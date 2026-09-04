@@ -12,9 +12,8 @@ use super::WidgetHost;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
 use op_editor_ui::widgets::variables_panel::VariablesPanel;
 use op_editor_ui::widgets::{
-    AIChatPlaceholder, CanvasViewport, ComponentBrowserPanel, DesignMdPanel, IconPickerPanel,
-    LayerPanel, LayoutCx, LocalePicker, PaintCx, PromptCenterPanel, PropertyPanel,
-    SceneTemplatePanel, ShapePicker, StatusBar, Toolbar, Widget, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, LocalePicker, PaintCx, PropertyPanel,
+    ShapePicker, StatusBar, Toolbar, Widget, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -58,6 +57,70 @@ impl WidgetHost {
         // BEFORE any resolve stores under it (mirrors native paint).
         self.rotate_chat_owner_if_session_changed();
         self.sync_theme_from_editor();
+        // Pump the preview router BEFORE painting, mirroring the native
+        // host: `navigate_to_screen` only queues `router.replace(path)`,
+        // and `reconcile` is what actually swaps the mounted screen. Doing
+        // it here means a switched screen paints this same frame instead of
+        // one frame late — and without it a pill tap looks like a no-op.
+        #[cfg(feature = "canvaskit")]
+        if self.preview.is_some() {
+            // The viewport arrives as a paint parameter on this host, so a
+            // resize has no event of its own. Rebuild the cached device
+            // frame when it changes — otherwise the frame keeps the `fit`
+            // it was solved with and the content paints squashed against a
+            // canvas region that is no longer that size.
+            let vp = (viewport_width, viewport_height);
+            if self.preview_frame_viewport != Some(vp) {
+                self.preview_frame_viewport = Some(vp);
+                // Keep the hit-test's cached viewport in step: hover and
+                // switcher hit-tests read these and would otherwise stay on
+                // the pre-resize geometry until the next press.
+                self.last_viewport_w = viewport_width;
+                self.last_viewport_h = viewport_height;
+                let (_cx, _cy, cw, ch) = self.canvas_region(viewport_width, viewport_height);
+                if let Some(preview) = self.preview.as_mut() {
+                    preview.resize((cw, ch));
+                }
+                self.recompute_device_frame(viewport_width, viewport_height);
+            }
+        }
+        #[cfg(feature = "canvaskit")]
+        {
+            // Track M-1: finalize a finished canvas ↔ device-frame merge
+            // animation BEFORE anything below reads `self.preview` /
+            // `device_mode_active()` this frame — an Exit whose 220ms
+            // window just elapsed drops the runtime here, so the rest of
+            // this pass sees the settled (real) mode immediately rather
+            // than one stale frame late.
+            self.settle_mode_transition();
+
+            let mut switched = false;
+            if let Some(preview) = self.preview.as_mut() {
+                // Advance the session clock FIRST. `dispatch_pointer_phase`
+                // has no clock parameter of its own — it reads the value last
+                // handed to `set_now_ms` to decide whether a screen
+                // transition is still running, and suppresses input while one
+                // is. Never advancing it freezes the session at the first
+                // transition, so every tap after the first screen switch is
+                // silently dropped.
+                preview.set_now_ms(self.now_ms);
+                let outcome = preview.reconcile(self.now_ms);
+                if outcome.repaint {
+                    let warnings = preview.warnings().to_vec();
+                    self.editor_state.editor_ui.preview.warnings = warnings;
+                }
+                switched = outcome.switched;
+            }
+            if switched {
+                if self.device_mode_active() {
+                    // The new screen has its own root, nav strip and scroll
+                    // extent, so the cached frame is stale.
+                    self.on_preview_screen_switched(viewport_width, viewport_height);
+                } else {
+                    self.center_canvas_on_preview_root(viewport_width, viewport_height);
+                }
+            }
+        }
         backend.fill_rect(
             Rect {
                 origin: Point2D::new(0.0, 0.0),
@@ -107,7 +170,13 @@ impl WidgetHost {
         } else {
             None
         };
-        let ui = &self.editor_state.editor_ui;
+
+        // Frame the slideshow board BEFORE the canvas painting so the camera
+        // is ready.
+        #[cfg(feature = "canvaskit")]
+        if self.preview_slideshow_active() {
+            self.frame_slideshow_board((viewport_width, viewport_height));
+        }
 
         let top_bar = self.top_bar();
         let top_bar_rect = self.top_bar_rect(viewport_width);
@@ -146,6 +215,32 @@ impl WidgetHost {
                 // that don't touch the layer tree skip the walk + measure.
                 self.layer_panel()
             };
+
+            // Auto-reveal selected node: if the selection changed and differs
+            // from the last-revealed anchor, expand ancestors and reveal.
+            // This covers MCP set_selection, undo/redo, and programmatic
+            // selection changes (not just canvas clicks).
+            if active_drag.is_none() {
+                // Only auto-reveal when not dragging; explicit drag interactions
+                // take precedence and manual collapse should be respected.
+                let should_reveal = match (
+                    &self.editor_state.selection.anchor,
+                    &self.editor_state.editor_ui.last_revealed_layer_anchor,
+                ) {
+                    (anchor, last) if anchor.is_real() => Some(anchor) != last.as_ref(),
+                    _ => false,
+                };
+                if should_reveal {
+                    op_editor_ui::widgets::scroll_flow::reveal_layer_panel_selection(
+                        &mut self.editor_state,
+                        &layer_panel,
+                        layer_panel_rect,
+                    );
+                    // Rebuild the panel after reveal to reflect any expanded ancestors.
+                    layer_panel = self.layer_panel();
+                }
+            }
+
             if let Some(d) = &active_drag {
                 layer_panel.drop_target = layer_panel
                     .drop_target_at(layer_panel_rect, Point2D::new(d.current_x, d.current_y));
@@ -174,25 +269,86 @@ impl WidgetHost {
             size: Point2D::new(canvas_w, canvas_h),
         };
         if canvas_w > 0.0 && canvas_h > 0.0 {
-            // PAINT path — the canvas reads editor state + the
-            // layout-resolved render scene (`refresh_layout_scene`).
-            let mut transition_scene = None;
-            if let Some(transition) = self.layout_transition.as_ref() {
-                if transition.is_active(self.now_ms) {
-                    let mut scene = self.layout_scene.clone();
-                    transition.apply_to_scene(&mut scene, self.now_ms);
-                    transition_scene = Some(scene);
+            // Check if preview mode is active and we have a session
+            #[cfg(feature = "canvaskit")]
+            if self.editor_state.editor_ui.preview.mode && self.preview.is_some() {
+                // PREVIEW PAINT path. Clear first: neither presentation
+                // necessarily covers the whole canvas rect, and the previous
+                // frame's design content must not show through around it.
+                backend.fill_rect(canvas_rect, self.theme.canvas_surface);
+
+                // Slideshow presentation paints the board letterboxed in the full viewport.
+                if self.preview_slideshow_active() {
+                    let viewport_rect = Rect {
+                        origin: Point2D::new(0.0, 0.0),
+                        size: Point2D::new(viewport_width, viewport_height),
+                    };
+                    self.paint_slideshow(backend, viewport_rect);
+                } else if self.device_mode_active() {
+                    // Phone / Desktop — present inside the device silhouette,
+                    // with the screen's bottom nav and top status bar pinned
+                    // out of the scroll flow.
+                    self.paint_device_frame(backend, canvas_rect);
+                } else if let Some(session) = self.preview.as_ref() {
+                    // Canvas segment — the raw scene at the editor's own
+                    // pan/zoom. Painting at a hard-coded identity transform
+                    // would draw the document at its own origin instead of
+                    // where the user is looking.
+                    let viewport = self.editor_state.viewport;
+                    session.paint_scene(
+                        backend,
+                        canvas_rect,
+                        (viewport.pan_x, viewport.pan_y),
+                        viewport.zoom,
+                        self.now_ms,
+                    );
                 }
+                // Chrome paints over the presentation in every segment.
+                self.paint_preview_switcher(backend, canvas_rect);
+                self.paint_screen_switcher(backend, canvas_rect);
+            } else {
+                // NORMAL PAINT path — the canvas reads editor state + the
+                // layout-resolved render scene (`refresh_layout_scene`).
+                let mut transition_scene = None;
+                if let Some(transition) = self.layout_transition.as_ref() {
+                    if transition.is_active(self.now_ms) {
+                        let mut scene = self.layout_scene.clone();
+                        transition.apply_to_scene(&mut scene, self.now_ms);
+                        transition_scene = Some(scene);
+                    }
+                }
+                let canvas_scene = transition_scene.as_ref().unwrap_or(&self.layout_scene);
+                let mut canvas = CanvasViewport::from_editor(&self.editor_state, canvas_scene);
+                canvas.now_ms = self.now_ms;
+                canvas.set_node_drag_active(self.node_drag.as_ref().is_some_and(|drag| drag.moved));
+                canvas.set_node_drag_overlay(self.node_drag_overlay_for_paint());
+                let mut cx = PaintCx {
+                    backend: &mut *backend,
+                };
+                canvas.paint(&mut cx, canvas_rect);
             }
-            let canvas_scene = transition_scene.as_ref().unwrap_or(&self.layout_scene);
-            let mut canvas = CanvasViewport::from_editor(&self.editor_state, canvas_scene);
-            canvas.now_ms = self.now_ms;
-            canvas.set_node_drag_active(self.node_drag.as_ref().is_some_and(|drag| drag.moved));
-            canvas.set_node_drag_overlay(self.node_drag_overlay_for_paint());
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            canvas.paint(&mut cx, canvas_rect);
+
+            #[cfg(not(feature = "canvaskit"))]
+            {
+                // NORMAL PAINT path (non-canvaskit build)
+                let mut transition_scene = None;
+                if let Some(transition) = self.layout_transition.as_ref() {
+                    if transition.is_active(self.now_ms) {
+                        let mut scene = self.layout_scene.clone();
+                        transition.apply_to_scene(&mut scene, self.now_ms);
+                        transition_scene = Some(scene);
+                    }
+                }
+                let canvas_scene = transition_scene.as_ref().unwrap_or(&self.layout_scene);
+                let mut canvas = CanvasViewport::from_editor(&self.editor_state, canvas_scene);
+                canvas.now_ms = self.now_ms;
+                canvas.set_node_drag_active(self.node_drag.as_ref().is_some_and(|drag| drag.moved));
+                canvas.set_node_drag_overlay(self.node_drag_overlay_for_paint());
+                let mut cx = PaintCx {
+                    backend: &mut *backend,
+                };
+                canvas.paint(&mut cx, canvas_rect);
+            }
         }
 
         let property_panel = PropertyPanel::for_selection_at_with_scene(
@@ -344,6 +500,11 @@ impl WidgetHost {
             );
         }
 
+        // Bound here rather than at the top of the pass: the rail section
+        // above needs `&mut self.editor_state` to reveal the selection, and a
+        // chrome-wide immutable borrow would outlive it.
+        let ui = &self.editor_state.editor_ui;
+
         // ShapePicker — anchored to the right of the toolbar shape
         // slot; same z-priority as the locale picker (native §9).
         if ui.shape_picker.open {
@@ -395,329 +556,36 @@ impl WidgetHost {
             panel.paint(&mut cx, panel_rect);
         }
 
-        // File-menu dropdown — anchored under TopBar's folder+chevron
-        // button (native §10b).
-        if let Some(menu_rect) = self.file_menu_rect(viewport_width) {
-            use op_editor_ui::widgets::file_menu::FileMenu;
-            let menu = FileMenu::from_editor_ui(&self.editor_state.editor_ui, self.wall_now_secs);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            menu.paint(&mut cx, menu_rect);
-        }
+        // Menus, modals, floating panels and the top-most notices —
+        // z-order above everything painted so far. Split into its own
+        // method purely to keep this file under the repo's 800-line cap;
+        // the call sits exactly where the moved block used to run.
+        self.paint_menu_modal_and_panel_layers(&mut *backend, viewport_width, viewport_height);
 
-        // Export quick menu — anchored under the TopBar download button,
-        // same overlay band as the file menu it shortcuts (native §10b).
-        if ui.export_quick_menu_open {
-            use op_editor_ui::widgets::ExportQuickMenu;
-            let menu_rect = self.export_quick_menu_rect(viewport_width);
-            let menu = ExportQuickMenu::for_editor_ui(&self.editor_state.editor_ui);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            menu.paint(&mut cx, menu_rect);
-        }
-
-        // Figma import modal — full-viewport scrim + centred card
-        // (native §10c).
-        if ui.figma_import_open {
-            use op_editor_ui::widgets::figma_import::FigmaImportModal;
-            backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(0.0, 0.0),
-                    size: Point2D::new(viewport_width, viewport_height),
-                },
-                op_editor_ui::Color {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 0.45,
-                },
-            );
-            let modal = FigmaImportModal::for_editor(&self.editor_state);
-            let modal_rect = modal.rect(viewport_width, viewport_height);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            modal.paint(&mut cx, modal_rect);
-        }
-
-        // Export dialog — full-viewport scrim + centred card
-        // (native §10d).
-        if ui.export_dialog_open {
-            use op_editor_ui::widgets::ExportDialog;
-            backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(0.0, 0.0),
-                    size: Point2D::new(viewport_width, viewport_height),
-                },
-                op_editor_ui::Color {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 0.45,
-                },
-            );
-            let dlg = ExportDialog::centered(viewport_width, viewport_height);
-            dlg.paint(&mut *backend, &self.theme, &self.editor_state.editor_ui);
-        }
-
-        // Sign-in modal — full-viewport scrim + centred card (native §10e).
-        if ui.account_ui_available && ui.login_modal_open {
-            use op_editor_ui::widgets::login_modal::LoginModal;
-            backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(0.0, 0.0),
-                    size: Point2D::new(viewport_width, viewport_height),
-                },
-                op_editor_ui::Color {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 0.45,
-                },
-            );
-            let modal = LoginModal::for_editor(&self.editor_state);
-            let modal_rect = modal.rect(viewport_width, viewport_height);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            modal.paint(&mut cx, modal_rect);
-        }
-
-        // Signed-in account dropdown — anchored under the TopBar avatar
-        // button, no scrim (native §10f).
-        if ui.account_ui_available && ui.account_menu_open {
-            use op_editor_ui::widgets::account_menu::AccountMenu;
-            use op_editor_ui::widgets::top_bar::TopBar;
-            use op_editor_ui::widgets::TOP_BAR_HEIGHT;
-            let top_bar_rect = Rect {
-                origin: Point2D::new(0.0, 0.0),
-                size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
-            };
-            let top_bar = TopBar::for_editor_ui(&self.editor_state.editor_ui);
-            let anchor = top_bar.account_button_rect(top_bar_rect);
-            if let Some(menu) = AccountMenu::for_editor_ui(&self.editor_state.editor_ui) {
-                let menu_rect = menu.rect_at(anchor);
-                let mut cx = PaintCx {
-                    backend: &mut *backend,
-                };
-                menu.paint(&mut cx, menu_rect);
-            }
-        }
-
-        // Settings modal — Cmd+, overlay. Painted before the colour
-        // picker / context menu / floating panels, mirroring native
-        // §10a z-order.
-        if ui.agent_settings_open {
-            use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
-            let panel = AgentSettingsPanel::for_web_editor_at(&self.editor_state, self.now_ms);
-            let panel_rect = panel.rect(viewport_width, viewport_height);
-            // Dim scrim behind the modal so the underlying canvas
-            // reads as "blocked." Matches the native shell's chrome.
-            backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(0.0, 0.0),
-                    size: Point2D::new(viewport_width, viewport_height),
-                },
-                op_editor_ui::Color {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 0.5,
-                },
-            );
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            panel.paint(&mut cx, panel_rect);
-        }
-
-        // Colour picker — floating overlay near the right rail
-        // (native §10b').
-        if let Some(state) = self.editor_state.ui.color_picker.clone() {
-            use op_editor_ui::widgets::color_picker::ColorPicker;
-            let picker = ColorPicker::for_state(&self.editor_state, state);
-            let picker_rect = picker.rect(viewport_width, viewport_height);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            picker.paint(&mut cx, picker_rect);
-        }
-
-        // Layer context menu — right-click overlay above everything
-        // painted so far (native §11).
-        if let Some(state) = self.editor_state.editor_ui.layer_context_menu.clone() {
-            use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
-            let menu = LayerContextMenu::for_state(&self.editor_state, state);
-            let menu_rect = menu.rect();
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            menu.paint(&mut cx, menu_rect);
-        }
-
-        // Path-anchor context menu — Select-tool right-click on a
-        // path anchor / handle (native §11a).
-        if let Some(state) = self.editor_state.ui.path_anchor_menu.clone() {
-            use op_editor_ui::widgets::path_anchor_context_menu::PathAnchorContextMenu;
-            let menu = PathAnchorContextMenu::for_state(&self.editor_state, state);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            menu.paint(&mut cx);
-        }
-
-        // Floating Component-Browser panel — painted just below the
-        // Design-MD panel so when both are open Design-MD sits
-        // absolute-top (native §11.5).
-        if let (Some(panel), Some(panel_rect)) = (
-            ComponentBrowserPanel::for_editor_at(&self.editor_state, self.now_ms),
-            self.component_browser_panel_rect(viewport_width, viewport_height),
-        ) {
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            panel.paint(&mut cx, panel_rect);
-        }
-
-        // Asset Center gallery — a dimming scrim across the whole viewport,
-        // then the panel over it (native `paint_floating_panels.rs`). The
-        // scrim is also the surface that takes a dismiss press, so paint and
-        // hit-test must agree that it covers everything.
-        if let (Some(panel), Some(panel_rect)) = (
-            SceneTemplatePanel::for_editor_at(&self.editor_state, self.now_ms),
-            self.scene_template_panel_rect(viewport_width, viewport_height),
-        ) {
-            if let Some(scrim) = self.scene_template_scrim_rect(viewport_width, viewport_height) {
-                backend.fill_rect(scrim, op_editor_ui::widgets::SCENE_TEMPLATE_SCRIM);
-            }
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            panel.paint(&mut cx, panel_rect);
-        }
-
-        if let (Some(panel), Some(panel_rect)) = (
-            PromptCenterPanel::for_editor_at(&self.editor_state, self.now_ms),
-            self.prompt_center_panel_rect(viewport_width, viewport_height),
-        ) {
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            panel.paint(&mut cx, panel_rect);
-        }
-
-        // Floating Icon picker — opened from the shape-tool dropdown.
-        // Above the component browser, below Design-MD, matching the
-        // press routing order (native §11.7).
-        if let (Some(panel), Some(panel_rect)) = (
-            IconPickerPanel::for_editor_at(&self.editor_state, self.now_ms),
-            self.icon_picker_panel_rect(viewport_width, viewport_height),
-        ) {
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            panel.paint(&mut cx, panel_rect);
-        }
-
-        // Floating Design-MD panel — the document's design.md brief.
-        // Painted last among the panels so it is the top-most overlay;
-        // hit-test mirrors this (`press.rs` dispatches it first)
-        // (native §12).
-        if let (Some(panel), Some(panel_rect)) = (
-            DesignMdPanel::for_editor(&self.editor_state),
-            self.design_md_panel_rect(viewport_width, viewport_height),
-        ) {
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            panel.paint(&mut cx, panel_rect);
-        }
-
-        // File-drop overlay — top-most layer while a file is dragged
-        // over the window (native §13). The web runner doesn't raise
-        // `file_drop_active` yet; painting the guard keeps z-order
-        // parity for when DOM drag events get wired.
-        if self.editor_state.editor_ui.file_drop_active {
-            let (drop_left, _y, drop_w, drop_h) =
-                self.canvas_region(viewport_width, viewport_height);
-            let drop_rect = Rect {
-                origin: Point2D::new(drop_left, TOP_BAR_HEIGHT),
-                size: Point2D::new(drop_w, drop_h),
-            };
-            op_editor_ui::widgets::file_drop_overlay::paint_file_drop_overlay(
-                &mut *backend,
-                &self.theme,
-                self.editor_state.editor_ui.locale,
-                drop_rect,
-                // The browser host has no drag-position stream yet, so it can
-                // never resolve a node target to ring.
-                None,
-            );
-        }
-
-        // Post-import HTML diagnostics notice — painted above every panel
-        // but under the missing-font modal, mirroring its press tier.
-        if let Some(panel) =
-            op_editor_ui::widgets::HtmlImportDiagnosticsPanel::for_editor(&self.editor_state)
+        // Keep the frame loop alive while EITHER preview animation plays.
+        // This host repaints only on request, so an animation that stops
+        // asking for frames freezes mid-way and then jumps whenever some
+        // unrelated event (a sync poll) happens to repaint.
+        //
+        // Both must be checked: `preview_mode_transition` is the canvas <->
+        // device-frame merge on enter/exit, while the app-mode screen slide
+        // lives inside the session and is what a nav tap starts. Checking
+        // only the former is why switching screens rendered as one or two
+        // discrete jumps, leaving a half-composited nav strip on screen
+        // until the next poll repainted over it.
+        #[cfg(feature = "canvaskit")]
         {
-            let panel_rect = panel.rect(viewport_width, viewport_height);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            panel.paint(&mut cx, panel_rect);
-        }
-
-        // Transient notice banner — painted above every panel and the
-        // diagnostics notice, but under the missing-font modal, so its press
-        // tier sits in exactly the same place (hit-test is reverse paint
-        // order). The rect is cached because the width is measured in the font
-        // it paints with, which only this pass can do.
-        self.toast_rect = {
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            op_editor_ui::widgets::editor_toast_flow::paint(
-                &mut cx,
-                &self.editor_state,
-                viewport_width,
-                viewport_height,
-                self.now_ms,
-            )
-        };
-
-        // Missing-font prompt — absolute top-most modal after every other
-        // overlay, matching its first-tier press routing.
-        if let Some(panel) =
-            op_editor_ui::widgets::MissingFontsPanel::for_editor(&self.editor_state)
-        {
-            backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(0.0, 0.0),
-                    size: Point2D::new(viewport_width, viewport_height),
-                },
-                op_editor_ui::Color {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 0.5,
-                },
-            );
-            let panel_rect = panel.rect(viewport_width, viewport_height);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            panel.paint(&mut cx, panel_rect);
-            panel.paint_picker(
-                &mut cx,
-                panel_rect,
-                Rect {
-                    origin: Point2D::new(0.0, 0.0),
-                    size: Point2D::new(viewport_width, viewport_height),
-                },
-                self.now_ms,
-            );
+            let mode_animating = self
+                .preview_mode_transition
+                .as_ref()
+                .is_some_and(|t| t.is_active(self.now_ms));
+            let screen_animating = self
+                .preview
+                .as_ref()
+                .is_some_and(|session| session.transition_active());
+            if mode_animating || screen_animating {
+                crate::repaint_coalescer::request();
+            }
         }
     }
 }

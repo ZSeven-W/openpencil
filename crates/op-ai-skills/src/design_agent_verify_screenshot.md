@@ -1,0 +1,5 @@
+### Step 8 — Verify with a screenshot
+
+Call `get_screenshot` with a nodeId or `"root"` to SEE your result. Iterate — fix overlaps, spacing, alignment, and contrast — until the screenshot reads as a polished, complete screen. The screenshot check is mandatory, not optional. Do not declare the design done without it.
+
+**Image self-check is presentation-only.** During automatic screenshot-driven self-check, verify that each intended photographic slot visibly renders exactly one image, with valid bounds, crop/fit, clipping, radius, and overlay order; a deliberately authored icon or illustration tile is also valid when it renders as intended. Once an image displays correctly, do NOT judge or replace it based on subject relevance, aesthetics, perceived quality, resolution, tone, stock-photo choice, or whether search/generation found a better-looking asset. This does not restrict initial asset selection or an explicit user request to replace, retarget, or restyle an image.

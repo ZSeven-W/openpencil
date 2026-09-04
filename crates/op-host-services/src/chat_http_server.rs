@@ -9,10 +9,9 @@
 //!   `session/{id}/message` empty-response fallback, and
 //!   `formatOpenCodeError`'s label + nested-JSON mapping (454-506).
 //! - `apps/web/server/utils/opencode-client.ts` — reuse an already
-//!   running server on port 4096 (probe `GET /config/providers`),
+//!   running server on port 4096 (verify `GET /global/health`),
 //!   else spawn one and kill it when the turn ends.
-//! - `apps/web/server/opencode/server.ts` — spawn argv
-//!   (`serve --hostname=127.0.0.1 --port=0`), the
+//! - `apps/web/server/opencode/server.ts` — spawn lifecycle, the
 //!   `OPENCODE_CONFIG_CONTENT` env, and the
 //!   `opencode server listening on <url>` stdout handshake.
 //!
@@ -32,20 +31,33 @@
 //!   turn forever with nothing but Stop to recover).
 //! - An empty system prompt skips the `noReply` injection instead of
 //!   posting an empty text part.
+//! - Spawn reserves a concrete loopback port and retries a bounded
+//!   address-in-use race; current OpenCode no longer treats `--port=0`
+//!   as an ephemeral-port request.
 
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 use std::time::Duration;
 
 use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, EffortLevel, StopReason};
-use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc;
 
 use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
-use crate::chat_spawn::{build_command, find_binary};
+use crate::chat_spawn::find_binary;
 
 #[path = "chat_http_server_error.rs"]
 mod error;
-pub use error::OpenCodeError;
+pub use error::{format_opencode_error, OpenCodeError};
+#[path = "chat_http_server_completion.rs"]
+mod completion;
+use completion::{cleanup_session, latest_assistant_text};
+#[path = "chat_http_server_probe.rs"]
+mod probe;
+pub use probe::parse_server_url;
+#[cfg(test)]
+use probe::probe_server;
+#[path = "chat_http_server_startup.rs"]
+mod startup;
+use startup::{resolve_opencode_server, ServerResolution};
 
 /// TS `opencode-client.ts` reuses an existing server on the default
 /// port before spawning its own.
@@ -56,20 +68,7 @@ const SESSION_TITLE: &str = "OpenPencil Chat";
 const STREAM_TIMEOUT: Duration = Duration::from_secs(180);
 /// TS chat.ts:708 — settle delay between SSE subscribe and prompt.
 const SSE_SETTLE: Duration = Duration::from_millis(100);
-/// Probe timeout for the existing-server check. TS runs the probe
-/// with fetch timeouts disabled (connection-refused still fails
-/// fast); the explicit cap here only guards a wedged listener.
-const PROBE_TIMEOUT: Duration = Duration::from_secs(3);
-
-/// TS `server.ts` listen timeout: 5s, 15s on Windows
-/// (`opencode-client.ts:92`).
-fn listen_timeout() -> Duration {
-    if cfg!(windows) {
-        Duration::from_secs(15)
-    } else {
-        Duration::from_secs(5)
-    }
-}
+const SERVER_EXIT_GRACE: Duration = Duration::from_secs(2);
 
 /// `ChatProvider` impl backed by the OpenCode CLI's HTTP server.
 pub struct OpenCodeProvider {
@@ -115,7 +114,29 @@ impl ChatProvider for OpenCodeProvider {
         &self.label
     }
 
+    fn supports_cancellable_send(&self) -> bool {
+        true
+    }
+
     fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+        self.send_inner(request, None)
+    }
+
+    fn send_cancellable(
+        &self,
+        request: ChatRequest,
+        cancel: Arc<AtomicBool>,
+    ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+        self.send_inner(request, Some(cancel))
+    }
+}
+
+impl OpenCodeProvider {
+    fn send_inner(
+        &self,
+        request: ChatRequest,
+        cancel: Option<Arc<AtomicBool>>,
+    ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
         let binary = self.binary.clone();
         let base_override = self.base_url_override.clone();
         // Prompt text = directive + history digest + user message.
@@ -198,11 +219,14 @@ impl ChatProvider for OpenCodeProvider {
             // spawned for this turn are killed; a pre-existing 4096
             // server is left alone.
             if let Some(mut child) = spawned {
-                let _ = child.start_kill();
-                let _ = child.wait().await;
+                let _ = op_process_io::terminate_tokio_process_tree(&mut child, SERVER_EXIT_GRACE)
+                    .await;
             }
         });
-        Box::new(BlockingRecvIter::new(rx))
+        match cancel {
+            Some(cancel) => Box::new(BlockingRecvIter::cooperative(rx, cancel)),
+            None => Box::new(BlockingRecvIter::new(rx)),
+        }
     }
 }
 
@@ -232,6 +256,7 @@ async fn run_opencode_turn(
     // is a documented divergence so a wedged server can't hang the
     // turn forever.
     let ops = match reqwest::Client::builder()
+        .use_rustls_tls()
         .timeout(Duration::from_secs(120))
         .build()
     {
@@ -241,6 +266,7 @@ async fn run_opencode_turn(
     // SSE client: no total timeout (the event stream outlives any
     // fixed request budget); connect failures still surface fast.
     let sse = match reqwest::Client::builder()
+        .use_rustls_tls()
         .connect_timeout(Duration::from_secs(10))
         .build()
     {
@@ -252,25 +278,73 @@ async fn run_opencode_turn(
     // default port; else spawn `opencode serve` (TS getOpencodeClient).
     let base = if let Some(base) = base_override {
         base
-    } else if probe_server(&ops, DEFAULT_SERVER_URL).await {
-        DEFAULT_SERVER_URL.to_string()
     } else {
-        match spawn_opencode_server(binary).await {
-            Ok((url, child)) => {
-                *spawned = Some(child);
-                url
+        match resolve_opencode_server(tx, &ops, binary, DEFAULT_SERVER_URL, spawned).await {
+            Ok(ServerResolution::Ready(url)) => url,
+            Ok(ServerResolution::Cancelled) => return,
+            Ok(ServerResolution::IdentityFailed) => {
+                return fail(
+                    tx,
+                    "OpenCode server started but failed its /global/health identity check.".into(),
+                )
+                .await;
             }
             // `fail` writes into `op-ai`'s `ChatDelta::Error(String)` sink,
             // so the typed failure renders here at the boundary.
-            Err(e) => return fail(tx, e.to_string()).await,
+            Err(error) => return fail(tx, error.to_string()).await,
         }
     };
 
     // 2. Create a session for this conversation (TS chat.ts:616-624).
-    let session_id = match create_session(&ops, &base).await {
-        Ok(id) => id,
-        Err(e) => return fail(tx, format!("Failed to create OpenCode session: {e}")).await,
+    // Keep the request independently owned so receiver cancellation can stop
+    // this turn even while a reused server is still deciding the response.
+    let create_ops = ops.clone();
+    let create_base = base.clone();
+    let mut create_task =
+        tokio::spawn(async move { create_session(&create_ops, &create_base).await });
+    let session_id = tokio::select! {
+        biased;
+        _ = tx.closed() => {
+            if spawned.is_some() {
+                // The caller tears down this integration-owned server next,
+                // which also removes any session the request may have made.
+                create_task.abort();
+            } else {
+                // A reused server outlives the turn. Let an accepted create
+                // finish independently, then remove its temporary session.
+                let cleanup_ops = ops.clone();
+                let cleanup_base = base.clone();
+                tokio::spawn(async move {
+                    if let Ok(Ok(session_id)) = create_task.await {
+                        cleanup_session(&cleanup_ops, &cleanup_base, &session_id, true).await;
+                    }
+                });
+            }
+            return;
+        }
+        result = &mut create_task => match result {
+            Ok(Ok(id)) => id,
+            Ok(Err(e)) => {
+                return fail(tx, format!("Failed to create OpenCode session: {e}")).await;
+            }
+            Err(e) => {
+                return fail(tx, format!("Failed to create OpenCode session: {e}")).await;
+            }
+        },
     };
+
+    // Every branch after session creation must delete this integration-owned
+    // session. Failed/canceled turns abort first so work cannot continue on a
+    // reused port-4096 server after the OpenPencil receiver is gone.
+    macro_rules! finish_session {
+        ($abort_first:expr) => {{
+            cleanup_session(&ops, &base, &session_id, $abort_first).await;
+            return;
+        }};
+    }
+    if tx.is_closed() {
+        finish_session!(true);
+    }
 
     // 3. Inject the system prompt as context, no AI reply
     // (TS chat.ts:626-636 — failure logs, never aborts the turn).
@@ -280,9 +354,13 @@ async fn run_opencode_turn(
             "noReply": true,
             "parts": [{ "type": "text", "text": system }],
         });
-        if let Err(e) =
-            post_json(&ops, &format!("{base}/session/{session_id}/message"), &body).await
-        {
+        let message_url = format!("{base}/session/{session_id}/message");
+        let injection = tokio::select! {
+            biased;
+            _ = tx.closed() => finish_session!(true),
+            result = post_json(&ops, &message_url, &body) => result,
+        };
+        if let Err(e) = injection {
             eprintln!("[AI] OpenCode system prompt injection failed: {e}");
         }
     }
@@ -318,40 +396,63 @@ async fn run_opencode_turn(
     };
 
     // 5. Give the SSE connection a moment to establish (TS 100ms).
-    tokio::time::sleep(SSE_SETTLE).await;
+    tokio::select! {
+        biased;
+        _ = tx.closed() => {
+            sse_task.abort();
+            finish_session!(true);
+        }
+        _ = tokio::time::sleep(SSE_SETTLE) => {}
+    }
 
     // 6. Send the prompt (TS chat.ts:659-664, 710-716).
-    let mut prompt_payload = serde_json::json!({ "parts": parts });
+    // This bridge returns one text completion to the orchestrator. Disabling
+    // tools prevents OpenCode from stranding the response in an unhandled
+    // tool call.
+    let mut prompt_payload = serde_json::json!({
+        "parts": parts,
+        "tools": { "*": false },
+    });
     if let Some((provider_id, model_id)) = &parsed_model {
         prompt_payload["model"] = serde_json::json!({
             "providerID": provider_id,
             "modelID": model_id,
         });
     }
-    if let Err(e) = post_json(
-        &ops,
-        &format!("{base}/session/{session_id}/prompt_async"),
-        &prompt_payload,
-    )
-    .await
-    {
+    let prompt_url = format!("{base}/session/{session_id}/prompt_async");
+    let prompt_result = tokio::select! {
+        biased;
+        _ = tx.closed() => {
+            sse_task.abort();
+            finish_session!(true);
+        }
+        result = post_json(&ops, &prompt_url, &prompt_payload) => result,
+    };
+    if let Err(e) = prompt_result {
         eprintln!("[AI] OpenCode promptAsync error: {e}");
         sse_task.abort();
-        return fail(tx, e.to_string()).await;
+        fail(tx, e.to_string()).await;
+        finish_session!(true);
     }
 
     // 7. Consume events until idle / error / timeout
     // (TS chat.ts:718-776).
     let deadline = tokio::time::Instant::now() + STREAM_TIMEOUT;
-    let mut emitted_text = false;
+    let mut streamed_text = String::new();
     let mut canceled = false;
+    let mut timed_out = false;
+    let mut terminal_error = None;
+    let mut tool_escape = None;
     loop {
         tokio::select! {
             biased;
             _ = tx.closed() => { canceled = true; break }
             // TS streamWithTimeout: the 180s budget ends the stream;
             // the fallback + empty checks still run after it.
-            _ = tokio::time::sleep_until(deadline) => break,
+            _ = tokio::time::sleep_until(deadline) => {
+                timed_out = true;
+                break;
+            },
             ev = events_rx.recv() => {
                 let Some(val) = ev else { break }; // SSE stream ended
                 let Some(ty) = val.get("type").and_then(|v| v.as_str()) else { continue };
@@ -371,7 +472,7 @@ async fn run_opencode_turn(
                                 canceled = true;
                                 break;
                             }
-                            emitted_text = true;
+                            streamed_text.push_str(delta);
                         }
                         // Forward reasoning deltas as thinking chunks.
                         if prop_session == Some(session_id.as_str())
@@ -382,6 +483,23 @@ async fn run_opencode_turn(
                             break;
                         }
                     }
+                    "message.part.updated" => {
+                        let part = props.and_then(|p| p.get("part"));
+                        let part_session = part
+                            .and_then(|p| p.get("sessionID"))
+                            .and_then(|v| v.as_str());
+                        if part_session == Some(session_id.as_str())
+                            && part.and_then(|p| p.get("type")).and_then(|v| v.as_str())
+                                == Some("tool")
+                        {
+                            let name = part
+                                .and_then(|p| p.get("tool"))
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("unknown");
+                            tool_escape = Some(name.to_string());
+                            break;
+                        }
+                    }
                     // Session went idle — response complete.
                     "session.idle" => {
                         if prop_session == Some(session_id.as_str()) {
@@ -389,16 +507,14 @@ async fn run_opencode_turn(
                         }
                     }
                     // Session error: ours, or one with no session id.
-                    "session.error" => {
-                        if prop_session == Some(session_id.as_str()) || prop_session.is_none() {
-                            let err = props.and_then(|p| p.get("error"));
-                            let msg = format_opencode_error(err);
-                            eprintln!("[AI] OpenCode session error: {msg}");
-                            if tx.send(ChatDelta::Error(msg)).await.is_err() {
-                                canceled = true;
-                            }
-                            break;
-                        }
+                    "session.error"
+                        if prop_session == Some(session_id.as_str()) || prop_session.is_none() =>
+                    {
+                        let err = props.and_then(|p| p.get("error"));
+                        let msg = format_opencode_error(err);
+                        eprintln!("[AI] OpenCode session error: {msg}");
+                        terminal_error = Some(msg);
+                        break;
                     }
                     _ => {}
                 }
@@ -407,178 +523,94 @@ async fn run_opencode_turn(
     }
     sse_task.abort();
     if canceled {
-        return;
+        finish_session!(true);
     }
 
-    // 8. Fallback: no streamed text → read the session messages
-    // directly (TS chat.ts:778-802; failures fall through to the
-    // empty-response error).
-    if !emitted_text {
-        if let Ok(messages) = get_json(&ops, &format!("{base}/session/{session_id}/message")).await
-        {
-            if let Some(items) = messages.as_array() {
-                let assistant = items.iter().rev().find(|m| {
-                    m.get("info")
-                        .and_then(|i| i.get("role"))
-                        .and_then(|v| v.as_str())
-                        == Some("assistant")
-                });
-                if let Some(parts) = assistant
-                    .and_then(|m| m.get("parts"))
-                    .and_then(|p| p.as_array())
+    if timed_out {
+        fail(
+            tx,
+            format!(
+                "OpenCode timed out after {} seconds before the session completed.",
+                STREAM_TIMEOUT.as_secs()
+            ),
+        )
+        .await;
+        finish_session!(true);
+    }
+    if let Some(name) = tool_escape {
+        fail(
+            tx,
+            format!(
+                "OpenCode attempted the forbidden `{name}` tool during a text-only completion."
+            ),
+        )
+        .await;
+        finish_session!(true);
+    }
+    if let Some(error) = terminal_error {
+        fail(tx, error).await;
+        finish_session!(true);
+    }
+
+    // 8. Reconcile against the persisted assistant message even when SSE
+    // produced text. OpenCode can reach idle after dropping a final delta;
+    // emitting only the missing suffix keeps the completion exact.
+    let messages_url = format!("{base}/session/{session_id}/message");
+    let final_messages = tokio::select! {
+        biased;
+        _ = tx.closed() => finish_session!(true),
+        result = get_json(&ops, &messages_url) => result,
+    };
+    if let Ok(messages) = final_messages {
+        if let Some(final_text) = latest_assistant_text(&messages) {
+            if streamed_text.is_empty() {
+                if tx
+                    .send(ChatDelta::TextDelta(final_text.clone()))
+                    .await
+                    .is_err()
                 {
-                    for part in parts {
-                        if part.get("type").and_then(|v| v.as_str()) == Some("text") {
-                            if let Some(text) = part
-                                .get("text")
-                                .and_then(|v| v.as_str())
-                                .filter(|t| !t.is_empty())
-                            {
-                                if tx
-                                    .send(ChatDelta::TextDelta(text.to_string()))
-                                    .await
-                                    .is_err()
-                                {
-                                    return;
-                                }
-                                emitted_text = true;
-                            }
-                        }
-                    }
+                    finish_session!(true);
                 }
+                streamed_text = final_text;
+            } else if let Some(suffix) = final_text.strip_prefix(&streamed_text) {
+                if !suffix.is_empty()
+                    && tx
+                        .send(ChatDelta::TextDelta(suffix.to_string()))
+                        .await
+                        .is_err()
+                {
+                    finish_session!(true);
+                }
+                streamed_text = final_text;
+            } else if final_text != streamed_text {
+                fail(
+                    tx,
+                    "OpenCode stream did not match its persisted final response.".into(),
+                )
+                .await;
+                finish_session!(true);
             }
         }
     }
 
-    // 9. Still nothing → the TS empty-response error (chat.ts:804-811).
-    if !emitted_text {
-        let _ = tx
-            .send(ChatDelta::Error(
-                "OpenCode returned an empty response. The model may not have generated any output."
-                    .into(),
-            ))
-            .await;
+    // 9. Still nothing → terminal empty-response failure.
+    if streamed_text.is_empty() {
+        fail(
+            tx,
+            "OpenCode returned an empty response. The model may not have generated any output."
+                .into(),
+        )
+        .await;
+        finish_session!(true);
     }
 
-    let _ = tx
+    let delivered = tx
         .send(ChatDelta::Done {
             stop_reason: StopReason::EndTurn,
         })
-        .await;
-}
-
-/// Probe an already-running server (TS `client.config.providers()`).
-async fn probe_server(client: &reqwest::Client, base: &str) -> bool {
-    match tokio::time::timeout(
-        PROBE_TIMEOUT,
-        client.get(format!("{base}/config/providers")).send(),
-    )
-    .await
-    {
-        Ok(Ok(resp)) => resp.status().is_success(),
-        _ => false,
-    }
-}
-
-/// Spawn `opencode serve --hostname=127.0.0.1 --port=0` and wait for
-/// the `opencode server listening on <url>` stdout line (TS
-/// `server.ts::createOpencodeServer`). Returns the announced base URL
-/// plus the child handle (caller kills it when the turn ends).
-async fn spawn_opencode_server(
-    binary: &str,
-) -> Result<(String, tokio::process::Child), OpenCodeError> {
-    let args: Vec<String> = vec![
-        "serve".into(),
-        "--hostname=127.0.0.1".into(),
-        "--port=0".into(),
-    ];
-    let mut cmd = build_command(binary, &args);
-    // TS spawns with the full parent env plus the inline config
-    // override (server.ts:40-43).
-    cmd.env("OPENCODE_CONFIG_CONTENT", "{}");
-    cmd.stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
-    let mut child = cmd.spawn().map_err(|e| OpenCodeError::Spawn {
-        binary: binary.to_string(),
-        message: e.to_string(),
-    })?;
-
-    // Collect stderr into the diagnostic buffer the TS error message
-    // includes ("Server output: …").
-    let output_buf: Arc<std::sync::Mutex<String>> = Arc::default();
-    if let Some(stderr) = child.stderr.take() {
-        let buf = Arc::clone(&output_buf);
-        tokio::spawn(async move {
-            let mut lines = BufReader::new(stderr).lines();
-            while let Ok(Some(line)) = lines.next_line().await {
-                if let Ok(mut b) = buf.lock() {
-                    if b.len() < 16 * 1024 {
-                        b.push_str(&line);
-                        b.push('\n');
-                    }
-                }
-            }
-        });
-    }
-    let stdout = child.stdout.take().ok_or(OpenCodeError::NoStdout)?;
-
-    let timeout = listen_timeout();
-    let buf_for_scan = Arc::clone(&output_buf);
-    let scan = async move {
-        let mut lines = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = lines.next_line().await {
-            if let Some(url) = parse_server_url(&line) {
-                // Keep draining stdout for the server's lifetime so
-                // it can't block on a full pipe.
-                tokio::spawn(async move { while let Ok(Some(_)) = lines.next_line().await {} });
-                return Some(url);
-            }
-            if let Ok(mut b) = buf_for_scan.lock() {
-                if b.len() < 16 * 1024 {
-                    b.push_str(&line);
-                    b.push('\n');
-                }
-            }
-        }
-        None
-    };
-    match tokio::time::timeout(timeout, scan).await {
-        Ok(Some(url)) => Ok((url, child)),
-        Ok(None) => {
-            // stdout ended — the server exited before announcing.
-            let _ = child.start_kill();
-            let status = child.wait().await.ok();
-            let code = status
-                .and_then(|s| s.code())
-                .map(|c| c.to_string())
-                .unwrap_or_else(|| "unknown".into());
-            let output = output_buf.lock().map(|b| b.clone()).unwrap_or_default();
-            // `Display` appends the "Server output: …" tail only when the
-            // buffer is non-blank — the same condition this used to apply by
-            // hand, so the message is byte-identical.
-            Err(OpenCodeError::ServerExited { code, output })
-        }
-        Err(_) => {
-            let _ = child.start_kill();
-            let _ = child.wait().await;
-            Err(OpenCodeError::ListenTimeout {
-                millis: timeout.as_millis(),
-            })
-        }
-    }
-}
-
-/// Parse the `opencode server listening on <url>` stdout line
-/// (TS server.ts:55-62: `startsWith('opencode server listening')` +
-/// `/on\s+(https?:\/\/[^\s]+)/`).
-pub fn parse_server_url(line: &str) -> Option<String> {
-    if !line.starts_with("opencode server listening") {
-        return None;
-    }
-    line.split_whitespace()
-        .find(|tok| tok.starts_with("http://") || tok.starts_with("https://"))
-        .map(str::to_string)
+        .await
+        .is_ok();
+    cleanup_session(&ops, &base, &session_id, !delivered).await;
 }
 
 /// Parse an OpenCode model slug "providerID/modelID" into its parts
@@ -653,88 +685,6 @@ async fn create_session(client: &reqwest::Client, base: &str) -> Result<String, 
         .and_then(|v| v.as_str())
         .map(str::to_string)
         .ok_or_else(|| OpenCodeError::Provider(format_opencode_error(Some(&val))))
-}
-
-/// Error name → user-friendly label mapping
-/// (TS `OPENCODE_ERROR_LABELS`).
-fn opencode_error_label(name: &str) -> &str {
-    match name {
-        "APIError" => "API error",
-        "ProviderAuthError" => "Authentication failed",
-        "UnknownError" => "Unknown error",
-        "MessageOutputLengthError" => "Response too long",
-        "MessageAbortedError" => "Request aborted",
-        "StructuredOutputError" => "Output format error",
-        "ContextOverflowError" => "Context too long",
-        other => other,
-    }
-}
-
-/// Extract a human-readable message from an OpenCode error object —
-/// verbatim port of TS `formatOpenCodeError` (chat.ts:470-506):
-/// structured `{ name, data: { message } }` errors get a label plus
-/// nested-JSON message extraction; plain `{ message }` passes
-/// through; everything else falls back to truncated JSON.
-pub fn format_opencode_error(error: Option<&serde_json::Value>) -> String {
-    let Some(error) = error else {
-        return "Unknown error".into();
-    };
-    if error.is_null() {
-        return "Unknown error".into();
-    }
-    if let Some(s) = error.as_str() {
-        return s.to_string();
-    }
-
-    let name = error.get("name").and_then(|v| v.as_str());
-    let data_message = error
-        .get("data")
-        .and_then(|d| d.get("message"))
-        .and_then(|v| v.as_str());
-    if let (Some(name), Some(message)) = (name, data_message) {
-        let label = opencode_error_label(name);
-        let mut msg = message.to_string();
-        // Try to extract a nested error message from JSON embedded in
-        // the message string, e.g.
-        // 'Unauthorized: {"error":{"code":"invalid_api_key","message":"invalid access token"}}'.
-        // TS only unwraps when the JSON starts past index 0.
-        if let Some(json_start) = msg.find('{').filter(|&i| i > 0) {
-            if let Ok(nested) = serde_json::from_str::<serde_json::Value>(&msg[json_start..]) {
-                let nested_msg = nested
-                    .get("error")
-                    .and_then(|e| e.get("message"))
-                    .and_then(|v| v.as_str())
-                    .or_else(|| nested.get("message").and_then(|v| v.as_str()));
-                if let Some(nested_msg) = nested_msg {
-                    let prefix = msg[..json_start]
-                        .trim_end()
-                        .trim_end_matches(':')
-                        .trim()
-                        .to_string();
-                    msg = if prefix.is_empty() {
-                        nested_msg.to_string()
-                    } else {
-                        format!("{prefix}: {nested_msg}")
-                    };
-                }
-            }
-        }
-        return format!("{label} — {msg}");
-    }
-
-    // Plain { message } object.
-    if let Some(message) = error.get("message").and_then(|v| v.as_str()) {
-        return message.to_string();
-    }
-
-    // Fallback: truncated JSON.
-    let json = error.to_string();
-    if json.chars().count() > 200 {
-        let truncated: String = json.chars().take(200).collect();
-        format!("{truncated}…")
-    } else {
-        json
-    }
 }
 
 #[cfg(test)]

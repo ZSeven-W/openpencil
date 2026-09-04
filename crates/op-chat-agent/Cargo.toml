@@ -1,0 +1,70 @@
+# op-chat-agent — the builtin-provider agent tool loop + canvas/design tool
+# surface, factored out of op-host-services so the mobile FFI hosts
+# (op-engine-ffi) run the SAME design pipeline the desktop runs instead of a
+# drifting port. op-host-services re-exports every moved item under its old
+# paths, so desktop/daemon call sites are unchanged.
+#
+# Dependency charter: native-only (reqwest/tokio transports), but free of the
+# daemon-only closure (no process spawn, no op-auth-bridge, no ACP, no PDF
+# skia) so iOS / Android / OHOS editor builds can link it.
+[package]
+name = "op-chat-agent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OpenPencil builtin-provider agent tool loop + canvas/design tool surface (shared by desktop, daemon, and mobile hosts)"
+
+[lib]
+name = "op_chat_agent"
+path = "src/lib.rs"
+
+[features]
+default = []
+# Gates the DEBUG_TOOL_SCHEMAS catalog entries (mirrors op-host-services'
+# feature of the same name, which forwards here).
+mcp-debug-tools = []
+
+[dependencies]
+op-ai = { path = "../op-ai" }
+op-editor-core = { path = "../op-editor-core" }
+# The transport-free chat tool channel (`UiChatToolExecutor`) the loop's
+# executors ride; only the `chat` slice is linked.
+op-editor-host-core = { path = "../op-editor-host-core", default-features = false, features = [
+  "chat",
+] }
+# Canvas tool implementations the executors dispatch into. The `script`
+# feature is NOT forced here — hosts that want script-mode batch_design
+# (desktop via op-orchestrator, mobile via its own graph) enable it.
+op-mcp = { path = "../op-mcp" }
+# Loop finalize, geometry diagnostics, model profiles, reasoning wire policy.
+op-orchestrator = { path = "../op-orchestrator" }
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+# Layout-scene reads for the per-batch diagnostics (resolved absolute rects).
+op-editor-ui = { path = "../op-editor-ui" }
+op-pen-loader = { path = "../op-pen-loader" }
+# Contrast scanning (quality_scans) + skill lookups.
+op-ai-skills = { path = "../op-ai-skills" }
+op-design-lint = { path = "../op-design-lint" }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+base64 = "0.22"
+futures = { version = "0.3", default-features = false, features = ["std"] }
+reqwest = { version = "0.12", default-features = false, features = [
+  "rustls-tls",
+  "json",
+  "stream",
+] }
+tokio = { version = "1", default-features = false, features = [
+  "rt-multi-thread",
+  "sync",
+  "net",
+  "time",
+  "macros",
+] }
+# Screenshot down-scaling for model context (`chat_agent_context`). Raster
+# core only — no gl, no pdf — so mobile hosts can link it.
+skia-safe = { version = "0.97.0", default-features = false, features = [
+  "textlayout",
+] }

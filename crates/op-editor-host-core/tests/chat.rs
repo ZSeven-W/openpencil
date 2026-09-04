@@ -1,6 +1,6 @@
 use op_ai::chat_provider::{
-    ChatDelta, ChatHistoryRole, ChatRequest, ChatToolExecutor, ChatToolResult, EchoProvider,
-    StopReason,
+    ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest, ChatToolExecutor, ChatToolResult,
+    EchoProvider, StopReason,
 };
 use op_editor_core::{ChatActivity, ChatActivityStatus, ChatCompletion, ChatMessage, ChatToolCall};
 use op_editor_host_core::chat::{
@@ -53,6 +53,80 @@ fn session_streams_provider_deltas_to_completion() {
     let (text, _, _, _) = drain_session(&mut session);
     assert!(session.finished());
     assert_eq!(text, "Hello");
+}
+
+struct SilentCancellableProvider {
+    canceled_tx: std::sync::mpsc::Sender<()>,
+}
+
+impl ChatProvider for SilentCancellableProvider {
+    fn provider_label(&self) -> &str {
+        "silent-cancellable"
+    }
+
+    fn send(&self, _request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+        panic!("ChatSession must launch providers through send_cancellable")
+    }
+
+    fn supports_cancellable_send(&self) -> bool {
+        true
+    }
+
+    fn send_cancellable(
+        &self,
+        _request: ChatRequest,
+        cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+        Box::new(CancelWaitIter {
+            cancel,
+            canceled_tx: Some(self.canceled_tx.clone()),
+        })
+    }
+}
+
+struct CancelWaitIter {
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    canceled_tx: Option<std::sync::mpsc::Sender<()>>,
+}
+
+impl Iterator for CancelWaitIter {
+    type Item = ChatDelta;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.cancel.load(std::sync::atomic::Ordering::Acquire) {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        if let Some(tx) = self.canceled_tx.take() {
+            let _ = tx.send(());
+        }
+        None
+    }
+}
+
+#[test]
+fn dropping_session_cancels_a_silent_provider() {
+    let (canceled_tx, canceled_rx) = std::sync::mpsc::channel();
+    let session = ChatSession::start(
+        Box::new(SilentCancellableProvider { canceled_tx }),
+        ChatRequest::default(),
+    );
+
+    drop(session);
+
+    canceled_rx
+        .recv_timeout(std::time::Duration::from_secs(1))
+        .expect("dropping Stop/New Chat session must cancel a silent provider");
+}
+
+#[test]
+fn dropping_channel_backed_session_sets_external_cancel_flag() {
+    let (_tx, rx) = std::sync::mpsc::channel();
+    let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let session = ChatSession::from_channels_with_cancel(rx, None, std::sync::Arc::clone(&cancel));
+
+    drop(session);
+
+    assert!(cancel.load(std::sync::atomic::Ordering::Acquire));
 }
 
 #[test]

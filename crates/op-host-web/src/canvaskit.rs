@@ -13,7 +13,7 @@
 //!
 //! * `bindings` — the `op_ck_bridge.js` / `op_ck_image_cache.js` FFI blocks
 //! * `convert`  — pure DPR / gradient / enum-code helpers
-//! * `backend`  — `CanvasKitBackend` + `init_backend`
+//! * `backend` / `backend_state` — `CanvasKitBackend`, state methods, and init
 //! * `ops`      — the flat `OpCk` draw-call bodies the `RenderBackend` impl forwards to
 //! * `inner`    — `CkInner` live shell state + daemon bootstrap
 //! * `mount`    — the body of `mount_ck`
@@ -22,16 +22,20 @@ use op_editor_ui::{Color, Point2D, Rect, RenderBackend};
 use wasm_bindgen::prelude::*;
 
 mod backend;
+mod backend_state;
 mod bindings;
 mod convert;
 mod inner;
+mod measure;
 mod mount;
+mod mount_keyboard;
 mod ops;
 #[cfg(test)]
 mod tests;
 
 pub use backend::{init_backend, CanvasKitBackend};
 pub use bindings::OpCk;
+pub use measure::BrowserMeasure;
 
 /// Mount the full editor chrome on `canvas_id`, rendered via CanvasKit on the
 /// GPU, with mouse / wheel / keyboard interactivity. Builds the shared

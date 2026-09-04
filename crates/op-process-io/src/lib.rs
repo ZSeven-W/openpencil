@@ -9,6 +9,14 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
 use tokio::process::{ChildStderr, ChildStdin, ChildStdout, Command as TokioCommand};
 
+mod process_tree;
+
+use process_tree::{combine_shutdown_and_reap, combine_signal_results, shutdown_without_reap};
+pub use process_tree::{
+    kill_process_tree, kill_tokio_process_tree, terminate_process_tree,
+    terminate_tokio_process_tree, ProcessTree,
+};
+
 /// Result of polling a spawned child while waiting for an external
 /// readiness signal.
 #[derive(Debug, PartialEq, Eq)]
@@ -73,6 +81,7 @@ pub type LineStream = Lines<BufReader<ChildStdout>>;
 /// Tokio child wrapper with piped stdin/stdout/stderr.
 pub struct LineStreamChild {
     child: tokio::process::Child,
+    tree: Option<ProcessTree>,
     stdin: Option<ChildStdin>,
     lines: Option<LineStream>,
     stderr: Option<ChildStderr>,
@@ -98,7 +107,9 @@ impl LineStreamChild {
     /// Spawn a preconfigured tokio command after forcing piped stdio.
     pub fn spawn_command(mut command: TokioCommand) -> io::Result<Self> {
         pipe_stdio(&mut command);
+        command.kill_on_drop(true);
         let mut child = command.spawn()?;
+        let tree = Some(ProcessTree::from_tokio_child(&child)?);
         let stdout = child
             .stdout
             .take()
@@ -107,6 +118,7 @@ impl LineStreamChild {
             stdin: child.stdin.take(),
             lines: Some(BufReader::new(stdout).lines()),
             stderr: child.stderr.take(),
+            tree,
             child,
         })
     }
@@ -155,25 +167,94 @@ impl LineStreamChild {
     }
 
     /// Start platform termination without waiting for reaping.
+    ///
+    /// A returned error can still mean that the leader accepted its kill but
+    /// descendant-tree signaling failed. Callers that use this low-level API
+    /// must therefore perform a bounded [`Self::wait`] after either result;
+    /// [`Self::kill_graceful`] owns that distinction for the common case.
     pub fn start_kill(&mut self) -> io::Result<()> {
-        self.child.start_kill()
+        self.start_kill_outcome().0
+    }
+
+    fn start_kill_outcome(&mut self) -> (io::Result<()>, bool) {
+        let tree_was_signaled = self.tree.is_some();
+        let tree_covers_descendants = self.tree.is_some_and(ProcessTree::covers_descendants);
+        let tree_result = self.tree.map_or(Ok(()), ProcessTree::kill);
+        let leader_result = self.child.start_kill();
+        let signal_accepted = (tree_was_signaled && tree_result.is_ok()) || leader_result.is_ok();
+        (
+            combine_signal_results(tree_result, leader_result, tree_covers_descendants),
+            signal_accepted,
+        )
     }
 
     /// Wait for process exit.
     pub async fn wait(&mut self) -> io::Result<ExitStatus> {
-        self.child.wait().await
+        let status = self.child.wait().await;
+        if status.is_ok() {
+            self.tree = None;
+        }
+        status
     }
 
     /// Close stdin and wait for the process to exit, killing it if it
     /// ignores EOF beyond `budget`.
     pub async fn kill_graceful(&mut self, budget: Duration) -> io::Result<ExitStatus> {
+        // Windows taskkill discovers descendants from the live leader pid. Ask
+        // it to terminate the full tree before closing stdin can let that
+        // leader exit and before `wait` can reap it; signaling the numeric pid
+        // afterwards would risk pid reuse. Verified Unix process groups remain
+        // safe to inspect after leader exit.
+        let pre_wait_tree_result = self
+            .tree
+            .filter(|tree| tree.requires_signal_before_wait())
+            .map(ProcessTree::terminate);
         let _ = self.close_stdin().await;
         match tokio::time::timeout(budget, self.child.wait()).await {
-            Ok(status) => status,
-            Err(_) => {
-                self.child.start_kill()?;
-                self.child.wait().await
+            Ok(status) => {
+                let status = status?;
+                if let Some(tree) = self.tree.take() {
+                    if tree.covers_descendants() {
+                        if tree.can_signal_after_leader_exit() {
+                            if tree.is_alive()? {
+                                tree.kill()?;
+                            }
+                        } else if let Some(tree_result) = pre_wait_tree_result {
+                            tree_result?;
+                        }
+                    }
+                }
+                Ok(status)
             }
+            Err(_) => {
+                let (shutdown, signal_accepted) = self.start_kill_outcome();
+                if !signal_accepted {
+                    return match self.child.try_wait() {
+                        Ok(Some(status)) => {
+                            self.tree = None;
+                            combine_shutdown_and_reap(shutdown, Ok(status))
+                        }
+                        Ok(None) => shutdown_without_reap(shutdown),
+                        Err(reap_error) => combine_shutdown_and_reap(shutdown, Err(reap_error)),
+                    };
+                }
+                let reap = self.child.wait().await;
+                if reap.is_ok() {
+                    self.tree = None;
+                }
+                combine_shutdown_and_reap(shutdown, reap)
+            }
+        }
+    }
+}
+
+impl Drop for LineStreamChild {
+    fn drop(&mut self) {
+        if self.child.id().is_some() {
+            if let Some(tree) = self.tree.take() {
+                let _ = tree.kill();
+            }
+            let _ = self.child.start_kill();
         }
     }
 }

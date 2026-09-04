@@ -19,6 +19,11 @@
 
 mod account;
 mod delivery;
+mod design_md;
+mod design_md_job;
+mod design_md_palette;
+mod design_md_render;
+mod design_md_validate;
 mod endpoint;
 mod filename;
 mod hub;
@@ -34,6 +39,10 @@ mod wasm_api;
 mod account_tests;
 #[cfg(test)]
 mod delivery_tests;
+#[cfg(test)]
+mod design_md_optional_tests;
+#[cfg(test)]
+mod design_md_tests;
 #[cfg(test)]
 mod endpoint_tests;
 #[cfg(test)]

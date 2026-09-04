@@ -58,6 +58,33 @@ fn the_asset_center_spans_its_scrim_and_clears_the_top_bar() {
     );
 }
 
+/// Touch hosts already pass a safe-area-adjusted viewport and do not paint
+/// the desktop top bar. Reusing its height here left a blank, untouchable band
+/// above the gallery on both phone and tablet.
+#[test]
+fn the_touch_asset_center_uses_the_full_safe_viewport() {
+    use op_editor_core::size_class::EditorSizeClass;
+
+    for (size_class, viewport_w, viewport_h) in [
+        (EditorSizeClass::Compact, 390.0_f32, 844.0_f32),
+        (EditorSizeClass::Medium, 834.0_f32, 1_112.0_f32),
+    ] {
+        let mut state = gallery_state(0.0);
+        state.editor_ui.touch = true;
+        state.editor_ui.size_class = size_class;
+        let rect =
+            scene_template_panel_rect(&state, viewport_w, viewport_h).expect("the gallery is open");
+        let inset = rect.origin.x;
+        assert_eq!(rect.origin.y, inset);
+        assert!((viewport_h - (rect.origin.y + rect.size.y) - inset).abs() < 0.01);
+        assert!(rect.origin.y < TOP_BAR_HEIGHT);
+
+        let scrim = scene_template_scrim_rect(&state, viewport_w, viewport_h)
+            .expect("the scrim is painted");
+        assert_eq!(scrim, Rect::xywh(0.0, 0.0, viewport_w, viewport_h));
+    }
+}
+
 /// A window too small for the nominal margin gets a smaller one rather
 /// than an inverted rect.
 #[test]

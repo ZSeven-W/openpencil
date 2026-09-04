@@ -20,7 +20,7 @@ pub enum ImportWarning {
     EmptyBody,
     /// `content.dom_depth_truncated` — HTML nesting exceeded {max_depth} levels and deeper content was dropped
     DomDepthTruncated { max_depth: usize },
-    /// `content.node_limit_truncated` — node limit reached (20000), remaining content dropped
+    /// `content.node_limit_truncated` — node limit reached (40000), remaining content dropped
     NodeLimitTruncated,
     /// `content.node_limit_mapping` — node limit reached while mapping HTML
     NodeLimitMapping,
@@ -81,6 +81,9 @@ pub enum ImportWarning {
     NegativeMarginsIgnored,
     /// `layout.margins_on_visual_box_ignored` — CSS margins on visual boxes cannot be represented without changing the box and were ignored
     MarginsOnVisualBoxIgnored,
+    /// `layout.inline_margin_wrapping_approximated` — a non-atomic inline with
+    ///   margins was boxed and may no longer wrap across lines
+    InlineMarginWrappingApproximated,
     /// `layout.content_box_percentage_approximated` — content-box percentage sizing cannot include padding exactly and was approximated
     ContentBoxPercentageApproximated,
     /// `layout.grid_empty_cells_packed` — CSS grid explicit start lines left empty cells; items
@@ -252,6 +255,8 @@ pub enum ImportWarning {
     ObjectPositionIgnored,
     /// `media.image_mix_blend_mode_unsupported` — unsupported CSS mix-blend-mode was ignored on an image
     ImageMixBlendModeUnsupported,
+    /// `media.image_intrinsic_axis_unresolved` — image intrinsic aspect ratio could not resolve the missing axis because the authored size is dynamic or its containing block is indefinite
+    ImageIntrinsicAxisUnresolved,
     /// `media.inline_svg_placeholder` — inline <svg> imported as image placeholder
     InlineSvgPlaceholder,
     /// `media.input_type_fallback` — unsupported input type imported as a text input
@@ -295,7 +300,7 @@ pub enum ImportWarning {
     // --- snapshot: Live browser-snapshot import.
     /// `snapshot.truncated` — browser snapshot was truncated during extraction
     SnapshotTruncated,
-    /// `snapshot.node_limit` — node limit reached (20000), remaining snapshot content dropped
+    /// `snapshot.node_limit` — node limit reached (40000), remaining snapshot content dropped
     SnapshotNodeLimit,
     /// `snapshot.tainted_images` — {count} images kept as remote URLs (CORS-tainted)
     SnapshotTaintedImages { count: usize },
@@ -368,6 +373,9 @@ impl ImportWarning {
             Self::OverflowScrollClipped => ident_pair!("layout.overflow_scroll_clipped"),
             Self::NegativeMarginsIgnored => ident_pair!("layout.negative_margins_ignored"),
             Self::MarginsOnVisualBoxIgnored => ident_pair!("layout.margins_on_visual_box_ignored"),
+            Self::InlineMarginWrappingApproximated => {
+                ident_pair!("layout.inline_margin_wrapping_approximated")
+            }
             Self::ContentBoxPercentageApproximated => {
                 ident_pair!("layout.content_box_percentage_approximated")
             }
@@ -485,6 +493,9 @@ impl ImportWarning {
             Self::ObjectPositionIgnored => ident_pair!("media.object_position_ignored"),
             Self::ImageMixBlendModeUnsupported => {
                 ident_pair!("media.image_mix_blend_mode_unsupported")
+            }
+            Self::ImageIntrinsicAxisUnresolved => {
+                ident_pair!("media.image_intrinsic_axis_unresolved")
             }
             Self::InlineSvgPlaceholder => ident_pair!("media.inline_svg_placeholder"),
             Self::InputTypeFallback => ident_pair!("media.input_type_fallback"),
@@ -673,6 +684,7 @@ pub const ALL_IMPORT_WARNING_CODES: &[&str] = &[
     "layout.overflow_scroll_clipped",
     "layout.negative_margins_ignored",
     "layout.margins_on_visual_box_ignored",
+    "layout.inline_margin_wrapping_approximated",
     "layout.content_box_percentage_approximated",
     "layout.grid_empty_cells_packed",
     "layout.grid_span_reflowed",
@@ -751,6 +763,7 @@ pub const ALL_IMPORT_WARNING_CODES: &[&str] = &[
     "media.object_fit_none_ignored",
     "media.object_position_ignored",
     "media.image_mix_blend_mode_unsupported",
+    "media.image_intrinsic_axis_unresolved",
     "media.inline_svg_placeholder",
     "media.input_type_fallback",
     "media.element_placeholder",

@@ -151,6 +151,7 @@ for workflow_path in \
     "crates/op-editor-ui/**" \
     "crates/op-host-native/**" \
     "crates/op-host-desktop/**" \
+    "crates/op-chat-agent/src/provider_dial.rs" \
     "crates/op-host-services/**" \
     "crates/op-i18n/**" \
     "deploy/collab-relay/**" \

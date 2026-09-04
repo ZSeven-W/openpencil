@@ -46,6 +46,7 @@ mod path_bounds;
 #[cfg(test)]
 mod property_edit_scene_tests;
 mod scene_cache;
+mod shader_preset;
 #[cfg(test)]
 mod snapshot_scene_tests;
 

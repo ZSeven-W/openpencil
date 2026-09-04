@@ -25,6 +25,9 @@ pub struct AiStreamRequest {
     /// Explicit provider identity from the structured model catalog. Older
     /// clients omit it and use the ambiguity-safe legacy resolver.
     pub provider: Option<AgentProvider>,
+    /// Exact daemon-owned built-in identity from the structured model
+    /// catalog. Kept separate from `model` because both ids may contain `:`.
+    pub builtin_provider_id: Option<String>,
     pub model: String,
     pub skills: Vec<String>,
     pub user: String,
@@ -51,6 +54,14 @@ pub fn parse_ai_stream_body(body: &str) -> Option<AiStreamRequest> {
     let provider = match obj.get("provider") {
         None | Some(Value::Null) => None,
         Some(Value::String(value)) => Some(AgentProvider::from_wire_id(value)?),
+        Some(_) => return None,
+    };
+    let builtin_provider_id = match obj.get("builtinProviderId") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(value)) => {
+            let value = value.trim();
+            (!value.is_empty()).then(|| value.to_string())
+        }
         Some(_) => return None,
     };
     let user = obj
@@ -89,6 +100,7 @@ pub fn parse_ai_stream_body(body: &str) -> Option<AiStreamRequest> {
     };
     Some(AiStreamRequest {
         provider,
+        builtin_provider_id,
         model,
         skills,
         user,
@@ -180,7 +192,7 @@ pub fn stream_ai_response<W: Write>(
 
 fn request_model_id(model: &str) -> Option<String> {
     let model = model.trim();
-    if model.is_empty() || model == "default" || parse_builtin_model_key(model).is_some() {
+    if model.is_empty() || model == "default" || model.starts_with("builtin:") {
         None
     } else {
         Some(model.to_string())
@@ -255,7 +267,7 @@ pub fn proxy_provider_for_request_with_chat_session(
     _policy: crate::web_credential_policy::WebCredentialPersistence,
 ) -> Result<Option<Box<dyn ChatProvider>>, ProxyProviderError> {
     if let Some(agent) = request.transient_builtin.as_ref() {
-        if agent.model.trim() != request.model.trim() {
+        if !agent.has_model(request.model.trim()) {
             return Err(ProxyProviderError::TransientModelMismatch);
         }
         if request
@@ -268,13 +280,16 @@ pub fn proxy_provider_for_request_with_chat_session(
         if !crate::web_credentials::public_demo_transient_endpoint_allowed(agent) {
             return Err(ProxyProviderError::EndpointNotPermittedByDeployment);
         }
-        return Ok(ConfiguredBuiltinProvider::from_builtin_agent_for_web(agent)
-            .map(|provider| Box::new(provider) as Box<dyn ChatProvider>));
+        return Ok(
+            ConfiguredBuiltinProvider::from_builtin_agent_for_web_with_model(agent, &request.model)
+                .map(|provider| Box::new(provider) as Box<dyn ChatProvider>),
+        );
     }
 
     Ok(proxy_builtin_for_identity(
         editor,
         request.provider,
+        request.builtin_provider_id.as_deref(),
         &request.model,
     ))
 }
@@ -286,7 +301,7 @@ pub fn proxy_provider_with_chat_session(
     model: &str,
     _chat_session: bool,
 ) -> Option<Box<dyn ChatProvider>> {
-    proxy_builtin_for_identity(editor, None, model)
+    proxy_builtin_for_identity(editor, None, None, model)
 }
 
 fn browser_owned_endpoint_is_allowed(agent: &BuiltinAgentConfig) -> bool {
@@ -294,31 +309,49 @@ fn browser_owned_endpoint_is_allowed(agent: &BuiltinAgentConfig) -> bool {
         || crate::web_credentials::public_demo_transient_endpoint_allowed(agent)
 }
 
-/// JSON body for `GET /api/ai/models`. Only permitted ready built-in model ids
-/// are exposed; host CLI discovery remains private to the native desktop.
+/// JSON body for `GET /api/ai/models`. Each row carries its exact built-in
+/// provider identity so equal model ids on different credentials remain
+/// independently selectable. Host CLI discovery remains private to native.
 pub fn models_json(editor: &EditorState) -> String {
-    let mut models: Vec<String> = editor
+    let mut seen = std::collections::HashSet::new();
+    let mut models = Vec::new();
+    for agent in editor
         .editor_ui
         .agent_settings
         .builtin_agents
         .iter()
-        .filter(|agent| agent.ready() && browser_owned_endpoint_is_allowed(agent))
-        .map(|agent| agent.model.trim())
-        .filter(|model| !model.is_empty())
-        .map(str::to_string)
-        .collect();
-    let mut seen = std::collections::HashSet::new();
-    models.retain(|model| seen.insert(model.clone()));
+        .filter(|agent| {
+            agent.ready()
+                && !crate::web_credentials::browser_owns_builtin_agent(agent)
+                && browser_owned_endpoint_is_allowed(agent)
+        })
+    {
+        for model in agent.models.iter().map(|model| model.trim()) {
+            if model.is_empty() || !seen.insert((agent.id.as_str(), model)) {
+                continue;
+            }
+            models.push(json!({
+                "provider": agent.kind.model_provider().wire_id(),
+                "value": format!("builtin:{}:{model}", agent.id),
+                "displayName": model,
+                "providerDisplayName": agent.display_name,
+                "builtinProviderId": agent.id,
+            }));
+        }
+    }
     serde_json::to_string(&models).unwrap_or_else(|_| "[]".to_string())
 }
 
 /// Web-request provider constructor: browser-owned agents dial with
 /// connect-time DNS screening; operator-owned daemon agents stay trusted.
-fn web_provider_for_agent(agent: &BuiltinAgentConfig) -> Option<Box<dyn ChatProvider>> {
+fn web_provider_for_agent(
+    agent: &BuiltinAgentConfig,
+    selected_model: &str,
+) -> Option<Box<dyn ChatProvider>> {
     let provider = if crate::web_credentials::browser_owns_builtin_agent(agent) {
-        ConfiguredBuiltinProvider::from_builtin_agent_for_web(agent)
+        ConfiguredBuiltinProvider::from_builtin_agent_for_web_with_model(agent, selected_model)
     } else {
-        ConfiguredBuiltinProvider::from_builtin_agent(agent)
+        ConfiguredBuiltinProvider::from_builtin_agent_with_model(agent, selected_model)
     };
     provider.map(|configured| Box::new(configured) as Box<dyn ChatProvider>)
 }
@@ -326,36 +359,77 @@ fn web_provider_for_agent(agent: &BuiltinAgentConfig) -> Option<Box<dyn ChatProv
 fn proxy_builtin_for_identity(
     editor: &EditorState,
     provider: Option<AgentProvider>,
+    builtin_provider_id: Option<&str>,
     model: &str,
 ) -> Option<Box<dyn ChatProvider>> {
-    if let Some((builtin_id, builtin_model)) = parse_builtin_model_key(model) {
+    let model = model.trim();
+    if let Some(builtin_id) = builtin_provider_id {
         let chosen = editor
             .editor_ui
             .agent_settings
             .builtin_agents
             .iter()
-            .find(|agent| {
-                agent.ready()
-                    && browser_owned_endpoint_is_allowed(agent)
-                    && agent.id == builtin_id
-                    && agent.model.trim() == builtin_model
-                    && provider.is_none_or(|expected| agent.kind.model_provider() == expected)
-            })?;
-        return web_provider_for_agent(chosen);
+            .find(|agent| agent.id == builtin_id)?;
+        let builtin_model = match model.strip_prefix("builtin:") {
+            Some(structured) => structured
+                .strip_prefix(builtin_id)?
+                .strip_prefix(':')?
+                .trim(),
+            None => model,
+        };
+        if !chosen.ready()
+            || !browser_owned_endpoint_is_allowed(chosen)
+            || !chosen.has_model(builtin_model)
+            || provider.is_some_and(|expected| chosen.kind.model_provider() != expected)
+        {
+            return None;
+        }
+        return web_provider_for_agent(chosen, builtin_model);
+    }
+    // Rolling-upgrade compatibility for a web tab loaded before
+    // `builtinProviderId` was added. Never split the structured value: compare
+    // the complete value generated from each saved `(provider id, model)` and
+    // accept only one exact candidate. Non-injective colon joins remain
+    // rejected instead of guessing a credential boundary.
+    if model.starts_with("builtin:") {
+        let mut candidate = None;
+        for agent in &editor.editor_ui.agent_settings.builtin_agents {
+            if provider.is_some_and(|expected| agent.kind.model_provider() != expected) {
+                continue;
+            }
+            for saved_model in &agent.models {
+                if format!("builtin:{}:{saved_model}", agent.id) != model {
+                    continue;
+                }
+                if candidate.is_some() {
+                    return None;
+                }
+                candidate = Some((agent, saved_model.as_str()));
+            }
+        }
+        let (chosen, selected_model) = candidate?;
+        if !chosen.ready() || !browser_owned_endpoint_is_allowed(chosen) {
+            return None;
+        }
+        return web_provider_for_agent(chosen, selected_model);
     }
 
-    let requested = model.trim();
+    let requested = model;
     let is_default = requested.is_empty() || requested == "default";
     let agents = &editor.editor_ui.agent_settings.builtin_agents;
     let exact = || {
         agents.iter().filter(|agent| {
             agent.ready()
-                && agent.model.trim() == requested
+                && agent.has_model(requested)
                 && provider.is_none_or(|expected| agent.kind.model_provider() == expected)
         })
     };
-    if let Some(chosen) = exact().find(|agent| browser_owned_endpoint_is_allowed(agent)) {
-        return web_provider_for_agent(chosen);
+    let mut eligible = exact().filter(|agent| browser_owned_endpoint_is_allowed(agent));
+    if let Some(chosen) = eligible.next() {
+        if eligible.next().is_some() {
+            return None;
+        }
+        return web_provider_for_agent(chosen, requested);
     }
     if exact().next().is_some() || !is_default {
         return None;
@@ -366,17 +440,8 @@ fn proxy_builtin_for_identity(
             && browser_owned_endpoint_is_allowed(agent)
             && provider.is_none_or(|expected| agent.kind.model_provider() == expected)
     })?;
-    web_provider_for_agent(chosen)
-}
-
-fn parse_builtin_model_key(value: &str) -> Option<(&str, &str)> {
-    let mut parts = value.trim().splitn(3, ':');
-    if parts.next()? != "builtin" {
-        return None;
-    }
-    let id = parts.next()?.trim();
-    let model = parts.next()?.trim();
-    (!id.is_empty() && !model.is_empty()).then_some((id, model))
+    let model = chosen.first_model()?;
+    web_provider_for_agent(chosen, model)
 }
 
 #[cfg(test)]

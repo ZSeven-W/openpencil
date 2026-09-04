@@ -120,6 +120,24 @@ impl BatchDesign {
         bindings: Vec<String>,
         promoted: Vec<PromoteNote>,
     ) -> ToolOutcome {
+        let post_processed = args
+            .get("postProcess")
+            .or_else(|| args.get("post_process"))
+            .is_some_and(|raw| matches!(raw.trim(), "true" | "1"));
+        // Unknown external parents are intentionally downgraded to document
+        // root later in this function, so choose the refine scope from the
+        // destination that will actually be emitted rather than merely from
+        // whether the parsed id is syntactically real.
+        let document_root = !parent_id.is_real() || !self.existing_ids.contains(&parent_id);
+        if post_processed {
+            for node in &mut nodes {
+                if document_root {
+                    let _ = op_editor_core::command_refine::refine_subtree(node);
+                } else {
+                    let _ = op_editor_core::command_refine::refine_child_subtree(node);
+                }
+            }
+        }
         let Some(seed0) = self.id_seed else {
             return dispatch_batch_design(args, None); // id-space exhausted → flat path
         };
@@ -159,6 +177,9 @@ impl BatchDesign {
         // nodes. Omitted entirely (so the result is byte-identical to before)
         // when nothing was promoted, which is the common case.
         let mut result = json!({ "results": results, "nodeCount": node_count });
+        if post_processed {
+            result["postProcessed"] = Value::Bool(true);
+        }
         if !promoted.is_empty() {
             let notes: Vec<Value> = promoted
                 .iter()

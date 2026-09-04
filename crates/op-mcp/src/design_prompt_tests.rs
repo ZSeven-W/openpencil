@@ -59,7 +59,7 @@ fn get_design_prompt_full_includes_mobile_quality_guardrails() {
 }
 
 #[test]
-fn get_design_prompt_elements_section_points_to_batch_design_operations() {
+fn get_design_prompt_elements_section_is_script_first_and_edits_with_operations() {
     let state = op_editor_core::EditorState::new();
     let mut args = BTreeMap::new();
     args.insert("section".into(), "elements".into());
@@ -68,7 +68,13 @@ fn get_design_prompt_elements_section_points_to_batch_design_operations() {
         ToolOutcome::Ok(out) => {
             let prompt = out.get("designPrompt").expect("prompt");
             assert!(prompt.contains("batch_design"));
-            assert!(prompt.contains("root=I(null"));
+            assert!(prompt.contains("batch_design.script"));
+            assert!(prompt.contains("script-first"));
+            assert!(prompt.contains("I(parent, nodeObject)"));
+            assert!(prompt.contains("K(\"starter/<id>\""));
+            assert!(prompt.contains("batch_design.operations"));
+            assert!(prompt.contains("ONLY to edit existing nodes"));
+            assert!(prompt.contains("Do not create fresh UI trees with `I()` in operations"));
             assert!(prompt.contains("U(nodeId, patchJson)"));
             assert!(prompt.contains("C(sourceId, parent"));
             assert!(prompt.contains("R(nodeId, nodeJson)"));

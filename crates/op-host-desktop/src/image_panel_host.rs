@@ -308,6 +308,7 @@ fn run_search_blocking(query: &str, credentials: Option<&OpenverseCredentials>) 
 
 async fn run_search(query: &str, credentials: Option<&OpenverseCredentials>) -> SearchOutcome {
     let Ok(client) = reqwest::Client::builder()
+        .use_rustls_tls()
         .timeout(Duration::from_secs(8))
         .user_agent(concat!("openpencil-desktop/", env!("CARGO_PKG_VERSION")))
         .build()

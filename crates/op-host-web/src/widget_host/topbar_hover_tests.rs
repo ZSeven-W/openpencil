@@ -35,7 +35,7 @@ fn web_topbar_sidebar_button_has_no_traffic_gap() {
 }
 
 #[test]
-fn web_topbar_preview_button_toggles_preview_mode_like_native() {
+fn web_topbar_preview_button_press_is_routed_and_leaves_no_half_state() {
     let mut host = WidgetHost::new();
     host.last_viewport_w = 1440.0;
     host.last_viewport_h = 900.0;
@@ -60,11 +60,23 @@ fn web_topbar_preview_button_toggles_preview_mode_like_native() {
 
     assert!(host.apply_press(point.x, point.y, 1440.0, 900.0));
 
-    assert!(host.editor_state.editor_ui.preview.mode);
-
-    assert!(host.apply_press(point.x, point.y, 1440.0, 900.0));
-
-    assert!(!host.editor_state.editor_ui.preview.mode);
+    // Entering preview needs a live CanvasKit context: the session's text
+    // measurement is the browser's own Canvas2D (`BrowserMeasure::new(op_ck)`),
+    // which a headless test cannot supply — `OpCk` is a wasm-bindgen bridge to
+    // a JS object. So this asserts the half of the contract that IS reachable
+    // here: the button routes, the press is consumed, and a host that could not
+    // build the session stays consistently in design mode rather than flipping
+    // the flag with no runtime behind it. The native twin
+    // (`preview_input::toggle_preview`) covers the state transition itself, and
+    // ties the flag to a successful session the same way.
+    assert!(
+        !host.editor_state.editor_ui.preview.mode,
+        "no renderer, so preview must not report itself active"
+    );
+    assert!(
+        host.preview.is_none(),
+        "and no session may exist behind that flag"
+    );
 }
 
 /// The browser host has no deadline scheduler, so the dwell has to be

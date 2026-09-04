@@ -267,10 +267,12 @@ fn build_auto_generate_body(state: &EditorState) -> Option<String> {
     // scoped credential path from the deployment-aware web host, while using
     // provider identity only for an actual built-in catalog entry.
     selected.builtin_provider_id.as_ref()?;
-    let (model, credential) = crate::web_ai_credentials::selected_target(state);
+    let (model, credential, builtin_provider_id) =
+        crate::web_ai_credentials::selected_target(state);
     let user = build_design_md_user_message(state);
     let body = serde_json::json!({
         "provider": selected.provider.wire_id(),
+        "builtinProviderId": builtin_provider_id,
         "model": model,
         "skills": [],
         "user": user,

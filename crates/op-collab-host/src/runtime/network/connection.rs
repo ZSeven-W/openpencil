@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 
 use op_collab::{Bye, ByeReason, CollabMessage, ConnectionKey, Epoch, SessionId};
 use op_collab_transport::{
-    AdmissionError, ConnectionDriver, DriverEvent, EncodedFrameTransfer, InboundTransferPolicy,
-    QueueError, RuntimeError, SharedQueueBudget,
+    AdmissionError, ConnectionDriver, DriverEvent, InboundTransferPolicy, RuntimeError,
+    SharedQueueBudget,
 };
 
 use super::super::auth::{
@@ -15,6 +15,7 @@ use super::super::types::{
     CollabRuntimeFailure, GuestNetworkCommand, NetworkEvent, PeerNetworkCommand, RemoteBye,
     TerminalNetworkEvent,
 };
+use super::connection_queue::queue_command_frame;
 use super::shutdown::{retirement_ready, TerminalDrain};
 use super::{EventSendError, EventSink};
 
@@ -351,25 +352,6 @@ pub(super) fn drive_guest(
     }
 }
 
-fn queue_command_frame(
-    driver: &mut ConnectionDriver,
-    encoded: EncodedFrameTransfer,
-    coalesce_key: Option<u64>,
-    lossy_presence: bool,
-    now: Instant,
-) -> Result<(), RuntimeError> {
-    let result = match coalesce_key {
-        Some(key) => driver.queue_coalescing_encoded_frame(key, encoded, now),
-        None => driver.queue_encoded_frame(encoded, now),
-    };
-    match result {
-        Err(RuntimeError::Queue(QueueError::Full | QueueError::ByteBudget)) if lossy_presence => {
-            Ok(())
-        }
-        result => result,
-    }
-}
-
 fn send_frame(
     sink: &EventSink,
     connection: ConnectionKey,
@@ -389,7 +371,11 @@ fn send_frame(
         return Err(None);
     }
     let lossy = super::super::types::is_lossy_presence_frame(&frame);
-    match sink.try_send_sized(NetworkEvent::Frame { connection, frame }, encoded_len) {
+    match sink.try_send_sized(
+        NetworkEvent::Frame { connection, frame },
+        encoded_len,
+        lossy,
+    ) {
         Ok(()) => Ok(()),
         Err(EventSendError::Full) if lossy => Ok(()),
         Err(EventSendError::Full) => Err(Some(CollabRuntimeFailure::ResourceLimit)),
@@ -451,7 +437,7 @@ pub(super) fn runtime_failure(error: &RuntimeError) -> CollabRuntimeFailure {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use std::net::TcpListener;
     use std::sync::mpsc::TryRecvError;
     use std::sync::Arc;
@@ -501,7 +487,7 @@ mod tests {
         }
     }
 
-    pub(super) fn admitted_pair(
+    pub(in crate::runtime::network) fn admitted_pair(
         expires_at_unix_ms: u64,
     ) -> (
         op_collab_transport::ConnectionDriver,
@@ -587,7 +573,7 @@ mod tests {
         )
     }
 
-    pub(super) fn bye_frame(reason: ByeReason) -> FrameEnvelope {
+    pub(in crate::runtime::network) fn bye_frame(reason: ByeReason) -> FrameEnvelope {
         FrameEnvelope::new(
             SessionId::from("session"),
             Epoch(1),
@@ -776,7 +762,3 @@ mod tests {
         ));
     }
 }
-
-#[cfg(test)]
-#[path = "connection_queue_tests.rs"]
-mod queue_tests;

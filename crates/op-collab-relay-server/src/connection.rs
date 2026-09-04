@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     num::NonZeroU64,
     sync::{Arc, Mutex},
 };
@@ -11,7 +10,7 @@ use futures_util::{
 use op_collab_relay_protocol::{
     is_valid_relay_bearer_token, RelayClientHello, RelayProtocolError, RelayRejectCode,
     RelayServerStatus, MAX_RELAY_BEARER_BYTES, MAX_RELAY_REAUTH_RESPONSE_TEXT_BYTES,
-    RELAY_CHALLENGE_HEADER_NAME,
+    RELAY_CHALLENGE_HEADER_NAME, RELAY_WAITING_HEADER_NAME,
 };
 use tokio::{
     net::TcpStream,
@@ -23,7 +22,7 @@ use tokio_tungstenite::{
     tungstenite::{
         handshake::server::{ErrorResponse, Request, Response},
         http::HeaderValue,
-        protocol::{frame::coding::CloseCode, CloseFrame, WebSocketConfig},
+        protocol::WebSocketConfig,
         Message,
     },
     WebSocketStream,
@@ -32,13 +31,16 @@ use zeroize::Zeroizing;
 
 use crate::{
     auth::{AuthenticatedRoute, RelayAuthenticator, RelayBearerCredential, RelayUpgradeChallenge},
+    close::{close, close_and_linger, reject_and_close, send_status, RelayCloseReason},
     config::RelayConfig,
     connection_reauth::{
         perform_reauthentication, ReauthOutcome, ReauthRelayTraffic, RelayAuthState,
         RelaySessionIdentity,
     },
+    connection_wait::wait_for_pair,
+    observe::{ConnectionTrace, HandshakeStage, RelayCensus},
     peer_quota::PeerQuotaPermit,
-    registry::{PairNotice, QueuedPayload, Registration, Registry, WaitingRegistration},
+    registry::{PairNotice, QueuedPayload, Registration, Registry},
 };
 
 type WebSocket = WebSocketStream<TcpStream>;
@@ -65,6 +67,7 @@ pub(crate) struct ConnectionServices {
     pub(crate) auth_in_flight: Arc<Semaphore>,
     pub(crate) reauth_in_flight: Arc<Semaphore>,
     pub(crate) queued_bytes: Arc<Semaphore>,
+    pub(crate) census: Arc<RelayCensus>,
 }
 
 /// The capacity a connection occupies until it pairs.
@@ -99,10 +102,14 @@ pub(crate) async fn serve_connection(
         auth_in_flight,
         reauth_in_flight,
         queued_bytes,
+        census,
     } = services;
+    let mut trace = ConnectionTrace::new(&census);
+    trace.accepted();
     let started_at = Instant::now();
     let handshake_deadline = started_at + config.handshake_timeout;
     let Ok(auth_permit) = Arc::clone(&auth_in_flight).try_acquire_owned() else {
+        trace.handshake_failed(HandshakeStage::AuthConcurrency);
         return;
     };
     let challenge_authenticator = Arc::clone(&authenticator);
@@ -112,13 +119,19 @@ pub(crate) async fn serve_connection(
     let (challenge_key, auth_permit) =
         match time::timeout_at(handshake_deadline, challenge_key).await {
             Ok(Ok((Ok(key_id), permit))) => (key_id, permit),
-            Ok(Ok((Err(_), _))) | Ok(Err(_)) | Err(_) => return,
+            Ok(Ok((Err(_), _))) | Ok(Err(_)) | Err(_) => {
+                trace.handshake_failed(HandshakeStage::ChallengeKey);
+                return;
+            }
         };
     let challenge = match challenge_key {
         Some(key_id) => {
             match RelayUpgradeChallenge::generate(key_id, handshake_deadline.into_std()) {
                 Ok(challenge) => Some(challenge),
-                Err(_) => return,
+                Err(_) => {
+                    trace.handshake_failed(HandshakeStage::ChallengeGeneration);
+                    return;
+                }
             }
         }
         None => None,
@@ -134,14 +147,18 @@ pub(crate) async fn serve_connection(
             config.max_message_bytes,
             config.unauthenticated_dev(),
             challenge_header,
+            config.waiting_advertisement().encode_header(),
         ),
     )
     .await
     {
         Ok(Ok(websocket)) => websocket,
-        Ok(Err(_)) => return,
+        Ok(Err(_)) => {
+            trace.handshake_failed(HandshakeStage::Upgrade);
+            return;
+        }
         Err(_) => {
-            tracing::debug!("relay WebSocket handshake timed out");
+            trace.handshake_failed(HandshakeStage::UpgradeTimeout);
             return;
         }
     };
@@ -150,15 +167,30 @@ pub(crate) async fn serve_connection(
     let first = match time::timeout_at(handshake_deadline, source.next()).await {
         Ok(Some(Ok(Message::Binary(payload)))) => Zeroizing::new(payload),
         Ok(Some(Ok(_))) => {
-            reject_and_close(&mut sink, RelayRejectCode::MalformedHello).await;
+            reject(
+                &mut trace,
+                &mut sink,
+                &mut source,
+                RelayRejectCode::MalformedHello,
+            )
+            .await;
             return;
         }
-        Ok(Some(Err(_))) | Ok(None) | Err(_) => return,
+        Ok(Some(Err(_))) | Ok(None) | Err(_) => {
+            trace.handshake_failed(HandshakeStage::Hello);
+            return;
+        }
     };
     let hello = match RelayClientHello::decode(&first) {
         Ok(hello) => hello,
         Err(error) => {
-            reject_and_close(&mut sink, hello_decode_reject_code(&error)).await;
+            reject(
+                &mut trace,
+                &mut sink,
+                &mut source,
+                hello_decode_reject_code(&error),
+            )
+            .await;
             return;
         }
     };
@@ -172,7 +204,13 @@ pub(crate) async fn serve_connection(
     let authentication = match time::timeout_at(handshake_deadline, authentication).await {
         Ok(Ok(authentication)) => authentication,
         Ok(Err(_)) | Err(_) => {
-            reject_and_close(&mut sink, RelayRejectCode::AuthenticationFailed).await;
+            reject(
+                &mut trace,
+                &mut sink,
+                &mut source,
+                RelayRejectCode::AuthenticationFailed,
+            )
+            .await;
             return;
         }
     };
@@ -183,24 +221,43 @@ pub(crate) async fn serve_connection(
     } = match authentication {
         Ok(route) => route,
         Err(code) => {
-            reject_and_close(&mut sink, code).await;
+            reject(&mut trace, &mut sink, &mut source, code).await;
             return;
         }
     };
     let Some(expires_at_unix) =
         NonZeroU64::new(expires_at_unix.get().min(session_hello.expires_at_unix()))
     else {
-        reject_and_close(&mut sink, RelayRejectCode::AuthenticationFailed).await;
+        reject(
+            &mut trace,
+            &mut sink,
+            &mut source,
+            RelayRejectCode::AuthenticationFailed,
+        )
+        .await;
         return;
     };
     let Some(mut auth_state) = RelayAuthState::new(expires_at_unix) else {
-        reject_and_close(&mut sink, RelayRejectCode::AuthenticationFailed).await;
+        reject(
+            &mut trace,
+            &mut sink,
+            &mut source,
+            RelayRejectCode::AuthenticationFailed,
+        )
+        .await;
         return;
     };
     let Some(identity) = RelaySessionIdentity::new(route, role, &session_hello) else {
-        reject_and_close(&mut sink, RelayRejectCode::AuthenticationFailed).await;
+        reject(
+            &mut trace,
+            &mut sink,
+            &mut source,
+            RelayRejectCode::AuthenticationFailed,
+        )
+        .await;
         return;
     };
+    trace.identify(role, &route);
     let configured_deadline = started_at
         .checked_add(config.tunnel_lifetime)
         .unwrap_or(auth_state.deadline());
@@ -209,7 +266,13 @@ pub(crate) async fn serve_connection(
     let registration = match registry.register(route, role, relay_tx).await {
         Ok(registration) => registration,
         Err(_) => {
-            reject_and_close(&mut sink, RelayRejectCode::Capacity).await;
+            reject(
+                &mut trace,
+                &mut sink,
+                &mut source,
+                RelayRejectCode::Capacity,
+            )
+            .await;
             return;
         }
     };
@@ -230,7 +293,9 @@ pub(crate) async fn serve_connection(
             pair
         }
         Registration::Waiting(mut waiting) => {
+            trace.registered(waiting.waiting_on_route);
             let pair = wait_for_pair(
+                &mut trace,
                 &mut sink,
                 &mut source,
                 &mut waiting,
@@ -257,16 +322,24 @@ pub(crate) async fn serve_connection(
         registry.close_pair(pair.pair_id).await;
         return;
     }
+    trace.paired();
     let synchronize_timeout = auth_state
         .effective_deadline(configured_deadline)
         .saturating_duration_since(Instant::now())
         .min(config.handshake_timeout);
     if synchronize_timeout.is_zero() || !pair.synchronize(synchronize_timeout).await {
-        close(&mut sink, CloseCode::Away, "peer disconnected").await;
+        close_out(
+            &mut trace,
+            &mut sink,
+            &mut source,
+            RelayCloseReason::PeerDisconnected,
+        )
+        .await;
         registry.close_pair(pair.pair_id).await;
         return;
     }
     relay_paired(
+        &mut trace,
         sink,
         source,
         relay_rx,
@@ -285,6 +358,28 @@ pub(crate) async fn serve_connection(
     .await;
 }
 
+/// Reject a peer: record it, then deliver the reason and drain the close.
+pub(crate) async fn reject(
+    trace: &mut ConnectionTrace<'_>,
+    sink: &mut WebSocketSink,
+    source: &mut WebSocketSource,
+    code: RelayRejectCode,
+) {
+    trace.rejected(code);
+    reject_and_close(sink, source, code).await;
+}
+
+/// Close a peer: record it, then deliver the reason and drain the close.
+pub(crate) async fn close_out(
+    trace: &mut ConnectionTrace<'_>,
+    sink: &mut WebSocketSink,
+    source: &mut WebSocketSource,
+    reason: RelayCloseReason,
+) {
+    trace.closed(reason);
+    close_and_linger(sink, source, reason).await;
+}
+
 // Tungstenite fixes the handshake callback's error to a full HTTP response.
 #[allow(clippy::result_large_err)]
 async fn accept_tunnel(
@@ -292,6 +387,7 @@ async fn accept_tunnel(
     max_message_bytes: usize,
     allow_anonymous_dev: bool,
     challenge_header: Option<String>,
+    waiting_header: String,
 ) -> Result<(WebSocket, Option<RelayBearerCredential>), tokio_tungstenite::tungstenite::Error> {
     let credential = Arc::new(Mutex::new(None));
     let callback_credential = Arc::clone(&credential);
@@ -299,6 +395,16 @@ async fn accept_tunnel(
         if request.uri().path_and_query().map(|uri| uri.as_str()) != Some("/v1/tunnel") {
             return Err(http_error_response(404, "not found"));
         }
+        // The waiting capability is not a secret and carries no identity, so
+        // it rides every accepted upgrade — including the development path
+        // that has no challenge to attach.
+        let advertise = |response: &mut Response| {
+            response.headers_mut().insert(
+                RELAY_WAITING_HEADER_NAME,
+                HeaderValue::from_str(&waiting_header)
+                    .expect("waiting advertisement encoding is a valid HTTP header"),
+            );
+        };
         match parse_bearer(request) {
             Ok(Some(value)) => {
                 *callback_credential
@@ -311,10 +417,12 @@ async fn accept_tunnel(
                             .expect("protocol challenge encoding is a valid HTTP header"),
                     );
                 }
+                advertise(&mut response);
                 Ok(response)
             }
             Ok(None) if allow_anonymous_dev => {
                 debug_assert!(challenge_header.is_none());
+                advertise(&mut response);
                 Ok(response)
             }
             Ok(None) | Err(()) => Err(http_error_response(401, "unauthorized")),
@@ -366,142 +474,8 @@ fn http_error_response(status: u16, message: &'static str) -> ErrorResponse {
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn wait_for_pair(
-    sink: &mut WebSocketSink,
-    source: &mut WebSocketSource,
-    waiting: &mut WaitingRegistration,
-    config: &RelayConfig,
-    auth_state: &mut RelayAuthState,
-    configured_deadline: Instant,
-    strict_reauth: bool,
-    authenticator: Arc<dyn RelayAuthenticator>,
-    reauth_in_flight: Arc<Semaphore>,
-    identity: &RelaySessionIdentity,
-    shutdown: &mut watch::Receiver<bool>,
-) -> Option<PairNotice> {
-    let waiting_deadline = Instant::now() + config.waiting_timeout;
-    let mut idle = sleep_until(Instant::now() + config.idle_timeout);
-    let mut waiting_timeout = sleep_until(waiting_deadline);
-    let mut lifetime = sleep_until(auth_state.effective_deadline(configured_deadline));
-    let mut reauth_at = strict_reauth
-        .then(|| {
-            auth_state.reauth_at(
-                Instant::now(),
-                configured_deadline,
-                identity.locator_expiry_unix(),
-            )
-        })
-        .flatten();
-    let mut reauth = sleep_until(
-        reauth_at.unwrap_or_else(|| auth_state.effective_deadline(configured_deadline)),
-    );
-
-    loop {
-        tokio::select! {
-            biased;
-            changed = shutdown.changed() => {
-                if changed.is_ok() && *shutdown.borrow() {
-                    close(sink, CloseCode::Restart, "relay shutdown").await;
-                    return None;
-                }
-            }
-            () = &mut lifetime => {
-                reject_and_close(sink, RelayRejectCode::AuthenticationFailed).await;
-                return None;
-            }
-            () = &mut reauth, if reauth_at.is_some() => {
-                match perform_reauthentication(
-                    sink,
-                    source,
-                    Arc::clone(&authenticator),
-                    Arc::clone(&reauth_in_flight),
-                    identity,
-                    *auth_state,
-                    configured_deadline,
-                    config.handshake_timeout,
-                    None,
-                ).await {
-                    Ok(ReauthOutcome::Extended(extended)) => {
-                        *auth_state = extended;
-                        lifetime.as_mut().reset(
-                            auth_state.effective_deadline(configured_deadline),
-                        );
-                        reauth_at = auth_state.reauth_at(
-                            Instant::now(),
-                            configured_deadline,
-                            identity.locator_expiry_unix(),
-                        );
-                        reauth.as_mut().reset(
-                            reauth_at.unwrap_or_else(|| {
-                                auth_state.effective_deadline(configured_deadline)
-                            }),
-                        );
-                        reset_idle(&mut idle, config.idle_timeout);
-                    }
-                    Ok(ReauthOutcome::StillCurrent) => {
-                        reauth_at = auth_state.reauth_at(
-                            Instant::now(),
-                            configured_deadline,
-                            identity.locator_expiry_unix(),
-                        );
-                        reauth.as_mut().reset(
-                            reauth_at.unwrap_or_else(|| {
-                                auth_state.effective_deadline(configured_deadline)
-                            }),
-                        );
-                        reset_idle(&mut idle, config.idle_timeout);
-                    }
-                    Err(()) => {
-                        close(
-                            sink,
-                            CloseCode::Policy,
-                            "relay reauthentication failed",
-                        ).await;
-                        return None;
-                    }
-                }
-            }
-            () = &mut waiting_timeout => {
-                reject_and_close(sink, RelayRejectCode::PairingTimeout).await;
-                return None;
-            }
-            () = &mut idle => {
-                close(sink, CloseCode::Away, "idle timeout").await;
-                return None;
-            }
-            result = &mut waiting.pair_rx => {
-                return result.ok();
-            }
-            message = source.next() => {
-                match message {
-                    Some(Ok(Message::Ping(payload))) => {
-                        if sink.send(Message::Pong(payload)).await.is_err() {
-                            return None;
-                        }
-                        reset_idle(&mut idle, config.idle_timeout);
-                    }
-                    Some(Ok(Message::Pong(_))) => {
-                        reset_idle(&mut idle, config.idle_timeout);
-                    }
-                    Some(Ok(Message::Close(frame))) => {
-                        let _ = sink.send(Message::Close(frame)).await;
-                        return None;
-                    }
-                    Some(Ok(Message::Binary(_) | Message::Text(_) | Message::Frame(_))) => {
-                        // No application payload is accepted before both peers
-                        // have received Paired.
-                        reject_and_close(sink, RelayRejectCode::MalformedHello).await;
-                        return None;
-                    }
-                    Some(Err(_)) | None => return None,
-                }
-            }
-        }
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
 async fn relay_paired(
+    trace: &mut ConnectionTrace<'_>,
     mut sink: WebSocketSink,
     mut source: WebSocketSource,
     mut relay_rx: mpsc::Receiver<QueuedPayload>,
@@ -537,12 +511,17 @@ async fn relay_paired(
             biased;
             changed = shutdown.changed() => {
                 if changed.is_ok() && *shutdown.borrow() {
-                    close(&mut sink, CloseCode::Restart, "relay shutdown").await;
+                    close_out(trace, &mut sink, &mut source, RelayCloseReason::Shutdown).await;
                     break;
                 }
             }
             () = &mut lifetime => {
-                close(&mut sink, CloseCode::Away, "tunnel lifetime reached").await;
+                close_out(
+                    trace,
+                    &mut sink,
+                    &mut source,
+                    RelayCloseReason::TunnelLifetime,
+                ).await;
                 break;
             }
             () = &mut reauth, if reauth_at.is_some() => {
@@ -594,24 +573,26 @@ async fn relay_paired(
                         reset_idle(&mut idle, config.idle_timeout);
                     }
                     Err(()) => {
-                        close(
+                        close_out(
+                            trace,
                             &mut sink,
-                            CloseCode::Policy,
-                            "relay reauthentication failed",
+                            &mut source,
+                            RelayCloseReason::ReauthenticationFailed,
                         ).await;
                         break;
                     }
                 }
             }
             () = &mut idle => {
-                close(&mut sink, CloseCode::Away, "idle timeout").await;
+                close_out(trace, &mut sink, &mut source, RelayCloseReason::IdleTimeout).await;
                 break;
             }
             message = source.next() => {
                 match message {
                     Some(Ok(Message::Binary(payload))) => {
                         if payload.len() > config.max_message_bytes {
-                            close(&mut sink, CloseCode::Size, "message too large").await;
+                            trace.closed(RelayCloseReason::MessageTooLarge);
+                            close(&mut sink, RelayCloseReason::MessageTooLarge).await;
                             break;
                         }
                         let permits = u32::try_from(payload.len())
@@ -619,29 +600,34 @@ async fn relay_paired(
                         let Ok(global_budget) = Arc::clone(&queued_bytes)
                             .try_acquire_many_owned(permits)
                         else {
-                            close(&mut sink, CloseCode::Again, "relay backpressure").await;
+                            trace.closed(RelayCloseReason::Backpressure);
+                            close(&mut sink, RelayCloseReason::Backpressure).await;
                             break;
                         };
                         let Ok(route_budget) = Arc::clone(&pair.route_budget)
                             .try_acquire_many_owned(permits)
                         else {
-                            close(&mut sink, CloseCode::Again, "relay backpressure").await;
+                            trace.closed(RelayCloseReason::Backpressure);
+                            close(&mut sink, RelayCloseReason::Backpressure).await;
                             break;
                         };
                         let queued =
                             QueuedPayload::new(payload, global_budget, route_budget);
                         if pair.peer_tx.try_send(queued).is_err() {
-                            close(&mut sink, CloseCode::Again, "relay backpressure").await;
+                            trace.closed(RelayCloseReason::Backpressure);
+                            close(&mut sink, RelayCloseReason::Backpressure).await;
                             break;
                         }
                         reset_idle(&mut idle, config.idle_timeout);
                     }
                     Some(Ok(Message::Text(_))) => {
-                        close(&mut sink, CloseCode::Unsupported, "binary messages only").await;
+                        trace.closed(RelayCloseReason::TextUnsupported);
+                        close(&mut sink, RelayCloseReason::TextUnsupported).await;
                         break;
                     }
                     Some(Ok(Message::Ping(payload))) => {
                         if sink.send(Message::Pong(payload)).await.is_err() {
+                            trace.closed(RelayCloseReason::PeerReset);
                             break;
                         }
                         reset_idle(&mut idle, config.idle_timeout);
@@ -650,24 +636,35 @@ async fn relay_paired(
                         reset_idle(&mut idle, config.idle_timeout);
                     }
                     Some(Ok(Message::Close(frame))) => {
+                        trace.closed(RelayCloseReason::PeerClosed);
                         let _ = sink.send(Message::Close(frame)).await;
                         break;
                     }
                     Some(Ok(Message::Frame(_))) => {
-                        close(&mut sink, CloseCode::Protocol, "unexpected frame").await;
+                        trace.closed(RelayCloseReason::UnexpectedFrame);
+                        close(&mut sink, RelayCloseReason::UnexpectedFrame).await;
                         break;
                     }
-                    Some(Err(_)) | None => break,
+                    Some(Err(error)) => {
+                        trace.closed(transport_end_reason(Some(&error)));
+                        break;
+                    }
+                    None => {
+                        trace.closed(RelayCloseReason::PeerEof);
+                        break;
+                    }
                 }
             }
             queued = relay_rx.recv() => {
                 let Some(queued) = queued else {
-                    close(&mut sink, CloseCode::Away, "peer disconnected").await;
+                    trace.closed(RelayCloseReason::PeerDisconnected);
+                    close(&mut sink, RelayCloseReason::PeerDisconnected).await;
                     break;
                 };
                 let (payload, _global_budget, _route_budget) =
                     queued.into_parts();
                 if sink.send(Message::Binary(payload)).await.is_err() {
+                    trace.closed(RelayCloseReason::PeerReset);
                     break;
                 }
                 reset_idle(&mut idle, config.idle_timeout);
@@ -678,23 +675,27 @@ async fn relay_paired(
     registry.close_pair(pair.pair_id).await;
 }
 
-fn sleep_until(deadline: Instant) -> std::pin::Pin<Box<Sleep>> {
+pub(crate) fn sleep_until(deadline: Instant) -> std::pin::Pin<Box<Sleep>> {
     Box::pin(time::sleep_until(deadline))
 }
 
-fn reset_idle(idle: &mut std::pin::Pin<Box<Sleep>>, timeout: std::time::Duration) {
+pub(crate) fn reset_idle(idle: &mut std::pin::Pin<Box<Sleep>>, timeout: std::time::Duration) {
     idle.as_mut().reset(Instant::now() + timeout);
 }
 
-async fn send_status(sink: &mut WebSocketSink, status: RelayServerStatus) -> bool {
-    sink.send(Message::Binary(status.encode().to_vec()))
-        .await
-        .is_ok()
-}
-
-async fn reject_and_close(sink: &mut WebSocketSink, code: RelayRejectCode) {
-    let _ = send_status(sink, RelayServerStatus::Rejected(code)).await;
-    close(sink, CloseCode::Policy, "relay request rejected").await;
+/// Classify how a peer's transport ended.
+///
+/// A reset and an orderly end are both "the socket is gone", but only one of
+/// them says something is severing tunnels.
+pub(crate) fn transport_end_reason(
+    error: Option<&tokio_tungstenite::tungstenite::Error>,
+) -> RelayCloseReason {
+    match error {
+        None | Some(tokio_tungstenite::tungstenite::Error::ConnectionClosed) => {
+            RelayCloseReason::PeerEof
+        }
+        Some(_) => RelayCloseReason::PeerReset,
+    }
 }
 
 fn hello_decode_reject_code(error: &RelayProtocolError) -> RelayRejectCode {
@@ -702,13 +703,4 @@ fn hello_decode_reject_code(error: &RelayProtocolError) -> RelayRejectCode {
         RelayProtocolError::UnsupportedVersion { .. } => RelayRejectCode::UnsupportedVersion,
         _ => RelayRejectCode::MalformedHello,
     }
-}
-
-async fn close(sink: &mut WebSocketSink, code: CloseCode, reason: &'static str) {
-    let _ = sink
-        .send(Message::Close(Some(CloseFrame {
-            code,
-            reason: Cow::Borrowed(reason),
-        })))
-        .await;
 }

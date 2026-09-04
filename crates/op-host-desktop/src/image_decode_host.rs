@@ -238,6 +238,30 @@ fn decode_worker(
     }
 }
 
+/// Serialize every test that OBSERVES or DRAINS the process-global
+/// pending-decode registry (`op_editor_ui::widgets::canvas_viewport_image`).
+///
+/// The decode tests below queue an id and assert that the FIRST `pump`
+/// submits it. Any concurrently running test that *takes* from the registry
+/// steals that entry out from under them: an export / screenshot / preview
+/// render goes through `op-render-export`'s
+/// `scene_painter::ensure_images_decoded`, whose discovery pass calls
+/// `take_pending_decodes(usize::MAX)` and silently discards ids whose bytes
+/// live outside the data-url cache (the avatar cache, for one). That exact
+/// theft made `worker_uses_the_bounded_avatar_cache_without_gui_decode` fail
+/// on linux-aarch64 CI while the template-save test rendered its preview.
+///
+/// Discipline: tests that merely PAINT (and so only append queue entries)
+/// stay unlocked — `reset_decode_registry` absorbs their leftovers — but any
+/// test whose call graph TAKES from the registry must hold this lock.
+#[cfg(test)]
+pub(crate) fn lock_decode_test_registry() -> std::sync::MutexGuard<'static, ()> {
+    static DECODE_TEST_LOCK: Mutex<()> = Mutex::new(());
+    DECODE_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,10 +270,7 @@ mod tests {
         take_pending_decodes,
     };
     use op_host_native::NativeBackend;
-    use std::sync::Mutex;
     use std::time::{Duration, Instant};
-
-    static DECODE_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn encode_test_png() -> Vec<u8> {
         let mut surface = skia_safe::surfaces::raster_n32_premul((3, 2)).unwrap();
@@ -288,11 +309,12 @@ mod tests {
     /// The leftovers do not come from these tests — they come from any test
     /// in this binary that paints chrome, because op-editor-ui's paint paths
     /// queue decodes for the images they draw and hold no decode lock.
-    /// Serializing every painting test behind `DECODE_TEST_LOCK` would trade
-    /// this flake for a suite that runs single-file, so each decode test
-    /// instead starts from a known-empty registry. That is what the other
-    /// three tests here already did by hand; making it one function is what
-    /// stops the next one from forgetting.
+    /// Serializing every painting test behind [`super::lock_decode_test_registry`]
+    /// would trade this flake for a suite that runs single-file, so each
+    /// decode test instead starts from a known-empty registry. That is what
+    /// the other three tests here already did by hand; making it one function
+    /// is what stops the next one from forgetting. Tests that DRAIN the
+    /// registry are a different story — see the lock's doc.
     fn reset_decode_registry() {
         for stale in take_pending_decodes(usize::MAX) {
             mark_decode_done(stale.id);
@@ -301,9 +323,7 @@ mod tests {
 
     #[test]
     fn worker_round_trip_decodes_and_installs_off_thread() {
-        let _guard = DECODE_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let _guard = super::lock_decode_test_registry();
         let id = 0xDEC0_DE01;
         reset_decode_registry();
         let png = encode_test_png();
@@ -328,9 +348,7 @@ mod tests {
 
     #[test]
     fn worker_uses_the_bounded_avatar_cache_without_gui_decode() {
-        let _decode_guard = DECODE_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let _decode_guard = super::lock_decode_test_registry();
         let _avatar_guard = crate::collab_avatar_host::lock_avatar_test_registry();
         reset_decode_registry();
         let key = "avatar-decode-participant";
@@ -371,9 +389,7 @@ mod tests {
 
     #[test]
     fn successful_worker_decode_installs_a_fallback_thumbnail() {
-        let _guard = DECODE_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let _guard = super::lock_decode_test_registry();
         let id = 0xDEC0_7A11;
         reset_decode_registry();
         store_remote_image_bytes(id, encode_test_png());
@@ -402,9 +418,7 @@ mod tests {
 
     #[test]
     fn worker_decode_failure_is_not_queued_again() {
-        let _guard = DECODE_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
+        let _guard = super::lock_decode_test_registry();
         let id = 0xDEC0_BAD1;
         reset_decode_registry();
         store_remote_image_bytes(id, b"not an encoded image".to_vec());

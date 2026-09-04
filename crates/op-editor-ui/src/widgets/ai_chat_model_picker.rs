@@ -1,11 +1,13 @@
 //! Model-picker dropdown for the AI chat panel — the upward
-//! popover that lists discovered models grouped by provider.
+//! popover that lists saved models grouped by provider.
 //! Mirrors the TS `ai-chat-model-selector.tsx` `ModelDropdown`
 //! (search row + grouped rows + per-provider brand icon + selected
 //! check / badges).
 
 use crate::theme::Theme;
-use crate::widgets::brand_icons::{paint_brand_logo, paint_opencode_logo, BrandLogo};
+use crate::widgets::brand_icons::{
+    paint_brand_logo, paint_deepseek_harness_logo, paint_opencode_logo, BrandLogo,
+};
 use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::property_panel_text_input::paint_text_input_view_value;
@@ -248,7 +250,7 @@ pub fn model_picker_hit(
 }
 
 pub fn search_clear_hit(rect: Rect, point: Point2D, search: &str) -> bool {
-    !search.is_empty() && (search_clear_rect(rect)).contains(point)
+    !search.is_empty() && search_clear_rect(rect).contains(point)
 }
 
 fn model_list_rect(rect: Rect) -> Rect {
@@ -258,10 +260,18 @@ fn model_list_rect(rect: Rect) -> Rect {
     }
 }
 
-fn search_clear_rect(rect: Rect) -> Rect {
+fn search_field_rect(rect: Rect) -> Rect {
     Rect {
-        origin: Point2D::new(rect.origin.x + rect.size.x - 40.0, rect.origin.y + 7.0),
-        size: Point2D::new(32.0, 24.0),
+        origin: Point2D::new(rect.origin.x + 8.0, rect.origin.y + 7.0),
+        size: Point2D::new((rect.size.x - 16.0).max(0.0), 24.0),
+    }
+}
+
+fn search_clear_rect(rect: Rect) -> Rect {
+    let search = search_field_rect(rect);
+    Rect {
+        origin: Point2D::new(search.origin.x + search.size.x - 28.0, search.origin.y),
+        size: Point2D::new(28.0, search.size.y),
     }
 }
 
@@ -475,10 +485,7 @@ fn paint_search_row(
         },
         theme.border,
     );
-    let search_rect = Rect {
-        origin: Point2D::new(rect.origin.x + 8.0, rect.origin.y + 7.0),
-        size: Point2D::new(rect.size.x - 16.0, 24.0),
-    };
+    let search_rect = search_field_rect(rect);
     cx.backend
         .fill_round_rect(search_rect, 6.0, (theme.muted).with_alpha(0.5));
     draw_icon(
@@ -619,6 +626,9 @@ pub fn paint_provider_logo(
         AgentProvider::GrokBuild => {
             paint_brand_logo(cx.backend, BrandLogo::Grok, top_left, size, color)
         }
+        AgentProvider::DeepSeekHarness => {
+            paint_deepseek_harness_logo(cx.backend, top_left, size, color)
+        }
     }
 }
 
@@ -632,6 +642,7 @@ pub(super) fn provider_label(provider: AgentProvider) -> &'static str {
         AgentProvider::OpenCode => "OPENCODE",
         AgentProvider::Antigravity => "ANTIGRAVITY",
         AgentProvider::GrokBuild => "GROK BUILD",
+        AgentProvider::DeepSeekHarness => "DEEPSEEK HARNESS",
     }
 }
 
@@ -644,6 +655,7 @@ fn group_label(provider: AgentProvider, builtin: bool) -> &'static str {
             AgentProvider::OpenCode => "OPENCODE API KEY",
             AgentProvider::Antigravity => "ANTIGRAVITY API KEY",
             AgentProvider::GrokBuild => "GROK BUILD API KEY",
+            AgentProvider::DeepSeekHarness => "DEEPSEEK API KEY",
         }
     } else {
         provider_label(provider)

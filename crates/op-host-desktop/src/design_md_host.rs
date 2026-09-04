@@ -5,10 +5,14 @@
 //! Split out of `main.rs` to keep that file under the repo's
 //! 800-line-per-file cap.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::{Arc, Mutex};
 use std::thread;
 
-use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, EffortLevel, ThinkingMode};
+use op_ai::chat_provider::{
+    ChatDelta, ChatProvider, ChatRequest, EffortLevel, StopReason, ThinkingMode,
+};
 use op_ai::design_md::{
     clean_ai_design_md_result, truncate_chars, DESIGN_MD_MAX_TREE_CHARS, DESIGN_MD_MAX_VAR_CHARS,
     DESIGN_MD_SYSTEM_PROMPT,
@@ -18,6 +22,23 @@ use op_editor_core::EditorState;
 use crate::chat_session::{provider_for_selected_model, selected_cli_model_id};
 use crate::design_md_error::DesignMdError;
 use crate::DesktopApp;
+
+/// Hard response ceiling for extension-triggered design-system extraction.
+/// The model stream is stopped before it can accumulate an arbitrarily large
+/// response in the desktop process, and the cleaned document is checked again
+/// before it crosses the MCP responder.
+const MCP_DESIGN_MD_MAX_OUTPUT_BYTES: usize = 512 * 1024;
+/// Cleaning may remove a small outer fence or preamble. Allow that bounded
+/// envelope while keeping the raw accumulation effectively at the public cap.
+const MCP_DESIGN_MD_MAX_RAW_BYTES: usize = MCP_DESIGN_MD_MAX_OUTPUT_BYTES + 256;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum McpDesignMdFailure {
+    Provider,
+    EmptyOutput,
+    InvalidOutput,
+    OutputTooLarge,
+}
 
 pub(crate) struct DesignMdSession {
     rx: Receiver<Result<String, DesignMdError>>,
@@ -50,6 +71,27 @@ fn build_design_md_chat_request(state: &EditorState, model: Option<String>) -> C
         // the role prompt exactly like the design orchestrator adapter does.
         system_prompt: String::new(),
         user_message: format!("{DESIGN_MD_SYSTEM_PROMPT}\n\n---\n\n{user_prompt}"),
+        history: Vec::new(),
+        max_output_tokens: 8192,
+        thinking: ThinkingMode::Disabled,
+        effort: EffortLevel::High,
+        attachments: vec![],
+        model,
+    }
+}
+
+fn build_mcp_design_md_chat_request(
+    system_prompt: String,
+    user_prompt: String,
+    model: Option<String>,
+) -> ChatRequest {
+    ChatRequest {
+        // Extension evidence is allowed only through the evidence-only
+        // built-in provider, which honors the real system channel. Keep the
+        // untrusted corpus exclusively in the user/data role instead of
+        // duplicating trusted instructions into it.
+        system_prompt,
+        user_message: user_prompt,
         history: Vec::new(),
         max_output_tokens: 8192,
         thinking: ThinkingMode::Disabled,
@@ -103,7 +145,178 @@ fn run_design_md_provider_blocking(
     }
 }
 
+/// Run the extension MCP extraction turn without touching the document-bound
+/// Design-MD session. This stricter path validates the public response
+/// contract in addition to applying the shared model-output cleanup.
+fn run_mcp_design_md_provider_blocking(
+    provider: Box<dyn ChatProvider>,
+    request: ChatRequest,
+    cancel: Arc<AtomicBool>,
+) -> Result<String, McpDesignMdFailure> {
+    if cancel.load(Ordering::Acquire)
+        || !provider.supports_cancellable_send()
+        || !provider.supports_evidence_only_send()
+    {
+        return Err(McpDesignMdFailure::Provider);
+    }
+    let mut out = String::new();
+    for delta in provider.send_cancellable(request, Arc::clone(&cancel)) {
+        if cancel.load(Ordering::Acquire) {
+            return Err(McpDesignMdFailure::Provider);
+        }
+        match delta {
+            ChatDelta::TextDelta(text) => {
+                if out.len().saturating_add(text.len()) > MCP_DESIGN_MD_MAX_RAW_BYTES {
+                    return Err(McpDesignMdFailure::OutputTooLarge);
+                }
+                out.push_str(&text);
+            }
+            ChatDelta::Thinking(_) => {}
+            ChatDelta::ToolUse { .. } => {
+                return Err(McpDesignMdFailure::Provider);
+            }
+            ChatDelta::Done {
+                stop_reason: StopReason::EndTurn,
+            } => break,
+            ChatDelta::Done { .. } => return Err(McpDesignMdFailure::Provider),
+            ChatDelta::Error(_) => return Err(McpDesignMdFailure::Provider),
+        }
+    }
+    if cancel.load(Ordering::Acquire) {
+        return Err(McpDesignMdFailure::Provider);
+    }
+    let cleaned = clean_mcp_design_md_result(&out);
+    if cleaned.is_empty() {
+        return Err(McpDesignMdFailure::EmptyOutput);
+    }
+    if cleaned.len() > MCP_DESIGN_MD_MAX_OUTPUT_BYTES {
+        return Err(McpDesignMdFailure::OutputTooLarge);
+    }
+    if !cleaned.starts_with("# Design System:")
+        || cleaned.contains("http://")
+        || cleaned.contains("https://")
+        || cleaned.contains("data:")
+    {
+        return Err(McpDesignMdFailure::InvalidOutput);
+    }
+    let mut last_heading_position = 0;
+    for required_heading in ["## Color System", "## Typography", "## Corner Radius"] {
+        if cleaned
+            .lines()
+            .filter(|line| *line == required_heading)
+            .count()
+            != 1
+        {
+            return Err(McpDesignMdFailure::InvalidOutput);
+        }
+        let Some(position) = cleaned.find(required_heading) else {
+            return Err(McpDesignMdFailure::InvalidOutput);
+        };
+        if position < last_heading_position {
+            return Err(McpDesignMdFailure::InvalidOutput);
+        }
+        last_heading_position = position;
+    }
+    Ok(cleaned)
+}
+
+fn clean_mcp_design_md_result(raw: &str) -> String {
+    let mut cleaned = clean_ai_design_md_result(raw);
+    // The shared cleaner handles either a preamble or an outer fence. Some
+    // models emit both (`Here you go: ```markdown ... ````); after the
+    // preamble is removed that leaves only the closing fence. Strip it when
+    // the original answer proves the design document was fence-wrapped.
+    if cleaned.ends_with("\n```")
+        && raw.trim_end().ends_with("```")
+        && raw
+            .find("# Design System:")
+            .is_some_and(|heading| raw[..heading].contains("```"))
+    {
+        cleaned.truncate(cleaned.len() - "\n```".len());
+        cleaned = cleaned.trim_end().to_string();
+    }
+    cleaned
+}
+
 impl DesktopApp {
+    /// Hand a validated extension evidence request to the currently selected
+    /// generation model. The responder travels with a detached worker, so the
+    /// UI pump returns immediately and no document/session state is occupied.
+    pub(crate) fn start_mcp_design_md_request(
+        &mut self,
+        pending: op_host_services::mcp_live::PendingDesignMdRequest,
+    ) {
+        use op_host_services::mcp_live::DesignMdResponseError;
+
+        // The HTTP caller may have given up while the UI thread was busy.
+        // Starting a paid provider turn after that deadline would produce a
+        // result nobody can receive. Dropping the pending request also drops
+        // its single-flight lease, so a fresh button press can try again.
+        if pending.is_cancelled() {
+            return;
+        }
+        let (system_prompt, user_prompt, responder) = pending.into_parts();
+        let Some(provider) = self.mcp_design_md_provider_for_generation() else {
+            let _ = responder.error(DesignMdResponseError::NoModel);
+            return;
+        };
+        let request = build_mcp_design_md_chat_request(
+            system_prompt,
+            user_prompt,
+            selected_cli_model_id(&self.host),
+        );
+        let cancel = responder.cancellation_flag();
+        // Keep the single-use responder behind a shared slot. `spawn`
+        // consumes its closure even when thread creation fails; this lets the
+        // caller report `WorkerSpawn` without making the responder cloneable
+        // (and therefore without creating a double-response capability).
+        let responder = Arc::new(Mutex::new(Some(responder)));
+        let worker_responder = Arc::clone(&responder);
+        let spawned = thread::Builder::new()
+            .name("op-mcp-design-md".into())
+            .spawn(move || {
+                let outcome = run_mcp_design_md_provider_blocking(provider, request, cancel);
+                let Some(responder) = worker_responder
+                    .lock()
+                    .unwrap_or_else(|poison| poison.into_inner())
+                    .take()
+                else {
+                    return;
+                };
+                match outcome {
+                    Ok(markdown) => {
+                        let _ = responder.success(markdown);
+                    }
+                    Err(error) => {
+                        let response_error = match error {
+                            McpDesignMdFailure::Provider => {
+                                eprintln!("openpencil-desktop: MCP design.md provider failed");
+                                DesignMdResponseError::ProviderError
+                            }
+                            McpDesignMdFailure::EmptyOutput => DesignMdResponseError::EmptyOutput,
+                            McpDesignMdFailure::InvalidOutput => {
+                                DesignMdResponseError::InvalidOutput
+                            }
+                            McpDesignMdFailure::OutputTooLarge => {
+                                DesignMdResponseError::OutputTooLarge
+                            }
+                        };
+                        let _ = responder.error(response_error);
+                    }
+                }
+            });
+        if let Err(error) = spawned {
+            eprintln!("openpencil-desktop: spawn MCP design.md thread failed: {error}");
+            if let Some(responder) = responder
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner())
+                .take()
+            {
+                let _ = responder.error(DesignMdResponseError::WorkerSpawn);
+            }
+        }
+    }
+
     /// Run a queued Design-MD request — `design_md_panel.request`, set by a
     /// panel click. A no-op when nothing is queued.
     pub(crate) fn drain_design_md_action(&mut self) -> bool {
@@ -192,7 +405,7 @@ impl DesktopApp {
         if self.host.editor_state().active_children().is_empty() {
             return false;
         }
-        let Some(provider) = self.design_md_provider_for_auto_generate() else {
+        let Some(provider) = self.design_md_provider_for_generation() else {
             eprintln!("openpencil-desktop: design.md auto-generate skipped: no model configured");
             return false;
         };
@@ -213,12 +426,28 @@ impl DesktopApp {
         self.design_md_test_provider = Some(provider);
     }
 
-    fn design_md_provider_for_auto_generate(&mut self) -> Option<Box<dyn ChatProvider>> {
+    fn design_md_provider_for_generation(&mut self) -> Option<Box<dyn ChatProvider>> {
         #[cfg(test)]
         if let Some(provider) = self.design_md_test_provider.take() {
             return Some(provider);
         }
         provider_for_selected_model(&self.host)
+    }
+
+    /// Extension design extraction has a hard route deadline. Only transports
+    /// that can abort their in-flight work may start here; returning `NoModel`
+    /// lets the extension use its local deterministic fallback instead of
+    /// leaving an uncancellable CLI/ACP turn paid and busy after timeout.
+    fn mcp_design_md_provider_for_generation(&mut self) -> Option<Box<dyn ChatProvider>> {
+        let provider = self.design_md_provider_for_generation()?;
+        if !provider.supports_cancellable_send() || !provider.supports_evidence_only_send() {
+            eprintln!(
+                "openpencil-desktop: MCP design.md skipped unsafe provider: {}",
+                provider.provider_label()
+            );
+            return None;
+        }
+        Some(provider)
     }
 
     pub(crate) fn poll_design_md_generation(&mut self) -> bool {
@@ -297,3 +526,7 @@ impl DesktopApp {
         false
     }
 }
+
+#[cfg(test)]
+#[path = "design_md_host_mcp_tests.rs"]
+mod mcp_tests;

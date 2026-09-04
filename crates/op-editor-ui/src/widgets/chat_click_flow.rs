@@ -124,6 +124,22 @@ pub fn apply_chat_hit(state: &mut EditorState, hit: AIChatHit, now_ms: u64) -> C
         // path bypass.
         AIChatHit::DragHandle | AIChatHit::Resize(_) => ChatClickStep::Unhandled,
         AIChatHit::ToggleCollapse => {
+            // Touch chrome hosts the chat as a modal bottom sheet — there
+            // is no minimized desktop bar to collapse INTO, so the chevron
+            // CLOSES the sheet instead. Blur the input too: `chat.focused`
+            // is what keeps the sheet tracking the software keyboard, so a
+            // stale focus would leave the shell's IME session (and the
+            // keyboard) alive over a sheet that no longer exists.
+            if state.editor_ui.touch_chrome()
+                && state.editor_ui.mobile_sheet
+                    == Some(op_editor_core::size_class::MobileSheetKind::Ai)
+            {
+                state.editor_ui.mobile_sheet = None;
+                state.chat.blur_input(now_ms);
+                state.chat.collapsed = true;
+                state.editor_ui.close_chat_model_picker();
+                return ChatClickStep::Dirty;
+            }
             let expanding = state.chat.is_minimized();
             state.chat.toggle_minimized();
             // Expanding from the bar hands the user straight to the
@@ -160,6 +176,10 @@ pub fn apply_chat_hit(state: &mut EditorState, hit: AIChatHit, now_ms: u64) -> C
         AIChatHit::ToggleModelPicker => {
             let opening = state.editor_ui.toggle_chat_model_picker();
             if opening {
+                // The chat picker is a read-only view of models already saved
+                // in provider settings. Rebuild locally when it opens; model
+                // discovery belongs exclusively to the settings workflow.
+                state.rebuild_chat_models();
                 // Close the parallel-agents picker when model picker opens.
                 state.editor_ui.close_parallel_agents_picker();
                 state.editor_ui.chat_model_picker_input.touch(now_ms);
@@ -181,8 +201,8 @@ pub fn apply_chat_hit(state: &mut EditorState, hit: AIChatHit, now_ms: u64) -> C
         AIChatHit::SelectModel(idx) => {
             // Commit on press so the selected model and closed picker
             // appear in the first repaint. A deferred bare index could
-            // also target the wrong row if an async catalog refresh
-            // landed before pointer release.
+            // also target the wrong row if saved provider settings changed
+            // before pointer release.
             state.select_chat_model(idx);
             // The consumed press schedules the repaint; the document
             // layout scene is NOT stale for this UI-only preference
@@ -199,6 +219,14 @@ pub fn apply_chat_hit(state: &mut EditorState, hit: AIChatHit, now_ms: u64) -> C
         }
         AIChatHit::OpenPromptCenter => {
             state.editor_ui.open_prompt_center(now_ms);
+            ChatClickStep::Dirty
+        }
+        AIChatHit::OpenMcpSettings => {
+            // Land on the tab that carries the toggle the notice is about —
+            // dropping the user on the Agents tab would make them hunt for it.
+            state.editor_ui.agent_settings.tab =
+                op_editor_core::agent_settings::AgentSettingsTab::Mcp;
+            state.editor_ui.agent_settings_open = true;
             ChatClickStep::Dirty
         }
         AIChatHit::CycleAgentTeam => {
@@ -292,6 +320,7 @@ pub fn apply_chat_hit(state: &mut EditorState, hit: AIChatHit, now_ms: u64) -> C
             // Pure editor-state change — a switch does NOT touch the run
             // binding (a run keeps streaming into its own bound tab).
             state.chat.switch_to(idx);
+            state.rebuild_chat_models();
             state.editor_ui.close_chat_model_picker();
             // Active session changed: the host rotates the transcript-cache
             // owner synchronously so a pointer move arriving before the next
@@ -332,4 +361,127 @@ pub fn begin_chat_transcript_selection(
     });
     state.codegen.code_selection = None;
     state.chat.focused = false;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn opening_and_searching_model_picker_never_queue_builtin_discovery() {
+        let mut state = EditorState::new();
+        state.editor_ui.agent_settings.add_builtin_agent_config(
+            "Provider",
+            "sk-test",
+            "fallback",
+            op_editor_core::BuiltinAgentKind::OpenAiCompat,
+            "https://example.test/v1",
+        );
+
+        assert_eq!(
+            apply_chat_hit(&mut state, AIChatHit::ToggleModelPicker, 42),
+            ChatClickStep::ModelPickerToggled { opening: true }
+        );
+        assert_eq!(
+            state
+                .editor_ui
+                .agent_settings
+                .pending_builtin_model_catalog_refreshes
+                .len(),
+            0
+        );
+
+        state.editor_ui.chat_model_picker_input.set_text("fall");
+        assert_eq!(
+            apply_chat_hit(&mut state, AIChatHit::FocusModelSearch, 43),
+            ChatClickStep::Dirty
+        );
+        assert_eq!(
+            apply_chat_hit(&mut state, AIChatHit::ClearModelSearch, 44),
+            ChatClickStep::Dirty
+        );
+        apply_chat_hit(&mut state, AIChatHit::ToggleModelPicker, 43);
+        apply_chat_hit(&mut state, AIChatHit::ToggleModelPicker, 44);
+        assert_eq!(
+            state
+                .editor_ui
+                .agent_settings
+                .pending_builtin_model_catalog_refreshes
+                .len(),
+            0,
+            "chat picker interactions must never enter the provider discovery queue"
+        );
+    }
+
+    #[test]
+    fn switching_tabs_uses_saved_models_and_ignores_runtime_catalogs() {
+        let mut state = EditorState::new();
+        let id = state.editor_ui.agent_settings.add_builtin_agent_config(
+            "Provider",
+            "sk-test",
+            "fallback",
+            op_editor_core::BuiltinAgentKind::OpenAiCompat,
+            "https://example.test/v1",
+        );
+        state.chat.new_tab();
+        state.chat.switch_to(0);
+        let request = state
+            .editor_ui
+            .agent_settings
+            .begin_builtin_model_catalog_refresh(
+                op_editor_core::BuiltinModelCatalogTarget::Agent(id.clone()),
+                1,
+            )
+            .expect("catalog request");
+        state
+            .editor_ui
+            .agent_settings
+            .take_pending_builtin_model_catalog_refresh();
+        let expected = state
+            .editor_ui
+            .agent_settings
+            .builtin_model_catalog_config_for_request(&request)
+            .expect("provider snapshot");
+        assert!(state
+            .editor_ui
+            .agent_settings
+            .apply_builtin_model_catalog_refresh_outcome_if_current(
+                &expected,
+                &request,
+                op_editor_core::BuiltinModelCatalogRefreshOutcome::Success {
+                    models: vec![op_editor_core::BuiltinModelOption::new(
+                        "dynamic", "Dynamic",
+                    )],
+                },
+            ));
+        state.rebuild_chat_models();
+        assert!(state.chat.tabs()[0]
+            .available_models
+            .iter()
+            .any(|entry| entry.builtin_model_id() == Some("fallback")));
+        assert!(!state.chat.tabs()[1]
+            .available_models
+            .iter()
+            .any(|entry| entry.builtin_model_id() == Some("dynamic")));
+
+        assert_eq!(
+            apply_chat_hit(&mut state, AIChatHit::SwitchTab(1), 2),
+            ChatClickStep::RotateChatOwner
+        );
+        assert!(state
+            .chat
+            .available_models
+            .iter()
+            .any(|entry| entry.builtin_model_id() == Some("fallback")));
+        assert!(!state
+            .chat
+            .available_models
+            .iter()
+            .any(|entry| entry.builtin_model_id() == Some("dynamic")));
+        assert!(state
+            .editor_ui
+            .agent_settings
+            .pending_builtin_model_catalog_refreshes
+            .is_empty());
+    }
 }

@@ -22,6 +22,7 @@ fn req() -> DesignRequest {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     }
 }
 
@@ -35,6 +36,7 @@ fn subtask_with_screen(id: &str, label: &str, screen: Option<&str>) -> Subtask {
         },
         id_prefix: String::new(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: screen.map(str::to_string),
         generated_root_id: None,

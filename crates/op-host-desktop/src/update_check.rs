@@ -142,6 +142,7 @@ fn check_latest_release() -> UpdateStatus {
 fn fetch_latest_tag() -> Option<String> {
     op_host_services::chat_runtime::block_on_anywhere(async {
         let client = reqwest::Client::builder()
+            .use_rustls_tls()
             .timeout(std::time::Duration::from_secs(15))
             // GitHub's API rejects requests without a User-Agent.
             .user_agent(concat!("openpencil-desktop/", env!("CARGO_PKG_VERSION")))
@@ -280,6 +281,7 @@ fn download_and_open_blocking(version: &str) -> bool {
     // Shared runtime, not a private one — see `fetch_latest_tag`.
     let downloaded = op_host_services::chat_runtime::block_on_anywhere(async {
         let client = reqwest::Client::builder()
+            .use_rustls_tls()
             // Installers run tens of MB — allow a long transfer.
             .timeout(std::time::Duration::from_secs(600))
             .user_agent(concat!("openpencil-desktop/", env!("CARGO_PKG_VERSION")))

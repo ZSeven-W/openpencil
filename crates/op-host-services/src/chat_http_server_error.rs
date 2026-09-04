@@ -40,6 +40,9 @@ pub enum OpenCodeError {
     /// stdout stayed open but never carried the `opencode server listening
     /// on <url>` line within the platform listen budget.
     ListenTimeout { millis: u128 },
+    /// The server announced a different listener than the explicit loopback
+    /// port OpenPencil reserved and passed on its command line.
+    UnexpectedListenUrl { expected: String, announced: String },
     /// A control-plane request never completed (connect / timeout / body).
     /// Text is `reqwest`'s own, an upstream crate this pass does not own.
     Request(String),
@@ -73,6 +76,13 @@ impl fmt::Display for OpenCodeError {
             OpenCodeError::ListenTimeout { millis } => {
                 write!(f, "Timeout waiting for server to start after {millis}ms")
             }
+            OpenCodeError::UnexpectedListenUrl {
+                expected,
+                announced,
+            } => write!(
+                f,
+                "OpenCode announced {announced}, expected reserved listener {expected}"
+            ),
             OpenCodeError::Request(message) | OpenCodeError::Provider(message) => {
                 f.write_str(message)
             }
@@ -85,3 +95,75 @@ impl fmt::Display for OpenCodeError {
 }
 
 impl std::error::Error for OpenCodeError {}
+
+/// Error name to user-facing label mapping from OpenCode's response schema.
+fn opencode_error_label(name: &str) -> &str {
+    match name {
+        "APIError" => "API error",
+        "ProviderAuthError" => "Authentication failed",
+        "UnknownError" => "Unknown error",
+        "MessageOutputLengthError" => "Response too long",
+        "MessageAbortedError" => "Request aborted",
+        "StructuredOutputError" => "Output format error",
+        "ContextOverflowError" => "Context too long",
+        other => other,
+    }
+}
+
+/// Extract a human-readable message from an OpenCode error object.
+pub fn format_opencode_error(error: Option<&serde_json::Value>) -> String {
+    let Some(error) = error else {
+        return "Unknown error".into();
+    };
+    if error.is_null() {
+        return "Unknown error".into();
+    }
+    if let Some(s) = error.as_str() {
+        return s.to_string();
+    }
+
+    let name = error.get("name").and_then(|v| v.as_str());
+    let data_message = error
+        .get("data")
+        .and_then(|d| d.get("message"))
+        .and_then(|v| v.as_str());
+    if let (Some(name), Some(message)) = (name, data_message) {
+        let label = opencode_error_label(name);
+        let mut msg = message.to_string();
+        // OpenCode sometimes embeds the provider's JSON error in its message.
+        if let Some(json_start) = msg.find('{').filter(|&i| i > 0) {
+            if let Ok(nested) = serde_json::from_str::<serde_json::Value>(&msg[json_start..]) {
+                let nested_msg = nested
+                    .get("error")
+                    .and_then(|e| e.get("message"))
+                    .and_then(|v| v.as_str())
+                    .or_else(|| nested.get("message").and_then(|v| v.as_str()));
+                if let Some(nested_msg) = nested_msg {
+                    let prefix = msg[..json_start]
+                        .trim_end()
+                        .trim_end_matches(':')
+                        .trim()
+                        .to_string();
+                    msg = if prefix.is_empty() {
+                        nested_msg.to_string()
+                    } else {
+                        format!("{prefix}: {nested_msg}")
+                    };
+                }
+            }
+        }
+        return format!("{label} — {msg}");
+    }
+
+    if let Some(message) = error.get("message").and_then(|v| v.as_str()) {
+        return message.to_string();
+    }
+
+    let json = error.to_string();
+    if json.chars().count() > 200 {
+        let truncated: String = json.chars().take(200).collect();
+        format!("{truncated}…")
+    } else {
+        json
+    }
+}

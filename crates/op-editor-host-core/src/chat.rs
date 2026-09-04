@@ -1,8 +1,9 @@
 //! Shared chat turn worker and transcript folding logic.
 
 use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use op_ai::chat_provider::{
@@ -227,6 +228,10 @@ pub fn chat_tool_channel() -> (UiChatToolExecutor, Receiver<ChatToolRequest>) {
 /// One in-flight chat turn.
 pub struct ChatSession {
     rx: Receiver<ChatDelta>,
+    /// Shared with `ChatProvider::send_cancellable`. Dropping a session is
+    /// the host's Stop/New Chat/close-tab signal, including while a provider
+    /// is silent and the worker is blocked waiting for its next delta.
+    cancel: Option<Arc<AtomicBool>>,
     tool_rx: Option<Receiver<ChatToolRequest>>,
     deferred_tool_requests: VecDeque<ChatToolRequest>,
     finished: bool,
@@ -474,7 +479,9 @@ fn tool_level_from_args(args: &str) -> Option<String> {
 }
 
 impl ChatSession {
-    /// Spawn a worker that drains `provider.send(req)` into a channel.
+    /// Spawn a worker that drains an explicitly cancellable provider turn into
+    /// a channel. Providers that do not override `send_cancellable` retain
+    /// their existing behavior through the trait's default delegation.
     pub fn start(provider: Box<dyn ChatProvider>, req: ChatRequest) -> Self {
         Self::start_with_tools(provider, req, None)
     }
@@ -487,10 +494,12 @@ impl ChatSession {
         tool_rx: Option<Receiver<ChatToolRequest>>,
     ) -> Self {
         let (tx, rx) = mpsc::channel();
+        let cancel = Arc::new(AtomicBool::new(false));
+        let worker_cancel = Arc::clone(&cancel);
         thread::Builder::new()
             .name("op-chat-turn".into())
             .spawn(move || {
-                for delta in provider.send(req) {
+                for delta in provider.send_cancellable(req, worker_cancel) {
                     if tx.send(delta).is_err() {
                         return;
                     }
@@ -499,6 +508,7 @@ impl ChatSession {
             .expect("spawn op-chat-turn thread");
         Self {
             rx,
+            cancel: Some(cancel),
             tool_rx,
             deferred_tool_requests: VecDeque::new(),
             finished: false,
@@ -552,8 +562,28 @@ impl ChatSession {
         rx: Receiver<ChatDelta>,
         tool_rx: Option<Receiver<ChatToolRequest>>,
     ) -> Self {
+        Self::from_channels_with_optional_cancel(rx, tool_rx, None)
+    }
+
+    /// Wrap externally supplied channels while retaining the cancellation
+    /// flag owned by the worker behind them. Direct-route launchers use this
+    /// so dropping the UI session interrupts a silent provider promptly.
+    pub fn from_channels_with_cancel(
+        rx: Receiver<ChatDelta>,
+        tool_rx: Option<Receiver<ChatToolRequest>>,
+        cancel: Arc<AtomicBool>,
+    ) -> Self {
+        Self::from_channels_with_optional_cancel(rx, tool_rx, Some(cancel))
+    }
+
+    fn from_channels_with_optional_cancel(
+        rx: Receiver<ChatDelta>,
+        tool_rx: Option<Receiver<ChatToolRequest>>,
+        cancel: Option<Arc<AtomicBool>>,
+    ) -> Self {
         Self {
             rx,
+            cancel,
             tool_rx,
             deferred_tool_requests: VecDeque::new(),
             finished: false,
@@ -624,5 +654,13 @@ impl ChatSession {
 
     pub fn finished(&self) -> bool {
         self.finished
+    }
+}
+
+impl Drop for ChatSession {
+    fn drop(&mut self) {
+        if let Some(cancel) = &self.cancel {
+            cancel.store(true, Ordering::Release);
+        }
     }
 }

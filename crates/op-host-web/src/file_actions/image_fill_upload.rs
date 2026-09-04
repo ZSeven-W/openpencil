@@ -29,6 +29,7 @@ mod tests {
     fn png_data_url(width: u32, height: u32) -> String {
         let mut png = vec![0; 24];
         png[..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
+        png[8..12].copy_from_slice(&13_u32.to_be_bytes());
         png[12..16].copy_from_slice(b"IHDR");
         png[16..20].copy_from_slice(&width.to_be_bytes());
         png[20..24].copy_from_slice(&height.to_be_bytes());

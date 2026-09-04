@@ -217,6 +217,16 @@ impl LlmClient for DirectOpenAiClient {
                     { "role": "user", "content": user },
                 ],
             });
+            // Optional temperature override: read OPENPENCIL_LLM_TEMPERATURE
+            // (f32 in range 0.0..=2.0). If set and valid, add to body; else
+            // omit (preserve provider default).
+            if let Ok(temp_str) = std::env::var("OPENPENCIL_LLM_TEMPERATURE") {
+                if let Ok(temp) = temp_str.parse::<f32>() {
+                    if (0.0..=2.0).contains(&temp) {
+                        body["temperature"] = serde_json::json!(temp);
+                    }
+                }
+            }
             // Reasoning models burn their whole output budget on thinking and
             // return truncated (or empty) JSON, so a design turn asks for it
             // reduced. Both the DECISION and the wire shape are production's:
@@ -228,14 +238,24 @@ impl LlmClient for DirectOpenAiClient {
             // `reasoning_effort:"low"` it demands instead (sending `thinking`
             // to K3 is a 400).
             apply_reasoning_wire_control(&mut body, &model, reduce_reasoning_for_smoke(&model));
-            // Connect + overall deadlines so a hung provider endpoint surfaces
+            // Connect + read-idle deadlines so a hung provider endpoint surfaces
             // as an error instead of pinning the headless harness forever
-            // (mirrors the desktop's builtin_http_client).
+            // (mirrors the desktop's builtin_http_client). Per-read, not
+            // per-request: a reasoning model can spend longer than any whole-
+            // request budget on one generation without the connection stalling.
+            // The idle budget scales with the profile's timeout multiplier:
+            // an always-thinking model (GLM-5.3, ×3) is silent for longer
+            // than 180 s before its first byte, and a flat 180 s surfaced as
+            // "error sending request" on 43 of one day's subtasks.
+            let read_idle_secs = (180.0
+                * op_orchestrator::resolve_model_profile(&model).timeout_multiplier)
+                .round() as u64;
             let client = reqwest::Client::builder()
+                .use_rustls_tls()
                 .connect_timeout(std::time::Duration::from_secs(15))
-                .timeout(std::time::Duration::from_secs(300))
+                .read_timeout(std::time::Duration::from_secs(read_idle_secs))
                 .build()
-                .unwrap_or_else(|_| reqwest::Client::new());
+                .expect("build smoke rustls client");
             let resp = match client.post(&url).bearer_auth(&key).json(&body).send().await {
                 Ok(r) => r,
                 Err(e) => {

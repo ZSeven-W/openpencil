@@ -1,6 +1,7 @@
 use op_collab_relay_client::{RelayBridgePhase, RelayFailureKind};
 use op_collab_transport::RuntimeError;
 
+use super::super::relay::OwnerRelayBridgeReport;
 use super::super::types::CollabRuntimeFailure;
 
 struct RelaySecureTransportFailure<'a> {
@@ -60,6 +61,25 @@ impl std::fmt::Display for OwnerSecureTransportFailure<'_> {
 pub(super) fn report_owner_secure_transport_failure(transport_error: &RuntimeError) {
     let diagnostic = OwnerSecureTransportFailure { transport_error };
     eprintln!("[collab] {diagnostic}");
+}
+
+/// Report an owner relay-pool transition.
+///
+/// An owner whose lane pool is empty is invisible in the relay's waiting
+/// queue: guests that try to join simply fail to pair, and until now nothing
+/// on the owner side could observe that. Reporting every transition — not just
+/// failures — makes a reconnect loop readable in a desktop terminal, Xcode, or
+/// logcat.
+pub(super) fn report_owner_relay_bridge(report: OwnerRelayBridgeReport) {
+    eprintln!(
+        "[collab] RelayOwnerBridge {{ phase: {:?}, waiting_lanes: {}, active_tunnels: {}, \
+         last_error: {:?}, relay_pairing_timeouts: {} }}",
+        report.phase,
+        report.waiting_lanes,
+        report.active_tunnels,
+        report.last_error,
+        report.relay_pairing_timeouts
+    );
 }
 
 #[cfg(test)]

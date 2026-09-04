@@ -195,6 +195,20 @@ fn hovering_a_row_washes_it_and_leaving_the_rail_clears_it() {
 #[test]
 fn the_footer_button_enters_preview() {
     let mut host = host_with(Some(TemplateScene::Slides));
+    host.editor_state.editor_ui.login_modal_open = true;
+    host.editor_state.editor_ui.prompt_center.open = true;
+    host.editor_state.editor_ui.prompt_center.save_open = true;
+    host.editor_state.editor_ui.theme_mode = op_editor_core::ThemeMode::Light;
+    host.editor_state.editor_ui.locale = op_editor_core::Locale::Ja;
+    host.editor_state.editor_ui.account = op_editor_core::AccountState::dev_fake_signed_in();
+    host.editor_state.ui.property_focus = Some(op_editor_core::PropertyFocus::PositionX);
+    host.editor_state.ui.property_input.set_text("draft");
+    host.editor_state
+        .ui
+        .property_input
+        .set_composition("ni", 2, 0);
+    let document_before = host.editor_state.doc.clone();
+    let auth_actions_before = host.pending_auth_actions.clone();
     let button = {
         let slides = host.slides_panel_frame(VW, VH).expect("slides tab");
         Point2D::new(
@@ -202,9 +216,25 @@ fn the_footer_button_enters_preview() {
             slides.layout.actions.present.origin.y + slides.layout.actions.present.size.y / 2.0,
         )
     };
-    host.apply_press(button.x, button.y, VW, VH);
+    assert!(
+        host.apply_press(button.x, button.y, VW, VH),
+        "press is consumed"
+    );
+    assert!(
+        host.editor_state.ui.property_focus.is_none(),
+        "the ordinary slides-panel press blurs property focus before release"
+    );
+    assert!(host.editor_state.ui.property_input.composition().is_none());
     host.apply_release_with_viewport(VW, VH);
-    assert!(host.editor_state.editor_ui.preview.mode);
+    assert!(!host.editor_state.editor_ui.preview.mode);
+    assert_eq!(host.editor_state.doc, document_before);
+    assert!(host.editor_state.editor_ui.login_modal_open);
+    assert!(host.editor_state.editor_ui.prompt_center.open);
+    assert_eq!(host.pending_auth_actions, auth_actions_before);
+    assert_eq!(
+        host.editor_state.editor_ui.preview.warnings,
+        vec!["preview: CanvasKit not initialized".to_string()]
+    );
 }
 
 /// The tab row must not swallow a cursor move while the chat model

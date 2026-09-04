@@ -23,7 +23,7 @@ impl ChatState {
     ///
     /// [`available_models`]: ChatState::available_models
     /// [`discovered_models`]: ChatState::discovered_models
-    pub fn rebuild_available_models(&mut self, connected: &[bool; 6]) {
+    pub fn rebuild_available_models(&mut self, connected: &[bool; 7]) {
         let prev = self.available_models.get(self.selected_model).cloned();
         self.available_models = self
             .discovered_models
@@ -237,6 +237,10 @@ impl ChatState {
 
     pub fn blur_input(&mut self, now_ms: u64) {
         self.focused = false;
+        // A marked candidate belongs to the focused platform session. Once
+        // focus leaves, discard only that transient preedit; the durable
+        // prompt remains untouched and the next focus starts cleanly.
+        self.input.clear_composition();
         self.input.set_caret(self.input.caret(), now_ms);
     }
 

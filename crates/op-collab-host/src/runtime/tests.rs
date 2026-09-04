@@ -10,7 +10,8 @@ use op_collab::{
 use op_collab_transport::{encode_frame_transfer, m1_wire_limits, SharedQueueBudget};
 use op_editor_core::{
     CollabAvailability, CollabConnectionPhase, CollabNoticeKind, CollabPanelHover,
-    CollabPendingEditUi, CollabRejectUiCode, PenDocument,
+    CollabPendingEditUi, CollabRejectUiCode, CollabTransportCapabilities, CollabUiAction,
+    PenDocument,
 };
 
 use super::actor::{set_owner_ui, EditorActor, OwnerActor, PendingGuestAdmission};
@@ -67,6 +68,30 @@ fn availability_refresh_clears_hover_from_the_previous_screen() {
 
     assert!(runtime.refresh_availability(&mut host));
     assert_eq!(host.editor_state().editor_ui.collab.panel.hover, None);
+}
+
+#[test]
+fn relay_only_capability_is_projected_and_rejects_injected_lan_actions() {
+    let mut runtime = CollabRuntime::new();
+    runtime.set_transport_capabilities(CollabTransportCapabilities::RELAY_AND_MANUAL_JOIN);
+    let mut host = HeadlessCollabHost::new();
+
+    assert!(runtime.refresh_availability(&mut host));
+    assert_eq!(
+        host.editor_state().editor_ui.collab.transport_capabilities,
+        CollabTransportCapabilities::RELAY_AND_MANUAL_JOIN
+    );
+
+    host.editor_state_mut().editor_ui.collab.pending_action = Some(CollabUiAction::StartLan);
+    assert!(runtime.drain_ui_action(&mut host));
+    assert!(runtime.pending_network_launch.is_none());
+    assert!(matches!(
+        host.editor_state().editor_ui.collab.notice,
+        Some(op_editor_core::CollabNotice {
+            kind: CollabNoticeKind::Reject(CollabRejectUiCode::Unsupported),
+            ..
+        })
+    ));
 }
 
 #[test]
@@ -145,7 +170,7 @@ fn owner_runtime(
     (runtime, host, commands, peer)
 }
 
-fn guest_runtime(
+pub(super) fn guest_runtime(
     capacity: usize,
 ) -> (
     CollabRuntime,
@@ -298,6 +323,7 @@ fn owner_local_auth_failure_survives_following_stopped_event() {
         host.editor_state().editor_ui.collab.notice.unwrap().kind,
         CollabNoticeKind::TicketExpired
     );
+    assert!(runtime.next_reconnect_deadline().is_none());
 }
 
 #[test]
@@ -325,6 +351,7 @@ fn guest_local_auth_failure_survives_following_stopped_event() {
         host.editor_state().editor_ui.collab.notice.unwrap().kind,
         CollabNoticeKind::TicketExpired
     );
+    assert!(runtime.next_reconnect_deadline().is_none());
 }
 
 #[test]
@@ -366,6 +393,7 @@ fn avatar_completion_from_a_retired_session_generation_is_rejected() {
     runtime.advance_generation();
     let mut png = vec![0; 32];
     png[..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
+    png[8..12].copy_from_slice(&13_u32.to_be_bytes());
     png[12..16].copy_from_slice(b"IHDR");
     png[16..20].copy_from_slice(&16_u32.to_be_bytes());
     png[20..24].copy_from_slice(&16_u32.to_be_bytes());
@@ -758,6 +786,7 @@ fn inbound_bridge_reservation_is_held_through_gui_frame_handling() {
             frame: inbound,
         },
         inbound_len,
+        false,
     )
     .unwrap();
     assert_eq!(runtime.bridge_budget.used().unwrap(), inbound_len);

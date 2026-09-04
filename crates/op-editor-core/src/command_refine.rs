@@ -7,6 +7,8 @@ use crate::state::EditorState;
 use crate::walkers;
 use jian_ops_schema::node::PenNode;
 
+const DEFAULT_ICON_FONT_SIZE: f64 = 24.0;
+
 /// One fix applied during `RefineDesign`, mirroring TS design-refine's
 /// `RefineFix` (`{ nodeId, nodeName?, fix }`). Surfaced by the `design_refine`
 /// MCP tool as its `fixes[]` result so the Rust + TS tool results share shape.
@@ -46,15 +48,32 @@ impl EditorState {
 /// apply path) and the `design_refine` MCP tool (which simulates on a clone to
 /// report `fixes[]`), so the reported fixes always match what apply does.
 pub fn refine_subtree(root: &mut PenNode) -> Vec<RefineFix> {
+    refine_subtree_impl(root, true)
+}
+
+/// Apply the deterministic refine transforms to a subtree that will be
+/// installed below an existing document node. This intentionally omits the
+/// root-only height expansion: before installation, `root` is merely the
+/// insertion payload, so treating its horizontal children as document-root
+/// content can inflate an authored fixed height (for example, a 232 px
+/// category rail with five 160 px cards) to 800 px.
+pub fn refine_child_subtree(root: &mut PenNode) -> Vec<RefineFix> {
+    refine_subtree_impl(root, false)
+}
+
+fn refine_subtree_impl(root: &mut PenNode, adjust_root_height: bool) -> Vec<RefineFix> {
     let mut fixes = Vec::new();
     // Pass order mirrors TS `design-refine.ts:60-71` for the
     // deterministic subset (role / icon-path resolution are the
     // live-hook passes; see the module docs for coverage).
     apply_no_emoji_icon_heuristic(root, &mut fixes);
     ensure_unique_node_ids(root, &mut fixes);
+    normalize_icon_font_dimensions(root, &mut fixes);
     sanitize_auto_layout_child_positions(root, &mut fixes);
     sanitize_screen_frame_bounds(root, &mut fixes);
-    adjust_root_height_to_content(root, &mut fixes);
+    if adjust_root_height {
+        adjust_root_height_to_content(root, &mut fixes);
+    }
     fixes
 }
 
@@ -68,6 +87,7 @@ pub fn refine_subtree_with_allocator(
     let mut fixes = Vec::new();
     apply_no_emoji_icon_heuristic(root, &mut fixes);
     ensure_unique_node_ids_with_allocator(root, allocator, taken, &mut fixes)?;
+    normalize_icon_font_dimensions(root, &mut fixes);
     sanitize_auto_layout_child_positions(root, &mut fixes);
     sanitize_screen_frame_bounds(root, &mut fixes);
     adjust_root_height_to_content(root, &mut fixes);
@@ -225,6 +245,63 @@ fn ensure_unique_node_ids(root: &mut PenNode, fixes: &mut Vec<RefineFix>) {
     let mut used = HashSet::new();
     let mut counters = HashMap::new();
     walk(root, &mut used, &mut counters, fixes);
+}
+
+/// Give every icon-font node deterministic literal geometry before the live
+/// canvas observes a post-processed batch. A single valid authored axis is the
+/// best square-size signal for its missing/invalid twin; otherwise use the
+/// editor's stable 24 px icon default. Two valid authored axes are preserved,
+/// including intentionally non-square icons.
+fn normalize_icon_font_dimensions(node: &mut PenNode, fixes: &mut Vec<RefineFix>) {
+    if let PenNode::IconFont(icon) = node {
+        let width = valid_icon_font_dimension(&icon.width);
+        let height = valid_icon_font_dimension(&icon.height);
+        let target = match (width, height) {
+            (Some(_), Some(_)) => None,
+            (Some(width), None) => {
+                icon.height = Some(jian_ops_schema::sizing::SizingBehavior::Number(width));
+                Some((width, width))
+            }
+            (None, Some(height)) => {
+                icon.width = Some(jian_ops_schema::sizing::SizingBehavior::Number(height));
+                Some((height, height))
+            }
+            (None, None) => {
+                icon.width = Some(jian_ops_schema::sizing::SizingBehavior::Number(
+                    DEFAULT_ICON_FONT_SIZE,
+                ));
+                icon.height = Some(jian_ops_schema::sizing::SizingBehavior::Number(
+                    DEFAULT_ICON_FONT_SIZE,
+                ));
+                Some((DEFAULT_ICON_FONT_SIZE, DEFAULT_ICON_FONT_SIZE))
+            }
+        };
+        if let Some((width, height)) = target {
+            fixes.push(RefineFix {
+                node_id: icon.base.id.clone(),
+                node_name: icon.base.name.clone(),
+                fix: format!("Set missing/invalid icon font dimensions to {width}x{height}"),
+            });
+        }
+    }
+    if let Some(children) = node.children_mut() {
+        for child in children {
+            normalize_icon_font_dimensions(child, fixes);
+        }
+    }
+}
+
+fn valid_icon_font_dimension(
+    size: &Option<jian_ops_schema::sizing::SizingBehavior>,
+) -> Option<f64> {
+    match size {
+        Some(jian_ops_schema::sizing::SizingBehavior::Number(value))
+            if value.is_finite() && *value > 0.0 =>
+        {
+            Some(*value)
+        }
+        _ => None,
+    }
 }
 
 /// TS `sanitizeScreenFrameBounds` port: a free-layout "screen" frame

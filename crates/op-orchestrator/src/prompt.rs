@@ -203,10 +203,12 @@ pub fn build_orchestrator_prompt(
                 req.design_md.as_ref(),
                 req.pinned_style_guide.as_deref(),
             );
+            let mut user_prompt = cp.user_prompt;
+            append_reference_skeleton(&mut user_prompt, req);
             PlanningPrompt {
                 call_request: CallRequest {
                     system_prompt: cp.system,
-                    user_prompt: cp.user_prompt,
+                    user_prompt,
                     model: req.model.clone(),
                     provider: req.provider.clone(),
                     timeout: t.hard,
@@ -245,10 +247,12 @@ pub fn build_orchestrator_prompt(
                 .join("\n\n");
             system_prompt.push_str(PLANNING_QUALITY_GUARDRAILS);
             system_prompt.push_str(planning_suffix(mode));
+            let mut user_prompt = req.prompt.clone();
+            append_reference_skeleton(&mut user_prompt, req);
             PlanningPrompt {
                 call_request: CallRequest {
                     system_prompt,
-                    user_prompt: req.prompt.clone(),
+                    user_prompt,
                     model: req.model.clone(),
                     provider: req.provider.clone(),
                     timeout: t.hard,
@@ -260,6 +264,13 @@ pub fn build_orchestrator_prompt(
                 mode,
             }
         }
+    }
+}
+
+fn append_reference_skeleton(user_prompt: &mut String, req: &DesignRequest) {
+    if let Some(skeleton) = req.reference_skeleton.as_ref() {
+        user_prompt.push_str("\n\n");
+        user_prompt.push_str(&skeleton.render());
     }
 }
 
@@ -286,3 +297,7 @@ pub(crate) fn subtask_intent(req: &DesignRequest, subtask: &Subtask) -> String {
 #[cfg(test)]
 #[path = "prompt_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "prompt_reference_tests.rs"]
+mod reference_skeleton_tests;

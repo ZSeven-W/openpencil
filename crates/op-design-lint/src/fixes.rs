@@ -25,6 +25,10 @@ fn set_property(node: &mut PenNode, property: FixProperty, suggested: &Value) ->
             Some(v) => node_mut::set_rotation(node, v),
             None => false,
         },
+        FixProperty::Y => match suggested.as_f64() {
+            Some(v) => node_mut::set_y(node, v),
+            None => false,
+        },
         FixProperty::CornerRadius => match suggested.as_f64() {
             Some(v) => node_mut::set_corner_radius(node, v as f32),
             None => false,

@@ -73,6 +73,24 @@ fn right_rail_stays_visible_on_code_tab_without_selection() {
 }
 
 #[test]
+fn compact_legacy_code_tab_obeys_design_selection_visibility() {
+    let mut s = three_rects();
+    s.clear_selection();
+    s.editor_ui.touch = true;
+    s.editor_ui.size_class = crate::size_class::EditorSizeClass::Compact;
+    s.editor_ui.property_tab = crate::PropertyTab::Code;
+
+    assert_eq!(
+        s.editor_ui.effective_property_tab(),
+        crate::PropertyTab::Design
+    );
+    assert!(!s.property_panel_visible());
+
+    s.set_single_selection(NodeId::new("n1"));
+    assert!(s.property_panel_visible());
+}
+
+#[test]
 fn validate_catches_duplicate_ids() {
     let s = state_with(vec![
         rect("dup", "A", 0.0, 0.0, 10.0, 10.0),

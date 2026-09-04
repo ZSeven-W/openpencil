@@ -243,6 +243,8 @@ fn set_node_layout_prop_writes_container_layout_fields() {
         ),
         ("alignItems", LayoutPropValue::Keyword("center".into())),
         ("gap", LayoutPropValue::Number(12.0)),
+        ("x", LayoutPropValue::Number(3.5)),
+        ("y", LayoutPropValue::Number(7.5)),
         (
             "padding",
             LayoutPropValue::NumberArray(vec![1.0, 2.0, 3.0, 4.0]),
@@ -257,6 +259,8 @@ fn set_node_layout_prop_writes_container_layout_fields() {
     }
     match find_node(s.active_children(), &id("n1")).unwrap() {
         PenNode::Rectangle(r) => {
+            assert_eq!(r.base.x, Some(3.5));
+            assert_eq!(r.base.y, Some(7.5));
             assert_eq!(r.container.layout, Some(LayoutMode::Horizontal));
             assert_eq!(
                 r.container.justify_content,

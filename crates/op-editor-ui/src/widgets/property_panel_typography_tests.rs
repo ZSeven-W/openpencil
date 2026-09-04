@@ -11,6 +11,8 @@ use crate::{Color, RenderBackend, TextLayout};
 #[derive(Default)]
 struct RoundFillBackend {
     fills: Vec<(Rect, f32, Color)>,
+    text: Vec<(String, Point2D)>,
+    clips: Vec<Rect>,
 }
 
 impl RenderBackend for RoundFillBackend {
@@ -18,8 +20,13 @@ impl RenderBackend for RoundFillBackend {
     fn end_frame(&mut self) {}
     fn fill_rect(&mut self, _: Rect, _: Color) {}
     fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
-    fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
-    fn clip_rect(&mut self, _: Rect) {}
+    fn draw_text(&mut self, layout: &TextLayout, point: Point2D) {
+        self.text
+            .extend(layout.runs().iter().map(|run| (run.content.clone(), point)));
+    }
+    fn clip_rect(&mut self, rect: Rect) {
+        self.clips.push(rect);
+    }
     fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
     fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
         self.fills.push((rect, radius, color));
@@ -55,6 +62,13 @@ fn visible_text() -> VisibleSections {
         size_options: false,
         icon: false,
         ..VisibleSections::ALL
+    }
+}
+
+fn visible_touch_text() -> VisibleSections {
+    VisibleSections {
+        touch_controls: true,
+        ..visible_text()
     }
 }
 
@@ -99,6 +113,31 @@ fn entries_use_host_enumeration_and_filter_by_search() {
     assert!(!filtered[0].bundled);
     // No matches → empty (panel paints the no-results row).
     assert!(font_picker_entries(&[], &bundled(), &system, "zzz").is_empty());
+}
+
+#[test]
+fn yahei_faces_keep_distinct_rows_and_exact_active_state() {
+    let system = vec![
+        "Microsoft YaHei".to_string(),
+        "Microsoft YaHei UI".to_string(),
+    ];
+    let entries = font_picker_entries(&[], &[], &system, "");
+
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| entry.family.as_str())
+            .collect::<Vec<_>>(),
+        ["Microsoft YaHei", "Microsoft YaHei UI"]
+    );
+    assert!(super::paint::is_active_font_family(
+        "microsoft yahei",
+        "Microsoft YaHei"
+    ));
+    assert!(!super::paint::is_active_font_family(
+        "Microsoft YaHei",
+        "Microsoft YaHei UI"
+    ));
 }
 
 #[test]
@@ -180,6 +219,128 @@ fn entry_hit_maps_back_to_the_clicked_family() {
         ),
         Some(PropertyPanelAction::SetFontFamilyIndex(i)) if i == *expect
     ));
+}
+
+#[test]
+fn touch_picker_entries_search_and_import_are_full_44pt_targets() {
+    let entries = font_picker_entries(&[], &bundled(), &[], "");
+    let layout = font_picker_layout(
+        panel_rect(),
+        visible_touch_text(),
+        &entries,
+        ALLOW_IMPORT,
+        0.0,
+    )
+    .unwrap();
+    assert!(layout.search.size.y >= 44.0);
+    for (row, rect) in &layout.rows {
+        if matches!(
+            row,
+            FontPickerRow::Entry(_) | FontPickerRow::ImportAction | FontPickerRow::RemoveEntry(_)
+        ) {
+            assert!(rect.size.y >= 44.0, "{row:?} was {}", rect.size.y);
+        }
+    }
+}
+
+#[test]
+fn touch_picker_long_names_are_clipped_before_remove_and_check_targets() {
+    const IMPORTED: &str =
+        "Imported Typeface With An Extremely Long Name That Must Stop Before The Remove Target";
+    const SYSTEM: &str =
+        "System Typeface With An Extremely Long Name That Must Stop Before The Active Check";
+    let imported = vec![IMPORTED.to_owned()];
+    let system = vec![SYSTEM.to_owned()];
+    let entries = font_picker_entries(&imported, &[], &system, "");
+    let layout = font_picker_layout(
+        panel_rect(),
+        visible_touch_text(),
+        &entries,
+        ALLOW_IMPORT,
+        0.0,
+    )
+    .expect("touch picker");
+    let imported_index = entries
+        .iter()
+        .position(|entry| entry.family == IMPORTED)
+        .expect("imported entry");
+    let system_index = entries
+        .iter()
+        .position(|entry| entry.family == SYSTEM)
+        .expect("system entry");
+    let imported_row = layout
+        .rows
+        .iter()
+        .find_map(|(row, rect)| {
+            matches!(row, FontPickerRow::Entry(index) if *index == imported_index).then_some(*rect)
+        })
+        .expect("imported row");
+    let remove = layout
+        .rows
+        .iter()
+        .find_map(|(row, rect)| {
+            matches!(row, FontPickerRow::RemoveEntry(index) if *index == imported_index)
+                .then_some(*rect)
+        })
+        .expect("remove target");
+    let system_row = layout
+        .rows
+        .iter()
+        .find_map(|(row, rect)| {
+            matches!(row, FontPickerRow::Entry(index) if *index == system_index).then_some(*rect)
+        })
+        .expect("system row");
+    let mut backend = RoundFillBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_font_picker(
+        &mut cx,
+        &Theme::dark(),
+        panel_rect(),
+        visible_touch_text(),
+        op_editor_core::Locale::EnUs,
+        &entries,
+        ALLOW_IMPORT,
+        "",
+        &open_state(0.0),
+        false,
+        SYSTEM,
+        0,
+    );
+
+    assert!(!backend
+        .text
+        .iter()
+        .any(|(text, _)| text == IMPORTED || text == SYSTEM));
+    assert!(backend
+        .text
+        .iter()
+        .any(|(text, _)| text.starts_with("Imported") && text.ends_with('…')));
+    assert!(backend
+        .text
+        .iter()
+        .any(|(text, _)| text.starts_with("System") && text.ends_with('…')));
+    let imported_clip = backend
+        .clips
+        .iter()
+        .find(|clip| {
+            (clip.origin.x - (imported_row.origin.x + 10.0)).abs() < 0.01
+                && (clip.origin.y - imported_row.origin.y).abs() < 0.01
+        })
+        .expect("imported label clip");
+    assert!(imported_clip.origin.x + imported_clip.size.x <= remove.origin.x - 10.0 + 0.01);
+    let system_clip = backend
+        .clips
+        .iter()
+        .find(|clip| {
+            (clip.origin.x - (system_row.origin.x + 10.0)).abs() < 0.01
+                && (clip.origin.y - system_row.origin.y).abs() < 0.01
+        })
+        .expect("system label clip");
+    let active_check_x = system_row.origin.x + system_row.size.x - 30.0;
+    assert!(system_clip.origin.x + system_clip.size.x <= active_check_x - 10.0 + 0.01);
 }
 
 #[test]

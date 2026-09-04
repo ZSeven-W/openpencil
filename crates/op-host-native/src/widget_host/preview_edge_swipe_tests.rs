@@ -129,7 +129,7 @@ fn drag_past_threshold_fires_pop_cancels_the_gesture_and_disarms() {
     let edge = left_edge_x(&host);
 
     host.preview_dispatch_press(edge + 5.0, 400.0, VIEWPORT.0, VIEWPORT.1);
-    assert!(host.preview_press_active);
+    assert!(host.preview_any_pointer_held_for_test());
     // 65px > the 60px threshold.
     let handled = host.preview_dispatch_move(edge + 70.0, 400.0);
     assert!(handled, "the firing move is itself consumed");
@@ -138,7 +138,7 @@ fn drag_past_threshold_fires_pop_cancels_the_gesture_and_disarms() {
         "a fired candidate must disarm — at most once per gesture"
     );
     assert!(
-        !host.preview_press_active,
+        !host.preview_any_pointer_held_for_test(),
         "the underlying pointer gesture is cancelled, not left held"
     );
 

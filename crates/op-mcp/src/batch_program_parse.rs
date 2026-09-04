@@ -14,9 +14,15 @@ use super::batch_program_error::ProgramError;
 
 // --- Node JSON --------------------------------------------------------
 
-/// Parse + normalize an I()/R() node body into a `PenNode` with
-/// authored ids filled in (the caller remaps them to final ids).
-pub(crate) fn parse_node_json(raw: &str, post_process: bool) -> Result<PenNode> {
+/// Parse + normalize an I()/R() node body into a `PenNode` with authored ids
+/// filled in (the caller remaps them to final ids). `document_root` controls
+/// the one refine pass that is valid only for a real document root; child
+/// insertion payloads still receive every subtree-safe post-process fix.
+pub(crate) fn parse_node_json(
+    raw: &str,
+    post_process: bool,
+    document_root: bool,
+) -> Result<PenNode> {
     let mut value = parse_json_arg(raw)?;
     if !value.is_object() {
         return Err(ProgramError::Json("node data must be a JSON object".into()));
@@ -30,7 +36,11 @@ pub(crate) fn parse_node_json(raw: &str, post_process: bool) -> Result<PenNode> 
         // TS postProcess hooks (emoji strip, unique ids, layout-child
         // position sanitize, screen-bounds clamp) — the deterministic
         // subset shipped in `command_refine.rs`.
-        let _ = op_editor_core::command_refine::refine_subtree(&mut node);
+        if document_root {
+            let _ = op_editor_core::command_refine::refine_subtree(&mut node);
+        } else {
+            let _ = op_editor_core::command_refine::refine_child_subtree(&mut node);
+        }
     }
     Ok(node)
 }

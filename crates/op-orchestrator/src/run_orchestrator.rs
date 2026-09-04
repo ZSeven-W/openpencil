@@ -403,7 +403,7 @@ impl Orchestrator {
                     aborted_mid = true;
                     break;
                 }
-                let outcome = crate::concurrent::run_subtask_retry_ladder(
+                let outcome = crate::concurrent::run_subtask_retry_ladder_with_outcomes(
                     subtask,
                     &plan,
                     &request,
@@ -414,6 +414,7 @@ impl Orchestrator {
                     self.agent_indicator_epoch,
                     &geometry_echo_budget,
                     on_progress,
+                    &outcomes,
                 )
                 .await;
 
@@ -486,6 +487,7 @@ impl Orchestrator {
                     outcomes.get(outcome_index),
                     &plan.subtasks[subtask_index],
                 );
+                let prior_outcomes = outcomes.get(..outcome_index).unwrap_or(&[]);
                 on_progress(scope_progress_for_subtask(
                     &groups,
                     &group_identities,
@@ -496,7 +498,7 @@ impl Orchestrator {
                         reason: "salvage pass after transient failures".into(),
                     },
                 ));
-                let mut outcome = run_subtask_with_reveal_at(
+                let mut outcome = run_subtask_with_reveal_at_and_outcomes(
                     &subtask,
                     &plan,
                     &request,
@@ -508,9 +510,20 @@ impl Orchestrator {
                     self.agent_indicator_epoch,
                     reveal_now_millis(),
                     None,
+                    prior_outcomes,
                 )
                 .await;
                 if outcome.node_count > 0 {
+                    // The salvage appended the section after everything
+                    // generated since it first failed; put it back where
+                    // the plan placed it.
+                    crate::run_salvage_feedback::restore_planned_order(
+                        sink,
+                        &plan,
+                        &outcomes,
+                        subtask_index,
+                        &outcome,
+                    );
                     on_progress(scope_progress_for_subtask(
                         &groups,
                         &group_identities,

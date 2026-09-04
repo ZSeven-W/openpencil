@@ -88,6 +88,19 @@ pub fn mark_decode_failed(id: u64) {
     }
 }
 
+/// Whether another consumer is currently decoding taken entries. While an id
+/// sits in flight, paint will NOT re-record a miss for it, so a headless
+/// export that sees an empty queue cannot conclude its scene is fully
+/// decoded — the entry may have been taken by a concurrent consumer that
+/// installs into ITS raster cache, not the exporter's. See
+/// `op-render-export/src/scene_painter.rs::ensure_images_decoded`.
+pub fn has_in_flight_decodes() -> bool {
+    decodes()
+        .lock()
+        .map(|registry| !registry.in_flight.is_empty())
+        .unwrap_or(false)
+}
+
 pub fn has_pending_decodes() -> bool {
     decodes()
         .lock()

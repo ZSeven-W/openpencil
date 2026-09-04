@@ -210,18 +210,30 @@ fn strict_hello(role: RelayRole, route_seed: u8, caller: u8) -> RelayClientHello
     .unwrap()
 }
 
+/// Read the next reauthentication challenge, answering waiting-lease pings on
+/// the way the same as a real client's `next_binary_with_reauth` does.
 async fn next_challenge(socket: &mut ClientSocket) -> RelayServerChallengeV1 {
-    let message = time::timeout(Duration::from_secs(5), socket.next())
-        .await
-        .expect("reauthentication challenge arrives")
-        .expect("socket remains open")
-        .expect("challenge is a valid WebSocket message");
-    let Message::Text(text) = message else {
-        panic!("expected reauthentication Text control, got {message:?}");
-    };
-    RelayReauthChallengeV1::decode_text(&text)
-        .unwrap()
-        .into_challenge()
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let message = time::timeout_at(deadline, socket.next())
+            .await
+            .expect("reauthentication challenge arrives")
+            .expect("socket remains open")
+            .expect("challenge is a valid WebSocket message");
+        match message {
+            Message::Text(text) => {
+                return RelayReauthChallengeV1::decode_text(&text)
+                    .unwrap()
+                    .into_challenge()
+            }
+            Message::Ping(payload) => socket
+                .send(Message::Pong(payload))
+                .await
+                .expect("test client answers a lease ping"),
+            Message::Pong(_) => {}
+            other => panic!("expected reauthentication Text control, got {other:?}"),
+        }
+    }
 }
 
 async fn answer_challenge(

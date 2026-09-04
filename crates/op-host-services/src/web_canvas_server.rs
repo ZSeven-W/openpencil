@@ -12,7 +12,7 @@
 //! `openpencil-desktop --serve-web <port> [doc] [--host <addr>]`).
 //! Layered on top: an SSE endpoint that streams `version` bumps to connected
 //! shells, static serving of the host page + WASM bundle (`crate::web_static`
-//! — `GET /` and `GET /pkg/*`), and a token-authed `openpencil/shutdown`
+//! — `GET /` and `GET /pkg/*`), and a token-authenticated `openpencil/shutdown`
 //! (same contract as `--mcp-http`) so `op stop` works against this daemon.
 
 use std::io::{Read, Write};
@@ -88,9 +88,11 @@ pub struct WebCanvasState {
     /// The bound port, reported by `GET /api/mcp/server` (TS `server.get.ts`
     /// parity).
     pub(crate) port: u16,
-    /// Managed-mode per-instance auth token (see `ServeWebOptions::managed`
-    /// / `run_web_canvas`). `None` outside managed mode. Read by `serve_one`
-    /// (via `RequestAuth`) to gate every privileged request.
+    /// Managed-mode per-instance lifecycle token (see
+    /// `ServeWebOptions::managed` / `run_web_canvas`). `None` outside managed
+    /// mode. Ordinary requests are tokenless; `serve_one` consults this only
+    /// for the optional body-authenticated graceful-shutdown compatibility
+    /// path.
     pub(crate) managed_token: Option<String>,
     /// Managed-mode `--allow-origin` allowlist. Empty outside managed mode.
     /// Read by `serve_one` (via `cors_origin_for`) to decide which `Origin`
@@ -483,10 +485,17 @@ pub fn handle_web_canvas_request(
             Ok(doc_json) => WebReply {
                 status: "200 OK",
                 body: format!(
-                    r#"{{"document":{doc_json},"version":{},"activePageIndex":{},"preserveAuthoredGeometry":{}}}"#,
+                    r#"{{"document":{doc_json},"version":{},"activePageIndex":{},"preserveAuthoredGeometry":{},"scenario":{}}}"#,
                     state.version,
                     state.editor.ui.active_page_index,
-                    state.editor.editor_ui.preserve_authored_geometry
+                    state.editor.editor_ui.preserve_authored_geometry,
+                    // The scene tag rides the same wire as the rest of the
+                    // editor meta: a Slides deck must reach the browser as a
+                    // deck or web preview cannot enter its presentation.
+                    match state.editor.editor_ui.scenario {
+                        Some(scene) => format!("\"{}\"", scene.as_str()),
+                        None => "null".to_string(),
+                    }
                 ),
             },
             Err(e) => WebReply {

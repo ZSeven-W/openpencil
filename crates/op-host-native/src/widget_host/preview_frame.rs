@@ -1,268 +1,19 @@
-//! Device-frame host logic: geometry, inference, scroll state, and
-//! screen-to-scene input transforms.
+//! Device-frame host logic: state, paint, and input glue.
+//!
+//! The pure geometry (frame fit/centring, pinned-strip detection, the
+//! screen <-> scene transforms) lives in `op_preview_core::device_frame`
+//! so the web host solves it identically. This file is the native
+//! host's state + decoration on top of it.
 
 use op_editor_core::PreviewDeviceKind;
 use op_editor_ui::widgets::TOP_BAR_HEIGHT;
 use op_editor_ui::{Point2D, Rect};
 
-/// Pinned-strip geometry in the device frame's screen space — shared by
-/// the bottom nav and the top status bar (the two are otherwise
-/// symmetric: one node id, one screen-space strip, one paint origin).
-pub(crate) struct PinnedGeom {
-    pub node_id: String,
-    /// Strip node's scene rect (root-relative document space).
-    pub node_scene: Rect,
-    /// Full-width screen-space strip at the top or bottom of the frame.
-    pub strip: Rect,
-    /// Screen-space origin where the strip's subtree paints.
-    pub paint_origin: Point2D,
-}
-
-/// Device-frame geometry shared by paint and hit-testing.
-pub(crate) struct DeviceFrame {
-    pub kind: PreviewDeviceKind,
-    /// Screen-space frame rect after fit and centering.
-    pub frame: Rect,
-    pub fit: f32,
-    /// Screen-space page origin before applying the scroll offset.
-    pub content_origin: Point2D,
-    /// Pinned bottom nav, if detected.
-    pub pinned: Option<PinnedGeom>,
-    /// Pinned top status bar, if detected.
-    pub pinned_top: Option<PinnedGeom>,
-    /// Framed-root height in scene-space logical pixels.
-    pub content_h: f32,
-    /// Logical top of the final scrollable content extent.
-    pub nav_top: f32,
-    /// Screen-space x span occupied by the framed root.
-    pub content_span_x: (f32, f32),
-    /// Visible logical height after reserving the pinned nav / status
-    /// bar strips.
-    pub viewport_h: f32,
-}
-
-/// Presentation transform captured for one pointer gesture.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum PreviewSurface {
-    Scrolled { scroll_y: f32 },
-    Pinned,
-    PinnedTop,
-}
-
-/// Resolve the presentation surface under a screen-space point.
-/// Dead zones apply only while resolving the surface at pointer down.
-pub(crate) fn device_surface_at(
-    frame: &DeviceFrame,
-    screen: Point2D,
-    scroll_y: f32,
-) -> Option<PreviewSurface> {
-    let frame_rect = frame.frame;
-    let inside = screen.x >= frame_rect.origin.x
-        && screen.x <= frame_rect.origin.x + frame_rect.size.x
-        && screen.y >= frame_rect.origin.y
-        && screen.y <= frame_rect.origin.y + frame_rect.size.y;
-    if !inside {
-        return None;
-    }
-    if screen.x < frame.content_span_x.0 || screen.x > frame.content_span_x.1 {
-        return None;
-    }
-    // Once the point falls in a strip's screen-space band, the result
-    // is COMMITTED to that strip: either the pinned surface, or a dead
-    // zone (`None`) if it's beside a strip narrower than the frame —
-    // it must NOT fall through to `Scrolled` the way a miss on the
-    // strip's band itself does (that's a real, if rare, case: a
-    // narrower-than-frame bottom nav or top status bar still leaves
-    // its own flanks live for the scrolled content underneath).
-    if strip_band_contains(&frame.pinned, screen) {
-        return pinned_surface_or_dead_zone(
-            frame.pinned.as_ref().expect("checked Some above"),
-            frame.fit,
-            screen,
-            PreviewSurface::Pinned,
-        );
-    }
-    if strip_band_contains(&frame.pinned_top, screen) {
-        return pinned_surface_or_dead_zone(
-            frame.pinned_top.as_ref().expect("checked Some above"),
-            frame.fit,
-            screen,
-            PreviewSurface::PinnedTop,
-        );
-    }
-    Some(PreviewSurface::Scrolled { scroll_y })
-}
-
-/// Whether `screen` falls inside this (optional) strip's screen-space
-/// band at all — the OUTER gate `device_surface_at` commits on before
-/// checking the strip node's own (possibly narrower) horizontal span.
-fn strip_band_contains(pinned: &Option<PinnedGeom>, screen: Point2D) -> bool {
-    let Some(pinned) = pinned else {
-        return false;
-    };
-    let strip = pinned.strip;
-    screen.y >= strip.origin.y
-        && screen.y <= strip.origin.y + strip.size.y
-        && screen.x >= strip.origin.x
-        && screen.x <= strip.origin.x + strip.size.x
-}
-
-/// Inside the strip's band (already checked by the caller): resolve to
-/// the pinned surface, or `None` (dead zone) when the point is beside
-/// the strip node's own narrower horizontal span.
-fn pinned_surface_or_dead_zone(
-    pinned: &PinnedGeom,
-    fit: f32,
-    screen: Point2D,
-    surface: PreviewSurface,
-) -> Option<PreviewSurface> {
-    let left = pinned.paint_origin.x;
-    let right = left + pinned.node_scene.size.x * fit;
-    if screen.x < left || screen.x > right {
-        return None;
-    }
-    Some(surface)
-}
-
-/// Map a screen point through a previously resolved presentation surface.
-/// Captured gestures never apply dead zones again during held moves.
-pub(crate) fn device_scene_point(
-    frame: &DeviceFrame,
-    surface: &PreviewSurface,
-    screen: Point2D,
-) -> Option<Point2D> {
-    let through = |pinned: &PinnedGeom| {
-        Point2D::new(
-            pinned.node_scene.origin.x + (screen.x - pinned.paint_origin.x) / frame.fit,
-            pinned.node_scene.origin.y + (screen.y - pinned.paint_origin.y) / frame.fit,
-        )
-    };
-    match surface {
-        PreviewSurface::Pinned => frame.pinned.as_ref().map(through),
-        PreviewSurface::PinnedTop => frame.pinned_top.as_ref().map(through),
-        PreviewSurface::Scrolled { scroll_y } => Some(Point2D::new(
-            (screen.x - frame.content_origin.x) / frame.fit,
-            (screen.y - frame.content_origin.y) / frame.fit + scroll_y,
-        )),
-    }
-}
-
-pub(crate) fn frame_size(kind: PreviewDeviceKind) -> (f32, f32) {
-    match kind {
-        PreviewDeviceKind::Phone => (390.0, 844.0),
-        PreviewDeviceKind::Desktop | PreviewDeviceKind::Canvas => (1440.0, 900.0),
-    }
-}
-
-pub(crate) fn frame_radius(kind: PreviewDeviceKind) -> f32 {
-    match kind {
-        PreviewDeviceKind::Phone => 24.0,
-        PreviewDeviceKind::Desktop | PreviewDeviceKind::Canvas => 8.0,
-    }
-}
-
-/// Infer Phone at or below 500 logical pixels; otherwise Desktop.
-pub(crate) fn infer_kind_for_width(root_w: Option<f32>) -> PreviewDeviceKind {
-    match root_w {
-        Some(w) if w <= 500.0 => PreviewDeviceKind::Phone,
-        _ => PreviewDeviceKind::Desktop,
-    }
-}
-
-/// Compute all device-frame geometry from a canvas and framed root.
-/// `status_scene` mirrors `nav_scene` for the pinned top status bar.
-pub(crate) fn compute_frame_geometry(
-    kind: PreviewDeviceKind,
-    canvas: Rect,
-    root_scene: Rect,
-    nav_scene: Option<Rect>,
-    status_scene: Option<Rect>,
-) -> DeviceFrame {
-    let (frame_w, frame_h) = frame_size(kind);
-    let fit = (canvas.size.x / frame_w)
-        .min(canvas.size.y / frame_h)
-        .min(1.0);
-    let frame = Rect {
-        origin: Point2D::new(
-            canvas.origin.x + (canvas.size.x - frame_w * fit) / 2.0,
-            canvas.origin.y + (canvas.size.y - frame_h * fit) / 2.0,
-        ),
-        size: Point2D::new(frame_w * fit, frame_h * fit),
-    };
-    let content_origin = Point2D::new(
-        frame.origin.x + (frame.size.x - root_scene.size.x * fit) / 2.0 - root_scene.origin.x * fit,
-        frame.origin.y - root_scene.origin.y * fit,
-    );
-    // A generated flex root may retain its authored height even when its
-    // bottom tab bar resolves below that edge. Track the effective scene
-    // extent so the pinned-nav scroll range can still expose every item
-    // before the bar.
-    let content_h = nav_scene.map_or(root_scene.size.y, |nav| {
-        root_scene
-            .size
-            .y
-            .max(nav.origin.y + nav.size.y - root_scene.origin.y)
-    });
-    let pinned = nav_scene.map(|nav| {
-        let strip = Rect {
-            origin: Point2D::new(
-                frame.origin.x,
-                frame.origin.y + frame.size.y - nav.size.y * fit,
-            ),
-            size: Point2D::new(frame.size.x, nav.size.y * fit),
-        };
-        PinnedGeom {
-            node_id: String::new(),
-            node_scene: nav,
-            strip,
-            paint_origin: Point2D::new(content_origin.x + nav.origin.x * fit, strip.origin.y),
-        }
-    });
-    let pinned_top = status_scene.map(|status| {
-        let strip = Rect {
-            origin: frame.origin,
-            size: Point2D::new(frame.size.x, status.size.y * fit),
-        };
-        PinnedGeom {
-            node_id: String::new(),
-            node_scene: status,
-            strip,
-            paint_origin: Point2D::new(content_origin.x + status.origin.x * fit, strip.origin.y),
-        }
-    });
-    let status_h = pinned_top.as_ref().map_or(0.0, |p| p.node_scene.size.y);
-    let (nav_top, viewport_h) = match &pinned {
-        Some(pinned) => {
-            let nav_h = pinned.node_scene.size.y;
-            (
-                (pinned.node_scene.origin.y - root_scene.origin.y).max(0.0),
-                frame_h - nav_h - status_h,
-            )
-        }
-        None => (content_h, frame_h - status_h),
-    };
-    let content_span_x = (
-        content_origin.x + root_scene.origin.x * fit,
-        content_origin.x + (root_scene.origin.x + root_scene.size.x) * fit,
-    );
-    DeviceFrame {
-        kind,
-        frame,
-        fit,
-        content_origin,
-        pinned,
-        pinned_top,
-        content_h,
-        nav_top,
-        content_span_x,
-        viewport_h,
-    }
-}
-
-pub(crate) fn scroll_max(frame: &DeviceFrame) -> f32 {
-    debug_assert!(frame.nav_top <= frame.content_h + f32::EPSILON);
-    (frame.nav_top - frame.viewport_h).max(0.0)
-}
+pub(crate) use op_preview_core::device_frame::{
+    compute_frame_geometry, device_scene_point, device_surface_at, frame_radius,
+    infer_kind_for_width, paint_corner_notches, scroll_max, DeviceFrame, PinnedGeom,
+    PreviewSurface,
+};
 
 impl super::WidgetHostNative {
     pub(crate) fn initialize_device_preview(&mut self) {
@@ -392,8 +143,10 @@ impl super::WidgetHostNative {
         if let (Some(pinned_top), Some((node_id, _))) = (frame.pinned_top.as_mut(), status) {
             pinned_top.node_id = node_id;
         }
-        self.preview_scroll_y = self.preview_scroll_y.clamp(0.0, scroll_max(&frame));
+        let max = scroll_max(&frame);
+        self.preview_scroll_y = self.preview_scroll_y.clamp(0.0, max);
         self.preview_device_frame = Some(frame);
+        self.sync_page_scroll(max, 0.0);
     }
 
     /// Apply a screen-pixel scroll delta to logical frame content.
@@ -401,10 +154,27 @@ impl super::WidgetHostNative {
         let Some(frame) = self.preview_device_frame.as_ref() else {
             return;
         };
-        let next =
-            (self.preview_scroll_y - screen_delta_y / frame.fit).clamp(0.0, scroll_max(frame));
+        let max = scroll_max(frame);
+        let next = (self.preview_scroll_y - screen_delta_y / frame.fit).clamp(0.0, max);
         if (next - self.preview_scroll_y).abs() > f32::EPSILON {
             self.preview_scroll_y = next;
+            self.mark_dirty();
+        }
+        self.sync_page_scroll(max, screen_delta_y);
+    }
+
+    /// Feed the device frame's scroll position into the session so
+    /// `$scroll` bindings under the framed root track the page scroll
+    /// (page-scroll contract). Repaints when a bound value moved even
+    /// if the offset itself did not (a new `max_offset` changes
+    /// `$scroll.progress`).
+    fn sync_page_scroll(&mut self, max_offset: f32, delta_y: f32) {
+        let offset = self.preview_scroll_y;
+        let changed = self
+            .preview
+            .as_mut()
+            .is_some_and(|session| session.set_page_scroll(offset, max_offset, delta_y));
+        if changed {
             self.mark_dirty();
         }
     }
@@ -657,7 +427,7 @@ impl super::WidgetHostNative {
     }
 
     fn preview_switcher_labels(&self) -> [&'static str; 3] {
-        let locale = self.editor_state.editor_ui.locale;
+        let locale = self.editor_state.editor_ui.effective_locale();
         [
             op_i18n::translate(locale, "preview.device.phone"),
             op_i18n::translate(locale, "preview.device.desktop"),
@@ -668,15 +438,18 @@ impl super::WidgetHostNative {
     /// Canvas rect shared by switcher paint and hit-testing.
     pub(crate) fn preview_canvas_rect(&self, viewport_w: f32, viewport_h: f32) -> Rect {
         if self.preview_slideshow_active() {
-            // Presenting hides the rails, so the stage is everything under
-            // the TopBar. Derived, never stored: panel state is untouched, so
-            // the moment the presentation ends this returns the ordinary
-            // canvas region again with nothing to restore. Paint, the board
-            // fit and the toolbar's hit-test all read it, so they cannot
-            // disagree about where the stage is.
+            // Presenting hides the rails. Desktop keeps its TopBar because
+            // it remains painted; touch layouts hide their app bar and dock
+            // in favour of presenter controls, so their safe-area-local
+            // viewport is the whole stage with no unexplained top band.
+            let top = if self.editor_state.editor_ui.touch_chrome() {
+                0.0
+            } else {
+                TOP_BAR_HEIGHT
+            };
             return Rect {
-                origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
-                size: Point2D::new(viewport_w, (viewport_h - TOP_BAR_HEIGHT).max(0.0)),
+                origin: Point2D::new(0.0, top),
+                size: Point2D::new(viewport_w, (viewport_h - top).max(0.0)),
             };
         }
         let (canvas_x, canvas_y, canvas_w, canvas_h) = self.canvas_region(viewport_w, viewport_h);
@@ -685,20 +458,6 @@ impl super::WidgetHostNative {
             size: Point2D::new(canvas_w, canvas_h),
         }
     }
-}
-
-fn paint_corner_notches(
-    backend: &mut dyn op_editor_ui::RenderBackend,
-    frame: Rect,
-    radius: f32,
-    mask: op_editor_ui::Color,
-) {
-    let half = radius / 2.0;
-    let inflated = Rect {
-        origin: Point2D::new(frame.origin.x - half, frame.origin.y - half),
-        size: Point2D::new(frame.size.x + radius, frame.size.y + radius),
-    };
-    backend.stroke_round_rect(inflated, radius + half, mask, radius);
 }
 
 // Pure geometry tests (`compute_frame_geometry` / `device_surface_at` /

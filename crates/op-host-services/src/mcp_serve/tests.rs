@@ -24,7 +24,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        129,
+        135,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -96,6 +96,8 @@ fn tools_list_response_includes_all_registered_tools() {
         "get_style_guide_tags",
         "get_style_guide",
         "get_guidelines",
+        "get_design_agent_prompt",
+        "get_design_quality",
         "spawn_agents",
         "ToolSearch",
         "get_screenshot",
@@ -103,6 +105,7 @@ fn tools_list_response_includes_all_registered_tools() {
         "export_nodes",
         "get_active_theme",
         "list_components",
+        "list_ui_kits",
         "get_component",
         "batch_get",
         "read_nodes",
@@ -197,6 +200,8 @@ fn tools_list_response_includes_all_registered_tools() {
         "design_skeleton",
         "design_content",
         "design_refine",
+        "finalize_design",
+        "enrich_images",
     ] {
         assert!(r.contains(name), "tools/list must include {name}: {r}");
     }
@@ -386,6 +391,64 @@ fn find_empty_space_returns_padded_position_from_active_page_bounds() {
 }
 
 #[test]
+fn file_mcp_applier_normalizes_mobile_document_before_save() {
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "openpencil-mcp-mobile-normalize-{}-{suffix}.op",
+        std::process::id()
+    ));
+    let mut state = op_editor_core::EditorState::new();
+    let operations = r##"root=I(null,{"type":"frame","name":"Screen","width":375,"height":"fit_content","fill":[{"type":"solid","color":"#f7f8fa"}],"children":[{"type":"frame","name":"Status Bar","width":"fill_container","height":62,"children":[{"type":"text","content":"9:41"},{"type":"text","content":"signal wifi battery"}]},{"type":"path","name":"ChevronDownIcon","role":"icon","d":"M6 9l6 6 6-6","width":14,"height":14,"stroke":{"thickness":2.2,"fill":[{"type":"solid","color":"#1A1614"}]}}]})"##;
+    let line = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "batch_design", "arguments": {"operations": operations}}
+    })
+    .to_string();
+
+    let response = process_message(&mut state, &path, &line)
+        .expect("dispatch")
+        .expect("response");
+    assert!(!response.contains(r#""isError":true"#), "{response}");
+
+    let saved = load_editor_state(&path).expect("saved document");
+    let root = &saved.active_children()[0];
+    assert_eq!(root.width_px(), Some(375.0));
+    assert_eq!(root.height_px(), Some(812.0));
+    let status_bar = &root.children().expect("root children")[0];
+    assert_eq!(status_bar.base().role.as_deref(), Some("status-bar"));
+    assert!(status_bar.children().is_some_and(|children| {
+        children
+            .iter()
+            .any(|child| child.base().name.as_deref() == Some("Levels"))
+    }));
+    let icon = &root.children().expect("root children")[1];
+    let jian_ops_schema::node::PenNode::IconFont(icon) = icon else {
+        panic!("hand-drawn chevron should be normalized before save")
+    };
+    assert_eq!(icon.icon_font_name, "chevron-down");
+    assert_eq!(icon.icon_font_family.as_deref(), Some("lucide"));
+    assert_eq!(
+        icon.fill
+            .as_ref()
+            .and_then(|fills| fills.first())
+            .and_then(|fill| {
+                let jian_ops_schema::style::PenFill::Solid(body) = fill else {
+                    return None;
+                };
+                Some(body.color.as_str())
+            }),
+        Some("#1A1614")
+    );
+
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
 fn read_nodes_accepts_structured_ids_over_mcp() {
     let mut state = op_editor_core::EditorState::new();
     assert!(state.apply(EditorCommand::InsertNode {
@@ -414,6 +477,46 @@ fn read_nodes_accepts_structured_ids_over_mcp() {
         "{result}"
     );
     assert!(result.contains(&node_id), "{result}");
+}
+
+#[test]
+fn full_design_context_tools_dispatch_as_read_only_nested_json() {
+    let mut state = op_editor_core::EditorState::new();
+    let calls = [
+        (
+            "get_design_agent_prompt",
+            r#"{"userMessage":"Design an analytics dashboard","verifyProtocol":"layout"}"#,
+            &["prompt", "verifyProtocol", "Product-Design Depth"][..],
+        ),
+        (
+            "list_ui_kits",
+            r#"{"kitId":"openpencil-starter","limit":2}"#,
+            &["kits", "scriptRef", "starter/btn-primary"][..],
+        ),
+        (
+            "get_design_quality",
+            r#"{}"#,
+            &["geometryIssues", "contrastIssues", "navIssues"][..],
+        ),
+    ];
+    for (index, (tool, arguments, expected)) in calls.iter().enumerate() {
+        let line = format!(
+            r#"{{"jsonrpc":"2.0","id":{},"method":"tools/call","params":{{"name":"{tool}","arguments":{arguments}}}}}"#,
+            index + 30
+        );
+        let mut applied = false;
+        let response = process_message_with_applier(&mut state, &line, |_, _, _| {
+            applied = true;
+            true
+        })
+        .expect("dispatch")
+        .expect("response");
+        assert!(!applied, "read tool {tool} must emit no editor command");
+        let result = crate::mcp_serve::tool_text(&response);
+        for needle in *expected {
+            assert!(result.contains(needle), "{tool} missing {needle}: {result}");
+        }
+    }
 }
 
 #[test]
@@ -519,6 +622,115 @@ fn set_themes_accepts_structured_mcp_arguments_and_mutates_state() {
             .cloned(),
         Some(vec!["Light".to_string(), "Dark".to_string()])
     );
+}
+
+#[test]
+fn online_dispatch_refuses_user_scene_templates_before_the_tool_runs() {
+    let mut state = op_editor_core::EditorState::new();
+    let line = r#"{"jsonrpc":"2.0","id":14,"method":"tools/call","params":{"name":"use_scene_template","arguments":{"templateId":"user:private-deck"}}}"#;
+    let mut applied = false;
+    let response = process_message_with_applier_profiled(
+        &mut state,
+        line,
+        tool_profile::McpAccessProfile::online(tool_profile::McpScopes::FULL),
+        |_, _, _| {
+            applied = true;
+            true
+        },
+    )
+    .expect("dispatch")
+    .expect("response");
+
+    assert!(response.contains(r#""isError":true"#), "{response}");
+    assert!(
+        response.contains("user-template-not-available"),
+        "the profile must reject the user half explicitly: {response}"
+    );
+    assert!(!applied, "a refused user template must emit no command");
+}
+
+#[test]
+fn online_dispatch_keeps_shipped_scene_templates_available() {
+    let mut state = op_editor_core::EditorState::new();
+    let line = r#"{"jsonrpc":"2.0","id":15,"method":"tools/call","params":{"name":"use_scene_template","arguments":{"templateId":"slide-deck"}}}"#;
+    let mut applied_id = None;
+    let response = process_message_with_applier_profiled(
+        &mut state,
+        line,
+        tool_profile::McpAccessProfile::online(tool_profile::McpScopes::FULL),
+        |_, _, command| {
+            let EditorCommand::AdoptSceneTemplate { template_id } = command else {
+                return false;
+            };
+            applied_id = Some(template_id.clone());
+            true
+        },
+    )
+    .expect("dispatch")
+    .expect("response");
+
+    assert!(!response.contains(r#""isError""#), "{response}");
+    assert_eq!(applied_id.as_deref(), Some("slide-deck"));
+}
+
+#[test]
+fn scene_template_listing_is_shipped_only_online_and_two_source_locally() {
+    let _guard = scene_template_tools::exclusive_user_template_registry_for_tests();
+    op_editor_core::user_scene_templates::load_user_scene_template(
+        op_editor_core::user_scene_templates::UserSceneTemplate {
+            id: "user:private-deck".to_string(),
+            name: "Private Deck".to_string(),
+            frames: 1,
+            frame_width: 1920,
+            frame_height: 1080,
+            document: r#"{"version":"1.0.0","children":[]}"#.to_string(),
+            preview_jpeg: Vec::new(),
+        },
+    )
+    .expect("register user template fixture");
+    let line = r#"{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"list_scene_templates","arguments":{}}}"#;
+
+    let online = process_message_with_applier_profiled(
+        &mut op_editor_core::EditorState::new(),
+        line,
+        tool_profile::McpAccessProfile::online(tool_profile::McpScopes::FULL),
+        |_, _, _| false,
+    )
+    .expect("online dispatch")
+    .expect("online response");
+    let online_text = crate::mcp_serve::tool_text(&online);
+    assert!(online_text.contains("slide-deck"), "{online_text}");
+    assert!(!online_text.contains("user:private-deck"), "{online_text}");
+
+    let local =
+        process_message_with_applier(&mut op_editor_core::EditorState::new(), line, |_, _, _| {
+            false
+        })
+        .expect("local dispatch")
+        .expect("local response");
+    let local_text = crate::mcp_serve::tool_text(&local);
+    assert!(local_text.contains("slide-deck"), "{local_text}");
+    assert!(local_text.contains("user:private-deck"), "{local_text}");
+}
+
+#[test]
+fn local_tool_search_keeps_local_resource_descriptors() {
+    let line = r#"{"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"ToolSearch","arguments":{"query":"select:save_document,get_node","max_results":11}}}"#;
+    let response =
+        process_message_with_applier(&mut op_editor_core::EditorState::new(), line, |_, _, _| {
+            false
+        })
+        .expect("local dispatch")
+        .expect("local response");
+    let result: serde_json::Value = serde_json::from_str(&crate::mcp_serve::tool_text(&response))
+        .expect("ToolSearch result JSON");
+    let names: Vec<&str> = result["results"]
+        .as_array()
+        .expect("results array")
+        .iter()
+        .filter_map(|entry| entry["name"].as_str())
+        .collect();
+    assert_eq!(names, ["save_document", "get_node"], "{result}");
 }
 
 #[path = "tests_transport.rs"]

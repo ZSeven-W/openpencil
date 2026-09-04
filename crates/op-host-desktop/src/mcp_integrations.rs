@@ -14,6 +14,7 @@ use crate::mcp_config_error::McpConfigError;
 use crate::mcp_config_io::{
     atomic_write, grok_config_has_openpencil, update_grok_config, FileSnapshot,
 };
+use crate::mcp_integrations_dsh::{dsh_config_has_openpencil, update_dsh_patch_config};
 
 const SERVER_NAME: &str = "openpencil";
 const ANTIGRAVITY_MCP_PERMISSION: &str = "mcp(openpencil/*)";
@@ -31,9 +32,9 @@ pub(crate) fn set_cli_enabled(
     set_cli_enabled_at_path(cli, enabled, port, path)
 }
 
-pub(crate) fn detect_enabled_clis() -> [bool; 12] {
+pub(crate) fn detect_enabled_clis() -> [bool; 13] {
     let Some(home) = dirs::home_dir() else {
-        return [false; 12];
+        return [false; 13];
     };
     detect_enabled_clis_for_home(&home, true)
 }
@@ -55,12 +56,12 @@ pub(crate) fn set_cli_enabled_at_home(
 }
 
 /// Like [`detect_enabled_clis`] but against an explicit home dir (no env).
-pub(crate) fn detect_enabled_clis_at_home(home: &Path) -> [bool; 12] {
+pub(crate) fn detect_enabled_clis_at_home(home: &Path) -> [bool; 13] {
     detect_enabled_clis_for_home(home, false)
 }
 
-fn detect_enabled_clis_for_home(home: &Path, use_env: bool) -> [bool; 12] {
-    let mut flags = [false; 12];
+fn detect_enabled_clis_for_home(home: &Path, use_env: bool) -> [bool; 13] {
+    let mut flags = [false; 13];
     for (idx, cli) in McpCli::ALL.iter().copied().enumerate() {
         flags[idx] = if cli == McpCli::Antigravity {
             antigravity_config_has_openpencil(&config_path(cli, home, use_env))
@@ -83,15 +84,15 @@ fn set_cli_enabled_at_path(
         McpCli::Codex => update_codex_config(&path, enabled, port)?,
         McpCli::GrokBuild => update_grok_config(&path, enabled, &endpoint(port))?,
         McpCli::Antigravity => return Err(McpConfigError::AntigravityNeedsHome),
+        McpCli::OpenCode => update_opencode_config(&path, enabled, port)?,
         McpCli::QwenCode => update_mcp_servers_json(&path, enabled, qwen_server(port))?,
+        McpCli::Kiro => update_mcp_servers_json(&path, enabled, kiro_server(port))?,
         McpCli::Kimi => update_mcp_servers_json(&path, enabled, kimi_server(port))?,
         McpCli::ZCode => update_zcode_config(&path, enabled, port)?,
-        McpCli::ClaudeCode
-        | McpCli::OpenCode
-        | McpCli::Kiro
-        | McpCli::GithubCopilot
-        | McpCli::GeminiCli
-        | McpCli::Cursor => update_json_config(&path, enabled, port)?,
+        McpCli::Dsh => update_dsh_patch_config(&path, enabled, port)?,
+        McpCli::ClaudeCode | McpCli::GithubCopilot | McpCli::GeminiCli | McpCli::Cursor => {
+            update_json_config(&path, enabled, port)?
+        }
     }
     Ok(path)
 }
@@ -105,12 +106,13 @@ fn cli_config_has_openpencil(cli: McpCli, path: &Path) -> bool {
             .map(|text| grok_config_has_openpencil(&text))
             .unwrap_or(false),
         McpCli::Antigravity => antigravity_config_has_openpencil(path),
+        McpCli::OpenCode => opencode_config_has_openpencil(path),
+        McpCli::Kiro => kiro_config_has_openpencil(path),
         McpCli::ZCode => zcode_config_has_openpencil(path),
+        McpCli::Dsh => dsh_config_has_openpencil(path),
         // Every remaining CLI keys its servers off `mcpServers.openpencil`;
         // only the value shape differs, so presence is the same check.
         McpCli::ClaudeCode
-        | McpCli::OpenCode
-        | McpCli::Kiro
         | McpCli::GithubCopilot
         | McpCli::GeminiCli
         | McpCli::QwenCode
@@ -132,8 +134,8 @@ fn config_path(cli: McpCli, home: &Path, use_env: bool) -> PathBuf {
                 home.join(".codex").join("config.toml")
             }
         }
-        McpCli::OpenCode => home.join(".opencode").join("config.json"),
-        McpCli::Kiro => home.join(".kiro").join("settings.json"),
+        McpCli::OpenCode => home.join(".config").join("opencode").join("opencode.json"),
+        McpCli::Kiro => home.join(".kiro").join("settings").join("mcp.json"),
         McpCli::GithubCopilot => home.join(".config").join("github-copilot").join("mcp.json"),
         // Antigravity and the Gemini CLI both live under `~/.gemini` but read
         // different files, so enabling one leaves the other untouched.
@@ -162,6 +164,20 @@ fn config_path(cli: McpCli, home: &Path, use_env: bool) -> PathBuf {
         // this toggle; a dedicated "cross-agent standard" integration would
         // be the place for it.
         McpCli::ZCode => home.join(".zcode").join("cli").join("config.json"),
+        // DeepSeek Harness reads its home-level patch layer — one file
+        // that applies across all profiles, so a single write covers every
+        // profile. `DSH_HOME` overrides the data root, mirroring Codex's
+        // `CODEX_HOME` handling.
+        McpCli::Dsh => {
+            if use_env {
+                std::env::var_os("DSH_HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| home.join(".dsh"))
+                    .join("cordis.patch.yml")
+            } else {
+                home.join(".dsh").join("cordis.patch.yml")
+            }
+        }
         McpCli::GrokBuild => {
             if use_env {
                 std::env::var_os("GROK_HOME")
@@ -283,6 +299,32 @@ fn json_config_has_openpencil(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
+fn opencode_config_has_openpencil(path: &Path) -> bool {
+    read_json_object(path)
+        .ok()
+        .and_then(|root| {
+            root.get("mcp")
+                .and_then(Value::as_object)?
+                .get(SERVER_NAME)
+                .and_then(Value::as_object)
+                .map(|server| server.get("enabled").and_then(Value::as_bool) != Some(false))
+        })
+        .unwrap_or(false)
+}
+
+fn kiro_config_has_openpencil(path: &Path) -> bool {
+    read_json_object(path)
+        .ok()
+        .and_then(|root| {
+            root.get("mcpServers")
+                .and_then(Value::as_object)?
+                .get(SERVER_NAME)
+                .and_then(Value::as_object)
+                .map(|server| server.get("disabled").and_then(Value::as_bool) != Some(true))
+        })
+        .unwrap_or(false)
+}
+
 fn antigravity_config_has_openpencil(path: &Path) -> bool {
     let Some(server) = read_json_object(path).ok().and_then(|root| {
         root.get("mcpServers")
@@ -304,8 +346,8 @@ fn antigravity_config_has_openpencil(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-/// The `type` + `url` streamable-HTTP shape. Claude Code, OpenCode, Kiro,
-/// Copilot, the Gemini CLI, Cursor, and ZCode all accept it — verified
+/// The `type` + `url` streamable-HTTP shape. Claude Code, Copilot, the
+/// Gemini CLI, Cursor, and ZCode all accept it — verified
 /// against what `gemini mcp add --transport http` writes, against Cursor's
 /// own config reader (which keys off `url` and ignores the extra `type`), and
 /// against ZCode's settings form, which documents exactly this pair.
@@ -318,6 +360,48 @@ fn streamable_http_server(port: u16) -> Value {
 
 fn update_json_config(path: &Path, enabled: bool, port: u16) -> Result<(), McpConfigError> {
     update_mcp_servers_json(path, enabled, streamable_http_server(port))
+}
+
+/// OpenCode stores remote servers directly under `mcp` and uses `remote` as
+/// the transport discriminator. This is deliberately separate from the
+/// `mcpServers` layout used by most other clients.
+fn update_opencode_config(path: &Path, enabled: bool, port: u16) -> Result<(), McpConfigError> {
+    let mut root = read_json_object(path)?;
+    if enabled {
+        let mcp = root
+            .entry("mcp")
+            .or_insert_with(|| Value::Object(Map::new()));
+        if !mcp.is_object() {
+            *mcp = Value::Object(Map::new());
+        }
+        let mcp = mcp
+            .as_object_mut()
+            .ok_or(McpConfigError::McpServersNotAnObject)?;
+        mcp.insert(
+            SERVER_NAME.into(),
+            serde_json::json!({
+                "type": "remote",
+                "url": endpoint(port),
+                "enabled": true,
+            }),
+        );
+    } else if let Some(mcp) = root.get_mut("mcp").and_then(Value::as_object_mut) {
+        mcp.remove(SERVER_NAME);
+        if mcp.is_empty() {
+            root.remove("mcp");
+        }
+    }
+    write_json_object(path, &root)
+}
+
+/// Kiro infers a remote transport from `url`; `type: "http"` is not part of
+/// its native remote-server shape. Writing `disabled: false` makes re-enabling
+/// an entry explicit.
+fn kiro_server(port: u16) -> Value {
+    serde_json::json!({
+        "url": endpoint(port),
+        "disabled": false,
+    })
 }
 
 /// Qwen Code reads a plain `url` as SSE — `qwen mcp list` reports the
@@ -555,3 +639,11 @@ fn toml_basic_string_escape(s: &str) -> String {
 #[cfg(test)]
 #[path = "mcp_integrations_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "mcp_integrations_opencode_kiro_tests.rs"]
+mod opencode_kiro_tests;
+
+#[cfg(test)]
+#[path = "mcp_integrations_dsh_tests.rs"]
+mod dsh_tests;

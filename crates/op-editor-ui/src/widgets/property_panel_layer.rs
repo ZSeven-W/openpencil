@@ -20,6 +20,7 @@ pub fn paint_layer_section(
     labels: &PropertyLabels,
     edit: &EditContext<'_>,
     show_compositing: bool,
+    touch_controls: bool,
     locale: op_editor_core::Locale,
     x: f32,
     y: f32,
@@ -30,7 +31,10 @@ pub fn paint_layer_section(
     let half_w = (usable_w - 8.0) / 2.0;
     let opacity_rect = Rect {
         origin: Point2D::new(x + PAD_X, y),
-        size: Point2D::new(half_w, INPUT_HEIGHT),
+        size: Point2D::new(
+            opacity_input_width(width, snapshot.polygon_sides.is_some(), touch_controls),
+            INPUT_HEIGHT,
+        ),
     };
     let opacity_value = format_number(snapshot.opacity_percent);
     paint_labeled_input(
@@ -80,6 +84,23 @@ pub fn paint_layer_section(
     y += 12.0;
     paint_section_divider(cx, theme, x, y, width);
     y + SECTION_GAP
+}
+
+/// The half-width desktop row leaves room for Polygon Sides. On the narrower
+/// logical viewport produced by touch density there is no sibling for ordinary
+/// nodes, so let Opacity use the otherwise-empty second column rather than
+/// ellipsizing localized labels such as `不透明度`.
+pub(crate) fn opacity_input_width(
+    panel_width: f32,
+    has_polygon_sides: bool,
+    touch_controls: bool,
+) -> f32 {
+    let usable_w = panel_width - PAD_X * 2.0;
+    if touch_controls && !has_polygon_sides {
+        usable_w
+    } else {
+        (usable_w - 8.0) / 2.0
+    }
 }
 
 const COMPOSITING_ROW_GAP: f32 = crate::widgets::property_panel_compositing::COMPOSITING_ROW_GAP;

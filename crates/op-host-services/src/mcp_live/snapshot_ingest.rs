@@ -9,9 +9,9 @@
 //!   instance's own loopback origin, and a browser ALWAYS attaches
 //!   `Origin: chrome-extension://<id>` to an extension-initiated `POST`
 //!   (Fetch spec: `Origin` is appended for any non-`GET`/`HEAD` request).
-//! * `admission::check_token` requires the per-instance token from
-//!   `~/.openpencil/.op-mcp-port`, and an extension has no filesystem
-//!   access to read it.
+//! * The general `/mcp` surface is intentionally not widened to extension
+//!   origins. It remains available only to callers that clear the endpoint's
+//!   normal numeric-loopback `Host` and same-origin/no-`Origin` boundary.
 //!
 //! So this module adds ONE narrowly-scoped route instead of widening
 //! either gate:
@@ -19,8 +19,8 @@
 //! * It is a fixed alias for exactly one MCP tool, `import_web_snapshot`
 //!   — insert-only. It cannot read the document, cannot delete, cannot
 //!   move or export anything, so an extension reaching it can add visible
-//!   (and undoable) nodes and nothing else. Reads and every other write
-//!   tool stay behind the full token gate.
+//!   (and undoable) nodes and nothing else. Reads and every other write tool
+//!   remain behind the general route's strict Host/Origin boundary.
 //! * `admission::check_boundary` still screens it: `Host` must be a
 //!   numeric loopback literal on the bound port, and the `Origin` must be
 //!   either this instance's own loopback origin or an ACCEPTED
@@ -59,11 +59,16 @@ pub(crate) const SNAPSHOT_INGEST_PATH: &str = "/api/import/web-snapshot";
 ///
 /// This is the ONE untokened body-carrying route, so its cap is what bounds
 /// how much memory an unauthenticated local caller can make the editor
-/// buffer. 32 MiB is comfortably above any real snapshot: the extractor
-/// stops at 20,000 nodes and rasterizes at most ~24 MiB of images
-/// (`crates/op-html/assets/snapshot-extractor.js`), and a body that large
-/// is already a partial capture the user is told about.
-pub(crate) const MAX_SNAPSHOT_BODY: usize = 32 * 1024 * 1024;
+/// buffer PER CONNECTION — the loopback listener admits up to
+/// `MAX_LIVE_CONNS` (64) concurrent connections, so the aggregate untokened
+/// ceiling is 64 × this (plus the UTF-8→String copy each body takes on the
+/// way in). 48 MiB fits any real snapshot: the extractor stops at 40,000
+/// nodes (~20 MiB of styled nodes at the pathological densest) and
+/// rasterizes at most ~24 MiB of images
+/// (`crates/op-html/assets/snapshot-extractor.js`) — ~44 MiB at both maxima
+/// simultaneously, which no real page reaches — and a body that large is
+/// already a partial capture the user is told about.
+pub(crate) const MAX_SNAPSHOT_BODY: usize = 48 * 1024 * 1024;
 
 /// The one MCP tool this route is an alias for.
 const SNAPSHOT_TOOL: &str = "import_web_snapshot";
@@ -115,7 +120,7 @@ fn content_type_is_json(value: Option<&str>) -> bool {
 /// The snapshot is streamed straight into the output buffer through serde's
 /// string serializer — same escaping a `serde_json::json!` value would
 /// produce, but without materializing an intermediate `Value` and then a
-/// second `String` of it. On a 32 MiB body that is one copy instead of
+/// second `String` of it. On a 48 MiB body that is one copy instead of
 /// three, on a route any local caller can reach untokened.
 pub(super) fn snapshot_tool_call(snapshot: &str) -> String {
     let mut out: Vec<u8> = Vec::with_capacity(snapshot.len() + CALL_HEAD.len() + 96);

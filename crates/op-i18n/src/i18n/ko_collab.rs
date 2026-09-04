@@ -128,6 +128,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.documentUnavailable" => {
             "이 템플릿의 문서를 불러오지 못했습니다. 다시 시도하세요."
         }
+        "sceneTemplate.deleteFailed" => "해당 템플릿을 삭제하지 못했습니다. 다시 시도해 주세요.",
         "sceneTemplate.item.soundingNavyDeck.title" => "수심도 · 전략 제안 덱",
         "sceneTemplate.item.soundingNavyDeck.summary" => "해도의 따뜻한 백색에 강청색과 먹빛 남색. 각 장은 결론으로 시작하고 출처가 붙은 수치 하나로 뒷받침한다. 수심 단면 막대와 항적 목차가 일곱 장을 관통하는, 컨설팅 산출물과 전략 보고용.",
         "sceneTemplate.item.tidemarkSlateDeck.title" => "조수 자국 슬레이트 · 데이터 리뷰 덱",
@@ -140,7 +141,26 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.item.dossierLinenDeck.summary" => "리넨 종이 서류철의 질감으로 표지, 배경, 현황 데이터, 분석, 안 비교에서 결의까지. 그 자체로 읽히는 메모로 쓴 여덟 장, 의사결정 검토용.",
         "sceneTemplate.item.ledgerTickDeck.title" => "장부 눈금 · 경쟁 매트릭스 덱",
         "sceneTemplate.item.ledgerTickDeck.summary" => "장부 괘선 위의 평가 기준, 주 매트릭스, 분위 눈금, 격차와 강점 대조. 일곱 장으로 경쟁 비교를 대조 가능한 장부처럼 풀어내는, 제품 선정과 시장 분석용.",
+        "sceneTemplate.item.brandConceptSheet.title" => "브랜드 콘셉트 시트",
+        "sceneTemplate.item.brandConceptSheet.summary" => "주 로크업, 구성 논리, 흑백 반전, 최소 크기 생존 여부를 한 번에 검토하는 가로형 보드. 첫 콘셉트 전달용.",
+        "sceneTemplate.item.logoQaBoard.title" => "로고 융합 QA 보드",
+        "sceneTemplate.item.logoQaBoard.summary" => "네 칸에서 의미의 공동 부담, 구조적 의존, 실루엣의 통일, 보조 해석이 덧붙인 것이 아니라 발견한 것처럼 보이는지를 확인합니다.",
         "account.mcpToken" => "MCP 토큰",
+        "menu.saveAsTemplate" => "템플릿으로 저장…",
+        "menu.saveAsTemplate.saved" => "템플릿으로 저장됨",
+        "menu.saveAsTemplate.failed" => "템플릿을 저장할 수 없음",
+        "assetCenter.template.mine" => "내 템플릿",
+        "assetCenter.template.builtIn" => "기본 템플릿",
+        "ai.designProgress.detail.failureReason" => "실패 원인: {{reason}}",
+        "ai.designProgress.detail.noDiagnostic" => "에이전트가 오류 설명을 반환하지 않고 실패했습니다.",
+        "ai.designProgress.detail.noResult" => "이 섹션의 결과를 반환하기 전에 에이전트가 중지되었습니다.",
+        "ai.designProgress.detail.connectionClosed" => "이 섹션의 결과가 반환되기 전에 에이전트 연결이 끊겼습니다.",
+        "ai.designProgress.detail.stoppedByUser" => "사용자가 중지하여 이 섹션이 완료되지 않았습니다.",
+        "builtin.modelsOnePerLine" => "모델 ID, 한 줄에 하나씩",
+        "builtin.typeModelManually" => "모델 목록을 가져오지 못했습니다. 모델 ID를 한 줄에 하나씩 입력하세요",
+        "settings.provider.deepSeekHarness" => "DeepSeek Harness 모델",
+        "settings.agents.deleteProvider" => "프로바이더 삭제",
+        "chat.mcpRequired" => "{cli}을(를) 사용하려면 설정에서 OpenPencil MCP 연동을 켜세요",
         _ => return None,
     })
 }

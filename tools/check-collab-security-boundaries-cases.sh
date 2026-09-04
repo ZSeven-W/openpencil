@@ -21,6 +21,7 @@ pull_request:
     - 'crates/op-editor-ui/**'
     - 'crates/op-host-native/**'
     - 'crates/op-host-desktop/**'
+    - 'crates/op-chat-agent/src/provider_dial.rs'
     - 'crates/op-host-services/**'
     - 'crates/op-i18n/**'
     - 'deploy/collab-relay/**'
@@ -51,6 +52,7 @@ push:
     - 'crates/op-editor-ui/**'
     - 'crates/op-host-native/**'
     - 'crates/op-host-desktop/**'
+    - 'crates/op-chat-agent/src/provider_dial.rs'
     - 'crates/op-host-services/**'
     - 'crates/op-i18n/**'
     - 'deploy/collab-relay/**'
@@ -391,9 +393,25 @@ expect_failure "requires public-only desktop collaboration avatar delegation" \
     "desktop avatar security-policy delegation"
 
 new_fixture avatar-proxy-bypass-removed
-: > "$fixture_root/crates/op-host-services/src/provider_dial.rs"
+: > "$fixture_root/crates/op-chat-agent/src/provider_dial.rs"
+cat > "$fixture_root/crates/op-host-services/src/provider_dial.rs" <<'EOF'
+fn fake_pinned_client() {
+    let _ = ".no_proxy()";
+    let _ = ".resolve_to_addrs";
+}
+EOF
 expect_failure "requires proxy-free pinned avatar dialing" \
     "public HTTPS proxy bypass prevention"
+
+new_fixture avatar-dns-pinning-removed
+sed '/\.resolve_to_addrs/d' \
+    "$fixture_root/crates/op-chat-agent/src/provider_dial.rs" \
+    > "$fixture_root/crates/op-chat-agent/src/provider_dial.rs.next"
+mv \
+    "$fixture_root/crates/op-chat-agent/src/provider_dial.rs.next" \
+    "$fixture_root/crates/op-chat-agent/src/provider_dial.rs"
+expect_failure "requires connect-time DNS pinning for public avatar dialing" \
+    "public HTTPS DNS pinning"
 
 new_fixture auth-artifact-integrity-removed
 : > "$fixture_root/crates/op-auth-bridge/build.rs"
@@ -422,9 +440,9 @@ awk 'BEGIN { for (line = 1; line <= 801; line++) print "// integration line" }' 
 expect_failure "enforces the line cap across collaboration integration source" \
     "has 801 lines; maximum is 800"
 
-new_fixture missing-workflow-trigger
+new_fixture missing-provider-dial-workflow-trigger
 awk '
-    !removed && index($0, "crates/op-host-desktop/**") {
+    !removed && index($0, "crates/op-chat-agent/src/provider_dial.rs") {
         removed = 1
         next
     }
@@ -435,7 +453,7 @@ awk '
 mv \
     "$fixture_root/.github/workflows/collab-security.yml.next" \
     "$fixture_root/.github/workflows/collab-security.yml"
-expect_failure "rejects removal of either integration workflow trigger" \
+expect_failure "requires both canonical provider-dial workflow triggers" \
     "collaboration security workflow path trigger"
 
 new_fixture relay-edge-mtls-verification-removed

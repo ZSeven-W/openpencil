@@ -171,12 +171,82 @@ pub fn settings_text(ui: &mut EditorUiState, c: char, now_ms: u64) -> bool {
     true
 }
 
+/// Insert a multi-character payload into the focused settings input.
+///
+/// Built-in provider Model fields are the sole multiline settings surface:
+/// preserve their line structure while normalizing every platform newline
+/// spelling (`CRLF` / bare `CR`) to `LF`. All other settings fields retain
+/// their single-line contract and discard control characters before applying
+/// their usual per-focus validation.
+pub fn settings_text_payload(ui: &mut EditorUiState, text: &str, now_ms: u64) -> bool {
+    let Some(focus) = ui.agent_settings.focus else {
+        return false;
+    };
+    let multiline_model = matches!(
+        focus,
+        SettingsFocus::BuiltinAgent {
+            field: crate::agent_settings::BuiltinAgentField::Model,
+            ..
+        } | SettingsFocus::BuiltinAgentDraft(crate::agent_settings::BuiltinAgentField::Model)
+    );
+    let mut inserted = false;
+    let mut previous_was_cr = false;
+    for c in text.chars() {
+        if multiline_model {
+            if c == '\n' && previous_was_cr {
+                previous_was_cr = false;
+                continue;
+            }
+            previous_was_cr = c == '\r';
+            let normalized = if c == '\r' { '\n' } else { c };
+            if settings_text(ui, normalized, now_ms) {
+                inserted = true;
+            }
+        } else {
+            previous_was_cr = false;
+            if !c.is_control() && settings_text(ui, c, now_ms) {
+                inserted = true;
+            }
+        }
+    }
+    inserted
+}
+
+/// Insert a newline only when the built-in provider Model list owns focus.
+/// Hosts route Enter here before their generic "commit settings" branch.
+pub fn settings_model_newline(ui: &mut EditorUiState, now_ms: u64) -> bool {
+    if !matches!(
+        ui.agent_settings.focus,
+        Some(SettingsFocus::BuiltinAgent {
+            field: crate::agent_settings::BuiltinAgentField::Model,
+            ..
+        }) | Some(SettingsFocus::BuiltinAgentDraft(
+            crate::agent_settings::BuiltinAgentField::Model,
+        ))
+    ) {
+        return false;
+    }
+    settings_text(ui, '\n', now_ms)
+}
+
 /// Backspace in the focused settings input.
 pub fn settings_backspace(ui: &mut EditorUiState, now_ms: u64) -> bool {
     if ui.agent_settings.focus.is_none() {
         return false;
     }
     ui.settings_input.backspace(now_ms);
+    true
+}
+
+/// Forward Delete in the focused settings input — removes the pending
+/// selection or the character after the caret. Consumes the key whenever
+/// a settings field owns the keyboard so it can never fall through to
+/// canvas node deletion behind the modal.
+pub fn settings_delete_forward(ui: &mut EditorUiState, now_ms: u64) -> bool {
+    if ui.agent_settings.focus.is_none() {
+        return false;
+    }
+    ui.settings_input.delete_forward(now_ms);
     true
 }
 
@@ -201,6 +271,13 @@ fn settings_accepts(
     match focus {
         SettingsFocus::McpPort => {
             c.is_ascii_digit() && (input.is_select_all() || input.text().len() < 5)
+        }
+        SettingsFocus::BuiltinAgent {
+            field: crate::agent_settings::BuiltinAgentField::Model,
+            ..
+        }
+        | SettingsFocus::BuiltinAgentDraft(crate::agent_settings::BuiltinAgentField::Model) => {
+            (c == '\n' || !c.is_control()) && (input.is_select_all() || input.text().len() < 65_536)
         }
         SettingsFocus::ImageSearch(_)
         | SettingsFocus::BuiltinAgent { .. }
@@ -275,5 +352,81 @@ mod export_dialog_tests {
                 "scenario {scenario:?} must not overrule the picked format"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod settings_text_payload_tests {
+    use super::*;
+    use crate::agent_settings::{AcpAgentField, BuiltinAgentField};
+
+    #[test]
+    fn model_payload_preserves_lines_and_normalizes_platform_newlines() {
+        let mut ui = EditorUiState::default();
+        ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::Model));
+        ui.settings_input.set_text("old");
+        ui.settings_input.select_all();
+
+        assert!(settings_text_payload(
+            &mut ui,
+            "model-a\r\nmodel-b\rmodel-c\nmodel-d",
+            42,
+        ));
+        assert_eq!(
+            ui.settings_input.text(),
+            "model-a\nmodel-b\nmodel-c\nmodel-d"
+        );
+    }
+
+    #[test]
+    fn non_model_settings_payload_remains_single_line() {
+        let mut ui = EditorUiState::default();
+        ui.agent_settings.focus = Some(SettingsFocus::AcpAgentDraft(AcpAgentField::Command));
+
+        assert!(settings_text_payload(
+            &mut ui,
+            "node\r\nserver\t--stdio\u{7}",
+            42,
+        ));
+        assert_eq!(ui.settings_input.text(), "nodeserver--stdio");
+    }
+}
+
+#[cfg(test)]
+mod settings_delete_forward_tests {
+    use super::*;
+    use crate::agent_settings::BuiltinAgentField;
+
+    #[test]
+    fn removes_the_character_after_the_caret_while_focused() {
+        let mut ui = EditorUiState::default();
+        ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::ApiKey));
+        ui.settings_input.set_text("sk-old");
+        ui.settings_input.set_caret(0, 0);
+
+        assert!(settings_delete_forward(&mut ui, 42));
+        assert_eq!(ui.settings_input.text(), "k-old");
+        // At the buffer end the key stays owned (no-op edit).
+        ui.settings_input.set_caret("k-old".len(), 0);
+        assert!(settings_delete_forward(&mut ui, 43));
+        assert_eq!(ui.settings_input.text(), "k-old");
+    }
+
+    #[test]
+    fn ignored_without_a_settings_focus() {
+        let mut ui = EditorUiState::default();
+        ui.settings_input.set_text("sk-old");
+
+        assert!(!settings_delete_forward(&mut ui, 42));
+        assert_eq!(ui.settings_input.text(), "sk-old");
+    }
+
+    #[test]
+    fn chrome_delete_guard_covers_the_settings_focus() {
+        let mut state = crate::EditorState::starter();
+        assert!(!crate::host_keyboard_transitions::delete_owned_by_chrome_input(&state));
+        state.editor_ui.agent_settings.focus =
+            Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::ApiKey));
+        assert!(crate::host_keyboard_transitions::delete_owned_by_chrome_input(&state));
     }
 }

@@ -70,7 +70,7 @@ impl FigmaImportModal {
             id: WidgetId::new(5400),
             theme: theme_for(&state.editor_ui),
             source: state.editor_ui.import_source,
-            locale: state.editor_ui.locale,
+            locale: state.editor_ui.effective_locale(),
             hover,
             pressed,
             pages: state.editor_ui.figma_import_pages.clone(),

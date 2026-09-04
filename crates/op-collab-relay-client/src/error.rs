@@ -1,5 +1,6 @@
 use std::io;
 
+use op_collab_relay_protocol::RelayRejectCode;
 use thiserror::Error;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -18,6 +19,15 @@ pub struct RelayBridgeStatus {
     pub waiting_lanes: usize,
     pub active_tunnels: usize,
     pub last_error: Option<RelayFailureKind>,
+    /// How many lanes the relay retired with its own pairing timeout.
+    ///
+    /// Deliberately not folded into `last_error`: the lane simply never paired,
+    /// so it is a scheduled recycle as far as the pool is concerned and must
+    /// not advertise a broken relay. It is still worth counting, because a
+    /// non-zero value means the relay's waiting window expired before the
+    /// client's `RelayLimits::owner_pair` recycle budget — the pairing contract
+    /// inverted, which is exactly the condition that leaves a room unjoinable.
+    pub relay_pairing_timeouts: u32,
 }
 
 impl RelayBridgeStatus {
@@ -27,6 +37,7 @@ impl RelayBridgeStatus {
             waiting_lanes,
             active_tunnels: 0,
             last_error: None,
+            relay_pairing_timeouts: 0,
         }
     }
 
@@ -36,6 +47,7 @@ impl RelayBridgeStatus {
             waiting_lanes: 0,
             active_tunnels: 0,
             last_error: None,
+            relay_pairing_timeouts: 0,
         }
     }
 }
@@ -47,7 +59,14 @@ pub enum RelayFailureKind {
     ConnectTimeout,
     HelloTimeout,
     PairTimeout,
-    Rejected,
+    Rejected(RelayRejectCode),
+    /// The relay retired this lane with its own pairing timeout.
+    ///
+    /// Distinct from [`RelayFailureKind::Rejected`] so a relay that closed an
+    /// unpaired lane on schedule is never confused with a real rejection, and
+    /// distinct from [`RelayFailureKind::Protocol`], which is where it used to
+    /// land when the reject frame was lost to a connection reset.
+    RejectedPairingTimeout,
     Protocol,
     TextFrame,
     /// The relay sent a reauthentication challenge sooner than the protocol's
@@ -77,6 +96,12 @@ pub enum RelayClientError {
     ReadyTimeout,
     #[error("relay owner bridge stopped before a lane became ready")]
     StoppedBeforeReady,
+    #[error("relay guest bridge did not pair before the readiness deadline")]
+    PairedTimeout,
+    #[error("relay guest bridge stopped before its tunnel paired")]
+    StoppedBeforePaired,
+    #[error("relay guest bridge failed before pairing: {kind:?}")]
+    GuestPairingFailed { kind: RelayFailureKind },
     #[error("failed to bind the guest loopback bridge")]
     BindLoopback { kind: io::ErrorKind },
     #[error("failed to read the guest loopback bridge address")]
@@ -89,6 +114,17 @@ pub enum RelayStopError {
     Timeout,
     #[error("relay bridge task failed")]
     TaskFailed,
+}
+
+impl RelayFailureKind {
+    /// Classify a reject code the relay delivered, by status frame or by the
+    /// reason it repeated in the close frame.
+    pub(crate) const fn from_reject(code: RelayRejectCode) -> Self {
+        match code {
+            RelayRejectCode::PairingTimeout => Self::RejectedPairingTimeout,
+            _ => Self::Rejected(code),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

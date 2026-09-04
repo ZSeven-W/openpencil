@@ -1,3 +1,4 @@
+use super::cascade_display::canonical_display_serialization;
 use super::cascade_shared::{keyword_at, matching, split_top_level, top_level_delimiter};
 use super::declarations::parse_declarations;
 use super::selectors::{parse_selector_list, PseudoClass, Selector};
@@ -338,26 +339,16 @@ fn supports_declaration(input: &str) -> bool {
         return false;
     }
     match name.as_str() {
-        "display" => matches!(
-            value.to_ascii_lowercase().as_str(),
-            "none"
-                | "contents"
-                | "block"
-                | "inline"
-                | "inline-block"
-                | "flow-root"
-                | "flex"
-                | "inline-flex"
-                | "grid"
-                | "inline-grid"
-                | "list-item"
-                | "table"
-        ),
+        "display" => canonical_display_serialization(value).is_some(),
         "position" => matches!(
             value.to_ascii_lowercase().as_str(),
             "static" | "relative" | "absolute" | "fixed" | "sticky"
         ),
-        "color" | "background-color" | "border-color" => {
+        "color"
+        | "text-fill-color"
+        | "-webkit-text-fill-color"
+        | "background-color"
+        | "border-color" => {
             parse_css_color(value).is_some()
                 || value.eq_ignore_ascii_case("currentcolor")
                 || value.trim_start().to_ascii_lowercase().starts_with("var(")
@@ -401,7 +392,8 @@ fn supports_length(value: &str) -> bool {
 fn supported_property(name: &str) -> bool {
     matches!(
         name,
-        "align-content"
+        "-webkit-text-fill-color"
+            | "align-content"
             | "align-items"
             | "align-self"
             | "appearance"
@@ -497,6 +489,7 @@ fn supported_property(name: &str) -> bool {
             | "text-align"
             | "text-decoration"
             | "text-decoration-line"
+            | "text-fill-color"
             | "text-transform"
             | "top"
             | "transform"

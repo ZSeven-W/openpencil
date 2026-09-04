@@ -4,8 +4,9 @@
 //! orphan rule forces the impl into one of the two. It lives here rather than
 //! in `op-collab-host` because that crate must not depend on any host.
 //!
-//! Every method forwards to the inherent one in `scene_state.rs`; the
-//! collaboration runtime's behaviour is unchanged by the seam.
+//! ID-allocation methods forward to their inherent counterparts. The dirty
+//! mark deliberately uses the host-internal cache-invalidating path because
+//! collaboration overlays are baked into the canvas pan layer.
 
 use op_collab_host::CollabHost;
 
@@ -13,7 +14,11 @@ use super::WidgetHostNative;
 
 impl CollabHost for WidgetHostNative {
     fn mark_editor_state_dirty(&mut self) {
-        WidgetHostNative::mark_editor_state_dirty(self);
+        // Collaboration presence/participant projections paint inside the
+        // canvas layer. Route this trait-only dirty mark through the internal
+        // cache-invalidating path without penalising unrelated public
+        // `mark_editor_state_dirty` callers (chat/model/settings updates).
+        self.mark_dirty();
     }
 
     fn enable_collaboration_ids(

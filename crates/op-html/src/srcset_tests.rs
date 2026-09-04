@@ -23,7 +23,7 @@ fn first_image_src(nodes: &[jian_ops_schema::node::PenNode]) -> Option<String> {
 fn urls(value: &str) -> Vec<String> {
     parse_srcset(value)
         .into_iter()
-        .map(|candidate| candidate.url)
+        .map(|candidate| candidate.url.to_string())
         .collect()
 }
 
@@ -46,6 +46,24 @@ fn a_data_url_keeps_its_commas() {
         urls("data:image/svg+xml;base64,AAA,BBB=  1x , b.png 2x"),
         ["data:image/svg+xml;base64,AAA,BBB=", "b.png"]
     );
+}
+
+#[test]
+fn large_data_candidates_borrow_the_source_and_candidate_count_is_bounded() {
+    let data = format!("data:image/png;base64,{} 1x", "A".repeat(1024 * 1024));
+    let candidates = parse_srcset(&data);
+    assert_eq!(candidates.len(), 1);
+    let start = data.as_ptr() as usize;
+    let end = start + data.len();
+    let pointer = candidates[0].url.as_ptr() as usize;
+    assert!((start..end).contains(&pointer));
+
+    let many = (0..300)
+        .map(|index| format!("{index}.png 1x"))
+        .collect::<Vec<_>>()
+        .join(",");
+    assert_eq!(parse_srcset(&many).len(), 256);
+    assert!(!is_decodable(&format!("image/{}", "x".repeat(1024))));
 }
 
 #[test]

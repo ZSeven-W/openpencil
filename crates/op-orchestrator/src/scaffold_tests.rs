@@ -58,6 +58,15 @@ fn build_scaffold_mobile_injects_status_bar() {
             assert_eq!(status_children.len(), 2);
             assert_eq!(status_children[0]["name"], "Time");
             assert_eq!(status_children[0]["children"][0]["content"], "9:41");
+            assert_eq!(
+                status_children[0]["children"][0]["height"],
+                "fit_content",
+                "the fixed 54x22 Time frame owns status-bar geometry; its text must hug content so lint cannot report clipping"
+            );
+            assert!(
+                op_design_lint::detect_text_explicit_heights(&children[0]).is_empty(),
+                "canonical mobile status-bar chrome must not emit text-explicit-height"
+            );
             assert_eq!(status_children[1]["name"], "Levels");
             assert_eq!(status_children[1]["children"].as_array().unwrap().len(), 3);
         }
@@ -201,6 +210,7 @@ fn st(id: &str, label: &str) -> Subtask {
         },
         id_prefix: id.into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,
@@ -394,6 +404,7 @@ fn a_screen_group_per_slide_emits_a_root_per_slide() {
             },
             id_prefix: (*screen).to_string(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: Some((*screen).to_string()),
             generated_root_id: None,
@@ -464,6 +475,7 @@ fn screen_group_plan(
             region: Region { width, height },
             id_prefix: screen.clone(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: Some(screen),
             generated_root_id: None,

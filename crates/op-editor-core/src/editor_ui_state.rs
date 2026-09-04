@@ -1,49 +1,20 @@
 //! Editor-UI overlay + panel state for `EditorState`.
 //!
-//! This module ports the ~30 widget-layer UI fields that
-//! `openpencil-shell-core::document::UiState` carries beyond the
-//! editor-state subset already modelled by [`crate::ui_draft`]:
+//! This module owns the widget-layer state beyond [`crate::ui_draft`]:
+//! menus, modals, panels, preferences, hover targets, and pending host
+//! actions. Painting and hit-testing stay in the UI layer. Its plain-data
+//! types keep `op-editor-core` wasm32-clean.
 //!
-//!   - menu / dropdown open flags + their hover targets
-//!     (file menu, locale picker, shape picker, fill-type picker, …)
-//!   - modal open flags (export dialog, figma import, agent settings)
-//!   - the agent-settings modal struct (see [`crate::agent_settings`])
-//!   - panel widths, theme mode, locale
-//!   - layer / page hover + right-click context menu + page-rename
-//!   - the property-panel tab + flex-layout + size toggles
-//!   - export scale + format, recent files, pending file action
+//! This public spine contains [`EditorUiState`] and shared re-exports;
+//! implementations live in sibling modules without changing import paths:
 //!
-//! ### Move STATE, not RENDER code
-//!
-//! Many of these types are *declared* under shell-core's `widgets/`
-//! module — for example `ExportFormat` in `widgets/export_dialog.rs`.
-//! They are data/state enums, not rendering code, so their type
-//! definitions belong in the state layer. The widget *painting /
-//! hit-test* code stays in shell-core untouched.
-//!
-//! All types here are plain data (enums + structs of primitives /
-//! strings / ids), so `op-editor-core` stays wasm32-clean.
-//!
-//! ### Module layout
-//!
-//! This file is the public spine: the [`EditorUiState`] struct itself
-//! plus the shared re-exports. Everything else lives in sibling
-//! submodules (per the 800-line-per-file ceiling) and is re-exported
-//! here, so every existing `editor_ui_state::*` import path still
-//! resolves:
-//!
-//! - [`chrome`] — theme / embed host / file actions / recent files /
-//!   theme-preset IO / update status / Design-MD request / pencil cursor
-//! - [`pickers`] — picker purposes, canvas overlay geometry, layer
-//!   context menu + page rename, variable-row / effect-param focus
-//! - [`git_panel`] — the whole in-app Git panel data model
-//! - [`groups`] — grouped sub-states (preview / size toggles /
-//!   Design-MD panel) carved out of the flat field list
-//! - `defaults` — `impl Default for EditorUiState`
-//! - `methods` — `impl EditorUiState`
+//! Public submodules group chrome, picker, Git, panel, and slide-navigation
+//! data. Private `defaults`, `methods`, and `tests` modules hold the struct's
+//! implementations and regression coverage.
 
 pub mod chrome;
 mod defaults;
+mod exports;
 pub mod git_panel;
 pub mod groups;
 mod methods;
@@ -52,46 +23,11 @@ pub mod slides_panel_state;
 #[cfg(test)]
 mod tests;
 
-pub use chrome::{
-    DesignMdRequest, EmbedHost, FileAction, PencilCursorStyle, RecentFile, ThemeMode,
-    ThemePresetIo, UpdateStatus, RECENT_FILE_CAP,
-};
-pub use git_panel::{
-    CloneField, CloneFormState, CommitDiffPatch, CommitDiffSummary, CommitDiffView,
-    GitBranchPickerMode, GitCandidateFile, GitCommitSummary, GitDiffTarget, GitDiffView,
-    GitFileEntry, GitOverflowView, GitPanelAction, GitPanelState, MergeConflictRow,
-    MergeResolveFile, MergeResolveState,
-};
-pub use groups::{
-    AssetCenterTab, CustomPrompt, DesignMdPanelState, PreviewState, PromptCenterFocus,
-    PromptCenterState, PromptFilter, SceneFilter, SceneTemplateCenterState, SceneTemplateFocus,
-    SizeToggleState, StyleImportState,
-};
-pub use pickers::{
-    CanvasDropIndicator, CanvasOverlayLine, CanvasOverlayRect, CompositingPickerTarget,
-    EffectParamFocus, FontPickerPurpose, LayerContextMenuState, MissingFontSurface,
-    PageRenameState, PreviewDeviceKind, VariableRowFocus,
-};
-pub use slides_panel_state::{LeftPanelTab, SlidesDrag, SlidesPanelState, SlidesPanelTarget};
+pub use exports::*;
 
 use crate::node_id::NodeId;
 use crate::tool::Tool;
 use std::collections::HashSet;
-
-// `Locale` is the i18n locale enum — dependency-free + wasm-clean, so
-// it lives in `op-i18n` and re-exports cleanly into the state layer.
-pub use op_i18n::Locale;
-
-pub use crate::property_panel_state::{
-    BooleanOp, ExportFormat, FillType, FlexLayout, ImageAdjustmentField, ImageFillMode,
-    PaddingEditMode, PropertyTab,
-};
-
-// What the LayerPanel right-click context menu is acting on — the
-// canonical definition is `ui_draft::LayerContextTarget` (it backs
-// the inline-rename draft too). Re-exported so UI code that
-// references a context target has one import path.
-pub use crate::ui_draft::LayerContextTarget;
 
 /// Editor-UI overlay + panel state — the widget-layer toggles, hover
 /// targets, menu / modal open flags and panel metrics that the ~30
@@ -108,29 +44,50 @@ pub struct EditorUiState {
     pub sidebar_open: bool,
     pub layer_panel_width: f32,
     pub property_panel_width: f32,
+    /// Responsive layout: live size class, touch density (≥44pt targets,
+    /// bottom dock, sheets), and the single open mobile sheet.
+    pub size_class: crate::size_class::EditorSizeClass,
+    pub touch: bool,
+    /// Whether external CLI agents (Claude Code, Codex, …) can run on this
+    /// platform. Mobile shells (iOS / Android / HarmonyOS) cannot spawn
+    /// subprocess CLIs, so their FFI clears this and the chat catalog plus
+    /// the settings panel hide every external-CLI surface.
+    pub external_cli_available: bool,
+    pub mobile_sheet: Option<crate::size_class::MobileSheetKind>,
 
     // --- Theme + locale --------------------------------------------
-    /// Active UI theme — TopBar Sun icon flips it.
+    /// User's OpenPencil theme preference — TopBar Sun icon flips it.
     pub theme_mode: ThemeMode,
+    /// Page-lifetime color scheme imposed by an embedding host. Paint-only;
+    /// separate from `theme_mode`, so host theme changes never persist.
+    pub host_theme_override: Option<ThemeMode>,
     /// UI locale — TopBar Globe cycles.
     pub locale: Locale,
+    /// A runtime catalog selected in the web picker but not installed yet.
+    /// Transient by design: settings persist only after the catalog is ready
+    /// and the selection becomes [`Self::locale`].
+    pub pending_locale: Option<Locale>,
+    /// Locale value browser settings must preserve while the painted locale is
+    /// temporarily older than an unavailable account preference. Transient and
+    /// never serialized as a field; cleared once a ready choice becomes active.
+    pub locale_persistence_override: Option<Locale>,
+    /// Page-lifetime locale imposed by an embedding host. Presentation-only
+    /// like the host theme; never persisted as the user's locale.
+    pub host_locale_override: Option<Locale>,
     /// TopBar Globe dropdown state.
     pub locale_picker: jian_widgets::components::select::SelectState,
     /// User's last-set ⚡Nx parallel-agents team size — an app-level
     /// preference (persisted via `settings_io`), NOT the per-tab
-    /// `ChatState::agent_team_size` it seeds. `ChatSessions::new_tab`
-    /// carries the ACTIVE tab's current value forward for continuity
-    /// within a session; this field is what re-seeds tab 0's value across
-    /// a full app restart, where no "active tab" from a prior session
-    /// exists to carry forward from. Old `settings.json` files predating
-    /// this field default to `1` (serde default), matching
-    /// `ChatState::default().agent_team_size`.
+    /// `ChatState::agent_team_size` it seeds; `ChatSessions::new_tab` carries
+    /// the ACTIVE tab's value forward within a session. This field re-seeds
+    /// tab 0 across a full app restart; old `settings.json` files default
+    /// to `1` (serde default), matching `ChatState::default().agent_team_size`.
     pub preferred_agent_team_size: u32,
 
     // --- Collaboration ---------------------------------------------
     /// Sanitized collaboration display state shared by native and web
-    /// widgets. Transport handles, tickets, stable subjects, and device ids
-    /// deliberately never enter this paint-state projection.
+    /// widgets. Transport handles, tickets, subjects, and device ids never
+    /// enter this paint-state projection.
     pub collab: crate::collab_ui_state::CollabUiState,
 
     // --- File menu --------------------------------------------------
@@ -147,6 +104,24 @@ pub struct EditorUiState {
     pub export_quick_menu_hover: Option<crate::export_quick_menu_state::ExportQuickRow>,
     /// Pending file-menu action for the host runner to handle.
     pub pending_file_action: Option<FileAction>,
+    /// One-shot request for the mobile shell to present its native
+    /// account-center screen (set by the touch more-panel's Account tile;
+    /// desktop chrome keeps its painted account surfaces and never sets it).
+    pub pending_account_center: bool,
+    /// One-shot request for the mobile shell to start the sign-in flow (set
+    /// by the touch more-panel's Sign in tile). The shell configures the
+    /// auth runtime for its resolved region if needed, then calls
+    /// `op_editor_begin_login`; the engine-painted login modal never opens
+    /// on touch chrome.
+    pub pending_mobile_login: bool,
+    /// One-shot request for the mobile shell to present its native language
+    /// picker (set by the touch more-panel's Language tile).
+    pub pending_language_picker: bool,
+    /// Mobile Save / Save As file-name prompt (touch shells only).
+    pub save_name_dialog: SaveNameDialogState,
+    /// One-shot request for the embedded shell to drive the window from the
+    /// TopBar's painted traffic-light dots (desktop chrome only).
+    pub pending_window_control: Option<WindowControlRequest>,
     /// Recent files (head = newest, cap 10).
     pub recent_files: Vec<RecentFile>,
     /// TopBar display name; `None` = "Untitled".
@@ -334,13 +309,6 @@ pub struct EditorUiState {
     /// Text filter, caret, selection, and blink state for the chat
     /// model-picker search box.
     pub chat_model_picker_input: jian_core::text_input::TextInputState,
-    /// Request seam raised every time the model picker OPENS: a host
-    /// with local CLI access re-discovers the external providers'
-    /// catalogs so a CLI that shipped new models mid-session is listed
-    /// without an app restart. Drained by the desktop pump
-    /// (`drain_model_catalog_refresh`), which applies its own TTL
-    /// debounce; hosts without subprocess access simply clear it.
-    pub pending_model_catalog_refresh: bool,
     /// Hovered chat design JSON card `(message_index, block_index)`;
     /// drives the TS-style hover reveal of the card's copy affordance.
     pub chat_design_block_hover: Option<(usize, usize)>,
@@ -697,6 +665,12 @@ pub struct EditorUiState {
     /// rebuilt on load, never serialized, and toggling it never pushes
     /// a history entry.
     pub collapsed_layers: HashSet<NodeId>,
+    /// Last selection anchor that was expanded and revealed in the layers
+    /// panel. Compared each frame to auto-reveal when the user changes the
+    /// selection. Cleared in `clear_document_derived` on document replacement.
+    /// View-only transient state: never serialized, never part of the undo
+    /// snapshot.
+    pub last_revealed_layer_anchor: Option<NodeId>,
     /// Last LayerPanel click target + ms; 400 ms re-press → rename.
     pub last_layer_click: Option<(LayerContextTarget, u64)>,
     /// Deepest canvas hit + ms for the first half of a possible

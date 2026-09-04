@@ -21,7 +21,7 @@
  * an extractor result can reach tens of MB (it embeds rasterized images up to
  * 24 MB) and `chrome.scripting.executeScript` has to structured-clone the
  * result across a process boundary. 4 MiB per hop stays far below any IPC
- * limit while keeping the number of round trips small (8 for a 32 MB page).
+ * limit while keeping the number of round trips small (12 for a maximum 48 MB page).
  * Which slice to ask for, whether the answer was acceptable, whether the
  * total adds up, and whether the payload carries the extractor's `truncated`
  * flag are all decided by the Rust core's `ChunkPlan`; this file only moves
@@ -38,7 +38,7 @@ const EXTRACTOR_FILE = 'vendor/snapshot-extractor.js';
 /** Sentinel object URL, so the harness only swallows the extractor's own anchor. */
 const CAPTURE_URL = 'blob:openpencil-capture';
 /** Hard ceiling on the lazy-content scroll march before a full-page capture. */
-const SETTLE_BUDGET_MS = 7000;
+export const SETTLE_BUDGET_MS = 7000;
 
 /* -------------------------------------------------------------------------
  * Functions below run inside the tab (ISOLATED world). They must be
@@ -143,7 +143,7 @@ function readChunk(offset, length) {
  * hang the capture: whatever loaded within the budget is what gets
  * captured. Returns the original scroll offset for `restoreScroll`.
  */
-async function settlePageForCapture(maxMs) {
+export async function settlePageForCapture(maxMs) {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const scroller = document.scrollingElement || document.documentElement;
   const original = { x: window.scrollX, y: window.scrollY };
@@ -162,10 +162,7 @@ async function settlePageForCapture(maxMs) {
   }
   // Give the images the march started a bounded chance to finish.
   while (Date.now() < deadline) {
-    const pending = Array.prototype.filter.call(
-      document.images,
-      (image) => !image.complete,
-    );
+    const pending = Array.prototype.filter.call(document.images, (image) => !image.complete);
     if (pending.length === 0) break;
     // oxlint-disable-next-line no-await-in-loop
     await sleep(150);
@@ -176,7 +173,7 @@ async function settlePageForCapture(maxMs) {
 }
 
 /** Put the page back where the user left it. */
-function restoreScroll(position) {
+export function restoreScroll(position) {
   if (position && typeof position.y === 'number') {
     window.scrollTo(position.x || 0, position.y);
   }
@@ -210,7 +207,7 @@ function endCapture() {
 
 /* ---------------------------------------------------------------------- */
 
-async function runInTab(tabId, injection) {
+export async function runInTab(tabId, injection) {
   const results = await chrome.scripting.executeScript({
     target: { tabId, frameIds: [0] },
     ...injection,
@@ -311,9 +308,7 @@ export async function capturePage(tabId, onProgress, options) {
     // clipboard back in place and the parked snapshot freed.
     await runInTab(tabId, { func: endCapture }).catch(() => undefined);
     if (scrollBack) {
-      await runInTab(tabId, { func: restoreScroll, args: [scrollBack] }).catch(
-        () => undefined,
-      );
+      await runInTab(tabId, { func: restoreScroll, args: [scrollBack] }).catch(() => undefined);
     }
   }
 }

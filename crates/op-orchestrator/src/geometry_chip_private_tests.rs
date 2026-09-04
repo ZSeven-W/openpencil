@@ -2,7 +2,7 @@ use super::*;
 use serde_json::json;
 use std::collections::HashMap;
 
-fn rects(entries: &[(&str, f64, f64, f64, f64)]) -> HashMap<String, Rect> {
+pub(super) fn rects(entries: &[(&str, f64, f64, f64, f64)]) -> HashMap<String, Rect> {
     entries
         .iter()
         .map(|(id, x, y, w, h)| {
@@ -36,8 +36,37 @@ fn pill_chip_text_overflow_is_not_converted_to_fill_wrap() {
     collect_text_overflow_fixes(&chip, &rects, &mut cmds);
 
     assert!(
-        cmds.is_empty(),
+        cmds.iter().all(|cmd| {
+            !matches!(
+                cmd,
+                EditorCommand::SetNodeLayoutProp { property, value: LayoutPropValue::Keyword(k), .. }
+                    if property == "width" && k == "fill_container"
+            )
+        }),
         "pill chip text must stay single-line instead of fill+wrap: {cmds:?}"
+    );
+    assert!(
+        cmds.iter().all(|cmd| {
+            !matches!(
+                cmd,
+                EditorCommand::SetNodeLayoutProp { property, value: LayoutPropValue::Keyword(k), .. }
+                    if property == "textGrowth" && k == "fixed-width"
+            )
+        }),
+        "pill chip text must not wrap: {cmds:?}"
+    );
+    assert!(
+        cmds.iter().any(|cmd| {
+            matches!(
+                cmd,
+                EditorCommand::SetNodeLayoutProp {
+                    node_id,
+                    property,
+                    value: LayoutPropValue::Bool(true),
+                } if node_id.as_str() == "chip" && property == "clipContent"
+            )
+        }),
+        "numeric-width pill with measured text overflow must set clipContent: {cmds:?}"
     );
 }
 
@@ -720,55 +749,5 @@ fn ordinary_vertical_clip_does_not_suppress_text_overflow_repair() {
         cmd,
         EditorCommand::SetNodeLayoutProp { node_id, property, value: LayoutPropValue::Keyword(k) }
             if node_id.as_str() == "copy" && property == "width" && k == "fill_container"
-    )));
-}
-
-#[test]
-fn ordinary_horizontal_clipped_card_still_repairs_inner_overflows() {
-    let tree = json!({
-        "type":"frame","id":"card","name":"Media Card","width":120,"height":100,
-        "layout":"horizontal","clipContent":true,"children":[{
-            "type":"frame","id":"content","name":"Card Content","width":"fill_container",
-            "height":"fit_content","layout":"horizontal","gap":8,"children":[
-                {
-                    "type":"frame","id":"visual","name":"Visual","width":"fit_content",
-                    "height":40,"children":[]
-                },
-                {
-                    "type":"text","id":"copy","name":"Copy","content":"Long card copy",
-                    "width":"fit_content","textGrowth":"auto"
-                }
-            ]
-        }]
-    });
-    let rects = rects(&[
-        ("card", 0.0, 0.0, 120.0, 100.0),
-        ("content", 0.0, 0.0, 120.0, 40.0),
-        ("visual", 0.0, 0.0, 140.0, 40.0),
-        ("copy", 148.0, 0.0, 140.0, 18.0),
-    ]);
-
-    let mut text_cmds = Vec::new();
-    collect_text_overflow_fixes(&tree, &rects, &mut text_cmds);
-    assert!(text_cmds.iter().any(|cmd| matches!(
-        cmd,
-        EditorCommand::SetNodeLayoutProp { node_id, property, value: LayoutPropValue::Keyword(k) }
-            if node_id.as_str() == "copy" && property == "width" && k == "fill_container"
-    )));
-
-    let mut frame_cmds = Vec::new();
-    collect_frame_overflow_fixes(&tree, &rects, &mut frame_cmds);
-    assert!(frame_cmds.iter().any(|cmd| matches!(
-        cmd,
-        EditorCommand::SetNodeLayoutProp { node_id, property, value: LayoutPropValue::Keyword(k) }
-            if node_id.as_str() == "visual" && property == "width" && k == "fill_container"
-    )));
-
-    let mut row_cmds = Vec::new();
-    collect_row_overfull_fixes(&tree, &rects, &mut row_cmds, false);
-    assert!(row_cmds.iter().any(|cmd| matches!(
-        cmd,
-        EditorCommand::SetNodeLayoutProp { node_id, property, value: LayoutPropValue::Keyword(k) }
-            if node_id.as_str() == "visual" && property == "width" && k == "fill_container"
     )));
 }

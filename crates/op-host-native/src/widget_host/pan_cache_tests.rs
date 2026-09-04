@@ -388,3 +388,34 @@ fn document_mutation_invalidates_the_pan_cache() {
     host.mark_paint_dirty_for_test();
     assert!(!host.pan_cache_resident_for_test());
 }
+
+#[cfg(feature = "collab-host")]
+#[test]
+fn collaboration_dirty_invalidates_the_pan_cache() {
+    let _indicator_guard = crate::agent_indicator_test_support::read();
+    let fonts0 = jian_skia::font_generation();
+    let mut host = WidgetHostNative::new();
+    seed_red_rect(&mut host);
+    let mut backend = NativeBackend::with_dpi(1.0);
+
+    host.set_now_ms(1_000);
+    let _ = paint_frame(&mut host, &mut backend);
+    assert!(host.apply_pan_gesture(350.0, 150.0, 20.0, 0.0, W as f32, H as f32));
+    let _ = paint_frame(&mut host, &mut backend);
+    if !fonts_stable_since(fonts0) {
+        return;
+    }
+    assert!(host.pan_cache_resident_for_test());
+
+    host.mark_editor_state_dirty();
+    assert!(
+        host.pan_cache_resident_for_test(),
+        "the general external dirty seam must keep its non-canvas cache policy"
+    );
+    op_collab_host::CollabHost::mark_editor_state_dirty(&mut host);
+
+    assert!(
+        !host.pan_cache_resident_for_test(),
+        "presence/participant projection must not leave a stale canvas layer"
+    );
+}

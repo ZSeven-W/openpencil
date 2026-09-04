@@ -44,6 +44,15 @@ fn container_content_height(node: &PenNode) -> Option<f64> {
             .filter_map(intrinsic_height)
             .reduce(f64::max)
             .map(|height| height + padding_y),
+        // `layout: none` compiles to a single-cell grid (jian 2026-07-28), so
+        // the children OVERLAY each other: the container is as tall as its
+        // tallest layer, not the sum of them. Summing here made the
+        // root-height repair inflate every overlay stack to N× its height.
+        Some(LayoutMode::None) => children
+            .iter()
+            .filter_map(intrinsic_height)
+            .reduce(f64::max)
+            .map(|height| height + padding_y),
         _ => stacked_children_height(Some(children.as_slice()), gap, padding_y),
     }
 }

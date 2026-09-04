@@ -1,0 +1,22 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "OpenPencil player entry HAP.",
+  "main": "",
+  "author": "ZSeven",
+  "license": "MIT",
+  "dependencies": {
+    // Type-only package for the prebuilt Rust NAPI module. The actual
+    // `libopenpencil.so` is dropped into `entry/libs/<abi>/` by
+    // `scripts/build-ohos.sh`; this entry only teaches the ArkTS compiler
+    // the shape of `import napi from 'libopenpencil.so'`.
+    "libopenpencil.so": "file:./src/main/cpp/types/libopenpencil",
+    // Native sign-in SDK .har files, fetched by
+    // `../scripts/fetch-vendor-sdks.sh` before `ohpm install` (proprietary
+    // binaries, deliberately not committed).
+    "@douyin/opensdk-common-external": "file:./libs/douyin-opensdk-common-external.har",
+    "@alipay/afservicesdk": "file:./libs/afservicesdk.har",
+    // WeChat OpenSDK for HarmonyOS, published on the official ohpm registry.
+    "@tencent/wechat_open_sdk": "1.0.19"
+  }
+}

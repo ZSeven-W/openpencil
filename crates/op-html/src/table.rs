@@ -142,12 +142,14 @@ pub(super) fn finish_table(
     let row_indices: Vec<usize> = children
         .iter()
         .enumerate()
-        .filter(|(_, node)| node_base(node).name.as_deref() == Some("tr"))
+        .filter(|(_, node)| layout_subject_name(node) == Some("tr"))
         .map(|(index, _)| index)
         .collect();
     let mut row_spans = Vec::with_capacity(row_indices.len());
     for index in &row_indices {
-        row_spans.push(take_cell_spans(child_nodes_mut(&mut children[*index])));
+        row_spans.push(take_cell_spans(child_nodes_mut(layout_subject_mut(
+            &mut children[*index],
+        ))));
     }
     // Safety net: a row that was re-parented (an offset or auto-margin wrapper)
     // is not matched above, so sweep whatever carriers are left.
@@ -202,7 +204,7 @@ fn move_caption_to_bottom(style: &ComputedStyle, children: &mut Vec<PenNode>) {
     let mut captions: Vec<PenNode> = Vec::new();
     let mut index = 0;
     while index < children.len() {
-        if node_base(&children[index]).name.as_deref() == Some("caption") {
+        if layout_subject_name(&children[index]) == Some("caption") {
             captions.push(children.remove(index));
         } else {
             index += 1;
@@ -222,6 +224,7 @@ fn has_row_descendant(element: &DomElement) -> bool {
 
 /// Pin cell widths and give the row the stretch alignment a table row implies.
 fn apply_row(row: &mut PenNode, spans: &[usize], widths: &[f64], gap: f64) {
+    let row = layout_subject_mut(row);
     if let PenNode::Frame(frame) = row {
         if frame.container.align_items.is_none() {
             frame.container.align_items = Some(AlignItems::Stretch);
@@ -235,6 +238,45 @@ fn apply_row(row: &mut PenNode, spans: &[usize], widths: &[f64], gap: f64) {
         }
         start = (start + span).min(widths.len());
     }
+}
+
+fn layout_subject_name(node: &PenNode) -> Option<&str> {
+    let node = layout_subject(node);
+    node_base(node).name.as_deref()
+}
+
+fn layout_subject(node: &PenNode) -> &PenNode {
+    let PenNode::Frame(frame) = node else {
+        return node;
+    };
+    if !matches!(
+        frame.base.name.as_deref(),
+        Some("Margin" | "Offset" | "Auto margin")
+    ) {
+        return node;
+    }
+    frame
+        .children
+        .as_deref()
+        .and_then(|children| children.first())
+        .map(layout_subject)
+        .unwrap_or(node)
+}
+
+fn layout_subject_mut(node: &mut PenNode) -> &mut PenNode {
+    let descend = matches!(
+        node,
+        PenNode::Frame(frame)
+            if matches!(frame.base.name.as_deref(), Some("Margin" | "Offset" | "Auto margin"))
+                && frame.children.as_ref().is_some_and(|children| !children.is_empty())
+    );
+    if descend {
+        let PenNode::Frame(frame) = node else {
+            unreachable!()
+        };
+        return layout_subject_mut(&mut frame.children.as_mut().expect("checked above")[0]);
+    }
+    node
 }
 
 /// One width per column, in CSS px.

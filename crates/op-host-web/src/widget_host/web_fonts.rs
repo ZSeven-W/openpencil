@@ -20,7 +20,47 @@ pub(crate) fn normalize_browser_system_font_families(families: Vec<String>) -> V
     out
 }
 
+/// Normalize the app-bundled family list into the picker's display order.
+///
+/// Mirrors `jian_skia::list_bundled_families` (the desktop snapshot source):
+/// trim, drop blanks, sort case-insensitively, and collapse case-duplicates.
+/// Deliberately WITHOUT the browser path's `system-ui` fallback — an empty
+/// bundled list means the fetch failed, and claiming a generic face here would
+/// mark it resolved when nothing was registered.
+pub(crate) fn normalize_bundled_font_families(families: Vec<String>) -> Vec<String> {
+    let mut out = families
+        .into_iter()
+        .map(|family| family.trim().to_string())
+        .filter(|family| !family.is_empty())
+        .collect::<Vec<_>>();
+    out.sort_by_key(|family| family.to_lowercase());
+    out.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    out
+}
+
 impl WidgetHost {
+    /// Arm the bundled-font gate before the mount fires its fetches, so a
+    /// system-font query that completes first cannot run the one-shot
+    /// missing-font detection against a still-empty bundled list.
+    pub(crate) fn begin_bundled_font_loading(&mut self) {
+        self.bundled_fonts_pending = true;
+    }
+
+    /// Publish the families that actually registered, then release the gate and
+    /// run the detection it was holding back.
+    pub(crate) fn apply_bundled_font_families(&mut self, families: Vec<String>) {
+        let families = normalize_bundled_font_families(families);
+        let ui = &mut self.editor_state.editor_ui;
+        ui.bundled_font_families = Arc::new(families);
+        ui.font_picker.hover = None;
+        self.bundled_fonts_pending = false;
+        self.mark_dirty();
+        self.complete_pending_missing_fonts_detection();
+        // A modal opened before the fonts landed still lists them as missing;
+        // refreshing resolves those rows in place.
+        self.refresh_missing_fonts_prompt();
+    }
+
     pub(crate) fn apply_browser_system_font_families(&mut self, families: Vec<String>) {
         let families = normalize_browser_system_font_families(families);
         let ui = &mut self.editor_state.editor_ui;
@@ -47,6 +87,21 @@ mod tests {
         ]);
 
         assert_eq!(families, vec!["Inter", "PingFang SC", "SF Pro"]);
+    }
+
+    #[test]
+    fn bundled_fonts_sort_and_dedupe_without_a_generic_fallback() {
+        let families = normalize_bundled_font_families(vec![
+            "Outfit".to_string(),
+            " Inter ".to_string(),
+            "inter".to_string(),
+            "  ".to_string(),
+        ]);
+
+        assert_eq!(families, vec!["Inter", "Outfit"]);
+        // A failed fetch must report nothing, not a generic face the picker
+        // would then treat as covering every missing family.
+        assert!(normalize_bundled_font_families(Vec::new()).is_empty());
     }
 
     #[test]

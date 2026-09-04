@@ -344,6 +344,93 @@ pub enum RelayRejectCode {
     Internal = 14,
 }
 
+impl RelayRejectCode {
+    /// Stable, credential-free label for this reject reason.
+    ///
+    /// Used for relay operational logging and as the machine-readable half of
+    /// [`RelayRejectCode::close_reason`].
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::MalformedHello => "malformed-hello",
+            Self::UnsupportedVersion => "unsupported-version",
+            Self::AuthenticationRequired => "authentication-required",
+            Self::AuthenticationFailed => "authentication-failed",
+            Self::LocatorNotYetValid => "locator-not-yet-valid",
+            Self::LocatorExpired => "locator-expired",
+            Self::ExpiryTooFarFuture => "expiry-too-far-future",
+            Self::UnknownRoute => "unknown-route",
+            Self::RoleConflict => "role-conflict",
+            Self::Capacity => "capacity",
+            Self::RateLimited => "rate-limited",
+            Self::PairingTimeout => "pairing-timeout",
+            Self::RelayUnavailable => "relay-unavailable",
+            Self::Internal => "internal",
+        }
+    }
+
+    /// The WebSocket close-frame reason that carries this reject code.
+    ///
+    /// The relay writes the [`RelayServerStatus::Rejected`] status frame and
+    /// the close frame back to back. Repeating the reason inside the close
+    /// frame means a peer that only observes the closing handshake — an
+    /// intermediary that forwards the close but drops a trailing data frame,
+    /// or a client that was already draining towards close — can still tell a
+    /// deliberate rejection from an unexplained transport fault.
+    ///
+    /// The payload of a close frame is capped at 125 bytes, two of which the
+    /// status code takes, so every reason must stay under that.
+    pub const fn close_reason(self) -> &'static str {
+        match self {
+            Self::MalformedHello => "relay-reject:malformed-hello",
+            Self::UnsupportedVersion => "relay-reject:unsupported-version",
+            Self::AuthenticationRequired => "relay-reject:authentication-required",
+            Self::AuthenticationFailed => "relay-reject:authentication-failed",
+            Self::LocatorNotYetValid => "relay-reject:locator-not-yet-valid",
+            Self::LocatorExpired => "relay-reject:locator-expired",
+            Self::ExpiryTooFarFuture => "relay-reject:expiry-too-far-future",
+            Self::UnknownRoute => "relay-reject:unknown-route",
+            Self::RoleConflict => "relay-reject:role-conflict",
+            Self::Capacity => "relay-reject:capacity",
+            Self::RateLimited => "relay-reject:rate-limited",
+            Self::PairingTimeout => "relay-reject:pairing-timeout",
+            Self::RelayUnavailable => "relay-reject:relay-unavailable",
+            Self::Internal => "relay-reject:internal",
+        }
+    }
+
+    /// Recover a reject code from a relay close-frame reason.
+    ///
+    /// Returns `None` for any reason the relay did not write, so an ordinary
+    /// close never masquerades as a rejection.
+    pub fn from_close_reason(reason: &str) -> Option<Self> {
+        let label = reason.strip_prefix(RELAY_REJECT_CLOSE_PREFIX)?;
+        RELAY_REJECT_CODES
+            .into_iter()
+            .find(|code| code.label() == label)
+    }
+}
+
+/// Prefix of every relay close-frame reason that carries a reject code.
+pub const RELAY_REJECT_CLOSE_PREFIX: &str = "relay-reject:";
+
+/// Every reject code, for exhaustive decoding and tests.
+pub const RELAY_REJECT_CODES: [RelayRejectCode; 14] = [
+    RelayRejectCode::MalformedHello,
+    RelayRejectCode::UnsupportedVersion,
+    RelayRejectCode::AuthenticationRequired,
+    RelayRejectCode::AuthenticationFailed,
+    RelayRejectCode::LocatorNotYetValid,
+    RelayRejectCode::LocatorExpired,
+    RelayRejectCode::ExpiryTooFarFuture,
+    RelayRejectCode::UnknownRoute,
+    RelayRejectCode::RoleConflict,
+    RelayRejectCode::Capacity,
+    RelayRejectCode::RateLimited,
+    RelayRejectCode::PairingTimeout,
+    RelayRejectCode::RelayUnavailable,
+    RelayRejectCode::Internal,
+];
+
 impl TryFrom<u8> for RelayRejectCode {
     type Error = RelayProtocolError;
 

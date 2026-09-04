@@ -1,19 +1,22 @@
 use crate::import_warning::ImportWarning;
-use base64::engine::general_purpose::STANDARD;
-use base64::Engine;
 use jian_ops_schema::node::base::{BoolOrExpression, NumberOrExpression, PenNodeBase};
-use jian_ops_schema::node::container::CornerRadius;
+use jian_ops_schema::node::container::{ContainerProps, CornerRadius};
 use jian_ops_schema::node::{
-    CheckboxNode, FrameNode, ImageFitMode, ImageNode, ImageSrc, PenNode, ProgressNode,
-    RadioGroupNode, RectangleNode, SelectNode, SelectOption, SliderNode, TextAreaNode,
-    TextInputNode,
+    CheckboxNode, FrameNode, PenNode, ProgressNode, RadioGroupNode, RectangleNode, SelectNode,
+    SelectOption, SliderNode, TextAreaNode, TextInputNode,
 };
 use jian_ops_schema::sizing::{SizeLimits, SizingBehavior, SizingKeyword};
-use jian_ops_schema::style::{BlendMode, PenEffect, PenFill, PenStroke, SolidFillBody};
+use jian_ops_schema::style::{PenEffect, PenFill, PenStroke, SolidFillBody};
 
 use crate::css::cascade::ComputedStyle;
 use crate::dom::{DomElement, DomNode};
 use crate::mapper::{container_props_from, MapCtx};
+
+#[path = "special_image.rs"]
+mod image;
+#[cfg(test)]
+pub(crate) use image::apply_intrinsic_axes;
+use image::{map_image, map_svg};
 
 /// `path` carries the ancestor chain because a replaced element can depend on
 /// its parent: an `<img>` inside `<picture>` selects its source from the
@@ -36,6 +39,22 @@ pub fn map_special(
         _ => return None,
     };
     Some(Some(node))
+}
+
+pub(crate) fn is_special_leaf_tag(tag: &str) -> bool {
+    matches!(
+        tag,
+        "img"
+            | "svg"
+            | "input"
+            | "textarea"
+            | "select"
+            | "progress"
+            | "hr"
+            | "iframe"
+            | "video"
+            | "canvas"
+    )
 }
 
 pub(crate) fn map_radio_group(
@@ -140,136 +159,36 @@ fn base(context: &mut MapCtx<'_>, name: &str, style: &ComputedStyle) -> PenNodeB
     base
 }
 
+fn base_with_sizing(
+    context: &mut MapCtx<'_>,
+    name: &str,
+    style: &ComputedStyle,
+    width: &mut Option<SizingBehavior>,
+    height: &mut Option<SizingBehavior>,
+    limits: SizeLimits,
+) -> PenNodeBase {
+    let mut sizing = ContainerProps {
+        width: width.take(),
+        height: height.take(),
+        limits,
+        ..Default::default()
+    };
+    let mut base = PenNodeBase {
+        id: context.generate_id(),
+        name: Some(name.to_string()),
+        ..Default::default()
+    };
+    let outcome =
+        crate::mapper::apply_base_style_with_box(&mut base, style, context, Some(&mut sizing));
+    context.pending_base_outcome = outcome;
+    *width = sizing.width;
+    *height = sizing.height;
+    base
+}
+
 fn finish(context: &mut MapCtx<'_>, node: PenNode) -> PenNode {
     context.node_count += 1;
     node
-}
-
-fn map_image(
-    context: &mut MapCtx<'_>,
-    path: &[&DomElement],
-    element: &DomElement,
-    style: &ComputedStyle,
-) -> PenNode {
-    let source = crate::srcset::resolve_image_source(context, path, element);
-    let visual = visual_props(context, style);
-    let object_fit = match style.get("object-fit") {
-        Some("cover") => Some(ImageFitMode::Crop),
-        Some("contain") => Some(ImageFitMode::Fit),
-        Some("fill") => Some(ImageFitMode::Fill),
-        Some("scale-down") => {
-            context.warn_once(ImportWarning::ObjectFitScaleDown);
-            Some(ImageFitMode::Fit)
-        }
-        Some("none") => {
-            context.warn_once(ImportWarning::ObjectFitNoneIgnored);
-            None
-        }
-        _ => None,
-    };
-    if style
-        .get("object-position")
-        .is_some_and(|value| !is_default_object_position(value))
-    {
-        context.warn_once(ImportWarning::ObjectPositionIgnored);
-    }
-    let mut image_base = base(context, "img", style);
-    image_base.blend_mode = image_blend_mode(context, style);
-    // `aspect-ratio` applies to replaced elements too, and only after the
-    // legacy `width` / `height` attributes have supplied their fallback.
-    let mut width = visual.width.or_else(|| numeric_attr(element, "width"));
-    let mut height = visual.height.or_else(|| numeric_attr(element, "height"));
-    crate::mapper::apply_aspect_ratio_axes(&mut width, &mut height, &visual.limits, style, context);
-    let node = PenNode::Image(ImageNode {
-        base: image_base,
-        src: ImageSrc::from(source),
-        object_fit,
-        width,
-        height,
-        corner_radius: visual.corner_radius,
-        effects: visual.effects,
-        exposure: None,
-        contrast: None,
-        saturation: None,
-        temperature: None,
-        tint: None,
-        highlights: None,
-        shadows: None,
-        image_prompt: None,
-        image_search_query: None,
-        state: None,
-        bindings: None,
-        events: None,
-        lifecycle: None,
-        semantics: None,
-        gestures: None,
-        route: None,
-        limits: visual.limits,
-    });
-    finish(context, node)
-}
-
-fn is_default_object_position(value: &str) -> bool {
-    let parts: Vec<_> = value
-        .split_ascii_whitespace()
-        .map(str::to_ascii_lowercase)
-        .collect();
-    match parts.as_slice() {
-        [value] => matches!(value.as_str(), "center" | "50%"),
-        [first, second] => {
-            matches!(first.as_str(), "center" | "50%")
-                && matches!(second.as_str(), "center" | "50%")
-        }
-        _ => false,
-    }
-}
-
-fn image_blend_mode(context: &mut MapCtx<'_>, style: &ComputedStyle) -> Option<BlendMode> {
-    let value = style.get("mix-blend-mode")?;
-    match crate::mapper::map_blend_mode(value) {
-        Some(BlendMode::Normal) => None,
-        Some(mode) => Some(mode),
-        None => {
-            context.warn_once(ImportWarning::ImageMixBlendModeUnsupported);
-            None
-        }
-    }
-}
-
-fn map_svg(context: &mut MapCtx<'_>, element: &DomElement, style: &ComputedStyle) -> PenNode {
-    context.warn_once(ImportWarning::InlineSvgPlaceholder);
-    let source = serialize_element(element);
-    let src = format!("data:image/svg+xml;base64,{}", STANDARD.encode(source));
-    let visual = visual_props(context, style);
-    let mut image_base = base(context, "svg", style);
-    image_base.blend_mode = image_blend_mode(context, style);
-    let node = PenNode::Image(ImageNode {
-        base: image_base,
-        src: ImageSrc::from(src),
-        object_fit: None,
-        width: visual.width.or_else(|| numeric_attr(element, "width")),
-        height: visual.height.or_else(|| numeric_attr(element, "height")),
-        corner_radius: visual.corner_radius,
-        effects: visual.effects,
-        exposure: None,
-        contrast: None,
-        saturation: None,
-        temperature: None,
-        tint: None,
-        highlights: None,
-        shadows: None,
-        image_prompt: None,
-        image_search_query: None,
-        state: None,
-        bindings: None,
-        events: None,
-        lifecycle: None,
-        semantics: None,
-        gestures: None,
-        route: None,
-        limits: visual.limits,
-    });
-    finish(context, node)
 }
 
 fn map_input(context: &mut MapCtx<'_>, element: &DomElement, style: &ComputedStyle) -> PenNode {
@@ -515,39 +434,6 @@ fn element_text(element: &DomElement) -> String {
             DomNode::Element(child) => element_text(child),
         })
         .collect()
-}
-
-fn serialize_element(element: &DomElement) -> String {
-    let mut source = format!("<{}", element.tag);
-    for (name, value) in &element.attrs {
-        source.push(' ');
-        source.push_str(name);
-        source.push_str("=\"");
-        source.push_str(&escape_xml(value));
-        source.push('"');
-    }
-    source.push('>');
-    for child in &element.children {
-        match child {
-            DomNode::Text(text) => source.push_str(&escape_xml(text)),
-            DomNode::Element(child) => source.push_str(&serialize_element(child)),
-        }
-    }
-    source.push_str("</");
-    source.push_str(&element.tag);
-    source.push('>');
-    source
-}
-
-// Intentionally local: op-html keeps a minimal op-* dep set, so this stays a
-// private copy of the canonical `op_util::xml_escape::escape_html` (same four
-// entities). Keep the two in sync.
-fn escape_xml(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
 }
 
 fn solid_fill(color: &str) -> PenFill {

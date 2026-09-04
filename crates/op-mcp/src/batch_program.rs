@@ -111,6 +111,7 @@ pub(crate) fn run_batch_design_program(
         current_line: 0,
         explicitly_sized_append_lines: explicitly_sized_append_lines(&lines),
         replaceable_empty_root_ids: Vec::new(),
+        id_high_water: 0,
     };
     // Pin the sim's active page to the requested page so sim READS
     // (path lookups, node counts) see the same children every emitted
@@ -159,13 +160,33 @@ pub(crate) fn run_batch_design_program(
         envelope.insert("results".into(), Value::Array(Vec::new()));
         envelope.insert("nodeCount".into(), json!(baseline_count));
         envelope.insert("applied".into(), Value::Bool(false));
+        // The hint carries the FIRST failure verbatim. `errors` already holds
+        // every line and reason, but a caller that renders only the hint (a
+        // host tool card, a transcript summary) otherwise shows "N failed"
+        // with no way to act — measured: a model burned six corrective rounds
+        // re-sending near-identical batches and inventing a wrong theory about
+        // the validator, when the real reason named the offending node.
+        let first = errors.first().map(|entry| {
+            format!(
+                "First failure — {}: {}",
+                entry
+                    .get("line")
+                    .and_then(Value::as_str)
+                    .unwrap_or("<line>"),
+                entry
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .unwrap_or("<reason>"),
+            )
+        });
         envelope.insert(
             "hint".into(),
             json!(format!(
                 "Transaction rolled back: {} operation(s) failed, so NONE of this batch was \
                  applied — the document is unchanged. Fix the failing line(s) and resend the \
-                 whole corrected batch.",
-                errors.len()
+                 whole corrected batch.{}",
+                errors.len(),
+                first.map(|line| format!(" {line}")).unwrap_or_default()
             )),
         );
         envelope.insert("errors".into(), Value::Array(errors));
@@ -243,6 +264,13 @@ pub(crate) struct ProgramCtx {
     /// Root placeholders that existed before this program started. Consumed
     /// at most once so newly inserted empty screen shells remain siblings.
     pub(crate) replaceable_empty_root_ids: Vec<String>,
+    /// Highest id this program has handed out, so an id freed by a `D()`
+    /// earlier in the SAME batch is never reissued. The document's own seed
+    /// is `max(existing) + 1`, which walks backwards after a delete: a
+    /// measured batch bound both the deleted badge and the image that
+    /// replaced it to `n16`, leaving one binding pointing at a node the
+    /// caller believes is gone.
+    pub(crate) id_high_water: u64,
 }
 
 impl ProgramCtx {
@@ -281,10 +309,12 @@ impl ProgramCtx {
         let mut seed = self
             .sim
             .next_node_id_seed()
-            .ok_or(ProgramError::IdSpaceExhausted)?;
+            .ok_or(ProgramError::IdSpaceExhausted)?
+            .max(self.id_high_water);
         let mut taken = self.sim.collect_node_ids();
         let map = remap_subtree_ids_mapping(nodes, &mut seed, &mut taken)
             .ok_or(ProgramError::IdSpaceExhausted)?;
+        self.id_high_water = seed;
         for (old, new) in &map {
             if !old.starts_with("__op_tmp_") {
                 self.alias.entry(old.clone()).or_insert_with(|| new.clone());
@@ -472,7 +502,7 @@ fn execute_insert(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<()>
         .ok_or_else(|| ProgramError::Syntax("Insert requires parent and node data".into()))?;
     let parent_raw = args[..comma].trim();
     let parent = resolve_parent_ref(parent_raw, &ctx.bindings);
-    let mut node = parse_node_json(&args[comma + 1..], ctx.post_process)?;
+    let mut node = parse_node_json(&args[comma + 1..], ctx.post_process, parent.is_none())?;
     delete_superseded_draft(binding, parent.as_deref(), &node, ctx);
 
     // TS auto-replace: a root-level frame insert replaces the first EMPTY

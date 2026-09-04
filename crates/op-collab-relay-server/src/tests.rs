@@ -275,6 +275,23 @@ async fn connect(
     connect_with_authorization_values(address, path, &["Bearer test-ticket".to_owned()]).await
 }
 
+/// Connect and keep the upgrade response, for capability-header assertions.
+async fn connect_with_response(
+    address: std::net::SocketAddr,
+) -> (
+    ClientSocket,
+    tokio_tungstenite::tungstenite::http::Response<Option<Vec<u8>>>,
+) {
+    let mut request = format!("ws://{address}/v1/tunnel")
+        .into_client_request()
+        .expect("test WebSocket request");
+    request.headers_mut().append(
+        AUTHORIZATION,
+        HeaderValue::from_static("Bearer test-ticket"),
+    );
+    connect_async(request).await.expect("connect relay")
+}
+
 async fn connect_with_authorization_values(
     address: std::net::SocketAddr,
     path: &str,
@@ -303,15 +320,27 @@ async fn next_status(socket: &mut ClientSocket) -> RelayServerStatus {
     next_status_within(socket, Duration::from_secs(1)).await
 }
 
+/// Read the next status frame, answering the relay's waiting-lease pings the
+/// way a real client's `next_binary_with_reauth` does.
 async fn next_status_within(socket: &mut ClientSocket, timeout: Duration) -> RelayServerStatus {
-    match time::timeout(timeout, socket.next())
-        .await
-        .expect("status arrives before timeout")
-        .expect("relay socket remains open")
-        .expect("relay status frame is valid WebSocket")
-    {
-        Message::Binary(raw) => RelayServerStatus::decode(&raw).expect("strict relay status"),
-        other => panic!("expected binary relay status, got {other:?}"),
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        let message = time::timeout_at(deadline, socket.next())
+            .await
+            .expect("status arrives before timeout")
+            .expect("relay socket remains open")
+            .expect("relay status frame is valid WebSocket");
+        match message {
+            Message::Binary(raw) => {
+                return RelayServerStatus::decode(&raw).expect("strict relay status")
+            }
+            Message::Ping(payload) => socket
+                .send(Message::Pong(payload))
+                .await
+                .expect("test client answers a lease ping"),
+            Message::Pong(_) => {}
+            other => panic!("expected binary relay status, got {other:?}"),
+        }
     }
 }
 
@@ -733,4 +762,6 @@ fn protocol_reject(error: RelayProtocolError) -> RelayRejectCode {
     }
 }
 
+mod lease_tests;
 mod reauth_tests;
+mod reject_delivery_tests;

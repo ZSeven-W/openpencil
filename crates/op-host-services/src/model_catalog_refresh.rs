@@ -38,7 +38,7 @@ pub const MODEL_CATALOG_TTL: Duration = Duration::from_secs(5 * 60);
 struct RefreshJob {
     /// The provider mask this job was spawned for — the landing step
     /// must only touch these slices, never the whole catalog.
-    mask: [bool; 6],
+    mask: [bool; 7],
     rx: Receiver<Vec<ModelEntry>>,
 }
 
@@ -53,7 +53,7 @@ pub struct ModelCatalogRefresh {
     /// on the attempt is deliberate: a provider whose CLI is broken returns
     /// nothing every time, and keying the TTL off success would re-spawn
     /// that failing probe on every single picker open.
-    last_attempt: [Option<Instant>; 6],
+    last_attempt: [Option<Instant>; 7],
     job: Option<RefreshJob>,
 }
 
@@ -67,7 +67,7 @@ impl ModelCatalogRefresh {
     }
 
     /// Providers in `connected` whose catalog has aged past the TTL.
-    pub fn due_providers(&self, connected: [bool; 6], now: Instant) -> [bool; 6] {
+    pub fn due_providers(&self, connected: [bool; 7], now: Instant) -> [bool; 7] {
         std::array::from_fn(|index| {
             connected[index]
                 && self.last_attempt[index]
@@ -77,16 +77,16 @@ impl ModelCatalogRefresh {
 
     /// Spawn a silent refresh for the due subset of `connected`. Returns
     /// true when a worker started.
-    pub fn request(&mut self, connected: [bool; 6], now: Instant) -> bool {
+    pub fn request(&mut self, connected: [bool; 7], now: Instant) -> bool {
         self.request_with(connected, now, discover_models_for_connected)
     }
 
     /// [`request`](Self::request) with the discovery step injected, so tests
     /// can drive the whole request → land → splice path without depending on
     /// which CLIs the machine running them happens to have installed.
-    pub fn request_with<F>(&mut self, connected: [bool; 6], now: Instant, discover: F) -> bool
+    pub fn request_with<F>(&mut self, connected: [bool; 7], now: Instant, discover: F) -> bool
     where
-        F: FnOnce([bool; 6]) -> Vec<ModelEntry> + Send + 'static,
+        F: FnOnce([bool; 7]) -> Vec<ModelEntry> + Send + 'static,
     {
         if self.is_pending() {
             return false;
@@ -142,7 +142,7 @@ impl ModelCatalogRefresh {
 /// asked for must never be able to empty the picker the user is looking
 /// at. A stale entry fails loudly at send time; a vanished list looks
 /// like the app broke.
-fn apply_refreshed_catalog(state: &mut EditorState, mask: [bool; 6], models: Vec<ModelEntry>) {
+fn apply_refreshed_catalog(state: &mut EditorState, mask: [bool; 7], models: Vec<ModelEntry>) {
     let fresh: Vec<op_editor_core::ModelEntry> =
         models.into_iter().map(model_entry_to_ec).collect();
     for (index, provider) in AgentProvider::ALL.iter().enumerate() {

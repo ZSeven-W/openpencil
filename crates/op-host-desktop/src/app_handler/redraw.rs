@@ -11,6 +11,24 @@ use std::time::{Duration, Instant};
 use winit::event_loop::ActiveEventLoop;
 
 impl DesktopApp {
+    /// Drain the preview-entry-only Figma cancel before the worker pump.
+    ///
+    /// Preview owns this one transient file action. Other queued file
+    /// actions must stay in place for the normal pointer / keyboard drains.
+    pub(crate) fn drain_preview_entry_figma_import_cancel(&mut self) -> bool {
+        if !matches!(
+            self.host.editor_state().editor_ui.pending_file_action,
+            Some(op_editor_core::FileAction::FinishFigmaImport(
+                op_editor_core::FigmaImportSelection::Cancel
+            ))
+        ) {
+            return false;
+        }
+        self.host.editor_state_mut().editor_ui.pending_file_action = None;
+        figma_import_session::cancel(&mut self.host, &mut self.current_figma_import);
+        true
+    }
+
     /// Returns `false` when the frame bailed before doing any work (no
     /// render context yet) — the dispatcher then skips its post-event
     /// epilogue, exactly as the inlined `return` did.
@@ -194,6 +212,9 @@ impl DesktopApp {
         if self.pump_html_clipboard_paste() {
             self.redraw_dirty = true;
         }
+        if self.drain_preview_entry_figma_import_cancel() {
+            self.redraw_dirty = true;
+        }
         match figma_import_session::pump(
             &mut self.host,
             &mut self.current_figma_import,
@@ -370,9 +391,9 @@ impl DesktopApp {
                 self.redraw_dirty = true;
             }
         }
-        // Drain the picker-open catalog refresh — a CLI that gained
-        // models since the last probe shows up without a restart.
-        if self.drain_model_catalog_refresh() {
+        // Drain picker-open built-in HTTP catalogs. Core rejects results whose
+        // target generation or credential fingerprint changed in flight.
+        if self.drain_builtin_model_refresh() {
             self.redraw_dirty = true;
         }
         // Drain the background auto-update probe.

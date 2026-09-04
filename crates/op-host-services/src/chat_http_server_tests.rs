@@ -1,6 +1,9 @@
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 
 use super::*;
 
@@ -16,6 +19,8 @@ struct Scenario {
     sse_events: Vec<String>,
     /// Body served for `GET /session/ses_mock/message` (fallback).
     messages_fallback: String,
+    /// Optional gate that holds the create-session response until opened.
+    session_create_gate: Option<Arc<AtomicBool>>,
 }
 
 type RequestLog = Arc<Mutex<Vec<(String, String, String)>>>;
@@ -93,11 +98,23 @@ fn handle_connection(mut stream: TcpStream, scenario: Scenario, log: RequestLog)
             // the turn ends.
             std::thread::sleep(std::time::Duration::from_millis(300));
         }
-        ("POST", "/session") => write_json(&mut stream, 200, r#"{"id":"ses_mock"}"#),
+        ("POST", "/session") => {
+            if let Some(gate) = &scenario.session_create_gate {
+                while !gate.load(Ordering::Acquire) {
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+            }
+            write_json(&mut stream, 200, r#"{"id":"ses_mock"}"#);
+        }
         ("POST", "/session/ses_mock/message") => write_json(&mut stream, 200, r#"{"info":{}}"#),
         ("POST", "/session/ses_mock/prompt_async") => write_json(&mut stream, 200, "{}"),
+        ("POST", "/session/ses_mock/abort") => write_json(&mut stream, 200, "true"),
+        ("DELETE", "/session/ses_mock") => write_json(&mut stream, 200, "true"),
         ("GET", "/session/ses_mock/message") => {
             write_json(&mut stream, 200, &scenario.messages_fallback)
+        }
+        ("GET", "/global/health") => {
+            write_json(&mut stream, 200, r#"{"healthy":true,"version":"1.15.0"}"#)
         }
         ("GET", "/config/providers") => write_json(&mut stream, 200, r#"{"providers":[]}"#),
         _ => write_json(&mut stream, 404, r#"{"message":"not found"}"#),
@@ -116,9 +133,47 @@ fn write_json(stream: &mut TcpStream, status: u16, body: &str) {
     let _ = stream.flush();
 }
 
+fn probe_health_document(body: &'static str) -> bool {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind health probe");
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept health probe");
+        let mut reader = BufReader::new(stream.try_clone().expect("clone health probe"));
+        let mut line = String::new();
+        while reader.read_line(&mut line).is_ok() && !line.trim().is_empty() {
+            line.clear();
+        }
+        write_json(&mut stream, 200, body);
+    });
+    crate::chat_runtime::block_on_anywhere(async move {
+        let client = reqwest::Client::builder()
+            .use_rustls_tls()
+            .build()
+            .expect("health client");
+        probe_server(&client, &base).await
+    })
+}
+
 fn collect_deltas(server: &MockServer, request: ChatRequest) -> Vec<ChatDelta> {
     let provider = OpenCodeProvider::with_base_url(server.base.clone());
     provider.send(request).collect()
+}
+
+fn wait_for_request(server: &MockServer, method: &str, path: &str) -> bool {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while std::time::Instant::now() < deadline {
+        if server
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(seen_method, seen_path, _)| seen_method == method && seen_path == path)
+        {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    false
 }
 
 // ---------------------------------------------------------------
@@ -139,6 +194,7 @@ fn opencode_turn_streams_text_thinking_and_done() {
             r#"{"type":"session.idle","properties":{"sessionID":"ses_mock"}}"#.into(),
         ],
         messages_fallback: "[]".into(),
+        session_create_gate: None,
     };
     let server = start_mock(scenario);
     let deltas = collect_deltas(
@@ -175,6 +231,12 @@ fn opencode_turn_streams_text_thinking_and_done() {
             stop_reason: StopReason::EndTurn
         })
     ));
+    assert!(server
+        .requests
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(method, path, _)| method == "DELETE" && path == "/session/ses_mock"));
 
     // Wire assertions: session create → noReply system injection →
     // prompt_async with parsed model + text part.
@@ -197,6 +259,8 @@ fn opencode_turn_streams_text_thinking_and_done() {
     assert!(prompt.2.contains(r#""providerID":"anthropic""#));
     assert!(prompt.2.contains(r#""modelID":"claude-test""#));
     assert!(prompt.2.contains(r#""text":"hi""#));
+    let prompt_json: serde_json::Value = serde_json::from_str(&prompt.2).unwrap();
+    assert_eq!(prompt_json["tools"]["*"], false);
 }
 
 #[test]
@@ -208,6 +272,7 @@ fn opencode_session_error_maps_to_label_with_nested_json() {
             r#"{"type":"session.error","properties":{"sessionID":"ses_mock","error":{"name":"APIError","data":{"message":"Unauthorized: {\"error\":{\"code\":\"invalid_api_key\",\"message\":\"invalid access token\"}}","statusCode":401}}}}"#.into(),
         ],
         messages_fallback: "[]".into(),
+        session_create_gate: None,
     };
     let server = start_mock(scenario);
     let deltas = collect_deltas(
@@ -238,6 +303,7 @@ fn opencode_empty_stream_falls_back_to_session_messages() {
             {"info":{"role":"assistant"},"parts":[{"type":"step-start"},{"type":"text","text":"from-fallback"}]}
         ]"#
         .into(),
+        session_create_gate: None,
     };
     let server = start_mock(scenario);
     let deltas = collect_deltas(
@@ -260,10 +326,202 @@ fn opencode_empty_stream_falls_back_to_session_messages() {
 }
 
 #[test]
+fn opencode_reconciles_a_missing_final_sse_suffix() {
+    let scenario = Scenario {
+        sse_events: vec![
+            r#"{"type":"message.part.delta","properties":{"sessionID":"ses_mock","field":"text","delta":"partial"}}"#.into(),
+            r#"{"type":"session.idle","properties":{"sessionID":"ses_mock"}}"#.into(),
+        ],
+        messages_fallback: r#"[
+            {"info":{"role":"assistant"},"parts":[{"type":"text","text":"partial-final"}]}
+        ]"#
+        .into(),
+        session_create_gate: None,
+    };
+    let server = start_mock(scenario);
+    let deltas = collect_deltas(
+        &server,
+        ChatRequest {
+            user_message: "hi".into(),
+            ..Default::default()
+        },
+    );
+    let text: String = deltas
+        .iter()
+        .filter_map(|delta| match delta {
+            ChatDelta::TextDelta(text) => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(text, "partial-final", "{deltas:?}");
+}
+
+#[test]
+fn opencode_aborts_if_a_tool_escapes_the_text_only_contract() {
+    let scenario = Scenario {
+        sse_events: vec![
+            r#"{"type":"message.part.updated","properties":{"part":{"id":"prt_1","sessionID":"ses_mock","messageID":"msg_1","type":"tool","callID":"call_1","tool":"write","state":{"status":"running","input":{},"time":{"start":1}}}}}"#.into(),
+        ],
+        messages_fallback: "[]".into(),
+        session_create_gate: None,
+    };
+    let server = start_mock(scenario);
+    let deltas = collect_deltas(
+        &server,
+        ChatRequest {
+            user_message: "hi".into(),
+            ..Default::default()
+        },
+    );
+    assert!(
+        deltas.iter().any(|delta| matches!(
+            delta,
+            ChatDelta::Error(message) if message.contains("forbidden `write` tool")
+        )),
+        "{deltas:?}"
+    );
+    assert!(matches!(
+        deltas.last(),
+        Some(ChatDelta::Done {
+            stop_reason: StopReason::Aborted
+        })
+    ));
+    assert!(server
+        .requests
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(method, path, _)| method == "POST" && path == "/session/ses_mock/abort"));
+    assert!(server
+        .requests
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(method, path, _)| method == "DELETE" && path == "/session/ses_mock"));
+}
+
+#[test]
+fn dropping_receiver_aborts_and_deletes_session_on_reused_server() {
+    let server = start_mock(Scenario {
+        // No terminal event: dropping the iterator is the only reason this
+        // turn ends, which reproduces Stop/New Chat against a reused server.
+        sse_events: vec![r#"{"type":"server.connected","properties":{}}"#.into()],
+        messages_fallback: "[]".into(),
+        session_create_gate: None,
+    });
+    let provider = OpenCodeProvider::with_base_url(server.base.clone());
+    let turn = provider.send(ChatRequest {
+        user_message: "keep running".into(),
+        ..Default::default()
+    });
+    assert!(
+        wait_for_request(&server, "POST", "/session/ses_mock/prompt_async"),
+        "prompt must be running before the receiver is dropped"
+    );
+
+    drop(turn);
+
+    assert!(
+        wait_for_request(&server, "POST", "/session/ses_mock/abort"),
+        "receiver drop must abort work even when OpenPencil did not spawn the server"
+    );
+    assert!(
+        wait_for_request(&server, "DELETE", "/session/ses_mock"),
+        "the temporary integration session must be deleted after cancellation"
+    );
+}
+
+#[test]
+fn cancellable_send_aborts_and_deletes_a_silent_reused_server_session() {
+    let server = start_mock(Scenario {
+        sse_events: vec![r#"{"type":"server.connected","properties":{}}"#.into()],
+        messages_fallback: "[]".into(),
+        session_create_gate: None,
+    });
+    let provider = OpenCodeProvider::with_base_url(server.base.clone());
+    let cancel = Arc::new(AtomicBool::new(false));
+    let mut turn = provider.send_cancellable(
+        ChatRequest {
+            user_message: "keep running".into(),
+            ..Default::default()
+        },
+        Arc::clone(&cancel),
+    );
+    assert!(
+        wait_for_request(&server, "POST", "/session/ses_mock/prompt_async"),
+        "prompt must be running before cancellation"
+    );
+
+    cancel.store(true, Ordering::Release);
+    assert!(
+        turn.next().is_none(),
+        "cooperative cancellation must end the blocking iterator"
+    );
+
+    assert!(
+        wait_for_request(&server, "POST", "/session/ses_mock/abort"),
+        "cancellation must wake tx.closed and abort the reused server session"
+    );
+    assert!(
+        wait_for_request(&server, "DELETE", "/session/ses_mock"),
+        "cancellation must delete the integration-owned session"
+    );
+}
+
+#[test]
+fn receiver_drop_cancels_pending_session_create_and_cleans_reused_server() {
+    let create_gate = Arc::new(AtomicBool::new(false));
+    let server = start_mock(Scenario {
+        sse_events: Vec::new(),
+        messages_fallback: "[]".into(),
+        session_create_gate: Some(Arc::clone(&create_gate)),
+    });
+    let (tx, rx) = mpsc::channel::<ChatDelta>(1);
+    let base = server.base.clone();
+    let worker = shared_runtime().spawn(async move {
+        let mut spawned = None;
+        run_opencode_turn(
+            &tx,
+            "opencode",
+            Some(base),
+            "",
+            vec![serde_json::json!({ "type": "text", "text": "hi" })],
+            None,
+            &mut spawned,
+        )
+        .await;
+        assert!(spawned.is_none());
+    });
+    assert!(
+        wait_for_request(&server, "POST", "/session"),
+        "session creation must be in flight before cancellation"
+    );
+
+    drop(rx);
+    let stopped = crate::chat_runtime::block_on_anywhere(async {
+        tokio::time::timeout(std::time::Duration::from_millis(500), worker).await
+    });
+    create_gate.store(true, Ordering::Release);
+    assert!(
+        matches!(stopped, Ok(Ok(()))),
+        "receiver drop must end the turn while session creation is pending: {stopped:?}"
+    );
+    assert!(
+        wait_for_request(&server, "POST", "/session/ses_mock/abort"),
+        "an accepted create on the reused server must be aborted"
+    );
+    assert!(
+        wait_for_request(&server, "DELETE", "/session/ses_mock"),
+        "an accepted create on the reused server must be deleted"
+    );
+}
+
+#[test]
 fn opencode_idle_with_no_output_emits_empty_response_error() {
     let scenario = Scenario {
         sse_events: vec![r#"{"type":"session.idle","properties":{"sessionID":"ses_mock"}}"#.into()],
         messages_fallback: "[]".into(),
+        session_create_gate: None,
     };
     let server = start_mock(scenario);
     let deltas = collect_deltas(
@@ -287,6 +545,19 @@ fn opencode_idle_with_no_output_emits_empty_response_error() {
 // ---------------------------------------------------------------
 
 #[test]
+fn spawned_server_keeps_a_kill_on_drop_guard() {
+    let source = include_str!("chat_http_server_startup.rs");
+    let spawn_body = source
+        .split_once("async fn spawn_opencode_server")
+        .expect("spawn function exists")
+        .1;
+    assert!(
+        spawn_body.contains("cmd.kill_on_drop(true);"),
+        "runtime/task abort must not detach the spawned OpenCode server"
+    );
+}
+
+#[test]
 fn parse_server_url_matches_ts_handshake() {
     assert_eq!(
         parse_server_url("opencode server listening on http://127.0.0.1:4096").as_deref(),
@@ -295,6 +566,21 @@ fn parse_server_url_matches_ts_handshake() {
     // Prefix is mandatory (TS startsWith check).
     assert!(parse_server_url("server listening on http://127.0.0.1:1").is_none());
     assert!(parse_server_url("Warning: OPENCODE_SERVER_PASSWORD is not set").is_none());
+    assert!(parse_server_url("opencode server listening on https://127.0.0.1:4096").is_none());
+    assert!(parse_server_url("opencode server listening on http://example.com:4096").is_none());
+    assert!(parse_server_url("opencode server listening on http://127.0.0.1:4096/other").is_none());
+}
+
+#[test]
+fn existing_server_probe_requires_documented_health_identity() {
+    assert!(probe_health_document(
+        r#"{"healthy":true,"version":"1.15.0"}"#
+    ));
+    assert!(!probe_health_document(r#"{"healthy":true}"#));
+    assert!(!probe_health_document(
+        r#"{"healthy":false,"version":"1.15.0"}"#
+    ));
+    assert!(!probe_health_document(r#"{"providers":[]}"#));
 }
 
 #[test]
@@ -380,4 +666,5 @@ fn format_opencode_error_known_labels() {
 fn provider_constructs_as_chat_provider_trait_object() {
     let p: Arc<dyn ChatProvider> = Arc::new(OpenCodeProvider::new());
     assert_eq!(p.provider_label(), "OpenCode");
+    assert!(p.supports_cancellable_send());
 }

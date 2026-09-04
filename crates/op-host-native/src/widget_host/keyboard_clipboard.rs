@@ -24,13 +24,23 @@ impl WidgetHostNative {
 
     /// Paste clipboard `text` into whichever text input currently owns
     /// the keyboard — the clone-wizard URL / destination, the git commit
-    /// message, the remote / HTTPS draft, or a settings field. Each
-    /// character is routed through [`Self::apply_text`], so per-input
-    /// filtering (e.g. digits-only for the MCP port, the clone field's
-    /// `!cloning` lock) still applies; control characters / newlines are
-    /// dropped since these inputs are single-line. Returns `true` if
-    /// anything was inserted.
+    /// message, the remote / HTTPS draft, or a settings field. The built-in
+    /// Model list preserves normalized newlines; every other settings field
+    /// remains single-line. Other inputs route each character through
+    /// [`Self::apply_text`], so their per-input filtering (e.g. the clone
+    /// field's `!cloning` lock) still applies. Returns `true` if anything was
+    /// inserted.
     pub fn apply_input_paste(&mut self, text: &str) -> bool {
+        // The save-name dialog is modal and filters characters a file name
+        // cannot carry, so it takes the paste as a unit.
+        if let Some(changed) =
+            op_editor_core::save_name_keyboard::paste(&mut self.editor_state, text, self.now_ms)
+        {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
         // The Asset Center takes a paste as a unit: its style-import box
         // receives a whole DESIGN.md, and the char-by-char route below drops
         // control characters, which would flatten the markdown to one line.
@@ -58,6 +68,9 @@ impl WidgetHostNative {
                 self.mark_dirty();
             }
             return true;
+        }
+        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
+            return self.apply_settings_text_payload(text);
         }
         let mut inserted = false;
         for c in text.chars() {

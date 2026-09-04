@@ -319,12 +319,10 @@ impl NativeBackend {
     /// a solid `Paint`.
     #[tracing::instrument(skip(self, canvas))]
     pub fn fill_rect(&mut self, canvas: &skia_safe::Canvas, rect: Rect, color: Color) {
-        // `Paint::solid` hardcodes `opacity: 1.0`, so the colour's
-        // alpha was dropped — a translucent fill (e.g. the 12 %
-        // marquee-selection band) painted fully opaque. Carry the
-        // alpha through `Paint.opacity` the way `stroke_rect` does.
-        let mut paint = jian_core::render::Paint::solid((color).to_jian());
-        paint.opacity = color.a.clamp(0.0, 1.0);
+        // jian-skia multiplies authored colour alpha by `Paint.opacity`.
+        // This bridge has no separate opacity, so leave the paint at 1.0;
+        // copying `color.a` there would square every translucent fill.
+        let paint = jian_core::render::Paint::solid((color).to_jian());
         let op = jian_core::render::DrawOp::Rect {
             rect: to_jian_rect(rect),
             paint,
@@ -347,7 +345,8 @@ impl NativeBackend {
                 color: (color).to_jian(),
                 width,
             }),
-            opacity: color.a.clamp(0.0, 1.0),
+            // The stroke colour already carries its authored alpha.
+            opacity: 1.0,
         };
         let op = jian_core::render::DrawOp::Rect {
             rect: to_jian_rect(rect),
@@ -715,6 +714,28 @@ pub fn enumerate_system_font_families() -> Vec<String> {
             }
         }
         out
+    })
+}
+
+/// Return authored family names the system manager can resolve, even when
+/// they are absent from [`enumerate_system_font_families`].
+///
+/// Skia explicitly allows `match_family` to expose hidden or auto-activated
+/// families that `count_families` cannot enumerate. Missing-font detection
+/// must therefore use this resolver boundary instead of guessing aliases from
+/// similar names or shared font files.
+pub fn resolvable_system_font_families(candidates: &[String]) -> Vec<String> {
+    jian_skia::with_font_lock(|| {
+        let mgr = skia_safe::FontMgr::new();
+        candidates
+            .iter()
+            .filter(|family| !family.contains('\0'))
+            .filter(|family| {
+                let mut styles = mgr.match_family(family);
+                styles.count() > 0
+            })
+            .cloned()
+            .collect()
     })
 }
 

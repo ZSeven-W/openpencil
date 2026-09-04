@@ -49,6 +49,8 @@ mod agent_settings_compact_press_tests;
 mod agent_settings_form_press_tests;
 mod agent_settings_hover;
 mod agent_settings_mcp_server;
+#[cfg(test)]
+mod agent_settings_model_input_tests;
 mod agent_settings_press;
 #[cfg(test)]
 mod agent_settings_press_tests;
@@ -124,6 +126,8 @@ mod keyboard;
 mod keyboard_edit_ops;
 mod keyboard_escape;
 mod keyboard_git;
+#[cfg(test)]
+mod keyboard_git_tests;
 mod keyboard_ime;
 mod keyboard_settings_commit;
 #[cfg(test)]
@@ -149,6 +153,8 @@ mod page_switch_center_tests;
 mod paint;
 #[cfg(test)]
 mod paint_caret_tests;
+mod paint_overlays;
+mod paint_topmost_overlays;
 #[cfg(test)]
 mod pan_tests;
 mod pen_press;
@@ -161,6 +167,9 @@ mod press_ctx;
 mod press_overlay_tiers;
 mod press_property_tiers;
 mod press_surface_tiers;
+mod preview_frame;
+mod preview_frame_teardown;
+mod preview_slideshow;
 #[cfg(test)]
 mod prompt_center_host_tests;
 mod prompt_center_press;
@@ -391,6 +400,61 @@ pub struct WidgetHost {
     /// change rotates `chat_panel_owner` (see
     /// [`Self::rotate_chat_owner_if_session_changed`]).
     pub(in crate::widget_host) last_chat_session_index: usize,
+    /// Live preview session when preview mode is active (`editor_ui.preview.mode`).
+    /// Holds the interactive runtime, layout, and rendering state.
+    /// `None` when not previewing or if preview entry failed.
+    #[cfg(feature = "canvaskit")]
+    preview: Option<op_preview_core::PreviewSession>,
+    /// Cached device-frame geometry for the active preview presentation.
+    /// Derived state: rebuilt by `recompute_device_frame` on enter,
+    /// resize, device switch, and app-mode screen switch.
+    preview_device_frame: Option<op_preview_core::device_frame::DeviceFrame>,
+    /// Logical scroll offset of the framed content, in scene pixels.
+    preview_scroll_y: f32,
+    /// Segment the user explicitly chose; `None` means "keep inferring
+    /// from the framed root width on every screen switch".
+    preview_manual_pick: Option<op_editor_core::PreviewDeviceKind>,
+    /// Presentation surface captured at pointer-down, so a held drag
+    /// keeps mapping through the surface it started on.
+    preview_surface_capture: Option<op_preview_core::device_frame::PreviewSurface>,
+    /// Pressed preview pointer ids (R4 Canonical PreviewInput): one
+    /// entry per pointer between Down and Up, guarding the per-pointer Up
+    /// dispatch — sending an unpaired Up leaves the runtime's gesture
+    /// state wedged and it swallows the NEXT Down.
+    preview_pressed_pids: Vec<u32>,
+    /// Last scene-space point sent to the runtime PER POINTER ID. The Up
+    /// must be dispatched HERE, not at the origin — the runtime resolves
+    /// a tap by where the release landed.
+    preview_last_doc_by_pid: std::collections::HashMap<u32, (f32, f32)>,
+    /// Start screen-x for edge-swipe-to-pop candidate. `None` when not armed.
+    preview_edge_swipe_start_x: Option<f32>,
+    /// Which pressed pointer owns the armed edge-swipe candidate — a
+    /// second finger's drag can never fire someone else's pop (R4).
+    preview_edge_swipe_pid: Option<u32>,
+    /// Viewport the cached device frame was solved against, so paint can
+    /// notice a resize and rebuild rather than scaling stale geometry.
+    preview_frame_viewport: Option<(f32, f32)>,
+    /// CanvasKit bridge for text measurement — required for preview construction.
+    /// Set by the mount / repaint path after the backend is initialized.
+    #[cfg(feature = "canvaskit")]
+    op_ck: Option<crate::canvaskit::OpCk>,
+    /// Track M-1: canvas ↔ device-frame merge animation state during enter/exit preview.
+    /// Lives here (not in `PreviewSession`) because it must survive the session teardown
+    /// on exit and be driven from the paint loop.
+    #[cfg(feature = "canvaskit")]
+    pub(in crate::widget_host) preview_mode_transition: Option<op_preview_core::ModeTransition>,
+    /// Current pointer position for slideshow gesture tracking (swipe detection).
+    pub(in crate::widget_host) slideshow_cursor: Option<(f32, f32)>,
+    /// Pointer-down position for slideshow board press, used to distinguish
+    /// clicks from swipes on release.
+    pub(in crate::widget_host) slideshow_press_screen: Option<(f32, f32)>,
+    /// The app-bundled design fonts are still being fetched from the daemon.
+    ///
+    /// Unlike the desktop host, which registers them synchronously before the
+    /// first frame, the browser fetches them over the network at mount. Missing
+    /// -font detection is a one-shot modal, so completing it while these are in
+    /// flight would accuse every bundled family of being missing.
+    pub(in crate::widget_host) bundled_fonts_pending: bool,
 }
 
 impl WidgetHost {

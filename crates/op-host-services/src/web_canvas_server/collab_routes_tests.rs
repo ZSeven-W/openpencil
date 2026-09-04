@@ -311,24 +311,19 @@ fn the_collab_routes_are_gated_as_sensitive_browser_posts() {
 }
 
 #[test]
-fn managed_mode_requires_the_token_for_every_collab_route() {
-    let auth = super::super::RequestAuth {
-        managed: true,
-        token: "secret".into(),
-    };
-    for (method, path) in [
-        ("GET", op_editor_core::collab_routes::STATE),
-        ("POST", op_editor_core::collab_routes::ACTION),
-        ("POST", op_editor_core::collab_routes::PRESENCE),
-    ] {
-        assert!(
-            !auth.allows(method, path, None),
-            "{path} must not be reachable without the managed token"
-        );
-        assert!(
-            !auth.allows(method, path, Some("wrong")),
-            "{path} must reject a mismatched token"
-        );
-        assert!(auth.allows(method, path, Some("secret")), "{path}");
-    }
+fn managed_collaboration_routes_use_the_origin_boundary_not_a_token() {
+    let allow = vec!["http://127.0.0.1:3100".to_string()];
+    assert!(super::super::managed_request_origin_allowed(
+        &allow, None, None
+    ));
+    assert!(super::super::managed_request_origin_allowed(
+        &allow,
+        Some("http://127.0.0.1:3100"),
+        Some("127.0.0.1:3100")
+    ));
+    assert!(!super::super::managed_request_origin_allowed(
+        &allow,
+        Some("https://evil.example"),
+        Some("127.0.0.1:3100")
+    ));
 }

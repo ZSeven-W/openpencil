@@ -537,7 +537,7 @@ const NUMERIC_TOKEN_FIELDS: &[&str] = &[
 
 /// 把**数值型**设计 token 字符串解析成 prompt 文档化的默认数值:
 /// `$type-{tier}-{size|weight|line-height|letter-spacing}`、`$spacing-{1..5}`、
-/// `$radius-{sm|md|lg}`。weight 也解析成数字 —— `FontWeight` 是 untagged
+/// `$--radius-{none|xs|m|l|pill}`(旧 `$radius-{sm|md|lg}` 继续兼容)。weight 也解析成数字 —— `FontWeight` 是 untagged
 /// `{Number, Keyword}`,接受数字;未解析的 `$type-*-weight` 串会被当 keyword
 /// 反序列化、再被字重解析器当未知值退回默认字重(标题该 700 却渲成 400,Codex
 /// review)。颜色 `$color-*` 等非数值 token 返回 `None`(在 fill 里合法、保持字符串)。
@@ -586,10 +586,21 @@ fn resolve_numeric_design_token(s: &str) -> Option<f64> {
         };
     }
     if let Some(r) = s.strip_prefix("$radius-") {
+        // Retired spellings keep resolving (pre-B1 documents).
         return match r {
             "sm" => Some(4.0),
             "md" => Some(8.0),
             "lg" => Some(12.0),
+            _ => None,
+        };
+    }
+    if let Some(r) = s.strip_prefix("$--radius-") {
+        return match r {
+            "none" => Some(0.0),
+            "xs" => Some(4.0),
+            "m" => Some(8.0),
+            "l" => Some(12.0),
+            "pill" => Some(999.0),
             _ => None,
         };
     }

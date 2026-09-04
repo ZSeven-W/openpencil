@@ -25,6 +25,28 @@ impl WidgetHost {
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
             return None;
         }
+        // Route canvas presses to preview when preview mode is active
+        #[cfg(feature = "canvaskit")]
+        if self.editor_state.editor_ui.preview.mode && self.preview.is_some() {
+            // Preview chrome paints over the presentation, so it gets the
+            // press first — otherwise a tap on a switcher pill would fall
+            // through into the previewed screen underneath it.
+            if self.preview_switcher_press(x, y, viewport_width, viewport_height)
+                || self.screen_switcher_press(x, y, viewport_width, viewport_height)
+            {
+                self.mark_dirty();
+                return Some(true);
+            }
+            // Commit the presentation surface this gesture started on, so a
+            // held drag off the scrolled content does not remap through the
+            // pinned nav when it crosses into that band.
+            self.capture_device_preview_surface(x, y);
+            let consumed = self.preview_dispatch_press(x, y, viewport_width, viewport_height);
+            return Some(
+                consumed || rename_committed || text_edit_committed || property_focus_committed,
+            );
+        }
+
         if matches!(self.editor_state.tool, op_editor_core::Tool::Hand) || self.space_pan {
             self.drag = Some(DragState {
                 last_x: x,

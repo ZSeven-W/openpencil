@@ -1,29 +1,26 @@
 //! End-to-end coverage for a saved local ACP agent.
 //!
-//! The fake agent is this test executable itself, launched through the same
-//! `tokio::process::Command` stdio path as a user-configured local agent. That
-//! keeps the fixture cross-platform while proving the process boundary rather
-//! than stopping at an in-memory duplex stream or an injected probe outcome.
+//! A harness-free example binary acts as the fake agent and is launched
+//! through the same `tokio::process::Command` stdio path as a user-configured
+//! local agent. That keeps the fixture cross-platform while proving the
+//! process boundary instead of stopping at an in-memory duplex stream.
 
 use super::*;
 use op_editor_core::{AcpAgentConnectPhase, ChatRole};
-use serde_json::{json, Value};
-use std::io::{self, BufRead, Write};
+use std::path::PathBuf;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 const FIXTURE_ENV: &str = "OPENPENCIL_LOCAL_ACP_E2E_FIXTURE";
-const FIXTURE_TEST: &str = "acp_agent_probe_host::local_e2e_tests::fake_local_acp_agent_process";
 const FIXTURE_AGENT_NAME: &str = "OpenPencil Local ACP Fixture";
 const FIXTURE_AGENT_VERSION: &str = "1.0";
-const FIXTURE_SESSION_ID: &str = "fixture-session";
 const FIXTURE_PROMPT: &str = "LOCAL_ACP_E2E_7C1: reply with the fixture greeting.";
 const FIXTURE_REPLY: &str = "Hello from the real local ACP subprocess.";
 const FIXTURE_MCP_PORT: u16 = 4_123;
 
 #[test]
 fn local_acp_save_connect_initialize_picker_prompt_disconnect_e2e() {
-    let executable = std::env::current_exe().expect("resolve current test executable");
+    let executable = fixture_executable();
     let mut app = DesktopApp::new(None);
 
     // DesktopApp restores machine settings even in tests. Reset only the
@@ -48,13 +45,7 @@ fn local_acp_save_connect_initialize_picker_prompt_disconnect_e2e() {
             .expect("draft should be created");
         draft.display_name = FIXTURE_AGENT_NAME.into();
         draft.command = executable.to_string_lossy().into_owned();
-        draft.args = vec![
-            FIXTURE_TEST.into(),
-            "--exact".into(),
-            "--ignored".into(),
-            "--nocapture".into(),
-            "--test-threads=1".into(),
-        ];
+        draft.args.clear();
         draft.env.insert(FIXTURE_ENV.into(), "enabled".into());
         settings
             .save_acp_agent_draft()
@@ -227,168 +218,58 @@ fn local_acp_save_connect_initialize_picker_prompt_disconnect_e2e() {
         .all(|model| model.value != format!("acp:{agent_id}")));
 }
 
-/// Ignored during normal test runs; the parent E2E launches this exact test
-/// through `current_exe` and talks ACP ndJSON over its stdin/stdout.
-#[test]
-#[ignore = "stdio fixture launched by the local ACP process E2E"]
-fn fake_local_acp_agent_process() {
-    if std::env::var_os(FIXTURE_ENV).is_none() {
-        return;
-    }
-
-    let stdin = io::stdin();
-    let mut stdout = io::stdout().lock();
-
-    // libtest prints `test <name> ... ` without a newline before invoking an
-    // uncaptured test. Terminate that prefix so op-acp's tolerant ndJSON
-    // reader can skip it before the first real response.
-    stdout
-        .write_all(b"\n")
-        .expect("terminate libtest stdout prefix");
-    stdout.flush().expect("flush fixture prelude");
-
-    let mut initialized = false;
-    let mut session_open = false;
-    for line in stdin.lock().lines() {
-        let Ok(line) = line else {
-            break;
-        };
-        let Ok(frame) = serde_json::from_str::<Value>(&line) else {
-            continue;
-        };
-        let id = frame.get("id").cloned().unwrap_or(Value::Null);
-        let method = frame
-            .get("method")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        let params = frame.get("params").cloned().unwrap_or(Value::Null);
-
-        match method {
-            "initialize" => {
-                let valid = params.get("protocolVersion").and_then(Value::as_u64) == Some(1)
-                    && params.pointer("/clientInfo/name").and_then(Value::as_str)
-                        == Some("openpencil");
-                if !valid {
-                    write_rpc_error(&mut stdout, id, "invalid initialize payload");
-                    continue;
-                }
-                initialized = true;
-                write_frame(
-                    &mut stdout,
-                    json!({
-                        "jsonrpc": "2.0",
-                        "id": id,
-                        "result": {
-                            "protocolVersion": 1,
-                            "agentInfo": {
-                                "name": FIXTURE_AGENT_NAME,
-                                "version": FIXTURE_AGENT_VERSION
-                            }
-                        }
-                    }),
-                );
-            }
-            "session/new" => {
-                let server = params
-                    .get("mcpServers")
-                    .and_then(Value::as_array)
-                    .and_then(|servers| servers.first());
-                let valid = initialized
-                    && params
-                        .get("cwd")
-                        .and_then(Value::as_str)
-                        .is_some_and(|cwd| !cwd.is_empty())
-                    && server
-                        .and_then(|server| server.get("name"))
-                        .and_then(Value::as_str)
-                        == Some("openpencil")
-                    && server
-                        .and_then(|server| server.get("type"))
-                        .and_then(Value::as_str)
-                        == Some("http")
-                    && server
-                        .and_then(|server| server.get("url"))
-                        .and_then(Value::as_str)
-                        == Some("http://127.0.0.1:4123/mcp")
-                    && server
-                        .and_then(|server| server.get("headers"))
-                        .and_then(Value::as_array)
-                        .is_some_and(Vec::is_empty)
-                    && params
-                        .pointer("/_meta/systemPrompt")
-                        .and_then(Value::as_str)
-                        .is_some_and(|prompt| prompt.contains("mcp__openpencil__"));
-                if !valid {
-                    write_rpc_error(&mut stdout, id, "invalid session/new payload");
-                    continue;
-                }
-                session_open = true;
-                write_frame(
-                    &mut stdout,
-                    json!({
-                        "jsonrpc": "2.0",
-                        "id": id,
-                        "result": { "sessionId": FIXTURE_SESSION_ID }
-                    }),
-                );
-            }
-            "session/prompt" => {
-                let prompt_text = params
-                    .get("prompt")
-                    .and_then(Value::as_array)
-                    .and_then(|blocks| blocks.first())
-                    .and_then(|block| block.get("text"))
-                    .and_then(Value::as_str);
-                let valid = initialized
-                    && session_open
-                    && params.get("sessionId").and_then(Value::as_str) == Some(FIXTURE_SESSION_ID)
-                    && prompt_text.is_some_and(|prompt| prompt.contains(FIXTURE_PROMPT));
-                if !valid {
-                    write_rpc_error(&mut stdout, id, "invalid session/prompt payload");
-                    continue;
-                }
-                write_frame(
-                    &mut stdout,
-                    json!({
-                        "jsonrpc": "2.0",
-                        "method": "session/update",
-                        "params": {
-                            "sessionId": FIXTURE_SESSION_ID,
-                            "update": {
-                                "sessionUpdate": "agent_message_chunk",
-                                "content": { "type": "text", "text": FIXTURE_REPLY }
-                            }
-                        }
-                    }),
-                );
-                write_frame(
-                    &mut stdout,
-                    json!({
-                        "jsonrpc": "2.0",
-                        "id": id,
-                        "result": { "stopReason": "end_turn" }
-                    }),
-                );
-                break;
-            }
-            _ => write_rpc_error(&mut stdout, id, "unsupported method"),
-        }
-    }
-}
-
-fn write_rpc_error(stdout: &mut dyn Write, id: Value, message: &str) {
-    write_frame(
-        stdout,
-        json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "error": { "code": -32_000, "message": message }
-        }),
+/// Cargo compiles examples during an ordinary `cargo test` without replacing
+/// their `main` functions with libtest. Resolve that clean executable next to
+/// the current profile's `deps` directory. `cargo build --example` creates an
+/// un-hashed executable; `cargo test` creates a fingerprinted one, so accept
+/// both layouts (including Windows' executable suffix) and prefer the newest.
+fn fixture_executable() -> PathBuf {
+    let current = std::env::current_exe().expect("resolve current test executable");
+    let deps_dir = current
+        .parent()
+        .expect("test executable should live in a deps directory");
+    assert_eq!(
+        deps_dir.file_name().and_then(|name| name.to_str()),
+        Some("deps"),
+        "unexpected Cargo test executable layout: {}",
+        current.display()
     );
-}
-
-fn write_frame(stdout: &mut dyn Write, frame: Value) {
-    serde_json::to_writer(&mut *stdout, &frame).expect("serialize ACP fixture frame");
-    stdout.write_all(b"\n").expect("write ACP fixture newline");
-    stdout.flush().expect("flush ACP fixture frame");
+    let examples_dir = deps_dir
+        .parent()
+        .expect("deps directory should have a profile parent")
+        .join("examples");
+    let executable_suffix = std::env::consts::EXE_SUFFIX;
+    std::fs::read_dir(&examples_dir)
+        .unwrap_or_else(|error| {
+            panic!(
+                "read ACP fixture example directory {}: {error}",
+                examples_dir.display()
+            )
+        })
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file())
+        .filter(|path| {
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                return false;
+            };
+            let Some(stem) = name.strip_suffix(executable_suffix) else {
+                return false;
+            };
+            stem == "op-acp-test-agent"
+                || stem
+                    .strip_prefix("op_acp_test_agent-")
+                    .is_some_and(|hash| hash.len() == 16 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        })
+        .max_by_key(|path| {
+            path.metadata()
+                .and_then(|metadata| metadata.modified())
+                .unwrap_or(SystemTime::UNIX_EPOCH)
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "ACP fixture example was not built under {}; run the test without a Cargo target-selection flag",
+                examples_dir.display()
+            )
+        })
 }

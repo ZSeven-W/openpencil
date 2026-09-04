@@ -190,6 +190,13 @@ for (const [locale, catalog] of catalogs) {
       fail(`${locale}: "${key}" is missing the "description" ${BASE} carries`);
     if (!documented && has) fail(`${locale}: "${key}" has a "description" ${BASE} does not`);
   }
+
+  // Chrome rejects a manifest description over 132 characters, including a
+  // localized replacement that only becomes visible during store packaging.
+  const description = catalog.extDescription && catalog.extDescription.message;
+  if (typeof description === 'string' && [...description].length > 132) {
+    fail(`${locale}: "extDescription" exceeds Chrome's 132-character manifest limit`);
+  }
 }
 
 /* --------------------------------------------------- the manifest's __MSG_ */

@@ -66,6 +66,65 @@ fn stub_cli(body: &str) -> (std::path::PathBuf, std::path::PathBuf) {
     (dir, path)
 }
 
+fn read_test_pids(path: &std::path::Path) -> Vec<i32> {
+    std::fs::read_to_string(path)
+        .expect("CLI pid file")
+        .split_whitespace()
+        .map(|pid| pid.parse().expect("numeric pid"))
+        .collect()
+}
+
+/// Wait for a stub to write its pid file. A liveness bound, not the
+/// property under test: under parallel `cargo test` on a loaded machine
+/// the stub's spawn chain alone can take several seconds (an earlier 5s
+/// bound expired for real under concurrent full-suite runs), so this is
+/// generous — it only shapes how long a genuinely broken spawn takes to
+/// report, never whether a healthy one passes.
+///
+/// Waits for the newline-terminated payload, not mere existence: the
+/// shell's `>` redirection creates the file before the pid write lands,
+/// so an existence check can hand the reader an empty file (observed
+/// under load as a ParseIntError on an "Empty" pid).
+fn wait_for_pid_file(path: &std::path::Path) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while std::time::Instant::now() < deadline {
+        if std::fs::read_to_string(path).is_ok_and(|content| content.ends_with('\n')) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+fn process_alive(pid: i32) -> bool {
+    // SAFETY: signal 0 is a read-only existence probe for an exact positive
+    // pid written by this test's own child.
+    (unsafe { libc::kill(pid, 0) }) == 0
+        || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
+fn assert_process_tree_reaped(pids: &[i32], context: &str) {
+    // 5s: signal delivery plus init's reap of orphaned zombies can lag by
+    // seconds on a loaded machine; a genuinely surviving process (the
+    // regression this guards) still fails below, just a bit later.
+    for _ in 0..500 {
+        if pids.iter().copied().all(|pid| !process_alive(pid)) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let survivors: Vec<_> = pids
+        .iter()
+        .copied()
+        .filter(|pid| process_alive(*pid))
+        .collect();
+    for pid in &survivors {
+        // SAFETY: exact still-live test child pid, force-killed only as test
+        // cleanup before reporting the regression.
+        let _ = unsafe { libc::kill(*pid, libc::SIGKILL) };
+    }
+    assert!(survivors.is_empty(), "{context}: {survivors:?}");
+}
+
 /// Run one generation turn against a stand-in and return the error text
 /// the user would see.
 ///
@@ -246,4 +305,208 @@ fn a_cli_that_diagnoses_itself_on_stdout_is_quoted_too() {
         message.contains("workspace policy rejected the request"),
         "{message}"
     );
+}
+
+#[test]
+fn codex_terminal_error_events_finish_the_turn_as_aborted() {
+    for event in [
+        r#"{"type":"turn.failed","error":{"message":"usage limit reached"}}"#,
+        r#"{"type":"error","message":"stream disconnected"}"#,
+    ] {
+        let body = format!("#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '{event}'\n");
+        let (dir, binary) = stub_cli(&body);
+        let provider = SubprocessProvider::for_cli(CliName::Codex)
+            .expect("codex subprocess template")
+            .with_test_binary(binary.to_string_lossy().into_owned());
+        let deltas: Vec<_> = provider
+            .send(ChatRequest {
+                user_message: "inspect the canvas".into(),
+                ..Default::default()
+            })
+            .collect();
+        let _ = std::fs::remove_dir_all(dir);
+
+        assert!(
+            matches!(deltas.first(), Some(ChatDelta::Error(_))),
+            "terminal event must surface its error: {deltas:?}"
+        );
+        assert!(matches!(
+            deltas.last(),
+            Some(ChatDelta::Done {
+                stop_reason: StopReason::Aborted
+            })
+        ));
+        assert_eq!(
+            deltas.len(),
+            2,
+            "one error and one terminal delta: {deltas:?}"
+        );
+    }
+}
+
+#[test]
+fn cancelling_a_silent_subprocess_reaps_its_descendant() {
+    let body = r#"#!/bin/sh
+sleep 30 &
+descendant=$!
+printf '%s %s\n' "$$" "$descendant" > "$0.pids"
+cat >/dev/null
+wait "$descendant"
+"#;
+    let (dir, binary) = stub_cli(body);
+    let pid_file = std::path::PathBuf::from(format!("{}.pids", binary.to_string_lossy()));
+    let provider = SubprocessProvider::for_cli(CliName::Codex)
+        .expect("codex subprocess template")
+        .with_test_binary(binary.to_string_lossy().into_owned());
+    let cancel = Arc::new(AtomicBool::new(false));
+    let mut deltas = provider.send_cancellable(
+        ChatRequest {
+            user_message: "a silent turn".into(),
+            ..Default::default()
+        },
+        Arc::clone(&cancel),
+    );
+
+    wait_for_pid_file(&pid_file);
+    let pids = read_test_pids(&pid_file);
+    assert_eq!(pids.len(), 2, "leader and descendant pids");
+
+    cancel.store(true, std::sync::atomic::Ordering::Release);
+    let started = std::time::Instant::now();
+    assert!(deltas.next().is_none(), "cancelled iterator must terminate");
+    // Far below the 30s the tree would otherwise live, which is the
+    // property (cancellation is not tied to child lifetime) — but not so
+    // tight that scheduler starvation under a loaded parallel test run
+    // fails a cancellation that did work; a 1s bound flaked for real.
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "silent cancellation took {:?}",
+        started.elapsed()
+    );
+    drop(deltas);
+
+    assert_process_tree_reaped(&pids, "cancelled subprocess left descendants alive");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn cancelling_a_backpressured_prompt_write_reaps_its_process_tree() {
+    let body = r#"#!/bin/sh
+sleep 30 &
+descendant=$!
+printf '%s %s\n' "$$" "$descendant" > "$0.pids"
+wait "$descendant"
+"#;
+    let (dir, binary) = stub_cli(body);
+    let pid_file = std::path::PathBuf::from(format!("{}.pids", binary.to_string_lossy()));
+    let provider = SubprocessProvider::for_cli(CliName::Codex)
+        .expect("codex subprocess template")
+        .with_test_binary(binary.to_string_lossy().into_owned());
+    let cancel = Arc::new(AtomicBool::new(false));
+    let mut deltas = provider.send_cancellable(
+        ChatRequest {
+            // Larger than normal pipe capacities, while neither process reads
+            // stdin. Before the regression fix `feed().await` never observed
+            // receiver cancellation and kept this tree alive.
+            user_message: "x".repeat(8 * 1024 * 1024),
+            ..Default::default()
+        },
+        Arc::clone(&cancel),
+    );
+
+    wait_for_pid_file(&pid_file);
+    let pids = read_test_pids(&pid_file);
+    assert_eq!(pids.len(), 2, "leader and descendant pids");
+
+    cancel.store(true, std::sync::atomic::Ordering::Release);
+    assert!(deltas.next().is_none(), "cancelled iterator must terminate");
+    drop(deltas);
+    assert_process_tree_reaped(&pids, "blocked stdin cancellation left processes alive");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn stdout_eof_does_not_allow_a_live_process_tree_to_outlast_exit_grace() {
+    let body = r#"#!/bin/sh
+cat >/dev/null
+sleep 30 </dev/null >/dev/null 2>&1 &
+descendant=$!
+printf '%s %s\n' "$$" "$descendant" > "$0.pids"
+exec 1>&-
+exec 2>&-
+wait "$descendant"
+"#;
+    let (dir, binary) = stub_cli(body);
+    let pid_file = std::path::PathBuf::from(format!("{}.pids", binary.to_string_lossy()));
+    let provider = SubprocessProvider::for_cli(CliName::Codex)
+        .expect("codex subprocess template")
+        .with_test_binary(binary.to_string_lossy().into_owned());
+
+    let started = std::time::Instant::now();
+    let _deltas: Vec<_> = provider
+        .send(ChatRequest {
+            user_message: "close stdout, then stay alive".into(),
+            ..Default::default()
+        })
+        .collect();
+    // The elapsed bound covers the WHOLE turn, not just the post-EOF
+    // reap: spawn, prompt feed, EOF detection, and up to two EXIT_GRACE
+    // waits (~4s of legitimate fixed budget) all land inside it, and a
+    // loaded machine adds scheduling/timer lag on top. What the test must
+    // prove is only that the turn never waits out the still-live 30s
+    // descendant after stdout EOF — so the bound stays far below the
+    // descendant's lifetime while leaving real headroom over the fixed
+    // grace budget. The previous 15s-sleep/8s-bound pairing left ~4s of
+    // slack and flaked under parallel `cargo test` on loaded machines.
+    assert!(
+        started.elapsed() < Duration::from_secs(15),
+        "post-EOF child wait exceeded exit grace: {:?}",
+        started.elapsed()
+    );
+    let pids = read_test_pids(&pid_file);
+    assert_process_tree_reaped(&pids, "post-EOF cleanup left processes alive");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// The unknown-status rule, kept as a test because the platform that exposed
+/// it (Windows `cmd /c <missing-binary>`) is not the platform most of this is
+/// developed on — a regression here would otherwise only surface on CI, as a
+/// silent `Done` rather than an error.
+#[test]
+fn an_unfinished_child_with_no_readable_status_is_a_failure() {
+    assert!(
+        crate::chat_subprocess_exit::unfinished_child_is_failure(None),
+        "a child that neither finished cleanly nor left a readable status must \
+         be reported, never passed off as success"
+    );
+}
+
+#[test]
+fn a_clean_exit_on_the_unfinished_path_is_not_a_failure() {
+    let ok = std::process::Command::new(if cfg!(windows) { "cmd" } else { "true" })
+        .args(if cfg!(windows) {
+            vec!["/c", "exit 0"]
+        } else {
+            vec![]
+        })
+        .status()
+        .expect("spawn a trivially successful process");
+    assert!(!crate::chat_subprocess_exit::unfinished_child_is_failure(
+        Some(&ok)
+    ));
+}
+
+#[test]
+fn a_nonzero_exit_on_the_unfinished_path_is_a_failure() {
+    let bad = std::process::Command::new(if cfg!(windows) { "cmd" } else { "false" })
+        .args(if cfg!(windows) {
+            vec!["/c", "exit 1"]
+        } else {
+            vec![]
+        })
+        .status()
+        .expect("spawn a trivially failing process");
+    assert!(crate::chat_subprocess_exit::unfinished_child_is_failure(
+        Some(&bad)
+    ));
 }

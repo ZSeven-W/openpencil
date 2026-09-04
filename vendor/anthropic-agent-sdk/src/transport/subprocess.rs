@@ -7,9 +7,10 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -18,7 +19,15 @@ use crate::types::{ClaudeAgentOptions, SystemPrompt};
 use crate::utils::truncate_for_display;
 use crate::{Transport, VERSION};
 
+#[path = "subprocess_lifecycle.rs"]
+mod lifecycle;
+use lifecycle::{
+    force_cli_tree, reap_cli_process_in_background, request_tree_shutdown_before_wait,
+    terminate_cli_process,
+};
+
 const DEFAULT_MAX_BUFFER_SIZE: usize = 1024 * 1024; // 1MB
+const PROCESS_GRACEFUL_EXIT: Duration = Duration::from_secs(2);
 
 // Dangerous environment variables that should not be passed to subprocess
 const DANGEROUS_ENV_VARS: &[&str] = &[
@@ -64,6 +73,7 @@ pub struct SubprocessTransport {
     cli_path: PathBuf,
     cwd: Option<PathBuf>,
     process: Option<Child>,
+    process_pid: Option<u32>,
     stdin: Option<ChildStdin>,
     stdout: Option<BufReader<ChildStdout>>,
     ready: Arc<AtomicBool>,
@@ -131,6 +141,7 @@ impl SubprocessTransport {
             cli_path,
             cwd,
             process: None,
+            process_pid: None,
             stdin: None,
             stdout: None,
             ready: Arc::new(AtomicBool::new(false)),
@@ -171,6 +182,20 @@ impl SubprocessTransport {
     #[allow(clippy::too_many_lines)]
     fn build_command(&self) -> Result<Command> {
         let mut cmd = Command::new(&self.cli_path);
+
+        // A dropped transport must never detach the Claude CLI. The explicit
+        // cleanup path below kills and reaps it; `kill_on_drop` is the final
+        // fallback if the runtime itself is already shutting down.
+        cmd.kill_on_drop(true);
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            // Put the CLI and any tools it spawns in a dedicated group so
+            // Stop/New Chat can terminate the whole tree, not only the shell
+            // or npm shim at its root.
+            cmd.as_std_mut().process_group(0);
+        }
 
         #[cfg(windows)]
         {
@@ -691,6 +716,7 @@ impl Transport for SubprocessTransport {
         // Store handles
         self.stdin = Some(stdin);
         self.stdout = Some(BufReader::new(stdout));
+        self.process_pid = child.id();
         self.process = Some(child);
         self.stderr_task = Some(stderr_task);
         self.ready.store(true, Ordering::SeqCst);
@@ -741,9 +767,11 @@ impl Transport for SubprocessTransport {
     fn read_messages(&mut self) -> mpsc::UnboundedReceiver<Result<serde_json::Value>> {
         let (tx, rx) = mpsc::unbounded_channel();
 
-        // Take ownership of stdout and process
+        // The reader owns stdout, but the transport deliberately retains the
+        // Child handle. If the returned message stream is dropped, transport
+        // cleanup can still kill and reap the CLI instead of orphaning it in
+        // this background task.
         let stdout = self.stdout.take();
-        let process = Arc::new(Mutex::new(self.process.take()));
         let max_buffer_size = self.max_buffer_size;
         let cancel_token = self.cancellation_token.clone();
 
@@ -827,28 +855,6 @@ impl Transport for SubprocessTransport {
                     }
                 }
             }
-
-            // Check process exit code
-            if let Ok(mut process_guard) = process.try_lock() {
-                if let Some(mut child) = process_guard.take() {
-                    match child.wait().await {
-                        Ok(status) => {
-                            if !status.success() {
-                                if let Some(code) = status.code() {
-                                    let _ = tx.send(Err(ClaudeError::process(
-                                        "Command failed",
-                                        code,
-                                        Some("Check stderr output for details".to_string()),
-                                    )));
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            let _ = tx.send(Err(ClaudeError::Io(e)));
-                        }
-                    }
-                }
-            }
         });
 
         // Store task handle for cleanup
@@ -873,11 +879,14 @@ impl Transport for SubprocessTransport {
         }
 
         // Wait for reader task to finish (it will exit due to cancellation)
-        if let Some(task) = self.reader_task.take() {
+        if let Some(mut task) = self.reader_task.take() {
             // Give a brief window for graceful exit before abort
             tokio::select! {
-                _ = task => {}
-                () = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
+                _ = &mut task => {}
+                () = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
+                    task.abort();
+                    let _ = task.await;
+                }
             }
         }
         if let Some(task) = self.stderr_task.take() {
@@ -886,23 +895,55 @@ impl Transport for SubprocessTransport {
 
         self.stdout = None;
 
-        // Try to wait for the process to exit gracefully first
-        if let Some(mut child) = self.process.take() {
-            // Give the process a configurable timeout to exit gracefully
-            let timeout_duration = std::time::Duration::from_secs(5);
-
-            match tokio::time::timeout(timeout_duration, child.wait()).await {
-                Ok(Ok(_status)) => {
-                    // Process exited gracefully
+        // Normal EOF gets a brief chance to preserve the CLI's real exit
+        // status. A stuck process is then terminated as a whole tree and the
+        // direct child is always reaped before returning.
+        if self.process.is_some() {
+            let pid = self.process_pid;
+            // Reap a leader that has already exited before considering a
+            // numeric Windows taskkill target. Once the exact child is known
+            // exited, that PID may already name an unrelated process tree.
+            let observed_status = self
+                .process
+                .as_mut()
+                .expect("checked process")
+                .try_wait()
+                .map_err(ClaudeError::Io)?;
+            let (status, requested_tree_shutdown) = match observed_status {
+                Some(status) => (status, false),
+                None => {
+                    // Windows `taskkill /T` needs the leader PID to remain live
+                    // while it discovers descendants. Request tree teardown
+                    // before waiting; Unix groups remain safely addressable.
+                    let requested = request_tree_shutdown_before_wait(pid);
+                    // Keep Child in `self` across every await. If close is
+                    // canceled, Drop still owns both leader and group id.
+                    let child = self.process.as_mut().expect("checked process");
+                    let status =
+                        match tokio::time::timeout(PROCESS_GRACEFUL_EXIT, child.wait()).await {
+                            Ok(status) => status.map_err(ClaudeError::Io)?,
+                            Err(_) => terminate_cli_process(child, pid, PROCESS_GRACEFUL_EXIT)
+                                .await
+                                .map_err(ClaudeError::Io)?,
+                        };
+                    (status, requested)
                 }
-                Ok(Err(e)) => {
-                    return Err(ClaudeError::Io(e));
-                }
-                Err(_) => {
-                    // Timeout - kill the process
-                    let _ = child.kill().await;
-                    let _ = child.wait().await;
-                }
+            };
+            // A CLI may close stdout before a helper exits. Unix process
+            // groups remain safe to address after the leader is reaped, so
+            // clean any remaining members there. Windows must never run
+            // taskkill against a reaped leader's reusable PID; its tree
+            // teardown was already requested before the wait above.
+            #[cfg(unix)]
+            let _ = force_cli_tree(pid);
+            self.process.take();
+            self.process_pid.take();
+            if !status.success() && !requested_tree_shutdown {
+                return Err(ClaudeError::process(
+                    "Command failed",
+                    status.code().unwrap_or(-1),
+                    Some("Check stderr output for details".to_string()),
+                ));
             }
         }
 
@@ -928,10 +969,28 @@ impl Drop for SubprocessTransport {
             task.abort();
         }
 
-        // Try graceful shutdown first, then kill if needed
+        // Drop cannot await, so signal synchronously and hand the owned Child
+        // to a detached OS-thread reaper. It does not depend on an ambient
+        // Tokio runtime surviving the stream/task that initiated cleanup.
         if let Some(mut child) = self.process.take() {
-            // Try to kill gracefully (SIGTERM on Unix)
-            let _ = child.start_kill();
+            let pid = self.process_pid.take();
+            match child.try_wait() {
+                Ok(Some(_)) => {
+                    // Already reaped: never target the reusable numeric PID.
+                }
+                Ok(None) => {
+                    let _ = force_cli_tree(pid);
+                    let _ = child.start_kill();
+                    reap_cli_process_in_background(child);
+                }
+                Err(_) => {
+                    // The child state could not be observed. Avoid a numeric
+                    // tree lookup, but still use the exact owned child handle
+                    // as the last-resort leader termination path.
+                    let _ = child.start_kill();
+                    reap_cli_process_in_background(child);
+                }
+            }
         }
     }
 }

@@ -9,7 +9,7 @@
 //! family can legitimately fill the slot it was found in. Matching on colour
 //! distance alone silently rewrites a design's semantics — measured on
 //! `0808-gm-1.op`, where a 36px headline's near-white literal happened to equal
-//! `$color-border`'s active-theme value and every card and section title in the
+//! `$--border`'s active-theme value and every card and section title in the
 //! document came back bound to the BORDER token. Nothing looked wrong (the two
 //! resolve to the same hex today), but the design was one theme flip — or one
 //! palette repair — away from headlines rendered in hairline grey. See
@@ -52,12 +52,17 @@ enum ColorFamily {
 
 fn family_of(name: &str) -> ColorFamily {
     let name = name.to_ascii_lowercase();
-    // Text wins over the surface words on purpose: `color-danger-text` is a
+    // Text wins over the surface words on purpose: `--color-error-foreground` is a
     // text token that happens to name a state, not a state background.
     if name.contains("text") || name.contains("foreground") {
         return ColorFamily::Text;
     }
-    if name.contains("border") || name.contains("outline") || name.contains("divider") {
+    if name.contains("border")
+        || name.contains("outline")
+        || name.contains("divider")
+        || name.contains("input")
+        || name.contains("ring")
+    {
         return ColorFamily::Border;
     }
     if [
@@ -68,6 +73,17 @@ fn family_of(name: &str) -> ColorFamily {
         "panel",
         "chip",
         "scrim",
+        // shadcn slot names (B1): the gray wells, the sidebar ground, and
+        // the status colours all paint surfaces.
+        "muted",
+        "secondary",
+        "popover",
+        "sidebar",
+        "accent",
+        "success",
+        "warning",
+        "error",
+        "info",
     ]
     .iter()
     .any(|word| name.contains(word))
@@ -91,7 +107,7 @@ fn slot_accepts(slot: ColorSlot, family: ColorFamily) -> bool {
         (ColorSlot::Text, ColorFamily::Border | ColorFamily::Surface) => false,
         // A surface / border is never a glyph colour. (`role_post_pass`'s
         // surface-discipline pass repairs this downstream by rewriting the
-        // fill to `$color-surface-2`; refusing the bind here is the same
+        // fill to `$--muted`; refusing the bind here is the same
         // judgement made at the source, and keeps the authored colour.)
         (ColorSlot::Surface | ColorSlot::Stroke, ColorFamily::Text) => false,
         _ => true,

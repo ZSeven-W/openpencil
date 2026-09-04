@@ -166,7 +166,7 @@ impl<'a> ComponentBrowserPanel<'a> {
         Some(ComponentBrowserPanel {
             state,
             theme: theme_for(&state.editor_ui),
-            locale: state.editor_ui.locale,
+            locale: state.editor_ui.effective_locale(),
             active_category: state.editor_ui.component_browser_category,
             hover: state.editor_ui.component_browser_hover,
             pressed: match state.editor_ui.pressed_button {

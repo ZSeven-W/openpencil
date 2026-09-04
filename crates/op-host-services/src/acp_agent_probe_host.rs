@@ -50,9 +50,9 @@ impl AcpAgentConnectJob {
         debug_assert_eq!(request.id, agent.id);
         let config = acp_config_for_probe(&agent);
         let (tx, rx) = mpsc::channel();
-        // Detached one-shot: the probe's handshake calls carry op-acp's
-        // 30 s `HANDSHAKE_TIMEOUT`, and `AcpConnection::drop` kills the spawned
-        // agent + aborts its IO tasks, so this thread always terminates.
+        // Detached one-shot: local/remote connection and handshake stages are
+        // bounded inside op-acp, and the probe explicitly shuts down/reaps a
+        // local process tree before this worker exits.
         std::thread::spawn(move || {
             let outcome = probe_acp_agent_config(config);
             let _ = tx.send(outcome);
@@ -126,16 +126,66 @@ pub fn probe_acp_agent_config(config: op_acp::AcpAgentConfig) -> AcpAgentProbeOu
     // the web-canvas server, so bridge through the runtime-aware helper.
     crate::chat_runtime::block_on_anywhere(async move {
         match op_acp::connect_acp_agent(&config).await {
-            Ok(conn) => {
+            Ok(mut conn) => {
                 let info = format_acp_agent_info(conn.agent_info(), &config.display_name);
-                AcpAgentProbeOutcome::connected(info)
+                let outcome = validate_probe_session(&conn, info).await;
+                conn.shutdown().await;
+                outcome
             }
             Err(err) => AcpAgentProbeOutcome::failed(err.to_string()),
         }
     })
 }
 
+/// Validate that an initialized agent can create a session, then clean up the
+/// deliberately ephemeral session before its transport is shut down. Close
+/// releases active resources; delete then removes persisted `session/list`
+/// state. Either advertised method remains a valid fallback on its own.
+async fn validate_probe_session(
+    conn: &op_acp::AcpConnection,
+    info: String,
+) -> AcpAgentProbeOutcome {
+    // Initialize alone only proves protocol negotiation. Creating one empty
+    // session also verifies auth state and catches agents that cannot serve.
+    let session = match conn.new_session().await {
+        Ok(session) => session,
+        Err(err) => {
+            return AcpAgentProbeOutcome::failed(format!("ACP session validation failed: {err}"));
+        }
+    };
+    let mut failures = Vec::new();
+    if conn.supports_session_close() {
+        if let Err(err) = conn.close_session_if_supported(&session.session_id).await {
+            failures.push(format!("close: {err}"));
+        }
+    }
+    // Attempt delete even when close failed: the active-resource failure must
+    // be reported, but it must not also leave avoidable persisted probe state.
+    if conn.supports_session_delete() {
+        if let Err(err) = conn.delete_session_if_supported(&session.session_id).await {
+            failures.push(format!("delete: {err}"));
+        }
+    }
+    if failures.is_empty() {
+        AcpAgentProbeOutcome::connected(info)
+    } else {
+        AcpAgentProbeOutcome::failed(format!(
+            "ACP session cleanup failed: {}",
+            failures.join("; ")
+        ))
+    }
+}
+
 pub fn acp_config_for_probe(agent: &CoreAcpAgentConfig) -> op_acp::AcpAgentConfig {
+    let mut env = agent.env.clone();
+    if agent.connection_type == AcpConnectionType::Local
+        && !env.keys().any(|key| key.eq_ignore_ascii_case("PATH"))
+    {
+        let path = crate::chat_spawn::effective_path_env();
+        if !path.is_empty() {
+            env.insert("PATH".into(), path);
+        }
+    }
     op_acp::AcpAgentConfig {
         id: agent.id.clone(),
         display_name: agent.display_name.clone(),
@@ -144,11 +194,11 @@ pub fn acp_config_for_probe(agent: &CoreAcpAgentConfig) -> op_acp::AcpAgentConfi
             AcpConnectionType::Remote => op_acp::ConnectionType::Remote,
         },
         command: match agent.connection_type {
-            AcpConnectionType::Local => Some(agent.command.clone()),
+            AcpConnectionType::Local => Some(crate::chat_spawn::find_binary(&agent.command)),
             AcpConnectionType::Remote => None,
         },
         args: agent.args.clone(),
-        env: agent.env.clone(),
+        env,
         url: agent.url.clone(),
         enabled: agent.enabled,
     }
@@ -189,5 +239,165 @@ pub fn format_acp_agent_info(info: &op_acp::AcpAgentInfo, fallback: &str) -> Str
     {
         Some(version) => format!("{name} {version}"),
         None => name.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+    use tokio::io::BufReader;
+
+    fn core_config(connection_type: AcpConnectionType) -> CoreAcpAgentConfig {
+        CoreAcpAgentConfig {
+            id: "test".into(),
+            display_name: "Test".into(),
+            connection_type,
+            command: std::env::current_exe()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned(),
+            args: vec!["--acp".into()],
+            env: BTreeMap::from([("Path".into(), "configured-path".into())]),
+            url: Some("ws://example.invalid/acp".into()),
+            enabled: true,
+            connected: false,
+        }
+    }
+
+    #[test]
+    fn local_probe_resolves_command_and_preserves_explicit_path() {
+        let source = core_config(AcpConnectionType::Local);
+        let config = acp_config_for_probe(&source);
+        assert_eq!(config.command.as_deref(), Some(source.command.as_str()));
+        assert_eq!(
+            config.env.get("Path").map(String::as_str),
+            Some("configured-path")
+        );
+        assert!(!config.env.contains_key("PATH"));
+    }
+
+    #[test]
+    fn remote_probe_does_not_carry_a_local_command() {
+        let config = acp_config_for_probe(&core_config(AcpConnectionType::Remote));
+        assert_eq!(config.connection_type, op_acp::ConnectionType::Remote);
+        assert!(config.command.is_none());
+    }
+
+    fn probe_lifecycle(
+        session_capabilities: serde_json::Value,
+        fail_close: bool,
+    ) -> (Vec<String>, AcpAgentProbeOutcome) {
+        crate::chat_runtime::block_on_anywhere(async move {
+            let lifecycle_count = usize::from(session_capabilities.get("close").is_some())
+                + usize::from(session_capabilities.get("delete").is_some());
+            let (client_write, agent_read) = tokio::io::duplex(4096);
+            let (agent_write, client_read) = tokio::io::duplex(4096);
+            let agent = tokio::spawn(async move {
+                let mut read = BufReader::new(agent_read);
+                let mut write = agent_write;
+                let mut methods = Vec::new();
+                while let Some(frame) = op_acp::transport::read_frame(&mut read).await.unwrap() {
+                    let method = frame["method"].as_str().unwrap().to_string();
+                    methods.push(method.clone());
+                    let response = match method.as_str() {
+                        "session/close" if fail_close => {
+                            assert_eq!(frame["params"]["sessionId"], "probe-session");
+                            serde_json::json!({
+                                "jsonrpc": "2.0", "id": frame["id"],
+                                "error": { "code": -32_001, "message": "close failed" }
+                            })
+                        }
+                        method => {
+                            let result = match method {
+                                "initialize" => serde_json::json!({
+                                    "protocolVersion": 1,
+                                    "agentCapabilities": {
+                                        "sessionCapabilities": session_capabilities.clone()
+                                    }
+                                }),
+                                "session/new" => {
+                                    serde_json::json!({ "sessionId": "probe-session" })
+                                }
+                                "session/delete" | "session/close" => {
+                                    assert_eq!(frame["params"]["sessionId"], "probe-session");
+                                    serde_json::json!({})
+                                }
+                                other => panic!("unexpected probe method: {other}"),
+                            };
+                            serde_json::json!({
+                                "jsonrpc": "2.0", "id": frame["id"], "result": result
+                            })
+                        }
+                    };
+                    op_acp::transport::write_frame(&mut write, &response)
+                        .await
+                        .unwrap();
+                    if methods.len() == 2 + lifecycle_count {
+                        break;
+                    }
+                }
+                methods
+            });
+
+            let mut conn = op_acp::AcpConnection::new(client_read, client_write, None);
+            conn.initialize("Probe").await.unwrap();
+            let outcome = validate_probe_session(&conn, "Probe 1.0".into()).await;
+            conn.shutdown().await;
+            (agent.await.unwrap(), outcome)
+        })
+    }
+
+    fn probe_lifecycle_methods(session_capabilities: serde_json::Value) -> Vec<String> {
+        let (methods, outcome) = probe_lifecycle(session_capabilities, false);
+        assert_eq!(outcome, AcpAgentProbeOutcome::connected("Probe 1.0".into()));
+        methods
+    }
+
+    #[test]
+    fn probe_closes_then_deletes_when_both_are_advertised() {
+        let methods = probe_lifecycle_methods(serde_json::json!({
+            "delete": {},
+            "close": {}
+        }));
+        assert_eq!(
+            methods,
+            [
+                "initialize",
+                "session/new",
+                "session/close",
+                "session/delete"
+            ]
+        );
+    }
+
+    #[test]
+    fn probe_falls_back_to_close_when_delete_is_not_advertised() {
+        let methods = probe_lifecycle_methods(serde_json::json!({ "close": {} }));
+        assert_eq!(methods, ["initialize", "session/new", "session/close"]);
+    }
+
+    #[test]
+    fn probe_uses_delete_when_close_is_not_advertised() {
+        let methods = probe_lifecycle_methods(serde_json::json!({ "delete": {} }));
+        assert_eq!(methods, ["initialize", "session/new", "session/delete"]);
+    }
+
+    #[test]
+    fn probe_still_deletes_and_reports_when_close_fails() {
+        let (methods, outcome) =
+            probe_lifecycle(serde_json::json!({ "close": {}, "delete": {} }), true);
+        assert_eq!(
+            methods,
+            [
+                "initialize",
+                "session/new",
+                "session/close",
+                "session/delete"
+            ]
+        );
+        let error = outcome.error.expect("cleanup failure");
+        assert!(error.contains("close: ACP agent error -32001: close failed"));
+        assert!(!outcome.connected);
     }
 }

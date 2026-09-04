@@ -57,7 +57,7 @@ pub struct AcpConnectResult {
 }
 
 /// Errors raised by the ACP client.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum AcpError {
     /// A local agent config had no `command`, or a remote one no `url`.
     #[error("ACP config error: {0}")]

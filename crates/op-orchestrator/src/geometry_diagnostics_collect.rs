@@ -205,10 +205,20 @@ pub(super) fn collect_diagnostics_with_context(
                 if cr.w <= pw + TEXT_OVERFLOW_EPS && !past_right {
                     continue;
                 }
-                if (crate::chip_repair::is_pill_chip(v) || is_compact_status_badge(v, rects))
-                    && c.get("type").and_then(Value::as_str) == Some("text")
-                {
-                    continue;
+                if c.get("type").and_then(Value::as_str) == Some("text") {
+                    let is_pill_with_numeric_width = crate::chip_repair::is_pill_chip(v)
+                        && v.get("width")
+                            .and_then(|w| match w {
+                                Value::Number(n) => n.as_f64(),
+                                Value::String(s) => s.parse::<f64>().ok(),
+                                _ => None,
+                            })
+                            .is_some_and(|w| w > 0.0);
+                    let is_hug_pill =
+                        crate::chip_repair::is_pill_chip(v) && !is_pill_with_numeric_width;
+                    if is_hug_pill || is_compact_status_badge(v, rects) {
+                        continue;
+                    }
                 }
                 if c.get("type").and_then(Value::as_str) == Some("text") {
                     out.push(format!(

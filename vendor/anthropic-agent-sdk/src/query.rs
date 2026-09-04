@@ -115,8 +115,12 @@ pub async fn query(
                 Err(e) => yield Err(e),
             }
         }
-        // Keep transport alive until stream is done
-        drop(transport);
+        // Normal EOF still owns the transport's Child handle. Close waits for
+        // and reaps it; dropping the stream early takes the transport Drop
+        // path, which force-terminates and schedules the same reap.
+        if let Err(error) = transport.close().await {
+            yield Err(error);
+        }
     };
 
     Ok(message_stream)

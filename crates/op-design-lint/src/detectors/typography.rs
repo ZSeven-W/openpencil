@@ -56,18 +56,48 @@ pub struct LowContrastText {
     pub bg_color: String,
     pub ratio: f64,
     pub threshold: f64,
-    /// Large text is allowed a looser ratio, and a repair must honour the
-    /// same distinction the detector used.
+    /// Size class used by the default lint thresholds. A caller-owned strict
+    /// target may deliberately apply one publication bar to both classes.
     pub is_large: bool,
 }
 
-/// Resolved low-contrast text/background pairs, in walk order.
+/// Resolved low-contrast text/background pairs, in walk order, using the
+/// detector's established size-dependent 2.5/2.0 thresholds.
 pub fn low_contrast_text(root: &PenNode, doc: &PenDocument) -> Vec<LowContrastText> {
+    low_contrast_text_with_thresholds(root, doc, DEFAULT_NORMAL_THRESHOLD, DEFAULT_LARGE_THRESHOLD)
+}
+
+/// Resolved text/background pairs below one caller-owned target, in walk
+/// order. This keeps the lint detector's calibrated 2.5/2.0 semantics stable
+/// while allowing a finalizer to converge against a stricter publication
+/// gate such as WCAG AA's 4.5:1 target.
+pub fn low_contrast_text_below(
+    root: &PenNode,
+    doc: &PenDocument,
+    threshold: f64,
+) -> Vec<LowContrastText> {
+    low_contrast_text_with_thresholds(root, doc, threshold, threshold)
+}
+
+fn low_contrast_text_with_thresholds(
+    root: &PenNode,
+    doc: &PenDocument,
+    normal_threshold: f64,
+    large_threshold: f64,
+) -> Vec<LowContrastText> {
     let empty_vars = Variables::new();
     let variables = doc.variables.as_ref().unwrap_or(&empty_vars);
     let theme = default_theme(doc.themes.as_ref());
     let mut found = Vec::new();
-    collect_low_contrast(root, &[], variables, &theme, &mut found);
+    collect_low_contrast(
+        root,
+        &[],
+        variables,
+        &theme,
+        normal_threshold,
+        large_threshold,
+        &mut found,
+    );
     found
 }
 
@@ -76,6 +106,8 @@ fn collect_low_contrast<'a>(
     ancestors: &[&'a PenNode],
     variables: &Variables,
     theme: &Theme,
+    normal_threshold: f64,
+    large_threshold: f64,
     found: &mut Vec<LowContrastText>,
 ) {
     if !is_node_visible(node) {
@@ -88,9 +120,9 @@ fn collect_low_contrast<'a>(
                 let ratio = color_contrast(&text_color, &bg_color);
                 let is_large = is_large_text(text);
                 let threshold = if is_large {
-                    DEFAULT_LARGE_THRESHOLD
+                    large_threshold
                 } else {
-                    DEFAULT_NORMAL_THRESHOLD
+                    normal_threshold
                 };
                 if ratio.is_finite() && ratio < threshold {
                     found.push(LowContrastText {
@@ -108,7 +140,15 @@ fn collect_low_contrast<'a>(
     let mut next = ancestors.to_vec();
     next.push(node);
     for child in children(node) {
-        collect_low_contrast(child, &next, variables, theme, found);
+        collect_low_contrast(
+            child,
+            &next,
+            variables,
+            theme,
+            normal_threshold,
+            large_threshold,
+            found,
+        );
     }
 }
 
@@ -436,17 +476,17 @@ mod tests {
             "version": "1.0",
             "children": [],
             "variables": {
-                "color-bg": {"type": "color", "value": "#FFFFFF"},
-                "color-text": {"type": "color", "value": "#F5F5F5"}
+                "--background": {"type": "color", "value": "#FFFFFF"},
+                "--foreground": {"type": "color", "value": "#F5F5F5"}
             }
         }));
         let root = node(json!({
             "type": "frame", "id": "page",
-            "fill": [{"type": "solid", "color": "$color-bg"}],
+            "fill": [{"type": "solid", "color": "$--background"}],
             "children": [
                 {
                     "type": "text", "id": "t1", "content": "Hi",
-                    "fill": [{"type": "solid", "color": "$color-text"}]
+                    "fill": [{"type": "solid", "color": "$--foreground"}]
                 }
             ]
         }));
@@ -515,5 +555,44 @@ mod tests {
             detect_text_bg_contrast(&normal, &doc(json!({"version": "1.0", "children": []})));
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].node_id, "small");
+    }
+
+    #[test]
+    fn strict_collection_uses_the_caller_target_without_changing_lint_thresholds() {
+        // #0F172A on #64748B is ~3.75:1: readable enough for the calibrated
+        // 2.5/2.0 lint detector, but below the publication quality gate's
+        // 4.5:1 target for both body and large text.
+        let root = node(json!({
+            "type": "frame", "id": "page",
+            "fill": [{"type": "solid", "color": "#64748B"}],
+            "children": [
+                {
+                    "type": "text", "id": "body", "content": "Body", "fontSize": 14,
+                    "fill": [{"type": "solid", "color": "#0F172A"}]
+                },
+                {
+                    "type": "text", "id": "title", "content": "Title", "fontSize": 28,
+                    "fill": [{"type": "solid", "color": "#0F172A"}]
+                }
+            ]
+        }));
+        let document = doc(json!({"version": "1.0", "children": []}));
+
+        assert!(detect_text_bg_contrast(&root, &document).is_empty());
+        assert!(low_contrast_text(&root, &document).is_empty());
+
+        let strict = low_contrast_text_below(&root, &document, 4.5);
+        assert_eq!(
+            strict
+                .iter()
+                .map(|offender| offender.node_id.as_str())
+                .collect::<Vec<_>>(),
+            ["body", "title"]
+        );
+        assert!(strict
+            .iter()
+            .all(|offender| (offender.threshold - 4.5).abs() < f64::EPSILON));
+        assert!(!strict[0].is_large);
+        assert!(strict[1].is_large);
     }
 }

@@ -8,26 +8,26 @@ use crate::model_discovery::{discover_models_for_connected, model_entry_to_ec};
 
 pub struct ModelProbe {
     rx: Option<Receiver<Vec<ModelEntry>>>,
-    providers: [bool; 6],
+    providers: [bool; 7],
 }
 
 impl ModelProbe {
     pub fn idle() -> Self {
         Self {
             rx: None,
-            providers: [false; 6],
+            providers: [false; 7],
         }
     }
 
     /// Spawn a full-catalog discovery worker for compatibility with callers
     /// that explicitly need every locally installed provider.
     pub fn spawn() -> Self {
-        Self::spawn_for_connected([true; 6])
+        Self::spawn_for_connected([true; 7])
     }
 
     /// Probe only providers connected at startup. Provider queries execute
     /// concurrently, so their individual timeouts do not stack serially.
-    pub fn spawn_for_connected(connected: [bool; 6]) -> Self {
+    pub fn spawn_for_connected(connected: [bool; 7]) -> Self {
         if !connected.iter().any(|is_connected| *is_connected) {
             return Self::idle();
         }
@@ -52,12 +52,12 @@ impl ModelProbe {
 
     #[cfg(test)]
     pub(crate) fn pending_for_test() -> (Self, mpsc::Sender<Vec<ModelEntry>>) {
-        Self::pending_for_providers_for_test([true; 6])
+        Self::pending_for_providers_for_test([true; 7])
     }
 
     #[cfg(test)]
     fn pending_for_providers_for_test(
-        providers: [bool; 6],
+        providers: [bool; 7],
     ) -> (Self, mpsc::Sender<Vec<ModelEntry>>) {
         let (tx, rx) = mpsc::channel();
         (
@@ -116,12 +116,12 @@ mod tests {
 
     #[test]
     fn empty_connected_mask_stays_idle() {
-        assert!(!ModelProbe::spawn_for_connected([false; 6]).is_pending());
+        assert!(!ModelProbe::spawn_for_connected([false; 7]).is_pending());
     }
 
     #[test]
     fn filtered_result_does_not_erase_unprobed_provider() {
-        let mut providers = [false; 6];
+        let mut providers = [false; 7];
         providers[4] = true;
         let (mut probe, tx) = ModelProbe::pending_for_providers_for_test(providers);
         let mut state = EditorState::default();

@@ -18,14 +18,17 @@
 //! through `dirs::home_dir`.
 
 use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use op_ai::agent_settings_state::AgentProvider;
 use op_ai::chat_models::ModelEntry;
+use op_ai::chat_provider::CliName;
 
+use crate::cli_probe_error::CliProbeError;
+use crate::cli_probe_support::{bounded_cli_output, diagnose_timeout, BoundedProbe};
 pub use crate::model_probe::ModelProbe;
 
 /// Translate a shell-core `ModelEntry` into op-editor-core's.
@@ -38,6 +41,7 @@ pub fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
         ScP::GithubCopilot => op_editor_core::AgentProvider::GithubCopilot,
         ScP::Antigravity => op_editor_core::AgentProvider::Antigravity,
         ScP::GrokBuild => op_editor_core::AgentProvider::GrokBuild,
+        ScP::DeepSeekHarness => op_editor_core::AgentProvider::DeepSeekHarness,
     };
     op_editor_core::ModelEntry::new(provider, m.value, m.display_name)
 }
@@ -46,12 +50,12 @@ pub fn model_entry_to_ec(m: ModelEntry) -> op_editor_core::ModelEntry {
 /// provider-grouped model list. Safe to call off the UI thread —
 /// it only reads files and spawns short-lived subprocesses.
 pub fn discover_models() -> Vec<ModelEntry> {
-    discover_models_for_connected([true; 6])
+    discover_models_for_connected([true; 7])
 }
 
 /// Discover a startup-selected provider set concurrently while preserving
 /// the stable Settings/model-picker provider order in the returned catalog.
-pub fn discover_models_for_connected(connected: [bool; 6]) -> Vec<ModelEntry> {
+pub fn discover_models_for_connected(connected: [bool; 7]) -> Vec<ModelEntry> {
     let workers: Vec<_> = discovery_provider_order()
         .into_iter()
         .enumerate()
@@ -74,103 +78,22 @@ fn discover_provider(provider: AgentProvider) -> Vec<ModelEntry> {
         AgentProvider::GithubCopilot => discover_copilot(),
         AgentProvider::Antigravity => crate::cli_model_discovery::discover_antigravity(),
         AgentProvider::GrokBuild => crate::cli_model_discovery::discover_grok(),
+        AgentProvider::DeepSeekHarness => crate::cli_model_discovery::discover_deepseek_harness(),
     }
 }
 
 /// Provider probe order mirrors TS `DEFAULT_PROVIDERS`, which is
 /// also the core `AgentProvider::ALL` order used by Settings.
-fn discovery_provider_order() -> [AgentProvider; 6] {
+fn discovery_provider_order() -> [AgentProvider; 7] {
     AgentProvider::ALL
 }
 
-/// Resolve `name` to an executable on `PATH`. On Windows this also
-/// tries the `.exe` / `.cmd` / `.bat` suffixes so npm-installed CLI
-/// shims resolve. Returns `None` when the CLI is not installed.
-///
-/// When the `PATH` walk misses (a Finder/dock launch inherits a
-/// minimal PATH), the standard user-local install directories are
-/// scanned next — the TS resolvers' `posixUserBinDirs()` candidate
-/// list (`cli-resolver-helpers.ts:29-72`). The TS login-shell probe
-/// (`probeViaLoginShell`) is intentionally NOT ported: spawning the
-/// user's interactive shell from the GUI process is slow and
-/// side-effectful.
+/// Resolve `name` through the same executable search used by live chat:
+/// the current/login-shell PATH merge first, then standard package-manager
+/// install directories. Keeping one resolver prevents Settings from checking
+/// a different CLI than the transport later starts.
 pub fn resolve_cli(name: &str) -> Option<PathBuf> {
-    let exts: &[&str] = if cfg!(windows) {
-        &[".exe", ".cmd", ".bat", ""]
-    } else {
-        &[""]
-    };
-    if let Some(path) = std::env::var_os("PATH") {
-        for dir in std::env::split_paths(&path) {
-            for ext in exts {
-                let candidate = dir.join(format!("{name}{ext}"));
-                if candidate.is_file() {
-                    return Some(candidate);
-                }
-            }
-        }
-    }
-    for dir in user_bin_dirs() {
-        for ext in exts {
-            let candidate = dir.join(format!("{name}{ext}"));
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
-    }
-    None
-}
-
-/// Standard user-local / package-manager bin directories — the TS
-/// `posixUserBinDirs()` list plus the opencode/npm-global extras the
-/// per-CLI TS resolvers add, applied uniformly (a superset never
-/// hides an install). Windows also covers npm-global plus the official
-/// Antigravity and Grok Build installer directories.
-fn user_bin_dirs() -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-    if cfg!(windows) {
-        return crate::cli_resolver_windows::user_bin_dirs();
-    }
-    let Some(home) = dirs::home_dir() else {
-        return dirs;
-    };
-    // Antigravity's official Unix installer (`curl -fsSL
-    // https://antigravity.google/cli/install.sh | bash`) writes `agy` to
-    // `$HOME/.local/bin` by default (`TARGET_DIR="$HOME/.local/bin"` in
-    // that script), mirroring the explicit `%LOCALAPPDATA%\agy\bin` entry
-    // the Windows resolver carries (`cli_resolver_windows.rs`). Listed
-    // first and by name — not left to coincidentally match the generic
-    // dev-tool list below — so this candidate keeps resolving even if
-    // that list's contents change. `.local/bin` is intentionally absent
-    // from the loop below to avoid probing it twice.
-    dirs.push(home.join(".local/bin"));
-    for rel in [
-        ".bun/bin",
-        ".volta/bin",
-        ".local/share/mise/shims",
-        ".asdf/shims",
-        "Library/pnpm",
-        ".pnpm-global/bin",
-        ".cargo/bin",
-        ".opencode/bin",
-        ".npm-global/bin",
-    ] {
-        dirs.push(home.join(rel));
-    }
-    dirs.push(PathBuf::from("/usr/local/bin"));
-    dirs.push(PathBuf::from("/opt/homebrew/bin"));
-    // nvm / fnm: enumerate installed node versions best-effort.
-    if let Ok(rd) = std::fs::read_dir(home.join(".nvm/versions/node")) {
-        for entry in rd.flatten() {
-            dirs.push(entry.path().join("bin"));
-        }
-    }
-    if let Ok(rd) = std::fs::read_dir(home.join(".fnm/node-versions")) {
-        for entry in rd.flatten() {
-            dirs.push(entry.path().join("installation/bin"));
-        }
-    }
-    dirs
+    crate::chat_spawn::resolve_binary(name)
 }
 
 /// Claude Code — live `initialize` control-request query over the
@@ -238,8 +161,17 @@ fn discover_codex() -> Vec<ModelEntry> {
 /// falls back to the on-disk cache.
 pub fn codex_models_from_app_server() -> Option<Vec<ModelEntry>> {
     let exe = resolve_cli("codex")?;
-    let mut cmd = Command::new(exe);
-    cmd.arg("app-server")
+    codex_models_from_app_server_with_exe(&exe)
+}
+
+/// App-server discovery pinned to a previously resolved Codex executable.
+/// The Settings connection gate uses this so its version check and model
+/// handshake cannot silently select different installations.
+pub(crate) fn codex_models_from_app_server_with_exe(exe: &Path) -> Option<Vec<ModelEntry>> {
+    let mut cmd = crate::chat_spawn::build_blocking_command(exe, &["app-server"]);
+    cmd.env_clear()
+        .envs(crate::chat_subprocess_quirks::codex_child_env())
+        .env("PATH", crate::chat_spawn::runtime_path_for_binary(exe))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
@@ -376,103 +308,15 @@ pub fn parse_codex_models_cache(raw: &str) -> Option<Vec<ModelEntry>> {
     Some(keyed.into_iter().map(|(_, model)| model).collect())
 }
 
-/// How long to wait for `copilot --stdio` to answer `models.list`.
-const COPILOT_STDIO_TIMEOUT: Duration = Duration::from_secs(8);
-
-/// GitHub Copilot CLI — query models via the official CLI JSON-RPC
-/// protocol (`connect` → `models.list`), then a documented-name
-/// fallback when the CLI is installed but the query didn't answer.
+/// GitHub Copilot CLI — query the live catalog through the official SDK.
+/// The shared probe applies server-mode argv and delegates framing to the SDK.
 fn discover_copilot() -> Vec<ModelEntry> {
-    if let Some(models) = copilot_models_from_stdio() {
-        if !models.is_empty() {
-            return models;
-        }
-    }
-    if resolve_cli("copilot").is_none() {
+    let Some(exe) = resolve_cli("copilot") else {
         return Vec::new();
-    }
-    [
-        ("gpt-5", "GPT-5"),
-        ("claude-sonnet-4.5", "Claude Sonnet 4.5"),
-    ]
-    .iter()
-    .map(|(value, name)| ModelEntry::new(AgentProvider::GithubCopilot, *value, *name))
-    .collect()
-}
-
-/// Query Copilot models through the official CLI JSON-RPC
-/// protocol — the same `connect` → `models.list` wire calls the
-/// `github-copilot-sdk` makes (protocol version 3), spoken
-/// directly over `copilot --stdio`. Talking the wire protocol
-/// rather than linking the SDK crate keeps the dep set + the
-/// workspace's Rust 1.85 toolchain unchanged (the SDK crate needs
-/// Rust 1.94). Returns `None` on any failure.
-fn copilot_models_from_stdio() -> Option<Vec<ModelEntry>> {
-    let exe = resolve_cli("copilot")?;
-    let mut cmd = Command::new(exe);
-    cmd.arg("--stdio")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    crate::chat_spawn::hide_console_window(&mut cmd);
-    let mut child = cmd.spawn().ok()?;
-    let mut stdin = child.stdin.take()?;
-    let stdout = child.stdout.take()?;
-
-    // Detached reader thread; same contract as `codex_models_from_app_server`
-    // — a blocking pipe read is uninterruptible, so `child.kill()` closing the
-    // child's stdout is its only shutdown signal and every exit path below
-    // must reach it.
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-            if tx.send(line).is_err() {
-                break;
-            }
-        }
-    });
-
-    // `connect` (id 1) establishes the session; `models.list`
-    // (id 2) needs no params when the server runs without a
-    // connection token (we spawned it ourselves). Both go out as
-    // `Content-Length`-framed frames — the wire framing the
-    // official copilot-sdk writes on `copilot --stdio`.
-    let connect = r#"{"jsonrpc":"2.0","id":1,"method":"connect","params":{}}"#;
-    let list = r#"{"jsonrpc":"2.0","id":2,"method":"models.list","params":{}}"#;
-    // Never `?` out on a write failure — see the codex path: it would strand
-    // the child process plus its blocked reader thread.
-    let wrote = write_lsp_frame(&mut stdin, connect)
-        .and_then(|_| write_lsp_frame(&mut stdin, list))
-        .and_then(|_| stdin.flush())
-        .is_ok();
-
-    let mut models = None;
-    if wrote {
-        let deadline = Instant::now() + COPILOT_STDIO_TIMEOUT;
-        while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
-            match rx.recv_timeout(remaining) {
-                Ok(line) => {
-                    if let Some(parsed) = parse_copilot_model_list(&line) {
-                        models = Some(parsed);
-                        break;
-                    }
-                }
-                Err(_) => break,
-            }
-        }
-    }
-    let _ = child.kill();
-    let _ = child.wait();
-    models
-}
-
-/// Write one `Content-Length`-framed JSON-RPC message — the wire
-/// framing the official copilot-sdk writes on `copilot --stdio`
-/// (`Content-Length: <byte len>\r\n\r\n<body>`, no trailing
-/// newline). `body` is ASCII JSON, so `str::len` is the byte
-/// count the header must report.
-pub fn write_lsp_frame(w: &mut impl Write, body: &str) -> std::io::Result<()> {
-    write!(w, "Content-Length: {}\r\n\r\n{}", body.len(), body)
+    };
+    crate::copilot_sdk_probe::probe_copilot_cli(&exe)
+        .map(|probe| probe.models)
+        .unwrap_or_default()
 }
 
 /// Extract the first complete top-level JSON object from `s` —
@@ -514,59 +358,85 @@ pub fn extract_json_object(s: &str) -> Option<&str> {
     None
 }
 
-/// Parse one JSON-RPC line from `copilot --stdio`; yields the
-/// model list only for the `id:2` (`models.list`) response.
-/// Policy-disabled models are dropped — the TS route's
-/// `!m.policy || m.policy.state === 'enabled'` filter
-/// (connect-agent.ts:779-786).
-pub fn parse_copilot_model_list(line: &str) -> Option<Vec<ModelEntry>> {
-    let json: serde_json::Value = serde_json::from_str(extract_json_object(line)?).ok()?;
-    if json.get("id")?.as_i64()? != 2 {
-        return None;
-    }
-    let models = json.get("result")?.get("models")?.as_array()?;
-    Some(
-        models
-            .iter()
-            .filter_map(|m| {
-                // TS: `!m.policy || m.policy.state === 'enabled'` —
-                // a model carrying a policy object is kept only when
-                // that policy's state is exactly "enabled".
-                if let Some(policy) = m.get("policy").filter(|p| !p.is_null()) {
-                    if policy.get("state").and_then(|s| s.as_str()) != Some("enabled") {
-                        return None;
-                    }
-                }
-                let id = m.get("id")?.as_str()?;
-                let name = m.get("name").and_then(|v| v.as_str()).unwrap_or(id);
-                Some(ModelEntry::new(AgentProvider::GithubCopilot, id, name))
-            })
-            .collect(),
-    )
+/// Model listing is a networked CLI operation and can pause for first-run
+/// authentication. Keep startup/settings refresh bounded like the other CLI
+/// catalogs rather than letting one OpenCode process block every provider.
+const OPENCODE_MODEL_QUERY_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// OpenCode — `opencode models` prints one `provider/model` slug per line.
+pub fn discover_opencode() -> Vec<ModelEntry> {
+    query_opencode_models().unwrap_or_default()
 }
 
-/// OpenCode — `opencode models` prints one `provider/model` slug
-/// per line. A real query: parse stdout. Empty when the CLI is
-/// missing or the command fails.
-pub fn discover_opencode() -> Vec<ModelEntry> {
-    let Some(exe) = resolve_cli("opencode") else {
-        return Vec::new();
-    };
-    let mut cmd = Command::new(exe);
-    cmd.arg("models");
-    crate::chat_spawn::hide_console_window(&mut cmd);
-    let Ok(output) = cmd.output() else {
-        return Vec::new();
+pub(crate) fn query_opencode_models() -> Result<Vec<ModelEntry>, CliProbeError> {
+    let exe = resolve_cli("opencode").ok_or(CliProbeError::NotFound {
+        provider: "OpenCode",
+    })?;
+    opencode_models_from_exe(&exe, OPENCODE_MODEL_QUERY_TIMEOUT)
+}
+
+fn opencode_models_from_exe(
+    exe: &std::path::Path,
+    timeout: Duration,
+) -> Result<Vec<ModelEntry>, CliProbeError> {
+    let output = match bounded_cli_output(CliName::OpenCode, exe, &["models"], timeout) {
+        BoundedProbe::Completed(output) => output,
+        BoundedProbe::TimedOut { stdout, stderr } => {
+            return Err(CliProbeError::Timeout(diagnose_timeout(
+                CliName::OpenCode,
+                "OpenCode",
+                "`opencode`",
+                timeout,
+                &stdout,
+                &stderr,
+            )))
+        }
+        BoundedProbe::Failed => {
+            return Err(CliProbeError::NotResponding {
+                provider: "OpenCode",
+            })
+        }
     };
     if !output.status.success() {
-        return Vec::new();
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            CliProbeError::QueryFailed {
+                provider: "OpenCode",
+                login_command: Some("`opencode`"),
+            }
+        } else {
+            CliProbeError::CliReported(stderr)
+        });
     }
-    String::from_utf8_lossy(&output.stdout)
+    let models = parse_opencode_models(&String::from_utf8_lossy(&output.stdout));
+    if models.is_empty() {
+        Err(CliProbeError::NoCatalog {
+            provider: "OpenCode",
+        })
+    } else {
+        Ok(models)
+    }
+}
+
+fn parse_opencode_models(stdout: &str) -> Vec<ModelEntry> {
+    stdout
         .lines()
         .map(str::trim)
-        .filter(|line| !line.is_empty())
+        .filter(|slug| valid_opencode_model_slug(slug))
         .map(|slug| ModelEntry::new(AgentProvider::OpenCode, slug, slug))
         .collect()
+}
+
+fn valid_opencode_model_slug(slug: &str) -> bool {
+    let Some((provider, model)) = slug.split_once('/') else {
+        return false;
+    };
+    !provider.is_empty()
+        && !model.is_empty()
+        && slug.len() <= 256
+        && slug
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '/' | ':' | '@'))
 }
 
 #[cfg(test)]
@@ -596,6 +466,57 @@ mod tests {
         assert_eq!(parsed[0].display_name, "GPT-5.5");
         // Missing display_name falls back to the slug.
         assert_eq!(parsed[2].display_name, "gpt-unprioritized");
+    }
+
+    #[test]
+    fn opencode_catalog_accepts_only_bounded_provider_model_slugs() {
+        let oversized = format!("provider/{}", "x".repeat(300));
+        let raw = format!(
+            "anthropic/claude-sonnet-4-6\nopenrouter/meta/llama-3\nwarning: sign in\n/no-provider\nprovider/\n{oversized}\n"
+        );
+        let values: Vec<_> = parse_opencode_models(&raw)
+            .into_iter()
+            .map(|model| model.value)
+            .collect();
+        assert_eq!(
+            values,
+            ["anthropic/claude-sonnet-4-6", "openrouter/meta/llama-3"]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn opencode_catalog_query_kills_hung_process_tree_at_deadline() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let script = std::env::temp_dir().join(format!(
+            "openpencil-opencode-models-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::write(
+            &script,
+            "#!/bin/sh\nprintf 'anthropic/claude-test\\n'\nsleep 30\n",
+        )
+        .expect("write fake opencode");
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+
+        let started = Instant::now();
+        let result = opencode_models_from_exe(&script, Duration::from_millis(100));
+        let elapsed = started.elapsed();
+        let _ = std::fs::remove_file(&script);
+
+        assert!(
+            matches!(result, Err(CliProbeError::Timeout(_))),
+            "{result:?}"
+        );
+        assert!(
+            elapsed < Duration::from_secs(2),
+            "hung wrapper/descendant escaped the deadline: {elapsed:?}"
+        );
     }
 
     #[test]
@@ -635,45 +556,6 @@ mod tests {
     }
 
     #[test]
-    fn copilot_response_parser_picks_id2_model_list() {
-        // connect reply (id 1) — not the model list.
-        assert!(parse_copilot_model_list(
-            r#"{"jsonrpc":"2.0","id":1,"result":{"connected":true}}"#
-        )
-        .is_none());
-        let models = parse_copilot_model_list(
-            r#"{"jsonrpc":"2.0","id":2,"result":{"models":[
-                {"id":"gpt-5-mini","name":"GPT-5 mini"},
-                {"id":"claude-haiku-4.5"}
-            ]}}"#,
-        )
-        .expect("id:2 parses");
-        assert_eq!(models.len(), 2);
-        assert_eq!(models[0].display_name, "GPT-5 mini");
-        // Missing name falls back to the id.
-        assert_eq!(models[1].display_name, "claude-haiku-4.5");
-    }
-
-    #[test]
-    fn copilot_parser_policy_filter_matches_ts() {
-        // TS keeps `!m.policy || m.policy.state === 'enabled'`: no
-        // policy → kept, null policy → kept, enabled → kept, any
-        // other state (or a policy missing `state`) → dropped.
-        let models = parse_copilot_model_list(
-            r#"{"jsonrpc":"2.0","id":2,"result":{"models":[
-                {"id":"no-policy"},
-                {"id":"null-policy","policy":null},
-                {"id":"enabled","policy":{"state":"enabled"}},
-                {"id":"disabled","policy":{"state":"disabled"}},
-                {"id":"stateless-policy","policy":{}}
-            ]}}"#,
-        )
-        .expect("id:2 parses");
-        let values: Vec<&str> = models.iter().map(|m| m.value.as_str()).collect();
-        assert_eq!(values, ["no-policy", "null-policy", "enabled"]);
-    }
-
-    #[test]
     fn extract_json_object_handles_framing_prefix_and_suffix() {
         // Plain object.
         assert_eq!(extract_json_object(r#"{"a":1}"#), Some(r#"{"a":1}"#));
@@ -688,16 +570,6 @@ mod tests {
         );
         // No object at all.
         assert_eq!(extract_json_object("Content-Length: 0\r\n"), None);
-    }
-
-    #[test]
-    fn copilot_parser_tolerates_content_length_framed_line() {
-        // A line carrying the CL header prefix + a glued next header
-        // still yields the model list.
-        let line = "Content-Length: 80\r\n\r\n{\"id\":2,\"result\":{\"models\":[{\"id\":\"gpt-5\",\"name\":\"GPT-5\"}]}}Content-Length: 5\r\n";
-        let models = parse_copilot_model_list(line).expect("framed line parses");
-        assert_eq!(models.len(), 1);
-        assert_eq!(models[0].display_name, "GPT-5");
     }
 
     #[test]
@@ -719,28 +591,5 @@ mod tests {
         // Whatever is or isn't installed on the test machine, the
         // probe must return cleanly.
         let _ = discover_models();
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn posix_candidates_list_antigravity_dir_exactly_once() {
-        // `.local/bin` is both the generic dev-tool candidate and
-        // Antigravity's official installer target; it must appear once,
-        // not be probed twice.
-        let dirs = user_bin_dirs();
-        let Some(home) = dirs::home_dir() else {
-            return;
-        };
-        let antigravity_dir = home.join(".local/bin");
-        assert_eq!(
-            dirs.iter().filter(|d| **d == antigravity_dir).count(),
-            1,
-            "expected exactly one .local/bin candidate, got {dirs:?}"
-        );
-        assert_eq!(
-            dirs.first(),
-            Some(&antigravity_dir),
-            "Antigravity's official dir should be checked first"
-        );
     }
 }

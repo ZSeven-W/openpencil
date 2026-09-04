@@ -125,6 +125,128 @@ fn clipping_horizontal_row_preserves_zero_trailing_padding() {
         node_json(&sink, "date-row")["padding"],
         json!([1.0, 0.0, 1.0, 24.0])
     );
+
+    sink.applied.clear();
+    pad_clipping_horizontal_row_for_stroke(&mut sink, "root");
+    assert!(
+        sink.applied.is_empty(),
+        "the intentionally flush trailing edge must not make the pass emit a no-op command forever"
+    );
+}
+
+#[test]
+fn sibling_equalization_does_not_undo_clip_stroke_safety() {
+    let mut sink = VecDocSink::new();
+    let rows: Vec<Value> = (1..=6)
+        .map(|index| {
+            let stroke = if index <= 2 {
+                json!({
+                    "thickness": 1,
+                    "fill": [{"type": "solid", "color": "#E5E7EB"}]
+                })
+            } else {
+                Value::Null
+            };
+            let mut child = json!({
+                "type": "frame",
+                "id": format!("chip-{index}"),
+                "name": format!("Chip {index:02}"),
+                "width": 48,
+                "height": 60,
+                "children": []
+            });
+            if !stroke.is_null() {
+                child["stroke"] = stroke;
+            }
+            json!({
+                "type": "frame",
+                "id": format!("row-{index}"),
+                "name": format!("Date Scroller {index:02}"),
+                "width": "fill_container",
+                "height": "fit_content",
+                "layout": "horizontal",
+                "clipContent": true,
+                "padding": [0, 20],
+                "children": [child]
+            })
+        })
+        .collect();
+    insert_tree(
+        &mut sink,
+        &json!({
+            "type": "frame",
+            "id": "root",
+            "name": "Mobile Root",
+            "width": 390,
+            "height": 844,
+            "layout": "vertical",
+            "children": rows
+        })
+        .to_string(),
+    );
+
+    pad_clipping_horizontal_row_for_stroke(&mut sink, "root");
+    let top_padding: Vec<f64> = (1..=6)
+        .map(|index| {
+            node_json(&sink, &format!("row-{index}"))["padding"][0]
+                .as_f64()
+                .expect("top padding is numeric")
+        })
+        .collect();
+    assert_eq!(top_padding, vec![1.0, 1.0, 0.0, 0.0, 0.0, 0.0]);
+    let zero_votes = top_padding
+        .iter()
+        .filter(|padding| **padding == 0.0)
+        .count();
+    assert_eq!(
+        zero_votes, 4,
+        "the fixture must have four zero-padding siblings"
+    );
+    assert!(
+        zero_votes * 3 >= top_padding.len() * 2,
+        "four of six siblings must satisfy the equalizer's 2/3 majority threshold"
+    );
+    assert_ne!(
+        top_padding[0], 0.0,
+        "without the clip-stroke floor, the zero majority would target this protected edge"
+    );
+    assert_eq!(
+        equalize_sibling_items(&mut sink, "root"),
+        0,
+        "the unstroked 4/6 majority must not vote protected edges back to zero"
+    );
+    assert_eq!(
+        node_json(&sink, "row-1")["padding"],
+        json!([1.0, 20.0, 1.0, 20.0])
+    );
+
+    sink.applied.clear();
+    pad_clipping_horizontal_row_for_stroke(&mut sink, "root");
+    assert_eq!(equalize_sibling_items(&mut sink, "root"), 0);
+    assert!(
+        sink.applied.is_empty(),
+        "the ordered finalize slice must emit zero commands on its second run"
+    );
+
+    // Exercise the public native finalizer too: the DSH adapter calls this
+    // surface, and used to observe fresh repair records/version bumps even
+    // though the document ended each run byte-identical.
+    crate::loop_finalize::apply_loop_finalize_counted(&mut sink.state);
+    let before_second_finalize =
+        serde_json::to_value(sink.state.active_children()).expect("serialize finalized tree");
+    let second = crate::loop_finalize::apply_loop_finalize_counted(&mut sink.state);
+    let after_second_finalize =
+        serde_json::to_value(sink.state.active_children()).expect("serialize finalized tree");
+    assert_eq!(
+        second.total_repairs(),
+        0,
+        "a second native finalize must report zero repairs: {:?}",
+        second.records()
+    );
+    assert_eq!(
+        after_second_finalize, before_second_finalize,
+        "a second native finalize must leave the document unchanged"
+    );
 }
 
 #[test]

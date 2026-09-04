@@ -141,6 +141,14 @@ fn resolve_type(
     })
 }
 
+pub(crate) fn marker_is_suppressed(style: &ComputedStyle) -> bool {
+    style
+        .get("list-style-type")
+        .map(str::trim)
+        .or_else(|| style.get("list-style").and_then(shorthand_type))
+        .is_some_and(|value| value.eq_ignore_ascii_case("none"))
+}
+
 pub(crate) fn parse_type(value: &str) -> Option<MarkerType> {
     match value.trim().to_ascii_lowercase().as_str() {
         "disc" => Some(MarkerType::Disc),
@@ -528,7 +536,9 @@ mod tests {
         let PenNode::Frame(root) = &result.nodes[0] else {
             panic!()
         };
-        let PenNode::Frame(list) = &root.children.as_ref().unwrap()[0] else {
+        let PenNode::Frame(list) =
+            crate::mapper::unwrap_margin_node(&root.children.as_ref().unwrap()[0])
+        else {
             panic!()
         };
         let PenNode::Frame(item) = &list.children.as_ref().unwrap()[0] else {

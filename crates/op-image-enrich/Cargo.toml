@@ -1,0 +1,51 @@
+[package]
+name = "op-image-enrich"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Shared image-slot enrichment primitives: target detection, request-mode classification, and result write-back. Used by the desktop image-search session and the headless MCP enrich_images tool."
+
+[lib]
+name = "op_image_enrich"
+path = "src/lib.rs"
+
+[dependencies]
+# Canonical node/schema types the slot predicates walk.
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+# EditorState + walkers + collab gating for the write-back half.
+op-editor-core = { path = "../op-editor-core" }
+# Layout-scene input for scene-aware target collection.
+op-editor-ui = { path = "../op-editor-ui" }
+# Active-page layout scene resolution for target dimensions.
+op-pen-loader = { path = "../op-pen-loader" }
+
+# Networked resolution ladder (feature `net`): Openverse/Wikimedia fetch +
+# skia down-scale. Kept optional so slot detection / write-back consumers
+# stay transport-free.
+base64 = { version = "0.22", optional = true }
+# Pure-Rust decode fallback for containers the skia build ships no codec
+# for (WebP in practice — Openverse thumbnails), so a fetched WebP can be
+# transcoded to a renderer codec instead of being rejected outright.
+image = { version = "0.25", default-features = false, features = [
+  "webp",
+  "png",
+  "jpeg",
+], optional = true }
+reqwest = { version = "0.12", default-features = false, features = [
+  "rustls-tls",
+  "json",
+  "stream",
+], optional = true }
+serde_json = { workspace = true }
+skia-safe = { version = "0.97.0", default-features = false, features = [
+  "textlayout",
+], optional = true }
+tokio = { version = "1", default-features = false, features = [
+  "rt-multi-thread",
+  "time",
+], optional = true }
+
+[features]
+default = []
+net = ["dep:base64", "dep:image", "dep:reqwest", "dep:skia-safe", "dep:tokio"]

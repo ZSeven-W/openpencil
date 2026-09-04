@@ -5,7 +5,7 @@ phase: [generation]
 trigger:
   keywords: [slide, slides, deck, presentation, pitch deck, keynote, ppt, 幻灯片, 演示, 演示文稿, 路演, 课件, 汇报]
 priority: 22
-budget: 1900
+budget: 2000
 category: domain
 ---
 
@@ -100,6 +100,14 @@ Rules only, via per-side stroke — a full box turns the table into a grid and h
 ## Chart placeholder
 
 `frame(horizontal, gap=28, alignItems="end", padding=[40,40], cornerRadius=24, fill=[surface], height="fill_container")` holding 5 `rect(width="fill_container", cornerRadius=12)` bars at heights 180/250/220/330/420. Exactly ONE bar — the one the takeaway is about — uses `accent`, the rest `accent-soft`. Pair it with a `width=520` notes column of 2–3 title 30/600 + body 26/400 pairs: the insight goes in words, never left for the audience to find.
+
+### Bar chart geometry
+
+- **Bottom baseline** — bars align to same bottom; set `alignItems="end"` so heights float upward.
+- **Height ∝ value** — if value B is 2× value A, so is height B.
+- **Flex layout** — use `frame(horizontal, alignItems="end")` for auto-distribution; never `layout="none"` with manual x/y.
+- **Axis at bottom** — x-axis sits below bars, not above.
+- **No empty frames** — frame + fill color alone is a defect; every placeholder needs visible content.
 
 ## Closing / CTA
 

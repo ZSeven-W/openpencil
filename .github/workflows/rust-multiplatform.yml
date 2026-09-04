@@ -10,6 +10,7 @@ on:
     paths:
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - '.cargo/**'
       - 'crates/**'
       - 'vendor/jian/**'
       # The casement winit fork + agent runtime link into every desktop
@@ -18,15 +19,18 @@ on:
       - 'vendor/agent/**'
       - 'rust-toolchain.toml'
       - 'deny.toml'
+      - '.github/workflows/rust-release.yml'
       - '.github/workflows/rust-multiplatform.yml'
   pull_request:
     paths:
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - '.cargo/**'
       - 'crates/**'
       - 'vendor/jian/**'
       - 'vendor/casement/**'
       - 'vendor/agent/**'
+      - '.github/workflows/rust-release.yml'
       - '.github/workflows/rust-multiplatform.yml'
   workflow_dispatch:
 
@@ -96,15 +100,18 @@ jobs:
             libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
             libegl1-mesa-dev libgles2-mesa-dev libgbm-dev mesa-utils \
             libfreetype-dev libfontconfig1-dev fonts-noto-cjk \
+            pkg-config libssl-dev \
             xvfb
           )
           for attempt in 1 2 3 4; do
-            if sudo apt-get \
+            if sudo env DEBIAN_FRONTEND=noninteractive \
+                timeout 180s apt-get \
                 -o Acquire::ForceIPv4=true \
                 -o Acquire::Retries=3 \
                 -o Acquire::http::Timeout=30 \
                 update && \
-              sudo apt-get \
+              sudo env DEBIAN_FRONTEND=noninteractive \
+                timeout 300s apt-get \
                 -o Acquire::ForceIPv4=true \
                 -o Acquire::Retries=3 \
                 -o Acquire::http::Timeout=30 \
@@ -201,16 +208,20 @@ jobs:
           - label: ios-aarch64
             runner: macos-latest
             target: aarch64-apple-ios
+            features: metal,editor
           - label: ios-aarch64-sim
             runner: macos-latest
             target: aarch64-apple-ios-sim
+            features: metal,editor
           # Android targets via NDK — Linux runner.
           - label: android-aarch64
             runner: ubuntu-latest
             target: aarch64-linux-android
+            features: gl,editor
           - label: android-x86_64
             runner: ubuntu-latest
             target: x86_64-linux-android
+            features: gl,editor
     steps:
       - uses: actions/checkout@v4
         with:
@@ -246,6 +257,11 @@ jobs:
               echo "CXX_aarch64_linux_android=$CXX" >> "$GITHUB_ENV"
               echo "AR_aarch64_linux_android=$TOOLCHAIN/llvm-ar" >> "$GITHUB_ENV"
               echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$CC" >> "$GITHUB_ENV"
+              # rquickjs-sys (op-mcp `script`, via the editor design pipeline)
+              # runs bindgen at build time on Android; bindgen's libclang
+              # reads neither CC nor CFLAGS, so hand it target + sysroot or it
+              # parses QuickJS headers against the host sysroot.
+              echo "BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android=--target=aarch64-linux-android${API_LEVEL} --sysroot=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot" >> "$GITHUB_ENV"
               ;;
             x86_64-linux-android)
               CC="$TOOLCHAIN/x86_64-linux-android${API_LEVEL}-clang"
@@ -254,6 +270,8 @@ jobs:
               echo "CXX_x86_64_linux_android=$CXX" >> "$GITHUB_ENV"
               echo "AR_x86_64_linux_android=$TOOLCHAIN/llvm-ar" >> "$GITHUB_ENV"
               echo "CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER=$CC" >> "$GITHUB_ENV"
+              # Same bindgen story as the aarch64 arm above.
+              echo "BINDGEN_EXTRA_CLANG_ARGS_x86_64_linux_android=--target=x86_64-linux-android${API_LEVEL} --sysroot=$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot" >> "$GITHUB_ENV"
               ;;
           esac
           test -x "$CC"
@@ -267,5 +285,11 @@ jobs:
       #   stack (glutin / winit) is target-gated to desktop in Cargo.toml +
       #   GlutinProvider source is cfg-gated to desktop OS only. Real SDK
       #   linking and iOS/Android runtime is Step 1f.
+      # - op-engine-ffi (the player C ABI) + op-engine-jni (Android JNI
+      #   marshalling) compile on every mobile target with the platform GPU
+      #   feature plus the full editor integration exercised by the mobile
+      #   shells (metal,editor on iOS; gl,editor on Android).
       - run: cargo check -p op-editor-ui --target ${{ matrix.target }}
       - run: cargo check -p op-host-native --target ${{ matrix.target }}
+      - run: cargo check -p op-engine-ffi --target ${{ matrix.target }} --features ${{ matrix.features }}
+      - run: cargo check -p op-engine-jni --target ${{ matrix.target }} --features ${{ matrix.features }}

@@ -457,6 +457,7 @@ fn begin_subtask_retry_finds_a_fully_persisted_row_and_raises_the_pending_flag()
         .push(crate::chat_activity::PendingSubtaskRetry {
             subtask_id: "hero".into(),
             subtask_json: "{\"id\":\"hero\"}".into(),
+            insert_after_sibling_id: None,
         });
     chat.messages.push(msg);
 
@@ -554,7 +555,7 @@ fn rebuild_available_models_keeps_only_connected_providers() {
         ..Default::default()
     };
     // Only Claude Code (index 0 of AgentProvider::ALL) connected.
-    let mut connected = [false; 6];
+    let mut connected = [false; 7];
     connected[0] = true;
     chat.rebuild_available_models(&connected);
     assert_eq!(chat.available_models.len(), 2);
@@ -573,7 +574,7 @@ fn rebuild_available_models_preserves_selection_by_identity() {
         ],
         ..Default::default()
     };
-    let mut connected = [false; 6];
+    let mut connected = [false; 7];
     connected[0] = true; // Claude
     connected[1] = true; // Codex
     chat.rebuild_available_models(&connected);
@@ -592,4 +593,25 @@ fn rebuild_available_models_preserves_selection_by_identity() {
     chat.rebuild_available_models(&connected);
     assert!(chat.available_models.is_empty());
     assert_eq!(chat.selected_model, 0);
+}
+
+#[test]
+fn builtin_model_id_strips_the_exact_structured_provider_prefix() {
+    let entry = ModelEntry::builtin_with_display_name(
+        AgentProvider::CodexCli,
+        "web-credential:builtin:account:7",
+        "Provider",
+        "builtin:web-credential:builtin:account:7:deployment:blue",
+        "Blue",
+    );
+
+    assert_eq!(entry.builtin_model_id(), Some("deployment:blue"));
+
+    let malformed = ModelEntry::builtin(
+        AgentProvider::CodexCli,
+        "expected:id",
+        "builtin:different:id:model",
+        "Model",
+    );
+    assert_eq!(malformed.builtin_model_id(), None);
 }

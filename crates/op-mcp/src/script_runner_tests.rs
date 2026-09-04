@@ -1,4 +1,4 @@
-//! Sandbox, salvage, and resource-limit tests for the shared script runner.
+//! Sandbox, transactional recovery, and resource-limit tests for the shared script runner.
 
 use super::*;
 
@@ -14,6 +14,249 @@ for (const label of ["A", "B", "C"]) { I(row, {type: "text", content: label}); }
     assert!(lines[0].starts_with("b0=I(null, "));
     assert!(lines[1].starts_with("b1=I(b0, "));
     assert!(lines[3].contains(r#""content":"C""#));
+}
+
+#[test]
+fn text_insert_defaults_missing_typography_without_overwriting_explicit_values() {
+    let program = run_script_to_program(
+        r#"const root = I(null, {type: "frame", name: "Root"});
+I(root, {type: "text", content: "Default"});
+I(root, {type: "text", content: "Brand", fontFamily: "IBM Plex Mono", fontSize: 19, lineHeight: 1.1});"#,
+    )
+    .expect("text inserts run");
+    let lines: Vec<&str> = program.lines().collect();
+
+    assert_eq!(lines.len(), 3, "{program}");
+    assert!(
+        !lines[0].contains("fontFamily"),
+        "non-text remains unchanged: {program}"
+    );
+    assert!(
+        lines[1].contains(r#""fontFamily":"Inter""#),
+        "missing font gets the deterministic default: {program}"
+    );
+    assert!(lines[1].contains(r#""fontSize":16"#), "{program}");
+    assert!(lines[1].contains(r#""lineHeight":1.5"#), "{program}");
+    assert!(
+        lines[2].contains(r#""fontFamily":"IBM Plex Mono""#),
+        "explicit font must be preserved: {program}"
+    );
+    assert!(lines[2].contains(r#""fontSize":19"#), "{program}");
+    assert!(lines[2].contains(r#""lineHeight":1.1"#), "{program}");
+    assert!(!lines[2].contains(r#""fontFamily":"Inter""#), "{program}");
+}
+
+#[test]
+fn cjk_text_raises_only_an_explicit_low_line_height() {
+    let program = run_script_to_program(
+        r#"I(null, {type: "text", content: "中文标题", fontFamily: "Inter", fontSize: 24, lineHeight: 1.2});
+I(null, {type: "text", content: "日本語", fontFamily: "Inter", fontSize: 20, lineHeight: 1.3});
+I(null, {type: "text", content: "English", fontFamily: "Inter", fontSize: 18, lineHeight: 1.1});"#,
+    )
+    .expect("CJK typography normalization runs");
+    let lines: Vec<&str> = program.lines().collect();
+
+    assert_eq!(lines.len(), 3, "{program}");
+    assert!(lines[0].contains(r#""fontSize":24"#), "{program}");
+    assert!(lines[0].contains(r#""lineHeight":1.5"#), "{program}");
+    assert!(lines[1].contains(r#""lineHeight":1.3"#), "{program}");
+    assert!(lines[2].contains(r#""fontSize":18"#), "{program}");
+    assert!(lines[2].contains(r#""lineHeight":1.1"#), "{program}");
+}
+
+#[test]
+fn icon_font_insert_normalizes_only_the_measured_exact_aliases() {
+    let program = run_script_to_program(
+        r##"I(null, {type: "icon_font", name: "Search", iconFontFamily: "lucide", iconFontName: "magnifying-glass", width: 20, height: 22, fill: [{type: "solid", color: "#123456"}]});
+I(null, {type: "icon_font", iconFontName: "snow"});
+I(null, {type: "icon_font", iconFontName: "drop"});
+I(null, {type: "icon_font", iconFontName: "cup"});
+I(null, {type: "icon_font", iconFontName: "table-lamp"});
+I(null, {type: "icon_font", iconFontName: "search"});
+I(null, {type: "icon_font", iconFontName: "Snow"});
+I(null, {type: "icon_font", iconFontName: "drop "});"##,
+    )
+    .expect("icon aliases normalize");
+    let lines: Vec<&str> = program.lines().collect();
+
+    assert_eq!(lines.len(), 8, "{program}");
+    for (line, expected) in
+        lines[..5]
+            .iter()
+            .zip(["search", "snowflake", "droplet", "coffee", "lamp-desk"])
+    {
+        assert!(
+            line.contains(&format!(r#""iconFontName":"{expected}""#)),
+            "{line}"
+        );
+    }
+    assert!(lines[5].contains(r#""iconFontName":"search""#), "{program}");
+    assert!(lines[6].contains(r#""iconFontName":"Snow""#), "{program}");
+    assert!(lines[7].contains(r#""iconFontName":"drop ""#), "{program}");
+    assert!(lines[0].contains(r#""name":"Search""#), "{program}");
+    assert!(
+        lines[0].contains(r#""iconFontFamily":"lucide""#),
+        "{program}"
+    );
+    assert!(lines[0].contains(r#""width":20"#), "{program}");
+    assert!(lines[0].contains(r#""height":22"#), "{program}");
+    assert!(lines[0].contains(r##""color":"#123456""##), "{program}");
+}
+
+#[test]
+fn frame_center_layout_normalizes_only_the_exact_compatibility_shape() {
+    let program = run_script_to_program(
+        r#"I(null, {type: "frame", name: "Default centered", layout: "center"});
+I(null, {type: "frame", name: "Explicit alignment", layout: "center", alignItems: "end", justifyContent: "space_between"});
+I(null, {type: "rectangle", name: "Other type", layout: "center"});
+I(null, {type: "frame", name: "Other case", layout: "Center"});
+I(null, {type: "frame", name: "Padded value", layout: " center "});"#,
+    )
+    .expect("exact frame center layout normalizes");
+    let lines: Vec<&str> = program.lines().collect();
+
+    assert_eq!(lines.len(), 5, "{program}");
+    assert!(lines[0].contains(r#""layout":"vertical""#), "{program}");
+    assert!(lines[0].contains(r#""alignItems":"center""#), "{program}");
+    assert!(
+        lines[0].contains(r#""justifyContent":"center""#),
+        "{program}"
+    );
+    assert!(lines[1].contains(r#""layout":"vertical""#), "{program}");
+    assert!(lines[1].contains(r#""alignItems":"end""#), "{program}");
+    assert!(
+        lines[1].contains(r#""justifyContent":"space_between""#),
+        "{program}"
+    );
+    assert!(lines[2].contains(r#""layout":"center""#), "{program}");
+    assert!(!lines[2].contains("alignItems"), "{program}");
+    assert!(lines[3].contains(r#""layout":"Center""#), "{program}");
+    assert!(!lines[3].contains("alignItems"), "{program}");
+    assert!(lines[4].contains(r#""layout":" center ""#), "{program}");
+    assert!(!lines[4].contains("alignItems"), "{program}");
+}
+
+#[test]
+fn text_insert_normalizes_numeric_height_unless_growth_is_explicitly_fixed() {
+    let program = run_script_to_program(
+        r#"I(null, {type: "text", content: "Auto", height: 40});
+I(null, {type: "text", content: "Fixed", height: 40, textGrowth: "fixed-width-height"});
+I(null, {type: "text", content: "Already safe", height: "fit_content"});"#,
+    )
+    .expect("text height normalization runs");
+    let lines: Vec<&str> = program.lines().collect();
+
+    assert_eq!(lines.len(), 3, "{program}");
+    assert!(lines[0].contains(r#""height":"fit_content""#), "{program}");
+    assert!(lines[1].contains(r#""height":40"#), "{program}");
+    assert!(
+        lines[1].contains(r#""textGrowth":"fixed-width-height""#),
+        "{program}"
+    );
+    assert!(lines[2].contains(r#""height":"fit_content""#), "{program}");
+}
+
+#[test]
+fn insert_repairs_only_low_contrast_text_and_icons_on_known_solid_backgrounds() {
+    let program = run_script_to_program(
+        r##"const light = I(null, {type: "frame", name: "Light", fill: [{type: "solid", color: "#FFFFFF"}]});
+I(light, {type: "text", content: "Faint", fill: [{type: "solid", color: "#F5F5F5"}]});
+const dark = I(null, {type: "frame", name: "Dark", fill: [{type: "solid", color: "#17191D"}]});
+I(dark, {type: "icon_font", name: "Faint icon", fill: [{type: "solid", color: "#303238"}]});"##,
+    )
+    .expect("low-contrast foregrounds are normalized");
+    let lines: Vec<&str> = program.lines().collect();
+
+    assert_eq!(lines.len(), 4, "{program}");
+    assert!(lines[1].contains(r##""color":"#17191D""##), "{program}");
+    assert!(lines[3].contains(r##""color":"#FAF8F3""##), "{program}");
+    assert!(!lines[1].contains("#F5F5F5"), "{program}");
+    assert!(!lines[3].contains("#303238"), "{program}");
+}
+
+#[test]
+fn insert_preserves_qualified_foregrounds_and_non_foreground_nodes() {
+    let program = run_script_to_program(
+        r##"const root = I(null, {type: "frame", fill: [{type: "solid", color: "#FFFFFF"}]});
+I(root, {type: "text", content: "Readable", fill: [{type: "solid", color: "#555555"}]});
+I(root, {type: "icon_font", name: "Readable icon", fill: [{type: "solid", color: "#777777"}]});
+I(root, {type: "rectangle", name: "Quiet decoration", fill: [{type: "solid", color: "#F5F5F5"}]});"##,
+    )
+    .expect("already-safe and non-foreground fills remain unchanged");
+    let lines: Vec<&str> = program.lines().collect();
+
+    assert_eq!(lines.len(), 4, "{program}");
+    assert!(lines[1].contains(r##""color":"#555555""##), "{program}");
+    assert!(lines[2].contains(r##""color":"#777777""##), "{program}");
+    assert!(lines[3].contains(r##""color":"#F5F5F5""##), "{program}");
+}
+
+#[test]
+fn insert_preserves_foregrounds_when_background_or_fill_is_not_known_opaque_solid() {
+    let program = run_script_to_program(
+        r##"const unknown = I(null, {type: "frame", name: "No background"});
+I(unknown, {type: "text", content: "Unknown bg", fill: [{type: "solid", color: "#F5F5F5"}]});
+const gradient = I(null, {type: "frame", fill: [{type: "linear_gradient", stops: [{color: "#FFFFFF", offset: 0}, {color: "#000000", offset: 1}]}]});
+I(gradient, {type: "text", content: "Gradient bg", fill: [{type: "solid", color: "#F5F5F5"}]});
+const light = I(null, {type: "frame", fill: [{type: "solid", color: "#FFFFFF"}]});
+I(light, {type: "text", content: "Gradient fg", fill: [{type: "linear_gradient", stops: [{color: "#FFFFFF", offset: 0}, {color: "#EEEEEE", offset: 1}]}]});
+I(light, {type: "text", content: "Alpha hex", fill: [{type: "solid", color: "#FFFFFF80"}]});
+I(light, {type: "icon_font", name: "Paint opacity", fill: [{type: "solid", color: "#FFFFFF", opacity: 0.5}]});"##,
+    )
+    .expect("unknown and transparent colors pass through");
+
+    assert_eq!(program.lines().count(), 8, "{program}");
+    assert_eq!(program.matches("#F5F5F5").count(), 2, "{program}");
+    assert!(program.contains("linear_gradient"), "{program}");
+    assert!(program.contains("#FFFFFF80"), "{program}");
+    assert!(program.contains(r#""opacity":0.5"#), "{program}");
+}
+
+#[test]
+fn insert_inherits_known_background_through_unfilled_bindings() {
+    let program = run_script_to_program(
+        r##"const root = I(null, {type: "frame", fill: [{type: "solid", color: "#FFFFFF"}]});
+const section = I(root, {type: "frame", name: "Transparent section"});
+const row = I(section, {type: "frame", name: "Row", layout: "horizontal"});
+I(row, {type: "text", content: "Inherited", fill: [{type: "solid", color: "#FAFAFA"}]});"##,
+    )
+    .expect("background metadata follows the binding chain");
+    let lines: Vec<&str> = program.lines().collect();
+
+    assert_eq!(lines.len(), 4, "{program}");
+    assert!(lines[3].contains(r##""color":"#17191D""##), "{program}");
+    assert!(!lines[3].contains("#FAFAFA"), "{program}");
+}
+
+#[test]
+fn thin_fill_width_divider_is_promoted_out_of_horizontal_parent() {
+    let program = run_script_to_program(
+        r#"const root = I(null, {type: "frame", name: "Page", layout: "vertical"});
+const header = I(root, {type: "frame", name: "Header", layout: "horizontal"});
+I(header, {type: "text", name: "Label", content: "Store"});
+I(header, {type: "rectangle", name: "HeaderDivider", width: "fill_container", height: 1});
+I(header, {type: "rectangle", name: "Tall Divider", width: "fill_container", height: 3});
+I(header, {type: "rectangle", name: "Rule", width: 120, height: 1});"#,
+    )
+    .expect("only the provable horizontal-row divider is promoted");
+    let lines: Vec<&str> = program.lines().collect();
+
+    assert_eq!(lines.len(), 6, "{program}");
+    assert!(lines[3].starts_with("b3=I(b0, "), "{program}");
+    assert!(lines[4].starts_with("b4=I(b1, "), "{program}");
+    assert!(lines[5].starts_with("b5=I(b1, "), "{program}");
+}
+
+#[test]
+fn raw_newline_inside_a_quoted_text_value_is_escaped_and_retried() {
+    let program =
+        run_script_to_program("I(null, {type: \"text\", content: \"first line\nsecond line\"});")
+            .expect("outer template newline is repaired");
+
+    assert!(
+        program.contains(r#""content":"first line\nsecond line""#),
+        "{program}"
+    );
 }
 
 #[test]
@@ -43,13 +286,26 @@ fn fence_wrapped_script_is_unwrapped() {
 }
 
 #[test]
-fn mid_run_throw_salvages_recorded_prefix() {
-    let program = run_script_to_program(
+fn mid_run_throw_rejects_the_recorded_prefix() {
+    let error = run_script_to_program(
         r#"I(null, {type: "frame"});
 I(b0_missing_binding_reference.oops, {});"#,
     )
-    .expect("salvage keeps the first line");
-    assert_eq!(program.lines().count(), 1);
+    .expect_err("a runtime throw must discard the recorded prefix")
+    .to_string();
+    assert!(error.contains("is not defined"), "{error}");
+}
+
+#[test]
+fn mutating_an_insert_binding_rejects_the_recorded_prefix() {
+    let error = run_script_to_program(
+        r#"const card = I(null, {type: "frame", name: "Product"});
+card.x = undefined;
+I(card, {type: "text", content: "Must not be partially applied"});"#,
+    )
+    .expect_err("I() returns an opaque string binding, not a mutable node")
+    .to_string();
+    assert!(error.contains("not an object"), "{error}");
 }
 
 #[test]
@@ -178,7 +434,7 @@ I(null, {type: "frame"});"#,
     .unwrap_err()
     .to_string();
     assert!(
-        err.contains("no I(...) operations"),
+        err.contains("no I(...), K(...), or U(...) operations"),
         "expected the empty-program error, got: {err}"
     );
 }
@@ -226,15 +482,73 @@ fn unrepairable_garbage_still_errors() {
 }
 
 #[test]
-fn unsupported_mutations_are_rejected_instead_of_silently_dropped() {
+fn update_records_an_operations_compatible_program_line() {
+    let program = run_script_to_program(
+        r#"U("node-42", {x: 10, name: "Updated", width: "fill_container"});"#,
+    )
+    .expect("U() is a supported repair script operation");
+
+    assert_eq!(
+        program,
+        r#"U("node-42", {"x":10,"name":"Updated","width":"fill_container"})"#
+    );
+}
+
+#[test]
+fn update_script_reaches_the_existing_batch_update_executor() {
+    use crate::{EditorCommand, McpTool, ToolOutcome};
+    use std::collections::BTreeMap;
+
+    let state = crate::test_fixtures::sample();
+    let tool = crate::batch_design_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert(
+        "script".to_string(),
+        r#"U("n11", {x: 80, name: "Updated title"});"#.to_string(),
+    );
+
+    match tool.call(&args) {
+        ToolOutcome::OkWithCommand(
+            _,
+            EditorCommand::UpdateNode {
+                node_id, x, name, ..
+            },
+        ) => {
+            assert_eq!(node_id.as_str(), "n11");
+            assert_eq!(x, Some(80));
+            assert_eq!(name.as_deref(), Some("Updated title"));
+        }
+        other => panic!("expected the existing U() executor command, got {other:?}"),
+    }
+}
+
+#[test]
+fn update_accepts_an_insert_binding_and_returns_the_target() {
+    let program = run_script_to_program(
+        r#"const root = I(null, {type: "frame", name: "Root"});
+const sameRoot = U(root, {x: 10});
+I(sameRoot, {type: "text", content: "Child"});"#,
+    )
+    .expect("U() records and remains chainable");
+    let lines: Vec<&str> = program.lines().collect();
+
+    assert_eq!(lines.len(), 3, "{program}");
+    assert!(lines[0].starts_with("b0=I(null, "), "{program}");
+    assert_eq!(lines[1], r#"U("b0", {"x":10})"#);
+    assert!(lines[2].starts_with("b1=I(b0, "), "{program}");
+}
+
+#[test]
+fn still_unsupported_mutations_are_rejected_instead_of_silently_dropped() {
     let error = run_script_to_program(
         r#"const root = I(null, {type: "frame", name: "Root"});
-U(root, {x: 10});"#,
+D(root);"#,
     )
-    .expect_err("U() must not look successful while doing nothing")
+    .expect_err("D() must not look successful while doing nothing")
     .to_string();
     assert!(error.contains("OP_SCRIPT_MODE_UNSUPPORTED"), "{error}");
-    assert!(error.contains("operations mode"), "{error}");
+    assert!(error.contains("direct QuickJS"), "{error}");
+    assert!(error.contains("I(), K(), and authorized U()"), "{error}");
 }
 
 #[test]

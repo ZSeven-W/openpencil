@@ -23,6 +23,7 @@ op-ai = { path = "../op-ai" }
 
 # Canonical hex-color parsing (dependency-free + wasm32-clean).
 op-util = { path = "../op-util" }
+base64 = "0.22"
 
 # render_backend.rs uses glam::Vec2 as Point2D (spec §5.2). Pinned to the
 # same version op-editor-ui uses so both crates resolve one glam.

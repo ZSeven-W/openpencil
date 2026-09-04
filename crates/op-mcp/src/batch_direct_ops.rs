@@ -338,8 +338,28 @@ fn parse_i32_json(
     let Some(value) = obj.get(key) else {
         return Ok(None);
     };
-    let Some(raw) = value.as_i64() else {
-        return Err(ProgramError::Syntax(format!("{key} must be an integer")));
+    // Coerce a clean numeric string (e.g. "158") to an i64, but reject strings with
+    // units or operators ("158px", "50%", etc). This tolerates GLM-5.3's occasional
+    // quoted numbers while still rejecting malformed values.
+    let raw = match value {
+        serde_json::Value::Number(n) => n.as_i64().ok_or_else(|| {
+            ProgramError::Syntax(format!("{key} must be an integer, got non-integer number"))
+        })?,
+        serde_json::Value::String(s) => {
+            let trimmed = s.trim();
+            // Reject strings with units or operators (keep numbers and leading minus only)
+            if !trimmed.chars().all(|c| c.is_ascii_digit() || c == '-') {
+                return Err(ProgramError::Syntax(format!(
+                    "{key} must be an integer, got string with non-numeric chars: {trimmed:?}"
+                )));
+            }
+            trimmed.parse::<i64>().map_err(|_| {
+                ProgramError::Syntax(format!("{key} numeric string out of range: {trimmed:?}"))
+            })?
+        }
+        _ => {
+            return Err(ProgramError::Syntax(format!("{key} must be an integer")));
+        }
     };
     i32::try_from(raw)
         .map(Some)

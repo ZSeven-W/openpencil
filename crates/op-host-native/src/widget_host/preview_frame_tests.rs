@@ -155,6 +155,34 @@ fn device_scroll_divides_by_fit_and_clamps() {
     assert_eq!(host.preview_scroll_y, 0.0);
 }
 
+/// Page-scroll contract: the device frame's scroll position is mirrored
+/// into the session so `$scroll` under the framed root tracks it.
+#[test]
+fn device_scroll_feeds_the_session_page_scroll() {
+    let _guard = test_lock();
+    let mut host = host_with_doc(phone_doc(2000));
+    host.last_viewport_w = 800.0;
+    host.last_viewport_h = 400.0;
+    assert!(host.enter_preview((800.0, 400.0)));
+    host.recompute_device_frame(800.0, 400.0);
+    let frame = host.preview_device_frame.as_ref().unwrap();
+    let (fit, max) = (frame.fit, scroll_max(frame));
+    assert!(max > 0.0, "a 2000 px screen overflows the frame");
+    assert_eq!(
+        host.preview.as_ref().unwrap().page_scroll(),
+        Some((0.0, max)),
+        "entering preview publishes max_offset before any scroll"
+    );
+    host.apply_device_scroll(-100.0);
+    let (offset, published_max) = host.preview.as_ref().unwrap().page_scroll().unwrap();
+    assert!(
+        (offset - 100.0 / fit).abs() < 0.5,
+        "offset mirrors preview_scroll_y"
+    );
+    assert_eq!(published_max, max);
+    assert_eq!(offset, host.preview_scroll_y);
+}
+
 #[test]
 fn dead_zone_press_leaves_no_stale_capture() {
     let _guard = test_lock();

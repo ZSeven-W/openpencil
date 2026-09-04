@@ -78,6 +78,7 @@ fn admitted_pair_with_expiry(
         let mut connection =
             accept_secure_tcp(stream, &owner_key, &server_prelude(), config).unwrap();
         let local = AdmissionHello::new(b"owner-ticket".to_vec(), JoinIntent::New).unwrap();
+        let admission_now = Instant::now();
         connection
             .exchange_admission_responder(
                 &local,
@@ -85,11 +86,11 @@ fn admitted_pair_with_expiry(
                 ISSUER,
                 PeerIdentityPolicy::SameAccount { subject: SUBJECT },
                 NOW_UNIX_MS,
-                Instant::now(),
+                admission_now,
             )
             .unwrap();
         connection.authorize_remote(Role::Editor).unwrap();
-        connection.activate(Instant::now()).unwrap();
+        connection.activate(admission_now).unwrap();
         connection
     });
 
@@ -101,6 +102,7 @@ fn admitted_pair_with_expiry(
     )
     .unwrap();
     let local = AdmissionHello::new(b"guest-ticket".to_vec(), JoinIntent::New).unwrap();
+    let admission_now = Instant::now();
     guest
         .exchange_admission_initiator(
             &local,
@@ -108,11 +110,11 @@ fn admitted_pair_with_expiry(
             ISSUER,
             PeerIdentityPolicy::SameAccount { subject: SUBJECT },
             NOW_UNIX_MS,
-            Instant::now(),
+            admission_now,
         )
         .unwrap();
     guest.authorize_remote(Role::Owner).unwrap();
-    guest.activate(Instant::now()).unwrap();
+    guest.activate(admission_now).unwrap();
     (server.join().unwrap(), guest)
 }
 

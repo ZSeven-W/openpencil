@@ -19,6 +19,10 @@ use op_editor_core::{EditorState, NodeId};
 use crate::layout_scene::{LayoutScene, ScenePage};
 use crate::{Point2D, Rect};
 
+pub use super::drag_flow_index::{
+    build_canvas_drop_index, plan_drag_commit_indexed, CanvasDropIndex,
+};
+
 /// Read-phase summary of one dragged node — collected before any
 /// mutation so no document / scene borrow survives into the mutators.
 pub struct DragCommitPlan {
@@ -37,6 +41,9 @@ pub struct LiveDragPreview {
     /// Bounds the drag overlay should ghost at, when the node stayed
     /// inside its current auto-layout parent.
     pub overlay_bounds: Option<Rect>,
+    /// Scene snapshot captured only when the preview is about to mutate
+    /// the document. Hosts use it to animate sibling reflow.
+    pub before_scene: Option<LayoutScene>,
 }
 
 struct ContainerDropCandidate {
@@ -195,23 +202,74 @@ pub fn apply_live_drag_preview(
         state.editor_ui.canvas_drop_indicator = None;
         return None;
     };
-    let current_parent = parent_of(state.active_children(), id);
+    let (current_parent, current_index) =
+        op_editor_core::walkers::find_parent_and_index(state.active_children(), id)?;
+    Some(apply_live_drag_preview_plan(
+        state,
+        scene,
+        id,
+        current_parent,
+        current_index,
+        plan,
+    ))
+}
+
+/// Single-selection live preview backed by a gesture-scoped drop index.
+pub fn apply_live_drag_preview_indexed(
+    state: &mut EditorState,
+    scene: &LayoutScene,
+    index: &CanvasDropIndex,
+    id: &NodeId,
+    total_dx: f64,
+    total_dy: f64,
+) -> Option<LiveDragPreview> {
+    let Some(plan) = plan_drag_commit_indexed(scene, index, total_dx, total_dy) else {
+        state.editor_ui.canvas_drop_indicator = None;
+        return None;
+    };
+    Some(apply_live_drag_preview_plan(
+        state,
+        scene,
+        id,
+        index.current_parent().cloned(),
+        index.current_index(),
+        plan,
+    ))
+}
+
+fn apply_live_drag_preview_plan(
+    state: &mut EditorState,
+    scene: &LayoutScene,
+    id: &NodeId,
+    current_parent: Option<NodeId>,
+    current_index: usize,
+    plan: DragCommitPlan,
+) -> LiveDragPreview {
     let bounds = plan.dropped_bounds;
+    let planned_indicator = plan.indicator.clone();
     let mut indicator = None;
     let mut mutated = false;
     let mut overlay_bounds = None;
+    let mut before_scene = None;
     if let Some(target) = plan.target.clone() {
-        match &target {
-            DragDropTarget::Container { parent_id, .. }
-                if current_parent.as_ref() == Some(parent_id) =>
-            {
+        match target {
+            DragDropTarget::Container {
+                ref parent_id,
+                index,
+                ..
+            } if current_parent.as_ref() == Some(parent_id) => {
                 overlay_bounds = Some(bounds);
-                mutated |= apply_drag_commit(state, id, plan);
+                if current_index != index {
+                    before_scene = Some(scene.clone());
+                    mutated |= apply_drag_commit(state, id, plan);
+                }
             }
             DragDropTarget::PageRoot { .. } if current_parent.is_some() => {
+                before_scene = Some(scene.clone());
                 mutated |= apply_drag_commit(state, id, plan);
             }
             DragDropTarget::Container { .. } if current_parent.is_some() => {
+                before_scene = Some(scene.clone());
                 mutated |= state.move_node_to_drop_target(
                     id,
                     DragDropTarget::PageRoot { index: 0 },
@@ -220,20 +278,21 @@ pub fn apply_live_drag_preview(
                     bounds.size.x as f64,
                     bounds.size.y as f64,
                 );
-                indicator = plan.indicator;
+                indicator = planned_indicator;
             }
             _ => {
-                indicator = plan.indicator;
+                indicator = planned_indicator;
             }
         }
     }
     if state.editor_ui.canvas_drop_indicator != indicator {
         state.editor_ui.canvas_drop_indicator = indicator;
     }
-    Some(LiveDragPreview {
+    LiveDragPreview {
         mutated,
         overlay_bounds,
-    })
+        before_scene,
+    }
 }
 
 /// Scene ids the incremental drag patch may translate: exactly what

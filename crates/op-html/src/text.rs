@@ -8,7 +8,6 @@ use jian_ops_schema::style::{
     FontStyleKind as SegmentFontStyle, PenFill, SolidFillBody, StyledTextSegment,
 };
 
-use crate::color::parse_css_color;
 use crate::css::cascade::{compute_style_for_viewport, ComputedStyle};
 use crate::dom::{DomElement, DomNode};
 use crate::length::{parse_length, CssLength, LengthCtx};
@@ -25,10 +24,14 @@ mod children;
 
 pub(crate) use children::map_children;
 
+#[path = "text_style.rs"]
+mod style;
+use style::{segment_style, sync_single_run_style};
+
 #[rustfmt::skip]
 pub fn is_inline_tag(tag: &str) -> bool {
     matches!(tag, "a" | "b" | "strong" | "i" | "em" | "u" | "s" | "del" | "strike"
-        | "span" | "code" | "small" | "sub" | "sup" | "label" | "br" | "mark")
+        | "span" | "code" | "small" | "sub" | "sup" | "label" | "br" | "mark" | "picture")
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -127,13 +130,35 @@ struct RawSegment {
     forced_break: bool,
 }
 
+#[derive(Clone, Copy)]
+struct InlineTextScope<'a> {
+    context: InlineTextContext,
+    fill_override: Option<&'a str>,
+}
+
+impl<'a> InlineTextScope<'a> {
+    fn child(self, style: &ComputedStyle) -> Self {
+        Self {
+            context: self.context.child(style),
+            ..self
+        }
+    }
+}
+
 pub(crate) fn build_generated_text_node(
     context: &mut MapCtx<'_>,
     text: &str,
     style: &ComputedStyle,
+    text_fill_override: Option<&str>,
 ) -> Option<PenNode> {
     let node = DomNode::Text(text.to_string());
-    build_text_node_in_path(context, &[children::InlineRunItem::Dom(&node)], style, &[])
+    build_text_node_in_path(
+        context,
+        &[children::InlineRunItem::Dom(&node)],
+        style,
+        &[],
+        text_fill_override,
+    )
 }
 
 fn build_text_node_in_path(
@@ -141,15 +166,23 @@ fn build_text_node_in_path(
     run: &[children::InlineRunItem<'_>],
     block_style: &ComputedStyle,
     path: &[&DomElement],
+    text_fill_override: Option<&str>,
 ) -> Option<PenNode> {
     if context.node_count >= crate::MAX_OUTPUT_NODES {
         context.warn_once(ImportWarning::NodeLimitMapping);
         return None;
     }
-    let base_style = segment_style(block_style, nearest_href(path));
+    let base_style = segment_style(block_style, nearest_href(path), text_fill_override);
     let base_context = InlineTextContext::root(block_style);
-    let raw_segments =
-        children::collect_run_segments(run, context, path, block_style, &base_style, base_context);
+    let raw_segments = children::collect_run_segments(
+        run,
+        context,
+        path,
+        block_style,
+        &base_style,
+        base_context,
+        text_fill_override,
+    );
     let mut segments = normalize_segments(raw_segments);
     if segments.is_empty() {
         return None;
@@ -209,9 +242,7 @@ fn build_text_node_in_path(
         text_growth: text_box.growth,
         underline: decoration(block_style, "underline").then_some(true),
         strikethrough: decoration(block_style, "line-through").then_some(true),
-        fill: block_style
-            .get("color")
-            .and_then(parse_css_color)
+        fill: crate::mapper::text_paint_color(block_style, text_fill_override)
             .map(|color| vec![solid_fill(color)]),
         effects,
         state: None,
@@ -237,14 +268,14 @@ fn collect_segments(
     path: &[&DomElement],
     parent_style: &ComputedStyle,
     inherited: &SegStyle,
-    inherited_context: InlineTextContext,
+    scope: InlineTextScope<'_>,
     segments: &mut Vec<RawSegment>,
 ) {
     match node {
         DomNode::Text(text) => segments.push(RawSegment {
             text: text.clone(),
             style: inherited.clone(),
-            context: inherited_context,
+            context: scope.context,
             forced_break: false,
         }),
         DomNode::Element(element) => {
@@ -267,13 +298,13 @@ fn collect_segments(
             } else {
                 inherited.href.clone()
             };
-            let style = segment_style(&computed, href.clone());
-            let child_context = inherited_context.child(&computed);
+            let style = segment_style(&computed, href.clone(), scope.fill_override);
+            let child_scope = scope.child(&computed);
             if element.tag == "br" {
                 segments.push(RawSegment {
                     text: String::new(),
                     style,
-                    context: child_context,
+                    context: child_scope.context,
                     forced_break: true,
                 });
                 return;
@@ -284,7 +315,7 @@ fn collect_segments(
                 &computed,
                 crate::css::selectors::PseudoElement::Before,
                 href.clone(),
-                child_context,
+                child_scope,
                 segments,
             );
             for child in &element.children {
@@ -294,7 +325,7 @@ fn collect_segments(
                     &child_path,
                     &computed,
                     &style,
-                    child_context,
+                    child_scope,
                     segments,
                 );
             }
@@ -304,7 +335,7 @@ fn collect_segments(
                 &computed,
                 crate::css::selectors::PseudoElement::After,
                 href,
-                child_context,
+                child_scope,
                 segments,
             );
         }
@@ -317,54 +348,6 @@ fn nearest_href(path: &[&DomElement]) -> Option<String> {
             .then(|| element.attr("href").map(str::to_string))
             .flatten()
     })
-}
-
-fn segment_style(style: &ComputedStyle, href: Option<String>) -> SegStyle {
-    SegStyle {
-        weight: parse_weight(style.get("font-weight")),
-        style: match style.get("font-style") {
-            Some("italic" | "oblique") => Some(SegmentFontStyle::Italic),
-            Some("normal") => Some(SegmentFontStyle::Normal),
-            _ => None,
-        },
-        underline: decoration(style, "underline").then_some(true),
-        strike: decoration(style, "line-through").then_some(true),
-        fill: style.get("color").and_then(parse_css_color),
-        href,
-        font_size: Some(style.font_size as f32),
-        font_family: style.get("font-family").map(str::to_string),
-    }
-}
-
-/// Keep a single rich-text run's effective typography on the node as well.
-/// Layout and fallback render paths consult node-level fields, while the rich
-/// text painter consults the segment, so a one-run node must agree at both
-/// levels. Multiple-run nodes deliberately retain their common block style.
-fn sync_single_run_style(text: &mut TextNode, style: &SegStyle) {
-    if let Some(family) = style.font_family.as_ref() {
-        text.font_family = Some(family.clone());
-    }
-    if let Some(size) = style.font_size {
-        text.font_size = Some(f64::from(size));
-    }
-    if let Some(weight) = style.weight {
-        text.font_weight = Some(FontWeight::Number(weight));
-    }
-    if let Some(font_style) = style.style.as_ref() {
-        text.font_style = Some(match font_style {
-            SegmentFontStyle::Normal => TextFontStyle::Normal,
-            SegmentFontStyle::Italic => TextFontStyle::Italic,
-        });
-    }
-    if let Some(fill) = style.fill.as_ref() {
-        text.fill = Some(vec![solid_fill(fill.clone())]);
-    }
-    if style.underline.is_some() {
-        text.underline = style.underline;
-    }
-    if style.strike.is_some() {
-        text.strikethrough = style.strike;
-    }
 }
 
 fn push_segment(segments: &mut Vec<Segment>, text: String, style: SegStyle) {
@@ -560,6 +543,12 @@ mod tests {
             0,
             crate::css::cascade::StyleOrigin::UserAgent,
         );
+        // These tests exercise text-run shaping, not browser default block
+        // spacing. Keep the authored nodes direct so margin-wrapper structure
+        // is covered only by the dedicated mapper margin tests.
+        let (reset_margins, _) =
+            crate::css::cascade::parse_stylesheet("p,h1,h2,h3,h4,h5,h6,ul,ol,hr{margin:0}", 999);
+        rules.extend(reset_margins);
         let (author, _) = crate::css::cascade::parse_stylesheet(css, 1000);
         rules.extend(author);
         let options = crate::HtmlImportOptions::default();

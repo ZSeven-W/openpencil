@@ -1,3 +1,4 @@
+use crate::css::cascade_display::canonical_display_serialization;
 use crate::css::cascade_shared::{is_ident, matching, top_level_delimiter};
 use crate::css::declarations::{parse_declarations, resolve_deferred_shorthand, Declaration};
 use crate::css::selectors::{matches, matches_for_pseudo, specificity, PseudoElement, Selector};
@@ -10,13 +11,16 @@ use std::collections::{BTreeMap, BTreeSet};
 mod cascade_initial;
 use cascade_initial::initial_value;
 
+#[path = "cascade_logical.rs"]
+mod cascade_logical;
+
 pub use super::cascade_parser::{
     parse_stylesheet, parse_stylesheet_for_viewport, parse_stylesheet_for_viewport_with_origin,
     parse_stylesheet_with_origin, StylesheetParser,
 };
 
 pub const UA_STYLESHEET: &str = concat!(
-    "body{font-size:16px;color:#111111}[hidden]{display:none}h1{font-size:32px;font-weight:700;margin:21px 0}",
+    "[hidden]{display:none}body{margin:8px}h1{font-size:32px;font-weight:700;margin:21px 0}",
     "h2{font-size:24px;font-weight:700;margin:20px 0}h3{font-size:19px;font-weight:700;margin:18px 0}",
     "h4{font-size:16px;font-weight:700;margin:21px 0}h5{font-size:13px;font-weight:700;margin:22px 0}",
     "h6{font-size:11px;font-weight:700;margin:24px 0}p{margin:16px 0}ul,ol{margin:16px 0;padding:0 0 0 40px}",
@@ -128,6 +132,7 @@ impl Ord for Priority {
 
 #[derive(Clone, Debug)]
 struct Candidate {
+    target: String,
     priority: Priority,
     value: String,
     deferred_shorthand: Option<String>,
@@ -137,6 +142,7 @@ struct Candidate {
 
 #[derive(Clone, Debug)]
 struct CascadedValue {
+    target: String,
     value: String,
     deferred_shorthand: Option<String>,
 }
@@ -146,6 +152,7 @@ fn cascaded<F>(
     rules: &[StyleRule],
     mut selector_matches: F,
     inline: bool,
+    logical_rtl: Option<bool>,
 ) -> BTreeMap<String, CascadedValue>
 where
     F: FnMut(&Selector, &[&DomElement]) -> bool,
@@ -189,6 +196,10 @@ where
                 order,
             );
         }
+        cascade_logical::push_direction_hint(&mut candidates, path);
+    }
+    if let Some(rtl) = logical_rtl {
+        cascade_logical::remap_margin_candidates(&mut candidates, rtl);
     }
     candidates
         .into_iter()
@@ -218,6 +229,7 @@ fn push_candidate(
         .entry(declaration.name.clone())
         .or_default()
         .push(Candidate {
+            target: declaration.name.clone(),
             priority,
             value: declaration.value.clone(),
             deferred_shorthand: declaration.deferred_shorthand.clone(),
@@ -300,6 +312,7 @@ fn resolve_candidate(mut candidates: Vec<Candidate>) -> Option<CascadedValue> {
             }
             _ => {
                 return Some(CascadedValue {
+                    target: candidate.target,
                     value: candidate.value,
                     deferred_shorthand: candidate.deferred_shorthand,
                 });
@@ -327,7 +340,15 @@ pub fn compute_style_for_viewport(
     viewport_w: f64,
     viewport_h: f64,
 ) -> ComputedStyle {
-    let raw = cascaded(path, rules, matches, true);
+    let preliminary = cascaded(path, rules, matches, true, None);
+    let direction = compute_raw(preliminary, parent, root_font_size, viewport_w, viewport_h);
+    let raw = cascaded(
+        path,
+        rules,
+        matches,
+        true,
+        Some(direction.get("direction") == Some("rtl")),
+    );
     compute_raw(raw, parent, root_font_size, viewport_w, viewport_h)
 }
 
@@ -350,11 +371,20 @@ pub fn compute_pseudo_style_for_viewport(
     viewport_w: f64,
     viewport_h: f64,
 ) -> ComputedStyle {
+    let preliminary = cascaded(
+        path,
+        rules,
+        |selector, path| matches_for_pseudo(selector, path, pseudo),
+        false,
+        None,
+    );
+    let direction = compute_raw(preliminary, parent, root_font_size, viewport_w, viewport_h);
     let raw = cascaded(
         path,
         rules,
         |selector, path| matches_for_pseudo(selector, path, pseudo),
         false,
+        Some(direction.get("direction") == Some("rtl")),
     );
     compute_raw(raw, parent, root_font_size, viewport_w, viewport_h)
 }
@@ -398,7 +428,25 @@ fn compute_raw(
             props.insert(name.clone(), value);
         }
     }
-    for (name, cascaded) in raw.iter().filter(|(name, _)| !name.starts_with("--")) {
+    if let Some(cascaded) = raw.get("direction") {
+        let resolved = resolve_vars(
+            &cascaded.value,
+            &custom_source,
+            &mut Vec::new(),
+            &mut invalid,
+            0,
+        );
+        apply_property(
+            &mut props,
+            "direction",
+            resolved.as_deref().unwrap_or("unset"),
+            parent,
+        );
+    }
+    for (name, cascaded) in raw
+        .iter()
+        .filter(|(name, _)| !name.starts_with("--") && name.as_str() != "direction")
+    {
         let resolved = resolve_vars(
             &cascaded.value,
             &custom_source,
@@ -408,7 +456,7 @@ fn compute_raw(
         )
         .filter(|value| !value.trim().is_empty())
         .and_then(|value| match cascaded.deferred_shorthand.as_deref() {
-            Some(shorthand) => resolve_deferred_shorthand(shorthand, name, &value),
+            Some(shorthand) => resolve_deferred_shorthand(shorthand, &cascaded.target, &value),
             None => Some(value),
         });
         apply_property(
@@ -466,6 +514,20 @@ fn apply_property(
 ) {
     let keyword = value.trim().to_ascii_lowercase();
     let inherit = || parent.and_then(|style| style.props.get(name)).cloned();
+    if name == "direction" {
+        let direction = match keyword.as_str() {
+            "ltr" | "rtl" => keyword,
+            "initial" => "ltr".to_string(),
+            "inherit" | "unset" | "revert" | "revert-layer" => {
+                inherit().unwrap_or_else(|| "ltr".to_string())
+            }
+            // Invalid computed values are discarded. Since `direction` is
+            // inherited, the parent's value (or the initial LTR) resurfaces.
+            _ => inherit().unwrap_or_else(|| "ltr".to_string()),
+        };
+        props.insert(name.to_string(), direction);
+        return;
+    }
     let selected = match keyword.as_str() {
         "inherit" => inherit().or_else(|| initial_value(name).map(str::to_string)),
         "initial" => initial_value(name).map(str::to_string),
@@ -475,7 +537,13 @@ fn apply_property(
         "unset" | "revert" | "revert-layer" => initial_value(name).map(str::to_string),
         _ => Some(value.trim().to_string()),
     };
-    if let Some(value) = selected {
+    if let Some(mut value) = selected {
+        if name == "display" {
+            value = canonical_display_serialization(&value)
+                .or_else(|| initial_value("display"))
+                .unwrap_or("inline")
+                .to_string();
+        }
         props.insert(name.to_string(), value);
     } else {
         props.remove(name);
@@ -698,6 +766,7 @@ const INHERITED_PROPERTIES: &[&str] = &[
     "tab-size",
     "text-align",
     "text-align-last",
+    "text-fill-color",
     "text-indent",
     "text-justify",
     "text-orientation",

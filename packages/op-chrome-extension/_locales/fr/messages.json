@@ -4,36 +4,111 @@
     "description": "Extension name shown in Chrome."
   },
   "extDescription": {
-    "message": "Capturez la page telle qu’elle est rendue et importez-la dans OpenPencil sous forme de nœuds de design modifiables.",
+    "message": "Capturez les pages en nœuds de design OpenPencil modifiables et extrayez en un clic un guide de système de design design.md.",
     "description": "Extension description shown in Chrome."
   },
-  "captureButton": { "message": "Capturer la page entière" },
-  "pickButton": { "message": "Capturer un élément" },
-  "downloadButton": { "message": "Télécharger le .op" },
-  "pickHint": { "message": "Cliquez sur un élément pour le capturer" },
-  "pickCancelHint": { "message": "Échap pour annuler" },
-  "endpointLabel": { "message": "Adresse OpenPencil" },
+  "captureButton": {
+    "message": "Capturer la page entière"
+  },
+  "pickButton": {
+    "message": "Capturer un élément"
+  },
+  "downloadButton": {
+    "message": "Télécharger le .op"
+  },
+  "designButton": {
+    "message": "Extraire design.md"
+  },
+  "statusDesignWorking": {
+    "message": "Collecte d’éléments de style désidentifiés de la page et interrogation d’OpenPencil AI…"
+  },
+  "statusDesignSmartSuccess": {
+    "message": "design.md a été généré et téléchargé avec l’IA configurée."
+  },
+  "statusDesignFallbackSuccess": {
+    "message": "L’IA est indisponible ; design.md a été généré et téléchargé avec le repli local déterministe : $1"
+  },
+  "designFallbackPairing": {
+    "message": "OpenPencil n’a pas autorisé cette extension à utiliser la génération par IA ; le repli local a été utilisé."
+  },
+  "designFallbackOffline": {
+    "message": "OpenPencil à l’adresse $1 est inaccessible."
+  },
+  "designFallbackUnsupported": {
+    "message": "Cette version d’OpenPencil ne prend pas en charge la génération intelligente de design.md."
+  },
+  "designFallbackError": {
+    "message": "Échec de la génération intelligente : $1"
+  },
+  "designBusy": {
+    "message": "Une autre capture ou action design.md est déjà en cours."
+  },
+  "designEvidenceSummary": {
+    "message": "$1 éléments visibles ont été échantillonnés."
+  },
+  "designEvidenceTruncated": {
+    "message": "$1 éléments visibles ont été échantillonnés ; la collecte s’est arrêtée à sa limite de sécurité."
+  },
+  "designFallbackModel": {
+    "message": "Aucun modèle d’IA utilisable n’est configuré."
+  },
+  "errorDesign": {
+    "message": "Échec de la génération de design.md : $1"
+  },
+  "pickHint": {
+    "message": "Cliquez sur un élément pour le capturer"
+  },
+  "pickCancelHint": {
+    "message": "Échap pour annuler"
+  },
+  "endpointLabel": {
+    "message": "Adresse OpenPencil"
+  },
   "endpointHint": {
     "message": "Application de bureau : Paramètres → MCP → démarrer le serveur (port 3100 par défaut)."
   },
-  "languageLabel": { "message": "Langue" },
-  "statusIdle": { "message": "Prêt." },
-  "statusCapturing": { "message": "Capture de la page en cours…" },
-  "statusTransferring": { "message": "Transfert de la capture ($1)…" },
-  "statusSending": { "message": "Envoi vers OpenPencil…" },
-  "statusImported": { "message": "$1 nœuds importés dans OpenPencil." },
-  "statusSendingAccount": { "message": "Envoi vers votre compte OpenPencil…" },
-  "statusSentToAccount": { "message": "Envoyé vers votre compte OpenPencil : $1" },
+  "languageLabel": {
+    "message": "Langue"
+  },
+  "statusIdle": {
+    "message": "Prêt."
+  },
+  "statusCapturing": {
+    "message": "Capture de la page en cours…"
+  },
+  "statusTransferring": {
+    "message": "Transfert de la capture ($1)…"
+  },
+  "statusSending": {
+    "message": "Envoi vers OpenPencil…"
+  },
+  "statusImported": {
+    "message": "$1 nœuds importés dans OpenPencil."
+  },
+  "statusSendingAccount": {
+    "message": "Envoi vers votre compte OpenPencil…"
+  },
+  "statusSentToAccount": {
+    "message": "Envoyé vers votre compte OpenPencil : $1"
+  },
   "statusSentLocalFallback": {
     "message": "Votre session de compte avait expiré : l'envoi est allé vers l'OpenPencil de cet ordinateur — $1 nœuds importés."
   },
-  "statusDownloaded": { "message": "$1 enregistré." },
-  "statusPicked": { "message": "$1 capturé. $2" },
-  "statusPickCancelled": { "message": "Capture de l’élément annulée." },
-  "statusTruncated": {
-    "message": "Remarque : la page a atteint la limite de 20 000 nœuds de l’extracteur, la capture est donc partielle."
+  "statusDownloaded": {
+    "message": "$1 enregistré."
   },
-  "errorNoTab": { "message": "Aucun onglet actif." },
+  "statusPicked": {
+    "message": "$1 capturé. $2"
+  },
+  "statusPickCancelled": {
+    "message": "Capture de l’élément annulée."
+  },
+  "statusTruncated": {
+    "message": "Remarque : la page a atteint la limite de 40 000 nœuds de l’extracteur, la capture est donc partielle."
+  },
+  "errorNoTab": {
+    "message": "Aucun onglet actif."
+  },
   "errorRestrictedTab": {
     "message": "Chrome n’autorise pas les extensions à s’exécuter sur cette page. Ouvrez une page http(s) normale et réessayez."
   },
@@ -47,7 +122,7 @@
     "message": "La capture a été perdue pendant le transfert (la page a probablement changé). Réessayez."
   },
   "errorEndpoint": {
-    "message": "L’adresse doit être une adresse de bouclage avec un port — 127.0.0.1:3100, localhost:3100 ou [::1]:3100."
+    "message": "L’adresse doit être une adresse de bouclage avec un port — 127.0.0.1:3100 ou localhost:3100."
   },
   "errorOffline": {
     "message": "OpenPencil est injoignable à l’adresse $1. Lancez l’application de bureau et démarrez Paramètres → MCP → serveur, ou exécutez : openpencil-desktop --serve-web 3100"
@@ -61,8 +136,15 @@
   "errorTooLarge": {
     "message": "Cette capture dépasse $1 Mo, ce que la route de capture d’OpenPencil refuse. Utilisez « Télécharger le .op », puis ouvrez le fichier dans OpenPencil"
   },
-  "errorImport": { "message": "OpenPencil a refusé la capture : $1" },
-  "errorDownload": { "message": "Échec du téléchargement : $1" },
+  "errorAccountTooLarge": {
+    "message": "Cette capture dépasse $1 Mo, ce que la boîte de réception du compte refuse. Envoyez-la plutôt vers cet appareil."
+  },
+  "errorImport": {
+    "message": "OpenPencil a refusé la capture : $1"
+  },
+  "errorDownload": {
+    "message": "Échec du téléchargement : $1"
+  },
   "errorCoreMissing": {
     "message": "Cette extension n’a pas été compilée. Exécutez packages/op-chrome-extension/scripts/build-wasm.sh, puis cliquez sur Actualiser sur la fiche de l’extension. ($1)"
   },
@@ -72,16 +154,24 @@
   "errorPickUnavailable": {
     "message": "La capture d’élément est indisponible : le service worker de l’extension n’est pas en cours d’exécution. Consultez la fiche de l’extension dans chrome://extensions pour voir l’erreur, réexécutez build-wasm.sh, puis cliquez sur Actualiser. ($1)"
   },
-  "accountSignIn": { "message": "Se connecter" },
-  "accountSignOut": { "message": "Se déconnecter" },
+  "accountSignIn": {
+    "message": "Se connecter"
+  },
+  "accountSignOut": {
+    "message": "Se déconnecter"
+  },
   "accountSignInOpened": {
     "message": "Terminez la connexion dans la page qui vient de s'ouvrir, puis rouvrez cette fenêtre."
   },
-  "accountSignedOut": { "message": "Vous êtes déconnecté de votre compte OpenPencil." },
+  "accountSignedOut": {
+    "message": "Vous êtes déconnecté de votre compte OpenPencil."
+  },
   "accountSignOutManual": {
     "message": "Terminez la déconnexion dans la page de compte qui vient de s'ouvrir."
   },
-  "accountUnavailable": { "message": "Impossible de joindre votre compte OpenPencil : $1" },
+  "accountUnavailable": {
+    "message": "Impossible de joindre votre compte OpenPencil : $1"
+  },
   "errorAccountSignedOut": {
     "message": "Votre session de compte OpenPencil a expiré. Reconnectez-vous, puis réessayez."
   },
@@ -100,14 +190,28 @@
   "errorAccountRateLimitedSeconds": {
     "message": "Trop d'envois vers votre compte. Réessayez dans environ $1 secondes."
   },
-  "errorAccountRejected": { "message": "Votre compte OpenPencil a refusé la capture : $1" },
+  "errorAccountRejected": {
+    "message": "Votre compte OpenPencil a refusé la capture : $1"
+  },
   "errorAccountUnavailable": {
     "message": "Votre compte OpenPencil ne peut pas recevoir de capture pour l'instant ($1). Réessayez plus tard, ou envoyez vers l'OpenPencil de cet ordinateur."
   },
-  "regionLabel": { "message": "Région" },
-  "regionCn": { "message": "Chine" },
-  "regionGlobal": { "message": "International" },
-  "deliveryLabel": { "message": "Envoyer vers" },
-  "deliveryLocal": { "message": "OpenPencil sur cet ordinateur" },
-  "deliveryAccount": { "message": "Mon compte OpenPencil" }
+  "regionLabel": {
+    "message": "Région"
+  },
+  "regionCn": {
+    "message": "Chine"
+  },
+  "regionGlobal": {
+    "message": "International"
+  },
+  "deliveryLabel": {
+    "message": "Envoyer vers"
+  },
+  "deliveryLocal": {
+    "message": "OpenPencil sur cet ordinateur"
+  },
+  "deliveryAccount": {
+    "message": "Mon compte OpenPencil"
+  }
 }

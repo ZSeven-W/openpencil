@@ -35,7 +35,7 @@ impl DesktopApp {
         }
         changed |= self.reconcile_mcp_server_from_settings();
         if any_cli_enabled {
-            changed |= self.reconcile_mcp_cli_integrations(Some(([false; 12], port)));
+            changed |= self.reconcile_mcp_cli_integrations(Some(([false; 13], port)));
         }
         if self.mcp_server_active() {
             changed |= self.request_redraw(false);
@@ -167,10 +167,20 @@ impl DesktopApp {
     }
 
     pub(crate) fn poll_mcp_server(&mut self) -> bool {
-        let Some(server) = self.mcp_server.as_mut() else {
-            return false;
+        let (outcome, pending_design_md) = {
+            let Some(server) = self.mcp_server.as_mut() else {
+                return false;
+            };
+            let outcome = server.pump(self.host.editor_state_mut());
+            let pending_design_md = server.take_pending_design_md_request();
+            (outcome, pending_design_md)
         };
-        let outcome = server.pump(self.host.editor_state_mut());
+        // Provider execution is deliberately outside the UI/server borrow and
+        // on its own worker. This request contains bounded extension evidence,
+        // not a snapshot of (or mutation to) the live document.
+        if let Some(request) = pending_design_md {
+            self.start_mcp_design_md_request(request);
+        }
         if outcome.layout_dirty {
             self.host.mark_editor_state_dirty();
         }
@@ -226,7 +236,7 @@ impl DesktopApp {
 
     pub(crate) fn reconcile_mcp_cli_integrations(
         &mut self,
-        before: Option<([bool; 12], u16)>,
+        before: Option<([bool; 13], u16)>,
     ) -> bool {
         let Some((before_flags, before_port)) = before else {
             return false;

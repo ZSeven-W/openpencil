@@ -11,3 +11,6 @@ name = "op_ai"
 path = "src/lib.rs"
 
 [dependencies]
+# The only dependency: `chat_sse`'s payload parsing. Kept workspace-pinned
+# and wasm32-clean; real transports stay host-side.
+serde_json = { workspace = true }

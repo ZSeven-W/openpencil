@@ -252,7 +252,13 @@ fn run_inner(
             false,
         ),
         GuestConnectionRoute::Relay(request) => {
-            let running = GuestRelayRuntime::start(request, Arc::clone(&key), Arc::clone(&local))?;
+            let Some(running) =
+                GuestRelayRuntime::start(request, Arc::clone(&key), Arc::clone(&local), &|| {
+                    cancellation.requested()
+                })?
+            else {
+                return Ok(());
+            };
             let target = relay_guest_target(&running);
             relay_runtime = Some(running);
             (target.0, target.1, target.2, true)
@@ -370,7 +376,7 @@ fn run_inner(
     }
     let budget = SharedQueueBudget::new(config.connections.global_queued_bytes)
         .map_err(|_| CollabRuntimeFailure::ResourceLimit)?;
-    let failure = drive_guest(
+    let mut failure = drive_guest(
         connection,
         budget,
         DriverIdentity {
@@ -386,6 +392,10 @@ fn run_inner(
         },
         sink,
     );
+    let relay_failure = relay_runtime
+        .as_ref()
+        .and_then(GuestRelayRuntime::terminal_failure);
+    failure = prefer_guest_failure(failure, relay_failure);
     let _ = sink.send_terminal(TerminalNetworkEvent::ConnectionClosed {
         connection: connection_id,
         failure,
@@ -393,6 +403,16 @@ fn run_inner(
     });
     drop(relay_runtime);
     Ok(())
+}
+
+fn prefer_guest_failure(
+    inner: Option<CollabRuntimeFailure>,
+    relay: Option<CollabRuntimeFailure>,
+) -> Option<CollabRuntimeFailure> {
+    match inner {
+        None | Some(CollabRuntimeFailure::Transport) => relay.or(inner),
+        terminal_or_specific => terminal_or_specific,
+    }
 }
 
 fn relay_join_failure(error: &RuntimeError, relay_join: bool) -> CollabRuntimeFailure {

@@ -99,6 +99,8 @@ mod theme_preset_io;
 mod web_ai_credentials;
 #[cfg(feature = "canvaskit")]
 mod web_ai_transport;
+#[cfg(feature = "canvaskit")]
+mod web_builtin_model_discovery;
 // Web Iconify bridge — drains the icon picker's remote-search request directly
 // against api.iconify.design (CORS-open, same as TS).
 #[cfg(feature = "canvaskit")]
@@ -154,6 +156,23 @@ mod font_store_idb;
 // build has no family-name introspection).
 #[cfg(feature = "canvaskit")]
 mod font_meta;
+// Byte-level `fvar` default-weight fix — the web stand-in for the skia
+// variation instancing `jian_skia::bundled_fonts` does on native.
+#[cfg(feature = "canvaskit")]
+mod vf_normalize;
+// Mount-time fetch + registration of the app-shipped design fonts the desktop
+// binary embeds. The browser has none, so without this a document using a
+// bundled family renders a fallback and reports the family as missing.
+#[cfg(feature = "canvaskit")]
+mod bundled_fonts_web;
+// Canvas Preview (Play) mode — instantiates `PreviewSession` with
+// `canvaskit::BrowserMeasure`, the SAME Canvas2D `measureText` path the design
+// canvas already lays out through. Preview's runtime layout serves only
+// hit-testing, so it must measure identically to the canvas or taps stop
+// landing where widgets paint. Wired here but not yet called from the top bar
+// (awaiting the TogglePreview action handler).
+#[cfg(feature = "canvaskit")]
+mod preview_host;
 
 #[cfg(not(feature = "canvaskit"))]
 use wasm_bindgen::prelude::*;

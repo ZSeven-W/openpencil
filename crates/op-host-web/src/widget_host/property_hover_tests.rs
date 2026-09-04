@@ -123,8 +123,12 @@ fn effect_add_menu_hover_clears_overlapped_property_action_hover() {
     host.editor_state
         .set_single_selection(op_editor_core::NodeId::new("hover-overlap"));
     host.mark_dirty();
+    // The inspector stack has grown past 800 px (compositing rows,
+    // size toggles, per-corner radius) — give the window enough height
+    // that the Effects section (and the Interactions rows its popup
+    // drops over) are on screen.
     host.last_viewport_w = 1200.0;
-    host.last_viewport_h = 800.0;
+    host.last_viewport_h = 1180.0;
 
     let rect = property_rect(&host);
     let base_panel = PropertyPanel::for_selection(&host.editor_state).expect("property panel");
@@ -430,7 +434,7 @@ fn color_variable_popup_owns_hover_instead_of_the_rail_underneath() {
     host.editor_state.set_single_selection(NodeId::new("n13"));
     for i in 0..6 {
         assert!(host.editor_state.create_variable(
-            &format!("color-surface-{i:02}"),
+            &format!("--card-{i:02}"),
             VariableKind::Color,
             VariableScalar::Str("#DBD8CB".into()),
         ));

@@ -47,9 +47,9 @@ fn paste_inserts_into_the_focused_input() {
         .editor_ui
         .settings_input
         .select_all();
-    // Paste replaces the select-all range; the trailing newline is a
-    // control char and is dropped by `apply_input_paste`.
-    assert!(host.apply_input_paste("codex\n"));
+    // Paste replaces the select-all range; single-line settings fields keep
+    // filtering every platform newline spelling and other controls.
+    assert!(host.apply_input_paste("co\r\ndex\r\n\t"));
     assert_eq!(host.editor_state().editor_ui.settings_input.text(), "codex");
 }
 

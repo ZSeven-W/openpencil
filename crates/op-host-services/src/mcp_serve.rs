@@ -30,34 +30,35 @@ use op_mcp::{
     design_refine_snapshot, design_skeleton_snapshot, document_info_snapshot,
     duplicate_page_snapshot, duplicate_selected_snapshot, export_design_md_snapshot,
     find_empty_space_snapshot, find_node_by_name_snapshot, get_active_theme_snapshot,
-    get_canvas_bounds_snapshot, get_component_snapshot, get_design_md_snapshot,
-    get_design_prompt_snapshot, get_editor_state_snapshot, get_guidelines_snapshot,
-    get_history_depth_snapshot, get_node_children_snapshot, get_node_parent_snapshot,
-    get_node_snapshot, get_selection_set_snapshot, get_style_guide_snapshot,
-    get_style_guide_tags_snapshot, get_variables_snapshot, get_viewport_snapshot,
-    group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
+    get_canvas_bounds_snapshot, get_component_snapshot, get_design_agent_prompt_snapshot,
+    get_design_md_snapshot, get_design_prompt_snapshot, get_editor_state_snapshot,
+    get_guidelines_snapshot, get_history_depth_snapshot, get_node_children_snapshot,
+    get_node_parent_snapshot, get_node_snapshot, get_selection_set_snapshot,
+    get_style_guide_snapshot, get_style_guide_tags_snapshot, get_variables_snapshot,
+    get_viewport_snapshot, group_selected_snapshot, import_svg_snapshot, insert_node_snapshot,
     instantiate_component_snapshot, lint_document_snapshot, list_components_snapshot,
     list_node_kinds_snapshot, list_pages_snapshot, list_style_guides_snapshot,
-    list_theme_presets_snapshot, list_variables_snapshot, load_theme_preset_snapshot,
-    move_node_snapshot, nudge_selected_snapshot, open_document_snapshot, paste_clipboard_snapshot,
-    read_nodes_snapshot, redo_snapshot, remove_node_effect_snapshot, remove_page_snapshot,
-    rename_component_snapshot, rename_page_snapshot, rename_variable_snapshot,
-    reorder_page_snapshot, reorder_selected_snapshot, replace_all_matching_properties_snapshot,
-    replace_node_snapshot, run_stdio_with_applier, save_document_snapshot,
-    save_theme_preset_snapshot, search_all_unique_properties_snapshot, selection_snapshot,
-    set_active_axis_value_snapshot, set_active_page_snapshot, set_active_tool_snapshot,
-    set_design_md_snapshot, set_ellipse_arc_snapshot, set_node_collapsed_snapshot,
-    set_node_corner_radius_snapshot, set_node_fill_hex_snapshot, set_node_flip_snapshot,
-    set_node_font_size_snapshot, set_node_font_weight_snapshot, set_node_hidden_snapshot,
-    set_node_locked_snapshot, set_node_name_snapshot, set_node_rotation_snapshot,
-    set_node_stroke_hex_snapshot, set_node_stroke_side_width_snapshot,
-    set_node_stroke_width_snapshot, set_node_text_snapshot, set_selection_set_snapshot,
-    set_selection_snapshot, set_themes_snapshot, set_variable_boolean_snapshot,
-    set_variable_color_snapshot, set_variable_number_snapshot, set_variable_string_snapshot,
-    set_variables_snapshot, set_viewport_snapshot, snapshot_layout_snapshot, spawn_agents_snapshot,
-    toggle_node_selection_snapshot, tool_search_snapshot, undo_snapshot, ungroup_selected_snapshot,
-    update_node_snapshot, upsert_component_snapshot, upsert_screen_snapshot,
-    upsert_variables_snapshot, McpTool, ToolRegistry,
+    list_theme_presets_snapshot, list_ui_kits_snapshot, list_variables_snapshot,
+    load_theme_preset_snapshot, move_node_snapshot, nudge_selected_snapshot,
+    open_document_snapshot, paste_clipboard_snapshot, read_nodes_snapshot, redo_snapshot,
+    remove_node_effect_snapshot, remove_page_snapshot, rename_component_snapshot,
+    rename_page_snapshot, rename_variable_snapshot, reorder_page_snapshot,
+    reorder_selected_snapshot, replace_all_matching_properties_snapshot, replace_node_snapshot,
+    run_stdio_with_applier, save_document_snapshot, save_theme_preset_snapshot,
+    search_all_unique_properties_snapshot, selection_snapshot, set_active_axis_value_snapshot,
+    set_active_page_snapshot, set_active_tool_snapshot, set_design_md_snapshot,
+    set_ellipse_arc_snapshot, set_node_collapsed_snapshot, set_node_corner_radius_snapshot,
+    set_node_fill_hex_snapshot, set_node_flip_snapshot, set_node_font_size_snapshot,
+    set_node_font_weight_snapshot, set_node_hidden_snapshot, set_node_locked_snapshot,
+    set_node_name_snapshot, set_node_rotation_snapshot, set_node_stroke_hex_snapshot,
+    set_node_stroke_side_width_snapshot, set_node_stroke_width_snapshot, set_node_text_snapshot,
+    set_selection_set_snapshot, set_selection_snapshot, set_themes_snapshot,
+    set_variable_boolean_snapshot, set_variable_color_snapshot, set_variable_number_snapshot,
+    set_variable_string_snapshot, set_variables_snapshot, set_viewport_snapshot,
+    snapshot_layout_snapshot, spawn_agents_snapshot, toggle_node_selection_snapshot,
+    tool_search_snapshot, undo_snapshot, ungroup_selected_snapshot, update_node_snapshot,
+    upsert_component_snapshot, upsert_screen_snapshot, upsert_variables_snapshot, McpTool,
+    ToolRegistry,
 };
 #[cfg(feature = "mcp-debug-tools")]
 use op_mcp::{
@@ -102,6 +103,60 @@ fn save_editor_state(state: &EditorState, path: &Path) -> Result<(), McpServeErr
         .map_err(|error| McpServeError::Document(format!("save {}: {error}", path.display())))
 }
 
+pub(crate) fn normalize_mobile_screens_after_apply(
+    state: &mut EditorState,
+) -> op_chat_agent::MobileNormalizeReport {
+    let report = op_chat_agent::normalize_mobile_screens(state);
+    let mut changes = Vec::new();
+    if report.status_bars_inserted > 0 {
+        changes.push(format!(
+            "status_bars_inserted={}",
+            report.status_bars_inserted
+        ));
+    }
+    if report.status_bars_replaced > 0 {
+        changes.push(format!(
+            "status_bars_replaced={}",
+            report.status_bars_replaced
+        ));
+    }
+    if report.duplicate_status_bars_removed > 0 {
+        changes.push(format!(
+            "duplicate_status_bars_removed={}",
+            report.duplicate_status_bars_removed
+        ));
+    }
+    if report.viewport_heights_fixed > 0 {
+        changes.push(format!(
+            "viewport_heights_fixed={}",
+            report.viewport_heights_fixed
+        ));
+    }
+    if !changes.is_empty() {
+        eprintln!(
+            "openpencil-desktop mcp: mobile normalization: {}",
+            changes.join(", ")
+        );
+    }
+    report
+}
+
+pub(crate) fn normalize_icon_paths_after_apply(
+    state: &mut EditorState,
+) -> op_editor_core::icon_path_normalize::IconPathNormalizeReport {
+    let report = op_editor_core::icon_path_normalize::normalize_icon_paths(
+        state,
+        op_editor_ui::widgets::icons::lucide_name_for_path_d,
+    );
+    if report != Default::default() {
+        eprintln!(
+            "openpencil-desktop mcp: icon path normalization: converted_to_icon_font={}, refit_uniform={}",
+            report.converted_to_icon_font, report.refit_uniform
+        );
+    }
+    report
+}
+
 /// Process one JSON-RPC message line against the editor state.
 fn process_message(
     state: &mut EditorState,
@@ -122,6 +177,8 @@ fn process_message(
         if !state.apply(cmd.clone()) {
             return false;
         }
+        normalize_mobile_screens_after_apply(state);
+        normalize_icon_paths_after_apply(state);
         if let Err(e) = save_editor_state(state, path) {
             applier_failed = Some(format!("save failed: {e}"));
             return false;
@@ -198,7 +255,7 @@ where
     // tool's own argument parsing: a denied tool never sees the path it was
     // asked to open.
     if let Some(call) = call.as_ref() {
-        if let Some(refusal) = profile.refuse(&call.tool) {
+        if let Some(refusal) = profile.refuse_call(&call.tool, &call.arguments) {
             // The ordinary tools/call error envelope (`isError:true`) with
             // the originating id, so a client sees a refusal it can read
             // rather than a transport failure that would drop the session.
@@ -212,7 +269,7 @@ where
         }
     }
     let requested_tool = call.map(|call| call.tool);
-    let registry = rebuild_registry(state, requested_tool.as_deref());
+    let registry = rebuild_registry(state, requested_tool.as_deref(), profile);
     process_tool_message_with_registry(&registry, line, |tool_name, cmd| {
         apply(tool_name, state, cmd)
     })
@@ -360,9 +417,9 @@ pub struct HttpRequest {
     pub body: String,
     pub host: Option<String>,
     pub origin: Option<String>,
-    /// `X-OpenPencil-Token` header value, when present — the managed
-    /// web-canvas daemon's per-instance auth token (see
-    /// `web_canvas_server::RequestAuth`).
+    /// Legacy `X-OpenPencil-Token` header value, when present. The local and
+    /// managed web-canvas daemons deliberately ignore it; managed lifecycle
+    /// authentication, when used, stays in the `openpencil/shutdown` body.
     pub token: Option<String>,
     /// `Content-Type` header value, when present. Browser-facing JSON routes
     /// require `application/json` so cross-origin "simple requests" (which
@@ -440,18 +497,24 @@ pub fn read_http_request<S: std::io::Read>(stream: &mut S) -> Result<HttpRequest
     // boundary mid-slice; that panic would also bypass the live server's
     // connection-count decrement. A malformed length falls back to 0 (empty
     // body) rather than erroring.
-    let declared_length = headers.lines().find_map(|l| {
-        let (name, value) = l.trim().split_once(':')?;
-        name.eq_ignore_ascii_case("content-length")
-            .then(|| value.trim().parse::<usize>().ok())
-            .flatten()
-    });
+    let content_length_values: Vec<&str> = headers
+        .lines()
+        .skip(1)
+        .filter_map(|line| {
+            let (name, value) = line.trim().split_once(':')?;
+            name.eq_ignore_ascii_case("content-length")
+                .then_some(value.trim())
+        })
+        .collect();
+    let declared_length = content_length_values
+        .iter()
+        .find_map(|value| value.parse::<usize>().ok());
     let content_length = declared_length.unwrap_or(0);
-    // The live endpoint's browser-extension snapshot ingress is the one
-    // body-carrying route reachable WITHOUT the per-instance token, so it
-    // caps its body far below the endpoint-wide `MAX_BODY` — and does it
-    // here, before a single body byte is read, so an untokened caller
-    // cannot make this process buffer 64 MiB. See
+    // Browser-extension snapshot ingress is the large body-carrying scoped
+    // route, so it caps its body far below the endpoint-wide `MAX_BODY` — and
+    // does it here, before a single body byte is read, so an untokened caller
+    // cannot make this process buffer 64 MiB. The separate design-evidence
+    // route receives its own smaller cap below. See
     // `mcp_live::snapshot_ingest::MAX_SNAPSHOT_BODY`.
     if method == "POST" && path == crate::mcp_live::snapshot_ingest::SNAPSHOT_INGEST_PATH {
         let limit = crate::mcp_live::snapshot_ingest::MAX_SNAPSHOT_BODY;
@@ -475,12 +538,55 @@ pub fn read_http_request<S: std::io::Read>(stream: &mut S) -> Result<HttpRequest
             Some(_) => {}
         }
     }
-    if path == "/api/settings/credentials"
-        && content_length > crate::web_credentials::MAX_CREDENTIAL_BODY_BYTES
+    // Intelligent design extraction is extension-reachable and must never
+    // inherit the endpoint-wide 64 MiB body budget. Require one canonical
+    // decimal Content-Length and reject above 256 KiB before reading bytes.
+    if crate::mcp_live::design_md_route::is_design_md_path(&path) {
+        let limit = crate::design_md_evidence::MAX_DESIGN_MD_EVIDENCE_BYTES;
+        if content_length > limit {
+            return Err(McpServeError::Framing {
+                status: "413 Payload Too Large",
+                message: "design.md evidence body exceeds 256 KiB".into(),
+            });
+        }
+        let starts_job =
+            method == "POST" && path == crate::mcp_live::design_md_route::DESIGN_MD_PATH;
+        if !starts_job && content_length > 0 {
+            return Err(McpServeError::Framing {
+                status: "400 Bad Request",
+                message: "non-POST design.md requests must not carry a body".into(),
+            });
+        }
+    }
+    if method == "POST" && path == crate::mcp_live::design_md_route::DESIGN_MD_PATH {
+        let valid_single_length = content_length_values.len() == 1
+            && !content_length_values[0].is_empty()
+            && content_length_values[0]
+                .bytes()
+                .all(|byte| byte.is_ascii_digit())
+            && declared_length.is_some();
+        if !valid_single_length {
+            return Err(McpServeError::Framing {
+                status: if content_length_values.is_empty() {
+                    "411 Length Required"
+                } else {
+                    "400 Bad Request"
+                },
+                message: "design.md evidence requires one valid Content-Length header".into(),
+            });
+        }
+    }
+    let credential_body_label = match path.as_str() {
+        "/api/settings/credentials" => Some("credential settings"),
+        "/api/ai/models/discover" => Some("model discovery"),
+        _ => None,
+    };
+    if let Some(label) = credential_body_label
+        .filter(|_| content_length > crate::web_credentials::MAX_CREDENTIAL_BODY_BYTES)
     {
-        return Err(McpServeError::Protocol(
-            "credential settings body exceeds 256 KiB".into(),
-        ));
+        return Err(McpServeError::Protocol(format!(
+            "{label} body exceeds 256 KiB"
+        )));
     }
     let header_value = |wanted: &str| {
         headers.lines().skip(1).find_map(|line| {
@@ -493,6 +599,23 @@ pub fn read_http_request<S: std::io::Read>(stream: &mut S) -> Result<HttpRequest
     let origin = header_value("origin");
     let token = header_value("x-openpencil-token");
     let content_type = header_value("content-type");
+    if method == "POST" && path == crate::mcp_live::design_md_route::DESIGN_MD_PATH {
+        let content_type_count = headers
+            .lines()
+            .skip(1)
+            .filter(|line| {
+                line.trim()
+                    .split_once(':')
+                    .is_some_and(|(name, _)| name.eq_ignore_ascii_case("content-type"))
+            })
+            .count();
+        if content_type_count > 1 {
+            return Err(McpServeError::Framing {
+                status: "400 Bad Request",
+                message: "design.md evidence accepts only one Content-Type header".into(),
+            });
+        }
+    }
     let authorization = header_value("authorization");
     let cookie = header_value("cookie");
     if content_length > MAX_BODY {
@@ -519,10 +642,18 @@ pub fn read_http_request<S: std::io::Read>(stream: &mut S) -> Result<HttpRequest
         body.extend_from_slice(&chunk[..n]);
         remaining -= n;
     }
+    let body = if method == "POST" && path == crate::mcp_live::design_md_route::DESIGN_MD_PATH {
+        String::from_utf8(body).map_err(|_| McpServeError::Framing {
+            status: "400 Bad Request",
+            message: "design.md evidence body must be valid UTF-8".into(),
+        })?
+    } else {
+        String::from_utf8_lossy(&body).into_owned()
+    };
     Ok(HttpRequest {
         method,
         path,
-        body: String::from_utf8_lossy(&body).into_owned(),
+        body,
         host,
         origin,
         token,
@@ -589,187 +720,8 @@ pub(crate) fn write_mcp_http_response_with_origin<S: std::io::Write>(
         .map_err(|e| McpServeError::Io(format!("http flush: {e}")))
 }
 
-fn rebuild_registry(doc: &EditorState, requested_tool: Option<&str>) -> ToolRegistry {
-    let mut r = ToolRegistry::default();
-
-    macro_rules! register_tool {
-        ($name:literal, $tool:expr) => {
-            if should_register(requested_tool, $name) {
-                r.register(Box::new($tool));
-            }
-        };
-    }
-
-    if requested_tool
-        .map(|name| name.starts_with("add_"))
-        .unwrap_or(true)
-    {
-        for tool in op_mcp::element_tools::insert_kit_component_tools(doc) {
-            if should_register(requested_tool, tool.name()) {
-                r.register(Box::new(tool));
-            }
-        }
-    }
-    register_tool!("open_document", open_document_snapshot(doc));
-    register_tool!("save_document", save_document_snapshot(doc));
-    register_tool!("get_document_info", document_info_snapshot(doc));
-    register_tool!("get_selection", selection_snapshot(doc));
-    register_tool!("get_node", get_node_snapshot(doc));
-    register_tool!("list_pages", list_pages_snapshot(doc));
-    register_tool!("list_variables", list_variables_snapshot(doc));
-    register_tool!("get_variables", get_variables_snapshot(doc));
-    register_tool!("upsert_variables", upsert_variables_snapshot());
-    register_tool!("upsert_component", upsert_component_snapshot());
-    register_tool!("upsert_screen", upsert_screen_snapshot());
-    register_tool!("conversion_status", conversion_status_snapshot(doc));
-    register_tool!("lint_document", lint_document_snapshot(doc));
-    register_tool!("save_theme_preset", save_theme_preset_snapshot(doc));
-    register_tool!("load_theme_preset", load_theme_preset_snapshot());
-    register_tool!("list_theme_presets", list_theme_presets_snapshot());
-    register_tool!("get_design_md", get_design_md_snapshot(doc));
-    register_tool!("set_design_md", set_design_md_snapshot(doc));
-    register_tool!("export_design_md", export_design_md_snapshot(doc));
-    register_tool!("get_style_guide_tags", get_style_guide_tags_snapshot());
-    register_tool!("get_style_guide", get_style_guide_snapshot());
-    register_tool!("list_style_guides", list_style_guides_snapshot());
-    register_tool!("get_guidelines", get_guidelines_snapshot());
-    // Phase 0: always register spawn_agents (validates + returns request result).
-    // Actual parallel execution is deferred to Phase 3 (Task 3.1).
-    register_tool!("spawn_agents", spawn_agents_snapshot());
-    register_tool!("ToolSearch", tool_search_snapshot(schemas::TOOL_SCHEMAS));
-    register_tool!("get_screenshot", get_screenshot_snapshot(doc));
-    register_tool!("export_item", export_item_snapshot(doc));
-    register_tool!("export_nodes", export_nodes_snapshot(doc));
-    register_tool!("export_deck", export_deck_snapshot(doc));
-    register_tool!("export_frames", export_frames_snapshot(doc));
-    register_tool!("get_deck_boards", get_deck_boards_snapshot(doc));
-    register_tool!("list_scene_templates", list_scene_templates_snapshot());
-    register_tool!("use_scene_template", use_scene_template_snapshot());
-    register_tool!("get_active_theme", get_active_theme_snapshot(doc));
-    register_tool!("list_components", list_components_snapshot(doc));
-    register_tool!("get_component", get_component_snapshot(doc));
-    register_tool!("batch_get", batch_get_snapshot(doc));
-    register_tool!("read_nodes", read_nodes_snapshot(doc));
-    register_tool!("codegen_plan", codegen_plan_snapshot(doc));
-    register_tool!("codegen_submit_chunk", codegen_submit_chunk_snapshot());
-    register_tool!("codegen_assemble", codegen_assemble_snapshot());
-    register_tool!("codegen_clean", codegen_clean_snapshot());
-    register_tool!(
-        "search_all_unique_properties",
-        search_all_unique_properties_snapshot(doc)
-    );
-    register_tool!(
-        "replace_all_matching_properties",
-        replace_all_matching_properties_snapshot(doc)
-    );
-    register_tool!("snapshot_layout", snapshot_layout_snapshot(doc));
-    register_tool!("find_empty_space", find_empty_space_snapshot(doc));
-    register_tool!("get_canvas_bounds", get_canvas_bounds_snapshot(doc));
-    register_tool!("find_node_by_name", find_node_by_name_snapshot(doc));
-    register_tool!("get_node_parent", get_node_parent_snapshot(doc));
-    register_tool!("get_node_children", get_node_children_snapshot(doc));
-    register_tool!("count_nodes", count_nodes_snapshot(doc));
-    register_tool!("list_node_kinds", list_node_kinds_snapshot(doc));
-    register_tool!("get_history_depth", get_history_depth_snapshot(doc));
-    register_tool!("get_viewport", get_viewport_snapshot(doc));
-    register_tool!("get_selection_set", get_selection_set_snapshot(doc));
-    register_tool!("get_editor_state", get_editor_state_snapshot(doc));
-    #[cfg(feature = "mcp-debug-tools")]
-    if debug_tools_enabled() {
-        register_tool!(
-            "debug_validation_report",
-            debug_validation_report_snapshot(doc)
-        );
-        register_tool!("debug_logs_tail", debug_logs_tail_snapshot());
-        register_tool!("debug_screenshot", debug_screenshot_snapshot());
-    }
-    register_tool!("clear_selection", clear_selection_snapshot());
-    register_tool!("set_selection", set_selection_snapshot());
-    register_tool!("set_viewport", set_viewport_snapshot());
-    register_tool!("set_node_hidden", set_node_hidden_snapshot());
-    register_tool!("set_node_locked", set_node_locked_snapshot());
-    register_tool!("set_node_collapsed", set_node_collapsed_snapshot());
-    register_tool!("set_active_tool", set_active_tool_snapshot());
-    register_tool!("undo", undo_snapshot());
-    register_tool!("redo", redo_snapshot());
-    register_tool!("duplicate_selected", duplicate_selected_snapshot());
-    register_tool!("delete_selected", delete_selected_snapshot());
-    register_tool!("nudge_selected", nudge_selected_snapshot());
-    register_tool!("group_selected", group_selected_snapshot());
-    register_tool!("ungroup_selected", ungroup_selected_snapshot());
-    register_tool!("reorder_selected", reorder_selected_snapshot());
-    register_tool!("set_node_rotation", set_node_rotation_snapshot());
-    register_tool!("set_node_text", set_node_text_snapshot());
-    register_tool!("set_node_corner_radius", set_node_corner_radius_snapshot());
-    register_tool!("set_node_font_size", set_node_font_size_snapshot());
-    register_tool!("set_node_font_weight", set_node_font_weight_snapshot());
-    register_tool!("set_node_stroke_hex", set_node_stroke_hex_snapshot());
-    register_tool!("set_node_stroke_width", set_node_stroke_width_snapshot());
-    register_tool!(
-        "set_node_stroke_side_width",
-        set_node_stroke_side_width_snapshot()
-    );
-    register_tool!("align_selected", align_selected_snapshot());
-    register_tool!("set_node_fill_hex", set_node_fill_hex_snapshot());
-    register_tool!("set_node_flip", set_node_flip_snapshot());
-    register_tool!("set_ellipse_arc", set_ellipse_arc_snapshot());
-    register_tool!("add_node_effect", add_node_effect_snapshot());
-    register_tool!("remove_node_effect", remove_node_effect_snapshot());
-    register_tool!("set_node_name", set_node_name_snapshot());
-    register_tool!("set_selection_set", set_selection_set_snapshot());
-    register_tool!("toggle_node_selection", toggle_node_selection_snapshot());
-    register_tool!(
-        "cycle_active_axis_value",
-        cycle_active_axis_value_snapshot(doc)
-    );
-    register_tool!("copy_selected", copy_selected_snapshot());
-    register_tool!("cut_selected", cut_selected_snapshot());
-    register_tool!("paste_clipboard", paste_clipboard_snapshot());
-    register_tool!("set_variable_color", set_variable_color_snapshot(doc));
-    register_tool!("set_active_axis_value", set_active_axis_value_snapshot(doc));
-    register_tool!("insert_node", insert_node_snapshot());
-    register_tool!("import_svg", import_svg_snapshot());
-    register_tool!("import_html", import_html_snapshot());
-    register_tool!("import_html_url", import_html_url_snapshot());
-    register_tool!("import_web_snapshot", import_web_snapshot_tool());
-    register_tool!("update_node", update_node_snapshot());
-    register_tool!("delete_node", delete_node_snapshot());
-    register_tool!("move_node", move_node_snapshot());
-    register_tool!("copy_node", copy_node_snapshot());
-    register_tool!("replace_node", replace_node_snapshot());
-    register_tool!("batch_design", batch_design_snapshot(doc));
-    register_tool!("get_design_prompt", get_design_prompt_snapshot(doc));
-    register_tool!("design_skeleton", design_skeleton_snapshot());
-    register_tool!("design_content", design_content_snapshot());
-    register_tool!("design_refine", design_refine_snapshot(doc));
-    register_tool!("set_variable_number", set_variable_number_snapshot(doc));
-    register_tool!("set_variable_string", set_variable_string_snapshot(doc));
-    register_tool!("set_variable_boolean", set_variable_boolean_snapshot(doc));
-    register_tool!("set_variables", set_variables_snapshot());
-    register_tool!("set_themes", set_themes_snapshot());
-    register_tool!("apply_design_system", apply_design_system_snapshot());
-    register_tool!("create_variable", create_variable_snapshot(doc));
-    register_tool!("delete_variable", delete_variable_snapshot(doc));
-    register_tool!("rename_variable", rename_variable_snapshot(doc));
-    register_tool!("instantiate_component", instantiate_component_snapshot());
-    register_tool!("create_component", create_component_snapshot());
-    register_tool!("delete_component", delete_component_snapshot());
-    register_tool!("rename_component", rename_component_snapshot());
-    register_tool!("set_active_page", set_active_page_snapshot());
-    register_tool!("add_page", add_page_snapshot());
-    register_tool!("rename_page", rename_page_snapshot(doc));
-    register_tool!("delete_page", delete_page_snapshot(doc));
-    register_tool!("remove_page", remove_page_snapshot(doc));
-    register_tool!("duplicate_page", duplicate_page_snapshot(doc));
-    register_tool!("reorder_page", reorder_page_snapshot(doc));
-    r
-}
-
-fn should_register(requested_tool: Option<&str>, tool_name: &str) -> bool {
-    requested_tool
-        .map(|requested| requested == tool_name)
-        .unwrap_or(true)
-}
+mod registry;
+use registry::rebuild_registry;
 
 mod wire;
 pub use wire::*;
@@ -801,10 +753,28 @@ use export_frames_tool::{export_frames_snapshot, get_deck_boards_snapshot};
 pub(crate) mod scene_template_tools;
 use scene_template_tools::{list_scene_templates_snapshot, use_scene_template_snapshot};
 
+pub(crate) mod finalize_tool;
+use finalize_tool::finalize_design_snapshot;
+pub(crate) mod design_quality_tool;
+use design_quality_tool::get_design_quality_snapshot;
+pub(crate) mod enrich_images_tool;
+use enrich_images_tool::enrich_images_snapshot;
+pub(crate) mod design_agent_run_error;
+pub(crate) mod design_agent_run_tool;
+use design_agent_run_tool::run_design_agent_snapshot;
+
 #[cfg(test)]
 mod codegen_wire_tests;
 #[cfg(test)]
 mod conversion_flow_tests;
+#[cfg(test)]
+mod design_agent_run_tool_tests;
+#[cfg(test)]
+mod enrich_images_tool_tests;
+#[cfg(test)]
+mod finalize_tool_advisory_tests;
+#[cfg(test)]
+mod finalize_tool_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

@@ -1,28 +1,151 @@
 use crate::import_warning::ImportWarning;
 use base64::Engine as _;
-use jian_ops_schema::node::PenNode;
+use jian_ops_schema::node::{ImageSrc, PenNode};
 use jian_ops_schema::style::PenFill;
 use std::collections::HashMap;
+use std::sync::Arc;
 use url::Url;
 
 #[path = "resources_css_imports.rs"]
 mod css_imports;
 #[path = "resources_css_urls.rs"]
 mod css_urls;
+#[path = "resources_image_metadata.rs"]
+mod image_metadata;
 pub(crate) use css_imports::expand_stylesheet_imports;
+#[cfg(test)]
+use image_metadata::data_url_image_dimensions;
+#[cfg(test)]
+use image_metadata::MAX_IMAGE_METADATA_BASE64_CHARS;
+pub(crate) use image_metadata::{
+    browser_image_metadata, element_intrinsic_metadata, normalize_image_source,
+    prefetch_image_metadata, BrowserImageMetadata,
+};
+use image_metadata::{data_url_image_metadata, is_data_url};
 
 pub type ResourceFetcher<'a> = dyn Fn(&str) -> Option<Vec<u8>> + 'a;
 pub type ImageTransform<'a> = dyn Fn(&[u8]) -> Option<Vec<u8>> + 'a;
 
 const PLACEHOLDER_GRAY_PNG: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+const MAX_FETCHED_IMAGE_RESOURCES: usize = 2_048;
+const MAX_SOURCE_IMAGE_BYTES: usize = 64 * 1024 * 1024;
+const MAX_CACHED_IMAGE_DATA_URL_BYTES: usize = 64 * 1024 * 1024;
+const MAX_RESOURCE_URL_BYTES: usize = 8 * 1024;
+const OVERSIZED_IMAGE_URL_LABEL: &str = "image URL exceeds importer limit";
 
-#[derive(Default)]
-pub(crate) struct ResourceBudget;
+pub(crate) struct ResourceBudget {
+    fetched_images: usize,
+    cached_image_bytes: usize,
+    max_fetched_images: usize,
+    max_source_image_bytes: usize,
+    max_cached_image_bytes: usize,
+    cache_exhausted: bool,
+    exhaustion_warning_emitted: bool,
+    prefetched_images: usize,
+    pending_image_bytes: usize,
+    max_prefetched_images: usize,
+    max_pending_image_bytes: usize,
+    prefetch_exhausted: bool,
+}
+
+impl Default for ResourceBudget {
+    fn default() -> Self {
+        Self {
+            fetched_images: 0,
+            cached_image_bytes: 0,
+            max_fetched_images: MAX_FETCHED_IMAGE_RESOURCES,
+            max_source_image_bytes: MAX_SOURCE_IMAGE_BYTES,
+            max_cached_image_bytes: MAX_CACHED_IMAGE_DATA_URL_BYTES,
+            cache_exhausted: false,
+            exhaustion_warning_emitted: false,
+            prefetched_images: 0,
+            pending_image_bytes: 0,
+            max_prefetched_images: MAX_FETCHED_IMAGE_RESOURCES,
+            max_pending_image_bytes: MAX_CACHED_IMAGE_DATA_URL_BYTES,
+            prefetch_exhausted: false,
+        }
+    }
+}
 
 impl ResourceBudget {
     pub(crate) fn take(&mut self, _warnings: &mut Vec<ImportWarning>) -> bool {
         true
     }
+
+    fn take_image(&mut self) -> bool {
+        if self.cache_exhausted || self.fetched_images >= self.max_fetched_images {
+            return false;
+        }
+        self.fetched_images += 1;
+        true
+    }
+
+    fn source_allowed(&self, bytes: usize) -> bool {
+        bytes <= self.max_source_image_bytes
+    }
+
+    fn take_prefetch(&mut self) -> bool {
+        if self.prefetch_exhausted || self.prefetched_images >= self.max_prefetched_images {
+            return false;
+        }
+        self.prefetched_images += 1;
+        true
+    }
+
+    fn reserve_pending(&mut self, bytes: usize) -> bool {
+        let Some(next) = self.pending_image_bytes.checked_add(bytes) else {
+            self.prefetch_exhausted = true;
+            return false;
+        };
+        if next > self.max_pending_image_bytes {
+            self.prefetch_exhausted = true;
+            return false;
+        }
+        self.pending_image_bytes = next;
+        true
+    }
+
+    fn release_pending(&mut self, bytes: usize) {
+        self.pending_image_bytes = self.pending_image_bytes.saturating_sub(bytes);
+    }
+
+    fn reserve_data_url(&mut self, bytes: &[u8]) -> bool {
+        let Some(encoded) = bytes.len().checked_add(2).map(|size| size / 3 * 4) else {
+            return false;
+        };
+        let Some(total) = encoded.checked_add(64) else {
+            return false;
+        };
+        let Some(next) = self.cached_image_bytes.checked_add(total) else {
+            return false;
+        };
+        if next > self.max_cached_image_bytes {
+            self.cache_exhausted = true;
+            return false;
+        }
+        self.cached_image_bytes = next;
+        true
+    }
+
+    fn exhausted_placeholder(
+        &mut self,
+        url: &str,
+        warnings: &mut Vec<ImportWarning>,
+        emit_warning: bool,
+    ) -> EmbeddedImage {
+        if emit_warning && !self.exhaustion_warning_emitted {
+            warnings.push(ImportWarning::ImageUnavailable {
+                url: url.to_string(),
+            });
+            self.exhaustion_warning_emitted = true;
+        }
+        EmbeddedImage::placeholder()
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct ImageResourceCache {
+    entries: HashMap<String, EmbeddedImage>,
 }
 
 pub fn resolve_url(base: Option<&str>, href: &str) -> Option<String> {
@@ -111,17 +234,23 @@ fn same_origin(left: &Url, right: &Url) -> bool {
 pub(crate) fn embed_images(
     nodes: &mut [PenNode],
     base_url: Option<&str>,
-    fetcher: &ResourceFetcher<'_>,
+    fetcher: Option<&ResourceFetcher<'_>>,
     transform: Option<&ImageTransform<'_>>,
     budget: &mut ResourceBudget,
     warnings: &mut Vec<ImportWarning>,
+    cache: &mut ImageResourceCache,
 ) -> usize {
-    let mut cache = HashMap::new();
     nodes
         .iter_mut()
         .map(|node| {
             embed_node_images(
-                node, base_url, fetcher, transform, budget, warnings, &mut cache,
+                node,
+                base_url,
+                fetcher,
+                transform,
+                budget,
+                warnings,
+                &mut cache.entries,
             )
         })
         .sum()
@@ -130,11 +259,11 @@ pub(crate) fn embed_images(
 fn embed_node_images(
     node: &mut PenNode,
     base_url: Option<&str>,
-    fetcher: &ResourceFetcher<'_>,
+    fetcher: Option<&ResourceFetcher<'_>>,
     transform: Option<&ImageTransform<'_>>,
     budget: &mut ResourceBudget,
     warnings: &mut Vec<ImportWarning>,
-    cache: &mut HashMap<String, String>,
+    cache: &mut HashMap<String, EmbeddedImage>,
 ) -> usize {
     let mut count = 0;
     let children = match node {
@@ -223,12 +352,27 @@ fn embed_node_images(
             None
         }
         PenNode::Image(image) => {
-            let src = image.src.as_str().to_string();
-            if let Some(embedded) =
-                embed_url(&src, base_url, fetcher, transform, budget, warnings, cache)
-            {
-                image.src = embedded.into();
-                count += 1;
+            // `data:` images were sized during DOM hydration and already own
+            // their payload. Avoid a second decode and an unbounded URL copy.
+            let embedded = (!is_data_url(image.src.as_str()))
+                .then(|| {
+                    embed_url(
+                        image.src.as_str(),
+                        base_url,
+                        fetcher,
+                        transform,
+                        budget,
+                        warnings,
+                        cache,
+                        true,
+                    )
+                })
+                .flatten();
+            if let Some(embedded) = embedded {
+                if let Some(replacement) = embedded.replacement {
+                    image.src = replacement;
+                    count += 1;
+                }
             }
             None
         }
@@ -248,22 +392,33 @@ fn embed_node_images(
 fn embed_fills(
     fills: &mut Option<Vec<PenFill>>,
     base_url: Option<&str>,
-    fetcher: &ResourceFetcher<'_>,
+    fetcher: Option<&ResourceFetcher<'_>>,
     transform: Option<&ImageTransform<'_>>,
     budget: &mut ResourceBudget,
     warnings: &mut Vec<ImportWarning>,
-    cache: &mut HashMap<String, String>,
+    cache: &mut HashMap<String, EmbeddedImage>,
 ) -> usize {
     let mut count = 0;
     if let Some(fills) = fills {
         for fill in fills {
             if let PenFill::Image(image) = fill {
-                let url = image.url.as_str().to_string();
-                if let Some(embedded) =
-                    embed_url(&url, base_url, fetcher, transform, budget, warnings, cache)
-                {
-                    image.url = embedded.into();
-                    count += 1;
+                if is_data_url(image.url.as_str()) {
+                    continue;
+                }
+                if let Some(embedded) = embed_url(
+                    image.url.as_str(),
+                    base_url,
+                    fetcher,
+                    transform,
+                    budget,
+                    warnings,
+                    cache,
+                    true,
+                ) {
+                    if let Some(replacement) = embedded.replacement {
+                        image.url = replacement;
+                        count += 1;
+                    }
                 }
             }
         }
@@ -271,48 +426,242 @@ fn embed_fills(
     count
 }
 
+#[allow(clippy::too_many_arguments)]
 fn embed_url(
     url: &str,
     base_url: Option<&str>,
+    fetcher: Option<&ResourceFetcher<'_>>,
+    transform: Option<&ImageTransform<'_>>,
+    budget: &mut ResourceBudget,
+    warnings: &mut Vec<ImportWarning>,
+    cache: &mut HashMap<String, EmbeddedImage>,
+    emit_warnings: bool,
+) -> Option<EmbeddedImage> {
+    if is_data_url(url) {
+        let metadata = data_url_image_metadata(url);
+        return Some(EmbeddedImage {
+            replacement: None,
+            dimensions: metadata.map(|metadata| metadata.dimensions),
+            preferred_ratio: metadata.and_then(|metadata| metadata.preferred_ratio),
+            warning: None,
+            pending: None,
+        });
+    }
+    if url.trim().len() > MAX_RESOURCE_URL_BYTES {
+        return Some(budget.exhausted_placeholder(
+            OVERSIZED_IMAGE_URL_LABEL,
+            warnings,
+            emit_warnings,
+        ));
+    }
+    let fetcher = fetcher?;
+    let resolved = match resolve_resource_url(base_url, url) {
+        Some(resolved) => resolved,
+        None if base_url.is_some_and(is_virtual_project_base) => {
+            let cache_key = format!("blocked:{url}");
+            if let Some(cached) = cached_image(
+                cache,
+                &cache_key,
+                transform,
+                budget,
+                warnings,
+                emit_warnings,
+            ) {
+                return Some(cached);
+            }
+            let allowed = if emit_warnings {
+                budget.take_image()
+            } else {
+                budget.take_prefetch()
+            };
+            if !allowed {
+                return Some(budget.exhausted_placeholder(url, warnings, emit_warnings));
+            }
+            let mut embedded = EmbeddedImage::unavailable(ImportWarning::ImageOutsideOrigin {
+                url: url.to_string(),
+            });
+            embedded.emit_warning(warnings, emit_warnings);
+            cache.insert(cache_key, embedded.clone());
+            return Some(embedded);
+        }
+        None => url.to_string(),
+    };
+    if let Some(cached) = cached_image(cache, &resolved, transform, budget, warnings, emit_warnings)
+    {
+        return Some(cached);
+    }
+    let (mut embedded, cacheable) = if emit_warnings {
+        fetch_final_image(&resolved, fetcher, transform, budget, warnings)?
+    } else {
+        prefetch_image(&resolved, fetcher, budget)?
+    };
+    embedded.emit_warning(warnings, emit_warnings);
+    if cacheable {
+        cache.insert(resolved, embedded.clone());
+    }
+    Some(embedded)
+}
+
+fn prefetch_image(
+    resolved: &str,
+    fetcher: &ResourceFetcher<'_>,
+    budget: &mut ResourceBudget,
+) -> Option<(EmbeddedImage, bool)> {
+    if !budget.take_prefetch() {
+        return Some((EmbeddedImage::placeholder(), false));
+    }
+    let bytes = match fetcher(resolved) {
+        Some(bytes) if budget.source_allowed(bytes.len()) => bytes,
+        Some(_) | None => {
+            return Some((
+                EmbeddedImage::unavailable(ImportWarning::ImageUnavailable {
+                    url: resolved.to_string(),
+                }),
+                true,
+            ));
+        }
+    };
+    let metadata = browser_image_metadata(&bytes);
+    if !budget.reserve_pending(bytes.len()) {
+        return Some((
+            EmbeddedImage {
+                replacement: None,
+                dimensions: metadata.map(|metadata| metadata.dimensions),
+                preferred_ratio: metadata.and_then(|metadata| metadata.preferred_ratio),
+                warning: None,
+                pending: None,
+            },
+            false,
+        ));
+    }
+    Some((
+        EmbeddedImage {
+            replacement: None,
+            dimensions: metadata.map(|metadata| metadata.dimensions),
+            preferred_ratio: metadata.and_then(|metadata| metadata.preferred_ratio),
+            warning: None,
+            pending: Some(Arc::from(bytes)),
+        },
+        true,
+    ))
+}
+
+fn fetch_final_image(
+    resolved: &str,
     fetcher: &ResourceFetcher<'_>,
     transform: Option<&ImageTransform<'_>>,
     budget: &mut ResourceBudget,
     warnings: &mut Vec<ImportWarning>,
-    cache: &mut HashMap<String, String>,
-) -> Option<String> {
-    if url.starts_with("data:") {
-        return None;
+) -> Option<(EmbeddedImage, bool)> {
+    if !budget.take_image() {
+        return Some((
+            budget.exhausted_placeholder(resolved, warnings, true),
+            false,
+        ));
     }
-    let resolved = match resolve_resource_url(base_url, url) {
-        Some(resolved) => resolved,
-        None if base_url.is_some_and(is_virtual_project_base) => {
-            warnings.push(ImportWarning::ImageOutsideOrigin {
-                url: url.to_string(),
-            });
-            return Some(PLACEHOLDER_GRAY_PNG.to_string());
-        }
-        None => url.to_string(),
-    };
-    if let Some(cached) = cache.get(&resolved) {
-        return Some(cached.clone());
-    }
-    if !budget.take(warnings) {
-        return None;
-    }
-    let embedded = match fetcher(&resolved) {
-        Some(bytes) => {
-            let transformed = transform.and_then(|rewrite| rewrite(&bytes));
-            blob_to_data_url(transformed.as_deref().unwrap_or(&bytes))
-        }
-        None => {
-            warnings.push(ImportWarning::ImageUnavailable {
-                url: resolved.to_string(),
-            });
-            PLACEHOLDER_GRAY_PNG.to_string()
+    let bytes = match fetcher(resolved) {
+        Some(bytes) if budget.source_allowed(bytes.len()) => bytes,
+        Some(_) | None => {
+            return Some((
+                EmbeddedImage::unavailable(ImportWarning::ImageUnavailable {
+                    url: resolved.to_string(),
+                }),
+                true,
+            ));
         }
     };
-    cache.insert(resolved, embedded.clone());
-    Some(embedded)
+    let metadata = browser_image_metadata(&bytes);
+    Some((
+        finalize_image_bytes(resolved, &bytes, metadata, transform, budget),
+        true,
+    ))
+}
+
+fn finalize_image_bytes(
+    resolved: &str,
+    bytes: &[u8],
+    metadata: Option<BrowserImageMetadata>,
+    transform: Option<&ImageTransform<'_>>,
+    budget: &mut ResourceBudget,
+) -> EmbeddedImage {
+    let transformed = transform.and_then(|rewrite| rewrite(bytes));
+    let payload = transformed.as_deref().unwrap_or(bytes);
+    if budget.reserve_data_url(payload) {
+        EmbeddedImage {
+            replacement: Some(blob_to_data_url(payload).into()),
+            dimensions: metadata.map(|metadata| metadata.dimensions),
+            preferred_ratio: metadata.and_then(|metadata| metadata.preferred_ratio),
+            warning: None,
+            pending: None,
+        }
+    } else {
+        EmbeddedImage::unavailable(ImportWarning::ImageUnavailable {
+            url: resolved.to_string(),
+        })
+    }
+}
+
+#[derive(Clone)]
+struct EmbeddedImage {
+    replacement: Option<ImageSrc>,
+    dimensions: Option<(f64, f64)>,
+    preferred_ratio: Option<f64>,
+    warning: Option<ImportWarning>,
+    pending: Option<Arc<[u8]>>,
+}
+
+impl EmbeddedImage {
+    fn placeholder() -> Self {
+        Self {
+            replacement: Some(ImageSrc::from(PLACEHOLDER_GRAY_PNG)),
+            dimensions: None,
+            preferred_ratio: None,
+            warning: None,
+            pending: None,
+        }
+    }
+
+    fn unavailable(warning: ImportWarning) -> Self {
+        Self {
+            warning: Some(warning),
+            ..Self::placeholder()
+        }
+    }
+
+    fn emit_warning(&mut self, warnings: &mut Vec<ImportWarning>, emit: bool) {
+        if emit {
+            if let Some(warning) = self.warning.take() {
+                warnings.push(warning);
+            }
+        }
+    }
+}
+
+fn cached_image(
+    cache: &mut HashMap<String, EmbeddedImage>,
+    key: &str,
+    transform: Option<&ImageTransform<'_>>,
+    budget: &mut ResourceBudget,
+    warnings: &mut Vec<ImportWarning>,
+    emit_warnings: bool,
+) -> Option<EmbeddedImage> {
+    let cached = cache.get_mut(key)?;
+    if emit_warnings {
+        if let Some(pending) = cached.pending.take() {
+            budget.release_pending(pending.len());
+            if budget.take_image() {
+                let metadata = cached.dimensions.map(|dimensions| BrowserImageMetadata {
+                    dimensions,
+                    preferred_ratio: cached.preferred_ratio,
+                });
+                *cached = finalize_image_bytes(key, &pending, metadata, transform, budget);
+            } else {
+                *cached = budget.exhausted_placeholder(key, warnings, true);
+            }
+        }
+    }
+    cached.emit_warning(warnings, emit_warnings);
+    Some(cached.clone())
 }
 
 fn is_virtual_project_base(base: &str) -> bool {
@@ -343,13 +692,7 @@ fn image_mime(bytes: &[u8]) -> &'static str {
 }
 
 fn looks_like_svg(bytes: &[u8]) -> bool {
-    let text = String::from_utf8_lossy(bytes);
-    let text = text.trim_start_matches('\u{feff}').trim_start();
-    text.starts_with("<svg")
-        || text
-            .strip_prefix("<?xml")
-            .and_then(|rest| rest.find("?>").map(|end| &rest[end + 2..]))
-            .is_some_and(|rest| rest.trim_start().starts_with("<svg"))
+    op_util::encoded_svg_intrinsic_metadata(bytes).is_some()
 }
 
 #[cfg(test)]
@@ -435,3 +778,15 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "resources_image_tests.rs"]
+mod image_tests;
+
+#[cfg(test)]
+#[path = "resources_image_budget_tests.rs"]
+mod image_budget_tests;
+
+#[cfg(test)]
+#[path = "resources_image_edge_tests.rs"]
+mod image_edge_tests;

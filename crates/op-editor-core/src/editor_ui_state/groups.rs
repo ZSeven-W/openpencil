@@ -356,12 +356,16 @@ impl AssetCenterTab {
 
 /// Grouped state for the non-modal Scene Template Center panel.
 ///
-/// Deliberately smaller than [`PromptCenterState`]: a template is opened,
-/// never authored, so there is no save form and no user-owned entries to
-/// persist. Adding those later means adding fields here, not reshaping the
-/// panel.
+/// Deliberately smaller than [`PromptCenterState`]: the panel opens existing
+/// templates and delegates host-owned persistence through one-shot requests.
+/// There is no template authoring form in this state.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SceneTemplateCenterState {
+    /// Whether this host can persist the open document into the user's local
+    /// template library. Unsupported hosts omit the File-menu action.
+    pub save_current_supported: bool,
+    /// Raised by File ▸ Save As Template and drained by the owning host.
+    pub pending_save_current: bool,
     /// Whether the floating panel is visible.
     pub open: bool,
     /// Search text, caret, selection, and IME state.
@@ -370,6 +374,12 @@ pub struct SceneTemplateCenterState {
     pub generate: jian_core::text_input::TextInputState,
     /// Which of the two fields the keyboard writes into.
     pub focus: SceneTemplateFocus,
+    /// Whether that field currently owns platform text input.
+    ///
+    /// Desktop opens with search active for keyboard-first workflows. Touch
+    /// opens as a gallery and activates the IME only after an explicit field
+    /// tap, so the software keyboard cannot cover the cards on entry.
+    pub input_focus_active: bool,
     /// Which asset family the panel is showing.
     pub tab: AssetCenterTab,
     /// Active catalogue filter.
@@ -400,6 +410,11 @@ pub struct SceneTemplateCenterState {
     pub generate_basis: Option<String>,
     /// The Styles tab's `DESIGN.md` import.
     pub import: StyleImportState,
+    /// Ids of saved templates removed from memory whose directories a host
+    /// with a disk should delete. Mirrors `import.pending_delete`; kept on
+    /// the centre state because a template delete is a Templates-tab action,
+    /// not a style-import one.
+    pub pending_template_delete: Vec<String>,
 }
 
 /// Importing a user's own `DESIGN.md` into the Styles tab.
@@ -433,10 +448,13 @@ pub struct StyleImportState {
 impl Default for SceneTemplateCenterState {
     fn default() -> Self {
         Self {
+            save_current_supported: false,
+            pending_save_current: false,
             open: false,
             search: Default::default(),
             generate: Default::default(),
             focus: SceneTemplateFocus::Search,
+            input_focus_active: false,
             tab: AssetCenterTab::default(),
             filter: SceneFilter::All,
             scroll: Default::default(),
@@ -445,23 +463,40 @@ impl Default for SceneTemplateCenterState {
             pending_generate: None,
             generate_basis: None,
             import: StyleImportState::default(),
+            pending_template_delete: Vec::new(),
         }
     }
 }
 
 impl SceneTemplateCenterState {
-    /// Open the panel with search focused and no stale hover/scroll.
-    pub fn open(&mut self, now_ms: u64) {
+    pub fn request_save_current(&mut self) -> bool {
+        if !self.save_current_supported || self.pending_save_current {
+            return false;
+        }
+        self.pending_save_current = true;
+        true
+    }
+
+    pub fn take_pending_save_current(&mut self) -> bool {
+        std::mem::take(&mut self.pending_save_current)
+    }
+
+    /// Open the panel with no stale hover/scroll.
+    pub fn open(&mut self, now_ms: u64, focus_search: bool) {
         self.open = true;
         self.hover = None;
         self.scroll.offset = 0.0;
         self.focus = SceneTemplateFocus::Search;
-        self.search.touch(now_ms);
+        self.input_focus_active = focus_search;
+        if focus_search {
+            self.search.touch(now_ms);
+        }
     }
 
     /// Close only this panel layer.
     pub fn close(&mut self) {
         self.open = false;
+        self.input_focus_active = false;
         self.hover = None;
         // The paste box is a layer inside this panel; leaving it armed would
         // reopen the gallery with somebody's half-finished import on top.
@@ -503,6 +538,11 @@ impl SceneTemplateCenterState {
         }
     }
 
+    /// Whether a visible Asset Center field owns keyboard and IME input.
+    pub fn input_active(&self) -> bool {
+        self.open && self.input_focus_active
+    }
+
     /// Ask the host to open a file dialog for a `DESIGN.md`.
     pub fn request_style_import_file(&mut self) {
         self.import.error_key = None;
@@ -521,6 +561,7 @@ impl SceneTemplateCenterState {
         self.import.text.set_text("");
         self.import.text.touch(now_ms);
         self.focus = SceneTemplateFocus::Import;
+        self.input_focus_active = true;
     }
 
     /// Close the paste box, handing the keyboard back to the search field.
@@ -560,6 +601,16 @@ impl SceneTemplateCenterState {
         std::mem::take(&mut self.import.pending_delete)
     }
 
+    /// Note that `id` is gone from memory and its directory should follow.
+    pub fn queue_template_delete(&mut self, id: impl Into<String>) {
+        self.pending_template_delete.push(id.into());
+    }
+
+    /// Drain ids awaiting a directory delete.
+    pub fn take_pending_template_delete(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.pending_template_delete)
+    }
+
     /// Request that the host generate a document for the typed topic.
     ///
     /// An all-whitespace topic is not a request — the button is live but
@@ -580,5 +631,76 @@ impl SceneTemplateCenterState {
     /// Drain a pending generate request.
     pub fn take_pending_generate(&mut self) -> Option<String> {
         self.pending_generate.take()
+    }
+}
+
+/// Modal file-name prompt for the mobile Save / Save As flow.
+///
+/// The touch shells keep documents inside the app sandbox, so the first
+/// save of an untitled document (and every Save As) needs a file name but
+/// no directory picker. The dialog is engine-painted like the other touch
+/// modals; the owning FFI host opens it, drains the confirmation, and
+/// performs the actual canonical write. Desktop never opens it — its Save
+/// flow keeps the native rfd picker.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SaveNameDialogState {
+    /// Whether the modal is visible (and owns keyboard + IME input).
+    pub open: bool,
+    /// True for Save As — always writes a new file and switches the
+    /// current document to it. False for a first Save of an untitled doc.
+    pub save_as: bool,
+    /// File-name text (without the `.op` extension), caret + IME state.
+    pub input: jian_core::text_input::TextInputState,
+    /// Raised by the confirm affordance (button press or Enter); drained
+    /// by the owning host, which sanitizes the name and writes the file.
+    pub confirmed: bool,
+}
+
+impl SaveNameDialogState {
+    /// Open the dialog seeded with `name`, selected for quick replacement.
+    pub fn open_with(&mut self, name: &str, save_as: bool, now_ms: u64) {
+        self.open = true;
+        self.save_as = save_as;
+        self.confirmed = false;
+        self.input.set_text(name);
+        self.input.select_all();
+        self.input.touch(now_ms);
+    }
+
+    /// Close the dialog, dropping any unconfirmed draft.
+    pub fn close(&mut self) {
+        self.open = false;
+        self.confirmed = false;
+        self.input.set_text("");
+    }
+
+    /// Whether the confirm affordance is actionable.
+    pub fn confirm_enabled(&self) -> bool {
+        self.open && !self.input.text().trim().is_empty()
+    }
+
+    /// Raise the confirmation for the host to drain. No-op when the
+    /// trimmed draft is empty.
+    pub fn request_confirm(&mut self) -> bool {
+        if !self.confirm_enabled() {
+            return false;
+        }
+        self.confirmed = true;
+        true
+    }
+
+    /// Drain a raised confirmation, returning the trimmed file name.
+    /// The dialog stays open; the host closes it once the write lands
+    /// (or reports the failure).
+    pub fn take_confirmed_name(&mut self) -> Option<String> {
+        if !(self.open && self.confirmed) {
+            return None;
+        }
+        self.confirmed = false;
+        let name = self.input.text().trim().to_string();
+        if name.is_empty() {
+            return None;
+        }
+        Some(name)
     }
 }

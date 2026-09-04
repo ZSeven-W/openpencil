@@ -182,6 +182,29 @@ fn grok_default_model() -> Vec<ModelEntry> {
     )]
 }
 
+/// DeepSeek Harness catalog: `dsh` has NO verified model-listing
+/// command (its verified surface is the one-shot
+/// `dsh --profile headless "<prompt>"`), so discovery never spawns a
+/// `models` query for it. Gated on the binary being installed — like
+/// every fallback in this crate — the picker then lists the single
+/// `default` entry, mirroring the `antigravity_default_model` shape.
+pub fn discover_deepseek_harness() -> Vec<ModelEntry> {
+    if resolve_cli("dsh").is_none() {
+        return Vec::new();
+    }
+    deepseek_harness_default_model()
+}
+
+/// The one model entry the DeepSeek Harness card and chat picker
+/// advertise. Shared by startup discovery and the connect probe.
+pub fn deepseek_harness_default_model() -> Vec<ModelEntry> {
+    vec![ModelEntry::new(
+        AgentProvider::DeepSeekHarness,
+        "default",
+        "DeepSeek Harness default",
+    )]
+}
+
 /// Parse `grok models`. Current builds print a human list, while some builds
 /// expose JSON; accept both without mistaking headings or status prose for ids.
 pub fn parse_grok_models(raw: &str) -> Vec<ModelEntry> {

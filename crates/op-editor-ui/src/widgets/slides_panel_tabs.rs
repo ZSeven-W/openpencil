@@ -12,7 +12,7 @@ use op_editor_core::{LeftPanelTab, SlidesPanelTarget};
 
 use super::{
     contains, TAB_FONT, TAB_ICON_GAP, TAB_ICON_SIZE, TAB_INSET_X, TAB_INSET_Y, TAB_PAD_X,
-    TAB_RADIUS, TAB_ROW_HEIGHT,
+    TAB_RADIUS, TAB_ROW_HEIGHT, TOUCH_SLIDES_TAB_ROW_HEIGHT, TOUCH_SLIDES_TAB_TARGET,
 };
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::text_metrics;
@@ -59,14 +59,45 @@ impl SlidesPanelTabs {
     /// icons a few pixels early rather than painting a label that
     /// clips.
     pub fn new(panel: Rect, active: LeftPanelTab, layers_label: &str, slides_label: &str) -> Self {
+        Self::with_row_height(panel, active, layers_label, slides_label, TAB_ROW_HEIGHT)
+    }
+
+    /// Touch variant with a 52pt row and two 44pt tab targets.
+    pub fn new_touch(
+        panel: Rect,
+        active: LeftPanelTab,
+        layers_label: &str,
+        slides_label: &str,
+    ) -> Self {
+        Self::with_row_height(
+            panel,
+            active,
+            layers_label,
+            slides_label,
+            TOUCH_SLIDES_TAB_ROW_HEIGHT,
+        )
+    }
+
+    fn with_row_height(
+        panel: Rect,
+        active: LeftPanelTab,
+        layers_label: &str,
+        slides_label: &str,
+        row_height: f32,
+    ) -> Self {
         let row = Rect {
             origin: panel.origin,
-            size: Point2D::new(panel.size.x, TAB_ROW_HEIGHT),
+            size: Point2D::new(panel.size.x, row_height),
         };
         let inner_w = (row.size.x - TAB_INSET_X * 2.0).max(0.0);
         let x = row.origin.x + TAB_INSET_X;
-        let y = row.origin.y + TAB_INSET_Y;
-        let h = (TAB_ROW_HEIGHT - TAB_INSET_Y * 2.0).max(0.0);
+        let inset_y = if row_height > TAB_ROW_HEIGHT {
+            4.0
+        } else {
+            TAB_INSET_Y
+        };
+        let y = row.origin.y + inset_y;
+        let h = (row_height - inset_y * 2.0).max(0.0);
         let widest = estimated_text_width(layers_label, TAB_FONT)
             .max(estimated_text_width(slides_label, TAB_FONT));
 
@@ -91,19 +122,30 @@ impl SlidesPanelTabs {
         // shrink to their glyph. Laid out left to right from the inner
         // edge, so the row reads as a toolbar rather than as two
         // stretched halves with nothing in them.
-        let icon_only_w = TAB_ICON_SIZE + TAB_PAD_X * 2.0;
-        let labelled_w = |label: &str| {
-            TAB_ICON_SIZE + TAB_ICON_GAP + estimated_text_width(label, TAB_FONT) + TAB_PAD_X * 2.0
+        let touch = row_height > TAB_ROW_HEIGHT;
+        let icon_only_w = if touch {
+            TOUCH_SLIDES_TAB_TARGET
+        } else {
+            TAB_ICON_SIZE + TAB_PAD_X * 2.0
         };
-        let (layers_w, slides_w) = match active {
+        let labelled_w = |label: &str| {
+            (TAB_ICON_SIZE + TAB_ICON_GAP + estimated_text_width(label, TAB_FONT) + TAB_PAD_X * 2.0)
+                .max(if touch { TOUCH_SLIDES_TAB_TARGET } else { 0.0 })
+        };
+        let (wanted_layers_w, wanted_slides_w) = match active {
             LeftPanelTab::Layers => (labelled_w(layers_label), icon_only_w),
             LeftPanelTab::Slides => (icon_only_w, labelled_w(slides_label)),
         };
         // Even one pill can overrun a very narrow rail, so each tab is
         // capped at what its predecessors left rather than being
         // allowed to hang off the row's edge.
-        let layers_w = layers_w.min(inner_w);
-        let slides_w = slides_w.min((inner_w - layers_w).max(0.0));
+        let layers_cap = if touch && inner_w >= TOUCH_SLIDES_TAB_TARGET * 2.0 {
+            inner_w - TOUCH_SLIDES_TAB_TARGET
+        } else {
+            inner_w
+        };
+        let layers_w = wanted_layers_w.min(layers_cap);
+        let slides_w = wanted_slides_w.min((inner_w - layers_w).max(0.0));
         Self {
             row,
             layers: Rect {
@@ -133,9 +175,10 @@ impl SlidesPanelTabs {
     /// The rail below the tab row — what the Layers tree gets when it
     /// is the tab on show.
     pub fn content_rect(&self, panel: Rect) -> Rect {
+        let row_height = self.row.size.y;
         Rect {
-            origin: Point2D::new(panel.origin.x, panel.origin.y + TAB_ROW_HEIGHT),
-            size: Point2D::new(panel.size.x, (panel.size.y - TAB_ROW_HEIGHT).max(0.0)),
+            origin: Point2D::new(panel.origin.x, panel.origin.y + row_height),
+            size: Point2D::new(panel.size.x, (panel.size.y - row_height).max(0.0)),
         }
     }
 

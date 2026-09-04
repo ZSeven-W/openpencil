@@ -322,6 +322,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "htmlImport.warn.layout.margins_on_visual_box_ignored" => {
             "CSS-Außenabstände an einem sichtbaren Kasten wurden ignoriert."
         }
+        "htmlImport.warn.layout.inline_margin_wrapping_approximated" => "Ein Inline-Element mit CSS-Außenabständen wurde als Box angenähert und kann möglicherweise nicht mehr über Zeilen umbrechen.",
         "htmlImport.warn.layout.content_box_percentage_approximated" => {
             "Prozentuale Größenberechnung mit content-box wurde angenähert."
         }
@@ -545,6 +546,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         }
         "htmlImport.warn.media.object_fit_none_ignored" => "CSS-object-fit:none wurde ignoriert.",
         "htmlImport.warn.media.object_position_ignored" => "CSS-object-position wurde ignoriert.",
+        "htmlImport.warn.media.image_intrinsic_axis_unresolved" => {
+            "Das intrinsische Seitenverhältnis des Bildes konnte die fehlende Achse nicht bestimmen, da die angegebene Größe dynamisch ist oder der umschließende Block keine bestimmte Größe hat."
+        }
         "htmlImport.warn.media.image_mix_blend_mode_unsupported" => {
             "Ein nicht unterstützter CSS-mix-blend-mode an einem Bild wurde ignoriert."
         }
@@ -685,6 +689,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "slidesPanel.exportPdf" => "Als PDF exportieren",
         "slidesPanel.exportAllSlides" => "Alle Folien exportieren",
         "slidesPanel.exportSelectedSlides" => "Ausgewählte Folien exportieren ({{count}})",
+        "settings.tab.ai" => "KI",
         "settings.agents.heroTitle" => "Verbinde deinen KI-Anbieter",
         "settings.agents.heroSubtitle" => "OpenPencil steuert deine lokalen CLI-Agenten und API-Anbieter — verbinde einen, um Designs zu generieren.",
         "settings.agents.statusConnected" => "Verbunden",

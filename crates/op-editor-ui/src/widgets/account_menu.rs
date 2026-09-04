@@ -177,7 +177,7 @@ impl<'a> Widget for AccountMenu<'a> {
             rect.origin.x,
             y,
             Icon::Settings,
-            t(self.ui.locale, "account.settings"),
+            t(self.ui.effective_locale(), "account.settings"),
             self.hover == Some(AccountMenuRow::Settings),
         );
         if self.show_mcp_tokens {
@@ -188,7 +188,7 @@ impl<'a> Widget for AccountMenu<'a> {
                 rect.origin.x,
                 y,
                 Icon::Key,
-                t(self.ui.locale, "account.mcpToken"),
+                t(self.ui.effective_locale(), "account.mcpToken"),
                 self.hover == Some(AccountMenuRow::McpToken),
             );
         }
@@ -199,7 +199,7 @@ impl<'a> Widget for AccountMenu<'a> {
             rect.origin.x,
             y,
             Icon::LogOut,
-            t(self.ui.locale, "account.signOut"),
+            t(self.ui.effective_locale(), "account.signOut"),
             self.hover == Some(AccountMenuRow::SignOut),
         );
     }

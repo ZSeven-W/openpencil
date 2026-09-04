@@ -24,7 +24,7 @@ pub(super) fn apply_nav_surface_fill(nav: &mut Value, role: &str) -> bool {
     };
     obj.insert(
         "fill".to_string(),
-        json!([{ "type": "solid", "color": "$color-surface" }]),
+        json!([{ "type": "solid", "color": "$--card" }]),
     );
     // Lift shadow only when no effects were authored. Bottom nav → shadow
     // points up (offsetY < 0); top/other nav → down.
@@ -222,10 +222,44 @@ pub(super) fn should_strip_fill(child_fill: &str, root_fill: Option<&str>) -> bo
     SAFE_DARK_HEXES.contains(&child_key.as_str()) || SAFE_LIGHT_HEXES.contains(&child_key.as_str())
 }
 
+/// Check if a node looks like a screen root (mobile artboard).
+/// A screen root is the ground level for content, so its fill is never "redundant" —
+/// nothing is behind it to paint. Screen roots are identified by:
+/// - Width 300-480 (mobile range)
+/// - Height >= 480 (numeric) OR "fit_content" (potential generated mobile root)
+fn looks_like_screen_root(node: &Value) -> bool {
+    let width = node.get("width").and_then(Value::as_f64).unwrap_or(0.0);
+    let height_value = node.get("height");
+
+    // Mobile width range: 300-480.
+    if !(300.0..=480.0).contains(&width) {
+        return false;
+    }
+
+    // Check height: numeric >= 480 OR the string "fit_content".
+    if let Some(h) = height_value.and_then(Value::as_f64) {
+        return h >= 480.0;
+    }
+    if let Some(h) = height_value.and_then(Value::as_str) {
+        return h == "fit_content";
+    }
+    false
+}
+
 /// Per-section decision (the body of the TS loop, applied to one page-root
 /// child). `page_bg` is the page root's fill hex when known.
+///
+/// **Invariant:** A screen root's fill is never redundant — it is the ground level
+/// for content, and nothing is behind it to paint. Only strip fills from true
+/// sections (content wrappers), not from screen roots (mobile artboards).
 pub(super) fn strip_redundant_section_fill(node: &mut Value, page_bg: Option<&str>) {
     if node.get("type").and_then(Value::as_str) != Some("frame") {
+        return;
+    }
+    // Do not strip a screen root's fill — it is the ground level, so the fill is never
+    // redundant. A section wrapper's fill might be redundant with the page background,
+    // but a mobile artboard (screen root) must retain its background.
+    if looks_like_screen_root(node) {
         return;
     }
     if !is_section_level_frame(node) {

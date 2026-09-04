@@ -15,3 +15,4 @@ serde_json = "1"
 url = "2"
 zip = { version = "2", default-features = false, features = ["deflate-flate2", "flate2"] }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+op-util = { path = "../op-util" }

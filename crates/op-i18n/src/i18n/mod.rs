@@ -12,66 +12,277 @@
 
 use crate::Locale;
 
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod de;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod de_collab;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod de_git;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod de_panel;
 mod en;
 mod en_collab;
 mod en_git;
 mod en_panel;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod es;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod es_collab;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod es_git;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod es_panel;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod fr;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod fr_collab;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod fr_git;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod fr_panel;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod hi;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod hi_collab;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod hi_git;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod hi_panel;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod id;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod id_collab;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod id_git;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod id_panel;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod ja;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod ja_collab;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod ja_git;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod ja_panel;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod ko;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod ko_collab;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod ko_git;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod ko_panel;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod pt;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod pt_collab;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod pt_git;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod pt_panel;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod ru;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod ru_collab;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod ru_git;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod ru_panel;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod th;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod th_collab;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod th_git;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod th_panel;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod tr;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod tr_collab;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod tr_git;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod tr_panel;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod vi;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod vi_collab;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod vi_git;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod vi_panel;
 mod zh_cn;
 mod zh_cn_collab;
 mod zh_cn_git;
 mod zh_cn_panel;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod zh_tw;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod zh_tw_collab;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod zh_tw_git;
+#[cfg(any(
+    not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+    test
+))]
 mod zh_tw_panel;
+
+mod runtime;
+pub use runtime::{catalog_ready, catalog_route, install_catalog};
 
 /// Translate `key` for `locale`.
 ///
@@ -93,19 +304,85 @@ pub fn translate_dynamic(locale: Locale, key: &str) -> Option<&'static str> {
     let lookup = match locale {
         Locale::EnUs => en::lookup(key),
         Locale::ZhCn => zh_cn::lookup(key),
+        #[cfg(any(
+            not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+            test
+        ))]
         Locale::ZhTw => zh_tw::lookup(key),
+        #[cfg(any(
+            not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+            test
+        ))]
         Locale::Ja => ja::lookup(key),
+        #[cfg(any(
+            not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+            test
+        ))]
         Locale::Ko => ko::lookup(key),
+        #[cfg(any(
+            not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+            test
+        ))]
         Locale::Fr => fr::lookup(key),
+        #[cfg(any(
+            not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+            test
+        ))]
         Locale::Es => es::lookup(key),
+        #[cfg(any(
+            not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+            test
+        ))]
         Locale::De => de::lookup(key),
+        #[cfg(any(
+            not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+            test
+        ))]
         Locale::Pt => pt::lookup(key),
+        #[cfg(any(
+            not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+            test
+        ))]
         Locale::Ru => ru::lookup(key),
+        #[cfg(any(
+            not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+            test
+        ))]
         Locale::Hi => hi::lookup(key),
+        #[cfg(any(
+            not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+            test
+        ))]
         Locale::Tr => tr::lookup(key),
+        #[cfg(any(
+            not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+            test
+        ))]
         Locale::Th => th::lookup(key),
+        #[cfg(any(
+            not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+            test
+        ))]
         Locale::Vi => vi::lookup(key),
+        #[cfg(any(
+            not(all(target_arch = "wasm32", feature = "runtime-locale-catalog")),
+            test
+        ))]
         Locale::Id => id::lookup(key),
+        #[cfg(all(target_arch = "wasm32", feature = "runtime-locale-catalog", not(test)))]
+        Locale::ZhTw
+        | Locale::Ja
+        | Locale::Ko
+        | Locale::Fr
+        | Locale::Es
+        | Locale::De
+        | Locale::Pt
+        | Locale::Ru
+        | Locale::Hi
+        | Locale::Tr
+        | Locale::Th
+        | Locale::Vi
+        | Locale::Id => runtime::lookup(locale, key),
     };
     lookup.or_else(|| en::lookup(key))
 }

@@ -1,6 +1,7 @@
 //! Core translate / interpolate / plural behaviour tests.
 
 use super::*;
+use std::collections::HashMap;
 
 #[test]
 fn zh_cn_returns_chinese_chrome_strings() {
@@ -34,6 +35,41 @@ fn every_locale_has_a_direct_common_translation() {
     for locale in Locale::ALL {
         assert_ne!(translate(locale, "common.cancel"), "common.cancel");
     }
+}
+
+#[test]
+fn native_thai_catalog_remains_embedded() {
+    assert_eq!(translate(Locale::Th, "common.cancel"), "ยกเลิก");
+}
+
+#[test]
+fn runtime_catalog_routes_use_stable_bcp47_codes() {
+    assert_eq!(catalog_route(Locale::Ja), "/pkg/assets/i18n/ja.json");
+    assert_eq!(catalog_route(Locale::ZhTw), "/pkg/assets/i18n/zh-TW.json");
+    assert!(catalog_ready(Locale::EnUs));
+    assert!(catalog_ready(Locale::ZhCn));
+}
+
+#[test]
+fn runtime_catalog_install_is_bounded_to_known_keys_and_falls_back_per_key() {
+    let _guard = runtime::test_lock();
+    runtime::reset_for_test();
+
+    assert!(!install_catalog(Locale::De, HashMap::new()));
+    assert!(!runtime::catalog_installed(Locale::De));
+
+    let invalid = HashMap::from([("not.an.i18n.key".to_string(), "Nein".to_string())]);
+    assert!(!install_catalog(Locale::De, invalid));
+    assert!(!runtime::catalog_installed(Locale::De));
+
+    let partial = HashMap::from([("common.cancel".to_string(), "Abbrechen!".to_string())]);
+    assert!(install_catalog(Locale::De, partial));
+    assert!(runtime::catalog_installed(Locale::De));
+    assert_eq!(
+        runtime::lookup(Locale::De, "common.cancel"),
+        Some("Abbrechen!")
+    );
+    assert_eq!(runtime::lookup(Locale::De, "common.ok"), None);
 }
 
 #[test]

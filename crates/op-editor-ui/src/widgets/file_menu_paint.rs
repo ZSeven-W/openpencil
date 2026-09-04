@@ -105,7 +105,21 @@ impl<'a> Widget for FileMenu<'a> {
             h(4),
         );
         y += ROW_HEIGHT;
+        if self.has_save_as_template_row() {
+            paint_row(
+                cx,
+                &self.theme,
+                rect.origin.x,
+                y,
+                Icon::Package,
+                t(self.ui, "saveAsTemplate"),
+                "",
+                h(5),
+            );
+            y += ROW_HEIGHT;
+        }
         y = paint_divider(cx, &self.theme, rect, y);
+        let export_image_row = 5 + usize::from(self.has_save_as_template_row());
         paint_row(
             cx,
             &self.theme,
@@ -114,10 +128,11 @@ impl<'a> Widget for FileMenu<'a> {
             Icon::Download,
             t(self.ui, "exportImage"),
             "⌘⇧P",
-            h(5),
+            h(export_image_row),
         );
         y += ROW_HEIGHT;
         if self.has_export_all_row() {
+            let row = export_image_row + 1;
             paint_row(
                 cx,
                 &self.theme,
@@ -126,7 +141,7 @@ impl<'a> Widget for FileMenu<'a> {
                 Icon::LayoutGrid,
                 &self.export_all_label(),
                 "",
-                h(6),
+                h(row),
             );
             y += ROW_HEIGHT;
         }
@@ -208,7 +223,10 @@ impl<'a> Widget for FileMenu<'a> {
 
     fn access_node(&self) -> accesskit::Node {
         let mut node = accesskit::Node::new(accesskit::Role::Menu);
-        node.set_label(op_i18n::translate(self.ui.locale, "a11y.fileMenu"));
+        node.set_label(op_i18n::translate(
+            self.ui.effective_locale(),
+            "a11y.fileMenu",
+        ));
         node
     }
 }

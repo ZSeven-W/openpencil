@@ -614,6 +614,22 @@ fn parse_tool_call_allows_structured_style_guide_tags_for_ts_parity() {
 }
 
 #[test]
+fn parse_tool_call_allows_structured_finalize_and_enrich_root_ids() {
+    for tool in ["finalize_design", "enrich_images"] {
+        let line = format!(
+            r#"{{"id":4,"method":"tools/call","params":{{"name":"{tool}","arguments":{{"root_ids":["root-a","root-b"]}}}}}}"#
+        );
+        let call = parse_tool_call(&line)
+            .unwrap_or_else(|| panic!("{tool} must accept a structured root_ids array"));
+        assert_eq!(call.tool, tool);
+        assert_eq!(
+            call.arguments.get("root_ids"),
+            Some(&r#"["root-a","root-b"]"#.to_string())
+        );
+    }
+}
+
+#[test]
 fn parse_tool_call_allows_structured_codegen_args_for_ts_parity() {
     let plan_line = r#"{"id":5,"method":"tools/call","params":{"name":"codegen_plan","arguments":{"plan":{"chunks":[{"chunkId":"hero","nodeIds":["n1"],"dependsOn":[]}],"sharedStyles":[],"rootLayout":{"nodeId":"n1"}},"pageId":"page-1"}}}"#;
     let plan = parse_tool_call(plan_line).expect("codegen_plan must accept TS-style plan object");

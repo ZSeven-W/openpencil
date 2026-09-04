@@ -46,9 +46,38 @@ pub fn pump_commands(
     let mut any_applied = false;
     let mut any_rejected = false;
     for req in reqs {
+        let target_page_index = req.target_page_id.as_deref().and_then(|page_id| {
+            match host.editor_state().doc.pages.as_ref() {
+                Some(pages) if !pages.is_empty() => pages
+                    .iter()
+                    .position(|page| page.id == page_id)
+                    .or_else(|| {
+                        page_id
+                            .parse::<usize>()
+                            .ok()
+                            .filter(|index| *index < pages.len())
+                    }),
+                _ if page_id == "0" => Some(0),
+                _ => None,
+            }
+        });
+        let original_page_index = host.editor_state().ui.active_page_index;
+        let original_selection = host.editor_state().selection.clone();
+        if let Some(target) = target_page_index {
+            let state = host.editor_state_mut();
+            state.ui.active_page_index = target;
+            if target != original_page_index {
+                state.clear_selection();
+            }
+        }
+        let target_available = req.target_page_id.is_none() || target_page_index.is_some();
+        let target_is_visible =
+            req.target_page_id.is_none() || target_page_index == Some(original_page_index);
         let applied = match req.op {
             DesignCmdOp::Apply(cmd) => {
-                if !host.gate_collaboration_action(
+                if !target_available {
+                    false
+                } else if !host.gate_collaboration_action(
                     op_editor_core::CollabGateAction::Document(
                         op_editor_core::CollabDocumentMutation::Unsupported(
                             op_editor_core::CollabUnsupportedFeature::BulkWrite,
@@ -57,21 +86,15 @@ pub fn pump_commands(
                     op_editor_core::CollabEditSource::Ai,
                 ) {
                     any_rejected = true;
-                    let snapshot = op_editor_core::request_snapshot::narrowed_snapshot(
-                        host.editor_state_mut(),
-                    );
-                    let _ = req.ack.send(DesignCmdAck {
-                        applied: false,
-                        new_state: snapshot,
-                    });
-                    continue;
+                    false
+                } else {
+                    let state = host.editor_state_mut();
+                    let applied = state.apply(cmd);
+                    if applied && target_is_visible {
+                        fit_design_viewport_to_content(state, viewport_width, viewport_height);
+                    }
+                    applied
                 }
-                let state = host.editor_state_mut();
-                let applied = state.apply(cmd);
-                if applied {
-                    fit_design_viewport_to_content(state, viewport_width, viewport_height);
-                }
-                applied
             }
             // TODO(host): wire into op-editor-core history batch mode
             // once available. Today undo-batch boundaries are no-ops so
@@ -83,6 +106,11 @@ pub fn pump_commands(
         // session length and are read by nothing in the worker's mirror
         // (see op_editor_core::request_snapshot's consumer audit).
         let snapshot = op_editor_core::request_snapshot::narrowed_snapshot(host.editor_state_mut());
+        if target_page_index.is_some_and(|target| target != original_page_index) {
+            let state = host.editor_state_mut();
+            state.ui.active_page_index = original_page_index;
+            state.selection = original_selection;
+        }
         let ack = DesignCmdAck {
             applied,
             new_state: snapshot,
@@ -223,17 +251,19 @@ pub fn launch_subtask_retry_if_pending(
             return true;
         }
     };
-    let subtask: op_orchestrator::plan::Subtask = match serde_json::from_str(&entry.subtask_json) {
-        Ok(s) => s,
-        Err(e) => {
-            write_inline_error(
-                host,
-                msg_idx,
-                &format!("error: could not restore the failed section's spec for retry: {e}"),
-            );
-            return true;
-        }
-    };
+    let mut subtask: op_orchestrator::plan::Subtask =
+        match serde_json::from_str(&entry.subtask_json) {
+            Ok(s) => s,
+            Err(e) => {
+                write_inline_error(
+                    host,
+                    msg_idx,
+                    &format!("error: could not restore the failed section's spec for retry: {e}"),
+                );
+                return true;
+            }
+        };
+    subtask.insert_after_sibling_id = entry.insert_after_sibling_id.clone();
     // Whatever provider is CURRENTLY selected — not frozen from the
     // original turn. The user may have switched specifically because the
     // first provider kept failing; `ChatProviderLlmClient` adapts any
@@ -316,11 +346,11 @@ fn apply_progress(msg: &mut ChatMessage, progress: &[Progress], locale: Locale) 
                 ChatActivityStatus::Done,
                 Some(element_count(locale, *node_count)),
             ),
-            Progress::SubtaskFailed { id, .. } => update_activity(
+            Progress::SubtaskFailed { id, error } => update_activity(
                 msg,
                 id,
                 ChatActivityStatus::Error,
-                Some(op_i18n::translate(locale, "ai.designProgress.detail.needsAttention").into()),
+                Some(subtask_failure_detail(locale, error)),
             ),
             Progress::SubtaskRetry { id, attempt, .. } => update_activity(
                 msg,
@@ -439,6 +469,9 @@ fn apply_progress(msg: &mut ChatMessage, progress: &[Progress], locale: Locale) 
                 ChatActivityStatus::Done,
                 Some(op_i18n::translate(locale, "ai.designProgress.detail.standardPath").into()),
             ),
+            Progress::ReferenceUnavailable { reason } => {
+                append_narration(msg, &format!("• {reason}"))
+            }
             // "承诺-交付" honest report — not translated, same diagnostic
             // confirmation-line treatment as GeometryEcho above. The canvas
             // itself already carries the " (unfilled)" name suffix
@@ -557,6 +590,19 @@ fn element_count(locale: Locale, count: usize) -> String {
     op_i18n::translate(locale, key).replace("{{count}}", &count.to_string())
 }
 
+fn subtask_failure_detail(locale: Locale, error: &str) -> String {
+    let compact = error.split_whitespace().collect::<Vec<_>>().join(" ");
+    if compact.is_empty() {
+        return op_i18n::translate(locale, "ai.designProgress.detail.noDiagnostic").into();
+    }
+    let mut visible: String = compact.chars().take(220).collect();
+    if compact.chars().count() > 220 {
+        visible.push('…');
+    }
+    op_i18n::translate(locale, "ai.designProgress.detail.failureReason")
+        .replace("{{reason}}", &visible)
+}
+
 fn planned_narration(locale: Locale, count: usize) -> String {
     let key = if count == 1 {
         "ai.designProgress.narration.plannedOne"
@@ -645,6 +691,10 @@ fn count_u32(count: usize) -> u32 {
 #[cfg(test)]
 #[path = "design_session_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "design_session_anchor_tests.rs"]
+mod anchor_tests;
 
 #[cfg(test)]
 #[path = "design_session_quality_tests.rs"]

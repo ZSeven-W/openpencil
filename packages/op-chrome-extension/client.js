@@ -13,8 +13,9 @@
  * 1. `POST /api/import/web-snapshot` — the insert-only snapshot route the
  *    running desktop editor exposes on its live MCP endpoint
  *    (`crates/op-host-services/src/mcp_live/snapshot_ingest.rs`). It is the
- *    only route on that endpoint reachable from a `chrome-extension://`
- *    origin, and it needs no token. The request body IS the snapshot JSON.
+ *    first extension route on that endpoint, and it needs no token. The
+ *    separate `/api/generate/design-md` route accepts only bounded de-identified
+ *    design evidence. The request body here IS the snapshot JSON.
  * 2. `POST /mcp` — a plain MCP `tools/call` for `import_web_snapshot`. This
  *    covers exactly one host: the UNMANAGED headless daemon
  *    (`openpencil-desktop --serve-web <port>`), whose `/mcp` needs no token.
@@ -157,16 +158,228 @@ export async function importSnapshot(endpoint, snapshot) {
 
   let outcome = await sendVia(core.ingestUrl(endpoint), snapshot, core.classifyIngestReply);
   if (outcome.outcome === 'fallback') {
-    outcome = await sendVia(
-      core.mcpUrl(endpoint),
-      buildMcpEnvelope(core, snapshot),
-      core.classifyMcpReply,
-    );
+    // The envelope JSON-escapes the snapshot, which can inflate a capture
+    // that passed the raw-size precheck past the endpoint's 64 MiB
+    // whole-body cap — check the BUILT size so the user gets the actionable
+    // message instead of uploading it all and being refused.
+    const envelope = buildMcpEnvelope(core, snapshot);
+    if (core.mcpEnvelopeTooLarge(envelope.length)) {
+      throw requestError('tooLarge', String(core.maxSnapshotMb()));
+    }
+    outcome = await sendVia(core.mcpUrl(endpoint), envelope, core.classifyMcpReply);
   }
   if (outcome.outcome === 'error') {
     throw requestError(outcome.code, outcome.detail);
   }
   return { nodeCount: outcome.nodeCount, warnings: outcome.warnings };
+}
+
+/* --------------------------------------------------------- design.md route */
+
+/** Read one response with a hard decoded-byte ceiling, including chunked bodies. */
+export async function readBoundedDesignResponse(response, maxBytes) {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+    throw requestError('generationFailed', 'invalid design response limit');
+  }
+  const rawLength = response.headers.get('Content-Length');
+  const declaredLength = rawLength && /^\d+$/.test(rawLength) ? Number(rawLength) : null;
+  if (declaredLength !== null && declaredLength > maxBytes) {
+    throw requestError('tooLarge', String(maxBytes));
+  }
+
+  if (!response.body || typeof response.body.getReader !== 'function') {
+    // A real fetch body is stream-backed. Only an explicitly bounded empty or
+    // synthetic response may use the compatibility path.
+    if (declaredLength === null) throw requestError('generationFailed', 'unbounded response body');
+    const text = await response.text();
+    if (new TextEncoder().encode(text).byteLength > maxBytes) {
+      throw requestError('tooLarge', String(maxBytes));
+    }
+    return text;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const parts = [];
+  let received = 0;
+  let chunkCount = 0;
+  try {
+    while (true) {
+      // Sequential by construction: byte accounting must happen before the
+      // next chunk is allowed into extension memory.
+      // oxlint-disable-next-line no-await-in-loop
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunkCount += 1;
+      received += value.byteLength;
+      if (received > maxBytes || chunkCount > 4096) {
+        // oxlint-disable-next-line no-await-in-loop -- stop the source before surfacing the cap.
+        await reader.cancel('design.md response exceeded its byte limit');
+        throw requestError('tooLarge', String(maxBytes));
+      }
+      parts.push(decoder.decode(value, { stream: true }));
+    }
+    parts.push(decoder.decode());
+    return parts.join('');
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function requestDesignStep(url, init, timeoutMs, maxReplyBytes) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    try {
+      const response = await fetch(url, { ...init, signal: controller.signal });
+      const replyLimit =
+        typeof maxReplyBytes === 'function' ? maxReplyBytes(response.status) : maxReplyBytes;
+      const text = await readBoundedDesignResponse(response, replyLimit);
+      return {
+        status: response.status,
+        text,
+        bytes: new TextEncoder().encode(text).byteLength,
+      };
+    } catch (cause) {
+      if (controller.signal.aborted) throw requestError('timeout', String(timeoutMs / 1000));
+      if (cause && typeof cause.code === 'string') throw cause;
+      throw requestError('offline', String(cause && cause.message ? cause.message : cause));
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Pure clamp for a core-validated retry hint against the remaining budget. */
+export function designPollDelay(retryAfterMs, remainingMs) {
+  const retry = Number.isFinite(retryAfterMs) ? Math.max(100, retryAfterMs) : 1000;
+  return Math.max(0, Math.min(retry, remainingMs));
+}
+
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function cancelDesignJob(url, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    await fetch(url, {
+      method: 'DELETE',
+      cache: 'no-store',
+      redirect: 'error',
+      signal: controller.signal,
+    });
+  } catch {
+    // Best effort: the host also expires abandoned jobs.
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Ask the user's local OpenPencil to synthesize design.md from bounded style
+ * evidence. OpenPencil, not the extension, owns the configured AI provider and
+ * credentials; this request never addresses a provider directly.
+ *
+ * @param {string} endpoint normalized loopback host:port.
+ * @param {object} evidence de-identified evidence reconstructed by design-evidence.js.
+ * @returns {Promise<{markdown: string, intelligent: true}>}
+ */
+export async function generateDesignMd(endpoint, evidence) {
+  const core = getCore();
+  const body = JSON.stringify(evidence);
+  const bodyBytes = new TextEncoder().encode(body).byteLength;
+  if (core.designEvidenceTooLarge(bodyBytes)) {
+    throw requestError('tooLarge', String(core.maxDesignEvidenceBytes()));
+  }
+  const startedAt = performance.now();
+  const deadline = startedAt + core.designMdTotalBudgetMs();
+  const maxPollAttempts = core.maxDesignMdPollAttempts();
+  const maxTotalReplyBytes = core.maxDesignMdTotalReplyBytes();
+  let jobUrl = null;
+  let completed = false;
+  try {
+    const startReply = await requestDesignStep(
+      core.designMdStartUrl(endpoint),
+      {
+        method: 'POST',
+        cache: 'no-store',
+        redirect: 'error',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      },
+      core.designMdStartTimeoutMs(),
+      core.maxDesignMdStartReplyBytes(),
+    );
+    let totalReplyBytes = startReply.bytes;
+    const started = JSON.parse(core.classifyDesignMdStartReply(startReply.status, startReply.text));
+    if (started.outcome === 'error') {
+      throw requestError(String(started.code || 'generationFailed'), String(started.detail || ''));
+    }
+    if (started.outcome !== 'pending') {
+      throw requestError('generationFailed', 'OpenPencil returned an invalid design job');
+    }
+    jobUrl = core.designMdPollUrl(endpoint, String(started.jobId || '')) ?? null;
+    if (!jobUrl) throw requestError('generationFailed', 'OpenPencil returned an invalid job id');
+
+    let retryAfterMs = started.retryAfterMs ?? core.designMdPollIntervalMs();
+    let pollAttempts = 0;
+    while (performance.now() < deadline) {
+      const beforeWait = deadline - performance.now();
+      // oxlint-disable-next-line no-await-in-loop -- polling is intentionally sequential.
+      await wait(designPollDelay(retryAfterMs, beforeWait));
+      const remaining = deadline - performance.now();
+      if (remaining <= 0) break;
+      pollAttempts += 1;
+      if (pollAttempts > maxPollAttempts) {
+        throw requestError('generationFailed', 'design polling exceeded its attempt limit');
+      }
+      // Each GET has its own sub-10-second budget, so it cannot trigger
+      // Chrome's independent 30-second fetch-response termination rule.
+      // oxlint-disable-next-line no-await-in-loop
+      const pollReply = await requestDesignStep(
+        jobUrl,
+        { method: 'GET', cache: 'no-store', redirect: 'error' },
+        Math.max(1, Math.min(core.designMdPollTimeoutMs(), remaining)),
+        (status) =>
+          status === 200 ? core.maxDesignMdPollReplyBytes() : core.maxDesignMdPendingReplyBytes(),
+      );
+      totalReplyBytes += pollReply.bytes;
+      if (totalReplyBytes > maxTotalReplyBytes) {
+        throw requestError('tooLarge', String(maxTotalReplyBytes));
+      }
+      const outcome = JSON.parse(core.classifyDesignMdPollReply(pollReply.status, pollReply.text));
+      if (outcome.outcome === 'pending') {
+        retryAfterMs = outcome.retryAfterMs ?? core.designMdPollIntervalMs();
+        continue;
+      }
+      if (outcome.outcome === 'error') {
+        throw requestError(
+          String(outcome.code || 'generationFailed'),
+          String(outcome.detail || ''),
+        );
+      }
+      if (outcome.outcome !== 'ok') {
+        throw requestError('generationFailed', 'OpenPencil returned an invalid job result');
+      }
+      completed = true;
+      return { markdown: String(outcome.markdown), intelligent: true };
+    }
+    throw requestError('timeout', String(core.designMdTotalBudgetMs() / 1000));
+  } finally {
+    if (jobUrl && !completed) {
+      const remaining = deadline - performance.now();
+      if (remaining > 0) {
+        await cancelDesignJob(
+          jobUrl,
+          Math.max(1, Math.min(2000, core.designMdPollTimeoutMs(), remaining)),
+        );
+      } else {
+        // Start the best-effort DELETE without extending the public 120s
+        // budget. The host independently expires an abandoned job.
+        void cancelDesignJob(jobUrl, Math.min(2000, core.designMdPollTimeoutMs()));
+      }
+    }
+  }
 }
 
 /* ----------------------------------------------- the account snapshot inbox */
@@ -269,11 +482,11 @@ export async function sendSnapshotToAccount(hubOrigin, csrfToken, snapshot, meta
     if (typeof csrfToken !== 'string' || csrfToken === '') {
       throw requestError('signedOut', 'no session');
     }
-    // The hub's cap is the local ingress's 32 MiB, less the envelope wrapped
-    // around the document — a capture that only just fits locally would
-    // otherwise be uploaded in full and then refused.
+    // The hub's cap is its own 32 MiB (smaller than the local ingress cap),
+    // less the envelope wrapped around the document — a capture that fits
+    // locally would otherwise be uploaded in full and then refused.
     if (core.hubSnapshotTooLarge(snapshot.length)) {
-      throw requestError('tooLarge', String(core.maxSnapshotMb()));
+      throw requestError('tooLarge', String(core.hubMaxSnapshotMb()));
     }
     const reply = await postHubJson(
       core.hubSnapshotsUrl(hubOrigin),

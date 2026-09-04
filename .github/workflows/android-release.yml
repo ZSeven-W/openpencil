@@ -1,0 +1,219 @@
+name: Android Release
+
+# Called by the canonical Rust Release workflow for an exact v* tag. The
+# build runner never receives the Android release keystore; a fresh protected
+# runner signs only the immutable unsigned handoff. This lane deliberately
+# stops at GitHub Release assets and does not upload to an app store.
+
+"on":
+  workflow_call:
+    secrets:
+      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN:
+        description: Reviewed China collaboration bootstrap URL
+        required: true
+      OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL:
+        description: Reviewed global collaboration bootstrap URL
+        required: true
+    outputs:
+      version:
+        description: Canonical OpenPencil version
+        value: ${{ jobs.verify.outputs.version }}
+      artifact_name:
+        description: Signed Android Actions artifact consumed by Rust Release
+        value: ${{ jobs.sign.outputs.artifact_name }}
+      artifact_id:
+        description: Immutable signed Android Actions artifact id
+        value: ${{ jobs.sign.outputs.artifact_id }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify immutable source and auth matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      source_sha: ${{ steps.release.outputs.source_sha }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Checkout the exact release source without credentials
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Validate the exact tag source and release version
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::Android Release may run only for an exact stable v* tag"
+            exit 2
+          }
+          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]] || {
+            echo "::error::checkout does not match the release source SHA"
+            exit 1
+          }
+          version=$(scripts/workspace-version.sh)
+          [[ "$GITHUB_REF" == "refs/tags/v$version" ]] || {
+            echo "::error::release tag does not match workspace version v$version"
+            exit 2
+          }
+          echo "source_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Android release and production Auth contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools/check-android-release-workflow.sh
+          tools/check-android-release-workflow.test.sh
+          tools/install-pinned-android-sdk.sh --self-test
+          tools/check-op-auth-release-matrix.test.sh
+          tools/check-op-auth-release-matrix.sh
+          tools/check-op-auth-prebuilt.sh --require-hardened
+          for target in aarch64-linux-android x86_64-linux-android; do
+            CONFIGURATION=Release \
+            OP_AUTH_ARCHIVE="$GITHUB_WORKSPACE/crates/op-auth-bridge/prebuilt/$target/libop_auth.a" \
+            OP_AUTH_TARGET="$target" \
+              tools/check-mobile-auth-link-input.sh
+          done
+
+  build:
+    name: Build verified unsigned APK and AAB
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    outputs:
+      artifact_id: ${{ steps.unsigned.outputs.artifact-id }}
+      artifact_digest: ${{ steps.unsigned.outputs.artifact-digest }}
+    steps:
+      - name: Checkout the exact release source without credentials
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ needs.verify.outputs.source_sha }}
+          submodules: recursive
+
+      - name: Install pinned Rust and Android toolchains
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install 1.94 --profile minimal
+          rustup target add --toolchain 1.94 \
+            aarch64-linux-android x86_64-linux-android
+          tools/install-pinned-android-sdk.sh \
+            "$RUNNER_TEMP/android-sdk"
+
+      - name: Stage reviewed Android Skia and bundletool inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          aarch64_url=$(GITHUB_ENV= tools/pinned-release-tools.sh skia android \
+            aarch64-linux-android "$RUNNER_TEMP/skia-aarch64-linux-android")
+          x86_64_url=$(GITHUB_ENV= tools/pinned-release-tools.sh skia android \
+            x86_64-linux-android "$RUNNER_TEMP/skia-x86_64-linux-android")
+          bundletool_jar=$(tools/pinned-release-tools.sh bundletool \
+            "$RUNNER_TEMP/bundletool-1.18.3")
+          {
+            echo "ANDROID_SKIA_AARCH64_BINARIES_URL=$aarch64_url"
+            echo "ANDROID_SKIA_X86_64_BINARIES_URL=$x86_64_url"
+            echo "BUNDLETOOL_JAR=$bundletool_jar"
+          } >> "$GITHUB_ENV"
+
+      - name: Build collaboration-enabled unsigned release handoff
+        shell: bash
+        env:
+          ANDROID_UNSIGNED_OUTPUT_DIR: ${{ runner.temp }}/openpencil-android-unsigned
+          OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
+          OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
+          OPENPENCIL_RELEASE_SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
+          OP_AUTH_ARTIFACT_ROOT: ${{ github.workspace }}/crates/op-auth-bridge/prebuilt
+        run: |
+          set -euo pipefail
+          scripts/build-android-release.sh
+
+      - name: Upload exact unsigned handoff
+        id: unsigned
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: internal-android-unsigned-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/openpencil-android-unsigned/
+          if-no-files-found: error
+          retention-days: 1
+
+  sign:
+    name: Sign exact APK and AAB handoff
+    needs: [verify, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release-production
+    outputs:
+      artifact_name: ${{ steps.metadata.outputs.artifact_name }}
+      artifact_id: ${{ steps.signed.outputs.artifact-id }}
+    steps:
+      - name: Checkout the exact release signer source without credentials
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ needs.verify.outputs.source_sha }}
+
+      - name: Install digest-pinned Android signing tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools/pinned-release-tools.sh android-signing-tools \
+            "$RUNNER_TEMP/android-signing-tools"
+
+      - name: Download exact unsigned artifact id
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: ${{ runner.temp }}/openpencil-android-unsigned
+          merge-multiple: true
+
+      - name: Sign and verify without invoking Cargo or Gradle
+        shell: bash
+        env:
+          ANDROID_RELEASE_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          ANDROID_RELEASE_VERSION: ${{ needs.verify.outputs.version }}
+          ANDROID_SIGNED_OUTPUT_DIR: ${{ runner.temp }}/openpencil-android-signed
+          ANDROID_UNSIGNED_HANDOFF_DIR: ${{ runner.temp }}/openpencil-android-unsigned
+          OPENPENCIL_RELEASE_SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$ANDROID_JAVA_HOME"
+          export PATH="$ANDROID_JAVA_HOME/bin:$PATH"
+          scripts/sign-android-release.sh
+
+      - name: Freeze signed artifact name
+        id: metadata
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: echo "artifact_name=openpencil-android-$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Upload signed Android release assets
+        id: signed
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: openpencil-android-${{ needs.verify.outputs.version }}
+          path: |
+            ${{ runner.temp }}/openpencil-android-signed/*.apk
+            ${{ runner.temp }}/openpencil-android-signed/*.aab
+            ${{ runner.temp }}/openpencil-android-signed/SHA256SUMS.android.txt
+          if-no-files-found: error
+          retention-days: 7

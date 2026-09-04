@@ -90,6 +90,44 @@ impl RelayGuestBridge {
         self.handle.subscribe()
     }
 
+    /// Wait until the relay has paired this guest with an owner.
+    ///
+    /// The local TCP/Noise driver must not start its five-second handshake
+    /// window before this gate opens: relay pairing has its own, much longer
+    /// bounded budget and is not Noise progress.
+    pub async fn wait_until_paired(
+        &self,
+        timeout: std::time::Duration,
+    ) -> Result<(), RelayClientError> {
+        let mut status = self.subscribe();
+        let paired = async {
+            loop {
+                let current = *status.borrow();
+                match current.phase {
+                    RelayBridgePhase::Active => return Ok(()),
+                    RelayBridgePhase::Failed => {
+                        return Err(RelayClientError::GuestPairingFailed {
+                            kind: current.last_error.unwrap_or(RelayFailureKind::Protocol),
+                        });
+                    }
+                    RelayBridgePhase::Stopped => {
+                        return Err(RelayClientError::StoppedBeforePaired);
+                    }
+                    RelayBridgePhase::Starting
+                    | RelayBridgePhase::Waiting
+                    | RelayBridgePhase::Degraded => {}
+                }
+                status
+                    .changed()
+                    .await
+                    .map_err(|_| RelayClientError::StoppedBeforePaired)?;
+            }
+        };
+        tokio::time::timeout(timeout, paired)
+            .await
+            .map_err(|_| RelayClientError::PairedTimeout)?
+    }
+
     pub async fn stop(self) -> Result<(), RelayStopError> {
         self.handle.stop().await
     }
@@ -112,6 +150,7 @@ impl RelayGuestBridge {
             waiting_lanes: 1,
             active_tunnels: 0,
             last_error: None,
+            relay_pairing_timeouts: 0,
         };
         let (status_tx, status_rx) = watch::channel(initial);
         let task = tokio::spawn(run_guest(
@@ -153,29 +192,6 @@ async fn run_guest(
     limits: RelayLimits,
 ) {
     let started_at = Instant::now();
-    let accepted = tokio::select! {
-        _ = cancelled(&mut cancel) => {
-            publish(&status, RelayBridgeStatus::stopped());
-            return;
-        }
-        result = tokio::time::timeout(limits.lifetime, listener.accept()) => result,
-    };
-    let (local, _) = match accepted {
-        Err(_) => {
-            publish_failed(&status, RelayFailureKind::LifetimeExceeded);
-            return;
-        }
-        Ok(Err(_)) => {
-            publish_failed(&status, RelayFailureKind::LocalIo);
-            return;
-        }
-        Ok(Ok(pair)) => pair,
-    };
-    if local.set_nodelay(true).is_err() {
-        publish_failed(&status, RelayFailureKind::LocalIo);
-        return;
-    }
-
     // One budget for the guest's single tunnel, spanning the handshake and the
     // pump so the bound covers the whole connection rather than one phase.
     let mut reauth_budget = ReauthBudget::new(limits);
@@ -202,6 +218,11 @@ async fn run_guest(
         }
     };
 
+    if *cancel.borrow() {
+        publish(&status, RelayBridgeStatus::stopped());
+        return;
+    }
+
     publish(
         &status,
         RelayBridgeStatus {
@@ -209,11 +230,45 @@ async fn run_guest(
             waiting_lanes: 0,
             active_tunnels: 1,
             last_error: None,
+            relay_pairing_timeouts: 0,
         },
     );
+    // Pairing and the inner Noise handshake are separate bounded phases. Only
+    // accept the loopback driver after the relay tunnel is paired, otherwise a
+    // slow but healthy relay wait consumes Noise's five-second deadline.
+    let remaining = match (started_at + limits.lifetime).checked_duration_since(Instant::now()) {
+        Some(remaining) if !remaining.is_zero() => remaining,
+        _ => {
+            publish_failed(&status, RelayFailureKind::LifetimeExceeded);
+            return;
+        }
+    };
+    let accepted = tokio::select! {
+        biased;
+        _ = cancelled(&mut cancel) => {
+            publish(&status, RelayBridgeStatus::stopped());
+            return;
+        }
+        result = tokio::time::timeout(remaining, listener.accept()) => result,
+    };
+    let (mut local, _) = match accepted {
+        Err(_) => {
+            publish_failed(&status, RelayFailureKind::LifetimeExceeded);
+            return;
+        }
+        Ok(Err(_)) => {
+            publish_failed(&status, RelayFailureKind::LocalIo);
+            return;
+        }
+        Ok(Ok(pair)) => pair,
+    };
+    if local.set_nodelay(true).is_err() {
+        publish_failed(&status, RelayFailureKind::LocalIo);
+        return;
+    }
     match pump(
         socket,
-        local,
+        &mut local,
         ClientReauthContext {
             auth: &auth,
             role: op_collab_relay_protocol::RelayRole::Guest,
@@ -241,6 +296,7 @@ fn publish_failed(status: &watch::Sender<RelayBridgeStatus>, kind: RelayFailureK
             waiting_lanes: 0,
             active_tunnels: 0,
             last_error: Some(kind),
+            relay_pairing_timeouts: 0,
         },
     );
 }

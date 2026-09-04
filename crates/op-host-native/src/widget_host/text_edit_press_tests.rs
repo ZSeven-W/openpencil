@@ -307,6 +307,82 @@ fn select_all_then_typing_replaces_content() {
     assert_eq!(caret(&host), Some(1));
 }
 
+// --- Deep-nesting drill chain (reported: generated mobile design) -------
+
+/// 4-level fixture mirroring generated documents: screen frame >
+/// header row > search pill (135×40 r20) > single-line text. Layout
+/// attributes match what the generation pipeline authors, so the
+/// resolved scene — not hand-placed x/y — decides where the text lands.
+const DEEP_PILL: &str = r#"{"version":"1.0.0","children":[
+  {"type":"frame","id":"screen","name":"Screen","x":400,"y":60,"width":375,"height":300,
+   "layout":"vertical","children":[
+    {"type":"frame","id":"header","name":"Header","width":"fill_container","height":72,
+     "layout":"horizontal","padding":[16,16],"gap":8,"alignItems":"center","children":[
+      {"type":"frame","id":"pill","name":"SearchPill","width":135,"height":40,"cornerRadius":20,
+       "layout":"horizontal","alignItems":"center","padding":[0,12],"children":[
+        {"type":"text","id":"pill_text","name":"Placeholder",
+         "content":"Search exhibitions","fontSize":16,"lineHeight":1}
+      ]}
+    ]}
+  ]}
+]}"#;
+
+/// A single double-click on deeply nested text jumps straight into the
+/// edit session — the pointer names the exact node, so the level-by-level
+/// drill (which used to cost one double-click per nesting level) must not
+/// gate text editing.
+#[test]
+fn double_click_on_deep_nested_text_jumps_straight_to_edit() {
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, DEEP_PILL);
+    let b = node_bounds(&mut host, "pill_text");
+    let (cx, cy) = (b.origin.x + b.size.x / 2.0, b.origin.y + b.size.y / 2.0);
+    press_doc(&mut host, cx, cy);
+    release(&mut host);
+    host.set_now_ms(100);
+    press_doc(&mut host, cx, cy);
+    release(&mut host);
+    assert_eq!(
+        host.editor_state().ui.text_editing,
+        Some(NodeId::new("pill_text")),
+        "first double-click must open the session regardless of nesting depth"
+    );
+    assert_eq!(
+        host.editor_state().selection.anchor.as_str(),
+        "pill_text",
+        "selection jumps with the session"
+    );
+    assert_eq!(
+        host.editor_state().editor_ui.entered_container,
+        Some(NodeId::new("pill")),
+        "scope lands on the text's parent so exiting the session is sane"
+    );
+}
+
+/// Double-click over a container (no text at the deepest hit) keeps the
+/// level-by-level drill — the fast path is text-only.
+#[test]
+fn double_click_on_container_still_drills_one_level() {
+    let mut host = WidgetHostNative::new();
+    seed(&mut host, DEEP_PILL);
+    // A point inside the header row but right of the pill: deepest hit
+    // is the header frame, not a text leaf.
+    let header = node_bounds(&mut host, "header");
+    let pill = node_bounds(&mut host, "pill");
+    let cx = pill.origin.x + pill.size.x + 40.0;
+    let cy = header.origin.y + header.size.y / 2.0;
+    press_doc(&mut host, cx, cy);
+    release(&mut host);
+    host.set_now_ms(100);
+    press_doc(&mut host, cx, cy);
+    release(&mut host);
+    assert_eq!(
+        host.editor_state().ui.text_editing,
+        None,
+        "a container double-click must not open a text session"
+    );
+}
+
 #[test]
 fn backspace_and_delete_are_caret_aware() {
     let mut host = WidgetHostNative::new();

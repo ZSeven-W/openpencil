@@ -2,7 +2,7 @@
 //! properties that do not have their own typed `EditorCommand` variants.
 //!
 //! Covers: `layout`, `gap`, `padding`, `letterSpacing`, `lineHeight`,
-//! `opacity`, `fontFamily`, `textAlign`, `textAlignVertical`,
+//! `opacity`, `x`, `y`, `fontFamily`, `textAlign`, `textAlignVertical`,
 //! `textGrowth`, `alignItems`, `justifyContent`, `clipContent`, and
 //! sizing keywords for `width` / `height` (`"fit_content"` /
 //! `"fill_container"`).
@@ -139,7 +139,7 @@ impl EditorState {
 
         // Read-validate before taking the mutable borrow.
         match property {
-            "gap" | "letterSpacing" | "lineHeight" | "opacity" => {
+            "gap" | "letterSpacing" | "lineHeight" | "opacity" | "x" | "y" => {
                 let LayoutPropValue::Number(n) = value else {
                     return false;
                 };
@@ -309,6 +309,20 @@ impl EditorState {
                 node.base_mut().opacity = Some(NumberOrExpression::Number(*n));
                 true
             }
+            "x" => {
+                let LayoutPropValue::Number(n) = value else {
+                    return false;
+                };
+                node.base_mut().x = Some(*n);
+                true
+            }
+            "y" => {
+                let LayoutPropValue::Number(n) = value else {
+                    return false;
+                };
+                node.base_mut().y = Some(*n);
+                true
+            }
             "width" => {
                 let LayoutPropValue::Keyword(s) = value else {
                     return false;
@@ -352,6 +366,8 @@ fn property_invalidates_preserved_geometry(property: &str) -> bool {
             | "height"
             | "clipContent"
             | "textGrowth"
+            | "x"
+            | "y"
     )
 }
 

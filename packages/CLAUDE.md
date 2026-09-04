@@ -51,12 +51,21 @@ member — load it unpacked from `chrome://extensions`.
   `op_html::import_snapshot` parses). `bun run lint` runs
   `op-chrome-extension/scripts/check-extractor-sync.sh`, which fails on drift;
   `--fix` re-copies the canonical asset. Never edit the copy.
-- Ingress: `POST /api/import/web-snapshot` on the desktop app's live MCP
-  endpoint (insert-only, tokenless, the one route there that accepts a
-  `chrome-extension://` origin — see
-  `crates/op-host-services/src/mcp_live/snapshot_ingest.rs`), falling back to a
-  plain `/mcp` `tools/call import_web_snapshot` for the unmanaged
-  `--serve-web` daemon. `Download JSON` + `op import:snapshot` is the offline path.
+- The live MCP endpoint exposes two extension-scoped REST capabilities. Snapshot
+  import uses `POST /api/import/web-snapshot` (insert-only and open to a
+  well-formed `chrome-extension://` origin unless explicitly pinned), with a
+  plain `/mcp` `tools/call import_web_snapshot` fallback for unmanaged
+  `--serve-web`. Intelligent `design.md` extraction uses a stricter asynchronous
+  `POST /api/generate/design-md` + GET/DELETE job flow: it accepts only bounded
+  style evidence and queues model work only for an extension id explicitly
+  paired through `OPENPENCIL_EXTENSION_ALLOWED_IDS` and a cancellable,
+  evidence-only built-in API provider; tool-capable CLI/ACP adapters are not
+  eligible. The extension generates a deterministic local guide when pairing
+  or compatible model generation is unavailable.
+  See `snapshot_ingest.rs` and `design_md_route.rs` under
+  `crates/op-host-services/src/mcp_live/`. The extension's offline path is
+  **Download .op**, which converts the capture locally into a ready-to-open
+  document.
 - **Account (optional).** The popup header can sign in to OP Hub through the
   hub's own BFF: a tab on `GET /api/v1/auth/login?return_to=/account`, then
   `GET /api/v1/session` with `credentials: 'include'`. The extension is a

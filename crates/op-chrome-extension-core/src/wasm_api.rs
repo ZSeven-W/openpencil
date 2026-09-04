@@ -14,6 +14,8 @@ use wasm_bindgen::prelude::*;
 
 use crate::account::{self, Region};
 use crate::delivery;
+use crate::design_md;
+use crate::design_md_job::{self, DesignMdReply, PollReply, StartReply};
 use crate::endpoint;
 use crate::filename;
 use crate::hub;
@@ -39,6 +41,24 @@ pub fn normalize_endpoint(raw: &str) -> Option<String> {
 #[wasm_bindgen(js_name = ingestUrl)]
 pub fn ingest_url(endpoint: &str) -> String {
     endpoint::ingest_url(endpoint)
+}
+
+/// Absolute URL of the paired desktop host's intelligent `design.md` route.
+#[wasm_bindgen(js_name = designMdUrl)]
+pub fn design_md_url(endpoint: &str) -> String {
+    endpoint::design_md_url(endpoint)
+}
+
+/// URL that starts a short-lived intelligent generation job.
+#[wasm_bindgen(js_name = designMdStartUrl)]
+pub fn design_md_start_url(endpoint: &str) -> String {
+    endpoint::design_md_start_url(endpoint)
+}
+
+/// URL that polls or cancels a validated opaque job id.
+#[wasm_bindgen(js_name = designMdPollUrl)]
+pub fn design_md_poll_url(endpoint: &str, job_id: &str) -> Option<String> {
+    endpoint::design_md_poll_url(endpoint, job_id)
 }
 
 /// Absolute URL of the `/mcp` fallback.
@@ -67,6 +87,167 @@ pub fn snapshot_placeholder() -> String {
 #[wasm_bindgen(js_name = opFilename)]
 pub fn op_filename(title: &str) -> String {
     filename::op_filename(title)
+}
+
+/// Conventional fixed download name for an extracted design system.
+#[wasm_bindgen(js_name = designMdFilename)]
+pub fn design_md_filename() -> String {
+    filename::design_md_filename().to_owned()
+}
+
+/// Convert bounded design evidence into a deterministic local `design.md`.
+///
+/// The returned JSON always carries all three fields:
+/// `{"ok":true,"markdown":"…","error":null}` or
+/// `{"ok":false,"markdown":null,"error":"…"}`.
+#[wasm_bindgen(js_name = evidenceToDesignMd)]
+pub fn evidence_to_design_md(evidence_json: &str) -> String {
+    let value = match design_md::evidence_to_design_md(evidence_json) {
+        Ok(markdown) => serde_json::json!({
+            "ok": true,
+            "markdown": markdown,
+            "error": null,
+        }),
+        Err(error) => serde_json::json!({
+            "ok": false,
+            "markdown": null,
+            "error": error.to_string(),
+        }),
+    };
+    value.to_string()
+}
+
+/// Legacy alias for one short job request, not the whole generation budget.
+#[wasm_bindgen(js_name = designMdRequestTimeoutMs)]
+pub fn design_md_request_timeout_ms() -> u32 {
+    design_md_job::START_TIMEOUT_MS
+}
+
+#[wasm_bindgen(js_name = designMdStartTimeoutMs)]
+pub fn design_md_start_timeout_ms() -> u32 {
+    design_md_job::START_TIMEOUT_MS
+}
+
+#[wasm_bindgen(js_name = designMdPollTimeoutMs)]
+pub fn design_md_poll_timeout_ms() -> u32 {
+    design_md_job::POLL_TIMEOUT_MS
+}
+
+#[wasm_bindgen(js_name = designMdPollIntervalMs)]
+pub fn design_md_poll_interval_ms() -> u32 {
+    design_md_job::POLL_INTERVAL_MS
+}
+
+#[wasm_bindgen(js_name = designMdTotalBudgetMs)]
+pub fn design_md_total_budget_ms() -> u32 {
+    design_md_job::TOTAL_BUDGET_MS
+}
+
+/// Maximum UTF-8 evidence body accepted by the local and intelligent paths.
+#[wasm_bindgen(js_name = maxDesignEvidenceBytes)]
+pub fn max_design_evidence_bytes() -> u32 {
+    design_md::MAX_EVIDENCE_BYTES as u32
+}
+
+/// Maximum UTF-8 response envelope the client may read from the model route.
+#[wasm_bindgen(js_name = maxDesignMdReplyBytes)]
+pub fn max_design_md_reply_bytes() -> u32 {
+    design_md_job::MAX_POLL_REPLY_BYTES as u32
+}
+
+#[wasm_bindgen(js_name = maxDesignMdStartReplyBytes)]
+pub fn max_design_md_start_reply_bytes() -> u32 {
+    design_md_job::MAX_START_REPLY_BYTES as u32
+}
+
+#[wasm_bindgen(js_name = maxDesignMdPollReplyBytes)]
+pub fn max_design_md_poll_reply_bytes() -> u32 {
+    design_md_job::MAX_POLL_REPLY_BYTES as u32
+}
+
+#[wasm_bindgen(js_name = maxDesignMdPendingReplyBytes)]
+pub fn max_design_md_pending_reply_bytes() -> u32 {
+    design_md_job::MAX_PENDING_REPLY_BYTES as u32
+}
+
+#[wasm_bindgen(js_name = maxDesignMdPollAttempts)]
+pub fn max_design_md_poll_attempts() -> u32 {
+    design_md_job::MAX_POLL_ATTEMPTS
+}
+
+#[wasm_bindgen(js_name = maxDesignMdTotalReplyBytes)]
+pub fn max_design_md_total_reply_bytes() -> u32 {
+    design_md_job::MAX_TOTAL_REPLY_BYTES as u32
+}
+
+/// Whether an evidence body is over the shared 256 KiB cap.
+#[wasm_bindgen(js_name = designEvidenceTooLarge)]
+pub fn design_evidence_too_large(bytes: f64) -> bool {
+    !bytes.is_finite() || bytes < 0.0 || bytes > design_md::MAX_EVIDENCE_BYTES as f64
+}
+
+/// Classify a reply from `POST /api/generate/design-md`.
+///
+/// Success is `{"outcome":"ok","markdown":"…","intelligent":true}`;
+/// failure is `{"outcome":"error","code":"…","detail":"…"}`.
+#[wasm_bindgen(js_name = classifyDesignMdReply)]
+pub fn classify_design_md_reply(status: u16, text: &str) -> String {
+    let value = match design_md_job::classify_reply(status, text) {
+        DesignMdReply::Ready { markdown } => serde_json::json!({
+            "outcome": "ok",
+            "markdown": markdown,
+            "intelligent": true,
+        }),
+        DesignMdReply::Failed { code, detail } => serde_json::json!({
+            "outcome": "error",
+            "code": code.as_str(),
+            "detail": detail,
+        }),
+    };
+    value.to_string()
+}
+
+/// Classify the short POST acknowledgement.
+#[wasm_bindgen(js_name = classifyDesignMdStartReply)]
+pub fn classify_design_md_start_reply(status: u16, text: &str) -> String {
+    let value = match design_md_job::classify_start_reply(status, text) {
+        StartReply::Pending {
+            job_id,
+            retry_after_ms,
+        } => serde_json::json!({
+            "outcome": "pending",
+            "jobId": job_id,
+            "retryAfterMs": retry_after_ms,
+        }),
+        StartReply::Failed { code, detail } => serde_json::json!({
+            "outcome": "error",
+            "code": code.as_str(),
+            "detail": detail,
+        }),
+    };
+    value.to_string()
+}
+
+/// Classify one short GET poll.
+#[wasm_bindgen(js_name = classifyDesignMdPollReply)]
+pub fn classify_design_md_poll_reply(status: u16, text: &str) -> String {
+    let value = match design_md_job::classify_poll_reply(status, text) {
+        PollReply::Pending { retry_after_ms } => serde_json::json!({
+            "outcome": "pending",
+            "retryAfterMs": retry_after_ms,
+        }),
+        PollReply::Ready { markdown } => serde_json::json!({
+            "outcome": "ok",
+            "markdown": markdown,
+            "intelligent": true,
+        }),
+        PollReply::Failed { code, detail } => serde_json::json!({
+            "outcome": "error",
+            "code": code.as_str(),
+            "detail": detail,
+        }),
+    };
+    value.to_string()
 }
 
 /// Convert an extractor snapshot into a ready-to-open `.op` document.
@@ -117,6 +298,13 @@ pub fn max_snapshot_mb() -> u32 {
 #[wasm_bindgen(js_name = snapshotTooLarge)]
 pub fn snapshot_too_large(chars: f64) -> bool {
     transfer::snapshot_too_large(chars)
+}
+
+/// Whether a built `/mcp` fallback envelope exceeds the endpoint's 64 MiB
+/// whole-body cap (JSON re-escaping can inflate past the snapshot cap).
+#[wasm_bindgen(js_name = mcpEnvelopeTooLarge)]
+pub fn mcp_envelope_too_large(chars: f64) -> bool {
+    transfer::mcp_envelope_too_large(chars)
 }
 
 /// Classify a reply from `POST /api/import/web-snapshot`. See
@@ -266,6 +454,13 @@ pub fn hub_snapshot_placeholder() -> String {
 #[wasm_bindgen(js_name = hubSnapshotTooLarge)]
 pub fn hub_snapshot_too_large(chars: f64) -> bool {
     hub::snapshot_too_large(chars)
+}
+
+/// The Hub's own body cap, in megabytes (used in the account over-size
+/// message; smaller than the local ingest cap).
+#[wasm_bindgen(js_name = hubMaxSnapshotMb)]
+pub fn hub_max_snapshot_mb() -> u32 {
+    hub::HUB_MAX_SNAPSHOT_MB
 }
 
 /// Milliseconds before an upload to the Hub is abandoned.

@@ -53,3 +53,49 @@ fn direct_update_keeps_numeric_sizes_on_flat_command() {
         other => panic!("numeric sizes must stay on UpdateNode, got {other:?}"),
     }
 }
+
+#[test]
+fn direct_update_coerces_numeric_string_to_number() {
+    // GLM-5.3 occasionally emits quoted numbers; accept them.
+    let command = parse_single_direct_operation(r#"U("n10", {"width":"158","height":"240"})"#)
+        .expect("valid direct update")
+        .expect("update command");
+
+    match command {
+        EditorCommand::UpdateNode { width, height, .. } => {
+            assert_eq!(width, Some(158));
+            assert_eq!(height, Some(240));
+        }
+        other => panic!("numeric strings must coerce to UpdateNode, got {other:?}"),
+    }
+}
+
+#[test]
+fn direct_update_rejects_numeric_strings_with_units() {
+    // Strings with units ("158px", "50%") are structural errors — the normalizer
+    // accepts clean numeric strings but rejects any with non-digit chars.
+    let err = parse_single_direct_operation(r#"U("n10", {"width":"158px"})"#)
+        .expect_err("should return ProgramError for unit suffix");
+    // Error must report the violation clearly.
+    let msg = err.to_string();
+    assert!(
+        msg.contains("158px") || msg.contains("non-numeric"),
+        "error message should mention the bad value or non-numeric chars, got: {}",
+        msg
+    );
+}
+
+#[test]
+fn direct_update_keeps_non_numeric_field_strings_uncoerced() {
+    // Field-scoped coercion: name and other text fields stay as strings.
+    let command = parse_single_direct_operation(r#"U("n10", {"name":"158"})"#)
+        .expect("valid direct update")
+        .expect("update command");
+
+    match command {
+        EditorCommand::UpdateNode { name, .. } => {
+            assert_eq!(name, Some("158".to_string()));
+        }
+        other => panic!("text fields must not coerce, got {other:?}"),
+    }
+}

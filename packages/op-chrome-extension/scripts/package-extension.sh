@@ -14,8 +14,8 @@
 #      origins the core is compiled against. Skippable with --skip-tests when
 #      the caller has just run it.
 #   3. node --check every runtime .js, so a syntax error cannot ship.
-#   4. The three drift guards: the vendored extractor, the service worker's
-#      import graph, the 15 locale catalogs.
+#   4. The drift/privacy guards: vendored extractor, service-worker import
+#      graph, 15 locale catalogs and bounded design evidence.
 #   5. Stage the runtime files — and only those — into a clean directory.
 #   6. Add pt_BR and pt_PT as copies of pt (see below).
 #   7. Zip the STAGE ROOT and list what went in.
@@ -85,10 +85,14 @@ RUNTIME_FILES=(
   capture.js
   client.js
   core-registry.js
+  design-capture.js
+  design-evidence.js
+  design-md.js
   i18n.js
   picker.js
   popup.js
   popup-status.js
+  popup-worker-actions.js
   wasm-core.js
   vendor/snapshot-extractor.js
   wasm/op_chrome_extension_core.js
@@ -120,10 +124,11 @@ for source in "${EXTENSION_DIR}"/*.js "${EXTENSION_DIR}"/vendor/*.js; do
 done
 printf '  ✓ %d script(s) parse\n' "${checked}"
 
-step 4 "Drift guards: extractor, service worker, locales"
+step 4 "Drift/privacy guards: extractor, service worker, locales, design evidence"
 bash "${SCRIPT_DIR}/check-extractor-sync.sh"
 node "${SCRIPT_DIR}/check-sw-imports.mjs"
 node "${SCRIPT_DIR}/check-locales.mjs"
+node "${SCRIPT_DIR}/check-design-evidence.mjs"
 
 step 5 "Stage the runtime files"
 # A stale stage would silently ship a file that has since been deleted.

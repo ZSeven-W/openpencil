@@ -126,7 +126,7 @@ fn title_group_center_is_independent_of_asymmetric_chrome() {
     let mut crowded = TopBar::new("Untitled");
     crowded.git_branch = Some("main".to_string());
     crowded.agent_count = 6;
-    crowded.connected = [true; 6];
+    crowded.connected = [true; 7];
     crowded.mcp_count = 8;
     crowded.account_button_visible = true;
     crowded.collab.visible = true;
@@ -263,6 +263,19 @@ fn for_editor_ui_picks_up_button_hover() {
     let bar = TopBar::for_editor_ui(&ui);
     assert!(bar.is_hovered(op_editor_core::TopBarButton::ToggleTheme));
     assert!(!bar.is_hovered(op_editor_core::TopBarButton::ToggleSidebar));
+}
+
+#[test]
+fn for_editor_ui_uses_transient_host_theme_for_paint() {
+    let ui = EditorUiState {
+        theme_mode: op_editor_core::ThemeMode::Light,
+        host_theme_override: Some(op_editor_core::ThemeMode::Dark),
+        ..Default::default()
+    };
+    let bar = TopBar::for_editor_ui(&ui);
+    assert_eq!(bar.theme_mode, op_editor_core::ThemeMode::Dark);
+    assert!(bar.theme.background.r < 0.1);
+    assert_eq!(ui.theme_mode, op_editor_core::ThemeMode::Light);
 }
 
 #[test]
@@ -633,7 +646,7 @@ fn agent_chip_counts_ready_builtin_agents() {
         display_name: "MiniMax M3".into(),
         kind: BuiltinAgentKind::OpenAiCompat,
         api_key: "sk-test".into(),
-        model: "MiniMax-M3".into(),
+        models: vec!["MiniMax-M3".into()],
         base_url: "https://api.minimaxi.com/v1".into(),
         enabled: true,
     });
@@ -644,7 +657,7 @@ fn agent_chip_counts_ready_builtin_agents() {
         display_name: "Unconfigured".into(),
         kind: BuiltinAgentKind::OpenAiCompat,
         api_key: "".into(),
-        model: "x".into(),
+        models: vec!["x".into()],
         base_url: "".into(),
         enabled: true,
     });
@@ -663,10 +676,10 @@ fn agent_chip_counts_ready_builtin_agents() {
 fn chip_with_only_builtin_agents_reserves_no_icon_cluster() {
     let mut bar = TopBar::new("test.op");
     bar.agent_count = 4;
-    bar.connected = [false; 6];
+    bar.connected = [false; 7];
     assert_eq!(bar.agent_icons_span(), 0.0, "no painted icons, no span");
 
-    bar.connected = [true, false, false, false, false, false];
+    bar.connected = [true, false, false, false, false, false, false];
     assert!(
         bar.agent_icons_span() > 0.0,
         "a connected CLI provider brings the cluster back"
@@ -722,50 +735,6 @@ fn account_button_gate_on_restores_hit_target_and_layout_slot() {
         account.origin.y + account.size.y / 2.0,
     );
     assert_eq!(bar.hit_test(rect, center), Some(TopBarHit::Account));
-}
-
-#[test]
-fn vscode_embed_hides_file_figma_title_and_fullscreen() {
-    let mut bar = TopBar::new("Untitled").with_traffic_controls(false);
-    bar.embed = op_editor_core::EmbedHost::VsCode;
-    // No hit anywhere may resolve to the hidden controls.
-    let rect = Rect {
-        origin: Point2D::new(0.0, 0.0),
-        size: Point2D::new(1200.0, TOP_BAR_HEIGHT),
-    };
-    for x in 0..1200 {
-        let hit = bar.hit_test(rect, Point2D::new(x as f32, TOP_BAR_HEIGHT / 2.0));
-        assert!(
-            !matches!(
-                hit,
-                Some(TopBarHit::ToggleFileMenu)
-                    | Some(TopBarHit::OpenImportMenu)
-                    | Some(TopBarHit::ToggleFullscreen)
-            ),
-            "hidden control hit at x={x}: {hit:?}"
-        );
-    }
-}
-
-#[test]
-fn vscode_embed_keeps_sidebar_locale_theme_and_chip() {
-    let mut bar = TopBar::new("Untitled").with_traffic_controls(false);
-    bar.embed = op_editor_core::EmbedHost::VsCode;
-    let rect = Rect {
-        origin: Point2D::new(0.0, 0.0),
-        size: Point2D::new(1200.0, TOP_BAR_HEIGHT),
-    };
-    let hits: Vec<_> = (0..1200)
-        .filter_map(|x| bar.hit_test(rect, Point2D::new(x as f32, TOP_BAR_HEIGHT / 2.0)))
-        .collect();
-    for expect in [
-        TopBarHit::ToggleSidebar,
-        TopBarHit::ToggleLocale,
-        TopBarHit::ToggleTheme,
-        TopBarHit::OpenAgentSettings,
-    ] {
-        assert!(hits.contains(&expect), "missing {expect:?}");
-    }
 }
 
 #[test]

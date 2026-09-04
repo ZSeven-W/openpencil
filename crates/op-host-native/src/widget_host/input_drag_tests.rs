@@ -1,7 +1,7 @@
 //! Drag/release tests split from `input_tests.rs` so each test module
 //! stays under the repository file-size ceiling.
 
-use super::{HandleDragState, NodeDragState, WidgetHostNative};
+use super::{CreateDragState, HandleDragState, NodeDragState, RotateDragState, WidgetHostNative};
 use op_editor_core::{NodeId, PenNodeExt};
 use op_editor_ui::{widgets::SelectionHandle, Point2D, Rect};
 
@@ -70,6 +70,130 @@ fn bottom_right_handle_resizes_only_selected_container() {
         child_before,
         "normal container resize must not scale or translate fixed descendants"
     );
+}
+
+#[test]
+fn consecutive_resize_frames_keep_layout_scene_in_sync() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"1.0.0","children":[{
+          "type":"rectangle","id":"shape","name":"shape","x":100,"y":80,
+          "width":120,"height":80
+        }]}"#,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("shape"));
+    host.mark_paint_dirty_for_test();
+    let _ = host.layout_scene();
+    host.editor_state_mut().commit_history();
+    host.handle_drag = Some(HandleDragState {
+        handle: SelectionHandle::Right,
+        start_screen_x: 500.0,
+        start_screen_y: 500.0,
+        start_bounds: Rect::xywh(100.0, 80.0, 120.0, 80.0),
+        start_authored_x: Some(100.0),
+        start_authored_y: Some(80.0),
+    });
+
+    for (cursor_x, expected_width) in [(520.0, 140.0), (540.0, 160.0)] {
+        assert!(host.apply_cursor_move(cursor_x, 500.0));
+        assert_eq!(authored_geometry(&host, "shape").2, Some(expected_width));
+        let scene_width = host
+            .layout_scene()
+            .active_page()
+            .and_then(|page| page.find("shape"))
+            .expect("scene shape")
+            .bounds
+            .size
+            .x;
+        assert_eq!(scene_width, expected_width as f32);
+    }
+}
+
+#[test]
+fn consecutive_rotation_frames_keep_layout_scene_in_sync() {
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"1.0.0","children":[{
+          "type":"rectangle","id":"shape","name":"shape","x":100,"y":80,
+          "width":120,"height":80
+        }]}"#,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("shape"));
+    let _ = host.layout_scene();
+    host.editor_state_mut().commit_history();
+    host.rotate_drag = Some(RotateDragState {
+        center_screen_x: 500.0,
+        center_screen_y: 500.0,
+        start_cursor_angle: 0.0,
+        start_rotation: 0.0,
+    });
+
+    for (cursor, expected) in [
+        ((500.0, 510.0), std::f32::consts::FRAC_PI_2),
+        ((490.0, 500.0), std::f32::consts::PI),
+    ] {
+        assert!(host.apply_cursor_move(cursor.0, cursor.1));
+        let scene_rotation = host
+            .layout_scene()
+            .active_page()
+            .and_then(|page| page.find("shape"))
+            .expect("scene shape")
+            .rotation;
+        assert!((scene_rotation - expected).abs() < 0.0001);
+    }
+}
+
+#[test]
+fn consecutive_create_frames_keep_layout_scene_in_sync() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().tool = op_editor_core::Tool::Rect;
+    let start = Point2D::new(700.0, 400.0);
+    let id = host
+        .create_node_for_active_tool(start)
+        .expect("rectangle tool creates a node");
+    host.editor_state_mut().set_single_selection(id.clone());
+    host.create_drag = Some(CreateDragState {
+        start_doc_x: start.x,
+        start_doc_y: start.y,
+    });
+    let (canvas_x, canvas_y) =
+        op_editor_ui::widgets::host_canvas_geometry::canvas_origin(host.editor_state());
+
+    for (doc_cursor, expected_size) in [
+        (Point2D::new(740.0, 440.0), Point2D::new(40.0, 40.0)),
+        (Point2D::new(760.0, 460.0), Point2D::new(60.0, 60.0)),
+    ] {
+        assert!(host.apply_cursor_move(canvas_x + doc_cursor.x, canvas_y + doc_cursor.y));
+        let scene_bounds = host
+            .layout_scene()
+            .active_page()
+            .and_then(|page| page.find(id.as_str()))
+            .expect("created scene shape")
+            .bounds;
+        assert_eq!(scene_bounds.size, expected_size);
+    }
+}
+
+#[test]
+fn geometry_drags_enable_canvas_fast_paint_without_enabling_pan_cache() {
+    let mut host = WidgetHostNative::new();
+    assert!(!host.fast_interaction_active());
+    assert!(!host.canvas_fast_interaction_active());
+    host.handle_drag = Some(HandleDragState {
+        handle: SelectionHandle::Right,
+        start_screen_x: 0.0,
+        start_screen_y: 0.0,
+        start_bounds: Rect::xywh(0.0, 0.0, 100.0, 100.0),
+        start_authored_x: Some(0.0),
+        start_authored_y: Some(0.0),
+    });
+
+    assert!(host.canvas_fast_interaction_active());
+    assert!(!host.fast_interaction_active());
 }
 
 #[test]
@@ -528,117 +652,7 @@ fn node_drag_keeps_flex_child_in_layout_flow() {
     );
 }
 
-#[test]
-fn dragging_a_selection_with_a_locked_node_does_not_drift_it_in_the_scene() {
-    // Parity with the web host: the incremental scene patch must move exactly
-    // what `translate_selected` moved — editable nodes only. A selected locked
-    // node must not drift in the scene (it would otherwise jump during the drag
-    // and snap back on the release-time reconversion).
-    let mut host = WidgetHostNative::new();
-    seed(
-        &mut host,
-        r#"{"version":"1.0.0","children":[
-          {"type":"rectangle","id":"free","name":"free","x":100,"y":100,"width":80,"height":60},
-          {"type":"rectangle","id":"locked","name":"locked","x":600,"y":100,"width":80,"height":60,"locked":true}
-        ]}"#,
-    );
-    host.editor_state_mut().selection.set = vec![NodeId::new("free"), NodeId::new("locked")];
-    host.mark_paint_dirty_for_test();
-    let _ = host.layout_scene();
-    assert!(!host.editor_state_dirty);
-
-    let free_before = scene_node_xy(&host, "free");
-    let locked_before = scene_node_xy(&host, "locked");
-
-    host.node_drag = Some(NodeDragState {
-        last_screen_x: 500.0,
-        last_screen_y: 500.0,
-        press_screen_x: 500.0,
-        press_screen_y: 500.0,
-        moved: true,
-        total_dx: 0.0,
-        total_dy: 0.0,
-        overlay_bounds: None,
-    });
-    assert!(host.apply_cursor_move(540.0, 500.0));
-
-    let free_after = scene_node_xy(&host, "free");
-    let locked_after = scene_node_xy(&host, "locked");
-
-    assert!(
-        (free_after.0 - free_before.0).abs() > 1.0,
-        "editable node should move in the scene during the drag"
-    );
-    assert_eq!(
-        locked_after, locked_before,
-        "locked node must not drift in the scene"
-    );
-}
-
-#[test]
-fn incremental_drag_then_doc_restored_to_cached_value_rebuilds_the_scene() {
-    // The incremental drag patches `layout_scene` without updating the scene
-    // cache. If the doc later returns to the cached build's value (e.g. undo, or
-    // dirty flipping mid-drag), `maybe_rebuild` must NOT skip and leave the stale
-    // patch on screen — the incremental path invalidates the cache to prevent it.
-    let mut host = WidgetHostNative::new();
-    seed(
-        &mut host,
-        r#"{"version":"1.0.0","children":[
-          {"type":"rectangle","id":"free","name":"free","x":100,"y":100,"width":80,"height":60}
-        ]}"#,
-    );
-    host.editor_state_mut()
-        .set_single_selection(NodeId::new("free"));
-    host.mark_paint_dirty_for_test();
-    let _ = host.layout_scene(); // caches the build for the @100 doc
-    let before = scene_node_xy(&host, "free");
-    let cached_doc = host.editor_state().doc.clone();
-
-    // Incremental drag: patches the scene (and invalidates the cache).
-    host.node_drag = Some(NodeDragState {
-        last_screen_x: 500.0,
-        last_screen_y: 500.0,
-        press_screen_x: 500.0,
-        press_screen_y: 500.0,
-        moved: true,
-        total_dx: 0.0,
-        total_dy: 0.0,
-        overlay_bounds: None,
-    });
-    assert!(host.apply_cursor_move(540.0, 500.0));
-    let patched = scene_node_xy(&host, "free");
-    assert!(
-        (patched.0 - before.0).abs() > 1.0,
-        "incremental patch moved the scene"
-    );
-
-    // Restore the doc to EXACTLY the cached build's inputs, then refresh.
-    host.editor_state_mut().doc = cached_doc;
-    host.mark_paint_dirty_for_test();
-    let _ = host.layout_scene();
-    let after = scene_node_xy(&host, "free");
-    assert!(
-        (after.0 - before.0).abs() < 1.0,
-        "restoring the doc to the cached value must rebuild, not serve the stale patch"
-    );
-}
-
-#[test]
-fn host_carries_editor_state_as_source_of_truth() {
-    // A fresh host opens with the blank starter document seeded onto
-    // `EditorState` — the host's single source of truth.
-    let host = WidgetHostNative::new();
-    assert!(!host.editor_state().doc.children.is_empty());
-    assert!(host.editor_state().selection.is_empty());
-}
-
-#[test]
-fn editor_state_is_mutable_through_the_accessor() {
-    let mut host = WidgetHostNative::new();
-    host.editor_state_mut().tool = op_editor_core::Tool::Rect;
-    assert_eq!(host.editor_state().tool, op_editor_core::Tool::Rect);
-}
+mod scene_sync;
 
 /// Read a node's `(x, y)` from the host's `editor_state.doc`.
 fn node_xy(host: &WidgetHostNative, id: &str) -> (f64, f64) {

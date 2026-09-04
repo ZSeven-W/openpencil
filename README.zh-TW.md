@@ -20,6 +20,10 @@
   <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
+<p align="center">
+  <a href="https://trendshift.io/repositories/24088?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-24088" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/24088" alt="ZSeven-W%2Fopenpencil | Trendshift" width="250" height="55" /></a>
+</p>
+
 <br />
 
 <p align="center">
@@ -28,17 +32,6 @@
   </a>
 </p>
 <p align="center"><sub>點擊圖片觀看示範影片</sub></p>
-
-<br />
-
-<p align="center">
-  <a href="https://github.com/InnerAura/hyperweave" title="Star history rendered with HyperWeave">
-    <img src="./screenshot/openpencil-star-history.svg" alt="OpenPencil star history rendered by HyperWeave" width="100%" />
-  </a>
-</p>
-<p align="center">
-  <sub>The trend above is rendered with <a href="https://github.com/InnerAura/hyperweave"><b>HyperWeave</b></a> — an experimental SVG artifact layer for agents. &nbsp;<a href="https://github.com/InnerAura/hyperweave"><b>Explore&nbsp;→</b></a></sub>
-</p>
 
 ## 為什麼選擇 OpenPencil
 
@@ -110,6 +103,8 @@ Web 應用程式 + macOS、Windows 和 Linux 上的原生桌面應用程式 — 
 </table>
 
 ## 安裝
+
+**Windows 編譯：** [BUILD_WINDOWS.zh-TW.md](./docs/build_windows/BUILD_WINDOWS.zh-TW.md)
 
 **macOS（Homebrew）：**
 
@@ -389,6 +384,7 @@ OpenPencil 是 **[ZSeven-W](https://github.com/ZSeven-W)** 出品的一系列純
 
 | 專案 | 簡介 |
 | ---- | ---- |
+| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | OpenPencil 的 DeepSeek Harness 外掛 — 在對話中提供精確的多畫板 `.op` 預覽、可互動畫布，以及具備代理原生設計工具的託管編輯器。 |
 | **[Zode](https://github.com/ZSeven-W/zode)** | 面向終端機的開源、AI 原生程式設計助手 — 一個快速的 Rust TUI（`ratatui`），可讀取你的程式碼、執行命令、搜尋檔案並管理 git。透過 MCP 驅動 OpenPencil。 |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | 用於交付 LLM 智能體的純 Rust 非同步執行環境 — 多提供商、端到端工具能力、結構化權限、真正的 MCP、零 `unsafe`。為 OpenPencil 內建的智能體執行環境（`vendor/agent`）和 Zode 提供動力。 |
 | **[jian](https://github.com/ZSeven-W/jian)** | 純 Rust、GPU-Skia UI 框架 — widgets、版面配置、事件和熱重載集於一棧。將宣告式的 `.op` 文件變為原生、AI 可控的應用程式，無需 JS 執行環境、無 DOM、無 Electron。OpenPencil 的 UI 框架（`vendor/jian`）。 |

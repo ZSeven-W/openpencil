@@ -142,6 +142,11 @@ fn content_type_for(name: &str) -> &'static str {
         "html" => "text/html; charset=utf-8",
         "json" | "map" => "application/json",
         "ts" => "text/plain; charset=utf-8",
+        // The bundled design fonts staged under `/pkg/assets/fonts/`. Served
+        // with a real font type so the browser doesn't sniff them as a
+        // download; the client reads them as an ArrayBuffer either way.
+        "ttf" => "font/ttf",
+        "otf" => "font/otf",
         _ => "application/octet-stream",
     }
 }

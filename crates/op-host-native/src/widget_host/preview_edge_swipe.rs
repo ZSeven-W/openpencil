@@ -13,8 +13,6 @@
 //! today) or a horizontal drag inside ordinary content — those never
 //! start within the 24px dead zone in the first place.
 
-use jian_core::gesture::pointer::PointerPhase;
-
 /// Screen-space distance from the framed content's left edge a press
 /// must start within to arm an edge-swipe candidate.
 const EDGE_ZONE_PX: f32 = 24.0;
@@ -66,6 +64,7 @@ impl super::WidgetHostNative {
     /// never crossed the threshold doesn't leak into the NEXT press.
     pub(in crate::widget_host) fn disarm_edge_swipe(&mut self) {
         self.preview_edge_swipe_start_x = None;
+        self.preview_edge_swipe_pid = None;
     }
 
     /// Cancel the in-flight preview pointer gesture after an edge-swipe
@@ -74,11 +73,17 @@ impl super::WidgetHostNative {
     /// flag so the eventual OS-level release is a no-op rather than
     /// replaying a stale `Up`.
     pub(in crate::widget_host) fn cancel_preview_gesture_for_edge_swipe(&mut self) {
-        if let Some((x, y)) = self.preview_last_doc {
-            if let Some(p) = self.preview.as_mut() {
-                p.dispatch_pointer_phase(x, y, PointerPhase::Cancel);
+        let pids = std::mem::take(&mut self.preview_pressed_pids);
+        let t_ms = self.preview_pointer_time_ms();
+        for pid in pids {
+            if let Some((_x, _y)) = self.preview_last_doc_by_pid.remove(&pid) {
+                if let Some(p) = self.preview.as_mut() {
+                    // Per-pointer cancel (R4): settle THIS arena's timers.
+                    p.cancel_pointer(pid, t_ms);
+                }
+            } else if let Some(p) = self.preview.as_mut() {
+                p.cancel_pointer(pid, t_ms);
             }
         }
-        self.preview_press_active = false;
     }
 }

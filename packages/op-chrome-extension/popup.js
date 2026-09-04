@@ -62,6 +62,7 @@ import {
   reportDeliveryError,
   setStatus,
 } from './popup-status.js';
+import { showPendingWorkerResult, startWorkerAction } from './popup-worker-actions.js';
 // The popup's own loader — dynamic, so an unbuilt checkout still renders an
 // actionable message instead of a blank window. The service worker MUST NOT
 // import this file; see `core-registry.js`.
@@ -70,12 +71,11 @@ import { loadCore } from './wasm-core.js';
 const ENDPOINT_KEY = 'endpoint';
 /** Which delivery the user last chose; the element pick reuses it. */
 const LAST_ACTION_KEY = 'lastAction';
-/** Where `background.js` leaves the outcome of a pick. */
-const PICK_RESULT_KEY = 'pickResult';
 /** Schemes Chrome lets `activeTab` + `scripting` reach. */
 const INJECTABLE = /^(https?|file):/i;
 
 const captureButton = document.getElementById('capture');
+const designButton = document.getElementById('design-md');
 const pickButton = document.getElementById('pick');
 const downloadButton = document.getElementById('download');
 const endpointInput = document.getElementById('endpoint');
@@ -115,11 +115,11 @@ let accountBusy = false;
 
 function setBusy(next) {
   busy = next;
-  for (const button of [captureButton, pickButton, downloadButton]) {
+  for (const button of [captureButton, designButton, pickButton, downloadButton]) {
     button.disabled = next;
   }
   // The account controls navigate away from the popup, which would abandon a
-  // capture mid-transfer, so they go down with the three main buttons.
+  // capture mid-transfer, so they go down with all four action buttons.
   if (!accountRow.hidden) renderAccount();
 }
 
@@ -327,7 +327,9 @@ async function onDownload() {
     // second-guesses an unknown suffix against the blob's MIME type and
     // rewrote `<title>.op` to `<title>.json`. A generic byte stream keeps
     // the `.op` name the core built.
-    const objectUrl = URL.createObjectURL(new Blob([converted.op], { type: 'application/octet-stream' }));
+    const objectUrl = URL.createObjectURL(
+      new Blob([converted.op], { type: 'application/octet-stream' }),
+    );
     const id = await chrome.downloads.download({ url: objectUrl, filename, saveAs: false });
     revokeWhenDownloadSettles(id, objectUrl);
     await rememberAction('download');
@@ -367,40 +369,52 @@ async function onPick() {
   setBusy(true);
   try {
     const tab = await activeTab();
-    await chrome.storage.local.remove(PICK_RESULT_KEY);
-    await chrome.action.setBadgeText({ text: '' });
     try {
-      await chrome.runtime.sendMessage({ type: 'pick', tabId: tab.id });
+      await startWorkerAction('pick', tab.id);
     } catch (cause) {
+      if (cause && cause.code === 'actionBusy') throw cause;
       // No worker answered. The usual reason is that its static import of the
       // core did not resolve, so it never registered — which is a different
       // problem from "this tab cannot be captured", and the only one of the
-      // three buttons this can affect.
+      // capture buttons this can affect.
       throw coreError('pickUnavailable', cause);
     }
     window.close();
   } catch (error) {
     setBusy(false);
-    reportCaptureError(error);
+    if (error && error.code === 'actionBusy') setStatus(msg('designBusy'), 'error');
+    else reportCaptureError(error);
   }
 }
 
 /**
- * Show the outcome of a pick that finished while the popup was closed, then
- * clear the badge — the popup opening IS the user reading it.
+ * Design-system extraction is worker-owned because the local AI request may
+ * outlive this popup by two minutes. It is independent of lastAction and of
+ * the element pick's pending result.
  */
-async function showPendingPickResult() {
-  const stored = await chrome.storage.local.get(PICK_RESULT_KEY);
-  const result = stored[PICK_RESULT_KEY];
-  if (!result || typeof result.key !== 'string') return false;
-  await chrome.storage.local.remove(PICK_RESULT_KEY);
-  await chrome.action.setBadgeText({ text: '' });
-  const args = Array.isArray(result.args) ? result.args : [];
-  // The worker stores keys and their substitutions rather than rendered text
-  // — including the nested delivery message inside `statusPicked` — so a
-  // language change between the pick and this open still reads right.
-  setStatus(msg(result.key, args), result.tone === 'error' ? 'error' : 'ok');
-  return true;
+async function onDesignMd() {
+  if (busy) return;
+  const endpoint = await commitEndpoint();
+  if (!endpoint) return;
+  setBusy(true);
+  try {
+    const tab = await activeTab();
+    setStatus(msg('statusDesignWorking'), 'working');
+    await startWorkerAction('designMd', tab.id);
+    window.close();
+  } catch (error) {
+    setBusy(false);
+    if (error && (error.code === 'noTab' || error.code === 'restricted')) {
+      reportCaptureError(error);
+    } else if (error && error.code === 'actionBusy') {
+      setStatus(msg('designBusy'), 'error');
+    } else {
+      setStatus(
+        msg('errorDesign', [String(error && error.message ? error.message : error)]),
+        'error',
+      );
+    }
+  }
 }
 
 /* ------------------------------------------------------------ the account */
@@ -698,9 +712,10 @@ async function init() {
   endpointInput.value = endpoint;
   endpointSummary.textContent = endpoint;
 
-  if (!(await showPendingPickResult())) setStatus(msg('statusIdle'), 'idle');
+  if (!(await showPendingWorkerResult())) setStatus(msg('statusIdle'), 'idle');
 
   captureButton.addEventListener('click', onCapture);
+  designButton.addEventListener('click', onDesignMd);
   pickButton.addEventListener('click', onPick);
   downloadButton.addEventListener('click', onDownload);
   endpointInput.addEventListener('change', async () => {

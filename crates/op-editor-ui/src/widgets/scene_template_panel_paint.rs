@@ -3,17 +3,17 @@
 
 use op_editor_core::SceneTemplateFocus;
 
+use super::asset_center_style_layout::STYLE_SECTION_HEADER_H;
 use super::panel_controls::{
     paint_accent_button, paint_panel_chip, paint_segmented_control, ButtonSpec, SegmentState,
 };
 use super::scene_template_card_actions::{
-    BASIS_CHIP_DISMISS_W, BASIS_CHIP_LABEL_SIZE, BASIS_CHIP_PAD_X, SCENE_TEMPLATE_BASIS_CHIP_HOVER,
+    BASIS_CHIP_LABEL_SIZE, BASIS_CHIP_PAD_X, SCENE_TEMPLATE_BASIS_CHIP_HOVER,
 };
 use super::scene_template_panel::{
-    filter_hover_token, tab_hover_token, SceneTemplatePanel, CHIP_RADIUS, CLOSE_BTN,
-    CONTROL_RADIUS, GENERATE_HINT_SIZE, GENERATE_INPUT_PAD_X, GENERATE_TEXT_SIZE, HEADER_H,
-    SCENE_TEMPLATE_CLOSE_HOVER, SCENE_TEMPLATE_GENERATE_HOVER, SEARCH_PAD_X, SEARCH_TEXT_SIZE,
-    TITLE_SIZE,
+    filter_hover_token, tab_hover_token, SceneTemplatePanel, CHIP_RADIUS, CONTROL_RADIUS,
+    GENERATE_HINT_SIZE, GENERATE_INPUT_PAD_X, GENERATE_TEXT_SIZE, SCENE_TEMPLATE_CLOSE_HOVER,
+    SCENE_TEMPLATE_GENERATE_HOVER, SEARCH_PAD_X, SEARCH_TEXT_SIZE, TITLE_SIZE,
 };
 use crate::widgets::button::paint_button_feedback_wash;
 use crate::widgets::prompt_center_panel::estimated_text_width;
@@ -24,6 +24,10 @@ use crate::{Color, Point2D, Rect, TextLayout};
 /// Corner radius of the gallery frame itself. Larger than a dropdown's
 /// because the shape is read at canvas scale, not at menu scale.
 const PANEL_RADIUS: f32 = 16.0;
+
+/// Section-heading text size — the same size the Styles tab uses, so the two
+/// tabs' "mine / built-in" bands read as one visual language.
+const SECTION_SIZE: f32 = 11.5;
 
 impl SceneTemplatePanel<'_> {
     /// Paint the complete gallery.
@@ -82,7 +86,12 @@ impl SceneTemplatePanel<'_> {
             Point2D::new(
                 content.origin.x,
                 jian_widgets::centered_text_baseline_y(
-                    Rect::xywh(content.origin.x, panel.origin.y, content.size.x, HEADER_H),
+                    Rect::xywh(
+                        content.origin.x,
+                        panel.origin.y,
+                        content.size.x,
+                        self.header_height_for(panel),
+                    ),
                     TITLE_SIZE,
                 ),
             ),
@@ -90,7 +99,7 @@ impl SceneTemplatePanel<'_> {
             self.theme.foreground,
         );
 
-        let close = Self::close_rect(panel);
+        let close = self.close_rect_for(panel);
         jian_widgets::components::icon_button::IconButton {
             icon_paths: Icon::Close.paths(),
             hovered: self.state.editor_ui.scene_template_center.hover
@@ -98,7 +107,7 @@ impl SceneTemplatePanel<'_> {
             pressed: self.is_pressed(SCENE_TEMPLATE_CLOSE_HOVER),
             active: false,
             enabled: true,
-            icon_size: CLOSE_BTN - 14.0,
+            icon_size: close.size.x - 14.0,
             stroke_width: 1.5,
         }
         .paint(
@@ -108,13 +117,18 @@ impl SceneTemplatePanel<'_> {
         );
 
         cx.backend.fill_rect(
-            Rect::xywh(panel.origin.x, panel.origin.y + HEADER_H, panel.size.x, 1.0),
+            Rect::xywh(
+                panel.origin.x,
+                panel.origin.y + self.header_height_for(panel),
+                panel.size.x,
+                1.0,
+            ),
             self.theme.border,
         );
     }
 
     fn paint_search(&self, cx: &mut PaintCx<'_>, panel: Rect) {
-        let rect = Self::search_rect(panel);
+        let rect = self.search_rect_for(panel);
         self.paint_field_frame(cx, rect, Icon::Search);
         paint_text_input_view(
             cx,
@@ -251,8 +265,9 @@ impl SceneTemplatePanel<'_> {
 
     fn paint_cards(&self, cx: &mut PaintCx<'_>, panel: Rect) {
         let viewport = self.cards_viewport(panel);
+        let user_cards = self.user_cards();
         let templates = self.filtered();
-        if templates.is_empty() {
+        if user_cards.is_empty() && templates.is_empty() {
             self.paint_text(
                 cx,
                 self.t("sceneTemplate.empty", "没有匹配的模板"),
@@ -265,17 +280,44 @@ impl SceneTemplatePanel<'_> {
 
         cx.backend.save();
         cx.backend.clip_rect(viewport);
-        for (index, rect) in self.card_rects_for_count(panel, templates.len()) {
-            // Cheap reject for rows scrolled out of view: their rects are
-            // still computed so hover and paint agree on indices.
-            if rect.origin.y > viewport.origin.y + viewport.size.y
-                || rect.origin.y + rect.size.y < viewport.origin.y
-            {
+        let layout = self.template_layout(panel);
+        for header in &layout.headers {
+            if !Self::row_visible(header.rect, viewport) {
                 continue;
             }
-            self.paint_card(cx, rect, templates[index], index);
+            self.paint_text(
+                cx,
+                if header.is_user {
+                    self.t("assetCenter.template.mine", "我的模板")
+                } else {
+                    self.t("assetCenter.template.builtIn", "内置模板")
+                },
+                Point2D::new(
+                    header.rect.origin.x,
+                    header.rect.origin.y + STYLE_SECTION_HEADER_H - 12.0,
+                ),
+                SECTION_SIZE,
+                self.theme.muted_foreground,
+            );
+        }
+        for (index, rect) in layout.cards {
+            // Cheap reject for rows scrolled out of view: their rects are
+            // still computed so hover and paint agree on indices.
+            if !Self::row_visible(rect, viewport) {
+                continue;
+            }
+            if index < user_cards.len() {
+                self.paint_user_card(cx, rect, &user_cards[index], index);
+            } else {
+                self.paint_card(cx, rect, templates[index - user_cards.len()], index);
+            }
         }
         cx.backend.restore();
+    }
+
+    fn row_visible(rect: Rect, viewport: Rect) -> bool {
+        rect.origin.y <= viewport.origin.y + viewport.size.y
+            && rect.origin.y + rect.size.y >= viewport.origin.y
     }
 
     /// "基于：极简 Keynote ×" — the standing answer to "in what style?".
@@ -297,7 +339,11 @@ impl SceneTemplatePanel<'_> {
         cx.backend
             .stroke_round_rect(chip, radius, self.theme.border, 1.0);
 
-        let text_w = (chip.size.x - BASIS_CHIP_PAD_X - BASIS_CHIP_DISMISS_W).max(0.0);
+        let dismiss_w = self
+            .basis_chip_dismiss_rect(panel)
+            .map(|rect| rect.size.x)
+            .unwrap_or(0.0);
+        let text_w = (chip.size.x - BASIS_CHIP_PAD_X - dismiss_w).max(0.0);
         self.paint_text(
             cx,
             &truncate_to_width(&label, text_w, BASIS_CHIP_LABEL_SIZE),

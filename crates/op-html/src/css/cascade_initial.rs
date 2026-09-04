@@ -8,6 +8,7 @@ pub(super) fn initial_value(name: &str) -> Option<&'static str> {
         "letter-spacing" | "word-spacing" => Some("normal"),
         "text-align" => Some("start"),
         "text-transform" | "text-decoration-line" => Some("none"),
+        "text-fill-color" => Some("currentcolor"),
         "white-space" => Some("normal"),
         "visibility" => Some("visible"),
         "cursor" => Some("auto"),

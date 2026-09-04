@@ -37,9 +37,8 @@
 #   OPENPENCIL_BINARY      path to a prebuilt release openpencil-desktop;
 #                          skips this script's own cargo build and is copied
 #                          over the bundled executable afterwards, so the
-#                          shipped binary is EXACTLY the one CI built
-#                          (cargo-bundle still runs `cargo build` internally,
-#                          but with a warm target dir that is a no-op)
+#                          shipped binary is EXACTLY the one CI built; the
+#                          wrapper disables cargo-bundle's implicit build
 #   OPENPENCIL_CLI_BINARY  path to a prebuilt `op` CLI binary; embedded at
 #                          Contents/MacOS/op so the .app/DMG ships the CLI
 #   MACOS_SIGN_IDENTITY    codesign identity. Defaults to "-" (ad-hoc).
@@ -50,7 +49,7 @@
 set -euo pipefail
 
 WS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=../tools/macos-local-network-plist.sh
+# shellcheck disable=SC1091
 source "$WS_ROOT/tools/macos-local-network-plist.sh"
 CANONICAL_VERSION="$("$WS_ROOT/scripts/workspace-version.sh")"
 APP_VERSION="${OPENPENCIL_VERSION:-$CANONICAL_VERSION}"
@@ -65,39 +64,51 @@ if [[ "${OPENPENCIL_VALIDATE_VERSION_ONLY:-}" == 1 ]]; then
 fi
 TARGET_TRIPLE="${OPENPENCIL_TARGET:-}"
 
-# Locate cargo-bundle. Tries PATH first, then a workspace-local
-# fallback under `target/cargo-bundle-host/bin`. When neither
-# resolves the script auto-installs into the fallback so a fresh CI
-# checkout bootstraps without manual intervention. The install uses
-# a script-local `CARGO_HOME` so the user's Cargo mirror config
-# (the workspace pins a private USTC mirror) doesn't apply.
+# Locate only the digest-pinned cargo-bundle staged by the release workflow (or
+# by tools/pinned-release-tools.sh for a local release build). Never bootstrap
+# executable code after signing credentials have been imported.
 CARGO_BUNDLE_HOME="${CARGO_BUNDLE_HOME:-$WS_ROOT/target/cargo-bundle-host}"
-if command -v cargo-bundle >/dev/null 2>&1; then
-  CARGO_BUNDLE=cargo-bundle
-elif [ -x "$CARGO_BUNDLE_HOME/bin/cargo-bundle" ]; then
+CARGO_BUNDLE_VERSION=0.10.0
+cargo_bundle_is_pinned() {
+  [ "$("$1" --version 2>/dev/null)" = "cargo-bundle v$CARGO_BUNDLE_VERSION" ]
+}
+if [ -f "$CARGO_BUNDLE_HOME/bin/cargo-bundle" ] \
+    && [ ! -L "$CARGO_BUNDLE_HOME/bin/cargo-bundle" ] \
+    && [ -x "$CARGO_BUNDLE_HOME/bin/cargo-bundle" ] \
+    && cargo_bundle_is_pinned "$CARGO_BUNDLE_HOME/bin/cargo-bundle"; then
   CARGO_BUNDLE="$CARGO_BUNDLE_HOME/bin/cargo-bundle"
 else
-  echo "==> bootstrapping cargo-bundle into $CARGO_BUNDLE_HOME"
-  mkdir -p "$CARGO_BUNDLE_HOME"
-  if ! CARGO_HOME="$CARGO_BUNDLE_HOME" cargo install cargo-bundle --locked >&2; then
-    echo "error: failed to install cargo-bundle into $CARGO_BUNDLE_HOME" >&2
-    echo "       try a hermetic CARGO_HOME by hand:" >&2
-    echo "         CARGO_HOME=$CARGO_BUNDLE_HOME cargo install cargo-bundle --locked" >&2
-    exit 1
-  fi
-  CARGO_BUNDLE="$CARGO_BUNDLE_HOME/bin/cargo-bundle"
+  echo "error: digest-pinned cargo-bundle $CARGO_BUNDLE_VERSION is required" >&2
+  echo "       stage it before signing with:" >&2
+  echo "         tools/pinned-release-tools.sh cargo-cli cargo-bundle $CARGO_BUNDLE_HOME" >&2
+  exit 1
 fi
+cargo_bundle_is_pinned "$CARGO_BUNDLE" || {
+  echo "error: cargo-bundle $CARGO_BUNDLE_VERSION is required" >&2
+  exit 1
+}
 
+if [ -n "$TARGET_TRIPLE" ]; then
+  BUNDLE_INPUT="$WS_ROOT/target/$TARGET_TRIPLE/release/openpencil-desktop"
+else
+  BUNDLE_INPUT="$WS_ROOT/target/release/openpencil-desktop"
+fi
 if [ -n "${OPENPENCIL_BINARY:-}" ]; then
   echo "==> skipping cargo build (prebuilt binary: $OPENPENCIL_BINARY)"
+  mkdir -p "${BUNDLE_INPUT%/*}"
+  if [ ! -e "$BUNDLE_INPUT" ] || [ ! "$OPENPENCIL_BINARY" -ef "$BUNDLE_INPUT" ]; then
+    cp "$OPENPENCIL_BINARY" "$BUNDLE_INPUT"
+    chmod 0755 "$BUNDLE_INPUT"
+  fi
 else
   echo "==> building release binary"
-  ( cd "$WS_ROOT" && cargo build --release --bin openpencil-desktop \
+  ( cd "$WS_ROOT" && cargo build --release --locked --bin openpencil-desktop \
       ${TARGET_TRIPLE:+--target "$TARGET_TRIPLE"} )
 fi
 
 echo "==> running cargo-bundle"
 ( cd "$WS_ROOT/crates/op-host-desktop" \
+    && export CARGO_BUNDLE_SKIP_BUILD=1 \
     && "$CARGO_BUNDLE" bundle --bin openpencil-desktop --release --format osx \
          ${TARGET_TRIPLE:+--target "$TARGET_TRIPLE"} )
 

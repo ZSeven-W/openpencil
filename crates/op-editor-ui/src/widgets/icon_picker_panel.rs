@@ -79,7 +79,7 @@ impl<'a> IconPickerPanel<'a> {
         Some(IconPickerPanel {
             state,
             theme: theme_for(&state.editor_ui),
-            locale: state.editor_ui.locale,
+            locale: state.editor_ui.effective_locale(),
             hover: state.editor_ui.icon_picker.hover,
             pressed: state.editor_ui.icon_picker.pressed,
             now_ms,

@@ -1,3 +1,4 @@
+use super::cascade_display::valid_specified_display;
 use super::declaration_syntax::{
     extract_function, find_top_level, is_background_position, is_background_repeat,
     is_border_style, is_border_width, is_css_wide, is_font_size_token, is_font_weight,
@@ -43,6 +44,12 @@ pub fn parse_declarations(block: &str) -> Vec<Declaration> {
         if value.is_empty() {
             continue;
         }
+        if name == "display" && !valid_specified_display(value) {
+            continue;
+        }
+        if name == "direction" && !valid_specified_direction(value) {
+            continue;
+        }
         if name.starts_with("--") {
             push(&mut declarations, &name, value, important);
             continue;
@@ -56,19 +63,26 @@ pub fn parse_declarations(block: &str) -> Vec<Declaration> {
     declarations
 }
 
+fn valid_specified_direction(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "ltr" | "rtl" | "inherit" | "initial" | "unset" | "revert" | "revert-layer"
+    ) || deferred::contains_var_function(value)
+}
+
 fn expand_declaration(out: &mut Vec<Declaration>, name: &str, value: &str, important: bool) {
     match name {
         "margin" | "padding" | "inset" => expand_box(out, name, value, important),
         "margin-block" | "padding-block" | "inset-block" => {
             expand_axis(out, name, value, "top", "bottom", important)
         }
-        "margin-inline" | "padding-inline" | "inset-inline" => {
+        "margin-inline" => expand_axis(out, name, value, "inline-start", "inline-end", important),
+        "padding-inline" | "inset-inline" => {
             expand_axis(out, name, value, "left", "right", important)
         }
         "margin-block-start" => push(out, "margin-top", value, important),
         "margin-block-end" => push(out, "margin-bottom", value, important),
-        "margin-inline-start" => push(out, "margin-left", value, important),
-        "margin-inline-end" => push(out, "margin-right", value, important),
+        "margin-inline-start" | "margin-inline-end" => push(out, name, value, important),
         "padding-block-start" => push(out, "padding-top", value, important),
         "padding-block-end" => push(out, "padding-bottom", value, important),
         "padding-inline-start" => push(out, "padding-left", value, important),
@@ -133,6 +147,7 @@ fn normalize_property_name(name: &str) -> String {
                     | "line-clamp"
                     | "mask"
                     | "mask-image"
+                    | "text-fill-color"
                     | "text-size-adjust"
                     | "transform"
                     | "transform-origin"

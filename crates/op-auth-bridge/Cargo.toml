@@ -16,10 +16,13 @@ default = []
 # Deterministic, non-production signing keys for downstream integration tests.
 # Production verifier configuration never trusts this fixture issuer.
 test-issuer = []
-# Explicit opt-in for an unsigned, external op-auth archive in local debug
-# builds. `build.rs` still requires the absolute archive path and ABI version,
-# and rejects this feature outside Cargo's debug profile.
-dev-abi-v2 = []
+# Explicit opt-in for an unsigned, external ABI-v2 or ABI-v3 op-auth archive
+# in local debug builds. `build.rs` still requires the absolute archive path
+# and ABI version, and rejects this feature outside Cargo's debug profile.
+dev-prebuilt = []
+# Compatibility alias for existing desktop development commands. New mobile
+# integrations use `dev-prebuilt` through their `mobile-auth-dev` feature.
+dev-abi-v2 = ["dev-prebuilt"]
 
 [dependencies]
 base64 = "0.22"

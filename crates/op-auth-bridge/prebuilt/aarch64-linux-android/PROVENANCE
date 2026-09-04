@@ -1,0 +1,9 @@
+format=1
+target=aarch64-linux-android
+artifact=libop_auth.a
+version=0.8.5
+abi=3
+sha256=5a0b4bb1cd6e7baf133bb0fef150bc6e542a396fbd8732a97d73d9636bbed96c
+hardening=op-auth-hardened-v1
+source_revision=204956f0e15dfd02af49759bdb2f435dae96fae3
+build_id=openpencil-0.8.5-5a7b834d498b.a3.13f6be372194a52f788c50e3ab6a9b623621c3dcbd7f8fd376b131f8dc9b2330

@@ -96,7 +96,7 @@ impl<'a> EditorToast<'a> {
     /// an empty banner: a silent blank box is a worse bug report than a raw
     /// key, and it is the only signal a missing translation would give.
     pub fn message(&self) -> String {
-        match op_i18n::translate_dynamic(self.ui.locale, &self.toast.i18n_key) {
+        match op_i18n::translate_dynamic(self.ui.effective_locale(), &self.toast.i18n_key) {
             Some(template) => op_i18n::interpolate(template, &self.toast.arg_pairs()),
             None => self.toast.i18n_key.clone(),
         }

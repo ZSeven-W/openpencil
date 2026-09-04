@@ -3,23 +3,6 @@
 //! shell-web `widget_host.rs` so the editor-UI composition is
 //! cross-platform: same widget code, same paint output.
 //!
-//! Layout matches `apps/web/src/components/editor/editor-layout.tsx`
-//! — TopBar / LayerPanel / Toolbar (vertical floating) / Canvas
-//! (fills) / RightPanel (only with selection) / StatusBar (floating
-//! bottom-right) / AIChatPlaceholder (floating bottom-center).
-//!
-//! ### Mobile (iOS / Android) — Step 1f path
-//!
-//! Spec §11 — shell-native is desktop-gated (`backend` /
-//! `widget_host` modules cfg-gated to `macos | linux | windows`).
-//! Mobile widget rendering lands in Step 1f via `context::EaglProvider`
-//! / `context::AndroidEglProvider`. Per the 2026-05-10 directive
-//! (Android and iOS need no IPC / local CLI — only a custom provider):
-//! mobile rendering is a custom-provider plugin point on the
-//! `GlContextProvider` trait, not a separate IPC / CLI pipeline.
-//!
-//! ### Module layout
-//!
 //! This file is the public spine. Implementation methods are split
 //! across sibling submodules (per the 800-line-per-file ceiling):
 //! - `NativeFrameBackend` (`RenderBackend` impl) — moved to `crate::backend`
@@ -29,12 +12,11 @@
 //! - [`scroll`] — wheel + trackpad-pan (zoom / canvas + diff scroll)
 //! - [`press`] — `apply_press` + new-node spawn (largest method)
 //! - [`git_press`] — Git-panel press dispatch
-//! - [`paint`] — full editor-UI composition paint pass
 
 use op_editor_core::PreviewDeviceKind;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
 use op_editor_ui::widgets::host_frame_bookkeeping as bookkeeping;
-use op_editor_ui::widgets::SelectionHandle;
+use op_editor_ui::widgets::{drag_flow::CanvasDropIndex, SelectionHandle};
 use op_editor_ui::{Rect, Theme};
 
 mod a11y;
@@ -44,13 +26,19 @@ mod account_press_tests;
 #[cfg(test)]
 mod agent_settings_acp_tests;
 #[cfg(test)]
+mod agent_settings_api_key_delete_tests;
+#[cfg(test)]
 mod agent_settings_compact_press_tests;
 #[cfg(test)]
 mod agent_settings_form_press_tests;
+mod agent_settings_geometry;
 #[cfg(test)]
 mod agent_settings_image_gen_tests;
 #[cfg(test)]
 mod agent_settings_tests;
+mod agent_settings_touch;
+#[cfg(test)]
+mod agent_settings_touch_tests;
 mod ai_chat_geometry;
 #[cfg(test)]
 mod ai_chat_minimized_tests;
@@ -59,7 +47,11 @@ mod auth_flow;
 mod blur_inputs;
 #[cfg(test)]
 mod blur_inputs_tests;
+mod boolean_op;
+#[cfg(test)]
+mod canvas_drag_transition_tests;
 mod canvas_pan_cache;
+mod canvas_scene_patch;
 mod canvas_select_drag;
 #[cfg(test)]
 mod canvas_select_drag_tests;
@@ -81,6 +73,8 @@ mod chat_style_card_tests;
 mod click;
 #[cfg(test)]
 mod codegen_framework_tests;
+pub mod collab_history_hit;
+#[cfg(feature = "collab-host")]
 mod collab_host_impl;
 #[cfg(test)]
 mod collab_input_tests;
@@ -110,6 +104,8 @@ mod export_quick_menu_tests;
 mod figma_import_scroll;
 #[cfg(test)]
 mod figma_import_tests;
+#[cfg(test)]
+mod file_menu_press_tests;
 #[cfg(test)]
 mod font_generation_scene_tests;
 mod font_picker_dispatch;
@@ -157,6 +153,8 @@ mod keyboard_delete;
 mod keyboard_escape;
 mod keyboard_send;
 mod missing_fonts_dispatch;
+#[cfg(test)]
+mod mobile_touch_tests;
 mod mode_transition_host;
 #[cfg(test)]
 mod overlay_cursor_tests;
@@ -166,7 +164,9 @@ mod page_switch_center_tests;
 mod paint;
 mod paint_chrome_menus;
 mod paint_floating_panels;
+mod paint_mobile;
 mod paint_pan_cache;
+mod paint_rail;
 mod paint_topmost_overlays;
 #[cfg(test)]
 mod pan_cache_scroll_tests;
@@ -190,33 +190,41 @@ mod preview_edge_swipe;
 mod preview_edge_swipe_tests;
 mod preview_frame;
 #[cfg(test)]
-mod preview_frame_geometry_tests;
 #[cfg(all(test, not(target_os = "windows")))]
 mod preview_frame_tests;
 mod preview_input;
 mod preview_slideshow;
 #[cfg(test)]
 mod preview_slideshow_tests;
+#[cfg(all(test, not(target_os = "windows")))]
+mod preview_swipe_tests;
 #[cfg(test)]
 mod prompt_center_host_tests;
 mod prompt_center_press;
 #[cfg(test)]
 mod property_compositing_tests;
 mod property_dispatch;
+#[cfg(test)]
+mod property_keyboard_occlusion_tests;
 mod property_layout_dispatch;
 #[cfg(test)]
 mod property_panel_interactions_tests;
 #[cfg(test)]
 mod property_panel_press_tests;
 mod property_popovers;
+mod property_scroll;
 mod release;
 mod release_feedback;
+mod responsive_geometry;
 mod scene_state;
 #[cfg(test)]
 mod scene_template_host_tests;
 #[cfg(test)]
 mod scene_template_ime_tests;
+mod scene_template_install;
 mod scene_template_press;
+#[cfg(test)]
+mod scene_template_touch_tests;
 mod screen_switcher;
 #[cfg(all(test, not(target_os = "windows")))]
 mod screen_switcher_tests;
@@ -246,6 +254,9 @@ mod toolbar_actions;
 mod toolbar_hover;
 #[cfg(test)]
 mod top_bar_tooltip_tests;
+mod touch_panel_gesture;
+#[cfg(test)]
+mod touch_panel_gesture_tests;
 #[cfg(test)]
 mod variables_panel_add_tests;
 mod variables_panel_commit;
@@ -258,6 +269,8 @@ mod variables_panel_tests;
 mod variables_panel_ux_tests;
 mod variables_preset_press;
 mod viewport_fit;
+#[cfg(test)]
+mod window_control_tests;
 
 /// Cursor affordance the host suggests for a given screen point — re-exported
 /// from `jian-core` so widgets (via `cursor_at`) and hosts share one vocabulary.
@@ -322,6 +335,12 @@ pub struct WidgetHostNative {
     /// Active canvas pan-drag state — left-button press → motion
     /// → release.
     pub(in crate::widget_host) drag: Option<DragState>,
+    /// Pending one-finger gestures: touch Agent Settings body (release
+    /// commits, slop promotes to scroll) and touch Property / Layers / Slides
+    /// surfaces (stationary release replays the press, slop scrolls).
+    pub(in crate::widget_host) agent_settings_touch_gesture:
+        Option<agent_settings_touch::AgentSettingsTouchGesture>,
+    pub(in crate::widget_host) touch_panel_gesture: Option<touch_panel_gesture::TouchPanelGesture>,
     /// True while Space is held — transient pan mode (TS parity):
     /// canvas presses pan regardless of the active tool.
     pub(in crate::widget_host) space_pan: bool,
@@ -389,6 +408,8 @@ pub struct WidgetHostNative {
     /// cursor anchor so each `apply_cursor_move` translates the
     /// selected node by the delta.
     pub(in crate::widget_host) node_drag: Option<NodeDragState>,
+    /// Gesture-scoped drop-target index reused across pointer frames.
+    pub(in crate::widget_host) canvas_drop_index: Option<CanvasDropIndex>,
     /// Original selected ids for an active Option-drag clone move.
     /// Drop hit-testing skips these so a fresh clone does not
     /// immediately reparent back into the source it overlaps.
@@ -496,6 +517,7 @@ pub struct WidgetHostNative {
     pub(in crate::widget_host) toast_rect: Option<op_editor_ui::Rect>,
     pub(in crate::widget_host) last_viewport_w: f32,
     pub(in crate::widget_host) last_viewport_h: f32,
+    pub(in crate::widget_host) keyboard_occlusion: f32,
     /// Live canvas Preview (Play) session — `Some` while
     /// `editor_state.editor_ui.preview.mode` is set. Owns the jian
     /// `Runtime` (host-local; `!Send`). Built on enter from the
@@ -513,13 +535,29 @@ pub struct WidgetHostNative {
     /// `settle_mode_transition` so the merge-back animation has
     /// something live to paint). `None` the rest of the time.
     pub(in crate::widget_host) preview_mode_transition: Option<crate::preview::ModeTransition>,
-    /// Live preview pointer-drag state: `true` between a canvas Down
-    /// and its Up, so cursor moves dispatch as drags (slider knob)
-    /// instead of hovers.
-    pub(in crate::widget_host) preview_press_active: bool,
-    /// Last preview pointer position in DOCUMENT space — the release
-    /// dispatches its Up here (the OS reports release without coords).
-    pub(in crate::widget_host) preview_last_doc: Option<(f32, f32)>,
+    /// Live preview pressed-pointer ids (R4 Canonical PreviewInput):
+    /// one entry per pointer between its canvas Down and Up, so
+    /// concurrent pointers dispatch as independent drags instead of
+    /// sharing one boolean. Desktop mouse panels use the legacy id 1.
+    pub(in crate::widget_host) preview_pressed_pids: Vec<u32>,
+    /// Scoped factual timestamp (ms) of the pointer event currently
+    /// being routed by a timestamped entry variant (`apply_press_at` /
+    /// `apply_cursor_move_at` / `apply_release_with_viewport_at` /
+    /// `cancel_native_touch_gestures_at`). The live-preview pointer
+    /// path stamps `PointerEvent.t_ms` with this exact value while the
+    /// host's GLOBAL clock (`now_ms`) advances independently and only
+    /// ever forward — an out-of-order event (frame at 2000, Down at
+    /// 950) keeps the global clock at 2000 yet still measures its
+    /// factual 100 ms pair delta. `None` means "no factual timestamp —
+    /// fall back to `now_ms`", which is what every legacy entry does.
+    pub(in crate::widget_host) preview_event_time_ms: Option<u64>,
+    /// Last preview pointer position in DOCUMENT space PER POINTER ID —
+    /// that pointer's release dispatches its Up here (the OS reports a
+    /// release without coords).
+    pub(in crate::widget_host) preview_last_doc_by_pid: std::collections::HashMap<u32, (f32, f32)>,
+    /// Which pressed pointer owns the armed edge-swipe candidate — a
+    /// second finger's drag can never fire someone else's pop (R4).
+    pub(in crate::widget_host) preview_edge_swipe_pid: Option<u32>,
     /// Screen-space point a presenting press landed on, held until the
     /// release decides whether the gesture was a click (advance the deck) or
     /// a drag (do nothing). `None` outside a slideshow press.
@@ -703,85 +741,5 @@ impl WidgetHostNative {
     pub(in crate::widget_host) fn sync_theme_from_editor(&mut self) {
         self.theme =
             op_editor_ui::widgets::editor_state_ext::theme_for(&self.editor_state.editor_ui);
-    }
-
-    /// Run a path boolean op on the active selection (Union /
-    /// Subtract / Intersect / Exclude). Backed by skia's `Path::op`.
-    /// Returns true when the op committed (≥ 2 Path nodes were
-    /// selected + the result yielded a non-empty polyline).
-    pub fn apply_boolean_op(&mut self, op: op_editor_core::BooleanOp) -> bool {
-        // Codex stop-gate: boolean op shortcuts (Cmd+Alt+U/S/I/X)
-        // mutate the document — commit any pending variable-row
-        // edit first so the dirty draft lands before this op runs.
-        self.commit_variable_row_focus_if_any();
-        if !self.collab_allows_document_mutation(
-            op_editor_core::CollabDocumentMutation::Unsupported(
-                op_editor_core::CollabUnsupportedFeature::NodeReplacement,
-            ),
-        ) {
-            return true;
-        }
-        // The skia `Path::op` math runs against the layout-resolved
-        // `LayoutScene` + the editor selection; the result polyline
-        // is committed back through an `EditorState` mutator so the
-        // host never edits the canonical tree directly.
-        self.refresh_layout_scene();
-        let selected: Vec<String> = self
-            .editor_state
-            .selection
-            .set
-            .iter()
-            .map(|id| id.as_str().to_string())
-            .collect();
-        let outcome = crate::boolean_ops::compute_boolean_op(&self.layout_scene, &selected, op);
-        let Some(result) = outcome else {
-            return false;
-        };
-        // Scene ids are the canonical `.op` ids — wrap straight into
-        // `op_editor_core::NodeId`.
-        let source_ids: Vec<op_editor_core::NodeId> = result
-            .source_ids
-            .iter()
-            .map(op_editor_core::NodeId::new)
-            .collect();
-        let pre = self.editor_state.snapshot_for_history();
-        let new_id = if let Some(allocator) = self.collab_id_allocator.as_mut() {
-            self.editor_state
-                .replace_paths_with_polyline_with_allocator(
-                    &source_ids,
-                    &result.contours,
-                    allocator,
-                )
-        } else {
-            Ok(self.editor_state.replace_paths_with_polyline(
-                &source_ids,
-                &result.contours,
-                &mut self.next_node_id,
-            ))
-        };
-        match new_id {
-            Err(error) => {
-                self.show_collab_id_error(error);
-                true
-            }
-            Ok(Some(id)) => {
-                self.editor_state.history_push_past(pre);
-                self.editor_state.set_single_selection(id);
-                self.mark_dirty();
-                true
-            }
-            Ok(None) => false,
-        }
-    }
-}
-
-/// How long after the last pan/zoom tick the canvas keeps painting in
-/// interactive-degrade mode. Long enough to cover trackpad event gaps,
-/// short enough that full quality returns imperceptibly after release.
-const INTERACTION_HOT_MS: u64 = 150;
-
-impl Default for WidgetHostNative {
-    fn default() -> Self {
-        Self::new()
     }
 }

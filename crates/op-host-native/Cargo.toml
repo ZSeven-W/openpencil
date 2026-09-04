@@ -28,15 +28,38 @@ path = "src/lib.rs"
 # flip gl on for mobile. Making `gl-host` non-default + opt-in is the only
 # cargo-valid, mobile-safe way to keep skia's `gl` out of the raster build.
 default = []
+# Mobile-safe editor chrome: the FULL widget host (top bar, layer panel,
+# toolbar, property panel, chat, settings, canvas editing, preview runtime)
+# + accesskit tree building — no winit / glutin / desktop GL. Shells drive
+# input (press/move/release/zoom/keys/IME); the engine paints the chrome
+# through the same `NativeFrameBackend` the desktop uses. Enabled on iOS /
+# Android by the player engine (`op-engine-ffi`).
+widget-host = ["dep:accesskit"]
+# Test-only narrow seams for cross-crate tests (the op-engine-ffi editor
+# pointer-clock suites). Enables op-preview-core's `testing` feature so the
+# live preview runtime hands out CLONED app-state snapshots — never a
+# reference into its interior-mutable state in production.
+testing = ["op-preview-core/testing"]
+# Collaboration/editor actor seam shared by desktop and mobile embedders.
+# This deliberately does not enable winit, glutin, or desktop GL: the mobile
+# engine owns the event loop and GPU surface while `WidgetHostNative` only
+# implements the host trait consumed by `op-collab-host`.
+collab-host = ["widget-host", "dep:op-collab-host"]
+# Local mobile-shell authentication against an unsigned external ABI-v2/v3
+# archive. The bridge accepts it only in Cargo's debug profile.
+mobile-auth-dev = ["op-auth-bridge/dev-prebuilt"]
+# Desktop GUI host stack (winit + glutin + skia-safe GL + jian-host-desktop
+# glue) on top of the widget host. The orchestrator (AI preview wiring) stays
+# desktop-only; collaboration is exposed separately through `collab-host`.
 gl-host = [
+  "collab-host",
   "skia-safe/gl",
   "dep:glutin",
   "dep:winit",
   "dep:scopeguard",
   "dep:jian-host-desktop",
-  "dep:accesskit",
   "dep:op-orchestrator",
-  "dep:op-collab-host",
+  "op-preview-core/gl-host",
 ]
 
 # The basic_window demo needs the GL host stack (SharedSkiaContext + winit);
@@ -47,6 +70,10 @@ name = "basic_window"
 required-features = ["gl-host"]
 
 [dependencies]
+# Canvas Preview (Play) mode runtime — extracted into its own crate.
+# Feature flag: gl-host enables auto-wire via op-orchestrator (desktop-only).
+op-preview-core = { path = "../op-preview-core" }
+
 # Phase 7.3 reorg: openpencil-shell-core dissolved — widget facade /
 # theme / layout scene / scene vars / render-backend / gesture types
 # all resolve through the op-editor-ui crate.
@@ -78,8 +105,9 @@ op-auth-bridge = { path = "../op-auth-bridge" }
 op-i18n = { path = "../op-i18n" }
 # Collaboration runtime — this crate only supplies the `CollabHost` impl for
 # `WidgetHostNative` (the orphan rule requires it to live in one of the two
-# defining crates). Optional + behind `gl-host` so the raster-only build used
-# by `op-host-services` pulls none of the collaboration transport stack.
+# defining crates). Optional + behind `collab-host`; desktop's `gl-host` and
+# the mobile engine opt in explicitly, while raster-only service builds do not
+# pull the transport stack.
 op-collab-host = { path = "../op-collab-host", optional = true }
 
 # Native-only deps cfg-gated outside wasm32. This is critical (resolves codex round 2 B1 BLOCK):
@@ -220,6 +248,10 @@ sysinfo = "0.30"
 # registry the widget layer resolves pins against. Already in the build graph
 # through op-editor-ui; named here only so the tests can reach it.
 op-ai-skills = { path = "../op-ai-skills" }
+# Preview crate with testing feature enabled — exposes test-only helper
+# methods (`current_path_for_test`, `router_for_test`, etc.) needed by
+# op-host-native's cross-crate tests.
+op-preview-core = { path = "../op-preview-core", features = ["testing"] }
 # `no-env-filter` is required for integration tests — the default filter
 # only captures logs from the test crate itself, but our `#[tracing::instrument]`
 # spans live inside `op_host_native::*`. (Per upstream README §136.)

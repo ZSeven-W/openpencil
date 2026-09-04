@@ -286,6 +286,35 @@ fn nova_store(viewport_width: f64) -> crate::HtmlImportResult {
 }
 
 #[test]
+fn html_font_and_color_inherit_through_unstyled_body_and_text() {
+    let result = import_html(
+        "<html style='font-size:20px;color:#123456'><body><p>Inherited</p></body></html>",
+        &HtmlImportOptions::default(),
+    );
+    let text = descendant_text_with_exact_content(feature_root(&result), "Inherited")
+        .expect("inherited text");
+    assert_eq!(text.font_size, Some(20.0));
+    assert!(matches!(
+        text.fill.as_deref(),
+        Some([PenFill::Solid(fill)]) if fill.color == "#123456"
+    ));
+}
+
+#[test]
+fn hidden_document_element_suppresses_the_imported_body() {
+    let result = import_html(
+        "<html style='display:none'><body><p>hidden</p></body></html>",
+        &HtmlImportOptions::default(),
+    );
+    let root = feature_root(&result);
+    assert_eq!(root.base.visible, Some(false));
+    assert!(root
+        .children
+        .as_deref()
+        .is_some_and(|children| children.is_empty()));
+}
+
+#[test]
 fn landing_page_imports_as_editable_tree() {
     let result = import_html(LANDING, &HtmlImportOptions::default());
     assert_eq!(result.nodes.len(), 1);
@@ -352,7 +381,8 @@ fn auto_flex_item_uses_intrinsic_width_without_fill_container_cycles() {
 #[test]
 fn node_limit_truncates_with_warning() {
     let mut html = String::from("<div>");
-    for _ in 0..25_000 {
+    // ~2 output nodes per <p>; 45,000 keeps a >2x margin over the 40k cap.
+    for _ in 0..45_000 {
         html.push_str("<p>x</p>");
     }
     html.push_str("</div>");
@@ -372,7 +402,9 @@ fn generated_content_also_obeys_the_output_node_limit() {
         "<style>p::before{content:'before';display:block}\
          p::after{content:'after';display:block}</style><div>",
     );
-    for _ in 0..3_500 {
+    // Each <p> expands to ~6 output nodes with the generated content, so
+    // 7,500 paragraphs lands ~45k — just over MAX_OUTPUT_NODES (40k).
+    for _ in 0..7_500 {
         html.push_str("<p>x</p>");
     }
     html.push_str("</div>");

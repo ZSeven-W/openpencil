@@ -158,6 +158,7 @@ mod tests {
     fn png_header() -> Vec<u8> {
         let mut bytes = vec![0; 32];
         bytes[..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
+        bytes[8..12].copy_from_slice(&13_u32.to_be_bytes());
         bytes[12..16].copy_from_slice(b"IHDR");
         bytes[16..20].copy_from_slice(&16_u32.to_be_bytes());
         bytes[20..24].copy_from_slice(&16_u32.to_be_bytes());

@@ -34,7 +34,18 @@ impl WidgetHost {
         };
         let panel = AgentSettingsPanel::for_web_editor(&self.editor_state);
         let panel_rect = panel.rect(vw, vh);
-        let hit = panel.hit_test(panel_rect, Point2D::new(x, y));
+        let point = Point2D::new(x, y);
+        let hit = panel.hit_test(panel_rect, point);
+        let focus_press = settings_flow::is_settings_focus_press(hit);
+        // Preserve the window painted for an already-focused input (model
+        // line window / single-line scroll shift); the shared focus
+        // transition reseeds the draft and moves its caret to the end.
+        let caret_before = if focus_press {
+            panel.focused_text_byte_offset_at(panel_rect, point)
+        } else {
+            None
+        };
+        drop(panel);
         let outcome = settings_flow::apply_agent_settings_hit(
             &mut self.editor_state,
             hit,
@@ -44,6 +55,20 @@ impl WidgetHost {
             SettingsCommitScope::Browser,
             self.now_ms,
         );
+        if focus_press {
+            // A fresh focus has no pre-click mapping; resolve against the
+            // just-seeded draft so the caret still lands at the tapped glyph.
+            let offset = caret_before.or_else(|| {
+                let panel = AgentSettingsPanel::for_web_editor(&self.editor_state);
+                panel.focused_text_byte_offset_at(panel_rect, point)
+            });
+            if let Some(offset) = offset {
+                self.editor_state
+                    .editor_ui
+                    .settings_input
+                    .set_caret(offset, self.now_ms);
+            }
+        }
         self.finish_agent_settings_press(outcome);
         let after_mcp = {
             let mcp = self.editor_state.editor_ui.agent_settings.mcp_server;

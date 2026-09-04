@@ -264,6 +264,51 @@ fn cleanup_preserves_fixed_844_mobile_root_with_tall_content() {
 }
 
 #[test]
+fn cleanup_keeps_an_overlay_root_at_its_tallest_layer_not_the_sum() {
+    // `layout: none` compiles to a single-cell grid (jian 2026-07-28): the
+    // children are stacked ON TOP of each other, so the root is exactly as
+    // tall as its tallest layer. The content-height estimator used to sum
+    // them like a vertical stack, and the root-height repair then inflated
+    // every overlay root to N x its authored height.
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_value(json!({
+        "type": "frame",
+        "id": "root",
+        "name": "Layered Hero",
+        "width": 390,
+        "height": 844,
+        "layout": "none",
+        "children": [
+            {"type":"rectangle", "id":"base", "name":"Base", "width":390, "height":844},
+            {"type":"rectangle", "id":"noise", "name":"Noise", "width":390, "height":844},
+            {"type":"rectangle", "id":"vignette", "name":"Vignette", "width":390, "height":844}
+        ]
+    }))
+    .expect("overlay root json");
+    sink.state.apply(EditorCommand::InsertSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state.active_children()[0].id_str().to_string();
+    sink.applied.clear();
+
+    run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
+
+    let root = sink
+        .state
+        .active_children()
+        .iter()
+        .find(|n| n.id_str() == root_id)
+        .expect("root survives cleanup");
+    assert_eq!(
+        root.height_px(),
+        Some(844.0),
+        "three stacked 844px overlay layers must not triple the root height"
+    );
+}
+
+#[test]
 fn cleanup_grows_390x844_poster_despite_mobile_geometry_and_status_bar() {
     let mut sink = VecDocSink::new();
     let tree: PenNode = serde_json::from_value(json!({

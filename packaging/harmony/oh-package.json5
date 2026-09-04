@@ -1,0 +1,13 @@
+{
+  "modelVersion": "5.0.0",
+  "name": "openpencil-harmony",
+  "version": "1.0.0",
+  "description": "OpenPencil HarmonyOS player: a thin ArkUI shell around the Rust engine.",
+  "main": "",
+  "author": "ZSeven",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@ohos/hypium": "1.0.19"
+  }
+}

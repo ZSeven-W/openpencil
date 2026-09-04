@@ -137,6 +137,32 @@ test("start posts init and retries until ready, then cancels the timer", async (
   expect(host.postedOfType("op-bridge/init").length).toBe(initsBefore);
 });
 
+test("listening restarts init after the original retry budget expires", () => {
+  const host = new MockHost();
+  const s = new PenSession(host, "tok", "{}");
+  s.start();
+  for (let i = 0; i < 20; i++) host.fireLatestTimer();
+  expect(host.warnings).toEqual(["OpenPencil editor did not become ready"]);
+  const beforeListening = host.postedOfType("op-bridge/init").length;
+
+  s.onPageMessage(JSON.stringify({ type: "op-bridge/listening" }));
+
+  expect(host.postedOfType("op-bridge/init").length).toBe(beforeListening + 1);
+  host.fireLatestTimer();
+  expect(host.postedOfType("op-bridge/init").length).toBe(beforeListening + 2);
+});
+
+test("late listening does not reinitialize a ready or disposed session", async () => {
+  const { host, s } = await readySession();
+  const readyCount = host.postedOfType("op-bridge/init").length;
+  s.onPageMessage(JSON.stringify({ type: "op-bridge/listening" }));
+  expect(host.postedOfType("op-bridge/init").length).toBe(readyCount);
+
+  s.dispose();
+  s.onPageMessage(JSON.stringify({ type: "op-bridge/listening" }));
+  expect(host.postedOfType("op-bridge/init").length).toBe(readyCount);
+});
+
 test("boot sends open-document and reaches ready on opened", async () => {
   const { host, s } = await readySession();
   const opens = host.postedOfType("op-bridge/open-document");

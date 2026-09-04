@@ -90,7 +90,7 @@ pub const SNAPSHOT_PLACEHOLDER: &str = "__OPENPENCIL_SNAPSHOT__";
 ///   escapes it as `\udXXX` and round-trips it. A `&str` parameter cannot
 ///   hold one at all, so wasm-bindgen rewrote it to `U+FFFD` on the way in —
 ///   silent corruption of an otherwise intact capture.
-/// * **Peak memory.** Handing a 32 MB snapshot to wasm copied it into the
+/// * **Peak memory.** Handing a maximum-size (48 MB) snapshot to wasm copied it into the
 ///   wasm heap, then built the escaped envelope beside it, then copied the
 ///   result back out: roughly four live copies at the peak. Splicing in JS
 ///   leaves the snapshot where it already is.

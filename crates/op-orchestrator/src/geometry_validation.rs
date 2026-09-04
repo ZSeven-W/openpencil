@@ -352,6 +352,10 @@ pub fn geometry_diagnostics(state: &EditorState) -> Vec<String> {
 #[cfg(test)]
 #[path = "geometry_chip_private_tests.rs"]
 mod chip_private_tests;
+
+#[cfg(test)]
+#[path = "geometry_chip_pill_tests.rs"]
+mod chip_pill_tests;
 /// Detect + fix a card rail whose `fill_container` siblings collapsed
 /// beside a fixed-width reference card. See
 /// [`collect_rail_width_collapse_fixes`] for the failure mode. Returns

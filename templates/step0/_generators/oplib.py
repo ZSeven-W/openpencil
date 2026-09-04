@@ -244,7 +244,7 @@ def asset_fill(filename, mode="fit"):
     return {"type": "image", "url": url, "mode": mode}
 
 
-def write_doc(dst, variables, children, name):
+def write_doc(dst, variables, children, name, *, compact=False):
     doc = {
         "version": "1.0.0",
         "name": name,
@@ -252,7 +252,10 @@ def write_doc(dst, variables, children, name):
         "children": children,
     }
     with open(dst, "w", encoding="utf-8") as fh:
-        json.dump(doc, fh, ensure_ascii=False, indent=2)
+        if compact:
+            json.dump(doc, fh, ensure_ascii=False, separators=(",", ":"))
+        else:
+            json.dump(doc, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
     print(f"wrote {dst}")
 

@@ -16,6 +16,10 @@ enum RelayGuestStartupStage {
     RelayBridge,
 }
 
+const GUEST_RELAY_PAIR_GATE_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(5 * 60 + 30);
+const GUEST_RELAY_CANCEL_POLL: std::time::Duration = std::time::Duration::from_millis(10);
+
 struct RelayGuestStageFailure {
     stage: RelayGuestStartupStage,
     failure: CollabRuntimeFailure,
@@ -54,28 +58,102 @@ fn at_stage_with<T>(
     }
 }
 
+fn relay_client_failure(error: op_collab_relay_client::RelayClientError) -> CollabRuntimeFailure {
+    match error {
+        op_collab_relay_client::RelayClientError::GuestPairingFailed { kind } => {
+            relay_tunnel_failure(kind)
+        }
+        _ => CollabRuntimeFailure::RelayUnavailable,
+    }
+}
+
+fn relay_tunnel_failure(kind: op_collab_relay_client::RelayFailureKind) -> CollabRuntimeFailure {
+    use op_collab_relay_client::RelayFailureKind as Failure;
+    use op_collab_relay_protocol::RelayRejectCode as Reject;
+
+    match kind {
+        Failure::Authentication
+        | Failure::Rejected(Reject::AuthenticationRequired | Reject::AuthenticationFailed) => {
+            CollabRuntimeFailure::TicketRejected
+        }
+        Failure::Rejected(Reject::LocatorNotYetValid | Reject::LocatorExpired) => {
+            CollabRuntimeFailure::RelayInviteExpired
+        }
+        Failure::Rejected(Reject::ExpiryTooFarFuture) => CollabRuntimeFailure::RelayInviteInvalid,
+        Failure::Rejected(Reject::Capacity | Reject::RateLimited) => {
+            CollabRuntimeFailure::RelayRateLimited
+        }
+        Failure::Rejected(Reject::UnknownRoute) => CollabRuntimeFailure::RelayInviteUnavailable,
+        Failure::Rejected(
+            Reject::MalformedHello | Reject::UnsupportedVersion | Reject::RoleConflict,
+        )
+        | Failure::Protocol
+        | Failure::TextFrame
+        | Failure::ReauthTooFrequent
+        | Failure::ReauthBudgetExhausted
+        | Failure::BinaryFrameTooLarge => CollabRuntimeFailure::Protocol,
+        Failure::ByteLimitExceeded => CollabRuntimeFailure::ResourceLimit,
+        Failure::Rejected(Reject::RelayUnavailable | Reject::Internal)
+        | Failure::Rejected(Reject::PairingTimeout)
+        | Failure::RejectedPairingTimeout
+        | Failure::Connect
+        | Failure::ConnectTimeout
+        | Failure::HelloTimeout
+        | Failure::PairTimeout
+        | Failure::IdleTimeout
+        | Failure::LifetimeExceeded
+        | Failure::LocalIo
+        | Failure::RelayIo
+        | Failure::Closed => CollabRuntimeFailure::RelayUnavailable,
+    }
+}
+
 impl GuestRelayRuntime {
     pub(in crate::runtime) fn start(
         request: &RelayGuestRequest,
         key: Arc<DeviceStaticKey>,
         local: Arc<std::sync::RwLock<LocalAdmission>>,
-    ) -> Result<Self, CollabRuntimeFailure> {
+        is_cancelled: &dyn Fn() -> bool,
+    ) -> Result<Option<Self>, CollabRuntimeFailure> {
         // Resolve and verify the invite on the guest network worker. The UI
         // only parses enough of the bounded invite to select its claimed
         // region and render status.
         let bootstrap = at_stage(RelayGuestStartupStage::Bootstrap, request.provider.load())?;
         let (invite, home_region) = match &request.secret {
             RelayJoinSecret::Invite(invite) => (invite.as_ref().clone(), request.home_region),
-            RelayJoinSecret::Pairing(code) => {
-                let invite = at_stage(
+            RelayJoinSecret::Pairing { code, claimed } => {
+                let cached = at_stage(
                     RelayGuestStartupStage::PairingClaim,
-                    claim_pairing_invite(
-                        &bootstrap,
-                        code,
-                        request.control_plane.as_ref(),
-                        &key,
-                        &local,
-                    ),
+                    claimed
+                        .lock()
+                        .map_err(|_| CollabRuntimeFailure::RelayUnavailable)
+                        .map(|claimed| claimed.clone()),
+                )?;
+                let invite = match cached {
+                    Some(invite) => invite,
+                    None => at_stage(
+                        RelayGuestStartupStage::PairingClaim,
+                        claim_pairing_invite(
+                            &bootstrap,
+                            code,
+                            request.control_plane.as_ref(),
+                            &key,
+                            &local,
+                        ),
+                    )?,
+                };
+                // Claiming consumes the short code. Cache the still-untrusted
+                // signed invite immediately, before region/clock/verification,
+                // so every later retry re-verifies this same claim instead of
+                // attempting to spend the one-time code again.
+                at_stage(
+                    RelayGuestStartupStage::PairingClaim,
+                    claimed
+                        .lock()
+                        .map_err(|_| CollabRuntimeFailure::RelayUnavailable)
+                        .map(|mut cached| {
+                            cached.get_or_insert_with(|| invite.clone());
+                        }),
                 )?;
                 let claimed_region = invite.locator().claims().home_region();
                 (invite, claimed_region)
@@ -133,7 +211,7 @@ impl GuestRelayRuntime {
         let bridge = at_stage(
             RelayGuestStartupStage::RelayBridge,
             crate::blocking::block_on(async move {
-                if development_unsigned {
+                let bridge = if development_unsigned {
                     start_development_guest_bridge(endpoint, handshake).await
                 } else {
                     RelayGuestBridge::start(
@@ -142,17 +220,48 @@ impl GuestRelayRuntime {
                         authenticator.ok_or(CollabRuntimeFailure::RelayUnavailable)?,
                     )
                     .await
-                    .map_err(|_| CollabRuntimeFailure::RelayUnavailable)
+                    .map_err(relay_client_failure)
+                }?;
+                let paired = {
+                    let paired = bridge.wait_until_paired(GUEST_RELAY_PAIR_GATE_TIMEOUT);
+                    tokio::pin!(paired);
+                    loop {
+                        if is_cancelled() {
+                            break None;
+                        }
+                        tokio::select! {
+                            result = &mut paired => {
+                                break Some(result.map_err(relay_client_failure));
+                            }
+                            _ = tokio::time::sleep(GUEST_RELAY_CANCEL_POLL) => {}
+                        }
+                    }
+                };
+                // Dropping a bridge whose gate was cancelled aborts its bounded
+                // relay task immediately; the shutdown watcher never waits for
+                // the multi-minute pairing budget.
+                let Some(paired) = paired else {
+                    drop(bridge);
+                    return Ok(None);
+                };
+                paired?;
+                if is_cancelled() {
+                    drop(bridge);
+                    return Ok(None);
                 }
+                Ok(Some(bridge))
             }),
         )?;
+        let Some(bridge) = bridge else {
+            return Ok(None);
+        };
         let local_addr = bridge.local_addr();
-        Ok(Self {
+        Ok(Some(Self {
             local_addr,
             expected_discovery_id,
             expected_remote_static,
             bridge,
-        })
+        }))
     }
 
     pub(in crate::runtime) const fn local_addr(&self) -> SocketAddr {
@@ -167,6 +276,13 @@ impl GuestRelayRuntime {
     ) {
         let status = self.bridge.status();
         (status.phase, status.last_error)
+    }
+
+    pub(in crate::runtime) fn terminal_failure(&self) -> Option<CollabRuntimeFailure> {
+        let status = self.bridge.status();
+        (status.phase == op_collab_relay_client::RelayBridgePhase::Failed)
+            .then(|| status.last_error.map(relay_tunnel_failure))
+            .flatten()
     }
 }
 
@@ -199,5 +315,28 @@ mod tests {
 
         assert_eq!(result, Ok(7));
         assert!(!emitted);
+    }
+
+    #[test]
+    fn relay_rejections_keep_retryability_and_terminal_authentication_distinct() {
+        use op_collab_relay_client::RelayFailureKind as Failure;
+        use op_collab_relay_protocol::RelayRejectCode as Reject;
+
+        assert_eq!(
+            relay_tunnel_failure(Failure::Rejected(Reject::AuthenticationFailed)),
+            CollabRuntimeFailure::TicketRejected
+        );
+        assert_eq!(
+            relay_tunnel_failure(Failure::Rejected(Reject::RateLimited)),
+            CollabRuntimeFailure::RelayRateLimited
+        );
+        assert_eq!(
+            relay_tunnel_failure(Failure::Rejected(Reject::RelayUnavailable)),
+            CollabRuntimeFailure::RelayUnavailable
+        );
+        assert_eq!(
+            relay_tunnel_failure(Failure::Rejected(Reject::UnknownRoute)),
+            CollabRuntimeFailure::RelayInviteUnavailable
+        );
     }
 }

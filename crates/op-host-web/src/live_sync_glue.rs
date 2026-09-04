@@ -372,13 +372,19 @@ fn apply_document_response<C: RepaintContext + 'static>(
             s.client
                 .sync_with_editor_meta(
                     body,
-                    |doc, _version, active_page_index, preserve_authored_geometry| {
+                    |doc,
+                     _version,
+                     active_page_index,
+                     preserve_authored_geometry,
+                     wire_scenario| {
                         let host = inner_ref.host_mut();
                         host.replace_document_from_sync(doc, undoable);
-                        // The live-sync wire carries no scenario field, so
-                        // keep whatever the open document already had rather
-                        // than letting every sync erase its tag.
-                        let scenario = host.editor_state().editor_ui.scenario;
+                        // A daemon new enough to send `scenario` is the
+                        // authority (the browser boots with `None`, and a deck
+                        // must present as a deck). An older daemon omits the
+                        // field — keep whatever the open document already had
+                        // rather than letting every sync erase its tag.
+                        let scenario = wire_scenario.or(host.editor_state().editor_ui.scenario);
                         let pinned_style_guide =
                             host.editor_state().editor_ui.pinned_style_guide.clone();
                         op_pen_loader::apply_editor_meta(

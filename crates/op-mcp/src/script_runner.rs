@@ -2,9 +2,10 @@
 //!
 //! One implementation for BOTH callers: the orchestrator's script-gen
 //! subagent path and external `batch_design(script)` calls. The script may
-//! only cause effects through the bound `I(parent, obj)` recorder; the
-//! result is a `batch_design` operations program executed by the existing
-//! `batch_program` executor. Hard limits guard externally-supplied scripts:
+//! only cause effects through the bound `I(parent, obj)`, `K(...)`, and
+//! `U(nodeId, patch)` recorders; the result is a `batch_design` operations
+//! program executed by the existing `batch_program` executor. Hard limits
+//! guard externally-supplied scripts:
 //! memory, wall-clock interrupt, recorded-line cap, and source-size cap.
 
 use std::cell::{Cell, RefCell};
@@ -19,6 +20,11 @@ mod error;
 #[path = "script_runner_dotted_keys.rs"]
 mod dotted_keys;
 
+#[path = "script_runner_prelude.rs"]
+mod prelude;
+
+use prelude::PRELUDE;
+
 pub use error::ScriptError;
 
 pub const MAX_SCRIPT_BYTES: usize = 262_144;
@@ -32,28 +38,6 @@ pub const MAX_RECORDED_LINES: usize = 4096;
 pub const MAX_RECORDED_BYTES: usize = 8 * 1024 * 1024;
 const MEMORY_LIMIT_BYTES: usize = 64 * 1024 * 1024;
 const EVAL_BUDGET: Duration = Duration::from_secs(2);
-
-const PRELUDE: &str = r#"
-globalThis.I = function (parent, obj) {
-  return __record(parent == null ? "null" : String(parent), JSON.stringify(obj));
-};
-globalThis.K = function (kitComponentId, parent, overrides) {
-  return __recordK(JSON.stringify(String(kitComponentId)), parent == null ? "null" : String(parent), JSON.stringify(overrides == null ? {} : overrides));
-};
-function __unsupported(op) {
-  return function () {
-    throw new Error("OP_SCRIPT_MODE_UNSUPPORTED: " + op + "() has no effect in script mode; use batch_design operations mode");
-  };
-}
-globalThis.C = __unsupported("C");
-globalThis.U = __unsupported("U");
-globalThis.D = __unsupported("D");
-globalThis.M = __unsupported("M");
-globalThis.R = __unsupported("R");
-globalThis.G = __unsupported("G");
-var __noop = function () {};
-globalThis.console = { log: __noop, warn: __noop, error: __noop, info: __noop, debug: __noop };
-"#;
 
 /// Strip fences, enforce caps, eval, and return the recorded program.
 /// Retries once with `repair_truncated_script` when the first eval fails,
@@ -127,6 +111,20 @@ fn eval_after_initial_failure(script: &str, first_err: ScriptError) -> Result<St
         },
         None => script.to_string(),
     };
+    let script = match escape_raw_newlines_in_quoted_strings(&script) {
+        Some(repaired) => match eval_to_program(&repaired) {
+            Ok(p) => {
+                tracing::warn!(
+                    original_len = script.len(),
+                    repaired_len = repaired.len(),
+                    "script failed as-is; raw newline repair recovered a quoted string"
+                );
+                return Ok(p);
+            }
+            Err(_) => repaired,
+        },
+        None => script,
+    };
     let script = script.as_str();
 
     // GLM-5.2 commonly drops the outer `}` when `stroke:{...}` is the final
@@ -175,9 +173,104 @@ fn eval_after_initial_failure(script: &str, first_err: ScriptError) -> Result<St
     }
 }
 
-/// Eval in a fresh limited QuickJS context. Ok(program) on success OR on a
-/// mid-run throw with a non-empty recording (partial salvage); Err only when
-/// nothing was recorded.
+/// A normal JavaScript string cannot contain a literal line break. This shape
+/// appears when an outer `run_code` template evaluates `\\n` before passing the
+/// inner QuickJS source. Escape only line breaks found inside single/double
+/// quoted strings; template literals and comments keep their original bytes.
+fn escape_raw_newlines_in_quoted_strings(src: &str) -> Option<String> {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum State {
+        Normal,
+        Single,
+        Double,
+        Template,
+        LineComment,
+        BlockComment,
+    }
+
+    let mut out = String::with_capacity(src.len());
+    let mut chars = src.chars().peekable();
+    let mut state = State::Normal;
+    let mut escaped = false;
+    let mut changed = false;
+
+    while let Some(ch) = chars.next() {
+        match state {
+            State::Normal => {
+                out.push(ch);
+                match ch {
+                    '\'' => state = State::Single,
+                    '"' => state = State::Double,
+                    '`' => state = State::Template,
+                    '/' if chars.peek() == Some(&'/') => {
+                        out.push(chars.next().expect("peeked slash"));
+                        state = State::LineComment;
+                    }
+                    '/' if chars.peek() == Some(&'*') => {
+                        out.push(chars.next().expect("peeked star"));
+                        state = State::BlockComment;
+                    }
+                    _ => {}
+                }
+            }
+            State::Single | State::Double => {
+                let quote = if state == State::Single { '\'' } else { '"' };
+                if escaped {
+                    out.push(ch);
+                    escaped = false;
+                } else if ch == '\\' {
+                    out.push(ch);
+                    escaped = true;
+                } else if ch == quote {
+                    out.push(ch);
+                    state = State::Normal;
+                } else if ch == '\n' {
+                    out.push_str("\\n");
+                    changed = true;
+                } else if ch == '\r' {
+                    if chars.peek() == Some(&'\n') {
+                        chars.next();
+                    }
+                    out.push_str("\\n");
+                    changed = true;
+                } else {
+                    out.push(ch);
+                }
+            }
+            State::Template => {
+                out.push(ch);
+                if escaped {
+                    escaped = false;
+                } else if ch == '\\' {
+                    escaped = true;
+                } else if ch == '`' {
+                    state = State::Normal;
+                }
+            }
+            State::LineComment => {
+                out.push(ch);
+                if ch == '\n' || ch == '\r' {
+                    state = State::Normal;
+                }
+            }
+            State::BlockComment => {
+                out.push(ch);
+                if ch == '*' && chars.peek() == Some(&'/') {
+                    out.push(chars.next().expect("peeked slash"));
+                    state = State::Normal;
+                }
+            }
+        }
+    }
+
+    changed.then_some(out)
+}
+
+/// Eval in a fresh limited QuickJS context. A runtime throw is always an
+/// error, even when earlier I/K/U calls were recorded. The caller executes
+/// the returned program transactionally, so returning a prefix here would
+/// turn an incomplete JavaScript transaction into a misleading success.
+/// Syntax-level truncation recovery remains in `eval_after_initial_failure`.
 fn eval_to_program(script: &str) -> Result<String, ScriptError> {
     let rt = Runtime::new().map_err(|e| ScriptError::RuntimeInit(e.to_string()))?;
     rt.set_memory_limit(MEMORY_LIMIT_BYTES);
@@ -194,6 +287,8 @@ fn eval_to_program(script: &str) -> Result<String, ScriptError> {
     let lines_rec_k = lines.clone();
     let counter_rec_k = counter.clone();
     let bytes_rec_k = bytes_used.clone();
+    let lines_rec_u = lines.clone();
+    let bytes_rec_u = bytes_used.clone();
 
     let outcome: Result<(), ScriptError> = ctx.with(|ctx| {
         let record = Function::new(ctx.clone(), move |parent: String, json: String| -> String {
@@ -217,6 +312,21 @@ fn eval_to_program(script: &str) -> Result<String, ScriptError> {
             name: "__recordK",
             detail: e.to_string(),
         })?;
+        let record_u = Function::new(
+            ctx.clone(),
+            move |node_id: String, json: String| -> String {
+                push_recorded_operation(
+                    &lines_rec_u,
+                    &bytes_rec_u,
+                    format!("U({node_id}, {json})"),
+                );
+                node_id
+            },
+        )
+        .map_err(|e| ScriptError::BindHostFn {
+            name: "__recordU",
+            detail: e.to_string(),
+        })?;
         ctx.globals()
             .set("__record", record)
             .map_err(|e| ScriptError::SetGlobal {
@@ -227,6 +337,12 @@ fn eval_to_program(script: &str) -> Result<String, ScriptError> {
             .set("__recordK", record_k)
             .map_err(|e| ScriptError::SetGlobal {
                 name: "__recordK",
+                detail: e.to_string(),
+            })?;
+        ctx.globals()
+            .set("__recordU", record_u)
+            .map_err(|e| ScriptError::SetGlobal {
+                name: "__recordU",
                 detail: e.to_string(),
             })?;
         ctx.eval::<(), _>(PRELUDE)
@@ -249,14 +365,13 @@ fn eval_to_program(script: &str) -> Result<String, ScriptError> {
         // raised by the prelude's `__unsupported` thrower, so it can only
         // ever arrive inside a script-throw payload.
         Err(e) if e.to_string().contains("OP_SCRIPT_MODE_UNSUPPORTED") => Err(e),
-        Err(e) if program.trim().is_empty() => Err(e),
         Err(e) => {
             tracing::warn!(
                 error = %e,
                 recorded_ops = lines.borrow().len(),
-                "script threw mid-run; salvaging the nodes recorded before the throw"
+                "script threw mid-run; discarding the recorded prefix"
             );
-            Ok(program)
+            Err(e)
         }
     }
 }
@@ -270,23 +385,28 @@ fn push_recorded_line(
     let n = counter.get();
     counter.set(n + 1);
     let bind = format!("b{n}");
-    // Mirrors the line-count cap: bindings keep incrementing so later
-    // calls still resolve, but once either cap is met the line stops
-    // accumulating. The byte cap is enforced on the WHOLE line BEFORE
-    // pushing (check-then-add would let one arbitrarily large line
-    // overshoot the advertised cap by its own size), and it latches:
-    // a refused line ends recording so the program stays a clean
-    // prefix — no holes referencing bindings whose insert was dropped.
-    if n < MAX_RECORDED_LINES && bytes_used.get() < MAX_RECORDED_BYTES {
-        let line = build(&bind);
-        if bytes_used.get() + line.len() <= MAX_RECORDED_BYTES {
-            bytes_used.set(bytes_used.get() + line.len());
-            lines.borrow_mut().push(line);
-        } else {
-            bytes_used.set(MAX_RECORDED_BYTES);
-        }
-    }
+    push_recorded_operation(lines, bytes_used, build(&bind));
     bind
+}
+
+fn push_recorded_operation(
+    lines: &Rc<RefCell<Vec<String>>>,
+    bytes_used: &Rc<Cell<usize>>,
+    line: String,
+) {
+    // Bindings keep incrementing independently of unbound U() calls, while
+    // the cap applies to every recorded operation. The byte cap is enforced
+    // on the WHOLE line BEFORE pushing and latches after an oversized line,
+    // keeping the returned program a clean prefix.
+    if lines.borrow().len() >= MAX_RECORDED_LINES || bytes_used.get() >= MAX_RECORDED_BYTES {
+        return;
+    }
+    if bytes_used.get() + line.len() <= MAX_RECORDED_BYTES {
+        bytes_used.set(bytes_used.get() + line.len());
+        lines.borrow_mut().push(line);
+    } else {
+        bytes_used.set(MAX_RECORDED_BYTES);
+    }
 }
 
 fn balance_brackets(src: &str) -> String {

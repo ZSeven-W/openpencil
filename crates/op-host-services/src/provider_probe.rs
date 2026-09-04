@@ -12,7 +12,7 @@
 //! (`provider_probe_host.rs`); nothing touches the UI thread.
 
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use base64::Engine;
@@ -21,7 +21,8 @@ use op_ai::chat_models::ModelEntry;
 use op_i18n::Locale;
 
 use crate::model_discovery::{
-    codex_models_from_app_server, codex_models_from_cache, discover_opencode, resolve_cli,
+    codex_models_from_app_server_with_exe, codex_models_from_cache, query_opencode_models,
+    resolve_cli,
 };
 use crate::provider_probe_models::{
     claude_initialize_query, codex_home, codex_models_from_latest_md, ClaudeAccount,
@@ -30,11 +31,11 @@ use crate::provider_probe_models::{
 
 #[path = "provider_probe_copilot.rs"]
 mod copilot;
+#[cfg(test)]
+use crate::copilot_sdk_probe::CopilotAuth;
 use copilot::connect_copilot;
 #[cfg(test)]
-use copilot::{
-    copilot_connection_info, friendly_copilot_error, parse_copilot_auth_status, CopilotAuth,
-};
+use copilot::{copilot_connection_info, friendly_copilot_error};
 
 /// Probe result — the TS `ConnectResult` shape plus the install
 /// guidance the not-installed path surfaces.
@@ -95,6 +96,16 @@ fn no_models_error(locale: Locale, provider: AgentProvider) -> String {
         AgentProvider::GithubCopilot => "providerProbe.noModelsCopilot",
         AgentProvider::Antigravity => "providerProbe.noModelsAntigravity",
         AgentProvider::GrokBuild => "providerProbe.noModelsGrok",
+        // dsh exposes no verified model-listing command, so the probe
+        // never queries one — this arm only covers a hypothetical
+        // empty-catalog outcome, reusing the shared key + name var.
+        AgentProvider::DeepSeekHarness => {
+            return tw(
+                locale,
+                "providerProbe.noModelList",
+                &[("name", "DeepSeek Harness")],
+            );
+        }
     };
     t(locale, key)
 }
@@ -133,6 +144,7 @@ pub fn connect_provider(provider: AgentProvider, locale: Locale) -> ProbeOutcome
         AgentProvider::GithubCopilot => connect_copilot(locale),
         AgentProvider::Antigravity => crate::cli_provider_probe::connect_antigravity(),
         AgentProvider::GrokBuild => crate::cli_provider_probe::connect_grok_build(),
+        AgentProvider::DeepSeekHarness => crate::cli_provider_probe::connect_deepseek_harness(),
     }
 }
 
@@ -174,6 +186,7 @@ fn install_command_for_platform(
         AgentProvider::Antigravity => "curl -fsSL https://antigravity.google/cli/install.sh | bash",
         AgentProvider::GrokBuild if windows => "irm https://x.ai/cli/install.ps1 | iex",
         AgentProvider::GrokBuild => "curl -fsSL https://x.ai/cli/install.sh | bash",
+        AgentProvider::DeepSeekHarness => "npm install -g @deepseek-ai/dsh",
     }
 }
 
@@ -246,24 +259,41 @@ pub(crate) fn cli_version_failure_message(provider: &str, failure: &CliVersionFa
     }
 }
 
+/// Pick the actionable part of a failed Codex version probe before
+/// bounding and redacting it for the provider card. Codex's Node
+/// launcher states the cause first and follows it with a long stack,
+/// so keeping only the final bytes hides failures such as a missing
+/// platform-specific optional dependency.
+fn cli_version_exit_diagnostic(stdout: &str, stderr: &str) -> String {
+    crate::chat_subprocess_quirks::extract_codex_cli_error(stderr)
+        .and_then(|message| op_util::cli_output::diagnostic_tail(&message))
+        .or_else(|| op_util::cli_output::diagnostic_tail(stderr))
+        .or_else(|| op_util::cli_output::diagnostic_tail(stdout))
+        .unwrap_or_default()
+}
+
 /// Run `exe --version`, capturing stdout+stderr (the TS gates run
 /// with `2>&1`). Both streams are drained on background threads so a
 /// chatty or hung CLI can neither fill a pipe nor cost us its output
 /// when the deadline kills it.
 fn cli_version(exe: &Path, timeout: Duration) -> Result<String, CliVersionFailure> {
-    let mut cmd = Command::new(exe);
-    cmd.arg("--version")
-        .stdin(Stdio::null())
+    let mut cmd = crate::chat_spawn::build_blocking_command(exe, &["--version"]);
+    cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
     crate::chat_spawn::hide_console_window(&mut cmd);
     let mut child = match cmd.spawn() {
         Ok(child) => child,
         Err(err) => return Err(CliVersionFailure::Spawn(err.to_string())),
     };
+    let process_tree = op_process_io::ProcessTree::from_child(&child).ok();
     let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
-        let _ = child.kill();
-        let _ = child.wait();
+        let _ = op_process_io::terminate_process_tree(&mut child, Duration::ZERO);
         return Err(CliVersionFailure::Spawn("no output pipes".to_string()));
     };
     let stdout_reader = crate::cli_probe_support::PipeCapture::spawn(stdout);
@@ -272,12 +302,20 @@ fn cli_version(exe: &Path, timeout: Duration) -> Result<String, CliVersionFailur
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                let out = String::from_utf8_lossy(&stdout_reader.finish()).into_owned();
-                let err = String::from_utf8_lossy(&stderr_reader.finish()).into_owned();
+                if let Some(tree) = process_tree {
+                    let _ = tree.kill_after_leader_exit();
+                }
+                let (out, err) = crate::cli_probe_support::finish_pipe_captures(
+                    stdout_reader,
+                    stderr_reader,
+                    deadline,
+                );
+                let out = String::from_utf8_lossy(&out).into_owned();
+                let err = String::from_utf8_lossy(&err).into_owned();
                 if !status.success() {
                     return Err(CliVersionFailure::Exited {
                         status: crate::chat_spawn::exit_status_label(&status),
-                        tail: crate::cli_probe_support::tail_snippet(&out, &err),
+                        tail: cli_version_exit_diagnostic(&out, &err),
                     });
                 }
                 // A CLI that prints its version to stderr is still a
@@ -290,16 +328,20 @@ fn cli_version(exe: &Path, timeout: Duration) -> Result<String, CliVersionFailur
                 return Ok(version.to_string());
             }
             Ok(None) if Instant::now() < deadline => {
-                std::thread::sleep(Duration::from_millis(50));
+                std::thread::sleep(
+                    Duration::from_millis(50)
+                        .min(deadline.saturating_duration_since(Instant::now())),
+                );
             }
             Ok(None) | Err(_) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                let grace = crate::cli_probe_support::CAPTURE_GRACE;
-                let out =
-                    String::from_utf8_lossy(&stdout_reader.finish_bounded(grace)).into_owned();
-                let err =
-                    String::from_utf8_lossy(&stderr_reader.finish_bounded(grace)).into_owned();
+                let _ = op_process_io::terminate_process_tree(&mut child, Duration::ZERO);
+                let (out, err) = crate::cli_probe_support::finish_pipe_captures(
+                    stdout_reader,
+                    stderr_reader,
+                    deadline,
+                );
+                let out = String::from_utf8_lossy(&out).into_owned();
+                let err = String::from_utf8_lossy(&err).into_owned();
                 return Err(CliVersionFailure::TimedOut {
                     seconds: timeout.as_secs(),
                     tail: crate::cli_probe_support::tail_snippet(&out, &err),
@@ -482,7 +524,7 @@ fn connect_codex_cli(locale: Locale) -> ProbeOutcome {
     // Model list: app-server protocol (the approved no-hardcoded-
     // lists design; a superset of TS, which reads only the cache),
     // then the on-disk cache, then latest-model.md (both TS paths).
-    let mut models = codex_models_from_app_server().unwrap_or_default();
+    let mut models = codex_models_from_app_server_with_exe(&exe).unwrap_or_default();
     if models.is_empty() {
         models = codex_models_from_cache().unwrap_or_default();
     }
@@ -609,18 +651,18 @@ fn connect_opencode(locale: Locale) -> ProbeOutcome {
     // Model query via `opencode models` — Rust's sanctioned
     // transport divergence from the TS `opencode serve` SDK round
     // trip (the listing is equivalent: `provider/model` slugs).
-    let models = discover_opencode();
-    if models.is_empty() {
-        return ProbeOutcome::failed(t(locale, "providerProbe.noModelsOpenCode"));
-    }
+    let models = match query_opencode_models() {
+        Ok(models) => models,
+        Err(error) => return ProbeOutcome::failed(error.to_string()),
+    };
     let info = opencode_provider_summary(locale, &models);
     ProbeOutcome {
         connected: true,
         models,
         connection_info: Some(info),
         hint_path: Some(config_path(
-            "~/.opencode/config.json",
-            "%USERPROFILE%\\.opencode\\config.json",
+            "~/.config/opencode/opencode.json",
+            "%USERPROFILE%\\.config\\opencode\\opencode.json",
         )),
         ..ProbeOutcome::default()
     }

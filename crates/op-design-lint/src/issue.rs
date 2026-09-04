@@ -16,7 +16,7 @@ pub enum IssueSeverity {
     Info,
 }
 
-/// Which detector produced an issue — one variant per detector (14 total).
+/// Which detector produced an issue — one variant per detector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum IssueCategory {
@@ -35,10 +35,24 @@ pub enum IssueCategory {
     TextBgContrast,
     StackedHorizontalPadding,
     WidgetA11y,
+    EmptyFilledPanel,
+    TopAnchoredBars,
+    NoBaselineBars,
+    RedundantWrapper,
+    ExcessiveNestingDepth,
+    AbsolutePositioningShare,
+    /// GPU cost of SkSL shader fills — how many full-bleed fragment passes
+    /// one screen carries. Advisory: expensive, but it renders.
+    ShaderBudget,
+    /// A shader fill the renderer cannot honour — bad uniform arity, or source
+    /// past the size bound. Distinct from `ShaderBudget` because the outcome is
+    /// different in kind: the fill degrades to a flat colour at paint time, so
+    /// what ships is not the design that was authored.
+    ShaderInvalid,
 }
 
-/// The node property a fix targets. The detectors emit only this closed set
-/// of 9 values (spec §4, Codex Q3); `Remove` is the `"__remove"` sentinel.
+/// The node property a fix targets. `Remove` is the `"__remove"` sentinel;
+/// `Y` is used by the contract-tier top-anchored-bar repair.
 /// `#[serde(rename)]` keeps each on-wire string identical to TS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FixProperty {
@@ -65,6 +79,9 @@ pub enum FixProperty {
     /// apply paths treat it as a no-op like `Fill`.
     #[serde(rename = "label")]
     Label,
+    /// A numeric y-position used by the contract-tier bar-chart repair.
+    #[serde(rename = "y")]
+    Y,
 }
 
 impl FixProperty {
@@ -84,6 +101,7 @@ impl FixProperty {
             FixProperty::Rotation => "rotation",
             FixProperty::Stroke => "stroke",
             FixProperty::Label => "label",
+            FixProperty::Y => "y",
         }
     }
 }
@@ -154,6 +172,8 @@ mod tests {
             FixProperty::Padding,
             FixProperty::Rotation,
             FixProperty::Stroke,
+            FixProperty::Label,
+            FixProperty::Y,
         ] {
             let serde_wire = serde_json::to_value(property).unwrap();
             assert_eq!(

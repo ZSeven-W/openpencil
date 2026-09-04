@@ -26,7 +26,7 @@ use std::fmt;
 use op_mcp::ToolErrorCode;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum ImportHtmlUrlError {
+pub enum ImportHtmlUrlError {
     /// The `url` argument (or a redirect target) is not a parseable URL.
     UrlInvalid,
     /// The URL parsed but is refused by the SSRF screen: a non-HTTP(S)
@@ -52,6 +52,12 @@ pub(crate) enum ImportHtmlUrlError {
     /// The response body exceeded the byte cap for its tier (10 MiB for the
     /// page, 4 MiB for a subresource).
     ResponseTooLarge { url: String },
+    /// No import slot was available for this page.
+    TooManyConcurrentJobs,
+    /// The successful response was not HTML and did not look like HTML.
+    NotHtmlPage,
+    /// The HTML importer produced no nodes.
+    NoImportableContent { detail: String },
 }
 
 impl ImportHtmlUrlError {
@@ -73,7 +79,10 @@ impl ImportHtmlUrlError {
             | ImportHtmlUrlError::TooManyRedirects
             | ImportHtmlUrlError::RedirectMissingLocation
             | ImportHtmlUrlError::RedirectLocationInvalid
-            | ImportHtmlUrlError::ResponseTooLarge { .. } => ToolErrorCode::ToolFailed,
+            | ImportHtmlUrlError::ResponseTooLarge { .. }
+            | ImportHtmlUrlError::TooManyConcurrentJobs
+            | ImportHtmlUrlError::NotHtmlPage => ToolErrorCode::ToolFailed,
+            ImportHtmlUrlError::NoImportableContent { .. } => ToolErrorCode::InvalidArgument,
         }
     }
 }
@@ -101,6 +110,13 @@ impl fmt::Display for ImportHtmlUrlError {
             }
             ImportHtmlUrlError::ResponseTooLarge { url } => {
                 write!(f, "response from {url} exceeds the size cap")
+            }
+            ImportHtmlUrlError::TooManyConcurrentJobs => {
+                f.write_str("too many concurrent import jobs")
+            }
+            ImportHtmlUrlError::NotHtmlPage => f.write_str("not an html page"),
+            ImportHtmlUrlError::NoImportableContent { detail } => {
+                write!(f, "no importable content: {detail}")
             }
         }
     }

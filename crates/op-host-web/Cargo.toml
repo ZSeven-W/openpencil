@@ -20,7 +20,7 @@ ttf-parser = "0.25"
 # Phase 7.3 reorg: openpencil-shell-core dissolved — widget facade /
 # theme / layout scene / scene vars / render-backend / gesture types
 # all resolve through the op-editor-ui crate.
-op-editor-ui = { path = "../op-editor-ui", features = ["runtime-icon-catalog"] }
+op-editor-ui = { path = "../op-editor-ui", features = ["runtime-icon-catalog", "runtime-locale-catalog", "slim-corpus"] }
 # Reorg: the web host owns an `op_editor_core::EditorState` as its
 # single source of truth; `op-pen-loader` bridges it into the
 # read-only paint `Document` the shared widgets consume.
@@ -76,9 +76,15 @@ wasm-bindgen-futures = { version = "0.4", optional = true }
 # re-exports `gesture::*`), so pull jian-core directly. Same path-with-
 # version pattern as shell-core's own jian-core dep.
 jian-core = { path = "../../vendor/jian/crates/jian-core", version = "0.0.1" }
-# Pin to 0.2.117 — last wasm-bindgen-cli release compatible with the
-# workspace's Rust 1.85 toolchain. Newer 0.2.120+ requires rustc 1.86.
-# When the workspace bumps Rust, raise this bound.
+# Canvas Preview (Play) mode runtime — jian runtime integration, hit-testing
+# overlay, app-mode routing. Preview enters with CkMeasure as the text-measurement
+# backend, keeping layout in sync with the design canvas's CanvasKit rendering.
+op-preview-core = { path = "../op-preview-core" }
+# Preview device-switcher segment labels use the same i18n keys as the
+# native host so both shells read identically.
+op-i18n = { path = "../op-i18n", features = ["runtime-locale-catalog"] }
+# Pin to the reviewed wasm-bindgen CLI used by release workflows; the crate and
+# CLI must move together rather than floating independently.
 wasm-bindgen = "=0.2.117"
 
 [dependencies.web-sys]
@@ -188,3 +194,12 @@ canvaskit = [
 # skia-only raster modules were deleted. `skia-safe` reverted to upstream
 # crates.io — it has no wasm32-unknown-unknown target, so a wasm skia build is
 # no longer possible regardless.)
+
+# Desktop-only test lane: compare the real native Skia raster against the
+# vendored CanvasKit CPU raster without pulling either dependency into wasm.
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dev-dependencies]
+op-host-native = { path = "../op-host-native", default-features = false }
+skia-safe = { version = "0.97.0", default-features = false, features = [
+  "binary-cache",
+  "textlayout",
+] }

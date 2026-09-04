@@ -42,17 +42,21 @@ pub fn press_scene_template_center(
         SceneTemplateHit::Close => state.editor_ui.close_scene_template_center(),
         SceneTemplateHit::FocusSearch(offset) => {
             let center = &mut state.editor_ui.scene_template_center;
-            let changed =
-                center.search.caret() != offset || center.focus != SceneTemplateFocus::Search;
+            let changed = center.search.caret() != offset
+                || center.focus != SceneTemplateFocus::Search
+                || !center.input_focus_active;
             center.focus = SceneTemplateFocus::Search;
+            center.input_focus_active = true;
             center.search.set_caret(offset, now_ms);
             changed
         }
         SceneTemplateHit::FocusGenerate(offset) => {
             let center = &mut state.editor_ui.scene_template_center;
-            let changed =
-                center.generate.caret() != offset || center.focus != SceneTemplateFocus::Generate;
+            let changed = center.generate.caret() != offset
+                || center.focus != SceneTemplateFocus::Generate
+                || !center.input_focus_active;
             center.focus = SceneTemplateFocus::Generate;
+            center.input_focus_active = true;
             center.generate.set_caret(offset, now_ms);
             changed
         }
@@ -134,18 +138,19 @@ pub fn press_scene_template_center(
             true
         }
         SceneTemplateHit::DeleteStyleGuide(id) => delete_user_style_guide(state, &id),
+        SceneTemplateHit::DeleteTemplate(id) => delete_user_scene_template(state, &id),
         SceneTemplateHit::FocusStyleImport(offset) => {
             let center = &mut state.editor_ui.scene_template_center;
-            let changed =
-                center.import.text.caret() != offset || center.focus != SceneTemplateFocus::Import;
+            let changed = center.import.text.caret() != offset
+                || center.focus != SceneTemplateFocus::Import
+                || !center.input_focus_active;
             center.focus = SceneTemplateFocus::Import;
+            center.input_focus_active = true;
             center.import.text.set_caret(offset, now_ms);
             changed
         }
         SceneTemplateHit::ConfirmStyleImport => confirm_style_import(state),
-        SceneTemplateHit::CancelStyleImport => {
-            state.editor_ui.scene_template_center.close_style_import()
-        }
+        SceneTemplateHit::CancelStyleImport => state.editor_ui.close_scene_template_style_import(),
         SceneTemplateHit::InsideStyleImport => false,
         SceneTemplateHit::Inside => false,
     };
@@ -190,7 +195,7 @@ pub fn import_style_guide_text(state: &mut EditorState, raw: &str, fallback_name
             let id = imported.id.clone();
             let center = &mut state.editor_ui.scene_template_center;
             center.queue_style_persist(id.clone());
-            center.close_style_import();
+            state.editor_ui.close_scene_template_style_import();
             // Pin what was just imported. The user went and found a style
             // guide; leaving it unpinned would make the next generation
             // ignore the thing they just went to the trouble of adding.
@@ -233,6 +238,25 @@ pub fn delete_user_style_guide(state: &mut EditorState, id: &str) -> bool {
     if state.editor_ui.pinned_style_guide.as_deref() == Some(id) {
         state.editor_ui.clear_pinned_style_guide();
     }
+    true
+}
+
+/// Forget a saved scene template.
+///
+/// Memory first, disk after, mirroring the style-guide delete: the runtime
+/// registry removal makes the card vanish from "My templates" this instant,
+/// and the queued id is what a host with a disk drains to remove the
+/// directory. A host without a disk (the browser) drops the queue — its
+/// registry is always empty anyway.
+pub fn delete_user_scene_template(state: &mut EditorState, id: &str) -> bool {
+    if op_editor_core::user_scene_templates::remove_user_scene_template(id).is_none() {
+        return false;
+    }
+    let center = &mut state.editor_ui.scene_template_center;
+    center.queue_template_delete(id);
+    // The grid just got shorter; a retained hover token points at whatever
+    // card slid up into that slot.
+    center.hover = None;
     true
 }
 

@@ -340,6 +340,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "htmlImport.warn.layout.margins_on_visual_box_ignored" => {
             "विज़ुअल बॉक्स पर CSS मार्जिन को अनदेखा किया गया।"
         }
+        "htmlImport.warn.layout.inline_margin_wrapping_approximated" => "CSS मार्जिन वाले इनलाइन तत्व को बॉक्स बनाया गया है और वह अब पंक्तियों में रैप नहीं हो सकता।",
         "htmlImport.warn.layout.content_box_percentage_approximated" => {
             "content-box प्रतिशत आकार-निर्धारण को अनुमानित किया गया।"
         }
@@ -567,6 +568,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "htmlImport.warn.media.object_position_ignored" => {
             "CSS object-position को अनदेखा किया गया।"
         }
+        "htmlImport.warn.media.image_intrinsic_axis_unresolved" => {
+            "छवि का अंतर्निहित पक्षानुपात अनुपस्थित अक्ष निर्धारित नहीं कर सका, क्योंकि निर्धारित आकार डायनेमिक है या उसका कंटेनिंग ब्लॉक अनिश्चित है।"
+        }
         "htmlImport.warn.media.image_mix_blend_mode_unsupported" => {
             "छवि पर असमर्थित CSS mix-blend-mode को अनदेखा किया गया।"
         }
@@ -697,6 +701,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "slidesPanel.exportPdf" => "PDF निर्यात करें",
         "slidesPanel.exportAllSlides" => "सभी स्लाइड निर्यात करें",
         "slidesPanel.exportSelectedSlides" => "चयनित स्लाइड निर्यात करें ({{count}})",
+        "settings.tab.ai" => "AI",
         "settings.agents.heroTitle" => "अपना AI प्रदाता कनेक्ट करें",
         "settings.agents.heroSubtitle" => "OpenPencil आपके स्थानीय CLI एजेंट और API प्रदाताओं को चलाता है — डिज़ाइन बनाना शुरू करने के लिए किसी एक को कनेक्ट करें।",
         "settings.agents.statusConnected" => "कनेक्टेड",

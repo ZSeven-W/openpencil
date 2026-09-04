@@ -20,6 +20,10 @@
   <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
+<p align="center">
+  <a href="https://trendshift.io/repositories/24088?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-24088" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/24088" alt="ZSeven-W%2Fopenpencil | Trendshift" width="250" height="55" /></a>
+</p>
+
 <br />
 
 <p align="center">
@@ -28,17 +32,6 @@
   </a>
 </p>
 <p align="center"><sub>Demo videosunu izlemek için görsele tıklayın</sub></p>
-
-<br />
-
-<p align="center">
-  <a href="https://github.com/InnerAura/hyperweave" title="Star history rendered with HyperWeave">
-    <img src="./screenshot/openpencil-star-history.svg" alt="OpenPencil star history rendered by HyperWeave" width="100%" />
-  </a>
-</p>
-<p align="center">
-  <sub>The trend above is rendered with <a href="https://github.com/InnerAura/hyperweave"><b>HyperWeave</b></a> — an experimental SVG artifact layer for agents. &nbsp;<a href="https://github.com/InnerAura/hyperweave"><b>Explore&nbsp;→</b></a></sub>
-</p>
 
 ## Neden OpenPencil
 
@@ -110,6 +103,8 @@ Tek bir `.op` dosyasından React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, S
 </table>
 
 ## Kurulum
+
+**Windows'da derleme:** [BUILD_WINDOWS.tr.md](./docs/build_windows/BUILD_WINDOWS.tr.md)
 
 **macOS (Homebrew):**
 
@@ -391,6 +386,7 @@ OpenPencil, **[ZSeven-W](https://github.com/ZSeven-W)** tarafından geliştirile
 
 | Proje | Nedir |
 | ----- | ----- |
+| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | OpenPencil için DeepSeek Harness eklentisi — bir sohbetin içinde tam çoklu çerçeve `.op` önizlemeleri, etkileşimli bir tuval ve ajan-yerel tasarım araçlarına sahip yönetilen bir düzenleyici. |
 | **[Zode](https://github.com/ZSeven-W/zode)** | Terminaliniz için açık kaynaklı, AI-yerel kodlama asistanı — kodunuzu okuyan, komutları çalıştıran, dosyaları arayan ve git'i yöneten hızlı bir Rust TUI'si (`ratatui`). OpenPencil'ı MCP üzerinden sürer. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | LLM ajanlarını sevk etmek için saf Rust asenkron çalışma ortamı — çoklu sağlayıcı, uçtan uca araç yetenekli, yapılandırılmış izinler, gerçek MCP ve sıfır `unsafe`. OpenPencil'ın yerleşik ajan çalışma ortamını (`vendor/agent`) ve Zode'u güçlendirir. |
 | **[jian](https://github.com/ZSeven-W/jian)** | Saf Rust, GPU-Skia UI çatısı — tek bir yığında widget'lar, düzen, olaylar ve hot reload. Bildirimsel bir `.op` belgesini JS çalışma ortamı, DOM ve Electron olmadan yerel, AI ile kontrol edilebilir bir uygulamaya dönüştürür. OpenPencil'ın UI çatısı (`vendor/jian`). |

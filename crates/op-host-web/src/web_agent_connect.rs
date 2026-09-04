@@ -99,7 +99,7 @@ pub(crate) fn apply_provider_connect_response(
         connected = false;
         info = None;
         error = Some(op_editor_core::missing_models_connect_error(
-            state.editor_ui.locale,
+            state.editor_ui.effective_locale(),
             provider,
         ));
     }

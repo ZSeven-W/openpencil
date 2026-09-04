@@ -38,10 +38,15 @@ pub(super) const DIVIDER_GAP: f32 = 4.0;
 /// has none, so the button is compiled out there — otherwise it would
 /// toggle an invisible panel (Codex stop-time review).
 pub(super) const GIT_BUTTON_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
-/// Preview needs the host-side jian runtime owner. The current web/wasm host
-/// has no equivalent runtime/measurement bridge, so hide the button there
-/// rather than exposing a non-interactive preview flag.
-pub(super) const PREVIEW_BUTTON_AVAILABLE: bool = !cfg!(target_arch = "wasm32");
+/// Preview needs a host-side jian runtime owner plus a measurement bridge that
+/// matches how that host's design canvas measures text — otherwise preview's
+/// hit-test layout drifts from what the canvas paints and taps miss.
+///
+/// Both hosts supply one now: the desktop host injects `jian_skia::SkiaMeasure`,
+/// and the web host injects `canvaskit::BrowserMeasure`, which routes through
+/// the same Canvas2D `measureText` path the web design canvas lays out with. So
+/// the button is offered on every target rather than compiled out on wasm.
+pub(super) const PREVIEW_BUTTON_AVAILABLE: bool = true;
 /// Stacked agent-icon metrics — mirror TS `top-bar.tsx`
 /// (`w-5 h-5 rounded-md bg-foreground/10 ring-1 ring-card` chips
 /// overlapped by `-space-x-1.5`).
@@ -115,7 +120,7 @@ pub struct TopBar {
     pub agent_count: u32,
     /// Per-provider connect state, indexed by `AgentProvider::ALL`.
     /// The active chip paints one brand icon per connected provider.
-    pub connected: [bool; 6],
+    pub connected: [bool; 7],
     /// Number of enabled MCP CLI integrations — the `· N MCP` half
     /// of the chip status.
     pub mcp_count: u32,
@@ -181,7 +186,7 @@ impl TopBar {
             file_name: file_name.into(),
             edited: false,
             agent_count: 1,
-            connected: [false; 6],
+            connected: [false; 7],
             mcp_count: 0,
             collab: CollabTopBarModel::default(),
             theme: Theme::dark(),
@@ -250,7 +255,7 @@ impl TopBar {
             traffic_hover: ui.topbar_traffic_hover,
             show_traffic_controls: true,
             fullscreen: ui.window_fullscreen,
-            theme_mode: ui.theme_mode,
+            theme_mode: ui.effective_theme_mode(),
             git_branch: ui.git_panel.branch.clone(),
             preview_active: ui.preview.mode,
             hover: ui.topbar_button_hover,

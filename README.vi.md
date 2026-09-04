@@ -20,6 +20,10 @@
   <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
+<p align="center">
+  <a href="https://trendshift.io/repositories/24088?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-24088" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/24088" alt="ZSeven-W%2Fopenpencil | Trendshift" width="250" height="55" /></a>
+</p>
+
 <br />
 
 <p align="center">
@@ -28,17 +32,6 @@
   </a>
 </p>
 <p align="center"><sub>Nhấp vào hình ảnh để xem video demo</sub></p>
-
-<br />
-
-<p align="center">
-  <a href="https://github.com/InnerAura/hyperweave" title="Star history rendered with HyperWeave">
-    <img src="./screenshot/openpencil-star-history.svg" alt="OpenPencil star history rendered by HyperWeave" width="100%" />
-  </a>
-</p>
-<p align="center">
-  <sub>The trend above is rendered with <a href="https://github.com/InnerAura/hyperweave"><b>HyperWeave</b></a> — an experimental SVG artifact layer for agents. &nbsp;<a href="https://github.com/InnerAura/hyperweave"><b>Explore&nbsp;→</b></a></sub>
-</p>
 
 ## Tại sao chọn OpenPencil
 
@@ -110,6 +103,8 @@ Xuất từ một tệp `.op` duy nhất sang React + Tailwind, HTML + CSS, Vue,
 </table>
 
 ## Cài đặt
+
+**Biên dịch trên Windows:** [BUILD_WINDOWS.vi.md](./docs/build_windows/BUILD_WINDOWS.vi.md)
 
 **macOS (Homebrew):**
 
@@ -390,6 +385,7 @@ OpenPencil là một phần của bộ công cụ thuần Rust, thuần AI đế
 
 | Dự án | Là gì |
 | ----- | ----- |
+| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | Plugin DeepSeek Harness cho OpenPencil — bản xem trước `.op` nhiều khung chính xác, canvas tương tác và trình chỉnh sửa được quản lý với các công cụ thiết kế gốc cho agent, ngay trong cuộc trò chuyện. |
 | **[Zode](https://github.com/ZSeven-W/zode)** | Trợ lý lập trình mã nguồn mở, thuần AI cho terminal của bạn — một Rust TUI nhanh (`ratatui`) đọc mã của bạn, chạy lệnh, tìm kiếm tệp và quản lý git. Điều khiển OpenPencil qua MCP. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | Một runtime bất đồng bộ thuần Rust để phát hành các tác nhân LLM — đa nhà cung cấp, hỗ trợ công cụ đầu-cuối, quyền có cấu trúc, MCP thực thụ, không có `unsafe`. Cung cấp năng lượng cho runtime tác nhân tích hợp sẵn của OpenPencil (`vendor/agent`) và Zode. |
 | **[jian](https://github.com/ZSeven-W/jian)** | Framework UI GPU-Skia thuần Rust — widget, layout, sự kiện và hot reload trong một stack duy nhất. Biến một tài liệu `.op` khai báo thành một ứng dụng gốc, có thể điều khiển bằng AI mà không cần JS runtime, không DOM, không Electron. Framework UI của OpenPencil (`vendor/jian`). |

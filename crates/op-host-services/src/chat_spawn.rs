@@ -7,12 +7,19 @@
 //! the stdio bridge's internals.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::ffi::{OsStr, OsString};
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 #[cfg(not(windows))]
 use std::time::Duration;
 
 use tokio::process::Command;
+
+#[path = "chat_spawn_command.rs"]
+mod command;
+pub(crate) use command::build_blocking_command;
+#[cfg(windows)]
+use command::is_powershell_script;
 
 /// Hard budget for the login-shell environment probe. The probe runs an
 /// INTERACTIVE shell, so it executes the user's full rc — which is
@@ -134,12 +141,17 @@ fn capture_env_dump(program: &str, args: &[&str], timeout: Duration) -> EnvDump 
         // it into the void: only stdout is parsed, and an undrained
         // pipe would let a chatty rc deadlock this probe.
         .stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
     let Ok(mut child) = command.spawn() else {
         return EnvDump::Failed;
     };
+    let process_tree = op_process_io::ProcessTree::from_child(&child).ok();
     let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
-        let _ = child.kill();
-        let _ = child.wait();
+        let _ = op_process_io::terminate_process_tree(&mut child, Duration::ZERO);
         return EnvDump::Failed;
     };
     let stdout_reader = crate::cli_probe_support::PipeCapture::spawn(stdout);
@@ -148,8 +160,14 @@ fn capture_env_dump(program: &str, args: &[&str], timeout: Duration) -> EnvDump 
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
-                let out = stdout_reader.finish();
-                drop(stderr_reader);
+                if let Some(tree) = process_tree {
+                    let _ = tree.kill_after_leader_exit();
+                }
+                let (out, _stderr) = crate::cli_probe_support::finish_pipe_captures(
+                    stdout_reader,
+                    stderr_reader,
+                    deadline,
+                );
                 if !status.success() {
                     return EnvDump::Failed;
                 }
@@ -159,11 +177,18 @@ fn capture_env_dump(program: &str, args: &[&str], timeout: Duration) -> EnvDump 
                 };
             }
             Ok(None) if Instant::now() < deadline => {
-                std::thread::sleep(Duration::from_millis(25));
+                std::thread::sleep(
+                    Duration::from_millis(25)
+                        .min(deadline.saturating_duration_since(Instant::now())),
+                );
             }
             Ok(None) | Err(_) => {
-                let _ = child.kill();
-                let _ = child.wait();
+                let _ = op_process_io::terminate_process_tree(&mut child, Duration::ZERO);
+                let _ = crate::cli_probe_support::finish_pipe_captures(
+                    stdout_reader,
+                    stderr_reader,
+                    deadline,
+                );
                 return EnvDump::TimedOut;
             }
         }
@@ -340,51 +365,56 @@ fn merge_path_lists(login: &str, current: &str) -> String {
     merged.join(&sep.to_string())
 }
 
-/// Search for `name` on PATH, then in well-known per-platform install
-/// locations for Node-based CLIs (npm / pnpm / yarn / bun globals,
-/// nvm, volta). Returns the resolved absolute path, or `name` itself
-/// as a fallback so `build_command` can still attempt a bare-name
-/// spawn (errors surface as a normal spawn-failure `ChatDelta::Error`).
-///
-/// Cross-platform: each branch only probes paths that exist on that
-/// OS so we don't pay for filesystem-stat misses on the wrong OS.
+/// Resolve `name` on the effective PATH, then in well-known install
+/// locations. The selected candidate is returned verbatim: in particular,
+/// symlinks stay symlinks so the executable's install directory can still
+/// determine which sibling runtime a `#!/usr/bin/env node` wrapper receives.
+pub(crate) fn resolve_binary(name: &str) -> Option<PathBuf> {
+    let path_env = OsString::from(effective_path_env());
+    resolve_binary_from(name, &path_env, &well_known_install_paths(name))
+}
+
+fn resolve_binary_from(name: &str, path_env: &OsStr, fallbacks: &[PathBuf]) -> Option<PathBuf> {
+    for dir in std::env::split_paths(path_env).filter(|dir| !dir.as_os_str().is_empty()) {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        #[cfg(windows)]
+        for ext in &["exe", "cmd", "bat", "ps1"] {
+            let mut with_ext = candidate.clone();
+            with_ext.set_extension(ext);
+            if with_ext.is_file() {
+                return Some(with_ext);
+            }
+        }
+    }
+    fallbacks.iter().find(|path| path.is_file()).cloned()
+}
+
+/// String-returning compatibility wrapper. A missing binary remains a bare
+/// name so the spawn layer can surface its normal typed spawn error.
 pub fn find_binary(name: &str) -> String {
-    // PATH-relative entries first (cross-platform) — against the
-    // MERGED login-shell PATH so a GUI launch sees the same binaries
-    // a terminal launch does (nvm/volta/homebrew shims included).
-    {
-        let path_env = effective_path_env();
-        let sep = if cfg!(windows) { ';' } else { ':' };
-        for dir in path_env.split(sep).filter(|s| !s.is_empty()) {
-            let candidate = std::path::Path::new(dir).join(name);
-            if candidate.is_file() {
-                return candidate.to_string_lossy().into();
-            }
-            // Windows: PATHEXT-style suffix probe so we find
-            // `claude.cmd` / `claude.exe` / `claude.bat` even when the
-            // user typed the bare name.
-            #[cfg(windows)]
-            {
-                for ext in &[".exe", ".cmd", ".bat", ".ps1"] {
-                    let mut with_ext = candidate.clone();
-                    with_ext.set_extension(&ext[1..]);
-                    if with_ext.is_file() {
-                        return with_ext.to_string_lossy().into();
-                    }
-                }
-            }
-        }
-    }
-    // Fall back through well-known install locations. Mirrors
-    // bartolli/anthropic-agent-sdk's `find_cli` for parity with the
-    // reference implementation.
-    let candidates = well_known_install_paths(name);
-    for path in candidates {
-        if path.is_file() {
-            return path.to_string_lossy().into();
-        }
-    }
-    name.into()
+    resolve_binary(name)
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|| name.into())
+}
+
+/// PATH used when spawning a resolved CLI wrapper. Its own directory leads so
+/// `/opt/homebrew/bin/codex` cannot accidentally run an earlier, incompatible
+/// `node`; all other entries retain their previous relative order.
+pub(crate) fn runtime_path_for_binary(binary: &Path) -> OsString {
+    runtime_path_for(binary, OsStr::new(&effective_path_env()))
+}
+
+fn runtime_path_for(binary: &Path, base: &OsStr) -> OsString {
+    let Some(parent) = binary.parent().filter(|path| !path.as_os_str().is_empty()) else {
+        return base.to_os_string();
+    };
+    let paths = std::iter::once(parent.to_path_buf()).chain(
+        std::env::split_paths(base).filter(|path| !path.as_os_str().is_empty() && path != parent),
+    );
+    std::env::join_paths(paths).unwrap_or_else(|_| base.to_os_string())
 }
 
 fn well_known_install_paths(name: &str) -> Vec<PathBuf> {
@@ -393,30 +423,52 @@ fn well_known_install_paths(name: &str) -> Vec<PathBuf> {
     #[cfg(unix)]
     {
         if let Some(h) = home.clone() {
-            // `~/.opencode/bin` is OpenCode's own installer target —
-            // TS `opencode-client.ts` probes it first among its
-            // non-PATH candidates.
-            out.push(h.join(".opencode/bin").join(name));
-            out.push(h.join(".npm-global/bin").join(name));
-            out.push(h.join(".local/bin").join(name));
-            out.push(h.join(".bun/bin").join(name));
-            out.push(h.join(".volta/bin").join(name));
-            out.push(h.join("node_modules/.bin").join(name));
-            out.push(h.join(".yarn/bin").join(name));
+            for rel in [
+                ".local/bin",
+                ".bun/bin",
+                ".volta/bin",
+                ".local/share/mise/shims",
+                ".asdf/shims",
+                "Library/pnpm",
+                ".pnpm-global/bin",
+                ".cargo/bin",
+                ".opencode/bin",
+                ".npm-global/bin",
+                "node_modules/.bin",
+                ".yarn/bin",
+            ] {
+                out.push(h.join(rel).join(name));
+            }
         }
         out.push(PathBuf::from("/usr/local/bin").join(name));
         out.push(PathBuf::from("/opt/homebrew/bin").join(name));
-    }
-    #[cfg(windows)]
-    {
-        let _ = home; // not used directly on Windows
-        if let Ok(appdata) = std::env::var("APPDATA") {
-            for ext in &["cmd", "exe", "bat", "ps1"] {
-                out.push(
-                    PathBuf::from(&appdata)
-                        .join("npm")
-                        .join(format!("{name}.{ext}")),
+        if let Some(h) = home.as_ref() {
+            if let Ok(entries) = std::fs::read_dir(h.join(".nvm/versions/node")) {
+                out.extend(
+                    entries
+                        .flatten()
+                        .map(|entry| entry.path().join("bin").join(name)),
                 );
+            }
+            if let Ok(entries) = std::fs::read_dir(h.join(".fnm/node-versions")) {
+                out.extend(
+                    entries
+                        .flatten()
+                        .map(|entry| entry.path().join("installation/bin").join(name)),
+                );
+            }
+        }
+    }
+    if cfg!(windows) {
+        let _ = home; // not used directly on Windows
+        for dir in crate::cli_resolver_windows::user_bin_dirs() {
+            for ext in &["exe", "cmd", "bat", "ps1", ""] {
+                let file = if ext.is_empty() {
+                    name.to_string()
+                } else {
+                    format!("{name}.{ext}")
+                };
+                out.push(dir.join(file));
             }
         }
         if let Ok(localapp) = std::env::var("LOCALAPPDATA") {
@@ -441,11 +493,12 @@ fn well_known_install_paths(name: &str) -> Vec<PathBuf> {
 ///   PATH execvp lookup. We forward straight to `Command::new`.
 /// - **Windows**: Win32 `CreateProcessW` does **not** honor PATHEXT,
 ///   so a bare `claude` only spawns when an exact `claude` (no
-///   extension) is on PATH. npm / bun / Volta / scoop / winget all
-///   ship Node-based CLIs as `claude.cmd` / `claude.bat` / `claude.ps1`
-///   shims. To make those work we route through `cmd /c <binary>`
-///   when the binary doesn't already look like a fully-resolved path
-///   ending in `.exe`. The binary names we ship from `for_cli` are
+///   extension) is on PATH. npm / bun / Volta / scoop / winget ship
+///   Node-based CLIs as `.cmd` / `.bat` shims; Rust's Windows process
+///   launcher handles fully-resolved batch paths. PowerShell scripts are
+///   different, so a resolved `.ps1` is routed through non-interactive
+///   `powershell.exe -File`. Bare names still go through `cmd /c` for
+///   PATHEXT lookup. The binary names we ship from `for_cli` are
 ///   hardcoded constants (no user-controlled metacharacters) so this
 ///   is safe from shell injection. Users passing a custom binary via
 ///   `with_binary` are responsible for not embedding shell payload.
@@ -472,13 +525,22 @@ pub fn build_command(binary: &str, args: &[String]) -> Command {
             .and_then(|e| e.to_str())
             .map(|e| e.eq_ignore_ascii_case("exe"))
             .unwrap_or(false);
-        if has_path_sep || looks_like_exe {
+        if is_powershell_script(binary) {
+            let mut cmd = Command::new("powershell.exe");
+            cmd.arg("-NoProfile")
+                .arg("-NonInteractive")
+                .arg("-File")
+                .arg(binary)
+                .args(args);
+            cmd.creation_flags(CREATE_NO_WINDOW);
+            cmd
+        } else if has_path_sep || looks_like_exe {
             let mut cmd = Command::new(binary);
             cmd.args(args);
             cmd.creation_flags(CREATE_NO_WINDOW);
             cmd
         } else {
-            // Route through `cmd /c` so PATHEXT (.cmd / .bat / .ps1)
+            // Route through `cmd /c` so PATHEXT (.exe / .cmd / .bat)
             // expansion kicks in. /c runs the command and exits.
             let mut cmd = Command::new("cmd");
             cmd.arg("/c").arg(binary).args(args);
@@ -490,13 +552,9 @@ pub fn build_command(binary: &str, args: &[String]) -> Command {
     {
         let mut cmd = Command::new(binary);
         cmd.args(args);
-        // Login-shell PATH for the child: a Dock-launched app's own
-        // PATH has no nvm/homebrew shims, so a Node-based CLI script
-        // (`#!/usr/bin/env node`) found via `find_binary`'s fallback
-        // list would still die on shebang resolution ("CLI not
-        // responding"). The merged PATH makes GUI and terminal
-        // launches spawn identically.
-        cmd.env("PATH", effective_path_env());
+        // A resolved wrapper's own directory leads the effective PATH so its
+        // `#!/usr/bin/env node` uses the matching package-manager runtime.
+        cmd.env("PATH", runtime_path_for_binary(Path::new(binary)));
         // process_group(0) puts the child in its own group so signals
         // sent to OP's pgroup (e.g., Ctrl-C in the terminal that
         // launched the GUI) don't propagate to the CLI mid-stream.
@@ -545,6 +603,34 @@ pub fn exit_status_label(status: &std::process::ExitStatus) -> String {
         }
     }
     "?".into()
+}
+
+/// Dangerous environment variables that should never be propagated to
+/// the spawned CLI: linker preload paths can hijack execution; PATH
+/// can substitute a malicious binary; runtime-library paths
+/// (NODE_OPTIONS, PYTHONPATH, etc.) can inject code into Node-based
+/// CLIs. Mirrors bartolli/anthropic-agent-sdk's `DANGEROUS_ENV_VARS`.
+/// Used for Claude Code + custom binaries; Codex gets the stricter
+/// TS allowlist (`chat_subprocess_quirks`). Returns the
+/// env-var pairs the child will receive (parent env minus the
+/// dangerous names — preserving every safe var so node version
+/// managers like nvm / volta still pick the right Node). Moved here
+/// from `chat_subprocess.rs` to keep that spine under the 800-line
+/// cap — pure code motion.
+pub(crate) fn scrubbed_child_env() -> Vec<(String, String)> {
+    const DANGEROUS: &[&str] = &[
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_LIBRARY_PATH",
+        "NODE_OPTIONS",
+        "PYTHONPATH",
+        "PERL5LIB",
+        "RUBYLIB",
+    ];
+    std::env::vars()
+        .filter(|(k, _)| !DANGEROUS.iter().any(|d| k.eq_ignore_ascii_case(d)))
+        .collect()
 }
 
 #[cfg(test)]
@@ -681,68 +767,9 @@ mod login_shell_tests {
 }
 
 #[cfg(all(test, not(windows)))]
-mod env_dump_tests {
-    use super::*;
+#[path = "chat_spawn_env_dump_tests.rs"]
+mod env_dump_tests;
 
-    /// Deliberately short: these assert on the deadline firing, not on
-    /// any real shell finishing.
-    const TIMEOUT: Duration = Duration::from_millis(400);
-
-    #[test]
-    fn capture_reads_stdout_and_tolerates_stderr_noise() {
-        let script = "printf 'A=1\\nB=2\\n'; printf '_encode: command not found\\n' >&2";
-        let EnvDump::Completed(text) = capture_env_dump("/bin/sh", &["-c", script], TIMEOUT) else {
-            panic!("a script that exits inside the budget must complete");
-        };
-        let map = parse_env_dump(&text);
-        assert_eq!(map.get("A").map(String::as_str), Some("1"));
-        assert_eq!(map.get("B").map(String::as_str), Some("2"));
-    }
-
-    #[test]
-    fn capture_times_out_instead_of_hanging_on_a_blocking_rc() {
-        let started = std::time::Instant::now();
-        let dump = capture_env_dump("/bin/sh", &["-c", "sleep 30"], TIMEOUT);
-        assert!(
-            matches!(dump, EnvDump::TimedOut),
-            "a shell still running at the deadline must be killed, not awaited"
-        );
-        assert!(
-            started.elapsed() < Duration::from_secs(5),
-            "the deadline, not the child, decides when the probe returns"
-        );
-    }
-
-    #[test]
-    fn capture_reports_failure_for_nonzero_exit_and_missing_program() {
-        assert!(matches!(
-            capture_env_dump("/bin/sh", &["-c", "printf 'A=1\\n'; exit 3"], TIMEOUT),
-            EnvDump::Failed
-        ));
-        assert!(matches!(
-            capture_env_dump(
-                "/nonexistent/shell-that-is-not-installed",
-                &["-ilc"],
-                TIMEOUT
-            ),
-            EnvDump::Failed
-        ));
-    }
-
-    #[test]
-    fn a_dump_with_no_entries_falls_back_to_the_unrepaired_env() {
-        // The fallback contract behind `login_shell_env`: an empty parse
-        // must read as "no login-shell env", so `effective_path_env`
-        // keeps the current process PATH instead of clearing it.
-        let EnvDump::Completed(text) =
-            capture_env_dump("/bin/sh", &["-c", "printf 'no entries here\\n'"], TIMEOUT)
-        else {
-            panic!("the script exits inside the budget");
-        };
-        assert!(parse_env_dump(&text).is_empty());
-        assert_eq!(
-            effective_path_env().is_empty(),
-            std::env::var("PATH").unwrap_or_default().is_empty()
-        );
-    }
-}
+#[cfg(test)]
+#[path = "chat_spawn_resolver_tests.rs"]
+mod resolver_tests;

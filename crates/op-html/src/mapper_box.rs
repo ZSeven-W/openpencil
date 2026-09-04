@@ -43,7 +43,6 @@ pub(super) fn map_padding(
     style: &ComputedStyle,
     context: &mut MapCtx<'_>,
     border: [f64; 4],
-    has_visual_box: bool,
 ) -> Option<Padding> {
     let padding_names = [
         "padding-top",
@@ -51,25 +50,8 @@ pub(super) fn map_padding(
         "padding-bottom",
         "padding-left",
     ];
-    let margin_names = ["margin-top", "margin-right", "margin-bottom", "margin-left"];
-    let margins = margin_names.map(|name| resolve(style, name, context));
     let padding_values = padding_names.map(|name| resolve(style, name, context));
-    if margins.iter().flatten().any(|value| *value < 0.0) {
-        context.warn_once(ImportWarning::NegativeMarginsIgnored);
-    }
-    let positive_margin = margins.iter().flatten().any(|value| *value > 0.0);
-    if has_visual_box && positive_margin {
-        context.warn_once(ImportWarning::MarginsOnVisualBoxIgnored);
-    }
-    let values = std::array::from_fn(|index| {
-        padding_values[index].unwrap_or(0.0)
-            + border[index]
-            + if has_visual_box {
-                0.0
-            } else {
-                margins[index].unwrap_or(0.0).max(0.0)
-            }
-    });
+    let values = std::array::from_fn(|index| padding_values[index].unwrap_or(0.0) + border[index]);
     if values.iter().all(|value| value.abs() <= f64::EPSILON) {
         return None;
     }
@@ -179,7 +161,7 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
 
-    fn mapped(props: &[(&str, &str)], visual: bool) -> (Option<Padding>, Vec<String>) {
+    fn mapped(props: &[(&str, &str)]) -> (Option<Padding>, Vec<String>) {
         let style = ComputedStyle {
             props: props
                 .iter()
@@ -204,23 +186,21 @@ mod tests {
             pending_base_outcome: Default::default(),
         };
         let border = border_widths(&style, &context);
-        let padding = map_padding(&style, &mut context, border, visual || border != [0.0; 4]);
+        let padding = map_padding(&style, &mut context, border);
         (padding, crate::render_warnings(&context.warnings))
     }
 
     #[test]
-    fn visual_box_margin_does_not_expand_its_background_padding() {
-        let (padding, warnings) = mapped(&[("padding-top", "4px"), ("margin-top", "12px")], true);
+    fn margin_never_expands_visual_box_padding() {
+        let (padding, warnings) = mapped(&[("padding-top", "4px"), ("margin-top", "12px")]);
         assert!(matches!(padding, Some(Padding::LtrB(values)) if values[0] == 4.0));
-        assert!(warnings
-            .iter()
-            .any(|warning| warning.contains("visual boxes")));
+        assert!(warnings.is_empty());
     }
 
     #[test]
-    fn transparent_box_keeps_positive_margin_spacing_approximation() {
-        let (padding, warnings) = mapped(&[("margin-top", "12px")], false);
-        assert!(matches!(padding, Some(Padding::LtrB(values)) if values[0] == 12.0));
+    fn transparent_box_margin_is_not_turned_into_padding() {
+        let (padding, warnings) = mapped(&[("margin-top", "12px")]);
+        assert_eq!(padding, None);
         assert!(warnings.is_empty());
     }
 

@@ -200,7 +200,7 @@ pub fn apply_property_action(
         | A::ToggleInstanceComponentPicker
         | A::SetInstanceComponent(_) => Handled,
         A::SetPropertyTab(tab) => {
-            state.editor_ui.property_tab = *tab;
+            state.editor_ui.set_property_tab(*tab);
             Handled
         }
         A::ToggleCompositingPicker(target) => {
@@ -594,7 +594,9 @@ pub fn apply_property_action(
         }
         A::SetExportFormat(format) => {
             let ui = &mut state.editor_ui;
-            ui.export_format = *format;
+            if format.is_implemented() {
+                ui.export_format = *format;
+            }
             ui.export_format_picker_open = false;
             ui.export_picker_hover = None;
             Handled
@@ -758,7 +760,10 @@ pub fn apply_property_action(
         | A::ApplyGeneratedImage
         | A::RetryImageGenerate
         | A::OpenImageGenSettings => HostOwned,
-        // Clipboard / download / bundle export are platform IO.
+        // Clipboard / download / bundle export are platform IO. Compact touch
+        // layouts do not expose the Code panel, so direct action dispatch is
+        // inert there as well as through paint / hit-testing.
+        A::Codegen(_) if !state.editor_ui.code_property_tab_available() => Handled,
         A::Codegen(_) => HostOwned,
     }
 }

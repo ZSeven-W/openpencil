@@ -48,6 +48,7 @@ async fn run_generate(
     height: Option<f64>,
 ) -> Result<String, ImageGenerateError> {
     let client = reqwest::Client::builder()
+        .use_rustls_tls()
         .timeout(Duration::from_secs(120))
         .user_agent(concat!("openpencil-desktop/", env!("CARGO_PKG_VERSION")))
         .build()

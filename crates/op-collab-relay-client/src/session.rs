@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
@@ -7,13 +8,16 @@ use tokio::sync::watch;
 use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::{header::AUTHORIZATION, HeaderMap};
-use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
+use tokio_tungstenite::tungstenite::protocol::{CloseFrame, WebSocketConfig};
 use tokio_tungstenite::tungstenite::{Error as WebSocketError, Message};
-use tokio_tungstenite::{connect_async_with_config, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{
+    connect_async_tls_with_config, Connector, MaybeTlsStream, WebSocketStream,
+};
 
 use op_collab_relay_protocol::{
-    RelayReauthChallengeV1, RelayRole, RelayServerChallengeV1, VerifiedRelayRoute,
-    MAX_RELAY_REAUTH_RESPONSE_TEXT_BYTES, RELAY_CHALLENGE_HEADER_NAME,
+    RelayReauthChallengeV1, RelayRejectCode, RelayRole, RelayServerChallengeV1,
+    RelayWaitingAdvertisementV1, VerifiedRelayRoute, MAX_RELAY_REAUTH_RESPONSE_TEXT_BYTES,
+    RELAY_CHALLENGE_HEADER_NAME, RELAY_WAITING_HEADER_NAME,
 };
 
 use crate::auth::{AuthMode, RelayAuthAttempt, RelayCredential};
@@ -23,6 +27,20 @@ use crate::limits::RelayLimits;
 use crate::reauth_budget::ReauthBudget;
 
 pub(crate) type RelaySocket = WebSocketStream<MaybeTlsStream<TcpStream>>;
+
+fn rustls_connector() -> Connector {
+    let mut roots = rustls::RootCertStore::empty();
+    let native = rustls_native_certs::load_native_certs();
+    let _ = roots.add_parsable_certificates(native.certs);
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let config = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .expect("ring supports default TLS protocol versions")
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    Connector::Rustls(Arc::new(config))
+}
 
 #[derive(Clone, Copy)]
 pub(crate) struct ClientReauthContext<'a> {
@@ -34,6 +52,12 @@ pub(crate) struct ClientReauthContext<'a> {
 pub(crate) struct RelayUpgrade {
     pub(crate) socket: RelaySocket,
     pub(crate) challenge_attempt: Option<(RelayAuthAttempt, RelayServerChallengeV1)>,
+    /// The relay's waiting-window capability, when it advertised one.
+    ///
+    /// Optional by design: a relay that predates the capability, or an
+    /// intermediary that strips unknown headers, simply leaves the client on
+    /// its compiled-in fallback rather than breaking the connection.
+    pub(crate) waiting: Option<RelayWaitingAdvertisementV1>,
 }
 
 pub(crate) async fn connect_socket(
@@ -84,7 +108,8 @@ pub(crate) async fn connect_socket(
         ..WebSocketConfig::default()
     };
 
-    let connect = connect_async_with_config(request, Some(config), true);
+    let connect =
+        connect_async_tls_with_config(request, Some(config), true, Some(rustls_connector()));
     tokio::select! {
         _ = cancelled(cancel) => Err(TunnelError::Cancelled),
         result = tokio::time::timeout(limits.connect, connect) => {
@@ -103,6 +128,7 @@ pub(crate) async fn connect_socket(
                     Ok(RelayUpgrade {
                         socket,
                         challenge_attempt,
+                        waiting: parse_waiting_advertisement(response.headers()),
                     })
                 }
             }
@@ -123,6 +149,20 @@ fn parse_challenge(headers: &HeaderMap) -> Result<RelayServerChallengeV1, Tunnel
         .map_err(|_| TunnelError::Failure(RelayFailureKind::Authentication))?;
     RelayServerChallengeV1::decode_header(value)
         .map_err(|_| TunnelError::Failure(RelayFailureKind::Authentication))
+}
+
+/// Read the relay's waiting capability from the upgrade response.
+///
+/// Never fails the connection. A missing, duplicated, or malformed value is
+/// treated exactly like an absent one, because the capability is an
+/// optimisation and the fallback is always safe.
+fn parse_waiting_advertisement(headers: &HeaderMap) -> Option<RelayWaitingAdvertisementV1> {
+    let mut values = headers.get_all(RELAY_WAITING_HEADER_NAME).iter();
+    let value = values.next()?;
+    if values.next().is_some() {
+        return None;
+    }
+    RelayWaitingAdvertisementV1::decode_header(value.to_str().ok()?).ok()
 }
 
 pub(crate) async fn send_binary(
@@ -150,7 +190,7 @@ pub(crate) async fn send_binary(
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn pump(
     mut socket: RelaySocket,
-    mut local: TcpStream,
+    local: &mut TcpStream,
     reauth: ClientReauthContext<'_>,
     reauth_budget: &mut ReauthBudget,
     cancel: &mut watch::Receiver<bool>,
@@ -158,19 +198,48 @@ pub(crate) async fn pump(
     limits: RelayLimits,
 ) -> Result<(), TunnelError> {
     let lifetime_deadline = started_at + limits.lifetime;
-    let mut idle_deadline = Instant::now() + limits.idle;
+    let now = Instant::now();
+    let mut idle_deadline = now + limits.idle;
+    let mut keepalive_deadline = now + limits.keepalive;
+    // A successful Ping write proves only that the local socket still accepts
+    // bytes. Keep one fixed response deadline until any peer frame arrives, so
+    // repeatedly writable buffers cannot mask a dead relay path forever.
+    let mut pong_deadline = None;
     let mut buffer = vec![0_u8; limits.max_binary_bytes];
     let mut transferred = 0_u64;
 
     loop {
+        if *cancel.borrow() {
+            return Err(TunnelError::Cancelled);
+        }
+        let now = Instant::now();
+        if now >= lifetime_deadline {
+            return Err(TunnelError::Failure(RelayFailureKind::LifetimeExceeded));
+        }
+        if now >= idle_deadline || pong_deadline.is_some_and(|deadline| now >= deadline) {
+            return Err(TunnelError::Failure(RelayFailureKind::IdleTimeout));
+        }
+        if pong_deadline.is_none() && now >= keepalive_deadline {
+            send_before_deadlines(
+                &mut socket,
+                Message::Ping(Vec::new()),
+                cancel,
+                idle_deadline,
+                lifetime_deadline,
+            )
+            .await?;
+            let now = Instant::now();
+            idle_deadline = now + limits.idle;
+            keepalive_deadline = now + limits.keepalive;
+            pong_deadline = Some(now + limits.idle);
+            continue;
+        }
+        let next_deadline = lifetime_deadline
+            .min(idle_deadline)
+            .min(pong_deadline.unwrap_or(keepalive_deadline));
         tokio::select! {
             _ = cancelled(cancel) => return Err(TunnelError::Cancelled),
-            _ = tokio::time::sleep_until(lifetime_deadline) => {
-                return Err(TunnelError::Failure(RelayFailureKind::LifetimeExceeded));
-            }
-            _ = tokio::time::sleep_until(idle_deadline) => {
-                return Err(TunnelError::Failure(RelayFailureKind::IdleTimeout));
-            }
+            _ = tokio::time::sleep_until(next_deadline) => {}
             read = local.read(&mut buffer) => {
                 let read = read.map_err(|_| TunnelError::Failure(RelayFailureKind::LocalIo))?;
                 if read == 0 {
@@ -185,7 +254,8 @@ pub(crate) async fn pump(
                     idle_deadline,
                     lifetime_deadline,
                 ).await?;
-                idle_deadline = Instant::now() + limits.idle;
+                let now = Instant::now();
+                idle_deadline = now + limits.idle;
             }
             message = socket.next() => {
                 match message {
@@ -202,13 +272,18 @@ pub(crate) async fn pump(
                             limits.max_connection_bytes,
                         )?;
                         write_before_deadlines(
-                            &mut local,
+                            local,
                             &bytes,
                             cancel,
                             idle_deadline,
                             lifetime_deadline,
                         ).await?;
-                        idle_deadline = Instant::now() + limits.idle;
+                        note_peer_activity(
+                            &mut idle_deadline,
+                            &mut keepalive_deadline,
+                            &mut pong_deadline,
+                            limits,
+                        );
                     }
                     Some(Ok(Message::Ping(bytes))) => {
                         send_before_deadlines(
@@ -218,10 +293,20 @@ pub(crate) async fn pump(
                             idle_deadline,
                             lifetime_deadline,
                         ).await?;
-                        idle_deadline = Instant::now() + limits.idle;
+                        note_peer_activity(
+                            &mut idle_deadline,
+                            &mut keepalive_deadline,
+                            &mut pong_deadline,
+                            limits,
+                        );
                     }
                     Some(Ok(Message::Pong(_))) => {
-                        idle_deadline = Instant::now() + limits.idle;
+                        note_peer_activity(
+                            &mut idle_deadline,
+                            &mut keepalive_deadline,
+                            &mut pong_deadline,
+                            limits,
+                        );
                     }
                     Some(Ok(Message::Close(_))) | None => return Ok(()),
                     Some(Ok(Message::Text(text))) => {
@@ -234,7 +319,12 @@ pub(crate) async fn pump(
                             idle_deadline,
                             lifetime_deadline,
                         ).await?;
-                        idle_deadline = Instant::now() + limits.idle;
+                        note_peer_activity(
+                            &mut idle_deadline,
+                            &mut keepalive_deadline,
+                            &mut pong_deadline,
+                            limits,
+                        );
                     }
                     Some(Ok(Message::Frame(_))) => {
                         return Err(TunnelError::Failure(RelayFailureKind::Protocol));
@@ -244,6 +334,18 @@ pub(crate) async fn pump(
             }
         }
     }
+}
+
+fn note_peer_activity(
+    idle_deadline: &mut Instant,
+    keepalive_deadline: &mut Instant,
+    pong_deadline: &mut Option<Instant>,
+    limits: RelayLimits,
+) {
+    let now = Instant::now();
+    *idle_deadline = now + limits.idle;
+    *keepalive_deadline = now + limits.keepalive;
+    *pong_deadline = None;
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -294,9 +396,8 @@ pub(crate) async fn next_binary_with_reauth(
                     .await?;
             }
             Some(Ok(Message::Pong(_))) => {}
-            Some(Ok(Message::Close(_))) | None => {
-                return Err(TunnelError::Failure(RelayFailureKind::Closed));
-            }
+            Some(Ok(Message::Close(frame))) => return Err(close_error(frame.as_ref())),
+            None => return Err(TunnelError::Failure(RelayFailureKind::Closed)),
             Some(Ok(Message::Frame(_))) => {
                 return Err(TunnelError::Failure(RelayFailureKind::Protocol));
             }
@@ -426,6 +527,20 @@ pub(crate) async fn sleep_or_cancel(
     }
 }
 
+/// Classify a close frame the relay sent while this end was still waiting for
+/// a status frame.
+///
+/// The relay repeats a rejection's reason inside the close frame, so a close
+/// that carries a `relay-reject:` token is a rejection with a known cause, not
+/// an anonymous disconnect. Anything else stays
+/// [`RelayFailureKind::Closed`].
+fn close_error(frame: Option<&CloseFrame<'_>>) -> TunnelError {
+    match frame.and_then(|frame| RelayRejectCode::from_close_reason(frame.reason.as_ref())) {
+        Some(code) => TunnelError::Failure(RelayFailureKind::from_reject(code)),
+        None => TunnelError::Failure(RelayFailureKind::Closed),
+    }
+}
+
 pub(crate) fn map_websocket_error(error: WebSocketError) -> TunnelError {
     match error {
         WebSocketError::Capacity(_) => TunnelError::Failure(RelayFailureKind::BinaryFrameTooLarge),
@@ -436,5 +551,61 @@ pub(crate) fn map_websocket_error(error: WebSocketError) -> TunnelError {
             TunnelError::Failure(RelayFailureKind::Closed)
         }
         _ => TunnelError::Failure(RelayFailureKind::RelayIo),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+
+    use op_collab_relay_protocol::RELAY_REJECT_CODES;
+    use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
+
+    use super::*;
+
+    #[test]
+    fn relay_connector_stays_on_rustls_when_native_tls_is_also_linked() {
+        assert!(matches!(rustls_connector(), Connector::Rustls(_)));
+    }
+
+    fn frame(reason: &'static str) -> CloseFrame<'static> {
+        CloseFrame {
+            code: CloseCode::Policy,
+            reason: Cow::Borrowed(reason),
+        }
+    }
+
+    #[test]
+    fn a_relay_close_reason_recovers_the_reject_code_it_carries() {
+        for code in RELAY_REJECT_CODES {
+            let expected = RelayFailureKind::from_reject(code);
+            assert_eq!(
+                close_error(Some(&frame(code.close_reason()))),
+                TunnelError::Failure(expected)
+            );
+        }
+        // A pairing timeout is the one the client must never confuse with a
+        // real rejection or with a generic protocol fault.
+        assert_eq!(
+            close_error(Some(&frame(RelayRejectCode::PairingTimeout.close_reason()))),
+            TunnelError::Failure(RelayFailureKind::RejectedPairingTimeout)
+        );
+    }
+
+    #[test]
+    fn an_ordinary_close_stays_an_anonymous_disconnect() {
+        assert_eq!(
+            close_error(None),
+            TunnelError::Failure(RelayFailureKind::Closed)
+        );
+        for reason in ["idle timeout", "relay shutdown", "", "relay-reject:"] {
+            assert_eq!(
+                close_error(Some(&CloseFrame {
+                    code: CloseCode::Away,
+                    reason: Cow::Borrowed(reason),
+                })),
+                TunnelError::Failure(RelayFailureKind::Closed)
+            );
+        }
     }
 }

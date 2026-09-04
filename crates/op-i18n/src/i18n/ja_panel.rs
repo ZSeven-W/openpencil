@@ -302,6 +302,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "htmlImport.warn.layout.overflow_scroll_clipped" => "CSS overflow: auto / scroll を近似しました。",
         "htmlImport.warn.layout.negative_margins_ignored" => "負の CSS マージンを無視しました。",
         "htmlImport.warn.layout.margins_on_visual_box_ignored" => "視覚ボックス上の CSS マージンを無視しました。",
+        "htmlImport.warn.layout.inline_margin_wrapping_approximated" => "CSS マージン付きのインライン要素をボックス化したため、行をまたいで折り返せない場合があります。",
         "htmlImport.warn.layout.content_box_percentage_approximated" => {
             "content-box のパーセント指定サイズを近似しました。"
         }
@@ -437,6 +438,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "htmlImport.warn.media.object_fit_scale_down" => "CSS object-fit:scale-down を近似しました。",
         "htmlImport.warn.media.object_fit_none_ignored" => "CSS object-fit:none を無視しました。",
         "htmlImport.warn.media.object_position_ignored" => "CSS object-position を無視しました。",
+        "htmlImport.warn.media.image_intrinsic_axis_unresolved" => {
+            "指定サイズが動的であるか、包含ブロックのサイズが未確定なため、画像の固有アスペクト比から不足している軸を決定できませんでした。"
+        }
         "htmlImport.warn.media.image_mix_blend_mode_unsupported" => {
             "画像に対する未対応の CSS mix-blend-mode を無視しました。"
         }
@@ -525,6 +529,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "slidesPanel.exportPdf" => "PDF を書き出し",
         "slidesPanel.exportAllSlides" => "すべてのスライドを書き出し",
         "slidesPanel.exportSelectedSlides" => "選択したスライドを書き出し（{{count}}）",
+        "settings.tab.ai" => "AI",
         "settings.agents.heroTitle" => "AI プロバイダーを接続",
         "settings.agents.heroSubtitle" => "OpenPencil はローカルの CLI エージェントと API プロバイダーを直接動かします。いずれかを接続するとデザイン生成を開始できます。",
         "settings.agents.statusConnected" => "接続済み",

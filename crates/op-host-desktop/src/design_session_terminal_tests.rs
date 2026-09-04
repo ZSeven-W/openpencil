@@ -16,6 +16,7 @@ fn failed_subtask(id: &str, label: &str) -> op_orchestrator::plan::Subtask {
         },
         id_prefix: id.into(),
         parent_frame_id: Some("root".into()),
+        insert_after_sibling_id: None,
         elements: None,
         screen: Some("Now".into()),
         generated_root_id: None,
@@ -36,6 +37,7 @@ fn design_request_json() -> String {
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     })
     .unwrap()
 }
@@ -49,6 +51,7 @@ fn failed_run_summary() -> RunSummary {
                 node_count: 12,
                 error: None,
                 inserted_root_ids: vec!["hero-root".into()],
+                headline: None,
                 subtask: None,
             },
             SubtaskOutcome {
@@ -56,6 +59,7 @@ fn failed_run_summary() -> RunSummary {
                 node_count: 0,
                 error: Some("self-check failed".into()),
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: Some(failed_subtask("sun_arc", "Sunrise & Sunset Arc")),
             },
         ],
@@ -152,6 +156,16 @@ fn companion_chat_disconnect_cannot_drop_validation_completion_or_retry_payload(
             .unwrap()
             .status,
         ChatActivityStatus::Error
+    );
+    assert_eq!(
+        message
+            .activities
+            .iter()
+            .find(|activity| activity.id == "sun_arc")
+            .unwrap()
+            .detail
+            .as_deref(),
+        Some("Reason: self-check failed")
     );
     assert_eq!(message.failed_subtasks.len(), 1);
     assert_eq!(message.failed_subtasks[0].subtask_id, "sun_arc");

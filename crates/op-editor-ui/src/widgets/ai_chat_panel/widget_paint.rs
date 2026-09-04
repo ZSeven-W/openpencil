@@ -138,6 +138,14 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
 
         // Body — either messages or examples.
         if self.state.messages.is_empty() {
+            // The empty-state stack is laid out from the top while the
+            // composer block is bottom-anchored; on a keyboard-shrunk
+            // compact sheet the two can meet. Clip to the region between
+            // them and hand the painter its bottom so pills / tips that
+            // don't fit are dropped instead of overlapping the composer.
+            let region = self.empty_state_region(rect);
+            cx.backend.save();
+            cx.backend.clip_rect(region);
             paint_examples(
                 cx,
                 &self.theme,
@@ -150,7 +158,9 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
                 self.is_streaming(),
                 self.example_hover,
                 self.example_pressed,
+                region.origin.y + region.size.y,
             );
+            cx.backend.restore();
         } else {
             let body = self.body_rect(rect);
             // Fingerprint + resolve the transcript ONCE for the whole paint
@@ -182,12 +192,28 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             );
         }
         let input_block_rect = self.input_rect(rect);
+        // Above even the chips: a turn that cannot start at all outranks
+        // anything describing what the turn would do.
+        let notice_h = self.mcp_notice_row_h();
+        if let (Some(row), Some(label)) = (self.mcp_notice_row(rect), self.mcp_notice.as_deref()) {
+            crate::widgets::ai_chat_mcp_notice::paint_mcp_notice(cx, row, self.theme, label);
+        }
+        let rows_rect = Rect {
+            origin: Point2D::new(
+                input_block_rect.origin.x,
+                input_block_rect.origin.y + notice_h,
+            ),
+            size: Point2D::new(
+                input_block_rect.size.x,
+                (input_block_rect.size.y - notice_h).max(0.0),
+            ),
+        };
         // Above everything else in the input block: the chips describe the
         // next turn and what it is aimed at, not the turn's content.
-        crate::widgets::ai_chat_chip_row::paint_chip_row(cx, &self.theme, self, input_block_rect);
+        crate::widgets::ai_chat_chip_row::paint_chip_row(cx, &self.theme, self, rows_rect);
         let chip_row_h = self.chip_row_h();
         let input_rect = Rect {
-            origin: Point2D::new(rect.origin.x + PAD, sep_y + 1.0 + chip_row_h),
+            origin: Point2D::new(rect.origin.x + PAD, sep_y + 1.0 + notice_h + chip_row_h),
             size: Point2D::new(
                 rect.size.x - PAD * 2.0,
                 self.input_area_height_for_rect(rect),

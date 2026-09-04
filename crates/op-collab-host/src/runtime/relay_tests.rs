@@ -290,11 +290,12 @@ fn pairing_code_route_carries_the_code_and_skips_bootstrap_http() {
     ));
     let code = op_collab_relay_protocol::PairingCode::parse("2A2C4E6G8J").unwrap();
     let route = GuestConnectionRoute::Relay(Box::new(RelayGuestRequest {
-        secret: RelayJoinSecret::Pairing(code),
+        secret: RelayJoinSecret::pairing(code),
         home_region: RelayRegion::Global,
         provider: provider.clone(),
         control_plane: std::sync::Arc::new(UnusedControlPlane),
     }));
+    let retry_route = route.clone();
     assert_eq!(
         provider.0.load(std::sync::atomic::Ordering::SeqCst),
         0,
@@ -306,6 +307,25 @@ fn pairing_code_route_carries_the_code_and_skips_bootstrap_http() {
             home_region: CollabRelayRegion::Global
         }
     );
+    let (GuestConnectionRoute::Relay(original), GuestConnectionRoute::Relay(retry)) =
+        (&route, &retry_route)
+    else {
+        panic!("pairing code routes must stay on relay");
+    };
+    let (
+        RelayJoinSecret::Pairing {
+            claimed: original_claim,
+            ..
+        },
+        RelayJoinSecret::Pairing {
+            claimed: retry_claim,
+            ..
+        },
+    ) = (&original.secret, &retry.secret)
+    else {
+        panic!("pairing code routes must preserve the pairing secret");
+    };
+    assert!(std::sync::Arc::ptr_eq(original_claim, retry_claim));
 }
 
 #[test]

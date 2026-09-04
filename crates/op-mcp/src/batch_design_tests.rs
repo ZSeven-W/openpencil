@@ -113,7 +113,10 @@ fn batch_design_fill_passthrough_carries_shader() {
             assert_eq!(stack.len(), 1);
             match &stack[0] {
                 PenFill::Shader(b) => {
-                    assert!(b.sksl.contains("half4 main(float2 p)"));
+                    assert!(b
+                        .sksl
+                        .as_deref()
+                        .is_some_and(|sksl| sksl.contains("half4 main(float2 p)")));
                     let u = b.uniforms.as_ref().expect("uniforms map");
                     assert_eq!(u.get("glow"), Some(&ShaderUniformValue::Float(0.5)));
                     assert_eq!(
@@ -497,5 +500,70 @@ fn batch_design_insert_operations_accept_outer_page_id() {
             assert_eq!(page_id.as_deref(), Some("page-2"));
         }
         other => panic!("expected InsertAuthoredSubtree with page id, got {other:?}"),
+    }
+}
+
+#[test]
+fn batch_design_normalizes_hyphenated_fill_type_to_snake_case() {
+    // GLM-5.3 occasionally emits CSS-style hyphenated type names instead of
+    // snake_case (measured: `"linear-gradient"` dropped, leaving no fill).
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"rectangle","name":"Gradient","width":100,"height":100,"fill":[{"type":"linear-gradient","angle":45,"stops":[{"offset":0,"color":"#ff0000"},{"offset":1,"color":"#0000ff"}]}]})"##
+            .into(),
+    );
+
+    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
+        tool.call(&args)
+    else {
+        panic!("expected InsertAuthoredSubtree");
+    };
+    let value = serde_json::to_value(&nodes[0]).expect("node json");
+    assert_eq!(value["fill"][0]["type"], "linear_gradient");
+}
+
+#[test]
+fn batch_design_normalizes_camelcase_fill_type_to_snake_case() {
+    // Also normalize camelCase variants.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"rectangle","name":"Radial","width":80,"height":80,"fill":[{"type":"radialGradient","stops":[{"offset":0,"color":"#fff"},{"offset":1,"color":"#000"}]}]})"##
+            .into(),
+    );
+
+    let ToolOutcome::OkJsonWithCommand(_, EditorCommand::InsertAuthoredSubtree { nodes, .. }) =
+        tool.call(&args)
+    else {
+        panic!("expected InsertAuthoredSubtree");
+    };
+    let value = serde_json::to_value(&nodes[0]).expect("node json");
+    assert_eq!(value["fill"][0]["type"], "radial_gradient");
+}
+
+#[test]
+fn batch_design_rejects_unknown_fill_type() {
+    // Unrecognized type names are left untouched and rejected by serde.
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        r##"root=I(null, {"type":"rectangle","name":"Unknown","width":100,"height":100,"fill":[{"type":"conic-gradient","stops":[]}]})"##
+            .into(),
+    );
+
+    match tool.call(&args) {
+        ToolOutcome::OkJson(msg) if msg.contains("applied\":false") => {
+            // Transaction rolled back due to invalid fill type.
+            assert!(msg.contains("conic-gradient") || msg.contains("unknown variant"));
+        }
+        ToolOutcome::Err(code, msg) => {
+            assert_eq!(code, ToolErrorCode::InvalidArgument);
+            assert!(msg.contains("conic-gradient") || msg.contains("expected one of"));
+        }
+        other => panic!("expected rolled-back transaction or error, got {other:?}"),
     }
 }

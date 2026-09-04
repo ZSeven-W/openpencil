@@ -21,6 +21,7 @@ impl WidgetHostNative {
     pub(in crate::widget_host) fn press_git_and_chat_tiers(
         &mut self,
         ctx: &PressCtx,
+        allow_touch_panel_defer: bool,
     ) -> Option<bool> {
         let (x, y) = (ctx.x, ctx.y);
         let viewport_width = ctx.viewport_width;
@@ -36,6 +37,13 @@ impl WidgetHostNative {
         //    order. DragHandle starts a chat drag; other AI hits
         //    defer to apply_click.
         if let Some(chat_rect) = self.ai_chat_rect(viewport_width, viewport_height) {
+            // 1a. Mobile sheet: a body press defers until release so a
+            //     one-finger drag scrolls the transcript instead of
+            //     painting a text selection; a stationary tap replays
+            //     through this tier with `allow_touch_panel_defer = false`.
+            if allow_touch_panel_defer && self.begin_chat_transcript_touch_gesture(ctx) {
+                return Some(true);
+            }
             let panel =
                 AIChatPlaceholder::from_editor(&self.editor_state).owned_by(self.chat_panel_owner);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
@@ -102,7 +110,9 @@ impl WidgetHostNative {
         // 2. Toolbar — second-highest overlay.
         let toolbar_rect = self.toolbar_rect(viewport_width, viewport_height);
         let toolbar = Toolbar::for_editor(&self.editor_state);
-        if (toolbar_rect).contains(Point2D::new(x, y)) {
+        if !self.editor_state.editor_ui.touch_chrome()
+            && (toolbar_rect).contains(Point2D::new(x, y))
+        {
             if let Some(hit) = toolbar.hit_test(toolbar_rect, Point2D::new(x, y)) {
                 match hit {
                     op_editor_ui::widgets::ToolbarHit::Tool(tool) => {
@@ -139,7 +149,10 @@ impl WidgetHostNative {
                     self.mark_dirty();
                 }
                 op_editor_ui::widgets::AlignToolbarHit::Boolean(op) => {
+                    #[cfg(feature = "gl-host")]
                     let _ = self.apply_boolean_op(op);
+                    #[cfg(not(feature = "gl-host"))]
+                    let _ = op;
                 }
             }
             return Some(true);
@@ -152,21 +165,33 @@ impl WidgetHostNative {
     pub(in crate::widget_host) fn press_layer_and_click_tiers(
         &mut self,
         ctx: &PressCtx,
+        allow_touch_panel_defer: bool,
     ) -> Option<bool> {
         let (x, y) = (ctx.x, ctx.y);
         let viewport_width = ctx.viewport_width;
         let viewport_height = ctx.viewport_height;
         // 2b. The rail's slides tab owns the whole rail while it is on
         //     show, and its tab row takes clicks even while the layer
-        //     tree owns the rest — so it is asked first.
+        //     tree owns the rest. Touch list presses defer before the
+        //     desktop SlidesDrag can be seeded; tabs and footer actions
+        //     keep using the ordinary slides press below.
+        if allow_touch_panel_defer && self.begin_slides_touch_gesture(ctx) {
+            return Some(true);
+        }
         if self.slides_panel_press(x, y, viewport_width, viewport_height) {
+            return Some(true);
+        }
+        if allow_touch_panel_defer && !ctx.rename_committed && self.begin_touch_layer_reorder(ctx) {
+            return Some(true);
+        }
+        if allow_touch_panel_defer && self.begin_layers_touch_gesture(ctx) {
             return Some(true);
         }
         // 3. apply_click — LayerPanel + chat-defocus. Peek the
         //    LayerPanel hit-test for a drag-to-reorder candidate.
-        if self.editor_state.editor_ui.sidebar_open {
+        if self.layers_panel_visible() && !self.editor_state.editor_ui.touch_chrome() {
             use op_editor_ui::widgets::LayerPanelHit;
-            let layer_rect = self.layers_content_rect(viewport_height);
+            let layer_rect = self.layers_content_rect(viewport_width, viewport_height);
             let panel = self.layer_panel();
             if let Some(LayerPanelHit::Layer(node_id)) =
                 panel.hit_test(layer_rect, Point2D::new(x, y))

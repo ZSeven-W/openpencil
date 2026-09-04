@@ -1,0 +1,18 @@
+/node_modules
+/oh_modules
+/local.properties
+/.idea
+/build
+/.hvigor
+/.cxx
+/.clangd
+/.clang-format
+/.clang-tidy
+**/.test
+/entry/build
+/entry/oh_modules
+/entry/.preview
+# The engine library is produced by scripts/build-ohos.sh, never committed.
+/entry/libs
+# DevEco writes signing material here; keep certificates out of the tree.
+/signature

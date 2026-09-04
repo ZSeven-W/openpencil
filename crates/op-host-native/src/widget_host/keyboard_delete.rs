@@ -11,6 +11,15 @@ use op_editor_core::host_preset_name_draft as preset_name;
 
 impl WidgetHostNative {
     pub fn apply_backspace(&mut self) -> bool {
+        // Save-name dialog first — same modal priority as `apply_text`.
+        if let Some(changed) =
+            op_editor_core::save_name_keyboard::backspace(&mut self.editor_state, self.now_ms)
+        {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
         if let Some(changed) = shared::prompt_center_backspace(&mut self.editor_state, self.now_ms)
         {
             if changed {
@@ -260,6 +269,14 @@ impl WidgetHostNative {
     /// otherwise deletes the selected node.
     pub fn apply_delete(&mut self) -> bool {
         if let Some(changed) =
+            op_editor_core::save_name_keyboard::delete_forward(&mut self.editor_state, self.now_ms)
+        {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
+        if let Some(changed) =
             shared::prompt_center_delete_forward(&mut self.editor_state, self.now_ms)
         {
             if changed {
@@ -302,6 +319,12 @@ impl WidgetHostNative {
         // selection behind the overlay.
         if self.editor_state.editor_ui.font_picker.open {
             return true;
+        }
+        // Settings-modal input owns Delete while focused (forward
+        // deletion at the caret) — without this arm the keystroke fell
+        // through and removed the selected node behind the modal.
+        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
+            return self.apply_settings_delete_forward();
         }
         if self.editor_state.editor_ui.variables_header_rename_active() {
             let changed =

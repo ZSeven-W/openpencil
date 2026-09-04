@@ -1,5 +1,5 @@
 /**
- * Service worker: owns the element-pick flow, which cannot live in the popup.
+ * Service worker: owns long-lived actions which cannot live in the popup.
  *
  * Chrome closes a popup the moment the user clicks into the page, and every
  * `chrome.*` call from a torn-down popup stops settling. Picking an element
@@ -11,7 +11,7 @@
  * ways, both of which the user sees without being asked to keep anything
  * open:
  *
- * * a transient badge on the toolbar icon — `✓` or `✗`, coloured;
+ * * a badge on the toolbar icon — `✓` or `✗`, coloured;
  * * a stored result line the popup renders the next time it opens, at which
  *   point the badge is cleared.
  *
@@ -48,6 +48,7 @@ import {
   setCore,
 } from './core-registry.js';
 import { initLocale, t } from './i18n.js';
+import { createDesignMd, hasFreshWorkerResult } from './design-md.js';
 import { clearPick, pickElement } from './picker.js';
 
 // STATIC import, and it has to be. `import()` is disallowed on
@@ -69,6 +70,8 @@ import initCore, * as coreExports from './wasm/op_chrome_extension_core.js';
 const ENDPOINT_KEY = 'endpoint';
 const LAST_ACTION_KEY = 'lastAction';
 const PICK_RESULT_KEY = 'pickResult';
+/** Independent from pickResult: design.md never changes pick delivery state. */
+const DESIGN_RESULT_KEY = 'designResult';
 
 /** The `.wasm` beside the shim, addressed absolutely for the worker. */
 const CORE_WASM = 'wasm/op_chrome_extension_core_bg.wasm';
@@ -104,13 +107,15 @@ function ensureCore() {
   return initializing;
 }
 
-/** How long the ✓ / ✗ badge stays up when nobody opens the popup. */
+/** Badge freshness window, evaluated whenever the worker next wakes. */
 const BADGE_MS = 90_000;
 
 const BADGE = {
   ok: { text: '✓', color: '#128a63' },
   error: { text: '✗', color: '#c0392b' },
 };
+
+let badgeGeneration = 0;
 
 /**
  * Record the outcome for the next popup, and flash it on the toolbar icon.
@@ -124,19 +129,43 @@ const BADGE = {
  *
  * The badge is exempt: `✓` / `✗` need no locale.
  */
-async function report(tone, key, args) {
+async function reportResult(storageKey, tone, key, args, detail) {
+  badgeGeneration += 1;
+  const now = Date.now();
   await chrome.storage.local.set({
-    [PICK_RESULT_KEY]: { tone, key, args: args || [], at: Date.now() },
+    [storageKey]: {
+      tone,
+      key,
+      args: args || [],
+      detail: detail || null,
+      at: now,
+      expiresAt: now + BADGE_MS,
+    },
   });
   const badge = BADGE[tone];
   await chrome.action.setBadgeBackgroundColor({ color: badge.color });
   await chrome.action.setBadgeText({ text: badge.text });
-  // A badge that never expires would still be there tomorrow, describing a
-  // capture the user has long since forgotten.
-  setTimeout(() => {
-    chrome.action.setBadgeText({ text: '' }).catch(() => undefined);
-  }, BADGE_MS);
 }
+
+const report = (tone, key, args) => reportResult(PICK_RESULT_KEY, tone, key, args);
+const reportDesign = (tone, key, args, detail) =>
+  reportResult(DESIGN_RESULT_KEY, tone, key, args, detail);
+
+/** A worker kept alive by chrome calls may still receive a second popup press. */
+let designInFlight = false;
+let pickInFlight = false;
+
+/** Clear a stale badge on wake without requesting the alarms permission. */
+async function clearExpiredBadge() {
+  const generation = badgeGeneration;
+  const stored = await chrome.storage.local.get([PICK_RESULT_KEY, DESIGN_RESULT_KEY]);
+  if (generation !== badgeGeneration) return;
+  if (!hasFreshWorkerResult([stored[PICK_RESULT_KEY], stored[DESIGN_RESULT_KEY]], Date.now())) {
+    await chrome.action.setBadgeText({ text: '' });
+  }
+}
+
+clearExpiredBadge().catch(() => undefined);
 
 /**
  * Turn snapshot text into something `chrome.downloads` can fetch.
@@ -287,8 +316,11 @@ function accountFailureMessage(code, detail, error) {
       };
     case 'rateLimited':
       return accountRateLimitMessage(error.retryAfterSeconds, detail);
+    // NOT `errorTooLarge`: the hub's 32 MiB cap is smaller than the local
+    // ingest cap, so a capture in between imports fine locally — the local
+    // message's "download the file" remedy would be wrong here.
     case 'tooLarge':
-      return { key: 'errorTooLarge', args: [detail] };
+      return { key: 'errorAccountTooLarge', args: [detail] };
     case 'rejected':
       return { key: 'errorAccountRejected', args: [detail] };
     case 'unavailable':
@@ -319,6 +351,9 @@ function accountRateLimitMessage(seconds, detail) {
  * click goes nowhere.
  */
 function keepAlive() {
+  // Chrome 110+ resets the MV3 idle timer on extension API calls. The
+  // manifest pins that minimum specifically so this is a guarantee, not a
+  // best-effort trick on older workers.
   const timer = setInterval(() => {
     chrome.runtime.getPlatformInfo().catch(() => undefined);
   }, 20_000);
@@ -364,23 +399,78 @@ async function runPick(tabId) {
   ]);
 }
 
+/** Generate design.md without consulting or changing lastAction. */
+async function runDesign(tabId) {
+  const stored = await chrome.storage.local.get(ENDPOINT_KEY);
+  const endpoint = stored[ENDPOINT_KEY] || getCore().defaultEndpoint();
+  const outcome = await createDesignMd(tabId, endpoint);
+  const detail = {
+    key: outcome.truncated ? 'designEvidenceTruncated' : 'designEvidenceSummary',
+    args: [String(outcome.elementCount)],
+  };
+  if (outcome.intelligent) {
+    await reportDesign('ok', 'statusDesignSmartSuccess', [], detail);
+  } else {
+    await reportDesign('ok', 'statusDesignFallbackSuccess', [outcome.reason], detail);
+  }
+}
+
+function designFailureMessage(error) {
+  const detail = String((error && (error.detail || error.message)) || error);
+  switch (error && error.code) {
+    case 'restricted':
+      return { key: 'errorRestrictedTab', args: [] };
+    case 'wasmInit':
+    case 'wasmMissing':
+      return { key: 'errorCoreInit', args: [detail] };
+    default:
+      return { key: 'errorDesign', args: [detail] };
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (!message || message.type !== 'pick') return undefined;
+  if (!message || (message.type !== 'pick' && message.type !== 'designMd')) return undefined;
   const tabId = message.tabId;
+  if (designInFlight || pickInFlight) {
+    sendResponse({ ok: false, busy: true });
+    return false;
+  }
+  if (message.type === 'designMd') designInFlight = true;
+  else pickInFlight = true;
   // The popup is about to close; acknowledge before it does so it can.
   sendResponse({ ok: true });
   (async () => {
     try {
+      const resultKey = message.type === 'designMd' ? DESIGN_RESULT_KEY : PICK_RESULT_KEY;
+      await chrome.storage.local.remove(resultKey);
+      await chrome.action.setBadgeText({ text: '' });
       await ensureCore();
-      await runPick(tabId);
+      if (message.type === 'designMd') {
+        const stopKeepAlive = keepAlive();
+        try {
+          await runDesign(tabId);
+        } finally {
+          stopKeepAlive();
+        }
+      } else {
+        await runPick(tabId);
+      }
     } catch (error) {
       if (isCoreTrap(error)) invalidateCore();
-      await clearPick(tabId).catch(() => undefined);
-      const stored = await chrome.storage.local.get(ENDPOINT_KEY);
-      const failure = failureMessage(error, stored[ENDPOINT_KEY] || '');
-      // A cancel is the user's own decision, not a failure to flag in red.
-      const tone = failure.key === 'statusPickCancelled' ? 'ok' : 'error';
-      await report(tone, failure.key, failure.args);
+      if (message.type === 'designMd') {
+        const failure = designFailureMessage(error);
+        await reportDesign('error', failure.key, failure.args);
+      } else {
+        await clearPick(tabId).catch(() => undefined);
+        const stored = await chrome.storage.local.get(ENDPOINT_KEY);
+        const failure = failureMessage(error, stored[ENDPOINT_KEY] || '');
+        // A cancel is the user's own decision, not a failure to flag in red.
+        const tone = failure.key === 'statusPickCancelled' ? 'ok' : 'error';
+        await report(tone, failure.key, failure.args);
+      }
+    } finally {
+      if (message.type === 'designMd') designInFlight = false;
+      else pickInFlight = false;
     }
   })();
   // Nothing further is sent, but keeping the channel nominally open costs

@@ -278,7 +278,10 @@ fn wikimedia_missing_or_empty_imageinfo_releases_the_page_reservation() {
         .enable_all()
         .build()
         .expect("runtime");
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .use_rustls_tls()
+        .build()
+        .expect("build test rustls client");
     for page in [
         serde_json::json!({"pageid": 41, "title": "Missing imageinfo"}),
         serde_json::json!({"pageid": 42, "title": "Empty imageinfo", "imageinfo": []}),

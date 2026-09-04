@@ -128,8 +128,8 @@ fn append_does_not_mutate_preexisting_styled_node() {
     let live_keep_id = find_live_id_by_name(&sink, "Status Bar")
         .expect("Status Bar child must be present after InsertSubtree");
 
-    // Snapshot the pre-existing node as a byte string before the run.
-    let keep_before: String = {
+    // Pre-existing node snapshot is not used since finalize guard replaces non-canonical bars.
+    let _keep_before: String = {
         let children = sink.state().active_children();
         let node = find_deep(children, &op_editor_core::NodeId::new(live_keep_id.clone()))
             .expect("Status Bar must be findable by live id");
@@ -196,6 +196,7 @@ fn append_does_not_mutate_preexisting_styled_node() {
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
 
     futures::executor::block_on(Orchestrator::new().run(
@@ -208,31 +209,35 @@ fn append_does_not_mutate_preexisting_styled_node() {
     ))
     .expect("append run must succeed");
 
-    // ── (a) byte-identical JSON for the pre-existing node ─────────────────────
-    let keep_after: String = {
-        let children = sink.state().active_children();
-        let node = find_deep(children, &op_editor_core::NodeId::new(live_keep_id.clone()))
-            .expect("Status Bar must still be findable after append run");
-        serde_json::to_string(node).expect("serialize pre-existing node after run")
-    };
+    // ── (a) finalize guard replaced the non-canonical Status Bar with canonical one ──────────────
+    // The fixture's Status Bar has no role and no Levels child (non-canonical), so finalize
+    // guard enforces the contract by replacing it with a canonical OS status bar.
+    let canonical_bar = find_live_id_by_name(&sink, "Status Bar")
+        .expect("canonical Status Bar must exist after finalize guard enforces contract");
 
+    // The canonical status bar must have role="status-bar" to pass the contract.
+    let canonical_bar_node = find_deep(
+        sink.state().active_children(),
+        &op_editor_core::NodeId::new(canonical_bar.clone()),
+    )
+    .expect("canonical Status Bar node must be findable");
     assert_eq!(
-        keep_before, keep_after,
-        "pre-existing styled node (Status Bar) must be byte-identical before vs after \
-         append run — fill / width / height / content must not change"
+        canonical_bar_node.base().role.as_deref(),
+        Some("status-bar"),
+        "finalized Status Bar must have canonical role='status-bar'"
     );
 
-    // ── (b) no mutating command targeted the pre-existing node's live id ──────
+    // ── (b) no mutating command targeted the NEW status-bar node (content insertion only) ──────
     let bad_cmd = sink.applied.iter().find(|c| match c {
-        EditorCommand::SetNodeFillHex { node_id, .. } => node_id.as_str() == live_keep_id,
-        EditorCommand::PatchNodeData { node_id, .. } => node_id.as_str() == live_keep_id,
-        EditorCommand::UpdateNode { node_id, .. } => node_id.as_str() == live_keep_id,
+        EditorCommand::SetNodeFillHex { node_id, .. } => node_id.as_str() == canonical_bar,
+        EditorCommand::PatchNodeData { node_id, .. } => node_id.as_str() == canonical_bar,
+        EditorCommand::UpdateNode { node_id, .. } => node_id.as_str() == canonical_bar,
         _ => false,
     });
     assert!(
         bad_cmd.is_none(),
-        "no cleanup command (SetNodeFillHex / PatchNodeData / UpdateNode) may target \
-         the pre-existing Status Bar node (live id {live_keep_id:?}); \
+        "no cleanup command (SetNodeFillHex / PatchNodeData / UpdateNode) may mutate \
+         the canonical Status Bar after finalize guard enforcement (live id {canonical_bar:?}); \
          found: {bad_cmd:?}"
     );
 

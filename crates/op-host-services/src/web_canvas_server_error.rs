@@ -145,9 +145,9 @@ impl From<crate::mcp_serve::McpServeError> for WebCanvasError {
             E::Protocol(m) | E::Io(m) => WebCanvasError::Transport(m),
             // A route-specific framing refusal (over-cap / missing
             // `Content-Length`) never fires on this daemon's routes — only
-            // the live endpoint's snapshot ingress declares one — but it is
-            // the same class of client fault as `Dispatch`, so it answers
-            // 400 here rather than being logged as a transport failure.
+            // the live endpoint's extension-scoped routes declare one — but
+            // it is the same class of client fault as `Dispatch`, so it
+            // answers 400 here rather than being logged as a transport failure.
             E::Framing { message, .. } => WebCanvasError::BadRequest(message),
             E::Config(m) => WebCanvasError::Config(m),
         }

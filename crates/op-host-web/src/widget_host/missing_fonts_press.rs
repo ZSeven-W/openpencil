@@ -98,6 +98,14 @@ impl WidgetHost {
     }
 
     pub(crate) fn complete_pending_missing_fonts_detection(&mut self) {
+        // Detection opens a one-shot modal, so it must not run against a
+        // half-built font snapshot. The bundled faces are fetched over the
+        // network at mount and land moments after the system-font query; when
+        // they do, `apply_bundled_font_families` clears the flag and re-enters
+        // here, so nothing is dropped — only deferred.
+        if self.bundled_fonts_pending {
+            return;
+        }
         if fonts_flow::complete_pending_detection(&mut self.editor_state) {
             self.mark_dirty();
         }
@@ -299,6 +307,64 @@ mod tests {
         assert_eq!(
             ui.missing_fonts_prompt.as_ref().unwrap().entries[0].family,
             "__OpenPencilWebDeferredFontTest__"
+        );
+    }
+
+    /// A mount that has armed the bundled-font fetch but not received it yet,
+    /// holding a document whose only family is an app-bundled one.
+    fn host_awaiting_bundled_fonts(family: &str) -> WidgetHost {
+        let mut host = WidgetHost::new();
+        host.begin_bundled_font_loading();
+        host.install_ingested_state(state_with_text(family));
+        assert!(host.editor_state.editor_ui.missing_fonts_pending_detect);
+        host
+    }
+
+    #[test]
+    fn a_system_font_query_cannot_open_the_modal_while_bundled_fonts_are_in_flight() {
+        // The browser fetches the bundled faces over the network, so the
+        // system-font query routinely wins the race. Completing detection then
+        // would accuse Inter of being missing a frame before it registers.
+        let mut host = host_awaiting_bundled_fonts("Inter");
+
+        host.apply_browser_system_font_families(vec!["Arial".to_string()]);
+
+        let ui = &host.editor_state.editor_ui;
+        assert!(!ui.missing_fonts_modal_open);
+        assert!(ui.missing_fonts_prompt.is_none());
+        assert!(
+            ui.missing_fonts_pending_detect,
+            "detection must stay armed so the bundled fonts can complete it"
+        );
+    }
+
+    #[test]
+    fn bundled_fonts_landing_completes_the_held_detection_with_no_prompt() {
+        let mut host = host_awaiting_bundled_fonts("Inter");
+        host.apply_browser_system_font_families(vec!["Arial".to_string()]);
+
+        host.apply_bundled_font_families(vec!["Inter".to_string()]);
+
+        let ui = &host.editor_state.editor_ui;
+        assert!(!ui.missing_fonts_pending_detect);
+        assert!(ui.missing_fonts_prompt.is_none());
+        assert!(!ui.missing_fonts_modal_open);
+    }
+
+    #[test]
+    fn a_family_no_bundled_font_covers_still_raises_the_prompt() {
+        const MISSING: &str = "__OpenPencilWebUnbundledFontTest__";
+        let mut host = host_awaiting_bundled_fonts(MISSING);
+        host.apply_browser_system_font_families(vec!["Arial".to_string()]);
+
+        host.apply_bundled_font_families(vec!["Inter".to_string(), "Outfit".to_string()]);
+
+        let ui = &host.editor_state.editor_ui;
+        assert!(!ui.missing_fonts_pending_detect);
+        assert!(ui.missing_fonts_modal_open);
+        assert_eq!(
+            ui.missing_fonts_prompt.as_ref().unwrap().entries[0].family,
+            MISSING
         );
     }
 

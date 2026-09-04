@@ -1,10 +1,9 @@
 name: VS Code extension package
 
-# Gates the op-vscode extension (typecheck + unit tests + esbuild bundle) and
-# packages a platform-neutral .vsix artifact on every change. The daemon
-# binary + wasm bundle are NOT embedded yet (the extension probes
-# <workspace>/target/debug/op-host-web-server or `openpencil.dev.daemonPath`);
-# per-platform vsix bundling lands with the packaging plan (Plan 3).
+# Fast source gate for op-vscode (typecheck + unit tests + esbuild bundle). It
+# deliberately emits a platform-neutral development VSIX; tagged releases use
+# rust-release.yml to build six platform-specific VSIX packages that embed the
+# matching op-host-web-server binary, WebAssembly bundle, and CanvasKit assets.
 
 on:
   push:

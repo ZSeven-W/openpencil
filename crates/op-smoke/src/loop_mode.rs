@@ -271,7 +271,7 @@ fn build_design_provider(
         display_name: "smoke-loop".into(),
         kind: BuiltinAgentKind::OpenAiCompat,
         api_key,
-        model,
+        models: vec![model],
         base_url,
         enabled: true,
     };

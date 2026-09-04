@@ -1,0 +1,175 @@
+[package]
+name         = "op-engine-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description  = "Stable C ABI for embedding the OpenPencil engine in iOS / Android player shells"
+
+[lib]
+# cdylib for the Android player, staticlib for the iOS player, rlib so
+# host-side tests and the JNI layer link the same code.
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[features]
+default = []
+# Production mobile release lane: require the verified prebuilt Skia archive.
+pinned-skia-binaries = ["skia-safe/no-compile"]
+# Metal rendering on iOS / macOS — enables jian-skia's `surface/metal`
+# (skia-safe Metal backend over a shell-owned CAMetalLayer).
+metal = ["jian-skia/metal"]
+# GL rendering on Android — enables jian-skia's `surface/egl_android`
+# (EGL/GLES backend over a shell-owned ANativeWindow).
+gl = ["jian-skia/gl"]
+# Full editor mode: drives op-host-native's widget host (the complete
+# desktop chrome — top bar, layers, toolbar, property panel, chat,
+# settings, canvas editing) on iOS / Android.
+editor = [
+  "op-host-native/widget-host",
+  "op-host-native/collab-host",
+  "dep:op-ai",
+  "dep:op-ai-skills",
+  "dep:op-builtin-model-discovery",
+  "dep:op-chat-agent",
+  "dep:op-collab-host",
+  "dep:op-collab-transport",
+  "dep:op-editor-host-core",
+  "dep:op-image-enrich",
+  "dep:op-orchestrator",
+  "dep:op-render-export",
+  "dep:futures",
+  "dep:reqwest",
+  "dep:tokio",
+  "dep:zeroize",
+  # Mobile targets only (see the target-scoped section): rquickjs with
+  # build-time bindgen so op-mcp's `script` feature (pulled in by
+  # op-orchestrator) links — rquickjs ships no pregenerated bindings for
+  # ios/android/ohos. Desktop/CI builds keep the pregenerated path.
+  "dep:rquickjs",
+]
+# Local-only authentication for the iOS / Android editor shells. This forwards
+# the explicit debug-only archive lane without enabling it in shipping builds.
+mobile-auth-dev = ["op-host-native/mobile-auth-dev"]
+# Debug fault seams; only meaningful with debug_assertions (never ship).
+debug-hooks = []
+
+[dependencies]
+# The canonical editor model (`EditorState`) the player loads a `.op`
+# document into.
+op-editor-core = { path = "../op-editor-core" }
+# The shared canvas painter (`canvas_viewport_paint`) + widget facade —
+# the player renders documents with the exact painter the desktop
+# editor canvas uses, so a phone shows the same pixels as the desktop.
+op-editor-ui = { path = "../op-editor-ui" }
+# `.op` → `EditorState` canonical load + `LayoutScene` builder.
+op-pen-loader = { path = "../op-pen-loader" }
+# `NativeBackend` / `NativeFrameBackend` — the OP `RenderBackend`
+# adapter that paints OP widget calls onto a skia canvas. Raster-only
+# by default (no `gl-host`), so the crate stays mobile-safe.
+op-host-native = { path = "../op-host-native" }
+# Mobile editor model discovery is split from op-host-services so iOS and
+# Android do not pull the daemon's rquickjs / process / export dependency
+# closure. The service host reuses this exact provider/auth/parser crate.
+op-builtin-model-discovery = { path = "../op-builtin-model-discovery", optional = true }
+op-collab-host = { path = "../op-collab-host", optional = true }
+op-collab-transport = { path = "../op-collab-transport", optional = true }
+op-config-store = { path = "../op-config-store" }
+# Locale table lookup for the sandbox Save flow's localized default file
+# name (`common.untitled`). Dependency-free; already in the build graph
+# through op-editor-core.
+op-i18n = { path = "../op-i18n" }
+# Shared desktop settings persistence (`settings.json` load / save /
+# fingerprint) — the mobile editor persists agent/provider settings into
+# the shell's private storage root through the exact desktop code path.
+# `default-features = false` keeps the design closure out of the mobile build;
+# settings, chat, and codegen are enabled explicitly below.
+op-editor-host-core = { path = "../op-editor-host-core", default-features = false, features = [
+  "settings-io",
+  # The transport-free chat turn worker (`ChatSession` poll/fold) behind the
+  # mobile chat pump. Pulls only op-ai + serde_json — none of the
+  # codegen/design closures.
+  "chat",
+  # Shared generation worker/results plus deterministic code/bundle artifacts.
+  "codegen",
+], optional = true }
+# Transport-free chat shapes + the shared SSE payload parsers the mobile
+# chat pump streams through (`op_ai::chat_sse`), plus the shared tool-call
+# stream collectors (`op_ai::chat_tool_sse`) behind the design agent loop.
+op-ai = { path = "../op-ai", optional = true }
+# The shared builtin-provider agent loop + design tool surface (factored out
+# of op-host-services) — mobile design turns run the exact desktop pipeline:
+# tool loop with corrective budgets, 15-tool surface with per-batch quality
+# feedback, loop finalize plumbing.
+op-chat-agent = { path = "../op-chat-agent", optional = true }
+# Shared image-slot detection + write-back, plus (feature `net`) the
+# Openverse/Wikimedia resolution ladder behind the mobile image-search pump.
+op-image-enrich = { path = "../op-image-enrich", features = [
+  "net",
+], optional = true }
+# Loop finalize + unfilled-screen marking + intent/model-profile policy —
+# executed engine-side against the live document (desktop pump parity).
+# Enables op-mcp's `script` feature transitively, so mobile `batch_design`
+# accepts the script-generation protocol like every other host.
+op-orchestrator = { path = "../op-orchestrator", optional = true }
+# Embedded skill corpus + the design-agent tool-loop system prompt
+# (`design_agent_system_prompt_with_skills`) — the same prompt the desktop
+# design loop sends, so mobile and desktop builtin design turns cannot
+# drift onto different contracts. Pure Rust, mobile-clean (~1.1 MiB corpus).
+op-ai-skills = { path = "../op-ai-skills", optional = true }
+# Mobile-safe raster/SVG/PDF export core. This intentionally stays separate
+# from op-host-services so player builds never pull daemon/QuickJS/process IO.
+op-render-export = { path = "../op-render-export", optional = true }
+# Canonical `.op` schema — `PenDocument` parse targets.
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+# `TextInputState` (IME composition/selection model) + UTF-16 ↔ UTF-8
+# offset conversion helpers used by the text-edit ABI.
+jian-core = { path = "../../vendor/jian/crates/jian-core" }
+# The GPU/raster surfaces the player paints onto (metal / egl_android /
+# raster), same crate the desktop host renders through.
+jian-skia = { path = "../../vendor/jian/crates/jian-skia" }
+# The frame adapters expose skia canvases; pinned to the same 0.97 the
+# native host links (no `gl` feature — the viewer never owns a GL
+# context, the platform surfaces do).
+skia-safe = { version = "0.97.0", default-features = false, features = [
+  "textlayout",
+] }
+serde_json = { workspace = true }
+tokio = { version = "1", default-features = false, features = [
+  "rt-multi-thread",
+  "time",
+], optional = true }
+# Mobile chat turns stream over HTTPS. `rustls-tls` bundles the webpki
+# roots — mobile OSes expose no /etc/ssl/certs, so a native-cert root
+# store would be empty and every provider dial would fail TLS verification
+# (the same failure mode fixed for collaboration in op-collab-relay-client).
+reqwest = { version = "0.12", default-features = false, features = [
+  "rustls-tls",
+  "json",
+  "stream",
+], optional = true }
+futures = { version = "0.3", default-features = false, features = [
+  "std",
+], optional = true }
+zeroize = { version = "1", optional = true }
+
+# Mobile targets: rquickjs (QuickJS, pulled in via op-mcp's `script`
+# feature) ships pregenerated FFI bindings only for desktop platforms; the
+# `bindgen` feature generates them at build time instead. Declared
+# target-scoped so desktop / CI builds keep the pregenerated bindings
+# (resolver v2: target-specific features do not leak to other targets).
+# Build-lane env: iOS needs nothing extra; Android requires
+# BINDGEN_EXTRA_CLANG_ARGS_<triple> with the NDK sysroot (see
+# packaging/android); OHOS exports its sysroot via scripts/build-ohos.sh.
+[target.'cfg(any(target_os = "ios", target_os = "android", target_env = "ohos"))'.dependencies]
+rquickjs = { version = "0.12", features = ["bindgen"], optional = true }
+
+[dev-dependencies]
+# Host-side tests render through the raster CPU path only.
+serde_json = { workspace = true }
+op-collab-host = { path = "../op-collab-host", features = ["test-support"] }
+# The editor pointer-clock suites read the live preview runtime's CLONED
+# app-state snapshot through op-preview-core's `testing` seam — never a
+# reference into its interior-mutable state in production.
+op-host-native = { path = "../op-host-native", features = ["testing"] }

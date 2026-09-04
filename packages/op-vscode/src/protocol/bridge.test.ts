@@ -11,6 +11,32 @@ test("encodeOutbound: init", () => {
   expect(JSON.parse(encodeOutbound(msg))).toEqual({ type: "op-bridge/init", token: "t0k" });
 });
 
+test("encodeOutbound: theme", () => {
+  const light: BridgeOutboundToPage = { type: "op-bridge/theme", colorScheme: "light" };
+  const dark: BridgeOutboundToPage = { type: "op-bridge/theme", colorScheme: "dark" };
+  expect(JSON.parse(encodeOutbound(light))).toEqual({
+    type: "op-bridge/theme",
+    colorScheme: "light",
+  });
+  expect(JSON.parse(encodeOutbound(dark))).toEqual({
+    type: "op-bridge/theme",
+    colorScheme: "dark",
+  });
+});
+
+test("encodeOutbound: locale", () => {
+  const zh: BridgeOutboundToPage = { type: "op-bridge/locale", locale: "zh-CN" };
+  const en: BridgeOutboundToPage = { type: "op-bridge/locale", locale: "en-US" };
+  expect(JSON.parse(encodeOutbound(zh))).toEqual({
+    type: "op-bridge/locale",
+    locale: "zh-CN",
+  });
+  expect(JSON.parse(encodeOutbound(en))).toEqual({
+    type: "op-bridge/locale",
+    locale: "en-US",
+  });
+});
+
 test("encodeOutbound: open-document", () => {
   const msg: BridgeOutboundToPage = { type: "op-bridge/open-document", json: '{"a":1}' };
   expect(JSON.parse(encodeOutbound(msg))).toEqual({ type: "op-bridge/open-document", json: '{"a":1}' });
@@ -45,6 +71,12 @@ test("encodeOutbound: resolve-conflict", () => {
 // parseInboundFromPage — one legal sample per BridgeInboundFromPage variant.
 // Field names/values copied verbatim from bridge_protocol.rs's event_* output.
 // ---------------------------------------------------------------------------
+
+test("parseInboundFromPage: listening", () => {
+  const raw = '{"type":"op-bridge/listening"}';
+  const expected: BridgeInboundFromPage = { type: "op-bridge/listening" };
+  expect(parseInboundFromPage(raw)).toEqual(expected);
+});
 
 test("parseInboundFromPage: ready", () => {
   const raw = '{"type":"op-bridge/ready","generation":2,"revision":17}';

@@ -64,6 +64,48 @@ pub(super) fn collect_collapse_fixes(
 /// Slack so a text a hair wider than its block isn't needlessly wrapped.
 pub(super) const TEXT_OVERFLOW_EPS: f64 = 2.0;
 
+fn collect_pill_text_overflow_clip_fix(
+    pill: &Value,
+    text_child: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    let has_numeric_width = pill
+        .get("width")
+        .and_then(|w| match w {
+            Value::Number(n) => n.as_f64(),
+            Value::String(s) => s.parse::<f64>().ok(),
+            _ => None,
+        })
+        .is_some_and(|w| w > 0.0);
+    if !has_numeric_width {
+        return;
+    }
+    let already_clips = pill.get("clipContent").and_then(Value::as_bool) == Some(true);
+    if already_clips {
+        return;
+    }
+    let Some(pill_id) = pill.get("id").and_then(Value::as_str) else {
+        return;
+    };
+    let Some(pill_rect) = rects.get(pill_id) else {
+        return;
+    };
+    let Some(text_id) = text_child.get("id").and_then(Value::as_str) else {
+        return;
+    };
+    let Some(text_rect) = rects.get(text_id) else {
+        return;
+    };
+    if text_rect.w > pill_rect.w + TEXT_OVERFLOW_EPS {
+        cmds.push(EditorCommand::SetNodeLayoutProp {
+            node_id: NodeId::new(pill_id.to_string()),
+            property: "clipContent".to_string(),
+            value: LayoutPropValue::Bool(true),
+        });
+    }
+}
+
 /// A text node whose RESOLVED width exceeds its parent block's — the parent is a
 /// constrained (`fill_container` / fixed) block whose `min_size: 0` lets it shrink
 /// BELOW its `fit_content` text, so the text overflows into the next column
@@ -129,6 +171,7 @@ pub(super) fn collect_text_overflow_fixes_with_context(
                         });
                     }
                 }
+                collect_pill_text_overflow_clip_fix(v, c, rects, cmds);
                 continue;
             }
             let Some(cid) = c.get("id").and_then(Value::as_str) else {

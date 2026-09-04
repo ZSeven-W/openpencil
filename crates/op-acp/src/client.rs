@@ -2,10 +2,13 @@
 //! agent and drive the initialize / session / prompt handshake.
 //! Port of `pen-acp/src/client.ts`.
 
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use agent_client_protocol::schema::ProtocolVersion;
 use op_util::cli_output::BoundedTail;
 use serde_json::Value;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, BufReader};
@@ -15,16 +18,27 @@ use tokio::task::JoinHandle;
 
 use crate::jsonrpc::{dispatch_inbound, JsonRpcEngine, NOTIFICATION_CAPACITY, OUTBOUND_CAPACITY};
 use crate::protocol::{
-    InitializeResult, NewSessionResult, SessionNotification, METHOD_INITIALIZE, METHOD_SESSION_NEW,
-    METHOD_SESSION_PROMPT, PROTOCOL_VERSION,
+    AcpStopReason, AgentCapabilities, AuthMethod, InitializeResult, NewSessionResult, PromptResult,
+    SessionConfigOption, SessionConfigOptionValue, SessionNotification,
+    SetSessionConfigOptionResponse, METHOD_INITIALIZE, METHOD_SESSION_CANCEL, METHOD_SESSION_NEW,
+    METHOD_SESSION_PROMPT, METHOD_SESSION_SET_CONFIG_OPTION, PROTOCOL_VERSION,
 };
+#[cfg(feature = "remote")]
+use crate::transport::MAX_INBOUND_FRAME_BYTES;
 use crate::transport::{read_frame, write_frame};
 use crate::types::{AcpAgentConfig, AcpAgentInfo, AcpError, ConnectionType};
 
 /// Per-request timeout for the handshake calls.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(30);
+/// A remote TCP/TLS/WebSocket dial must not hold a worker forever.
+#[cfg(feature = "remote")]
+const REMOTE_DIAL_TIMEOUT: Duration = Duration::from_secs(15);
 /// A prompt turn can run a long while — generous ceiling.
 const PROMPT_TIMEOUT: Duration = Duration::from_secs(600);
+/// Best-effort protocol cancellation must not delay local teardown.
+const CANCEL_QUEUE_TIMEOUT: Duration = Duration::from_secs(1);
+/// Graceful process-tree termination before force-killing the group.
+const PROCESS_SHUTDOWN_GRACE: Duration = Duration::from_secs(2);
 
 /// Byte budget for the retained stderr tail of a local agent. Fixed:
 /// the drain task exists to keep the child's pipe from filling, so its
@@ -65,13 +79,25 @@ pub struct NewSessionOptions {
     pub system_prompt_meta: Option<String>,
 }
 
+/// A newly-created stable-v1 ACP session, including the configuration state
+/// the agent advertised for model/mode/reasoning selectors.
+#[derive(Debug, Clone)]
+pub struct AcpSession {
+    pub session_id: String,
+    pub config_options: Vec<SessionConfigOption>,
+}
+
 /// A live ACP connection to one agent.
 pub struct AcpConnection {
     engine: JsonRpcEngine,
     notifications: Option<mpsc::Receiver<SessionNotification>>,
     child: Option<Child>,
     tasks: Vec<JoinHandle<()>>,
+    stderr_task: Option<JoinHandle<()>>,
     agent_info: AcpAgentInfo,
+    protocol_version: ProtocolVersion,
+    agent_capabilities: AgentCapabilities,
+    auth_methods: Vec<AuthMethod>,
     /// The most recent lines a locally spawned agent wrote to stderr.
     /// `None` for remote (WebSocket) agents and for connections built
     /// over an arbitrary stream pair — neither has a stderr pipe.
@@ -92,6 +118,7 @@ impl AcpConnection {
         let engine = JsonRpcEngine::new(out_tx);
         let pending = engine.pending();
         let reply_tx = engine.out_tx();
+        let reader_engine = engine.clone();
 
         // Writer task — drain outbound frames onto the byte stream.
         let mut write = write;
@@ -107,20 +134,19 @@ impl AcpConnection {
         // EOF or a transport failure ends the stream.
         let reader = tokio::spawn(async move {
             let mut buf = BufReader::new(read);
-            while let Ok(Some(value)) = read_frame(&mut buf).await {
-                dispatch_inbound(value, &pending, &notif_tx, &reply_tx);
-            }
-            // Connection closed: fail every in-flight request now so
-            // callers get `Closed` immediately instead of stalling
-            // until the request timeout.
-            let waiters: Vec<_> = pending
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .drain()
-                .collect();
-            for (_, waiter) in waiters {
-                let _ = waiter.send(Err(AcpError::Closed));
-            }
+            let failure = loop {
+                match read_frame(&mut buf).await {
+                    Ok(Some(value)) => {
+                        if let Err(error) = dispatch_inbound(value, &pending, &notif_tx, &reply_tx)
+                        {
+                            break error;
+                        }
+                    }
+                    Ok(None) => break AcpError::Closed,
+                    Err(error) => break error,
+                }
+            };
+            reader_engine.fail(failure);
         });
 
         AcpConnection {
@@ -128,7 +154,11 @@ impl AcpConnection {
             notifications: Some(notif_rx),
             child,
             tasks: vec![writer, reader],
+            stderr_task: None,
             agent_info: AcpAgentInfo::default(),
+            protocol_version: ProtocolVersion::V1,
+            agent_capabilities: AgentCapabilities::default(),
+            auth_methods: Vec::new(),
             stderr_tail: None,
         }
     }
@@ -160,17 +190,36 @@ impl AcpConnection {
             .await?;
         let parsed: InitializeResult =
             serde_json::from_value(result).map_err(|e| AcpError::Protocol(e.to_string()))?;
-        let info = parsed.agent_info.unwrap_or_default();
-        self.agent_info = AcpAgentInfo {
-            name: info.name.unwrap_or_else(|| fallback_name.to_string()),
-            title: info.title,
-            version: info.version,
+        if parsed.protocol_version != ProtocolVersion::V1 {
+            return Err(AcpError::Protocol(format!(
+                "agent selected unsupported protocol version {}; OpenPencil supports stable v1",
+                parsed.protocol_version.as_u16()
+            )));
+        }
+        self.protocol_version = parsed.protocol_version;
+        self.agent_capabilities = parsed.agent_capabilities;
+        self.auth_methods = parsed.auth_methods;
+        self.agent_info = match parsed.agent_info {
+            Some(info) => AcpAgentInfo {
+                name: if info.name.trim().is_empty() {
+                    fallback_name.to_string()
+                } else {
+                    info.name
+                },
+                title: info.title,
+                version: (!info.version.trim().is_empty()).then_some(info.version),
+            },
+            None => AcpAgentInfo {
+                name: fallback_name.to_string(),
+                title: None,
+                version: None,
+            },
         };
         Ok(())
     }
 
-    /// Open a new session, returning its id.
-    pub async fn new_session(&self) -> Result<String, AcpError> {
+    /// Open a new session, retaining the agent's initial config options.
+    pub async fn new_session(&self) -> Result<AcpSession, AcpError> {
         self.new_session_with(&NewSessionOptions::default()).await
     }
 
@@ -182,7 +231,26 @@ impl AcpConnection {
     /// `mcpServers` (HTTP endpoints the agent connects to for tools)
     /// + `_meta: { systemPrompt }` (claude-agent-acp honors it; other
     ///   agents ignore unknown `_meta`).
-    pub async fn new_session_with(&self, options: &NewSessionOptions) -> Result<String, AcpError> {
+    pub async fn new_session_with(
+        &self,
+        options: &NewSessionOptions,
+    ) -> Result<AcpSession, AcpError> {
+        if !options.mcp_servers.is_empty() && !self.agent_capabilities.mcp_capabilities.http {
+            return Err(AcpError::Protocol(
+                "agent did not advertise agentCapabilities.mcpCapabilities.http; refusing to send an HTTP MCP endpoint"
+                    .into(),
+            ));
+        }
+        match self.new_session_once(options).await {
+            Err(AcpError::Rpc { code: -32_000, .. }) => {
+                self.authenticate_unambiguous().await?;
+                self.new_session_once(options).await
+            }
+            result => result,
+        }
+    }
+
+    async fn new_session_once(&self, options: &NewSessionOptions) -> Result<AcpSession, AcpError> {
         let cwd = std::env::current_dir()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| ".".to_string());
@@ -210,20 +278,69 @@ impl AcpConnection {
             .await?;
         let parsed: NewSessionResult =
             serde_json::from_value(result).map_err(|e| AcpError::Protocol(e.to_string()))?;
-        Ok(parsed.session_id)
+        Ok(AcpSession {
+            session_id: parsed.session_id.to_string(),
+            config_options: parsed.config_options.unwrap_or_default(),
+        })
+    }
+
+    /// Change one stable-v1 session config option and retain the complete
+    /// state returned by the agent. String values are select ids; booleans
+    /// carry the required `type: "boolean"` discriminator.
+    pub async fn set_session_config_option(
+        &self,
+        session_id: &str,
+        config_id: &str,
+        value: SessionConfigOptionValue,
+    ) -> Result<Vec<SessionConfigOption>, AcpError> {
+        let mut params = serde_json::json!({
+            "sessionId": session_id,
+            "configId": config_id,
+        });
+        let encoded = serde_json::to_value(value)
+            .map_err(|e| AcpError::Protocol(format!("invalid session config value: {e}")))?;
+        let object = encoded.as_object().ok_or_else(|| {
+            AcpError::Protocol("session config value did not serialize as an object".into())
+        })?;
+        for (key, value) in object {
+            params[key] = value.clone();
+        }
+        let result = self
+            .engine
+            .call(METHOD_SESSION_SET_CONFIG_OPTION, params, HANDSHAKE_TIMEOUT)
+            .await?;
+        let parsed: SetSessionConfigOptionResponse =
+            serde_json::from_value(result).map_err(|e| AcpError::Protocol(e.to_string()))?;
+        Ok(parsed.config_options)
     }
 
     /// Drive one prompt turn. Resolves when the agent finishes the
     /// turn; streamed output arrives on the notification channel.
-    pub async fn prompt(&self, session_id: &str, text: &str) -> Result<(), AcpError> {
+    pub async fn prompt(&self, session_id: &str, text: &str) -> Result<AcpStopReason, AcpError> {
         let params = serde_json::json!({
             "sessionId": session_id,
             "prompt": [ { "type": "text", "text": text } ]
         });
-        self.engine
+        let result = self
+            .engine
             .call(METHOD_SESSION_PROMPT, params, PROMPT_TIMEOUT)
             .await?;
-        Ok(())
+        let parsed: PromptResult =
+            serde_json::from_value(result).map_err(|e| AcpError::Protocol(e.to_string()))?;
+        Ok(parsed.stop_reason)
+    }
+
+    /// Cancel all work for one session. ACP defines this as a notification,
+    /// not a request; a conforming prompt resolves with `stopReason:
+    /// "cancelled"` after receiving it.
+    pub async fn cancel_session(&self, session_id: &str) -> Result<(), AcpError> {
+        self.engine
+            .notify(
+                METHOD_SESSION_CANCEL,
+                serde_json::json!({ "sessionId": session_id }),
+                CANCEL_QUEUE_TIMEOUT,
+            )
+            .await
     }
 
     /// Take the `session/update` notification receiver — callable
@@ -237,20 +354,19 @@ impl AcpConnection {
         &self.agent_info
     }
 
-    /// Kill the local process (if any) and stop the IO tasks.
-    pub fn disconnect(&mut self) {
-        if let Some(mut child) = self.child.take() {
-            let _ = child.start_kill();
-        }
-        for task in self.tasks.drain(..) {
-            task.abort();
-        }
+    /// Negotiated stable ACP protocol version.
+    pub fn protocol_version(&self) -> ProtocolVersion {
+        self.protocol_version
     }
-}
 
-impl Drop for AcpConnection {
-    fn drop(&mut self) {
-        self.disconnect();
+    /// Capabilities retained from the initialize response.
+    pub fn agent_capabilities(&self) -> &AgentCapabilities {
+        &self.agent_capabilities
+    }
+
+    /// Authentication methods retained from the initialize response.
+    pub fn auth_methods(&self) -> &[AuthMethod] {
+        &self.auth_methods
     }
 }
 
@@ -270,14 +386,13 @@ async fn connect_local(config: &AcpAgentConfig) -> Result<AcpConnection, AcpErro
         .as_ref()
         .ok_or_else(|| AcpError::Config("local ACP agent requires a command".into()))?;
 
-    let mut cmd = Command::new(command);
-    cmd.args(&config.args)
-        .stdin(Stdio::piped())
+    let resolved = resolve_local_command(command, &config.env);
+    let mut cmd = build_local_command(&resolved, &config.args);
+    apply_local_environment(&mut cmd, &config.env);
+    cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    for (key, value) in &config.env {
-        cmd.env(key, value);
-    }
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
     let mut child = cmd.spawn().map_err(|e| AcpError::Spawn(e.to_string()))?;
     let stdin = child
         .stdin
@@ -311,6 +426,7 @@ async fn connect_local(config: &AcpAgentConfig) -> Result<AcpConnection, AcpErro
 
     let mut conn = AcpConnection::new(stdout, stdin, Some(child));
     conn.stderr_tail = Some(stderr_tail);
+    conn.stderr_task = stderr_drain;
     match conn.initialize(&config.display_name).await {
         Ok(()) => Ok(conn),
         Err(error) => {
@@ -328,12 +444,172 @@ async fn connect_local(config: &AcpAgentConfig) -> Result<AcpConnection, AcpErro
             // case). It aborts the reader/writer tasks, which is the
             // existing shutdown semantics; the drain task is NOT among
             // them, so joining it here does not fight `Drop`.
-            conn.disconnect();
-            if let Some(drain) = stderr_drain {
-                let _ = tokio::time::timeout(STDERR_DRAIN_GRACE, drain).await;
-            }
+            conn.shutdown().await;
             Err(with_agent_output(error, conn.stderr_tail()))
         }
+    }
+}
+
+/// Host environment keys that a local ACP child is allowed to inherit.
+/// User-configured `config.env` entries are explicit and override this set.
+fn local_env_allowed(key: &str) -> bool {
+    // Windows environment keys are case-insensitive and are commonly exposed
+    // as `Path`, `ComSpec`, and `SystemRoot`; normalize so the allowlist does
+    // not accidentally remove the Node runtime needed by npm ACP shims.
+    let key = key.to_ascii_uppercase();
+    matches!(
+        key.as_str(),
+        "PATH"
+            | "HOME"
+            | "USER"
+            | "LOGNAME"
+            | "SHELL"
+            | "TMPDIR"
+            | "TMP"
+            | "TEMP"
+            | "LANG"
+            | "LC_ALL"
+            | "LC_CTYPE"
+            | "TERM"
+            | "XDG_CONFIG_HOME"
+            | "XDG_CACHE_HOME"
+            | "XDG_DATA_HOME"
+            | "XDG_STATE_HOME"
+            | "SSL_CERT_FILE"
+            | "SSL_CERT_DIR"
+            | "NODE_EXTRA_CA_CERTS"
+            | "HTTP_PROXY"
+            | "HTTPS_PROXY"
+            | "ALL_PROXY"
+            | "NO_PROXY"
+            | "SYSTEMROOT"
+            | "WINDIR"
+            | "COMSPEC"
+            | "PATHEXT"
+            | "USERPROFILE"
+            | "APPDATA"
+            | "LOCALAPPDATA"
+            | "PROGRAMDATA"
+    ) || key.starts_with("LC_")
+}
+
+fn apply_local_environment(cmd: &mut Command, configured: &BTreeMap<String, String>) {
+    cmd.env_clear();
+    for (key, value) in std::env::vars().filter(|(key, _)| local_env_allowed(key)) {
+        cmd.env(key, value);
+    }
+    for (key, value) in configured {
+        cmd.env(key, value);
+    }
+}
+
+fn effective_local_path(configured: &BTreeMap<String, String>) -> String {
+    configured
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case("PATH"))
+        .map(|(_, value)| value.clone())
+        .or_else(|| std::env::var("PATH").ok())
+        .unwrap_or_default()
+}
+
+fn command_candidates(command: &str, path: &str) -> Vec<PathBuf> {
+    let command_path = Path::new(command);
+    if command_path.is_absolute() || command_path.components().count() > 1 {
+        return vec![command_path.to_path_buf()];
+    }
+    let mut out = Vec::new();
+    for dir in std::env::split_paths(path) {
+        let base = dir.join(command);
+        out.push(base.clone());
+        #[cfg(windows)]
+        for ext in ["exe", "cmd", "bat", "com", "ps1"] {
+            out.push(base.with_extension(ext));
+        }
+    }
+    #[cfg(unix)]
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        for dir in [".local/bin", ".npm-global/bin", ".bun/bin", ".volta/bin"] {
+            out.push(home.join(dir).join(command));
+        }
+    }
+    #[cfg(windows)]
+    if let Some(appdata) = std::env::var_os("APPDATA") {
+        let base = PathBuf::from(appdata).join("npm").join(command);
+        for ext in ["exe", "cmd", "bat", "com", "ps1"] {
+            out.push(base.with_extension(ext));
+        }
+    }
+    #[cfg(unix)]
+    {
+        out.push(PathBuf::from("/usr/local/bin").join(command));
+        out.push(PathBuf::from("/opt/homebrew/bin").join(command));
+    }
+    out
+}
+
+fn is_executable_candidate(candidate: &Path) -> bool {
+    if !candidate.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        candidate
+            .metadata()
+            .is_ok_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+fn resolve_local_command(command: &str, configured: &BTreeMap<String, String>) -> String {
+    let path = effective_local_path(configured);
+    command_candidates(command, &path)
+        .into_iter()
+        .find(|candidate| is_executable_candidate(candidate))
+        .unwrap_or_else(|| PathBuf::from(command))
+        .to_string_lossy()
+        .into_owned()
+}
+
+fn build_local_command(command: &str, args: &[String]) -> Command {
+    #[cfg(windows)]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let extension = Path::new(command)
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or_default();
+        if extension.eq_ignore_ascii_case("ps1") {
+            let mut cmd = Command::new("powershell.exe");
+            cmd.arg("-NoProfile")
+                .arg("-NonInteractive")
+                .arg("-File")
+                .arg(command)
+                .args(args)
+                .creation_flags(CREATE_NO_WINDOW);
+            cmd
+        } else if extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat") {
+            let mut cmd = Command::new("cmd.exe");
+            cmd.arg("/d").arg("/c").arg(command).args(args);
+            cmd.creation_flags(CREATE_NO_WINDOW);
+            cmd
+        } else {
+            let mut cmd = Command::new(command);
+            cmd.args(args).creation_flags(CREATE_NO_WINDOW);
+            cmd
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let mut cmd = Command::new(command);
+        cmd.args(args);
+        #[cfg(unix)]
+        cmd.process_group(0);
+        cmd
     }
 }
 
@@ -371,6 +647,30 @@ async fn connect_remote(_config: &AcpAgentConfig) -> Result<AcpConnection, AcpEr
     ))
 }
 
+#[cfg(feature = "remote")]
+fn remote_rustls_connector() -> tokio_tungstenite::Connector {
+    let mut roots = rustls::RootCertStore::empty();
+    let native = rustls_native_certs::load_native_certs();
+    let _ = roots.add_parsable_certificates(native.certs);
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let provider = Arc::new(rustls::crypto::ring::default_provider());
+    let config = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .expect("ring supports default TLS protocol versions")
+        .with_root_certificates(roots)
+        .with_no_client_auth();
+    tokio_tungstenite::Connector::Rustls(Arc::new(config))
+}
+
+#[cfg(feature = "remote")]
+fn remote_websocket_config() -> tokio_tungstenite::tungstenite::protocol::WebSocketConfig {
+    tokio_tungstenite::tungstenite::protocol::WebSocketConfig {
+        max_message_size: Some(MAX_INBOUND_FRAME_BYTES),
+        max_frame_size: Some(MAX_INBOUND_FRAME_BYTES),
+        ..Default::default()
+    }
+}
+
 /// Connect to a remote agent over a WebSocket endpoint.
 #[cfg(feature = "remote")]
 async fn connect_remote(config: &AcpAgentConfig) -> Result<AcpConnection, AcpError> {
@@ -381,8 +681,15 @@ async fn connect_remote(config: &AcpAgentConfig) -> Result<AcpConnection, AcpErr
         .url
         .as_ref()
         .ok_or_else(|| AcpError::Config("remote ACP agent requires a url".into()))?;
-    let (ws, _resp) = tokio_tungstenite::connect_async(url)
+    let dial = tokio_tungstenite::connect_async_tls_with_config(
+        url,
+        Some(remote_websocket_config()),
+        false,
+        Some(remote_rustls_connector()),
+    );
+    let (ws, _resp) = tokio::time::timeout(REMOTE_DIAL_TIMEOUT, dial)
         .await
+        .map_err(|_| AcpError::Transport("remote ACP WebSocket connect timed out".into()))?
         .map_err(|e| AcpError::Transport(e.to_string()))?;
     let (mut sink, mut stream) = ws.split();
 
@@ -391,6 +698,7 @@ async fn connect_remote(config: &AcpAgentConfig) -> Result<AcpConnection, AcpErr
     let engine = JsonRpcEngine::new(out_tx);
     let pending = engine.pending();
     let reply_tx = engine.out_tx();
+    let reader_engine = engine.clone();
 
     // Writer task — each outbound frame is one WebSocket text message.
     let writer = tokio::spawn(async move {
@@ -405,27 +713,31 @@ async fn connect_remote(config: &AcpAgentConfig) -> Result<AcpConnection, AcpErr
     });
     // Reader task — each text message is one inbound frame.
     let reader = tokio::spawn(async move {
-        while let Some(msg) = stream.next().await {
-            let Ok(msg) = msg else { break };
-            let text = match msg {
-                Message::Text(t) => t,
-                Message::Binary(b) => String::from_utf8_lossy(&b).into_owned(),
-                Message::Close(_) => break,
+        let failure = loop {
+            let message = match stream.next().await {
+                Some(Ok(message)) => message,
+                Some(Err(error)) => {
+                    break AcpError::Transport(format!("remote ACP WebSocket: {error}"));
+                }
+                None => break AcpError::Closed,
+            };
+            let value = match message {
+                Message::Text(text) => serde_json::from_str::<Value>(text.trim()),
+                Message::Binary(bytes) => serde_json::from_slice::<Value>(&bytes),
+                Message::Close(_) => break AcpError::Closed,
                 _ => continue,
             };
-            if let Ok(value) = serde_json::from_str::<Value>(text.trim()) {
-                dispatch_inbound(value, &pending, &notif_tx, &reply_tx);
+            let value = match value {
+                Ok(value) => value,
+                Err(error) => {
+                    break AcpError::Protocol(format!("invalid remote ACP JSON frame: {error}"));
+                }
+            };
+            if let Err(error) = dispatch_inbound(value, &pending, &notif_tx, &reply_tx) {
+                break error;
             }
-        }
-        // Socket closed: fail in-flight requests immediately.
-        let waiters: Vec<_> = pending
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .drain()
-            .collect();
-        for (_, waiter) in waiters {
-            let _ = waiter.send(Err(AcpError::Closed));
-        }
+        };
+        reader_engine.fail(failure);
     });
 
     let mut conn = AcpConnection {
@@ -433,303 +745,26 @@ async fn connect_remote(config: &AcpAgentConfig) -> Result<AcpConnection, AcpErr
         notifications: Some(notif_rx),
         child: None,
         tasks: vec![writer, reader],
+        stderr_task: None,
         agent_info: AcpAgentInfo::default(),
+        protocol_version: ProtocolVersion::V1,
+        agent_capabilities: AgentCapabilities::default(),
+        auth_methods: Vec::new(),
         // A WebSocket agent runs elsewhere — there is no stderr pipe.
         stderr_tail: None,
     };
-    conn.initialize(&config.display_name).await?;
-    Ok(conn)
+    match conn.initialize(&config.display_name).await {
+        Ok(()) => Ok(conn),
+        Err(error) => {
+            conn.shutdown().await;
+            Err(error)
+        }
+    }
 }
+
+#[path = "client_lifecycle.rs"]
+mod lifecycle;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::transport::read_frame;
-
-    /// A mock ACP agent: answers `initialize` / `session/new`, then on
-    /// `session/prompt` streams one message chunk and returns.
-    async fn mock_agent(read: impl AsyncRead + Unpin, mut write: impl AsyncWrite + Unpin) {
-        let mut buf = BufReader::new(read);
-        while let Ok(Some(frame)) = read_frame(&mut buf).await {
-            let id = frame.get("id").cloned().unwrap_or(Value::Null);
-            let method = frame.get("method").and_then(|m| m.as_str()).unwrap_or("");
-            match method {
-                "initialize" => {
-                    let resp = serde_json::json!({
-                        "jsonrpc": "2.0", "id": id,
-                        "result": { "protocolVersion": 1,
-                                    "agentInfo": { "name": "Mock Agent", "version": "9.9" } }
-                    });
-                    write_frame(&mut write, &resp).await.unwrap();
-                }
-                "session/new" => {
-                    let resp = serde_json::json!({
-                        "jsonrpc": "2.0", "id": id,
-                        "result": { "sessionId": "sess-1" }
-                    });
-                    write_frame(&mut write, &resp).await.unwrap();
-                }
-                "session/prompt" => {
-                    // Stream one chunk, then close the turn.
-                    let note = serde_json::json!({
-                        "jsonrpc": "2.0", "method": "session/update",
-                        "params": { "sessionId": "sess-1",
-                                    "update": { "sessionUpdate": "agent_message_chunk",
-                                                "content": { "type": "text", "text": "hi there" } } }
-                    });
-                    write_frame(&mut write, &note).await.unwrap();
-                    let resp = serde_json::json!({
-                        "jsonrpc": "2.0", "id": id, "result": { "stopReason": "end_turn" }
-                    });
-                    write_frame(&mut write, &resp).await.unwrap();
-                }
-                _ => break,
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn handshake_and_prompt_against_a_mock_agent() {
-        // Two duplex pipes: client writes → agent reads, agent writes
-        // → client reads.
-        let (client_w, agent_r) = tokio::io::duplex(8192);
-        let (agent_w, client_r) = tokio::io::duplex(8192);
-        tokio::spawn(mock_agent(agent_r, agent_w));
-
-        let mut conn = AcpConnection::new(client_r, client_w, None);
-        let mut notes = conn.take_notifications().expect("notifications");
-
-        conn.initialize("fallback").await.expect("initialize");
-        assert_eq!(conn.agent_info().name, "Mock Agent");
-        assert_eq!(conn.agent_info().version.as_deref(), Some("9.9"));
-
-        let session = conn.new_session().await.expect("new_session");
-        assert_eq!(session, "sess-1");
-
-        conn.prompt(&session, "design a button")
-            .await
-            .expect("prompt");
-        // The streamed chunk reached the notification channel.
-        let note = notes.recv().await.expect("a session/update");
-        assert_eq!(note.session_id.as_deref(), Some("sess-1"));
-    }
-
-    /// A mock agent that asserts the `session/new` params carry the
-    /// MCP server list + `_meta.systemPrompt`, encoding the verdict in
-    /// the returned session id.
-    async fn mock_agent_checking_session_new(
-        read: impl AsyncRead + Unpin,
-        mut write: impl AsyncWrite + Unpin,
-    ) {
-        let mut buf = BufReader::new(read);
-        while let Ok(Some(frame)) = read_frame(&mut buf).await {
-            let id = frame.get("id").cloned().unwrap_or(Value::Null);
-            let method = frame.get("method").and_then(|m| m.as_str()).unwrap_or("");
-            match method {
-                "initialize" => {
-                    let resp = serde_json::json!({
-                        "jsonrpc": "2.0", "id": id,
-                        "result": { "protocolVersion": 1 }
-                    });
-                    write_frame(&mut write, &resp).await.unwrap();
-                }
-                "session/new" => {
-                    let params = frame.get("params").cloned().unwrap_or(Value::Null);
-                    let server = &params["mcpServers"][0];
-                    let ok = server["name"] == "openpencil"
-                        && server["type"] == "http"
-                        && server["url"] == "http://127.0.0.1:3100/mcp"
-                        && server["headers"].as_array().is_some_and(Vec::is_empty)
-                        && params["_meta"]["systemPrompt"] == "use the canvas tools"
-                        && params["cwd"].as_str().is_some_and(|c| !c.is_empty());
-                    let session_id = if ok { "sess-mcp-ok" } else { "sess-bad" };
-                    let resp = serde_json::json!({
-                        "jsonrpc": "2.0", "id": id,
-                        "result": { "sessionId": session_id }
-                    });
-                    write_frame(&mut write, &resp).await.unwrap();
-                }
-                _ => break,
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn session_new_carries_mcp_servers_and_system_prompt_meta() {
-        let (client_w, agent_r) = tokio::io::duplex(8192);
-        let (agent_w, client_r) = tokio::io::duplex(8192);
-        tokio::spawn(mock_agent_checking_session_new(agent_r, agent_w));
-
-        let mut conn = AcpConnection::new(client_r, client_w, None);
-        conn.initialize("fallback").await.expect("initialize");
-        let options = NewSessionOptions {
-            mcp_servers: vec![McpHttpServer {
-                name: "openpencil".into(),
-                url: "http://127.0.0.1:3100/mcp".into(),
-            }],
-            system_prompt_meta: Some("use the canvas tools".into()),
-        };
-        let session = conn.new_session_with(&options).await.expect("new_session");
-        assert_eq!(
-            session, "sess-mcp-ok",
-            "agent saw a TS-shaped mcpServers + _meta.systemPrompt payload"
-        );
-    }
-
-    #[tokio::test]
-    async fn plain_new_session_sends_empty_server_list_and_no_meta() {
-        // The default payload must stay byte-compatible with the old
-        // `{ cwd, mcpServers: [] }` wire (no `_meta` key at all).
-        let options = NewSessionOptions::default();
-        assert!(options.mcp_servers.is_empty());
-        assert!(options.system_prompt_meta.is_none());
-    }
-
-    #[tokio::test]
-    async fn in_flight_call_fails_fast_when_agent_exits() {
-        // Agent end is dropped immediately — no response will come.
-        let (client_w, agent_r) = tokio::io::duplex(1024);
-        let (agent_w, client_r) = tokio::io::duplex(1024);
-        drop(agent_r);
-        drop(agent_w);
-
-        let mut conn = AcpConnection::new(client_r, client_w, None);
-        let started = std::time::Instant::now();
-        let err = conn.initialize("fallback").await.unwrap_err();
-        // The reader drains pending requests on EOF, so the call
-        // resolves to `Closed` at once rather than after the 30s
-        // handshake timeout.
-        assert!(
-            matches!(err, AcpError::Closed),
-            "expected Closed, got {err:?}"
-        );
-        assert!(
-            started.elapsed() < Duration::from_secs(5),
-            "must fail fast, not wait out the timeout"
-        );
-    }
-
-    /// A local agent stub on disk. Unix-only: it is a `/bin/sh` script.
-    #[cfg(unix)]
-    fn stub_agent(body: &str) -> (std::path::PathBuf, AcpAgentConfig) {
-        use std::os::unix::fs::PermissionsExt;
-        use std::sync::atomic::{AtomicU64, Ordering};
-        static SEQ: AtomicU64 = AtomicU64::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "op-acp-stub-{}-{}",
-            std::process::id(),
-            SEQ.fetch_add(1, Ordering::Relaxed)
-        ));
-        std::fs::create_dir_all(&dir).expect("temp dir");
-        let path = dir.join("agent.sh");
-        std::fs::write(&path, body).expect("write stub");
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
-        let config = AcpAgentConfig {
-            id: "stub".into(),
-            display_name: "Stub Agent".into(),
-            connection_type: ConnectionType::Local,
-            command: Some(path.to_string_lossy().into_owned()),
-            args: Vec::new(),
-            env: std::collections::BTreeMap::new(),
-            url: None,
-            enabled: true,
-        };
-        (dir, config)
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn failed_handshake_quotes_the_agents_stderr_with_secrets_removed() {
-        // An agent that dies during the handshake explains itself on
-        // stderr. That text used to be read and discarded line by line,
-        // so the user got a bare transport failure.
-        let (dir, config) = stub_agent(
-            "#!/bin/sh\n\
-             echo 'fatal: ANTHROPIC_API_KEY=sk-fake-000111222333 rejected by upstream' >&2\n\
-             echo 'see https://agent.example.test/setup?token=fake-token-999' >&2\n\
-             exit 1\n",
-        );
-        let error = match connect_acp_agent(&config).await {
-            Err(error) => error,
-            Ok(_) => panic!("stub never completes the handshake"),
-        };
-        let _ = std::fs::remove_dir_all(dir);
-        let text = error.to_string();
-        assert!(text.contains("rejected by upstream"), "{text}");
-        assert!(
-            text.contains("agent.example.test/setup?<redacted>"),
-            "{text}"
-        );
-        for secret in ["sk-fake-000111222333", "token=fake-token-999"] {
-            assert!(!text.contains(secret), "leaked {secret:?} in {text}");
-        }
-    }
-
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn stderr_capture_stays_bounded_under_a_flood() {
-        // The drain task exists to stop a full stderr pipe from
-        // blocking the child; retaining a tail must not turn it into an
-        // unbounded buffer. 200k lines in, a capped tail out.
-        let (dir, config) = stub_agent(
-            "#!/bin/sh\n\
-             awk 'BEGIN{for(i=0;i<200000;i++) print \"agent chatter line \" i > \"/dev/stderr\"}'\n\
-             exit 1\n",
-        );
-        let error = match connect_acp_agent(&config).await {
-            Err(error) => error,
-            Ok(_) => panic!("stub never completes the handshake"),
-        };
-        let _ = std::fs::remove_dir_all(dir);
-        let text = error.to_string();
-        assert!(
-            text.chars().count() <= 96 + op_util::cli_output::TAIL_MAX_CHARS,
-            "error message was {} chars: {text}",
-            text.chars().count()
-        );
-        assert!(text.contains("agent chatter line 199999"), "{text}");
-    }
-
-    /// The ACP twin of the CLI bridge's drain race. An agent binary that
-    /// exists but starts up broken (bad config, missing dependency,
-    /// immediate panic) dies with its explanation on stderr, and its
-    /// stdout EOF is what fails the handshake — so the read path and the
-    /// drain task wake on the same instant.
-    ///
-    /// The contention is CREATED here, not hoped for: run idle, the
-    /// drain wins every time and this case passes even with the fix
-    /// reverted. Measured before the fix: 5-8 of 96 connects came back
-    /// quoting nothing.
-    #[cfg(unix)]
-    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-    async fn a_broken_agents_stderr_survives_concurrent_connects() {
-        let (dir, config) =
-            stub_agent("#!/bin/sh\necho 'fatal: agent config rejected by upstream' >&2\nexit 1\n");
-        let mut lost = 0usize;
-        let mut total = 0usize;
-        for _round in 0..6 {
-            let mut pending = Vec::new();
-            for _ in 0..16 {
-                let config = config.clone();
-                pending.push(tokio::spawn(async move {
-                    match connect_acp_agent(&config).await {
-                        Err(error) => error.to_string(),
-                        Ok(_) => "unexpectedly connected".to_string(),
-                    }
-                }));
-            }
-            for handle in pending {
-                let text = handle.await.expect("probe task");
-                total += 1;
-                if !text.contains("agent config rejected by upstream") {
-                    lost += 1;
-                }
-            }
-        }
-        let _ = std::fs::remove_dir_all(dir);
-        assert_eq!(
-            lost, 0,
-            "{lost} of {total} connect failures lost the agent's stderr"
-        );
-    }
-}
+#[path = "client_tests.rs"]
+mod tests;

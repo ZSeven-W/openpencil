@@ -127,6 +127,7 @@ fn spawn_fetch(id: u64, url: String, fetcher: Fetcher) -> FetchJob {
 fn fetch_remote_image_blocking(url: &str) -> Result<Vec<u8>, AssetFetchError> {
     op_host_services::chat_runtime::block_on_anywhere(async {
         let client = reqwest::Client::builder()
+            .use_rustls_tls()
             .timeout(Duration::from_secs(20))
             .user_agent(concat!("openpencil-desktop/", env!("CARGO_PKG_VERSION")))
             .build()

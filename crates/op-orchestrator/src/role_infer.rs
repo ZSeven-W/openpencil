@@ -28,6 +28,7 @@ fn exact_role(lower: &str) -> Option<&'static str> {
             "bottom-tab-bar"
         }
         "tab bar" | "tabbar" | "tab-bar" => "tab-bar",
+        "nav links" | "nav-links" | "navigation links" | "navigation-links" => "nav-links",
         "navbar" | "navigation" | "navigation bar" | "nav bar" | "nav" | "header" | "top bar"
         | "topbar" => "navbar",
         "hero" | "hero section" => "hero",

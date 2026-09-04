@@ -56,7 +56,9 @@ impl fmt::Display for ScriptError {
             ScriptError::SourceTooLarge { bytes, max } => {
                 write!(f, "script too large: {bytes} bytes (max {max})")
             }
-            ScriptError::NoOperations => f.write_str("script emitted no I(...) operations"),
+            ScriptError::NoOperations => {
+                f.write_str("script emitted no I(...), K(...), or U(...) operations")
+            }
             ScriptError::RuntimeInit(detail) => write!(f, "js runtime: {detail}"),
             ScriptError::ContextInit(detail) => write!(f, "js context: {detail}"),
             ScriptError::BindHostFn { name, detail } => write!(f, "bind {name}: {detail}"),

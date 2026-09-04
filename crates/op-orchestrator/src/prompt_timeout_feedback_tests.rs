@@ -61,6 +61,7 @@ fn orchestrator_prompt_long_prompt_has_larger_timeout_than_short() {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let long_prompt = "x".repeat(5000); // >= 4200 chars
     let long_req = DesignRequest {
@@ -75,6 +76,7 @@ fn orchestrator_prompt_long_prompt_has_larger_timeout_than_short() {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let short_pp = build_orchestrator_prompt(&short_req, PlanningMode::Rich, AbortFlag::new());
     let long_pp = build_orchestrator_prompt(&long_req, PlanningMode::Rich, AbortFlag::new());
@@ -100,6 +102,7 @@ fn orchestrator_prompt_multiplier_applied() {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let pp = build_orchestrator_prompt(&ds_req, PlanningMode::Rich, AbortFlag::new());
     // Short bucket base: 300_000ms × 2.0 = 600_000ms
@@ -145,6 +148,7 @@ fn subagent_prompt_long_prompt_has_larger_timeout() {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let long_req = DesignRequest {
         prompt: "x".repeat(5000),
@@ -158,6 +162,7 @@ fn subagent_prompt_long_prompt_has_larger_timeout() {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let (short_cr, _) = bsp(
         &subtask(),
@@ -196,6 +201,7 @@ fn subagent_prompt_basic_tier_clamps_soft_timeouts() {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let (cr, _) = bsp(
         &subtask(),
@@ -231,6 +237,7 @@ fn subagent_prompt_append_mode_injected_when_labels_present() {
         },
         id_prefix: "pricing".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,
@@ -265,6 +272,7 @@ fn subagent_prompt_no_append_mode_when_labels_none() {
         },
         id_prefix: "hero".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,
@@ -291,6 +299,7 @@ fn subagent_prompt_no_append_mode_when_labels_empty() {
         },
         id_prefix: "hero".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,
@@ -321,6 +330,7 @@ fn subagent_prompt_injects_self_check_feedback_when_present() {
         },
         id_prefix: "hero".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,
@@ -359,6 +369,7 @@ fn subagent_prompt_omits_self_check_feedback_when_absent() {
         },
         id_prefix: "hero".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,
@@ -387,6 +398,7 @@ fn subagent_prompt_injects_geometry_feedback_with_distinct_wording() {
         },
         id_prefix: "hero".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,
@@ -431,6 +443,7 @@ fn subtask_intent_includes_prompt_label_and_hints() {
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let mut sub = crate::plan::Subtask {
         id: "header".into(),
@@ -441,6 +454,7 @@ fn subtask_intent_includes_prompt_label_and_hints() {
         },
         id_prefix: "header".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: Some("home".into()),
         generated_root_id: None,

@@ -7,6 +7,55 @@
 use super::*;
 
 #[test]
+fn compact_touch_shortcut_and_direct_action_cannot_open_codegen() {
+    use op_editor_core::size_class::EditorSizeClass;
+    use op_editor_core::PropertyTab;
+    use op_editor_ui::widgets::property_panel_action::CodegenAction;
+    use op_editor_ui::widgets::PropertyPanelAction;
+
+    let mut host = WidgetHostNative::new();
+    let ui = &mut host.editor_state_mut().editor_ui;
+    ui.touch = true;
+    ui.size_class = EditorSizeClass::Compact;
+    ui.property_tab = PropertyTab::Code;
+
+    assert!(host.apply_toggle_code_panel());
+    assert_eq!(
+        host.editor_state().editor_ui.property_tab,
+        PropertyTab::Design
+    );
+    assert!(host.apply_toggle_code_panel());
+    assert_eq!(
+        host.editor_state().editor_ui.property_tab,
+        PropertyTab::Design
+    );
+
+    host.apply_property_action(PropertyPanelAction::Codegen(CodegenAction::Generate));
+    assert!(!host.editor_state().codegen.pending_generate);
+}
+
+#[test]
+fn medium_touch_shortcut_and_codegen_action_remain_available() {
+    use op_editor_core::size_class::EditorSizeClass;
+    use op_editor_core::PropertyTab;
+    use op_editor_ui::widgets::property_panel_action::CodegenAction;
+    use op_editor_ui::widgets::PropertyPanelAction;
+
+    let mut host = WidgetHostNative::new();
+    let ui = &mut host.editor_state_mut().editor_ui;
+    ui.touch = true;
+    ui.size_class = EditorSizeClass::Medium;
+
+    assert!(host.apply_toggle_code_panel());
+    assert_eq!(
+        host.editor_state().editor_ui.property_tab,
+        PropertyTab::Code
+    );
+    host.apply_property_action(PropertyPanelAction::Codegen(CodegenAction::Generate));
+    assert!(host.editor_state().codegen.pending_generate);
+}
+
+#[test]
 fn codegen_select_framework_updates_state() {
     use op_editor_core::codegen::Framework;
     use op_editor_ui::widgets::property_panel_action::CodegenAction;

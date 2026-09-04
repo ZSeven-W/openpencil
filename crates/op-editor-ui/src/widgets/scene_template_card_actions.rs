@@ -24,7 +24,7 @@ use op_editor_core::AssetCenterTab;
 
 use super::panel_control_metrics::{CHIP_H, CHIP_LABEL_SIZE};
 use super::prompt_center_panel::estimated_text_width;
-use super::scene_template_panel::{SceneTemplateHit, SceneTemplatePanel, GENERATE_INPUT_H};
+use super::scene_template_panel::{SceneTemplateHit, SceneTemplatePanel};
 use crate::{Point2D, Rect};
 
 /// Hover-token band for the "add to canvas" button of card `index`.
@@ -42,6 +42,34 @@ pub const SCENE_TEMPLATE_BASIS_CHIP_HOVER: usize = usize::MAX - 128;
 /// stopped being a gallery well before it collided with the next band.
 const CARD_ACTION_BAND: usize = 4096;
 
+/// Hover-token band for a saved-template card's delete button.
+///
+/// Its own band, clear of the action-button bands ([`CARD_ADD_HOVER_BASE`] /
+/// [`CARD_GENERATE_HOVER_BASE`]) and of the style-card delete band: a delete
+/// button and the card it sits on are different targets, and sharing a token
+/// would make hovering the ✕ light the whole card.
+pub(super) const TEMPLATE_DELETE_HOVER_BASE: usize = usize::MAX - 8192;
+
+impl SceneTemplatePanel<'_> {
+    /// A hover token for the delete button of the saved-template card at
+    /// `index`.
+    pub(super) fn template_delete_hover_token(index: usize) -> usize {
+        TEMPLATE_DELETE_HOVER_BASE + index.min(CARD_ACTION_BAND - 1)
+    }
+
+    /// The delete button on a saved-template card, in its top-right corner —
+    /// the same geometry as the style cards' delete.
+    pub(super) fn template_delete_rect(card: Rect) -> Rect {
+        let side = super::scene_template_style_geometry::STYLE_DELETE_BTN;
+        Rect::xywh(
+            card.origin.x + card.size.x - side - 8.0,
+            card.origin.y + 8.0,
+            side,
+            side,
+        )
+    }
+}
+
 /// A card's action buttons are chips — same height, same label size as the
 /// filter row's — cut to the panel's control radius rather than to a pill,
 /// because they sit in a rectangular strip over a rectangular picture.
@@ -51,7 +79,6 @@ pub(super) const ACTION_GAP: f32 = 8.0;
 pub(super) const ACTION_LABEL_SIZE: f32 = CHIP_LABEL_SIZE;
 pub(super) const ACTION_RADIUS: f32 = 7.0;
 
-pub(super) const BASIS_CHIP_H: f32 = CHIP_H;
 pub(super) const BASIS_CHIP_LABEL_SIZE: f32 = 11.5;
 /// Room for the label's left padding plus the dismiss glyph and its gutter.
 pub(super) const BASIS_CHIP_PAD_X: f32 = 10.0;
@@ -115,12 +142,33 @@ impl SceneTemplatePanel<'_> {
     /// it again once hover fell back to the card. That oscillates once per
     /// mouse move.
     pub(super) fn card_actions_visible(&self, index: usize) -> bool {
+        // Saved-template cards have no action strip: no style guide to pin,
+        // so no "generate from this", and their one action is the whole card
+        // (plus the hover delete button, which has its own predicate).
+        if index < self.user_card_count() {
+            return false;
+        }
+        // Touch layouts cannot rely on hover to reveal the action strip.
+        if self.touch_density_active() {
+            return true;
+        }
         let hover = self.state.editor_ui.scene_template_center.hover;
         hover == Some(index)
             || hover == Some(card_add_hover_token(index))
             || hover == Some(card_generate_hover_token(index))
             || self.is_pressed(card_add_hover_token(index))
             || self.is_pressed(card_generate_hover_token(index))
+    }
+
+    /// Whether the saved-template card at `index` shows its delete button.
+    ///
+    /// Hover-gated, like the style cards' delete: a permanent ✕ on every
+    /// saved card would turn the section into a list of things to remove. It
+    /// stays live while the pointer is on the button itself as well as on the
+    /// card, or moving toward it would make it vanish.
+    pub(super) fn template_delete_visible(&self, index: usize) -> bool {
+        let hover = self.state.editor_ui.scene_template_center.hover;
+        hover == Some(index) || hover == Some(Self::template_delete_hover_token(index))
     }
 
     /// Whether this template offers the "generate from this" action here.
@@ -136,15 +184,25 @@ impl SceneTemplatePanel<'_> {
     }
 
     /// Refine a card hover to one of its action buttons when the pointer is
-    /// on one. Style cards have no action strip, so they always hover whole.
+    /// on one. Style cards have no action strip, so they always hover whole;
+    /// saved-template cards have only the delete button.
     pub(super) fn card_hover_token(&self, index: usize, card: Rect, point: Point2D) -> usize {
-        if self.tab() != AssetCenterTab::Templates || !self.card_actions_visible(index) {
+        if self.tab() != AssetCenterTab::Templates {
             return index;
         }
-        let Some(template) = self.filtered().get(index).copied() else {
+        if index < self.user_card_count() {
+            if Self::template_delete_rect(card).contains(point) {
+                return Self::template_delete_hover_token(index);
+            }
+            return index;
+        }
+        if !self.card_actions_visible(index) {
+            return index;
+        }
+        let Some(template) = self.filtered().get(index - self.user_card_count()).copied() else {
             return index;
         };
-        let (add, generate) = card_action_rects(card, self.card_offers_generate(template));
+        let (add, generate) = self.card_action_rects_for(card, self.card_offers_generate(template));
         if generate.is_some_and(|rect| rect.contains(point)) {
             return card_generate_hover_token(index);
         }
@@ -168,7 +226,7 @@ impl SceneTemplatePanel<'_> {
         point: Point2D,
     ) -> SceneTemplateHit {
         if self.card_actions_visible(index) && self.card_offers_generate(template) {
-            let (_, generate) = card_action_rects(card, true);
+            let (_, generate) = self.card_action_rects_for(card, true);
             if generate.is_some_and(|rect| rect.contains(point)) {
                 return SceneTemplateHit::GenerateFromTemplate(template.id.clone());
             }
@@ -180,21 +238,27 @@ impl SceneTemplatePanel<'_> {
     pub fn basis_chip_rect(&self, panel: Rect) -> Option<Rect> {
         let label = self.basis_chip_label()?;
         let input_row_y = self.generate_row_top(panel) + 6.0;
+        let chip_h = self.density().chip_h;
         Some(Rect::xywh(
             Self::content_rect(panel).origin.x,
-            input_row_y + (GENERATE_INPUT_H - BASIS_CHIP_H) / 2.0,
+            input_row_y + (self.generate_input_height_for() - chip_h) / 2.0,
             basis_chip_width(&label),
-            BASIS_CHIP_H,
+            chip_h,
         ))
     }
 
     /// The dismiss target inside the basis chip.
     pub(super) fn basis_chip_dismiss_rect(&self, panel: Rect) -> Option<Rect> {
         let chip = self.basis_chip_rect(panel)?;
+        let dismiss_w = if self.touch_density_active() {
+            self.density().chip_h
+        } else {
+            BASIS_CHIP_DISMISS_W
+        };
         Some(Rect::xywh(
-            chip.origin.x + chip.size.x - BASIS_CHIP_DISMISS_W,
+            chip.origin.x + chip.size.x - dismiss_w,
             chip.origin.y,
-            BASIS_CHIP_DISMISS_W,
+            dismiss_w,
             chip.size.y,
         ))
     }

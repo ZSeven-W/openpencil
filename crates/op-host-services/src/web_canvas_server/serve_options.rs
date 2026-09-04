@@ -25,7 +25,7 @@ pub struct ServeWebOptions {
     /// device session between accounts are refused. See `online_policy.rs`.
     ///
     /// Mutually exclusive with `--managed`: managed mode's whole contract is
-    /// one supervising operator holding one per-instance token.
+    /// one supervising operator holding the process stdin lease.
     pub online: bool,
 }
 
@@ -51,8 +51,11 @@ impl ServeWebOptions {
 ///   processes that want the handshake-JSON / stdin-EOF lifecycle contract
 ///   (see [`run_web_canvas`]).
 ///
-/// The host defaults to loopback; `--host 0.0.0.0` is the LAN/Docker opt-in
-/// (no TLS — deploy behind a proxy for anything beyond a trusted network).
+/// The host defaults to loopback. Local and online modes may explicitly use
+/// `--host 0.0.0.0` for LAN/Docker (no TLS — deploy behind a proxy for
+/// anything beyond a trusted network). Managed mode is deliberately
+/// loopback-only: its ordinary requests are credential-free and the stdin
+/// lease proves local supervision, not authority for a remote peer.
 pub fn parse_serve_web_args<I: Iterator<Item = String>>(mut args: I) -> Result<ServeWebOptions> {
     let Some(first) = args.next() else {
         return Err(WebCanvasError::Config("missing <port> arg".into()));
@@ -150,13 +153,18 @@ pub(super) fn parse_serve_web_args_managed<I: Iterator<Item = String>>(
     if host.is_empty() {
         return Err(WebCanvasError::Config("--host must not be empty".into()));
     }
-    // Managed mode means one supervising operator holding one per-instance
-    // token over one document; online means many verified accounts over many.
+    // Managed mode means one supervising operator holding the process stdin
+    // lease over one document; online means many verified accounts over many.
     // A daemon cannot be both, and silently picking one would hand whichever
     // contract lost its callers the wrong isolation.
     if managed && online {
         return Err(WebCanvasError::Config(
             "--managed and --online are mutually exclusive".into(),
+        ));
+    }
+    if managed && !is_loopback_web_host(&host) {
+        return Err(WebCanvasError::Config(
+            "--managed requires a loopback --host (127.0.0.1, localhost, or ::1)".into(),
         ));
     }
     Ok(ServeWebOptions {
@@ -172,9 +180,10 @@ pub(super) fn parse_serve_web_args_managed<I: Iterator<Item = String>>(
 /// Build the single-line handshake JSON printed to stdout in managed mode
 /// once the listener is bound: `{"ok":true,"port":<n>,"token":"<hex32>",
 /// "version":"<crate version>"}`. The supervising process reads exactly one
-/// line from the child's stdout to learn the actual bound port (relevant
-/// when `--port 0` requested an OS-assigned port) and the per-instance auth
-/// token.
+/// line from the child's stdout to learn the actual bound port (relevant when
+/// `--port 0` requested an OS-assigned port) and the lifecycle token retained
+/// for compatibility and optional graceful shutdown. Ordinary HTTP requests
+/// do not carry this token.
 pub(crate) fn handshake_json(port: u16, token: &str) -> String {
     format!(
         r#"{{"ok":true,"port":{port},"token":"{token}","version":"{}"}}"#,
@@ -182,11 +191,12 @@ pub(crate) fn handshake_json(port: u16, token: &str) -> String {
     )
 }
 
-/// Generate a per-instance token for managed mode. Not a cryptographic PRNG —
-/// `RandomState`'s per-process keying plus a nanosecond timestamp and the pid
-/// give a token that's unguessable across separate daemon invocations. The real
-/// access control is enforced by `serve_one` via `RequestAuth` gate on every
-/// request and `cors_origin_for` on privileged endpoints like `/mcp`.
+/// Generate a per-instance lifecycle token for managed mode. Not a
+/// cryptographic PRNG — `RandomState`'s per-process keying plus a nanosecond
+/// timestamp and the pid distinguish separate daemon invocations. It remains
+/// in the handshake for compatibility and optional graceful shutdown; request
+/// authority comes from the local supervisor lease plus the managed browser
+/// origin gate, not from a header token.
 pub(super) fn random_token() -> String {
     use std::collections::hash_map::RandomState;
     use std::hash::{BuildHasher, Hasher};

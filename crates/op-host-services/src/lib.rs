@@ -21,7 +21,7 @@
 pub mod acp_agent_probe_host;
 pub mod ai_proxy;
 pub mod ai_proxy_error;
-mod chat_agent_context;
+pub mod builtin_model_discovery;
 pub mod chat_agent_loop;
 pub mod chat_attachment;
 #[cfg(test)]
@@ -34,17 +34,18 @@ pub mod chat_copilot;
 pub mod chat_grok_stream;
 pub mod chat_http_server;
 pub mod chat_intent;
-mod chat_modify_sanitize;
 pub mod chat_provider_llm;
 pub mod chat_runtime;
 pub mod chat_spawn;
 pub mod chat_subprocess;
+mod chat_subprocess_antigravity_log;
+mod chat_subprocess_dsh;
 mod chat_subprocess_exit;
+mod chat_subprocess_lifecycle;
 mod chat_subprocess_parse;
 pub mod chat_subprocess_quirks;
 mod chat_subprocess_safety;
 pub mod chat_system_prompt;
-mod chat_tool_result;
 pub mod cli_model_discovery;
 pub mod cli_modes;
 pub mod cli_probe_error;
@@ -53,13 +54,18 @@ pub mod cli_provider_probe;
 mod cli_resolver_windows;
 pub(crate) mod collab_avatar_proxy;
 pub mod collab_blocking;
-mod design_agent_diagnostics;
+mod copilot_sdk_probe;
 #[cfg(test)]
 mod design_agent_reflow_tests;
 #[cfg(test)]
 mod design_agent_tool_result_tests;
 pub mod design_agent_tools;
 pub mod design_context;
+pub(crate) mod design_md_evidence;
+mod design_md_evidence_appendix;
+mod design_md_evidence_error;
+mod design_md_evidence_normalize;
+mod design_md_evidence_roles;
 pub mod design_md_llm;
 pub mod design_md_llm_error;
 pub mod design_session;
@@ -77,7 +83,7 @@ mod figma_convert_error;
 pub mod hub_auth_client;
 pub mod hub_auth_error;
 mod import_html_url;
-mod import_html_url_error;
+pub mod import_html_url_error;
 pub mod loop_blocker_ledger;
 pub mod mcp_live;
 pub mod mcp_serve;
@@ -92,8 +98,16 @@ pub mod provider_probe_host;
 pub mod provider_probe_models;
 pub mod public_https_client;
 pub mod quality_credential;
-pub mod settings_io;
-pub mod settings_io_error;
+pub mod reference_context;
+pub mod reference_context_error;
+#[cfg(test)]
+pub(crate) mod test_support;
+// Settings persistence moved to op-editor-host-core (feature `settings-io`)
+// so the mobile FFI hosts share the exact desktop load/save path; these
+// re-exports keep every `op_host_services::settings_io*` import stable.
+pub use op_editor_host_core::settings_io;
+pub use op_editor_host_core::settings_io_error;
+pub mod user_scene_template_store;
 pub mod validation_providers;
 pub(crate) mod web_auth;
 pub mod web_canvas_server;

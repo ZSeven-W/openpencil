@@ -55,6 +55,12 @@ pub(crate) fn reset_for_new_identity<C: RepaintContext + 'static>(inner: &Rc<Ref
     });
     if let Ok(mut context) = inner.try_borrow_mut() {
         let state = context.host_mut().editor_state_mut();
+        // The subject has already advanced, but this reset repaints before the
+        // new partition is loaded. Never promote a ready catalog belonging to
+        // the previous subject during that repaint and dirty the new subject's
+        // settings snapshot.
+        state.editor_ui.pending_locale = None;
+        state.editor_ui.locale_persistence_override = None;
         // Back to the same starter a fresh tab paints, so nothing of the
         // previous account survives on screen.
         state.replace_document(op_editor_core::EditorState::starter().doc);
@@ -64,7 +70,10 @@ pub(crate) fn reset_for_new_identity<C: RepaintContext + 'static>(inner: &Rc<Ref
         // user's data, and name an undo that no longer has anything to undo.
         state.editor_ui.dismiss_toast();
         context.host_mut().mark_editor_state_dirty();
-        let _ = context.repaint();
+        // Do not repaint between subject change and partition reload. The
+        // caller reloads account-scoped settings immediately and repaints once
+        // afterward; an intermediate frame would run persistence under the new
+        // subject while the old partition's settings are still in memory.
     }
     crate::collab_sync::reset_for_new_identity();
     // Queued and in-flight credential uploads belong to the previous account;

@@ -72,18 +72,23 @@ const AESTHETIC_QUALITY_GUIDE: &str = r#"AESTHETIC QUALITY BAR:
 
 const RUST_ELEMENT_TOOL_GUIDE: &str = r##"RUST MCP ELEMENT TOOL COMPATIBILITY:
 - This Rust MCP server does not expose the TS `add_*_v1` element-tool family unless those exact tools appear in tools/list. Do not call `add_*` tools just because older prompt text or examples mention them.
-- For custom UI trees, use `batch_design` with the TS operations DSL in the `operations` argument. Supported writes: `binding=I(parent, nodeJson)` for inserts, plus one-at-a-time `U(nodeId, patchJson)`, `D(nodeId)`, `M(nodeId, parent, index?)`, `binding=C(sourceId, parent, overrides?)`, `binding=R(nodeId, nodeJson)`, and `binding=G(slotIdOrBinding, "search"|"generate", prompt[, "append"])` refine operations. The default 3-argument G is strict slot-fill: its target must exist and have zero children. The explicit fourth argument `"append"` is accepted only on a parent that declares layout `"horizontal"` or `"vertical"`; it never overlays a layout-none/omitted parent. Size the appended binding with `U()` in the same batch.
-- Parent can be `null` for the active page root, a previous binding name, or one real existing parent id. The node JSON is canonical PenNode JSON; omit `id` if you do not care, because Rust remaps inserted ids.
+- CREATE custom UI trees with `batch_design.script` (script-first). The sandboxed JavaScript program may call only `I(parent, nodeObject)` for custom PenNodes and `K("starter/<id>"|"shadcn/<id>"|"<kit>/<component>", parent, overrides?)` for UIKit components. Use loops, helpers, and data arrays inside the script; bindings are ordinary JavaScript variables whose returned node ids can be used by later edit batches.
+- `parent` may be `null` for the active page root, a previous `I()`/`K()` result, or one real existing parent id. Node objects use canonical PenNode fields and may omit `id`, because Rust remaps inserted ids.
+- Use `batch_design.operations` ONLY to edit existing nodes after inspection or verification. Supported edit/refine operations are one-at-a-time `U(nodeId, patchJson)`, `D(nodeId)`, `M(nodeId, parent, index?)`, `binding=C(sourceId, parent, overrides?)`, `binding=R(nodeId, nodeJson)`, and `binding=G(slotIdOrBinding, "search"|"generate", prompt[, "append"])`. Do not create fresh UI trees with `I()` in operations.
+- The default 3-argument `G` is strict slot-fill: its target must exist and have zero children. The explicit fourth argument `"append"` is accepted only on a parent that declares layout `"horizontal"` or `"vertical"`; it never overlays a layout-none/omitted parent. Size the appended binding with `U()` in the same edit batch.
 - `U` currently patches geometry/name/fill fields; use dedicated `set_node_*` tools for text, rotation, stroke, font, effects, and other specialized fields.
 
 Example:
-root=I(null, {"type":"frame","name":"Page","width":1200,"height":800,"layout":"vertical","gap":24,"fill":"#ffffff"})
-hero=I(root, {"type":"frame","name":"Hero","width":"fill_container","height":360,"layout":"vertical","gap":16})
-title=I(hero, {"type":"text","name":"Headline","content":"Welcome Back","width":"fill_container","height":64,"fontSize":48,"fontWeight":700})
+`batch_design({script: `
+const root = I(null, {type:"frame",name:"Page",width:1200,height:800,layout:"vertical",gap:24,fill:"#ffffff"});
+const hero = I(root, {type:"frame",name:"Hero",width:"fill_container",height:360,layout:"vertical",gap:16});
+I(hero, {type:"text",name:"Headline",content:"Welcome Back",width:"fill_container",height:64,fontSize:48,fontWeight:700});
+K("shadcn/btn-primary", hero, {label:"Get started"});
+`})`
 
 Light/dark handling:
 - Inspect `get_variables` / `get_active_theme` first when the document already defines theme axes.
-- Use variable refs such as `$color-bg`, `$color-text`, and `$color-surface` when the document provides them.
+- Use variable refs such as `$--background`, `$--foreground`, and `$--card` when the document provides them.
 - If the user explicitly asks for a one-off dark or light design and no variables exist, use concrete high-contrast fills and text colors directly."##;
 
 const DEFAULT_DESIGN_MD: &str = "No design.md loaded in the current document.";

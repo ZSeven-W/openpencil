@@ -1,5 +1,6 @@
 pub mod cascade;
 mod cascade_conditions;
+mod cascade_display;
 
 pub use cascade_conditions::MediaQueryError;
 mod cascade_parser;
@@ -130,6 +131,7 @@ mod cascade_tests {
     #[test]
     fn supports_evaluates_boolean_declarations_and_selectors() {
         let css = "@supports (display:grid) and selector(.card > span:first-child){p{color:red}}\
+            @supports (display:inline flex){p{font-style:italic}}\
             @supports (display:nonsense){p{color:blue}}\
             @supports (unknown-prop:x) or (position:absolute){p{display:block}}\
             @supports not (unknown-prop:x){p{visibility:hidden}}\
@@ -140,6 +142,7 @@ mod cascade_tests {
         let node = el("p", "", "");
         let style = compute_style(&[&node], &rules, None, 16.0);
         assert_eq!(style.get("color"), Some("red"));
+        assert_eq!(style.get("font-style"), Some("italic"));
         assert_eq!(style.get("display"), Some("block"));
         assert_eq!(style.get("visibility"), Some("hidden"));
         assert_eq!(style.get("opacity"), None);
@@ -257,6 +260,55 @@ mod cascade_tests {
         assert_eq!(style.get("color"), Some("red"));
         assert_eq!(style.get("display"), Some("block"));
         assert_eq!(style.get("opacity"), None);
+    }
+
+    #[test]
+    fn display_values_use_browser_computed_serialization() {
+        for (specified, expected) in [
+            ("block flow", "block"),
+            ("inline flow", "inline"),
+            ("block flow-root", "flow-root"),
+            ("inline flow-root", "inline-block"),
+            ("block flex", "flex"),
+            ("inline flex", "inline-flex"),
+            ("block grid", "grid"),
+            ("inline grid", "inline-grid"),
+            ("block table", "table"),
+            ("inline table", "inline-table"),
+            ("inline ruby", "ruby"),
+            ("FLOW BLOCK", "block"),
+            ("FLEX", "flex"),
+            ("NONE", "none"),
+            ("INLINE-BLOCK", "inline-block"),
+        ] {
+            let node = el("div", "", &format!("display:{specified}"));
+            assert_eq!(
+                compute_style(&[&node], &[], None, 16.0).get("display"),
+                Some(expected),
+                "specified display: {specified}"
+            );
+        }
+
+        let invalid = el("div", "", "display:flex;display:nonsense");
+        assert_eq!(
+            compute_style(&[&invalid], &[], None, 16.0).get("display"),
+            Some("flex")
+        );
+        let invalid_variable = el("div", "", "--layout:nonsense;display:var(--layout)");
+        assert_eq!(
+            compute_style(&[&invalid_variable], &[], None, 16.0).get("display"),
+            Some("inline")
+        );
+        let uppercase_variable = el("div", "", "--layout:inline flex;display:VAR(--layout)");
+        assert_eq!(
+            compute_style(&[&uppercase_variable], &[], None, 16.0).get("display"),
+            Some("inline-flex")
+        );
+        let embedded_name = el("div", "", "display:flex;display:invalidvar(--layout)");
+        assert_eq!(
+            compute_style(&[&embedded_name], &[], None, 16.0).get("display"),
+            Some("flex")
+        );
     }
 
     #[test]

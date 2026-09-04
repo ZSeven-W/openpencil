@@ -185,6 +185,37 @@ pub fn paint_opencode_logo(
     );
 }
 
+/// DeepSeek Harness logo — PLACEHOLDER primitive, deliberately NOT
+/// the official DeepSeek whale mark (the brand glyph is not shipped
+/// here, same policy as OpenCode's primitive above). Abstract
+/// geometric mark in a 24×24 viewBox: a stroked diamond frame with a
+/// filled centre dot, drawn from basic backend primitives so it
+/// renders on every backend. `size` is the side length.
+pub fn paint_deepseek_harness_logo(
+    backend: &mut dyn RenderBackend,
+    top_left: Point2D,
+    size: f32,
+    color: Color,
+) {
+    let s = size / 24.0;
+    let x = top_left.x;
+    let y = top_left.y;
+    // Diamond frame: vertices (12,4) (20,12) (12,20) (4,12), stroked.
+    let diamond = [
+        Point2D::new(x + 12.0 * s, y + 4.0 * s),
+        Point2D::new(x + 20.0 * s, y + 12.0 * s),
+        Point2D::new(x + 12.0 * s, y + 20.0 * s),
+        Point2D::new(x + 4.0 * s, y + 12.0 * s),
+    ];
+    backend.stroke_polygon(&diamond, color, 2.0 * s);
+    // Centre dot r=2.5 at (12,12).
+    let dot = Rect {
+        origin: Point2D::new(x + (12.0 - 2.5) * s, y + (12.0 - 2.5) * s),
+        size: Point2D::new(5.0 * s, 5.0 * s),
+    };
+    backend.fill_oval(dot, color);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

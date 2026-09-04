@@ -1,6 +1,11 @@
 #[cfg(all(
     feature = "native",
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
+    any(
+        target_os = "ios",
+        all(target_os = "linux", not(target_env = "ohos")),
+        target_os = "macos",
+        target_os = "windows"
+    )
 ))]
 use std::sync::Mutex;
 
@@ -8,7 +13,12 @@ use std::sync::Mutex;
     test,
     all(
         feature = "native",
-        any(target_os = "linux", target_os = "macos", target_os = "windows")
+        any(
+            target_os = "ios",
+            all(target_os = "linux", not(target_env = "ohos")),
+            target_os = "macos",
+            target_os = "windows"
+        )
     )
 ))]
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -16,22 +26,47 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
     test,
     all(
         feature = "native",
-        any(target_os = "linux", target_os = "macos", target_os = "windows")
+        any(
+            target_os = "ios",
+            all(target_os = "linux", not(target_env = "ohos")),
+            target_os = "macos",
+            target_os = "windows"
+        )
     )
 ))]
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::{DeviceStaticKey, KeyStoreError, StaticKeyStore};
 
-#[cfg(all(feature = "native", any(target_os = "linux", target_os = "macos")))]
+#[cfg(all(
+    feature = "native",
+    any(
+        all(target_os = "linux", not(target_env = "ohos")),
+        target_os = "macos"
+    )
+))]
+// Desktop compatibility identifier. Renaming it without a migration would
+// silently rotate existing desktop Noise identities; mobile stores use their
+// explicit `tech.zseven.openpencil` identifiers instead.
 const KEYRING_SERVICE: &str = "app.openpencil.collaboration";
-#[cfg(all(feature = "native", any(target_os = "linux", target_os = "macos")))]
+#[cfg(all(
+    feature = "native",
+    any(
+        all(target_os = "linux", not(target_env = "ohos")),
+        target_os = "macos"
+    )
+))]
 const KEYRING_ACCOUNT: &str = "device-noise-x25519-v1";
 #[cfg(any(
     test,
     all(
         feature = "native",
-        any(target_os = "linux", target_os = "macos", target_os = "windows")
+        any(
+            target_os = "ios",
+            all(target_os = "linux", not(target_env = "ohos")),
+            target_os = "macos",
+            target_os = "windows"
+        )
     )
 ))]
 const STORED_KEY_PREFIX: &str = "op-noise-x25519-v1:";
@@ -39,22 +74,32 @@ const STORED_KEY_PREFIX: &str = "op-noise-x25519-v1:";
     test,
     all(
         feature = "native",
-        any(target_os = "linux", target_os = "macos", target_os = "windows")
+        any(
+            target_os = "ios",
+            all(target_os = "linux", not(target_env = "ohos")),
+            target_os = "macos",
+            target_os = "windows"
+        )
     )
 ))]
 const PRIVATE_KEY_BYTES: usize = 32;
 
 #[cfg(all(
     feature = "native",
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
+    any(
+        target_os = "ios",
+        all(target_os = "linux", not(target_env = "ohos")),
+        target_os = "macos",
+        target_os = "windows"
+    )
 ))]
 static PROCESS_CREDENTIAL_LOCK: Mutex<()> = Mutex::new(());
 
 /// Stores the device Noise static key in the operating system's credential
 /// store.
 ///
-/// macOS uses Keychain, Windows uses Credential Manager, and Linux uses the
-/// desktop Secret Service. A locked, inaccessible, ambiguous, or malformed
+/// iOS and macOS use Keychain, Windows uses Credential Manager, and Linux uses
+/// the desktop Secret Service. A locked, inaccessible, ambiguous, or malformed
 /// store fails closed. Hosts that need the hardened file fallback can select
 /// [`crate::FileKeyStore`] explicitly when no platform credential service is
 /// available.
@@ -71,7 +116,12 @@ impl StaticKeyStore for OsKeyStore {
     fn load_or_generate(&self) -> Result<DeviceStaticKey, KeyStoreError> {
         #[cfg(not(all(
             feature = "native",
-            any(target_os = "linux", target_os = "macos", target_os = "windows")
+            any(
+                target_os = "ios",
+                all(target_os = "linux", not(target_env = "ohos")),
+                target_os = "macos",
+                target_os = "windows"
+            )
         )))]
         {
             Err(KeyStoreError::UnsupportedPlatform)
@@ -79,7 +129,12 @@ impl StaticKeyStore for OsKeyStore {
 
         #[cfg(all(
             feature = "native",
-            any(target_os = "linux", target_os = "macos", target_os = "windows")
+            any(
+                target_os = "ios",
+                all(target_os = "linux", not(target_env = "ohos")),
+                target_os = "macos",
+                target_os = "windows"
+            )
         ))]
         {
             // Platform stores do not all serialize same-entry operations
@@ -98,7 +153,12 @@ impl StaticKeyStore for OsKeyStore {
     test,
     all(
         feature = "native",
-        any(target_os = "linux", target_os = "macos", target_os = "windows")
+        any(
+            target_os = "ios",
+            all(target_os = "linux", not(target_env = "ohos")),
+            target_os = "macos",
+            target_os = "windows"
+        )
     )
 ))]
 pub(crate) trait CredentialEntry {
@@ -110,7 +170,12 @@ pub(crate) trait CredentialEntry {
     test,
     all(
         feature = "native",
-        any(target_os = "linux", target_os = "macos", target_os = "windows")
+        any(
+            target_os = "ios",
+            all(target_os = "linux", not(target_env = "ohos")),
+            target_os = "macos",
+            target_os = "windows"
+        )
     )
 ))]
 fn load_or_generate_from(entry: &impl CredentialEntry) -> Result<DeviceStaticKey, KeyStoreError> {
@@ -132,7 +197,12 @@ fn load_or_generate_from(entry: &impl CredentialEntry) -> Result<DeviceStaticKey
     test,
     all(
         feature = "native",
-        any(target_os = "linux", target_os = "macos", target_os = "windows")
+        any(
+            target_os = "ios",
+            all(target_os = "linux", not(target_env = "ohos")),
+            target_os = "macos",
+            target_os = "windows"
+        )
     )
 ))]
 fn encode_private_key(key: &DeviceStaticKey) -> Zeroizing<String> {
@@ -148,7 +218,12 @@ fn encode_private_key(key: &DeviceStaticKey) -> Zeroizing<String> {
     test,
     all(
         feature = "native",
-        any(target_os = "linux", target_os = "macos", target_os = "windows")
+        any(
+            target_os = "ios",
+            all(target_os = "linux", not(target_env = "ohos")),
+            target_os = "macos",
+            target_os = "windows"
+        )
     )
 ))]
 fn decode_private_key(encoded: &str) -> Result<DeviceStaticKey, KeyStoreError> {
@@ -172,10 +247,22 @@ fn decode_private_key(encoded: &str) -> Result<DeviceStaticKey, KeyStoreError> {
     result
 }
 
-#[cfg(all(feature = "native", any(target_os = "linux", target_os = "macos")))]
+#[cfg(all(
+    feature = "native",
+    any(
+        all(target_os = "linux", not(target_env = "ohos")),
+        target_os = "macos"
+    )
+))]
 struct KeyringEntry(keyring::Entry);
 
-#[cfg(all(feature = "native", any(target_os = "linux", target_os = "macos")))]
+#[cfg(all(
+    feature = "native",
+    any(
+        all(target_os = "linux", not(target_env = "ohos")),
+        target_os = "macos"
+    )
+))]
 impl KeyringEntry {
     fn new() -> Result<Self, KeyStoreError> {
         keyring::Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
@@ -184,7 +271,13 @@ impl KeyringEntry {
     }
 }
 
-#[cfg(all(feature = "native", any(target_os = "linux", target_os = "macos")))]
+#[cfg(all(
+    feature = "native",
+    any(
+        all(target_os = "linux", not(target_env = "ohos")),
+        target_os = "macos"
+    )
+))]
 impl CredentialEntry for KeyringEntry {
     fn load(&self) -> Result<Option<Zeroizing<String>>, KeyStoreError> {
         match self.0.get_password() {
@@ -199,7 +292,13 @@ impl CredentialEntry for KeyringEntry {
     }
 }
 
-#[cfg(all(feature = "native", any(target_os = "linux", target_os = "macos")))]
+#[cfg(all(
+    feature = "native",
+    any(
+        all(target_os = "linux", not(target_env = "ohos")),
+        target_os = "macos"
+    )
+))]
 fn map_keyring_error(error: keyring::Error) -> KeyStoreError {
     match error {
         keyring::Error::NoStorageAccess(_) => KeyStoreError::PlatformStoreAccessDenied,
@@ -214,7 +313,7 @@ fn map_keyring_error(error: keyring::Error) -> KeyStoreError {
     }
 }
 
-#[cfg(all(feature = "native", target_os = "linux"))]
+#[cfg(all(feature = "native", target_os = "linux", not(target_env = "ohos")))]
 fn map_platform_failure(error: &(dyn std::error::Error + Send + Sync + 'static)) -> KeyStoreError {
     if matches!(
         error.downcast_ref::<secret_service::Error>(),
@@ -231,8 +330,16 @@ fn map_platform_failure(_: &(dyn std::error::Error + Send + Sync + 'static)) -> 
     KeyStoreError::PlatformStoreFailure
 }
 
-#[cfg(all(feature = "native", any(target_os = "linux", target_os = "macos")))]
+#[cfg(all(
+    feature = "native",
+    any(
+        all(target_os = "linux", not(target_env = "ohos")),
+        target_os = "macos"
+    )
+))]
 type PlatformEntry = KeyringEntry;
+#[cfg(all(feature = "native", target_os = "ios"))]
+type PlatformEntry = crate::apple_key_store::AppleKeychainEntry;
 #[cfg(all(feature = "native", target_os = "windows"))]
 type PlatformEntry = crate::windows_key_store::WindowsCredentialEntry;
 
@@ -242,6 +349,34 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
+
+    #[test]
+    fn ios_keychain_contract_is_device_only_and_uses_the_canonical_service() {
+        let source = include_str!("apple_key_store.rs");
+        assert!(source.contains("tech.zseven.openpencil.collaboration"));
+        assert!(source.contains("kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly"));
+        assert!(source.contains("kSecAttrSynchronizable"));
+        assert!(source.contains("CFBoolean::false_value()"));
+        assert!(source.contains("SecItemAdd"));
+        assert!(source.contains("errSecDuplicateItem"));
+        assert!(!source.contains("SecItemUpdate"));
+        assert!(source.contains("ERR_SEC_INTERACTION_NOT_ALLOWED"));
+        assert!(source.contains("PlatformStoreAccessDenied"));
+        assert!(!source.contains("PlatformStoreUnavailable"));
+        assert!(!source.contains("app.openpencil.collaboration"));
+    }
+
+    #[cfg(all(
+        feature = "native",
+        any(
+            all(target_os = "linux", not(target_env = "ohos")),
+            target_os = "macos"
+        )
+    ))]
+    #[test]
+    fn desktop_keyring_keeps_its_legacy_identity_until_an_explicit_migration() {
+        assert_eq!(KEYRING_SERVICE, "app.openpencil.collaboration");
+    }
 
     #[derive(Default)]
     struct FakeEntry {
@@ -352,13 +487,19 @@ mod tests {
         assert_eq!(entry.stores.lock().unwrap().len(), 1);
     }
 
-    #[cfg(all(feature = "native", any(target_os = "linux", target_os = "macos")))]
+    #[cfg(all(
+        feature = "native",
+        any(
+            all(target_os = "linux", not(target_env = "ohos")),
+            target_os = "macos"
+        )
+    ))]
     #[test]
     fn native_entry_builder_is_configured_without_accessing_the_store() {
         KeyringEntry::new().unwrap();
     }
 
-    #[cfg(all(feature = "native", target_os = "linux"))]
+    #[cfg(all(feature = "native", target_os = "linux", not(target_env = "ohos")))]
     #[test]
     fn linux_absent_secret_service_is_distinct_from_access_or_runtime_failures() {
         assert!(matches!(

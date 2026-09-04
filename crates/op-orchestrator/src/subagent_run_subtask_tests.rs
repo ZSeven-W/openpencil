@@ -3,6 +3,52 @@
 use super::*;
 
 #[test]
+fn run_subtask_rejects_unsolicited_images_for_a_text_only_xhs_card() {
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
+        r#"I(null, {"type":"frame","name":"Cover Card","width":1080,"height":1440,
+             "layout":"none","children":[
+               {"type":"image","name":"Background","width":1080,"height":1440,
+                "imageSearchQuery":"json syntax","imagePrompt":"a photographed JSON reference sheet"},
+               {"type":"text","name":"Title","x":64,"y":64,
+                "content":"装了这么多 DSH 插件，到底怎么管？","fontSize":72}
+             ]});"#
+            .into(),
+    )]);
+    let mut request = req();
+    request.prompt =
+        "用这个文字做一张符合小红书封面的卡片：装了这么多 DSH 插件，到底怎么管？".into();
+    let mut sink = VecDocSink::new();
+
+    let outcome = block_on(run_subtask(
+        &subtask(),
+        &plan(),
+        &request,
+        &llm,
+        &mut sink,
+        &AbortFlag::new(),
+        false,
+        false,
+    ));
+
+    assert_eq!(outcome.node_count, 0);
+    assert!(
+        outcome
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("unsolicited-card-image")),
+        "{:?}",
+        outcome.error
+    );
+    assert!(
+        !sink
+            .applied
+            .iter()
+            .any(|command| matches!(command, EditorCommand::InsertSubtree { .. })),
+        "the rejected image-backed card must never reach the canvas"
+    );
+}
+
+#[test]
 fn run_subtask_hoists_node_state_before_insert_subtree() {
     // A frame whose LLM output carries a `state` block should emit
     // a MergeAppState command BEFORE the InsertSubtree, and the inserted
@@ -142,7 +188,7 @@ fn run_subtask_binds_generated_exact_color_to_document_variable() {
     };
     assert_eq!(
         op_editor_core::fills::first_solid_fill_hex(&nodes[0]),
-        Some("$color-bg-deep")
+        Some("$--background")
     );
 }
 
@@ -175,7 +221,7 @@ fn run_subtask_binds_generated_near_color_to_document_variable() {
     };
     assert_eq!(
         op_editor_core::fills::first_solid_fill_hex(&nodes[0]),
-        Some("$color-surface-3")
+        Some("$--accent")
     );
 }
 

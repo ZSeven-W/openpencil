@@ -93,3 +93,52 @@ fn chrome_rects_paint_at_expected_coordinates() {
         "background unchanged"
     );
 }
+
+#[test]
+fn translucent_rects_apply_color_alpha_once() {
+    let mut surface =
+        skia_safe::surfaces::raster_n32_premul((32, 16)).expect("raster_n32_premul allocated");
+    surface.canvas().clear(skia_safe::Color::WHITE);
+
+    let mut backend = NativeBackend::with_dpi(1.0);
+    let canvas = surface.canvas();
+    backend.fill_rect(
+        canvas,
+        Rect::xywh(0.0, 0.0, 8.0, 8.0),
+        Color::BLACK.with_alpha(0.06),
+    );
+    backend.stroke_rect(
+        canvas,
+        Rect::xywh(16.0, 2.0, 8.0, 8.0),
+        Color::BLACK.with_alpha(0.5),
+        4.0,
+    );
+
+    let stride = 32 * 4;
+    let mut pixels = vec![0u8; stride * 16];
+    let info = skia_safe::ImageInfo::new(
+        (32, 16),
+        skia_safe::ColorType::RGBA8888,
+        skia_safe::AlphaType::Premul,
+        None,
+    );
+    assert!(surface.read_pixels(&info, &mut pixels, stride, (0, 0)));
+
+    let hover_fill = pixel_at(&pixels, stride, 4, 4);
+    assert!(
+        (239..=241).contains(&hover_fill[0]),
+        "6% black over white should remain visibly gray, got {hover_fill:?}"
+    );
+    assert_eq!(hover_fill[0], hover_fill[1]);
+    assert_eq!(hover_fill[1], hover_fill[2]);
+    assert_eq!(hover_fill[3], 255);
+
+    let translucent_stroke = pixel_at(&pixels, stride, 16, 6);
+    assert!(
+        (126..=129).contains(&translucent_stroke[0]),
+        "50% black over white should blend once, got {translucent_stroke:?}"
+    );
+    assert_eq!(translucent_stroke[0], translucent_stroke[1]);
+    assert_eq!(translucent_stroke[1], translucent_stroke[2]);
+    assert_eq!(translucent_stroke[3], 255);
+}

@@ -1,0 +1,50 @@
+[package]
+name       = "op-engine-napi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish    = false
+description = "OpenHarmony (OHOS) NAPI marshalling layer for the OpenPencil engine player (op-engine-ffi)"
+
+[lib]
+# The ArkTS import specifier IS the library file name
+# (`import native from 'libopenpencil.so'`), so the lib name is part of the
+# ABI contract with `packaging/harmony`. rlib so the host-triple contract
+# tests link the same code.
+name       = "openpencil"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+# EGL/GLES rendering (forwards to the engine's `gl`). NOTE: the engine's GL
+# surface backend is still `target_os = "android"`-gated inside
+# op-engine-ffi/jian-skia, so on OHOS this currently compiles but yields no
+# GPU surface — see README "UNVERIFIED-UNTIL-NDK".
+gl = ["op-engine-ffi/gl", "op-engine-jni/gl"]
+# Full-editor mode (forwards to the engine's editor feature).
+editor = ["op-engine-ffi/editor", "op-engine-jni/editor"]
+# Production release lane: require the digest-pinned Skia archive instead of
+# downloading or compiling one.
+pinned-skia-binaries = [
+  "op-engine-ffi/pinned-skia-binaries",
+  "op-engine-jni/pinned-skia-binaries",
+]
+# Local-only authentication for OHOS editor builds (debug profile only).
+mobile-auth-dev = ["op-engine-ffi/mobile-auth-dev", "op-engine-jni/mobile-auth-dev"]
+
+[dependencies]
+op-engine-ffi = { path = "../op-engine-ffi" }
+# The engine-thread queue + tombstoning handle registry are platform-free
+# (pure `std`) and are the SINGLE source for both mobile bindings. They live
+# in the JNI crate today; this crate deliberately reuses them instead of
+# forking a byte-identical twin (the workspace has been bitten by drifted
+# copy-paste twins before — see crates/CLAUDE.md "Shared host logic").
+op-engine-jni = { path = "../op-engine-jni" }
+
+[target.'cfg(all(target_os = "linux", target_env = "ohos"))'.dependencies]
+# ohos-rs (https://github.com/ohos-rs/ohos-rs) — the OpenHarmony fork of
+# napi-rs. `compat-mode` is required for `register_module_exports`, which is
+# how the XComponent object is picked out of the module exports at load time.
+napi-ohos        = { version = "1.2.0", features = ["compat-mode"] }
+napi-derive-ohos = "1.2.0"

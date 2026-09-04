@@ -31,7 +31,7 @@ pub(super) fn action_model(
     };
     CollabPanelActionModel {
         action,
-        label: op_i18n::translate(ui.locale, key).to_string(),
+        label: op_i18n::translate(ui.effective_locale(), key).to_string(),
         primary,
     }
 }

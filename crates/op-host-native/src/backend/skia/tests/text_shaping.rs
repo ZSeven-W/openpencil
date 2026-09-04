@@ -50,10 +50,14 @@ fn explicit_family_typeface_lookup_is_cached() {
 #[test]
 fn skia_measure_matches_native_weighted_font_resolution() {
     let _guard = crate::font_registry_test_support::lock();
+    // Same set as `font_fallback_tests::register_test_bundled_fonts` —
+    // registration is process-global and first-call-wins, so the two lists
+    // must agree or the registered set depends on test order.
     jian_skia::register_bundled_fonts(vec![
         include_bytes!("../../../../../op-host-desktop/assets/fonts/CormorantGaramond-VF.ttf")
             .to_vec(),
         include_bytes!("../../../../../op-host-desktop/assets/fonts/Inter-VF.ttf").to_vec(),
+        include_bytes!("../../../../../op-host-desktop/assets/fonts/Outfit-VF.ttf").to_vec(),
     ]);
 
     struct Case {

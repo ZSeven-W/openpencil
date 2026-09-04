@@ -49,6 +49,8 @@ op-host-services = { path = "../op-host-services" }
 op-ai = { path = "../op-ai" }
 # System prompt for the design agent loop (parity with the desktop design loop).
 op-ai-skills = { path = "../op-ai-skills" }
+# Image-slot enrichment — collect targets, fetch URLs, apply results.
+op-image-enrich = { path = "../op-image-enrich", features = ["net"] }
 # `futures` for `BoxStream` + `mpsc` channels in the LlmClient impl.
 futures = "0.3"
 # `tokio` for the runtime that `Orchestrator::run` (async) runs on.

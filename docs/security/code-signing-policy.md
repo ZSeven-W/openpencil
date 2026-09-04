@@ -7,7 +7,8 @@ and the rules the project follows for code signing.
 
 - **Windows:** the NSIS installer `OpenPencil-<version>-<arch>-win-setup.exe`
   (x64 and arm64), containing the desktop app `openpencil-desktop.exe`, the
-  CLI `op.exe`, and the bundled ANGLE runtime DLLs.
+  CLI `op.exe`, the bundled ANGLE runtime DLLs, and an unmodified
+  Microsoft-signed Visual C++ Redistributable prerequisite.
 - **macOS:** the `.dmg` disk images and the app bundle inside them
   (Developer ID signing + notarization when release certificates are
   configured).
@@ -16,10 +17,15 @@ and the rules the project follows for code signing.
 
 Every release artifact is produced by the public GitHub Actions workflow
 [`.github/workflows/rust-release.yml`](../../.github/workflows/rust-release.yml)
-from a version tag on this repository. Binaries are compiled from the tagged
-source, packaged, checksummed into `SHA256SUMS.txt`, attested with a signed
-SLSA build-provenance attestation, and uploaded to GitHub Releases directly by
-CI. No human handles or modifies the binaries between build and publication.
+from a version tag on this repository. OpenPencil binaries are compiled from
+the tagged source, packaged, checksummed into `SHA256SUMS.txt`, attested with a
+signed SLSA build-provenance attestation, and uploaded to GitHub Releases
+directly by CI. The Windows packaging job additionally downloads the Visual C++
+Redistributable from a versioned Microsoft URL and verifies its pinned SHA-256
+and Microsoft Authenticode signer before embedding it unchanged. The release
+also fails before compiling Windows binaries if an installed MSVC toolset is
+newer than that pinned Runtime. No human handles or modifies the binaries
+between build and publication.
 
 Anyone can verify an asset's origin:
 
@@ -34,7 +40,11 @@ gh attestation verify <downloaded-file> --repo ZSeven-W/openpencil
   [SignPath Foundation](https://signpath.org).
 - We only sign artifacts built by the release workflow of this repository
   from source code in this repository (including its vendored submodules,
-  which the same team maintains). We never sign third-party binaries or
+  which the same team maintains). When present, the Windows installer's outer
+  signature covers the complete installer, including the unmodified
+  Microsoft-signed Visual C++ prerequisite; it does not replace Microsoft's
+  nested signature or claim that prerequisite as OpenPencil code. We never
+  apply an OpenPencil signature to a standalone third-party binary or to
   locally built artifacts.
 - Signing is performed in CI as part of the release pipeline; signing
   credentials are never exported to developer machines.

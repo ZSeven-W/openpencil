@@ -81,6 +81,7 @@ mod conversion_tools_tests;
 mod copy_node_tests;
 #[cfg(feature = "debug-tools")]
 pub mod debug_tools;
+pub mod design_agent_prompt_tool;
 pub mod design_md_tools;
 #[cfg(test)]
 mod design_md_tools_tests;
@@ -152,6 +153,7 @@ mod theme_presets_tests;
 pub mod tools;
 #[cfg(test)]
 mod tools_tests;
+pub mod ui_kit_tool;
 mod update_node_data;
 #[cfg(test)]
 mod update_node_data_tests;
@@ -212,6 +214,7 @@ pub use debug_tools::{
 pub fn debug_tools_enabled() -> bool {
     false
 }
+pub use design_agent_prompt_tool::{get_design_agent_prompt_snapshot, GetDesignAgentPrompt};
 pub use design_md_tools::{
     export_design_md_snapshot, get_design_md_snapshot, set_design_md_snapshot, ExportDesignMd,
     GetDesignMd, SetDesignMd,
@@ -262,6 +265,7 @@ pub use selected_ops_tools::{
     DuplicateSelected, GroupSelected, NudgeSelected, PasteClipboard, ReorderSelected,
     UngroupSelected,
 };
+pub use ui_kit_tool::{list_ui_kits_snapshot, ListUiKits};
 pub mod spawn_agents_error;
 pub mod spawn_agents_tool;
 pub use spawn_agents_tool::{spawn_agents_snapshot, SpawnAgents, SpawnSpec};

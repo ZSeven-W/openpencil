@@ -18,6 +18,21 @@ use op_editor_core::NodeId;
 use op_editor_ui::widgets::drag_flow;
 use op_editor_ui::widgets::CanvasNodeDragOverlay;
 
+#[cfg(test)]
+thread_local! {
+    static DROP_INDEX_BUILD_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+pub(in crate::widget_host) fn reset_drop_index_build_count() {
+    DROP_INDEX_BUILD_COUNT.with(|count| count.set(0));
+}
+
+#[cfg(test)]
+pub(in crate::widget_host) fn drop_index_build_count() -> usize {
+    DROP_INDEX_BUILD_COUNT.with(std::cell::Cell::get)
+}
+
 impl WidgetHostNative {
     /// Select-tool press over a resolved root-to-deepest hit path.
     /// A plain click selects the current level's primary node; a
@@ -31,6 +46,7 @@ impl WidgetHostNative {
         x: f32,
         y: f32,
         text_edit_was_active: bool,
+        viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
         let Some(resolved) = core_drag::resolve_canvas_press(
@@ -59,6 +75,13 @@ impl WidgetHostNative {
             if resolved.selected_crop_is_deepest && self.enter_selected_image_crop_edit() {
                 return true;
             }
+            if core_drag::jump_to_deepest_text_edit(&mut self.editor_state, &hit_path) {
+                self.editor_state.ui.text_edit_input.touch(self.now_ms);
+                self.last_hover_probe = None;
+                self.scroll_layer_panel_selection_into_view(viewport_width, viewport_height);
+                self.mark_dirty();
+                return true;
+            }
             if let Some(secondary) = resolved.targets.secondary_under_pointer {
                 core_drag::enter_child_scope(
                     &mut self.editor_state,
@@ -68,7 +91,7 @@ impl WidgetHostNative {
                 // The native 3 px probe cache would otherwise retain the old
                 // level until the mouse moved again.
                 self.last_hover_probe = None;
-                self.scroll_layer_panel_selection_into_view(viewport_height);
+                self.scroll_layer_panel_selection_into_view(viewport_width, viewport_height);
                 self.mark_dirty();
                 return true;
             }
@@ -87,7 +110,7 @@ impl WidgetHostNative {
             self.shift_held,
             &hit_path,
         );
-        self.scroll_layer_panel_selection_into_view(viewport_height);
+        self.scroll_layer_panel_selection_into_view(viewport_width, viewport_height);
         if should_start_drag {
             self.start_node_drag(x, y);
         }
@@ -101,6 +124,7 @@ impl WidgetHostNative {
     /// drag undoes as one step.
     pub(in crate::widget_host) fn start_node_drag(&mut self, x: f32, y: f32) {
         self.editor_state.commit_history();
+        self.canvas_drop_index = None;
         self.option_drag_source_ids.clear();
         self.node_drag = Some(NodeDragState {
             last_screen_x: x,
@@ -133,26 +157,35 @@ impl WidgetHostNative {
             return;
         }
         self.refresh_layout_scene();
-        let before_scene = self.layout_scene.clone();
         let id = self.editor_state.selection.anchor.clone();
-        let Some(preview) = drag_flow::apply_live_drag_preview(
+        if self.ensure_canvas_drop_index(&id).is_none() {
+            self.editor_state.editor_ui.canvas_drop_indicator = None;
+            return;
+        }
+        let Some(index) = self.canvas_drop_index.as_ref() else {
+            return;
+        };
+        let Some(preview) = drag_flow::apply_live_drag_preview_indexed(
             &mut self.editor_state,
             &self.layout_scene,
+            index,
             &id,
             drag.total_dx,
             drag.total_dy,
-            &self.option_drag_source_ids,
         ) else {
             return;
         };
         if preview.mutated {
+            self.canvas_drop_index = None;
             // Drag history advances the document revision when the gesture
             // starts, before this live reorder mutates the tree. Invalidate the
             // revision-keyed scene cache so sibling reflow observes the new
             // order instead of reusing the pre-mutation scene.
             self.scene_cache.invalidate();
             self.mark_dirty();
-            self.start_layout_transition_from_scene_excluding(before_scene, &id);
+            if let Some(before_scene) = preview.before_scene {
+                self.start_layout_transition_from_scene_excluding(before_scene, &id);
+            }
         }
         if let Some(active_drag) = self.node_drag.as_mut() {
             active_drag.overlay_bounds = preview.overlay_bounds;
@@ -194,6 +227,7 @@ impl WidgetHostNative {
             &self.option_drag_source_ids,
         );
         if mutated {
+            self.canvas_drop_index = None;
             // The drag snapshot already consumed this gesture's document
             // revision, so the final tree mutation must invalidate the scene
             // cache explicitly.
@@ -201,5 +235,28 @@ impl WidgetHostNative {
             self.mark_dirty();
         }
         mutated
+    }
+
+    fn ensure_canvas_drop_index(&mut self, dragged_id: &NodeId) -> Option<()> {
+        let matches = self.canvas_drop_index.as_ref().is_some_and(|index| {
+            index.matches(
+                &self.editor_state,
+                &self.layout_scene,
+                dragged_id,
+                &self.option_drag_source_ids,
+            )
+        });
+        if matches {
+            return Some(());
+        }
+        #[cfg(test)]
+        DROP_INDEX_BUILD_COUNT.with(|count| count.set(count.get() + 1));
+        self.canvas_drop_index = drag_flow::build_canvas_drop_index(
+            &self.editor_state,
+            &self.layout_scene,
+            dragged_id,
+            &self.option_drag_source_ids,
+        );
+        self.canvas_drop_index.as_ref().map(|_| ())
     }
 }

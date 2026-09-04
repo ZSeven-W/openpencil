@@ -20,6 +20,10 @@
   <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
+<p align="center">
+  <a href="https://trendshift.io/repositories/24088?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-24088" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/24088" alt="ZSeven-W%2Fopenpencil | Trendshift" width="250" height="55" /></a>
+</p>
+
 <br />
 
 <p align="center">
@@ -28,17 +32,6 @@
   </a>
 </p>
 <p align="center"><sub>Cliquez sur l'image pour regarder la vidéo de démonstration</sub></p>
-
-<br />
-
-<p align="center">
-  <a href="https://github.com/InnerAura/hyperweave" title="Star history rendered with HyperWeave">
-    <img src="./screenshot/openpencil-star-history.svg" alt="OpenPencil star history rendered by HyperWeave" width="100%" />
-  </a>
-</p>
-<p align="center">
-  <sub>The trend above is rendered with <a href="https://github.com/InnerAura/hyperweave"><b>HyperWeave</b></a> — an experimental SVG artifact layer for agents. &nbsp;<a href="https://github.com/InnerAura/hyperweave"><b>Explore&nbsp;→</b></a></sub>
-</p>
 
 ## Pourquoi OpenPencil
 
@@ -110,6 +103,8 @@ Exportez depuis un seul fichier `.op` vers React + Tailwind, HTML + CSS, Vue, Sv
 </table>
 
 ## Installation
+
+**Compiler sur Windows :** [BUILD_WINDOWS.fr.md](./docs/build_windows/BUILD_WINDOWS.fr.md)
 
 **macOS (Homebrew) :**
 
@@ -391,6 +386,7 @@ OpenPencil fait partie d'une famille d'outils en Rust pur, natifs IA, développ�
 
 | Projet | De quoi il s'agit |
 | ------ | ----------------- |
+| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | Plugin DeepSeek Harness pour OpenPencil — aperçus `.op` multi-cadres exacts, un canevas interactif et un éditeur géré avec des outils de conception natifs pour agents, directement dans une conversation. |
 | **[Zode](https://github.com/ZSeven-W/zode)** | Assistant de code open-source natif IA pour votre terminal — une TUI Rust rapide (`ratatui`) qui lit votre code, exécute des commandes, recherche des fichiers et gère git. Pilote OpenPencil via MCP. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | Un runtime asynchrone en Rust pur pour déployer des agents LLM — multi-fournisseurs, capable d'utiliser des outils de bout en bout, permissions structurées, vrai MCP, zéro `unsafe`. Alimente le runtime d'agent intégré d'OpenPencil (`vendor/agent`) et Zode. |
 | **[jian](https://github.com/ZSeven-W/jian)** | Framework UI GPU-Skia en Rust pur — widgets, layout, événements et rechargement à chaud dans une seule stack. Transforme un document déclaratif `.op` en une app native, contrôlable par IA, sans runtime JS, sans DOM, sans Electron. Le framework UI d'OpenPencil (`vendor/jian`). |

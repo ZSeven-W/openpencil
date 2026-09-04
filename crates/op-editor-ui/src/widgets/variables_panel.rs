@@ -239,7 +239,7 @@ impl VariablesPanel {
             rows,
             total_rows,
             theme: theme_for(&state.editor_ui),
-            locale: state.editor_ui.locale,
+            locale: state.editor_ui.effective_locale(),
             chips,
             themes,
             current_axis,

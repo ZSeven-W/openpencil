@@ -1,9 +1,9 @@
 format=1
 target=aarch64-apple-darwin
 artifact=libop_auth.a
-version=0.8.4
+version=0.8.5
 abi=3
 sha256=8ea4a77ad35fca990149925b8995320f09da5216aae0e1bc38eacbec7fbca305
 hardening=op-auth-hardened-v1
-source_revision=74e9f3d5dda851fcb5795c35dc3a506404a2d602
-build_id=op-auth-firstparty-v1-20260811d.a2.99cded9572181a65f08086020701e1aace7fa05353a1d831682fa04872960d76
+source_revision=204956f0e15dfd02af49759bdb2f435dae96fae3
+build_id=openpencil-0.8.5-5a7b834d498b.a3.75c87bc84e0253966eda44ef829ac6dea9946071e6510b5badd9e0e860c73f30

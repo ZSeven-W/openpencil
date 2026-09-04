@@ -76,7 +76,7 @@ fn the_diagnostics_panel_chrome_is_translated_everywhere() {
 fn the_warning_key_family_stays_the_size_the_importer_declares() {
     let expected = ALL_IMPORT_WARNING_CODES.len();
     assert_eq!(
-        expected, 140,
+        expected, 142,
         "update the intentional HTML-import warning catalog size"
     );
     let localized = ALL_IMPORT_WARNING_CODES

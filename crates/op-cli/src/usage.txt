@@ -31,9 +31,9 @@ COMMON COMMANDS:
   op export-frames --output-dir DIR [--format png|jpeg|webp]
                                           export every top-level frame on the
                                           active page, one image per frame
-  op templates [--scene S] [--tag T]        list shipped scene templates
-                                          (tutorial / comparison / carousel /
-                                          slides / …), including 16:9 decks
+  op templates [--scene S] [--tag T]        list scene templates: the shipped
+                                          catalogue plus the templates you
+                                          saved, saved first (user: ids)
   op use-template <id>                      start from a scene template: takes
                                           over a blank starter page, otherwise
                                           appends its boards

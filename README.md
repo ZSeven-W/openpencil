@@ -20,6 +20,10 @@
   <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
+<p align="center">
+  <a href="https://trendshift.io/repositories/24088?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-24088" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/24088" alt="ZSeven-W%2Fopenpencil | Trendshift" width="250" height="55" /></a>
+</p>
+
 <br />
 
 <p align="center">
@@ -29,18 +33,20 @@
 </p>
 <p align="center"><sub>Click the image to watch the demo video</sub></p>
 
-<br />
-
-<p align="center">
-  <a href="https://github.com/InnerAura/hyperweave" title="Star history rendered with HyperWeave">
-    <img src="./screenshot/openpencil-star-history.svg" alt="OpenPencil star history rendered by HyperWeave" width="100%" />
-  </a>
-</p>
-<p align="center">
-  <sub>The trend above is rendered with <a href="https://github.com/InnerAura/hyperweave"><b>HyperWeave</b></a> — an experimental SVG artifact layer for agents. &nbsp;<a href="https://github.com/InnerAura/hyperweave"><b>Explore&nbsp;→</b></a></sub>
-</p>
-
 ## Why OpenPencil
+
+<a href="https://www.infistar.cc/register?aff=LLZC3RLG&amp;ref_source=link" title="Infistar.cc 无限星河">
+  <img src="./screenshot/infistar-sponsor-banner.png" alt="Infistar.cc 无限星河 — 一站式全球大模型 API 服务平台" width="100%" />
+</a>
+
+### [OpenPencil × Infistar.cc 无限星河｜全模型 API · 驱动 AI 原生设计创作](https://www.infistar.cc/register?aff=LLZC3RLG&ref_source=link)
+
+感谢 [Infistar.cc 无限星河](https://www.infistar.cc/register?aff=LLZC3RLG&ref_source=link) 赞助并为 OpenPencil 提供模型服务支持！
+
+- ⚡ **稳定承载复杂设计任务：** 提供企业级高并发通道与多节点冗余，价格低至官方渠道 1 折，稳定支持长任务、流式响应与连续工具调用。
+- 🧠 **一个 API Key 接入主流模型：** 全面支持 ChatGPT、Claude、Gemini、Kimi、GLM、DeepSeek 等模型，兼容 OpenAI、Anthropic 等主流接口，可在 OpenPencil 中灵活配置模型服务。
+- 🎨 **赋能 AI 原生矢量设计：** 适用于提示词生成设计、画布内容修改、多模型协同、图片生成及设计方案迭代，让 AI Agent 更高效地完成从创意到成稿的全过程。
+- 🎁 **OpenPencil 用户专属福利：** 通过 [专属推广链接](https://www.infistar.cc/register?aff=LLZC3RLG&ref_source=link) 注册并完成首次调用，即可领取 **5 美元等值测试额度 / 首充专属优惠**！
 
 <table>
 <tr>
@@ -143,6 +149,8 @@ Design together over authenticated peer-to-peer sessions with a public relay and
 
 ## Install
 
+**Building from source on Windows:** see [BUILD_WINDOWS.md](./docs/build_windows/BUILD_WINDOWS.md)
+
 **macOS (Homebrew):**
 
 ```bash
@@ -158,6 +166,14 @@ scoop install openpencil
 ```
 
 **Linux / Windows direct download:** [GitHub Releases](https://github.com/ZSeven-W/openpencil/releases) — `.exe` (Windows), `.AppImage` / `.deb` (Linux)
+
+The Windows `.exe` installer, both Scoop packages, and the `install-op.ps1`
+CLI installer check and, when needed, service the pinned, Microsoft-signed
+Visual C++ v14 runtime during every install or upgrade. The portable Windows
+`.zip` archives and Windows VSIX packages do not run an elevated system
+installer; install Microsoft's
+[latest supported Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
+before using those artifacts directly.
 
 > Antivirus flagged the Windows installer? That's a known heuristic false positive on new, low-prevalence releases — see [how to verify your download](docs/security/antivirus-false-positives.md).
 
@@ -477,6 +493,7 @@ OpenPencil is part of a family of pure-Rust, AI-native tools from **[ZSeven-W](h
 
 | Project | What it is |
 | ------- | ---------- |
+| <img src="./screenshot/logo-dsh-openpencil.png" alt="DSH OpenPencil" width="40" /> **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | DeepSeek Harness plugin for OpenPencil — exact multi-frame `.op` previews, an interactive canvas, and a managed editor with agent-native design tools, right inside a conversation. |
 | <img src="./screenshot/logo-zode.png" alt="Zode logo" width="40" /> **[Zode](https://github.com/ZSeven-W/zode)** | Open-source, AI-native coding assistant for your terminal — a fast Rust TUI (`ratatui`) that reads your code, runs commands, searches files, and manages git. Drives OpenPencil over MCP. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | A pure-Rust async runtime for shipping LLM agents — multi-provider, tool-capable end-to-end, structured permissions, real MCP, zero `unsafe`. Powers OpenPencil's built-in agent runtime (`vendor/agent`) and Zode. |
 | <img src="./screenshot/logo-jian-rounded.png" alt="jian logo" width="40" /> **[jian](https://github.com/ZSeven-W/jian)** | Pure-Rust, GPU-Skia UI framework — widgets, layout, events, and hot reload in one stack. Turns a declarative `.op` document into a native, AI-controllable app with no JS runtime, no DOM, no Electron. OpenPencil's UI framework (`vendor/jian`). |
@@ -520,6 +537,8 @@ openpencil/
 │   ├── op-collab-transport/  Native Noise/TCP transport, bounded admission, and optional LAN discovery
 │   ├── op-collab-smoke/      Two-process authenticated collaboration recovery matrix
 │   ├── op-host-native/       Native host lib — winit + skia-safe GL (desktop + mobile)
+│   ├── op-engine-ffi/        Player C ABI — embed the canvas in iOS / Android shells
+│   ├── op-engine-jni/        Android JNI marshalling layer for op-engine-ffi
 │   ├── op-host-web/          Browser bundle — wasm32 cdylib, CanvasKit renderer
 │   ├── op-host-desktop/      Desktop binary `openpencil-desktop`; also the `--serve-web` daemon
 │   ├── op-host-services/     Headless serve-web / MCP daemon lib
@@ -609,10 +628,12 @@ cargo deny check && cargo deny --target wasm32-unknown-unknown check bans       
 | --------------- | -------------------------------------------------------------------------------- | ---------------- |
 | op-host-web     | Browser bundle entry — wasm32 cdylib, renders via CanvasKit                       | ✅               |
 | op-host-native  | Native host lib — WidgetHostNative + skia-safe GL backend (desktop + mobile)      | ❌ (native only) |
+| op-engine-ffi   | Player C ABI — one engine, three shells (iOS Metal / Android EGL / host raster)     | ❌ (native only) |
+| op-engine-jni   | Android JNI marshalling layer for op-engine-ffi (engine thread, registry, callbacks) | ❌ (native only) |
 | op-host-desktop | Desktop binary `openpencil-desktop` (winit + skia-safe GL) — also the `--serve-web` daemon that hosts the web bundle | ❌ (native only) |
 | op-cli          | `op` command-line tool                                                           | ❌ (native only) |
 
-**Shared library crates:** `op-editor-core` (canonical `.op` state), `op-editor-ui` (platform-free widgets + `RenderBackend`), `op-editor-host-core` (transport-free host state machines), `op-collab` (open, transport-free collaboration protocol/hash/exact apply), `op-collab-transport` (native Noise/TCP, bounded admission, and optional LAN discovery), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — plus `op-collab-smoke` (authenticated two-process collaboration/recovery matrix) and `op-smoke` (headless design-turn test runner). The browser bundle renders through the official CanvasKit skia WASM (loaded separately), so the retired `skia-safe-op` wasm fork + `wasm-libc-shim` no longer exist.
+**Shared library crates:** `op-editor-core` (canonical `.op` state), `op-editor-ui` (platform-free widgets + `RenderBackend`), `op-editor-host-core` (transport-free host state machines), `op-collab` (open, transport-free collaboration protocol/hash/exact apply), `op-collab-transport` (native Noise/TCP, bounded admission, and optional LAN discovery), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — plus `op-collab-smoke` (authenticated two-process collaboration/recovery matrix) and `op-smoke` (headless design-turn test runner). The mobile players live in `packaging/` (`ios` + `android` shells over `op-engine-ffi` / `op-engine-jni`). The browser bundle renders through the official CanvasKit skia WASM (loaded separately), so the retired `skia-safe-op` wasm fork + `wasm-libc-shim` no longer exist.
 
 **Submodule:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (cross-product Rust agent runtime).
 

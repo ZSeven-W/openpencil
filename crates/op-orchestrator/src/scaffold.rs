@@ -111,7 +111,7 @@ fn mobile_status_bar_json(root_id: &str, fill_hex: &str, width: f64) -> serde_js
         "x": 0,
         "y": 0,
         "width": 54,
-        "height": 22,
+        "height": "fit_content",
         "content": "9:41",
         "fill": fg_fill.clone(),
         "fontFamily": "Inter",

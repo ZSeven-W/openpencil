@@ -1,5 +1,6 @@
 //! `CanvasKitBackend` — the `RenderBackend` implementation over the CanvasKit
-//! JS bridge, plus the async `init_backend` constructor.
+//! JS bridge, plus the async `init_backend` constructor. Inherent state and
+//! resource methods live in `backend_state` to keep this trait impl under cap.
 //!
 //! Split out of `canvaskit.rs`. A trait impl must be one block, so the flat
 //! `OpCk` call bodies for the shape / gradient / SVG-path ops live in `ops`
@@ -24,73 +25,8 @@ pub struct CanvasKitBackend {
     pub(super) ck: OpCk,
     pub(super) dpr: f32,
     /// Logical (CSS) viewport — what widget layout uses.
-    logical_w: u32,
-    logical_h: u32,
-}
-
-impl CanvasKitBackend {
-    pub fn new(ck: OpCk, dpr: f32, logical_w: u32, logical_h: u32) -> Self {
-        let dpr = dpr.max(1.0);
-        ck.set_dpr(dpr);
-        Self {
-            ck,
-            dpr,
-            logical_w,
-            logical_h,
-        }
-    }
-    pub fn logical_size(&self) -> (f32, f32) {
-        (self.logical_w as f32, self.logical_h as f32)
-    }
-    pub fn resize_for_display(&mut self, logical_w: u32, logical_h: u32, dpr: f32) {
-        self.logical_w = logical_w.max(1);
-        self.logical_h = logical_h.max(1);
-        self.dpr = dpr.max(1.0);
-        self.ck.set_dpr(self.dpr);
-        let pw = ((self.logical_w as f32) * self.dpr).round() as u32;
-        let ph = ((self.logical_h as f32) * self.dpr).round() as u32;
-        self.ck.resize(pw.max(1), ph.max(1));
-    }
-    /// Register a user-imported font face (mirrors `register_system_font` but
-    /// for the family-selectable imported registry). Returns `true` when the
-    /// face parsed and is now selectable by `family`.
-    pub fn register_imported_font(&mut self, family: &str, bytes: &[u8]) -> bool {
-        self.ck.register_imported_font(family, bytes)
-    }
-    /// Register a font whose family is unknown (a fresh browser import). Returns
-    /// the extracted family display name, or `None` on parse failure / no
-    /// family name (the CanvasKit side returns an empty string).
-    pub fn register_imported_font_from_bytes(&mut self, bytes: &[u8]) -> Option<String> {
-        // The vendored CanvasKit build can't report a typeface's family name,
-        // so parse it in Rust, then register through the family-known FFI.
-        let family = crate::font_meta::parse_family(bytes)?;
-        self.ck
-            .register_imported_font(&family, bytes)
-            .then_some(family)
-    }
-    /// Display names of every registered imported family.
-    pub fn imported_family_list(&self) -> Vec<String> {
-        self.ck.imported_family_list()
-    }
-    /// Drop a previously imported font face by family name.
-    pub fn remove_imported_font(&mut self, family: &str) {
-        self.ck.remove_imported_font(family);
-    }
-
-    pub(super) fn drain_pending_decodes(&mut self, max: usize) -> usize {
-        use crate::image_decode_queue::{finish_web_decode, take_web_decode_batch};
-        let batch = take_web_decode_batch(max);
-        for job in &batch {
-            let decoded = self.ck.decode_image(
-                job.id as u32,
-                (job.id >> 32) as u32,
-                job.bytes.as_ref(),
-                job.max_edge_px,
-            );
-            finish_web_decode(job.id, decoded);
-        }
-        batch.len()
-    }
+    pub(super) logical_w: u32,
+    pub(super) logical_h: u32,
 }
 
 impl RenderBackend for CanvasKitBackend {
@@ -202,6 +138,32 @@ impl RenderBackend for CanvasKitBackend {
     ) {
         ops::fill_round_rect_mesh_gradient_per_corner(
             &self.ck, rect, radii, rows, cols, colors, opacity,
+        );
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn fill_round_rect_shader(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        sksl: &str,
+        uniforms: &[(&str, &[f32])],
+        opacity: f32,
+        fallback: Color,
+    ) {
+        ops::fill_round_rect_shader(&self.ck, rect, radius, sksl, uniforms, opacity, fallback);
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn fill_round_rect_shader_per_corner(
+        &mut self,
+        rect: Rect,
+        radii: [f32; 4],
+        sksl: &str,
+        uniforms: &[(&str, &[f32])],
+        opacity: f32,
+        fallback: Color,
+    ) {
+        ops::fill_round_rect_shader_per_corner(
+            &self.ck, rect, radii, sksl, uniforms, opacity, fallback,
         );
     }
     fn stroke_round_rect(&mut self, rect: Rect, radius: f32, color: Color, width: f32) {

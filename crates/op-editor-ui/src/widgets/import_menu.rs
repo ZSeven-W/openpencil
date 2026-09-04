@@ -80,7 +80,7 @@ impl ImportMenu {
         Self {
             id: WidgetId::new(5410),
             theme: theme_for(ui),
-            locale: ui.locale,
+            locale: ui.effective_locale(),
             state: ui.import_menu.clone(),
         }
     }

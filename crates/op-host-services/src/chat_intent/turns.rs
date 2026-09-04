@@ -69,14 +69,19 @@ pub(super) fn applied_modify_nodes_json(
     serde_json::to_string_pretty(&node_values).ok()
 }
 
-pub(super) fn stream_and_parse_modify_turn(
+fn stream_and_parse_modify_turn_inner(
     provider: &dyn ChatProvider,
     request: ChatRequest,
+    cancel: Option<Arc<std::sync::atomic::AtomicBool>>,
 ) -> ModifyTurnParse {
     let mut full_response = String::new();
     let mut stream_error: Option<String> = None;
     let mut retryable_completion = false;
-    for delta in provider.send(request) {
+    let stream = match cancel {
+        Some(cancel) => provider.send_cancellable(request, cancel),
+        None => provider.send(request),
+    };
+    for delta in stream {
         match delta {
             ChatDelta::TextDelta(s) => full_response.push_str(&s),
             // TS: thinking chunks are ignored for modification — the
@@ -164,11 +169,13 @@ pub fn run_cli_turn(
     cmd_tx: Sender<DesignCmdReq>,
 ) {
     let modify_target_frame_ids = selected_frame_ids(&plan.initial_state).unwrap_or_default();
-    let classified = classify_intent_for_standard_route(
+    let turn_cancel = plan.abort.shared_atomic();
+    let classified = classify_intent_for_standard_route_cancellable(
         plan.classify_provider.as_ref(),
         &plan.initial_state,
         &plan.user_text,
         plan.model.clone(),
+        Arc::clone(&turn_cancel),
     );
     // Stop / New Chat may arrive while the classifier LLM is in flight. The
     // provider call itself has its own bounded timeout, but once it returns we
@@ -189,7 +196,10 @@ pub fn run_cli_turn(
             drop(delta_tx);
             drop(cmd_tx);
             drop(executor);
-            for delta in plan.chat_provider.send(plan.chat_request) {
+            for delta in plan
+                .chat_provider
+                .send_cancellable(plan.chat_request, turn_cancel)
+            {
                 if chat_tx.send(delta).is_err() {
                     return; // turn aborted (Stop / New Chat)
                 }
@@ -199,12 +209,13 @@ pub fn run_cli_turn(
             drop(delta_tx);
             drop(cmd_tx);
             let request = modify_request.expect("checked above");
-            run_modify_turn(
+            run_modify_turn_cancellable(
                 plan.design_provider.as_ref(),
                 request,
                 &chat_tx,
                 &executor,
                 modify_target_frame_ids,
+                turn_cancel,
             );
         }
         DesignIntent::New => {
@@ -243,6 +254,37 @@ pub fn run_modify_turn(
     executor: &UiChatToolExecutor,
     target_frame_ids: Vec<String>,
 ) {
+    run_modify_turn_inner(provider, request, chat_tx, executor, target_frame_ids, None);
+}
+
+/// Cancellable direct/standard modify route. The UI-side ChatSession owns the
+/// same flag and sets it on Stop/New Chat/drop.
+pub fn run_modify_turn_cancellable(
+    provider: &dyn ChatProvider,
+    request: ChatRequest,
+    chat_tx: &Sender<ChatDelta>,
+    executor: &UiChatToolExecutor,
+    target_frame_ids: Vec<String>,
+    cancel: Arc<std::sync::atomic::AtomicBool>,
+) {
+    run_modify_turn_inner(
+        provider,
+        request,
+        chat_tx,
+        executor,
+        target_frame_ids,
+        Some(cancel),
+    );
+}
+
+fn run_modify_turn_inner(
+    provider: &dyn ChatProvider,
+    request: ChatRequest,
+    chat_tx: &Sender<ChatDelta>,
+    executor: &UiChatToolExecutor,
+    target_frame_ids: Vec<String>,
+    cancel: Option<Arc<std::sync::atomic::AtomicBool>>,
+) {
     if chat_tx
         .send(ChatDelta::TextDelta(MODIFY_STEP.to_string()))
         .is_err()
@@ -250,12 +292,23 @@ pub fn run_modify_turn(
         return;
     }
 
-    let mut parsed = stream_and_parse_modify_turn(provider, request.clone());
+    let canceled = || {
+        cancel
+            .as_ref()
+            .is_some_and(|flag| flag.load(std::sync::atomic::Ordering::Acquire))
+    };
+    let mut parsed = stream_and_parse_modify_turn_inner(provider, request.clone(), cancel.clone());
+    if canceled() {
+        return;
+    }
     let mut retried = false;
     if parsed.nodes.is_empty() && parsed.stream_error.is_none() && parsed.retryable_completion {
         retried = true;
         let retry_request = with_modify_retry_feedback(request, &parsed);
-        parsed = stream_and_parse_modify_turn(provider, retry_request);
+        parsed = stream_and_parse_modify_turn_inner(provider, retry_request, cancel.clone());
+        if canceled() {
+            return;
+        }
     }
 
     let ModifyTurnParse {

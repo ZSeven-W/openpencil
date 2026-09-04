@@ -10,7 +10,7 @@ use tokio::time::Instant;
 use crate::auth::AuthMode;
 use crate::endpoint::RelayEndpoint;
 use crate::error::{RelayFailureKind, TunnelError};
-use crate::limits::RelayLimits;
+use crate::limits::{PairBudget, RelayLimits};
 use crate::reauth_budget::ReauthBudget;
 use crate::session::{
     connect_socket, next_binary_with_reauth, send_binary, ClientReauthContext, RelaySocket,
@@ -64,11 +64,17 @@ pub(crate) async fn establish_relay(
         cancel,
         started_at,
         limits,
+        PairBudget::Fixed(limits.pair),
         || {},
     )
     .await
 }
 
+/// `pair_budget` is how long this connection may wait for its counterpart
+/// after the relay accepted it. Guests use the long [`RelayLimits::pair`]
+/// window; owner lanes pass a policy that is resolved against the relay's
+/// advertised waiting capability once the upgrade response is in hand, so the
+/// client, not the relay, decides when an idle lane is retired.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn establish_relay_with_ready_hook<F>(
     endpoint: &RelayEndpoint,
@@ -79,6 +85,7 @@ pub(crate) async fn establish_relay_with_ready_hook<F>(
     cancel: &mut watch::Receiver<bool>,
     started_at: Instant,
     limits: RelayLimits,
+    pair_budget: PairBudget,
     on_ready: F,
 ) -> Result<RelaySocket, TunnelError>
 where
@@ -95,9 +102,11 @@ where
     let RelayUpgrade {
         mut socket,
         challenge_attempt,
+        waiting,
     } = connect_socket(endpoint, auth, cancel, connect_limits)
         .await
         .map_err(|error| remap_timeout(error, connect_kind))?;
+    let pair_budget = pair_budget.resolve(waiting);
 
     let hello = match challenge_attempt {
         Some((attempt, challenge)) => attempt
@@ -136,8 +145,8 @@ where
     .await?;
     match first {
         RelayServerStatus::Ready => on_ready(),
-        RelayServerStatus::Rejected(_) => {
-            return Err(TunnelError::Failure(RelayFailureKind::Rejected));
+        RelayServerStatus::Rejected(code) => {
+            return Err(TunnelError::Failure(RelayFailureKind::from_reject(code)));
         }
         RelayServerStatus::Paired => {
             return Err(TunnelError::Failure(RelayFailureKind::Protocol));
@@ -147,7 +156,7 @@ where
     let (pair_timeout, pair_kind) = phase_timeout(
         started_at,
         limits,
-        limits.pair,
+        pair_budget,
         RelayFailureKind::PairTimeout,
     )?;
     let second = next_status(
@@ -166,7 +175,9 @@ where
     .await?;
     match second {
         RelayServerStatus::Paired => Ok(socket),
-        RelayServerStatus::Rejected(_) => Err(TunnelError::Failure(RelayFailureKind::Rejected)),
+        RelayServerStatus::Rejected(code) => {
+            Err(TunnelError::Failure(RelayFailureKind::from_reject(code)))
+        }
         RelayServerStatus::Ready => Err(TunnelError::Failure(RelayFailureKind::Protocol)),
     }
 }

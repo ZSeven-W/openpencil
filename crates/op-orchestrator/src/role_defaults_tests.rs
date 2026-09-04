@@ -25,12 +25,20 @@ fn theme_from_fill_luminance() {
     assert_eq!(detect_theme_from_fill(Some("#F8FAFC")), Theme::Light);
     // 3-digit hex.
     assert_eq!(detect_theme_from_fill(Some("#000")), Theme::Dark);
-    // Unresolved ref / missing → default light.
-    assert_eq!(detect_theme_from_fill(Some("$color-bg")), Theme::Light);
-    assert_eq!(detect_theme_from_fill(None), Theme::Light);
-    // Malformed multi-byte color must not panic the byte-slicer → default light.
-    assert_eq!(detect_theme_from_fill(Some("#héllo!")), Theme::Light);
-    assert_eq!(detect_theme_from_fill(Some("redʔ")), Theme::Light);
+}
+
+#[test]
+fn theme_from_fill_unknown_inputs() {
+    // Unresolved ref (variables: null or binding failure) → Unknown.
+    assert_eq!(
+        detect_theme_from_fill(Some("$--background")),
+        Theme::Unknown
+    );
+    // No fill at all → Unknown (can't tell what page sits behind).
+    assert_eq!(detect_theme_from_fill(None), Theme::Unknown);
+    // Malformed hex → Unknown (can't tell luminance).
+    assert_eq!(detect_theme_from_fill(Some("#héllo!")), Theme::Unknown);
+    assert_eq!(detect_theme_from_fill(Some("redʔ")), Theme::Unknown);
 }
 
 // ── apply_role_defaults: set-if-absent ────────────────────────────────────

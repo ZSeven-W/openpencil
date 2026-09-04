@@ -202,7 +202,7 @@ impl<'a> MissingFontsPanel<'a> {
             self.row_button_rect(panel, row),
             300.0,
             inset_rect(viewport, 8.0),
-            self.ui.locale,
+            self.ui.effective_locale(),
             &entries,
             self.ui.font_import_supported,
             false,

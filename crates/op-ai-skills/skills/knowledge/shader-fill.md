@@ -3,7 +3,7 @@ name: shader-fill
 description: Native SkSL shader fills — generative noise / aurora / glow backgrounds via the shader fill type
 phase: [generation]
 trigger:
-  keywords: [shader, glsl, sksl, generative, noise, aurora]
+  keywords: [shader, glsl, sksl, generative, noise, grain, turbulence, feTurbulence, aurora]
 priority: 28
 budget: 750
 category: knowledge
@@ -56,13 +56,15 @@ fill: [{ type: "shader",
   uniforms: { core: "#7c3aed", edge: "#0b0614", size: [600, 600] } }]
 ```
 
-3) Subtle value noise (gentle film grain over a base colour):
+3) Turbulence preset (film grain / FBM value noise):
 
 ```
-fill: [{ type: "shader",
-  sksl: "uniform half4 base; uniform float2 size; float hash(float2 p){ return fract(sin(dot(p, float2(127.1, 311.7))) * 43758.5453); } half4 main(float2 p){ float n = (hash(floor(p)) - 0.5) * 0.06; return half4(base.rgb + n, base.a); }",
-  uniforms: { base: "#111827", size: [800, 600] } }]
+fill: [{ type: "shader", preset: "turbulence",
+  uniforms: { baseFrequency: [0.08, 0.08], seed: 0, numOctaves: 3 } }]
 ```
+
+The loader expands this preset; `baseFrequency` accepts a number or `[x,y]`,
+`seed` is numeric, and integer `numOctaves` is clamped to 1..6.
 
 RULES:
 

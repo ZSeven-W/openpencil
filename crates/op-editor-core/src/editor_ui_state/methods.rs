@@ -5,14 +5,52 @@
 //! Split out of the `editor_ui_state` spine (800-line file ceiling).
 
 use super::{
-    EditorUiState, FontPickerPurpose, MissingFontSurface, RecentFile, SceneTemplateFocus,
-    RECENT_FILE_CAP,
+    EditorUiState, FontPickerPurpose, Locale, MissingFontSurface, RecentFile, SceneTemplateFocus,
+    ThemeMode, RECENT_FILE_CAP,
 };
 
 impl EditorUiState {
     /// A fresh UI state — sidebar open, dark theme, no menus open.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Theme currently painted by the editor. An embedding host may override
+    /// the user's stored preference for this page without mutating it.
+    pub fn effective_theme_mode(&self) -> ThemeMode {
+        self.host_theme_override.unwrap_or(self.theme_mode)
+    }
+
+    /// Set or clear a page-lifetime embedding-host theme override.
+    pub fn set_host_theme_override(&mut self, theme: Option<ThemeMode>) {
+        self.host_theme_override = theme;
+    }
+
+    /// Locale currently presented by the editor. An embedding host may
+    /// override the user's stored preference for this page without mutating it.
+    pub fn effective_locale(&self) -> Locale {
+        self.host_locale_override.unwrap_or(self.locale)
+    }
+
+    /// Set or clear a page-lifetime embedding-host locale override.
+    pub fn set_host_locale_override(&mut self, locale: Option<Locale>) {
+        self.host_locale_override = locale;
+    }
+
+    /// Apply a locale whose catalog is ready, or remember it without changing
+    /// the painted locale while its runtime catalog is loading.
+    ///
+    /// Returns `true` when the host needs to request the catalog.
+    pub fn set_locale_when_catalog_ready(&mut self, locale: Locale, catalog_ready: bool) -> bool {
+        if catalog_ready {
+            self.locale = locale;
+            self.pending_locale = None;
+            self.locale_persistence_override = None;
+            false
+        } else {
+            self.pending_locale = Some(locale);
+            true
+        }
     }
 
     pub fn clear_button_press_target(&mut self) {
@@ -160,7 +198,8 @@ impl EditorUiState {
         self.close_icon_picker();
         self.close_chat_model_picker();
         self.close_parallel_agents_picker();
-        self.scene_template_center.open(now_ms);
+        self.scene_template_center
+            .open(now_ms, !self.touch_chrome());
     }
 
     /// Close the Scene Template Center and clear its transient state.
@@ -178,6 +217,17 @@ impl EditorUiState {
             self.pressed_button = None;
         }
         true
+    }
+
+    /// Close the style-import layer and resolve keyboard ownership for the
+    /// current input mode. Pointer-driven desktop keeps its search focus;
+    /// touch returns to browsing until the user taps a field again.
+    pub fn close_scene_template_style_import(&mut self) -> bool {
+        let changed = self.scene_template_center.close_style_import();
+        if changed && self.touch_chrome() {
+            self.scene_template_center.input_focus_active = false;
+        }
+        changed
     }
 
     /// Aim the generate row at a template: pin its style guide, narrow the
@@ -214,6 +264,8 @@ impl EditorUiState {
         }
         changed |= center.focus != SceneTemplateFocus::Generate;
         center.focus = SceneTemplateFocus::Generate;
+        changed |= !center.input_focus_active;
+        center.input_focus_active = true;
         changed |= center.generate_basis.as_deref() != Some(template.id.as_str());
         center.generate_basis = Some(template.id.clone());
         changed
@@ -421,19 +473,8 @@ impl EditorUiState {
         self.close_chat_model_picker();
         if opening {
             self.chat_model_picker.open = true;
-            // Raised here rather than in the click flow so every path
-            // that opens the picker asks for a fresh catalog — the
-            // request is only a request, and the host that drains it
-            // decides (via TTL) whether a probe actually runs.
-            self.pending_model_catalog_refresh = true;
         }
         opening
-    }
-
-    /// Consume the model-catalog refresh request raised by the last
-    /// picker open. Returns true exactly once per open.
-    pub fn take_pending_model_catalog_refresh(&mut self) -> bool {
-        std::mem::take(&mut self.pending_model_catalog_refresh)
     }
 
     pub fn close_chat_model_picker(&mut self) -> bool {
@@ -489,10 +530,10 @@ impl EditorUiState {
         let Some(api_key) = self.builtin_agent_draft_field_text(BuiltinAgentField::ApiKey) else {
             return false;
         };
-        let Some(model) = self.builtin_agent_draft_field_text(BuiltinAgentField::Model) else {
+        let Some(base_url) = self.builtin_agent_draft_field_text(BuiltinAgentField::BaseUrl) else {
             return false;
         };
-        !name.trim().is_empty() && !api_key.trim().is_empty() && !model.trim().is_empty()
+        !name.trim().is_empty() && !api_key.trim().is_empty() && !base_url.trim().is_empty()
     }
 
     pub fn acp_agent_draft_ready(&self) -> bool {
@@ -517,18 +558,20 @@ impl EditorUiState {
     pub fn builtin_agent_draft_field_text(
         &self,
         field: crate::agent_settings::BuiltinAgentField,
-    ) -> Option<&str> {
+    ) -> Option<std::borrow::Cow<'_, str>> {
         use crate::agent_settings::{BuiltinAgentField, SettingsFocus};
 
         let draft = self.agent_settings.builtin_agent_draft.as_ref()?;
         if self.agent_settings.focus == Some(SettingsFocus::BuiltinAgentDraft(field)) {
-            return Some(self.settings_input.text());
+            return Some(std::borrow::Cow::Borrowed(self.settings_input.text()));
         }
         Some(match field {
-            BuiltinAgentField::DisplayName => draft.display_name.as_str(),
-            BuiltinAgentField::ApiKey => draft.api_key.as_str(),
-            BuiltinAgentField::Model => draft.model.as_str(),
-            BuiltinAgentField::BaseUrl => draft.base_url.as_str(),
+            BuiltinAgentField::DisplayName => {
+                std::borrow::Cow::Borrowed(draft.display_name.as_str())
+            }
+            BuiltinAgentField::ApiKey => std::borrow::Cow::Borrowed(draft.api_key.as_str()),
+            BuiltinAgentField::Model => std::borrow::Cow::Owned(draft.models_text()),
+            BuiltinAgentField::BaseUrl => std::borrow::Cow::Borrowed(draft.base_url.as_str()),
         })
     }
 
@@ -567,6 +610,7 @@ impl EditorUiState {
         self.layer_pages_h_scroll.offset = 0.0;
         self.layer_layers_h_scroll.offset = 0.0;
         self.collapsed_layers.clear();
+        self.last_revealed_layer_anchor = None;
         self.last_layer_click = None;
         self.last_canvas_click = None;
         self.entered_container = None;
@@ -603,5 +647,73 @@ impl EditorUiState {
         // preserve-geometry layout path) — matches file-open, which resets it
         // via a fresh `editor_ui`.
         self.preserve_authored_geometry = false;
+    }
+}
+
+impl EditorUiState {
+    /// Phone bottom-sheet layout. Kept as a narrow compatibility helper;
+    /// tablet and input-density decisions must use the explicit predicates
+    /// below so Medium never silently collapses into Compact again.
+    pub fn mobile_layout(&self) -> bool {
+        self.touch && self.size_class.is_compact()
+    }
+
+    /// Native touch chrome is shared by phone and tablet players. Layout
+    /// geometry still branches on the three size classes.
+    pub fn touch_chrome(&self) -> bool {
+        self.touch
+    }
+
+    pub fn compact_layout(&self) -> bool {
+        self.touch && self.size_class.is_compact()
+    }
+
+    pub fn medium_layout(&self) -> bool {
+        self.touch && self.size_class.is_medium()
+    }
+
+    pub fn expanded_touch_layout(&self) -> bool {
+        self.touch && self.size_class.is_expanded()
+    }
+
+    /// The generated-code inspector needs more horizontal room than the
+    /// Compact phone sheet provides. It remains available on tablet, desktop,
+    /// and web layouts.
+    pub fn code_property_tab_available(&self) -> bool {
+        !self.compact_layout()
+    }
+
+    /// Active PropertyPanel tab after applying responsive availability. A
+    /// retained Code value (for example after resizing an iPad split view down
+    /// to Compact) presents as Design until enough room is available again.
+    pub fn effective_property_tab(&self) -> crate::PropertyTab {
+        if !self.code_property_tab_available()
+            && matches!(self.property_tab, crate::PropertyTab::Code)
+        {
+            crate::PropertyTab::Design
+        } else {
+            self.property_tab
+        }
+    }
+
+    /// Set the active PropertyPanel tab without allowing direct action
+    /// dispatch to reopen Code in a Compact layout. Returns whether the stored
+    /// value changed.
+    pub fn set_property_tab(&mut self, requested: crate::PropertyTab) -> bool {
+        let next = if !self.code_property_tab_available()
+            && matches!(requested, crate::PropertyTab::Code)
+        {
+            crate::PropertyTab::Design
+        } else {
+            requested
+        };
+        let changed = self.property_tab != next;
+        self.property_tab = next;
+        if !self.code_property_tab_available()
+            && matches!(self.property_tab_hover, Some(crate::PropertyTab::Code))
+        {
+            self.property_tab_hover = None;
+        }
+        changed
     }
 }

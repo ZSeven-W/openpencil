@@ -164,7 +164,11 @@ pub(super) fn normalize_mobile_category_section(node: &mut Value, canvas_width: 
 }
 
 pub(super) fn normalize_mobile_category_row(node: &mut Value, canvas_width: f64) {
-    if !should_normalize_mobile_category_row(node, canvas_width) {
+    // This pass is intentionally mobile-only. Desktop category rails commonly
+    // carry six or more wide tiles; applying the phone overflow guard there
+    // used to truncate the authored rail and made finalize command recording
+    // fail closed because a valid node disappeared during the semantic phase.
+    if canvas_width > 480.0 || !should_normalize_mobile_category_row(node, canvas_width) {
         return;
     }
 
@@ -183,7 +187,6 @@ pub(super) fn normalize_mobile_category_row_unchecked(node: &mut Value) {
     node["width"] = json!("fill_container");
     node["height"] = json!("fit_content");
     node["gap"] = json!(12);
-    node["clipContent"] = json!(false);
     node["alignItems"] = json!("center");
     // Distribute a small fixed set of chips across the row instead of clustering
     // them on the left with a lopsided empty band on the right. 3+ chips use
@@ -196,24 +199,21 @@ pub(super) fn normalize_mobile_category_row_unchecked(node: &mut Value) {
         .and_then(Value::as_array)
         .map(|c| c.len())
         .unwrap_or(0);
-    node["justifyContent"] = json!(if child_count >= 3 {
-        "space_between"
-    } else {
+    const MAX_VISIBLE_CHIPS_PER_ROW: usize = 5;
+    let is_scroller = child_count > MAX_VISIBLE_CHIPS_PER_ROW;
+    node["clipContent"] = json!(is_scroller);
+    node["justifyContent"] = json!(if is_scroller || child_count < 3 {
         "start"
+    } else {
+        "space_between"
     });
 
     let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) else {
         return;
     };
-    // Off-canvas guard: ~5 fit_content icon+label chips is the most that fits one
-    // 375px row (overflow.md). The count is NOT pinned to four anymore, but a
-    // single non-scrolling row beyond five would push chips off the right edge,
-    // so cap at five. (6+ categories should be a horizontal scroll rail or a
-    // grid — the model is guided there by overflow.md.)
-    const MAX_CHIPS_PER_ROW: usize = 5;
-    if children.len() > MAX_CHIPS_PER_ROW {
-        children.truncate(MAX_CHIPS_PER_ROW);
-    }
+    // Six or more items become a clipped, start-aligned horizontal rail. Keep
+    // every authored node: semantic finalization is a field transform and must
+    // never delete product/category content to satisfy a viewport heuristic.
     for (idx, child) in children.iter_mut().enumerate() {
         if is_category_item_like_child(child) {
             child["width"] = json!("fit_content");
@@ -251,7 +251,7 @@ pub(super) fn normalize_category_icon_tile(item: &mut Value, active: bool) {
             obj.remove("stroke");
             obj.remove("effects");
         }
-        set_subtree_foreground(tile, "$color-accent");
+        set_subtree_foreground(tile, "$--primary");
     } else {
         tile["fill"] = solid_fill("#FFFFFF");
         tile["stroke"] = neutral_stroke("#EAD8C8");

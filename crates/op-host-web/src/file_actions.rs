@@ -360,9 +360,17 @@ fn ingest_html_project(
 pub fn preserve_app_preferences(previous: &EditorState, next: &mut EditorState) {
     let previous_selected_model = previous.chat.selected_model_entry().cloned();
     next.editor_ui.theme_mode = previous.editor_ui.theme_mode;
+    next.editor_ui.host_theme_override = previous.editor_ui.host_theme_override;
     next.editor_ui.locale = previous.editor_ui.locale;
+    next.editor_ui.pending_locale = previous.editor_ui.pending_locale;
+    next.editor_ui.locale_persistence_override = previous.editor_ui.locale_persistence_override;
+    next.editor_ui.host_locale_override = previous.editor_ui.host_locale_override;
     next.editor_ui.recent_files = previous.editor_ui.recent_files.clone();
     next.editor_ui.font_import_supported = previous.editor_ui.font_import_supported;
+    next.editor_ui.scene_template_center.save_current_supported = previous
+        .editor_ui
+        .scene_template_center
+        .save_current_supported;
     next.editor_ui.system_fonts_loaded = previous.editor_ui.system_fonts_loaded;
     next.editor_ui.system_font_families = previous.editor_ui.system_font_families.clone();
     next.editor_ui.bundled_font_families = previous.editor_ui.bundled_font_families.clone();

@@ -1,0 +1,9 @@
+format=1
+target=aarch64-apple-ios
+artifact=libop_auth.a
+version=0.8.5
+abi=3
+sha256=dc4e3cef4d79820219f4d311ed284d8b690ae6436a125a148a36a72b7144eb73
+hardening=op-auth-hardened-v1
+source_revision=204956f0e15dfd02af49759bdb2f435dae96fae3
+build_id=openpencil-0.8.5-5a7b834d498b.a3.008152bce693f0fb794f9d7381bff4bc1889abbf83a6e1873eb9673606f2ab30

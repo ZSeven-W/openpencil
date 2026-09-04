@@ -64,7 +64,7 @@ pub fn quick_menu_rows(ui: &EditorUiState) -> Vec<ExportQuickRow> {
 /// Resolve a `fileMenu.*` row label, dropping the trailing ellipsis the
 /// catalogue carries (a Mac convention the Rust menus don't follow).
 pub fn trimmed_label(ui: &EditorUiState, key: &'static str) -> &'static str {
-    op_i18n::translate(ui.locale, key).trim_end_matches(['.', '…'])
+    op_i18n::translate(ui.effective_locale(), key).trim_end_matches(['.', '…'])
 }
 
 #[cfg(test)]

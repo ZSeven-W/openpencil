@@ -67,6 +67,7 @@ An explicit brand colour in the request overrides the tier's accent (keep every 
 ## Format
 
 - Each slide is a 16:9 frame, 1920×1080. Keep all content ≥100px from the edges.
+- MARGIN FLOOR: slide root horizontal padding ≥64px (1080-wide card roots ≥48px); no text may touch the canvas edge — a full-bleed background image is the only exception.
 - Multiple slides = multiple sibling frames laid left-to-right on the canvas.
 
 ## Core rules
@@ -85,7 +86,7 @@ An explicit brand colour in the request overrides the tier's accent (keep every 
 ## Color
 
 - 2–3 core colors + neutrals (from the selected style guide). Accent only for emphasis. Body text neutral. High contrast text/bg mandatory.
-- When the document carries the semantic palette, prefer refs over hex: slide bg `$color-bg-deep` (or `$color-surface` for light decks), titles `$color-text-primary`, body/sub `$color-text-body`, labels/meta/muted-before `$color-text-muted`, the one emphasis/after/KPI accent `$color-accent`. Full-bleed hero overlays use `$color-scrim`. Otherwise use guide hex.
+- When the document carries the semantic palette, prefer refs over hex: slide bg `$--background` (or `$--card` for light decks), titles `$--foreground`, body/sub `$--secondary-foreground`, labels/meta/muted-before `$--muted-foreground`, the one emphasis/after/KPI accent `$--primary`. Full-bleed hero overlays use `$--scrim`. Otherwise use guide hex.
 
 ## Visuals & data
 

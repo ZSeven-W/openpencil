@@ -29,6 +29,14 @@ const TIP_TOP_GAP: f32 = 14.0;
 /// Line height for tip text rows.
 const TIP_LINE_H: f32 = 16.0;
 
+/// Whether an example pill fully fits above `content_bottom` — the shared
+/// predicate paint and hit-test use so a pill that would run into the
+/// bottom-anchored composer (keyboard-shrunk compact sheet) is dropped
+/// from BOTH instead of overlapping it visually or stealing its taps.
+pub(crate) fn example_card_fits(card: &Rect, content_bottom: f32) -> bool {
+    card.origin.y + card.size.y <= content_bottom
+}
+
 /// Returns the four pill rects, stacked full-width below the hint line.
 pub(crate) fn example_card_rects(rect: Rect) -> [Rect; 4] {
     // First pill starts below header + hint line + gap.
@@ -111,6 +119,12 @@ pub(crate) fn paint_panel_body_chrome(cx: &mut PaintCx<'_>, theme: &Theme, rect:
 ///   • 4 stacked full-width pills (EXAMPLE_CARD_HEIGHT each, EXAMPLE_CARD_GAP gap)
 ///   • tip line 1: "Tip: Export design to code via Claude Code in terminal."
 ///   • tip line 2: "Drop image / text file to chat or via 📎"
+///
+/// `content_bottom` is where the bottom-anchored composer block begins
+/// (`AIChatPlaceholder::empty_state_region`'s bottom edge). A compact touch
+/// sheet shrunk by the software keyboard may not have room for the full
+/// stack: pills that don't fully fit are dropped, and the optional tip
+/// lines drop out before the pills do — nothing may overlap the composer.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn paint_examples(
     cx: &mut PaintCx<'_>,
@@ -122,6 +136,7 @@ pub(crate) fn paint_examples(
     disabled: bool,
     hover: Option<usize>,
     pressed_index: Option<usize>,
+    content_bottom: f32,
 ) {
     let opacity = if disabled { 0.6 } else { 1.0 };
 
@@ -162,6 +177,12 @@ pub(crate) fn paint_examples(
         .zip(examples.iter())
         .enumerate()
     {
+        // A pill that would run into the bottom-anchored composer block is
+        // cut rather than painted overlapping it; the ones below it can't
+        // fit either.
+        if !example_card_fits(pill, content_bottom) {
+            break;
+        }
         // Base pill fill.
         cx.backend
             .fill_round_rect(*pill, EXAMPLE_PILL_RADIUS, pill_bg);
@@ -225,6 +246,14 @@ pub(crate) fn paint_examples(
     let tip2_top = tip1_top + TIP_LINE_H;
     let tip2_y = tip2_top + tip_font * 0.35;
 
+    // The tip lines are optional hints — when the shrunk sheet has no room
+    // for them below the pill stack they drop out entirely instead of
+    // overlapping the composer block.
+    if tip1_top + TIP_LINE_H > content_bottom {
+        return;
+    }
+    let tip2_fits = tip2_top + TIP_LINE_H <= content_bottom;
+
     // Both tips are fitted to the card before they are centred. They are
     // long fixed English sentences and the chat card is user-resizable, so
     // an unfitted line runs off both edges of a narrow panel — and the
@@ -254,6 +283,9 @@ pub(crate) fn paint_examples(
     // Tip line 2: "Drop image / text file to chat or via 📎"
     // The trailing paperclip is part of the line, so its width comes out of
     // the budget the text is fitted to.
+    if !tip2_fits {
+        return;
+    }
     let clip_size = tip_font * 1.2;
     let clip_gap = 4.0;
     let tip2_text = text_metrics::fit_chrome(
@@ -430,6 +462,7 @@ mod tests {
             false,
             None,
             None,
+            rect.origin.y + rect.size.y,
         );
 
         // At least 4 round rects with large radius should be painted (one per pill).
@@ -465,6 +498,7 @@ mod tests {
             false,
             None,
             None,
+            rect.origin.y + rect.size.y,
         );
 
         // Each example title (or its ellipsized form) should appear in text runs.
@@ -496,6 +530,95 @@ mod tests {
             "pill radius should be 14px (#37 compact), got {}",
             EXAMPLE_PILL_RADIUS
         );
+    }
+
+    /// Keyboard-shrunk compact sheet: pills that would run into the
+    /// bottom-anchored composer are dropped, never painted overlapping it.
+    #[test]
+    fn paint_examples_drops_pills_below_content_bottom() {
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        let rect = Rect::xywh(0.0, 0.0, 360.0, 600.0);
+        let pills = example_card_rects(rect);
+        // Room for the first two pills only.
+        let content_bottom = pills[1].origin.y + pills[1].size.y + 1.0;
+
+        paint_examples(
+            &mut cx,
+            &Theme::dark(),
+            rect,
+            "Try an example",
+            "tip",
+            &make_examples(),
+            false,
+            None,
+            None,
+            content_bottom,
+        );
+
+        let pill_rects: Vec<_> = backend
+            .round_rects
+            .iter()
+            .filter(|(_, r)| *r >= EXAMPLE_PILL_RADIUS - 0.01)
+            .collect();
+        // 2 pills × (fill + stroke) — pills 3 and 4 are dropped entirely.
+        assert_eq!(
+            pill_rects.len(),
+            4,
+            "only the pills that fully fit may paint, got {} rects",
+            pill_rects.len()
+        );
+        for (r, _) in &pill_rects {
+            assert!(
+                r.origin.y + r.size.y <= content_bottom,
+                "no painted pill may cross content_bottom ({content_bottom})"
+            );
+        }
+    }
+
+    /// Keyboard-shrunk compact sheet: the optional tip lines drop out when
+    /// there is no room below the pill stack instead of overlapping the
+    /// composer block.
+    #[test]
+    fn paint_examples_drops_tip_lines_when_height_is_tight() {
+        let mut backend = CaptureBackend::default();
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        let rect = Rect::xywh(0.0, 0.0, 360.0, 600.0);
+        let pills = example_card_rects(rect);
+        // All 4 pills fit, but the tip lines below them do not.
+        let content_bottom = pills[3].origin.y + pills[3].size.y + 4.0;
+
+        paint_examples(
+            &mut cx,
+            &Theme::dark(),
+            rect,
+            "Try an example",
+            "tip",
+            &make_examples(),
+            false,
+            None,
+            None,
+            content_bottom,
+        );
+
+        assert!(
+            !backend.text_runs.iter().any(|r| r.contains("Tip:")),
+            "tip line 1 must drop out when it does not fit"
+        );
+        assert!(
+            !backend.text_runs.iter().any(|r| r.contains("Drop image")),
+            "tip line 2 must drop out when it does not fit"
+        );
+        let pill_rects = backend
+            .round_rects
+            .iter()
+            .filter(|(_, r)| *r >= EXAMPLE_PILL_RADIUS - 0.01)
+            .count();
+        assert_eq!(pill_rects, 8, "all four pills still paint (fill + stroke)");
     }
 
     /// #37: two tip lines must not overlap each other.

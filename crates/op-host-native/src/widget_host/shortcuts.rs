@@ -20,6 +20,7 @@ impl WidgetHostNative {
             || editor_ui.preset_name_input_active()
             || editor_ui.icon_picker.open
             || editor_ui.prompt_center.open
+            || editor_ui.scene_template_center.input_active()
             || editor_ui.component_browser_open
             // `active_text_input()` resolves chat before Git. Visible Git /
             // clone inputs must therefore claim ownership before the pointer
@@ -180,6 +181,10 @@ impl WidgetHostNative {
     }
 
     fn apply_input_select_all(&mut self) -> bool {
+        if op_editor_core::save_name_keyboard::select_all(&mut self.editor_state, self.now_ms) {
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.editor_ui.collab_join_input_active() {
             if op_editor_ui::widgets::collab_ui::join_address_select_all(
                 &mut self.editor_state.editor_ui,
@@ -399,12 +404,21 @@ impl WidgetHostNative {
     pub fn apply_toggle_code_panel(&mut self) -> bool {
         self.commit_variable_row_focus_if_any();
         use op_editor_core::PropertyTab;
-        self.editor_state.editor_ui.property_tab = match self.editor_state.editor_ui.property_tab {
+        let ui = &mut self.editor_state.editor_ui;
+        if !ui.code_property_tab_available() {
+            if ui.set_property_tab(PropertyTab::Design) {
+                self.mark_dirty();
+            }
+            return true;
+        }
+        let next = match ui.effective_property_tab() {
             PropertyTab::Design => PropertyTab::Code,
             PropertyTab::Interact => PropertyTab::Code,
             PropertyTab::Code => PropertyTab::Design,
         };
-        self.mark_dirty();
+        if ui.set_property_tab(next) {
+            self.mark_dirty();
+        }
         true
     }
 
@@ -528,10 +542,15 @@ impl WidgetHostNative {
 
     /// Cmd+, — open / close the floating agent-settings modal.
     pub fn apply_toggle_agent_settings(&mut self) -> bool {
+        self.cancel_agent_settings_touch_gesture();
         self.commit_variable_row_focus_if_any();
         self.editor_state.editor_ui.blur_collab_join_input();
         let opening = !self.editor_state.editor_ui.agent_settings_open;
         if opening {
+            // Settings covers the Property surface. Commit and release every
+            // Property-owned input before the modal becomes visible so a
+            // hidden field cannot keep receiving text / IME events.
+            self.release_property_keyboard_owner();
             self.editor_state.editor_ui.agent_settings_open = true;
             // The settings modal is now topmost. Do not leave a property-panel
             // image input alive underneath it or text/IME would keep routing
@@ -540,10 +559,20 @@ impl WidgetHostNative {
             self.editor_state.chat.blur_input(self.now_ms);
         } else {
             // Cmd+, closes through the same commit/defocus path as the modal's
-            // close button. Leaving `focus` set after hiding the modal makes
-            // the desktop shortcut router treat an invisible field as owner.
+            // close button. Leaving either the form focus or the Fonts tab's
+            // searchable picker alive after hiding the modal makes the input /
+            // IME router treat an invisible field as owner.
             self.commit_settings_focus_if_any();
             let ui = &mut self.editor_state.editor_ui;
+            if matches!(
+                ui.font_picker_purpose,
+                Some(op_editor_core::FontPickerPurpose::MissingFont {
+                    surface: op_editor_core::MissingFontSurface::Settings,
+                    ..
+                })
+            ) {
+                ui.close_font_picker();
+            }
             ui.agent_settings_open = false;
             ui.agent_settings_drag = None;
             ui.ime_preedit = None;
@@ -557,8 +586,10 @@ impl WidgetHostNative {
     /// Native menu commands use this instead of toggling so a command can
     /// reveal its live status even when Settings is already open elsewhere.
     pub fn apply_open_agent_settings_tab(&mut self, tab: AgentSettingsTab) -> bool {
+        self.cancel_agent_settings_touch_gesture();
         self.commit_variable_row_focus_if_any();
         self.editor_state.editor_ui.blur_collab_join_input();
+        self.release_property_keyboard_owner();
         self.commit_settings_focus_if_any();
         shared::commit_editing_for_modal(&mut self.editor_state);
         self.design_md_drag = None;

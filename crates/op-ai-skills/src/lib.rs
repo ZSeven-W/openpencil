@@ -19,6 +19,8 @@
 use include_dir::{include_dir, Dir};
 
 pub mod budget;
+#[cfg(test)]
+mod card_corpus_tests;
 pub mod color;
 pub mod compose;
 #[cfg(test)]
@@ -26,10 +28,16 @@ mod deck_corpus_tests;
 pub mod design_systems;
 pub mod frontmatter;
 pub mod loader;
+#[cfg(test)]
+mod logo_corpus_tests;
 pub mod memory;
 pub mod resolve;
 pub mod resolve_style;
 pub mod resolver;
+#[cfg(test)]
+mod scroll_orchestration_corpus_tests;
+#[cfg(test)]
+mod shader_fill_corpus_tests;
 pub mod style_guide;
 pub mod types;
 
@@ -46,7 +54,7 @@ pub use types::{
 /// guidance; screenshot-driven self-check must not turn into image curation.
 pub const IMAGE_SELF_CHECK_SCOPE: &str = r#"## Image self-check scope (authoritative)
 
-During automatic screenshot-driven self-check, assess image presentation and rendering integrity only: intended photographic slots render exactly one visible image with valid bounds, crop/fit, clipping, radius, and overlay order; deliberately authored icon or illustration tiles render as intended. Do not judge or replace a rendered image based on subject relevance, aesthetics, perceived quality, resolution, tone, stock-photo choice, search-query quality, generation quality, or whether another asset might look better. This restriction does not apply to initial image-query/image-prompt authoring or to an explicit user request to replace, retarget, or restyle an image."#;
+During automatic screenshot-driven self-check, assess image presentation and rendering integrity only: intended photographic slots render exactly one visible image with valid bounds, crop/fit, clipping, radius, and overlay order; deliberately authored icon or illustration tiles render as intended. A raster slot is intended only when the user request or domain explicitly calls for raster media; a model-invented image slot in a text-only social card is a structural intent violation, not image curation. Do not judge or replace an authorized rendered image based on subject relevance, aesthetics, perceived quality, resolution, tone, stock-photo choice, search-query quality, generation quality, or whether another asset might look better. This restriction does not apply to initial image-query/image-prompt authoring or to an explicit user request to replace, retarget, or restyle an image."#;
 
 /// Place the authoritative image-review scope after any task-specific prompt
 /// sections, moving an existing copy instead of duplicating it.
@@ -94,6 +102,19 @@ const GUIDELINE_TOPICS: &[(&str, &[&str], &[&str])] = &[
     ("form", &["form-ui"], &["form-ui"]),
     ("design-system", &[], &["design-system-composition"]),
     ("interactivity", &[], &["interactivity"]),
+    // The page-scroll contract for external agents driving the MCP tools:
+    // K3 and Grok over MCP built a 900 px clipped viewport root when the
+    // prompt did not spell the contract out (2026-09-03 matrix), because
+    // no guideline topic carried it.
+    (
+        "scroll",
+        &["scroll-orchestration", "parallax", "page-scroll"],
+        &["scroll-orchestration"],
+    ),
+    // Card boards had no MCP-side contract either (0825 A/B: the gap was
+    // the contract, not the model).
+    ("card", &["cards", "card-item"], &["cards"]),
+    ("icons", &["icon", "icon-font", "lucide"], &["icon-catalog"]),
 ];
 
 /// Compose the named skills (in order) into one coherent guideline doc,
@@ -129,6 +150,11 @@ fn compose_skills(names: &[&str]) -> Option<String> {
 /// - `"design-system"` — design-system composition
 /// - `"interactivity"` — multi-screen navigation contract (`screen` markers
 ///   + `events.onTap` actions) for tappable App Mode preview
+/// - `"scroll"` (`scroll-orchestration`, `parallax`, `page-scroll`) — the
+///   page-scroll contract: the page root is the `$scroll` source, `pin: true`
+///   pins, paint-only `translateX/Y` moves
+/// - `"card"` (`cards`, `card-item`) — card-board contract
+/// - `"icons"` (`icon`, `icon-font`, `lucide`) — icon_font/lucide icon catalog
 ///
 /// Returns `None` for any unrecognised topic so callers can produce a typed
 /// "unknown topic" error without special-casing the string themselves.
@@ -149,8 +175,102 @@ pub fn guideline_topics() -> Vec<&'static str> {
 }
 
 const JIAN_COMPONENTS_PLACEHOLDER: &str = "{{jianComponents}}";
+const TOOL_SELECT_PLACEHOLDER: &str = "{{toolSelect}}";
+const VERIFY_STEP_PLACEHOLDER: &str = "{{verifyStep}}";
+const FINISH_CONDITION_PLACEHOLDER: &str = "{{finishCondition}}";
 
-/// Return the system prompt for the design agentic tool-loop.
+/// How the executing host verifies visual output — the one part of the
+/// design-agent protocol that is host-capability-dependent. The empty-canvas
+/// postmortem: the prompt made the screenshot check "mandatory, not
+/// optional" and made it the END condition, while the mobile host cannot
+/// render screenshots at all — a trailing capability note was not enough for
+/// a weak model on a starved budget, so the protocol text itself must be
+/// host-aware.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DesignVerifyProtocol {
+    /// Desktop / daemon: `get_screenshot` renders, the screenshot check is
+    /// mandatory, and finishing is gated on it (the historical text).
+    Screenshot,
+    /// Hosts without a render arm (the mobile FFI): verification runs on
+    /// `snapshot_layout` + per-batch `layoutIssues`, and finishing is gated
+    /// on those instead. `get_screenshot` is not mentioned as available.
+    LayoutSnapshot,
+}
+
+const SCREENSHOT_TOOL_SELECT: &str = "select:get_editor_state,get_guidelines,get_style_guide_tags,get_style_guide,get_variables,batch_get,snapshot_layout,batch_design,get_screenshot,find_empty_space,spawn_agents";
+const LAYOUT_TOOL_SELECT: &str = "select:get_editor_state,get_guidelines,get_style_guide_tags,get_style_guide,get_variables,batch_get,snapshot_layout,batch_design,find_empty_space";
+
+const LAYOUT_VERIFY_STEP: &str = "### Step 8 — Verify with `snapshot_layout`\n\n\
+This host cannot render screenshots — `get_screenshot` does not exist here and its absence is \
+never a reason to stop or skip building. Verify with `snapshot_layout` and each `batch_design` \
+result's `layoutIssues` list instead: those are the REAL resolved layout's measured facts \
+(collapsed containers, overflowing rows, clipped text). Iterate until no layout issue remains \
+and every section shell is filled. Do not declare the design done while a known defect stands.";
+
+const LAYOUT_FINISH_CONDITION: &str = "End the turn when `snapshot_layout` confirms every \
+section is present and filled and the last `batch_design` results carry no unresolved \
+`layoutIssues`.";
+
+const SCREENSHOT_FINISH_CONDITION: &str = "End the turn when the `get_screenshot` output \
+verifies the design is complete and visually polished.";
+
+/// The design-agent template with the shared `jian-components` contract
+/// mounted and the host-dependent placeholders still in place.
+fn design_agent_template() -> &'static str {
+    static TEMPLATE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    TEMPLATE.get_or_init(|| {
+        let template = phase_corpus_dir()
+            .and_then(|dir| dir.get_file("phases/agent/design-agent.md"))
+            .and_then(|f| f.contents_utf8())
+            .expect(
+                "skills/phases/agent/design-agent.md must be embedded in the op-ai-skills corpus \
+                 (a slim-corpus build must never reach the design-agent template)",
+            );
+        for placeholder in [
+            JIAN_COMPONENTS_PLACEHOLDER,
+            TOOL_SELECT_PLACEHOLDER,
+            VERIFY_STEP_PLACEHOLDER,
+            FINISH_CONDITION_PLACEHOLDER,
+        ] {
+            assert!(
+                template.contains(placeholder),
+                "design-agent.md must carry the {placeholder} mount point"
+            );
+        }
+        let widgets = get_skill_by_name("jian-components")
+            .expect("jian-components must be registered for the design-agent prompt");
+        template.replace(JIAN_COMPONENTS_PLACEHOLDER, widgets.content.trim())
+    })
+}
+
+/// The screenshot-verification Step 8 text (historical wording, embedded in
+/// its own corpus file so the two variants stay reviewable side by side).
+const SCREENSHOT_VERIFY_STEP: &str = include_str!("design_agent_verify_screenshot.md");
+
+/// Return the design-agent tool-loop system prompt for a given host
+/// verification protocol.
+pub fn design_agent_system_prompt_for(verify: DesignVerifyProtocol) -> String {
+    let (tool_select, verify_step, finish) = match verify {
+        DesignVerifyProtocol::Screenshot => (
+            SCREENSHOT_TOOL_SELECT,
+            SCREENSHOT_VERIFY_STEP.trim(),
+            SCREENSHOT_FINISH_CONDITION,
+        ),
+        DesignVerifyProtocol::LayoutSnapshot => (
+            LAYOUT_TOOL_SELECT,
+            LAYOUT_VERIFY_STEP,
+            LAYOUT_FINISH_CONDITION,
+        ),
+    };
+    design_agent_template()
+        .replace(TOOL_SELECT_PLACEHOLDER, tool_select)
+        .replace(VERIFY_STEP_PLACEHOLDER, verify_step)
+        .replace(FINISH_CONDITION_PLACEHOLDER, finish)
+}
+
+/// Return the system prompt for the design agentic tool-loop (desktop
+/// screenshot protocol — the historical text, byte-stable for existing
+/// callers).
 ///
 /// The protocol template is embedded from
 /// `skills/phases/agent/design-agent.md`. Its native-widget placeholder is
@@ -162,21 +282,7 @@ const JIAN_COMPONENTS_PLACEHOLDER: &str = "{{jianComponents}}";
 /// (a build-time invariant: the file is checked in alongside this crate).
 pub fn design_agent_system_prompt() -> &'static str {
     static PROMPT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-    PROMPT.get_or_init(|| {
-        let template = SKILLS
-            .get_file("phases/agent/design-agent.md")
-            .and_then(|f| f.contents_utf8())
-            .expect(
-                "skills/phases/agent/design-agent.md must be embedded in the op-ai-skills corpus",
-            );
-        assert!(
-            template.contains(JIAN_COMPONENTS_PLACEHOLDER),
-            "design-agent.md must mount the shared jian-components contract"
-        );
-        let widgets = get_skill_by_name("jian-components")
-            .expect("jian-components must be registered for the design-agent prompt");
-        template.replace(JIAN_COMPONENTS_PLACEHOLDER, widgets.content.trim())
-    })
+    PROMPT.get_or_init(|| design_agent_system_prompt_for(DesignVerifyProtocol::Screenshot))
 }
 
 /// Return the design-agent tool-loop system prompt with the prompt-matched
@@ -203,7 +309,17 @@ pub fn design_agent_system_prompt() -> &'static str {
 /// resolver's (per-skill budgets + phase cap), so a keyword-rich prompt cannot
 /// balloon the system prompt.
 pub fn design_agent_system_prompt_with_skills(user_message: &str) -> String {
-    let base = design_agent_system_prompt();
+    design_agent_system_prompt_with_skills_for(user_message, DesignVerifyProtocol::Screenshot)
+}
+
+/// Host-aware variant of [`design_agent_system_prompt_with_skills`]: same
+/// depth-skill assembly over the protocol for the given verification
+/// protocol (mobile passes [`DesignVerifyProtocol::LayoutSnapshot`]).
+pub fn design_agent_system_prompt_with_skills_for(
+    user_message: &str,
+    verify: DesignVerifyProtocol,
+) -> String {
+    let base = design_agent_system_prompt_for(verify);
     let ctx = resolve::resolve_skills(
         types::Phase::Generation,
         user_message,
@@ -222,7 +338,7 @@ pub fn design_agent_system_prompt_with_skills(user_message: &str) -> String {
         .map(|s| s.content.trim())
         .filter(|c| !c.is_empty())
         .collect();
-    let mut prompt = base.to_string();
+    let mut prompt = base;
     if !depth.is_empty() {
         prompt.push_str("\n\n---\n\n## Product-Design Depth (applies to this task)\n\n");
         prompt.push_str(&depth.join("\n\n"));
@@ -234,7 +350,46 @@ pub fn design_agent_system_prompt_with_skills(user_message: &str) -> String {
 /// The embedded `skills/` corpus — domain / knowledge / phase skill
 /// markdown plus the `style-guides/` subtree. Parsed into the skill
 /// registry on first access (see [`loader`]).
+// The slim gate is feature AND target: cargo feature unification opens
+// the feature for every crate in a workspace build that includes
+// op-host-web, and without the target gate that build would strip the
+// corpus out from under the desktop and daemon. Only an actual wasm32
+// compilation slims.
+#[cfg(not(all(feature = "slim-corpus", target_arch = "wasm32")))]
 pub static SKILLS: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/skills");
+
+/// slim-corpus: only the style-guides subtree is embedded. Everything
+/// that walks [`SKILLS`] must go through [`style_guides_dir`] /
+/// [`phase_corpus_dir`] so both embeds answer the same questions.
+#[cfg(all(feature = "slim-corpus", target_arch = "wasm32"))]
+pub static STYLE_GUIDES_ONLY: Dir<'static> =
+    include_dir!("$CARGO_MANIFEST_DIR/skills/style-guides");
+
+/// The style-guides subtree, wherever this build embedded it.
+pub fn style_guides_dir() -> Option<&'static Dir<'static>> {
+    #[cfg(not(all(feature = "slim-corpus", target_arch = "wasm32")))]
+    {
+        SKILLS.get_dir("style-guides")
+    }
+    #[cfg(all(feature = "slim-corpus", target_arch = "wasm32"))]
+    {
+        Some(&STYLE_GUIDES_ONLY)
+    }
+}
+
+/// The phase/domain/knowledge corpus root, absent on a slim build — the
+/// browser never composes prompts, so callers must treat `None` as "not
+/// this build's job", never as an error.
+pub fn phase_corpus_dir() -> Option<&'static Dir<'static>> {
+    #[cfg(not(all(feature = "slim-corpus", target_arch = "wasm32")))]
+    {
+        Some(&SKILLS)
+    }
+    #[cfg(all(feature = "slim-corpus", target_arch = "wasm32"))]
+    {
+        None
+    }
+}
 
 /// The embedded P2 style catalog. This is deliberately separate from
 /// [`SKILLS`] so catalog entries cannot be parsed as phase skills.
@@ -254,522 +409,5 @@ pub(crate) fn count_md(dir: &Dir) -> usize {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn embeds_the_skill_corpus() {
-        // The TS package ships ~95 skill + style-guide markdown files;
-        // the full corpus must travel with the crate.
-        assert!(
-            count_md(&SKILLS) >= 91,
-            "expected the full skill corpus to embed, found {}",
-            count_md(&SKILLS)
-        );
-    }
-
-    #[test]
-    fn guideline_for_web_app_returns_product_design_content() {
-        let content = guideline_for("web-app").expect("web-app guideline must be present");
-        // Both source skills must be represented.
-        assert!(
-            content.contains("PURPOSE FIRST"),
-            "web-app guideline must contain product-principles content"
-        );
-        assert!(
-            content.contains("DESIGN CRAFT"),
-            "web-app guideline must contain design-principles content"
-        );
-        assert!(!content.is_empty());
-    }
-
-    #[test]
-    fn design_agent_prompt_with_skills_appends_matched_domain_depth() {
-        // A dashboard ask must carry dashboard.md + the always-on principle
-        // bases on top of the unchanged protocol base.
-        let prompt = design_agent_system_prompt_with_skills(
-            "Design an analytics dashboard with a client table",
-        );
-        assert!(
-            prompt.starts_with(design_agent_system_prompt()),
-            "protocol base must lead the assembled prompt"
-        );
-        assert!(
-            prompt.contains("Product-Design Depth"),
-            "depth section header present"
-        );
-        assert!(
-            prompt.contains("PURPOSE FIRST"),
-            "always-on product-principles must ride along"
-        );
-        assert!(
-            prompt.contains("DASHBOARD / ADMIN / DATA-TABLE DEPTH"),
-            "dashboard domain skill must resolve for a dashboard ask"
-        );
-    }
-
-    #[test]
-    fn design_agent_prompt_with_skills_matches_mobile_domain() {
-        let prompt =
-            design_agent_system_prompt_with_skills("design a mobile fitness app home screen");
-        assert!(
-            prompt.contains("THREE-SECTION ARCHITECTURE"),
-            "mobile-app domain skill must resolve for a mobile ask"
-        );
-        assert!(
-            prompt.contains("transparent root-direct section frames")
-                && prompt.contains("height=\"fit_content\"")
-                && prompt.contains("padding: [0,24]"),
-            "mobile domain must teach Hug Height and the section-owned content rail"
-        );
-    }
-
-    #[test]
-    fn builtin_design_loop_prompt_mounts_the_shared_first_class_widget_contract() {
-        let widgets = get_skill_by_name("jian-components")
-            .expect("jian-components must be registered")
-            .content
-            .trim();
-        let base = design_agent_system_prompt();
-        let builtin = design_agent_system_prompt_with_skills(
-            "Continue this mobile app with an interactive settings screen",
-        );
-
-        assert!(
-            base.contains(widgets),
-            "bare tool-loop prompt must mount the exact shared generation contract"
-        );
-        assert!(
-            builtin.contains(widgets),
-            "the prompt passed to builtin design turns must retain the shared contract"
-        );
-        assert!(!base.contains(JIAN_COMPONENTS_PLACEHOLDER));
-        assert_eq!(
-            builtin.matches("FIRST-CLASS OUTPUT").count(),
-            1,
-            "the builtin prompt must mount one authoritative widget contract"
-        );
-        for kind in [
-            "text_input",
-            "text_area",
-            "select",
-            "switch",
-            "checkbox",
-            "slider",
-            "radio_group",
-            "number_input",
-            "progress",
-            "tabs",
-        ] {
-            assert!(
-                builtin.contains(kind),
-                "builtin design loop must receive first-class widget `{kind}`"
-            );
-        }
-        for contract in [
-            "options: [{value,label}]",
-            "`checked`",
-            "`min`, `max`, `step`, and `value`",
-            "MUST explicitly carry `fill`, `stroke`, and",
-            "`cornerRadius`",
-            "`fill` is the active/accent paint",
-            "`stroke.fill` is the inactive track/border paint",
-            "LEGACY COMPATIBILITY ONLY",
-        ] {
-            assert!(
-                builtin.contains(contract),
-                "builtin design loop lost native-widget contract {contract:?}"
-            );
-        }
-    }
-
-    #[test]
-    fn design_agent_base_prompt_keeps_final_hug_height_invariant() {
-        let prompt = design_agent_system_prompt();
-        assert!(
-            prompt.contains("Final sizing invariant")
-                && prompt.contains("ordinary content wrappers default to `height:\"fit_content\"`"),
-            "the tool-loop base must carry the sizing invariant even when protocol skills are excluded"
-        );
-    }
-
-    #[test]
-    fn design_agent_prompt_with_skills_excludes_protocol_skills() {
-        // Output-protocol skills (schema / layout / codegen) must NOT ride
-        // into the tool-loop prompt — the loop's protocol is the tool loop
-        // itself (design-agent.md), and doubling protocols confuses weak
-        // models. `layout.md`'s canonical opener is the marker.
-        let prompt = design_agent_system_prompt_with_skills(
-            "Design an analytics dashboard with a client table",
-        );
-        assert!(
-            !prompt.contains("LAYOUT ENGINE (flexbox-based)"),
-            "generation-protocol layout.md must not be appended"
-        );
-    }
-
-    #[test]
-    fn guideline_for_mobile_returns_mobile_app_content() {
-        let content = guideline_for("mobile").expect("mobile guideline must be present");
-        // Canonical phrase from mobile-app.md.
-        assert!(
-            content.contains("THREE-SECTION ARCHITECTURE"),
-            "mobile guideline must contain the three-section architecture content"
-        );
-        assert!(!content.is_empty());
-    }
-
-    #[test]
-    fn code_to_design_guideline_resolves() {
-        let content = guideline_for("code-to-design").expect("code-to-design guideline present");
-        for must in [
-            "Five-step",
-            "upsert_variables",
-            "upsert_component",
-            "upsert_screen",
-            "conversion_status",
-            "lint_document",
-            "get_screenshot",
-        ] {
-            assert!(content.contains(must), "guideline missing: {must}");
-        }
-    }
-
-    #[test]
-    fn code_to_design_component_example_uses_valid_pen_node_json() {
-        let content = guideline_for("code-to-design").expect("code-to-design guideline present");
-        let marker = "{\n  \"key\": \"src/components/Button.tsx#Button\"";
-        let start = content
-            .find(marker)
-            .expect("component example JSON block must exist");
-        let end = content[start..]
-            .find("\n```")
-            .map(|offset| start + offset)
-            .expect("component example JSON block must close");
-        let example: serde_json::Value =
-            serde_json::from_str(&content[start..end]).expect("component example parses as JSON");
-        let node = example
-            .get("node_json")
-            .cloned()
-            .expect("component example includes node_json");
-
-        serde_json::from_value::<jian_ops_schema::node::PenNode>(node)
-            .expect("component example node_json must deserialize as a PenNode");
-    }
-
-    #[test]
-    fn guideline_for_unknown_topic_returns_none() {
-        assert!(
-            guideline_for("unknown-topic").is_none(),
-            "unknown topics must return None"
-        );
-        assert!(guideline_for("").is_none(), "empty topic must return None");
-        assert!(
-            guideline_for("desktop").is_none(),
-            "unsupported topics must return None"
-        );
-    }
-
-    #[test]
-    fn guideline_for_extended_topics_resolve() {
-        // landing-page composes the landing domain + design craft.
-        let lp = guideline_for("landing-page").expect("landing-page guideline present");
-        assert!(
-            lp.contains("DESIGN CRAFT"),
-            "landing-page must include design craft"
-        );
-        // slides resolves to the slide layout contracts AND the pattern
-        // skeletons — an external agent asking for slide guidance needs both
-        // the tier/format rules and the structures that satisfy them.
-        let sl = guideline_for("slides").expect("slides guideline present");
-        assert!(
-            sl.to_uppercase().contains("SLIDE"),
-            "slides must include slide guidance"
-        );
-        assert!(
-            sl.contains("## Style tiers — pick ONE for the whole deck"),
-            "slides guideline must carry the style tiers"
-        );
-        assert!(
-            sl.contains("DECK PATTERNS — SLIDE SKELETONS"),
-            "slides guideline must carry the pattern skeletons"
-        );
-        // dashboard / table both resolve.
-        assert!(
-            guideline_for("dashboard").is_some(),
-            "dashboard guideline present"
-        );
-        assert!(guideline_for("table").is_some(), "table alias resolves");
-        // web-app now also carries the web-app depth laws.
-        let wa = guideline_for("web-app").expect("web-app guideline present");
-        assert!(
-            wa.contains("PROGRESSIVE DISCLOSURE"),
-            "web-app must include the web-app depth laws"
-        );
-        // aliases resolve.
-        assert!(guideline_for("webapp").is_some(), "webapp alias resolves");
-        assert!(
-            guideline_for("presentation").is_some(),
-            "presentation alias resolves"
-        );
-    }
-
-    #[test]
-    fn guideline_for_interactivity_teaches_screen_and_on_tap_contract() {
-        let content =
-            guideline_for("interactivity").expect("interactivity guideline must be present");
-        assert!(
-            content.contains("\"screen\""),
-            "must teach the screen marker"
-        );
-        assert!(
-            content.contains("events.onTap") || content.contains("onTap"),
-            "must teach the events.onTap binding"
-        );
-        assert!(
-            content.contains(r#"{ "replace": "\"/profile\"" } "#)
-                || content.contains(r#"{ "replace": "\"/profile\"" }"#),
-            "must show the exact quote-literal replace example: {content:?}"
-        );
-        assert!(
-            content.contains(r#"{"pop": null}"#) || content.contains(r#"{ "pop": null }"#),
-            "must show the pop (no-path) example"
-        );
-        assert!(
-            content.contains("`route` field") && content.contains("schema-only"),
-            "must forbid the schema-only route field: {content:?}"
-        );
-    }
-
-    #[test]
-    fn design_agent_system_prompt_resolves_and_contains_protocol_markers() {
-        let prompt = design_agent_system_prompt();
-        assert!(
-            !prompt.is_empty(),
-            "design_agent_system_prompt must not be empty"
-        );
-
-        // Tool-loop protocol markers.
-        assert!(
-            prompt.contains("get_editor_state"),
-            "must reference get_editor_state"
-        );
-        assert!(
-            prompt.contains("get_style_guide"),
-            "must reference get_style_guide"
-        );
-        assert!(
-            prompt.contains("get_guidelines"),
-            "must reference get_guidelines"
-        );
-        assert!(
-            prompt.contains("batch_design"),
-            "must reference batch_design"
-        );
-        assert!(
-            prompt.contains("script"),
-            "must reference batch_design's script mode (the preferred build path)"
-        );
-        assert!(
-            prompt.contains("I(parent") || prompt.contains("I(null"),
-            "must teach the I(parent, obj) script-gen call syntax"
-        );
-        assert!(
-            prompt.contains("unsupported in script mode") && prompt.contains("rejects the script"),
-            "must teach that unsupported script mutations fail loudly"
-        );
-        assert!(
-            prompt.contains("get_screenshot"),
-            "must reference get_screenshot"
-        );
-        assert!(
-            prompt.contains("spawn_agents"),
-            "must reference spawn_agents"
-        );
-        assert!(
-            prompt.contains("find_empty_space"),
-            "must reference find_empty_space"
-        );
-
-        // DSL / node model markers.
-        assert!(
-            prompt.contains("placeholder"),
-            "must describe placeholder scaffolding"
-        );
-        assert!(
-            prompt.contains("instanceId"),
-            "must describe instanceId path editing"
-        );
-
-        // Batch size limit.
-        assert!(
-            prompt.contains("25"),
-            "must state the 25-operation batch limit"
-        );
-
-        // De-templating rules.
-        assert!(
-            prompt.contains("space-between") || prompt.contains("space_between"),
-            "must teach spacing / spread rule (space-between)"
-        );
-        assert!(
-            prompt.contains("right"),
-            "must state new-screen opens to the right"
-        );
-        assert!(
-            prompt.contains("icon"),
-            "must describe icon in nav tab rule"
-        );
-        assert!(
-            prompt.contains("label"),
-            "must describe label in nav tab rule"
-        );
-    }
-
-    #[test]
-    fn local_edit_skill_outputs_script_gen_protocol() {
-        let skill = get_skill_by_name("local-edit").expect("local-edit skill must be registered");
-
-        assert!(
-            skill.content.contains("JavaScript program"),
-            "local-edit must request a script-gen JavaScript program"
-        );
-        assert!(
-            skill.content.contains("I(parent") || skill.content.contains("I(null"),
-            "local-edit must teach the I(parent, obj) call syntax"
-        );
-        assert!(
-            skill.content.contains("are rejected") && skill.content.contains("operations"),
-            "local-edit must explain that unsupported script mutations fail loudly"
-        );
-        assert!(
-            !skill.content.contains("json` code block"),
-            "local-edit must not ask for the retired flat JSON code block"
-        );
-    }
-
-    #[test]
-    fn design_agent_prompt_mentions_style_fetch() {
-        let prompt = design_agent_system_prompt();
-        assert!(
-            prompt.contains("get_guidelines(category:\"style\""),
-            "design-agent prompt must tell the loop to fetch a style guideline"
-        );
-        assert!(
-            prompt.contains("colorPalette:\""),
-            "design-agent prompt must show the flat colorPalette style param"
-        );
-    }
-
-    #[test]
-    fn design_agent_prompt_requires_one_palette_source_of_truth() {
-        let prompt = design_agent_system_prompt();
-        assert!(
-            prompt.contains("Choose exactly ONE source of truth"),
-            "design-agent prompt must make palette selection explicit"
-        );
-        assert!(
-            prompt.contains("Existing project variables/design system"),
-            "existing project tokens must win over presets"
-        );
-        assert!(
-            prompt.contains("No matching built-in"),
-            "a style-guide concrete-value path must remain available"
-        );
-        assert!(
-            prompt.contains("do not mix this palette with an unrelated preset"),
-            "the prompt must forbid competing palette sources"
-        );
-    }
-
-    #[test]
-    fn design_agent_and_base_layout_teach_front_to_back_overlay_order() {
-        let prompt = design_agent_system_prompt();
-        for marker in [
-            "front-to-back by child index",
-            "`children[0]` is TOPMOST",
-            "M(overlayId, stackId, 0)",
-            "separate EMPTY frame/rectangle image slot",
-        ] {
-            assert!(
-                prompt.contains(marker),
-                "design-agent prompt must contain {marker:?}"
-            );
-        }
-
-        let layout = get_skill_by_name("layout").expect("base layout skill must be registered");
-        assert!(layout.content.contains("front-to-back by array index"));
-        assert!(layout.content.contains("`children[0]` is TOPMOST"));
-        assert!(layout
-            .content
-            .contains("separate EMPTY frame/rectangle slot"));
-    }
-
-    #[test]
-    fn design_agent_prompt_distinguishes_seed_from_explicit_viewport() {
-        let prompt = design_agent_system_prompt();
-        assert!(prompt.contains("CONSTRUCTION seed, not automatically the final height"));
-        assert!(prompt.contains("switch an ordinary content-driven page root"));
-        assert!(prompt.contains("A user-specified numeric viewport is authoritative"));
-        assert!(!prompt.contains("grow the height later if content exceeds it"));
-        assert!(!prompt.contains("numeric viewport such as 390x844 is an AUTHORED CONTRACT"));
-    }
-
-    #[test]
-    fn design_agent_prompt_forbids_cross_call_destructive_rebuilds() {
-        let prompt = design_agent_system_prompt();
-        assert!(prompt.contains("Preserve the last working visual state"));
-        assert!(prompt.contains("NEVER delete a visible working section in one tool call"));
-        assert!(prompt.contains("ONE transactional `batch_design` call"));
-        assert!(prompt.contains("keep the working section intact"));
-    }
-
-    #[test]
-    fn image_self_check_is_limited_to_rendering_integrity() {
-        let prompt = design_agent_system_prompt();
-        assert!(prompt.contains("Image self-check is presentation-only"));
-        assert!(prompt.contains("do NOT judge or replace it based on subject relevance"));
-        assert!(prompt.contains("does not restrict initial asset selection"));
-        assert!(prompt.contains("an explicit user request to replace, retarget, or restyle"));
-
-        let mobile = get_skill_by_name("mobile-ui").expect("mobile-ui skill must be registered");
-        assert!(mobile.content.contains("MOBILE IMAGE PRESENTATION"));
-        assert!(mobile
-            .content
-            .contains("During initial image-query or image-prompt authoring"));
-        assert!(mobile.content.contains("coherent in subject category"));
-        assert!(mobile.content.contains("verify only rendering integrity"));
-        assert!(mobile
-            .content
-            .contains("icon or illustration tile is valid"));
-        assert!(mobile
-            .content
-            .contains("explicit user-requested image edit remains allowed"));
-        assert!(!mobile.content.contains("MOBILE IMAGE QUALITY"));
-        assert!(!mobile.content.contains("random low-quality"));
-
-        let landing = design_agent_system_prompt_with_skills(
-            "Design a landing page for a climate travel service",
-        );
-        assert!(landing.contains("initial selection heuristic before inserting the image"));
-        assert!(landing.contains("self-check is presentation-only"));
-        assert!(landing.contains("automatic screenshot-driven self-check"));
-        assert!(landing.contains("unless the user explicitly requests an image edit"));
-        assert!(!landing.contains("If not, change it"));
-        assert!(landing
-            .trim_end()
-            .ends_with(IMAGE_SELF_CHECK_SCOPE.trim_end()));
-
-        let mut contextual = landing;
-        contextual.push_str("\n\nEXISTING CANVAS CONTEXT");
-        append_image_self_check_scope(&mut contextual);
-        assert_eq!(
-            contextual.matches(IMAGE_SELF_CHECK_SCOPE).count(),
-            1,
-            "the authoritative scope must be moved to the end, not duplicated"
-        );
-        assert!(contextual
-            .trim_end()
-            .ends_with(IMAGE_SELF_CHECK_SCOPE.trim_end()));
-    }
-}
+#[path = "lib_tests.rs"]
+mod lib_tests;

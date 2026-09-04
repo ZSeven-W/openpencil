@@ -4,7 +4,8 @@
 //! widgets relied on. `EditorState` deliberately has no widget-layer
 //! concerns, so the same two derivations live here as free functions
 //! over the narrowest sub-struct that carries the inputs —
-//! `EditorUiState` (which holds `theme_mode` + `locale`).
+//! `EditorUiState` (which resolves the user theme plus any transient host
+//! override, and holds `locale`).
 //!
 //! Widgets that were ported off `Document` onto `EditorState` call
 //! these instead of the old `doc.theme()` / `doc.t(key)`.
@@ -15,7 +16,7 @@ use op_editor_core::editor_ui_state::{EditorUiState, ThemeMode};
 /// Resolve the active editor [`Theme`] from the UI theme mode.
 /// Mirrors the old `Document::theme()`.
 pub fn theme_for(ui: &EditorUiState) -> Theme {
-    match ui.theme_mode {
+    match ui.effective_theme_mode() {
         ThemeMode::Dark => Theme::dark(),
         ThemeMode::Light => Theme::light(),
     }
@@ -24,7 +25,7 @@ pub fn theme_for(ui: &EditorUiState) -> Theme {
 /// Translate a chrome string key against the active UI locale.
 /// Mirrors the old `Document::t()`.
 pub fn translate(ui: &EditorUiState, key: &'static str) -> &'static str {
-    crate::i18n::translate(ui.locale, key)
+    crate::i18n::translate(ui.effective_locale(), key)
 }
 
 /// Map an `op_editor_core::ExportFormat` onto the widget-layer

@@ -13,6 +13,11 @@ use op_editor_ui::widgets::press_flow::{
 };
 use op_editor_ui::Point2D;
 
+/// Pointer id the mouse-driven preview wrappers dispatch under (R4 keeps
+/// real ids available for pointer-event-capable callers through `_id`
+/// variants added alongside these seams).
+pub(in crate::widget_host) const LEGACY_WEB_PREVIEW_POINTER_ID: u32 = 1;
+
 use super::press_ctx::PressCtx;
 use super::WidgetHost;
 
@@ -224,5 +229,243 @@ impl WidgetHost {
         // (panel-rail gaps, property-panel padding, …): blank press.
         let blurred = self.blur_text_inputs_on_blank_press();
         blurred || rename_committed || text_edit_committed || property_focus_committed
+    }
+
+    /// Route a screen-space press into the live preview runtime as a
+    /// pointer Down. Returns `true` (consumed) only when preview is active
+    /// and the point is inside the canvas. No-op (false) when not in preview.
+    #[cfg(feature = "canvaskit")]
+    pub(in crate::widget_host) fn preview_dispatch_press(
+        &mut self,
+        screen_x: f32,
+        screen_y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        use jian_core::gesture::pointer::PointerPhase;
+
+        // Slideshow presentation: check toolbar and board presses first,
+        // before converting to scene space (slideshow operates in screen space).
+        if self.preview_slideshow_active() {
+            // Toolbar has priority — it must stay clickable above the board.
+            if self.slideshow_toolbar_press(screen_x, screen_y, viewport_w, viewport_h) {
+                return true;
+            }
+            // Board press records the position for swipe detection on release.
+            self.slideshow_board_press(screen_x, screen_y);
+            return true;
+        }
+
+        let doc_point =
+            match self.preview_screen_to_scene_point(screen_x, screen_y, viewport_w, viewport_h) {
+                Some(p) => p,
+                None => return false,
+            };
+
+        let Some(session) = self.preview.as_mut() else {
+            return false;
+        };
+        let handled = session.dispatch_pointer_for_id_at(
+            LEGACY_WEB_PREVIEW_POINTER_ID,
+            jian_core::gesture::pointer::PointerKind::Mouse,
+            doc_point.x,
+            doc_point.y,
+            PointerPhase::Down,
+            self.now_ms,
+        );
+        let first_finger = self.preview_pressed_pids.is_empty();
+        if !self
+            .preview_pressed_pids
+            .contains(&LEGACY_WEB_PREVIEW_POINTER_ID)
+        {
+            self.preview_pressed_pids
+                .push(LEGACY_WEB_PREVIEW_POINTER_ID);
+        }
+        self.preview_last_doc_by_pid
+            .insert(LEGACY_WEB_PREVIEW_POINTER_ID, (doc_point.x, doc_point.y));
+        // Arm edge-swipe candidate after the runtime has the pointer Down,
+        // and only for the FIRST finger — a second finger never arms.
+        if first_finger {
+            self.arm_edge_swipe_candidate(screen_x);
+            self.preview_edge_swipe_pid = Some(LEGACY_WEB_PREVIEW_POINTER_ID);
+        }
+        if handled {
+            self.mark_dirty();
+        }
+        handled
+    }
+
+    /// Route a cursor move into the live preview runtime.
+    /// Returns `true` (consumed) when the point is on-canvas and a gesture
+    /// is active or the preview handled the move event.
+    #[cfg(feature = "canvaskit")]
+    pub(in crate::widget_host) fn preview_dispatch_move(
+        &mut self,
+        screen_x: f32,
+        screen_y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        use jian_core::gesture::pointer::PointerPhase;
+
+        // Slideshow presentation: update toolbar hover and cursor tracking
+        // before the runtime sees the move.
+        if self.preview_slideshow_active() {
+            self.slideshow_toolbar_hover(screen_x, screen_y, viewport_w, viewport_h);
+            return true;
+        }
+
+        let Some(_session) = self.preview.as_mut() else {
+            return false;
+        };
+        let Some(doc_point) =
+            self.preview_screen_to_scene_point(screen_x, screen_y, viewport_w, viewport_h)
+        else {
+            return false;
+        };
+        // Check edge-swipe BEFORE updating preview_last_doc, so cancel
+        // dispatches at the gesture's last real position
+        if self
+            .preview_pressed_pids
+            .contains(&LEGACY_WEB_PREVIEW_POINTER_ID)
+            && self.preview_edge_swipe_pid == Some(LEGACY_WEB_PREVIEW_POINTER_ID)
+            && self.maybe_fire_edge_swipe(screen_x)
+        {
+            self.cancel_preview_gesture_for_edge_swipe();
+            self.mark_dirty();
+            return true;
+        }
+        // Move ONLY while the press is held; a bare cursor pass is a
+        // Hover. Feeding the runtime a stream of `Move` with no button
+        // down leaves its gesture machine believing a drag is in flight,
+        // and every later Down/Up stops resolving as a tap — which reads
+        // as "the nav works once, then goes dead".
+        let phase = if self
+            .preview_pressed_pids
+            .contains(&LEGACY_WEB_PREVIEW_POINTER_ID)
+        {
+            PointerPhase::Move
+        } else {
+            PointerPhase::Hover
+        };
+        self.preview_last_doc_by_pid
+            .insert(LEGACY_WEB_PREVIEW_POINTER_ID, (doc_point.x, doc_point.y));
+        if let Some(session) = self.preview.as_mut() {
+            let emitted = session.dispatch_pointer_for_id_at(
+                LEGACY_WEB_PREVIEW_POINTER_ID,
+                jian_core::gesture::pointer::PointerKind::Mouse,
+                doc_point.x,
+                doc_point.y,
+                phase,
+                self.now_ms,
+            );
+            if emitted
+                || self
+                    .preview_pressed_pids
+                    .contains(&LEGACY_WEB_PREVIEW_POINTER_ID)
+            {
+                self.mark_dirty();
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Complete a preview gesture: pointer Up.
+    /// Returns `true` (consumed) when a preview press was in flight.
+    #[cfg(feature = "canvaskit")]
+    pub(in crate::widget_host) fn preview_dispatch_release(&mut self) -> bool {
+        use jian_core::gesture::pointer::PointerPhase;
+
+        // Slideshow presentation: resolve the release through slideshow handlers
+        // (tap/swipe detection, toolbar activation).
+        if self.preview_slideshow_active() {
+            // Update the cursor to the final position before release analysis.
+            if let Some((x, y)) = self
+                .preview_last_doc_by_pid
+                .get(&LEGACY_WEB_PREVIEW_POINTER_ID)
+                .copied()
+            {
+                let _ = self.preview_slideshow_release_point(
+                    x,
+                    y,
+                    self.last_viewport_w,
+                    self.last_viewport_h,
+                );
+            }
+            // Toolbar release handles button activation; board release handles
+            // taps and swipes. Both consume the gesture if they were armed.
+            let handled = self.slideshow_toolbar_release() || self.slideshow_board_release();
+            self.preview_last_doc_by_pid
+                .remove(&LEGACY_WEB_PREVIEW_POINTER_ID);
+            return handled;
+        }
+
+        // Mirrors the native host's `preview_dispatch_release`.
+        self.preview_surface_capture = None;
+        self.disarm_edge_swipe();
+        if !self
+            .preview_pressed_pids
+            .contains(&LEGACY_WEB_PREVIEW_POINTER_ID)
+        {
+            // No Down in flight. Sending an unpaired Up wedges the
+            // runtime's gesture state and it swallows the next Down —
+            // which reads as "the nav only works once".
+            return false;
+        }
+        self.preview_pressed_pids
+            .retain(|p| *p != LEGACY_WEB_PREVIEW_POINTER_ID);
+        let Some((x, y)) = self
+            .preview_last_doc_by_pid
+            .remove(&LEGACY_WEB_PREVIEW_POINTER_ID)
+        else {
+            return false;
+        };
+        // Release AT the gesture's last scene point: the runtime resolves
+        // a tap by where the pointer came up, so an Up at the origin never
+        // completes the tap on the widget the Down landed on.
+        if let Some(session) = self.preview.as_mut() {
+            session.dispatch_pointer_for_id_at(
+                LEGACY_WEB_PREVIEW_POINTER_ID,
+                jian_core::gesture::pointer::PointerKind::Mouse,
+                x,
+                y,
+                PointerPhase::Up,
+                self.now_ms,
+            );
+        }
+        self.mark_dirty();
+        true
+    }
+
+    /// Convert screen-space point to preview scene-space.
+    /// Returns `None` if the point is outside the canvas region.
+    #[cfg(feature = "canvaskit")]
+    fn preview_screen_to_scene_point(
+        &self,
+        screen_x: f32,
+        screen_y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<Point2D> {
+        // The hit test must invert whatever transform preview PAINTED
+        // through, and the two segments paint through different ones.
+        // Getting this wrong errors nowhere — taps just land in empty
+        // space — so the branch mirrors the paint branch exactly.
+        if self.device_mode_active() {
+            // Phone / Desktop: through the device frame, honouring the
+            // pinned strips and the captured gesture surface.
+            return self.device_preview_doc_point(screen_x, screen_y);
+        }
+        // Canvas: the editor's own pan/zoom, via the same shared helper
+        // the native host's `preview_doc_point` falls back to.
+        op_editor_ui::widgets::host_canvas_geometry::canvas_doc_point(
+            &self.editor_state,
+            screen_x,
+            screen_y,
+            viewport_w,
+            viewport_h,
+        )
     }
 }

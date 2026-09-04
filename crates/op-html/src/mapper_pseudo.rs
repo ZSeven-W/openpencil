@@ -6,7 +6,7 @@ use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use crate::css::cascade::{compute_pseudo_style_for_viewport, ComputedStyle};
 use crate::css::selectors::PseudoElement;
 use crate::dom::DomElement;
-use crate::mapper::{apply_base_style, container_props_from, MapCtx};
+use crate::mapper::{apply_base_style, MapCtx};
 
 pub(crate) struct InlinePseudo {
     pub content: String,
@@ -30,10 +30,21 @@ pub(crate) fn map_pseudo(
     context: &mut MapCtx<'_>,
     path: &[&DomElement],
     parent_style: &ComputedStyle,
+    layout_parent_style: &ComputedStyle,
     pseudo: PseudoElement,
+    text_fill_override: Option<&str>,
 ) -> Option<MappedPseudo> {
     let (style, generated) = resolved_pseudo(context, path, parent_style, pseudo)?;
-    if !crate::text::inline::pseudo_needs_frame(&style, parent_style, context) {
+    let needs_frame = crate::text::inline::pseudo_needs_frame(&style, parent_style, context);
+    if needs_frame
+        && crate::text::inline::pseudo_frame_is_inline(&style)
+        && crate::text::inline::has_nonzero_inline_margin(&style, context)
+        && context.containing_width_is_definite
+        && crate::text::inline::inline_text_may_wrap(&style, &generated)
+    {
+        context.warn_once(ImportWarning::InlineMarginWrappingApproximated);
+    }
+    if !needs_frame {
         return Some(MappedPseudo::Inline(InlinePseudo {
             content: generated,
             style,
@@ -45,7 +56,14 @@ pub(crate) fn map_pseudo(
         context.warn_once(ImportWarning::NodeLimitPseudo);
         return None;
     }
-    let mut container = container_props_from(&style, context);
+    let can_transfer_text_clip = crate::mapper::text_scope::style_allows_text_clip_transfer(&style);
+    let (mut container, local_text_fill) =
+        crate::mapper::text_scope::container_props_with_text_scope(
+            &style,
+            context,
+            can_transfer_text_clip,
+        );
+    let text_fill_override = local_text_fill.as_deref().or(text_fill_override);
     apply_inset_sizing(&style, &mut container.width, &mut container.height);
 
     let name = pseudo_name(pseudo);
@@ -59,33 +77,44 @@ pub(crate) fn map_pseudo(
     let outcome = apply_base_style(&mut base, &style, context);
     crate::mapper::warn_dropped_flow_offset(context, outcome);
 
-    let children = if generated.is_empty() {
+    let mut children = if generated.is_empty() {
         Vec::new()
     } else {
-        crate::text::build_generated_text_node(context, &generated, &style)
+        crate::text::build_generated_text_node(context, &generated, &style, text_fill_override)
             .into_iter()
             .collect()
     };
+    let collapsed =
+        super::margin::finish_children(context, &style, Some(layout_parent_style), &mut children);
     context.node_count += 1;
     let inline_level = crate::text::inline::pseudo_frame_is_inline(&style);
+    let node = PenNode::Frame(FrameNode {
+        base,
+        container,
+        children: Some(children),
+        image_search_query: None,
+        reusable: None,
+        slot: None,
+        state: None,
+        bindings: None,
+        events: None,
+        lifecycle: None,
+        semantics: None,
+        gestures: None,
+        route: None,
+        screen: None,
+        breakpoint: None,
+    });
+    let node = super::margin::wrap_margins(
+        context,
+        node,
+        name,
+        &style,
+        Some(layout_parent_style),
+        collapsed,
+    );
     Some(MappedPseudo::Frame {
-        node: Box::new(PenNode::Frame(FrameNode {
-            base,
-            container,
-            children: Some(children),
-            image_search_query: None,
-            reusable: None,
-            slot: None,
-            state: None,
-            bindings: None,
-            events: None,
-            lifecycle: None,
-            semantics: None,
-            gestures: None,
-            route: None,
-            screen: None,
-            breakpoint: None,
-        })),
+        node: Box::new(node),
         inline_level,
     })
 }
@@ -365,7 +394,7 @@ mod tests {
             auto_margin_handled_by_parent: false,
             pending_base_outcome: Default::default(),
         };
-        map_pseudo(&mut context, &[element], &parent, pseudo)
+        map_pseudo(&mut context, &[element], &parent, &parent, pseudo, None)
     }
 
     #[test]

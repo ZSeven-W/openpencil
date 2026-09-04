@@ -25,6 +25,7 @@ use op_host_services::design_agent_tools::{
 use op_editor_core::scene_template_catalog::TemplateScene;
 
 use super::clear_fresh_starter_frame_for_design;
+use super::providers::selected_builtin_agent_config;
 
 /// Parses recognized force-loop / force-orchestrator environment values.
 fn parse_loop_env(opt: Option<&str>) -> Option<bool> {
@@ -203,14 +204,8 @@ pub(crate) fn builtin_provider_with_design_tools(
 ) -> Option<(Box<dyn ChatProvider>, Receiver<ChatToolRequest>)> {
     let state = host.editor_state();
     let entry = state.chat.selected_model_entry()?;
-    let id = entry.builtin_provider_id.as_deref()?;
-    let config = state
-        .editor_ui
-        .agent_settings
-        .builtin_agents
-        .iter()
-        .find(|agent| agent.id == id && agent.ready())?;
-    let provider = ConfiguredBuiltinProvider::from_builtin_agent(config)?;
+    let config = selected_builtin_agent_config(state, entry)?;
+    let provider = ConfiguredBuiltinProvider::from_builtin_agent(&config)?;
     let (executor, tool_rx) = chat_tool_channel();
     let provider = provider
         .with_canvas_tools(design_tool_defs(), Arc::new(executor))
@@ -234,16 +229,7 @@ pub(crate) fn design_turn_thinking_mode(host: &WidgetHostNative) -> ThinkingMode
     let model = state
         .chat
         .selected_model_entry()
-        .and_then(|e| e.builtin_provider_id.as_deref())
-        .and_then(|id| {
-            state
-                .editor_ui
-                .agent_settings
-                .builtin_agents
-                .iter()
-                .find(|a| a.id == id)
-                .map(|a| a.model.as_str())
-        });
+        .and_then(op_editor_core::ModelEntry::builtin_model_id);
     resolve_design_thinking(model, state.chat.thinking_mode)
 }
 

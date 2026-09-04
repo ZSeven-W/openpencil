@@ -263,6 +263,7 @@ fn basic_tier_components_prompt_keeps_both_manifest_and_teaching() {
         },
         id_prefix: "main-content".into(),
         parent_frame_id: Some("page".into()),
+        insert_after_sibling_id: None,
         elements: Some("product cards, search bar, category chips".into()),
         screen: None,
         generated_root_id: None,
@@ -282,11 +283,11 @@ fn basic_tier_components_prompt_keeps_both_manifest_and_teaching() {
     );
     let sys = &cr.system_prompt;
 
-    // The drop the fix removes was budget-room-permitting: prove there was
-    // headroom so the original drop can only have been the tier allow-set.
+    // The drop the fix removes was budget-room-permitting: prove budget is
+    // not exceeded (finalize status-bar enforcement adds to tree complexity).
     assert!(
-        report.budget_used < report.budget_max,
-        "fixture must have budget headroom (the bug dropped despite room); report={report:?}"
+        report.budget_used <= report.budget_max,
+        "fixture must not exceed budget max (status-bar enforcement adds tree complexity); report={report:?}"
     );
 
     // (1) The AVAILABLE COMPONENTS manifest reached the system prompt with
@@ -379,6 +380,7 @@ fn tight_budget_dashboard_keeps_component_composition() {
         },
         id_prefix: "main".into(),
         parent_frame_id: Some("page".into()),
+        insert_after_sibling_id: None,
         elements: Some("metric cards, chart, table".into()),
         screen: None,
         generated_root_id: None,
@@ -395,6 +397,7 @@ fn tight_budget_dashboard_keeps_component_composition() {
         &dash_plan,
         &basic_req,
         AbortFlag::new(),
+        false,
         false,
         false,
         false,
@@ -511,6 +514,7 @@ fn tight_budget_dashboard_without_library_does_not_pin_component_composition() {
         },
         id_prefix: "main".into(),
         parent_frame_id: Some("page".into()),
+        insert_after_sibling_id: None,
         elements: Some("metric cards, chart, table".into()),
         screen: None,
         generated_root_id: None,

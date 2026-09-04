@@ -567,8 +567,18 @@ fn paint_frame(shared: &RenderShared) -> bool {
     let vp = b.viewport;
     let w = b.logical_w;
     let h = b.logical_h;
+    // A scene paint records encoded-image decode work into the shared image
+    // runtime. Drain work left by the previous frame before painting, then
+    // drain again afterwards so this frame's newly requested images are
+    // decoded and can be shown by the next dirty repaint. The full web host
+    // does the same at the start of `CkInner::repaint`; the standalone SDK
+    // owns its own pump and therefore must service that queue itself.
+    b.backend.drain_pending_decodes(2);
     b.backend.begin_frame();
     crate::viewer_host::paint_scene(&mut b.backend, &scene_rc, vp, Theme::dark(), w, h);
     b.backend.end_frame();
+    if b.backend.drain_pending_decodes(2) > 0 {
+        mark_and_arm(shared);
+    }
     true
 }

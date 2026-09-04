@@ -29,6 +29,7 @@ pub(crate) struct NativeCollabJwksFetcher {
 impl NativeCollabJwksFetcher {
     pub(crate) fn new() -> Result<Self, CollabJwksFetchError> {
         let client = Client::builder()
+            .use_rustls_tls()
             .redirect(redirect::Policy::none())
             .connect_timeout(JWKS_HTTP_TIMEOUT)
             .timeout(JWKS_HTTP_TIMEOUT)

@@ -1,3 +1,7 @@
+# Waiting-queue policy is inherited from compose.yaml and is identical in both
+# regions: one lease per WAITING_TIMEOUT_SECS, renewed while the peer answers
+# pings. Rolling the lease needs no client rollout — already-shipped clients
+# pong as a side effect of reading. See README.md, "Mixed-fleet migration".
 services:
   relay:
     environment:

@@ -377,3 +377,43 @@ img=G("slot", "search", "sunset coast")"##;
             .as_str()
             .is_some_and(|message| message.contains("declared width and height")))));
 }
+
+/// A batch that frees an id with `D()` must not hand that id to a later
+/// insert: the caller still holds a binding for the deleted node, and
+/// reissuing its id makes that binding silently resolve to the replacement.
+#[test]
+fn an_id_freed_in_this_batch_is_never_reissued() {
+    let state = sample();
+    let program = r##"card=I(null, {"type":"frame","name":"Card","x":900,"y":0,"width":400,"height":300,"layout":"none"})
+badge=I(card, {"type":"frame","name":"Badge","width":52,"height":28,"x":10,"y":10})
+D(badge)
+img=G(card, "search", "desert dunes epic film poster")"##;
+    let (envelope, _cmd) = call_operations(&state, program);
+    let badge = binding_id(&envelope, "badge");
+    let img = binding_id(&envelope, "img");
+    assert_ne!(
+        badge, img,
+        "the deleted badge's id was reissued to the image: {envelope}"
+    );
+}
+
+/// The rolled-back hint is the only line some hosts render, so it has to
+/// name the first offending line and its reason.
+#[test]
+fn rollback_hint_names_the_first_failing_line_and_reason() {
+    let state = sample();
+    let program = r##"card=I(null, {"type":"frame","name":"Card","x":900,"y":0,"width":400,"height":300,"layout":"none"})
+badge=I(card, {"type":"frame","name":"Badge","width":52,"height":28,"x":10,"y":10})
+img=G(card, "search", "desert dunes epic film poster")"##;
+    let (rolled_back, _) = call_operations(&state, program);
+    let hint = rolled_back["hint"].as_str().expect("hint");
+    assert!(hint.contains("First failure"), "{hint}");
+    assert!(
+        hint.contains("img=G(card"),
+        "hint must name the line: {hint}"
+    );
+    assert!(
+        hint.contains("must be empty"),
+        "hint must carry the reason: {hint}"
+    );
+}

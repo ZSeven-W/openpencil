@@ -280,6 +280,8 @@ pub enum Icon {
     LayersStack,
     /// Custom presentation screen — the left rail's Slides tab, icon mode.
     PresentationScreen,
+    /// Layers — touch-first entry to the document layer hierarchy.
+    Layers,
 }
 
 impl Icon {
@@ -435,6 +437,7 @@ impl Icon {
             Icon::SquaresExclude => SQUARES_EXCLUDE,
             Icon::LayersStack => LAYERS_STACK,
             Icon::PresentationScreen => PRESENTATION_SCREEN,
+            Icon::Layers => LAYERS,
             Icon::Palette => PALETTE,
         }
     }
@@ -443,9 +446,8 @@ impl Icon {
     /// the canonical `.op` loader: `IconFontNode.iconFontName` carries
     /// strings like `pen-tool` / `mail` / `eye-off`; the renderer
     /// looks them up here so authored icons paint as lucide glyphs.
-    /// Returns `None` for names the chrome doesn't carry — the
-    /// renderer falls back to an honest placeholder rather than
-    /// silently dropping the node.
+    /// Returns `None` for names the chrome doesn't carry; unresolved
+    /// `icon_font` nodes are intentionally left unpainted.
     pub fn from_name(name: &str) -> Option<Icon> {
         Some(match name {
             "pen-tool" => Icon::PenTool,
@@ -507,12 +509,13 @@ impl Icon {
             "type" | "text" => Icon::Type,
             "frame" => Icon::Frame,
             "hand" => Icon::Hand,
-            "cursor" | "mouse-pointer" => Icon::Cursor,
+            "cursor" | "mouse-pointer" | "mouse-pointer-2" => Icon::Cursor,
             "maximize" | "fullscreen" => Icon::Maximize,
             "minimize" | "minimize-2" | "restore" => Icon::Minimize,
             "sun" => Icon::Sun,
             "moon" => Icon::Moon,
             "panel-left" => Icon::PanelLeft,
+            "layers" | "layers-2" => Icon::Layers,
             "braces" | "code" => Icon::Braces,
             "book-open" => Icon::BookOpen,
             "library" => Icon::Library,
@@ -711,8 +714,8 @@ pub fn draw_icon_catalog_entry(
 }
 
 /// Paint a canonical `icon_font` node by Iconify collection + name,
-/// scaled into `rect` with aspect preserved. Unknown names stroke a
-/// small dot at the centre so the user sees an honest fallback mark.
+/// scaled into `rect` with aspect preserved. Unknown names are left
+/// unpainted instead of rendering a misleading fallback glyph.
 pub fn paint_icon_font_node(
     backend: &mut dyn RenderBackend,
     family: &str,
@@ -742,21 +745,24 @@ pub fn paint_icon_font_node(
     };
     if let Some(icon) = super::icon_catalog::lookup_icon(family, name) {
         draw_icon_catalog_entry(backend, icon, top_left, size, color, stroke_width);
-    } else if family == "lucide" {
-        if let Some(icon) = Icon::from_name(name) {
-            draw_icon(backend, icon, top_left, size, color, stroke_width);
-        } else {
-            backend.stroke_svg_path(FALLBACK_ICON_D, top_left, size, color, stroke_width);
-        }
     } else {
-        backend.stroke_svg_path(FALLBACK_ICON_D, top_left, size, color, stroke_width);
+        // Web only: the core catalog is fetched lazily, and historically only
+        // the icon picker asked for it — a document full of `icon_font` nodes
+        // painted unresolved dots forever unless the picker was opened. The
+        // paint that misses the catalog now requests the fetch itself (same
+        // seam the prompt-center and scene-template paints use); the install
+        // wakes a repaint and the glyphs resolve.
+        #[cfg(all(target_arch = "wasm32", feature = "runtime-icon-catalog"))]
+        if !super::icon_catalog::core_catalog_loaded() {
+            op_editor_core::web_assets::request(super::icon_catalog::ICONIFY_CORE_ROUTE);
+        }
+        if family == "lucide" {
+            if let Some(icon) = Icon::from_name(name) {
+                draw_icon(backend, icon, top_left, size, color, stroke_width);
+            }
+        }
     }
 }
-
-/// Lucide-style dot glyph — small filled circle at viewBox centre.
-/// Used as the unknown-icon fallback (TS parity with
-/// `FALLBACK_ICON_D` in `node-renderer.ts`).
-const FALLBACK_ICON_D: &str = "M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0";
 
 /// Lucide `palette.svg` — artist color-palette shape with paint-dot holes.
 /// Used in the AI chat bottom toolbar as a style/palette affordance.
@@ -769,6 +775,8 @@ const PALETTE: &[&str] = &[
 ];
 
 use super::icons_data::*;
+
+pub use super::icons_lookup::lucide_name_for_path_d;
 
 #[cfg(test)]
 mod spinner_tests {

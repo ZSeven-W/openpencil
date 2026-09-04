@@ -6,7 +6,7 @@ trigger:
   keywords:
     - "/[\\u4e00-\\u9fff\\u3040-\\u309f\\u30a0-\\u30ff\\uac00-\\ud7af]/"
 priority: 21
-budget: 700
+budget: 800
 category: domain
 ---
 
@@ -23,3 +23,7 @@ CJK TYPOGRAPHY (Chinese/Japanese/Korean):
 - Never truncate a CJK title with an ellipsis: rewrite the copy or change the layout.
 - Mixed runs: one space between a CJK run and a Latin/number run, written into the copy (not letterSpacing); none between a number and its unit. Digits and Latin take the Latin family — a CJK family rendering digits makes column widths wobble; numbers read down a column need monospace or fixed widths.
 - Detect CJK from the request language — apply these rules (script-specific Noto for headings; the size-banded lineHeight/letterSpacing above everywhere).
+- **Line-start taboo** — don't start a line with closing punctuation `，。、；：？！》」』）】`; rewrite or widen text box.
+- **Line-end taboo** — don't end a line with opening punctuation `《「『（【`; pull content forward.
+- **Execution** — adjust width or rewrite to avoid orphaned punctuation at line edges.
+

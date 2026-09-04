@@ -284,15 +284,15 @@ fn node_identity_label(node: &PenNode) -> String {
 }
 
 /// Port of `getBorderStroke` (`detectors.ts:27-34`). Prefers the
-/// `$color-border` variable when the document defines it, else a neutral
+/// `$--border` variable when the document defines it, else a neutral
 /// light-gray hex.
 fn border_stroke(doc: &PenDocument) -> Value {
     let has_border_var = doc
         .variables
         .as_ref()
-        .is_some_and(|vars| vars.contains_key("color-border"));
+        .is_some_and(|vars| vars.contains_key("--border"));
     let color = if has_border_var {
-        "$color-border"
+        "$--border"
     } else {
         "#E2E8F0"
     };
@@ -599,14 +599,14 @@ mod tests {
             "version": "1.0",
             "children": [],
             "variables": {
-                "color-border": {"type": "color", "value": "#CCCCCC"}
+                "--border": {"type": "color", "value": "#CCCCCC"}
             }
         }));
         let root = invisible_fixture("#FFFFFF");
         let issues = detect_invisible_containers(&root, &with_var);
         assert_eq!(
             issues[0].suggested_value,
-            json!({"thickness": 1, "fill": [{"type": "solid", "color": "$color-border"}]})
+            json!({"thickness": 1, "fill": [{"type": "solid", "color": "$--border"}]})
         );
     }
 

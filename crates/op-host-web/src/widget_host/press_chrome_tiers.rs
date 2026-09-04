@@ -124,6 +124,7 @@ impl WidgetHost {
     pub(in crate::widget_host) fn press_top_bar_tier(&mut self, ctx: &PressCtx) -> Option<bool> {
         let (x, y) = (ctx.x, ctx.y);
         let viewport_width = ctx.viewport_width;
+        let viewport_height = ctx.viewport_height;
         let rename_committed = ctx.rename_committed;
         let text_edit_committed = ctx.text_edit_committed;
         // 0b. TopBar — sidebar toggle + chrome buttons. Mirrors the
@@ -181,7 +182,27 @@ impl WidgetHost {
                     }
                 }
                 TopBarHit::TogglePreview => {
-                    self.editor_state.editor_ui.toggle_preview();
+                    if self.preview.is_some() {
+                        // Exit preview mode. Track M-1: defer the teardown —
+                        // only close the runtime if there is no device frame.
+                        self.exit_preview(viewport_width, viewport_height);
+                    } else {
+                        #[cfg(feature = "canvaskit")]
+                        {
+                            let op_ck = self.op_ck.clone();
+                            let _ = self.enter_preview_from_browser(
+                                viewport_width,
+                                viewport_height,
+                                op_ck.as_ref(),
+                            );
+                        }
+                        #[cfg(not(feature = "canvaskit"))]
+                        {
+                            self.editor_state.editor_ui.preview.mode = false;
+                            self.editor_state.editor_ui.preview.warnings =
+                                vec!["preview: not available in this build".to_string()];
+                        }
+                    }
                 }
                 TopBarHit::Account => {
                     if self.editor_state.editor_ui.account_ui_available {

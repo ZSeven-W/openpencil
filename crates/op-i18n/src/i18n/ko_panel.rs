@@ -292,6 +292,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         }
         "htmlImport.warn.layout.negative_margins_ignored" => "음수 CSS 여백이 무시되었습니다.",
         "htmlImport.warn.layout.margins_on_visual_box_ignored" => "시각적 박스의 CSS 여백이 무시되었습니다.",
+        "htmlImport.warn.layout.inline_margin_wrapping_approximated" => "CSS 여백이 있는 인라인 요소를 상자로 변환하여 줄 사이에서 더 이상 줄바꿈되지 않을 수 있습니다.",
         "htmlImport.warn.layout.content_box_percentage_approximated" => {
             "content-box 백분율 크기 지정이 근사 처리되었습니다."
         }
@@ -445,6 +446,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "htmlImport.warn.media.object_fit_scale_down" => "CSS object-fit:scale-down이 근사 처리되었습니다.",
         "htmlImport.warn.media.object_fit_none_ignored" => "CSS object-fit:none이 무시되었습니다.",
         "htmlImport.warn.media.object_position_ignored" => "CSS object-position이 무시되었습니다.",
+        "htmlImport.warn.media.image_intrinsic_axis_unresolved" => {
+            "지정된 크기가 동적이거나 포함 블록의 크기가 확정되지 않아 이미지의 고유 종횡비로 누락된 축을 결정할 수 없습니다."
+        }
         "htmlImport.warn.media.image_mix_blend_mode_unsupported" => {
             "이미지에 적용된 지원되지 않는 CSS mix-blend-mode가 무시되었습니다."
         }
@@ -547,6 +551,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "slidesPanel.exportPdf" => "PDF 내보내기",
         "slidesPanel.exportAllSlides" => "모든 슬라이드 내보내기",
         "slidesPanel.exportSelectedSlides" => "선택한 슬라이드 내보내기({{count}})",
+        "settings.tab.ai" => "AI",
         "settings.agents.heroTitle" => "AI 제공자 연결",
         "settings.agents.heroSubtitle" => "OpenPencil은 로컬 CLI 에이전트와 API 제공자를 직접 구동합니다. 하나를 연결하면 디자인 생성을 시작할 수 있습니다.",
         "settings.agents.statusConnected" => "연결됨",

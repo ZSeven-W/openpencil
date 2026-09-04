@@ -1,0 +1,532 @@
+/*
+ * OpenPencil Engine C ABI
+ *
+ * This header has one ABI shape in every build. Rust feature flags and debug
+ * assertions never add, remove, or alter declarations in this contract.
+ *
+ * Coordinates: pointer input uses surface-logical pixels with a top-left
+ * origin. Safe-area and keyboard occlusion are separate logical-point
+ * channels.
+ *
+ * Tail-growth versioning: OpCreateDesc.size must be at least
+ * offsetof(OpCreateDesc, dpr) + sizeof(float) (36 bytes on the supported
+ * 64-bit hosts). OpCallbacks.size must be at least sizeof(size_t) (8 bytes
+ * on the supported 64-bit hosts). Missing trailing fields are zero/null; a
+ * size larger than the current sizeof(struct) is invalid.
+ *
+ * Threading: an engine is owned by exactly one thread — the thread that
+ * called op_create. Every other call must run on that thread or
+ * OpStatus_WrongThread is returned. Most callbacks fire synchronously inside
+ * the call that caused them; collaboration workers may also invoke
+ * needs_redraw and the secure-store callbacks. The shell copies callback
+ * payloads, reacts asynchronously, and must not re-enter the engine.
+ *
+ * Rendering: the engine paints the document's active page with the exact
+ * painter the desktop editor canvas uses. op_attach_surface hands the
+ * engine a borrowed platform surface — a CAMetalLayer* on iOS, an
+ * ANativeWindow* on Android — which the shell must keep alive until
+ * op_suspend / op_destroy returns. op_frame presents one frame;
+ * op_frame_cpu renders into caller-owned RGBA8888 storage (used by tests
+ * and debug tooling).
+ */
+
+
+#ifndef OP_ENGINE_H
+#define OP_ENGINE_H
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Stable status values returned by every OpenPencil C ABI call. */
+typedef enum OpStatus {
+    OpStatus_Ok = 0,
+    OpStatus_InvalidArg = 1,
+    OpStatus_BadDocument = 2,
+    OpStatus_LayoutError = 3,
+    OpStatus_GpuError = 4,
+    OpStatus_OutOfMemory = 5,
+    OpStatus_WrongThread = 6,
+    OpStatus_Suspended = 7,
+    OpStatus_Busy = 8,
+    OpStatus_NoFocus = 9,
+    OpStatus_NotReady = 10,
+    OpStatus_Poisoned = 11,
+} OpStatus;
+
+typedef struct OpEngine OpEngine;
+
+/* Logical safe-area insets (top-left origin, logical points). */
+typedef struct OpInsets {
+    float top;
+    float right;
+    float bottom;
+    float left;
+} OpInsets;
+
+/* Runtime diagnostic payload copied synchronously into the callback. */
+typedef struct OpRuntimeError {
+    int32_t kind;
+    const uint8_t *message_ptr;
+    size_t message_len;
+    const uint8_t *source_ptr;
+    size_t source_len;
+} OpRuntimeError;
+
+/* Collaboration workers may invoke needs_redraw to restart a paused frame
+ * pump. The shell must make this callback thread-safe, must not re-enter the
+ * engine from it, and must keep user_data alive until op_destroy returns. */
+typedef void (*OpNeedsRedraw)(void *user_data, bool has_next_wake, uint64_t next_wake_ms);
+typedef void (*OpRuntimeErrorCallback)(void *user_data, const OpRuntimeError *error);
+typedef void (*OpInputFocusChanged)(void *user_data, bool focused, int32_t input_kind, int32_t return_key_hint);
+typedef void (*OpRemoteImageRequest)(void *user_data, uint64_t request_id, const uint8_t *url_ptr, size_t url_len);
+/* Platform secure-store callbacks may also run on a collaboration worker
+ * thread. The shell must make them thread-safe and keep user_data alive until
+ * op_destroy returns. Credentials are exactly 32 bytes. Load: 0=found,
+ * 1=missing, negative=failure. */
+typedef int32_t (*OpCredentialLoad)(void *user_data, uint8_t *out, size_t capacity, size_t *out_len);
+typedef int32_t (*OpCredentialStoreIfAbsent)(void *user_data, const uint8_t *value, size_t value_len);
+
+/* Callback table. Future callbacks grow only at the tail. */
+typedef struct OpCallbacks {
+    size_t size;
+    void *user_data;
+    OpNeedsRedraw needs_redraw;
+    OpRuntimeErrorCallback runtime_error;
+    OpInputFocusChanged input_focus_changed;
+    OpRemoteImageRequest remote_image_request;
+    OpCredentialLoad credential_load;
+    OpCredentialStoreIfAbsent credential_store_if_absent;
+} OpCallbacks;
+
+/* Engine construction descriptor. doc_ptr/doc_len normally hold a non-empty
+ * canonical .op document. Full-editor mode may pass NULL/0 to open the
+ * canonical blank starter; viewer mode always requires document bytes.
+ * asset_base is the v1 tail; mode is the v2 tail (0 = viewer, 1 = full
+ * editor); storage_root is the v3 tail; documents_root is the v4 tail.
+ * Mobile editor shells must pass a private app-sandbox directory before any
+ * runtime config is resolved. documents_root is optional: it is the absolute
+ * user-visible directory saved .op documents land in (iOS
+ * NSDocumentDirectory, surfaced by the Files app). Omitting it keeps saves
+ * under <storage_root>/documents. */
+typedef struct OpCreateDesc {
+    size_t size;
+    const uint8_t *doc_ptr;
+    size_t doc_len;
+    float width;
+    float height;
+    float dpr;
+    const OpCallbacks *callbacks;
+    const uint8_t *asset_base_ptr;
+    size_t asset_base_len;
+    int32_t mode;
+    const uint8_t *storage_root_ptr;
+    size_t storage_root_len;
+    const uint8_t *documents_root_ptr;
+    size_t documents_root_len;
+} OpCreateDesc;
+
+/* Platform surface descriptor. iOS: borrowed CAMetalLayer*. Android:
+ * borrowed ANativeWindow*. */
+typedef struct OpSurfaceDesc {
+    size_t size;
+    void *handle;
+} OpSurfaceDesc;
+
+typedef enum OpPointerPhase {
+    OpPointerPhase_Down = 0,
+    OpPointerPhase_Move = 1,
+    OpPointerPhase_Up = 2,
+    OpPointerPhase_Cancel = 3,
+} OpPointerPhase;
+
+/* Work the editor asks its platform shell to perform. */
+typedef enum OpShellAction {
+    OpShellAction_None = 0,
+    OpShellAction_OpenDocument = 1,
+    /* Present the pending device-login flow in the shell's native login UI
+     * (the enum name predates the WebView retirement). */
+    OpShellAction_OpenLoginWebView = 2,
+    OpShellAction_CloseLoginWebView = 3,
+    OpShellAction_ExportDocument = 4,
+    OpShellAction_OpenAccountCenter = 5,
+    /* Configure the auth runtime for the resolved region if needed, then
+     * call op_editor_begin_login. */
+    OpShellAction_RequestLogin = 6,
+    /* Present the shell's native language picker; apply the choice with
+     * op_editor_set_locale. */
+    OpShellAction_OpenLanguagePicker = 7,
+    /* The user pressed one of the TopBar's painted window-control dots.
+     * Only desktop-class shells that hid the platform title bar can see
+     * these; touch chrome paints no dots. Append-only: existing codes never
+     * move, so an older shell simply logs an unknown action. */
+    OpShellAction_WindowClose = 8,
+    OpShellAction_WindowMinimize = 9,
+    OpShellAction_WindowZoom = 10,
+    /* Save the current document through the platform file picker. Emitted
+     * only after op_editor_configure_save_picker(engine, true); a shell that
+     * never declares the capability keeps the engine-owned destination
+     * directory and the engine-painted name dialog. */
+    OpShellAction_SaveDocument = 11,
+    /* Present a bounded image picker and return one PNG, JPEG, GIF, WebP, or
+     * SVG through op_editor_import_image_or_svg. Append-only ABI value. */
+    OpShellAction_ImportImageOrSvg = 12,
+} OpShellAction;
+
+/* Regional SSO deployments for op_editor_configure_auth. Both map to pinned
+ * first-party origins inside the engine; the shell only picks a region. */
+typedef enum OpAuthRegion {
+    OpAuthRegion_China = 0,
+    OpAuthRegion_Global = 1,
+} OpAuthRegion;
+
+/* Surrounding-text snapshot for the shell's input connection. The text
+ * pointer is BORROWED from the engine and valid only until the next engine
+ * call; offsets are UTF-16 code units. */
+typedef struct OpTextState {
+    const uint8_t *text_ptr;
+    size_t text_len;
+    uint32_t selection_start;
+    uint32_t selection_end;
+    bool has_composing;
+    uint32_t composing_start;
+    uint32_t composing_end;
+} OpTextState;
+
+/* Create an engine from a versioned descriptor. `out` receives the
+ * handle, or NULL on failure (read the reason via op_last_error with a
+ * NULL engine). */
+OpStatus op_create(const OpCreateDesc *desc, OpEngine **out);
+
+/* Destroy an engine on its owner thread. */
+OpStatus op_destroy(OpEngine *engine);
+
+/* Copy the last error into a caller-owned byte buffer. With a NULL
+ * engine, reports the op_create error. */
+OpStatus op_last_error(OpEngine *engine, uint8_t *buffer, size_t length, size_t *required);
+
+/* Select GPU mode using a borrowed platform surface. */
+OpStatus op_attach_surface(OpEngine *engine, const OpSurfaceDesc *desc);
+
+/* Suspend rendering and synchronously stop using a borrowed surface. */
+OpStatus op_suspend(OpEngine *engine);
+
+/* Render-free owner-thread pump for a user-started mobile generation. The
+ * platform shell calls this only while it holds its OS background-execution
+ * grant; `active` says whether another tick is needed. */
+OpStatus op_background_tick(OpEngine *engine, uint64_t now_ms, bool *active);
+OpStatus op_has_background_work(OpEngine *engine, bool *active);
+/* Cancel the user-started generation and retire its render-free work. */
+OpStatus op_cancel_background_work(OpEngine *engine);
+
+/* Resume rendering, optionally with a new borrowed GPU surface. */
+OpStatus op_resume(OpEngine *engine, const OpSurfaceDesc *desc);
+
+/* Pump and present one GPU frame. */
+OpStatus op_frame(OpEngine *engine, uint64_t now_ms);
+
+/* Pump and copy one CPU frame into caller-owned RGBA8888 storage.
+ * `buffer` must cover `height * stride` bytes with
+ * `stride >= physical_width * 4`. */
+OpStatus op_frame_cpu(OpEngine *engine, uint64_t now_ms, uint8_t *buffer, size_t buffer_len, size_t stride);
+
+/* Change the logical viewport and device-pixel ratio. */
+OpStatus op_resize(OpEngine *engine, float width, float height, float dpr);
+
+/* Atomically update logical viewport, DPR, and safe-area insets. Mobile
+ * rotation/configuration paths should prefer this over separate calls. */
+OpStatus op_resize_with_safe_area(OpEngine *engine, float width, float height, float dpr, float top, float right, float bottom, float left);
+
+/* Return the current physical pixel dimensions. */
+OpStatus op_get_pixel_size(OpEngine *engine, uint32_t *width, uint32_t *height);
+
+/* Deliver one pointer event (surface-logical coordinates, top-left
+ * origin). `id` identifies the touch/finger; `phase` is an
+ * OpPointerPhase value. */
+OpStatus op_pointer(OpEngine *engine, uint32_t id, int32_t phase, float x, float y, uint64_t time_ms);
+
+/* Update the four logical safe-area insets. */
+OpStatus op_set_safe_area(OpEngine *engine, float top, float right, float bottom, float left);
+
+/* Update the logical keyboard occlusion height. */
+OpStatus op_set_keyboard(OpEngine *engine, float height);
+
+/* Whether status/navigation bars should use light-colored icons. */
+OpStatus op_prefers_light_system_icons(OpEngine *engine, bool *out);
+
+/* Enter inline text-edit mode on the node with id `node_id` (the shell
+ * then shows the system keyboard via input_focus_changed). */
+OpStatus op_text_begin(OpEngine *engine, const uint8_t *node_id_ptr, size_t node_id_len);
+
+/* Exit text-edit mode, committing the draft into the document. */
+OpStatus op_text_end(OpEngine *engine);
+
+/* Insert `text` at the caret, replacing any active selection. */
+OpStatus op_text_insert(OpEngine *engine, const uint8_t *text_ptr, size_t text_len);
+
+/* Delete the selection, or the character before the caret. */
+OpStatus op_text_backspace(OpEngine *engine);
+
+/* Delete the selection, or the character after the caret. */
+OpStatus op_text_delete_forward(OpEngine *engine);
+
+/* Place the caret at UTF-16 `offset`; `extend` keeps the selection anchor. */
+OpStatus op_text_set_caret(OpEngine *engine, uint32_t offset, bool extend);
+
+/* Drag-select: anchor at UTF-16 `anchor`, caret follows `focus`. */
+OpStatus op_text_select_range(OpEngine *engine, uint32_t anchor, uint32_t focus);
+
+/* Set the in-flight IME composition. `sel_start`/`sel_end` are UTF-16
+ * offsets within the NEW composing text. */
+OpStatus op_ime_set_composing_text(OpEngine *engine, const uint8_t *text_ptr, size_t text_len, uint32_t sel_start, uint32_t sel_end);
+
+/* Commit the in-flight IME composition into the draft. */
+OpStatus op_ime_commit_composition(OpEngine *engine);
+
+/* Cancel the in-flight IME composition. */
+OpStatus op_ime_cancel_composition(OpEngine *engine);
+
+/* Snapshot the surrounding-text state (borrowed text pointer). */
+OpStatus op_text_get_state(OpEngine *engine, OpTextState *out);
+
+/* Caret rect in surface-logical points; `out` receives x, y, w, h. */
+OpStatus op_text_caret_rect(OpEngine *engine, float *out);
+
+/* Push fetched remote-image bytes back into the engine (empty = failed). */
+OpStatus op_remote_image_result(OpEngine *engine, uint64_t request_id, const uint8_t *bytes_ptr, size_t bytes_len);
+
+/* Register an imported TTF/OTF font and re-layout the document. */
+OpStatus op_register_font(OpEngine *engine, const uint8_t *bytes_ptr, size_t bytes_len);
+
+/* Number of document pages. */
+OpStatus op_get_page_count(OpEngine *engine, uint32_t *out);
+
+/* Switch to page `index` (0-based); the viewport re-fits. */
+OpStatus op_set_active_page(OpEngine *engine, uint32_t index);
+
+/* Full-editor mode (OpCreateDesc.mode == 1): the engine drives the
+ * desktop chrome. Pointer press (single finger). */
+OpStatus op_editor_press(OpEngine *engine, float x, float y);
+
+/* Press with the event's factual monotonic timestamp (milliseconds,
+ * platform boot/uptime domain — UITouch.timestamp*1000, MotionEvent.eventTime,
+ * TouchEvent.timestamp/1e6). The engine's global clocks advance
+ * monotonically to time_ms; the preview runtime still measures the event's
+ * own timestamp. */
+OpStatus op_editor_press_at(OpEngine *engine, float x, float y, uint64_t time_ms);
+
+/* Desktop-chrome hover (cursor motion without a pressed button); drives
+ * hover highlighting and needs no pointer capture. */
+OpStatus op_editor_hover(OpEngine *engine, float x, float y);
+
+/* Desktop-chrome wheel scroll: panel-aware (scrolls panels under the
+ * cursor, pans the canvas otherwise); zoom != 0 = Ctrl+wheel zoom. */
+OpStatus op_editor_wheel(OpEngine *engine, float x, float y, float dx, float dy, int32_t zoom);
+
+/* Pointer move (single finger). */
+OpStatus op_editor_move(OpEngine *engine, float x, float y);
+
+/* Move with the event's factual monotonic timestamp (see op_editor_press_at). */
+OpStatus op_editor_move_at(OpEngine *engine, float x, float y, uint64_t time_ms);
+
+/* Pointer release (single finger). */
+OpStatus op_editor_release(OpEngine *engine, float x, float y);
+
+/* Release with the gesture endpoint's factual monotonic timestamp. */
+OpStatus op_editor_release_at(OpEngine *engine, float x, float y, uint64_t time_ms);
+
+/* Cancel the active pointer gesture without dispatching release actions. */
+OpStatus op_editor_cancel_gesture(OpEngine *engine);
+
+/* Cancel with the platform cancel's monotonic timestamp (CACurrentMediaTime*1000
+ * / SystemClock.uptimeMillis / TouchEvent.timestamp/1e6). */
+OpStatus op_editor_cancel_gesture_at(OpEngine *engine, uint64_t time_ms);
+
+/* Long-press -> right-click (context menus). */
+OpStatus op_editor_right_press(OpEngine *engine, float x, float y);
+
+/* Begin a two-finger transform at the second-finger Down midpoint. */
+OpStatus op_editor_begin_transform(OpEngine *engine, float x, float y);
+
+/* Two-finger pan after op_editor_begin_transform (midpoint deltas). */
+OpStatus op_editor_pan(OpEngine *engine, float x, float y, float dx, float dy);
+
+/* Pinch after op_editor_begin_transform (positive delta_y = zoom in). */
+OpStatus op_editor_pinch(OpEngine *engine, float x, float y, float delta_y);
+
+/* Printable text from the system keyboard. */
+OpStatus op_editor_text(OpEngine *engine, const uint8_t *text_ptr, size_t text_len);
+
+/* Non-printable key (see KEY_* constants below). */
+OpStatus op_editor_key(OpEngine *engine, int32_t key);
+
+/* IME preedit into the focused input (byte offsets within the preedit). */
+OpStatus op_editor_ime_preedit(OpEngine *engine, const uint8_t *text_ptr, size_t text_len, size_t sel_start, size_t sel_end);
+
+/* IME commit into the focused input. */
+OpStatus op_editor_ime_commit(OpEngine *engine, const uint8_t *text_ptr, size_t text_len);
+
+/* Paste clipboard text into whichever text input owns the keyboard
+ * (settings field, chat input, canvas text edit, ...). No-op without a
+ * focused input; the shells call this from their long-press edit menus. */
+OpStatus op_editor_paste_text(OpEngine *engine, const uint8_t *text_ptr, size_t text_len);
+
+/* Drain the engine's pending copy-to-clipboard text (collab invite / share
+ * address, MCP config, chat copy buttons). NULL/0 probes the required
+ * length without consuming; a complete copy consumes. NotReady = nothing
+ * pending. The shells poll after each frame and write the system
+ * pasteboard. The payload is not NUL-terminated. */
+OpStatus op_editor_take_copy_text(OpEngine *engine, uint8_t *buffer, size_t capacity, size_t *required);
+
+/* Whether the editor host currently holds the IME (show/hide keyboard). */
+OpStatus op_editor_ime_focused(OpEngine *engine, bool *out);
+
+/* Drain the next platform-shell action. File actions not owned by the mobile
+ * shell stay queued for their host integration. */
+OpStatus op_editor_take_shell_action(OpEngine *engine, int32_t *out);
+
+/* Insert one file selected for OpShellAction_ImportImageOrSvg. The shell must
+ * bound the borrowed payload to 32 MiB. Raster bytes are embedded as a data
+ * URL; an .svg file becomes editable nodes. The engine re-checks the live
+ * collaboration permission immediately before mutation. */
+OpStatus op_editor_import_image_or_svg(OpEngine *engine,
+                                       const uint8_t *data_ptr, size_t data_len,
+                                       const uint8_t *file_name_ptr, size_t file_name_len);
+
+/* Peek/copy the UTF-8 file name of the frozen export. NULL/0 reports the
+ * required length without consuming it. The payload is not NUL-terminated. */
+OpStatus op_editor_copy_export_file_name(OpEngine *engine, uint8_t *buffer, size_t capacity, size_t *required);
+
+/* Atomically create the absolute UTF-8 staging path with the frozen export.
+ * The target must not already exist. Success consumes the export; failure
+ * leaves it retryable. */
+OpStatus op_editor_export_to_path(OpEngine *engine, const uint8_t *path_ptr, size_t path_len);
+
+/* Discard a frozen export when the platform save UI cannot be presented. */
+OpStatus op_editor_cancel_export(OpEngine *engine);
+
+/* ---- Picker-backed Save / Save As -------------------------------------
+ *
+ * A file picker returns an opaque handle, not a path (a SAF content:// URI,
+ * a DocumentViewPicker file URI, security-scoped bookmark data), so the
+ * engine writes canonical .op bytes into an app-private staging file the
+ * shell names, and the shell copies them into the picked destination:
+ *
+ *   OpShellAction_SaveDocument
+ *   -> op_editor_copy_save_file_name   suggested "<stem>.op"
+ *   -> op_editor_copy_save_target      bound handle, *required == 0 = prompt
+ *   -> (prompt only) run the picker
+ *   -> op_editor_stage_save_to_path    engine writes the bytes
+ *   -> copy staging into the destination
+ *   -> op_editor_commit_save / op_editor_cancel_save
+ *
+ * Only op_editor_commit_save marks the document saved. The shell owns the
+ * staging directory and must remove it on every terminal path. */
+
+/* Declare that this shell drives Save / Save As through its file picker.
+ * Call once after op_create. */
+OpStatus op_editor_configure_save_picker(OpEngine *engine, bool enabled);
+
+/* Peek/copy the pending save's suggested UTF-8 file name. NULL/0 reports the
+ * required length. Reading never consumes the pending save. */
+OpStatus op_editor_copy_save_file_name(OpEngine *engine, uint8_t *buffer, size_t capacity, size_t *required);
+
+/* Peek/copy the durable destination handle a plain Save should rewrite.
+ * Returns OpStatus_Ok with *required == 0 when the document has no binding
+ * yet — that is the signal to present the picker, not an error. */
+OpStatus op_editor_copy_save_target(OpEngine *engine, uint8_t *buffer, size_t capacity, size_t *required);
+
+/* Write the live document's canonical .op bytes to a NEW absolute UTF-8
+ * staging path whose file name matches op_editor_copy_save_file_name. Does
+ * NOT consume the pending save or mark the document saved. */
+OpStatus op_editor_stage_save_to_path(OpEngine *engine, const uint8_t *path_ptr, size_t path_len);
+
+/* The shell placed the staged bytes at the destination. `handle` is the
+ * durable token a later plain Save rewrites; `display_name` is what the
+ * destination is actually called. Marks the document saved. */
+OpStatus op_editor_commit_save(OpEngine *engine,
+                               const uint8_t *handle_ptr, size_t handle_len,
+                               const uint8_t *name_ptr, size_t name_len);
+
+/* The picker was dismissed (failed == false) or the shell could not write
+ * the destination (failed == true). The document stays dirty and keeps its
+ * previous binding either way. */
+OpStatus op_editor_cancel_save(OpEngine *engine, bool failed);
+
+/* Configure the real mobile auth backend. `storage_dir` must be a private
+ * app-owned directory; device name and app version are display metadata.
+ * `region` is an OpAuthRegion value; both regional SSO origins are pinned by
+ * the engine and are never shell-provided. */
+OpStatus op_editor_configure_auth(OpEngine *engine, const uint8_t *storage_dir_ptr, size_t storage_dir_len, const uint8_t *device_name_ptr, size_t device_name_len, const uint8_t *app_version_ptr, size_t app_version_len, int32_t region);
+
+/* Copy a JSON snapshot of the signed-in account ({"signed_in":bool,
+ * "display_name":…, "username":…, "primary_email":…, "avatar_url":…,
+ * "device_id":…}). NULL/0 reports the required length; the snapshot is
+ * re-read per call and never consumed. Not NUL-terminated. */
+OpStatus op_editor_account_snapshot(OpEngine *engine, uint8_t *buffer, size_t capacity, size_t *required);
+
+/* Apply a UI locale by BCP-47 tag; unsupported tags are rejected. */
+/* Chrome family: 1 = touch (phones/tablets, the mobile default), 0 = full
+ * desktop chrome for desktop-class devices (HarmonyOS PC / 2in1). */
+OpStatus op_editor_set_touch_chrome(OpEngine *engine, int32_t enabled);
+
+OpStatus op_editor_set_locale(OpEngine *engine, const uint8_t *tag_ptr, size_t tag_len);
+
+/* Copy the current UI locale's BCP-47 tag (never consumed). */
+OpStatus op_editor_locale_code(OpEngine *engine, uint8_t *buffer, size_t capacity, size_t *required);
+
+/* Start the device-login flow after configuring auth (RequestLogin
+ * follow-up). NotReady = stub backend; surface natively. */
+OpStatus op_editor_begin_login(OpEngine *engine);
+
+/* Revoke the device session and clear the engine's account mirror. */
+OpStatus op_editor_auth_sign_out(OpEngine *engine);
+
+/* Peek/copy the pending UTF-8 login URL. NULL/0 reports the required length
+ * without consuming it. A complete copy consumes it; a short copy fails and
+ * remains retryable. The payload is not NUL-terminated. */
+OpStatus op_editor_copy_login_url(OpEngine *engine, uint8_t *buffer, size_t capacity, size_t *required);
+
+/* Cancel an in-flight login after the user dismisses the embedded WebView. */
+OpStatus op_editor_cancel_login(OpEngine *engine);
+
+/* Parse and atomically install a platform-picked `.op` document. The optional
+ * file name is UTF-8 display text; pass NULL/0 when unavailable. */
+OpStatus op_editor_open_document(OpEngine *engine, const uint8_t *doc_ptr, size_t doc_len, const uint8_t *file_name_ptr, size_t file_name_len);
+
+/* Editor key codes for op_editor_key. */
+enum {
+    OpKey_Backspace = 1,
+    OpKey_Delete = 2,
+    OpKey_Enter = 3,
+    OpKey_Escape = 4,
+    OpKey_Duplicate = 5,
+    OpKey_Undo = 6,
+    OpKey_Redo = 7,
+    OpKey_ArrowUp = 9,
+    OpKey_ArrowDown = 10,
+    OpKey_ArrowLeft = 11,
+    OpKey_ArrowRight = 12,
+    OpKey_SelectAll = 13,
+    OpKey_Copy = 14,
+    OpKey_Cut = 15,
+    OpKey_Paste = 16,
+    OpKey_Group = 17,
+    OpKey_Ungroup = 18,
+    OpKey_ReorderBack = 19,
+    OpKey_ReorderForward = 20,
+    OpKey_ArrowUpBig = 21,
+    OpKey_ArrowDownBig = 22,
+    OpKey_ArrowLeftBig = 23,
+    OpKey_ArrowRightBig = 24,
+};
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
+#endif /* OP_ENGINE_H */

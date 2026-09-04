@@ -218,6 +218,7 @@ impl HubAuthClient {
             return Err(HubAuthError::NotConfigured);
         }
         let http = reqwest::Client::builder()
+            .use_rustls_tls()
             // No proxy: this is a container-network call, and honouring an
             // ambient HTTP_PROXY would send session cookies to a third party.
             .no_proxy()

@@ -7,6 +7,23 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+// The transport remains OpenPencil-owned because it also supports remote
+// WebSockets and host-specific deadlines, but all stable request/response
+// shapes come from the official ACP Rust SDK 2.0.0. Keeping these re-exports
+// here makes the stable v1 boundary explicit and prevents our hand-written
+// structs from drifting as non-breaking fields are added.
+pub use agent_client_protocol::schema::{
+    v1::{
+        AgentCapabilities, AuthMethod, AuthenticateRequest, AuthenticateResponse,
+        CloseSessionRequest, CloseSessionResponse, DeleteSessionRequest, DeleteSessionResponse,
+        InitializeResponse as InitializeResult, NewSessionResponse as NewSessionResult,
+        PromptResponse as PromptResult, SessionConfigKind, SessionConfigOption,
+        SessionConfigOptionCategory, SessionConfigOptionValue, SessionConfigSelectOptions,
+        SetSessionConfigOptionResponse, StopReason as AcpStopReason,
+    },
+    ProtocolVersion,
+};
+
 pub use op_rpc_transport::{
     classify_inbound, Inbound, JsonRpcError, JsonRpcRequest, JsonRpcResponse,
 };
@@ -16,42 +33,24 @@ pub const PROTOCOL_VERSION: u32 = 1;
 
 /// `initialize` — handshake.
 pub const METHOD_INITIALIZE: &str = "initialize";
+/// `authenticate` — run one agent-advertised authentication method.
+pub const METHOD_AUTHENTICATE: &str = "authenticate";
 /// `session/new` — open a session.
 pub const METHOD_SESSION_NEW: &str = "session/new";
+/// `session/delete` — remove a persisted session when advertised.
+pub const METHOD_SESSION_DELETE: &str = "session/delete";
+/// `session/close` — release an active session when advertised.
+pub const METHOD_SESSION_CLOSE: &str = "session/close";
 /// `session/prompt` — drive one turn.
 pub const METHOD_SESSION_PROMPT: &str = "session/prompt";
+/// `session/cancel` — cancel work for one session (notification).
+pub const METHOD_SESSION_CANCEL: &str = "session/cancel";
+/// `session/set_config_option` — update a model/mode/reasoning selector.
+pub const METHOD_SESSION_SET_CONFIG_OPTION: &str = "session/set_config_option";
 /// `session/update` — streaming notification from the agent.
 pub const METHOD_SESSION_UPDATE: &str = "session/update";
 /// `session/request_permission` — agent asks the client to approve a tool.
 pub const METHOD_REQUEST_PERMISSION: &str = "session/request_permission";
-
-/// `initialize` result — only the fields the client reads.
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InitializeResult {
-    #[serde(default)]
-    pub protocol_version: Option<u32>,
-    #[serde(default)]
-    pub agent_info: Option<AgentInfoWire>,
-}
-
-/// `agentInfo` block of an [`InitializeResult`].
-#[derive(Debug, Default, Deserialize)]
-pub struct AgentInfoWire {
-    #[serde(default)]
-    pub name: Option<String>,
-    #[serde(default)]
-    pub title: Option<String>,
-    #[serde(default)]
-    pub version: Option<String>,
-}
-
-/// `session/new` result.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NewSessionResult {
-    pub session_id: String,
-}
 
 /// One content block of a prompt / message.
 #[derive(Debug, Clone, Serialize, Deserialize)]

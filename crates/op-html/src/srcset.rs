@@ -10,15 +10,24 @@ use crate::dom::{DomElement, DomNode};
 use crate::import_warning::ImportWarning;
 use crate::length::{parse_length, LengthCtx};
 use crate::mapper::MapCtx;
+use std::borrow::Cow;
 
 /// One `srcset` entry with its (optional) descriptor.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Candidate {
-    pub url: String,
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct Candidate<'a> {
+    pub url: &'a str,
     /// `<n>w` — the candidate's intrinsic width in px.
     pub width: Option<f64>,
     /// `<n>x` — the candidate's pixel density.
     pub density: Option<f64>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ResolvedImageSource<'a> {
+    pub url: Cow<'a, str>,
+    /// Pixel density selected by `srcset`. Encoded pixel dimensions divide by
+    /// this value to produce the browser's CSS-pixel natural dimensions.
+    pub density: f64,
 }
 
 /// The URL an `<img>` should import, honouring an enclosing `<picture>`, its
@@ -28,6 +37,16 @@ pub(crate) fn resolve_image_source(
     path: &[&DomElement],
     element: &DomElement,
 ) -> String {
+    resolve_image_candidate(context, path, element)
+        .url
+        .into_owned()
+}
+
+pub(crate) fn resolve_image_candidate<'a>(
+    context: &mut MapCtx<'_>,
+    path: &[&'a DomElement],
+    element: &'a DomElement,
+) -> ResolvedImageSource<'a> {
     let viewport = (context.opts.viewport_width, context.opts.viewport_height());
     let fallback_width = element
         .attr("sizes")
@@ -41,16 +60,19 @@ pub(crate) fn resolve_image_source(
         || element
             .attr("srcset")
             .is_some_and(|srcset| !parse_srcset(srcset).is_empty());
-    if let Some(url) = pick_from_picture(context, path, viewport, img_fallback) {
-        return url;
+    if let Some(source) = pick_from_picture(context, path, viewport, img_fallback) {
+        return source;
     }
-    if let Some(url) = element
+    if let Some(candidate) = element
         .attr("srcset")
-        .and_then(|srcset| select(&parse_srcset(srcset), fallback_width).cloned())
+        .and_then(|srcset| select(&parse_srcset(srcset), fallback_width).copied())
     {
-        return url.url;
+        return resolve_candidate(candidate, fallback_width);
     }
-    element.attr("src").unwrap_or_default().to_string()
+    ResolvedImageSource {
+        url: Cow::Borrowed(element.attr("src").unwrap_or_default()),
+        density: 1.0,
+    }
 }
 
 /// Walk the parent `<picture>`'s `<source>` list in document order.
@@ -60,12 +82,12 @@ pub(crate) fn resolve_image_source(
 /// importing an undecodable format still beats importing nothing, but it must
 /// never win over a `src` this importer is certain it can read — a browser
 /// without AVIF support paints the `<img>`, and so should this.
-fn pick_from_picture(
+fn pick_from_picture<'a>(
     context: &mut MapCtx<'_>,
-    path: &[&DomElement],
+    path: &[&'a DomElement],
     viewport: (f64, f64),
     img_fallback: bool,
-) -> Option<String> {
+) -> Option<ResolvedImageSource<'a>> {
     let picture = path
         .get(path.len().checked_sub(2)?)
         .filter(|parent| parent.tag == "picture")?;
@@ -100,16 +122,29 @@ fn pick_from_picture(
                 .attr("sizes")
                 .and_then(|sizes| resolve_sizes(sizes, viewport, context))
                 .unwrap_or(viewport.0);
-            let Some(candidate) = select(&parse_srcset(srcset), target).cloned() else {
+            let Some(candidate) = select(&parse_srcset(srcset), target).copied() else {
                 continue;
             };
             if !honour_type {
                 context.warn_once(ImportWarning::PictureUndecodableTypes);
             }
-            return Some(candidate.url);
+            return Some(resolve_candidate(candidate, target));
         }
     }
     None
+}
+
+fn resolve_candidate(candidate: Candidate<'_>, source_size: f64) -> ResolvedImageSource<'_> {
+    let density = candidate
+        .width
+        .map(|width| width / source_size)
+        .or(candidate.density)
+        .filter(|density| density.is_finite() && *density > 0.0)
+        .unwrap_or(1.0);
+    ResolvedImageSource {
+        url: Cow::Borrowed(candidate.url),
+        density,
+    }
 }
 
 /// Evaluate a media condition and surface whatever the evaluator could not
@@ -124,26 +159,25 @@ fn media_applies(context: &mut MapCtx<'_>, condition: &str, viewport: (f64, f64)
 
 /// Image MIME types the resource embedder and renderers handle.
 fn is_decodable(mime: &str) -> bool {
-    matches!(
-        mime.split(';')
-            .next()
-            .unwrap_or_default()
-            .trim()
-            .to_ascii_lowercase()
-            .as_str(),
-        "image/png"
-            | "image/apng"
-            | "image/jpeg"
-            | "image/jpg"
-            | "image/pjpeg"
-            | "image/gif"
-            | "image/webp"
-            | "image/bmp"
-            | "image/svg+xml"
-            | "image/x-icon"
-            | "image/vnd.microsoft.icon"
-            | ""
-    )
+    let essence = mime.split(';').next().unwrap_or_default().trim();
+    essence.len() <= 128
+        && essence.is_ascii()
+        && [
+            "image/png",
+            "image/apng",
+            "image/jpeg",
+            "image/jpg",
+            "image/pjpeg",
+            "image/gif",
+            "image/webp",
+            "image/bmp",
+            "image/svg+xml",
+            "image/x-icon",
+            "image/vnd.microsoft.icon",
+            "",
+        ]
+        .into_iter()
+        .any(|supported| essence.eq_ignore_ascii_case(supported))
 }
 
 /// Parse a `srcset` attribute.
@@ -151,51 +185,65 @@ fn is_decodable(mime: &str) -> bool {
 /// Follows the HTML "parse a srcset attribute" shape closely enough for real
 /// markup: a candidate URL is a run of non-space characters (so a `data:` URL
 /// keeps its commas) and its descriptors run to the next top-level comma.
-pub(crate) fn parse_srcset(value: &str) -> Vec<Candidate> {
-    let characters: Vec<char> = value.chars().collect();
+pub(crate) fn parse_srcset(value: &str) -> Vec<Candidate<'_>> {
+    const MAX_CANDIDATES: usize = 256;
     let mut candidates = Vec::new();
     let mut at = 0usize;
-    while at < characters.len() {
-        while at < characters.len() && (characters[at].is_whitespace() || characters[at] == ',') {
-            at += 1;
+    while at < value.len() && candidates.len() < MAX_CANDIDATES {
+        while let Some(character) = value[at..].chars().next() {
+            if !character.is_whitespace() && character != ',' {
+                break;
+            }
+            at += character.len_utf8();
+            if at == value.len() {
+                break;
+            }
         }
         let start = at;
-        while at < characters.len() && !characters[at].is_whitespace() {
-            at += 1;
+        while at < value.len() {
+            let character = value[at..].chars().next().expect("character boundary");
+            if character.is_whitespace() {
+                break;
+            }
+            at += character.len_utf8();
         }
         if at == start {
             break;
         }
-        let raw: String = characters[start..at].iter().collect();
+        let raw = &value[start..at];
         let terminated = raw.ends_with(',');
-        let url = raw.trim_end_matches(',').to_string();
-        let mut descriptors = String::new();
+        let url = raw.trim_end_matches(',');
+        let descriptor_start = at;
         if !terminated {
             let mut depth = 0usize;
-            while at < characters.len() {
-                let character = characters[at];
+            while at < value.len() {
+                let character = value[at..].chars().next().expect("character boundary");
                 match character {
                     '(' => depth += 1,
                     ')' => depth = depth.saturating_sub(1),
                     ',' if depth == 0 => {
-                        at += 1;
                         break;
                     }
                     _ => {}
                 }
-                descriptors.push(character);
-                at += 1;
+                at += character.len_utf8();
             }
         }
         if url.is_empty() {
+            if at < value.len() {
+                at += 1;
+            }
             continue;
         }
-        let (width, density) = parse_descriptors(&descriptors);
+        let (width, density) = parse_descriptors(&value[descriptor_start..at]);
         candidates.push(Candidate {
             url,
             width,
             density,
         });
+        if at < value.len() && value.as_bytes()[at] == b',' {
+            at += 1;
+        }
     }
     candidates
 }
@@ -204,16 +252,17 @@ fn parse_descriptors(value: &str) -> (Option<f64>, Option<f64>) {
     let mut width = None;
     let mut density = None;
     for token in value.split_whitespace() {
-        let lower = token.to_ascii_lowercase();
-        if let Some(number) = lower
+        if let Some(number) = token
             .strip_suffix('w')
+            .or_else(|| token.strip_suffix('W'))
             .and_then(|number| number.parse::<f64>().ok())
         {
             if number > 0.0 {
                 width = Some(number);
             }
-        } else if let Some(number) = lower
+        } else if let Some(number) = token
             .strip_suffix('x')
+            .or_else(|| token.strip_suffix('X'))
             .and_then(|number| number.parse::<f64>().ok())
         {
             if number > 0.0 {
@@ -229,7 +278,10 @@ fn parse_descriptors(value: &str) -> (Option<f64>, Option<f64>) {
 /// Width descriptors win when present: the narrowest candidate that still
 /// covers the slot, or the widest available when none does. Otherwise the
 /// density closest to `1x` is taken, ties going to the lower density.
-pub(crate) fn select(candidates: &[Candidate], target_width: f64) -> Option<&Candidate> {
+pub(crate) fn select<'slice, 'source>(
+    candidates: &'slice [Candidate<'source>],
+    target_width: f64,
+) -> Option<&'slice Candidate<'source>> {
     if candidates.iter().any(|candidate| candidate.width.is_some()) {
         return candidates
             .iter()

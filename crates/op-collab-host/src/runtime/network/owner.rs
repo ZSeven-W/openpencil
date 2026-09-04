@@ -16,7 +16,7 @@ use socket2::{Domain, Protocol, Socket, Type};
 use super::super::auth::{
     production_verifier, unix_time_ms, LocalAdmission, LocalTicketRenewer, ProductionTicketVerifier,
 };
-use super::super::relay::{OwnerRelayRuntime, RelayOwnerRequest};
+use super::super::relay::{OwnerRelayBridgeReport, OwnerRelayRuntime, RelayOwnerRequest};
 use super::super::types::{
     CollabRuntimeFailure, NetworkEvent, OwnerNetworkCommand, PeerNetworkCommand,
     TerminalNetworkEvent,
@@ -24,7 +24,9 @@ use super::super::types::{
 use super::connection::{drive_owner_peer, runtime_failure, DriverControl, DriverIdentity};
 use super::owner_lifecycle::{PeerControl, PeerPhase, PeerRegistry};
 use super::share_endpoint::select_share_endpoint;
-use super::transport_diagnostic::report_owner_secure_transport_failure;
+use super::transport_diagnostic::{
+    report_owner_relay_bridge, report_owner_secure_transport_failure,
+};
 use super::EventSink;
 
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
@@ -35,11 +37,17 @@ const PEER_TERMINAL_CAPACITY: usize = 1;
 /// timeout, while remaining bounded and holding a pending-handshake slot.
 const OWNER_APPROVAL_TIMEOUT: Duration = Duration::from_secs(120);
 
+fn when_lan_advertising<T>(enabled: bool, start: impl FnOnce() -> Option<T>) -> Option<T> {
+    enabled.then(start).flatten()
+}
+
 pub(super) struct OwnerTarget {
     pub(super) bind_address: SocketAddr,
     pub(super) session_id: SessionId,
     pub(super) epoch: Epoch,
     pub(super) relay: Option<RelayOwnerRequest>,
+    /// Whether this owner may advertise through multicast DNS.
+    pub(super) advertise_lan: bool,
 }
 
 pub(super) fn run(
@@ -68,6 +76,7 @@ fn run_inner(
         session_id,
         epoch,
         relay,
+        advertise_lan,
     } = target;
     let config = TransportConfig::default();
     let key = Arc::new(
@@ -104,7 +113,9 @@ fn run_inner(
         .local_addr()
         .map_err(|_| CollabRuntimeFailure::Transport)?;
     let share_endpoint = select_share_endpoint(endpoint, dual_stack);
-    let mut publisher = DiscoveryPublisher::start_for_listener(endpoint, dual_stack).ok();
+    let mut publisher = when_lan_advertising(advertise_lan, || {
+        DiscoveryPublisher::start_for_listener(endpoint, dual_stack).ok()
+    });
     let discovery_id = match publisher.as_ref() {
         Some(publisher) => publisher.discovery_id().to_owned(),
         None => random_hex_identifier()?,
@@ -138,9 +149,20 @@ fn run_inner(
     let (done_sender, done_receiver) = mpsc::channel();
     let mut peers = PeerRegistry::new();
     let mut next_connection = Some(2_u64);
+    let mut relay_bridge_report: Option<OwnerRelayBridgeReport> = None;
 
     loop {
         let now = Instant::now();
+        // The relay pool runs on its own tasks; this accept turn is the only
+        // owner-side place that can observe it, and an empty pool is exactly
+        // what a guest experiences as "the session will not let me in".
+        if let Some(relay) = relay.as_ref() {
+            let next = relay.bridge_diagnostic();
+            if relay_bridge_report != Some(next) {
+                relay_bridge_report = Some(next);
+                report_owner_relay_bridge(next);
+            }
+        }
         match shutdown.try_recv() {
             Ok(reason) => {
                 peers.set_exit_reason(reason);
@@ -685,6 +707,24 @@ mod approval_timeout_tests {
             &DiscoveryError::PublisherStopped,
             true
         ));
+    }
+
+    #[test]
+    fn relay_only_owner_never_constructs_a_discovery_publisher() {
+        let mut starts = 0;
+        let publisher = when_lan_advertising(false, || {
+            starts += 1;
+            Some(())
+        });
+        assert!(publisher.is_none());
+        assert_eq!(starts, 0);
+
+        assert!(when_lan_advertising(true, || {
+            starts += 1;
+            Some(())
+        })
+        .is_some());
+        assert_eq!(starts, 1);
     }
 
     #[test]

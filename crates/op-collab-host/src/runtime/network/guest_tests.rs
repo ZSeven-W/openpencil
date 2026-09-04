@@ -82,6 +82,24 @@ fn cancellation_prelude(discovery_id: &str) -> ServerPrelude {
 }
 
 #[test]
+fn precise_inner_failures_outrank_a_racing_relay_local_io_failure() {
+    assert_eq!(
+        prefer_guest_failure(
+            Some(CollabRuntimeFailure::TicketRejected),
+            Some(CollabRuntimeFailure::RelayUnavailable),
+        ),
+        Some(CollabRuntimeFailure::TicketRejected)
+    );
+    assert_eq!(
+        prefer_guest_failure(
+            Some(CollabRuntimeFailure::Transport),
+            Some(CollabRuntimeFailure::TicketRejected),
+        ),
+        Some(CollabRuntimeFailure::TicketRejected)
+    );
+}
+
+#[test]
 fn address_fallback_reaches_second_loopback_endpoint() {
     let unavailable = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
     let unavailable_address = unavailable.local_addr().unwrap();

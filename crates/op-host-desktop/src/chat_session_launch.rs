@@ -98,7 +98,9 @@ pub fn launch_if_pending(
         if launch_direct_modify_turn(host, &effective_user_text, current_chat, current_design) {
             return true;
         }
-    } else if matches!(classify_intent(&effective_user_text), Intent::Design) {
+    } else if !op_host_services::chat_intent::is_non_request_text(&effective_user_text)
+        && matches!(classify_intent(&effective_user_text), Intent::Design)
+    {
         // Record what this turn establishes the document to be BEFORE either
         // design route can clear the starter frame — once the page is empty
         // the "was it empty?" fact is gone. See `design_turn_scenario`.
@@ -370,18 +372,24 @@ fn launch_direct_modify_turn(
     };
     let (chat_tx, chat_rx) = mpsc::channel::<ChatDelta>();
     let (executor, tool_rx) = chat_tool_channel();
+    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
     *current_design = None;
     super::finalize_design_session_if_needed(host, current_chat, "teardown-backstop");
-    *current_chat = Some(ChatSession::from_channels(chat_rx, Some(tool_rx)));
+    *current_chat = Some(ChatSession::from_channels_with_cancel(
+        chat_rx,
+        Some(tool_rx),
+        Arc::clone(&cancel),
+    ));
     let spawned = thread::Builder::new()
         .name("op-chat-modify".into())
         .spawn(move || {
-            op_host_services::chat_intent::run_modify_turn(
+            op_host_services::chat_intent::run_modify_turn_cancellable(
                 provider.as_ref(),
                 request,
                 &chat_tx,
                 &executor,
                 target_frame_ids,
+                cancel,
             );
         });
     if let Err(err) = spawned {
@@ -408,9 +416,9 @@ fn launch_cli_standard_turn(
     current_chat: &mut Option<ChatSession>,
     current_design: &mut Option<DesignSession>,
 ) -> bool {
-    // All three transports up front: classification + design run
-    // session-untracked (TS classify/generate calls never join the
-    // chat conversation); the chat route resumes the chat session.
+    // All three transports up front: classification + design run without
+    // transcript history (TS classify/generate calls never join the chat
+    // conversation); the chat route receives only its owning tab's history.
     let (Some(classify_provider), Some(chat_provider), Some(design_provider)) = (
         provider_for_selected_model(host),
         chat_provider_for_selected_model(host),
@@ -497,7 +505,11 @@ fn launch_cli_standard_turn(
     let indicator_epoch = op_editor_core::agent_indicators::begin();
     let design_abort = AbortFlag::new();
     super::finalize_design_session_if_needed(host, current_chat, "teardown-backstop");
-    *current_chat = Some(ChatSession::from_channels(chat_rx, Some(tool_rx)));
+    *current_chat = Some(ChatSession::from_channels_with_cancel(
+        chat_rx,
+        Some(tool_rx),
+        design_abort.shared_atomic(),
+    ));
     *current_design = Some(DesignSession::from_channels_with_epoch_and_abort(
         delta_rx,
         cmd_rx,
@@ -544,7 +556,7 @@ fn launch_cli_standard_turn(
 /// history intact while the new tab starts blank. This drain only does the
 /// host-side worker cleanup the widget layer cannot reach: drop any in-flight
 /// workers (so stale deltas can't repopulate the previous tab's transcript)
-/// and forget any resumable provider session.
+/// and clear any provider-local chat state retained by older adapters.
 ///
 /// Returns the index of the tab a still-running turn was bound to, if any, so
 /// the caller can clear its `chat_running_tab` field (the run we just aborted
@@ -569,9 +581,9 @@ pub fn drain_new_chat_request(
     if let Some(epoch) = op_editor_core::agent_indicators::active_epoch() {
         op_editor_core::agent_indicators::end_if_epoch(epoch);
     }
-    // A fresh tab must start a fresh provider conversation — forget any
-    // resumable Claude Code / Copilot session so stale context cannot
-    // leak into the new chat.
+    // Keep the provider reset fanout for adapter compatibility. Claude Code
+    // and Copilot currently retain no process-global session: each new tab's
+    // request-local history already starts the provider conversation cleanly.
     op_host_services::chat_claude::reset_claude_chat_session();
     op_host_services::chat_copilot::reset_copilot_chat_session();
     host.mark_editor_state_dirty();

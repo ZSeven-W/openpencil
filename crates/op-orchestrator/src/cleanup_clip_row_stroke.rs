@@ -48,40 +48,58 @@ pub(super) fn collect_clip_row_stroke_padding_repairs(
 }
 
 pub(super) fn clip_row_stroke_padding_repair(node: &PenNode) -> Option<ClipRowStrokePaddingRepair> {
+    let floors = clip_row_stroke_padding_floors(node)?;
     let props = frame_container_props(node)?;
-    if props.layout.as_ref() != Some(&LayoutMode::Horizontal) || props.clip_content != Some(true) {
-        return None;
-    }
-    let max_stroke = node
-        .children()?
-        .iter()
-        .filter_map(node_stroke_width)
-        .max_by(f64::total_cmp)?;
     let mut padding = props
         .padding
         .as_ref()
         .map(padding_sides)
         .unwrap_or([0.0, 0.0, 0.0, 0.0]);
-    let stroke_padding = max_stroke.ceil();
-    if padding.iter().all(|side| *side >= stroke_padding) {
-        return None;
+    let before = padding;
+    for (side, floor) in padding.iter_mut().zip(floors) {
+        if let Some(floor) = floor {
+            *side = side.max(floor);
+        }
     }
-    padding[0] = padding[0].max(stroke_padding);
-    padding[2] = padding[2].max(stroke_padding);
-    padding[3] = padding[3].max(stroke_padding);
-    // A fill-width clipped row can be an intentional horizontal rail: keep
-    // its trailing edge flush so the next item may remain visibly cropped.
-    // A fit-content row, however, hugs its children and has no overflow
-    // affordance to preserve. Its trailing clip would only shave the outer
-    // half of the last child's stroke (notably a bordered avatar).
-    if matches!(
-        props.width.as_ref(),
-        Some(SizingBehavior::Keyword(SizingKeyword::FitContent))
-    ) {
-        padding[1] = padding[1].max(stroke_padding);
+    // In particular, a fill-width row deliberately leaves the trailing edge
+    // unprotected. Compare the actual target instead of requiring all four
+    // sides to meet the stroke width; otherwise a zero trailing inset emits
+    // the same SetNodeLayoutProp command on every finalize.
+    if padding == before {
+        return None;
     }
     Some(ClipRowStrokePaddingRepair {
         node_id: NodeId::new(node.id_str().to_string()),
         padding,
     })
+}
+
+/// Minimum padding that must survive later cleanup passes for a clipped
+/// horizontal row with stroked children. `None` means the edge is deliberately
+/// unconstrained: a fill-width rail may keep its trailing edge flush so the
+/// next item remains visibly cropped.
+pub(super) fn clip_row_stroke_padding_floors(node: &PenNode) -> Option<[Option<f64>; 4]> {
+    let props = frame_container_props(node)?;
+    if props.layout.as_ref() != Some(&LayoutMode::Horizontal) || props.clip_content != Some(true) {
+        return None;
+    }
+    let stroke_padding = node
+        .children()?
+        .iter()
+        .filter_map(node_stroke_width)
+        .max_by(f64::total_cmp)?
+        .ceil();
+    // A fit-content row hugs its children and therefore needs room on every
+    // edge. A fill-width rail preserves the intentional trailing crop.
+    let trailing = matches!(
+        props.width.as_ref(),
+        Some(SizingBehavior::Keyword(SizingKeyword::FitContent))
+    )
+    .then_some(stroke_padding);
+    Some([
+        Some(stroke_padding),
+        trailing,
+        Some(stroke_padding),
+        Some(stroke_padding),
+    ])
 }

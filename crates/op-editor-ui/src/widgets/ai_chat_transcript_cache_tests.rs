@@ -124,6 +124,7 @@ fn failed_subtask_message(retryable: bool) -> ChatMessage {
         m.failed_subtasks.push(op_editor_core::PendingSubtaskRetry {
             subtask_id: "hero".into(),
             subtask_json: "{}".into(),
+            insert_after_sibling_id: None,
         });
     }
     m

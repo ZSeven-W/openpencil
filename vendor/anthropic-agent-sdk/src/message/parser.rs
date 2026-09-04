@@ -54,10 +54,21 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_invalid_message() {
+    fn test_parse_unknown_message_is_forward_compatible() {
         let data = json!({
             "type": "invalid_type",
             "data": "some data"
+        });
+
+        let result = parse_message(data);
+        assert!(matches!(result, Ok(Message::Unknown)));
+    }
+
+    #[test]
+    fn test_parse_malformed_known_message_fails() {
+        let data = json!({
+            "type": "assistant",
+            "message": { "model": "claude-test" }
         });
 
         let result = parse_message(data);

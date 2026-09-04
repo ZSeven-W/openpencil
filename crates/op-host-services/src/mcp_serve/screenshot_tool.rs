@@ -38,6 +38,12 @@ impl McpTool for GetScreenshot {
     }
 
     fn call(&self, args: &BTreeMap<String, String>) -> ToolOutcome {
+        // The browser loads the shipped simple-icons catalog from the daemon,
+        // but this exact PNG is rendered server-side. Install the same catalog
+        // before painting so brand icon_font nodes do not degrade to the
+        // honest fallback dot during agent visual QA.
+        let _ = op_editor_ui::set_brand_catalog(crate::web_static::ICONIFY_BRANDS_JSON);
+
         // Parse nodeId argument.
         let raw_id = match args.get("nodeId").map(String::as_str) {
             Some(id) if !id.trim().is_empty() => id.trim(),
@@ -107,7 +113,8 @@ pub fn get_screenshot_snapshot(state: &EditorState) -> GetScreenshot {
 mod tests {
     use super::*;
     use crate::export::test_support::{filled_rect, scene_with};
-    use op_editor_ui::Color;
+    use op_editor_ui::layout_scene::{NodeKind, SceneNode};
+    use op_editor_ui::{Color, Rect};
 
     const PNG_MAGIC: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
@@ -173,6 +180,43 @@ mod tests {
             }
             other => panic!("expected OkImageContent, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn exact_screenshot_loads_the_shipped_brand_catalog_before_painting() {
+        let mut icon = SceneNode::leaf("wechat", NodeKind::Other("icon_font".into()));
+        icon.bounds = Rect::xywh(0.0, 0.0, 32.0, 32.0);
+        icon.text = Some("wechat".into());
+        icon.font_family = "simple-icons".into();
+        icon.fill = Some(Color::BLACK);
+        let tool = tool_from_scene(scene_with(vec![icon]));
+
+        let ToolOutcome::OkImageContent { image_base64, .. } = call(&tool, "root") else {
+            panic!("expected exact brand screenshot");
+        };
+        let bytes = decode_base64(&image_base64);
+        let image = skia_safe::Image::from_encoded(skia_safe::Data::new_copy(&bytes))
+            .expect("decode screenshot PNG");
+        let info = skia_safe::ImageInfo::new(
+            (image.width(), image.height()),
+            skia_safe::ColorType::RGBA8888,
+            skia_safe::AlphaType::Unpremul,
+            None,
+        );
+        let stride = image.width() as usize * 4;
+        let mut pixels = vec![0u8; stride * image.height() as usize];
+        assert!(image.read_pixels(
+            &info,
+            pixels.as_mut_slice(),
+            stride,
+            (0, 0),
+            skia_safe::image::CachingHint::Allow,
+        ));
+        let painted = pixels.chunks_exact(4).filter(|rgba| rgba[3] > 0).count();
+        assert!(
+            painted > 120,
+            "expected the WeChat silhouette rather than the small fallback dot, got {painted} pixels"
+        );
     }
 
     /// Explicit node id works the same way as "root".

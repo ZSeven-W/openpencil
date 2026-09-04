@@ -20,11 +20,53 @@ use crate::chat_spawn::exit_status_label;
 use crate::chat_subprocess_quirks as quirks;
 use crate::chat_subprocess_safety as safety;
 
+/// Cap on the retained Codex stderr tail used for error extraction.
+/// Lives here (rather than in the bridge spine) so `chat_subprocess.rs`
+/// stays under the 800-line cap — pure code motion.
+pub(crate) const STDERR_TAIL_CAP: usize = 64 * 1024;
+
+/// Line cap paired with [`STDERR_TAIL_CAP`]. Generous: the Codex error
+/// extractor scans the whole retained blob, and a stack trace is worth
+/// keeping in full when it fits inside the byte budget.
+pub(crate) const STDERR_TAIL_LINES: usize = 2048;
+
+/// Cap on the retained stdout tail — read only on the failure path, for
+/// CLIs that report their diagnosis on stdout. Smaller than the stderr
+/// budget: a healthy turn's stdout is the answer, not diagnostics.
+pub(crate) const STDOUT_TAIL_CAP: usize = 8 * 1024;
+
+/// Line cap paired with [`STDOUT_TAIL_CAP`].
+pub(crate) const STDOUT_TAIL_LINES: usize = 256;
+
+/// How long a reaped turn waits for the stderr drain to reach EOF
+/// before formatting its failure message. The child is already reaped so
+/// its pipe is at EOF and the drain finishes the instant it is polled —
+/// the wait is really for the drain TASK to be scheduled, not for I/O.
+/// Under a saturated runtime (the orchestrator's parallel turns, or the
+/// concurrent stress test) that scheduling latency occasionally ran past
+/// a two-second bound and the tail read back empty, so this is generous:
+/// it only has to outlast scheduler starvation, while still capping a
+/// genuinely wedged reader (a grandchild holding the pipe open).
+pub(crate) const STDERR_DRAIN_GRACE: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// Budget for the tail appended to a *classified* failure. Shorter than
 /// the unclassified one: the friendly sentence already carries the
 /// meaning, and the quote is there as corroboration — so it must be
 /// present, but subordinate.
 const CLASSIFIED_TAIL_MAX_CHARS: usize = 300;
+
+/// Whether a child that finished WITHOUT a terminal event and WITHOUT a
+/// streamed error should be reported as a failure.
+///
+/// The subtlety is the unknown case. Reaching this decision at all means the
+/// child did not finish cleanly, so an exit status we could not read is the
+/// least explicable outcome available — not a quiet success. Treating unknown
+/// as success is what let a Windows `cmd /c <missing-binary>` reach the user
+/// as a silent `Done { EndTurn }`: the agent appearing to say nothing and
+/// stop, with no error anywhere to explain it.
+pub(crate) fn unfinished_child_is_failure(status: Option<&ExitStatus>) -> bool {
+    status.map(|s| !s.success()).unwrap_or(true)
+}
 
 /// The `ChatDelta::Error` text for a child that exited non-zero without
 /// having streamed an error of its own.

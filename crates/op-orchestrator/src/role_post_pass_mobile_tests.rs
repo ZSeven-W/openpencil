@@ -56,7 +56,7 @@ fn leaf_children_search_bar_keeps_its_authored_chrome() {
     // leaves inside role=search-bar). The nested-shell normalizer used to
     // misfire here: shell fill stripped, search glyph painted white
     // (invisible on the light field), filter glyph re-inked with a
-    // dangling $color-accent that rendered fallback blue.
+    // dangling $--primary that rendered fallback blue.
     let mut bar = json!({
         "type":"frame","role":"search-bar","layout":"horizontal",
         "fill":[{"type":"solid","color":"#F4EDE3"}],
@@ -172,7 +172,7 @@ fn mobile_section_header_see_all_text_becomes_arrow_icon() {
     assert_eq!(row["children"][1]["iconFontName"], json!("chevron-right"));
     assert_eq!(
         row["children"][1]["fill"],
-        json!([{"type":"solid","color":"$color-accent"}])
+        json!([{"type":"solid","color":"$--primary"}])
     );
     assert!(
         row["children"][1].get("content").is_none(),
@@ -216,6 +216,62 @@ fn category_chip_row_preserves_all_chips_and_spreads() {
         assert_eq!(child["width"], json!("fit_content"));
         assert_eq!(child["cornerRadius"], json!(8));
     }
+}
+
+#[test]
+fn overflowing_mobile_category_rail_keeps_every_chip() {
+    let chip = |id: &str| {
+        json!({
+            "type":"frame","id":id,"role":"chip","name":format!("{id} Category"),
+            "children":[{"type":"text","id":format!("{id}-label"),"content":id}]
+        })
+    };
+    let mut row = json!({
+        "type":"frame","id":"rail","layout":"horizontal","name":"Category Chips",
+        "children":[chip("one"), chip("two"), chip("three"), chip("four"), chip("five"), chip("six")]
+    });
+
+    post_pass_value(&mut row, Some(Value::Null), 390.0);
+
+    assert_eq!(row["children"].as_array().expect("children").len(), 6);
+    assert_eq!(row["justifyContent"], json!("start"));
+    assert_eq!(row["clipContent"], json!(true));
+}
+
+#[test]
+fn desktop_category_rail_preserves_all_authored_tiles() {
+    let tile = |id: &str, label: &str, glyph: &str| {
+        json!({
+            "type":"frame","id":id,"name":format!("{label} tile"),
+            "layout":"vertical","width":196,"height":150,
+            "children":[
+                {"type":"icon_font","id":format!("{id}-icon"),
+                 "name":format!("{label} icon tile"),"iconFontName":glyph},
+                {"type":"text","id":format!("{id}-label"),
+                 "name":format!("{label} label"),"content":label}
+            ]
+        })
+    };
+    let mut row = json!({
+        "type":"frame","id":"rail","layout":"horizontal","name":"Category tiles",
+        "width":"fill_container","gap":24,"justifyContent":"space_between",
+        "children":[
+            tile("home", "Home", "house"),
+            tile("bags", "Bags", "shopping-bag"),
+            tile("apparel", "Apparel", "shirt"),
+            tile("lighting", "Lighting", "lamp"),
+            tile("kitchen", "Kitchen", "cooking-pot"),
+            tile("furniture", "Furniture", "sofa")
+        ]
+    });
+    let before = row.clone();
+
+    post_pass_value(&mut row, Some(Value::Null), 1440.0);
+
+    assert_eq!(
+        row, before,
+        "phone-only category normalization must not restyle or truncate a desktop rail"
+    );
 }
 
 #[test]
@@ -314,7 +370,7 @@ fn category_icon_tiles_inside_food_rows_are_compact_and_light() {
     );
     assert_eq!(
         active_tile["children"][0]["fill"],
-        json!([{"type":"solid","color":"$color-accent"}])
+        json!([{"type":"solid","color":"$--primary"}])
     );
 
     let inactive_tile = &children[1]["children"][0];

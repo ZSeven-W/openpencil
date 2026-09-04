@@ -19,6 +19,7 @@
 //!     stroke / cornerRadius / shadow when an ancestor already carries it
 //!     (port of strip-nested-card-decoration.ts) — kills box-in-box borders.
 
+use crate::role_defaults::Theme;
 use jian_ops_schema::node::PenNode;
 use serde_json::{json, Value};
 
@@ -115,7 +116,7 @@ fn child_count(node: &Value) -> usize {
 pub fn apply_tree_heuristics(
     nodes: &mut [PenNode],
     page_bg: Option<&str>,
-    light_theme: bool,
+    theme: Theme,
     prior_accent: Option<&str>,
 ) {
     // The emphasis color to use when filling an invisible band. Prefer the
@@ -130,7 +131,7 @@ pub fn apply_tree_heuristics(
                 .filter_map(|n| serde_json::to_value(n).ok())
                 .find_map(|v| find_design_accent(&v))
         })
-        .unwrap_or_else(|| "$color-accent".to_string());
+        .unwrap_or_else(|| "$--primary".to_string());
     for node in nodes.iter_mut() {
         let Ok(mut v) = serde_json::to_value(&*node) else {
             continue;
@@ -138,7 +139,7 @@ pub fn apply_tree_heuristics(
         // Section-level (operate on the forest root = a page-root child).
         strip_redundant_section_fill(&mut v, page_bg);
         inject_nav_surface_for_section(&mut v);
-        fix_invisible_text_band(&mut v, light_theme, &design_accent);
+        fix_invisible_text_band(&mut v, theme, &design_accent);
         // Subtree-recursive.
         merge_backdrop_child_fill(&mut v);
         convert_stacked_overlay_to_absolute(&mut v);
@@ -159,6 +160,9 @@ pub fn apply_tree_heuristics(
     }
 }
 
+#[cfg(test)]
+#[path = "tree_heuristics_media_tests.rs"]
+mod media_tests;
 #[cfg(test)]
 #[path = "tree_heuristics_tests.rs"]
 mod tests;

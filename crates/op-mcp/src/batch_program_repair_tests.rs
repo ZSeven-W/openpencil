@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use op_editor_core::{NodeId, PenNodeExt};
+use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
 use serde_json::Value;
 
 use super::batch_design_snapshot;
@@ -29,6 +29,177 @@ fn post_process_flag_marks_the_envelope() {
     };
     let envelope: Value = serde_json::from_str(&json).unwrap();
     assert_eq!(envelope["postProcessed"], Value::Bool(true), "{envelope}");
+}
+
+#[test]
+fn post_process_materializes_icon_font_dimensions_before_the_batch_applies() {
+    let mut state = sample();
+    let tool = batch_design_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert("postProcess".into(), "true".into());
+    args.insert(
+        "operations".into(),
+        "icon=I(\"n10\", {\"type\":\"icon_font\",\"name\":\"Search\",\"iconFontName\":\"search\",\"fontSize\":32})"
+            .into(),
+    );
+    let ToolOutcome::OkJsonWithCommand(json, command) = tool.call(&args) else {
+        panic!("expected post-processed command");
+    };
+    let envelope: Value = serde_json::from_str(&json).expect("valid envelope");
+    let icon_id = binding_id(&envelope, "icon");
+    let EditorCommand::InsertAuthoredSubtree { nodes, .. } = &command else {
+        panic!("expected one authored insert: {command:?}");
+    };
+    assert_eq!(envelope["postProcessed"], Value::Bool(true), "{envelope}");
+    assert_eq!(
+        (nodes[0].width_px(), nodes[0].height_px()),
+        (Some(24.0), Some(24.0)),
+        "postProcess must materialize dimensions in the emitted command"
+    );
+
+    assert!(state.apply(command));
+    let icon = op_editor_core::walkers::find_node(state.active_children(), &NodeId::new(&icon_id))
+        .expect("icon applies");
+    assert!(
+        matches!(icon, jian_ops_schema::node::PenNode::IconFont(_)),
+        "post-processed node must stay an icon_font: {icon:?}"
+    );
+    assert_eq!(
+        (icon.width_px(), icon.height_px()),
+        (Some(24.0), Some(24.0))
+    );
+}
+
+fn category_rail_json() -> &'static str {
+    r#"{"type":"frame","name":"Category rail","width":"fill_container","height":232,"layout":"horizontal","children":[
+            {"type":"frame","name":"Category 1","width":160,"height":160},
+            {"type":"frame","name":"Category 2","width":160,"height":160},
+            {"type":"frame","name":"Category 3","width":160,"height":160},
+            {"type":"frame","name":"Category 4","width":160,"height":160},
+            {"type":"frame","name":"Category 5","width":160,"height":160}
+        ]}"#
+}
+
+fn category_rail_program(parent: &str) -> String {
+    format!("rail=I({parent}, {})\nD(\"ghost\")", category_rail_json())
+}
+
+#[test]
+fn flat_child_insert_post_process_preserves_authored_category_rail_height() {
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert("postProcess".into(), "true".into());
+    args.insert(
+        "operations".into(),
+        format!("rail=I(\"n10\", {})", category_rail_json()),
+    );
+
+    let ToolOutcome::OkJsonWithCommand(_, command) = tool.call(&args) else {
+        panic!("expected post-processed flat insert command");
+    };
+    let EditorCommand::InsertAuthoredSubtree {
+        nodes, parent_id, ..
+    } = &command
+    else {
+        panic!("expected one flat insert: {command:?}");
+    };
+    assert_eq!(parent_id.as_str(), "n10");
+    assert_eq!(
+        nodes[0].height_px(),
+        Some(232.0),
+        "flat child insert must share the child-safe postProcess path"
+    );
+}
+
+#[test]
+fn child_insert_post_process_preserves_authored_category_rail_height() {
+    let mut state = sample();
+    let tool = batch_design_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert("postProcess".into(), "true".into());
+    // The harmless direct op forces this mixed program through
+    // `run_batch_design_program`, rather than the flat insert parser.
+    args.insert("operations".into(), category_rail_program(r#""n10""#));
+
+    let ToolOutcome::OkJsonWithCommand(json, command) = tool.call(&args) else {
+        panic!("expected post-processed program command");
+    };
+    let envelope: Value = serde_json::from_str(&json).expect("valid envelope");
+    let rail_id = binding_id(&envelope, "rail");
+    let EditorCommand::InsertAuthoredSubtreePreservingRoots {
+        nodes, parent_id, ..
+    } = &command
+    else {
+        panic!("expected one program insert: {command:?}");
+    };
+    assert_eq!(parent_id.as_str(), "n10");
+    assert_eq!(nodes[0].height_px(), Some(232.0));
+
+    assert!(state.apply(command));
+    let rail = op_editor_core::walkers::find_node(state.active_children(), &NodeId::new(&rail_id))
+        .expect("category rail applies");
+    assert_eq!(
+        rail.height_px(),
+        Some(232.0),
+        "child postProcess must not sum horizontal card heights into 800 px"
+    );
+}
+
+#[test]
+fn root_insert_post_process_keeps_root_height_adjustment() {
+    let tool = batch_design_snapshot(&sample());
+    let mut args = BTreeMap::new();
+    args.insert("postProcess".into(), "true".into());
+    args.insert("operations".into(), category_rail_program("null"));
+
+    let ToolOutcome::OkJsonWithCommand(_, command) = tool.call(&args) else {
+        panic!("expected post-processed program command");
+    };
+    let EditorCommand::InsertAuthoredSubtreePreservingRoots {
+        nodes, parent_id, ..
+    } = &command
+    else {
+        panic!("expected one program insert: {command:?}");
+    };
+    assert!(!parent_id.is_real(), "root insert must target the document");
+    assert_eq!(
+        nodes[0].height_px(),
+        Some(800.0),
+        "real document roots retain the established height-to-content pass"
+    );
+}
+
+#[test]
+fn child_copy_post_process_preserves_authored_category_rail_height() {
+    let mut state = sample();
+    let tool = batch_design_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert("postProcess".into(), "true".into());
+    args.insert(
+        "operations".into(),
+        format!(
+            "source=I(\"n10\", {})\ncopy=C(source, \"n10\")\nD(\"ghost\")",
+            category_rail_json()
+        ),
+    );
+
+    let ToolOutcome::OkJsonWithCommand(json, command) = tool.call(&args) else {
+        panic!("expected post-processed copy program command");
+    };
+    let envelope: Value = serde_json::from_str(&json).expect("valid envelope");
+    let source_id = binding_id(&envelope, "source");
+    let copy_id = binding_id(&envelope, "copy");
+    assert!(state.apply(command));
+    for node_id in [source_id, copy_id] {
+        let rail =
+            op_editor_core::walkers::find_node(state.active_children(), &NodeId::new(&node_id))
+                .unwrap_or_else(|| panic!("category rail {node_id} applies"));
+        assert_eq!(
+            rail.height_px(),
+            Some(232.0),
+            "child C() postProcess must not run the root-only height pass"
+        );
+    }
 }
 
 #[test]

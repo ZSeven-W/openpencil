@@ -20,6 +20,10 @@
   <a href="https://discord.gg/h9Fmyy6pVh"><img src="https://img.shields.io/badge/Discord-Join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
+<p align="center">
+  <a href="https://trendshift.io/repositories/24088?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-24088" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/24088" alt="ZSeven-W%2Fopenpencil | Trendshift" width="250" height="55" /></a>
+</p>
+
 <br />
 
 <p align="center">
@@ -28,17 +32,6 @@
   </a>
 </p>
 <p align="center"><sub>คลิกที่รูปภาพเพื่อดูวิดีโอสาธิต</sub></p>
-
-<br />
-
-<p align="center">
-  <a href="https://github.com/InnerAura/hyperweave" title="Star history rendered with HyperWeave">
-    <img src="./screenshot/openpencil-star-history.svg" alt="OpenPencil star history rendered by HyperWeave" width="100%" />
-  </a>
-</p>
-<p align="center">
-  <sub>The trend above is rendered with <a href="https://github.com/InnerAura/hyperweave"><b>HyperWeave</b></a> — an experimental SVG artifact layer for agents. &nbsp;<a href="https://github.com/InnerAura/hyperweave"><b>Explore&nbsp;→</b></a></sub>
-</p>
 
 ## ทำไมต้อง OpenPencil
 
@@ -110,6 +103,8 @@ Orchestrator แบ่งหน้าที่ซับซ้อนออกเ�
 </table>
 
 ## การติดตั้ง
+
+**คอมไพล์บน Windows:** [BUILD_WINDOWS.th.md](./docs/build_windows/BUILD_WINDOWS.th.md)
 
 **macOS (Homebrew):**
 
@@ -390,6 +385,7 @@ OpenPencil เป็นส่วนหนึ่งของตระกูลเ
 
 | โปรเจกต์ | คืออะไร |
 | -------- | ------- |
+| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | ปลั๊กอิน DeepSeek Harness สำหรับ OpenPencil — การแสดงตัวอย่าง `.op` หลายเฟรมที่แม่นยำ แคนวาสแบบอินเทอร์แอคทีฟ และเอดิเตอร์ที่มีการจัดการพร้อมเครื่องมือออกแบบแบบเอเจนต์เนทีฟ ภายในบทสนทนา |
 | **[Zode](https://github.com/ZSeven-W/zode)** | ผู้ช่วยเขียนโค้ดแบบโอเพนซอร์สที่ขับเคลื่อนด้วย AI สำหรับเทอร์มินัลของคุณ — Rust TUI (`ratatui`) ที่รวดเร็วซึ่งอ่านโค้ดของคุณ รันคำสั่ง ค้นหาไฟล์ และจัดการ git ขับเคลื่อน OpenPencil ผ่าน MCP |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | async runtime แบบ pure-Rust สำหรับส่งมอบ LLM agent — รองรับหลายผู้ให้บริการ ใช้เครื่องมือได้แบบ end-to-end สิทธิ์แบบมีโครงสร้าง MCP จริง และ `unsafe` เป็นศูนย์ ขับเคลื่อน agent runtime ในตัวของ OpenPencil (`vendor/agent`) และ Zode |
 | **[jian](https://github.com/ZSeven-W/jian)** | เฟรมเวิร์ก UI แบบ GPU-Skia ที่เป็น pure-Rust — widgets, layout, events และ hot reload ในสแตกเดียว เปลี่ยนเอกสาร `.op` แบบ declarative ให้เป็นแอปแบบ native ที่ควบคุมด้วย AI ได้ โดยไม่มี JS runtime, ไม่มี DOM, ไม่มี Electron เฟรมเวิร์ก UI ของ OpenPencil (`vendor/jian`) |

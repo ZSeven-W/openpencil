@@ -1,7 +1,9 @@
 //! Daemon lifecycle: bind the listener, spawn per-connection threads, honor
-//! the managed-mode stdin lease, and the request-auth / CORS gates the
+//! the managed-mode stdin lease, and the Origin / CORS gates the
 //! connection loop consults. Split out of `web_canvas_server.rs` to keep the
-//! spine under the 800-line cap.
+//! spine under the 800-line cap. Managed mode is tokenless per request: its
+//! security boundary is the local parent-owned process, stdin lease, and
+//! explicit browser-origin allowlist. The handshake token is lifecycle-only.
 
 use super::*;
 
@@ -10,18 +12,19 @@ use super::*;
 /// `None`). Serves the static host page + bundle, the whole-document REST
 /// sync + health routes, and falls through to the JSON-RPC `/mcp` tool
 /// dispatch (applied against the in-memory document). Blocks until a
-/// token-authed shutdown request (or, in managed mode, stdin EOF).
+/// token-authenticated shutdown request (or, in managed mode, stdin EOF).
 ///
 /// Managed mode (`options.managed`) layers on the parent-death lease
 /// contract used by a supervising process (e.g. the VS Code extension):
 /// once the listener is bound, a single-line handshake JSON
 /// (`{"ok":true,"port":..,"token":..,"version":..}`) is printed to stdout so
 /// the supervisor learns the actual port (relevant for `--port 0`) and a
-/// per-instance token; a background thread then reads stdin to EOF/error and
-/// raises the same `shutdown` flag the token-authed `openpencil/shutdown`
-/// path uses, waking the accept loop by connecting back to the bound
-/// address. Non-managed mode is untouched: no token, no handshake output, no
-/// stdin thread.
+/// lifecycle token retained for handshake/shutdown compatibility; ordinary
+/// requests do not send it. A background thread then reads stdin to EOF/error
+/// and raises the same `shutdown` flag the body-token-authenticated
+/// `openpencil/shutdown` path uses, waking the accept loop by connecting back
+/// to the bound address. Non-managed mode is untouched: no token, no handshake
+/// output, no stdin thread.
 pub fn run_web_canvas(options: ServeWebOptions) -> Result<()> {
     // The public multi-account daemon is a different accept loop: it resolves
     // a tenant per connection instead of sharing one document. Everything
@@ -80,12 +83,12 @@ pub fn run_web_canvas(options: ServeWebOptions) -> Result<()> {
     )));
     let hub = Arc::new(SseHub::default());
     let conn_count = Arc::new(AtomicUsize::new(0));
-    // Raised by a connection thread that accepted a token-authed
+    // Raised by a connection thread that accepted a token-authenticated
     // `openpencil/shutdown`; the accept loop checks it per iteration. The
     // raiser also pokes the listener with a throwaway connection so a blocked
     // `accept` wakes up and observes the flag.
     let shutdown = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    // Managed mode only: per-instance token + handshake + parent-death
+    // Managed mode only: lifecycle token + handshake + parent-death
     // lease (stdin-EOF watcher). Non-managed mode never touches this branch
     // — it keeps the existing `OPENPENCIL_MCP_TOKEN` shutdown contract as
     // the only lifecycle signal, byte-for-byte as before.
@@ -122,14 +125,15 @@ pub fn run_web_canvas(options: ServeWebOptions) -> Result<()> {
                     // Wake the (possibly blocked) accept loop — reconnect to
                     // the bound address exactly (works for IPv6 / custom
                     // --host, unlike the loopback-only wake used by the
-                    // token-authed shutdown path below).
+                    // token-authenticated shutdown path below).
                     let _ = std::net::TcpStream::connect(local_addr);
                 }
             });
     }
-    // Stash the managed token + allow-origins on the shared state. `serve_one`
-    // reads them via `RequestAuth` gate (token) and `cors_origin_for` (CORS
-    // allowlist) to enforce auth and CORS policies on all incoming requests.
+    // Stash the managed lifecycle token + allow-origins on the shared state.
+    // `serve_one` uses the token only for a body-authenticated shutdown and
+    // uses the allowlist as the browser request boundary. Ordinary native
+    // requests carry neither X-OpenPencil-Token nor Authorization.
     {
         let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
         guard.mode = mode;
@@ -216,46 +220,68 @@ where
     Ok(())
 }
 
-/// Managed-mode request gate (see `ServeWebOptions::managed` /
-/// `WebCanvasState::managed_token`). Non-managed daemons construct
-/// `RequestAuth { managed: false, .. }`, which `allows` always satisfies —
-/// the legacy fire-and-forget daemon stays byte-for-byte tokenless.
-pub(crate) struct RequestAuth {
-    pub managed: bool,
-    pub token: String,
+/// Managed-mode browser request boundary. Native clients do not send Origin
+/// and remain usable without credentials. A browser Origin is admitted when
+/// it either exactly matches one of the supervisor-provided `--allow-origin`
+/// values or is the daemon's own loopback HTTP origin (the Origin authority
+/// exactly matches the request Host authority). The latter is required by the
+/// iframe's module loader: `/pkg/*` requests originate at the managed daemon,
+/// not at the supervisor page that embedded it.
+///
+/// This is an active dispatch gate, not merely a CORS response hint, so a
+/// hostile page cannot perform a write and ignore the unreadable response.
+pub(crate) fn managed_request_origin_allowed(
+    allow: &[String],
+    origin: Option<&str>,
+    host: Option<&str>,
+) -> bool {
+    origin.is_none_or(|origin| {
+        allow
+            .iter()
+            .any(|allowed| allowed != "*" && allowed == origin)
+            || managed_same_loopback_origin(origin, host)
+    })
 }
 
-impl RequestAuth {
-    /// Whether `method path` may proceed without (or with a mismatched)
-    /// `presented` token. Mirrors `web_static.rs`'s static route table
-    /// (`web_static.rs:188`): everything the static layer serves stays
-    /// tokenless — the page cannot know the token before the postMessage
-    /// bootstrap hands it over — plus `OPTIONS` preflight. Every other
-    /// request (the `POST /` JSON-RPC alias, `/mcp`, `/api/*` including the
-    /// SSE `/api/mcp/events` and AI stream endpoints) requires the exact
-    /// per-instance token.
-    pub(crate) fn allows(&self, method: &str, path: &str, presented: Option<&str>) -> bool {
-        if !self.managed {
-            return true;
-        }
-        let static_get = method.eq_ignore_ascii_case("GET")
-            && (path == "/"
-                || path == "/index.html"
-                || path.starts_with("/pkg/")
-                || path.starts_with("/smoke/")
-                || path.starts_with("/canvaskit/")
-                || path.starts_with("/assets/"));
-        let exempt = method.eq_ignore_ascii_case("OPTIONS") || static_get;
-        exempt || presented == Some(self.token.as_str())
+/// Whether `origin` is exactly the HTTP origin named by `Host`, with that host
+/// constrained to loopback. Both hostname and effective port must match; an
+/// HTTPS origin cannot be same-origin with this plain-HTTP daemon.
+fn managed_same_loopback_origin(origin: &str, host: Option<&str>) -> bool {
+    let Some(host) = host else {
+        return false;
+    };
+    let Some(origin) = parse_http_origin(origin) else {
+        return false;
+    };
+    if origin.scheme() != "http" {
+        return false;
     }
+    let Ok(request_origin) = reqwest::Url::parse(&format!("http://{host}/")) else {
+        return false;
+    };
+    if !request_origin.username().is_empty()
+        || request_origin.password().is_some()
+        || request_origin.path() != "/"
+        || request_origin.query().is_some()
+        || request_origin.fragment().is_some()
+        || !request_origin.host_str().is_some_and(is_loopback_web_host)
+    {
+        return false;
+    }
+    same_url_origin(&origin, &request_origin)
 }
 
 /// Managed-mode CORS allowlist check: echoes `origin` back only when it
-/// exactly matches an entry in `allow`, otherwise omits the header
-/// (`None`). Unmanaged mode never calls this — it keeps the permissive
+/// is accepted by the managed request boundary (an explicit supervisor
+/// allowlist entry or the daemon's own loopback origin), otherwise omits the
+/// header (`None`). Unmanaged mode never calls this — it keeps the permissive
 /// `*` inline at each call site instead.
-pub(crate) fn cors_origin_for(allow: &[String], origin: Option<&str>) -> Option<String> {
+pub(crate) fn cors_origin_for(
+    allow: &[String],
+    origin: Option<&str>,
+    host: Option<&str>,
+) -> Option<String> {
     origin
-        .filter(|o| allow.iter().any(|a| a == o))
+        .filter(|origin| managed_request_origin_allowed(allow, Some(origin), host))
         .map(str::to_string)
 }

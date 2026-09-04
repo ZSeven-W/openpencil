@@ -44,7 +44,14 @@ use op_util::json_escape::escape_json_quoted;
 
 use crate::hub_time::{format_local_stamp, format_rfc3339_utc, unix_seconds_from_ms};
 use crate::js_text::{is_js_space, js_trim};
-use crate::transfer::MAX_SNAPSHOT_MB;
+/// The Hub's own request-body / document cap, in MiB.
+///
+/// A SERVER contract (`snapshot_routes.go::maxSnapshotBodyBytes`,
+/// `snapshots::DefaultMaxDocumentBytes`), deliberately NOT tied to the local
+/// ingest cap (`crate::transfer::MAX_SNAPSHOT_MB`): the local editor can raise
+/// its ceiling in lockstep with the extractor's node budget, but a capture
+/// only fits in the account inbox when the Go backend accepts it.
+pub const HUB_MAX_SNAPSHOT_MB: u32 = 32;
 
 /// The inbox route. Bare path, no query — the Hub refuses a request target
 /// carrying one (`exactRequestTarget`).
@@ -113,13 +120,14 @@ pub fn snapshots_url(origin: &str) -> String {
 /// Whether a snapshot of `chars` UTF-16 code units cannot fit in the Hub's
 /// request body once the envelope is wrapped around it.
 ///
-/// The cap is the same 32 MiB the local ingress enforces — the Hub chose it
-/// deliberately so "a capture that reaches OpenPencil directly also reaches
-/// the Hub" (`snapshots/types.go:102-105`) — minus [`ENVELOPE_OVERHEAD_BYTES`].
-/// UTF-16 length under-counts UTF-8 bytes and is never larger, so this only
-/// rejects captures the server would reject too.
+/// The cap is the Hub's own 32 MiB (`snapshots/types.go:102-105`) minus
+/// [`ENVELOPE_OVERHEAD_BYTES`]. Since the local ingest ceiling grew past it,
+/// a capture in the 32–48 MiB band imports locally but not into the account —
+/// which is why this check reports against [`HUB_MAX_SNAPSHOT_MB`], not the
+/// local cap. UTF-16 length under-counts UTF-8 bytes and is never larger, so
+/// this only rejects captures the server would reject too.
 pub fn snapshot_too_large(chars: f64) -> bool {
-    chars > f64::from(MAX_SNAPSHOT_MB) * 1024.0 * 1024.0 - ENVELOPE_OVERHEAD_BYTES
+    chars > f64::from(HUB_MAX_SNAPSHOT_MB) * 1024.0 * 1024.0 - ENVELOPE_OVERHEAD_BYTES
 }
 
 /// The display name for a page titled `title`, captured at `captured_at_ms`.

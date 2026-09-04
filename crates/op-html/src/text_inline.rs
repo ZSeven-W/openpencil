@@ -5,7 +5,7 @@ use crate::length::{parse_length, LengthCtx};
 use crate::mapper::pseudo::InlinePseudo;
 use crate::mapper::MapCtx;
 
-use super::{is_inline_tag, segment_style, InlineTextContext, RawSegment};
+use super::{is_inline_tag, segment_style, InlineTextScope, RawSegment};
 
 pub(super) fn append_inline_pseudo(
     context: &MapCtx<'_>,
@@ -13,25 +13,25 @@ pub(super) fn append_inline_pseudo(
     parent_style: &ComputedStyle,
     pseudo: PseudoElement,
     href: Option<String>,
-    inherited_context: InlineTextContext,
+    scope: InlineTextScope<'_>,
     segments: &mut Vec<RawSegment>,
 ) {
     if let Some(pseudo) = crate::mapper::pseudo::inline_pseudo(context, path, parent_style, pseudo)
     {
-        push_inline_pseudo(&pseudo, href, inherited_context, segments);
+        push_inline_pseudo(&pseudo, href, scope, segments);
     }
 }
 
 pub(super) fn push_inline_pseudo(
     pseudo: &InlinePseudo,
     href: Option<String>,
-    inherited_context: InlineTextContext,
+    scope: InlineTextScope<'_>,
     segments: &mut Vec<RawSegment>,
 ) {
     segments.push(RawSegment {
         text: pseudo.content.clone(),
-        style: segment_style(&pseudo.style, href),
-        context: inherited_context.child(&pseudo.style),
+        style: segment_style(&pseudo.style, href, scope.fill_override),
+        context: scope.context.child(&pseudo.style),
         forced_break: false,
     });
 }
@@ -40,7 +40,7 @@ pub(super) fn participates_in_inline_run(
     element: &DomElement,
     style: &ComputedStyle,
     path: &[&DomElement],
-    context: &MapCtx<'_>,
+    context: &mut MapCtx<'_>,
 ) -> bool {
     if style.get("display") == Some("contents") {
         return true;
@@ -65,17 +65,24 @@ pub(super) fn is_boxed_inline(
     element: &DomElement,
     style: &ComputedStyle,
     path: &[&DomElement],
-    context: &MapCtx<'_>,
+    context: &mut MapCtx<'_>,
 ) -> bool {
     if matches!(style.get("position"), Some("absolute" | "fixed")) {
         return false;
     }
+    let non_atomic_inline = matches!(
+        style.get("display").map(str::trim),
+        Some("inline" | "inline flow" | "ruby")
+    ) || (style.get("display").is_none() && is_inline_tag(&element.tag));
+    let inline_margin = has_nonzero_inline_margin(style, context);
     let inline_level = match style.get("display").map(str::trim) {
         Some("inline-block" | "inline flow-root" | "inline-flex" | "inline flex")
         | Some("inline-grid" | "inline grid") => true,
         Some("inline" | "inline flow" | "ruby") => {
             has_visual_box(style, context)
+                || inline_margin
                 || has_boxed_generated_content(path, style, context)
+                || contains_replaced_descendant(element)
                 || matches!(style.get("position"), Some("relative" | "sticky"))
         }
         Some(_) => false,
@@ -86,12 +93,92 @@ pub(super) fn is_boxed_inline(
                     "button" | "img" | "input" | "select" | "svg" | "textarea"
                 ))
                 && (has_visual_box(style, context)
+                    || inline_margin
                     || has_boxed_generated_content(path, style, context)
+                    || contains_replaced_descendant(element)
                     || matches!(style.get("position"), Some("relative" | "sticky"))
                     || !is_inline_tag(&element.tag))
         }
     };
+    if inline_level
+        && non_atomic_inline
+        && inline_margin
+        && context.containing_width_is_definite
+        && element_text_may_wrap(style, element)
+    {
+        context.warn_once(crate::import_warning::ImportWarning::InlineMarginWrappingApproximated);
+    }
     inline_level
+}
+
+fn contains_replaced_descendant(element: &DomElement) -> bool {
+    element.children.iter().any(|child| match child {
+        crate::dom::DomNode::Text(_) => false,
+        crate::dom::DomNode::Element(child) => {
+            crate::special::is_special_leaf_tag(&child.tag) || contains_replaced_descendant(child)
+        }
+    })
+}
+
+pub(crate) fn has_nonzero_inline_margin(style: &ComputedStyle, context: &MapCtx<'_>) -> bool {
+    let length_context = LengthCtx {
+        font_size: style.font_size,
+        root_font_size: context.opts.base_font_size,
+        viewport_w: context.opts.viewport_width,
+        viewport_h: context.opts.viewport_height(),
+    };
+    ["margin-left", "margin-right"].into_iter().any(|name| {
+        style
+            .get(name)
+            .filter(|value| !value.trim().eq_ignore_ascii_case("auto"))
+            .and_then(|value| parse_length(value, &length_context))
+            .is_some_and(|length| length.resolve(context.containing_width).abs() > f64::EPSILON)
+    })
+}
+
+pub(crate) fn inline_text_may_wrap(style: &ComputedStyle, text: &str) -> bool {
+    !text.is_empty()
+        && style_allows_inline_wrapping(style)
+        && (!is_single_unbreakable_token(text)
+            || matches!(style.get("overflow-wrap"), Some("anywhere" | "break-word"))
+            || matches!(style.get("word-break"), Some("break-all")))
+}
+
+fn style_allows_inline_wrapping(style: &ComputedStyle) -> bool {
+    !matches!(style.get("white-space"), Some("nowrap" | "pre"))
+}
+
+fn element_text_may_wrap(style: &ComputedStyle, element: &DomElement) -> bool {
+    if !style_allows_inline_wrapping(style) {
+        return false;
+    }
+    let mut saw_text = false;
+    let single_token = element_is_single_unbreakable_token(element, &mut saw_text);
+    saw_text
+        && (!single_token
+            || matches!(style.get("overflow-wrap"), Some("anywhere" | "break-word"))
+            || matches!(style.get("word-break"), Some("break-all")))
+}
+
+fn element_is_single_unbreakable_token(element: &DomElement, saw_text: &mut bool) -> bool {
+    if element.tag == "wbr" {
+        *saw_text = true;
+        return false;
+    }
+    element.children.iter().all(|child| match child {
+        crate::dom::DomNode::Text(text) => {
+            *saw_text |= !text.is_empty();
+            is_single_unbreakable_token(text)
+        }
+        crate::dom::DomNode::Element(child) => element_is_single_unbreakable_token(child, saw_text),
+    })
+}
+
+fn is_single_unbreakable_token(text: &str) -> bool {
+    !text.is_empty()
+        && text
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '_')
 }
 
 fn has_visual_box(style: &ComputedStyle, context: &MapCtx<'_>) -> bool {
@@ -196,7 +283,9 @@ pub(crate) fn pseudo_needs_frame(
         return true;
     }
     match style.get("display").map(str::trim) {
-        None | Some("inline" | "inline flow" | "ruby") => has_visual_box(style, context),
+        None | Some("inline" | "inline flow" | "ruby") => {
+            has_visual_box(style, context) || has_nonzero_inline_margin(style, context)
+        }
         _ => true,
     }
 }
@@ -265,6 +354,13 @@ mod tests {
         frame.children.as_deref().unwrap_or_default()
     }
 
+    fn authored_frame(node: &PenNode) -> &FrameNode {
+        let PenNode::Frame(frame) = crate::mapper::unwrap_margin_node(node) else {
+            panic!("expected authored frame")
+        };
+        frame
+    }
+
     fn text_content(content: &TextContent) -> String {
         match content {
             TextContent::Plain(value) => value.clone(),
@@ -299,9 +395,7 @@ mod tests {
         let PenNode::Frame(root) = &result.nodes[0] else {
             panic!()
         };
-        let PenNode::Frame(paragraph) = &children(root)[0] else {
-            panic!()
-        };
+        let paragraph = authored_frame(&children(root)[0]);
         let [PenNode::Frame(row)] = children(paragraph) else {
             panic!("inline boxes should share one row")
         };
@@ -323,9 +417,7 @@ mod tests {
         let PenNode::Frame(root) = &result.nodes[0] else {
             panic!()
         };
-        let PenNode::Frame(paragraph) = &children(root)[0] else {
-            panic!()
-        };
+        let paragraph = authored_frame(&children(root)[0]);
         let [PenNode::Text(text)] = children(paragraph) else {
             panic!("display:contents must not split one inline run into vertical children")
         };
@@ -343,9 +435,7 @@ mod tests {
         let PenNode::Frame(root) = &result.nodes[0] else {
             panic!()
         };
-        let PenNode::Frame(paragraph) = &children(root)[0] else {
-            panic!()
-        };
+        let paragraph = authored_frame(&children(root)[0]);
         let paragraph_children = children(paragraph);
         let [PenNode::Text(text)] = paragraph_children else {
             panic!("inline generated content should share the parent text node: {paragraph_children:#?}")
@@ -412,9 +502,7 @@ mod tests {
         let PenNode::Frame(root) = &result.nodes[0] else {
             panic!()
         };
-        let PenNode::Frame(paragraph) = &children(root)[0] else {
-            panic!()
-        };
+        let paragraph = authored_frame(&children(root)[0]);
         let [PenNode::Text(text)] = children(paragraph) else {
             panic!("display:contents link should remain one inline run")
         };

@@ -87,6 +87,27 @@ pub fn enter_child_scope(state: &mut EditorState, primary: NodeId, secondary: No
     state.editor_ui.canvas_hover_node = Some(secondary);
 }
 
+/// Double-click fast path: when the deepest hit under the pointer is a
+/// text leaf, jump selection + scope straight to it and open the inline
+/// text-edit session. The pointer already names the exact node, so
+/// walking the scope one level per double-click would only delay the
+/// edit; container targets keep the level-by-level drill. Returns
+/// `true` when a session opened.
+pub fn jump_to_deepest_text_edit(state: &mut EditorState, hit_path: &[NodeId]) -> bool {
+    let Some(deepest) = hit_path.last().cloned() else {
+        return false;
+    };
+    if !state.start_text_edit(deepest.clone()) {
+        return false;
+    }
+    let parent = crate::walkers::find_parent_and_index(state.active_children(), &deepest)
+        .and_then(|(parent, _)| parent);
+    state.set_single_selection(deepest.clone());
+    state.editor_ui.entered_container = parent;
+    state.editor_ui.canvas_hover_node = Some(deepest);
+    true
+}
+
 /// Apply the press selection at the resolved level and exit the entered
 /// container when the press landed outside it.
 ///

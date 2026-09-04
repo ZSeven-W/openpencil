@@ -20,19 +20,21 @@ pub const DEFAULT_ENDPOINT: &str = "127.0.0.1:3100";
 
 /// The insert-only snapshot route on the desktop app's live MCP endpoint.
 const INGEST_PATH: &str = "/api/import/web-snapshot";
+/// The extension-only design-system generation route.
+const DESIGN_MD_PATH: &str = "/api/generate/design-md";
 /// The general MCP surface, used only as the unmanaged-daemon fallback.
 const MCP_PATH: &str = "/mcp";
 
-/// Hosts an endpoint may name. `localhost` is accepted and rewritten; the
-/// two numeric literals pass through unchanged.
-const LOOPBACK_HOSTS: [&str; 3] = ["127.0.0.1", "[::1]", "localhost"];
+/// Hosts an endpoint may name. `localhost` is accepted and rewritten to the
+/// IPv4 literal the live MCP listener and extension manifest both support.
+const LOOPBACK_HOSTS: [&str; 2] = ["127.0.0.1", "localhost"];
 
 /// Normalize a user-typed endpoint to `host:port`.
 ///
-/// Accepts an optional `http://` / `https://` prefix and trailing slashes,
-/// exactly as the JS predecessor's
-/// `/^(127\.0\.0\.1|\[::1\]|localhost):([0-9]{1,5})$/i` did after stripping
-/// them.
+/// Accepts an optional `http://` / `https://` prefix and trailing slashes.
+/// This intentionally narrows the JS predecessor's loopback regex to
+/// `127.0.0.1` plus `localhost` rewritten to IPv4: the live MCP listener is
+/// IPv4-only and Chrome cannot grant an IPv6 host match pattern.
 ///
 /// Returns `None` when the input is unparseable or names anything but
 /// loopback — the caller must refuse to send.
@@ -43,9 +45,8 @@ pub fn normalize_endpoint(raw: &str) -> Option<String> {
     }
     let without_scheme = strip_trailing_slashes(strip_scheme(trimmed));
 
-    // Split on the LAST colon: `[::1]:3100` carries colons inside the host.
-    // Any leftover colon in the host part fails the whitelist below, which is
-    // what the anchored JS regex did too.
+    // Split on the last colon. Any leftover colon in the host part fails the
+    // IPv4-only whitelist below.
     let (host, port_text) = without_scheme.rsplit_once(':')?;
 
     // `[0-9]{1,5}` — no sign, no whitespace, no leading `+`, 1..=5 digits.
@@ -77,6 +78,31 @@ pub fn normalize_endpoint(raw: &str) -> Option<String> {
 /// never has a reason to hold an un-normalized one.
 pub fn ingest_url(endpoint: &str) -> String {
     format!("http://{endpoint}{INGEST_PATH}")
+}
+
+/// Absolute URL of the extension-only intelligent `design.md` route.
+///
+/// Like [`ingest_url`], `endpoint` must already have passed
+/// [`normalize_endpoint`]. The route is deliberately narrower than `/mcp`:
+/// generating a guide may spend the user's configured model quota, so the
+/// desktop host applies its extension-pairing and concurrency policy here.
+pub fn design_md_url(endpoint: &str) -> String {
+    design_md_start_url(endpoint)
+}
+
+/// Absolute URL that starts an intelligent `design.md` job.
+pub fn design_md_start_url(endpoint: &str) -> String {
+    format!("http://{endpoint}{DESIGN_MD_PATH}")
+}
+
+/// Absolute URL that polls or cancels `job_id`.
+///
+/// The host emits exactly 32 lowercase hexadecimal characters. Refusing any
+/// other spelling keeps the opaque id inside one URL path segment without
+/// relying on JavaScript's URL encoder or permitting traversal delimiters.
+pub fn design_md_poll_url(endpoint: &str, job_id: &str) -> Option<String> {
+    crate::design_md_job::is_valid_job_id(job_id)
+        .then(|| format!("http://{endpoint}{DESIGN_MD_PATH}/{job_id}"))
 }
 
 /// Absolute URL of the general MCP surface (the unmanaged-daemon fallback).

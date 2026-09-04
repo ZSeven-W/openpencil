@@ -640,6 +640,22 @@ impl crate::DesktopApp {
         self.image_search.reset();
         self.rebind_git_session_for_current_path();
         if fork {
+            // Leaving rotates the collab avatar generation (op-collab-host's
+            // `advance_generation`), which evicts every cached avatar byte
+            // from the process-global registry in op-editor-ui. op-collab-host
+            // guards its own tests against that, but its `#[cfg(test)]` guard
+            // is compiled OUT when this binary links it as a dependency —
+            // `cfg(test)` is only active for a crate's own test build. So the
+            // guard must live here, in the crate whose test binary actually
+            // runs this path: without it, a fork-save test's rotation landed
+            // between the image_decode_host avatar test's
+            // `note_pending_decode` and its first `pump`, evicted the avatar
+            // bytes, and the pump discarded the queued id as byte-less
+            // (linux-aarch64 CI, reproduced deterministically in a container
+            // by widening that window). Reentrant per thread; compiled out of
+            // production builds.
+            #[cfg(test)]
+            let _avatar_guard = crate::collab_avatar_host::lock_avatar_test_registry();
             self.collab_runtime.leave(&mut self.host);
         }
         true

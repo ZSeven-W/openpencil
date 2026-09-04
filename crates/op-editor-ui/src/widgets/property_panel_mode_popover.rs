@@ -13,29 +13,37 @@ use op_editor_core::PaddingEditMode;
 const POPOVER_PAD: f32 = 6.0;
 const POPOVER_TITLE_H: f32 = 22.0;
 const POPOVER_ROW_H: f32 = 26.0;
+const TOUCH_POPOVER_ROW_H: f32 = 30.0;
 
 /// Popup chrome derived from the gear emitted by the shared action
 /// walker. Paint and host containment both call this helper.
-pub(crate) fn mode_popover_rect_from_gear(gear: Rect, width: f32) -> Rect {
+pub(crate) fn mode_popover_rect_from_gear(gear: Rect, width: f32, touch_controls: bool) -> Rect {
     let pop_w = 190.0_f32.min(width - crate::widgets::property_panel_inputs::PAD_X * 2.0);
+    let row_h = if touch_controls {
+        TOUCH_POPOVER_ROW_H
+    } else {
+        POPOVER_ROW_H
+    };
     Rect {
-        origin: Point2D::new(gear.origin.x + gear.size.x - pop_w, gear.origin.y + 22.0),
-        size: Point2D::new(
-            pop_w,
-            POPOVER_PAD * 2.0 + POPOVER_TITLE_H + POPOVER_ROW_H * 3.0,
+        origin: Point2D::new(
+            gear.origin.x + gear.size.x - pop_w,
+            gear.origin.y + gear.size.y / 2.0 + 13.0,
         ),
+        size: Point2D::new(pop_w, POPOVER_PAD * 2.0 + POPOVER_TITLE_H + row_h * 3.0),
     }
 }
 
 /// The three mode-radio row rects inside `pop_box`.
-pub(crate) fn mode_popover_rows(pop_box: Rect) -> [Rect; 3] {
+pub(crate) fn mode_popover_rows(pop_box: Rect, touch_controls: bool) -> [Rect; 3] {
+    let row_h = if touch_controls {
+        TOUCH_POPOVER_ROW_H
+    } else {
+        POPOVER_ROW_H
+    };
     let first_row = pop_box.origin.y + POPOVER_PAD + POPOVER_TITLE_H;
     let row = |i: usize| Rect {
-        origin: Point2D::new(
-            pop_box.origin.x + POPOVER_PAD,
-            first_row + i as f32 * POPOVER_ROW_H,
-        ),
-        size: Point2D::new(pop_box.size.x - POPOVER_PAD * 2.0, POPOVER_ROW_H),
+        origin: Point2D::new(pop_box.origin.x + POPOVER_PAD, first_row + i as f32 * row_h),
+        size: Point2D::new(pop_box.size.x - POPOVER_PAD * 2.0, row_h),
     };
     [row(0), row(1), row(2)]
 }

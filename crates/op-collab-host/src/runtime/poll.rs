@@ -39,6 +39,7 @@ impl CollabRuntime {
                 generation: self.generation,
                 event: NetworkEvent::Failed(CollabRuntimeFailure::ResourceLimit),
                 bridge_reservation: None,
+                _lane_seat: None,
             });
         }
 
@@ -83,6 +84,7 @@ impl CollabRuntime {
         // bounded GUI lanes may still contain their final generation-tagged
         // backlog. Launch only after this poll has purged and processed both
         // lanes so a stale full queue cannot reject a new worker's first event.
+        changed |= self.launch_due_guest_reconnect(host);
         changed |= launch_pending_network(self);
         changed
     }

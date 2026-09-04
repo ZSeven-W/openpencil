@@ -1,5 +1,5 @@
 use super::WidgetHost;
-use op_editor_core::agent_settings::{AcpAgentField, SettingsFocus};
+use op_editor_core::agent_settings::{AcpAgentField, BuiltinAgentField, SettingsFocus};
 
 #[test]
 fn settings_input_arrows_move_caret_for_insert_and_backspace() {
@@ -21,6 +21,66 @@ fn settings_input_arrows_move_caret_for_insert_and_backspace() {
     assert!(host.apply_backspace());
     assert_eq!(host.editor_state.editor_ui.settings_input.text(), "abcd");
     assert_eq!(host.editor_state.editor_ui.settings_input.caret(), 2);
+}
+
+#[test]
+fn enter_adds_a_model_line_instead_of_committing_settings() {
+    let mut host = WidgetHost::new();
+    {
+        let ui = &mut host.editor_state.editor_ui;
+        ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::Model));
+        ui.settings_input.set_text("model-a");
+    }
+
+    assert!(host.apply_send());
+    assert_eq!(
+        host.editor_state.editor_ui.settings_input.text(),
+        "model-a\n"
+    );
+    assert_eq!(
+        host.editor_state.editor_ui.agent_settings.focus,
+        Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::Model))
+    );
+}
+
+#[test]
+fn web_model_clipboard_and_ime_preserve_normalized_lines() {
+    let mut host = WidgetHost::new();
+    {
+        let ui = &mut host.editor_state.editor_ui;
+        ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::Model));
+        ui.settings_input.set_text("old-model");
+        ui.settings_input.select_all();
+    }
+
+    assert!(host.apply_clipboard_text("model-a\r\nmodel-b\rmodel-c"));
+    assert_eq!(
+        host.editor_state.editor_ui.settings_input.text(),
+        "model-a\nmodel-b\nmodel-c"
+    );
+
+    let event = crate::event::ime::composition_end("\r\nmodel-d".to_string());
+    assert!(host.apply_ime(&event));
+    assert_eq!(
+        host.editor_state.editor_ui.settings_input.text(),
+        "model-a\nmodel-b\nmodel-c\nmodel-d"
+    );
+}
+
+#[test]
+fn web_single_line_settings_paste_still_filters_controls() {
+    let mut host = WidgetHost::new();
+    {
+        let ui = &mut host.editor_state.editor_ui;
+        ui.agent_settings.focus = Some(SettingsFocus::AcpAgentDraft(AcpAgentField::Command));
+        ui.settings_input.set_text("");
+    }
+
+    assert!(host.apply_clipboard_text("node\r\nserver\t--stdio"));
+    assert_eq!(
+        host.editor_state.editor_ui.settings_input.text(),
+        "nodeserver--stdio"
+    );
 }
 
 #[test]

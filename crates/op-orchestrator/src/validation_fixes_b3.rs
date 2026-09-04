@@ -245,6 +245,7 @@ fn build_container_node(
         justify_content,
         align_items,
         clip_content: None,
+        sticky_children: None,
         corner_radius,
         fill,
         stroke: None,

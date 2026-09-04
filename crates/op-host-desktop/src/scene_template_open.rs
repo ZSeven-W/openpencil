@@ -16,8 +16,8 @@
 //!   with work open who picks a template is reaching for material, not asking
 //!   to trade their file for it.
 
-use op_editor_core::scene_template_append::template_boards;
-use op_editor_core::scene_template_catalog::{scene_template_by_id, scene_template_document};
+use op_editor_core::scene_template_append::{template_boards, template_document_for};
+use op_editor_core::scene_template_catalog::scene_template_by_id;
 use op_host_native::widget_host::WidgetHostNative;
 use std::path::PathBuf;
 
@@ -30,6 +30,7 @@ pub(crate) fn drain_pending_scene_template(
     host: &mut WidgetHostNative,
     current_path: &mut Option<PathBuf>,
     window: Option<&winit::window::Window>,
+    now_ms: u64,
 ) -> bool {
     let Some(template_id) = host
         .editor_state_mut()
@@ -39,15 +40,28 @@ pub(crate) fn drain_pending_scene_template(
     else {
         return false;
     };
-    let Some(source) = scene_template_document(&template_id) else {
-        // The catalogue verifies this at load, so reaching here means the
-        // embedded set and the catalogue disagree — report it rather than
-        // silently doing nothing under the user's click.
-        eprintln!("[template] no embedded document for {template_id}");
+    let Some(source) = template_document_for(&template_id) else {
+        if template_id.starts_with(op_editor_core::user_scene_templates::USER_TEMPLATE_ID_PREFIX) {
+            // A user id the registry does not know is a real miss — the
+            // template was deleted behind the card's back, or the click came
+            // from a stale list. Say so rather than silently doing nothing
+            // under the user's click.
+            host.editor_state_mut().editor_ui.show_toast(
+                "sceneTemplate.documentUnavailable",
+                Vec::new(),
+                op_editor_core::editor_toast::EditorToastLevel::Warn,
+                now_ms,
+            );
+        } else {
+            // The catalogue verifies this at load, so reaching here means the
+            // embedded set and the catalogue disagree — report it rather than
+            // silently doing nothing under the user's click.
+            eprintln!("[template] no embedded document for {template_id}");
+        }
         return false;
     };
     if !op_editor_core::blank_starter::active_page_is_blank_starter(host.editor_state()) {
-        return append_scene_template(host, &template_id, source, current_path, window);
+        return append_scene_template(host, &template_id, &source, current_path, window);
     }
     // Replacing the document runs the same collaboration gate as File > New;
     // the panel's own press only opened a panel, which needed no gate.
@@ -58,7 +72,7 @@ pub(crate) fn drain_pending_scene_template(
         return false;
     }
     let locale = host.editor_state().editor_ui.locale;
-    let mut state = match op_host_services::doc_io::load_editor_state_from_source(source, locale) {
+    let mut state = match op_host_services::doc_io::load_editor_state_from_source(&source, locale) {
         Ok(state) => state,
         Err(error) => {
             eprintln!("[template] {template_id}: {error}");
@@ -141,6 +155,7 @@ fn stamp_template_scenario(state: &mut op_editor_core::EditorState, template_id:
 /// and worth keeping cheap: it parses every shipped template.
 #[cfg(test)]
 fn all_templates_parse(locale: op_editor_core::Locale) -> Result<(), String> {
+    use op_editor_core::scene_template_catalog::scene_template_document;
     use op_editor_core::EditorState;
     for template in op_editor_core::scene_template_catalog::scene_template_catalogue() {
         let source = scene_template_document(&template.id)

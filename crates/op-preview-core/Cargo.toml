@@ -1,0 +1,67 @@
+[package]
+name = "op-preview-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Canvas Preview (Play) mode runtime — jian runtime integration, hit-testing overlay, app-mode routing"
+
+[dependencies]
+# The dependency-light Preview contract DTOs (host capabilities, activation
+# ids; effects/debug in later tasks) — a leaf crate so core/UI/FFI/hosts can
+# share the frozen contract without the Core → UI cycle.
+op-preview-contracts = { path = "../op-preview-contracts" }
+# The canonical `.op` / `.pen` schema — the `PenDocument` loader
+# converts from. Also used for screen projection and JSON serialization.
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+# jian-core ships the taffy-backed `LayoutEngine` + `Runtime` for preview
+# widget state + routing.
+jian-core = { path = "../../vendor/jian/crates/jian-core" }
+# The canonical render scene this crate builds INTO (`LayoutScene` +
+# scene types) lives in jian-scene; scene_vars + the render-backend facade
+# (Color/Point2D/Rect) come from op-editor-ui.
+op-editor-ui = { path = "../op-editor-ui" }
+# Canonical editor-state superset this crate derives preview logic from.
+# Ref resolution + variable token resolution happen here.
+op-editor-core = { path = "../op-editor-core" }
+# The canonical loader / `EditorState` → paint-`Document` bridge, used
+# for layout scene construction.
+# `default-features = false` keeps op-pen-loader's `skia-measure` default (and
+# with it jian-skia → skia-safe → skia-bindings) out of this crate's graph, so
+# preview stays wasm32-buildable. Native builds get real skia metrics anyway:
+# op-host-native depends on op-pen-loader with defaults, and cargo unifies
+# features across the graph.
+op-pen-loader = { path = "../op-pen-loader", default-features = false }
+# Payload serialization round-trips through serde JSON.
+serde_json = { workspace = true }
+# Tracing for span instrumentation.
+tracing = { workspace = true }
+# Error types.
+thiserror = { workspace = true }
+# Track C-1: auto-wire pass runs the orchestrator's deterministic screen/nav
+# wiring over a preview-only `EditorState` clone. Optional + behind `gl-host`
+# (it enables op-orchestrator) so the raster-only build links no orchestrator.
+op-orchestrator = { path = "../op-orchestrator", optional = true }
+
+[dev-dependencies]
+# jian-skia ships `SkiaMeasure` — a real skia paragraph-shaper `MeasureBackend`
+# plugged into the layout engine. Only used by the test_measure() helper.
+jian-skia = { path = "../../vendor/jian/crates/jian-skia", features = ["textlayout"] }
+# Tests inject `SkiaMeasure` into the preview runtime, so the design-canvas
+# side must measure with skia too — otherwise `preview_layout_matches_design_
+# canvas` compares skia metrics against jian-core's estimate backend and fails
+# on text height. Test-only: the non-test graph stays skia-free for wasm.
+op-pen-loader = { path = "../op-pen-loader", features = ["skia-measure"] }
+
+[features]
+# Desktop GL host + orchestrator stack with auto-wire pass. Left OFF
+# by default for wasm cleanness; consumers that need auto-wire (desktop
+# preview) opt in via `features = ["gl-host"]`.
+default = []
+# Desktop-only auto-wire pass (Track C-1) behind the same feature gate
+# as op-orchestrator + preview's gl-host feature.
+gl-host = ["dep:op-orchestrator"]
+# Test helpers accessible across crate boundaries. Used by op-host-native's
+# tests to access preview testing methods that would otherwise be gated by
+# #[cfg(test)] in a non-test build of this crate.
+testing = []

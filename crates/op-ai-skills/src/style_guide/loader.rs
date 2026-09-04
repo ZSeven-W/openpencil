@@ -4,7 +4,6 @@ use std::sync::OnceLock;
 
 use crate::frontmatter::{parse_array, split_frontmatter, unquote};
 use crate::style_guide::types::{ParsedStyleGuide, Platform, StyleGuideMeta};
-use crate::SKILLS;
 
 /// Parse a style-guide markdown file's frontmatter.
 fn parse_frontmatter(content: &str) -> Option<(StyleGuideMeta, String)> {
@@ -59,7 +58,7 @@ static REGISTRY: OnceLock<Vec<ParsedStyleGuide>> = OnceLock::new();
 pub fn style_guide_registry() -> &'static [ParsedStyleGuide] {
     REGISTRY.get_or_init(|| {
         let mut out = Vec::new();
-        if let Some(dir) = SKILLS.get_dir("style-guides") {
+        if let Some(dir) = crate::style_guides_dir() {
             for file in dir.files() {
                 let is_md = file.path().extension().map(|e| e == "md").unwrap_or(false);
                 if !is_md {

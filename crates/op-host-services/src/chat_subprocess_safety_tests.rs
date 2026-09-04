@@ -171,6 +171,34 @@ fn guarded_child_env_excludes_host_token_and_unrelated_secrets() {
 }
 
 #[test]
+fn opencode_probe_env_keeps_config_but_not_unrelated_provider_keys() {
+    let vars = vec![
+        ("HOME".to_string(), "/tmp/home".to_string()),
+        ("PATH".to_string(), "/usr/bin".to_string()),
+        ("XDG_CONFIG_HOME".to_string(), "/tmp/config".to_string()),
+        ("XDG_RUNTIME_DIR".to_string(), "/tmp/runtime".to_string()),
+        (
+            "OPENCODE_CONFIG".to_string(),
+            "/tmp/opencode.json".to_string(),
+        ),
+        ("OPENAI_API_KEY".to_string(), "unrelated".to_string()),
+        ("ANTHROPIC_API_KEY".to_string(), "unrelated".to_string()),
+        ("DATABASE_URL".to_string(), "unrelated".to_string()),
+    ];
+
+    let opencode = filtered_env(CliName::OpenCode, vars);
+    let keys: Vec<_> = opencode.iter().map(|(key, _)| key.as_str()).collect();
+    assert!(keys.contains(&"HOME"));
+    assert!(keys.contains(&"PATH"));
+    assert!(keys.contains(&"XDG_CONFIG_HOME"));
+    assert!(keys.contains(&"XDG_RUNTIME_DIR"));
+    assert!(keys.contains(&"OPENCODE_CONFIG"));
+    assert!(!keys.contains(&"OPENAI_API_KEY"));
+    assert!(!keys.contains(&"ANTHROPIC_API_KEY"));
+    assert!(!keys.contains(&"DATABASE_URL"));
+}
+
+#[test]
 fn antigravity_keeps_linux_keyring_session_but_grok_does_not() {
     for key in ["DBUS_SESSION_BUS_ADDRESS", "XDG_RUNTIME_DIR"] {
         assert!(allowed_env(CliName::Antigravity, key), "{key}");

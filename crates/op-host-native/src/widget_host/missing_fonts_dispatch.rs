@@ -73,8 +73,8 @@ impl WidgetHostNative {
     pub fn arm_missing_fonts_detection(&mut self) {
         if !self.editor_state.editor_ui.system_fonts_loaded {
             fonts_flow::arm_pending_detection(&mut self.editor_state, true);
-            self.ensure_system_fonts_loaded();
         }
+        self.ensure_system_fonts_loaded();
         if self.editor_state.editor_ui.system_fonts_loaded {
             fonts_flow::replace_data(&mut self.editor_state, true);
             self.mark_dirty();
@@ -85,8 +85,8 @@ impl WidgetHostNative {
     pub(in crate::widget_host) fn refresh_missing_fonts_for_settings(&mut self) {
         if !self.editor_state.editor_ui.system_fonts_loaded {
             fonts_flow::arm_pending_detection(&mut self.editor_state, false);
-            self.ensure_system_fonts_loaded();
         }
+        self.ensure_system_fonts_loaded();
         if self.editor_state.editor_ui.system_fonts_loaded {
             fonts_flow::replace_data(&mut self.editor_state, false);
             self.mark_dirty();
@@ -100,8 +100,8 @@ impl WidgetHostNative {
         if !self.editor_state.editor_ui.system_fonts_loaded {
             let open_modal = self.editor_state.editor_ui.missing_fonts_modal_open;
             fonts_flow::arm_pending_detection(&mut self.editor_state, open_modal);
-            self.ensure_system_fonts_loaded();
         }
+        self.ensure_system_fonts_loaded();
         if self.editor_state.editor_ui.system_fonts_loaded {
             fonts_flow::clear_pending_detection(&mut self.editor_state);
             self.refresh_missing_fonts_prompt();

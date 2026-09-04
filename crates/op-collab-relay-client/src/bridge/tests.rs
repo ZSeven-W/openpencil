@@ -94,10 +94,17 @@ fn test_limits() -> RelayLimits {
         connect: Duration::from_secs(1),
         hello: Duration::from_secs(1),
         pair: Duration::from_secs(1),
+        owner_pair: Duration::from_secs(1),
+        keepalive: Duration::from_millis(250),
         idle: Duration::from_secs(2),
         lifetime: Duration::from_secs(5),
         retry: Duration::from_millis(10),
-        stop: Duration::from_secs(1),
+        // Stop is a convergence wait, not a latency assertion: no test asserts
+        // `RelayStopError::Timeout`, so this ceiling only decides how loaded a
+        // machine may be before an orderly shutdown gets misreported as a
+        // timeout. Measured 2026-08-28: at 1s, three suite instances racing a
+        // concurrent cargo build tripped it in whole-round bursts.
+        stop: Duration::from_secs(10),
         max_binary_bytes: MAX_RELAY_BINARY_BYTES,
         max_connection_bytes: MAX_RELAY_CONNECTION_BYTES,
     }
@@ -583,7 +590,11 @@ async fn owner_readiness_waits_for_relay_acceptance_not_pairing() {
     .await
     .unwrap();
     bridge
-        .wait_until_ready(Duration::from_secs(1))
+        // Generous on purpose: readiness here is a settled state the relay
+        // WILL reach, so a loaded runner should make the wait longer, never
+        // red. The timeout contract has its own test below with a budget it
+        // expects to blow.
+        .wait_until_ready(Duration::from_secs(10))
         .await
         .unwrap();
     assert_eq!(bridge.status().phase, RelayBridgePhase::Waiting);
@@ -702,3 +713,9 @@ async fn wait_for_phase(
     .await
     .unwrap()
 }
+
+#[path = "owner_pool_tests.rs"]
+mod owner_pool;
+
+#[path = "guest_recovery_tests.rs"]
+mod guest_recovery;

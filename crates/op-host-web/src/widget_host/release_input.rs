@@ -36,6 +36,19 @@ impl WidgetHost {
     pub fn apply_release_with_viewport(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
         self.last_viewport_w = viewport_w;
         self.last_viewport_h = viewport_h;
+        // Dispatch preview pointer up if preview is active
+        #[cfg(feature = "canvaskit")]
+        if self.editor_state.editor_ui.preview.mode && self.preview.is_some() {
+            if self.preview_switcher_release(viewport_w, viewport_h)
+                || self.screen_switcher_release(viewport_w, viewport_h)
+            {
+                self.preview_surface_capture = None;
+                return true;
+            }
+            let consumed = self.preview_dispatch_release();
+            self.preview_surface_capture = None;
+            return consumed;
+        }
         let pressed_released = self.release_pressed_feedback();
         // The rail's slides tab — a row click frames its board, a row
         // drag reorders the deck. Both resolve on release so a press that

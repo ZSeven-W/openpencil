@@ -238,6 +238,19 @@ fn take_inline_margins(children: &mut [PenNode]) -> Vec<f64> {
         .collect()
 }
 
+/// A margin wrapper makes the child's used width include this spacing, so the
+/// older flex-wrap-only carrier would count it a second time.
+pub(super) fn discard_recorded_inline_margin(node: &mut PenNode) {
+    let base = super::node_access::node_base_mut(node);
+    let Some(theme) = base.theme.as_mut() else {
+        return;
+    };
+    theme.remove(INLINE_MARGIN_KEY);
+    if theme.is_empty() {
+        base.theme = None;
+    }
+}
+
 /// Greedy line breaking: an item starts a new row as soon as it no longer
 /// fits the remaining content width, matching the flex line algorithm for
 /// items that neither grow nor shrink.
@@ -426,6 +439,15 @@ mod integration_tests {
             "<div style='display:flex;flex-wrap:wrap;width:700px'>{bare}{bare}{bare}</div>"
         ));
         assert_eq!(layout, Some(LayoutMode::Horizontal));
+
+        // The synthetic Margin frame already includes 40px around each card.
+        // Keeping the old private carrier as well would measure 900px and
+        // incorrectly wrap this 780px row in an 800px container.
+        let (layout, rows, _) = wrap_container(&format!(
+            "<div style='display:flex;flex-wrap:wrap;width:800px'>{card}{card}{card}</div>"
+        ));
+        assert_eq!(layout, Some(LayoutMode::Horizontal));
+        assert_eq!(rows, 3);
     }
 
     /// C1. A container with no definite width has no capacity to measure

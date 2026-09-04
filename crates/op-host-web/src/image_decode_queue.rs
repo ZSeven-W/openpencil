@@ -116,6 +116,7 @@ mod tests {
         clear_pending_work();
         let mut png = vec![0; 32];
         png[..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
+        png[8..12].copy_from_slice(&13_u32.to_be_bytes());
         png[12..16].copy_from_slice(b"IHDR");
         png[16..20].copy_from_slice(&16_u32.to_be_bytes());
         png[20..24].copy_from_slice(&16_u32.to_be_bytes());

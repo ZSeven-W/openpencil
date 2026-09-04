@@ -127,6 +127,41 @@ fn for_selection_code_tab_builds_panel_without_selection() {
 }
 
 #[test]
+fn compact_touch_hides_code_tab_and_presents_retained_code_as_design() {
+    use op_editor_core::size_class::EditorSizeClass;
+
+    let mut state = EditorState::sample();
+    state.editor_ui.touch = true;
+    state.editor_ui.size_class = EditorSizeClass::Compact;
+    state.editor_ui.property_tab = PropertyTab::Code;
+
+    let panel = PropertyPanel::for_selection(&state).expect("sample doc has a selection");
+    assert_eq!(panel.tab, PropertyTab::Design);
+    assert!(!panel.code_tab_available);
+
+    state.clear_selection();
+    assert!(
+        PropertyPanel::for_selection(&state).is_none(),
+        "retained Code state must use Design's selection gate on Compact"
+    );
+}
+
+#[test]
+fn medium_touch_keeps_selection_independent_code_panel() {
+    use op_editor_core::size_class::EditorSizeClass;
+
+    let mut state = EditorState::sample();
+    state.editor_ui.touch = true;
+    state.editor_ui.size_class = EditorSizeClass::Medium;
+    state.editor_ui.property_tab = PropertyTab::Code;
+    state.clear_selection();
+
+    let panel = PropertyPanel::for_selection(&state).expect("iPad Code tab remains available");
+    assert_eq!(panel.tab, PropertyTab::Code);
+    assert!(panel.code_tab_available);
+}
+
+#[test]
 fn for_selection_design_tab_still_hides_panel_without_selection() {
     let mut state = EditorState::sample();
     state.clear_selection();

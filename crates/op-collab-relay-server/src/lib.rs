@@ -1,8 +1,11 @@
 mod auth;
+mod close;
 mod config;
 mod connection;
 mod connection_reauth;
+mod connection_wait;
 mod error;
+mod observe;
 mod peer_quota;
 mod production;
 mod registry;
@@ -39,3 +42,5 @@ mod production_check_tests;
 mod production_config_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod waiting_timeout_tests;

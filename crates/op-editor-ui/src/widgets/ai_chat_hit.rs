@@ -51,6 +51,9 @@ pub enum AIChatHit {
     CycleEffort,
     /// Click on the prompt-library button — opens the Prompt Center.
     OpenPromptCenter,
+    /// The pre-flight MCP notice above the input — opens Settings on the MCP
+    /// tab so the missing integration is one click from the warning.
+    OpenMcpSettings,
     /// Click on the footer Agent Team chip — host cycles
     /// `ChatState::agent_team_size`.
     CycleAgentTeam,

@@ -206,3 +206,65 @@ fn effective_theme_layers_active_over_axis_defaults() {
     assert_eq!(theme.get("Mode"), Some(&"Dark".to_string()));
     assert_eq!(theme.get("Density"), Some(&"Comfort".to_string()));
 }
+
+/// B1: the seeded palette speaks shadcn vocabulary — `--`-prefixed
+/// tokens resolve from the built-in fallback with Light/Dark values.
+#[test]
+fn shadcn_dictionary_fallback_resolves() {
+    let light = Theme::from([("Mode".to_string(), "Light".to_string())]);
+    let dark = Theme::from([("Mode".to_string(), "Dark".to_string())]);
+    assert_eq!(
+        resolve_color_ref("$--primary", None, &light),
+        Some("#2563EB".to_string())
+    );
+    assert_eq!(
+        resolve_color_ref("$--primary", None, &dark),
+        Some("#60A5FA".to_string())
+    );
+    assert_eq!(
+        resolve_color_ref("$--muted-foreground", None, &light),
+        Some("#64748B".to_string())
+    );
+    assert_eq!(
+        resolve_color_ref("$--scrim", None, &light),
+        Some("#00000080".to_string())
+    );
+    assert_eq!(
+        resolve_numeric_ref("$--radius-pill", None, &light),
+        Some(999.0)
+    );
+    assert_eq!(resolve_numeric_ref("$--radius-xs", None, &light), Some(4.0));
+    assert!(has_palette_fallback("--background"));
+    assert!(has_palette_fallback("--sidebar-ring"));
+    assert!(has_palette_fallback("--chart-1"));
+}
+
+/// B1 compat: legacy `color-*` refs keep resolving through the compat
+/// fallback so pre-shadcn documents render without visual drift.
+#[test]
+fn legacy_color_refs_resolve_via_compat_fallback() {
+    let light = Theme::from([("Mode".to_string(), "Light".to_string())]);
+    let dark = Theme::from([("Mode".to_string(), "Dark".to_string())]);
+    assert_eq!(
+        resolve_color_ref("$color-surface", None, &light),
+        Some("#FFFFFF".to_string())
+    );
+    assert_eq!(
+        resolve_color_ref("$color-surface", None, &dark),
+        Some("#1E293B".to_string())
+    );
+    assert_eq!(
+        resolve_color_ref("$color-bg-deep", None, &dark),
+        Some("#0F172A".to_string())
+    );
+    assert_eq!(
+        resolve_color_ref("$color-danger-bg", None, &light),
+        Some("#FEE2E2".to_string())
+    );
+    assert_eq!(
+        resolve_color_ref("$color-border-strong", None, &light),
+        Some("#CBD5E1".to_string())
+    );
+    assert_eq!(resolve_numeric_ref("$radius-md", None, &light), Some(8.0));
+    assert!(has_palette_fallback("color-surface"));
+}

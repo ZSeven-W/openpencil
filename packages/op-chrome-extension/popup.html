@@ -37,6 +37,14 @@
         <span data-i18n="captureButton">Capture full page</span>
       </button>
 
+      <button id="design-md" class="btn btn-design" type="button">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 3h10l4 4v14H5z" />
+          <path d="M15 3v5h4M8 12h8M8 16h6" />
+        </svg>
+        <span data-i18n="designButton">Extract design.md</span>
+      </button>
+
       <div class="actions-row">
         <button id="pick" class="btn btn-quiet" type="button">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -89,7 +97,7 @@
         <!--
           The language row. It lives beside the endpoint because both are
           "set once and forget" settings, and neither belongs in the popup's
-          three-button main surface. Options are filled in by popup.js from
+          main action surface. Options are filled in by popup.js from
           i18n.js's SUPPORTED_LOCALES so the list has exactly one definition.
         -->
         <div class="settings-row">

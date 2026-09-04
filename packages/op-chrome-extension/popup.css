@@ -297,6 +297,17 @@ body {
   background: var(--brand-hover);
 }
 
+.btn-design {
+  background: var(--surface);
+  border-color: var(--brand);
+  color: var(--brand-hover);
+}
+
+.btn-design:hover:not(:disabled) {
+  background: var(--bg);
+  border-color: var(--brand-hover);
+}
+
 /*
  * The two half-width buttons are the tightest boxes in the popup, so they run
  * on less padding than the primary: it is the difference between "Захватить

@@ -268,10 +268,17 @@ impl WidgetHost {
                 true
             }
             flow::SlidesRelease::Present => {
-                // The same path the TopBar's Play button takes on this
-                // host — the browser has no slideshow session of its
-                // own, so entering Preview is the whole of it.
-                self.editor_state.editor_ui.enter_preview();
+                #[cfg(feature = "canvaskit")]
+                {
+                    let op_ck = self.op_ck.clone();
+                    let _ = self.enter_preview_from_browser(viewport_w, viewport_h, op_ck.as_ref());
+                }
+                #[cfg(not(feature = "canvaskit"))]
+                {
+                    self.editor_state.editor_ui.preview.mode = false;
+                    self.editor_state.editor_ui.preview.warnings =
+                        vec!["preview: not available in this build".to_string()];
+                }
                 self.mark_dirty();
                 true
             }

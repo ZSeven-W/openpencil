@@ -5,7 +5,7 @@ use op_orchestrator::{Progress, RunSummary, WorkerEvent};
 
 use super::{
     append_completion_narration, append_narration, apply_progress, count_u32, friendly_quota_error,
-    update_activity,
+    subtask_failure_detail, update_activity, upsert_activity,
 };
 
 /// Route global progress to the primary message and worker-scoped progress to
@@ -336,8 +336,7 @@ pub(super) fn finish_design_success(
                 None => {
                     activity.status = ChatActivityStatus::Error;
                     activity.detail = Some(
-                        op_i18n::translate(locale, "ai.designProgress.detail.needsAttention")
-                            .into(),
+                        op_i18n::translate(locale, "ai.designProgress.detail.noResult").into(),
                     );
                     unreported_active += 1;
                     if is_worker && !stopped_workers.contains(&index) {
@@ -348,7 +347,7 @@ pub(super) fn finish_design_success(
         }
     }
 
-    for outcome in &summary.subtasks {
+    for (outcome_index, outcome) in summary.subtasks.iter().enumerate() {
         let target = indices
             .iter()
             .copied()
@@ -359,16 +358,42 @@ pub(super) fn finish_design_success(
                     .any(|activity| activity.id == outcome.id)
             })
             .unwrap_or(primary);
-        if outcome.error.is_some() {
-            update_activity(
-                &mut messages[target],
-                &outcome.id,
-                ChatActivityStatus::Error,
-                Some(op_i18n::translate(locale, "ai.designProgress.detail.needsAttention").into()),
-            );
+        if let Some(error) = outcome.error.as_deref() {
+            let detail = Some(subtask_failure_detail(locale, error));
+            if messages[target]
+                .activities
+                .iter()
+                .any(|activity| activity.id == outcome.id)
+            {
+                update_activity(
+                    &mut messages[target],
+                    &outcome.id,
+                    ChatActivityStatus::Error,
+                    detail,
+                );
+            } else {
+                let title = outcome
+                    .subtask
+                    .as_ref()
+                    .map(|subtask| subtask.label.as_str())
+                    .unwrap_or(outcome.id.as_str());
+                upsert_activity(
+                    &mut messages[target],
+                    &outcome.id,
+                    title,
+                    ChatActivityStatus::Error,
+                    detail,
+                );
+            }
         }
         if let Some(subtask) = &outcome.subtask {
-            if let Ok(subtask_json) = serde_json::to_string(subtask) {
+            let insert_after_sibling_id = summary.subtasks[..outcome_index]
+                .iter()
+                .rev()
+                .find_map(|prior| prior.inserted_root_ids.last().cloned());
+            let mut subtask = subtask.clone();
+            subtask.insert_after_sibling_id = insert_after_sibling_id.clone();
+            if let Ok(subtask_json) = serde_json::to_string(&subtask) {
                 let message = &mut messages[target];
                 if message.design_request_json_for_retry.is_none() {
                     message.design_request_json_for_retry = request_json.clone();
@@ -383,6 +408,7 @@ pub(super) fn finish_design_success(
                         .push(op_editor_core::PendingSubtaskRetry {
                             subtask_id: outcome.id.clone(),
                             subtask_json,
+                            insert_after_sibling_id,
                         });
                 }
             }
@@ -433,8 +459,9 @@ pub(super) fn finish_design_error(messages: &mut [ChatMessage], raw: &str, local
     else {
         return false;
     };
+    let detail = subtask_failure_detail(locale, raw);
     for &index in &indices {
-        mark_active_activities_error(&mut messages[index]);
+        mark_active_activities_error(&mut messages[index], &detail);
         if messages[index].design_worker_group.is_some() {
             let terminal =
                 worker_stopped_narration(locale, messages[index].design_worker_screen.as_deref());
@@ -463,6 +490,7 @@ pub(super) fn finish_disconnected_design_messages(
     // durable design ownership here so that channel cannot terminate the real
     // plain-chat bubble.
     let indices = current_owned_design_message_indices(messages);
+    let detail = op_i18n::translate(locale, "ai.designProgress.detail.connectionClosed");
     for &index in &indices {
         let had_active_activity = messages[index].activities.iter().any(|activity| {
             matches!(
@@ -470,7 +498,7 @@ pub(super) fn finish_disconnected_design_messages(
                 ChatActivityStatus::Pending | ChatActivityStatus::Running
             )
         });
-        mark_active_activities_error(&mut messages[index]);
+        mark_active_activities_error(&mut messages[index], detail);
         // A manual retry closes its channel after sending SubtaskDone/Failed
         // instead of a whole-turn summary. In that normal path the row is
         // already terminal, so merely stop streaming; only an abrupt
@@ -527,6 +555,7 @@ pub(super) fn stop_design_messages(messages: &mut [ChatMessage], locale: Locale)
     }
 
     let mut changed = false;
+    let detail = op_i18n::translate(locale, "ai.designProgress.detail.stoppedByUser");
     for index in indices {
         let had_active = messages[index].activities.iter().any(|activity| {
             matches!(
@@ -534,7 +563,7 @@ pub(super) fn stop_design_messages(messages: &mut [ChatMessage], locale: Locale)
                 ChatActivityStatus::Pending | ChatActivityStatus::Running
             )
         });
-        changed |= mark_active_activities_error(&mut messages[index]);
+        changed |= mark_active_activities_error(&mut messages[index], detail);
         if messages[index].design_worker_group.is_some() && had_active {
             let terminal =
                 worker_stopped_narration(locale, messages[index].design_worker_screen.as_deref());
@@ -548,15 +577,18 @@ pub(super) fn stop_design_messages(messages: &mut [ChatMessage], locale: Locale)
     changed
 }
 
-fn mark_active_activities_error(message: &mut ChatMessage) -> bool {
+fn mark_active_activities_error(message: &mut ChatMessage, detail: &str) -> bool {
     let mut changed = false;
     for activity in &mut message.activities {
         if matches!(
             activity.status,
             ChatActivityStatus::Pending | ChatActivityStatus::Running
         ) {
+            let next_detail = Some(detail.to_owned());
+            changed |=
+                activity.status != ChatActivityStatus::Error || activity.detail != next_detail;
             activity.status = ChatActivityStatus::Error;
-            changed = true;
+            activity.detail = next_detail;
         }
     }
     changed
@@ -581,11 +613,13 @@ fn worker_finished_narration(locale: Locale, screen: Option<&str>, has_error: bo
         .unwrap_or("screen");
     match (locale, has_error) {
         (Locale::ZhCn, false) => format!("**{screen}** 已完成。"),
-        (Locale::ZhCn, true) => format!("**{screen}** 已完成，但有项目需要处理。"),
+        (Locale::ZhCn, true) => format!("**{screen}** 已结束；失败区块已展开并标明具体原因。"),
         (Locale::ZhTw, false) => format!("**{screen}** 已完成。"),
-        (Locale::ZhTw, true) => format!("**{screen}** 已完成，但有項目需要處理。"),
+        (Locale::ZhTw, true) => format!("**{screen}** 已結束；失敗區塊已展開並標明具體原因。"),
         (_, false) => format!("Finished **{screen}**."),
-        (_, true) => format!("Finished **{screen}** with items that need attention."),
+        (_, true) => {
+            format!("Finished **{screen}**; failed sections are expanded with their reasons.")
+        }
     }
 }
 

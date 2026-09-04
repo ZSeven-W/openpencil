@@ -12,7 +12,12 @@ op-ai = { path = "../op-ai", optional = true }
 op-ai-skills = { path = "../op-ai-skills", optional = true }
 op-codegen = { path = "../op-codegen", features = ["ai"], optional = true }
 op-collab = { path = "../op-collab" }
+# `settings-io` only: the explicit app-sandbox config root selected by
+# embedded (mobile) shells decides where `settings.json` lives.
+op-config-store = { path = "../op-config-store", optional = true }
 op-editor-core = { path = "../op-editor-core" }
+# `settings-io` only: persisted-locale parsing for the settings file.
+op-i18n = { path = "../op-i18n", optional = true }
 op-orchestrator = { path = "../op-orchestrator", optional = true }
 # Non-optional: `settings_payload` (shared settings serde shapes) is part of
 # the crate baseline and stays wasm32-clean.
@@ -20,6 +25,9 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
 thiserror = { workspace = true }
+# `settings-io` only: the desktop settings-file location. NOT wasm32-clean —
+# the feature must stay out of the browser bundle's graph.
+dirs = { version = "5", optional = true }
 
 [features]
 default = ["chat", "codegen", "design"]
@@ -33,6 +41,17 @@ codegen = [
   "dep:tracing",
 ]
 design = ["dep:op-orchestrator"]
+# File-backed user settings persistence (`settings.json` load / save /
+# fingerprint). Non-default and NOT wasm32-clean (`dirs` + real file IO):
+# enabled by op-host-services (desktop + web daemon) and op-engine-ffi
+# (mobile shells), never by the browser host.
+settings-io = [
+  "dep:dirs",
+  "dep:op-config-store",
+  "dep:op-i18n",
+  "dep:serde_json",
+]
 
 [dev-dependencies]
 serde_json = { workspace = true }
+zip = "2"

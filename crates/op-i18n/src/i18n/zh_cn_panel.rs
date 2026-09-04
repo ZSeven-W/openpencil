@@ -357,6 +357,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         }
         "htmlImport.warn.layout.negative_margins_ignored" => "负的 CSS 外边距已忽略。",
         "htmlImport.warn.layout.margins_on_visual_box_ignored" => "视觉盒上的 CSS 外边距已忽略。",
+        "htmlImport.warn.layout.inline_margin_wrapping_approximated" => "带 CSS 外边距的行内元素已装入独立盒，可能无法再跨行换行。",
         "htmlImport.warn.layout.content_box_percentage_approximated" => {
             "content-box 的百分比尺寸已近似处理。"
         }
@@ -526,6 +527,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "htmlImport.warn.media.object_fit_scale_down" => "CSS object-fit:scale-down 已近似处理。",
         "htmlImport.warn.media.object_fit_none_ignored" => "CSS object-fit:none 已忽略。",
         "htmlImport.warn.media.object_position_ignored" => "CSS object-position 已忽略。",
+        "htmlImport.warn.media.image_intrinsic_axis_unresolved" => {
+            "由于设定的尺寸为动态值或包含块尺寸不确定，无法使用图片的固有宽高比补全缺失的尺寸轴。"
+        }
         "htmlImport.warn.media.image_mix_blend_mode_unsupported" => {
             "图片上不支持的 CSS mix-blend-mode 已忽略。"
         }
@@ -626,6 +630,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "slidesPanel.exportPdf" => "导出 PDF",
         "slidesPanel.exportAllSlides" => "导出全部幻灯片",
         "slidesPanel.exportSelectedSlides" => "导出所选幻灯片（{{count}}）",
+        "settings.tab.ai" => "AI",
         "settings.agents.heroTitle" => "连接你的 AI 服务商",
         "settings.agents.heroSubtitle" => {
             "OpenPencil 直接驱动本地 CLI Agent 与 API 服务商，连接任意一个即可开始生成设计。"

@@ -43,6 +43,16 @@ impl DesktopApp {
             Key::Named(NamedKey::Backspace) if !self.zoom_modifier => {
                 consumed = self.host.apply_backspace();
             }
+            // The settings-modal input takes forward deletion; the host
+            // arm consumes the key while any settings field is focused,
+            // so a Delete can never reach the canvas selection behind
+            // the modal. The Git inputs below keep swallowing Delete via
+            // the `!settings_focused` gate on the generic arm.
+            Key::Named(NamedKey::Delete)
+                if !self.zoom_modifier && self.host.settings_focus_active() =>
+            {
+                consumed = self.host.apply_delete();
+            }
             Key::Named(NamedKey::Delete) if !self.zoom_modifier && !settings_focused => {
                 consumed = self.host.apply_delete();
             }
@@ -416,7 +426,14 @@ impl DesktopApp {
     /// pastes Figma clipboard HTML or the document node clipboard onto
     /// the canvas. `pub(crate)` for the Edit-menu path.
     pub(crate) fn handle_cmd_paste(&mut self) -> bool {
-        self.handle_paste_payload(ClipboardPayload::read_system())
+        let payload = if self.host.non_chat_input_owns_keyboard_pub() {
+            ClipboardPayload::read_text_system()
+        } else if self.host.chat_input_owns_keyboard_pub() {
+            ClipboardPayload::read_chat_system()
+        } else {
+            ClipboardPayload::read_canvas_system()
+        };
+        self.handle_paste_payload(payload)
     }
 
     /// Input-aware paste router over an already-read clipboard snapshot.
@@ -483,14 +500,20 @@ impl DesktopApp {
         }
         let encoded = base64::engine::general_purpose::STANDARD.encode(&image.png);
         let src = format!("data:image/png;base64,{encoded}");
+        let centre = op_editor_ui::widgets::host_canvas_geometry::canvas_centre_doc_point(
+            self.host.editor_state(),
+            self.viewport_width,
+            self.viewport_height,
+        );
         let inserted = self
             .host
             .editor_state_mut()
-            .insert_image_node_at_viewport_sized(
+            .insert_image_node_at_doc_point_sized(
                 "pasted-image.png",
                 &src,
                 image.width,
                 image.height,
+                (centre.x as f64, centre.y as f64),
             )
             .is_some();
         if inserted {

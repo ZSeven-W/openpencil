@@ -59,7 +59,7 @@ fn sync_applies_active_page_and_geometry_as_one_version() {
     let body = r#"{"document":{"version":"1.0","children":[],"editorMeta":{"activePageIndex":6,"preserveAuthoredGeometry":true}},"version":8,"activePageIndex":3}"#;
     let mut applied = None;
     assert!(client
-        .sync_with_editor_meta(body, |_doc, version, page, preserve| {
+        .sync_with_editor_meta(body, |_doc, version, page, preserve, _scenario| {
             applied = Some((version, page, preserve));
             true
         })

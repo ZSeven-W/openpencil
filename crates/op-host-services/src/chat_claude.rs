@@ -34,10 +34,11 @@
 //! gives that surface room to grow without busting the 800-line cap.
 
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
+use std::time::Duration;
 
 use anthropic_agent_sdk::{
-    types::{identifiers::SessionId, ContentBlock, Message},
+    types::{ContentBlock, Message},
     ClaudeAgentOptions, StreamExt,
 };
 use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, StopReason, ThinkingMode};
@@ -45,41 +46,26 @@ use tokio::sync::mpsc;
 
 use crate::chat_runtime::{shared_runtime, BlockingRecvIter};
 
-/// Process-wide chat-session resume slot. Each chat turn spawns a
-/// fresh `claude --print` subprocess; the slot carries the previous
-/// turn's `session_id` forward so the SDK resumes it (`--resume`) and
-/// follow-ups see the full conversation. New Chat clears the slot
-/// (`reset_claude_chat_session`) so a fresh transcript starts a fresh
-/// CLI session. Single-window desktop app — one slot is enough.
-fn chat_resume_slot() -> &'static Mutex<Option<SessionId>> {
-    static SLOT: OnceLock<Mutex<Option<SessionId>>> = OnceLock::new();
-    SLOT.get_or_init(|| Mutex::new(None))
-}
+/// Upper bounds for a routed Claude turn. The idle deadline resets after
+/// every valid SDK message; the total deadline prevents an endlessly active
+/// agentic loop from owning a CLI process forever.
+const CLAUDE_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+const CLAUDE_TOTAL_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
-/// Forget the resumable Claude Code chat session. Called when the
-/// user starts a New Chat so stale context can't leak into it.
-pub fn reset_claude_chat_session() {
-    if let Ok(mut slot) = chat_resume_slot().lock() {
-        *slot = None;
-    }
-}
+/// Retained for the host's provider-reset fanout. Claude turns no longer keep
+/// process-global resume state: each request carries the owning tab's trimmed
+/// history, so there is nothing to clear when another tab starts a new chat.
+pub fn reset_claude_chat_session() {}
 
 /// `ChatProvider` impl that drives Claude Code via the
 /// `anthropic-agent-sdk` Rust client. Each send spawns a fresh
-/// `claude --print` subprocess; chat-tracked providers
-/// ([`ClaudeCodeProvider::for_chat`]) thread the previous turn's
-/// `session_id` through `options.resume` so the CLI reloads the
-/// conversation — follow-ups carry full multi-turn context.
+/// `claude --print` subprocess. Chat-panel follow-ups carry the owning
+/// tab's trimmed history in-band instead of resuming a process-global
+/// Claude session, so concurrent tabs cannot inherit each other's context.
 pub struct ClaudeCodeProvider {
     /// Optional CLI-options bundle the SDK forwards to `claude`.
     /// Cloned per-`send`; `None` falls through to the SDK's defaults.
     options: Option<ClaudeAgentOptions>,
-    /// When true, this provider participates in the process-wide chat
-    /// resume slot: it resumes the stored session and stores the
-    /// session id each turn reports. The design orchestrator path
-    /// constructs untracked providers so its sub-requests never join
-    /// (or pollute) the user's chat session.
-    track_chat_session: bool,
     label: String,
 }
 
@@ -91,20 +77,14 @@ impl ClaudeCodeProvider {
     pub fn new() -> Self {
         Self {
             options: None,
-            track_chat_session: false,
             label: "Claude Code".into(),
         }
     }
 
-    /// Build a chat-panel provider that resumes (and records) the
-    /// process-wide chat session, so consecutive chat turns share one
-    /// Claude Code conversation.
+    /// Build a chat-panel provider. Conversation context comes from each
+    /// [`ChatRequest`], keeping independent editor tabs isolated.
     pub fn for_chat() -> Self {
-        Self {
-            options: None,
-            track_chat_session: true,
-            label: "Claude Code".into(),
-        }
+        Self::new()
     }
 
     /// Build a Claude Code provider with a pre-configured
@@ -121,7 +101,6 @@ impl ClaudeCodeProvider {
     pub fn with_options(options: ClaudeAgentOptions) -> Self {
         Self {
             options: Some(options),
-            track_chat_session: false,
             label: "Claude Code".into(),
         }
     }
@@ -139,11 +118,6 @@ impl ClaudeCodeProvider {
         request: ChatRequest,
         cancel: Option<Arc<AtomicBool>>,
     ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
-        let resume = if self.track_chat_session {
-            chat_resume_slot().lock().ok().and_then(|s| s.clone())
-        } else {
-            None
-        };
         // Image turns (TS chat.ts:293-297): the system prompt's
         // "NEVER use tools"-style restrictions are stripped so Claude
         // Code will use its Read tool to view the spilled image files.
@@ -152,8 +126,7 @@ impl ClaudeCodeProvider {
             request.system_prompt =
                 crate::chat_attachment::strip_no_tools_restriction(&request.system_prompt);
         }
-        let options = Some(effective_options(self.options.as_ref(), &request, resume));
-        let track_session = self.track_chat_session;
+        let options = Some(effective_options(self.options.as_ref(), &request));
         // Claude Code's `query` String API can't carry image content
         // blocks, so attachments spill to temp files and the prompt
         // carries the TS guided Read-tool flow (chat.ts:268-282): one
@@ -161,13 +134,14 @@ impl ClaudeCodeProvider {
         // the temp files alive for the turn and removes them when the
         // worker task ends. A staging failure aborts the turn with an
         // error rather than silently dropping the attachments.
-        let (prompt, guard) = match crate::chat_attachment::claude_image_prompt(
+        let (mut prompt, guard) = match crate::chat_attachment::claude_image_prompt(
             &request.user_message,
             &request.attachments,
         ) {
             Ok(pair) => pair,
             Err(e) => return crate::chat_attachment::attachment_error_turn(e),
         };
+        prompt = prompt_with_request_history(&request, prompt);
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
         let task = shared_runtime().spawn(async move {
             let _guard = guard;
@@ -189,24 +163,44 @@ impl ClaudeCodeProvider {
             let mut emitted_done = false;
             let mut state = StreamState::default();
             let mut out: Vec<ChatDelta> = Vec::new();
-            'msgs: while let Some(msg_result) = stream.next().await {
+            let total_deadline = tokio::time::Instant::now() + CLAUDE_TOTAL_TIMEOUT;
+            'msgs: loop {
+                let msg_result = tokio::select! {
+                    biased;
+                    _ = tx.closed() => break,
+                    _ = tokio::time::sleep_until(total_deadline) => {
+                        let _ = tx.send(ChatDelta::Error(
+                            "claude turn exceeded the 15 minute deadline".into()
+                        )).await;
+                        let _ = tx.send(ChatDelta::Done {
+                            stop_reason: StopReason::Aborted,
+                        }).await;
+                        emitted_done = true;
+                        break;
+                    }
+                    result = tokio::time::timeout(CLAUDE_IDLE_TIMEOUT, stream.next()) => {
+                        match result {
+                            Ok(Some(message)) => message,
+                            Ok(None) => break,
+                            Err(_) => {
+                                let _ = tx.send(ChatDelta::Error(
+                                    "claude produced no events for 5 minutes".into()
+                                )).await;
+                                let _ = tx.send(ChatDelta::Done {
+                                    stop_reason: StopReason::Aborted,
+                                }).await;
+                                emitted_done = true;
+                                break;
+                            }
+                        }
+                    }
+                };
                 // Drop-out the moment the chat panel goes away.
                 if tx.is_closed() {
                     break;
                 }
                 let msg = match msg_result {
-                    Ok(m) => {
-                        // Chat-tracked turns record the CLI session id
-                        // so the NEXT turn resumes this conversation.
-                        if track_session {
-                            if let Message::Result { session_id, .. } = &m {
-                                if let Ok(mut slot) = chat_resume_slot().lock() {
-                                    *slot = Some(session_id.clone());
-                                }
-                            }
-                        }
-                        m
-                    }
+                    Ok(m) => m,
                     Err(e) => {
                         let _ = tx
                             .send(ChatDelta::Error(format!("claude stream: {e}")))
@@ -265,13 +259,12 @@ mod provider_impl;
 ///   no selection keeps the CLI default);
 /// - the per-turn system prompt lands on `options.system_prompt`
 ///   (TS parity: `chat.ts` passes `systemPrompt: body.system`);
-/// - `resume` threads the previous chat turn's session id through so
-///   the CLI reloads the conversation — history rides the resumed
-///   session, not the prompt (no transcript digest needed).
+/// - conversation history is deliberately absent from SDK options: it is
+///   folded into the prompt by [`prompt_with_request_history`] so state stays
+///   bound to the originating OpenPencil tab.
 fn effective_options(
     base: Option<&ClaudeAgentOptions>,
     request: &ChatRequest,
-    resume: Option<SessionId>,
 ) -> ClaudeAgentOptions {
     let mut options = base.cloned().unwrap_or_default();
     // Token-level streaming (TS parity: `chat.ts:361`
@@ -293,9 +286,6 @@ fn effective_options(
     }
     if !request.system_prompt.trim().is_empty() {
         options.system_prompt = Some(request.system_prompt.clone().into());
-    }
-    if let Some(session) = resume {
-        options.resume = Some(session);
     }
     // GUI-launch environment repair: a Dock-launched app misses the
     // shell-rc exports a terminal launch has — without ANTHROPIC_* the
@@ -321,6 +311,21 @@ fn effective_options(
         }
     }
     options
+}
+
+/// Add the request-local transcript digest to a single-shot Claude prompt.
+/// `ChatRequest::history` is already captured from the tab that launched the
+/// turn, unlike a process-global SDK resume id which cannot distinguish tabs.
+fn prompt_with_request_history(request: &ChatRequest, prompt: String) -> String {
+    let digest = op_ai::chat_history::history_digest(
+        &request.history,
+        op_ai::chat_history::DEFAULT_DIGEST_CHARS,
+    );
+    if digest.is_empty() {
+        prompt
+    } else {
+        format!("{digest}\n\n{prompt}")
+    }
 }
 
 /// Per-message streaming dedupe state. With
@@ -409,6 +414,12 @@ fn map_message(
                         // history the CLI already shows the model;
                         // the chat widget doesn't render them
                         // separately today.
+                    }
+                    ContentBlock::Unknown => {
+                        // Forward compatibility: a newer Claude CLI may add
+                        // block kinds before this vendored SDK is refreshed.
+                        // Ignore that block without aborting the surrounding
+                        // assistant message or the rest of the stream.
                     }
                 }
             }
@@ -508,7 +519,7 @@ mod tests {
             model: Some("claude-sonnet-4-6".into()),
             ..Default::default()
         };
-        let options = effective_options(None, &req, None);
+        let options = effective_options(None, &req);
         assert_eq!(options.model.as_deref(), Some("claude-sonnet-4-6"));
     }
 
@@ -517,7 +528,7 @@ mod tests {
         // No selection → leave the configured base untouched so the
         // CLI keeps its own default model.
         let req = ChatRequest::default();
-        let options = effective_options(None, &req, None);
+        let options = effective_options(None, &req);
         assert!(options.model.is_none());
 
         // A base bundle with a model survives a turn without one.
@@ -525,7 +536,7 @@ mod tests {
             model: Some("opus".into()),
             ..Default::default()
         };
-        let options = effective_options(Some(&base), &req, None);
+        let options = effective_options(Some(&base), &req);
         assert_eq!(options.model.as_deref(), Some("opus"));
     }
 
@@ -536,31 +547,8 @@ mod tests {
             model: Some("   ".into()),
             ..Default::default()
         };
-        let options = effective_options(None, &req, None);
+        let options = effective_options(None, &req);
         assert!(options.model.is_none());
-    }
-
-    #[test]
-    fn effective_options_threads_system_prompt_and_resume() {
-        use anthropic_agent_sdk::types::options::SystemPrompt;
-        let req = ChatRequest {
-            system_prompt: "You are a design assistant.".into(),
-            ..Default::default()
-        };
-        let session = SessionId::new("sess-123");
-        let options = effective_options(None, &req, Some(session.clone()));
-        assert!(
-            matches!(
-                options.system_prompt,
-                Some(SystemPrompt::String(ref s)) if s == "You are a design assistant."
-            ),
-            "per-turn system prompt must ride options.system_prompt (TS parity: systemPrompt)"
-        );
-        assert_eq!(
-            options.resume.as_ref().map(SessionId::as_str),
-            Some("sess-123"),
-            "resume must carry the previous chat turn's session id"
-        );
     }
 
     #[test]
@@ -569,7 +557,7 @@ mod tests {
             system_prompt: "   ".into(),
             ..Default::default()
         };
-        let options = effective_options(None, &req, None);
+        let options = effective_options(None, &req);
         assert!(options.system_prompt.is_none());
         assert!(options.resume.is_none());
     }
@@ -604,7 +592,7 @@ mod tests {
     fn effective_options_enables_partial_messages() {
         // TS parity: chat.ts:361 `includePartialMessages: true` — the
         // flag is what makes the CLI emit token-level stream events.
-        let options = effective_options(None, &ChatRequest::default(), None);
+        let options = effective_options(None, &ChatRequest::default());
         assert!(options.include_partial_messages);
     }
 
@@ -677,6 +665,19 @@ mod tests {
                 ChatDelta::TextDelta("whole".into()),
             ]
         );
+    }
+
+    #[test]
+    fn unknown_assistant_content_block_does_not_abort_message() {
+        let mut state = StreamState::default();
+        let mut out = Vec::new();
+        let assistant = assistant_message(serde_json::json!([
+            { "type": "future_claude_block", "payload": { "version": 2 } },
+            { "type": "text", "text": "still rendered" }
+        ]));
+
+        assert!(map_message(assistant, &mut state, &mut out).is_none());
+        assert_eq!(out, vec![ChatDelta::TextDelta("still rendered".into())]);
     }
 
     #[test]
@@ -772,14 +773,14 @@ mod tests {
             effort: EffortLevel::High,
             ..Default::default()
         };
-        let options = effective_options(None, &req, None);
+        let options = effective_options(None, &req);
         assert_eq!(options.max_thinking_tokens, Some(24_000));
 
         let req = ChatRequest {
             thinking: ThinkingMode::Disabled,
             ..Default::default()
         };
-        let options = effective_options(None, &req, None);
+        let options = effective_options(None, &req);
         assert_eq!(options.max_thinking_tokens, Some(0));
     }
 }

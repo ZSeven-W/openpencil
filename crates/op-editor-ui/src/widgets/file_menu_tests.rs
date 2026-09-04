@@ -3,6 +3,8 @@
 //! Split out of the widget file to keep it under the 800-line cap.
 
 use super::*;
+use crate::widgets::{PaintCx, Widget};
+use crate::{Color, RenderBackend, TextLayout};
 use jian_widgets::components::menu::MenuHit;
 use op_editor_core::scene_template_catalog::TemplateScene;
 
@@ -10,6 +12,34 @@ fn menu_panel(menu: &FileMenu<'_>) -> Rect {
     Rect {
         origin: Point2D::new(100.0, 50.0),
         size: Point2D::new(MENU_WIDTH, menu.height()),
+    }
+}
+
+#[derive(Default)]
+struct TextCaptureBackend {
+    texts: Vec<(String, Point2D)>,
+}
+
+impl RenderBackend for TextCaptureBackend {
+    fn begin_frame(&mut self) {}
+    fn end_frame(&mut self) {}
+    fn fill_rect(&mut self, _: Rect, _: Color) {}
+    fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+    fn draw_text(&mut self, layout: &TextLayout, point: Point2D) {
+        self.texts
+            .extend(layout.runs().iter().map(|run| (run.content.clone(), point)));
+    }
+    fn clip_rect(&mut self, _: Rect) {}
+    fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+    fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
+    fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+    fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+    fn save(&mut self) {}
+    fn restore(&mut self) {}
+    fn translate(&mut self, _: Point2D) {}
+    fn resize(&mut self, _: u32, _: u32) {}
+    fn dpi_scale(&self) -> f32 {
+        1.0
     }
 }
 
@@ -111,6 +141,75 @@ fn hosts_without_batch_export_keep_the_original_row_map() {
         ),
         MenuHit::Inside
     );
+}
+
+#[test]
+fn desktop_template_save_row_sits_after_save_as_and_shifts_later_rows() {
+    let ui = EditorUiState {
+        ..Default::default()
+    };
+    let mut ui = ui;
+    ui.scene_template_center.save_current_supported = true;
+    let menu = FileMenu::for_editor_ui(&ui, two_recents());
+    let panel = menu_panel(&menu);
+    let divider = DIVIDER_GAP * 2.0 + 1.0;
+    let row_y =
+        panel.origin.y + PAD_Y + ROW_HEIGHT * 3.0 + divider + ROW_HEIGHT * 2.0 + ROW_HEIGHT * 0.5;
+
+    assert_eq!(menu.choice_for_row(5), Some(FileMenuChoice::SaveAsTemplate));
+    assert_eq!(menu.choice_for_row(6), Some(FileMenuChoice::ExportImage));
+    assert_eq!(menu.choice_for_row(7), Some(FileMenuChoice::OpenRecent(0)));
+    assert_eq!(menu.choice_for_row(9), Some(FileMenuChoice::ClearRecent));
+    assert_eq!(
+        menu.hit(panel, Point2D::new(panel.origin.x + 20.0, row_y)),
+        MenuHit::Row(5)
+    );
+
+    let plain_ui = EditorUiState::default();
+    let without = FileMenu::for_editor_ui(&plain_ui, two_recents());
+    assert_eq!(menu.height(), without.height() + ROW_HEIGHT);
+
+    let mut backend = TextCaptureBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+    menu.paint(&mut cx, panel);
+    let label_y = |label: &str| {
+        backend
+            .texts
+            .iter()
+            .find_map(|(text, point)| (text == label).then_some(point.y))
+            .unwrap_or_else(|| panic!("label {label:?} did not paint"))
+    };
+    let save_as_y = label_y(t(&ui, "saveAs"));
+    let template_y = label_y(t(&ui, "saveAsTemplate"));
+    let export_y = label_y(t(&ui, "exportImage"));
+    assert!(save_as_y < template_y && template_y < export_y);
+}
+
+#[test]
+fn template_save_composes_with_batch_and_deck_rows() {
+    let mut ui = desktop_ui(Some(TemplateScene::Slides));
+    ui.scene_template_center.save_current_supported = true;
+    let menu = FileMenu::for_editor_ui(&ui, two_recents());
+
+    assert_eq!(menu.choice_for_row(5), Some(FileMenuChoice::SaveAsTemplate));
+    assert_eq!(menu.choice_for_row(6), Some(FileMenuChoice::ExportImage));
+    assert_eq!(
+        menu.choice_for_row(7),
+        Some(FileMenuChoice::ExportAllFrames)
+    );
+    assert_eq!(
+        menu.choice_for_row(8),
+        Some(FileMenuChoice::ExportSlideshowHtml)
+    );
+    assert_eq!(menu.choice_for_row(9), Some(FileMenuChoice::ExportPptx));
+    assert_eq!(menu.choice_for_row(10), Some(FileMenuChoice::OpenRecent(0)));
+    assert_eq!(menu.choice_for_row(12), Some(FileMenuChoice::ClearRecent));
+
+    let without_template = desktop_ui(Some(TemplateScene::Slides));
+    let without = FileMenu::for_editor_ui(&without_template, two_recents());
+    assert_eq!(menu.height(), without.height() + ROW_HEIGHT);
 }
 
 #[test]

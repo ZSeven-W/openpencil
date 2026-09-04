@@ -330,6 +330,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "htmlImport.warn.layout.margins_on_visual_box_ignored" => {
             "As margens CSS em uma caixa visual foram ignoradas."
         }
+        "htmlImport.warn.layout.inline_margin_wrapping_approximated" => "Um elemento inline com margens CSS foi convertido em caixa e pode não mais quebrar entre linhas.",
         "htmlImport.warn.layout.content_box_percentage_approximated" => {
             "O dimensionamento percentual content-box foi aproximado."
         }
@@ -553,6 +554,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         }
         "htmlImport.warn.media.object_fit_none_ignored" => "O object-fit:none CSS foi ignorado.",
         "htmlImport.warn.media.object_position_ignored" => "O object-position CSS foi ignorado.",
+        "htmlImport.warn.media.image_intrinsic_axis_unresolved" => {
+            "A proporção intrínseca da imagem não pôde determinar o eixo ausente porque o tamanho definido é dinâmico ou o bloco que a contém não tem tamanho definido."
+        }
         "htmlImport.warn.media.image_mix_blend_mode_unsupported" => {
             "Um mix-blend-mode CSS sem suporte em uma imagem foi ignorado."
         }
@@ -689,6 +693,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "slidesPanel.exportPdf" => "Exportar PDF",
         "slidesPanel.exportAllSlides" => "Exportar todos os slides",
         "slidesPanel.exportSelectedSlides" => "Exportar slides selecionados ({{count}})",
+        "settings.tab.ai" => "IA",
         "settings.agents.heroTitle" => "Conecte seu provedor de IA",
         "settings.agents.heroSubtitle" => "O OpenPencil aciona seus agentes CLI locais e provedores de API — conecte um para começar a gerar designs.",
         "settings.agents.statusConnected" => "Conectado",

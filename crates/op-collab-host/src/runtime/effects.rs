@@ -105,6 +105,28 @@ impl CollabRuntime {
         host: &mut impl CollabHost,
         cursor: Option<(f64, f64)>,
     ) -> bool {
+        self.publish_local_presence_inner(host, cursor, false)
+    }
+
+    /// Publish a changed terminal presence without the paint-frame throttle.
+    ///
+    /// Mobile suspension uses this after clearing its pointer. The enqueue is
+    /// still lossy/coalesced, but a recent cursor frame cannot defer the final
+    /// `None` until a foreground pump that may no longer run.
+    pub fn publish_local_presence_immediately(
+        &mut self,
+        host: &mut impl CollabHost,
+        cursor: Option<(f64, f64)>,
+    ) -> bool {
+        self.publish_local_presence_inner(host, cursor, true)
+    }
+
+    fn publish_local_presence_inner(
+        &mut self,
+        host: &mut impl CollabHost,
+        cursor: Option<(f64, f64)>,
+        bypass_throttle: bool,
+    ) -> bool {
         let state = host.editor_state();
         let presence = Presence {
             cursor: cursor.map(|(x, y)| Point { x, y }),
@@ -130,9 +152,10 @@ impl CollabRuntime {
             return false;
         }
         self.pending_local_presence = Some(presence);
-        if self
-            .last_presence_sent
-            .is_some_and(|last| last.elapsed() < Duration::from_millis(33))
+        if !bypass_throttle
+            && self
+                .last_presence_sent
+                .is_some_and(|last| last.elapsed() < Duration::from_millis(33))
         {
             return false;
         }
@@ -407,11 +430,22 @@ impl CollabRuntime {
             // `clear_authenticated` never runs here — drop the replay stash
             // explicitly before it can outlive the session that produced it.
             self.clear_discarded_stash(host);
+            self.reset_guest_reconnect();
         }
         if phase.is_authenticated() {
+            // Status events are the only diagnostic trace a headless or mobile
+            // host has (both print them to stderr), so they have to stay a log
+            // of what changed. Republishing Active for every routed frame made
+            // it a log of what arrived: presence alone repeats it ~30 times a
+            // second while the other peer drags, which buries the one
+            // `Failed(..)` line that says why a session dropped. Report the
+            // transition only.
+            let was_active =
+                host.editor_state().editor_ui.collab.phase == CollabConnectionPhase::Active;
             set_guest_ui(host, guest, phase);
             self.publish_guest_connection_path(host);
-            if phase == CollabConnectionPhase::Active {
+            if phase == CollabConnectionPhase::Active && !was_active {
+                self.reset_guest_reconnect();
                 self.push_status(CollabStatusEvent::SessionActive {
                     role: guest.session.core().role(),
                 });
@@ -523,6 +557,7 @@ impl CollabRuntime {
             self.actor = Some(actor);
             return Ok(());
         }
+        let reconnect_failure = failure.unwrap_or(CollabRuntimeFailure::Transport);
         let result = match &mut actor {
             EditorActor::Owner(owner) => {
                 owner.connections.remove(&connection);
@@ -564,16 +599,25 @@ impl CollabRuntime {
                     self.clear_discarded_stash(host);
                 } else {
                     set_guest_ui(host, guest, CollabConnectionPhase::Reconnecting);
-                    self.set_notice(
-                        host,
-                        disconnect_notice(failure.unwrap_or(CollabRuntimeFailure::Transport)),
-                    );
+                    self.set_notice(host, disconnect_notice(reconnect_failure));
                     self.push_status(CollabStatusEvent::Reconnecting);
                 }
                 Ok(())
             }
         };
+        let reconnect = result.is_ok()
+            && matches!(
+                &actor,
+                EditorActor::Guest(guest)
+                    if guest.session.core().state()
+                        == op_collab::GuestConnectionState::Disconnected
+            );
         self.actor = Some(actor);
+        if reconnect {
+            self.schedule_guest_reconnect(reconnect_failure);
+        } else {
+            self.reset_guest_reconnect();
+        }
         result
     }
 

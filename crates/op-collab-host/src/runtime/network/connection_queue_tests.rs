@@ -8,8 +8,8 @@ use op_collab_transport::{
 };
 
 use super::super::super::types::{is_lossy_presence_frame, BudgetedFrame};
+use super::super::connection::tests::{admitted_pair, bye_frame};
 use super::queue_command_frame;
-use super::tests::{admitted_pair, bye_frame};
 
 const EXPIRES_AT_UNIX_MS: u64 = 11_000;
 
@@ -112,4 +112,37 @@ fn full_reliable_backlog_drops_owner_presence_changed_without_failing_driver() {
         Err(RuntimeError::Queue(QueueError::Full))
     ));
     assert_eq!(bridge_budget.used().unwrap(), 0);
+}
+
+#[test]
+fn presence_leaves_outbound_slots_for_the_commit_that_ends_a_drag() {
+    // A drag republishes presence at roughly 30 Hz. Before the reserve,
+    // presence alone could occupy all eight outbound slots the moment the
+    // socket stalled, and the commit that closed the gesture was then refused
+    // with `QueueError::Full` — fatal to the connection.
+    let (mut owner, _guest, _, _) = admitted_pair(EXPIRES_AT_UNIX_MS);
+    let bridge_budget = SharedQueueBudget::new(64 * 1024).expect("bridge budget");
+    let capacity = TransportConfig::default().connections.outbound_queue_items;
+
+    for _ in 0..(capacity * 4) {
+        let presence = budgeted(
+            frame(CollabMessage::PresenceChanged(ParticipantPresence {
+                participant_id: "participant-a".into(),
+                peer_id: "peer-a".into(),
+                presence: presence(),
+            })),
+            &bridge_budget,
+        );
+        queue_budgeted(&mut owner, presence, None).expect("presence is droppable, never fatal");
+    }
+
+    assert!(
+        owner.queued_items() <= capacity - 2,
+        "presence stopped short of the reserve, leaving {} of {capacity} slots used",
+        owner.queued_items()
+    );
+
+    let commit = budgeted(bye_frame(ByeReason::Normal), &bridge_budget);
+    queue_budgeted(&mut owner, commit, None)
+        .expect("an undroppable frame still has room after a presence flood");
 }

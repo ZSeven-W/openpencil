@@ -1,6 +1,7 @@
 //! `build_subagent_prompt` and its core builder.
 
 use super::*;
+use crate::types::SubtaskOutcome;
 
 /// 单个 sub-agent 的 LLM 调用输入。
 ///
@@ -32,6 +33,9 @@ pub fn build_subagent_prompt(
         abort,
         reduced_complexity,
         minimal_skills,
+        // This compatibility wrapper has no live document snapshot. The
+        // production runner uses the route-aware wrapper below.
+        false,
         components,
         &[],
     )
@@ -44,6 +48,9 @@ pub fn build_subagent_prompt(
 /// Generation paths call this variant after resolving normalized plan groups
 /// (or loop continuation's live screens) through navigation's shared route
 /// allocator.
+///
+/// * `doc_has_variables` — derived from the live document's non-empty
+///   `sink.state().doc.variables` table by the sub-agent runner.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_subagent_prompt_with_screen_routes(
     subtask: &Subtask,
@@ -52,6 +59,7 @@ pub(crate) fn build_subagent_prompt_with_screen_routes(
     abort: AbortFlag,
     reduced_complexity: bool,
     minimal_skills: bool,
+    doc_has_variables: bool,
     components: &ComponentLibrary,
     screen_routes: &[(String, String)],
 ) -> (CallRequest, SkillLoadReport) {
@@ -65,9 +73,41 @@ pub(crate) fn build_subagent_prompt_with_screen_routes(
         abort,
         reduced_complexity,
         minimal_skills,
+        doc_has_variables,
         script_on,
         components,
         screen_routes,
+    )
+}
+
+/// Production prompt builder with prior section headlines threaded from the
+/// sequential orchestrator. Concurrent screen-group workers deliberately pass
+/// an empty slice because their section results are buffered independently.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_subagent_prompt_with_screen_routes_and_outcomes(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    req: &DesignRequest,
+    abort: AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
+    doc_has_variables: bool,
+    components: &ComponentLibrary,
+    screen_routes: &[(String, String)],
+    prior_outcomes: &[SubtaskOutcome],
+) -> (CallRequest, SkillLoadReport) {
+    build_subagent_prompt_core_with_outcomes(
+        subtask,
+        plan,
+        req,
+        abort,
+        reduced_complexity,
+        minimal_skills,
+        doc_has_variables,
+        true,
+        components,
+        screen_routes,
+        prior_outcomes,
     )
 }
 
@@ -82,9 +122,41 @@ pub(super) fn build_subagent_prompt_core(
     abort: AbortFlag,
     reduced_complexity: bool,
     minimal_skills: bool,
+    doc_has_variables: bool,
     script_on: bool,
     components: &ComponentLibrary,
     screen_routes: &[(String, String)],
+) -> (CallRequest, SkillLoadReport) {
+    build_subagent_prompt_core_with_outcomes(
+        subtask,
+        plan,
+        req,
+        abort,
+        reduced_complexity,
+        minimal_skills,
+        doc_has_variables,
+        script_on,
+        components,
+        screen_routes,
+        &[],
+    )
+}
+
+/// Core sub-agent prompt builder with the headlines produced by earlier
+/// sections on the same page.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn build_subagent_prompt_core_with_outcomes(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    req: &DesignRequest,
+    abort: AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
+    doc_has_variables: bool,
+    script_on: bool,
+    components: &ComponentLibrary,
+    screen_routes: &[(String, String)],
+    prior_outcomes: &[SubtaskOutcome],
 ) -> (CallRequest, SkillLoadReport) {
     // Apply tier-gated filtering, then resolve the generation skill set under
     // the budget — that order, not the reverse; see the resolve call below.
@@ -128,10 +200,9 @@ pub(super) fn build_subagent_prompt_core(
     let mut flags = HashMap::new();
     flags.insert("isBasicTier".to_string(), tier == ModelTier::Basic);
     flags.insert("hasDesignMd".to_string(), has_design_md);
-    // No existing-document variable context is wired into `DesignRequest`
-    // (TS sources this from `request.context.variables`), so this is always
-    // false on the Rust path today.
-    flags.insert("hasVariables".to_string(), false);
+    // `doc_has_variables` comes from `sink.state().doc.variables` in the
+    // sub-agent runner, mirroring the TS `request.context.variables` gate.
+    flags.insert("hasVariables".to_string(), doc_has_variables);
     flags.insert("noStyleGuideMatch".to_string(), no_style_guide_match);
     // Element-tools (N-tool) path is not ported to Rust (feature-flag off in
     // TS production); `elements`/`elements-cookbook` therefore stay gated off.
@@ -209,6 +280,12 @@ pub(super) fn build_subagent_prompt_core(
     // grew under it: the deck skills were then silently dropped/tail-cut,
     // which `prompt_deck_skill_tests` now asserts against.
     //
+    // Cards (DS P1.5) join the same arm for the same reason: the plain
+    // Basic 5200 arm's always-kept Base skills alone resolve ~5440 tokens
+    // (0815 measurement), so the card contract would otherwise be dropped
+    // for BudgetExhausted on EVERY card prompt a weak model sees — the
+    // 2026-08-04 `slides` failure, in a card jacket.
+    //
     // Measured 2026-08-09 on that file's fixtures, every resolved skill
     // untruncated: Basic 11529/13200, Standard and Full both 12548/13200.
     // Standard lands on Full's exact skill set here — at an unbounded budget
@@ -217,14 +294,24 @@ pub(super) fn build_subagent_prompt_core(
     // Full tier reads the same default and loses it identically, so the deck
     // load simply fills the phase. Buying it back means raising the phase
     // default, which belongs to the corpus owner, not to this override.
+    //
+    // Scroll orchestration (parallax / sticky / stagger) joins the same arm
+    // for the same reason again: the `scroll-orchestration` skill is ~3000
+    // tokens on top of the always-kept base, so under the plain 5200 / 6500
+    // arms it was dropped for BudgetExhausted on every scroll prompt a weak
+    // model saw — and it is the only teaching that makes such a page move.
+    // The intent test reuses the skill's own trigger keywords
+    // (`scroll_intent.rs`) so the arm and the resolver cannot disagree.
     let is_deck = is_deck_board(plan);
+    let is_card = is_card_board(plan);
+    let is_scroll = crate::scroll_intent::is_scroll_orchestration_request(&req.prompt);
     let deck_budget = Phase::Generation.default_budget();
     let budget_override = match tier {
         ModelTier::Basic if is_mobile_layout || is_mobile_screen => Some(9200),
-        ModelTier::Basic if is_deck => Some(deck_budget),
+        ModelTier::Basic if is_deck || is_card || is_scroll => Some(deck_budget),
         ModelTier::Basic => Some(5200),
         ModelTier::Standard if is_mobile_layout => Some(9500),
-        ModelTier::Standard if is_deck => Some(deck_budget),
+        ModelTier::Standard if is_deck || is_card || is_scroll => Some(deck_budget),
         ModelTier::Standard => Some(6500),
         ModelTier::Full => None,
     };
@@ -265,6 +352,7 @@ pub(super) fn build_subagent_prompt_core(
     let (mut filtered, resolve_report, filter_drops) =
         resolve_generation_skills_after_prompt_filter(
             &intent,
+            model_id,
             &opts,
             tier,
             is_mobile_screen,
@@ -350,6 +438,7 @@ pub(super) fn build_subagent_prompt_core(
         .map(|instruction| format!("{instruction}\n\n"))
         .unwrap_or_default();
     let screen_route_block = screen_route_prompt_block(screen_routes);
+    let headline_block = section_headline_prompt_block(prior_outcomes, tier);
     let spacing_rule = if is_mobile_layout {
         "SPACING CONSISTENCY — MOBILE CONTENT RAIL: The root page may keep 0 horizontal padding for full-width status/navigation/full-bleed media. This ordinary transparent root-direct section owns padding:[0,24] exactly once; do not duplicate it on an inner wrapper. If this section is a clipped horizontal scroller, keep its section full width, inset its header 24px on both sides, and give the clipped viewport a 24px leading inset with a flush 0px trailing edge."
     } else {
@@ -374,6 +463,7 @@ pub(super) fn build_subagent_prompt_core(
     };
     let mut user_prompt = format!(
         "Page sections:\n{}\n\n\
+{}\
 Generate ONLY \"{}\" (~{:.0}px of content).{}\n\
 Overall design: {}\n\n\
 {}\
@@ -401,6 +491,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
 - ICONS: use icon_font with lucide iconFontName; never use path nodes for icons.\n\
 - {}",
         section_list,
+        headline_block,
         subtask.label,
         subtask.region.height,
         my_elements,
@@ -527,6 +618,27 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
             first_text_timeout: Some(t.first_text),
         },
         report,
+    )
+}
+
+fn section_headline_prompt_block(prior_outcomes: &[SubtaskOutcome], tier: ModelTier) -> String {
+    let limit = if tier == ModelTier::Basic { 4 } else { 12 };
+    let headlines = prior_outcomes
+        .iter()
+        .filter_map(|outcome| outcome.headline.as_deref())
+        .filter(|headline| !headline.trim().is_empty())
+        .take(limit)
+        .map(|headline| {
+            let truncated = headline.chars().take(60).collect::<String>();
+            serde_json::to_string(&truncated).expect("serializing a string cannot fail")
+        })
+        .collect::<Vec<_>>();
+    if headlines.is_empty() {
+        return String::new();
+    }
+    format!(
+        "HEADLINES ALREADY ON THIS PAGE (earlier sections — do NOT reuse or paraphrase them; this section needs its own distinct headline): {}\n\n",
+        headlines.join(", ")
     )
 }
 

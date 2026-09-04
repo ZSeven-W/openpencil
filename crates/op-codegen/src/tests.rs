@@ -593,3 +593,50 @@ fn expression_bound_values_degrade_to_no_attribute() {
     assert!(!html.contains("value="));
     assert!(!html.contains("$progress"));
 }
+
+/// B1: `--`-prefixed shadcn variable names must emit as CSS custom
+/// properties verbatim (`--primary`), never triple-dash (`---primary`).
+#[test]
+fn css_variables_emit_leading_dash_names_verbatim() {
+    let mut doc = empty_doc();
+    let mut vars = BTreeMap::new();
+    vars.insert("--primary".to_string(), color_def("#2563eb"));
+    vars.insert("--muted-foreground".to_string(), color_def("#64748b"));
+    doc.variables = Some(vars);
+    let css = CssVariables.generate(&doc);
+    assert!(css.contains("--primary: #2563eb;"), "css: {css}");
+    assert!(css.contains("--muted-foreground: #64748b;"), "css: {css}");
+    assert!(!css.contains("---"), "triple-dash leak: {css}");
+}
+
+/// B1: the shadcn `.dark` class convention — themed `Mode=Dark` entries
+/// also emit under a `.dark` selector so shadcn component classes
+/// consume the generated globals.css directly.
+#[test]
+fn css_variables_emit_dark_class_block() {
+    let mut doc = empty_doc();
+    let mut vars = BTreeMap::new();
+    vars.insert(
+        "--background".to_string(),
+        VariableDefinition {
+            kind: VariableKind::Color,
+            value: VariableValue::Themed(vec![
+                ThemedValue {
+                    value: VariableScalar::Str("#f8fafc".into()),
+                    theme: Some(axis("Mode", "Light")),
+                },
+                ThemedValue {
+                    value: VariableScalar::Str("#0f172a".into()),
+                    theme: Some(axis("Mode", "Dark")),
+                },
+            ]),
+        },
+    );
+    doc.variables = Some(vars);
+    let css = CssVariables.generate(&doc);
+    assert!(css.contains(":root[data-Mode=\"Dark\"]"), "css: {css}");
+    assert!(css.contains(".dark"), "missing .dark selector: {css}");
+    // The .dark selector shares the dark block's declarations.
+    let dark_block = css.split(".dark").nth(1).expect(".dark block");
+    assert!(dark_block.contains("--background: #0f172a;"), "css: {css}");
+}

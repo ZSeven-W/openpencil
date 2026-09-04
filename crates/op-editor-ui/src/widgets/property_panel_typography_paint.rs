@@ -4,8 +4,8 @@
 //! `property_panel_typography::paint_font_picker`.
 
 use super::{
-    display_font_family, font_picker_layout, font_picker_layout_at, FontPickerEntry,
-    FontPickerLayout, FontPickerRow, PAD_X, REMOVE_X_SIZE,
+    display_font_family, font_picker_layout, font_picker_layout_at_for_ui, FontPickerEntry,
+    FontPickerLayout, FontPickerRow, PAD_X,
 };
 use crate::theme::Theme;
 use crate::widgets::button::paint_button_feedback_wash;
@@ -15,6 +15,10 @@ use crate::widgets::text_metrics;
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 use jian_widgets::components::select::SelectState;
+
+pub(super) fn is_active_font_family(active: &str, entry: &str) -> bool {
+    active.trim().eq_ignore_ascii_case(entry.trim())
+}
 
 /// Paint the dropdown (call as a late overlay, after the sections).
 #[allow(clippy::too_many_arguments)]
@@ -77,10 +81,49 @@ pub fn paint_font_picker_at(
     active_family: &str,
     now_ms: u64,
 ) {
+    paint_font_picker_at_for_ui(
+        cx,
+        theme,
+        trigger,
+        popup_width,
+        bounds,
+        locale,
+        entries,
+        allow_import,
+        allow_remove,
+        search,
+        state,
+        import_hover,
+        active_family,
+        now_ms,
+        false,
+    );
+}
+
+/// Density-aware arbitrary-anchor picker paint. Its layout is resolved by the
+/// same touch flag used by Settings hit-testing and scroll bounds.
+#[allow(clippy::too_many_arguments)]
+pub fn paint_font_picker_at_for_ui(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    trigger: Rect,
+    popup_width: f32,
+    bounds: Rect,
+    locale: op_editor_core::Locale,
+    entries: &[FontPickerEntry],
+    allow_import: bool,
+    allow_remove: bool,
+    search: &str,
+    state: &SelectState,
+    import_hover: bool,
+    active_family: &str,
+    now_ms: u64,
+    touch_controls: bool,
+) {
     if !state.open {
         return;
     }
-    let layout = font_picker_layout_at(
+    let layout = font_picker_layout_at_for_ui(
         trigger,
         popup_width,
         bounds,
@@ -88,6 +131,7 @@ pub fn paint_font_picker_at(
         allow_import,
         allow_remove,
         state.scroll.offset,
+        touch_controls,
     );
     paint_font_picker_layout(
         cx,
@@ -116,6 +160,11 @@ fn paint_font_picker_layout(
     now_ms: u64,
     layout: &FontPickerLayout,
 ) {
+    let touch = layout.touch_controls;
+    let body_font = if touch { 15.0 } else { 11.0 };
+    let secondary_font = if touch { 14.0 } else { 11.0 };
+    let group_font = if touch { 14.0 } else { 9.0 };
+    let icon_size = if touch { 16.0 } else { 12.0 };
     cx.backend.fill_round_rect(layout.popup, 8.0, theme.popover);
     cx.backend
         .stroke_round_rect(layout.popup, 8.0, theme.border, 1.0);
@@ -126,13 +175,16 @@ fn paint_font_picker_layout(
     draw_icon(
         cx.backend,
         Icon::Search,
-        Point2D::new(s.origin.x + 8.0, s.origin.y + (s.size.y - 12.0) / 2.0),
-        12.0,
+        Point2D::new(
+            s.origin.x + if touch { 12.0 } else { 8.0 },
+            s.origin.y + (s.size.y - icon_size) / 2.0,
+        ),
+        icon_size,
         theme.muted_foreground,
         1.5,
     );
-    let text_x = s.origin.x + 26.0;
-    let baseline = s.origin.y + s.size.y / 2.0 + 4.0;
+    let text_x = s.origin.x + if touch { 38.0 } else { 26.0 };
+    let baseline = jian_widgets::centered_text_baseline_y(s, body_font);
     // Draft + placeholder + caret render through the unified jian TextInputView
     // (family-aware caret, no hand-rolled drift). The buffer is rebuilt from the
     // search String each frame; the open picker reads as focused.
@@ -145,7 +197,7 @@ fn paint_font_picker_layout(
         theme,
         &search_input,
         s,
-        11.0,
+        body_font,
         text_x - s.origin.x,
         baseline,
         now_ms,
@@ -185,13 +237,16 @@ fn paint_font_picker_layout(
                 let label = TextLayout::single_run(
                     label_str,
                     "system-ui",
-                    9.0,
+                    group_font,
                     (theme.muted_foreground).to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
                 cx.backend.draw_text(
                     &label,
-                    Point2D::new(rect.origin.x + 10.0, rect.origin.y + rect.size.y - 4.0),
+                    Point2D::new(
+                        rect.origin.x + 10.0,
+                        jian_widgets::centered_text_baseline_y(*rect, group_font),
+                    ),
                 );
             }
             FontPickerRow::NoResults => {
@@ -199,16 +254,16 @@ fn paint_font_picker_layout(
                 let label = TextLayout::single_run(
                     label_str,
                     "system-ui",
-                    11.0,
+                    secondary_font,
                     (theme.muted_foreground).to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
-                let w = text_metrics::measure_chrome(cx.backend, label_str, 11.0);
+                let w = text_metrics::measure_chrome(cx.backend, label_str, secondary_font);
                 cx.backend.draw_text(
                     &label,
                     Point2D::new(
                         rect.origin.x + (rect.size.x - w) / 2.0,
-                        rect.origin.y + rect.size.y / 2.0 + 4.0,
+                        jian_widgets::centered_text_baseline_y(*rect, secondary_font),
                     ),
                 );
             }
@@ -218,10 +273,10 @@ fn paint_font_picker_layout(
                     cx.backend,
                     Icon::Close,
                     Point2D::new(
-                        rect.origin.x + (rect.size.x - 12.0) / 2.0,
-                        rect.origin.y + (rect.size.y - 12.0) / 2.0,
+                        rect.origin.x + (rect.size.x - icon_size) / 2.0,
+                        rect.origin.y + (rect.size.y - icon_size) / 2.0,
                     ),
-                    12.0,
+                    icon_size,
                     theme.muted_foreground,
                     1.5,
                 );
@@ -250,24 +305,24 @@ fn paint_font_picker_layout(
                     Icon::Plus,
                     Point2D::new(
                         rect.origin.x + PAD_X,
-                        rect.origin.y + (rect.size.y - 12.0) / 2.0,
+                        rect.origin.y + (rect.size.y - icon_size) / 2.0,
                     ),
-                    12.0,
+                    icon_size,
                     theme.foreground,
                     1.6,
                 );
                 let label = TextLayout::single_run(
                     op_i18n::translate(locale, "text.font.importAction"),
                     "system-ui",
-                    11.0,
+                    body_font,
                     (theme.foreground).to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
                 cx.backend.draw_text(
                     &label,
                     Point2D::new(
-                        rect.origin.x + PAD_X + REMOVE_X_SIZE + 6.0,
-                        rect.origin.y + rect.size.y / 2.0 + 4.0,
+                        rect.origin.x + PAD_X + if touch { 24.0 } else { 18.0 },
+                        jian_widgets::centered_text_baseline_y(*rect, body_font),
                     ),
                 );
             }
@@ -275,7 +330,7 @@ fn paint_font_picker_layout(
                 let Some(entry) = entries.get(*i) else {
                     continue;
                 };
-                let is_active = entry.family.eq_ignore_ascii_case(active);
+                let is_active = is_active_font_family(active, &entry.family);
                 let row_rect = Rect {
                     origin: Point2D::new(rect.origin.x + 2.0, rect.origin.y),
                     size: Point2D::new(rect.size.x - 4.0, rect.size.y),
@@ -293,12 +348,32 @@ fn paint_font_picker_layout(
                         state.pressed == Some(*i),
                     );
                 }
+                let remove = layout.rows.iter().find_map(|(row, remove)| {
+                    matches!(row, FontPickerRow::RemoveEntry(index) if index == i)
+                        .then_some(*remove)
+                });
+                let check_x = is_active.then(|| {
+                    remove.map_or_else(
+                        || rect.origin.x + rect.size.x - if touch { 30.0 } else { 20.0 },
+                        |remove| remove.origin.x - icon_size - 8.0,
+                    )
+                });
+                let text_x = rect.origin.x + 10.0;
+                let text_right = check_x
+                    .map(|x| x - 10.0)
+                    .or_else(|| remove.map(|remove| remove.origin.x - 10.0))
+                    .unwrap_or(rect.origin.x + rect.size.x - 10.0);
+                let text_w = (text_right - text_x).max(1.0);
+                let family = crate::util::ellipsize_to_width(&entry.family, text_w, |text| {
+                    cx.backend
+                        .measure_text_family(text, body_font, &entry.family)
+                });
                 // Each row renders in its own family (TS style
                 // fontFamily: font.family).
                 let label = TextLayout::single_run(
+                    &family,
                     &entry.family,
-                    &entry.family,
-                    11.0,
+                    body_font,
                     (if is_active {
                         theme.primary
                     } else {
@@ -307,22 +382,23 @@ fn paint_font_picker_layout(
                     .to_jian(),
                     Point2D::new(0.0, 0.0),
                 );
+                cx.backend.save();
+                cx.backend
+                    .clip_rect(Rect::xywh(text_x, rect.origin.y, text_w, rect.size.y));
                 cx.backend.draw_text(
                     &label,
                     Point2D::new(
-                        rect.origin.x + 10.0,
-                        rect.origin.y + rect.size.y / 2.0 + 4.0,
+                        text_x,
+                        jian_widgets::centered_text_baseline_y(*rect, body_font),
                     ),
                 );
-                if is_active {
+                cx.backend.restore();
+                if let Some(check_x) = check_x {
                     draw_icon(
                         cx.backend,
                         Icon::Check,
-                        Point2D::new(
-                            rect.origin.x + rect.size.x - 20.0,
-                            rect.origin.y + (rect.size.y - 12.0) / 2.0,
-                        ),
-                        12.0,
+                        Point2D::new(check_x, rect.origin.y + (rect.size.y - icon_size) / 2.0),
+                        icon_size,
                         theme.primary,
                         1.6,
                     );

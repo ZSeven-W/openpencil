@@ -616,21 +616,24 @@ aiHidden: boolean | null,
 aiAliases: Array<string> | null, };
 
 /**
- * Native SkSL shader fill (v1). The `sksl` source is stored RAW and is
- * treated as untrusted: the renderer entrypoint is the SkSL signature
- * `half4 main(float2 fragCoord)`. On compile failure the backend
- * degrades to a visible solid fill (the first `color` uniform, else
- * mid-gray) and never panics. Mirrors the sibling gradient bodies for
- * the shared `opacity`/`blend_mode` tail.
+ * Native SkSL shader fill (v1). Authors may provide RAW source in `sksl`
+ * or ask the loader to expand a built-in source through `preset`. The
+ * loader currently recognizes only `"turbulence"`; a recognized preset
+ * wins when both fields are present.
  *
  * Pencil-flavoured WebGL-GLSL import is an explicit follow-up, NOT v1;
  * v1 expects SkSL (Skia's GLSL dialect) verbatim.
  */
 export type ShaderFillBody = {
 /**
- * RAW SkSL source. Entrypoint: `half4 main(float2 fragCoord)`.
+ * Loader-expanded source selector. Only `"turbulence"` is recognized
+ * in v1; expansion is runtime-only and is never serialized into `sksl`.
  */
-sksl: string,
+preset?: "turbulence" | null,
+/**
+ * Optional RAW SkSL source. Entrypoint: `half4 main(float2 fragCoord)`.
+ */
+sksl?: string | null,
 /**
  * Optional named-uniform map (`float` / `vec*` / `color`). A
  * shader may declare none; absent or empty both mean "no uniforms".

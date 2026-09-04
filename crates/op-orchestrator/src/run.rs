@@ -29,7 +29,9 @@ use crate::plan_repair::parse_orchestrator_response;
 use crate::prompt::build_orchestrator_prompt;
 use crate::scaffold::{build_scaffold_at, build_scaffold_reusing};
 use crate::screen_groups::group_subtasks_by_screen;
-use crate::subagent::{apply_command_with_reveal, reveal_now_millis, run_subtask_with_reveal_at};
+use crate::subagent::{
+    apply_command_with_reveal, reveal_now_millis, run_subtask_with_reveal_at_and_outcomes,
+};
 use crate::types::{
     AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, OrchestratorError, PlanningMode,
     Progress, RunSummary, SubtaskOutcome, ValidationProviders,

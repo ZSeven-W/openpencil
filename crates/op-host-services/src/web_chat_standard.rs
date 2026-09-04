@@ -37,6 +37,13 @@ use events::{
     write_done_event, write_error_event, write_thinking_event,
 };
 
+#[path = "web_chat_standard_reference.rs"]
+mod reference;
+
+#[path = "web_chat_standard_model_selection.rs"]
+mod model_selection;
+use model_selection::selected_model_id;
+
 const STANDARD_MODIFY_STEP: &str =
     r#"<step title="Checking guidelines">Analyzing modification request...</step>"#;
 
@@ -199,7 +206,6 @@ pub fn stream_standard_turn<W: Write>(
     cors_origin: Option<&str>,
 ) -> std::io::Result<()> {
     crate::ai_proxy::write_sse_headers(out, cors_origin)?;
-
     let mut snapshot = match apply_request_snapshot(&req, state, hub, write_barrier) {
         Ok(snapshot) => snapshot,
         Err(error) => {
@@ -209,7 +215,7 @@ pub fn stream_standard_turn<W: Write>(
         }
     };
 
-    let model = selected_model_id(&req.ai);
+    let model = selected_model_id(&req.ai, &snapshot);
     if matches!(
         op_orchestrator::classify_intent(&req.ai.user),
         op_orchestrator::Intent::Design
@@ -247,7 +253,6 @@ pub fn stream_standard_turn<W: Write>(
         }
     }
     inject_transient_builtin(&mut snapshot, req.transient_builtin.as_ref());
-
     let credential_persistence = state
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -272,7 +277,6 @@ pub fn stream_standard_turn<W: Write>(
         Ok(providers) => providers,
         Err(error) => return write_error_event(out, &error.to_string()),
     };
-
     let classified = crate::chat_intent::classify_intent_for_standard_route(
         classify_provider.as_ref(),
         &snapshot,
@@ -282,7 +286,6 @@ pub fn stream_standard_turn<W: Write>(
     let modify_plan = crate::chat_intent::build_modify_plan(&snapshot, &req.ai.user);
     let page_children_empty = snapshot.active_children().is_empty();
     let intent = resolve_standard_route(classified, page_children_empty, modify_plan.is_some());
-
     match intent {
         crate::chat_intent::DesignIntent::Chat => {
             stream_chat_route(out, &req, &snapshot, chat_provider.as_ref(), model)
@@ -323,7 +326,7 @@ fn apply_request_snapshot(
     let mut snapshot = {
         let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(agent) = req.transient_builtin.as_ref() {
-            if agent.model.trim() != req.ai.model.trim() {
+            if !agent.has_model(req.ai.model.trim()) {
                 return Err(WebChatStandardError::TransientModelMismatch);
             }
             // `web_credentials` is outside this pass; carry its verdict text.
@@ -411,15 +414,6 @@ fn inject_transient_builtin(state: &mut EditorState, transient: Option<&BuiltinA
     agents.retain(|agent| agent.id != transient.id);
     agents.insert(0, transient.clone());
     state.rebuild_chat_models();
-}
-
-fn selected_model_id(req: &AiStreamRequest) -> Option<String> {
-    let model = req.model.trim();
-    if model.is_empty() || model == "default" || model.starts_with("builtin:") {
-        None
-    } else {
-        Some(model.to_string())
-    }
 }
 
 fn clear_fresh_starter_frame_for_design(state: &mut EditorState) -> bool {
@@ -593,7 +587,8 @@ fn stream_new_design_route<W: Write>(
     target: CanvasWriteTarget<'_>,
 ) -> std::io::Result<()> {
     let append_context = crate::chat_intent::detect_append_intent(&snapshot, &req.ai.user);
-    let request = DesignRequest {
+    let prompt = req.ai.user.clone();
+    let mut request = DesignRequest {
         prompt: req.ai.user,
         model: model.clone(),
         provider: None,
@@ -607,20 +602,57 @@ fn stream_new_design_route<W: Write>(
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: snapshot.editor_ui.pinned_style_guide.clone(),
+        reference_skeleton: None,
     };
-    // Share one provider Arc between the design LLM and (optionally) the
-    // vision validator, so the real vision loop reuses the same auth/model
-    // the user picked instead of needing a second key.
     let provider_arc: Arc<dyn ChatProvider> = Arc::from(provider);
     let llm = ChatProviderLlmClient::new(provider_arc.clone()).with_model(model.clone());
     let mut sink = WebDesignDocSink::new(target.state, target.hub, target.write_barrier, snapshot);
     let abort = AbortFlag::new();
+    let image_model = request.model.clone();
+    let image_provider = request.provider.clone();
+    let reference_result = crate::chat_runtime::block_on_anywhere(
+        crate::reference_context::resolve_reference_context(
+            &llm,
+            &prompt,
+            request.model.clone(),
+            request.provider.clone(),
+            &abort,
+        ),
+    );
+    match reference_result {
+        Ok(Some(context)) => reference::apply_reference_context(&mut request, &mut sink, context),
+        Ok(None) => reference::apply_image_reference(
+            &mut request,
+            &mut sink,
+            &mut *out,
+            reference::resolve_image_reference(
+                &req.attachments,
+                &provider_arc,
+                &prompt,
+                image_model.clone(),
+                image_provider.clone(),
+            ),
+        )?,
+        Err(error) => {
+            let notice = format!("reference page could not be used: {error}");
+            eprintln!("[web-chat] {notice}");
+            write_thinking_event(out, &format!("\n{notice}"))?;
+            reference::apply_image_reference(
+                &mut request,
+                &mut sink,
+                &mut *out,
+                reference::resolve_image_reference(
+                    &req.attachments,
+                    &provider_arc,
+                    &prompt,
+                    image_model,
+                    image_provider,
+                ),
+            )?;
+        }
+    }
     let pre_validator = LintPreValidator;
 
-    // ── Class-C vision-validation provider selection (Track-1 Step 3) ──────────
-    // REAL providers only when `OPENPENCIL_VISION_VALIDATION=1` (defaults OFF);
-    // otherwise the no-op stubs keep `run_post_generation_validation` a
-    // guaranteed short-circuit, so the default path is byte-for-byte unchanged.
     let use_real_vision = crate::validation_providers::vision_validation_enabled();
     let stub_screenshot = SkippedScreenshotProvider;
     let stub_vision = SkippedVisionLlmClient;
@@ -651,9 +683,6 @@ fn stream_new_design_route<W: Write>(
             .into_iter()
             .next()
             .expect("one requested agent identity");
-    // The browser transcript learns the persona first. The daemon relay then
-    // confirms that exact same identity, so the canvas cursor cannot appear
-    // under a different name or colour than the visible assistant bubble.
     write_agent_identity_event(out, &identity)?;
     let epoch = op_editor_core::agent_indicators::begin();
     op_editor_core::agent_indicators::confirm_cursor_agent(epoch, &identity.color, &identity.name);
@@ -671,8 +700,6 @@ fn stream_new_design_route<W: Write>(
             &providers,
         ))
     };
-    // Natural completion drains the queued reveals gracefully; an
-    // aborted turn tears the overlay down at once.
     if abort.is_set() {
         op_editor_core::agent_indicators::end_if_epoch(epoch);
     } else {
@@ -702,8 +729,6 @@ fn stream_new_design_route<W: Write>(
 struct WebDesignDocSink<'a> {
     state: &'a Mutex<WebCanvasState>,
     hub: &'a SseHub,
-    /// Admission for each generated command's commit. `None` for the local
-    /// and managed daemons, which have no flush to protect.
     write_barrier: Option<&'a crate::web_canvas_server::WriteBarrier>,
     mirror: EditorState,
 }
@@ -730,17 +755,11 @@ impl DocSink for WebDesignDocSink<'_> {
     }
 
     fn apply(&mut self, cmd: EditorCommand) -> bool {
-        // Each generated command is its own document commit, so each needs its
-        // own instant of admission. A closed barrier acks `false`, which the
-        // generator already treats as "not applied".
         let Ok(_write_pass) = admit_document_write(self.write_barrier) else {
             return false;
         };
         let (applied, tick, snapshot) = {
             let mut guard = self.state.lock().unwrap_or_else(|p| p.into_inner());
-            // A refusal and a no-op both ack `false` to the generator, which is
-            // the existing contract; the difference is visible in the session
-            // notice the gate raises, not in this return value.
             let applied = guard
                 .apply_gated(cmd, op_editor_core::CollabEditSource::Ai)
                 .unwrap_or(false);
@@ -769,6 +788,12 @@ impl DocSink for WebDesignDocSink<'_> {
     fn end_undo_batch(&mut self) {}
 }
 
+#[cfg(test)]
+#[path = "web_chat_standard_model_tests.rs"]
+mod model_tests;
+#[cfg(test)]
+#[path = "web_chat_standard_reference_tests.rs"]
+mod reference_tests;
 #[cfg(test)]
 #[path = "web_chat_standard_tests.rs"]
 mod tests;

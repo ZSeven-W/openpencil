@@ -348,6 +348,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         }
         "htmlImport.warn.layout.negative_margins_ignored" => "負值的 CSS 邊界已忽略。",
         "htmlImport.warn.layout.margins_on_visual_box_ignored" => "視覺方塊上的 CSS 邊界已忽略。",
+        "htmlImport.warn.layout.inline_margin_wrapping_approximated" => "帶 CSS 邊界的行內元素已裝入獨立方塊，可能無法再跨行換行。",
         "htmlImport.warn.layout.content_box_percentage_approximated" => {
             "content-box 的百分比尺寸已近似處理。"
         }
@@ -515,6 +516,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "htmlImport.warn.media.object_fit_scale_down" => "CSS object-fit:scale-down 已近似處理。",
         "htmlImport.warn.media.object_fit_none_ignored" => "CSS object-fit:none 已忽略。",
         "htmlImport.warn.media.object_position_ignored" => "CSS object-position 已忽略。",
+        "htmlImport.warn.media.image_intrinsic_axis_unresolved" => {
+            "由於設定的尺寸為動態值或包含區塊尺寸未定，無法使用圖片的固有長寬比補齊缺少的尺寸軸。"
+        }
         "htmlImport.warn.media.image_mix_blend_mode_unsupported" => {
             "圖片上不支援的 CSS mix-blend-mode 已忽略。"
         }
@@ -619,6 +623,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "slidesPanel.exportPdf" => "匯出 PDF",
         "slidesPanel.exportAllSlides" => "匯出全部投影片",
         "slidesPanel.exportSelectedSlides" => "匯出所選投影片（{{count}}）",
+        "settings.tab.ai" => "AI",
         "settings.agents.heroTitle" => "連接你的 AI 服務商",
         "settings.agents.heroSubtitle" => {
             "OpenPencil 直接驅動本機 CLI Agent 與 API 服務商，連接任一個即可開始產生設計。"

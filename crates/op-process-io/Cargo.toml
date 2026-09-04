@@ -13,6 +13,9 @@ tokio = { version = "1", default-features = false, features = [
   "time",
 ] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 tokio = { version = "1", default-features = false, features = [
   "io-util",

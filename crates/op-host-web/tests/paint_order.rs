@@ -450,8 +450,7 @@ fn canvaskit_browser_text_raster_key_drops_color_and_alpha() {
     ))
     .expect("CanvasKit bridge source is readable");
 
-    // TEXT segments are keyed on (text, size, weight, italic, supersample)
-    // only — colour is applied at draw time, so N colours reuse ONE raster.
+    // Text keys omit colour so differently tinted runs reuse one raster.
     assert!(
         source.contains(": [t, sz, weight, italic ? 1 : 0, ss, family].join('\\n');"),
         "text raster cache key must contain no colour/alpha component"
@@ -460,14 +459,12 @@ fn canvaskit_browser_text_raster_key_drops_color_and_alpha() {
         source.contains(": 'rgba(255, 255, 255, 1)';"),
         "text glyph run must rasterize as a white full-alpha coverage mask"
     );
-    // The unconditional RGBA-keyed raster cache (the thrash source) is gone —
-    // the ONLY colour-keyed path left is the emoji branch (prefixed 'e').
+    // Only emoji retain the legacy RGBA-keyed raster path.
     assert!(
         !source.contains("const key = [t, sz, weight, italic ? 1 : 0, r, g, b, a, ss]"),
         "the always-RGBA-keyed raster cache (the thrash source) must be gone"
     );
-    // Emoji / colour-glyph segments keep the exact legacy baked-colour path
-    // (they ignore fillStyle, so tinting a white mask would flatten them).
+    // Colour glyphs ignore fillStyle, so tinting a white mask would flatten them.
     assert!(
         source.contains(
             "const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a, family = '') =>"
@@ -485,7 +482,7 @@ fn canvaskit_browser_text_raster_key_drops_color_and_alpha() {
 }
 
 #[test]
-fn canvaskit_text_rasters_refresh_at_effective_scale() {
+fn canvaskit_text_rasters_reuse_quantized_effective_scale() {
     let source = std::fs::read_to_string(format!(
         "{}/src/op_ck_bridge.js",
         env!("CARGO_MANIFEST_DIR")
@@ -516,8 +513,16 @@ fn canvaskit_text_rasters_refresh_at_effective_scale() {
         );
     }
     assert!(
-        image_body.contains("const ss = effectiveTextScale();"),
-        "browserTextImage must supersample at the current CanvasKit transform scale"
+        source.contains("const TEXT_SCALE_STEPS_PER_OCTAVE = 4;")
+            && source.contains("export function opCkQuantizeTextRasterScale(scale)")
+            && source.contains("Math.log2(finiteScale) * TEXT_SCALE_STEPS_PER_OCTAVE - 1e-9")
+            && scale_body.contains("const browserTextRasterScale = () =>")
+            && scale_body.contains("opCkQuantizeTextRasterScale(effectiveTextScale())"),
+        "browser text raster scale must round up to reusable quarter-octave buckets"
+    );
+    assert!(
+        image_body.contains("const ss = browserTextRasterScale();"),
+        "browserTextImage must supersample at the quantized effective scale"
     );
     for forbidden in ["clearBrowserTextCache()", "browserTextCache.clear()"] {
         assert!(
@@ -593,8 +598,7 @@ fn canvaskit_browser_text_cache_is_lru() {
     ))
     .expect("CanvasKit bridge source is readable");
 
-    // A cache hit re-inserts the entry (delete + set) so eviction drops the
-    // least-recently-used run, not the oldest-inserted (FIFO).
+    // Cache hits reinsert entries so eviction remains LRU rather than FIFO.
     let image_fn = source
         .find("const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a, family = '') =>")
         .expect("browserTextImage marker exists");
@@ -636,8 +640,7 @@ fn canvaskit_text_tint_color_filter_cache_is_bounded_and_freed() {
     ))
     .expect("CanvasKit bridge source is readable");
 
-    // The tinting filter is a WHITE-mask SrcIn blend, keyed on rgb only (alpha
-    // rides the paint), cached in a bounded LRU map that deletes evicted handles.
+    // The bounded white-mask SrcIn cache keys RGB; alpha rides the paint.
     for marker in [
         "const TINT_FILTER_CACHE_CAP = 64;",
         "const tintFilterCache = new Map();",
@@ -760,11 +763,8 @@ fn canvaskit_bridge_routes_complex_scripts_through_the_browser_shaper() {
     ))
     .expect("CanvasKit bridge source is readable");
 
-    // CanvasKit's `canvas.drawText` maps codepoints straight to glyphs — no
-    // bidi, no joining — so Arabic would paint in storage order. The browser's
-    // own 2D text engine does both, and the bridge already wraps it. The whole
-    // run must reach it in ONE call: the script-segmented path draws segment
-    // by segment left to right, which breaks bidi across segment boundaries.
+    // Browser shaping handles bidi and joining; one call preserves run order
+    // across script boundaries where segmented left-to-right drawing cannot.
     for marker in [
         "drawShapedText(t, family, x, y, sz, weight, italic, r, g, b, a)",
         "measureShapedText(t, family, sz, weight, italic)",

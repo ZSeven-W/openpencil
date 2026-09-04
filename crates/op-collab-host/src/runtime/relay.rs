@@ -93,7 +93,21 @@ impl GuestConnectionRoute {
 #[derive(Clone)]
 pub(super) enum RelayJoinSecret {
     Invite(Box<RelayInviteV1>),
-    Pairing(PairingCode),
+    Pairing {
+        code: PairingCode,
+        /// Shared by every retry clone so a redeemed one-time code is never
+        /// spent again merely because the transport dropped.
+        claimed: Arc<std::sync::Mutex<Option<RelayInviteV1>>>,
+    },
+}
+
+impl RelayJoinSecret {
+    fn pairing(code: PairingCode) -> Self {
+        Self::Pairing {
+            code,
+            claimed: Arc::new(std::sync::Mutex::new(None)),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -314,6 +328,36 @@ impl OwnerRelayRuntime {
     pub(super) const fn path(&self) -> CollabConnectionPathUi {
         self.path
     }
+
+    /// Coarse, credential-free relay-pool state for the owner network worker's
+    /// diagnostics. A session that keeps losing peers is almost always a lane
+    /// pool that is empty or degraded, and nothing else in the owner path can
+    /// see that.
+    pub(super) fn bridge_diagnostic(&self) -> OwnerRelayBridgeReport {
+        let status = self.bridge.status();
+        OwnerRelayBridgeReport {
+            phase: status.phase,
+            waiting_lanes: status.waiting_lanes,
+            active_tunnels: status.active_tunnels,
+            last_error: status.last_error,
+            relay_pairing_timeouts: status.relay_pairing_timeouts,
+        }
+    }
+}
+
+/// Owner relay-pool snapshot. Every field is a bounded enum or counter — never
+/// endpoints, invites, identities, or raw transport errors — because its
+/// `Debug`/`Display` output is written to the local terminal.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) struct OwnerRelayBridgeReport {
+    pub(super) phase: op_collab_relay_client::RelayBridgePhase,
+    pub(super) waiting_lanes: usize,
+    pub(super) active_tunnels: usize,
+    pub(super) last_error: Option<op_collab_relay_client::RelayFailureKind>,
+    /// Lanes the relay retired with its own pairing timeout. Non-zero means
+    /// the relay's waiting window is expiring before the client's lane recycle
+    /// budget, which leaves the waiting queue short while the pool re-dials.
+    pub(super) relay_pairing_timeouts: u32,
 }
 
 impl std::fmt::Debug for OwnerRelayRuntime {
@@ -401,7 +445,7 @@ pub(super) fn guest_route_from_pairing_code(
         .ok_or_else(|| runtime_error(CollabRuntimeFailure::RelayInviteInvalid))?;
     let provider = bootstrap_provider(preferred_region)?;
     Ok(GuestConnectionRoute::Relay(Box::new(RelayGuestRequest {
-        secret: RelayJoinSecret::Pairing(code),
+        secret: RelayJoinSecret::pairing(code),
         home_region,
         provider,
         control_plane,
@@ -707,7 +751,12 @@ fn publish_owner_pairing_code(
         let Ok(code) = PairingCode::generate_for(region.region) else {
             return None;
         };
-        let Ok(sealed) = SealedPairingInvite::seal_random(&code, &invite) else {
+        // Seal the legacy v1 envelope during the v1→v2 transition: fielded
+        // v0.8.4 desktops reject any other envelope version when they claim,
+        // so a v2-sealed publish mints codes those guests can never open.
+        // Opening accepts both versions; move back to `seal_random` (v2)
+        // once the fielded readers understand the v2 envelope.
+        let Ok(sealed) = SealedPairingInvite::seal_random_legacy_compat(&code, &invite) else {
             return None;
         };
         let Ok(request) = PairingPublishRequest::new(

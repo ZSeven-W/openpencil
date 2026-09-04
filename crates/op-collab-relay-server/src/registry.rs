@@ -6,6 +6,8 @@ use std::{
 use op_collab_relay_protocol::{RelayRole, RouteMapKey};
 use tokio::sync::{mpsc, oneshot, Mutex, OwnedSemaphorePermit, Semaphore};
 
+use crate::observe::QueueCensus;
+
 pub(crate) struct QueuedPayload {
     bytes: Vec<u8>,
     _global_budget: OwnedSemaphorePermit,
@@ -133,13 +135,39 @@ impl Registry {
                 pair_tx,
             });
         state.waiting += 1;
+        let waiting_on_route = state.routes.get(&route).map_or(0, RouteQueue::waiting);
 
         Ok(Registration::Waiting(WaitingRegistration {
             id,
             route,
             role,
+            waiting_on_route,
             pair_rx,
         }))
+    }
+
+    /// Sample the live queue depths for the operational census.
+    ///
+    /// Depths only — never a route key — so the sample is safe to log. Walks
+    /// the route table once per census interval, which is cheap next to the
+    /// per-connection work already taken under this lock.
+    pub(crate) async fn queue_census(&self) -> QueueCensus {
+        let state = self.inner.lock().await;
+        let mut census = QueueCensus {
+            waiting_routes: state.routes.len(),
+            active_pairs: state.active_pairs.len(),
+            ..QueueCensus::default()
+        };
+        for queue in state.routes.values() {
+            census.waiting_owners += queue.owners.len();
+            census.waiting_guests += queue.guests.len();
+            let depth = queue.waiting();
+            census.max_route_queue_depth = census.max_route_queue_depth.max(depth);
+            if depth >= self.max_waiting_per_route {
+                census.routes_at_waiting_capacity += 1;
+            }
+        }
+        census
     }
 
     pub(crate) async fn unregister_waiter(&self, waiting: &WaitingRegistration) {
@@ -173,6 +201,8 @@ pub(crate) struct WaitingRegistration {
     pub(crate) id: u64,
     pub(crate) route: RouteMapKey,
     pub(crate) role: RelayRole,
+    /// Peers queued on this route, including this one, at registration time.
+    pub(crate) waiting_on_route: usize,
     pub(crate) pair_rx: oneshot::Receiver<PairNotice>,
 }
 

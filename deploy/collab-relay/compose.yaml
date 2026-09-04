@@ -13,6 +13,14 @@ services:
       OPENPENCIL_COLLAB_RELAY_QUEUE_CAPACITY: "32"
       OPENPENCIL_COLLAB_RELAY_MAX_QUEUED_BYTES: "67108864"
       OPENPENCIL_COLLAB_RELAY_MAX_QUEUED_BYTES_PER_ROUTE: "1048576"
+      # One waiting lease, not a countdown from registration. Must stay above
+      # the client's owner-lane recycle budget (45 s) or the relay empties its
+      # waiting queue while an owner re-dials. See README.
+      OPENPENCIL_COLLAB_RELAY_WAITING_TIMEOUT_SECS: "60"
+      # Renew an un-paired peer's slot while it answers pings. Backward
+      # compatible: already-shipped clients pong as a side effect of reading,
+      # so no client rollout gates this. Set to "0" for the fixed countdown.
+      OPENPENCIL_COLLAB_RELAY_WAITING_LEASE: "1"
       OPENPENCIL_COLLAB_RELAY_LOG_LEVEL: info
     expose:
       - "8091"

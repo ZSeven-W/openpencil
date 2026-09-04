@@ -130,6 +130,37 @@ pub fn component_override_font_family_stacks(state: &EditorState) -> Vec<String>
     stacks
 }
 
+/// Every concrete family name authored by the document, including fallback
+/// candidates and component-instance overrides.
+///
+/// Native hosts use this list to ask the same system font manager that paints
+/// text whether a name is resolvable. A manager can resolve hidden, localized,
+/// or legacy names that are absent from its enumerable family list, so raw
+/// enumeration alone is not a reliable availability test.
+pub fn document_concrete_font_families(state: &EditorState) -> Vec<String> {
+    fn add_stack(families: &mut Vec<String>, stack: &str) {
+        for family in split_font_family_stack(stack) {
+            if !is_generic_or_system_font_alias(&family)
+                && !families
+                    .iter()
+                    .any(|candidate| candidate.eq_ignore_ascii_case(&family))
+            {
+                families.push(family);
+            }
+        }
+    }
+
+    let plan = FontPlan::scan(&state.doc);
+    let mut families = Vec::new();
+    for (stack, _) in plan.families().filter(|(family, _)| !family.is_empty()) {
+        add_stack(&mut families, stack);
+    }
+    for stack in component_override_font_family_stacks(state) {
+        add_stack(&mut families, &stack);
+    }
+    families
+}
+
 /// Diff the document's families against the current available-family snapshots.
 ///
 /// Returns `None` when every family is available or system enumeration has not
@@ -220,6 +251,17 @@ mod tests {
     }
 
     #[test]
+    fn distinct_yahei_ui_import_does_not_satisfy_plain_yahei() {
+        let mut state = state_with_text("Microsoft YaHei");
+        state.editor_ui.system_fonts_loaded = true;
+        state.editor_ui.imported_font_families =
+            std::sync::Arc::new(vec!["Microsoft YaHei UI".into()]);
+
+        let prompt = detect_missing_fonts(&state).expect("the distinct face remains missing");
+        assert_eq!(prompt.entries[0].family, "Microsoft YaHei");
+    }
+
+    #[test]
     fn family_matching_is_ascii_case_insensitive() {
         let mut state = state_with_text("kAtIbEh");
         state.editor_ui.system_fonts_loaded = true;
@@ -237,6 +279,17 @@ mod tests {
         state.editor_ui.system_font_families = std::sync::Arc::new(vec!["PingFang SC".into()]);
 
         assert!(detect_missing_fonts(&state).is_none());
+    }
+
+    #[test]
+    fn document_families_include_concrete_fallbacks_without_generic_aliases() {
+        let state =
+            state_with_text(r#""Primary, Display", Microsoft YaHei, system-ui, sans-serif"#);
+
+        assert_eq!(
+            document_concrete_font_families(&state),
+            vec!["Primary, Display", "Microsoft YaHei"]
+        );
     }
 
     #[test]

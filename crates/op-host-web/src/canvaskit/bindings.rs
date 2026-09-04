@@ -16,6 +16,12 @@ extern "C" {
     pub(super) fn set_image_cache_factory(factory: &js_sys::Function);
 
     /// The bridge object: flat scalar-arg ops over a CanvasKit canvas.
+    ///
+    /// `Clone` is a JS handle refcount bump, not a canvas copy. Preview's
+    /// `BrowserMeasure` holds one for the life of the session (the layout
+    /// engine keeps it behind an `Rc<dyn MeasureBackend>`), so it needs to own
+    /// a handle rather than borrow the host's.
+    #[derive(Clone)]
     pub type OpCk;
     #[wasm_bindgen(method, js_name = beginFrame)]
     pub(super) fn begin_frame(this: &OpCk);
@@ -163,6 +169,45 @@ extern "C" {
         cols: u32,
         colors: &[f32],
         opacity: f32,
+    );
+    #[wasm_bindgen(method, js_name = fillRoundRectShader)]
+    pub(super) fn fill_round_rect_shader(
+        this: &OpCk,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        radius: f32,
+        sksl: &str,
+        uniform_names: &js_sys::Array,
+        uniforms: &[f32],
+        uniform_arities: &[u32],
+        opacity: f32,
+        fallback_r: f32,
+        fallback_g: f32,
+        fallback_b: f32,
+        fallback_a: f32,
+    );
+    #[wasm_bindgen(method, js_name = fillRoundRectShaderPerCorner)]
+    pub(super) fn fill_round_rect_shader_per_corner(
+        this: &OpCk,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        top_left: f32,
+        top_right: f32,
+        bottom_right: f32,
+        bottom_left: f32,
+        sksl: &str,
+        uniform_names: &js_sys::Array,
+        uniforms: &[f32],
+        uniform_arities: &[u32],
+        opacity: f32,
+        fallback_r: f32,
+        fallback_g: f32,
+        fallback_b: f32,
+        fallback_a: f32,
     );
     #[wasm_bindgen(method, js_name = strokeRoundRect)]
     pub(super) fn stroke_round_rect(
@@ -461,6 +506,24 @@ extern "C" {
         weight: i32,
         italic: bool,
     ) -> f32;
+    /// Measure a multi-run paragraph with optional line wrapping.
+    /// Takes parallel arrays of run properties (texts, families, sizes, weights,
+    /// italics as u8 bools, letter_spacing) and returns [width, height, line_count, baseline]
+    /// in a Float32Array. Uses the same text measurement path as the design canvas to
+    /// keep preview's hit-test layout aligned with painted output.
+    /// maxWidth < 0 means natural single-line extent; lineHeight 0 means engine default (1.3).
+    #[wasm_bindgen(method, js_name = measureParagraph)]
+    pub(super) fn measure_paragraph(
+        this: &OpCk,
+        texts: &js_sys::Array,
+        families: &js_sys::Array,
+        sizes: &[f32],
+        weights: &[i32],
+        italics: &[u8],
+        spacing: &[f32],
+        max_width: f32,
+        line_height: f32,
+    ) -> js_sys::Float32Array;
     #[wasm_bindgen(method, js_name = registerSystemFont)]
     pub(super) fn register_system_font(this: &OpCk, family: &str, bytes: &[u8]) -> bool;
     /// Register a user-imported font face; the family becomes selectable by
@@ -469,6 +532,11 @@ extern "C" {
     /// failure.
     #[wasm_bindgen(method, js_name = registerImportedFont)]
     pub(super) fn register_imported_font(this: &OpCk, family: &str, bytes: &[u8]) -> bool;
+    /// Register an app-bundled design face. Ranked below imported and system
+    /// faces of the same name; otherwise identical to
+    /// `registerImportedFont`. Returns `false` on parse failure.
+    #[wasm_bindgen(method, js_name = registerBundledFont)]
+    pub(super) fn register_bundled_font(this: &OpCk, family: &str, bytes: &[u8]) -> bool;
     /// Display names of every registered imported family — mirrors the JS
     /// registry into the Rust snapshot after add / remove and at mount.
     #[wasm_bindgen(method, js_name = importedFamilyList)]

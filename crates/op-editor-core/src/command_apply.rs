@@ -312,15 +312,18 @@ impl EditorState {
             EditorCommand::AdoptSceneTemplate { template_id } => {
                 // A missing document is a corrupt or renamed asset rather
                 // than a user error, and on wasm it can simply not be
-                // fetched yet; either way there is nothing to apply and the
-                // document is left untouched.
+                // fetched yet; for a `user:` id it means the template was
+                // deleted since the card was painted. Either way there is
+                // nothing to apply and the document is left untouched — the
+                // shipped half keeps its historical silent no-op, and the
+                // tool layer validates ids before issuing the command.
                 let Some(source) =
-                    crate::scene_template_catalog::scene_template_document(&template_id)
+                    crate::scene_template_append::template_document_for(&template_id)
                 else {
                     return Ok(false);
                 };
                 let Some(boards) =
-                    crate::scene_template_append::template_boards(source, &template_id)
+                    crate::scene_template_append::template_boards(&source, &template_id)
                 else {
                     return Ok(false);
                 };

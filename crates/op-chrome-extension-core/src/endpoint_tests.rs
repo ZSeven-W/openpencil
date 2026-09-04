@@ -1,16 +1,15 @@
 //! Tests for [`crate::endpoint`] — the outbound-destination guard.
 
-use crate::endpoint::{ingest_url, mcp_url, normalize_endpoint, DEFAULT_ENDPOINT};
+use crate::endpoint::{
+    design_md_poll_url, design_md_start_url, design_md_url, ingest_url, mcp_url,
+    normalize_endpoint, DEFAULT_ENDPOINT,
+};
 
 #[test]
-fn accepts_the_three_loopback_spellings() {
+fn accepts_ipv4_and_rewrites_localhost() {
     assert_eq!(
         normalize_endpoint("127.0.0.1:3100").as_deref(),
         Some("127.0.0.1:3100")
-    );
-    assert_eq!(
-        normalize_endpoint("[::1]:3100").as_deref(),
-        Some("[::1]:3100")
     );
     // `localhost` is rewritten: the live endpoint's admission gate refuses a
     // `Host` header carrying a DNS name.
@@ -55,6 +54,8 @@ fn rejects_every_non_loopback_host() {
         // Userinfo trick: the real host is after the `@`.
         "127.0.0.1@evil.test:3100",
         "[::2]:3100",
+        "[::1]:3100",
+        "http://[::1]:3100",
     ] {
         assert_eq!(
             normalize_endpoint(raw),
@@ -133,5 +134,37 @@ fn urls_are_plain_http_on_the_given_authority() {
         ingest_url("127.0.0.1:3100"),
         "http://127.0.0.1:3100/api/import/web-snapshot"
     );
-    assert_eq!(mcp_url("[::1]:3100"), "http://[::1]:3100/mcp");
+    assert_eq!(mcp_url("127.0.0.1:3100"), "http://127.0.0.1:3100/mcp");
+    assert_eq!(
+        design_md_url("127.0.0.1:3100"),
+        "http://127.0.0.1:3100/api/generate/design-md"
+    );
+    assert_eq!(
+        design_md_start_url("127.0.0.1:3100"),
+        design_md_url("127.0.0.1:3100")
+    );
+    assert_eq!(
+        design_md_poll_url("127.0.0.1:3100", "0123456789abcdef0123456789abcdef").as_deref(),
+        Some("http://127.0.0.1:3100/api/generate/design-md/0123456789abcdef0123456789abcdef")
+    );
+}
+
+#[test]
+fn a_design_job_id_cannot_escape_its_url_segment() {
+    for job_id in [
+        "",
+        "0123456789abcdef0123456789abcde",
+        "0123456789abcdef0123456789abcdef0",
+        "0123456789ABCDEF0123456789ABCDEF",
+        "../../mcp.......................",
+        "0123456789abcdef/123456789abcdef",
+        "0123456789abcdef%2f123456789abc",
+        "0123456789abcdef_123456789abcdef",
+    ] {
+        assert_eq!(
+            design_md_poll_url("127.0.0.1:3100", job_id),
+            None,
+            "{job_id}"
+        );
+    }
 }

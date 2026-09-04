@@ -146,6 +146,7 @@ fn the_card_board_survives_plan_normalization() {
             },
             id_prefix: String::new(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: Some("封面".into()),
             generated_root_id: None,

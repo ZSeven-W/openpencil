@@ -108,13 +108,38 @@ fn managed_contract_end_to_end() {
     let probe = format!(r#""id":"{probe_id}""#);
     let mut d = spawn_managed(Some(fixture));
 
-    // 1. token gate on /api and /mcp (missing + wrong), POST / alias included
-    assert_eq!(http(d.port, "GET", "/api/mcp/version", None, None).0, 401);
-    assert_eq!(
-        http(d.port, "POST", "/mcp", Some("wrong"), Some("{}")).0,
-        401
+    // 1. managed traffic is TOKENLESS since 2abc6b4ca: the supervisor already
+    //    owns this process through the stdin lease (asserted in step 8), so
+    //    ordinary requests carry no per-request token and a stale one is
+    //    ignored rather than refused. The handshake token survives for the
+    //    lifecycle request alone.
+    //
+    //    What REPLACED the token as the browser-facing defence is the Origin
+    //    allowlist, so it is asserted here at the process level too — not
+    //    only in op-host-services' `serve_one` unit tests. It is now the only
+    //    thing between a web page and this daemon, which makes it exactly the
+    //    kind of boundary a smoke test should cross for real.
+    assert_eq!(http(d.port, "GET", "/api/mcp/version", None, None).0, 200);
+    // 202 today (the JSON-RPC POST is accepted for dispatch); asserted as
+    // "accepted" rather than one exact code, because the property under test
+    // is that a stale token is IGNORED, not which success code dispatch picks.
+    let stale = http(d.port, "POST", "/mcp", Some("wrong"), Some("{}")).0;
+    assert!(
+        matches!(stale, 200 | 202),
+        "a stale token must be ignored, not rejected — got {stale}"
     );
-    assert_eq!(http(d.port, "POST", "/", None, Some("{}")).0, 401);
+    let (origin_code, _, _) = http_with_origin(
+        d.port,
+        "GET",
+        "/api/mcp/version",
+        None,
+        Some("https://not-allowlisted.example"),
+        None,
+    );
+    assert_eq!(
+        origin_code, 403,
+        "a browser Origin outside the allowlist must still be refused"
+    );
 
     // 2. authenticated /mcp succeeds (not only rejection coverage)
     let init = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#;

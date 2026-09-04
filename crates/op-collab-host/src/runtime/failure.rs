@@ -13,6 +13,7 @@ use crate::host::CollabHost;
 
 impl CollabRuntime {
     pub(super) fn fail(&mut self, host: &mut impl CollabHost, failure: CollabRuntimeFailure) {
+        self.block_guest_reconnect_for_terminal_failure(failure);
         if let Some(notice) = setup_failure_notice(failure) {
             self.push_status(CollabStatusEvent::Failed(failure));
             if self.actor.is_none() {
@@ -76,6 +77,7 @@ impl CollabRuntime {
                 self.pending_guest = None;
                 self.transaction_active = false;
                 let mut session_ended = false;
+                let mut guest_disconnected = false;
                 if let Some(EditorActor::Guest(guest)) = self.actor.as_mut() {
                     let ended =
                         guest.session.core().state() == op_collab::GuestConnectionState::Ended;
@@ -86,11 +88,15 @@ impl CollabRuntime {
                     } else {
                         set_guest_ui(host, guest, CollabConnectionPhase::Reconnecting);
                         self.push_status(CollabStatusEvent::Reconnecting);
+                        guest_disconnected = true;
                     }
                     session_ended = ended;
                 }
                 if session_ended {
                     self.clear_discarded_stash(host);
+                    self.reset_guest_reconnect();
+                } else if guest_disconnected {
+                    self.schedule_guest_reconnect(failure);
                 }
             }
             None => {
@@ -102,6 +108,7 @@ impl CollabRuntime {
                     .editor_ui
                     .collab
                     .set_phase(CollabConnectionPhase::Idle);
+                self.reset_guest_reconnect();
             }
         }
         self.set_notice(host, disconnect_notice(failure));

@@ -35,6 +35,7 @@ collab_scan_roots=(
     crates/op-collab-host/src
     crates/op-host-native/src
     crates/op-host-desktop/src
+    crates/op-chat-agent/src/provider_dial.rs
     crates/op-host-services/src/profile_avatar_fetch.rs
     crates/op-host-services/src/public_https_client.rs
     crates/op-host-services/src/provider_dial.rs
@@ -586,9 +587,9 @@ for desktop_avatar_anchor in \
     require_literal crates/op-host-desktop/src/collab_avatar_host.rs \
         "$desktop_avatar_anchor" "desktop avatar security-policy delegation"
 done
-require_literal crates/op-host-services/src/provider_dial.rs \
+require_literal crates/op-chat-agent/src/provider_dial.rs \
     ".no_proxy()" "public HTTPS proxy bypass prevention"
-require_literal crates/op-host-services/src/provider_dial.rs \
+require_literal crates/op-chat-agent/src/provider_dial.rs \
     ".resolve_to_addrs" "public HTTPS DNS pinning"
 require_literal crates/op-editor-ui/src/collab_avatar_runtime.rs \
     "MAX_AVATAR_SOURCE_PIXELS" "decoded avatar pixel limit"
@@ -657,10 +658,14 @@ while IFS= read -r source_file; do
             continue
             ;;
     esac
-    if printf '%s\n' "$cfg_test_external_sources" \
-        | grep -Fxq -- "$source_file"; then
-        continue
-    fi
+    # Exact-line containment without a pipeline: `printf | grep -q` races
+    # grep's early exit under pipefail — printf can take SIGPIPE after grep
+    # already matched, flipping this exemption to false intermittently.
+    case $'\n'"$cfg_test_external_sources"$'\n' in
+        *$'\n'"$source_file"$'\n'*)
+            continue
+            ;;
+    esac
     hits=$(awk '
         /^[[:space:]]*#!\[cfg\(test\)\][[:space:]]*$/ { exit }
 

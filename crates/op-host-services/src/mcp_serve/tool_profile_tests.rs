@@ -63,6 +63,10 @@ fn the_denied_set_is_exactly_the_reviewed_list() {
             "debug_logs_tail",
             "debug_screenshot",
             "debug_validation_report",
+            // Stock-photo search dials public providers from the daemon host —
+            // outbound network, denied online for the same reason
+            // import_html_url is.
+            "enrich_images",
             // Writes a deck file at a caller-chosen path — denied online for the
             // same reason save_document is.
             "export_deck",
@@ -77,6 +81,7 @@ fn the_denied_set_is_exactly_the_reviewed_list() {
             "list_theme_presets",
             "load_theme_preset",
             "open_document",
+            "run_design_agent",
             "save_document",
             "save_theme_preset",
             "spawn_agents",
@@ -114,7 +119,12 @@ fn the_online_profile_still_serves_the_in_memory_catalog() {
         "insert_node",
         "get_node",
         "batch_design",
+        "get_design_agent_prompt",
+        "get_design_quality",
+        "list_scene_templates",
+        "list_ui_kits",
         "undo",
+        "use_scene_template",
     ] {
         assert!(profile.lists(name), "{name}");
         assert_eq!(profile.refuse(name), None, "{name}");
@@ -122,9 +132,63 @@ fn the_online_profile_still_serves_the_in_memory_catalog() {
 }
 
 #[test]
+fn tool_search_catalog_uses_the_same_online_surface_filter() {
+    let local = tool_search_schemas(McpAccessProfile::UNRESTRICTED);
+    assert_eq!(
+        local, TOOL_SCHEMAS,
+        "local discovery keeps the full catalog"
+    );
+
+    let online = tool_search_schemas(McpAccessProfile::online(McpScopes::FULL));
+    let names: Vec<String> = online
+        .iter()
+        .filter_map(|schema| schema_name(schema))
+        .collect();
+    assert!(names.iter().any(|name| name == "get_node"));
+    for denied in denied_tool_names() {
+        assert!(
+            !names.iter().any(|name| name == denied),
+            "{denied} must be hidden from ToolSearch as well as tools/list"
+        );
+    }
+}
+
+#[test]
+fn online_scene_template_calls_keep_shipped_ids_but_refuse_user_ids() {
+    let online = McpAccessProfile::online(McpScopes::FULL);
+    assert!(!online.includes_user_scene_templates());
+    assert!(McpAccessProfile::UNRESTRICTED.includes_user_scene_templates());
+    let shipped =
+        std::collections::BTreeMap::from([("templateId".to_string(), "slide-deck".to_string())]);
+    assert_eq!(online.refuse_call("use_scene_template", &shipped), None);
+
+    let user = std::collections::BTreeMap::from([(
+        "templateId".to_string(),
+        "  user:private-deck  ".to_string(),
+    )]);
+    assert_eq!(
+        online.refuse_call("use_scene_template", &user),
+        Some(ToolRefusal::UserTemplateDenied)
+    );
+    assert_eq!(
+        McpAccessProfile::UNRESTRICTED.refuse_call("use_scene_template", &user),
+        None,
+        "the local single-user daemon keeps access to its own saved templates"
+    );
+}
+
+#[test]
 fn a_read_only_credential_may_read_but_not_write() {
     let profile = McpAccessProfile::online(McpScopes::READ_ONLY);
-    for read_tool in ["get_node", "list_pages", "snapshot_layout", "lint_document"] {
+    for read_tool in [
+        "get_node",
+        "list_pages",
+        "snapshot_layout",
+        "lint_document",
+        "get_design_agent_prompt",
+        "get_design_quality",
+        "list_ui_kits",
+    ] {
         assert_eq!(profile.refuse(read_tool), None, "{read_tool}");
     }
     for write_tool in [
@@ -217,6 +281,12 @@ fn a_refusal_message_leads_with_its_machine_code() {
     let denied = ToolRefusal::LocalResourceDenied.message("save_document");
     assert!(denied.starts_with("tool-not-available:"), "{denied}");
     assert!(denied.contains("save_document"), "{denied}");
+
+    let user_template = ToolRefusal::UserTemplateDenied.message("use_scene_template");
+    assert!(
+        user_template.starts_with("user-template-not-available:"),
+        "{user_template}"
+    );
 
     let scoped = ToolRefusal::ScopeInsufficient.message("add_page");
     assert!(scoped.starts_with("scope-insufficient:"), "{scoped}");

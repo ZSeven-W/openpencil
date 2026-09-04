@@ -10,7 +10,12 @@
 
 use std::path::PathBuf;
 
+use op_editor_ui::layout_scene::{stable_image_source_id, SceneNode};
+use op_editor_ui::widgets::canvas_viewport_image::{
+    has_cached_image_bytes, has_pending_remote_image_requests, note_remote_image_miss,
+};
 use op_host_services::export::{export_node_raster_with_margin, RasterFormat};
+use std::time::{Duration, Instant};
 
 use crate::render_cli_error::RenderCliError;
 
@@ -85,6 +90,7 @@ pub fn run_cli_if_requested() -> bool {
         return true;
     }
 
+    prefetch_remote_images(&page.children);
     let total = page.children.len();
     let mut ok = 0usize;
     for node in &page.children {
@@ -151,6 +157,70 @@ fn dump_layout_node(node: &op_editor_ui::layout_scene::SceneNode) {
     for c in &node.children {
         dump_layout_node(c);
     }
+}
+
+/// Longest a headless render waits for remote image bytes before it
+/// exports with whatever landed (the rest paint as placeholders).
+const REMOTE_IMAGE_WARMUP: Duration = Duration::from_secs(45);
+
+/// Warm the painter's byte cache with every remote (`http(s)`) image
+/// source in the page before exporting.
+///
+/// The platform-free painter only RECORDS a remote miss and paints the
+/// dashed placeholder; the desktop app drains those misses through
+/// `RemoteImageSession` on its event loop. A headless render has no
+/// loop, so without this pass every image an enrichment step just
+/// resolved came out as a grey box in the shot. Records the misses the
+/// way paint would (same stable id), pumps the same fetcher until the
+/// queue drains or the deadline passes, then lets the export proceed.
+/// `OPENPENCIL_RENDER_NO_FETCH=1` skips it for offline renders.
+fn prefetch_remote_images(nodes: &[SceneNode]) {
+    if std::env::var("OPENPENCIL_RENDER_NO_FETCH").is_ok() {
+        return;
+    }
+    fn collect(node: &SceneNode, out: &mut Vec<(u64, String)>) {
+        if let Some(src) = node.image_src.as_deref() {
+            let lower = src.get(..8).unwrap_or(src).to_ascii_lowercase();
+            if lower.starts_with("http://") || lower.starts_with("https://") {
+                let id = if node.image_src_id == 0 {
+                    stable_image_source_id(src)
+                } else {
+                    node.image_src_id
+                };
+                out.push((id, src.to_owned()));
+            }
+        }
+        for child in &node.children {
+            collect(child, out);
+        }
+    }
+    let mut sources = Vec::new();
+    for node in nodes {
+        collect(node, &mut sources);
+    }
+    sources.retain(|(id, _)| !has_cached_image_bytes(*id));
+    if sources.is_empty() {
+        return;
+    }
+    let wanted = sources.len();
+    for (id, url) in &sources {
+        note_remote_image_miss(*id, url);
+    }
+    let mut session = crate::remote_image_host::RemoteImageSession::new();
+    let deadline = Instant::now() + REMOTE_IMAGE_WARMUP;
+    while session.is_pending() || has_pending_remote_image_requests() {
+        session.pump();
+        if Instant::now() >= deadline {
+            eprintln!("render-shots: remote image warm-up timed out; exporting with placeholders");
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let landed = sources
+        .iter()
+        .filter(|(id, _)| has_cached_image_bytes(*id))
+        .count();
+    eprintln!("render-shots: remote images {landed}/{wanted} fetched");
 }
 
 #[cfg(test)]

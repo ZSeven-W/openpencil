@@ -63,12 +63,18 @@ fn parse_line_codex_turn_completed() {
 
 #[test]
 fn for_cli_constructs_codex_exec_provider() {
-    // TS codex-client.ts argv: exec --json --skip-git-repo-check
-    // --sandbox read-only … - (prompt via stdin).
+    // The base shape stays stable whether this test host has a new, old, or
+    // missing Codex binary. Fake-CLI tests below cover both gate outcomes.
     let provider = SubprocessProvider::for_cli(CliName::Codex).expect("codex wired");
+    let args_without_ephemeral: Vec<_> = provider
+        .args
+        .iter()
+        .filter(|arg| arg.as_str() != "--ephemeral")
+        .map(String::as_str)
+        .collect();
     assert_eq!(
-        provider.args,
-        vec![
+        args_without_ephemeral,
+        [
             "exec",
             "--json",
             "--skip-git-repo-check",
@@ -78,6 +84,101 @@ fn for_cli_constructs_codex_exec_provider() {
     );
     assert_eq!(provider.prompt_mode, PromptMode::Stdin);
     assert_eq!(provider.tail_args, vec!["-"]);
+}
+
+#[cfg(unix)]
+struct CodexHelpStub {
+    dir: std::path::PathBuf,
+    binary: std::path::PathBuf,
+}
+
+#[cfg(unix)]
+impl CodexHelpStub {
+    fn new(help_line: &str) -> Self {
+        use std::os::unix::fs::PermissionsExt;
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        static SEQ: AtomicU64 = AtomicU64::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "openpencil-codex-help-{}-{}",
+            std::process::id(),
+            SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).expect("create Codex help stub dir");
+        // Model the real npm launcher: Codex is an `env node` wrapper, and
+        // the matching Node runtime lives beside it. If the subprocess PATH
+        // stops leading with this directory, the host machine's Node will try
+        // to parse the shell fixture below as JavaScript and the probe fails.
+        let node = dir.join("node");
+        std::fs::write(&node, "#!/bin/sh\nexec /bin/sh \"$@\"\n").expect("write sibling Node stub");
+        std::fs::set_permissions(&node, std::fs::Permissions::from_mode(0o755))
+            .expect("make sibling Node stub executable");
+        let binary = dir.join("codex");
+        let script = format!(
+            "#!/usr/bin/env node\n\
+             if [ \"$1\" != 'exec' ] || [ \"$2\" != '--help' ]; then exit 64; fi\n\
+             printf '%s\\n' '{}'\n",
+            help_line
+        );
+        std::fs::write(&binary, script).expect("write Codex help stub");
+        std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755))
+            .expect("make Codex help stub executable");
+        Self { dir, binary }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for CodexHelpStub {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn codex_ephemeral_flag_is_capability_gated_and_cached() {
+    // The gate result is negative-cached per binary path, and the probe
+    // behind it (`codex exec --help` through the real `env node` wrapper
+    // chain) is wall-clock bounded. On a saturated machine — parallel
+    // `cargo test` plus external load; measured locally with the whole
+    // suite running concurrently — the stub's spawn chain can outlive
+    // even a generous probe budget, and that one slow probe would pin
+    // "unsupported" for the stub's path forever. So when the flag fails
+    // to appear, retry with a FRESH stub (fresh path = fresh cache slot)
+    // instead of re-asking the poisoned entry. A real gating regression
+    // fails every attempt deterministically, so nothing the test proves
+    // is weakened; the retries only absorb scheduler starvation. The
+    // attempt count is generous because it is nearly free where it
+    // matters: a regressed gate completes each probe in well under a
+    // second (the stub exits immediately), so all attempts together
+    // still fail fast — only a starved machine pays a probe budget per
+    // attempt, and that is exactly the case the retries exist to
+    // outlast (the suite's own spawn-storm phase can starve a fresh
+    // child for tens of seconds; measured 10+ consecutive 10s probe
+    // timeouts with three test binaries running concurrently).
+    let supported = (0..12)
+        .find_map(|_| {
+            let stub = CodexHelpStub::new("      --ephemeral  Do not persist session files");
+            let mut args = vec!["exec".into(), "--json".into()];
+            quirks::append_codex_ephemeral_arg(&stub.binary, &mut args);
+            (args == ["exec", "--ephemeral", "--json"]).then_some(stub)
+        })
+        .expect("a Codex advertising --ephemeral must have the flag gated in");
+
+    // Removing the stand-in proves the second lookup uses the path cache.
+    std::fs::remove_file(&supported.binary).expect("remove supported stub");
+    let mut cached = vec!["exec".into(), "--json".into()];
+    quirks::append_codex_ephemeral_arg(&supported.binary, &mut cached);
+    assert_eq!(cached, ["exec", "--ephemeral", "--json"]);
+
+    // No retry needed here: a probe failure and a genuine "not
+    // advertised" verdict both leave the flag out, which is exactly what
+    // the assertion requires — it cannot flake, only miss a regression
+    // that the retried positive case above would catch.
+    let unsupported = CodexHelpStub::new("Usage: codex exec [OPTIONS]");
+    let mut old_args = vec!["exec".into(), "--json".into()];
+    quirks::append_codex_ephemeral_arg(&unsupported.binary, &mut old_args);
+    assert_eq!(old_args, ["exec", "--json"]);
 }
 
 #[test]
@@ -136,6 +237,141 @@ fn for_cli_rejects_opencode_and_copilot() {
     // stale dead end, so the subprocess bridge refuses both.
     assert!(SubprocessProvider::for_cli(CliName::OpenCode).is_none());
     assert!(SubprocessProvider::for_cli(CliName::Copilot).is_none());
+}
+
+#[test]
+fn for_cli_dsh_constructs_the_one_shot_headless_bridge() {
+    // Verified dsh interface: `dsh --profile headless "<prompt>"` —
+    // prompt as a bare trailing argv element, no model selector.
+    let dsh = SubprocessProvider::for_cli(CliName::Dsh).expect("dsh wired");
+    assert!(dsh.binary.ends_with("dsh"), "binary={}", dsh.binary);
+    assert_eq!(dsh.args, ["--profile", "headless"]);
+    assert_eq!(dsh.prompt_mode, PromptMode::BareArg);
+    assert_eq!(dsh.model_flag, None);
+    assert_eq!(dsh.label, "DeepSeek Harness");
+    // No stdin transport: the one-shot CLI gets a closed stdin.
+    let turn = dsh.turn_args(&ChatRequest {
+        user_message: "hi".into(),
+        ..ChatRequest::default()
+    });
+    assert_eq!(turn, vec!["--profile", "headless"]);
+}
+
+#[test]
+fn dsh_chat_routes_through_the_fail_closed_environment() {
+    let mut actual = child_env_for_cli(Some(CliName::Dsh));
+    let mut expected = safety::child_env(Some(CliName::Dsh)).expect("DSH guarded env");
+    actual.sort();
+    expected.sort();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn subprocess_providers_advertise_cooperative_cancellation() {
+    let provider = SubprocessProvider::for_cli(CliName::Codex).expect("codex provider");
+    assert!(provider.supports_cancellable_send());
+}
+
+#[cfg(unix)]
+#[test]
+fn terminal_reap_obeys_its_deadline() {
+    crate::chat_runtime::block_on_anywhere(async {
+        let pid_file = std::env::temp_dir().join(format!(
+            "openpencil-terminal-descendant-{}.pid",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&pid_file);
+        let args = vec![
+            "-c".to_string(),
+            "sleep 30 & echo $! > \"$1\"; wait".to_string(),
+            "openpencil-test".to_string(),
+            pid_file.to_string_lossy().into_owned(),
+        ];
+        let mut child =
+            LineStreamChild::spawn_command(build_command("/bin/sh", &args)).expect("spawn sleeper");
+        // Liveness bound, not the property under test: a loaded machine
+        // can take whole seconds to schedule the stub far enough to write
+        // its pid file, so this wait is generous. It waits for the
+        // newline-terminated payload rather than existence — the shell's
+        // `>` redirection creates the file before `echo` writes into it,
+        // and an existence check raced that into reading an empty pid.
+        let spawn_deadline = std::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            let written =
+                std::fs::read_to_string(&pid_file).is_ok_and(|content| content.ends_with('\n'));
+            if written || std::time::Instant::now() >= spawn_deadline {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        let descendant: i32 = std::fs::read_to_string(&pid_file)
+            .expect("descendant pid file")
+            .trim()
+            .parse()
+            .expect("descendant pid");
+        let (tx, _rx) = mpsc::channel(1);
+        let started = std::time::Instant::now();
+        let status = wait_for_terminal_exit(
+            &mut child,
+            tokio::time::Instant::now() + Duration::from_millis(25),
+            &tx,
+        )
+        .await;
+        assert!(
+            status.is_some(),
+            "deadline must force-kill and reap the child"
+        );
+        // Far below the 30s child lifetime (the property: the deadline,
+        // not the child, ends the reap), yet wide enough that scheduler
+        // starvation under a loaded parallel run cannot fail it.
+        assert!(started.elapsed() < Duration::from_secs(10));
+        // Generous liveness bound for kill delivery + init's zombie reap
+        // under load; the assert below still fails if the descendant
+        // genuinely survives the tree reap.
+        let reap_deadline = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
+            // SAFETY: signal 0 is a read-only existence probe for the exact
+            // positive pid written by this test's own child.
+            if unsafe { libc::kill(descendant, 0) } != 0
+                || std::time::Instant::now() >= reap_deadline
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert_ne!(
+            unsafe { libc::kill(descendant, 0) },
+            0,
+            "terminal reap must not leave a descendant alive"
+        );
+        let _ = std::fs::remove_file(pid_file);
+    });
+}
+
+#[cfg(unix)]
+#[test]
+fn terminal_reap_obeys_receiver_cancellation() {
+    crate::chat_runtime::block_on_anywhere(async {
+        let args = vec!["-c".to_string(), "sleep 30".to_string()];
+        let mut child =
+            LineStreamChild::spawn_command(build_command("/bin/sh", &args)).expect("spawn sleeper");
+        let (tx, rx) = mpsc::channel(1);
+        drop(rx);
+        let started = std::time::Instant::now();
+        let status = wait_for_terminal_exit(
+            &mut child,
+            tokio::time::Instant::now() + Duration::from_secs(30),
+            &tx,
+        )
+        .await;
+        assert!(
+            status.is_some(),
+            "cancellation must force-kill and reap the child"
+        );
+        // Same rationale as the deadline case above: well under the 30s
+        // child lifetime, tolerant of load-induced scheduling lag.
+        assert!(started.elapsed() < Duration::from_secs(10));
+    });
 }
 
 #[test]

@@ -159,6 +159,7 @@ fn pump_yields_after_ui_request_budget() {
         stop_tx,
         client_identity: Arc::new(Mutex::new(None)),
         last_mcp_epoch: 0,
+        pending_design_md: VecDeque::new(),
     };
     let mut state = EditorState::new();
     let mut acks = Vec::new();
@@ -202,6 +203,7 @@ fn pump_fulfills_screenshot_requests_off_the_live_state() {
         stop_tx,
         client_identity: Arc::new(Mutex::new(None)),
         last_mcp_epoch: 0,
+        pending_design_md: VecDeque::new(),
     };
     let mut state = EditorState::new();
     assert!(state.apply(EditorCommand::InsertNode {
@@ -248,6 +250,7 @@ fn pump_marks_layout_dirty_only_for_layout_affecting_commands() {
         stop_tx,
         client_identity: Arc::new(Mutex::new(None)),
         last_mcp_epoch: 0,
+        pending_design_md: VecDeque::new(),
     };
     let mut state = EditorState::new();
     state.selection.anchor = op_editor_core::NodeId::new("n1");
@@ -316,6 +319,7 @@ fn pump_flags_document_replaced_only_for_replace_document_requests() {
         stop_tx,
         client_identity: Arc::new(Mutex::new(None)),
         last_mcp_epoch: 0,
+        pending_design_md: VecDeque::new(),
     };
     let mut state = EditorState::new();
     let replacement_doc = op_pen_loader::load_canonical(
@@ -476,6 +480,7 @@ fn fresh_mcp_server(req_rx: Receiver<UiRequest>, stop_tx: Sender<()>) -> McpLive
         stop_tx,
         client_identity: Arc::new(Mutex::new(None)),
         last_mcp_epoch: 0,
+        pending_design_md: VecDeque::new(),
     }
 }
 

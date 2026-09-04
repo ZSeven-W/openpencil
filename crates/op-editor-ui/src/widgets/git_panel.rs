@@ -271,7 +271,7 @@ impl<'a> GitPanel<'a> {
         Some(GitPanel {
             state: panel,
             theme: theme_for(&state.editor_ui),
-            locale: state.editor_ui.locale,
+            locale: state.editor_ui.effective_locale(),
             now_ms,
             pressed: match state.editor_ui.pressed_button {
                 Some(op_editor_core::ButtonPressTarget::Git(button)) => Some(button),

@@ -108,19 +108,6 @@ fn connected_probe_outcome_rejects_empty_model_list() {
 }
 
 #[test]
-fn copilot_auth_status_parser_picks_id3() {
-    assert!(
-        parse_copilot_auth_status(r#"{"jsonrpc":"2.0","id":2,"result":{"models":[]}}"#).is_none()
-    );
-    let auth = parse_copilot_auth_status(
-        r#"{"jsonrpc":"2.0","id":3,"result":{"login":"octocat","authType":"oauth"}}"#,
-    )
-    .expect("id:3 parses");
-    assert_eq!(auth.login.as_deref(), Some("octocat"));
-    assert_eq!(auth.auth_type.as_deref(), Some("oauth"));
-}
-
-#[test]
 fn copilot_connection_info_mirrors_ts_branches() {
     let full = CopilotAuth {
         login: Some("octocat".into()),
@@ -189,6 +176,11 @@ fn install_commands_mirror_install_agent_ts() {
     };
     assert_eq!(install_command(AgentProvider::Antigravity), antigravity);
     assert_eq!(install_command(AgentProvider::GrokBuild), grok);
+    // The verified dsh install hint: the npm global package.
+    assert_eq!(
+        install_command(AgentProvider::DeepSeekHarness),
+        "npm install -g @deepseek-ai/dsh"
+    );
 }
 
 #[test]
@@ -287,6 +279,30 @@ fn fake_cli(name: &str, body: &str) -> (std::path::PathBuf, std::path::PathBuf) 
     (dir, exe)
 }
 
+/// [`cli_version`] with a bounded retry for the /tmp write→exec race
+/// that surfaces as ETXTBSY ("Text file busy") on CI runners' overlay
+/// filesystems. A fake CLI written and executed back-to-back can still be
+/// mid-copy-up when the exec lands, so a single immediate retry keeps the
+/// test's intent (a real subprocess round-trip) without papering over
+/// genuine spawn failures.
+#[cfg(unix)]
+fn cli_version_retry(
+    exe: &std::path::Path,
+    timeout: std::time::Duration,
+) -> Result<String, CliVersionFailure> {
+    for attempt in 0..3 {
+        match cli_version(exe, timeout) {
+            Err(CliVersionFailure::Spawn(message))
+                if attempt < 2 && message.contains("Text file busy") =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            result => return result,
+        }
+    }
+    unreachable!("the loop returns on its final attempt")
+}
+
 #[cfg(unix)]
 #[test]
 fn cli_version_reports_stderr_from_a_nonzero_exit() {
@@ -297,7 +313,7 @@ fn cli_version_reports_stderr_from_a_nonzero_exit() {
         "printf 'env: node: No such file or directory\\n' >&2\nexit 127\n",
     );
 
-    let failure = cli_version(&exe, std::time::Duration::from_secs(5))
+    let failure = cli_version_retry(&exe, std::time::Duration::from_secs(10))
         .expect_err("a 127 exit is not a usable version");
     let CliVersionFailure::Exited { status, tail } = &failure else {
         panic!("expected a non-zero exit, got {failure:?}");
@@ -314,12 +330,94 @@ fn cli_version_reports_stderr_from_a_nonzero_exit() {
 
 #[cfg(unix)]
 #[test]
+fn cli_version_surfaces_node_optional_dependency_root_cause() {
+    // Codex 0.149.x on Node 24 reports the actionable cause first, then
+    // enough loader frames that the old last-200-character snippet showed
+    // only ModuleJob.run / tracePromise. Keep the first error line, redact
+    // credentials in it, and still enforce the shared UI diagnostic cap.
+    let secret = "sk-proj-issue-228-secret-value";
+    let root = format!(
+        "Error: Missing optional dependency @openai/codex-darwin-arm64. \
+         Reinstall @openai/codex. OPENAI_API_KEY={secret} {}",
+        "context".repeat(120)
+    );
+    let body = format!(
+        "printf '%s\\n' '{root}' \
+         '    at file:///opt/homebrew/lib/node_modules/@openai/codex/bin/codex.js:401:17' \
+         '    at ModuleJob.run (node:internal/modules/esm/module_job:413:25)' \
+         '    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:654:26)' >&2\n\
+         exit 1\n"
+    );
+    let (dir, exe) = fake_cli("broken-codex", &body);
+
+    let failure = cli_version_retry(&exe, std::time::Duration::from_secs(10))
+        .expect_err("a missing platform package must fail the version gate");
+    let message = cli_version_failure_message("Codex", &failure);
+
+    assert!(
+        message.contains("Missing optional dependency @openai/codex-darwin-arm64"),
+        "the provider card must retain the actionable first line, got {message:?}"
+    );
+    assert!(
+        !message.contains("ModuleJob.run") && !message.contains("tracePromise"),
+        "loader stack frames must not replace the root cause, got {message:?}"
+    );
+    assert!(
+        !message.contains(secret) && message.contains("OPENAI_API_KEY=<redacted>"),
+        "the surfaced diagnostic must redact credentials, got {message:?}"
+    );
+    assert!(
+        message.chars().count()
+            <= "Codex CLI failed: ".chars().count() + op_util::cli_output::TAIL_MAX_CHARS,
+        "the provider card diagnostic must stay bounded, got {} characters",
+        message.chars().count()
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(unix)]
+#[test]
+fn cli_version_does_not_wait_for_a_descendant_holding_its_pipes() {
+    // The wrapper has already delivered a valid version and exited, but its
+    // background helper inherits stdout/stderr. A blocking reader join would
+    // turn this quick responsiveness gate into a 30-second wait.
+    let (dir, exe) = fake_cli(
+        "forking-cli",
+        "printf 'codex-cli 1.2.3\\n'\nsleep 30 &\nexit 0\n",
+    );
+    let started = std::time::Instant::now();
+    let version = cli_version_retry(&exe, std::time::Duration::from_secs(10));
+    let elapsed = started.elapsed();
+
+    assert_eq!(version, Ok("codex-cli 1.2.3".to_string()));
+    assert!(
+        elapsed < std::time::Duration::from_secs(15),
+        "the exited wrapper, not its descendant's pipe EOF, must finish the gate; took {elapsed:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[cfg(unix)]
+#[test]
 fn cli_version_accepts_a_healthy_cli_and_bounds_a_hung_one() {
     let (healthy_dir, healthy) = fake_cli("healthy-cli", "printf 'codex-cli 0.9.1\\n'\n");
-    assert_eq!(
-        cli_version(&healthy, std::time::Duration::from_secs(5)),
-        Ok("codex-cli 0.9.1".to_string())
-    );
+    // A loaded runner can starve the freshly spawned shell past a fixed
+    // budget; escalate like the hung-CLI branch below so scheduling delay
+    // cannot fail the healthy path, while a genuine regression still
+    // reports within a few fast attempts.
+    let budget_cap = std::time::Duration::from_secs(20);
+    let mut budget = std::time::Duration::from_secs(5);
+    let version = loop {
+        match cli_version_retry(&healthy, budget) {
+            Ok(version) => break version,
+            Err(failure) if budget >= budget_cap => {
+                panic!("healthy CLI must yield a version: {failure:?}")
+            }
+            Err(_) => budget = (budget * 2).min(budget_cap),
+        }
+    };
+    assert_eq!(version, "codex-cli 0.9.1");
     let _ = std::fs::remove_dir_all(&healthy_dir);
 
     // Mid first-run OAuth: prints a prompt, then hangs past the budget. A

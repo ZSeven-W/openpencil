@@ -5,10 +5,16 @@ on:
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
+      - ".cargo/**"
+      - "crates/**/Cargo.toml"
+      - "deny.toml"
       - "flake.nix"
       - "flake.lock"
       - "nix/release-manifest.json"
       - "nix/integration/**"
+      - "packages/package.json"
+      - "packages/bun.lock"
+      - "packages/*/package.json"
       - "crates/op-host-desktop/assets/icon.png"
       - ".github/workflows/nix-check.yml"
   push:
@@ -16,10 +22,16 @@ on:
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
+      - ".cargo/**"
+      - "crates/**/Cargo.toml"
+      - "deny.toml"
       - "flake.nix"
       - "flake.lock"
       - "nix/release-manifest.json"
       - "nix/integration/**"
+      - "packages/package.json"
+      - "packages/bun.lock"
+      - "packages/*/package.json"
       - "crates/op-host-desktop/assets/icon.png"
       - ".github/workflows/nix-check.yml"
   workflow_dispatch:
@@ -83,9 +95,24 @@ jobs:
 
       - name: Install headless display server
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes \
-            libegl1 libgles2 libgl1-mesa-dri libgbm1 mesa-utils xvfb
+          set -euo pipefail
+          apt_options=(
+            -o Acquire::ForceIPv4=true
+            -o Acquire::Retries=3
+            -o Acquire::http::Timeout=30
+          )
+          packages=(libegl1 libgles2 libgl1-mesa-dri libgbm1 mesa-utils xvfb)
+          for attempt in 1 2 3 4; do
+            if sudo apt-get "${apt_options[@]}" update && \
+              sudo apt-get "${apt_options[@]}" install --yes "${packages[@]}"; then
+              break
+            fi
+            if [[ "$attempt" == 4 ]]; then
+              echo "::error::apt prerequisites failed after $attempt attempts"
+              exit 1
+            fi
+            sleep $((attempt * 20))
+          done
 
       - name: Smoke-test prebuilt CLI
         run: |

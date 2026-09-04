@@ -15,6 +15,7 @@ use crate::{
     config::RelayConfig,
     connection::{serve_connection, AdmissionPermit, ConnectionServices},
     error::RelayServerError,
+    observe::{census_interval, RelayCensus},
     peer_quota::PeerQuota,
     registry::Registry,
 };
@@ -100,19 +101,33 @@ where
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let mut connections = JoinSet::new();
     let mut rejections = RejectionLog::default();
+    let census = Arc::new(RelayCensus::default());
+    // Driven from the accept loop so the gauge keeps ticking even while the
+    // relay is not accepting anything — an outage is precisely the case where
+    // no new connection arrives to trigger a lazy summary.
+    let mut census_tick = tokio::time::interval(census_interval());
+    census_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    // The first tick resolves immediately; spend it so the relay does not log
+    // an empty census the instant it starts.
+    census_tick.tick().await;
     tokio::pin!(shutdown);
 
     loop {
         tokio::select! {
             biased;
             () = &mut shutdown => break,
+            _ = census_tick.tick() => {
+                census.emit(registry.queue_census().await);
+            }
             accepted = listener.accept() => {
                 let (stream, peer_addr) = accepted.map_err(RelayServerError::Accept)?;
                 let Ok(pending_permit) = Arc::clone(&pending).try_acquire_owned() else {
+                    census.record_admission_refused();
                     rejections.record_pending_exhausted();
                     continue;
                 };
                 let Some(source_permit) = peer_quota.try_acquire(peer_addr.ip()) else {
+                    census.record_admission_refused();
                     rejections.record_source_exhausted();
                     continue;
                 };
@@ -122,6 +137,7 @@ where
                 let auth_in_flight = Arc::clone(&auth_in_flight);
                 let reauth_in_flight = Arc::clone(&reauth_in_flight);
                 let queued_bytes = Arc::clone(&queued_bytes);
+                let census = Arc::clone(&census);
                 let shutdown = shutdown_rx.clone();
                 connections.spawn(async move {
                     serve_connection(
@@ -133,6 +149,7 @@ where
                             auth_in_flight,
                             reauth_in_flight,
                             queued_bytes,
+                            census,
                         },
                         shutdown,
                         AdmissionPermit::new(pending_permit, source_permit),
@@ -149,6 +166,7 @@ where
     }
 
     rejections.flush_pending_summary();
+    census.emit(registry.queue_census().await);
     tracing::info!("relay shutdown requested");
     let _ = shutdown_tx.send(true);
     while let Some(result) = connections.join_next().await {

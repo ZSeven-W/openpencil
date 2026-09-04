@@ -91,7 +91,7 @@
         "openpencil.dev.daemonPath": {
           "type": "string",
           "default": "",
-          "description": "Path to the op-host-web-server daemon binary. When empty, probes <workspace>/target/debug/op-host-web-server."
+          "description": "Optional path to a development op-host-web-server binary. When empty, uses the VSIX-bundled runtime first, then probes <workspace>/target/debug/op-host-web-server."
         },
         "openpencil.proxy.port": {
           "type": "number",
@@ -119,12 +119,14 @@
     "test:integration": "bun test test/integration"
   },
   "devDependencies": {
+    "@vscode/vsce": "3.9.2",
     "@types/vscode": "~1.90",
     "@types/node": "^20",
     "@types/bun": "latest",
     "typescript": "^5",
     "esbuild": "^0.21",
     "jsonc-parser": "^3",
+    "ovsx": "1.1.1",
     "oxlint": "latest"
   },
   "repository": {

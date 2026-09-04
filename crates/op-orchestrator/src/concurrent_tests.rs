@@ -92,6 +92,7 @@ mod geometry_echo {
             validation_enabled: true,
             visual_ref_enabled: false,
             pinned_style_guide: None,
+            reference_skeleton: None,
         }
     }
 
@@ -122,6 +123,7 @@ mod geometry_echo {
             },
             id_prefix: "goals".into(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,
@@ -170,6 +172,7 @@ mod geometry_echo {
             node_count: 1,
             error: None,
             inserted_root_ids: vec!["rail".into()],
+            headline: None,
             subtask: None,
         }
     }
@@ -315,6 +318,7 @@ mod geometry_echo {
                 node_count: 1,
                 error: None,
                 inserted_root_ids: vec!["rail".into()],
+                headline: None,
                 subtask: None,
             },
         ));
@@ -391,6 +395,7 @@ mod geometry_echo {
                 node_count: 0,
                 error: Some("script error: unexpected end of string".into()),
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: None,
             },
         ));
@@ -427,6 +432,7 @@ mod geometry_echo {
                 node_count: 1,
                 error: None,
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: None,
             },
         ));

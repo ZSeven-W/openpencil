@@ -165,7 +165,7 @@ pub(crate) fn dispatch_design_content(args: &BTreeMap<String, String>) -> ToolOu
     let mut post_process_fixes = 0usize;
     if post_processed {
         for node in &mut parsed.nodes {
-            post_process_fixes += op_editor_core::command_refine::refine_subtree(node).len();
+            post_process_fixes += op_editor_core::command_refine::refine_child_subtree(node).len();
         }
     }
     let warnings_json =

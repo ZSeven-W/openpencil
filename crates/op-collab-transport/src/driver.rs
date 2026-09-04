@@ -200,6 +200,16 @@ impl ConnectionDriver {
         self.outbound_queue.len() + usize::from(self.outbound.is_some())
     }
 
+    /// How many items the outbound queue holds before it refuses one.
+    ///
+    /// Callers that mix droppable and undroppable traffic on one connection
+    /// need this to keep the droppable half from consuming the last slot: a
+    /// refused presence update is a stale cursor, a refused commit is a dead
+    /// connection.
+    pub fn outbound_queue_capacity(&self) -> usize {
+        self.connection.config.connections.outbound_queue_items
+    }
+
     pub fn queued_bytes(&self) -> usize {
         self.outbound_queue.queued_bytes()
             + self

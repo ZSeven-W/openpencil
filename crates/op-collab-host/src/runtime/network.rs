@@ -1,6 +1,7 @@
 //! Network-thread ownership and bounded GUI bridge.
 
 mod connection;
+mod connection_queue;
 mod discovery;
 mod guest;
 mod guest_confirmation;
@@ -13,7 +14,7 @@ mod shutdown;
 mod transport_diagnostic;
 
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -23,12 +24,31 @@ use op_collab_transport::{JoinIntent, SharedQueueBudget, StaticKeyStore};
 
 use super::relay::{GuestConnectionRoute, RelayOwnerRequest};
 use super::types::{
-    GuestNetworkCommand, NetworkEvent, OwnerNetworkCommand, TaggedNetworkEvent,
+    EventLaneSeat, GuestNetworkCommand, NetworkEvent, OwnerNetworkCommand, TaggedNetworkEvent,
     TerminalNetworkEvent,
 };
 
 pub(super) const GUI_COMMAND_CAPACITY: usize = 256;
 pub(super) const GUI_EVENT_CAPACITY: usize = 256;
+
+/// How much of a bounded GUI event lane droppable presence may occupy.
+///
+/// Presence is latest-value traffic: losing one costs a stale cursor for a
+/// frame. A document frame that finds the lane full costs the whole session —
+/// the connection worker has nowhere to put it and fails with
+/// `ResourceLimit`, which retires the session and shows the user a
+/// reconnect. Those two are not interchangeable, so they must not compete for
+/// the same last slot.
+///
+/// They did. A peer whose GUI thread is parked — a phone sitting idle while
+/// the other side drags a node — stops draining this lane while the drag
+/// republishes presence at roughly 30 Hz, so a few seconds of one-sided
+/// editing is enough to fill every seat with presence. The commit that ends
+/// the drag is then the frame that pays for it. Holding a quarter of the lane
+/// back for undroppable traffic keeps that commit deliverable; presence is
+/// simply dropped once it has had its three quarters, which is exactly what
+/// lossy means.
+const LOSSY_EVENT_LANE_SEATS: usize = GUI_EVENT_CAPACITY * 3 / 4;
 const GUI_TERMINAL_EVENT_CAPACITY: usize = 256;
 const DISCOVERY_COMMAND_CAPACITY: usize = 4;
 const TERMINAL_COMMAND_CAPACITY: usize = 1;
@@ -41,6 +61,8 @@ pub(super) struct EventSink {
     sender: SyncSender<TaggedNetworkEvent>,
     terminal: TerminalEventLane,
     bridge_budget: SharedQueueBudget,
+    /// Seats currently outstanding on `sender`'s lane.
+    occupancy: Arc<AtomicUsize>,
     wake: Arc<dyn Fn() + Send + Sync>,
     generation: u64,
 }
@@ -57,9 +79,16 @@ impl EventSink {
             sender,
             terminal,
             bridge_budget,
+            occupancy: Arc::new(AtomicUsize::new(0)),
             wake,
             generation,
         }
+    }
+
+    /// Seats a droppable frame may still claim before it must yield the rest
+    /// of the lane to undroppable traffic.
+    fn lossy_seat_available(&self) -> bool {
+        self.occupancy.load(Ordering::Acquire) < LOSSY_EVENT_LANE_SEATS
     }
 
     pub(super) fn try_send(&self, event: NetworkEvent) -> Result<(), EventSendError> {
@@ -67,11 +96,19 @@ impl EventSink {
     }
 
     /// Reserves decoded frame bytes until the GUI finishes handling the event.
+    ///
+    /// `lossy` marks a frame the session can drop without consequence. Such a
+    /// frame is refused once the lane is [`LOSSY_EVENT_LANE_SEATS`] deep, so
+    /// it can never be the reason an undroppable frame finds no room.
     pub(super) fn try_send_sized(
         &self,
         event: NetworkEvent,
         encoded_len: usize,
+        lossy: bool,
     ) -> Result<(), EventSendError> {
+        if lossy && !self.lossy_seat_available() {
+            return Err(EventSendError::Full);
+        }
         let reservation = self
             .bridge_budget
             .reserve(encoded_len)
@@ -84,10 +121,12 @@ impl EventSink {
         event: NetworkEvent,
         bridge_reservation: Option<op_collab_transport::SharedQueueReservation>,
     ) -> Result<(), EventSendError> {
+        let seat = EventLaneSeat::take(&self.occupancy);
         match self.sender.try_send(TaggedNetworkEvent {
             generation: self.generation,
             event,
             bridge_reservation,
+            _lane_seat: Some(seat),
         }) {
             Ok(()) => {
                 (self.wake)();
@@ -114,6 +153,9 @@ impl EventSink {
             generation: self.generation,
             event: event.into(),
             bridge_reservation: None,
+            // The terminal lane is independent of the data lane, so it keeps
+            // its own overflow policy rather than sharing its accounting.
+            _lane_seat: None,
         });
         (self.wake)();
         delivered
@@ -376,6 +418,7 @@ pub(super) fn spawn_owner(
     session_id: SessionId,
     epoch: Epoch,
     relay: Option<RelayOwnerRequest>,
+    advertise_lan: bool,
 ) -> SessionNetwork {
     let (commands, receiver) = mpsc::sync_channel(GUI_COMMAND_CAPACITY);
     let (shutdown, shutdown_receiver) = mpsc::sync_channel(TERMINAL_COMMAND_CAPACITY);
@@ -390,6 +433,7 @@ pub(super) fn spawn_owner(
                     session_id,
                     epoch,
                     relay,
+                    advertise_lan,
                 },
                 receiver,
                 shutdown_receiver,
@@ -483,6 +527,53 @@ mod tests {
         (sink, receiver, terminal_receiver, wakes)
     }
 
+    fn presence_frame() -> NetworkEvent {
+        NetworkEvent::Frame {
+            connection: ConnectionKey::new(1).unwrap(),
+            frame: FrameEnvelope::new(
+                SessionId::from("session"),
+                Epoch(1),
+                CollabMessage::PresenceUpdate(op_collab::Presence {
+                    cursor: None,
+                    selection: Vec::new(),
+                    viewport: None,
+                    editing_node: None,
+                }),
+            ),
+        }
+    }
+
+    #[test]
+    fn droppable_presence_never_takes_the_seat_an_undroppable_frame_needs() {
+        // The field failure this guards: a peer whose GUI thread is parked
+        // stops draining this lane while the other side drags, presence
+        // republishes at ~30 Hz, and the commit that ends the drag is the
+        // frame that finds no room — which retires the whole session.
+        let (sink, receiver, _terminal, _wakes) = sink_with_capacity(GUI_EVENT_CAPACITY, 1);
+
+        for _ in 0..LOSSY_EVENT_LANE_SEATS {
+            sink.try_send_sized(presence_frame(), 1, true)
+                .expect("presence fills its own share of the lane");
+        }
+        assert_eq!(
+            sink.try_send_sized(presence_frame(), 1, true),
+            Err(EventSendError::Full),
+            "presence stops at its share instead of consuming the reserve"
+        );
+
+        for _ in 0..(GUI_EVENT_CAPACITY - LOSSY_EVENT_LANE_SEATS) {
+            sink.try_send_sized(NetworkEvent::Stopped, 1, false)
+                .expect("the reserve belongs to undroppable frames");
+        }
+
+        // Taking events off the lane returns the seats they held.
+        for _ in 0..GUI_EVENT_CAPACITY {
+            receiver.recv().expect("queued event");
+        }
+        sink.try_send_sized(presence_frame(), 1, true)
+            .expect("a drained lane admits presence again");
+    }
+
     #[test]
     fn data_delivery_is_nonblocking_when_gui_queue_is_full() {
         let (sink, receiver, _terminal, wakes) = sink_with_capacity(1, 1);
@@ -539,11 +630,15 @@ mod tests {
         let sink = EventSink::new(sender, terminal, budget.clone(), Arc::new(|| {}), 9);
         let connection = ConnectionKey::new(1).unwrap();
 
-        sink.try_send_sized(NetworkEvent::Frame { connection, frame }, encoded_len)
-            .unwrap();
+        sink.try_send_sized(
+            NetworkEvent::Frame { connection, frame },
+            encoded_len,
+            false,
+        )
+        .unwrap();
         assert_eq!(budget.used().unwrap(), encoded_len);
         assert_eq!(
-            sink.try_send_sized(NetworkEvent::Stopped, 1),
+            sink.try_send_sized(NetworkEvent::Stopped, 1, false),
             Err(EventSendError::Full)
         );
 

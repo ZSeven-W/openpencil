@@ -2,6 +2,67 @@ use serde_json::json;
 
 use super::*;
 
+const TEXT_ONLY_XHS_PROMPT: &str =
+    "用这个文字做一张符合小红书封面的卡片：装了这么多 DSH 插件，到底怎么管？";
+
+#[test]
+fn text_only_xhs_card_rejects_a_model_invented_stock_image_slot() {
+    let nodes: Vec<PenNode> = serde_json::from_value(json!([{
+        "type": "frame", "id": "cover", "name": "Cover Card",
+        "width": 1080, "height": 1440, "layout": "none", "children": [
+            {"type": "image", "id": "background", "src": "", "width": 1080, "height": 1440,
+             "imageSearchQuery": "json syntax", "imagePrompt": "a photographed JSON reference sheet"},
+            {"type": "frame", "id": "content", "x": 16, "y": 16,
+             "width": 1048, "height": 480, "layout": "vertical", "children": [
+                {"type": "text", "id": "title", "content": "装了这么多 DSH 插件，到底怎么管？"}
+             ]}
+        ]
+    }]))
+    .expect("parse card");
+
+    let report = check_generated_nodes_for_prompt(&nodes, 1080.0, TEXT_ONLY_XHS_PROMPT);
+
+    assert!(report.has_fatal(), "unsolicited raster media must retry");
+    assert!(
+        report.failure_message().contains("unsolicited-card-image"),
+        "{report:?}"
+    );
+}
+
+#[test]
+fn xhs_card_accepts_raster_media_when_the_user_explicitly_requests_it() {
+    let nodes: Vec<PenNode> = serde_json::from_value(json!([{
+        "type": "image", "id": "background", "src": "", "width": 1080, "height": 1440,
+        "imageSearchQuery": "server rack", "imagePrompt": "editorial server rack photograph"
+    }]))
+    .expect("parse image");
+
+    let report = check_generated_nodes_for_prompt(
+        &nodes,
+        1080.0,
+        "做一张小红书封面，使用一张服务器机柜照片作为背景图",
+    );
+
+    assert!(
+        !report.failure_message().contains("unsolicited-card-image"),
+        "{report:?}"
+    );
+}
+
+#[test]
+fn explicit_no_image_wins_over_an_image_noun_in_the_request() {
+    let nodes: Vec<PenNode> = serde_json::from_value(json!([{
+        "type": "image", "id": "background", "src": "", "width": 1080, "height": 1440,
+        "imageSearchQuery": "json syntax"
+    }]))
+    .expect("parse image");
+
+    let report =
+        check_generated_nodes_for_prompt(&nodes, 1080.0, "做一张小红书纯文字卡片，不要图片或照片");
+
+    assert!(report.failure_message().contains("unsolicited-card-image"));
+}
+
 #[test]
 fn generated_nodes_reject_missing_progress_ring_without_auto_drawing() {
     let nodes: Vec<PenNode> = serde_json::from_value(json!([{
@@ -337,5 +398,151 @@ fn accepts_mobile_featured_food_card_with_image_top() {
     assert!(
         !report.has_fatal(),
         "valid image-top featured food card should pass: {report:?}"
+    );
+}
+
+// ── Structural drift echo (DS P1.5) ──────────────────────────────────────────
+
+/// The 0815 v4-pro card lesion: five "法则" items, five different internal
+/// structures. No structure holds a 2/3 majority, so the family must be
+/// echoed (never auto-fixed — structure is intent).
+#[test]
+fn five_same_stem_sections_with_five_structures_are_echoed() {
+    let nodes = json!([
+        {
+            "type": "frame", "id": "card", "name": "知识卡片", "width": 1080, "height": 1440,
+            "layout": "vertical",
+            "children": [
+                { "type": "frame", "id": "r1", "name": "法则 01", "layout": "vertical",
+                  "children": [{ "type": "text", "id": "r1t", "content": "第一条" }] },
+                { "type": "frame", "id": "r2", "name": "法则 02", "layout": "horizontal",
+                  "children": [{ "type": "text", "id": "r2t", "content": "第二条" },
+                               { "type": "frame", "id": "r2b", "layout": "vertical",
+                                 "children": [{ "type": "text", "id": "r2bt", "content": "行" }] }] },
+                { "type": "frame", "id": "r3", "name": "法则 03", "layout": "vertical",
+                  "children": [{ "type": "rectangle", "id": "r3o" },
+                               { "type": "text", "id": "r3t", "content": "第三条" }] },
+                { "type": "frame", "id": "r4", "name": "法则 04", "layout": "vertical",
+                  "children": [{ "type": "image", "id": "r4i" },
+                               { "type": "text", "id": "r4t", "content": "第四条" }] },
+                { "type": "frame", "id": "r5", "name": "法则 05", "layout": "vertical",
+                  "children": [{ "type": "text", "id": "r5t", "content": "第五条" },
+                               { "type": "text", "id": "r5b", "content": "尾注" }] }
+            ]
+        }
+    ]);
+
+    let report = check_value_forest(&nodes, 1080.0);
+
+    assert!(
+        report.has_fatal(),
+        "five structures under one family must be echoed: {report:?}"
+    );
+    let message = report.failure_message();
+    assert!(
+        message.contains("section-structure-drift"),
+        "echo must carry the drift code: {message}"
+    );
+    assert!(
+        message.contains("unify them on ONE structure template"),
+        "echo must demand one template: {message}"
+    );
+}
+
+/// Drift detection also keys on a shared role when the names disagree
+/// entirely (the second 0815 naming style: mixed 法则条目 / Section Rule /
+/// Rule 03 Row names under one role).
+#[test]
+fn same_role_sections_with_drifted_names_are_echoed_by_role() {
+    let nodes = json!([
+        {
+            "type": "frame", "id": "card", "name": "知识卡片", "width": 1080, "height": 1440,
+            "layout": "vertical",
+            "children": [
+                { "type": "frame", "id": "r1", "name": "法则条目", "role": "section-rule",
+                  "layout": "vertical",
+                  "children": [{ "type": "text", "id": "r1t", "content": "A" }] },
+                { "type": "frame", "id": "r2", "name": "Section Rule", "role": "section-rule",
+                  "layout": "vertical",
+                  "children": [{ "type": "text", "id": "r2t", "content": "B" },
+                               { "type": "frame", "id": "r2b",
+                                 "children": [{ "type": "text", "id": "r2bt", "content": "行" }] }] },
+                { "type": "frame", "id": "r3", "name": "Rule 03 Row", "role": "section-rule",
+                  "layout": "vertical",
+                  "children": [{ "type": "rectangle", "id": "r3o" },
+                               { "type": "text", "id": "r3t", "content": "C" }] }
+            ]
+        }
+    ]);
+
+    let report = check_value_forest(&nodes, 1080.0);
+    assert!(
+        report.has_fatal(),
+        "role-grouped drift must be echoed: {report:?}"
+    );
+}
+
+/// Isomorphic siblings (the family norm) are not drift — nothing to echo.
+#[test]
+fn isomorphic_sections_are_not_echoed() {
+    let items: Vec<serde_json::Value> = [1, 2, 3, 4]
+        .iter()
+        .map(|i| {
+            json!({
+                "type": "frame", "id": format!("r{i}"), "name": format!("法则 0{i}"),
+                "layout": "vertical",
+                "children": [
+                    { "type": "text", "id": format!("r{i}t"), "content": format!("第{i}条") }
+                ]
+            })
+        })
+        .collect();
+    let nodes = json!([
+        {
+            "type": "frame", "id": "card", "name": "知识卡片", "width": 1080, "height": 1440,
+            "layout": "vertical",
+            "children": items
+        }
+    ]);
+
+    let report = check_value_forest(&nodes, 1080.0);
+    assert!(
+        !report.has_fatal(),
+        "one shared structure is the norm, not drift: {report:?}"
+    );
+}
+
+/// The P1-a hero exemption: one differently-structured hero among a >= 2/3
+/// isomorphic family is a deliberate first item, not drift.
+#[test]
+fn a_hero_among_isomorphic_siblings_is_not_echoed() {
+    let nodes = json!([
+        {
+            "type": "frame", "id": "card", "name": "知识卡片", "width": 1080, "height": 1440,
+            "layout": "vertical",
+            "children": [
+                { "type": "frame", "id": "hero", "name": "法则 00",
+                  "layout": "vertical",
+                  "children": [
+                      { "type": "image", "id": "hero-img" },
+                      { "type": "text", "id": "hero-t", "content": "总纲" },
+                      { "type": "text", "id": "hero-b", "content": "导语" }
+                  ] },
+                { "type": "frame", "id": "r1", "name": "法则 01", "layout": "vertical",
+                  "children": [{ "type": "text", "id": "r1t", "content": "一" }] },
+                { "type": "frame", "id": "r2", "name": "法则 02", "layout": "vertical",
+                  "children": [{ "type": "text", "id": "r2t", "content": "二" }] },
+                { "type": "frame", "id": "r3", "name": "法则 03", "layout": "vertical",
+                  "children": [{ "type": "text", "id": "r3t", "content": "三" }] },
+                { "type": "frame", "id": "r4", "name": "法则 04", "layout": "vertical",
+                  "children": [{ "type": "text", "id": "r4t", "content": "四" }] }
+            ]
+        }
+    ]);
+
+    let report = check_value_forest(&nodes, 1080.0);
+    assert!(
+        !report.has_fatal(),
+        "a hero among a majority-consistent family is exempt: {report:?}"
     );
 }

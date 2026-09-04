@@ -18,7 +18,7 @@ fn loaded_document_dollar_ref_fill_resolves_without_any_cache() {
         {"type":"rectangle","id":"r1","width":100,"height":50,
          "fill":[{"type":"solid","color":"$brand"}]},
         {"type":"rectangle","id":"r2","x":0,"y":60,"width":100,"height":50,
-         "fill":[{"type":"solid","color":"$color-surface"}]}
+         "fill":[{"type":"solid","color":"$--card"}]}
       ]}],"children":[]
     }"##;
     let state = state_from(src);
@@ -33,7 +33,7 @@ fn loaded_document_dollar_ref_fill_resolves_without_any_cache() {
     let r2 = &scene.pages[0].children[1];
     let fill2 = r2
         .fill
-        .expect("$color-surface must resolve via the palette fallback");
+        .expect("$--card must resolve via the palette fallback");
     assert!((fill2.r - 1.0).abs() < 0.01);
     assert!((fill2.g - 1.0).abs() < 0.01);
     assert!((fill2.b - 1.0).abs() < 0.01);

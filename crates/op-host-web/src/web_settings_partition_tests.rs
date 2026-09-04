@@ -6,6 +6,39 @@
 
 use super::*;
 
+fn state_with_runtime_builtin_catalog() -> (EditorState, String) {
+    let mut state = EditorState::new();
+    let id = state.editor_ui.agent_settings.add_builtin_agent_config(
+        "Provider",
+        "sk-old",
+        "fallback-model",
+        op_editor_core::BuiltinAgentKind::OpenAiCompat,
+        "https://api.openai.com/v1",
+    );
+    let settings = &mut state.editor_ui.agent_settings;
+    settings.request_ready_builtin_model_catalog_refreshes(1);
+    let request = settings
+        .take_pending_builtin_model_catalog_refresh()
+        .expect("ready provider queues a catalog request");
+    let expected = settings
+        .builtin_model_catalog_config_for_request(&request)
+        .expect("request resolves its provider");
+    assert!(
+        settings.apply_builtin_model_catalog_refresh_outcome_if_current(
+            &expected,
+            &request,
+            op_editor_core::BuiltinModelCatalogRefreshOutcome::Success {
+                models: vec![op_editor_core::BuiltinModelOption::new(
+                    "remote-model",
+                    "Remote model",
+                )],
+            },
+        )
+    );
+    assert!(!settings.builtin_model_catalog_options(&id).is_empty());
+    (state, id)
+}
+
 #[test]
 fn an_empty_partition_clears_the_previous_accounts_credentials() {
     // The account-switch leak: after switching, the in-memory state still held
@@ -33,6 +66,45 @@ fn an_empty_partition_clears_the_previous_accounts_credentials() {
         state.editor_ui.agent_settings.builtin_agents.is_empty(),
         "B must not inherit A's API keys from an empty partition"
     );
+}
+
+#[test]
+fn account_reset_clears_runtime_builtin_catalogs() {
+    let (mut state, id) = state_with_runtime_builtin_catalog();
+
+    super::reset_account_scoped_settings(&mut state);
+
+    assert!(state
+        .editor_ui
+        .agent_settings
+        .builtin_model_catalog_options(&id)
+        .is_empty());
+}
+
+#[test]
+fn either_builtin_snapshot_replacement_clears_runtime_catalogs() {
+    let settings_snapshot = r#"{"version":1,"builtin_agents":[{"id":"builtin-1",
+        "preset":"custom","display_name":"New","kind":"openai-compat",
+        "api_key":"sk-new","model":"new-model",
+        "base_url":"https://api.example.com/v1","enabled":true}]}"#;
+    let (mut state, old_id) = state_with_runtime_builtin_catalog();
+    super::apply_json(&mut state, settings_snapshot).expect("legacy settings snapshot");
+    assert!(state
+        .editor_ui
+        .agent_settings
+        .builtin_model_catalog_options(&old_id)
+        .is_empty());
+
+    let credential_snapshot = r#"{"version":2,"builtin_agents":[],
+        "image_gen_profiles":[],"active_image_gen_profile_id":null,
+        "openverse_oauth":null}"#;
+    let (mut state, old_id) = state_with_runtime_builtin_catalog();
+    super::apply_credential_json(&mut state, credential_snapshot).expect("credential snapshot");
+    assert!(state
+        .editor_ui
+        .agent_settings
+        .builtin_model_catalog_options(&old_id)
+        .is_empty());
 }
 
 #[test]

@@ -1,4 +1,7 @@
-use super::{apply_json, validate_web_provider_base_url_with_allowlist, MAX_CREDENTIAL_BODY_BYTES};
+use super::{
+    apply_json, parse_transient_builtin, parse_transient_builtin_for_discovery,
+    validate_web_provider_base_url_with_allowlist, MAX_CREDENTIAL_BODY_BYTES,
+};
 use op_editor_core::{BuiltinAgentConfig, BuiltinAgentKind, BuiltinAgentPresetKey, EditorState};
 
 struct EnvVarGuard {
@@ -50,11 +53,66 @@ fn state_with_operator_agent() -> EditorState {
             display_name: "Operator".into(),
             kind: BuiltinAgentKind::OpenAiCompat,
             api_key: "operator-secret".into(),
-            model: "operator-model".into(),
+            models: vec!["operator-model".into()],
             base_url: "https://operator.example/v1".into(),
             enabled: true,
         });
     state
+}
+
+#[test]
+fn discovery_accepts_a_credential_before_its_first_model_is_selected() {
+    let credential = serde_json::json!({
+        "id": "builtin-web-1",
+        "preset": "custom",
+        "display_name": "Private Model",
+        "kind": "openai-compat",
+        "api_key": "sk-browser-only",
+        "model": "",
+        "base_url": "https://api.openai.com/v1",
+        "enabled": true,
+    });
+
+    assert!(parse_transient_builtin(&credential).is_none());
+    assert!(parse_transient_builtin_for_discovery(&credential).is_some());
+}
+
+#[test]
+fn transient_credential_preserves_an_explicit_preset_across_model_order() {
+    let credential = serde_json::json!({
+        "id": "builtin-web-1",
+        "preset": "ark-coding",
+        "display_name": "Ark Coding",
+        "kind": "anthropic",
+        "api_key": "sk-browser-only",
+        "model": "doubao-seed-2-0-pro-260215",
+        "models": ["doubao-seed-2-0-pro-260215", "ark-code-latest"],
+        "base_url": "https://ark.cn-beijing.volces.com/api/coding",
+        "enabled": true,
+    });
+
+    let agent = parse_transient_builtin(&credential).expect("credential parses");
+
+    assert_eq!(agent.preset, BuiltinAgentPresetKey::ArkCoding);
+}
+
+#[test]
+fn credential_snapshot_accepts_multiple_saved_models() {
+    let mut body: serde_json::Value = serde_json::from_str(VALID_BODY).expect("fixture JSON");
+    body["builtin_agents"][0]["models"] =
+        serde_json::json!(["private-model", "private-model-fast"]);
+    let mut state = EditorState::new();
+
+    apply_json(&mut state, &body.to_string()).expect("multi-model snapshot merges");
+
+    let agent = state
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .iter()
+        .find(|agent| agent.api_key == "sk-browser-only")
+        .expect("browser credential");
+    assert_eq!(agent.models, ["private-model", "private-model-fast"]);
 }
 
 #[test]
@@ -232,7 +290,7 @@ fn aggregate_entry_limit_is_atomic() {
                 display_name: format!("Operator {index}"),
                 kind: BuiltinAgentKind::OpenAiCompat,
                 api_key: format!("operator-secret-{index}"),
-                model: "operator-model".into(),
+                models: vec!["operator-model".into()],
                 base_url: "https://operator.example/v1".into(),
                 enabled: true,
             });
@@ -348,4 +406,25 @@ fn browser_credential_endpoint_rejects_every_acp_field_without_mutation() {
 
         assert_eq!(before, crate::settings_io::fingerprint(&state));
     }
+}
+
+#[test]
+fn browser_owned_duplicate_from_a_loaded_snapshot_is_removable() {
+    // Companion to op-editor-host-core's `settings_io_checked_tests::
+    // checked_settings_load_preserves_app_generated_operator_and_browser_duplicates`:
+    // the checked loader keeps both the operator entry and its
+    // browser-owned duplicate, and the credential sweep here removes
+    // exactly the browser-owned one.
+    let mut state = state_with_operator_agent();
+    let mut browser = state.editor_ui.agent_settings.builtin_agents[0].clone();
+    browser.id = "web-credential:builtin:shared".into();
+    state.editor_ui.agent_settings.builtin_agents.push(browser);
+
+    assert!(super::remove_browser_owned_credentials(&mut state));
+
+    assert_eq!(state.editor_ui.agent_settings.builtin_agents.len(), 1);
+    assert_eq!(
+        state.editor_ui.agent_settings.builtin_agents[0].id,
+        "operator-agent"
+    );
 }

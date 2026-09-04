@@ -1,0 +1,756 @@
+//! Preview session spine — the runtime owner, its retained state, and the
+//! entry/accessor surface.
+//!
+//! Split out of `preview/mod.rs` (the crate spine) to keep every file under
+//! the repo's 800-line-per-file cap. Holds [`RootFrame`] (the per-root
+//! scene↔runtime coordinate mapping), [`PreviewSession`] with its retained
+//! source/session fields, [`PreviewSession::enter`], and the accessor +
+//! test-helper surface. The scene overlay / paint impls live in the sibling
+//! `session_paint.rs`; app-mode routing, input dispatch, device-frame
+//! presentation, and screen transitions live in their own siblings
+//! (`app_mode.rs` / `input.rs` / `present.rs` / `transition.rs`).
+//!
+//! All fields are `pub(crate)` because those sibling modules read and write
+//! them from their own `impl PreviewSession` blocks (`app_mode::reconcile`
+//! rebuilds the scene, `input` owns the gesture mapping, `present` /
+//! `transition` read the live widget state for their overlay layers). None
+//! of the fields is part of the crate's public API.
+
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use jian_core::action::services::Router;
+use jian_core::layout::measure::MeasureBackend;
+use jian_core::Runtime;
+use jian_ops_schema::compat::{load_str_with, LoadOptions};
+use op_editor_ui::layout_scene::LayoutScene;
+use op_editor_ui::Rect;
+
+use crate::app_mode::AppMode;
+use crate::binding_overlay::BindingOverlay;
+use crate::binding_sites::{collect_binding_sites, BindingSite};
+use crate::error::PreviewEnterError;
+use crate::scene_helpers::format_warning;
+use crate::transition::ScreenTransition;
+
+/// One page-root's mapping between the design scene's coordinate space
+/// (root offset baked in) and the jian runtime's root-relative
+/// hit-test space. Used to translate a scene-space tap back into the
+/// space `Runtime::dispatch_pointer` expects.
+///
+/// Fields are `pub(crate)` so the sibling `app_mode` module's
+/// `solve_roots` (which constructs these) can reach them.
+pub(crate) struct RootFrame {
+    /// The root's bounds in SCENE space (authored origin + size).
+    pub(crate) scene_rect: Rect,
+    /// The root's authored `(base.x, base.y)` — the delta between scene
+    /// space and the runtime's root-relative space.
+    pub(crate) offset: (f32, f32),
+}
+
+#[derive(Clone)]
+pub(crate) struct ResetSeed {
+    pub(crate) document: jian_ops_schema::PenDocument,
+    pub(crate) canvas_size: (f32, f32),
+    pub(crate) active_theme: std::collections::BTreeMap<String, String>,
+    pub(crate) active_page_index: usize,
+    pub(crate) preserve_authored_geometry: bool,
+    pub(crate) presenting: bool,
+    pub(crate) measure: Rc<dyn MeasureBackend>,
+    pub(crate) host_capabilities: op_preview_contracts::PreviewHostCapabilities,
+}
+
+/// A live preview runtime built from a snapshot of the editor document.
+///
+/// Constructed by [`PreviewSession::enter`] from a JSON serialization of
+/// the document; dropping it tears down the runtime. The session is
+/// `!Send` (it owns an `Rc`-bound `Runtime`), so it is held only on the
+/// UI-thread-local host.
+pub struct PreviewSession {
+    /// The live jian runtime: widget state, focus chain, gestures. Read by
+    /// the input/paint siblings to drive live values + hit-tests.
+    pub(crate) runtime: Runtime,
+    /// Text-measurement backend the runtime layout solves against.
+    /// Injected by the host rather than hard-wired to
+    /// `jian_skia::SkiaMeasure`, so a wasm host can supply a
+    /// CanvasKit-backed implementation. Retained on the session because
+    /// an app-mode screen switch re-solves layout (`app_mode::reconcile`
+    /// → `solve_roots`) long after `enter` returned.
+    pub(crate) measure: Rc<dyn MeasureBackend>,
+    /// The available size the runtime's PRIMARY (first) root was laid
+    /// out against (the root's authored size). Read only by the
+    /// layout-parity test; retained as the record of what the runtime
+    /// solved against.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) available: (f32, f32),
+    /// R8: the one deferred discrete input held while a transition
+    /// plays, replaced (never queued) when a newer one arrives.
+    pub(crate) deferred_discrete_input: Option<crate::transition::DeferredDiscreteInput>,
+    /// R8: the transition-local press tracker — `Some` only between a
+    /// `Down` and its `Up` while a transition plays.
+    pub(crate) transition_tap: Option<crate::transition::TransitionTapTracker>,
+    /// R8: the activation the canonical dispatch path is currently
+    /// carrying. Set for the duration of one `dispatch_input` so a
+    /// deferred input can capture the activation the host certified for
+    /// it; `None` on the legacy wrappers, which carry no activation.
+    pub(crate) pending_activation: Option<op_preview_contracts::UserActivationId>,
+    /// R8: advances on every route switch and document replacement, so a
+    /// deferred input can prove the screen it targeted is still on screen
+    /// before it replays.
+    pub(crate) route_generation: u64,
+    /// Per-root scene↔runtime coordinate mapping for tap translation.
+    /// `pub(crate)` so `app_mode`'s
+    /// `current_screen_scene_rect` can read the first frame's scene rect.
+    pub(crate) root_frames: Vec<RootFrame>,
+    /// The design `LayoutScene` preview paints: paint tree from the
+    /// prepared + PROMOTED document (so a generated/legacy `role=input`
+    /// field renders as an interactive `text_input` widget, not a
+    /// frame), GEOMETRY from the unpromoted `layout_doc` laid out
+    /// exactly as the design canvas lays it out — so node positions
+    /// match design mode by construction. Live widget values are
+    /// overlaid onto a clone of this each frame in `paint_scene`.
+    pub(crate) scene: LayoutScene,
+    /// The prepared (ref/token-resolved, page-projected / screen-
+    /// normalized) but UNPROMOTED document — the geometry source the
+    /// design canvas would lay out. Kept so app-mode screen switches
+    /// rebuild the scene against the same geometry.
+    pub(crate) layout_doc: jian_ops_schema::PenDocument,
+    /// Whether the editor document carries authored (Figma Preserve)
+    /// geometry: the design canvas skips the flex solver for these, so
+    /// preview must too or every element shifts.
+    pub(crate) preserve_authored_geometry: bool,
+    /// Non-fatal load warnings (e.g. legacy role promotions), formatted
+    /// for display in the editor's `preview.warnings`.
+    pub(crate) warnings: Vec<String>,
+    /// Compiled non-`bind:value` bindings from the promoted document,
+    /// re-evaluated against the live state graph each overlay pass so
+    /// authored actions and host `set_state` writes become visible.
+    pub(crate) binding_sites: Vec<BindingSite>,
+    /// R6 typed overlay values plus read-only scroll/pointer namespaces.
+    pub(crate) binding_overlay: BindingOverlay,
+    /// R9 bounded trace, provenance, and debugger clock state.
+    pub(crate) debug: crate::debug_trace::PreviewDebugState,
+    /// Immutable source/options used to rebuild the entire session on reset.
+    pub(crate) reset_seed: ResetSeed,
+    /// R7 one bounded timeline plus its injected AnimationSink queue.
+    pub(crate) animation: crate::animation::PreviewAnimationState,
+    /// APP MODE state (routed multi-screen doc), or `None` for the
+    /// classic single-page workbench preview. `pub(crate)`
+    /// so `app_mode`'s `is_app_mode` can read it. See [`AppMode`].
+    pub(crate) app: Option<AppMode>,
+    /// The (scene rect, runtime rect) pair each ACTIVE pointer gesture
+    /// anchored on at its `Down` — that pointer's held `Move`s and `Up`
+    /// map through it (per-pointer capture), so a drag that leaves the
+    /// node's scene bounds doesn't remap through a neighbour, and two
+    /// concurrent pointers keep independent anchors (R4 multi-pointer
+    /// PreviewInput). Keyed by pointer id; absent between gestures or
+    /// when the `Down` hit no mapped node.
+    pub(crate) gesture_mappings: HashMap<u32, (Rect, Rect)>,
+    /// Track C-3: the in-flight screen-transition animation, set by
+    /// `app_mode::reconcile` on every screen switch. `None` when idle
+    /// (including the entire classic workbench-mode session, which never
+    /// switches screens).
+    pub(crate) transition: Option<ScreenTransition>,
+    /// The session's current clock: the greatest value pushed via
+    /// [`Self::set_now_ms`] or (in the explicit-timestamp pointer path)
+    /// an event's own `t_ms` — `transition`'s idle input dispatch guard
+    /// (`input.rs`) needs "now" but the dispatch methods don't take a
+    /// clock param of their own. Monotonic: never moves backward, exactly
+    /// like the jian runtime clock it mirrors.
+    pub(crate) last_now_ms: u64,
+    /// R4 interaction state: per-pointer pressed nodes + the hovered
+    /// node, tracked by the dispatch paths in `input.rs` and exposed to
+    /// paint via [`Self::interaction`].
+    pub(crate) interaction: crate::interaction_state::InteractionState,
+    /// The host-declared capability set (R4 `enter_with_capabilities`).
+    /// Fail-closed: the legacy `enter` wrapper supplies an explicit
+    /// all-false set, so an undeclared host capability can never read as
+    /// consent. The R3 effect queue reads this before enqueueing.
+    pub(crate) host_capabilities: op_preview_contracts::PreviewHostCapabilities,
+    /// The R3 effect queue: the bounded FIFO the engine's effect sink
+    /// enqueues into and the host drains from.
+    pub(crate) effects: crate::effects::PreviewEffectQueue,
+    /// R5 Preview-only visibility overrides, scroll requests, and their
+    /// accumulated redraw/hit-test invalidation work.
+    pub(crate) ui_actions: crate::ui_actions::PreviewUiActions,
+}
+
+impl PreviewSession {
+    /// Build a preview runtime from the document's JSON. `promote=true`
+    /// turns legacy role-frames into first-class widget nodes in-memory
+    /// (the source doc is untouched). `canvas_size` is the editor canvas
+    /// region; it is retained for API compatibility but does NOT drive
+    /// the runtime layout (layout is per-root from the document).
+    ///
+    /// ## Layout
+    ///
+    /// The runtime layout is solved per page-root against that root's
+    /// OWN authored size (`root_available_size`) with the `measure`
+    /// backend the caller supplies — which MUST be the same backend the
+    /// host's design canvas measures with (`jian_skia::SkiaMeasure` on
+    /// the native host, a CanvasKit-backed one on the web host), or taps
+    /// stop landing where widgets paint. The runtime layout now serves
+    /// only hit-testing (the
+    /// visible scene is painted by the host through the design
+    /// `LayoutScene`); keeping it bit-identical to the design canvas
+    /// keeps taps landing where widgets paint.
+    ///
+    /// ## Active theme
+    ///
+    /// `$token` refs are resolved against the editor's currently-active
+    /// theme (`active_theme`) before the runtime is built, so the live
+    /// state graph (e.g. seeded input values) reflects the same theme
+    /// the design canvas paints.
+    ///
+    /// ## App mode
+    ///
+    /// If the document carries at least one explicitly `screen`-marked
+    /// top-level frame (`jian_ops_schema::screen_projection::
+    /// project_screens`), `enter` projects it into a synthetic
+    /// multi-page document (entry screen at `pages[0]`) and installs a
+    /// [`jian_core::screens::ScreenRouter`] on `runtime.nav`; only the
+    /// entry screen is mounted. Docs with no screen markers keep today's
+    /// exact active-page workbench behavior, unchanged.
+    ///
+    /// ## Presenting a deck
+    ///
+    /// `presenting` says the host is about to run this document as a
+    /// slideshow (`op_editor_core::preview_slideshow`). A deck's boards are
+    /// slides, not screens: routing them would present them in route order
+    /// instead of the authored order, and would leave every board but the
+    /// mounted one out of the scene the presentation has to draw. So both
+    /// the screen projection and its auto-wire fallback are skipped, and
+    /// the session keeps the plain workbench scene with every board in it.
+    ///
+    /// Returns [`PreviewEnterError`] if serialization, parsing, runtime
+    /// build, or layout fails — the host then declines to enter preview and
+    /// surfaces the rendered message.
+    pub fn enter(
+        doc: &jian_ops_schema::PenDocument,
+        canvas_size: (f32, f32),
+        active_theme: &std::collections::BTreeMap<String, String>,
+        active_page_index: usize,
+        preserve_authored_geometry: bool,
+        presenting: bool,
+        measure: Rc<dyn MeasureBackend>,
+    ) -> Result<Self, PreviewEnterError> {
+        // R4: the legacy wrapper is fail-closed — no declared host
+        // capabilities means effects are denied, never silently allowed.
+        Self::enter_with_capabilities(
+            doc,
+            canvas_size,
+            active_theme,
+            active_page_index,
+            preserve_authored_geometry,
+            presenting,
+            measure,
+            op_preview_contracts::PreviewHostCapabilities::none(),
+        )
+    }
+
+    /// [`Self::enter`] with the host's capability declaration (R4 Step
+    /// 4). New hosts migrate onto this entry so the session knows which
+    /// effects the platform can actually perform; the parameter set is
+    /// otherwise identical.
+    #[allow(clippy::too_many_arguments)]
+    pub fn enter_with_capabilities(
+        doc: &jian_ops_schema::PenDocument,
+        canvas_size: (f32, f32),
+        active_theme: &std::collections::BTreeMap<String, String>,
+        active_page_index: usize,
+        preserve_authored_geometry: bool,
+        presenting: bool,
+        measure: Rc<dyn MeasureBackend>,
+        host_capabilities: op_preview_contracts::PreviewHostCapabilities,
+    ) -> Result<Self, PreviewEnterError> {
+        let reset_seed = ResetSeed {
+            document: doc.clone(),
+            canvas_size,
+            active_theme: active_theme.clone(),
+            active_page_index,
+            preserve_authored_geometry,
+            presenting,
+            measure: measure.clone(),
+            host_capabilities,
+        };
+        let debug = crate::debug_trace::PreviewDebugState::default();
+        let _ = canvas_size; // layout is root-derived, not canvas-derived.
+
+        // Track C-1: if the document has no authored `screen` marker at
+        // all, auto-wire a preview-only clone with Track A's deterministic
+        // screen/nav pass before anything else runs, so a hand-drawn or
+        // pre-Track-A multi-screen document still enters App Mode. `doc`
+        // is a local binding for the rest of `enter` — it either points at
+        // the caller's document (untouched) or at `auto_wired` (owned
+        // here); either way the CALLER's document is never mutated. See
+        // `auto_wire`'s module doc for the "any marker → skip entirely"
+        // rationale.
+        #[cfg(feature = "gl-host")]
+        let auto_wired = (!presenting)
+            .then(|| crate::auto_wire::auto_wire_for_preview(doc, active_page_index))
+            .flatten();
+        // Mobile: the orchestrator-backed pass is not linked; authored
+        // `screen` markers still drive App Mode.
+        #[cfg(not(feature = "gl-host"))]
+        let auto_wired: Option<jian_ops_schema::PenDocument> = None;
+        let doc: &jian_ops_schema::PenDocument = auto_wired.as_ref().unwrap_or(doc);
+
+        // Prepare the document EXACTLY as the design canvas does before
+        // it lays out + paints (`op_pen_loader::layout_scene::
+        // editor_state_to_layout_scene`): expand component (`RefNode`)
+        // instances FIRST so instance subtrees also resolve, then land
+        // every `$token` against the editor's ACTIVE theme. Both passes
+        // early-out via cheap detector walks, so a ref-free / token-free
+        // document pays no clone. Keeping this identical to the design
+        // canvas means the runtime tree (ids, seeded widget values) and
+        // the painted scene agree node-for-node.
+        let mut prepared = std::borrow::Cow::Borrowed(doc);
+        if op_editor_core::ref_resolve::document_has_refs(&prepared) {
+            prepared = std::borrow::Cow::Owned(
+                op_editor_core::ref_resolve::resolve_refs_for_canvas(&prepared),
+            );
+        }
+        if op_editor_core::variables_resolve::document_has_tokens(&prepared) {
+            prepared = std::borrow::Cow::Owned(
+                op_editor_core::variables_resolve::resolve_document_for_canvas(
+                    &prepared,
+                    active_theme,
+                ),
+            );
+        }
+
+        // Screen projection: marked multi-screen docs enter APP MODE
+        // (entry screen mounted, ScreenRouter installed); unmarked docs
+        // fall through to the classic active-page workbench path.
+        let mut projection_warnings: Vec<String> = Vec::new();
+        let mut app_projected = false;
+        // `project_screens` now always returns its warnings alongside the
+        // projection outcome (previously nested inside the `Some`, so a
+        // failed projection silently dropped them) — the projected doc
+        // still carries a `ScreenVariantTable` for responsive breakpoint
+        // variants, which this preview path doesn't consume yet (Phase 3
+        // scope: breakpoint-aware preview UI).
+        if !presenting {
+            let (projected, ws) = jian_ops_schema::screen_projection::project_screens(&prepared);
+            projection_warnings.extend(ws.iter().map(|w| format!("preview: {w}")));
+            if let Some((normalized, _variants)) = projected {
+                prepared = std::borrow::Cow::Owned(normalized);
+                app_projected = true;
+            }
+        }
+
+        // Project the editor's ACTIVE page so the runtime's roots match
+        // the page the design scene paints. jian's loader always takes
+        // `pages[0]` as roots (vendor/jian `document/loader.rs`), so a
+        // multi-page doc previewed on page N>0 would otherwise hit-test
+        // / seed widget state against page 0 while the scene paints page
+        // N. Slicing the active page's children to the top level (and
+        // clearing `pages`) makes the loader use them. This fixes
+        // ENTERING preview on any page; switching pages WHILE in preview
+        // needs the host to re-enter (the runtime is built once here).
+        // Skipped in APP MODE: the normalized doc's `pages[0]` is already
+        // the entry screen and must keep ALL its synthetic pages (Task 9
+        // switches among them via the router).
+        if !app_projected
+            && prepared
+                .pages
+                .as_ref()
+                .is_some_and(|pages| !pages.is_empty())
+        {
+            let mut owned = prepared.into_owned();
+            if let Some(pages) = owned.pages.take() {
+                let idx = active_page_index.min(pages.len().saturating_sub(1));
+                if let Some(page) = pages.into_iter().nth(idx) {
+                    owned.children = page.children;
+                }
+            }
+            prepared = std::borrow::Cow::Owned(owned);
+        }
+
+        // Own the prepared (unpromoted) tree: it is BOTH the runtime's
+        // serialization source and the preview scene's geometry source
+        // (the design canvas lays out this exact tree, so taking rects
+        // from it keeps preview positions design-identical).
+        let layout_doc = prepared.into_owned();
+        let src = serde_json::to_string(&layout_doc)
+            .map_err(|e| PreviewEnterError::Serialize(e.to_string()))?;
+
+        let loaded = load_str_with(
+            &src,
+            LoadOptions {
+                promote_legacy_widgets: true,
+            },
+        )
+        .map_err(|e| PreviewEnterError::Parse(e.to_string()))?;
+
+        let mut warnings = loaded
+            .warnings
+            .iter()
+            .filter_map(format_warning)
+            .collect::<Vec<_>>();
+
+        // Clone the prepared + promoted document BEFORE the runtime
+        // consumes it: this is the exact tree (refs/tokens resolved,
+        // active page projected, legacy role-frames promoted) we render
+        // the design scene from, so the painted scene and the runtime's
+        // hit-test/state graph agree node-for-node.
+        let promoted_doc = loaded.value.clone();
+
+        // APP MODE: derive the route table + router from the normalized
+        // doc. In workbench mode `app` stays `None`.
+        let mut app = None;
+        if app_projected {
+            let table = jian_core::screens::ScreenTable::from_document(promoted_doc.clone())
+                .ok_or(PreviewEnterError::LostRoutes)?;
+            let router = std::rc::Rc::new(jian_core::screens::ScreenRouter::new(
+                table.entry_path(),
+                table.paths(),
+            ));
+            let mounted_stack = router.current().stack;
+            app = Some(AppMode {
+                current_path: table.entry_path().to_owned(),
+                mounted_stack,
+                page_idx: 0,
+                theme: active_theme.clone(),
+                promoted_doc: promoted_doc.clone(),
+                table,
+                router,
+            });
+        }
+
+        // Compile every non-`bind:value` binding on the promoted tree so
+        // Task C2's overlay pass can re-evaluate them against the live
+        // state graph each frame. Compile failures surface as warnings,
+        // never as `enter` errors — a bad binding just doesn't animate.
+        // APP MODE compiles bindings off the ENTRY page's children (the
+        // mounted screen), not the top-level `children` — the normalized
+        // doc keeps everything under `pages`.
+        let mut binding_sites = Vec::new();
+        let site_children: &[jian_ops_schema::node::PenNode] = if app_projected {
+            &promoted_doc.pages.as_ref().unwrap()[0].children
+        } else {
+            &promoted_doc.children
+        };
+        collect_binding_sites(site_children, &mut binding_sites, &mut warnings);
+        let binding_overlay = BindingOverlay::from_document(&promoted_doc);
+        warnings.extend(projection_warnings);
+
+        let mut runtime = Runtime::new_from_document(loaded.value)
+            .map_err(|e| PreviewEnterError::BuildRuntime(e.to_string()))?;
+        runtime.set_action_observer(Rc::new(debug.trace.clone()));
+        binding_overlay.set_runtime_document(
+            runtime
+                .document
+                .as_ref()
+                .map(|document| document.schema.clone()),
+        );
+        if let Some(a) = &app {
+            runtime.nav = a.router.clone();
+        }
+
+        let (root_frames, primary_available) =
+            crate::app_mode::solve_roots(&mut runtime, &measure)?;
+
+        // Build the preview scene: paint tree from the promoted
+        // document, geometry from the unpromoted `layout_doc` — the
+        // design canvas's exact layout (or, for Figma Preserve imports,
+        // its authored rects), so preview positions match design mode
+        // by construction. The active page was projected to the top
+        // level in `enter`, so it is page index 0. APP MODE: page 0 is
+        // the entry screen (the `project_screens` convention) either way.
+        let scene = op_pen_loader::pen_document_to_layout_scene_for_preview(
+            &promoted_doc,
+            &layout_doc,
+            preserve_authored_geometry,
+            active_theme,
+            0,
+        );
+
+        // R3: install the effect queue adapter (mapped through the
+        // host's declared capabilities, fail-closed) and the fixed
+        // Preview action allowlist before any input can spawn actions.
+        // Action reporting is on so denied actions surface as
+        // structured diagnostics instead of vanishing.
+        let effects = crate::effects::PreviewEffectQueue::new();
+        effects.set_trace(debug.trace.clone());
+        crate::effects::install_on_runtime(&mut runtime, &effects, &host_capabilities);
+        let ui_actions = crate::ui_actions::PreviewUiActions::default();
+        runtime.set_ui_mutation_sink(Rc::new(ui_actions.clone()));
+        let animation = crate::animation::PreviewAnimationState::default();
+        animation.set_trace(debug.trace.clone());
+        runtime.set_animation_sink(Rc::new(animation.clone()));
+        runtime.enable_action_reporting();
+
+        Ok(Self {
+            runtime,
+            measure,
+            available: primary_available,
+            deferred_discrete_input: None,
+            transition_tap: None,
+            route_generation: 0,
+            pending_activation: None,
+            root_frames,
+            scene,
+            layout_doc,
+            preserve_authored_geometry,
+            warnings,
+            binding_sites,
+            binding_overlay,
+            debug,
+            reset_seed,
+            animation,
+            app,
+            gesture_mappings: HashMap::new(),
+            transition: None,
+            last_now_ms: 0,
+            interaction: crate::interaction_state::InteractionState::default(),
+            host_capabilities,
+            effects,
+            ui_actions,
+        })
+    }
+
+    /// The formatted load warnings collected on `enter` (for the
+    /// editor's `preview.warnings` diagnostics surface).
+    pub fn warnings(&self) -> &[String] {
+        &self.warnings
+    }
+
+    /// Push the host clock so the runtime can drive caret blink etc.
+    /// Monotonic like the runtime's own clock (`Runtime::set_now_ms`
+    /// already refuses to move backward): a later push never regresses
+    /// the session clock, so an out-of-order host clock cannot re-arm a
+    /// finished screen transition's input gate.
+    pub fn set_now_ms(&mut self, now_ms: u64) {
+        self.debug.note_host_time(now_ms);
+        if self.debug.is_paused() {
+            return;
+        }
+        let now_ms = self.debug.logical_time(now_ms);
+        self.set_logical_now_ms(now_ms);
+    }
+
+    pub(crate) fn set_logical_now_ms(&mut self, now_ms: u64) {
+        let was_transitioning = self.transition_active();
+        self.runtime.set_now_ms(now_ms);
+        self.last_now_ms = self.last_now_ms.max(now_ms);
+        let animation_now = self.last_now_ms;
+        let _ = self.tick_animation(animation_now);
+        // R8: a transition ends by the clock, not by an event, so the
+        // clock push IS the completion edge. Replay here — after the
+        // arriving screen's layout and hit mapping have settled — rather
+        // than on the next input, which would leave the tap the user
+        // already made waiting on another one.
+        if was_transitioning && !self.transition_active() {
+            self.replay_deferred_input();
+        }
+    }
+
+    /// The R4 interaction state tracked by the dispatch paths: which
+    /// nodes each pointer is pressing and which node hovers. Preview
+    /// paint derives the approved touch fallback (and mouse-pressed
+    /// widget states) from this instead of the host re-deriving it from
+    /// raw pointer traffic.
+    pub fn interaction(&self) -> &crate::interaction_state::InteractionState {
+        &self.interaction
+    }
+
+    /// Resolve a node's authored visibility through the R5 Preview-only
+    /// action overrides. R6 consumes this while building the unified overlay.
+    pub fn action_visibility_for(&self, node_id: &str, authored: bool) -> bool {
+        self.ui_actions.visibility_for(node_id, authored)
+    }
+
+    /// Drain ordered R5 scroll requests for the host/R6 overlay.
+    pub fn drain_action_scroll_requests(
+        &self,
+    ) -> Vec<(String, jian_core::action::services::ScrollAlignment)> {
+        self.ui_actions.drain_scroll_requests()
+    }
+
+    /// Take and clear the redraw/hit-test work accumulated by R5 actions.
+    pub fn take_ui_action_work(&self) -> jian_core::action::services::UiMutationWork {
+        self.ui_actions.take_work()
+    }
+
+    /// The host-declared capability set this session was entered with
+    /// (R4 fail-closed: the legacy `enter` wrapper declares none).
+    pub fn host_capabilities(&self) -> &op_preview_contracts::PreviewHostCapabilities {
+        &self.host_capabilities
+    }
+
+    /// The R3 effect queue: drain every queued effect in FIFO order,
+    /// perform them host-side, then report each outcome back through
+    /// [`Self::complete_effect`]. Denied actions appear in the queue's
+    /// diagnostics, never as effects.
+    pub fn drain_effects(&self) -> Vec<op_preview_contracts::PreviewEffect> {
+        if self.debug.is_paused() {
+            Vec::new()
+        } else {
+            self.effects.drain()
+        }
+    }
+
+    /// Complete one effect EXACTLY ONCE (`false` on a double
+    /// completion — a host bug, diagnosed on the queue).
+    pub fn complete_effect(
+        &self,
+        id: u64,
+        result: op_preview_contracts::PreviewEffectResult,
+    ) -> bool {
+        let traced = result.clone();
+        let completed = self.effects.complete(id, result).is_ok();
+        if completed {
+            self.effects.trace_result(id, &traced, self.last_now_ms);
+        }
+        completed
+    }
+
+    /// The queue's structured rejection diagnostics (bounded).
+    pub fn effect_diagnostics(&self) -> Vec<String> {
+        self.effects.diagnostics()
+    }
+
+    /// Drain the action-level diagnostics (policy rejections, chain
+    /// errors, chain warnings) collected since the last call — the
+    /// denied-action surface "denied actions appear in diagnostics, not
+    /// effects" is built on.
+    pub fn take_action_diagnostics(&mut self) -> Vec<String> {
+        let mut lines = Vec::new();
+        for outcome in self.runtime.take_action_outcomes() {
+            if let Err(error) = outcome.outcome.result {
+                lines.push(error.to_string());
+            }
+            for warning in outcome.outcome.warnings {
+                lines.push(warning.message);
+            }
+        }
+        lines
+    }
+
+    /// Resize hook for the host's `Resized` handler. Layout is derived
+    /// per-root from the document, independent of the editor canvas
+    /// region, so this is a no-op; the parameter is kept for API
+    /// compatibility with the host call site.
+    pub fn resize(&mut self, canvas_size: (f32, f32)) {
+        let _ = canvas_size;
+    }
+
+    /// Test-only read access to the live runtime so the crate's own
+    /// tests can assert injected text reached the widget state graph.
+    #[cfg(all(test, not(target_os = "windows")))]
+    pub(crate) fn runtime(&self) -> &Runtime {
+        &self.runtime
+    }
+
+    /// Test-only mutable access (e.g. `focused_editable_snapshot` for
+    /// the R4 IME trace assertions). Same `!Send` caveat as `runtime`.
+    #[cfg(all(test, not(target_os = "windows")))]
+    pub(crate) fn runtime_mut(&mut self) -> &mut Runtime {
+        &mut self.runtime
+    }
+
+    /// Narrow test-only snapshot of one `$app` state value, CLONED out
+    /// of the runtime. `Runtime.state` is interior-mutable, so it must
+    /// never be handed out in production — cross-crate tests read this
+    /// cloned seam instead (op-host-native's test builds enable the
+    /// `testing` feature; see its Cargo.toml dev-dependency).
+    #[cfg(any(all(test, not(target_os = "windows")), feature = "testing"))]
+    pub fn app_state_value_for_test(&self, key: &str) -> Option<jian_core::value::RuntimeValue> {
+        self.runtime.state.app_get(key)
+    }
+
+    /// Narrow test-only clock readout: the session's current monotonic
+    /// time (`last_now_ms`). Cross-crate tests (op-host-native's
+    /// timestamp regression suite) assert the global clock stays where
+    /// the frame pump put it even when pointer events carry out-of-order
+    /// factual timestamps.
+    #[cfg(any(all(test, not(target_os = "windows")), feature = "testing"))]
+    pub fn now_ms_for_test(&self) -> u64 {
+        self.last_now_ms
+    }
+
+    /// Test-only: the session's own scene with live runtime widget
+    /// values overlaid — what `paint_scene` walks — so render tests can
+    /// assert widget values without a backend.
+    #[cfg(all(test, not(target_os = "windows")))]
+    pub(crate) fn preview_scene_for_test(&self) -> LayoutScene {
+        self.overlay_runtime_state(&self.scene)
+    }
+
+    /// Test-only: the absolute layout rect `(x, y, w, h)` the runtime
+    /// resolved for the node with schema `id`, or `None` if unknown.
+    /// In the runtime's root-relative space (no scene offset).
+    #[cfg(all(test, not(target_os = "windows")))]
+    pub(crate) fn node_rect(&self, id: &str) -> Option<(f32, f32, f32, f32)> {
+        let r = self.runtime_rect(id)?;
+        Some((r.origin.x, r.origin.y, r.size.x, r.size.y))
+    }
+
+    /// Test-only: the available size the runtime's primary root was laid
+    /// out against (the root's authored size).
+    #[cfg(all(test, not(target_os = "windows")))]
+    pub(crate) fn available(&self) -> (f32, f32) {
+        self.available
+    }
+
+    /// Test-only: number of compiled binding sites.
+    #[cfg(all(test, not(target_os = "windows")))]
+    pub(crate) fn binding_sites_len_for_test(&self) -> usize {
+        self.binding_sites.len()
+    }
+
+    /// Test-only: number of currently-mounted page-roots (1 in APP MODE
+    /// — the entry screen only; N for an unmarked doc's top-level
+    /// frames).
+    #[cfg(all(test, not(target_os = "windows")))]
+    pub(crate) fn root_frames_len_for_test(&self) -> usize {
+        self.root_frames.len()
+    }
+
+    /// Test-only: the current text value of the text-input-family
+    /// widget with schema `id`, forcing the same lazy
+    /// `WidgetStateStore::get_or_init` seed a live interaction would
+    /// (mirrors `seed_focused_widget_state`'s borrow pattern) — so a
+    /// bound input re-mounted after a screen switch reads back its
+    /// persisted `$state.*` value even without an intervening focus
+    /// call. Empty string for any other widget kind or an unknown id.
+    #[cfg(all(test, not(target_os = "windows")))]
+    pub(crate) fn widget_text_for_test(&mut self, id: &str) -> String {
+        let schema = self.runtime.document.as_ref().and_then(|d| {
+            let key = d.tree.by_id.get(id).copied()?;
+            d.tree.nodes.get(key).map(|n| n.schema.clone())
+        });
+        let Some(schema) = schema else {
+            return String::new();
+        };
+        match self
+            .runtime
+            .widget_states
+            .get_or_init(&schema, &self.runtime.state)
+        {
+            Some(jian_core::widget_state::WidgetState::TextInput(st)) => st.text().to_string(),
+            _ => String::new(),
+        }
+    }
+}
+
+/// The measurement backend preview tests solve layout against — the same
+/// skia backend the native host injects, so test geometry matches
+/// production. Kept in one place so the 45 call sites don't each spell
+/// out the construction.
+#[cfg(all(test, not(target_os = "windows")))]
+pub(crate) fn test_measure() -> Rc<dyn MeasureBackend> {
+    Rc::new(jian_skia::SkiaMeasure::new())
+}
+
+#[cfg(all(test, not(target_os = "windows")))]
+pub(crate) mod font_registry_test_support {
+    use std::sync::{LazyLock, Mutex, MutexGuard};
+
+    static LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    pub(crate) fn lock() -> MutexGuard<'static, ()> {
+        LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}

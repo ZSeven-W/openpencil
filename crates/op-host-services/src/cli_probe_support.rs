@@ -7,7 +7,7 @@
 
 use std::io::Read;
 use std::path::Path;
-use std::process::{Command, Output, Stdio};
+use std::process::{Output, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -48,22 +48,45 @@ pub(crate) fn bounded_cli_output(
     args: &[&str],
     timeout: Duration,
 ) -> BoundedProbe {
-    let Some(env) = chat_subprocess_safety::child_env(Some(cli)) else {
-        return BoundedProbe::Failed;
+    let env = match cli {
+        CliName::Codex => crate::chat_subprocess_quirks::codex_child_env(),
+        _ => {
+            let Some(env) = chat_subprocess_safety::child_env(Some(cli)) else {
+                return BoundedProbe::Failed;
+            };
+            env
+        }
     };
-    let mut command = Command::new(exe);
+    let mut command = crate::chat_spawn::build_blocking_command(exe, args);
     command
-        .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .env_clear()
-        .envs(env);
+        .envs(env)
+        // `env_clear` removes the PATH installed by the shared command
+        // builder. Restore the binary-aware value last so an npm wrapper's
+        // `#!/usr/bin/env node` uses the Node beside the resolved CLI.
+        .env("PATH", crate::chat_spawn::runtime_path_for_binary(exe));
+    // The shared tree cleanup can cover descendants only when the child leads
+    // its own Unix process group. Without this, killing an npm/shell wrapper
+    // leaves its grandchild holding the capture pipes open past the deadline.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
     crate::chat_spawn::hide_console_window(&mut command);
     let Ok(mut child) = command.spawn() else {
         return BoundedProbe::Failed;
     };
+    // Capture the group target before `try_wait` can reap the leader. A CLI
+    // wrapper is allowed to exit after forking a helper that still owns our
+    // pipes; after the reap, reconstructing the process group from the pid is
+    // no longer reliable.
+    let process_tree = op_process_io::ProcessTree::from_child(&child).ok();
     let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+        let _ = op_process_io::terminate_process_tree(&mut child, Duration::ZERO);
         return BoundedProbe::Failed;
     };
     let stdout_reader = PipeCapture::spawn(stdout);
@@ -72,22 +95,33 @@ pub(crate) fn bounded_cli_output(
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
+                // A successful leader exit does not imply EOF: an inherited
+                // descriptor can remain open in a descendant. Best-effort
+                // tree cleanup closes the ordinary wrapper/helper case, and
+                // the bounded drain below covers detached descendants.
+                if let Some(tree) = process_tree {
+                    let _ = tree.kill_after_leader_exit();
+                }
+                let (stdout, stderr) = finish_pipe_captures(stdout_reader, stderr_reader, deadline);
                 return BoundedProbe::Completed(Output {
                     status,
-                    stdout: stdout_reader.finish(),
-                    stderr: stderr_reader.finish(),
+                    stdout,
+                    stderr,
                 });
             }
             Ok(None) if Instant::now() < deadline => {
-                std::thread::sleep(Duration::from_millis(50));
+                std::thread::sleep(
+                    Duration::from_millis(50)
+                        .min(deadline.saturating_duration_since(Instant::now())),
+                );
             }
             Ok(None) | Err(_) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return BoundedProbe::TimedOut {
-                    stdout: stdout_reader.finish_bounded(CAPTURE_GRACE),
-                    stderr: stderr_reader.finish_bounded(CAPTURE_GRACE),
-                };
+                // The shared helper reaps after any accepted signal but
+                // returns immediately if neither the tree nor leader could be
+                // signalled, avoiding an unbounded wait past this deadline.
+                let _ = op_process_io::terminate_process_tree(&mut child, Duration::ZERO);
+                let (stdout, stderr) = finish_pipe_captures(stdout_reader, stderr_reader, deadline);
+                return BoundedProbe::TimedOut { stdout, stderr };
             }
         }
     }
@@ -98,12 +132,11 @@ pub(crate) fn bounded_cli_output(
 /// Reads past the retained cap so a verbose CLI cannot fill an OS pipe and
 /// deadlock the probe. The bytes live behind a mutex rather than inside the
 /// reader thread's return value so a timed-out probe can take what was
-/// captured WITHOUT joining: killing a shell wrapper does not kill the
-/// grandchild it spawned, and that grandchild keeps the pipe open — an
-/// unconditional join on the kill path would let the child, not the
-/// deadline, decide when the probe returns (measured: a 400 ms budget took
-/// 30 s). Shared with `chat_spawn`'s login-shell env probe, which needs
-/// the same guarantee against a blocking shell rc.
+/// captured WITHOUT joining. Process-tree cleanup normally closes inherited
+/// pipes, but a platform limitation or independently detached descendant must
+/// still never let an unconditional reader join override the probe deadline.
+/// Shared with `chat_spawn`'s login-shell env probe, which needs the same
+/// guarantee against a blocking shell rc.
 pub(crate) struct PipeCapture {
     retained: Arc<Mutex<Vec<u8>>>,
     reader: JoinHandle<()>,
@@ -135,24 +168,31 @@ impl PipeCapture {
         Self { retained, reader }
     }
 
-    /// Everything captured through EOF — the normal-exit path, where the
-    /// child has already been observed to exit.
-    pub(crate) fn finish(self) -> Vec<u8> {
-        let Self { retained, reader } = self;
-        let _ = reader.join();
-        take_retained(&retained)
-    }
-
-    /// Everything captured within `grace` — the kill path, where the pipe
-    /// may never reach EOF. The grace window lets a reader that is merely
-    /// a few scheduler ticks behind catch up before we take the bytes.
-    pub(crate) fn finish_bounded(self, grace: Duration) -> Vec<u8> {
-        let deadline = Instant::now() + grace;
+    /// Everything captured before an absolute deadline. This deliberately
+    /// never joins the reader: observing the leader exit does not prove that
+    /// every descendant closed its inherited descriptor.
+    pub(crate) fn finish_by(self, deadline: Instant) -> Vec<u8> {
         while !self.reader.is_finished() && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(10));
+            std::thread::sleep(
+                Duration::from_millis(10).min(deadline.saturating_duration_since(Instant::now())),
+            );
         }
         take_retained(&self.retained)
     }
+}
+
+/// Drain both pipes concurrently up to the smaller of the probe's remaining
+/// total budget and a short capture grace. Passing the same absolute deadline
+/// to both readers prevents two sequential waits from doubling the budget.
+pub(crate) fn finish_pipe_captures(
+    stdout: PipeCapture,
+    stderr: PipeCapture,
+    probe_deadline: Instant,
+) -> (Vec<u8>, Vec<u8>) {
+    let capture_deadline = probe_deadline.min(Instant::now() + CAPTURE_GRACE);
+    let stdout = stdout.finish_by(capture_deadline);
+    let stderr = stderr.finish_by(capture_deadline);
+    (stdout, stderr)
 }
 
 fn take_retained(retained: &Mutex<Vec<u8>>) -> Vec<u8> {
@@ -162,8 +202,9 @@ fn take_retained(retained: &Mutex<Vec<u8>>) -> Vec<u8> {
         .unwrap_or_default()
 }
 
-/// How long a killed probe waits for its reader threads to drain the
-/// bytes already in flight before giving up on them.
+/// Maximum share of the existing probe budget spent letting reader threads
+/// drain bytes already in flight. This never extends the probe's total
+/// deadline.
 pub(crate) const CAPTURE_GRACE: Duration = Duration::from_millis(200);
 
 /// Turn a timed-out probe's retained stdout/stderr into an actionable
@@ -246,13 +287,10 @@ mod tests {
     /// `PROBE_BUDGET_CAP` so the timeout branch is guaranteed even at full
     /// escalation, but finite so nothing can outlive the test run.
     ///
-    /// The hang is spelled `exec sleep N`, not `sleep N`, on purpose: a
-    /// forked `sleep` INHERITS the stdout/stderr pipes, so `child.kill()`
-    /// would not close them and `bounded_cli_output`'s reader-thread `join`
-    /// would block until the grandchild exited on its own — the probe would
-    /// return after N seconds instead of at its deadline. `exec` replaces the
-    /// shell with `sleep`, so the pid the probe kills IS the process holding
-    /// the pipes.
+    /// The hang is spelled `exec sleep N`, not `sleep N`, so these tests
+    /// isolate the deadline path. A separate regression below deliberately
+    /// leaves a forked descendant holding both capture pipes after its leader
+    /// exits.
     #[cfg(unix)]
     const FAKE_CLI_HANG_SECS: u32 = 30;
 
@@ -376,12 +414,10 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn bounded_cli_output_returns_at_its_deadline_when_the_pipe_never_reaches_eof() {
-        // Killing a shell does not kill the grandchild it spawned, and the
-        // grandchild keeps the inherited pipe open — so waiting for EOF on
-        // the kill path handed the deadline to the child (measured: a
-        // short budget returned after 30 s). Output captured before the kill
-        // must still survive. Escalate the budget when a loaded runner has
-        // not scheduled the shell's first printf yet.
+        // The shell and both descendants inherit the pipes. Tree cleanup
+        // should close them; bounded capture remains the final backstop if a
+        // platform cannot cover one descendant. Output captured before the
+        // kill must still survive.
         let script = "printf 'Authentication required\\n'; sleep 30 & sleep 30";
         let mut budget = PROBE_BUDGET;
         loop {
@@ -456,6 +492,35 @@ mod tests {
             }
             _ => panic!("expected Completed, not a timeout/failure path"),
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn completed_probe_does_not_wait_for_descendant_pipe_eof() {
+        // The shell exits successfully while its background child retains
+        // both inherited write ends. `try_wait` therefore observes a normal
+        // leader exit before either capture reader can see EOF. The probe must
+        // clean the captured process group and use a bounded drain, preserving
+        // the leader's output without waiting for the 30-second descendant.
+        let script = "printf 'ready\\n'; printf 'notice\\n' >&2; sleep 30 & exit 0";
+        let started = Instant::now();
+        let probe = bounded_cli_output(
+            CliName::GrokBuild,
+            Path::new("/bin/sh"),
+            &["-c", script],
+            PROBE_BUDGET_CAP,
+        );
+        let elapsed = started.elapsed();
+        let BoundedProbe::Completed(output) = probe else {
+            panic!("an exited leader must remain a completed probe");
+        };
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "ready");
+        assert_eq!(String::from_utf8_lossy(&output.stderr).trim(), "notice");
+        assert!(
+            elapsed < Duration::from_secs(10),
+            "pipe EOF from the descendant must not determine completion; took {elapsed:?}"
+        );
     }
 
     #[cfg(unix)]

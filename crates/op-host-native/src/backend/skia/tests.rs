@@ -7,6 +7,8 @@ use jian_core::layout::measure::{FontStyleKind, MeasureBackend, MeasureRequest, 
 
 #[path = "tests/image_cache.rs"]
 mod image_cache;
+#[path = "tests/shader.rs"]
+mod shader;
 #[path = "tests/text_shaping.rs"]
 mod text_shaping;
 #[path = "tests/vector_paint.rs"]
@@ -79,4 +81,36 @@ fn rect_translation_keeps_size() {
     assert!((jr.min_y() - 20.0).abs() < 1e-6);
     assert!((jr.size.width - 30.0).abs() < 1e-6);
     assert!((jr.size.height - 40.0).abs() < 1e-6);
+}
+
+#[test]
+fn system_font_resolver_accepts_enumerated_names_and_rejects_unknown_ones() {
+    let Some(installed) = enumerate_system_font_families().into_iter().next() else {
+        return;
+    };
+    let unknown = "OpenPencil Definitely Missing Font 4E8A1B27".to_string();
+    let candidates = vec![installed.clone(), unknown, "bad\0family".to_string()];
+
+    assert_eq!(
+        resolvable_system_font_families(&candidates),
+        vec![installed]
+    );
+}
+
+#[cfg(target_os = "windows")]
+#[test]
+fn directwrite_resolves_both_yahei_faces_when_collection_is_installed() {
+    let installed = enumerate_system_font_families();
+    if !installed.iter().any(|family| {
+        family.eq_ignore_ascii_case("Microsoft YaHei")
+            || family.eq_ignore_ascii_case("Microsoft YaHei UI")
+    }) {
+        return;
+    }
+    let candidates = vec![
+        "Microsoft YaHei".to_string(),
+        "Microsoft YaHei UI".to_string(),
+    ];
+
+    assert_eq!(resolvable_system_font_families(&candidates), candidates);
 }

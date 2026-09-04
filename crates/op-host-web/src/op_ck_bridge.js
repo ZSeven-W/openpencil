@@ -23,6 +23,23 @@ function copyBytes(u8) {
 
 let createWebImageCaches = null;
 
+const TEXT_SCALE_STEPS_PER_OCTAVE = 4;
+
+// Round UP to quarter-octave buckets (about 19% apart). This keeps cached
+// browser-text bitmaps at or above the requested resolution while allowing
+// adjacent continuous-zoom frames to reuse the same raster.
+export function opCkQuantizeTextRasterScale(scale) {
+  const finiteScale = Number.isFinite(scale) && scale > 1 ? scale : 1;
+  const bucket = Math.ceil(
+    Math.log2(finiteScale) * TEXT_SCALE_STEPS_PER_OCTAVE - 1e-9,
+  );
+  let quantized = 2 ** (bucket / TEXT_SCALE_STEPS_PER_OCTAVE);
+  if (quantized < finiteScale) {
+    quantized *= 2 ** (1 / TEXT_SCALE_STEPS_PER_OCTAVE);
+  }
+  return quantized;
+}
+
 export function setImageCacheFactory(factory) {
   createWebImageCaches = factory;
 }
@@ -87,10 +104,14 @@ export function opCkParseFontFamilyStack(family) {
 }
 
 // Resolve registered families in authored CSS order. For one candidate an
-// explicit browser import wins over the system face with the same name. A
-// generic family is already available through the browser canvas path, so it
-// terminates named-face lookup instead of skipping ahead in the stack.
-export function opCkResolveRegisteredTypeface(family, importedTypefaces, systemTypefacesByFamily) {
+// explicit browser import wins over the system face with the same name, and an
+// app-bundled design font is the fallback below both — the same imported >
+// system > bundled order the native resolver applies. A generic family is
+// already available through the browser canvas path, so it terminates
+// named-face lookup instead of skipping ahead in the stack.
+// `bundledTypefaces` is optional so a caller that predates the bundled registry
+// still resolves imported + system.
+export function opCkResolveRegisteredTypeface(family, importedTypefaces, systemTypefacesByFamily, bundledTypefaces) {
   for (const candidate of opCkParseFontFamilyStack(family)) {
     const familyKey = opCkNormalizeFontFamilyName(candidate);
     if (!familyKey) continue;
@@ -103,6 +124,10 @@ export function opCkResolveRegisteredTypeface(family, importedTypefaces, systemT
     if (system) {
       return { key: `system:${familyKey}`, familyKey, source: 'system', tf: system.tf };
     }
+    const bundled = bundledTypefaces && bundledTypefaces.get(familyKey);
+    if (bundled) {
+      return { key: `bundled:${familyKey}`, familyKey, source: 'bundled', tf: bundled.tf };
+    }
   }
   return null;
 }
@@ -111,6 +136,125 @@ const opCkClampUnit = (value, fallback = 0) => {
   const number = Number(value);
   return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : fallback;
 };
+
+// Cache successful and failed RuntimeEffect compilations by exact SkSL source.
+// The cache lives for one CanvasKit bridge session, so repainting never invokes
+// the SkSL compiler again for a source it has already seen.
+export function opCkCreateRuntimeEffectCache(CK) {
+  const entries = new Map();
+  return {
+    get(sksl) {
+      const source = String(sksl);
+      if (entries.has(source)) return entries.get(source);
+
+      let effect = null;
+      let entry = null;
+      try {
+        effect = CK.RuntimeEffect.Make(source, () => {});
+        if (effect) {
+          const reflected = new Map();
+          const uniformCount = Math.max(0, Math.trunc(Number(effect.getUniformCount()) || 0));
+          for (let index = 0; index < uniformCount; index++) {
+            reflected.set(effect.getUniformName(index), effect.getUniform(index));
+          }
+          entry = {
+            effect,
+            reflected,
+            floatCount: Math.max(0, Math.trunc(Number(effect.getUniformFloatCount()) || 0)),
+          };
+        }
+      } catch (_error) {
+        if (effect && effect.delete) effect.delete();
+        entry = null;
+      }
+      entries.set(source, entry);
+      return entry;
+    },
+  };
+}
+
+// Bind the caller's name/value slices against CanvasKit's reflected uniform
+// slots. Unknown names and arity mismatches are ignored like native Skia.
+export function opCkMakeRuntimeShader(entry, uniformNames, uniforms, uniformArities, localMatrix = null) {
+  if (!entry) return null;
+  try {
+    const data = new Float32Array(entry.floatCount);
+    let cursor = 0;
+    for (let index = 0; index < uniformNames.length; index++) {
+      const rawArity = Number(uniformArities[index]);
+      const arity = Number.isSafeInteger(rawArity) && rawArity >= 0 ? rawArity : 0;
+      const valuesStart = cursor;
+      cursor += arity;
+      const info = entry.reflected.get(String(uniformNames[index]));
+      const expected = info ? Number(info.columns) * Number(info.rows) : 0;
+      const slot = info ? Number(info.slot) : -1;
+      if (!info || info.isInteger || expected !== arity
+          || !Number.isSafeInteger(slot) || slot < 0
+          || slot + arity > data.length || valuesStart + arity > uniforms.length) {
+        continue;
+      }
+      for (let value = 0; value < arity; value++) {
+        data[slot + value] = uniforms[valuesStart + value];
+      }
+    }
+    return entry.effect.makeShader(data, localMatrix) || null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+// RuntimeEffect coordinates are local to the painted node. Preset shaders
+// carry the document-space node size as an exact float2 uniform, so scale that
+// coordinate space to the current rect as well as anchoring its origin. The
+// cursor rules intentionally mirror uniform binding above: malformed arities
+// consume no values, while unknown uniforms still advance by their arity.
+export function opCkRuntimeEffectLocalMatrix(
+  uniformNames,
+  uniforms,
+  uniformArities,
+  x,
+  y,
+  w,
+  h,
+) {
+  let cursor = 0;
+  let size = null;
+  for (let index = 0; index < uniformNames.length; index++) {
+    const rawArity = Number(uniformArities[index]);
+    const arity = Number.isSafeInteger(rawArity) && rawArity >= 0 ? rawArity : 0;
+    const valuesStart = cursor;
+    cursor += arity;
+    if (size || String(uniformNames[index]) !== 'size' || arity !== 2
+        || valuesStart + arity > uniforms.length) {
+      continue;
+    }
+    size = [Number(uniforms[valuesStart]), Number(uniforms[valuesStart + 1])];
+  }
+  if (size && Number.isFinite(size[0]) && size[0] > 0
+      && Number.isFinite(size[1]) && size[1] > 0) {
+    return [w / size[0], 0, x, 0, h / size[1], y, 0, 0, 1];
+  }
+  return [1, 0, x, 0, 1, y, 0, 0, 1];
+}
+
+export function opCkMakeRuntimeShaderForRect(
+  entry,
+  uniformNames,
+  uniforms,
+  uniformArities,
+  x,
+  y,
+  w,
+  h,
+) {
+  return opCkMakeRuntimeShader(
+    entry,
+    uniformNames,
+    uniforms,
+    uniformArities,
+    opCkRuntimeEffectLocalMatrix(uniformNames, uniforms, uniformArities, x, y, w, h),
+  );
+}
 
 // Build the row-major vertex lattice consumed by CanvasKit.MakeVertices.
 // Kept pure + exported so the geometry/index contract can run under Node
@@ -171,6 +315,7 @@ export async function opCkInit(canvasId) {
   if (!surface) throw new Error('CanvasKit: MakeWebGLCanvasSurface returned null');
   let canvas = surface.getCanvas();
   const el = document.getElementById(canvasId);
+  const runtimeEffects = opCkCreateRuntimeEffectCache(CK);
 
   const systemTypefaces = [];
   const systemTypefaceKeys = new Set();
@@ -181,6 +326,10 @@ export async function opCkInit(canvasId) {
   // imported text shapes the WHOLE run with one typeface instead of
   // re-segmenting by script.
   const importedTypefaces = new Map();
+  // App-bundled OFL design faces, same shape as `importedTypefaces` but ranked
+  // below system fonts: the browser has no bundled fonts of its own, so these
+  // are fetched from the daemon at mount and registered here.
+  const bundledTypefaces = new Map();
   const coverageCache = new Map();
   // Per-CHARACTER coverage segments for explicitly selected family text,
   // keyed on `(registry + family key, size, text)`. This used to
@@ -370,13 +519,17 @@ export async function opCkInit(canvasId) {
     const yScale = Math.hypot(m[1], m[4]);
     return Math.max(1, xScale, yScale);
   };
+  // Continuous zoom used to put the exact floating-point transform in every
+  // browser-text cache key. Quantization lets adjacent frames reuse bitmaps.
+  const browserTextRasterScale = () =>
+    opCkQuantizeTextRasterScale(effectiveTextScale());
   // Text uses a white coverage mask keyed without colour/alpha, then receives
   // a SrcIn tint at draw time so differently coloured runs share a bitmap.
   // Emoji retain their legacy RGBA-keyed, untinted raster path because colour
   // glyphs can ignore fillStyle. Cache-hit reinsertion keeps eviction LRU.
   const browserTextImage = (t, sz, weight, italic, emoji, r, g, b, a, family = '') => {
     if (!browserTextCtx) return null;
-    const ss = effectiveTextScale();
+    const ss = browserTextRasterScale();
     // `family` participates in the key: the same string shaped in two
     // different families is two different bitmaps.
     const key = emoji
@@ -554,6 +707,48 @@ export async function opCkInit(canvasId) {
       if (shader.delete) shader.delete();
     }
   };
+  const drawRuntimeEffectRRect = (
+    rrect,
+    x,
+    y,
+    w,
+    h,
+    sksl,
+    uniformNames,
+    uniforms,
+    uniformArities,
+    opacity,
+    fallback,
+  ) => {
+    const alpha = opCkClampUnit(opacity);
+    const shader = opCkMakeRuntimeShaderForRect(
+      runtimeEffects.get(sksl),
+      uniformNames,
+      uniforms,
+      uniformArities,
+      x,
+      y,
+      w,
+      h,
+    );
+    if (!shader) {
+      canvas.drawRRect(rrect, fillPaint(
+        opCkClampUnit(fallback[0]),
+        opCkClampUnit(fallback[1]),
+        opCkClampUnit(fallback[2]),
+        opCkClampUnit(fallback[3]) * alpha,
+      ));
+      return;
+    }
+    const paint = shaderPaint(shader);
+    paint.setAlphaf(alpha);
+    try {
+      canvas.drawRRect(rrect, paint);
+    } finally {
+      paint.delete();
+      if (shader.delete) shader.delete();
+    }
+  };
   const makeLinearGradient = (x, y, w, h, stops, angleDeg, opacity) => {
     const gradient = gradientStops(stops, opacity);
     if (!gradient.colors.length) return null;
@@ -683,7 +878,7 @@ export async function opCkInit(canvasId) {
   // Resolve an explicit imported/system face in authored stack order. Generic
   // candidates intentionally return null and continue through browser text.
   const familyTypefaceEntry = (family) => {
-    return opCkResolveRegisteredTypeface(family, importedTypefaces, systemTypefacesByFamily);
+    return opCkResolveRegisteredTypeface(family, importedTypefaces, systemTypefacesByFamily, bundledTypefaces);
   };
   // Shared "typeface + font for (family, sz)" so the family-aware draw and
   // measure paths build the SAME CK.Font and agree to sub-pixel. Cached per
@@ -996,6 +1191,36 @@ export async function opCkInit(canvasId) {
       drawMeshGradientRRect(
         perCornerRRect(x, y, w, h, tl, tr, br, bl),
         x, y, w, h, rows, cols, colors, opacity,
+      );
+    },
+    fillRoundRectShader(x, y, w, h, radius, sksl, uniformNames, uniforms, uniformArities, opacity, fr, fg, fb, fa) {
+      drawRuntimeEffectRRect(
+        uniformRRect(x, y, w, h, radius),
+        x,
+        y,
+        w,
+        h,
+        sksl,
+        uniformNames,
+        uniforms,
+        uniformArities,
+        opacity,
+        [fr, fg, fb, fa],
+      );
+    },
+    fillRoundRectShaderPerCorner(x, y, w, h, tl, tr, br, bl, sksl, uniformNames, uniforms, uniformArities, opacity, fr, fg, fb, fa) {
+      drawRuntimeEffectRRect(
+        perCornerRRect(x, y, w, h, tl, tr, br, bl),
+        x,
+        y,
+        w,
+        h,
+        sksl,
+        uniformNames,
+        uniforms,
+        uniformArities,
+        opacity,
+        [fr, fg, fb, fa],
       );
     },
     strokeRoundRect(x, y, w, h, rad, r, g, b, a, sw) { const p = strokePaint(r, g, b, a, sw); canvas.drawRRect(CK.RRectXY(CK.LTRBRect(x, y, x + w, y + h), rad, rad), p); },
@@ -1370,6 +1595,171 @@ export async function opCkInit(canvasId) {
       }
       return w;
     },
+    /// Measure a multi-run paragraph with optional line-wrapping and return
+    /// [width, height, line_count, baseline] to match the layout engine's contract.
+    ///
+    /// Runs are arrays passed from Rust: texts[], families[], sizes[], weights[],
+    /// italics[] (u8 bools), spacing[] (letter_spacing per run).
+    /// maxWidth is the wrap budget; -1 means natural single-line extent.
+    /// lineHeight is the multiplier (0 = engine default = 1.3).
+    ///
+    /// Wrapping strategy: measure each run segment-by-segment (same as the
+    /// design-canvas draw path), break on newlines, and when a run exceeds the
+    /// budget, measure character by character to find the break point.
+    measureParagraph(texts, families, sizes, weights, italics, spacing, maxWidth, lineHeight) {
+      if (!texts || texts.length === 0) {
+        return Float32Array.of(0, 0, 0, 0);
+      }
+
+      // Collect runs into a flat array structure.
+      const runs = [];
+      let hasNewline = false;
+      for (let i = 0; i < texts.length; i++) {
+        const text = String(texts[i] || '');
+        const family = String(families[i] || '');
+        const sz = Number(sizes[i]) || 16;
+        const weight = Number(weights[i]) || 400;
+        const italic = Boolean(italics[i]);
+        const letterSpacing = Number(spacing[i]) || 0;
+        if (text.includes('\n')) hasNewline = true;
+        runs.push({ text, family, sz, weight, italic, letterSpacing });
+      }
+
+      // Compute baseline and natural height metrics from the largest/heaviest run.
+      let maxSz = 0;
+      let ascent = 0;
+      let descent = 0;
+      for (const run of runs) {
+        maxSz = Math.max(maxSz, run.sz);
+        if (browserTextCtx) {
+          browserTextCtx.font = browserTextFont(run.sz, run.weight, run.italic, run.family);
+          const metrics = browserTextCtx.measureText('M');
+          const fontAsc = Number(metrics.fontBoundingBoxAscent);
+          const fontDesc = Number(metrics.fontBoundingBoxDescent);
+          const inkAsc = Number(metrics.actualBoundingBoxAscent);
+          const inkDesc = Number(metrics.actualBoundingBoxDescent);
+          ascent = Math.max(ascent,
+            Number.isFinite(fontAsc) ? fontAsc : 0,
+            Number.isFinite(inkAsc) ? inkAsc : 0);
+          descent = Math.max(descent,
+            Number.isFinite(fontDesc) ? fontDesc : 0,
+            Number.isFinite(inkDesc) ? inkDesc : 0);
+        }
+      }
+      if (!(ascent > 0)) ascent = maxSz * 0.8;
+      if (!(descent > 0)) descent = maxSz * 0.2;
+      const naturalLineHeight = ascent + descent;
+      const finalLineHeight = lineHeight > 0 ? maxSz * lineHeight : naturalLineHeight;
+      const baseline = ascent + (finalLineHeight - naturalLineHeight) / 2;
+
+      // Helper to measure a single run with explicit text, sz, weight, italic, family.
+      const measureRunWidth = (runText, runSz, runWeight, runItalic, runFamily) => {
+        return this.measureTextFamilyStyled(runText, runFamily, runSz, runWeight, runItalic);
+      };
+
+      // If no max width or no newlines and no need to wrap, return natural width.
+      if (maxWidth < 0) {
+        let w = 0;
+        for (const run of runs) {
+          w += measureRunWidth(run.text, run.sz, run.weight, run.italic, run.family);
+          // Add letter spacing: # of chars * spacing.
+          if (run.letterSpacing !== 0) {
+            w += run.text.length * run.letterSpacing;
+          }
+        }
+        // Count explicit lines from newlines.
+        let lineCount = 1;
+        for (const run of runs) {
+          lineCount += (run.text.match(/\n/g) || []).length;
+        }
+        const height = maxSz * (lineHeight > 0 ? lineHeight : 1.3) * lineCount;
+        return Float32Array.of(w, height, lineCount, baseline);
+      }
+
+      // Wrapping logic: split runs into lines based on maxWidth.
+      // Strategy mirrors the existing code around line 1375 — measure each run,
+      // break on newlines, and when a run exceeds the budget, split it.
+      const lines = [];
+      let currentLine = [];
+      let currentLineWidth = 0;
+
+      for (const run of runs) {
+        // Split on newlines first.
+        const chunks = run.text.split('\n');
+        for (let chunkIdx = 0; chunkIdx < chunks.length; chunkIdx++) {
+          const chunk = chunks[chunkIdx];
+          const isLastChunk = chunkIdx === chunks.length - 1;
+
+          if (chunk) {
+            // Measure this chunk with wrapping if needed.
+            const chunkWidth = measureRunWidth(chunk, run.sz, run.weight, run.italic, run.family);
+            const totalChunkWidth = chunkWidth + chunk.length * run.letterSpacing;
+
+            if (currentLineWidth + totalChunkWidth <= maxWidth) {
+              // Fits on current line.
+              currentLine.push({ text: chunk, width: chunkWidth, spacing: run.letterSpacing });
+              currentLineWidth += totalChunkWidth;
+            } else if (currentLineWidth > 0) {
+              // Doesn't fit; start a new line if there's anything on the current line.
+              lines.push(currentLine);
+              currentLine = [{ text: chunk, width: chunkWidth, spacing: run.letterSpacing }];
+              currentLineWidth = totalChunkWidth;
+            } else {
+              // Current line is empty but chunk still doesn't fit: break chunk.
+              let remaining = chunk;
+              while (remaining) {
+                let fit = '';
+                let fitWidth = 0;
+                for (const ch of remaining) {
+                  const candidate = fit + ch;
+                  const candidateWidth = measureRunWidth(candidate, run.sz, run.weight, run.italic, run.family);
+                  const totalWidth = candidateWidth + candidate.length * run.letterSpacing;
+                  if (totalWidth <= maxWidth) {
+                    fit = candidate;
+                    fitWidth = candidateWidth;
+                  } else {
+                    break;
+                  }
+                }
+                if (!fit && remaining) {
+                  // Degenerate: even one char doesn't fit; output it anyway.
+                  fit = remaining[0];
+                  fitWidth = measureRunWidth(fit, run.sz, run.weight, run.italic, run.family);
+                }
+                if (fit) {
+                  lines.push([{ text: fit, width: fitWidth, spacing: run.letterSpacing }]);
+                  remaining = remaining.slice(fit.length);
+                } else {
+                  break;
+                }
+              }
+              currentLine = [];
+              currentLineWidth = 0;
+            }
+          }
+
+          if (!isLastChunk) {
+            // Newline: close the current line.
+            if (currentLine.length > 0) {
+              lines.push(currentLine);
+            }
+            currentLine = [];
+            currentLineWidth = 0;
+          }
+        }
+      }
+
+      if (currentLine.length > 0) {
+        lines.push(currentLine);
+      }
+
+      // Compute final metrics.
+      const lineCount = Math.max(1, lines.length);
+      const width = maxWidth;
+      const height = finalLineHeight * lineCount;
+
+      return Float32Array.of(width, height, lineCount, baseline);
+    },
     registerSystemFont(family, bytes) {
       const key = normalizedFamily(family);
       if (!key || systemTypefaceKeys.has(key)) return Boolean(key);
@@ -1399,6 +1789,21 @@ export async function opCkInit(canvasId) {
       const prev = importedTypefaces.get(key);
       if (prev && prev.tf && prev.tf.delete) prev.tf.delete();
       importedTypefaces.set(key, { tf, family: String(family || '') });
+      coverageCache.clear();
+      clearRegisteredFontCaches();
+      return true;
+    },
+    // Register an app-bundled design face. Same replace-on-same-key discipline
+    // as `registerImportedFont`; only the registry (and therefore the lookup
+    // rank) differs.
+    registerBundledFont(family, bytes) {
+      const key = primaryFamilyKey(family);
+      if (!key) return false;
+      const tf = CK.Typeface.MakeFreeTypeFaceFromData(copyBytes(bytes));
+      if (!tf) return false;
+      const prev = bundledTypefaces.get(key);
+      if (prev && prev.tf && prev.tf.delete) prev.tf.delete();
+      bundledTypefaces.set(key, { tf, family: String(family || '') });
       coverageCache.clear();
       clearRegisteredFontCaches();
       return true;

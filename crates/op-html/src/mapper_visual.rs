@@ -22,6 +22,12 @@ use syntax::{
 #[path = "mapper_background.rs"]
 mod background;
 
+#[path = "mapper_text_paint.rs"]
+mod text_paint;
+pub(crate) use text_paint::{background_clips_text, text_paint_has_partial_alpha};
+pub(crate) use text_paint::{fill_glyph_color, take_text_clip_fill, text_paint_color};
+use text_paint::{is_fully_transparent, text_clip_glyph_color};
+
 /// `node` is the element's used border-box size, needed to resolve
 /// `background-size` / `background-position` into an image-fill placement.
 /// `definite` reports per axis whether that size is real or a stand-in for an
@@ -31,6 +37,7 @@ pub(super) fn map_fill(
     context: &mut MapCtx<'_>,
     node: (f64, f64),
     definite: (bool, bool),
+    text_clip_will_transfer: bool,
 ) -> Option<Vec<PenFill>> {
     let mut fills = Vec::new();
     let mut position_dropped = false;
@@ -93,12 +100,10 @@ pub(super) fn map_fill(
     if position_dropped {
         context.warn_once(ImportWarning::BackgroundPositionDropped);
     }
-    warn_background_geometry(style, context);
+    let text_clip_handled =
+        text_clip_will_transfer && text_clip_glyph_color(style, &fills).is_some();
+    warn_background_geometry(style, context, text_clip_handled);
     (!fills.is_empty()).then_some(fills)
-}
-
-fn is_fully_transparent(color: &str) -> bool {
-    color.len() == 9 && color.ends_with("00")
 }
 
 pub(super) fn map_stroke(style: &ComputedStyle, context: &mut MapCtx<'_>) -> Option<PenStroke> {
@@ -688,15 +693,20 @@ fn layer_value(value: &str, index: usize) -> Option<&str> {
     (!layers.is_empty()).then(|| layers[index % layers.len()])
 }
 
-fn warn_background_geometry(style: &ComputedStyle, context: &mut MapCtx<'_>) {
+fn warn_background_geometry(
+    style: &ComputedStyle,
+    context: &mut MapCtx<'_>,
+    text_clip_handled: bool,
+) {
     for (name, default) in [
         ("background-origin", "padding-box"),
         ("background-clip", "border-box"),
         ("background-attachment", "scroll"),
     ] {
-        if style
-            .get(name)
-            .is_some_and(|value| !layers_match(value, &[default]))
+        if !(name == "background-clip" && text_clip_handled)
+            && style
+                .get(name)
+                .is_some_and(|value| !layers_match(value, &[default]))
         {
             context.warn_once(ImportWarning::PropertyNotRepresentable {
                 property: name.to_string(),

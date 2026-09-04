@@ -120,7 +120,7 @@ impl PropertyPanel {
         // alive (and the tab reachable) with an empty / unresolvable
         // selection. The Code body never reads the snapshot, so a
         // neutral placeholder suffices.
-        if state.editor_ui.property_tab == op_editor_core::PropertyTab::Code {
+        if state.editor_ui.effective_property_tab() == op_editor_core::PropertyTab::Code {
             return Some(Self::build_from_snapshot(
                 state,
                 NodeSnapshot::empty_for_code_tab(),
@@ -245,6 +245,8 @@ impl PropertyPanel {
         stroke_variable_ref: Option<String>,
     ) -> Self {
         let ui = &state.editor_ui;
+        let code_tab_available = ui.code_property_tab_available();
+        let property_tab = ui.effective_property_tab();
         let color_variables = color_variable_options(state);
         let color_variable_count = color_variables.len();
         let flex_layout = snapshot.flex_layout;
@@ -288,6 +290,17 @@ impl PropertyPanel {
         if ui.font_picker_purpose != Some(op_editor_core::FontPickerPurpose::PropertyText) {
             font_picker.open = false;
         }
+        let density_scale = if ui.touch_chrome() {
+            super::density::TOUCH_DENSITY_SCALE
+        } else {
+            1.0
+        };
+        // Host scroll state remains in physical surface points. Section and
+        // Code-tab layout below paint in the panel's density-independent
+        // logical coordinate space, so normalize the immutable paint snapshot.
+        codegen.framework_scroll.offset /= density_scale;
+        codegen.code_scroll.offset /= density_scale;
+        font_picker.scroll.offset /= density_scale;
         // Effects / Interactions menus are floating, owning surfaces.  Do not
         // carry a stale body-action hover into the immutable paint snapshot
         // while either menu is open: their downward-opening geometry can
@@ -296,6 +309,7 @@ impl PropertyPanel {
             ui.effect_add_picker_open || ui.interaction_menu_open || ui.compositing_picker.open;
         Self {
             id: WidgetId::new(2000),
+            density_scale,
             color_variable_picker_scroll: ui.property_color_variable_picker_scroll.offset.max(0.0),
             color_variable_picker_hover: ui.property_color_variable_picker_hover,
             snapshot,
@@ -389,8 +403,11 @@ impl PropertyPanel {
             stroke_mode_popover_open: ui.stroke_mode_popover_open,
             stroke_mode_popover_hover: ui.stroke_mode_popover_hover,
             is_multi,
-            tab: ui.property_tab,
-            tab_hover: ui.property_tab_hover,
+            tab: property_tab,
+            tab_hover: ui.property_tab_hover.filter(|tab| {
+                code_tab_available || !matches!(tab, op_editor_core::PropertyTab::Code)
+            }),
+            code_tab_available,
             export_format: ui.export_format,
             export_scale: ui.export_scale,
             export_scale_picker_open: ui.export_scale_picker_open,
@@ -398,7 +415,7 @@ impl PropertyPanel {
             export_picker_hover: ui.export_picker_hover,
             effect_add_menu_hover: ui.effect_add_menu_hover,
             scroll: ui.property_panel_scroll.offset.max(0.0),
-            locale: ui.locale,
+            locale: ui.effective_locale(),
             // Inert in the multi-select aggregate view.
             effect_param_focus: if is_multi {
                 None
@@ -406,7 +423,7 @@ impl PropertyPanel {
                 ui.effect_param_focus
             },
             codegen,
-            codegen_pressed: match ui.pressed_button {
+            codegen_pressed: match ui.pressed_button.filter(|_| code_tab_available) {
                 Some(op_editor_core::ButtonPressTarget::Codegen(hover)) => Some(hover),
                 _ => None,
             },

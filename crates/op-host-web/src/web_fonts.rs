@@ -168,7 +168,19 @@ fn start_system_font_query<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let inner_err = inner.clone();
     let on_err = Closure::<dyn FnMut(JsValue)>::once(move |_err: JsValue| {
         QUERY_IN_FLIGHT.with(|flag| flag.set(false));
-        if should_mark_system_fonts_loaded_after_query_rejection() {
+        // A present-but-rejecting queryLocalFonts usually means the
+        // permission prompt needs a user gesture (or an embedding frame just
+        // gained the delegation). Permanently recording an empty set here
+        // left the editor without system fonts for the whole session; keep
+        // the query retryable for a few later repaints (each retry is a
+        // cheap immediate rejection until a gesture-carrying frame lands),
+        // then settle on empty so an actually-denied permission stops asking.
+        let exhausted = QUERY_REJECTIONS.with(|count| {
+            let next = count.get() + 1;
+            count.set(next);
+            next >= MAX_QUERY_REJECTIONS
+        });
+        if exhausted && should_mark_system_fonts_loaded_after_query_rejection() {
             apply_system_font_families(&inner_err, Vec::new());
         }
     });
@@ -179,6 +191,12 @@ fn start_system_font_query<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
 
 fn should_mark_system_fonts_loaded_after_query_rejection() -> bool {
     true
+}
+
+/// Rejections tolerated before the query settles on an empty system set.
+const MAX_QUERY_REJECTIONS: u32 = 5;
+thread_local! {
+    static QUERY_REJECTIONS: Cell<u32> = const { Cell::new(0) };
 }
 
 fn query_local_fonts_function() -> Option<(web_sys::Window, Function)> {

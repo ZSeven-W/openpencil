@@ -61,8 +61,13 @@ pub(crate) fn execute_copy(binding: &str, args: &str, ctx: &mut ProgramCtx) -> R
     let mut node: PenNode = serde_json::from_value(cloned_value).map_err(|e| {
         ProgramError::InvalidNode(format!("C() overrides produce an invalid node: {e}"))
     })?;
+    let parent = resolve_parent_ref(parent_raw, &ctx.bindings);
     if ctx.post_process {
-        let _ = op_editor_core::command_refine::refine_subtree(&mut node);
+        if parent.is_none() {
+            let _ = op_editor_core::command_refine::refine_subtree(&mut node);
+        } else {
+            let _ = op_editor_core::command_refine::refine_child_subtree(&mut node);
+        }
     }
 
     let mut nodes = vec![node];
@@ -76,7 +81,6 @@ pub(crate) fn execute_copy(binding: &str, args: &str, ctx: &mut ProgramCtx) -> R
         .first()
         .map(|(_, new)| new.clone())
         .ok_or(ProgramError::ProducedNoNode("Copy"))?;
-    let parent = resolve_parent_ref(parent_raw, &ctx.bindings);
     ctx.emit(
         EditorCommand::InsertAuthoredSubtree {
             nodes,
@@ -167,7 +171,12 @@ pub(crate) fn execute_replace(binding: &str, args: &str, ctx: &mut ProgramCtx) -
         )));
     };
     let old_id = old.id_str().to_string();
-    let mut node = parse_node_json(&args[comma + 1..], ctx.post_process)?;
+    let replaces_document_root = ctx
+        .sim
+        .active_children()
+        .iter()
+        .any(|root| root.id_str() == old_id);
+    let mut node = parse_node_json(&args[comma + 1..], ctx.post_process, replaces_document_root)?;
     // Drain node-level `state` BEFORE the probe clone; hold the merge
     // and emit it only after the replace below succeeds (emit applies
     // immediately — emitting the merge first would leak an orphan
@@ -291,8 +300,24 @@ pub(crate) fn execute_image(binding: &str, args: &str, ctx: &mut ProgramCtx) -> 
                 .map(PenNode::id_str)
                 .collect::<Vec<_>>();
             if !child_ids.is_empty() {
+                // Name the empty slot the caller almost certainly meant. The
+                // authored shape is a painted card wrapping one empty media
+                // frame, and a measured run aimed every G() at the wrapper,
+                // burned its whole batch on the rejection, and never tried the
+                // child it had just built. Suggesting is not redirecting: a
+                // lone empty child can also be a deliberate scrim, so the
+                // caller still chooses.
+                let suggestion = empty_container_children(target);
+                let hint = match suggestion.as_slice() {
+                    [only] => format!(" The only empty container child is {only} — target that instead if it is the media slot."),
+                    [_, ..] => format!(
+                        " Empty container children that could be the slot: [{}].",
+                        suggestion.join(", ")
+                    ),
+                    [] => String::new(),
+                };
                 return Err(ProgramError::Rejected(format!(
-                    "G() slot target {} must be empty, but it has children [{}]. Pass the exact empty frame/rectangle slot id; use \"append\" only for an intentional child of an explicit horizontal/vertical flow parent",
+                    "G() slot target {} must be empty, but it has children [{}].{hint} Pass the exact empty frame/rectangle slot id; use \"append\" only for an intentional child of an explicit horizontal/vertical flow parent",
                     target.id_str(),
                     child_ids.join(", ")
                 )));
@@ -364,6 +389,20 @@ pub(crate) fn execute_image(binding: &str, args: &str, ctx: &mut ProgramCtx) -> 
     )?;
     ctx.bind(binding, &image_id);
     Ok(())
+}
+
+/// Ids of `node`'s direct children that are themselves empty containers —
+/// the shape an authored media slot takes when the model wraps it in a
+/// painted card. Used only to name a candidate in a rejection message.
+fn empty_container_children(node: &PenNode) -> Vec<String> {
+    node.children()
+        .into_iter()
+        .flatten()
+        .filter(|child| {
+            node_container(child).is_some() && child.children().is_some_and(|kids| kids.is_empty())
+        })
+        .map(|child| child.id_str().to_string())
+        .collect()
 }
 
 fn explicit_flow_layout(container: &ContainerProps) -> Option<&'static str> {

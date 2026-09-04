@@ -40,6 +40,7 @@
 //!   for recursive diff application, then falls back to
 //!   `op_orchestrator::parse::parse_nodes` for legacy flat JSON output.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -55,8 +56,10 @@ use crate::chat_canvas_tools::UiChatToolExecutor;
 use crate::chat_provider_llm::ChatProviderLlmClient;
 use crate::design_session::{run_design_worker, DesignCmdReq, DesignDelta};
 
-#[path = "chat_intent_screen_sets.rs"]
-mod screen_sets;
+// The pure listed-screen parser moved to `op_chat_agent::screen_sets`
+// (with `EXISTING_SCREEN_CTX_CJK`, which it owns now); the LLM intent
+// pipeline itself stays here.
+use op_chat_agent::screen_sets;
 pub use screen_sets::listed_whole_screen_names;
 use screen_sets::requests_listed_whole_screens;
 
@@ -195,6 +198,13 @@ fn matches_any_word_phrase(text_lower: &str, phrases: &[&str]) -> bool {
     phrases.iter().any(|p| matches_word_phrase(text_lower, p))
 }
 
+/// True when the message has no word or number content to route.
+/// Punctuation-only reactions must stay in chat instead of opening a design
+/// turn that can mutate the canvas.
+pub fn is_non_request_text(text: &str) -> bool {
+    !text.chars().any(char::is_alphanumeric)
+}
+
 /// TS `classifyByKeywords` — verbatim rule order.
 pub fn classify_by_keywords(text: &str) -> DesignIntent {
     let lower = text.to_lowercase();
@@ -225,6 +235,32 @@ pub fn classify_intent_for_standard_route(
     text: &str,
     model: Option<String>,
 ) -> DesignIntent {
+    classify_intent_for_standard_route_inner(provider, state, text, model, None)
+}
+
+/// Cancellable desktop-router variant. The external flag is observed while
+/// the classifier is silent; its own 8-second deadline cancels only the
+/// classifier transport and does not mark the whole routed turn aborted.
+pub fn classify_intent_for_standard_route_cancellable(
+    provider: &dyn ChatProvider,
+    state: &EditorState,
+    text: &str,
+    model: Option<String>,
+    external_cancel: Arc<AtomicBool>,
+) -> DesignIntent {
+    classify_intent_for_standard_route_inner(provider, state, text, model, Some(external_cancel))
+}
+
+fn classify_intent_for_standard_route_inner(
+    provider: &dyn ChatProvider,
+    state: &EditorState,
+    text: &str,
+    model: Option<String>,
+    external_cancel: Option<Arc<AtomicBool>>,
+) -> DesignIntent {
+    if is_non_request_text(text) {
+        return DesignIntent::Chat;
+    }
     // A whole-screen *draw* (creation verb + page noun, e.g. "重新画一个
     // search 页面") is unambiguously a new screen — it must win over the
     // modify classifier so it routes to the new-frame path, not edit-in-place.
@@ -250,7 +286,13 @@ pub fn classify_intent_for_standard_route(
     if is_named_follow_on_screen(text) {
         return DesignIntent::New;
     }
-    classify_intent_llm(provider, text, model)
+    classify_intent_llm_with_timeout_and_cancel(
+        provider,
+        text,
+        model,
+        CLASSIFY_TIMEOUT,
+        external_cancel.as_deref(),
+    )
 }
 
 /// TS classification-tag parsing (`ai-chat-intent-classifier.ts:46-51`).
@@ -265,12 +307,12 @@ pub fn parse_classified(text: &str) -> DesignIntent {
     if upper.contains("CHAT") {
         return DesignIntent::Chat;
     }
-    DesignIntent::New
+    DesignIntent::Chat
 }
 
 /// TS `classifyIntent` — one lightweight LLM call through the (chat-
 /// session-untracked) provider, with the TS 8s abort and the TS
-/// fallback to `new` on any failure / timeout.
+/// conservative fallback to chat on any failure / timeout.
 pub fn classify_intent_llm(
     provider: &dyn ChatProvider,
     text: &str,
@@ -285,6 +327,16 @@ fn classify_intent_llm_with_timeout(
     model: Option<String>,
     timeout: Duration,
 ) -> DesignIntent {
+    classify_intent_llm_with_timeout_and_cancel(provider, text, model, timeout, None)
+}
+
+fn classify_intent_llm_with_timeout_and_cancel(
+    provider: &dyn ChatProvider,
+    text: &str,
+    model: Option<String>,
+    timeout: Duration,
+    external_cancel: Option<&AtomicBool>,
+) -> DesignIntent {
     let req = ChatRequest {
         system_prompt: CLASSIFY_PROMPT.to_string(),
         user_message: text.to_string(),
@@ -292,11 +344,12 @@ fn classify_intent_llm_with_timeout(
         model,
         ..Default::default()
     };
-    // `provider.send` returns a blocking iterator. We are already on
-    // the router worker thread, but the 8s budget needs a timed recv,
-    // so the drain rides one more (detached) thread; dropping `rx`
-    // after a timeout makes its sends fail and the drain unwind.
-    let iter = provider.send(req);
+    // Keep classifier timeout separate from the run-scoped abort bit: timing
+    // out classification falls back to Chat, while Stop/New Chat aborts the
+    // whole route. Both paths set this local transport flag so a silent CLI is
+    // terminated instead of leaving the drain thread detached indefinitely.
+    let classify_cancel = Arc::new(AtomicBool::new(false));
+    let iter = provider.send_cancellable(req, Arc::clone(&classify_cancel));
     let (tx, rx) = mpsc::channel::<ChatDelta>();
     let spawned = std::thread::Builder::new()
         .name("op-chat-classify".into())
@@ -308,27 +361,33 @@ fn classify_intent_llm_with_timeout(
             }
         });
     if let Err(err) = spawned {
-        // TS: any classification failure falls back to { intent: 'new' }.
         eprintln!("[chat-intent] failed to spawn classify drain thread: {err}");
-        return DesignIntent::New;
+        return DesignIntent::Chat;
     }
 
     let deadline = Instant::now() + timeout;
     let mut out = String::new();
     loop {
+        if external_cancel.is_some_and(|cancel| cancel.load(Ordering::Acquire)) {
+            classify_cancel.store(true, Ordering::Release);
+            return parse_classified(&out);
+        }
         let now = Instant::now();
         if now >= deadline {
-            // TS: AbortController fires → catch → { intent: 'new' }.
-            return DesignIntent::New;
+            classify_cancel.store(true, Ordering::Release);
+            return parse_classified(&out);
         }
-        match rx.recv_timeout(deadline - now) {
+        let poll = (deadline - now).min(Duration::from_millis(20));
+        match rx.recv_timeout(poll) {
             Ok(ChatDelta::TextDelta(s)) => out.push_str(&s),
             // TS consumeSSEAsText only accumulates text chunks.
             Ok(ChatDelta::Thinking(_)) | Ok(ChatDelta::ToolUse { .. }) => {}
-            // TS: `if (!response.ok) throw` → catch → 'new'.
-            Ok(ChatDelta::Error(_)) => return DesignIntent::New,
+            Ok(ChatDelta::Error(_)) => {
+                classify_cancel.store(true, Ordering::Release);
+                return parse_classified(&out);
+            }
             Ok(ChatDelta::Done { .. }) => break,
-            Err(mpsc::RecvTimeoutError::Timeout) => return DesignIntent::New,
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }
@@ -501,7 +560,7 @@ const DRAW_VERB_EN: &[&str] = &[
 ];
 /// Markers that the request points at the CURRENT screen, so it is an edit of
 /// the existing frame, not a new one.
-const EXISTING_SCREEN_CTX_CJK: &[&str] = &["这个", "这一", "当前", "现有", "此页", "这页", "这屏"];
+use op_chat_agent::screen_sets::EXISTING_SCREEN_CTX_CJK;
 
 /// True when the unit being drawn is a whole *page / screen* — "继续画一下
 /// search 页面", "再来一个登录页", "continue, add a settings screen". The named
@@ -646,3 +705,7 @@ mod tests;
 #[cfg(test)]
 #[path = "chat_intent_selection_tests.rs"]
 mod selection_tests;
+
+#[cfg(test)]
+#[path = "chat_intent_cancellation_tests.rs"]
+mod cancellation_tests;

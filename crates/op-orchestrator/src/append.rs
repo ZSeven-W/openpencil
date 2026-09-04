@@ -99,6 +99,7 @@ mod tests {
                     },
                     id_prefix: id.to_string(),
                     parent_frame_id: None,
+                    insert_after_sibling_id: None,
                     elements: None,
                     screen: None,
                     generated_root_id: None,

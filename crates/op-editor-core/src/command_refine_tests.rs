@@ -106,3 +106,80 @@ fn refine_strips_emoji_from_text_content() {
     );
     assert!(fixes.iter().any(|f| f.fix.contains("emoji")));
 }
+
+fn dimensions(root: &PenNode, node_id: &str) -> (Option<f64>, Option<f64>) {
+    let node = find_node(std::slice::from_ref(root), &id(node_id)).expect("node exists");
+    (node.width_px(), node.height_px())
+}
+
+#[test]
+fn refine_recursively_normalizes_only_incomplete_icon_font_dimensions() {
+    let mut root = node_from(
+        r##"{"type":"frame","id":"root","name":"R","width":400,"height":800,"children":[
+            {"type":"icon_font","id":"font-size-only","name":"Font size only","iconFontName":"home","fontSize":32},
+            {"type":"icon_font","id":"no-size","name":"No size","iconFontName":"search"},
+            {"type":"icon_font","id":"width-only","name":"Width only","iconFontName":"menu","width":16},
+            {"type":"icon_font","id":"height-only","name":"Height only","iconFontName":"bell","height":22},
+            {"type":"icon_font","id":"authored","name":"Authored","iconFontName":"star","width":18,"height":20},
+            {"type":"icon_font","id":"invalid","name":"Invalid","iconFontName":"x","width":"fit_content","height":0},
+            {"type":"frame","id":"nested-frame","name":"Nested","width":100,"height":100,"children":[
+                {"type":"icon_font","id":"nested-icon","name":"Nested icon","iconFontName":"check"}
+            ]}
+        ]}"##,
+    );
+
+    let fixes = crate::command_refine::refine_subtree(&mut root);
+
+    assert_eq!(
+        dimensions(&root, "font-size-only"),
+        (Some(24.0), Some(24.0))
+    );
+    assert_eq!(dimensions(&root, "no-size"), (Some(24.0), Some(24.0)));
+    assert_eq!(dimensions(&root, "width-only"), (Some(16.0), Some(16.0)));
+    assert_eq!(dimensions(&root, "height-only"), (Some(22.0), Some(22.0)));
+    assert_eq!(dimensions(&root, "invalid"), (Some(24.0), Some(24.0)));
+    assert_eq!(dimensions(&root, "nested-icon"), (Some(24.0), Some(24.0)));
+    assert_eq!(
+        dimensions(&root, "authored"),
+        (Some(18.0), Some(20.0)),
+        "two valid authored dimensions must be preserved"
+    );
+
+    for repaired in [
+        "font-size-only",
+        "no-size",
+        "width-only",
+        "height-only",
+        "invalid",
+        "nested-icon",
+    ] {
+        assert!(
+            fixes
+                .iter()
+                .any(|fix| fix.node_id == repaired && fix.fix.contains("icon font dimensions")),
+            "missing RefineFix for {repaired}: {fixes:?}"
+        );
+    }
+    assert!(fixes.iter().all(|fix| fix.node_id != "authored"));
+}
+
+#[test]
+fn allocator_aware_refine_normalizes_nested_icon_after_reminting_its_id() {
+    use crate::id_allocator::SequentialIdAllocator;
+    use std::collections::HashSet;
+
+    let mut root = node_from(
+        r#"{"type":"frame","id":"root","width":200,"height":200,"children":[{"type":"frame","id":"nested","width":100,"height":100,"children":[{"type":"icon_font","id":"root","name":"Nested icon","iconFontName":"heart"}]}]}"#,
+    );
+    let mut allocator = SequentialIdAllocator::new(1);
+    let mut taken = HashSet::new();
+
+    let fixes =
+        crate::command_refine::refine_subtree_with_allocator(&mut root, &mut allocator, &mut taken)
+            .expect("allocator refine succeeds");
+
+    assert_eq!(dimensions(&root, "n1"), (Some(24.0), Some(24.0)));
+    assert!(fixes
+        .iter()
+        .any(|fix| { fix.node_id == "n1" && fix.fix.contains("icon font dimensions") }));
+}

@@ -46,6 +46,7 @@ pub struct PlannedFix {
 /// | `Remove`        | `Remove`                       | detach node from parent       |
 /// | `Height`        | `SetHeightFitContent`          | only `"fit_content"` is valid |
 /// | `Rotation`      | `SetRotation(f64)`             | degrees                       |
+/// | `Y`             | `SetY(f64)`                    | document-space y              |
 /// | `CornerRadius`  | `SetCornerRadius(f32)`         | uniform radius                |
 /// | `FontSize`      | `SetFontSize(f32)`             | doc-px                        |
 /// | `Effects`       | `ClearEffects`                 | set effects field to None     |
@@ -60,6 +61,8 @@ pub enum PlannedAction {
     SetHeightFitContent,
     /// Set the node's rotation to the given degrees.
     SetRotation(f64),
+    /// Set the node's authored document-space y coordinate.
+    SetY(f64),
     /// Set the node's corner-radius to a uniform value.
     SetCornerRadius(f32),
     /// Set the node's font size.
@@ -138,6 +141,13 @@ pub fn detect_and_plan(doc: &PenDocument) -> Vec<PlannedFix> {
                     None => continue,
                 };
                 PlannedAction::SetRotation(v)
+            }
+            FixProperty::Y => {
+                let v = match issue.suggested_value.as_f64() {
+                    Some(v) => v,
+                    None => continue,
+                };
+                PlannedAction::SetY(v)
             }
             FixProperty::CornerRadius => {
                 let v = match issue.suggested_value.as_f64() {
@@ -243,6 +253,7 @@ mod tests {
         match action {
             PlannedAction::SetHeightFitContent => node_mut::set_text_height_fit_content(node),
             PlannedAction::SetRotation(v) => node_mut::set_rotation(node, *v),
+            PlannedAction::SetY(v) => node_mut::set_y(node, *v),
             PlannedAction::SetCornerRadius(v) => node_mut::set_corner_radius(node, *v),
             PlannedAction::SetFontSize(v) => node_mut::set_font_size(node, *v),
             PlannedAction::ClearEffects => node_mut::clear_effects(node),
@@ -375,14 +386,14 @@ mod tests {
     }
 
     /// Load the `invisible-container-with-var` fixture (doc declares
-    /// `color-border` variable) and assert equivalence — exercises the
-    /// `$color-border` design-token reference path.
+    /// `--border` variable) and assert equivalence — exercises the
+    /// `$--border` design-token reference path.
     ///
     /// Regression guard: caught by stop-time review — `LintPreValidator`
-    /// previously dropped `$color-border` refs while reporting success
+    /// previously dropped `$--border` refs while reporting success
     /// because `cmd_set_node_stroke_hex` strict-parsed the hex. The
     /// op-design-lint side (this test) ensures `detect_and_plan + apply`
-    /// produces the same `$color-border`-stamped doc as `detect_and_fix`;
+    /// produces the same `$--border`-stamped doc as `detect_and_fix`;
     /// the host parity test confirms the same through `EditorCommand`.
     #[test]
     fn equivalence_invisible_container_with_var() {
@@ -409,7 +420,7 @@ mod tests {
             "var-ref stroke must round-trip identically"
         );
 
-        // Verify the plan carries the $color-border ref (not a resolved hex).
+        // Verify the plan carries the $--border ref (not a resolved hex).
         let stroke_plan = plan
             .iter()
             .find(|f| f.node_id == "light-on-light")
@@ -426,7 +437,7 @@ mod tests {
             .and_then(|c| c.as_str())
             .expect("color field");
         assert_eq!(
-            color, "$color-border",
+            color, "$--border",
             "plan must preserve design-token ref, not resolve to hex"
         );
     }

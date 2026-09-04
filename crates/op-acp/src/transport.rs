@@ -9,36 +9,70 @@ use tokio::io::{AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::types::AcpError;
 
-/// Read the next ndJSON frame from `reader`. Blank lines are skipped;
-/// a line that fails to parse as JSON is skipped (ndJSON robustness —
-/// a stray non-JSON line must not kill the connection). Returns
-/// `Ok(None)` at end of stream.
+/// Maximum accepted inbound ACP message size for stdio and WebSocket peers.
+/// The limit includes the JSON payload but not the ndJSON newline delimiter.
+pub const MAX_INBOUND_FRAME_BYTES: usize = 16 * 1024 * 1024;
+
+/// Read the next ndJSON frame from `reader`. Blank lines are skipped, while a
+/// malformed or oversized non-empty frame fails the connection. The bounded
+/// `fill_buf` loop is intentional: `read_line` would keep allocating forever
+/// when an untrusted child writes bytes without a newline.
 pub async fn read_frame(
     reader: &mut (impl AsyncBufRead + Unpin),
 ) -> Result<Option<Value>, AcpError> {
-    let mut line = String::new();
+    read_frame_with_limit(reader, MAX_INBOUND_FRAME_BYTES).await
+}
+
+async fn read_frame_with_limit(
+    reader: &mut (impl AsyncBufRead + Unpin),
+    max_bytes: usize,
+) -> Result<Option<Value>, AcpError> {
+    let mut frame = Vec::new();
     loop {
-        line.clear();
-        let n = reader
-            .read_line(&mut line)
-            .await
-            .map_err(|e| AcpError::Transport(e.to_string()))?;
-        if n == 0 {
-            return Ok(None);
-        }
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
+        let (consumed, reached_delimiter, reached_eof) = {
+            let available = reader
+                .fill_buf()
+                .await
+                .map_err(|e| AcpError::Transport(e.to_string()))?;
+            if available.is_empty() {
+                (0, false, true)
+            } else if let Some(index) = available.iter().position(|byte| *byte == b'\n') {
+                if frame.len().saturating_add(index) > max_bytes {
+                    return Err(AcpError::Protocol(format!(
+                        "ACP frame exceeds {max_bytes} bytes"
+                    )));
+                }
+                frame.extend_from_slice(&available[..index]);
+                (index + 1, true, false)
+            } else {
+                if frame.len().saturating_add(available.len()) > max_bytes {
+                    return Err(AcpError::Protocol(format!(
+                        "ACP frame exceeds {max_bytes} bytes"
+                    )));
+                }
+                frame.extend_from_slice(available);
+                (available.len(), false, false)
+            }
+        };
+        reader.consume(consumed);
+
+        if !reached_delimiter && !reached_eof {
             continue;
         }
-        match serde_json::from_str::<Value>(trimmed) {
-            Ok(v) => return Ok(Some(v)),
-            // Skip a malformed line rather than tearing down the link.
-            Err(_) => continue,
+        if frame.iter().all(u8::is_ascii_whitespace) {
+            if reached_eof {
+                return Ok(None);
+            }
+            frame.clear();
+            continue;
         }
+        return serde_json::from_slice::<Value>(&frame)
+            .map(Some)
+            .map_err(|error| AcpError::Protocol(format!("invalid ACP JSON frame: {error}")));
     }
 }
 
-/// `AsyncBufRead` is needed for `read_line`; re-exported so callers
+/// `AsyncBufRead` is needed for `fill_buf`; re-exported so callers
 /// don't need a separate `tokio::io` import.
 pub use tokio::io::AsyncBufRead;
 
@@ -74,16 +108,32 @@ mod tests {
         assert_eq!(f1["a"], 1);
         let f2 = read_frame(&mut reader).await.unwrap().unwrap();
         assert_eq!(f2["b"], 2);
-        // EOF.
         assert!(read_frame(&mut reader).await.unwrap().is_none());
     }
 
     #[tokio::test]
-    async fn skips_blank_and_malformed_lines() {
+    async fn skips_blank_lines_but_rejects_malformed_frames() {
         let data = "\n  \nnot json at all\n{\"ok\":true}\n";
         let mut reader = Cursor::new(data.as_bytes());
-        let f = read_frame(&mut reader).await.unwrap().unwrap();
-        assert_eq!(f["ok"], true);
+        let error = read_frame(&mut reader).await.unwrap_err();
+        assert!(error.to_string().contains("invalid ACP JSON frame"));
+    }
+
+    #[tokio::test]
+    async fn rejects_an_oversized_frame_without_waiting_for_a_newline() {
+        let mut reader = Cursor::new(vec![b'x'; 33]);
+        let error = read_frame_with_limit(&mut reader, 32).await.unwrap_err();
+        assert!(error.to_string().contains("exceeds 32 bytes"));
+    }
+
+    #[tokio::test]
+    async fn accepts_a_final_frame_without_a_newline() {
+        let mut reader = Cursor::new(br#"{"ok":true}"#);
+        let frame = read_frame_with_limit(&mut reader, 32)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(frame["ok"], true);
     }
 
     #[tokio::test]

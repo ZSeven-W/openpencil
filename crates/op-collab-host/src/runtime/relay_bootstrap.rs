@@ -283,6 +283,7 @@ impl EnvironmentRelayBootstrapProvider {
         cached: Option<&BootstrapCache>,
     ) -> Result<reqwest::blocking::Response, BootstrapError> {
         let client = Client::builder()
+            .use_rustls_tls()
             .redirect(Policy::none())
             .no_proxy()
             .connect_timeout(CONNECT_TIMEOUT)

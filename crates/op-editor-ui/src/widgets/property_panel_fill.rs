@@ -38,6 +38,7 @@ const FILL_HEAD_GAP: f32 = 6.0;
 const FILL_OPACITY_WIDTH: f32 = 50.0;
 const FILL_MOVE_WIDTH: f32 = 20.0;
 const FILL_REMOVE_WIDTH: f32 = 22.0;
+const TOUCH_FILL_ACTION_WIDTH: f32 = 30.0;
 
 /// Shared head-row geometry used by paint and every input/action walker.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -50,19 +51,29 @@ pub(crate) struct FillHeadRects {
     pub(crate) remove: Rect,
 }
 
-pub(crate) fn fill_head_rects(x: f32, y: f32, width: f32) -> FillHeadRects {
+pub(crate) fn fill_head_rects(x: f32, y: f32, width: f32, touch_controls: bool) -> FillHeadRects {
+    let move_width = if touch_controls {
+        TOUCH_FILL_ACTION_WIDTH
+    } else {
+        FILL_MOVE_WIDTH
+    };
+    let remove_width = if touch_controls {
+        TOUCH_FILL_ACTION_WIDTH
+    } else {
+        FILL_REMOVE_WIDTH
+    };
     let right = x + width - PAD_X;
     let remove = Rect {
-        origin: Point2D::new(right - FILL_REMOVE_WIDTH, y),
-        size: Point2D::new(FILL_REMOVE_WIDTH, INPUT_HEIGHT),
+        origin: Point2D::new(right - remove_width, y),
+        size: Point2D::new(remove_width, INPUT_HEIGHT),
     };
     let move_down = Rect {
-        origin: Point2D::new(remove.origin.x - FILL_MOVE_WIDTH, y),
-        size: Point2D::new(FILL_MOVE_WIDTH, INPUT_HEIGHT),
+        origin: Point2D::new(remove.origin.x - move_width, y),
+        size: Point2D::new(move_width, INPUT_HEIGHT),
     };
     let move_up = Rect {
-        origin: Point2D::new(move_down.origin.x - FILL_MOVE_WIDTH, y),
-        size: Point2D::new(FILL_MOVE_WIDTH, INPUT_HEIGHT),
+        origin: Point2D::new(move_down.origin.x - move_width, y),
+        size: Point2D::new(move_width, INPUT_HEIGHT),
     };
     let opacity = Rect {
         origin: Point2D::new(move_up.origin.x - FILL_HEAD_GAP - FILL_OPACITY_WIDTH, y),
@@ -231,6 +242,7 @@ pub fn paint_fill_section(
     _fill_picker_open: bool,
     _fill_variable_ref: Option<&str>,
     show_variable_button: bool,
+    touch_controls: bool,
     locale: op_editor_core::Locale,
     x: f32,
     y: f32,
@@ -260,6 +272,7 @@ pub fn paint_fill_section(
                 None
             },
             index == 0 && show_variable_button,
+            touch_controls,
             locale,
             x,
             y,
@@ -352,6 +365,7 @@ fn paint_one_fill(
     is_primary: bool,
     fill_variable_ref: Option<&str>,
     show_variable_button: bool,
+    touch_controls: bool,
     locale: op_editor_core::Locale,
     x: f32,
     y: f32,
@@ -361,7 +375,7 @@ fn paint_one_fill(
     let mut y = y;
     let fill_type = fill.fill_type;
     let fill_color = fill.color;
-    let head = fill_head_rects(x, y, width);
+    let head = fill_head_rects(x, y, width, touch_controls);
     let swatch_rect = head.swatch;
     // Swatch icon depends on the fill type so the head row reads
     // as a small preview of what's rendered below.

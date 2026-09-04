@@ -5,11 +5,13 @@
 //!
 //! - Canvas text edit stores preedit in `TextInputState::composition`
 //!   so the canvas painter can render it inline with an underline.
-//! - Other inputs still consume preedit updates without painting a
-//!   floating overlay. `Ime::Commit` is where text enters OpenPencil.
+//! - Chat and canvas text inputs keep preedit in their `TextInputState`, so
+//!   CJK candidates render inline and commits replace the composing range.
+//!   Other inputs still consume preedit without painting a floating overlay.
 //! - `apply_ime_commit` clears the preedit and lands the committed
-//!   string through `apply_text` char-by-char, so every focus branch
-//!   + per-field filter (numeric / hex drafts) applies unchanged.
+//!   string through each focus branch's text transition. The multiline
+//!   provider Model field preserves normalized newlines; numeric / hex /
+//!   other single-line drafts keep their existing filters.
 //! - `ime_anchor_rect` resolves the focused input's caret rect for
 //!   `set_ime_cursor_area`. Chat and image-popover inputs expose precise
 //!   carets; the desktop shell supplies a cursor-position fallback for older
@@ -25,6 +27,11 @@ impl WidgetHostNative {
     /// conditions `apply_text` routes on (keep in sync with
     /// `keyboard.rs::apply_text`).
     pub fn text_input_focus_active(&self) -> bool {
+        // The save-name dialog opens with its field focused, so the mobile
+        // shell raises the software keyboard as soon as it appears.
+        if self.editor_state.editor_ui.save_name_dialog.open {
+            return true;
+        }
         if self.editor_state.editor_ui.prompt_center.open {
             return true;
         }
@@ -40,17 +47,30 @@ impl WidgetHostNative {
         self.input_active()
     }
 
-    /// `Ime::Preedit` — canvas text edit paints inline composition;
+    /// `Ime::Preedit` — canvas text edit and chat paint inline composition;
     /// other inputs keep the legacy no-floating-overlay behavior.
     pub fn apply_ime_preedit(&mut self, text: &str, cursor: Option<(usize, usize)>) -> bool {
         let had = self.editor_state.editor_ui.ime_preedit.take().is_some();
+        // Save-name dialog: consume composition updates like the other
+        // chrome inputs (text lands on `Ime::Commit`).
+        if self.editor_state.editor_ui.save_name_dialog.open {
+            if had {
+                self.mark_dirty();
+            }
+            return had;
+        }
         if self.editor_state.editor_ui.prompt_center.open {
             if had {
                 self.mark_dirty();
             }
             return had;
         }
-        if self.editor_state.editor_ui.scene_template_center.open {
+        if self
+            .editor_state
+            .editor_ui
+            .scene_template_center
+            .input_active()
+        {
             if had {
                 self.mark_dirty();
             }
@@ -86,6 +106,22 @@ impl WidgetHostNative {
             }
             return changed || had;
         }
+        if self.chat_input_owns_keyboard_pub() {
+            let input = &mut self.editor_state.chat.input;
+            let changed = if text.is_empty() {
+                let changed = input.composition().is_some();
+                input.clear_composition();
+                changed
+            } else {
+                let (start, end) = cursor.unwrap_or((text.len(), text.len()));
+                input.set_composing_text(text, start, end, self.now_ms);
+                true
+            };
+            if changed || had {
+                self.mark_dirty();
+            }
+            return changed || had;
+        }
         if had {
             self.mark_dirty();
         }
@@ -97,6 +133,16 @@ impl WidgetHostNative {
     pub fn apply_ime_commit(&mut self, text: &str) -> bool {
         if self.editor_state.editor_ui.ime_preedit.take().is_some() {
             self.mark_dirty();
+        }
+        // Modal save-name dialog first — same priority as `apply_text`.
+        if self.editor_state.editor_ui.save_name_dialog.open {
+            let mut consumed = false;
+            for ch in text.chars() {
+                if !ch.is_control() && self.apply_text(ch) {
+                    consumed = true;
+                }
+            }
+            return consumed;
         }
         if self.editor_state.editor_ui.prompt_center.open {
             let mut consumed = false;
@@ -111,7 +157,12 @@ impl WidgetHostNative {
         // canvas, so a text node left mid-edit underneath it must not take
         // the candidate the user composed into the panel. Same stale-focus
         // rule the Prompt Center branch above encodes.
-        if self.editor_state.editor_ui.scene_template_center.open {
+        if self
+            .editor_state
+            .editor_ui
+            .scene_template_center
+            .input_active()
+        {
             let mut consumed = false;
             for ch in text.chars() {
                 if !ch.is_control() && self.apply_text(ch) {
@@ -130,6 +181,9 @@ impl WidgetHostNative {
                 }
             }
             return consumed;
+        }
+        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
+            return self.apply_settings_text_payload(text);
         }
         if self.editor_state.ui.text_editing.is_some() {
             if !text.is_empty()
@@ -152,6 +206,19 @@ impl WidgetHostNative {
                 self.mark_dirty();
             }
             return consumed;
+        }
+        if self.chat_input_owns_keyboard_pub() {
+            let had_composition = self.editor_state.chat.input.composition().is_some();
+            if text.is_empty() {
+                self.editor_state.chat.input.clear_composition();
+                if had_composition {
+                    self.mark_dirty();
+                }
+                return had_composition;
+            }
+            self.editor_state.chat.input.commit_text(text, self.now_ms);
+            self.mark_dirty();
+            return true;
         }
         let mut consumed = false;
         for ch in text.chars() {
@@ -239,32 +306,92 @@ mod tests {
     }
 
     #[test]
-    fn preedit_does_not_create_floating_overlay_and_commit_lands_in_chat() {
+    fn chat_preedit_renders_inline_and_commit_replaces_it() {
         let mut h = host();
         h.editor_state_mut().chat.focused = true;
-        assert!(
-            !h.apply_ime_preedit("nih", Some((0, 3))),
-            "preedit should not request redraw for a floating overlay"
-        );
+        assert!(h.apply_ime_preedit("nih", Some((0, 3))));
         assert!(h.editor_state().editor_ui.ime_preedit.is_none());
+        let composition = h
+            .editor_state()
+            .chat
+            .input
+            .composition()
+            .expect("chat should retain its inline preedit");
+        assert_eq!(composition.text, "nih");
+        assert_eq!(composition.selection.focus, 3);
 
-        assert!(!h.apply_ime_preedit("nih", Some((0, 3))));
         assert!(h.apply_ime_commit("你好"));
         assert!(h.editor_state().editor_ui.ime_preedit.is_none());
-        assert!(h.editor_state().chat.input.text().contains("你好"));
+        assert_eq!(h.editor_state().chat.input.text(), "你好");
+        assert!(h.editor_state().chat.input.composition().is_none());
+        assert_eq!(h.editor_state().chat.input_caret(), "你好".len());
     }
 
     #[test]
     fn empty_preedit_is_the_cancel_signal() {
         let mut h = host();
         h.editor_state_mut().chat.focused = true;
-        assert!(!h.apply_ime_preedit("ni", None));
+        assert!(h.apply_ime_preedit("ni", None));
+        assert!(h.editor_state().chat.input.composition().is_some());
         assert!(
-            !h.apply_ime_preedit("", None),
-            "clear is a no-op when preedit overlay state is not stored"
+            h.apply_ime_preedit("", None),
+            "clear removes the chat's inline composition"
         );
         assert!(h.editor_state().editor_ui.ime_preedit.is_none());
+        assert!(h.editor_state().chat.input.composition().is_none());
         assert!(!h.apply_ime_preedit("", None), "already clear → no-op");
+    }
+
+    #[test]
+    fn chat_preedit_selection_uses_utf8_byte_offsets() {
+        let mut h = host();
+        h.editor_state_mut().chat.focused = true;
+
+        assert!(h.apply_ime_preedit("中a文", Some((3, 4))));
+        let composition = h
+            .editor_state()
+            .chat
+            .input
+            .composition()
+            .expect("chat composition");
+        assert_eq!(composition.selection.anchor, 3);
+        assert_eq!(composition.selection.focus, 4);
+        assert_eq!(composition.cursor, 4);
+
+        assert!(h.apply_ime_commit("中文"));
+        assert_eq!(h.editor_state().chat.input.text(), "中文");
+        assert_eq!(h.editor_state().chat.input_caret(), "中文".len());
+        assert!(h.editor_state().chat.input.composition().is_none());
+    }
+
+    #[test]
+    fn chat_commit_replaces_the_durable_selection_atomically() {
+        let mut h = host();
+        h.editor_state_mut().chat.focused = true;
+        h.editor_state_mut().chat.set_input_text("a旧b");
+        h.editor_state_mut().chat.set_input_caret(1, 0);
+        h.editor_state_mut().chat.input.drag_to("a旧".len(), 0);
+
+        assert!(h.apply_ime_preedit("zhong", Some((5, 5))));
+        assert!(h.apply_ime_commit("中"));
+        assert_eq!(h.editor_state().chat.input.text(), "a中b");
+        assert_eq!(h.editor_state().chat.input_caret(), "a中".len());
+    }
+
+    #[test]
+    fn chat_blur_clears_only_transient_preedit() {
+        let mut h = host();
+        h.editor_state_mut().chat.focused = true;
+        h.editor_state_mut().chat.set_input_text("已提交");
+        assert!(h.apply_ime_preedit("zhong", Some((5, 5))));
+        assert_eq!(h.editor_state().chat.input.text(), "已提交");
+        assert!(h.editor_state().chat.input.composition().is_some());
+
+        h.editor_state_mut().chat.blur_input(1);
+
+        assert!(!h.editor_state().chat.focused);
+        assert_eq!(h.editor_state().chat.input.text(), "已提交");
+        assert!(h.editor_state().chat.input.composition().is_none());
     }
 
     #[test]

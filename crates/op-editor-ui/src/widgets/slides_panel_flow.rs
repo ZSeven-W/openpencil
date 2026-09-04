@@ -115,8 +115,16 @@ pub fn tab_labels(state: &EditorState) -> (&'static str, &'static str) {
 pub fn tab_row(state: &EditorState, panel: Rect) -> Option<SlidesPanelTabs> {
     tab_row_visible(state).then(|| {
         let (layers, slides) = tab_labels(state);
-        SlidesPanelTabs::new(panel, state.editor_ui.slides_panel.tab, layers, slides)
+        tabs_for_state(state, panel, layers, slides)
     })
+}
+
+fn tabs_for_state(state: &EditorState, panel: Rect, layers: &str, slides: &str) -> SlidesPanelTabs {
+    if state.editor_ui.touch_chrome() {
+        SlidesPanelTabs::new_touch(panel, state.editor_ui.slides_panel.tab, layers, slides)
+    } else {
+        SlidesPanelTabs::new(panel, state.editor_ui.slides_panel.tab, layers, slides)
+    }
 }
 
 /// The rail rect the Layers tree gets: the whole panel, less the tab
@@ -206,7 +214,7 @@ pub fn layout(
     let (layers, slides) = tab_labels(state);
     SlidesPanelLayout::new(
         panel,
-        SlidesPanelTabs::new(panel, state.editor_ui.slides_panel.tab, layers, slides),
+        tabs_for_state(state, panel, layers, slides),
         &board_aspects(chips, scene),
         state.editor_ui.slides_panel.scroll.offset,
         action_state(state, chips),

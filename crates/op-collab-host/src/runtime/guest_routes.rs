@@ -68,6 +68,14 @@ impl CollabRuntime {
         &mut self,
         host: &mut impl CollabHost,
     ) -> Result<(), CollabRuntimeError> {
+        let (route, intent) = self.guest_retry_target()?;
+        self.note_guest_retry_started();
+        self.spawn_guest_route(host, route, intent)
+    }
+
+    pub(super) fn guest_retry_target(
+        &self,
+    ) -> Result<(GuestConnectionRoute, JoinIntent), CollabRuntimeError> {
         let route = self
             .last_join
             .clone()
@@ -76,6 +84,9 @@ impl CollabRuntime {
             return Err(CollabRuntimeError::invalid_session());
         };
         let core = guest.session.core();
+        if core.state() != op_collab::GuestConnectionState::Disconnected {
+            return Err(CollabRuntimeError::invalid_session());
+        }
         let intent = JoinIntent::Resume(ResumeHint {
             participant_id: core.participant_id().clone(),
             peer_id: core.peer_id().clone(),
@@ -88,10 +99,9 @@ impl CollabRuntime {
         let expected_remote_static = self
             .pinned_owner_static
             .ok_or_else(CollabRuntimeError::invalid_session)?;
-        self.spawn_guest_route(
-            host,
+        Ok((
             route.retry_with_owner_static(expected_remote_static),
             intent,
-        )
+        ))
     }
 }

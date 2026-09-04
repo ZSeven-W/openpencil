@@ -266,6 +266,7 @@ pub fn common_props(figma: &FigValue, id: String) -> PenNodeBase {
         } else {
             None
         },
+        pin: None,
         flip_x,
         flip_y,
         mask_type: figma_mask_type(figma),

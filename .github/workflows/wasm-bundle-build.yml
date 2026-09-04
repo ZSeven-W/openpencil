@@ -17,7 +17,7 @@ name: WASM bundle build (#56 — real canvaskit deployable)
 # the CURRENT local script is the honest option.
 #
 # Authoritative recipe mirrored from `tools/check-wasm-bundle.sh`:
-#   prerequisites: cargo, wasm-bindgen, wasm-opt, node, gzip (NO EMSDK)
+#   prerequisites: cargo, wasm-bindgen, wasm-opt, node, python3, gzip (NO EMSDK)
 #   1. cargo build -p op-host-web --target wasm32-unknown-unknown \
 #        --no-default-features --features canvaskit --release
 #   2. wasm-bindgen --target web --out-dir crates/op-host-web/pkg <target.wasm>
@@ -37,6 +37,9 @@ on:
       - 'crates/**'
       - 'deny.toml'
       - 'tools/check-wasm-bundle.sh'
+      - 'tools/stage-web-assets.sh'
+      - 'tools/export-i18n-catalogs.py'
+      - 'tools/test_export_i18n_catalogs.py'
       - '.github/workflows/wasm-bundle-build.yml'
   push:
     branches: ['**']
@@ -45,6 +48,9 @@ on:
       - 'Cargo.lock'
       - 'crates/**'
       - 'tools/check-wasm-bundle.sh'
+      - 'tools/stage-web-assets.sh'
+      - 'tools/export-i18n-catalogs.py'
+      - 'tools/test_export_i18n_catalogs.py'
       - '.github/workflows/wasm-bundle-build.yml'
   # Allow on-demand runs so a release can produce the artifact without a code
   # change (e.g. to re-bundle against an updated toolchain).
@@ -70,8 +76,8 @@ jobs:
 
       # The CanvasKit bundle is pure Rust + web_sys + serde — no skia-safe, no
       # emscripten, no system GL libs. So the toolchain footprint is just the
-      # wasm-bindgen CLI + wasm-opt (binaryen) + node, exactly the prerequisites
-      # `tools/check-wasm-bundle.sh` asserts via its `need` checks.
+      # wasm-bindgen CLI + wasm-opt (binaryen) + node, plus Python for generated
+      # locale catalogs staged by `tools/stage-web-assets.sh`.
       - name: Install wasm-bindgen-cli (pinned to the locked version)
         run: |
           # Pin the CLI to the same version as the `wasm-bindgen` crate in
@@ -91,12 +97,24 @@ jobs:
 
       - name: Install binaryen (pinned modern release) + headless server runtime deps
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config \
-            libfreetype-dev \
-            libfontconfig1-dev \
-            fonts-noto-cjk
+          set -euo pipefail
+          apt_options=(
+            -o Acquire::ForceIPv4=true
+            -o Acquire::Retries=3
+            -o Acquire::http::Timeout=30
+          )
+          packages=(pkg-config libfreetype-dev libfontconfig1-dev fonts-noto-cjk)
+          for attempt in 1 2 3 4; do
+            if sudo apt-get "${apt_options[@]}" update && \
+              sudo apt-get "${apt_options[@]}" install --yes "${packages[@]}"; then
+              break
+            fi
+            if [[ "$attempt" == 4 ]]; then
+              echo "::error::apt prerequisites failed after $attempt attempts"
+              exit 1
+            fi
+            sleep $((attempt * 20))
+          done
           # Ubuntu's apt `binaryen` is v108 (2022) — far too old for rustc
           # 1.94's wasm feature set (memory.copy/fill from bulk-memory-opt),
           # so `wasm-opt` rejects the bundle with "all used features should be
@@ -108,11 +126,17 @@ jobs:
           echo "${GITHUB_WORKSPACE}/binaryen-${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
           "${GITHUB_WORKSPACE}/binaryen-${BINARYEN_VERSION}/bin/wasm-opt" --version
 
-      - name: Verify node + gzip + Chrome are present (script prerequisites)
+      - name: Verify node + Python + gzip + Chrome are present (script prerequisites)
         run: |
           node --version
+          python3 --version
           gzip --version | head -n1
           google-chrome --version || chromium --version || chromium-browser --version
+
+      - name: Test + validate runtime i18n catalog exporter
+        run: |
+          python3 tools/test_export_i18n_catalogs.py
+          python3 tools/export-i18n-catalogs.py --check
 
       # Single source of truth: run the local gate script verbatim. It performs
       # cargo build (canvaskit) -> wasm-bindgen --target web -> 0-env-import
@@ -132,10 +156,11 @@ jobs:
       # mirrors the `<exe_dir>/web-bundle` + `web-bundle/canvaskit` resolution
       # order in `crates/op-host-services/src/web_static.rs`.
       #
-      # `pkg/` also carries `assets/` — the preview JPEGs the wasm bundle no
-      # longer embeds and the browser fetches from `/pkg/assets/…` (staged by
-      # `tools/stage-web-assets.sh`, which the gate script above runs). The
-      # assertion below is what stops a bundle shipping without them.
+      # `pkg/` also carries `assets/` — previews, templates, the icon catalog,
+      # fonts, and the 13 locale catalogs the wasm bundle no longer embeds.
+      # The browser fetches them from `/pkg/assets/…` after
+      # `tools/stage-web-assets.sh` stages them. The assertion below is what
+      # stops a bundle shipping without them.
       - name: Assemble deployable web-bundle/
         run: |
           set -euo pipefail
@@ -144,10 +169,25 @@ jobs:
           cp -R crates/op-host-web/pkg/. web-bundle/
           cp -R crates/op-host-web/assets/canvaskit web-bundle/canvaskit
           for required in assets/prompt_center_previews assets/scene_template_previews \
-                          assets/scene_templates assets/iconify-catalog-core.json; do
+                          assets/scene_templates assets/iconify-catalog-core.json \
+                          assets/i18n; do
             test -e "web-bundle/$required" \
               || { echo "::error::web-bundle is missing $required"; exit 1; }
           done
+          expected_i18n_files="$(
+            printf '%s\n' \
+              de.json es.json fr.json hi.json id.json ja.json ko.json pt.json ru.json \
+              th.json tr.json vi.json zh-TW.json | LC_ALL=C sort
+          )"
+          actual_i18n_files="$(
+            find web-bundle/assets/i18n -mindepth 1 -maxdepth 1 -exec basename {} \; \
+              | LC_ALL=C sort
+          )"
+          i18n_count="$(find web-bundle/assets/i18n -maxdepth 1 -type f -name '*.json' | wc -l | tr -d ' ')"
+          test "$i18n_count" -eq 13 \
+            || { echo "::error::expected 13 runtime i18n catalogs, found $i18n_count"; exit 1; }
+          test "$actual_i18n_files" = "$expected_i18n_files" \
+            || { echo "::error::runtime i18n catalog filenames are not the exact BCP-47 set"; exit 1; }
           echo "web-bundle contents:"
           find web-bundle -maxdepth 2 -type f | sort
           echo "staged runtime assets: $(find web-bundle/assets -type f | wc -l) files"

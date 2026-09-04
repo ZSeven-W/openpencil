@@ -103,8 +103,10 @@ impl<'a> ExportQuickMenu<'a> {
             }
             // No dedicated catalogue key: the format name is the row, and
             // `export.exportFormat` is already the localized frame for it.
-            ExportQuickRow::Pdf => op_i18n::translate(self.ui.locale, "export.exportFormat")
-                .replace("{{format}}", "PDF"),
+            ExportQuickRow::Pdf => {
+                op_i18n::translate(self.ui.effective_locale(), "export.exportFormat")
+                    .replace("{{format}}", "PDF")
+            }
             ExportQuickRow::SlideshowHtml => {
                 export_menu_rows::trimmed_label(self.ui, "fileMenu.exportSlideshowHtml").to_string()
             }

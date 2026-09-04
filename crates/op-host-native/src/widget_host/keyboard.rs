@@ -14,6 +14,16 @@ impl WidgetHostNative {
     /// Typed-char router: settings → rename → text-edit → variable
     /// row → property → chat.
     pub fn apply_text(&mut self, c: char) -> bool {
+        // The mobile save-name dialog is fully modal — it owns every
+        // keystroke while open, above every other input surface.
+        if let Some(changed) =
+            op_editor_core::save_name_keyboard::text(&mut self.editor_state, c, self.now_ms)
+        {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
         if let Some(changed) = shared::prompt_center_text(&mut self.editor_state, c, self.now_ms) {
             if changed {
                 self.mark_dirty();

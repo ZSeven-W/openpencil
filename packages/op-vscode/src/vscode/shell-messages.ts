@@ -44,6 +44,45 @@ export function parseShellCopyText(raw: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Parse a request from the embedded editor to open an authentication or help
+ * page in the user's browser.
+ *
+ * The extension host is the security boundary here: the daemon page is
+ * allowed to request HTTPS URLs, plus loopback HTTP for an explicitly
+ * configured local development SSO. Other schemes, remote plaintext HTTP,
+ * credential-bearing URLs, and unreasonably large values are rejected before
+ * they reach `vscode.env.openExternal`.
+ */
+export function parseShellExternalUrl(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  let value: { type?: unknown; url?: unknown };
+  try {
+    value = JSON.parse(raw) as { type?: unknown; url?: unknown };
+  } catch {
+    return undefined;
+  }
+  if (value.type !== "op-shell/open-external" || typeof value.url !== "string") {
+    return undefined;
+  }
+  if (value.url.length === 0 || value.url.length > 4_096) return undefined;
+
+  try {
+    const url = new URL(value.url);
+    if (url.username !== "" || url.password !== "") return undefined;
+    const loopback =
+      url.hostname === "127.0.0.1" ||
+      url.hostname === "localhost" ||
+      url.hostname === "[::1]";
+    if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
+      return undefined;
+    }
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
 /** The origin reported by an op-shell/ready control message, else undefined. */
 export function parseShellReadyOrigin(raw: unknown): string | undefined {
   if (typeof raw !== "string") return undefined;

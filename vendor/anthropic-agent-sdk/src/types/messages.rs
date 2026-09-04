@@ -100,6 +100,11 @@ pub enum ContentBlock {
         #[serde(skip_serializing_if = "Option::is_none")]
         is_error: Option<bool>,
     },
+    /// Any content-block `type` added by a newer Claude Code build. Keeping
+    /// unknown blocks representable lets consumers preserve the surrounding
+    /// assistant message instead of failing the entire stream.
+    #[serde(other)]
+    Unknown,
 }
 
 /// User message content
@@ -233,6 +238,16 @@ pub enum Message {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unknown_content_block_is_forward_compatible() {
+        let block: ContentBlock = serde_json::from_value(serde_json::json!({
+            "type": "future_claude_block",
+            "payload": { "version": 2 }
+        }))
+        .expect("unknown content block must not fail the assistant message");
+        assert!(matches!(block, ContentBlock::Unknown));
+    }
 
     #[test]
     fn test_question_option_serde() {

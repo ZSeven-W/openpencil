@@ -5,6 +5,7 @@ on:
     paths:
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - '.cargo/**'
       - 'crates/**'
       # Parity with the push leg: a PR touching a vendored dep (the
       # casement winit fork, jian, agent) must not ride green with
@@ -17,12 +18,16 @@ on:
       - 'tools/check-web-server-headless.sh'
       - 'tools/check-widget-boundary.sh'
       - 'tools/check-text-measure.sh'
+      - 'tools/check-rustls-client-policy.sh'
+      - 'tools/check-file-line-cap.sh'
+      - '.github/workflows/rust-release.yml'
       - '.github/workflows/rust-check.yml'
   push:
     branches: ['**']
     paths:
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - '.cargo/**'
       - 'crates/**'
       - 'vendor/**'
       - 'deny.toml'
@@ -32,6 +37,9 @@ on:
       - 'tools/check-web-server-headless.sh'
       - 'tools/check-widget-boundary.sh'
       - 'tools/check-text-measure.sh'
+      - 'tools/check-rustls-client-policy.sh'
+      - 'tools/check-file-line-cap.sh'
+      - '.github/workflows/rust-release.yml'
       - '.github/workflows/rust-check.yml'
 
 jobs:
@@ -60,14 +68,48 @@ jobs:
       # Linux; the wayland-csd-adwaita feature pulls in xkbcommon + wayland-client.
       - name: Install Linux GL prereqs
         if: runner.os == 'Linux'
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libxkbcommon-dev libxkbcommon-x11-dev \
-            libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-            libegl1-mesa-dev libgles2-mesa-dev libgbm-dev mesa-utils \
+          set -euo pipefail
+          apt_options=(
+            -o Acquire::ForceIPv4=true
+            -o Acquire::Retries=3
+            -o Acquire::http::Timeout=30
+          )
+          packages=(
+            libxkbcommon-dev libxkbcommon-x11-dev
+            libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+            libegl1-mesa-dev libgles2-mesa-dev libgbm-dev mesa-utils
             libfreetype-dev libfontconfig1-dev fonts-noto-cjk
+            pkg-config libssl-dev
+            # `check-rustls-client-policy.sh` matches with ripgrep's multiline
+            # + PCRE2 lookahead, which grep cannot replicate portably. Without
+            # it the script's `rg` calls fail as "command not found" and the
+            # policy reports a violation that is not there — red on every
+            # Linux/macOS run since 215100234 introduced the dependency.
+            ripgrep
+          )
+          for attempt in 1 2 3 4; do
+            if sudo env DEBIAN_FRONTEND=noninteractive \
+              timeout 180s apt-get "${apt_options[@]}" update && \
+              sudo env DEBIAN_FRONTEND=noninteractive \
+              timeout 300s apt-get "${apt_options[@]}" install --yes "${packages[@]}"; then
+              break
+            fi
+            if [[ "$attempt" == 4 ]]; then
+              echo "::error::apt prerequisites failed after $attempt attempts"
+              exit 1
+            fi
+            sleep $((attempt * 20))
+          done
+      # macOS runners ship no ripgrep and have no apt block above; same
+      # dependency, same reason (see the Linux packages list).
+      - name: Install ripgrep (macOS)
+        if: runner.os == 'macOS'
+        run: brew list ripgrep >/dev/null 2>&1 || brew install ripgrep
       - run: cargo fmt --all -- --check
+      - run: tools/check-rustls-client-policy.sh
+      - run: tools/check-file-line-cap.sh
       - run: cargo build --workspace
       # GitHub-hosted runners are headless with no reliable Mesa software
       # EGL, so STEP1A_REQUIRE_GPU is left unset: the op-host-native GPU
@@ -104,7 +146,31 @@ jobs:
         run: cargo test --workspace --doc
       - name: Run CanvasKit web host tests
         run: cargo test -p op-host-web --features canvaskit -- --test-threads=1
+      # `gl-host` and `editor` are NON-DEFAULT features, so the workspace
+      # test step above compiles neither the native widget host (884 tests
+      # covering the entire desktop/mobile editor chrome) nor op-engine-ffi's
+      # editor-mode integration tests. That gap is exactly how the mobile
+      # safe-area band contract stayed red for eleven days after d20be2410
+      # re-tinted the bands. One Linux leg is enough to hold the contract;
+      # Windows is excluded for the same DirectWrite/Skia reason as above.
+      - name: Run native widget-host tests (non-default gl-host feature)
+        if: runner.os == 'Linux'
+        run: cargo test -p op-host-native --features gl-host
+      - name: Run engine-ffi editor-mode tests (non-default editor feature)
+        if: runner.os == 'Linux'
+        run: cargo test -p op-engine-ffi --features editor
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # The workspace clippy above only sees DEFAULT features, so the
+      # CanvasKit web host, the native widget host and the FFI editor mode
+      # are all invisible to it — a real `collapsible_if` sat in
+      # `canvaskit/mount_keyboard.rs` from 26b91658d until 0827 for exactly
+      # that reason. Lint those three surfaces explicitly.
+      - name: Clippy non-default feature surfaces
+        if: runner.os == 'Linux'
+        run: |
+          cargo clippy -p op-host-web --features canvaskit --all-targets -- -D warnings
+          cargo clippy -p op-host-native --features gl-host --all-targets -- -D warnings
+          cargo clippy -p op-engine-ffi --features editor --all-targets -- -D warnings
       # Step 1a Phase C Task 4: spec v19 §11 + §12.3 boundary invariants.
       # Linux runner has the full mobile target stdlib (`rustup target add`
       # in subsequent steps would handle ios/android cargo metadata too,

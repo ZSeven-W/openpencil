@@ -14,6 +14,14 @@ use op_editor_core::host_escape_transitions as escape;
 impl WidgetHost {
     /// Escape — handles one layer per press.
     pub fn apply_escape(&mut self) -> bool {
+        // Slideshow presentation consumes Escape to exit. This must run
+        // before all the property/panel/modal escapes so presentation gets
+        // priority when it is active. Use the cached viewport dimensions,
+        // which are updated on every press/paint.
+        if self.preview_slideshow_active() {
+            self.do_exit_preview(self.last_viewport_w, self.last_viewport_h);
+            return true;
+        }
         if self.editor_state.editor_ui.escape_scene_template_center() {
             self.mark_dirty();
             return true;

@@ -207,6 +207,9 @@ impl DesktopApp {
                 .pending_fullscreen_toggle = false;
             self.handle_menu_action(crate::menu::MenuAction::ToggleFullscreen, event_loop);
         }
+        if self.drain_save_current_template_request() {
+            self.request_redraw(true);
+        }
         if let Some(text) = self.host.editor_state_mut().chat.pending_copy_text.take() {
             crate::clipboard::set_text(&text);
         }

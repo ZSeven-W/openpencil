@@ -107,6 +107,7 @@ fn every_variant_paints_at_least_one_primitive() {
         Icon::Check,
         Icon::ArrowUpRight,
         Icon::Wrench,
+        Icon::Layers,
     ] {
         let b = paint_one(icon);
         assert!(b.paths > 0, "{:?} drew nothing", icon);
@@ -158,6 +159,7 @@ fn first_party_icon_font_names_all_resolve() {
         "chart-line",
         "settings-2",
         "wrench",
+        "layers",
     ] {
         assert!(
             Icon::from_name(name).is_some(),
@@ -212,4 +214,55 @@ fn icon_font_node_paints_simple_icon_as_fill_path() {
     );
     assert_eq!(b.fills, 1);
     assert_eq!(b.paths, 0);
+}
+
+#[test]
+fn icon_font_node_paints_builtin_lucide_when_catalog_has_no_exact_name() {
+    use crate::widgets::icon_catalog::lookup_icon;
+
+    assert!(lookup_icon("lucide", "favorite").is_none());
+    assert_eq!(Icon::from_name("favorite"), Some(Icon::Star));
+
+    let mut b = CountingBackend::default();
+    paint_icon_font_node(
+        &mut b,
+        "lucide",
+        "favorite",
+        Rect::xywh(0.0, 0.0, 24.0, 24.0),
+        Some(Color::WHITE),
+    );
+
+    assert!(b.paths > 0);
+    assert_eq!(b.fills, 0);
+}
+
+#[test]
+fn icon_font_node_unknown_name_paints_nothing() {
+    use crate::widgets::icon_catalog::lookup_icon;
+
+    let unknown = "definitely-not-a-real-icon";
+    assert!(lookup_icon("lucide", unknown).is_none());
+    assert!(Icon::from_name(unknown).is_none());
+
+    let mut lucide = CountingBackend::default();
+    paint_icon_font_node(
+        &mut lucide,
+        "lucide",
+        unknown,
+        Rect::xywh(0.0, 0.0, 24.0, 24.0),
+        Some(Color::WHITE),
+    );
+    assert_eq!(lucide.paths, 0);
+    assert_eq!(lucide.fills, 0);
+
+    let mut unknown_family = CountingBackend::default();
+    paint_icon_font_node(
+        &mut unknown_family,
+        "missing-family",
+        unknown,
+        Rect::xywh(0.0, 0.0, 24.0, 24.0),
+        Some(Color::WHITE),
+    );
+    assert_eq!(unknown_family.paths, 0);
+    assert_eq!(unknown_family.fills, 0);
 }

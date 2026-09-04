@@ -89,6 +89,25 @@ pub struct ColorVariablePickerLayout {
 }
 
 impl ColorVariablePickerLayout {
+    pub(crate) fn scaled_about(mut self, origin: Point2D, scale: f32) -> Self {
+        let map = |rect: Rect| Rect {
+            origin: Point2D::new(
+                origin.x + (rect.origin.x - origin.x) * scale,
+                origin.y + (rect.origin.y - origin.y) * scale,
+            ),
+            size: Point2D::new(rect.size.x * scale, rect.size.y * scale),
+        };
+        self.popup = map(self.popup);
+        self.viewport = map(self.viewport);
+        self.content_height *= scale;
+        self.max_scroll *= scale;
+        self.scroll *= scale;
+        for (_, rect) in &mut self.rows {
+            *rect = map(*rect);
+        }
+        self
+    }
+
     /// Row under `point`, or `None` when the point is outside the list
     /// or over a row scrolled out of view.
     pub fn row_at(&self, point: Point2D) -> Option<ColorVariableRow> {

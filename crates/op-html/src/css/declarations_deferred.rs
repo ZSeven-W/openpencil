@@ -83,7 +83,7 @@ fn is_supported_shorthand(name: &str) -> bool {
     )
 }
 
-fn contains_var_function(value: &str) -> bool {
+pub(super) fn contains_var_function(value: &str) -> bool {
     let bytes = value.as_bytes();
     let (mut quote, mut escaped) = (None, false);
     let mut at = 0;

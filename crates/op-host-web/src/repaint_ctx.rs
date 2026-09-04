@@ -52,6 +52,16 @@ pub(crate) trait RepaintContext {
     /// the import file-picker path; `register_imported_font` re-registers a
     /// known family from IndexedDB.
     fn register_imported_font_from_bytes(&mut self, bytes: &[u8]) -> Option<String>;
+    /// Register an app-shipped design face fetched at mount, ranked below
+    /// imported and system fonts of the same name. Returns `true` when the face
+    /// was registered.
+    ///
+    /// Defaulted to `false`: the test backends ship no fonts, so "could not
+    /// register" is the honest answer for them and they need no override.
+    fn register_bundled_font(&mut self, family: &str, bytes: &[u8]) -> bool {
+        let _ = (family, bytes);
+        false
+    }
     /// Display names of every registered imported family — the web snapshot
     /// source (Rust doesn't own the registry on web).
     fn imported_family_list(&self) -> Vec<String>;

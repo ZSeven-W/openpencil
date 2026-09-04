@@ -56,7 +56,7 @@ mod reveal;
 #[path = "canvas_viewport_paint/shapes.rs"]
 mod shapes;
 
-pub use entry::{paint_node, paint_scene_page};
+pub use entry::{paint_node, paint_scene_page, paint_scene_page_with_options};
 pub(crate) use entry::{
     paint_node_with_options, paint_node_with_options_hiding, paint_scene_nodes_with_options_hiding,
 };

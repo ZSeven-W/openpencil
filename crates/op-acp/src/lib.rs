@@ -24,7 +24,11 @@ pub mod protocol;
 pub mod transport;
 pub mod types;
 
-pub use client::{connect_acp_agent, AcpConnection, McpHttpServer, NewSessionOptions};
+pub use client::{connect_acp_agent, AcpConnection, AcpSession, McpHttpServer, NewSessionOptions};
 pub use event_adapter::session_update_to_delta;
-pub use protocol::{SessionNotification, SessionUpdate};
+pub use protocol::{
+    AcpStopReason, AgentCapabilities, AuthMethod, ProtocolVersion, SessionConfigKind,
+    SessionConfigOption, SessionConfigOptionCategory, SessionConfigOptionValue,
+    SessionConfigSelectOptions, SessionNotification, SessionUpdate,
+};
 pub use types::{AcpAgentConfig, AcpAgentInfo, AcpConnectResult, AcpError, ConnectionType};

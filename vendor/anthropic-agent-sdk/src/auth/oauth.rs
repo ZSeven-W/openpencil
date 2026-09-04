@@ -201,7 +201,7 @@ impl OAuthClientBuilder {
             config: self.config.unwrap_or_default(),
             storage: self.storage.unwrap_or_default(),
             auto_open_browser: self.auto_open_browser,
-            http_client: reqwest::Client::new(),
+            http_client: rustls_http_client(),
         }
     }
 }
@@ -226,7 +226,7 @@ impl OAuthClient {
             config: OAuthConfig::default(),
             storage: TokenStorage::new(),
             auto_open_browser: true,
-            http_client: reqwest::Client::new(),
+            http_client: rustls_http_client(),
         })
     }
 
@@ -559,6 +559,13 @@ impl OAuthClient {
     pub fn current_token(&self) -> Option<TokenInfo> {
         self.storage.load().ok()
     }
+}
+
+fn rustls_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .use_rustls_tls()
+        .build()
+        .expect("build Claude OAuth rustls client")
 }
 
 /// URL encode a string for OAuth parameters.

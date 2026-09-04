@@ -319,17 +319,16 @@ mod tests {
         // The repair layer keys off DesignForm, and the one outcome that
         // would actively damage a card is being read as a 375-wide phone
         // screen (status-bar injection, bottom-nav chrome, mobile reflow).
-        // 1080 is far above the phone band, so it reads as a Page — which
-        // only ever ADDS protection (`spacing_repair`'s section-rhythm gate)
-        // and never applies phone chrome.
-        for (w, h) in [
-            (1080.0, 1440.0), // XHS 竖版 3:4 — the primary spec
-            (1080.0, 1080.0), // XHS 方版 1:1
-            (1080.0, 1920.0), // 通用 9:16
+        // Portrait cards read as the Card form (DS P1.5); the square board
+        // keeps its previous Page judgement. None may read as a phone.
+        for (w, h, expected) in [
+            (1080.0, 1440.0, DesignForm::Card), // XHS 竖版 3:4 — the primary spec
+            (1080.0, 1080.0, DesignForm::Page), // XHS 方版 1:1
+            (1080.0, 1920.0, DesignForm::Card), // 通用 9:16
         ] {
             let form = classify_root_form(Some(w), Some(h));
             assert_ne!(form, DesignForm::MobileScreen, "{w}x{h}");
-            assert_eq!(form, DesignForm::Page, "{w}x{h}");
+            assert_eq!(form, expected, "{w}x{h}");
         }
     }
 

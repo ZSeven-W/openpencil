@@ -183,6 +183,14 @@ pub struct CodegenCacheEntry {
 /// `PartialEq` only (not `Eq`) — scroll offsets carry `f32` values.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CodegenState {
+    /// Monotonic runtime lifetime of document-scoped codegen state.
+    ///
+    /// This is intentionally not part of the `.op` document. Every document
+    /// install/reset advances it, including collaboration RemoteCommit,
+    /// Replay, and rollback paths that deliberately preserve the editor's
+    /// broader document generation.
+    #[doc(hidden)]
+    pub document_reset_epoch: u64,
     pub framework: Framework,
     /// Generated results keyed by framework. This mirrors the retired web
     /// panel's `codeCache` and lets a generated tab survive a round trip
@@ -234,6 +242,7 @@ pub struct CodegenState {
 impl Default for CodegenState {
     fn default() -> Self {
         Self {
+            document_reset_epoch: 0,
             framework: Framework::React,
             framework_cache: Arc::new(Vec::new()),
             framework_scroll: Default::default(),
@@ -266,13 +275,20 @@ impl CodegenState {
     /// reset must be explicit: generated code and its per-framework cache are
     /// document-scoped and must never survive Open/New/import/live-sync.
     pub fn reset_for_document_replacement(&mut self) {
+        let document_reset_epoch = self.document_reset_epoch.saturating_add(1);
         let framework = self.framework;
         let framework_scroll = self.framework_scroll;
         *self = Self {
+            document_reset_epoch,
             framework,
             framework_scroll,
             ..Self::default()
         };
+    }
+
+    /// Runtime lifetime of the document-scoped generation/cache state.
+    pub fn document_reset_epoch(&self) -> u64 {
+        self.document_reset_epoch
     }
 
     /// Select a different output framework, caching the current completed
@@ -416,6 +432,32 @@ mod tests {
 
         assert_eq!(s.framework_scroll.offset, 16.0);
         assert_eq!(s.code_scroll.offset, 32.0);
+    }
+
+    #[test]
+    fn document_reset_epoch_is_monotonic_and_preserves_framework_chrome() {
+        let mut state = CodegenState {
+            framework: Framework::Compose,
+            framework_scroll: jian_core::scroll::ScrollState { offset: 27.0 },
+            phase: CodegenPhase::Complete,
+            code: "old output".into(),
+            ..CodegenState::default()
+        };
+        let initial = state.document_reset_epoch();
+
+        state.reset_for_document_replacement();
+        let first_reset = state.document_reset_epoch();
+        assert!(first_reset > initial);
+        assert_eq!(state.framework, Framework::Compose);
+        assert_eq!(state.framework_scroll.offset, 27.0);
+        assert_eq!(state.phase, CodegenPhase::Idle);
+        assert!(state.code.is_empty());
+
+        let mut cloned = state.clone();
+        assert_eq!(cloned.document_reset_epoch(), first_reset);
+        cloned.reset_for_document_replacement();
+        assert!(cloned.document_reset_epoch() > first_reset);
+        assert_eq!(state.document_reset_epoch(), first_reset);
     }
 
     #[test]

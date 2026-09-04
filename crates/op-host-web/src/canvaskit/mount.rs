@@ -1,8 +1,6 @@
 //! Body of the `mount_ck` entry point.
-//!
-//! Split out of `canvaskit.rs`: builds the `CkInner` shell, runs the daemon
-//! bootstrap sequence, and installs every DOM listener the web editor needs.
-//! The `#[wasm_bindgen]` export itself stays in the `canvaskit` spine.
+//! Builds the `CkInner` shell and installs the web editor's DOM listeners.
+//! The `#[wasm_bindgen]` export stays in the `canvaskit` spine.
 
 use wasm_bindgen::prelude::*;
 
@@ -18,11 +16,21 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     use std::cell::RefCell;
     use std::rc::Rc;
     use wasm_bindgen::JsCast;
-    use web_sys::{KeyboardEvent, MouseEvent, WheelEvent};
+    use web_sys::{MouseEvent, WheelEvent};
 
     console_error_panic_hook::set_once();
 
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("mount_ck: no window"))?;
+    // dsh-openpencil #2: the host starts sending `op-bridge/init` the moment
+    // this iframe is created and retries only ~20x over ~10 s, while
+    // `init_backend` below downloads + instantiates ~24 MB of wasm
+    // (op_host_web_bg + CanvasKit) and paints the first frame. `postMessage`
+    // to a window without a listener is silently DROPPED — never queued — so
+    // install the bridge's receive-and-buffer phase NOW: it announces
+    // `op-bridge/listening` (the host responds by resending init) and buffers
+    // inbound messages until the full `install` replays them once this shell
+    // exists.
+    crate::vscode_bridge::install_early();
     let document = window
         .document()
         .ok_or_else(|| JsValue::from_str("mount_ck: no document"))?;
@@ -40,7 +48,6 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     let logical_w = (dev_w / dpr).round().max(1.0) as u32;
     let logical_h = (dev_h / dpr).round().max(1.0) as u32;
 
-    let backend = init_backend(&canvas_id, dpr, logical_w, logical_h).await?;
     let mut host = crate::widget_host::WidgetHost::new();
     // The editor opens on its canvas, not on a chat panel: the AI panel
     // starts as its compact input bar and expands on click. Applied here
@@ -62,6 +69,33 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
         host.editor_state_mut(),
         credential_load.payload_theme(),
     );
+    // A managed embedding host may impose its current color scheme. Apply it
+    // after the user's stored theme but still before the synchronous first
+    // paint, so the iframe never flashes the wrong theme. The theme module
+    // retains the underlying user preference for every persistence path.
+    if let Some(theme) = crate::web_settings::theme::host_theme_from_query(&search) {
+        crate::web_settings::theme::set_host_override(host.editor_state_mut(), theme);
+    }
+    if let Some(locale) = crate::web_settings::host_locale_from_query(&search) {
+        host.editor_state_mut()
+            .editor_ui
+            .set_host_locale_override(Some(locale));
+    }
+    // The anon-partition locale is synchronously known now. Start its catalog
+    // XHR before CanvasKit's ~24 MB initialization so the two downloads overlap;
+    // the host-side prefetch directly claims the existing asset registry because
+    // the normal request queue is not drained until the first repaint.
+    let initial_locale = host.editor_state().editor_ui.effective_locale();
+    let initial_catalog = crate::web_asset_fetch::prefetch_initial_catalog(initial_locale);
+    let backend = init_backend(&canvas_id, dpr, logical_w, logical_h).await?;
+    if let Some(catalog) = initial_catalog {
+        // The XHR itself owns the three-second timeout. Success installs the
+        // target catalog; failure leaves the stored locale in place so its first
+        // paint uses the embedded English fallback without blocking mount.
+        let _ = catalog.await;
+    }
+    // Set the OpCk for preview text measurement before any paint.
+    host.set_op_ck(backend.op_ck());
     host.mark_editor_state_dirty();
     let settings_fingerprint = credential_load.initial_settings_fingerprint(host.editor_state());
     let credential_fingerprint = credential_load.initial_fingerprint(host.editor_state());
@@ -128,9 +162,21 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
         let inner_for_paint = inner.clone();
         crate::repaint_coalescer::install(Rc::new(move || {
             if let Ok(mut b) = inner_for_paint.try_borrow_mut() {
+                // Advance the clock on the FRAME, not only on DOM events.
+                // Animations are driven by `now_ms`, and a self-sustaining
+                // animation repaints without any input: leaving the clock
+                // frozen here makes `is_active(now_ms)` answer `true`
+                // forever, so the frame loop spins at the refresh rate and
+                // the animation never actually progresses. The desktop host
+                // sets the clock once per frame for the same reason.
+                b.host.set_clocks(
+                    crate::listener::now_ms_perf(),
+                    crate::listener::now_unix_secs(),
+                );
                 b.repaint();
                 drop(b);
                 crate::web_fonts::drain_font_requests(&inner_for_paint);
+                crate::bundled_fonts_web::drain_pending_apply(&inner_for_paint);
                 crate::web_fonts::drain_missing_fonts_detection(&inner_for_paint);
             } else {
                 crate::repaint_coalescer::request();
@@ -140,8 +186,17 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     if op_editor_ui::image_runtime::has_pending_decodes() {
         crate::repaint_coalescer::request();
     }
+    // Arm the bundled-font gate BEFORE the first drain: the system-font query
+    // below routinely completes before the network fetch, and detection is a
+    // one-shot modal that would otherwise report every bundled family missing.
+    if let Ok(mut b) = inner.try_borrow_mut() {
+        b.host.begin_bundled_font_loading();
+    }
     crate::web_fonts::drain_font_requests(&inner);
     crate::web_fonts::drain_missing_fonts_detection(&inner);
+    // Fetch the app-shipped design fonts the wasm bundle omits (async; releases
+    // the gate above and repaints once every request has settled).
+    crate::bundled_fonts_web::load_bundled_fonts_at_mount(&inner);
     // Re-register any user-imported fonts persisted in IndexedDB (async; repaints
     // when the read lands so their text re-shapes with the imported typeface).
     crate::web_fonts::load_imported_fonts_at_mount(&inner);
@@ -154,7 +209,9 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     let sync_controller: crate::live_sync_glue::SharedSync =
         Rc::new(RefCell::new(crate::live_sync_glue::SyncController::new()));
     // 1. Install the bridge listener + observer BEFORE any daemon request, so an
-    //    Init / OpenDocument arriving during bootstrap is never missed.
+    //    Init / OpenDocument arriving during bootstrap is never missed. The
+    //    early phase (`install_early` above) already buffered anything that
+    //    arrived during the wasm download; `install` replays it here.
     crate::vscode_bridge::install(&inner, sync_controller.clone());
     // 2. Inside a webview iframe, await the host's Init (token) with a 2s
     //    fallback (proceed as a direct open on timeout). A standalone browser
@@ -338,6 +395,7 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 drop(b);
                 crate::web_chat::drain_chat_flags(&inner);
                 crate::web_image_panel::drain_image_jobs(&inner);
+                crate::web_builtin_model_discovery::drain_pending_builtin_model_discovery(&inner);
                 crate::iconify_web::drain_iconify_request(&inner);
                 crate::codegen_web::drain_codegen_flags(&inner);
                 crate::web_design_md::drain_design_md_action(&inner);
@@ -432,15 +490,26 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
             };
             let (w, h) = b.backend.logical_size();
             let (x, y) = b.event_offset_to_logical(evt.offset_x() as f32, evt.offset_y() as f32);
+            let mut modifiers = op_editor_ui::Modifiers::empty();
+            modifiers.set(op_editor_ui::Modifiers::SHIFT, evt.shift_key());
+            modifiers.set(op_editor_ui::Modifiers::CTRL, evt.ctrl_key());
+            modifiers.set(op_editor_ui::Modifiers::CMD, evt.meta_key());
+            modifiers.set(op_editor_ui::Modifiers::ALT, evt.alt_key());
             let consumed = match classify_wheel_intent(
                 evt.delta_x() as f32,
                 evt.delta_y() as f32,
-                evt.shift_key(),
-                evt.ctrl_key(),
-                evt.meta_key(),
-                evt.alt_key(),
+                evt.delta_mode(),
+                w,
+                h,
+                modifiers,
             ) {
-                WheelIntent::Zoom { delta_y } => b.host.apply_wheel(x, y, delta_y, w, h),
+                WheelIntent::Zoom {
+                    scroll_delta_y,
+                    canvas_delta_y,
+                } => {
+                    b.host
+                        .apply_wheel_with_canvas_delta(x, y, scroll_delta_y, canvas_delta_y, w, h)
+                }
                 WheelIntent::Pan { dx, dy } => b.host.apply_pan_gesture(x, y, dx, dy, w, h),
             };
             if consumed {
@@ -539,217 +608,7 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
             )?;
         }
     }
-    // keydown → text input + editor shortcuts. `apply_key` is a stub on this
-    // host; real input is dispatched per-key to apply_text / apply_backspace /
-    // apply_send / nudge / reorder / clipboard / undo etc. (mirrors the skia
-    // mount in lib.rs). Mod = Cmd/Ctrl; named-key shortcuts gate on `!is_mod`.
-    {
-        let inner = inner.clone();
-        add_listener::<KeyboardEvent, _, _>(&win_target, "keydown", &mut listeners, move |evt| {
-            use op_editor_core::ReorderDirection;
-            // In-flight IME composition owns its keystrokes (handled on commit).
-            if evt.is_composing() {
-                return;
-            }
-            let Ok(mut b) = inner.try_borrow_mut() else {
-                return;
-            };
-            b.host.set_clocks(now_ms_perf(), now_unix_secs());
-            let key = evt.key();
-            let starts_space_pan = evt.code() == "Space"
-                && !evt.repeat()
-                && !evt.meta_key()
-                && !evt.ctrl_key()
-                && !evt.alt_key();
-            let is_mod = evt.meta_key() || evt.ctrl_key();
-            let shift = evt.shift_key();
-            let nudge = if shift { 10.0 } else { 1.0 };
-            let image_popover_open = {
-                let panel = &b.host.editor_state().editor_ui.image_panel;
-                panel.search_open || panel.generate_open
-            };
-            let prompt_center_open = b.host.editor_state().editor_ui.prompt_center.open;
-            let mut consumed = false;
-            if starts_space_pan && !b.host.input_active() {
-                b.host.set_space_pan(true);
-                evt.prevent_default();
-            }
-            match key.as_str() {
-                "Backspace" if !is_mod => consumed = b.host.apply_backspace(),
-                "Delete" if !is_mod => consumed = b.host.apply_delete(),
-                "Enter" if !is_mod => consumed = b.host.apply_send(),
-                "Escape" if !is_mod => consumed = b.host.apply_escape(),
-                "ArrowUp" | "ArrowDown" if !is_mod && prompt_center_open => consumed = true,
-                "ArrowLeft" | "ArrowRight" if is_mod && prompt_center_open => consumed = true,
-                "ArrowUp" if !is_mod && image_popover_open => consumed = true,
-                "ArrowDown" if !is_mod && image_popover_open => consumed = true,
-                "ArrowUp" if !is_mod => {
-                    consumed = b.host.apply_text_edit_vertical(false)
-                        || b.host.apply_chat_input_vertical_caret(false, shift)
-                        || b.host.apply_nudge(0.0, -nudge)
-                }
-                "ArrowDown" if !is_mod => {
-                    consumed = b.host.apply_text_edit_vertical(true)
-                        || b.host.apply_chat_input_vertical_caret(true, shift)
-                        || b.host.apply_nudge(0.0, nudge)
-                }
-                "ArrowLeft" if is_mod && image_popover_open => {
-                    consumed = b.host.apply_image_panel_edge(false, shift)
-                }
-                "ArrowRight" if is_mod && image_popover_open => {
-                    consumed = b.host.apply_image_panel_edge(true, shift)
-                }
-                "Home" if image_popover_open => {
-                    consumed = b.host.apply_image_panel_edge(false, shift)
-                }
-                "End" if image_popover_open => {
-                    consumed = b.host.apply_image_panel_edge(true, shift)
-                }
-                "ArrowLeft" if is_mod => consumed = b.host.apply_text_edit_line_edge(false),
-                "ArrowRight" if is_mod => consumed = b.host.apply_text_edit_line_edge(true),
-                "ArrowLeft" if !is_mod => {
-                    consumed = b.host.apply_prompt_center_caret(false, shift)
-                        || b.host.apply_image_panel_caret(false, shift)
-                        || b.host.apply_settings_caret(false)
-                        || b.host.apply_chat_model_picker_caret(false)
-                        || b.host.apply_chat_input_caret(false, shift)
-                        || b.host.apply_rename_caret(false)
-                        || b.host.apply_text_edit_caret(false)
-                        || b.host.apply_property_caret(false)
-                        || b.host.apply_nudge(-nudge, 0.0);
-                }
-                "ArrowRight" if !is_mod => {
-                    consumed = b.host.apply_prompt_center_caret(true, shift)
-                        || b.host.apply_image_panel_caret(true, shift)
-                        || b.host.apply_settings_caret(true)
-                        || b.host.apply_chat_model_picker_caret(true)
-                        || b.host.apply_chat_input_caret(true, shift)
-                        || b.host.apply_rename_caret(true)
-                        || b.host.apply_text_edit_caret(true)
-                        || b.host.apply_property_caret(true)
-                        || b.host.apply_nudge(nudge, 0.0);
-                }
-                "[" if !is_mod && !b.host.input_active() => {
-                    consumed = b.host.apply_reorder(ReorderDirection::Down)
-                }
-                "]" if !is_mod && !b.host.input_active() => {
-                    consumed = b.host.apply_reorder(ReorderDirection::Up)
-                }
-                "F" | "f" | "H" | "h" | "K" | "k"
-                    if is_mod
-                        && shift
-                        && !evt.alt_key()
-                        && !image_popover_open
-                        && !prompt_center_open =>
-                {
-                    consumed =
-                        b.host
-                            .apply_keydown_shortcut(key.as_str(), is_mod, shift, evt.alt_key())
-                }
-                "d" | "D" if is_mod && !shift && !image_popover_open && !prompt_center_open => {
-                    consumed = b.host.apply_duplicate()
-                }
-                // Cmd/Ctrl+T — open a fresh chat tab (MT.3).
-                "t" | "T" if is_mod && !shift && !image_popover_open && !prompt_center_open => {
-                    consumed = b.host.apply_new_chat_tab()
-                }
-                "a" | "A" if is_mod && !shift => consumed = b.host.apply_select_all(),
-                "c" | "C" if is_mod && !shift => consumed = b.host.apply_copy(),
-                "x" | "X" if is_mod && !shift => consumed = b.host.apply_cut(),
-                // Cmd/Ctrl+V is owned by the DOM `paste` listener
-                // (`dom_io::register_io_listeners` → `handle_paste_event`): it
-                // routes the system clipboard first (Figma HTML / image / text),
-                // then falls back to the internal node clipboard. Calling
-                // `apply_paste` here would preempt that with the STALE internal
-                // clipboard + double-paste, so leave Cmd+V unconsumed → the
-                // browser's native paste fires the `paste` event. (Mirrors the
-                // skia codegen build, lib.rs.)
-                "v" | "V" if is_mod && !shift => {}
-                _ if is_mod && prompt_center_open => consumed = true,
-                // Case-insensitive: with Shift held, `key` is layout/IME
-                // dependent — macOS Chromium can report either "z" or "Z"
-                // for Cmd+Shift+Z, so branch on the shift flag alone.
-                // In a live session history belongs to the session, not this
-                // tab: undo becomes an M1 selective-undo request the daemon
-                // sequences, and redo is refused outright. Both short-circuit
-                // local history exactly as the desktop host does.
-                "z" | "Z" if is_mod && !image_popover_open => {
-                    consumed = if shift {
-                        crate::collab_sync::reject_redo(b.host.editor_state_mut())
-                            || b.host.apply_redo()
-                    } else {
-                        crate::collab_sync::request_undo(b.host.editor_state_mut())
-                            || b.host.apply_undo()
-                    };
-                }
-                "y" | "Y" if is_mod && !shift && !image_popover_open => {
-                    consumed = crate::collab_sync::reject_redo(b.host.editor_state_mut())
-                        || b.host.apply_redo()
-                }
-                "s" | "S" if is_mod && !shift => {
-                    // VS Code embed: the workbench cannot observe keystrokes
-                    // inside this cross-origin iframe, so Cmd/Ctrl+S must be
-                    // forwarded for a host-side save (extension runs the
-                    // regular workbench save → saveCustomDocument). Outside
-                    // the embed the browser default stays suppressed-by-noop.
-                    if b.host.editor_state().editor_ui.embed == op_editor_core::EmbedHost::VsCode {
-                        crate::web_clipboard::post_save_to_parent();
-                    }
-                    consumed = true;
-                }
-                _ if is_mod && image_popover_open => consumed = true,
-                _ => {
-                    // No Cmd/Ctrl held: a bare letter is first offered to the
-                    // single-key tool router (V/R/O/L/T/F/P/Y/H), which self-
-                    // gates on no input owning the keyboard; every other letter
-                    // (and any keystroke while a field is focused) types via
-                    // apply_text.
-                    if !is_mod {
-                        // Alt-modified keys never switch tools — Alt is a chord
-                        // modifier (and on macOS yields special glyphs like ®/π),
-                        // so an Alt+letter must not trip the bare-letter router.
-                        // A resulting printable char still types via apply_text.
-                        if !evt.alt_key() && b.host.apply_tool_shortcut(key.as_str()) {
-                            consumed = true;
-                        } else if crate::event::ime::keydown_should_insert_text(
-                            b.ime.as_ref().is_some_and(|ime| ime.owns_dom_focus()),
-                        ) {
-                            let mut chars = key.chars();
-                            if let (Some(c), None) = (chars.next(), chars.next()) {
-                                if !c.is_control() && b.host.apply_text(c) {
-                                    consumed = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if consumed {
-                evt.prevent_default();
-                crate::repaint_coalescer::request();
-            }
-            // Release the borrow before draining: Enter may have queued a chat
-            // send (apply_send → pending_send) or an image-panel search
-            // (apply_image_panel_send → search_epoch); the drains launch them.
-            drop(b);
-            crate::web_chat::drain_chat_flags(&inner);
-            crate::web_image_panel::drain_image_jobs(&inner);
-        })?;
-    }
-
-    {
-        let inner = inner.clone();
-        add_listener::<KeyboardEvent, _, _>(&win_target, "keyup", &mut listeners, move |evt| {
-            if evt.code() != "Space" {
-                return;
-            }
-            let Ok(mut b) = inner.try_borrow_mut() else {
-                return;
-            };
-            b.host.set_space_pan(false);
-            evt.prevent_default();
-        })?;
-    }
+    super::mount_keyboard::register_keyboard_listeners(&inner, &win_target, &mut listeners)?;
 
     {
         let inner = inner.clone();

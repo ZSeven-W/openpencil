@@ -316,6 +316,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "htmlImport.warn.layout.margins_on_visual_box_ignored" => {
             "Görsel bir kutudaki CSS kenar boşlukları yok sayıldı."
         }
+        "htmlImport.warn.layout.inline_margin_wrapping_approximated" => "CSS kenar boşluklu satır içi öğe kutuya dönüştürüldü ve artık satırlar arasında kaydırılamayabilir.",
         "htmlImport.warn.layout.content_box_percentage_approximated" => {
             "content-box yüzde boyutlandırması yaklaşık olarak uygulandı."
         }
@@ -535,6 +536,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         }
         "htmlImport.warn.media.object_fit_none_ignored" => "CSS object-fit:none yok sayıldı.",
         "htmlImport.warn.media.object_position_ignored" => "CSS object-position yok sayıldı.",
+        "htmlImport.warn.media.image_intrinsic_axis_unresolved" => {
+            "Belirtilen boyut dinamik veya kapsayıcı bloğun boyutu belirsiz olduğu için görüntünün doğal en-boy oranıyla eksik eksen belirlenemedi."
+        }
         "htmlImport.warn.media.image_mix_blend_mode_unsupported" => {
             "Bir görüntüdeki desteklenmeyen CSS mix-blend-mode yok sayıldı."
         }
@@ -665,6 +669,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "slidesPanel.exportPdf" => "PDF olarak dışa aktar",
         "slidesPanel.exportAllSlides" => "Tüm slaytları dışa aktar",
         "slidesPanel.exportSelectedSlides" => "Seçili slaytları dışa aktar ({{count}})",
+        "settings.tab.ai" => "YZ",
         "settings.agents.heroTitle" => "Yapay zekâ sağlayıcını bağla",
         "settings.agents.heroSubtitle" => "OpenPencil yerel CLI ajanlarını ve API sağlayıcılarını çalıştırır — tasarım üretmeye başlamak için birini bağla.",
         "settings.agents.statusConnected" => "Bağlandı",

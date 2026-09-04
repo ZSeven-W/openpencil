@@ -2,6 +2,29 @@ use super::*;
 use op_editor_core::{EditorState, Locale, ThemeMode};
 
 #[test]
+fn host_locale_query_accepts_only_exact_bcp47_values() {
+    assert_eq!(host_locale_from_query("?locale=zh-CN"), Some(Locale::ZhCn));
+    assert_eq!(
+        host_locale_from_query("?embed=vscode&locale=en-US"),
+        Some(Locale::EnUs)
+    );
+    for query in ["", "?locale=zh", "?locale=en", "?locale=EN", "?locale="] {
+        assert_eq!(host_locale_from_query(query), None, "{query}");
+    }
+}
+
+#[test]
+fn transient_host_locale_does_not_change_persistence_fingerprint() {
+    let mut state = EditorState::new();
+    state.editor_ui.locale = Locale::ZhCn;
+    let before = fingerprint(&state);
+    state.editor_ui.set_host_locale_override(Some(Locale::EnUs));
+    assert_eq!(state.editor_ui.effective_locale(), Locale::EnUs);
+    assert_eq!(state.editor_ui.locale, Locale::ZhCn);
+    assert_eq!(fingerprint(&state), before);
+}
+
+#[test]
 fn settings_payload_restores_locale_but_never_theme() {
     // Theme moved out of the account-scoped payload semantics: it is a device
     // preference resolved from its own unpartitioned key, so reading it here
@@ -88,7 +111,7 @@ fn legacy_mcp_flags_drop_gemini_without_shifting_google_antigravity() {
     );
     assert_eq!(
         state.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, false, true, false, true, true, false, false, false, false, false]
+        [true, false, false, true, false, true, true, false, false, false, false, false, false]
     );
     let rewritten = writes
         .iter()
@@ -98,7 +121,7 @@ fn legacy_mcp_flags_drop_gemini_without_shifting_google_antigravity() {
     assert_eq!(
         value["mcp_cli_enabled"],
         serde_json::json!([
-            true, false, false, true, false, true, true, false, false, false, false, false
+            true, false, false, true, false, true, true, false, false, false, false, false, false
         ])
     );
 }
@@ -113,6 +136,7 @@ fn separate_settings_and_credential_payloads_round_trip_their_own_fields() {
         BuiltinAgentKind::Anthropic,
         "https://api.minimaxi.com/anthropic",
     );
+    assert!(src.editor_ui.agent_settings.builtin_agents[0].add_model("MiniMax-M3"));
     let image_profile_id = src.editor_ui.agent_settings.add_image_gen_profile();
     let profile = &mut src.editor_ui.agent_settings.image_gen_profiles[0];
     profile.name = "Gemini Image".into();
@@ -140,6 +164,10 @@ fn separate_settings_and_credential_payloads_round_trip_their_own_fields() {
     assert_eq!(
         dst.editor_ui.agent_settings.builtin_agents[0].preset,
         BuiltinAgentPresetKey::MiniMax
+    );
+    assert_eq!(
+        dst.editor_ui.agent_settings.builtin_agents[0].models,
+        ["MiniMax-M2.7", "MiniMax-M3"]
     );
     assert!(dst.editor_ui.agent_settings.acp_agents.is_empty());
     assert_eq!(dst.editor_ui.agent_settings.image_gen_profiles.len(), 1);

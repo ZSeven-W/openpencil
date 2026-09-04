@@ -318,7 +318,7 @@ mod tests {
 
     fn expand(source: &str, fetcher: &ResourceFetcher<'_>) -> (String, Vec<String>) {
         let mut warnings = Vec::new();
-        let mut budget = ResourceBudget;
+        let mut budget = ResourceBudget::default();
         let output = expand_stylesheet_imports(
             source,
             Some("https://example.test/css/site.css"),

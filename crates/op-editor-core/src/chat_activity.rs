@@ -58,4 +58,7 @@ pub struct PendingSubtaskRetry {
     pub subtask_id: String,
     /// `serde_json`-encoded `op_orchestrator::plan::Subtask`.
     pub subtask_json: String,
+    /// The document sibling this section should follow when it is retried.
+    /// `None` means the first child of its parent.
+    pub insert_after_sibling_id: Option<String>,
 }

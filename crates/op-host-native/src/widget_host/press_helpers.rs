@@ -13,7 +13,6 @@ use op_editor_core::agent_settings::ImageGenField;
 use op_editor_core::host_settings_commit::SettingsCommitScope;
 use op_editor_ui::widgets::agent_settings_fonts::FontsHit;
 use op_editor_ui::widgets::agent_settings_panel::AgentSettingsHit;
-use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
 use op_editor_ui::widgets::agent_settings_press_flow::{
     self as settings_flow, SettingsPress, SettingsPressOutcome,
 };
@@ -98,9 +97,20 @@ impl WidgetHostNative {
         vh: f32,
     ) -> bool {
         self.refresh_layout_scene();
-        let panel = AgentSettingsPanel::for_editor(&self.editor_state);
-        let panel_rect = panel.rect(vw, vh);
-        let hit = panel.hit_test(panel_rect, Point2D::new(x, y));
+        let (panel, panel_rect) = self.agent_settings_geometry(vw, vh);
+        let point = Point2D::new(x, y);
+        let hit = panel.hit_test(panel_rect, point);
+        let focus_press = settings_flow::is_settings_focus_press(hit);
+        // When an already-focused input is clicked, its visible window
+        // (model line window / single-line scroll shift) depends on the
+        // pre-click caret. Capture that mapping before the shared focus
+        // transition reseeds the draft with the caret at the end.
+        let caret_before = if focus_press {
+            panel.focused_text_byte_offset_at(panel_rect, point)
+        } else {
+            None
+        };
+        drop(panel);
         if matches!(hit, AgentSettingsHit::Fonts(FontsHit::SelectFont(_)))
             && !self.collab_allows_document_mutation(
                 op_editor_core::CollabDocumentMutation::Unsupported(
@@ -119,7 +129,25 @@ impl WidgetHostNative {
             SettingsCommitScope::Operator,
             self.now_ms,
         );
+        if focus_press {
+            // A fresh focus has no pre-click mapping; resolve against the
+            // just-seeded draft so the caret still lands at the tapped glyph.
+            let offset = caret_before.or_else(|| {
+                let (panel, panel_rect) = self.agent_settings_geometry(vw, vh);
+                panel.focused_text_byte_offset_at(panel_rect, point)
+            });
+            if let Some(offset) = offset {
+                self.editor_state
+                    .editor_ui
+                    .settings_input
+                    .set_caret(offset, self.now_ms);
+            }
+        }
         self.finish_agent_settings_press(outcome);
+        self.ensure_focused_agent_settings_visible(vw, vh);
+        if !self.editor_state.editor_ui.agent_settings_open {
+            self.cancel_agent_settings_touch_gesture();
+        }
         self.mark_dirty();
         true
     }

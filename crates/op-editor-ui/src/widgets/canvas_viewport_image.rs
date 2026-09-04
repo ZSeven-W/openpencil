@@ -21,8 +21,8 @@ use test_support::{
 #[cfg(test)]
 pub(crate) use decode_registry::lock_decode_registry_for_tests;
 pub use decode_registry::{
-    has_pending_decodes, mark_decode_done, mark_decode_failed, note_pending_decode,
-    pending_decode_count, take_pending_decodes, PendingDecode,
+    has_in_flight_decodes, has_pending_decodes, mark_decode_done, mark_decode_failed,
+    note_pending_decode, pending_decode_count, take_pending_decodes, PendingDecode,
 };
 
 /// Byte budget for cached encoded-image payloads. The cache must hold

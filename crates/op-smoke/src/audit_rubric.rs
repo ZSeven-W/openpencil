@@ -471,6 +471,7 @@ mod tests {
             node_count,
             error: None,
             inserted_root_ids: Vec::new(),
+            headline: None,
             subtask: None,
         }
     }
@@ -481,6 +482,7 @@ mod tests {
             node_count: 0,
             error: Some("all 3 retry-ladder attempts exhausted".to_string()),
             inserted_root_ids: Vec::new(),
+            headline: None,
             subtask: None,
         }
     }

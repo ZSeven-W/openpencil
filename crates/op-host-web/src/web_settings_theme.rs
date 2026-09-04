@@ -71,6 +71,25 @@ thread_local! {
     };
 }
 
+/// Parse the host theme bootstrap hint from a page query. Query decoding is
+/// delegated to the URL form codec, while the value contract remains the same
+/// strict `light | dark` contract as `op-bridge/theme`.
+pub(crate) fn host_theme_from_query(search: &str) -> Option<ThemeMode> {
+    let query = search.strip_prefix('?').unwrap_or(search);
+    url::form_urlencoded::parse(query.as_bytes())
+        .find(|(key, _)| key == "theme")
+        .and_then(|(_, value)| {
+            op_editor_core::bridge_protocol::color_scheme_from_wire(value.as_ref())
+        })
+}
+
+/// Apply or update an embedding host's page-lifetime paint theme. The user's
+/// `theme_mode` preference remains untouched and is therefore all persistence
+/// paths continue to observe.
+pub(crate) fn set_host_override(state: &mut EditorState, active: ThemeMode) {
+    state.editor_ui.set_host_theme_override(Some(active));
+}
+
 /// The device theme, if this browser has one.
 pub(crate) fn stored_device_theme() -> Option<ThemeMode> {
     parse_device_theme(storage_get(DEVICE_THEME_KEY).as_deref())
@@ -168,6 +187,55 @@ mod tests {
         let mut state = EditorState::new();
         state.editor_ui.theme_mode = theme;
         state
+    }
+
+    #[test]
+    fn host_query_accepts_only_exact_light_or_dark_values() {
+        assert_eq!(
+            host_theme_from_query("?theme=light"),
+            Some(ThemeMode::Light)
+        );
+        assert_eq!(
+            host_theme_from_query("?embed=vscode&theme=dark"),
+            Some(ThemeMode::Dark)
+        );
+        for query in [
+            "",
+            "?theme=Light",
+            "?theme=system",
+            "?theme=",
+            "?colorScheme=dark",
+        ] {
+            assert_eq!(host_theme_from_query(query), None, "{query}");
+        }
+    }
+
+    #[test]
+    fn host_override_repaints_without_replacing_the_user_preference() {
+        let mut state = state_with(ThemeMode::Dark);
+        set_host_override(&mut state, ThemeMode::Light);
+        assert_eq!(state.editor_ui.effective_theme_mode(), ThemeMode::Light);
+        assert_eq!(state.editor_ui.theme_mode, ThemeMode::Dark);
+
+        set_host_override(&mut state, ThemeMode::Dark);
+        assert_eq!(state.editor_ui.effective_theme_mode(), ThemeMode::Dark);
+        assert_eq!(state.editor_ui.theme_mode, ThemeMode::Dark);
+    }
+
+    #[test]
+    fn host_override_is_never_written_as_the_device_preference() {
+        reset_last_written_for_test();
+        let mut state = state_with(ThemeMode::Light);
+        set_host_override(&mut state, ThemeMode::Dark);
+        let mut written = None;
+        assert_eq!(
+            save_if_changed_with(&state, |_, value| {
+                written = Some(value.to_string());
+                true
+            }),
+            Ok(true)
+        );
+        assert_eq!(written.as_deref(), Some("light"));
     }
 
     #[test]

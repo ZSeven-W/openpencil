@@ -91,7 +91,7 @@ Priority: optional
 Architecture: $DEB_ARCH
 Maintainer: ZSeven-W <fini.yang@gmail.com>
 Installed-Size: $INSTALLED_SIZE
-Depends: libc6, libfontconfig1, libfreetype6, libegl1, libgles2, libgbm1, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0
+Depends: libc6, libssl3, libfontconfig1, libfreetype6, libegl1, libgles2, libgbm1, libxkbcommon0, libxkbcommon-x11-0, libwayland-client0
 Recommends: shared-mime-info, desktop-file-utils
 Homepage: https://github.com/ZSeven-W/openpencil
 Description: OpenPencil — open-source AI-native vector design tool

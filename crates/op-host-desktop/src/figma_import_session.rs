@@ -591,5 +591,8 @@ fn refresh_title(current_path: &Option<PathBuf>, window: Option<&winit::window::
 }
 
 #[cfg(test)]
+#[path = "figma_import_session/preview_cancel_tests.rs"]
+mod preview_cancel_tests;
+#[cfg(test)]
 #[path = "figma_import_session/tests.rs"]
 mod tests;

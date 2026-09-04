@@ -52,6 +52,8 @@ Two mirror-image failures: eight pages of one template, and eight pages of eight
 | page-number and page-label position | rhythm: a dense page is followed by an open one |
 | corner radius; strokes; icon style | emphasis words; compositional centre of gravity |
 
+MARGIN FLOOR: the safe margin Law 3 locks is a floor, not a hint — slide root horizontal padding ≥64px, a 1080-wide card root ≥48px; no text sits against the canvas edge (a full-bleed background image is the only exception).
+
 Adjacent pages may not share a page type (two consecutive tables is the only exception, and page 3 must change). A deck of >=6 pages covers >=4 page-type families. Do not centre every page.
 
 Pre-flight, no rendering: say the page-type sequence aloud. If it repeats — "grid, grid, two-column, grid" — so does the deck. Fix the outline.

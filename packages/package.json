@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/openpencil-packages",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "private": true,
   "description": "Web SDK workspace for OpenPencil (the Rust product lives in ../crates). Hosts the wasm-backed op-web-sdk viewer family plus the JS build glue that feeds the Rust web target.",
   "author": {
@@ -15,10 +15,11 @@
   ],
   "type": "module",
   "scripts": {
-    "lint": "oxlint . && bun run check-extractor-sync && bun run check-sw-imports && bun run check-locales",
+    "lint": "oxlint . && bun run check-extractor-sync && bun run check-sw-imports && bun run check-locales && bun run check-design-evidence",
     "check-extractor-sync": "bash op-chrome-extension/scripts/check-extractor-sync.sh",
     "check-sw-imports": "node op-chrome-extension/scripts/check-sw-imports.mjs",
     "check-locales": "node op-chrome-extension/scripts/check-locales.mjs",
+    "check-design-evidence": "node op-chrome-extension/scripts/check-design-evidence.mjs",
     "check-extractor-sync:fix": "bash op-chrome-extension/scripts/check-extractor-sync.sh --fix",
     "build-extension": "bash op-chrome-extension/scripts/build-wasm.sh",
     "package-extension": "bash op-chrome-extension/scripts/package-extension.sh",

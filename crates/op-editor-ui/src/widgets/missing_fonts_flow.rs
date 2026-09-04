@@ -230,3 +230,41 @@ pub fn note_font_supplied(state: &mut EditorState, row: usize, actual_family: Op
     }
     refresh_prompt(state);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn distinct_yahei_ui_import_stays_unresolved_and_reports_mismatch() {
+        let doc = serde_json::from_value(serde_json::json!({
+            "version": "1.0.0",
+            "children": [{
+                "type": "text",
+                "id": "yahei",
+                "content": "字",
+                "fontFamily": "Microsoft YaHei"
+            }]
+        }))
+        .expect("document");
+        let mut state = EditorState::from_document(doc);
+        state.editor_ui.system_fonts_loaded = true;
+        state.editor_ui.imported_font_families =
+            std::sync::Arc::new(vec!["Microsoft YaHei UI".into()]);
+        replace_data(&mut state, true);
+
+        note_font_supplied(&mut state, 0, Some("Microsoft YaHei UI"));
+
+        let entry = &state
+            .editor_ui
+            .missing_fonts_prompt
+            .as_ref()
+            .expect("plain YaHei remains unresolved")
+            .entries[0];
+        let note = entry.mismatch_note.as_deref().expect("mismatch note");
+        assert_eq!(entry.family, "Microsoft YaHei");
+        assert!(!entry.resolved);
+        assert!(note.contains("Microsoft YaHei UI"));
+        assert!(note.contains("Microsoft YaHei"));
+    }
+}

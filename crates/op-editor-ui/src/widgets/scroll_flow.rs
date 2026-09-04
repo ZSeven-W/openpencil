@@ -9,10 +9,12 @@
 //! stay host-side because they are derived from host viewport
 //! bookkeeping, so callers pass them in.
 
+use op_editor_core::size_class::MobileSheetKind;
 use op_editor_core::EditorState;
 
 use crate::util::scroll_by_max;
 use crate::widgets::layer_panel::LayerPanel;
+use crate::widgets::layer_panel_walkers::{apply_layer_rename, walk, RenameView, WalkCx};
 use crate::{Point2D, Rect};
 
 /// Screen rect of the left-hand layer rail — the canonical walk lives
@@ -188,28 +190,56 @@ pub fn scroll_property_panel_body(
     point: Point2D,
     delta_y: f32,
 ) -> Option<bool> {
+    scroll_property_panel_body_2d(state, panel, property_rect, point, 0.0, delta_y)
+}
+
+/// Two-axis counterpart used by trackpad and one-finger pan paths. Only the
+/// Code tab's framework strip consumes `delta_x`; the rest of the inspector
+/// keeps its established vertical `delta_y` behaviour.
+pub fn scroll_property_panel_body_2d(
+    state: &mut EditorState,
+    panel: &crate::widgets::PropertyPanel,
+    property_rect: Rect,
+    point: Point2D,
+    delta_x: f32,
+    delta_y: f32,
+) -> Option<bool> {
     use crate::widgets::property_panel_code;
     if !property_rect.contains(point) {
         return None;
     }
     if matches!(
-        state.editor_ui.property_tab,
+        state.editor_ui.effective_property_tab(),
         op_editor_core::PropertyTab::Code
     ) {
+        let logical_rect = panel.logical_rect(property_rect);
+        let logical_point = panel.logical_point(property_rect, point);
         // Code tab: a wheel over the framework strip scrolls it
         // horizontally (it's a single row), not the panel vertically.
+        let touch_controls = state.editor_ui.touch_chrome();
         let (band_top, band_bottom) =
-            property_panel_code::framework_row_band(property_rect.origin.y);
-        if point.y >= band_top && point.y <= band_bottom {
-            let max = property_panel_code::framework_row_overflow(property_rect.size.x);
+            property_panel_code::framework_row_band_for(logical_rect.origin.y, touch_controls);
+        if logical_point.y >= band_top && logical_point.y <= band_bottom {
+            let max = panel.physical_length(property_panel_code::framework_row_overflow_for(
+                logical_rect.size.x,
+                touch_controls,
+            ));
+            let strip_delta = if delta_x != 0.0 { delta_x } else { delta_y };
             let cg = &mut state.codegen;
-            return Some(scroll_by_max(&mut cg.framework_scroll, -delta_y, max));
+            return Some(scroll_by_max(&mut cg.framework_scroll, -strip_delta, max));
         }
-        if property_panel_code::code_preview_rect(property_rect, &state.codegen)
-            .is_some_and(|rect| rect.contains(point))
+        let mut logical_codegen = state.codegen.clone();
+        logical_codegen.framework_scroll.offset =
+            panel.logical_length(logical_codegen.framework_scroll.offset);
+        logical_codegen.code_scroll.offset =
+            panel.logical_length(logical_codegen.code_scroll.offset);
+        if property_panel_code::code_preview_rect(logical_rect, &logical_codegen)
+            .is_some_and(|rect| rect.contains(logical_point))
         {
-            let max = property_panel_code::code_preview_max_scroll(property_rect, &state.codegen)
-                .unwrap_or(0.0);
+            let max = panel.physical_length(
+                property_panel_code::code_preview_max_scroll(logical_rect, &logical_codegen)
+                    .unwrap_or(0.0),
+            );
             let cg = &mut state.codegen;
             return Some(scroll_by_max(&mut cg.code_scroll, -delta_y, max));
         }
@@ -239,7 +269,7 @@ pub fn scroll_layer_panel(
     delta_x: f32,
     delta_y: f32,
 ) -> Option<bool> {
-    if !state.editor_ui.sidebar_open {
+    if !layer_panel_surface_open(state) {
         return None;
     }
     if !rect.contains(point) {
@@ -273,25 +303,104 @@ pub fn scroll_layer_panel(
 
 /// Scroll the layer rail so the selection anchor's row is visible.
 /// Returns whether the offset moved.
+///
+/// Expands all ancestors of the selected node to reveal its position
+/// in the collapsed layer tree, then scrolls to bring the row into view.
+/// Both operations happen in a single frame — if ancestors were collapsed,
+/// the selected node's row is rebuilt and scroll offset is computed against
+/// the post-expansion collapsed set.
 pub fn reveal_layer_panel_selection(
     state: &mut EditorState,
     panel: &LayerPanel,
     rect: Rect,
 ) -> bool {
-    if !state.editor_ui.sidebar_open {
+    if !layer_panel_surface_open(state) {
         return false;
     }
     let selected = state.selection.anchor.clone();
     if !selected.is_real() {
         return false;
     }
-    let Some(next) = panel.layers_offset_revealing(rect, &selected) else {
+
+    // Expand all ancestors of the selected node to reveal it in the tree.
+    let expanded = state.expand_layer_ancestors(&selected);
+
+    // If ancestors were expanded, rebuild the items list to reflect the new
+    // collapsed state, then compute the row index against the fresh items.
+    let items = if expanded {
+        // Rebuild items against the post-expansion collapsed set.
+        rebuild_layer_items_for_reveal(state, panel)
+    } else {
+        // Ancestors were already expanded; use the existing cached items.
+        (*panel.items).clone()
+    };
+
+    // Find the row index of the selected node in the (possibly rebuilt) items.
+    let Some(index) = items.iter().position(|item| item.node_id == selected) else {
         return false;
     };
-    let scroll = &mut state.editor_ui.layer_layers_scroll;
-    if (scroll.offset - next).abs() <= f32::EPSILON {
+
+    // Compute the scroll offset that brings this row into view.
+    let r = panel.regions(rect);
+    if r.layers_view_h <= 0.0 {
         return false;
     }
-    scroll.offset = next;
-    true
+
+    // After rebuilding items, recompute max_offset from the fresh item count.
+    // The old r.layers.max_offset comes from the pre-expansion panel, so it
+    // would clamp the scroll offset too tightly in scenarios where expansion
+    // adds many rows (e.g., many collapsed nodes -> select deep node -> expand).
+    let content_height = items.len() as f32 * panel.metrics.layer_row_height;
+    let fresh_max_offset = (content_height - r.layers_view_h).max(0.0);
+
+    let row_top = index as f32 * panel.metrics.layer_row_height;
+    let row_bottom = row_top + panel.metrics.layer_row_height;
+    let view_top = r.layers.offset;
+    let view_bottom = view_top + r.layers_view_h;
+    let next = if row_top < view_top {
+        row_top
+    } else if row_bottom > view_bottom {
+        row_bottom - r.layers_view_h
+    } else {
+        view_top
+    };
+    let next = next.clamp(0.0, fresh_max_offset);
+
+    // Record that we revealed this anchor, so we don't re-expand on the
+    // next frame if the user manually re-collapses an ancestor.
+    state.editor_ui.last_revealed_layer_anchor = Some(selected);
+
+    // Update the scroll offset if it changed and return whether we made changes.
+    let scroll = &mut state.editor_ui.layer_layers_scroll;
+    if (scroll.offset - next).abs() > f32::EPSILON {
+        scroll.offset = next;
+        true
+    } else {
+        // Scroll offset didn't change, but we still expanded ancestors and
+        // recorded the anchor, so return false to indicate no scroll update.
+        false
+    }
+}
+
+/// Rebuild the layer items list against the current collapsed state.
+/// Used by reveal_layer_panel_selection to recompute items after expanding
+/// ancestors, so the selected node's row exists in the rebuilt list.
+fn rebuild_layer_items_for_reveal(
+    state: &EditorState,
+    _panel: &LayerPanel,
+) -> Vec<crate::widgets::layer_panel::LayerItem> {
+    let rename = RenameView::from_state(state);
+    let cx = WalkCx::from_state(state);
+    let mut items = Vec::new();
+    for child in state.active_children() {
+        walk(child, &cx, 0, &mut items);
+    }
+    apply_layer_rename(&mut items, &rename);
+    items
+}
+
+fn layer_panel_surface_open(state: &EditorState) -> bool {
+    state.editor_ui.sidebar_open
+        || (state.editor_ui.touch_chrome()
+            && state.editor_ui.mobile_sheet == Some(MobileSheetKind::Layers))
 }

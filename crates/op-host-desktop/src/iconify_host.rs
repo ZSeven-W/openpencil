@@ -151,6 +151,7 @@ fn fetch_iconify_page(request: &IconifyLoadMoreRequest) -> Result<IconifyPage, A
     // a runtime" the moment this helper is reached from a tokio worker.
     op_host_services::chat_runtime::block_on_anywhere(async {
         let client = reqwest::Client::builder()
+            .use_rustls_tls()
             .timeout(Duration::from_secs(15))
             .user_agent(concat!("openpencil-desktop/", env!("CARGO_PKG_VERSION")))
             .build()

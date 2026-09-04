@@ -13,6 +13,7 @@ targets = [
   { triple = "x86_64-apple-darwin" },
   { triple = "aarch64-apple-darwin" },
   { triple = "x86_64-pc-windows-msvc" },
+  { triple = "aarch64-pc-windows-msvc" },
   { triple = "wasm32-unknown-unknown" },
 ]
 
@@ -76,8 +77,29 @@ deny = [
   # tools/check-wasm-bundle.sh.
   "pen-agent-cli",
   "pen-server",
-  "native-tls",
+  # github-copilot-sdk 1.0.11 currently enables native-tls unconditionally
+  # for its build downloader plus HTTP/WebSocket handler transports. Permit
+  # exactly the audited version and direct wrapper set; all other versions
+  # remain banned.
+  "native-tls:<0.2.18",
+  { crate = "native-tls@0.2.18", wrappers = [
+    "github-copilot-sdk",
+    "hyper-tls",
+    "reqwest",
+    "tokio-native-tls",
+    "tokio-tungstenite",
+    "tungstenite",
+    "ureq",
+  ], reason = "required by the official GitHub Copilot SDK 1.0.11" },
+  "native-tls:>0.2.18",
 ]
+
+[[bans.features]]
+name = "github-copilot-sdk"
+version = "=1.0.11"
+deny = ["default", "bundled-cli", "bundled-in-process"]
+exact = true
+reason = "OpenPencil must use the separately installed CLI without embedding SDK runtime artifacts"
 
 # tokio's process / rt-multi-thread features are no longer banned:
 # op-host-desktop's native (async) agent runtime legitimately needs them.

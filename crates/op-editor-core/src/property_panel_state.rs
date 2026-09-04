@@ -219,8 +219,11 @@ impl ExportFormat {
         }
     }
 
-    /// Whether the format has a working export backend.
+    /// Whether the target's shipping renderer contains this encoder.
+    ///
+    /// The pinned iOS/Android Skia archives omit WebP; desktop builds keep
+    /// their existing encoder. PNG/JPEG/SVG/PDF are available everywhere.
     pub fn is_implemented(self) -> bool {
-        true
+        !matches!(self, ExportFormat::Webp) || !cfg!(any(target_os = "ios", target_os = "android"))
     }
 }

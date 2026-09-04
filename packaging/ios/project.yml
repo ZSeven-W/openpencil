@@ -1,0 +1,153 @@
+name: OpenPencilPlayer
+
+options:
+  bundleIdPrefix: tech.zseven
+  deploymentTarget:
+    iOS: "15.0"
+  xcodeVersion: "26.4"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CLANG_CXX_LANGUAGE_STANDARD: c++17
+
+targets:
+  OpenPencilPlayer:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: Sources
+      - path: Resources
+        buildPhase: resources
+      - path: Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: tech.zseven.openpencil
+        PRODUCT_NAME: OpenPencilPlayer
+        # Local-development fallbacks; the release pipeline overrides both on
+        # the xcodebuild command line.
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: OpenPencil
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: "NO"
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Connect to an OpenPencil collaboration session on your local network when you enter its address."
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        SWIFT_OBJC_BRIDGING_HEADER: "$(SRCROOT)/OpenPencilPlayer-Bridging-Header.h"
+        CODE_SIGN_ENTITLEMENTS: "$(SRCROOT)/OpenPencilPlayer.entitlements"
+        HEADER_SEARCH_PATHS: "$(inherited) $(SRCROOT)/../../crates/op-engine-ffi/include"
+        "LIBRARY_SEARCH_PATHS[sdk=iphoneos*]": "$(inherited) $(SRCROOT)/../../target/aarch64-apple-ios/release"
+        "LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]": "$(inherited) $(SRCROOT)/../../target/aarch64-apple-ios-sim/release"
+        OP_AUTH_ARCHIVE: ""
+        OTHER_LDFLAGS: "$(inherited) $(OP_ENGINE_ARCHIVE) $(OP_AUTH_ARCHIVE) -lc++"
+        # Native sign-in SDKs (Douyin OpenSDK / Alipay AFServiceSDK) ship as
+        # proprietary fat static frameworks with device-arm64 + x86_64 slices
+        # only, so they link on device builds exclusively; simulator builds
+        # compile the stub branches of the Swift wrappers. WebKit is required
+        # by the Douyin SDK's built-in H5 auth fallback — it is linked here
+        # (device only) and deliberately kept out of `dependencies`, which
+        # the source contract reserves for the app's own frameworks.
+        "FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]": "$(inherited) $(SRCROOT)/Vendor"
+        # -no_compact_unwind: the Rust engine, C++, ObjC, and the vendored
+        # SDKs' hidden copy contribute four unwind personality routines —
+        # one more than the compact-unwind format can encode — so device
+        # links fall back to DWARF unwind info.
+        "OTHER_LDFLAGS[sdk=iphoneos*]": "$(inherited) -ObjC -framework DouyinOpenSDK -framework AFServiceSDK -framework WechatOpenSDK -framework WebKit -framework CoreData -framework SystemConfiguration -framework Network -lz -lsqlite3.0 -Wl,-no_compact_unwind"
+      configs:
+        Debug:
+          "OP_ENGINE_ARCHIVE[sdk=iphoneos*]": "$(SRCROOT)/../../target/aarch64-apple-ios/debug/libop_engine_ffi.a"
+          "OP_ENGINE_ARCHIVE[sdk=iphonesimulator*]": "$(SRCROOT)/../../target/aarch64-apple-ios-sim/debug/libop_engine_ffi.a"
+        Release:
+          GCC_OPTIMIZATION_LEVEL: s
+          "OP_ENGINE_ARCHIVE[sdk=iphoneos*]": "$(SRCROOT)/../../target/aarch64-apple-ios/release/libop_engine_ffi.a"
+          "OP_ENGINE_ARCHIVE[sdk=iphonesimulator*]": "$(SRCROOT)/../../target/aarch64-apple-ios-sim/release/libop_engine_ffi.a"
+    info:
+      path: Info.plist
+      properties:
+        # Explicit plist keys beat INFOPLIST_KEY_* injection, so version keys
+        # must resolve from the build settings the release pipeline overrides
+        # (MARKETING_VERSION / CURRENT_PROJECT_VERSION carry dev defaults in
+        # `settings` below).
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Third-party sign-in SDK plumbing. The Douyin callback scheme is the
+        # client key by SDK convention; the Alipay scheme is app-chosen and
+        # must match AlipayNativeSignIn.callbackScheme.
+        DouyinAppID: awbponwo0ls6cjos
+        # Saved documents live in NSDocumentDirectory, which the Files app
+        # only exposes ("On My iPhone -> OpenPencil") when BOTH keys are
+        # true. Without them the engine's saves are invisible to the user.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        # Each foreground generation registers a unique concrete identifier;
+        # this wildcard authorizes its per-generation UUID suffix.
+        BGTaskSchedulerPermittedIdentifiers:
+          - tech.zseven.openpencil.generation.*
+        UIBackgroundModes:
+          - processing
+        LSApplicationQueriesSchemes:
+          - douyinopensdk
+          - douyinliteopensdk
+          - douyinsharesdk
+          - snssdk1128
+          - alipay
+          - alipays
+          - weixin
+          - weixinULAPI
+          - weixinURLParamsAPI
+        CFBundleURLTypes:
+          - CFBundleURLName: tech.zseven.openpencil.douyin
+            CFBundleURLSchemes: [awbponwo0ls6cjos]
+          - CFBundleURLName: tech.zseven.openpencil.alipay
+            CFBundleURLSchemes: [openpencilalipay]
+          - CFBundleURLName: tech.zseven.openpencil.wechat
+            CFBundleURLSchemes: [wx327d6a759ea9fe62]
+    preBuildScripts:
+      - name: Fetch vendored sign-in SDKs
+        script: |
+          if [ "${PLATFORM_NAME:-}" = "iphoneos" ]; then
+            bash "$SRCROOT/scripts/fetch-vendor-sdks.sh"
+          fi
+        basedOnDependencyAnalysis: false
+      - name: Validate optional op-auth archive
+        script: |
+          if [ -n "${OP_AUTH_ARCHIVE:-}" ]; then
+            case "${PLATFORM_NAME:-}" in
+              iphoneos) export OP_AUTH_TARGET=aarch64-apple-ios ;;
+              iphonesimulator) export OP_AUTH_TARGET=aarch64-apple-ios-sim ;;
+              *) echo "error: unsupported auth link platform: ${PLATFORM_NAME:-unset}" >&2; exit 1 ;;
+            esac
+            bash "$SRCROOT/../../tools/check-mobile-auth-link-input.sh"
+          fi
+        basedOnDependencyAnalysis: false
+    postCompileScripts:
+      - name: Copy Douyin OpenSDK resource bundle
+        script: |
+          if [ "${PLATFORM_NAME:-}" = "iphoneos" ]; then
+            bundle="$SRCROOT/Vendor/DouyinOpenSDK.framework/Resources/DYOpenCore.bundle"
+            if [ -d "$bundle" ]; then
+              cp -R "$bundle" "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/"
+            fi
+          fi
+        basedOnDependencyAnalysis: false
+    dependencies:
+      - sdk: BackgroundTasks.framework
+      - sdk: Metal.framework
+      - sdk: QuartzCore.framework
+      - sdk: Security.framework
+      - sdk: UIKit.framework
+      - sdk: Foundation.framework
+      - sdk: CoreFoundation.framework
+      - sdk: CoreGraphics.framework
+      - sdk: CoreText.framework
+      - sdk: ImageIO.framework
+      - sdk: MobileCoreServices.framework
+      - sdk: SafariServices.framework
+      - sdk: AuthenticationServices.framework

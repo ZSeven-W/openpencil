@@ -1,0 +1,187 @@
+# frozen_string_literal: true
+
+# Source contracts for the native (WebView-free) SSO login and account
+# surfaces: OpPlayerView presentation glue, the login screen itself, region
+# handling, and auth storage hygiene.
+
+view_source = File.read(ARGV.fetch(0))
+login_source = File.read(ARGV.fetch(1))
+storage_source = File.read(ARGV.fetch(2))
+region_source = File.read(ARGV.fetch(3))
+header_source = File.read(ARGV.fetch(4))
+
+show = view_source[/func showNativeLogin\b.*?(?=\n    \/\/\/ Rust is authoritative)/m]
+raise "native-login presentation method missing" unless show
+raise "duplicate login action must be idempotent" unless show.include?(
+  "guard nativeLoginController == nil else { return }"
+)
+raise "failed login presentation must cancel the Rust flow" unless show.scan(
+  "host.cancelLoginFlow()"
+).length >= 1
+raise "engine-terminal close path missing" unless view_source.include?(
+  "func closeNativeLoginFromHost()"
+)
+
+# The login screen must never manufacture its own login URL: origin and
+# pairing come only from the engine-provided verification URL.
+raise "login screen must parse the engine verification URL" unless login_source.include?(
+  "DeviceLoginRequestInfo(verificationURL: verificationURL)"
+)
+if login_source.match?(%r{https://(?:sso\.)?zseven\.(?:cn|tech)})
+  raise "platform login URL must not be hard-coded in the login screen"
+end
+
+# User cancel reports exactly once and Rust stays authoritative for success.
+cancel = login_source[/@objc private func cancelPressed\b.*?\n    \}/m]
+raise "user cancel must guard duplicate reports" unless cancel&.include?("cancellationReported")
+raise "approval success must wait for the engine close action" unless login_source.include?(
+  "self.statusLabel.isHidden = false"
+)
+finish = login_source[/func finishFromHost\b.*?\n    \}/m]
+raise "host-driven dismissal missing" unless finish&.include?("dismiss(animated: animated)")
+
+# Providers without a native SDK stay inside the app on their own OAuth
+# page: the sheet opens the SSO start endpoint carrying the pairing, and the
+# callback lands on the dedicated approval page — never an embedded WebView,
+# never an external-browser bounce, never the generic login page.
+raise "provider tap must open the provider start endpoint" unless login_source.include?(
+  '"/api/v1/auth/providers/\(providerID)/start"'
+)
+raise "provider start must carry the pairing" unless login_source.include?(
+  'URLQueryItem(name: "device_pairing", value: pairingID)'
+)
+raise "provider sign-in must stay in-app" unless login_source.include?(
+  "present(SFSafariViewController(url: url), animated: true)"
+)
+raise "WebKit must stay out of the login path" if login_source.include?("import WebKit")
+
+# Apple sign-in is SDK-native: the tapped card runs the system
+# AuthenticationServices sheet, exchanges the nonce-bound identity token at
+# the SSO native-login endpoint, then approves the pairing directly. A user
+# cancel returns to the screen; other failures surface an inline error and
+# never touch a web page.
+raise "apple card must run the native sheet" unless login_source.include?(
+  'case "apple":'
+) && login_source.include?("startAppleNativeSignIn()")
+raise "apple token must exchange at native-login" unless login_source.include?(
+  'providerID: "apple",'
+) && login_source.include?("self.client.nativeLogin(")
+raise "native apple success must approve the pairing" unless login_source.include?(
+  "self.approvePairing()"
+)
+
+# Douyin and Alipay are SDK-native too: the SSO issues a single-use state
+# (with its binder cookie) first, the vendor SDK flow carries that state to
+# the minted auth code, `{state, code}` exchanges at the same native-login
+# endpoint, and the pairing is approved directly. A user cancel returns to
+# the screen; failures surface an inline error and never bounce to the
+# browser flow.
+raise "douyin card must run the OpenSDK flow" unless login_source.include?(
+  'case "douyin":'
+) && login_source.include?("DouyinNativeSignIn.start(from: self, state: state")
+raise "alipay card must run the in-app authorization" unless login_source.include?(
+  'case "alipay":'
+) && login_source.include?("AlipayNativeSignIn.start(state: state")
+raise "wechat card must run the OpenSDK flow" unless login_source.include?(
+  'case "wechat":'
+) && login_source.include?("WechatNativeSignIn.start(state: state")
+raise "native sign-in must obtain a server-issued state first" unless login_source.include?(
+  "client.nativeLoginStart(providerID: providerID)"
+)
+raise "native provider code must exchange with the bound state" unless login_source.include?(
+  "client.nativeCodeLogin("
+) && login_source.include?("state: state,\n                code: authCode")
+
+# The SDK wrappers pin the mobile-app credentials and the callback plumbing.
+douyin_source = File.read(File.expand_path("../Sources/DouyinNativeSignIn.swift", __dir__))
+alipay_source = File.read(File.expand_path("../Sources/AlipayNativeSignIn.swift", __dir__))
+callbacks_source = File.read(
+  File.expand_path("../Sources/NativeProviderCallbacks.swift", __dir__)
+)
+raise "douyin client key drifted" unless douyin_source.include?(
+  'clientKey = "awbponwo0ls6cjos"'
+)
+raise "alipay mobile AppID drifted" unless alipay_source.include?(
+  'appID = "2021006190626680"'
+)
+raise "alipay must use the unsigned PURE_OAUTH_SDK flow" unless alipay_source.include?(
+  "https://authweb.alipay.com/auth?auth_type=PURE_OAUTH_SDK"
+)
+raise "alipay callback scheme drifted" unless alipay_source.include?(
+  'callbackScheme = "openpencilalipay"'
+)
+wechat_source = File.read(File.expand_path("../Sources/WechatNativeSignIn.swift", __dir__))
+raise "wechat mobile AppID drifted" unless wechat_source.include?(
+  'appID = "wx327d6a759ea9fe62"'
+)
+raise "wechat universal link drifted" unless wechat_source.include?(
+  'universalLink = "https://op.zseven.cn/app-links/wechat/"'
+)
+raise "simulator builds must compile SDK stubs" unless
+  douyin_source.include?("#if targetEnvironment(simulator)") &&
+  alipay_source.include?("#if targetEnvironment(simulator)")
+raise "scheme callbacks must route into every SDK" unless
+  callbacks_source.include?("DouyinNativeSignIn.handleOpenURL(url)") &&
+  callbacks_source.include?("AlipayNativeSignIn.handleOpenURL(url)") &&
+  callbacks_source.include?("WechatNativeSignIn.handleOpenURL(url)")
+raise "onOpenURL-delivered universal links must reach the WeChat SDK" unless
+  callbacks_source.include?("WechatNativeSignIn.handleUniversalLinkURL(url)")
+app_source = File.read(File.expand_path("../Sources/OpPlayerApp.swift", __dir__))
+raise "scene must forward onOpenURL to the provider SDKs" unless app_source.include?(
+  "NativeProviderCallbacks.handle(url)"
+)
+raise "scene must forward universal links to the WeChat SDK first" unless app_source.include?(
+  "WechatNativeSignIn.handleUniversalLink(activity)"
+)
+
+# Region codes are literals for standalone-test compilability; pin them to
+# the C header so they cannot drift.
+raise "region code 0 must be China" unless region_source.include?("case .china: return 0")
+raise "region code 1 must be Global" unless region_source.include?("case .global: return 1")
+raise "header China region drifted" unless header_source.include?("OpAuthRegion_China = 0")
+raise "header Global region drifted" unless header_source.include?("OpAuthRegion_Global = 1")
+
+# Region probing consults the ZSeven gateway itself (nginx geo routing on
+# the hub entry), stays cookie-less and redirect-blind, waits for the probe
+# on a first launch, and a user override always wins.
+raise "region probe must ask the hub gateway" unless region_source.include?(
+  'URL(string: "https://op.zseven.tech/")'
+)
+raise "mainland verdict must match the hub redirect" unless region_source.include?(
+  'mainlandRedirectHost = "op.zseven.cn"'
+)
+raise "region probe must not send cookies" unless region_source.include?(
+  "configuration.httpShouldSetCookies = false"
+)
+raise "region probe must not follow redirects" unless region_source.include?(
+  "completionHandler(nil)"
+)
+raise "first launch must wait for the IP verdict" unless region_source.include?(
+  "static func resolveForStartup"
+)
+raise "user region override must suppress detection" unless region_source.include?(
+  "guard !hasUserOverride() else { return }"
+)
+
+# Third-party methods are region-accurate: fetched from the pairing origin,
+# never hardcoded per region in the login screen.
+raise "provider list must come from the pairing origin" unless login_source.include?(
+  "client.fetchProviders"
+)
+
+raise "auth storage must be excluded from backup" unless storage_source.include?(
+  "resourceValues.isExcludedFromBackup = true"
+)
+
+# The IME conduit starts (and stays) empty for plain typing, so backspace
+# must be forwarded from deleteBackward itself — the delegate path never
+# fires on an empty text view and engine inputs could type but not delete.
+view_full = File.read(File.expand_path("../Sources/OpPlayerView.swift", __dir__))
+raise "empty-conduit backspace must forward to the engine" unless view_full.include?(
+  "imeTextView.onEmptyDeleteBackward"
+)
+raise "the conduit must override deleteBackward" unless view_full.include?(
+  "override func deleteBackward()"
+)
+
+puts "iOS native login lifecycle contract validates"

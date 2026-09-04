@@ -7,9 +7,9 @@
 //! flow in `persistence.rs`. The rfd dialogs are modal/blocking, which is
 //! acceptable here (the same as `persistence::save_as_dialog`).
 
-use std::io::Write;
-
-use op_codegen::ai::types::AssetFile;
+use op_editor_host_core::codegen_export::{
+    generated_artifact, live_bundle_artifact, CodegenArtifact,
+};
 use op_host_native::WidgetHostNative;
 
 use crate::codegen_session::CodegenResults;
@@ -41,33 +41,15 @@ fn handle_download(host: &WidgetHostNative, results: &CodegenResults) {
     ) else {
         return;
     };
-    if result.code.is_empty() {
-        return;
-    }
-    if result.assets.is_empty() {
-        let Some(path) = rfd::FileDialog::new()
-            .set_file_name(format!("component.{}", result.framework_ext))
-            .add_filter("code", &[result.framework_ext.as_str()])
-            .save_file()
-        else {
+    let artifact = match generated_artifact(result) {
+        Ok(Some(artifact)) => artifact,
+        Ok(None) => return,
+        Err(error) => {
+            show_save_error(host, None, &error.to_string());
             return;
-        };
-        if let Err(e) = std::fs::write(&path, &result.code) {
-            show_save_error(host, Some(&path), &e.to_string());
         }
-    } else {
-        let Some(path) = rfd::FileDialog::new()
-            .set_file_name("component.zip")
-            .add_filter("zip", &["zip"])
-            .save_file()
-        else {
-            return;
-        };
-        let bytes = build_code_zip(&result.code, &result.framework_ext, &result.assets);
-        if let Err(e) = std::fs::write(&path, bytes) {
-            show_save_error(host, Some(&path), &e.to_string());
-        }
-    }
+    };
+    save_artifact(host, artifact);
 }
 
 /// Save the AI structure bundle (`manifest.json` + raw/sanitized views +
@@ -77,41 +59,34 @@ fn handle_download(host: &WidgetHostNative, results: &CodegenResults) {
 /// no completed generation is required and a stale generation-time
 /// selection is never exported.
 fn handle_export_bundle(host: &WidgetHostNative) {
-    let Some(bundle) = build_live_structure_bundle(host.editor_state()) else {
-        // Nothing to bundle (empty page / unresolvable selection) — the
-        // TS handler returns silently on `nodes.length === 0`.
-        return;
+    let artifact = match live_bundle_artifact(host.editor_state()) {
+        Ok(Some(artifact)) => artifact,
+        Ok(None) => return,
+        Err(error) => {
+            show_save_error(host, None, &error.to_string());
+            return;
+        }
     };
+    save_artifact(host, artifact);
+}
+
+fn save_artifact(host: &WidgetHostNative, artifact: CodegenArtifact) {
+    let extension = std::path::Path::new(&artifact.file_name)
+        .extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .unwrap_or("bin")
+        .to_string();
+    let filter_label = if extension == "zip" { "zip" } else { "code" };
     let Some(path) = rfd::FileDialog::new()
-        .set_file_name("bundle.zip")
-        .add_filter("zip", &["zip"])
+        .set_file_name(artifact.file_name)
+        .add_filter(filter_label, &[extension.as_str()])
         .save_file()
     else {
         return;
     };
-    let bytes = build_bundle_zip(&bundle.files);
-    if let Err(e) = std::fs::write(&path, bytes) {
-        show_save_error(host, Some(&path), &e.to_string());
+    if let Err(error) = std::fs::write(&path, artifact.bytes) {
+        show_save_error(host, Some(&path), &error.to_string());
     }
-}
-
-/// Build the structure bundle from the LIVE editor state: the selection's
-/// subtrees, else the active page's children (the same input-builder the
-/// Generate launch uses), asset-sanitized here because the pipeline isn't
-/// involved. `None` when there is nothing to bundle.
-fn build_live_structure_bundle(
-    state: &op_editor_core::EditorState,
-) -> Option<op_codegen::ai::bundle::StructureBundle> {
-    let (_input, raw) = crate::codegen_input::build_codegen_input(state)?;
-    let scope = if state.selection.is_empty() {
-        op_codegen::ai::bundle::BundleScope::Page
-    } else {
-        op_codegen::ai::bundle::BundleScope::Selection
-    };
-    let (sanitized, assets) = op_codegen::ai::assets::extract_codegen_assets(&raw);
-    Some(op_codegen::ai::bundle::build_structure_bundle(
-        &raw, &sanitized, &assets, scope,
-    ))
 }
 
 /// Pop the shared native Save error dialog.
@@ -124,44 +99,6 @@ fn show_save_error(host: &WidgetHostNative, path: Option<&std::path::Path>, deta
     );
 }
 
-/// Build a Download zip carrying `component.<ext>` (the generated code) plus
-/// one `assets/<...>` entry per asset. Stored (uncompressed) so the bytes are
-/// byte-stable and fast to write. Asset paths reuse each asset's `zip_path`,
-/// which already lives under `assets/`.
-fn build_code_zip(code: &str, ext: &str, assets: &[AssetFile]) -> Vec<u8> {
-    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
-    let opts =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    // Best-effort: a zip write failure on an in-memory cursor is effectively
-    // impossible, so we ignore the Result rather than thread it back to the UI.
-    let _ = writer.start_file(format!("component.{ext}"), opts);
-    let _ = writer.write_all(code.as_bytes());
-    for asset in assets {
-        let _ = writer.start_file(asset.zip_path.clone(), opts);
-        let _ = writer.write_all(&asset.bytes);
-    }
-    writer
-        .finish()
-        .map(|cursor| cursor.into_inner())
-        .unwrap_or_default()
-}
-
-/// Build a zip from a structure bundle's `(in-zip path, bytes)` entries.
-/// Stored (uncompressed).
-fn build_bundle_zip(files: &[(String, Vec<u8>)]) -> Vec<u8> {
-    let mut writer = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
-    let opts =
-        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-    for (path, bytes) in files {
-        let _ = writer.start_file(path.clone(), opts);
-        let _ = writer.write_all(bytes);
-    }
-    writer
-        .finish()
-        .map(|cursor| cursor.into_inner())
-        .unwrap_or_default()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -169,6 +106,7 @@ mod tests {
     use std::sync::atomic::AtomicBool;
     use std::sync::Arc;
 
+    use op_codegen::ai::types::AssetFile;
     use op_editor_core::codegen::Framework;
 
     use crate::codegen_session::{pump, CodegenDelta, CodegenSession};
@@ -214,7 +152,7 @@ mod tests {
             rx,
             finished: false,
             framework,
-            document_identity: (0, 0),
+            document_identity: (0, 0, 0),
             selection_snapshot: Vec::new(),
             model: None,
             cancel: Arc::new(AtomicBool::new(false)),
@@ -223,10 +161,16 @@ mod tests {
     }
 
     #[test]
-    fn code_zip_without_assets_has_only_the_component() {
-        let bytes = build_code_zip("export default function X(){}", "tsx", &[]);
-        let names = entry_names(&bytes);
-        assert_eq!(names, vec!["component.tsx".to_string()]);
+    fn download_without_assets_stays_a_plain_component() {
+        let artifact = generated_artifact(&crate::codegen_session::CodegenResult {
+            code: "export default function X(){}".into(),
+            framework_ext: "tsx".into(),
+            assets: Vec::new(),
+        })
+        .expect("within export budget")
+        .expect("artifact");
+        assert_eq!(artifact.file_name, "component.tsx");
+        assert_eq!(artifact.bytes, b"export default function X(){}");
     }
 
     #[test]
@@ -235,8 +179,14 @@ mod tests {
             asset("assets/img-1.png", &[1, 2, 3]),
             asset("assets/img-2.png", &[4, 5, 6]),
         ];
-        let bytes = build_code_zip("code", "vue", &assets);
-        let names = entry_names(&bytes);
+        let artifact = generated_artifact(&crate::codegen_session::CodegenResult {
+            code: "code".into(),
+            framework_ext: "vue".into(),
+            assets,
+        })
+        .expect("within export budget")
+        .expect("artifact");
+        let names = entry_names(&artifact.bytes);
         assert!(names.contains(&"component.vue".to_string()));
         assert!(names.contains(&"assets/img-1.png".to_string()));
         assert!(names.contains(&"assets/img-2.png".to_string()));
@@ -280,13 +230,17 @@ mod tests {
         assert_eq!(result.code, "<main>html source</main>");
         assert_eq!(result.framework_ext, "html");
 
-        let zip = build_code_zip(&result.code, &result.framework_ext, &result.assets);
+        let artifact = generated_artifact(result)
+            .expect("within export budget")
+            .expect("artifact");
         assert_eq!(
-            entry_bytes(&zip, "component.html"),
+            entry_bytes(&artifact.bytes, "component.html"),
             b"<main>html source</main>"
         );
-        assert_eq!(entry_bytes(&zip, "assets/html.png"), [1, 8, 7]);
-        assert!(!entry_names(&zip).iter().any(|name| name.contains("react")));
+        assert_eq!(entry_bytes(&artifact.bytes, "assets/html.png"), [1, 8, 7]);
+        assert!(!entry_names(&artifact.bytes)
+            .iter()
+            .any(|name| name.contains("react")));
     }
 
     #[test]
@@ -343,15 +297,8 @@ mod tests {
         })
     }
 
-    /// The bundle bytes for a named in-zip path, as UTF-8.
-    fn file_text(bundle: &op_codegen::ai::bundle::StructureBundle, path: &str) -> String {
-        let bytes = bundle
-            .files
-            .iter()
-            .find(|(p, _)| p == path)
-            .map(|(_, b)| b.clone())
-            .unwrap_or_else(|| panic!("bundle missing {path}"));
-        String::from_utf8(bytes).expect("utf8")
+    fn entry_text(bytes: &[u8], path: &str) -> String {
+        String::from_utf8(entry_bytes(bytes, path)).expect("utf8")
     }
 
     /// Export AI Bundle works PRE-generation, against the live selection —
@@ -362,11 +309,13 @@ mod tests {
         state.doc.children = vec![rect_node("n1"), rect_node("n2")];
         state.set_single_selection(op_editor_core::NodeId::new("n1"));
 
-        let bundle = super::build_live_structure_bundle(&state).expect("bundle");
-        let raw = file_text(&bundle, "views/raw.json");
+        let artifact = live_bundle_artifact(&state)
+            .expect("within export budget")
+            .expect("bundle");
+        let raw = entry_text(&artifact.bytes, "views/raw.json");
         assert!(raw.contains("n1"), "live selected node in the raw view");
         assert!(!raw.contains("n2"), "unselected sibling stays out");
-        assert!(file_text(&bundle, "manifest.json").contains("\"scope\": \"selection\""));
+        assert!(entry_text(&artifact.bytes, "manifest.json").contains("\"scope\": \"selection\""));
     }
 
     /// With nothing selected the bundle covers the active page's children
@@ -377,10 +326,12 @@ mod tests {
         state.doc.children = vec![rect_node("n1"), rect_node("n2")];
         state.clear_selection();
 
-        let bundle = super::build_live_structure_bundle(&state).expect("bundle");
-        let raw = file_text(&bundle, "views/raw.json");
+        let artifact = live_bundle_artifact(&state)
+            .expect("within export budget")
+            .expect("bundle");
+        let raw = entry_text(&artifact.bytes, "views/raw.json");
         assert!(raw.contains("n1") && raw.contains("n2"));
-        assert!(file_text(&bundle, "manifest.json").contains("\"scope\": \"page\""));
+        assert!(entry_text(&artifact.bytes, "manifest.json").contains("\"scope\": \"page\""));
     }
 
     /// An empty page with no selection has nothing to bundle (the TS
@@ -388,23 +339,22 @@ mod tests {
     #[test]
     fn live_bundle_is_none_on_empty_page() {
         let state = op_editor_core::EditorState::new();
-        assert!(super::build_live_structure_bundle(&state).is_none());
+        assert!(live_bundle_artifact(&state)
+            .expect("within export budget")
+            .is_none());
     }
 
     #[test]
     fn bundle_zip_contains_every_file_entry() {
-        let files = vec![
-            ("manifest.json".to_string(), b"{}".to_vec()),
-            ("views/raw.json".to_string(), b"[]".to_vec()),
-            ("views/sanitized.json".to_string(), b"[]".to_vec()),
-            ("assets/img-1.png".to_string(), vec![9, 9, 9]),
-        ];
-        let bytes = build_bundle_zip(&files);
-        let names = entry_names(&bytes);
+        let mut state = op_editor_core::EditorState::new();
+        state.doc.children = vec![rect_node("n1")];
+        let artifact = live_bundle_artifact(&state)
+            .expect("within export budget")
+            .expect("bundle");
+        let names = entry_names(&artifact.bytes);
         assert!(names.contains(&"manifest.json".to_string()));
         assert!(names.contains(&"views/raw.json".to_string()));
         assert!(names.contains(&"views/sanitized.json".to_string()));
-        assert!(names.contains(&"assets/img-1.png".to_string()));
-        assert_eq!(names.len(), 4);
+        assert_eq!(names.len(), 3);
     }
 }

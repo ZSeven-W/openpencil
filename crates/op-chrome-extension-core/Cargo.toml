@@ -34,11 +34,12 @@ op-html = { path = "../op-html" }
 # The canonical `.op` document schema `import_snapshot_document` returns; needed
 # to walk the imported node tree for the reported node count.
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
-# Used ONLY to parse the (small) HTTP reply bodies the two ingresses answer
+# Used ONLY to parse the (small) HTTP reply bodies the ingresses answer
 # with. The outbound `tools/call` envelope is built with `format!` +
 # `op_util::json_escape`, mirroring `op-mcp`'s serializer, so the multi-MB
 # snapshot string is escaped in one streaming pass instead of being routed
 # through an intermediate `serde_json::Value`.
+serde = { workspace = true }
 serde_json = { workspace = true }
 # Pin matches op-host-web / op-web-sdk — the wasm-bindgen crate and the
 # installed `wasm-bindgen-cli` must agree exactly.

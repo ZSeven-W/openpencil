@@ -7,7 +7,12 @@ use std::sync::Arc;
 use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest};
 use op_codegen::ai::types::{AssetFile, CodegenInput, PipelineStep, RequestKind};
 use op_codegen::ai::CodegenPipeline;
-use op_editor_core::codegen::CodeGenProgress;
+use op_editor_core::codegen::{CodeGenProgress, Framework};
+
+pub use crate::codegen_runtime_state::{
+    drain_codegen_cancel_state, pump_codegen_state, retire_stale_codegen_session,
+    CodegenDocumentIdentity, CodegenResult, CodegenResults,
+};
 
 /// Streamed from the worker to the UI pump.
 pub enum CodegenDelta {
@@ -22,15 +27,27 @@ pub enum CodegenDelta {
 
 static NEXT_RUN_EPOCH: AtomicU64 = AtomicU64::new(1);
 
+/// Failure to launch the background code-generation worker.
+#[derive(Debug, thiserror::Error)]
+pub enum CodegenStartError {
+    #[error("Could not start code generation: {source}")]
+    ThreadSpawn {
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+type CodegenWorker = Box<dyn FnOnce() + Send + 'static>;
+
 /// An in-flight generation. Host pumps own the UI-specific folding of deltas.
 pub struct CodegenSession {
     pub rx: Receiver<CodegenDelta>,
     pub finished: bool,
-    pub framework: op_editor_core::codegen::Framework,
+    pub framework: Framework,
     /// Whole-document identity captured by the host when this run launched.
     /// Hosts compare it before folding any delta so an Open/New/import/sync
     /// replacement cannot receive a completion from the previous document.
-    pub document_identity: (u64, u64),
+    pub document_identity: CodegenDocumentIdentity,
     /// Node ids captured when this run launched. The host commits these to
     /// `CodegenState::selection_snapshot` only when the matching terminal
     /// `Done` is applied; failed/canceled runs simply drop them.
@@ -44,12 +61,12 @@ pub struct CodegenSession {
 }
 
 impl CodegenSession {
-    /// Bind a newly-started session to `(host epoch, document generation)`.
+    /// Bind a newly-started session to its host/document/codegen lifetime.
     ///
     /// The shared worker does not own a host, so constructors use the initial
-    /// identity `(0, 0)` and concrete hosts stamp their live identity before
+    /// identity `(0, 0, 0)` and concrete hosts stamp their live identity before
     /// publishing the session.
-    pub fn with_document_identity(mut self, document_identity: (u64, u64)) -> Self {
+    pub fn with_document_identity(mut self, document_identity: CodegenDocumentIdentity) -> Self {
         self.document_identity = document_identity;
         self
     }
@@ -72,9 +89,18 @@ impl CodegenSession {
     pub fn start(
         provider: Box<dyn ChatProvider>,
         input: CodegenInput,
-        framework: op_editor_core::codegen::Framework,
+        framework: Framework,
     ) -> Self {
         Self::start_with_model(provider, input, framework, None)
+    }
+
+    /// Fallible production entry point for starting a code-generation worker.
+    pub fn try_start(
+        provider: Box<dyn ChatProvider>,
+        input: CodegenInput,
+        framework: Framework,
+    ) -> Result<Self, CodegenStartError> {
+        Self::try_start_with_model(provider, input, framework, None)
     }
 
     /// Spawn a worker and forward the selected CLI model to every planning,
@@ -84,52 +110,102 @@ impl CodegenSession {
     pub fn start_with_model(
         provider: Box<dyn ChatProvider>,
         input: CodegenInput,
-        framework: op_editor_core::codegen::Framework,
+        framework: Framework,
         model: Option<String>,
     ) -> Self {
+        let fallback_model = model.clone();
+        Self::try_start_with_model(provider, input, framework, model)
+            .unwrap_or_else(|error| Self::failed_start_session(framework, fallback_model, error))
+    }
+
+    /// Fallible worker launch that forwards the selected model to every
+    /// planning, chunk, and assembly request.
+    pub fn try_start_with_model(
+        provider: Box<dyn ChatProvider>,
+        input: CodegenInput,
+        framework: Framework,
+        model: Option<String>,
+    ) -> Result<Self, CodegenStartError> {
+        Self::try_start_with_model_and_spawner(provider, input, framework, model, |worker| {
+            std::thread::Builder::new()
+                .name("op-codegen-turn".into())
+                .spawn(worker)
+                .map(drop)
+        })
+    }
+
+    fn try_start_with_model_and_spawner<F>(
+        provider: Box<dyn ChatProvider>,
+        input: CodegenInput,
+        framework: Framework,
+        model: Option<String>,
+        spawner: F,
+    ) -> Result<Self, CodegenStartError>
+    where
+        F: FnOnce(CodegenWorker) -> std::io::Result<()>,
+    {
         let (tx, rx) = std::sync::mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = Arc::clone(&cancel);
         let worker_model = model.clone();
-        std::thread::Builder::new()
-            .name("op-codegen-turn".into())
-            .spawn(move || {
-                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    run_pipeline_with_model_and_cancel_token(
-                        provider.as_ref(),
-                        input,
-                        worker_model.as_deref(),
-                        &tx,
-                        &worker_cancel,
-                        Some(Arc::clone(&worker_cancel)),
-                    );
-                }));
-                if outcome.is_err() {
-                    let _ = tx.send(CodegenDelta::Failed(
-                        "Code generation failed unexpectedly".into(),
-                    ));
-                }
-            })
-            .expect("spawn op-codegen-turn worker");
+        let worker: CodegenWorker = Box::new(move || {
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                run_pipeline_with_model_and_cancel_token(
+                    provider.as_ref(),
+                    input,
+                    worker_model.as_deref(),
+                    &tx,
+                    &worker_cancel,
+                    Some(Arc::clone(&worker_cancel)),
+                );
+            }));
+            if outcome.is_err() {
+                let _ = tx.send(CodegenDelta::Failed(
+                    "Code generation failed unexpectedly".into(),
+                ));
+            }
+        });
+        spawner(worker).map_err(|source| CodegenStartError::ThreadSpawn { source })?;
+        Ok(CodegenSession {
+            rx,
+            finished: false,
+            framework,
+            document_identity: (0, 0, 0),
+            selection_snapshot: Vec::new(),
+            model,
+            cancel,
+            run_epoch: NEXT_RUN_EPOCH.fetch_add(1, Ordering::Relaxed),
+        })
+    }
+
+    fn failed_start_session(
+        framework: Framework,
+        model: Option<String>,
+        error: CodegenStartError,
+    ) -> Self {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let _ = tx.send(CodegenDelta::Failed(error.to_string()));
+        drop(tx);
         CodegenSession {
             rx,
             finished: false,
             framework,
-            document_identity: (0, 0),
+            document_identity: (0, 0, 0),
             selection_snapshot: Vec::new(),
             model,
-            cancel,
+            cancel: Arc::new(AtomicBool::new(false)),
             run_epoch: NEXT_RUN_EPOCH.fetch_add(1, Ordering::Relaxed),
         }
     }
 }
 
-/// The completed result kept host-side for Download.
-#[derive(Default, Clone)]
-pub struct CodegenResult {
-    pub code: String,
-    pub framework_ext: String,
-    pub assets: Vec<AssetFile>,
+impl Drop for CodegenSession {
+    fn drop(&mut self) {
+        // Teardown and document replacement must stop the worker even when a
+        // concrete host forgets to call `cancel` first. The worker owns only a
+        // clone of this token, so setting it is non-blocking and never joins.
+        self.cancel.store(true, Ordering::Relaxed);
+    }
 }
 
 /// Drive the pipeline to completion against `provider`, emitting deltas on
@@ -459,3 +535,7 @@ fn with_diagnostics(
     ));
     format!("{message}\nDetails: {}", details.join(" | "))
 }
+
+#[cfg(test)]
+#[path = "codegen_session_start_tests.rs"]
+mod start_tests;

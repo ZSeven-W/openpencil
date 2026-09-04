@@ -137,7 +137,8 @@ fn default_shader_body(hex: &str) -> ShaderFillBody {
         jian_ops_schema::style::ShaderUniformValue::Color(hex.to_string()),
     );
     ShaderFillBody {
-        sksl: "uniform half4 tint; half4 main(float2 p){ return tint; }".to_string(),
+        preset: None,
+        sksl: Some("uniform half4 tint; half4 main(float2 p){ return tint; }".to_string()),
         uniforms: Some(uniforms),
         explain: None,
         opacity: None,

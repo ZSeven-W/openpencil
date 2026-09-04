@@ -126,3 +126,40 @@ fn patch_node_data_shallow_merges_ts_text_fields() {
     assert_eq!(text.content, TextContent::Plain("New".into()));
     assert_eq!(text.font_size, Some(24.0));
 }
+
+#[test]
+fn patch_node_data_rebuilds_a_same_id_leaf_as_another_leaf_type() {
+    let mut s = state_with(vec![text(
+        "action",
+        "See all",
+        0.0,
+        0.0,
+        100.0,
+        24.0,
+        "View all >",
+    )]);
+
+    assert!(s.apply(EditorCommand::PatchNodeData {
+        node_id: id("action"),
+        patch_json: r#"{
+          "type":"icon_font",
+          "iconFontName":"chevron-right",
+          "width":20,
+          "height":20,
+          "content":null,
+          "fontSize":null
+        }"#
+        .into(),
+        page_id: None,
+    }));
+
+    let replacement = find_node(s.active_children(), &id("action")).unwrap();
+    let PenNode::IconFont(icon) = replacement else {
+        panic!("expected same-id icon_font replacement");
+    };
+    assert_eq!(icon.base.id, "action");
+    assert_eq!(icon.icon_font_name, "chevron-right");
+    let canonical = serde_json::to_value(replacement).unwrap();
+    assert!(canonical.get("content").is_none());
+    assert!(canonical.get("fontSize").is_none());
+}

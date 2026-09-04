@@ -11,7 +11,13 @@ default = ["remote"]
 # Remote ACP agents over a WebSocket endpoint. Local (stdio) agents
 # work without this feature; `remote` adds the `tokio-tungstenite`
 # dependency for the WebSocket transport.
-remote = ["dep:tokio-tungstenite", "dep:futures-util"]
+remote = [
+  "dep:tokio-tungstenite",
+  "dep:futures-util",
+  "dep:rustls",
+  "dep:rustls-native-certs",
+  "dep:webpki-roots",
+]
 
 [dependencies]
 # Desktop-only crate: spawns child processes + drives async IO, so it
@@ -33,6 +39,22 @@ op-rpc-transport = { path = "../op-rpc-transport" }
 op-ai = { path = "../op-ai" }
 # Bounded + redacted child-output tails, shared with the CLI bridge.
 op-util = { path = "../op-util" }
+# Official ACP 2.0 SDK. We intentionally use its stable v1 schema only;
+# the draft `unstable_protocol_v2` feature stays disabled.
+agent-client-protocol = "=2.0.0"
+# Shared process-tree termination for local stdio agents.
+op-process-io = { path = "../op-process-io" }
 
-tokio-tungstenite = { version = "0.24", optional = true }
+tokio-tungstenite = { version = "0.24", optional = true, default-features = false, features = [
+  "connect",
+  "rustls-tls-native-roots",
+  "rustls-tls-webpki-roots",
+] }
 futures-util = { version = "0.3", optional = true }
+rustls = { version = "0.23", optional = true, default-features = false, features = [
+  "ring",
+  "std",
+  "tls12",
+] }
+rustls-native-certs = { version = "0.8", optional = true }
+webpki-roots = { version = "0.26", optional = true }

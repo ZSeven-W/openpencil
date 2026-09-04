@@ -16,6 +16,7 @@ fn subtask() -> Subtask {
         },
         id_prefix: "section".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: Some("Screen".into()),
         generated_root_id: None,
@@ -77,6 +78,7 @@ fn rejected_atomic_batch_rolls_back_and_becomes_a_failed_outcome() {
         node_count: 1,
         error: None,
         inserted_root_ids: Vec::new(),
+        headline: None,
         subtask: None,
     };
     let (ack_tx, ack_rx) = oneshot::channel();

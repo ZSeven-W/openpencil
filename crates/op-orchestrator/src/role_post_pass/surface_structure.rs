@@ -73,13 +73,9 @@ pub(super) fn is_ring_like_decorative(node: &Value) -> bool {
 /// any of these is repainting the page background and must go transparent.
 /// Variable refs are NOT resolved at post-pass time (binding runs afterwards),
 /// so `hex_luminance` can't read them — match the token names directly. Colored
-/// tokens (`$color-accent`, dark bands, etc.) are deliberate → never listed here.
-pub(super) const LIGHT_SURFACE_REFS: &[&str] = &[
-    "$color-bg-deep",
-    "$color-surface",
-    "$color-surface-2",
-    "$color-surface-3",
-];
+/// tokens (`$--primary`, dark bands, etc.) are deliberate → never listed here.
+pub(super) const LIGHT_SURFACE_REFS: &[&str] =
+    &["$--background", "$--card", "$--muted", "$--accent"];
 
 /// True when a fill color reads as a light page/surface tone — either a parsed
 /// hex with luminance ≥ 0.85, or one of the neutral surface variable refs that
@@ -140,7 +136,7 @@ pub(super) fn fix_structural_wrapper_transparency(node: &mut Value) {
         // A card-like role normally keeps its fill — EXCEPT when it is a
         // redundant wrapper around a single full-bleed colored child card (glm
         // wraps an orange promo banner in a `feature-card` whose own
-        // `$color-surface` fill then shows as a light box around / under the
+        // `$--card` fill then shows as a light box around / under the
         // colored child). The colored child IS the banner surface, so strip the
         // wrapper's light fill + chrome.
         if is_redundant_colored_wrapper(node) {
@@ -326,10 +322,10 @@ pub(super) fn fix_orphan_container_contrast(node: &mut Value, parent_fill: Optio
         return;
     }
     // Use the semantic surface token directly. A literal #FFFFFF can bind to
-    // `$color-bg-deep` when both variables share the light-mode value; the
+    // `$--background` when both variables share the light-mode value; the
     // later surface-discipline pass correctly strips page-bg tokens from inner
     // nodes, making this rescued card transparent again.
-    node["fill"] = solid_fill("$color-surface");
+    node["fill"] = solid_fill("$--card");
     if effects_missing_or_null(node) {
         node["effects"] = json!([
             { "type": "shadow", "offsetX": 0, "offsetY": 1, "blur": 3, "spread": 0, "color": "#0000001A" },
@@ -380,7 +376,7 @@ pub(super) fn deck_rects_substantially_overlap(
 /// near-identical footprint always leaks), not a design-intent call, so it's
 /// safe to auto-repair. Measured: 0724-1-gm-3.op's Flashcard Deck Stack,
 /// where the front card's empty fill let "Back Layer 1"'s
-/// `$color-surface-3` bleed across the whole card. `frame`/`rectangle` only
+/// `$--accent` bleed across the whole card. `frame`/`rectangle` only
 /// (never `ellipse`) — a ring/donut sibling behind a centered label is a
 /// deliberate see-through composition, not a leak.
 pub(super) fn fix_deck_front_card_transparency(node: &mut Value) {
@@ -409,7 +405,7 @@ pub(super) fn fix_deck_front_card_transparency(node: &mut Value) {
     // it would blot out the photo and its scrim entirely (measured:
     // 0728-gm.op's three theme-list cards, where the model's deliberate
     // photo + 3-stop alpha scrim + transparent content stack came back with
-    // an opaque $color-surface lid and no visible image). Same rationale as
+    // an opaque $--card lid and no visible image). Same rationale as
     // the ellipse exclusion above.
     if children
         .iter()
@@ -433,8 +429,8 @@ pub(super) fn fix_deck_front_card_transparency(node: &mut Value) {
     };
     // Semantic token, not a literal hex — same convention as
     // `fix_orphan_container_contrast` (a later surface-discipline pass
-    // resolves `$color-surface` against the active theme).
-    children[0]["fill"] = solid_fill("$color-surface");
+    // resolves `$--card` against the active theme).
+    children[0]["fill"] = solid_fill("$--card");
 }
 
 // ── normalizeNestedSearchShell ──────────────────────────────────────────────

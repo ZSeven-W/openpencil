@@ -2,6 +2,76 @@
 //! templates, language consistency and design-system dropping.
 
 use super::*;
+use crate::types::SubtaskOutcome;
+use jian_ops_schema::variable::VariableDefinition;
+use std::collections::BTreeMap;
+
+/// Build a prompt for a document variable table using the same non-empty check
+/// as the production sub-agent runner.
+fn prompt_for_variables(
+    variables: Option<BTreeMap<String, VariableDefinition>>,
+    model: &str,
+) -> SkillLoadReport {
+    let doc_has_variables = variables.as_ref().is_some_and(|v| !v.is_empty());
+    let mut request = req();
+    request.model = Some(model.into());
+    let (_, report) = build_subagent_prompt_with_screen_routes(
+        &subtask(),
+        &plan(),
+        &request,
+        AbortFlag::new(),
+        false,
+        false,
+        doc_has_variables,
+        &ComponentLibrary::default(),
+        &[],
+    );
+    report
+}
+
+#[test]
+fn non_empty_document_variables_include_variables_skill() {
+    let report = prompt_for_variables(Some(crate::semantic_palette::palette_variables()), "claude");
+    assert!(
+        report
+            .included
+            .iter()
+            .any(|entry| entry.name == "variables"),
+        "a non-empty document variable table must include the variables skill: {report:?}"
+    );
+}
+
+#[test]
+fn empty_or_absent_document_variables_drop_variables_for_intent_miss() {
+    for variables in [None, Some(BTreeMap::new())] {
+        let report = prompt_for_variables(variables, "claude");
+        let dropped = report
+            .dropped
+            .iter()
+            .find(|entry| entry.name == "variables")
+            .unwrap_or_else(|| panic!("variables skill must be reported as dropped: {report:?}"));
+        assert_eq!(
+            dropped.reason,
+            op_ai_skills::DropReason::IntentMiss,
+            "empty or absent document variables must miss the flag gate"
+        );
+    }
+}
+
+#[test]
+fn basic_tier_keeps_variables_skill_when_document_variables_exist() {
+    let report = prompt_for_variables(
+        Some(crate::semantic_palette::palette_variables()),
+        "glm-4.6",
+    );
+    assert!(
+        report
+            .included
+            .iter()
+            .any(|entry| entry.name == "variables"),
+        "Basic tier must retain variables from its allow-set: {report:?}"
+    );
+}
 
 #[test]
 fn subagent_prompt_injects_exact_json_quoted_screen_route_inventory() {
@@ -23,6 +93,7 @@ fn subagent_prompt_injects_exact_json_quoted_screen_route_inventory() {
         AbortFlag::new(),
         false,
         false,
+        false,
         &ComponentLibrary::default(),
         &routes,
     );
@@ -42,6 +113,7 @@ CRITICAL LAYOUT CONSTRAINTS:"#;
         &plan,
         &req,
         AbortFlag::new(),
+        false,
         false,
         false,
         &ComponentLibrary::default(),
@@ -76,6 +148,7 @@ fn empty_screen_route_inventory_matches_public_builder_byte_for_byte() {
         AbortFlag::new(),
         false,
         false,
+        false,
         &components,
         &[],
     );
@@ -108,6 +181,7 @@ fn subagent_prompt_honors_explicit_radius_and_spacing_numbers() {
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let mut mobile_plan = plan();
     mobile_plan.root_frame.width = 402.0;
@@ -122,6 +196,7 @@ fn subagent_prompt_honors_explicit_radius_and_spacing_numbers() {
         },
         id_prefix: "content".into(),
         parent_frame_id: Some("page".into()),
+        insert_after_sibling_id: None,
         elements: Some("search, categories, promo, restaurant cards".into()),
         screen: None,
         generated_root_id: None,
@@ -168,6 +243,7 @@ fn mobile_food_prompt_avoids_fixed_food_template() {
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let mut mobile_plan = plan();
     mobile_plan.root_frame.width = 402.0;
@@ -185,6 +261,7 @@ fn mobile_food_prompt_avoids_fixed_food_template() {
         },
         id_prefix: "content".into(),
         parent_frame_id: Some("page".into()),
+        insert_after_sibling_id: None,
         elements: Some("header, search, categories, featured dish, popular list".into()),
         screen: None,
         generated_root_id: None,
@@ -252,6 +329,7 @@ fn chinese_mobile_food_prompt_carries_language_consistency_rule() {
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     };
     let mut mobile_plan = plan();
     mobile_plan.root_frame.width = 390.0;
@@ -265,6 +343,7 @@ fn chinese_mobile_food_prompt_carries_language_consistency_rule() {
         },
         id_prefix: "content".into(),
         parent_frame_id: Some("page".into()),
+        insert_after_sibling_id: None,
         elements: Some("配送地址、搜索框、美食分类、主题推荐卡片".into()),
         screen: None,
         generated_root_id: None,
@@ -335,4 +414,58 @@ fn subagent_prompt_drops_design_system_when_styling_covered() {
         !with_guide.system_prompt.contains(STYLE_DEFAULTS_ONLY),
         "named style guide should NOT load style-defaults"
     );
+}
+
+#[test]
+fn subagent_prompt_lists_headlines_from_earlier_sections_only_when_present() {
+    let earlier = vec![
+        SubtaskOutcome {
+            id: "hero".into(),
+            node_count: 1,
+            error: None,
+            inserted_root_ids: vec!["hero-root".into()],
+            headline: Some("Ship your next idea".into()),
+            subtask: None,
+        },
+        SubtaskOutcome {
+            id: "proof".into(),
+            node_count: 1,
+            error: None,
+            inserted_root_ids: vec!["proof-root".into()],
+            headline: Some("Trusted by thoughtful teams".into()),
+            subtask: None,
+        },
+    ];
+    let components = ComponentLibrary::default();
+    let (with_headlines, _) = build_subagent_prompt_with_screen_routes_and_outcomes(
+        &subtask(),
+        &plan(),
+        &req(),
+        AbortFlag::new(),
+        false,
+        false,
+        false,
+        &components,
+        &[],
+        &earlier,
+    );
+    assert!(with_headlines.user_prompt.contains(
+        "HEADLINES ALREADY ON THIS PAGE (earlier sections — do NOT reuse or paraphrase them; this section needs its own distinct headline): \"Ship your next idea\", \"Trusted by thoughtful teams\""
+    ));
+
+    let (without_headlines, _) = build_subagent_prompt_with_screen_routes_and_outcomes(
+        &subtask(),
+        &plan(),
+        &req(),
+        AbortFlag::new(),
+        false,
+        false,
+        false,
+        &components,
+        &[],
+        &[],
+    );
+    assert!(!without_headlines
+        .user_prompt
+        .contains("HEADLINES ALREADY ON THIS PAGE"));
 }

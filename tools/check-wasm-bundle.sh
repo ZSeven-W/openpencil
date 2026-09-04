@@ -4,7 +4,7 @@
 # What this script enforces (matches the CanvasKit production bundle gate
 # and the env.* import count guard):
 #   1. Required local tools are available: cargo, wasm-bindgen, wasm-opt,
-#      node, and gzip. CanvasKit needs no EMSDK / skia-safe / libc shim.
+#      node, python3, and gzip. CanvasKit needs no EMSDK / skia-safe / libc shim.
 #   2. cargo build → wasm-bindgen → wasm-opt -Oz pipeline produces the
 #      served crates/op-host-web/pkg/op_host_web_bg.wasm. `wasm-opt` is invoked
 #      with the core WebAssembly features emitted by current rustc.
@@ -21,7 +21,7 @@
 # Exit semantics:
 #   0   all four checks PASS.
 #   1   any check FAILED — message names which one.
-#   2   prerequisite missing (cargo / wasm-bindgen / wasm-opt / node / gzip).
+#   2   prerequisite missing (cargo / wasm-bindgen / wasm-opt / node / python3 / gzip).
 
 set -euo pipefail
 
@@ -65,38 +65,40 @@ step() { printf '\n[step %d/%d] %s\n' "$1" "$2" "$3"; }
 fail() { printf 'FAIL: %s\n' "$1" >&2; exit 1; }
 need() { command -v "$1" >/dev/null 2>&1 || { printf 'missing prerequisite: %s\n' "$1" >&2; exit 2; }; }
 
-step 1 6 "Verify prerequisites"
+step 1 7 "Verify prerequisites"
 need cargo
 need wasm-bindgen
 need wasm-opt
 need node
+need python3
 need gzip
 # CanvasKit needs NO EMSDK / skia-safe / libc shim — the editor renders through
 # the official CanvasKit skia WASM (loaded separately from /canvaskit/) and the
 # Rust bundle is pure logic. (The retired skia raster path needed EMSDK.)
 
+step 2 7 "Verify CanvasKit bridge scale bucketing"
+node --test crates/op-host-web/tests/op_ck_bridge_scale.test.mjs
+
 # `canvaskit` is the production browser feature set: the editor renders through
 # CanvasKit on the GPU and bundles the full app logic absorbed from the retired
 # skia raster path — daemon-backed AI chat (`web_chat`), live-sync, browser file
 # IO, clipboard/Figma paste, icon search, system fonts, and the codegen pipeline.
-step 2 6 "Build shell-web wasm32-unknown-unknown with --features canvaskit"
+step 3 7 "Build shell-web wasm32-unknown-unknown with --features canvaskit"
 cargo build -p op-host-web \
-  --target wasm32-unknown-unknown --no-default-features --features canvaskit --release >/dev/null
+  --target wasm32-unknown-unknown --no-default-features --features canvaskit --release --locked >/dev/null
 
-step 3 6 "wasm-bindgen --target web → ${PKG_DIR}/"
+step 4 7 "wasm-bindgen --target web → ${PKG_DIR}/"
 wasm-bindgen --target web --out-dir "${PKG_DIR}" "${TARGET_WASM}" >/dev/null
 
-step 4 6 "Stage runtime product assets into ${PKG_DIR}/assets/"
-# The wasm bundle no longer embeds the preview JPEGs, template documents and
-# icon catalog (see `op_editor_core::web_assets`): the browser fetches each on
-# demand from `/pkg/assets/…`, which the daemon already serves out of the
-# resolved bundle directory. Staging them here is what makes that route
-# resolve — a bundle shipped without this step degrades every preview to its
-# placeholder. Keep in sync with `.github/workflows/wasm-bundle-build.yml` and
-# `Dockerfile.web-rust`.
+step 5 7 "Stage runtime product assets into ${PKG_DIR}/assets/"
+# The wasm bundle no longer embeds the preview JPEGs, template documents, icon
+# catalog, or 13 non-default locale catalogs: the browser fetches each on demand
+# from `/pkg/assets/…`, which the daemon already serves out of the resolved
+# bundle directory. Staging them here is what makes those routes resolve. Keep
+# in sync with `.github/workflows/wasm-bundle-build.yml` and Dockerfile.web-rust.
 bash tools/stage-web-assets.sh "${PKG_DIR}/assets"
 
-step 5 6 "Verify 0 env.* imports (spec §7.1 import guard)"
+step 6 7 "Verify 0 env.* imports (spec §7.1 import guard)"
 env_count="$(node -e '
 const fs = require("fs");
 const buf = fs.readFileSync(process.argv[1]);
@@ -111,7 +113,7 @@ if [ "${env_count}" != "0" ]; then
 fi
 printf '  ✓ 0 env.* imports\n'
 
-step 6 6 "Verify gzip size ≤ ${LIMIT} bytes (spec §6 ceiling)"
+step 7 7 "Verify gzip size ≤ ${LIMIT} bytes (spec §6 ceiling)"
 # Keep only the candidate feature flags this wasm-opt understands (see the
 # WASM_OPT_CANDIDATE_FEATURES note) so an older binaryen doesn't hard-fail on
 # `--enable-bulk-memory-opt`. `--enable-bulk-memory` alone still covers

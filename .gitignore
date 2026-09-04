@@ -74,3 +74,9 @@ output
 # op-auth provenance signing private key — NEVER commit
 op-auth-provenance.pem
 *.provenance.pem
+
+# Local node toolchain downloaded by tooling — never commit (binaries exceed GitHub's 100MB limit)
+packages/.toolchain/
+
+# Codex CLI local config
+.codex/

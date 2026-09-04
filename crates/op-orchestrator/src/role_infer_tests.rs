@@ -33,6 +33,9 @@ fn exact_map_infers_role() {
         ("Bottom Navigation", "bottom-tab-bar"),
         ("Bottom Tab Bar", "bottom-tab-bar"),
         ("Tab Bar", "tab-bar"),
+        ("Nav Links", "nav-links"),
+        ("nav-links", "nav-links"),
+        ("Navigation Links", "nav-links"),
         ("Avatar", "avatar"),
         ("Divider", "divider"),
         ("Table", "table"),
@@ -57,6 +60,7 @@ fn exact_map_is_case_insensitive() {
 fn pattern_map_infers_role() {
     for (name, expected) in [
         ("Submit Button", "button"),
+        ("Home nav link", "nav-link"),
         // `\bcard\b` is matched BEFORE `pricing`/`stat`/`feature` (TS order),
         // so any name containing the word "card" resolves to plain `card`.
         ("Pricing Card", "card"),

@@ -276,6 +276,13 @@ impl WidgetHost {
             return true;
         }
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
+            if op_editor_core::host_ui_transitions::settings_model_newline(
+                &mut self.editor_state.editor_ui,
+                self.now_ms,
+            ) {
+                self.mark_dirty();
+                return true;
+            }
             self.commit_settings_focus();
             return true;
         }
@@ -370,6 +377,12 @@ impl WidgetHost {
         if self.editor_state.editor_ui.font_picker.open {
             return true;
         }
+        // Settings-modal input owns Delete while focused (forward
+        // deletion at the caret) — without this arm the keystroke fell
+        // through and removed the selected node behind the modal.
+        if self.editor_state.editor_ui.agent_settings.focus.is_some() {
+            return self.apply_settings_delete_forward();
+        }
         // The rename draft has no forward deletion — Delete pops the
         // char before the caret, same as Backspace.
         if let Some(changed) = shared::rename_backspace(&mut self.editor_state, self.now_ms) {
@@ -447,5 +460,40 @@ impl WidgetHost {
     #[allow(dead_code)]
     pub fn apply_key(&mut self, _event: &op_editor_ui::KeyEvent) -> bool {
         false
+    }
+
+    /// Route a printable character into the live preview runtime.
+    /// Returns `true` when consumed. No-op (false) when not in preview.
+    pub fn apply_preview_text(&mut self, text: &str) -> bool {
+        self.preview_dispatch_text(text)
+    }
+
+    /// Dispatch a named key to the preview runtime.
+    /// Returns `true` when consumed.
+    pub fn apply_preview_key(&mut self, key: &str, shift: bool) -> bool {
+        self.preview_dispatch_key(key, shift)
+    }
+
+    /// Advance focus in the preview. Returns `true` while in preview.
+    pub fn apply_preview_focus(&mut self, shift: bool) -> bool {
+        self.preview_focus(shift)
+    }
+
+    /// Check if preview is active. Used by keydown handler.
+    pub fn is_preview_active(&self) -> bool {
+        #[cfg(feature = "canvaskit")]
+        {
+            self.preview.is_some() && self.editor_state.editor_ui.preview.mode
+        }
+        #[cfg(not(feature = "canvaskit"))]
+        {
+            false
+        }
+    }
+
+    /// Exit Preview mode. Delegates to the preview_frame module which handles
+    /// Track M-1 animation logic.
+    pub fn exit_preview(&mut self, viewport_width: f32, viewport_height: f32) {
+        self.do_exit_preview(viewport_width, viewport_height);
     }
 }

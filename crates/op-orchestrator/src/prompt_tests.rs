@@ -40,6 +40,7 @@ fn req() -> DesignRequest {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     }
 }
 
@@ -70,6 +71,7 @@ fn subtask() -> crate::plan::Subtask {
         },
         id_prefix: "s".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,
@@ -84,8 +86,12 @@ fn subtask() -> crate::plan::Subtask {
 mod components_tests;
 #[path = "prompt_deck_skill_tests.rs"]
 mod deck_skill_tests;
+#[path = "prompt_overlay_skill_tests.rs"]
+mod overlay_skill_tests;
 #[path = "prompt_planning_tests.rs"]
 mod planning_tests;
+#[path = "prompt_scroll_skill_tests.rs"]
+mod scroll_skill_tests;
 #[path = "prompt_skill_budget_tests.rs"]
 mod skill_budget_tests;
 #[path = "prompt_subagent_content_tests.rs"]

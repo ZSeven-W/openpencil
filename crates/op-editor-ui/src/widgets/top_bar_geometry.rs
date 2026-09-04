@@ -58,7 +58,7 @@ impl TopBar {
     }
 
     /// Whether the Preview (Play) button paints / hit-tests. Gated only by
-    /// the host capability (`PREVIEW_BUTTON_AVAILABLE`, desktop-only) —
+    /// the host capability (`PREVIEW_BUTTON_AVAILABLE`, native and web) —
     /// preview interaction graduated out of the experimental-features gate
     /// (widget-config and other experimental items stay gated separately;
     /// see `EditorUiState::agent_settings.experimental_features_enabled`).
@@ -81,7 +81,7 @@ impl TopBar {
     }
 
     /// Right-cluster layout (right → left): Maximize (hidden in a VS Code
-    /// embed) | Play (native only) | Download | Sun | Globe. This is how
+    /// embed) | Play | Download | Sun | Globe. This is how
     /// many normal-width icon slots sit right of the Download button.
     fn right_icon_slots_after_export(&self) -> f32 {
         let mut slots = 0.0;
@@ -255,8 +255,7 @@ impl TopBar {
     }
 
     /// Theme toggle button — directly left of the Asset Center button. Its
-    /// x-position shifts right in the web/wasm build where the Preview
-    /// button is hidden, and in a VS Code embed where the Maximize button
+    /// x-position shifts right in a VS Code embed where the Maximize button
     /// is hidden.
     pub(super) fn theme_button_rect(&self, top_bar_rect: Rect) -> Rect {
         let asset_center = self.asset_center_button_rect(top_bar_rect);

@@ -243,6 +243,7 @@ fn ping_probe_stays_tokenless_for_cli_discovery() {
 /// A well-formed Chrome extension id: 32 characters from `a`–`p`.
 const EXTENSION_ORIGIN: &str = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
 const INGEST_PATH: &str = "/api/import/web-snapshot";
+const DESIGN_MD_PATH: &str = "/api/generate/design-md";
 /// The smallest payload the v1 extractor can emit that still maps to a node.
 const SNAPSHOT: &str = r#"{"version":1,"source":"https://example.com/","title":"Example","viewport":{"width":800,"height":600},"root":{"kind":"element","tag":"body","rect":{"x":0,"y":0,"w":800,"h":600},"styles":{"background-color":"rgb(255, 255, 255)"},"children":[{"kind":"element","tag":"div","rect":{"x":10,"y":10,"w":100,"h":40},"styles":{"background-color":"rgb(0, 0, 0)"},"children":[]}]}}"#;
 
@@ -420,6 +421,73 @@ fn extension_preflight_is_answered_scoped_to_that_origin() {
     );
 }
 
+#[test]
+fn design_md_preflight_echoes_any_well_formed_extension_origin_only_on_exact_path() {
+    let (req_tx, req_rx) = mpsc::channel();
+    let headers = format!(
+        "Host: 127.0.0.1:{PORT}\r\nOrigin: {EXTENSION_ORIGIN}\r\n\
+         Access-Control-Request-Method: POST\r\n"
+    );
+    let response = drive(
+        &request_with_method("OPTIONS", DESIGN_MD_PATH, &headers, ""),
+        &req_tx,
+    );
+    assert!(
+        response.starts_with("HTTP/1.1 204 No Content"),
+        "{response}"
+    );
+    assert!(
+        response.contains(&format!(
+            "Access-Control-Allow-Origin: {EXTENSION_ORIGIN}\r\n"
+        )),
+        "{response}"
+    );
+    assert!(!response.contains("Access-Control-Allow-Origin: *"));
+    assert!(response.contains("Access-Control-Allow-Methods: POST, GET, DELETE, OPTIONS\r\n"));
+    assert!(response.contains("Access-Control-Allow-Headers: Content-Type\r\n"));
+    assert!(!response.contains("Authorization"));
+    assert!(req_rx.try_recv().is_err());
+
+    let job_path = format!("{DESIGN_MD_PATH}/0123456789abcdef0123456789abcdef");
+    let response = drive(
+        &request_with_method("OPTIONS", &job_path, &headers, ""),
+        &req_tx,
+    );
+    assert!(
+        response.starts_with("HTTP/1.1 204 No Content"),
+        "{response}"
+    );
+    assert!(response.contains(&format!(
+        "Access-Control-Allow-Origin: {EXTENSION_ORIGIN}\r\n"
+    )));
+
+    let response = drive(
+        &request_with_method("OPTIONS", "/api/generate/design-md/", &headers, ""),
+        &req_tx,
+    );
+    assert!(response.starts_with("HTTP/1.1 403 Forbidden"), "{response}");
+    assert!(!response.contains("Access-Control-Allow-Origin"));
+}
+
+#[test]
+fn unpaired_design_md_request_gets_readable_origin_scoped_pairing_error() {
+    let (req_tx, req_rx) = mpsc::channel();
+    let headers = format!(
+        "Host: 127.0.0.1:{PORT}\r\nOrigin: {EXTENSION_ORIGIN}\r\nContent-Type: application/json\r\n"
+    );
+    let response = drive(
+        &request_with_method("GET", DESIGN_MD_PATH, &headers, ""),
+        &req_tx,
+    );
+    assert!(response.starts_with("HTTP/1.1 403 Forbidden"), "{response}");
+    assert!(response.contains(r#""code":"extensionNotPaired""#));
+    assert!(response.contains(&format!(
+        "Access-Control-Allow-Origin: {EXTENSION_ORIGIN}\r\n"
+    )));
+    assert!(!response.contains("Access-Control-Allow-Origin: *"));
+    assert!(req_rx.try_recv().is_err());
+}
+
 /// Fail closed on every method but `POST`: the ingest path is not a place to
 /// read anything back from, and the boundary widening for extension origins
 /// is method-agnostic on purpose (the preflight needs it).
@@ -533,4 +601,20 @@ fn extension_id_allowlist_pins_which_extensions_pass() {
     // never builds one — a blank / separator-only env var collapses to open
     // mode — so this pins the predicate, not a reachable configuration.
     assert!(!extension_origin_allowed(Some(EXTENSION_ORIGIN), Some(&[])));
+
+    // Intelligent generation is stricter than snapshot ingress: open mode
+    // never counts as paired, while one explicit matching id does.
+    assert!(is_unpaired_extension_origin_with_allowlist(
+        Some(EXTENSION_ORIGIN),
+        None
+    ));
+    assert!(is_unpaired_extension_origin_with_allowlist(
+        Some(EXTENSION_ORIGIN),
+        Some(&[])
+    ));
+    assert!(!is_unpaired_extension_origin_with_allowlist(
+        Some(EXTENSION_ORIGIN),
+        Some(&pinned)
+    ));
+    assert!(!is_unpaired_extension_origin_with_allowlist(None, None));
 }

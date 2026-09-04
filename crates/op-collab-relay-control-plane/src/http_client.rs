@@ -116,6 +116,7 @@ impl<V: RelayLocatorVerifier> RelayLocatorHttpClient<V> {
 
     fn build(endpoint: Url, verifier: V, https_only: bool) -> Result<Self, RelayLocatorIssueError> {
         let client = Client::builder()
+            .use_rustls_tls()
             .redirect(Policy::none())
             .no_proxy()
             .connect_timeout(CONTROL_PLANE_CONNECT_TIMEOUT)

@@ -1,0 +1,25 @@
+id: mobile-country-combobox
+category: mobile
+difficulty: obvious
+prompt: |
+  Design ONLY an OPEN-state country picker combobox (autocomplete with
+  visible suggestions). Top to bottom:
+    - small slate-900 13/500 label "Country"
+    - 44px-tall input row with white bg, 8px corner radius, blue-600
+      1px border, leading lucide "search" icon (16×16 slate-500), then
+      the partial query "Sing" in slate-900 14/400
+    - dropdown panel directly below the input: white bg, 8px corner
+      radius, 1px slate-200 border, soft drop shadow, three 36px-tall
+      option rows in vertical order:
+        1. "Singapore" — currently HIGHLIGHTED (slate-100 bg, 14/500)
+        2. "Sweden" (no fill, 14/400)
+        3. "Switzerland" (no fill, 14/400)
+  Do NOT render the rest of the form, the page chrome, or anything else.
+expected:
+  must_contain_roles:
+    - combobox
+    - combobox-input
+    - combobox-dropdown
+    - combobox-option
+    - combobox-option-active
+expected_tool_if_any: add_combobox_v0

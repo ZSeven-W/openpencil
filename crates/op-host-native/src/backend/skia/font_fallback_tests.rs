@@ -14,15 +14,24 @@ fn css_font_stack_parser_preserves_quoted_families_and_expands_generics() {
     assert_ne!(families[2], "ui-sans-serif");
 }
 
-#[cfg(target_os = "macos")]
-#[test]
-fn css_font_stack_preserves_bundled_inter_before_system_ui() {
-    let _guard = crate::font_registry_test_support::lock();
+/// `jian_skia::register_bundled_fonts` is process-global and first-call-wins,
+/// so every test that needs a bundled family must register the SAME set — the
+/// first test to run decides what the whole binary sees. Keep this list in
+/// sync with the copy in `tests/text_shaping.rs`.
+fn register_test_bundled_fonts() {
     jian_skia::register_bundled_fonts(vec![
         include_bytes!("../../../../op-host-desktop/assets/fonts/CormorantGaramond-VF.ttf")
             .to_vec(),
         include_bytes!("../../../../op-host-desktop/assets/fonts/Inter-VF.ttf").to_vec(),
+        include_bytes!("../../../../op-host-desktop/assets/fonts/Outfit-VF.ttf").to_vec(),
     ]);
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn css_font_stack_preserves_bundled_inter_before_system_ui() {
+    let _guard = crate::font_registry_test_support::lock();
+    register_test_bundled_fonts();
 
     let be = NativeBackend::with_dpi(1.0);
     assert_eq!(
@@ -45,6 +54,28 @@ fn css_font_stack_preserves_bundled_inter_before_system_ui() {
             .typeface
             .family_name(),
         "Inter"
+    );
+}
+
+#[test]
+fn a_thin_default_variable_font_resolves_at_regular_weight() {
+    // Outfit ships its default instance on the `wght` 100 master. Skia's
+    // `new_from_data` yields that default, so a document asking for Outfit at
+    // 400 used to render and measure hairline — synthetic bold only
+    // compensates from 600 up. The registry instances the face at 400 instead.
+    let _guard = crate::font_registry_test_support::lock();
+    register_test_bundled_fonts();
+
+    let be = NativeBackend::with_dpi(1.0);
+    let resolved = be
+        .font_resolver
+        .typeface_for_char(Some("Outfit"), 'A', 400, false)
+        .expect("bundled Outfit covers ASCII");
+    assert_eq!(resolved.typeface.family_name(), "Outfit");
+    assert_eq!(
+        *resolved.typeface.font_style().weight(),
+        400,
+        "the bundled variable face must be instanced at regular, not its thin default"
     );
 }
 

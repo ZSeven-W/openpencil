@@ -9,14 +9,14 @@
 
 use op_editor_core::host_press_transitions as core_press;
 use op_editor_core::ui_draft::LayerContextTarget;
-use op_editor_core::{EditorState, ExportQuickRow, Tool};
+use op_editor_core::{editor_ui_state::EditorUiState, EditorState, ExportQuickRow, Locale, Tool};
 
 use crate::widgets::export_quick_menu::{ExportQuickMenu, ExportQuickMenuHit};
 use crate::widgets::layer_context_menu::LayerContextAction;
 use crate::widgets::property_panel_fill;
 use crate::widgets::{
     LayerPanelHit, LocalePicker, PropertyPanel, PropertyPanelAction, ShapeChoice, ShapePicker,
-    TopBarHit, TOP_BAR_HEIGHT,
+    TopBarHit,
 };
 use crate::{Point2D, Rect};
 
@@ -33,16 +33,7 @@ pub use super::scene_template_press_flow::{
 /// from the same two inputs, so the walk lives here instead of being
 /// re-spelled at every popover hit-test site.
 pub fn property_panel_rect(state: &EditorState, viewport_width: f32, viewport_height: f32) -> Rect {
-    Rect {
-        origin: Point2D::new(
-            viewport_width - state.editor_ui.property_panel_width,
-            TOP_BAR_HEIGHT,
-        ),
-        size: Point2D::new(
-            state.editor_ui.property_panel_width,
-            (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-        ),
-    }
+    super::host_canvas_geometry::property_panel_rect(state, viewport_width, viewport_height)
 }
 
 // ─── Property-panel popovers ───────────────────────────────────────────
@@ -68,6 +59,14 @@ pub fn press_fill_type_picker(
     point: Point2D,
 ) -> PropertyOverlayPress {
     let property_rect = property_panel_rect(state, viewport_width, viewport_height);
+    press_fill_type_picker_in_rect(state, property_rect, point)
+}
+
+pub fn press_fill_type_picker_in_rect(
+    state: &mut EditorState,
+    property_rect: Rect,
+    point: Point2D,
+) -> PropertyOverlayPress {
     if let Some(panel) = PropertyPanel::for_selection(state) {
         match panel.fill_type_picker_hit(property_rect, point) {
             property_panel_fill::SelectHit::Row(idx) => {
@@ -98,6 +97,14 @@ pub fn press_compositing_picker(
     point: Point2D,
 ) -> PropertyOverlayPress {
     let property_rect = property_panel_rect(state, viewport_width, viewport_height);
+    press_compositing_picker_in_rect(state, property_rect, point)
+}
+
+pub fn press_compositing_picker_in_rect(
+    state: &mut EditorState,
+    property_rect: Rect,
+    point: Point2D,
+) -> PropertyOverlayPress {
     if let Some(panel) = PropertyPanel::for_selection(state) {
         if let Some(action) = panel.compositing_picker_action_at(property_rect, point) {
             return PropertyOverlayPress::Action(action);
@@ -118,6 +125,14 @@ pub fn press_effect_add_menu(
     point: Point2D,
 ) -> PropertyOverlayPress {
     let property_rect = property_panel_rect(state, viewport_width, viewport_height);
+    press_effect_add_menu_in_rect(state, property_rect, point)
+}
+
+pub fn press_effect_add_menu_in_rect(
+    state: &mut EditorState,
+    property_rect: Rect,
+    point: Point2D,
+) -> PropertyOverlayPress {
     if let Some(panel) = PropertyPanel::for_selection(state) {
         match panel.effect_add_menu_hit(property_rect, point) {
             crate::widgets::EffectAddMenuHit::Row(action) => {
@@ -139,6 +154,14 @@ pub fn press_color_variable_picker(
     point: Point2D,
 ) -> PropertyOverlayPress {
     let property_rect = property_panel_rect(state, viewport_width, viewport_height);
+    press_color_variable_picker_in_rect(state, property_rect, point)
+}
+
+pub fn press_color_variable_picker_in_rect(
+    state: &mut EditorState,
+    property_rect: Rect,
+    point: Point2D,
+) -> PropertyOverlayPress {
     if let Some(panel) = PropertyPanel::for_selection(state) {
         // The popup's own rows first: they are painted over the rail and
         // carry the list scroll, which the panel's ordinary control walk
@@ -173,7 +196,8 @@ pub fn press_color_variable_picker(
 /// Outcome of a press routed to the open TopBar locale dropdown.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LocalePickerPress {
-    /// A row was picked: the locale is applied and the popup closed.
+    /// A row was picked: a ready locale is applied, or its catalog is queued
+    /// while the old locale stays painted; the popup is closed either way.
     Selected,
     /// Popup chrome — swallow, keep it open.
     Swallow,
@@ -192,7 +216,9 @@ pub fn press_locale_picker(
     match picker.hit_popup(panel_rect, point) {
         crate::widgets::locale_picker::SelectHit::Row(idx) => {
             if let Some(locale) = LocalePicker::locale_at(idx) {
-                state.editor_ui.locale = locale;
+                if select_locale(&mut state.editor_ui, locale, op_i18n::catalog_ready(locale)) {
+                    op_editor_core::web_assets::request(&op_i18n::catalog_route(locale));
+                }
             }
             core_press::close_locale_picker(&mut state.editor_ui);
             LocalePickerPress::Selected
@@ -200,6 +226,10 @@ pub fn press_locale_picker(
         crate::widgets::locale_picker::SelectHit::Inside => LocalePickerPress::Swallow,
         crate::widgets::locale_picker::SelectHit::Outside => LocalePickerPress::Outside,
     }
+}
+
+fn select_locale(ui: &mut EditorUiState, locale: Locale, catalog_ready: bool) -> bool {
+    ui.set_locale_when_catalog_ready(locale, catalog_ready)
 }
 
 // ─── Export quick menu ─────────────────────────────────────────────────
@@ -620,3 +650,7 @@ pub fn press_open_layer_context_menu(
         MenuHit::Outside => OpenLayerMenuPress::Outside,
     })
 }
+
+#[cfg(test)]
+#[path = "press_flow_tests.rs"]
+mod tests;

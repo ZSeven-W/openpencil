@@ -7,7 +7,43 @@
 
 use super::*;
 
+/// Pointer id the legacy mouse wrappers dispatch under (desktop preview
+/// panels speak mouse; real ids ride the `_id` variants).
+pub(in crate::widget_host) const LEGACY_PREVIEW_POINTER_ID: u32 = 1;
+
 impl WidgetHostNative {
+    /// True while ANY preview pointer is between Down and Up.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn preview_any_pointer_held_for_test(&self) -> bool {
+        !self.preview_pressed_pids.is_empty()
+    }
+
+    /// The factual timestamp for the live-preview pointer event being
+    /// dispatched: the scoped event time when a timestamped entry
+    /// variant (`apply_press_at` / `apply_cursor_move_at` /
+    /// `apply_release_with_viewport_at` / `cancel_native_touch_gestures_at`)
+    /// supplied one, else the host's global clock (`now_ms`). The
+    /// global clock and the event time are deliberately independent:
+    /// an out-of-order event (frame at 2000, Down at 950) keeps the
+    /// clock at 2000 while the Swipe recognizer measures the factual
+    /// 100 ms pair delta.
+    pub(in crate::widget_host) fn preview_pointer_time_ms(&self) -> u64 {
+        self.preview_event_time_ms.unwrap_or(self.now_ms)
+    }
+
+    /// Narrow test-only snapshot of one `$app` value from the live
+    /// preview runtime. CLONED out of `PreviewSession` — the runtime's
+    /// state is interior-mutable, so production callers never receive a
+    /// reference into it. Compiled only when the `testing` feature is
+    /// enabled (op-engine-ffi / op-host-native test builds).
+    #[cfg(feature = "testing")]
+    pub fn preview_app_state_value_for_test(
+        &self,
+        key: &str,
+    ) -> Option<jian_core::value::RuntimeValue> {
+        self.preview.as_ref()?.app_state_value_for_test(key)
+    }
+
     /// Center the canvas viewport on a scene-space `rect`, keeping zoom
     /// unchanged. Used by APP MODE preview to keep the mounted screen
     /// framed on entry and after a screen-switch reconcile. `viewport_w`
@@ -117,7 +153,27 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) -> bool {
-        use jian_core::gesture::pointer::PointerPhase;
+        self.preview_dispatch_press_id(
+            LEGACY_PREVIEW_POINTER_ID,
+            screen_x,
+            screen_y,
+            viewport_w,
+            viewport_h,
+        )
+    }
+
+    /// [`Self::preview_dispatch_press`] carrying an explicit POINTER ID
+    /// (R4): concurrent pointers hold independent drags and reach the
+    /// runtime with distinct identities.
+    pub fn preview_dispatch_press_id(
+        &mut self,
+        pointer_id: u32,
+        screen_x: f32,
+        screen_y: f32,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        use jian_core::gesture::pointer::{PointerKind, PointerPhase};
         // Track M-1: the canvas/device-frame rect is physically moving
         // mid-merge — same "discard, don't queue" call
         // `PreviewSession::transition_active` makes for a screen-switch
@@ -129,18 +185,33 @@ impl WidgetHostNative {
             return false;
         };
         self.capture_device_preview_surface(screen_x, screen_y);
-        self.preview_press_active = true;
-        self.preview_last_doc = Some((doc.x, doc.y));
-        // Track C-4: arm an edge-swipe candidate when this press started
-        // in the device frame's left-edge dead zone. Forwarding Down to
-        // the runtime as usual is deliberate: a genuine edge-swipe moves
-        // well past the tap-gesture's own same-spot Down/Up tolerance
-        // before the pop fires, so it never completes as a stray tap.
-        self.arm_edge_swipe_candidate(screen_x);
-        let handled = self
-            .preview
-            .as_mut()
-            .is_some_and(|p| p.dispatch_pointer_phase(doc.x, doc.y, PointerPhase::Down));
+        if !self.preview_pressed_pids.contains(&pointer_id) {
+            self.preview_pressed_pids.push(pointer_id);
+        }
+        self.preview_last_doc_by_pid
+            .insert(pointer_id, (doc.x, doc.y));
+        // Track C-4: arm an edge-swipe candidate when THIS press started
+        // in the device frame's left-edge dead zone AND it is the first
+        // finger down — a second finger may never arm or fire the pop.
+        // Forwarding Down to the runtime as usual is deliberate: a
+        // genuine edge-swipe moves well past the tap-gesture's own
+        // same-spot Down/Up tolerance before the pop fires, so it never
+        // completes as a stray tap.
+        if self.preview_pressed_pids.len() == 1 {
+            self.arm_edge_swipe_candidate(screen_x);
+            self.preview_edge_swipe_pid = Some(pointer_id);
+        }
+        let t_ms = self.preview_pointer_time_ms();
+        let handled = self.preview.as_mut().is_some_and(|p| {
+            p.dispatch_pointer_for_id_at(
+                pointer_id,
+                PointerKind::Mouse,
+                doc.x,
+                doc.y,
+                PointerPhase::Down,
+                t_ms,
+            )
+        });
         self.mark_dirty();
         handled
     }
@@ -154,7 +225,19 @@ impl WidgetHostNative {
     /// non-interactive in preview: `press.rs` swallows all non-topbar
     /// presses, so preview owning its hover is consistent.)
     pub fn preview_dispatch_move(&mut self, screen_x: f32, screen_y: f32) -> bool {
-        use jian_core::gesture::pointer::PointerPhase;
+        self.preview_dispatch_move_id(LEGACY_PREVIEW_POINTER_ID, screen_x, screen_y)
+    }
+
+    /// [`Self::preview_dispatch_move`] for an explicit pointer id: only
+    /// THAT pointer's held state decides drag-vs-hover, so one finger's
+    /// lift cannot turn another finger's drag into hovers mid-stroke.
+    pub fn preview_dispatch_move_id(
+        &mut self,
+        pointer_id: u32,
+        screen_x: f32,
+        screen_y: f32,
+    ) -> bool {
+        use jian_core::gesture::pointer::{PointerKind, PointerPhase};
         let (vw, vh) = (self.last_viewport_w, self.last_viewport_h);
         if self.over_topmost_panel(screen_x, screen_y, vw, vh) {
             return false;
@@ -164,25 +247,29 @@ impl WidgetHostNative {
         };
         // Track C-4: a held drag that crosses the edge-swipe threshold
         // fires `pop` and cancels the underlying gesture instead of
-        // completing as a normal Move — checked BEFORE updating
-        // `preview_last_doc` so the cancel dispatches at the gesture's
-        // last real position, not this frame's.
-        if self.preview_press_active && self.maybe_fire_edge_swipe(screen_x) {
+        // completing as a normal Move — checked BEFORE updating the last
+        // documented point so the cancel dispatches at the gesture's last
+        // real position, not this frame's.
+        if self.preview_pressed_pids.contains(&pointer_id)
+            && self.preview_edge_swipe_pid == Some(pointer_id)
+            && self.maybe_fire_edge_swipe(screen_x)
+        {
             self.cancel_preview_gesture_for_edge_swipe();
             self.mark_dirty();
             return true;
         }
-        let phase = if self.preview_press_active {
+        let phase = if self.preview_pressed_pids.contains(&pointer_id) {
             PointerPhase::Move
         } else {
             PointerPhase::Hover
         };
-        self.preview_last_doc = Some((doc.x, doc.y));
-        let emitted = self
-            .preview
-            .as_mut()
-            .is_some_and(|p| p.dispatch_pointer_phase(doc.x, doc.y, phase));
-        if emitted || self.preview_press_active {
+        self.preview_last_doc_by_pid
+            .insert(pointer_id, (doc.x, doc.y));
+        let t_ms = self.preview_pointer_time_ms();
+        let emitted = self.preview.as_mut().is_some_and(|p| {
+            p.dispatch_pointer_for_id_at(pointer_id, PointerKind::Mouse, doc.x, doc.y, phase, t_ms)
+        });
+        if emitted || self.preview_pressed_pids.contains(&pointer_id) {
             self.mark_dirty();
         }
         true
@@ -192,20 +279,55 @@ impl WidgetHostNative {
     /// point. Returns `true` when a preview press was in flight (the
     /// release is consumed).
     pub fn preview_dispatch_release(&mut self) -> bool {
-        use jian_core::gesture::pointer::PointerPhase;
+        self.preview_dispatch_release_pid(LEGACY_PREVIEW_POINTER_ID)
+    }
+
+    /// [`Self::preview_dispatch_release`] for one explicit pointer id:
+    /// completes THAT pointer's drag at its own last documented point
+    /// without touching other concurrent pointers' streams.
+    pub fn preview_dispatch_release_pid(&mut self, pointer_id: u32) -> bool {
+        use jian_core::gesture::pointer::{PointerKind, PointerPhase};
         self.preview_surface_capture = None;
-        self.disarm_edge_swipe();
-        if !self.preview_press_active {
+        if !self.preview_pressed_pids.contains(&pointer_id)
+            && LEGACY_PREVIEW_POINTER_ID == pointer_id
+        {
+            // Preserve the legacy disarm-on-any-release behavior for the
+            // mouse path even when nothing is pressed.
+            self.disarm_edge_swipe();
+        }
+        let removed = self
+            .preview_pressed_pids
+            .iter()
+            .position(|p| *p == pointer_id)
+            .map(|idx| self.preview_pressed_pids.remove(idx))
+            .is_some();
+        if !removed {
             return false;
         }
-        self.preview_press_active = false;
-        if let Some((x, y)) = self.preview_last_doc {
+        self.disarm_edge_swipe_when_all_released();
+        if let Some((x, y)) = self.preview_last_doc_by_pid.remove(&pointer_id) {
+            let t_ms = self.preview_pointer_time_ms();
             if let Some(p) = self.preview.as_mut() {
-                p.dispatch_pointer_phase(x, y, PointerPhase::Up);
+                p.dispatch_pointer_for_id_at(
+                    pointer_id,
+                    PointerKind::Mouse,
+                    x,
+                    y,
+                    PointerPhase::Up,
+                    t_ms,
+                );
             }
         }
         self.mark_dirty();
         true
+    }
+
+    /// Track C-4 companion: once no pointer remains held, a gesture that
+    /// never crossed the threshold must not leak into the NEXT press.
+    fn disarm_edge_swipe_when_all_released(&mut self) {
+        if self.preview_pressed_pids.is_empty() {
+            self.disarm_edge_swipe();
+        }
     }
 
     /// Route a wheel / trackpad-pan scroll into the preview runtime;

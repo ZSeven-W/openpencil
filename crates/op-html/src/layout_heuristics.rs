@@ -12,6 +12,9 @@ use crate::length::{parse_length, LengthCtx};
 
 use super::MapCtx;
 
+#[path = "layout_positioned_margin.rs"]
+mod positioned_margin;
+
 pub(crate) fn infer_child_alignment(
     context: &MapCtx<'_>,
     path: &[&DomElement],
@@ -102,12 +105,12 @@ pub(super) fn apply_sizing_defaults(
     style: &ComputedStyle,
     parent: Option<&ComputedStyle>,
     parent_width_is_definite: bool,
+    inline_level: bool,
 ) {
     let parent_layout = parent.map(layout_for).unwrap_or(LayoutMode::Vertical);
     if container.width.is_none() && parent.is_some() {
-        let shrink_to_fit = parent_layout == LayoutMode::Horizontal
-            || is_inline_level(style)
-            || !parent_width_is_definite;
+        let shrink_to_fit =
+            parent_layout == LayoutMode::Horizontal || inline_level || !parent_width_is_definite;
         container.width = Some(SizingBehavior::Keyword(if shrink_to_fit {
             SizingKeyword::FitContent
         } else {
@@ -263,6 +266,7 @@ pub(super) fn apply_position(
     base: &mut PenNodeBase,
     style: &ComputedStyle,
     context: &mut MapCtx<'_>,
+    used_size: (Option<f64>, Option<f64>),
 ) {
     if !matches!(style.get("position"), Some("absolute" | "fixed")) {
         return;
@@ -294,22 +298,51 @@ pub(super) fn apply_position(
         context.containing_height,
         context,
     );
-    let own_width = own_size(
-        style.get("width"),
-        style.font_size,
+    let distribute_horizontal_auto = used_size.0.is_some();
+    let distribute_vertical_auto = used_size.1.is_some();
+    let own_width = used_size.0.unwrap_or_else(|| {
+        own_size(
+            style.get("width"),
+            style.font_size,
+            context.containing_width,
+            context,
+        )
+    });
+    let own_height = used_size.1.unwrap_or_else(|| {
+        own_size(
+            style.get("height"),
+            style.font_size,
+            context.containing_height,
+            context,
+        )
+    });
+    let margin_reference = context.containing_width;
+    let margin_left = positioned_margin::resolve(style, "margin-left", margin_reference, context);
+    let margin_right = positioned_margin::resolve(style, "margin-right", margin_reference, context);
+    let margin_top = positioned_margin::resolve(style, "margin-top", margin_reference, context);
+    let margin_bottom =
+        positioned_margin::resolve(style, "margin-bottom", margin_reference, context);
+    let x = positioned_margin::axis_origin(
+        left,
+        right,
+        own_width,
         context.containing_width,
-        context,
+        (margin_left, margin_right),
+        (
+            distribute_horizontal_auto,
+            style.get("direction") == Some("rtl"),
+        ),
     );
-    let own_height = own_size(
-        style.get("height"),
-        style.font_size,
+    let y = positioned_margin::axis_origin(
+        top,
+        bottom,
+        own_height,
         context.containing_height,
-        context,
+        (margin_top, margin_bottom),
+        (distribute_vertical_auto, false),
     );
-    let x = left.or_else(|| right.map(|right| context.containing_width - own_width - right));
-    let y = top.or_else(|| bottom.map(|bottom| context.containing_height - own_height - bottom));
-    base.x = Some(x.unwrap_or(0.0));
-    base.y = Some(y.unwrap_or(0.0));
+    base.x = Some(x);
+    base.y = Some(y);
     let has_left = has_offset(style, "left");
     let has_right = has_offset(style, "right");
     let has_top = has_offset(style, "top");
@@ -563,7 +596,7 @@ pub(super) fn resolve_absolute_fill(sizing: &mut Option<SizingBehavior>, referen
 
 pub(super) fn stretched_absolute_axis(
     style: &ComputedStyle,
-    context: &MapCtx<'_>,
+    context: &mut MapCtx<'_>,
     start: &str,
     end: &str,
     reference: f64,
@@ -573,7 +606,19 @@ pub(super) fn stretched_absolute_axis(
             .0
             .unwrap_or(0.0)
     };
-    (reference - inset(start) - inset(end)).max(0.0)
+    let start_inset = inset(start);
+    let end_inset = inset(end);
+    let (margin_start, margin_end) = match start {
+        "left" => ("margin-left", "margin-right"),
+        "top" => ("margin-top", "margin-bottom"),
+        _ => return (reference - start_inset - end_inset).max(0.0),
+    };
+    let margin_reference = context.containing_width;
+    let margin_start =
+        positioned_margin::resolve(style, margin_start, margin_reference, context).number();
+    let margin_end =
+        positioned_margin::resolve(style, margin_end, margin_reference, context).number();
+    (reference - start_inset - end_inset - margin_start - margin_end).max(0.0)
 }
 
 pub(super) fn warn_for_degradations(

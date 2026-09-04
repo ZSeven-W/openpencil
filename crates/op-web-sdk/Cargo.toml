@@ -17,8 +17,7 @@ op-pen-loader = { path = "../op-pen-loader", default-features = false }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-# Pin matches op-host-web — last wasm-bindgen-cli release compatible with
-# the workspace's Rust 1.85 toolchain.
+# Pin matches op-host-web and the reviewed release-workflow CLI.
 wasm-bindgen = "=0.2.117"
 console_error_panic_hook = "0.1"
 

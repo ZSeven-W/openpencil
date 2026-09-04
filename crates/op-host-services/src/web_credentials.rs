@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::IpAddr;
 
 use op_editor_core::{
     AgentSettings, BuiltinAgentConfig, BuiltinAgentKind, BuiltinAgentPresetKey, EditorState,
@@ -21,6 +21,7 @@ const MAX_URL_BYTES: usize = 4 * 1024;
 const MAX_CREDENTIAL_BYTES: usize = 16 * 1024;
 const MAX_LOCAL_ID_BYTES: usize = 128;
 const MAX_ENTRIES: usize = 64;
+const MAX_MODELS_PER_BUILTIN: usize = 64;
 const MAX_TOTAL_ENTRIES: usize = 256;
 const PAYLOAD_VERSION: u32 = 2;
 const WEB_CREDENTIAL_PREFIX: &str = "web-credential:";
@@ -49,7 +50,10 @@ struct BuiltinAgentPayload {
     kind: String,
     #[serde(default)]
     api_key: String,
+    #[serde(default)]
     model: String,
+    #[serde(default)]
+    models: Option<Vec<String>>,
     base_url: String,
     enabled: bool,
 }
@@ -102,12 +106,24 @@ pub(crate) fn parse_transient_builtin(value: &serde_json::Value) -> Option<Built
     let agent = parse_builtin_agent(payload).ok()?;
     if !agent.enabled
         || agent.api_key.trim().is_empty()
-        || agent.model.trim().is_empty()
+        || agent.first_model().is_none()
         || agent.base_url.trim().is_empty()
     {
         return None;
     }
     Some(agent)
+}
+
+/// Discovery variant of [`parse_transient_builtin`]. Listing models is what
+/// lets a user make the first model choice, so this path intentionally accepts
+/// an empty model while retaining the same identity/key/endpoint checks.
+pub(crate) fn parse_transient_builtin_for_discovery(
+    value: &serde_json::Value,
+) -> Option<BuiltinAgentConfig> {
+    let payload: BuiltinAgentPayload = serde_json::from_value(value.clone()).ok()?;
+    validate_required_id(&payload.id, "built-in agent id").ok()?;
+    let agent = parse_builtin_agent(payload).ok()?;
+    agent.discovery_ready().then_some(agent)
 }
 
 /// Whether a browser-supplied provider endpoint may be dialed. Any public
@@ -221,47 +237,12 @@ fn is_restricted_hostname(host: &str) -> bool {
         )
 }
 
-pub(crate) fn is_restricted_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(ip) => is_restricted_ipv4(ip),
-        IpAddr::V6(ip) => is_restricted_ipv6(ip),
-    }
-}
-
-fn is_restricted_ipv4(ip: Ipv4Addr) -> bool {
-    let [a, b, c, d] = ip.octets();
-    a == 0
-        || a == 10
-        || (a == 100 && (64..=127).contains(&b))
-        || a == 127
-        || (a == 169 && b == 254)
-        || (a == 172 && (16..=31).contains(&b))
-        || (a == 192 && b == 0 && c == 0)
-        || (a == 192 && b == 0 && c == 2)
-        || (a == 192 && b == 88 && c == 99)
-        || (a == 192 && b == 168)
-        || (a == 198 && matches!(b, 18 | 19))
-        || (a == 198 && b == 51 && c == 100)
-        || (a == 203 && b == 0 && c == 113)
-        || a >= 224
-        || [a, b, c, d] == [168, 63, 129, 16]
-}
-
-fn is_restricted_ipv6(ip: Ipv6Addr) -> bool {
-    let segments = ip.segments();
-    if segments[..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff {
-        let [a, b] = segments[6].to_be_bytes();
-        let [c, d] = segments[7].to_be_bytes();
-        return is_restricted_ipv4(Ipv4Addr::new(a, b, c, d));
-    }
-    (segments[0] & 0xe000) != 0x2000
-        || segments[0] == 0x2002
-        || segments[0] == 0x3fff
-        || (segments[0] == 0x2001
-            && (matches!(segments[1], 0 | 2 | 0x0db8)
-                || (segments[1] & 0xfff0) == 0x0010
-                || (segments[1] & 0xfff0) == 0x0020))
-}
+// The reserved-address classifiers moved to `op_chat_agent::ip_screen`
+// (pure code motion) with the connect-time dial guard; re-imported so every
+// `web_credentials::is_restricted_ip` path stays valid.
+pub(crate) use op_chat_agent::ip_screen::is_restricted_ip;
+#[allow(unused_imports)]
+pub(crate) use op_chat_agent::ip_screen::{is_restricted_ipv4, is_restricted_ipv6};
 
 pub(crate) fn browser_owns_builtin_agent(agent: &BuiltinAgentConfig) -> bool {
     agent.id.starts_with(&owner_prefix("builtin"))
@@ -455,6 +436,18 @@ fn parse_builtin_agent(payload: BuiltinAgentPayload) -> Result<BuiltinAgentConfi
         "built-in display name",
     )?;
     validate_len(&payload.model, MAX_TEXT_BYTES, "built-in model")?;
+    if payload
+        .models
+        .as_ref()
+        .is_some_and(|models| models.len() > MAX_MODELS_PER_BUILTIN)
+    {
+        return Err(WebCredentialError::TooManyEntries);
+    }
+    if let Some(models) = payload.models.as_ref() {
+        for model in models {
+            validate_len(model, MAX_TEXT_BYTES, "built-in model")?;
+        }
+    }
     validate_len(&payload.base_url, MAX_URL_BYTES, "built-in base URL")?;
     validate_len(&payload.api_key, MAX_CREDENTIAL_BYTES, "built-in API key")?;
     if let Some(preset) = payload.preset.as_deref() {
@@ -466,20 +459,19 @@ fn parse_builtin_agent(payload: BuiltinAgentPayload) -> Result<BuiltinAgentConfi
         "openai" | "openai-compat" | "openai_compat" => BuiltinAgentKind::OpenAiCompat,
         _ => return Err(WebCredentialError::UnsupportedBuiltinAgentKind),
     };
+    let models = op_editor_core::normalize_builtin_models(
+        payload
+            .models
+            .clone()
+            .unwrap_or_else(|| vec![payload.model.clone()]),
+    );
+    let preset_model = models.first().map(String::as_str).unwrap_or_default();
     let preset = payload
         .preset
         .as_deref()
         .and_then(BuiltinAgentPresetKey::from_str)
-        .map(|saved| {
-            op_editor_core::normalize_builtin_agent_preset(
-                saved,
-                kind,
-                &payload.base_url,
-                &payload.model,
-            )
-        })
         .unwrap_or_else(|| {
-            op_editor_core::infer_builtin_agent_preset(kind, &payload.base_url, &payload.model)
+            op_editor_core::infer_builtin_agent_preset(kind, &payload.base_url, preset_model)
         });
 
     Ok(BuiltinAgentConfig {
@@ -488,7 +480,7 @@ fn parse_builtin_agent(payload: BuiltinAgentPayload) -> Result<BuiltinAgentConfi
         display_name: payload.display_name,
         kind,
         api_key: payload.api_key,
-        model: payload.model,
+        models,
         base_url: payload.base_url,
         enabled: payload.enabled,
     })

@@ -65,6 +65,38 @@ fn structured_activities_render_as_compact_rows_without_thinking_text() {
 }
 
 #[test]
+fn failed_structured_activity_defaults_open_to_show_its_diagnostic() {
+    let mut message = ChatMessage::assistant("Finished with issues");
+    message.activities.push(op_editor_core::ChatActivity {
+        id: "customer-table".into(),
+        title: "Customer Table".into(),
+        detail: Some("Reason: parent_id=dashboard was not found".into()),
+        status: op_editor_core::ChatActivityStatus::Error,
+        content_offset: None,
+    });
+
+    let items = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+    assert!(items[0].steps[0].failed);
+    assert!(items[0].steps[0].expanded);
+    assert_eq!(
+        items[0].steps[0].details,
+        vec!["Reason: parent_id=dashboard was not found"]
+    );
+
+    message.action_step_expanded_overrides = vec![Some(false)];
+    let collapsed = build_transcript(
+        std::slice::from_ref(&message),
+        body(),
+        op_editor_core::Locale::EnUs,
+    );
+    assert!(!collapsed[0].steps[0].expanded);
+}
+
+#[test]
 fn structured_activities_interleave_with_cli_narration_by_offset() {
     let first = "I mapped the screen.";
     let second = "The sections are in place.";

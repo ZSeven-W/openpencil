@@ -5,7 +5,7 @@ phase: [generation]
 trigger:
   keywords: [mobile, phone, ios, android, 移动, 手机]
 priority: 25
-budget: 2000
+budget: 2100
 category: domain
 ---
 
@@ -19,10 +19,11 @@ Screen-height contract: use numeric 390-393×844 as a temporary construction see
 
 ## 1) STATUS BAR (OS-controlled) — PRE-INSERTED
 
-The status bar (time, signal, wifi, battery) is **automatically pre-inserted** by the orchestrator as the first child of the root frame. It is a fixed 62px-tall frame with hardcoded path icons.
+The status bar (time, signal, wifi, battery) is **automatically provided by OpenPencil on every generation path (orchestrator, design agent, and direct MCP)** as the first child of the root frame — a hand-drawn one is replaced by the canonical node. It is a fixed 62px-tall frame with hardcoded path icons.
 
 - **DO NOT generate a status bar** — it already exists
 - **DO NOT delete or modify** the pre-inserted status bar
+- **DO NOT give it a background fill** — it carries none, so it shows the screen behind it and its glyphs are already coloured for that background
 - Your first section should start BELOW the status bar (it occupies ~62px)
 
 ## 2) APP CONTENT (your layout)

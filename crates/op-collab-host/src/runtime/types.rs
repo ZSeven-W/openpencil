@@ -1,4 +1,6 @@
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use op_collab::{
     Bye, ByeReason, CollabMessage, ConnectionKey, Epoch, FrameEnvelope, OpaqueTicket, Role,
@@ -183,6 +185,29 @@ pub(super) struct TaggedNetworkEvent {
     pub(super) generation: u64,
     pub(super) event: NetworkEvent,
     pub(super) bridge_reservation: Option<SharedQueueReservation>,
+    /// Occupancy accounting for the bounded GUI event lane.
+    ///
+    /// Held for exactly as long as the event does — the seat is released when
+    /// the GUI takes the event off the channel and drops it — so a producer
+    /// can read how much of the lane is still outstanding before deciding
+    /// whether a droppable frame deserves one of the remaining slots.
+    pub(super) _lane_seat: Option<EventLaneSeat>,
+}
+
+/// One occupied seat on a bounded GUI event lane.
+pub(super) struct EventLaneSeat(Arc<AtomicUsize>);
+
+impl EventLaneSeat {
+    pub(super) fn take(occupancy: &Arc<AtomicUsize>) -> Self {
+        occupancy.fetch_add(1, Ordering::AcqRel);
+        Self(Arc::clone(occupancy))
+    }
+}
+
+impl Drop for EventLaneSeat {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

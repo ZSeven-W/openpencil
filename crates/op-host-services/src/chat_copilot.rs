@@ -1,85 +1,53 @@
 //! GitHub Copilot CLI bridge — adapts the official
 //! `github-copilot-sdk` to the shell-core [`ChatProvider`] trait.
 //!
-//! The SDK manages the `copilot --server --stdio` process and
-//! speaks `Content-Length`-framed JSON-RPC. Events reach us
-//! through a [`SessionHandler`] callback rather than a broadcast
-//! subscription: `on_event` forwards each `SessionEvent` into the
-//! turn's `ChatDelta` channel.
+//! OpenPencil owns the `copilot --server --stdio` process lifetime while the
+//! SDK speaks `Content-Length`-framed JSON-RPC. Events reach us through an SDK
+//! [`EventSubscription`](github_copilot_sdk::EventSubscription); each
+//! `SessionEvent` is forwarded into the turn's `ChatDelta` channel.
 //!
-//! One client is started per `send` (the handler binds the turn's
-//! channel at session-creation/resume time). Chat-tracked providers
-//! ([`CopilotProvider::for_chat`]) keep one Copilot **conversation**
-//! alive across turns through the process-wide resume slot: the CLI
-//! persists session state on disk, so the next turn resumes it via
-//! `Client::resume_session` and follow-ups see the full multi-turn
-//! context server-side — the same shape as the Claude Code adapter's
-//! `--resume` slot (`chat_claude.rs`).
-//!
-//! Deliberate divergence from TS: the TS Copilot path
-//! (`apps/web/server/api/ai/chat.ts:899-972`, `streamViaCopilot`)
-//! creates a fresh session per request and never resumes — multi-turn
-//! context there rides only the prompt. The Rust shell upgrades that
-//! to real server-side session reuse (campaign item #31 deferred
-//! "Copilot 跨轮 session 复用"); the no-session fallback (fresh
-//! session + history digest folded into the prompt) keeps at least
-//! the TS baseline when no resumable session exists.
+//! One client and session are started per `send` on a disposable runtime; the
+//! turn subscribes before sending. Multi-turn context rides the request's
+//! history digest, matching the TS Copilot path. A process-global SDK resume
+//! slot is deliberately avoided because OpenPencil supports multiple chat tabs.
 //!
 //! Event mapping:
 //! - `assistant.message_delta` (`deltaContent`) → `TextDelta`
-//! - `session.error` (`message`) → `Error`
+//! - SDK terminal errors → one `Error` from the worker boundary
 //! - turn completion (`send_and_wait` returns) → `Done { EndTurn }`
 
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc,
+};
 use std::time::Duration;
 
-use async_trait::async_trait;
-use github_copilot_sdk::handler::{
-    HandlerEvent, HandlerResponse, PermissionResult, SessionHandler,
-};
+use github_copilot_sdk::subscription::RecvErrorKind;
 use github_copilot_sdk::types::{
-    Attachment, MessageOptions, ResumeSessionConfig, SessionConfig, SessionEvent, SetModelOptions,
+    Attachment, MessageOptions, SessionConfig, SessionEvent, SessionId,
 };
-use github_copilot_sdk::{Client, ClientOptions};
+use github_copilot_sdk::{Client, Error, ErrorKind};
 use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, EffortLevel, StopReason};
 use tokio::sync::mpsc;
 
-use crate::chat_runtime::{prompt_with_system_prompt, shared_runtime, BlockingRecvIter};
+use crate::chat_runtime::{prompt_with_system_prompt, BlockingRecvIter};
 
 /// How long to let a single Copilot turn run before the SDK times
 /// the wait out.
 const COPILOT_TURN_TIMEOUT: Duration = Duration::from_secs(180);
+const COPILOT_TOTAL_TIMEOUT: Duration = Duration::from_secs(195);
+const COPILOT_GRACEFUL_STOP_TIMEOUT: Duration = Duration::from_secs(2);
+const COPILOT_SESSION_TEARDOWN_TIMEOUT: Duration = Duration::from_secs(2);
+static NEXT_COPILOT_SESSION: AtomicU64 = AtomicU64::new(1);
 
-/// Process-wide chat-session resume slot. Each chat turn starts a
-/// fresh `copilot --server --stdio` process; the slot carries the
-/// previous turn's CLI session id forward so the next turn resumes it
-/// (the CLI persists conversation state on disk). New Chat clears the
-/// slot (`reset_copilot_chat_session`) so a fresh transcript starts a
-/// fresh CLI session. Single-window desktop app — one slot is enough.
-/// Mirrors `chat_claude::chat_resume_slot`.
-fn copilot_resume_slot() -> &'static Mutex<Option<String>> {
-    static SLOT: OnceLock<Mutex<Option<String>>> = OnceLock::new();
-    SLOT.get_or_init(|| Mutex::new(None))
-}
-
-/// Forget the resumable Copilot chat session. Called when the user
-/// starts a New Chat so stale context can't leak into it.
-pub fn reset_copilot_chat_session() {
-    if let Ok(mut slot) = copilot_resume_slot().lock() {
-        *slot = None;
-    }
-}
+/// Retained for the host's provider-reset fanout. Copilot turns are stateless
+/// at the SDK-session layer, so there is no cross-tab resume state to clear.
+pub fn reset_copilot_chat_session() {}
 
 /// `ChatProvider` impl backed by the GitHub Copilot CLI through the
 /// official `github-copilot-sdk`.
 pub struct CopilotProvider {
     label: String,
-    /// When true, this provider participates in the process-wide chat
-    /// resume slot: it resumes the stored session and stores the
-    /// session id each turn reports. The design / codegen paths
-    /// construct untracked providers so their sub-requests never join
-    /// (or pollute) the user's chat conversation.
-    track_chat_session: bool,
 }
 
 impl CopilotProvider {
@@ -89,18 +57,13 @@ impl CopilotProvider {
     pub fn new() -> Self {
         Self {
             label: "GitHub Copilot".into(),
-            track_chat_session: false,
         }
     }
 
-    /// Build a chat-panel provider that resumes (and records) the
-    /// process-wide chat session, so consecutive chat turns share one
-    /// Copilot CLI conversation.
+    /// Build the chat-panel provider. Context is supplied by `ChatRequest`
+    /// history, keeping each editor tab isolated.
     pub fn for_chat() -> Self {
-        Self {
-            label: "GitHub Copilot".into(),
-            track_chat_session: true,
-        }
+        Self::new()
     }
 }
 
@@ -115,7 +78,29 @@ impl ChatProvider for CopilotProvider {
         &self.label
     }
 
+    fn supports_cancellable_send(&self) -> bool {
+        true
+    }
+
     fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+        self.send_inner(request, None)
+    }
+
+    fn send_cancellable(
+        &self,
+        request: ChatRequest,
+        cancel: Arc<AtomicBool>,
+    ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+        self.send_inner(request, Some(cancel))
+    }
+}
+
+impl CopilotProvider {
+    fn send_inner(
+        &self,
+        request: ChatRequest,
+        cancel: Option<Arc<AtomicBool>>,
+    ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
         // Stage attachments up front so a write failure aborts the
         // turn with an error instead of silently dropping them.
         let guard = if request.attachments.is_empty() {
@@ -126,54 +111,67 @@ impl ChatProvider for CopilotProvider {
                 Err(e) => return crate::chat_attachment::attachment_error_turn(e),
             }
         };
-        // Chat-tracked turns resume the previous turn's CLI session so
-        // cross-turn context lives server-side (mirrors the Claude
-        // adapter's `--resume`). Only sessionless turns fold a compact
-        // history digest in front of the user message — at least the
-        // TS parity baseline (system prompt + last message,
-        // `chat.ts:933-934`), plus the digest for cross-turn context
-        // when e.g. the user switched providers mid-conversation.
-        let resume = if self.track_chat_session {
-            copilot_resume_slot().lock().ok().and_then(|s| s.clone())
-        } else {
-            None
-        };
         let mut request = request;
-        if resume.is_none() {
-            let digest = op_ai::chat_history::history_digest(
-                &request.history,
-                op_ai::chat_history::DEFAULT_DIGEST_CHARS,
-            );
-            if !digest.is_empty() {
-                request.user_message = format!("{digest}\n\n{}", request.user_message);
-            }
+        let digest = op_ai::chat_history::history_digest(
+            &request.history,
+            op_ai::chat_history::DEFAULT_DIGEST_CHARS,
+        );
+        if !digest.is_empty() {
+            request.user_message = format!("{digest}\n\n{}", request.user_message);
         }
         request.user_message = prompt_with_system_prompt(
             &request.system_prompt,
             std::mem::take(&mut request.user_message),
         );
-        let track_session = self.track_chat_session;
         let (tx, rx) = mpsc::channel::<ChatDelta>(64);
-        shared_runtime().spawn(async move {
-            match run_turn(request, guard, tx.clone(), resume, track_session).await {
-                Ok(()) => {
-                    let _ = tx
-                        .send(ChatDelta::Done {
-                            stop_reason: StopReason::EndTurn,
-                        })
-                        .await;
-                }
-                Err(e) => {
-                    let _ = tx.send(ChatDelta::Error(format!("copilot: {e}"))).await;
-                    let _ = tx
-                        .send(ChatDelta::Done {
+        let worker_tx = tx.clone();
+        let worker = std::thread::Builder::new()
+            .name("openpencil-copilot-turn".to_string())
+            .spawn(move || {
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build();
+                match runtime {
+                    Ok(runtime) => runtime.block_on(async move {
+                        match run_turn(request, guard, worker_tx.clone()).await {
+                            Ok(()) => {
+                                let _ = worker_tx
+                                    .send(ChatDelta::Done {
+                                        stop_reason: StopReason::EndTurn,
+                                    })
+                                    .await;
+                            }
+                            Err(error) => {
+                                let _ = worker_tx
+                                    .send(ChatDelta::Error(format!("copilot: {error}")))
+                                    .await;
+                                let _ = worker_tx
+                                    .send(ChatDelta::Done {
+                                        stop_reason: StopReason::Aborted,
+                                    })
+                                    .await;
+                            }
+                        }
+                    }),
+                    Err(error) => {
+                        let _ = worker_tx
+                            .blocking_send(ChatDelta::Error(format!("copilot runtime: {error}")));
+                        let _ = worker_tx.blocking_send(ChatDelta::Done {
                             stop_reason: StopReason::Aborted,
-                        })
-                        .await;
+                        });
+                    }
                 }
-            }
-        });
-        Box::new(BlockingRecvIter::new(rx))
+            });
+        if let Err(error) = worker {
+            let _ = tx.try_send(ChatDelta::Error(format!("copilot worker: {error}")));
+            let _ = tx.try_send(ChatDelta::Done {
+                stop_reason: StopReason::Aborted,
+            });
+        }
+        match cancel {
+            Some(cancel) => Box::new(BlockingRecvIter::cooperative(rx, cancel)),
+            None => Box::new(BlockingRecvIter::new(rx)),
+        }
     }
 }
 
@@ -193,33 +191,101 @@ fn reasoning_effort_str(level: EffortLevel) -> &'static str {
 /// effort, and the selected model when the request carries one (TS
 /// parity: `chat.ts` spreads `model` into `createSession` only when
 /// present — no selection keeps the CLI's default model).
-fn session_config(request: &ChatRequest) -> SessionConfig {
+fn session_config(request: &ChatRequest, session_id: &SessionId) -> SessionConfig {
     let mut config = SessionConfig::default();
+    config.session_id = Some(session_id.clone());
     config.streaming = Some(true);
-    config.reasoning_effort = Some(reasoning_effort_str(request.effort).to_string());
+    // OpenPencil supplies the owning tab's history on every turn and never
+    // uses Copilot's cross-session search/retrieval store. Keep that store
+    // isolated; bounded session.delete below remains the persistence cleanup.
+    config.enable_session_store = Some(false);
     if let Some(model) = request.model_id() {
         config.model = Some(model.to_string());
+        // The synthetic auto model chooses both a concrete model and its
+        // effort. Current CLIs reject an explicit reasoningEffort with auto.
+        if model != "auto" {
+            config.reasoning_effort = Some(reasoning_effort_str(request.effort).to_string());
+        }
     }
-    config
+    config.approve_all_permissions()
 }
 
-/// Resume config for a chat-tracked follow-up turn: streaming on,
-/// handler installed by the caller. Model + reasoning effort are NOT
-/// part of the resume payload (the wire has no fields for them) —
-/// they ride a follow-up `session.set_model` when the request selects
-/// a model.
-fn resume_config(session_id: &str) -> ResumeSessionConfig {
-    let mut config = ResumeSessionConfig::new(session_id.into());
-    config.streaming = Some(true);
-    config
+fn reasoning_effort_is_unsupported(error: &Error) -> bool {
+    error
+        .to_string()
+        .to_ascii_lowercase()
+        .contains("reasoning effort is not supported")
 }
 
-/// Run one Copilot turn: start the CLI, resume the previous chat
-/// session (or create a fresh streaming one) with a handler that
-/// funnels events into `tx`, send the prompt, wait for completion,
-/// then tear the session + client down. The CLI keeps session state
-/// on disk, so `destroy` (wire `session.destroy`) only disconnects —
-/// the recorded id stays resumable by the next turn.
+async fn create_compatible_session(
+    client: &Client,
+    request: &ChatRequest,
+    session_id: &SessionId,
+) -> Result<github_copilot_sdk::session::Session, Error> {
+    match client
+        .create_session(session_config(request, session_id))
+        .await
+    {
+        Err(error) if reasoning_effort_is_unsupported(&error) => {
+            // Capability metadata evolves independently from the app. Retry
+            // only the explicit server verdict without the optional effort.
+            let mut fallback = session_config(request, session_id);
+            fallback.reasoning_effort = None;
+            client.create_session(fallback).await
+        }
+        result => result,
+    }
+}
+
+fn new_turn_session_id() -> SessionId {
+    let serial = NEXT_COPILOT_SESSION.fetch_add(1, Ordering::Relaxed);
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    SessionId::new(format!(
+        "openpencil-{}-{timestamp}-{serial}",
+        std::process::id()
+    ))
+}
+
+fn cancellation_error() -> Error {
+    Error::with_message(ErrorKind::Io, "Copilot turn cancelled")
+}
+
+async fn delete_turn_session(client: &Client, session_id: &SessionId) -> Result<(), Error> {
+    match tokio::time::timeout(
+        COPILOT_GRACEFUL_STOP_TIMEOUT,
+        client.delete_session(session_id),
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => Err(Error::with_message(
+            ErrorKind::Io,
+            format!("Copilot session cleanup timed out for {session_id}"),
+        )),
+    }
+}
+
+fn merge_turn_and_cleanup(
+    turn: Result<(), Error>,
+    cleanup: Result<(), Error>,
+) -> Result<(), Error> {
+    match (turn, cleanup) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
+        (Err(turn_error), Err(cleanup_error)) => Err(Error::with_message(
+            ErrorKind::Io,
+            format!("{turn_error}; Copilot session cleanup also failed: {cleanup_error}"),
+        )),
+    }
+}
+
+/// Run one Copilot turn: start the guarded CLI, verify the protocol, run the
+/// session on a bounded future, then delete the per-turn session and
+/// deterministically reap the process. Multi-turn context is supplied by the
+/// owning tab's request history; no SDK session id is resumed by a later turn.
 ///
 /// The per-turn effort drives the session's `reasoning_effort`;
 /// staged attachments spill to temp files passed as `File`
@@ -229,49 +295,66 @@ async fn run_turn(
     request: ChatRequest,
     guard: Option<crate::chat_attachment::TempGuard>,
     tx: mpsc::Sender<ChatDelta>,
-    resume: Option<String>,
-    track_session: bool,
 ) -> Result<(), github_copilot_sdk::Error> {
-    let client = Client::start(ClientOptions::default()).await?;
-    let handler: Arc<dyn SessionHandler> = Arc::new(StreamHandler { tx });
-    let mut resumed = false;
-    let session = match resume {
-        Some(id) => {
-            match client
-                .resume_session(resume_config(&id).with_handler(handler.clone()))
-                .await
-            {
-                Ok(session) => {
-                    resumed = true;
-                    session
-                }
-                // The CLI may have GC'd the on-disk session (or the
-                // copilot home moved). Fall back to a fresh session so
-                // the turn still runs — context degrades to the prompt
-                // for this turn and recovers via the freshly-recorded
-                // session id on the next one.
-                Err(_) => {
-                    let config = session_config(&request).with_handler(handler);
-                    client.create_session(config).await?
-                }
-            }
+    let exe = crate::model_discovery::resolve_cli("copilot").ok_or_else(|| {
+        Error::with_message(
+            ErrorKind::BinaryNotFound {
+                name: "copilot".to_string(),
+                hint: Some("Install GitHub Copilot CLI and connect it in Agents".to_string()),
+            },
+            "GitHub Copilot CLI was not found",
+        )
+    })?;
+    let mut server = crate::copilot_sdk_probe::CopilotServer::spawn(&exe)
+        .await
+        .map_err(|error| Error::with_message(ErrorKind::Io, error.to_string()))?;
+    let client = server.client().clone();
+    let result = run_turn_on_client(&client, request, guard, tx).await;
+    let _ = tokio::time::timeout(COPILOT_GRACEFUL_STOP_TIMEOUT, client.stop()).await;
+    server.shutdown().await;
+    result
+}
+
+async fn run_turn_on_client(
+    client: &Client,
+    request: ChatRequest,
+    guard: Option<crate::chat_attachment::TempGuard>,
+    tx: mpsc::Sender<ChatDelta>,
+) -> Result<(), github_copilot_sdk::Error> {
+    let session_id = new_turn_session_id();
+    let cancel = tx.clone();
+    let result = match tokio::time::timeout(COPILOT_TOTAL_TIMEOUT, async {
+        tokio::select! {
+            biased;
+            _ = cancel.closed() => return Err(cancellation_error()),
+            result = client.verify_protocol_version() => result?,
         }
-        None => {
-            let config = session_config(&request).with_handler(handler);
-            client.create_session(config).await?
-        }
+        run_turn_with_client(client, request, guard, tx, &session_id).await
+    })
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => Err(Error::with_message(ErrorKind::Io, "Copilot turn timed out")),
     };
-    // A resumed session keeps its previous model; apply this turn's
-    // selection (and its effort) when one is present. Best-effort —
-    // a failed switch must not abort the turn (the session's prior
-    // model still answers).
-    if resumed {
-        if let Some(model) = request.model_id() {
-            let opts = SetModelOptions::default()
-                .with_reasoning_effort(reasoning_effort_str(request.effort));
-            session.set_model(model, Some(opts)).await.ok();
-        }
-    }
+    // The ID is assigned before session.create, so every exit path can issue
+    // the persistent-state deletion even when creation, streaming, timeout,
+    // or receiver cancellation drops the in-flight SDK future.
+    let cleanup = delete_turn_session(client, &session_id).await;
+    merge_turn_and_cleanup(result, cleanup)
+}
+
+async fn run_turn_with_client(
+    client: &Client,
+    request: ChatRequest,
+    guard: Option<crate::chat_attachment::TempGuard>,
+    tx: mpsc::Sender<ChatDelta>,
+    session_id: &SessionId,
+) -> Result<(), github_copilot_sdk::Error> {
+    let session = tokio::select! {
+        biased;
+        _ = tx.closed() => return Err(cancellation_error()),
+        result = create_compatible_session(client, &request, session_id) => result?,
+    };
     // `guard` holds the staged attachment temp files (written before
     // the turn was spawned); Copilot reads them as `File` attachments.
     let mut opts =
@@ -291,74 +374,102 @@ async fn run_turn(
             opts = opts.with_attachments(files);
         }
     }
-    session.send_and_wait(opts).await?;
-    // Chat-tracked turns record the CLI session id so the NEXT turn
-    // resumes this conversation (the CLI may reassign the id on
-    // resume — always store what the live session reports).
-    if track_session {
-        if let Ok(mut slot) = copilot_resume_slot().lock() {
-            *slot = Some(session.id().to_string());
+    // Subscribe before sending so the first streamed delta cannot race past
+    // the observer. Bias toward ready events: once `send_and_wait` sees idle,
+    // drain every already-buffered delta before finishing the turn.
+    let turn_result = {
+        let mut events = session.subscribe();
+        let mut events_open = true;
+        let send = session.send_and_wait(opts);
+        tokio::pin!(send);
+        loop {
+            tokio::select! {
+                biased;
+                _ = tx.closed() => break Err(cancellation_error()),
+                event = events.recv(), if events_open => match event {
+                    Ok(event) => forward_session_event(&event, &tx).await,
+                    Err(error) => match error.kind() {
+                        RecvErrorKind::Lagged(lagged) => {
+                            break Err(Error::with_message(
+                                ErrorKind::InvalidConfig,
+                                format!(
+                                    "Copilot event stream lagged by {} events; incomplete response aborted",
+                                    lagged.skipped()
+                                ),
+                            ));
+                        }
+                        _ => events_open = false,
+                    },
+                },
+                result = &mut send => break result.map(|_| ()),
+            }
         }
-    }
+    };
     // Temp files are no longer needed once the turn is done.
     drop(guard);
-    // Best-effort teardown — a failed cleanup must not mask a
-    // successful turn. `destroy` is the wire `session.destroy`, which
-    // DISCONNECTS but preserves on-disk session state for resume.
-    session.destroy().await.ok();
-    client.stop().await.ok();
-    Ok(())
-}
-
-/// `SessionHandler` that forwards one turn's session events into a
-/// `ChatDelta` channel and auto-approves permission prompts so an
-/// unattended chat turn isn't blocked waiting for a click.
-struct StreamHandler {
-    tx: mpsc::Sender<ChatDelta>,
-}
-
-#[async_trait]
-impl SessionHandler for StreamHandler {
-    async fn on_event(&self, event: HandlerEvent) -> HandlerResponse {
-        match event {
-            HandlerEvent::SessionEvent { event, .. } => {
-                forward_session_event(&event, &self.tx).await;
-                HandlerResponse::Ok
-            }
-            HandlerEvent::PermissionRequest { .. } => {
-                HandlerResponse::Permission(PermissionResult::Approved)
-            }
-            _ => HandlerResponse::Ok,
+    // These are request/response RPCs too. Bound their combined grace period
+    // so a server that stops replying cannot turn Stop/New Chat into the
+    // 195-second turn timeout. The caller still deletes the known session ID
+    // and stops/reaps the server after this future returns.
+    let _ = tokio::time::timeout(COPILOT_SESSION_TEARDOWN_TIMEOUT, async {
+        if turn_result.is_err() {
+            session.abort().await.ok();
         }
-    }
+        session.disconnect().await.ok();
+    })
+    .await;
+    turn_result
 }
 
 /// Translate one `SessionEvent` into a `ChatDelta`. Unhandled
 /// event types are dropped — only streamed text + errors surface
 /// to the chat widget today.
 async fn forward_session_event(event: &SessionEvent, tx: &mpsc::Sender<ChatDelta>) {
-    match event.event_type.as_str() {
-        "assistant.message_delta" => {
-            if let Some(text) = event.data.get("deltaContent").and_then(|c| c.as_str()) {
-                let _ = tx.send(ChatDelta::TextDelta(text.to_string())).await;
-            }
+    if event.event_type == "assistant.message_delta" {
+        if let Some(text) = event.data.get("deltaContent").and_then(|c| c.as_str()) {
+            let _ = tx.send(ChatDelta::TextDelta(text.to_string())).await;
         }
-        "session.error" => {
-            let msg = event
-                .data
-                .get("message")
-                .and_then(|m| m.as_str())
-                .unwrap_or("unknown error")
-                .to_string();
-            let _ = tx.send(ChatDelta::Error(msg)).await;
-        }
-        _ => {}
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+
+    async fn read_frame<R>(reader: &mut R) -> serde_json::Value
+    where
+        R: AsyncBufRead + Unpin,
+    {
+        let mut content_length = None;
+        loop {
+            let mut line = String::new();
+            let read = reader.read_line(&mut line).await.expect("frame header");
+            assert_ne!(read, 0, "unexpected EOF before frame body");
+            if line == "\r\n" || line == "\n" {
+                break;
+            }
+            if let Some(value) = line.trim().strip_prefix("Content-Length:").map(str::trim) {
+                content_length = Some(value.parse::<usize>().expect("content length"));
+            }
+        }
+        let mut body = vec![0; content_length.expect("Content-Length header")];
+        reader.read_exact(&mut body).await.expect("frame body");
+        serde_json::from_slice(&body).expect("JSON-RPC body")
+    }
+
+    async fn write_frame<W>(writer: &mut W, value: serde_json::Value)
+    where
+        W: AsyncWrite + Unpin,
+    {
+        let body = serde_json::to_vec(&value).expect("serialize JSON-RPC response");
+        writer
+            .write_all(format!("Content-Length: {}\r\n\r\n", body.len()).as_bytes())
+            .await
+            .expect("frame header write");
+        writer.write_all(&body).await.expect("frame body write");
+        writer.flush().await.expect("frame flush");
+    }
 
     #[test]
     fn provider_label_is_human_readable() {
@@ -367,7 +478,8 @@ mod tests {
 
     #[test]
     fn provider_constructs_as_chat_provider_trait_object() {
-        let _: Arc<dyn ChatProvider> = Arc::new(CopilotProvider::new());
+        let provider: Arc<dyn ChatProvider> = Arc::new(CopilotProvider::new());
+        assert!(provider.supports_cancellable_send());
     }
 
     #[test]
@@ -380,63 +492,148 @@ mod tests {
     }
 
     #[test]
+    fn turn_session_ids_are_unique_and_openpencil_owned() {
+        let first = new_turn_session_id();
+        let second = new_turn_session_id();
+        assert_ne!(first, second);
+        assert!(first.as_str().starts_with("openpencil-"));
+    }
+
+    #[test]
+    fn cleanup_failure_preserves_the_turn_error() {
+        let turn = Error::with_message(ErrorKind::Io, "turn failed");
+        let cleanup = Error::with_message(ErrorKind::Io, "delete failed");
+        let error = merge_turn_and_cleanup(Err(turn), Err(cleanup)).expect_err("combined error");
+        let message = error.to_string();
+        assert!(message.contains("turn failed"));
+        assert!(message.contains("delete failed"));
+    }
+
+    #[tokio::test]
+    async fn cancellation_during_create_still_deletes_the_known_session() {
+        let (client_stream, server_stream) = tokio::io::duplex(32 * 1024);
+        let (client_reader, client_writer) = tokio::io::split(client_stream);
+        let (server_reader, mut server_writer) = tokio::io::split(server_stream);
+        let mut server_reader = tokio::io::BufReader::new(server_reader);
+        let client = Client::from_streams(
+            client_reader,
+            client_writer,
+            std::env::current_dir().expect("current directory"),
+        )
+        .expect("in-memory SDK client");
+        let (tx, rx) = mpsc::channel(1);
+        let turn_client = client.clone();
+        let turn = tokio::spawn(async move {
+            run_turn_on_client(&turn_client, ChatRequest::default(), None, tx).await
+        });
+
+        let connect = read_frame(&mut server_reader).await;
+        assert_eq!(connect["method"], "connect");
+        write_frame(
+            &mut server_writer,
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": connect["id"],
+                "result": { "ok": true, "protocolVersion": 3, "version": "test" }
+            }),
+        )
+        .await;
+
+        let create = read_frame(&mut server_reader).await;
+        assert_eq!(create["method"], "session.create");
+        assert_eq!(create["params"]["enableSessionStore"], false);
+        let session_id = create["params"]["sessionId"]
+            .as_str()
+            .expect("OpenPencil-assigned session ID")
+            .to_string();
+
+        // Cancel while session.create is still unanswered. The turn must not
+        // rely on receiving a Session object before it can delete state.
+        drop(rx);
+        let delete = tokio::time::timeout(Duration::from_secs(2), read_frame(&mut server_reader))
+            .await
+            .expect("session.delete after cancellation");
+        assert_eq!(delete["method"], "session.delete");
+        assert_eq!(delete["params"]["sessionId"], session_id);
+        write_frame(
+            &mut server_writer,
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": delete["id"],
+                "result": {}
+            }),
+        )
+        .await;
+
+        let error = tokio::time::timeout(Duration::from_secs(2), turn)
+            .await
+            .expect("bounded cancelled turn")
+            .expect("turn task")
+            .expect_err("cancelled turn error");
+        assert!(error.to_string().contains("cancelled"));
+        client.force_stop();
+    }
+
+    #[test]
     fn session_config_sets_selected_model() {
         let req = ChatRequest {
             model: Some("claude-sonnet-4".into()),
             ..Default::default()
         };
-        let config = session_config(&req);
+        let session_id = SessionId::new("openpencil-test-session");
+        let config = session_config(&req, &session_id);
         assert_eq!(config.model.as_deref(), Some("claude-sonnet-4"));
         assert_eq!(config.streaming, Some(true));
+        assert_eq!(config.enable_session_store, Some(false));
+        assert_eq!(config.session_id.as_ref(), Some(&session_id));
+        assert_eq!(config.reasoning_effort.as_deref(), Some("low"));
     }
 
     #[test]
     fn session_config_without_model_keeps_cli_default() {
         // No selection → leave `model` unset so the CLI picks its own
-        // default; blank ids are treated as unset too.
-        let config = session_config(&ChatRequest::default());
+        // default; its reasoning capability is also unknown.
+        let session_id = SessionId::new("openpencil-test-session");
+        let config = session_config(&ChatRequest::default(), &session_id);
         assert!(config.model.is_none());
-        let config = session_config(&ChatRequest {
-            model: Some("  ".into()),
-            ..Default::default()
-        });
+        assert!(config.reasoning_effort.is_none());
+        let config = session_config(
+            &ChatRequest {
+                model: Some("  ".into()),
+                ..Default::default()
+            },
+            &session_id,
+        );
         assert!(config.model.is_none());
+        assert!(config.reasoning_effort.is_none());
     }
 
     #[test]
-    fn resume_config_carries_session_id_and_streaming() {
-        let config = resume_config("copilot-sess-42");
-        assert_eq!(config.session_id.to_string(), "copilot-sess-42");
-        assert_eq!(
-            config.streaming,
-            Some(true),
-            "resumed turns must keep delta streaming on"
+    fn session_config_auto_leaves_reasoning_selection_to_the_cli() {
+        let session_id = SessionId::new("openpencil-test-session");
+        let config = session_config(
+            &ChatRequest {
+                model: Some("auto".into()),
+                effort: EffortLevel::Max,
+                ..Default::default()
+            },
+            &session_id,
         );
-        // Resume never silently swaps models — selection rides a
-        // follow-up set_model instead.
-        assert!(config.system_message.is_none());
+        assert_eq!(config.model.as_deref(), Some("auto"));
+        assert!(config.reasoning_effort.is_none());
     }
 
     #[test]
-    fn resume_slot_round_trips_and_resets() {
+    fn reset_hook_is_idempotent_without_global_session_state() {
         reset_copilot_chat_session();
-        assert!(copilot_resume_slot().lock().unwrap().is_none());
-        *copilot_resume_slot().lock().unwrap() = Some("sess-1".into());
+        reset_copilot_chat_session();
+    }
+
+    #[test]
+    fn for_chat_uses_the_same_tab_isolated_provider() {
         assert_eq!(
-            copilot_resume_slot().lock().unwrap().as_deref(),
-            Some("sess-1")
+            CopilotProvider::for_chat().provider_label(),
+            "GitHub Copilot"
         );
-        // New Chat forgets the conversation so stale context can't
-        // leak into a fresh transcript.
-        reset_copilot_chat_session();
-        assert!(copilot_resume_slot().lock().unwrap().is_none());
-    }
-
-    #[test]
-    fn for_chat_opts_into_session_tracking() {
-        assert!(CopilotProvider::for_chat().track_chat_session);
-        // Design / codegen sub-requests stay out of the user's chat
-        // conversation.
-        assert!(!CopilotProvider::new().track_chat_session);
     }
 }

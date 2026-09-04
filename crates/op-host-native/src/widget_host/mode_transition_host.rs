@@ -37,6 +37,28 @@ impl WidgetHostNative {
     /// a few lines down needs the session installed to compute the
     /// destination device-frame rect, so this can't be reordered.
     pub fn enter_preview(&mut self, canvas_size: (f32, f32)) -> bool {
+        self.enter_preview_with_builder(canvas_size, |state, presenting| {
+            crate::preview::PreviewSession::enter(
+                &state.doc,
+                canvas_size,
+                &state.ui.variables.active_theme,
+                state.ui.active_page_index,
+                state.editor_ui.preserve_authored_geometry,
+                presenting,
+                std::rc::Rc::new(jian_skia::SkiaMeasure::new()),
+            )
+        })
+    }
+
+    pub(in crate::widget_host) fn enter_preview_with_builder(
+        &mut self,
+        canvas_size: (f32, f32),
+        build: impl FnOnce(
+            &op_editor_core::EditorState,
+            bool,
+        )
+            -> Result<crate::preview::PreviewSession, crate::preview::PreviewEnterError>,
+    ) -> bool {
         // The user changed their mind mid-close: an Exit merge
         // animation was still playing (`self.preview` deliberately
         // kept alive for it — see `exit_preview`'s doc), so finish
@@ -52,18 +74,16 @@ impl WidgetHostNative {
         ) {
             self.finish_exit_teardown();
         }
+        // Preview owns the screen even when the runtime build fails. Commit
+        // document drafts and release every editor input/capture first so the
+        // builder reads the final document and failure cannot strand focus.
+        self.prepare_editor_for_preview();
         if self.preview.is_some() {
             return true;
         }
-        match crate::preview::PreviewSession::enter(
-            &self.editor_state.doc,
-            canvas_size,
-            &self.editor_state.ui.variables.active_theme,
-            self.editor_state.ui.active_page_index,
-            self.editor_state.editor_ui.preserve_authored_geometry,
-            // A deck is presented, not routed — see `PreviewSession::enter`.
-            op_editor_core::preview_slideshow::slideshow_for_document(&self.editor_state).is_some(),
-        ) {
+        let presenting =
+            op_editor_core::preview_slideshow::slideshow_for_document(&self.editor_state).is_some();
+        match build(&self.editor_state, presenting) {
             Ok(mut session) => {
                 let source_rect = session.framed_root().map(|(_, rect)| {
                     self.doc_rect_to_screen_rect(rect, canvas_size.0, canvas_size.1)
@@ -107,6 +127,56 @@ impl WidgetHostNative {
                 false
             }
         }
+    }
+
+    fn prepare_editor_for_preview(&mut self) {
+        if let Some(rename) = self.editor_state.ui.layer_rename.as_mut() {
+            rename.input.commit_composition(self.now_ms);
+        }
+        let _ = self.editor_state.rename_commit();
+        let _ = self.editor_state.text_edit_commit_composition(self.now_ms);
+        let _ = self.editor_state.text_edit_commit();
+        self.editor_state
+            .ui
+            .property_input
+            .commit_composition(self.now_ms);
+        self.commit_property_focus_if_any();
+
+        self.cancel_native_touch_gestures();
+        self.cancel_agent_settings_touch_gesture();
+        self.blur_text_inputs_on_blank_press();
+        self.release_property_keyboard_owner();
+        self.close_image_popovers_for_higher_overlay();
+        self.dismiss_mobile_surface();
+
+        let figma_owned = self.editor_state.editor_ui.import_source
+            == op_editor_core::figma_import_state::ImportSource::Figma
+            && (self.editor_state.editor_ui.figma_import_in_progress
+                || self.editor_state.editor_ui.figma_import_pages.len() > 1);
+        if figma_owned
+            && !matches!(
+                self.editor_state.editor_ui.pending_file_action,
+                Some(op_editor_core::FileAction::FinishFigmaImport(
+                    op_editor_core::FigmaImportSelection::Cancel
+                ))
+            )
+        {
+            self.editor_state.editor_ui.pending_file_action =
+                Some(op_editor_core::FileAction::FinishFigmaImport(
+                    op_editor_core::FigmaImportSelection::Cancel,
+                ));
+        }
+        self.cancel_auth_login();
+        op_editor_core::host_escape_transitions::close_preview_owned_overlays(
+            &mut self.editor_state,
+            self.now_ms,
+        );
+        self.preview_surface_capture = None;
+        self.slideshow_cursor = None;
+        self.slideshow_press_screen = None;
+        self.preview_pressed_pids.clear();
+        self.preview_last_doc_by_pid.clear();
+        self.mark_dirty();
     }
 
     /// Exit Preview mode. The document is byte-identical to before
@@ -200,8 +270,11 @@ impl WidgetHostNative {
     fn finish_exit_teardown(&mut self) {
         self.preview = None;
         self.clear_device_preview_state();
-        self.preview_press_active = false;
-        self.preview_last_doc = None;
+        self.preview_pressed_pids.clear();
+        self.preview_last_doc_by_pid.clear();
+        self.preview_surface_capture = None;
+        self.slideshow_cursor = None;
+        self.slideshow_press_screen = None;
         self.editor_state.editor_ui.exit_preview();
         self.preview_mode_transition = None;
     }

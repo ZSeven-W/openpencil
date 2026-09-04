@@ -138,6 +138,9 @@ export class PenSession {
     const msg = parseInboundFromPage(raw);
     if (!msg) return;
     switch (msg.type) {
+      case "op-bridge/listening":
+        this.handleListening();
+        break;
       case "op-bridge/ready":
         this.handleReady(msg.generation, msg.revision);
         break;
@@ -248,6 +251,19 @@ export class PenSession {
   }
 
   // ---- message handlers ----
+
+  private handleListening(): void {
+    if (this._state !== "booting") return;
+    // The page has installed its receive listener. Re-send init immediately,
+    // even when the original finite retry burst already expired while the
+    // wasm bundles were loading, and renew that bounded retry window in case
+    // the first handoff races a page rebuild.
+    this.initCancel?.();
+    this.initCancel = undefined;
+    this.initTries = 0;
+    this.postInit();
+    this.scheduleInitRetry();
+  }
 
   private handleReady(generation: number, _revision: number): void {
     if (this._state !== "booting") return; // idempotent (HTML rebuild re-sends)

@@ -129,6 +129,43 @@ fn serve_one_standard_ai_route_is_sse_not_404() {
 }
 
 #[test]
+fn serve_one_builtin_model_discovery_route_is_json_not_404() {
+    let response =
+        serve_with_content_type("POST", "/api/ai/models/discover", "application/json", "{}");
+    assert!(response.contains("400 Bad Request"), "{response}");
+    assert!(
+        response.contains("invalid model discovery request"),
+        "{response}"
+    );
+    assert!(!response.contains("404 Not Found"), "{response}");
+}
+
+#[test]
+fn managed_daemon_accepts_tokenless_native_model_discovery() {
+    let body = r#"{"id":"builtin-1","generation":1,"credential":{}}"#;
+    let request = format!(
+        "POST /api/ai/models/discover HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body,
+    );
+    let mut stream = mock_stream(&request);
+    let mut managed = fresh_state();
+    managed.mode = ServeMode::Managed;
+    managed.managed_token = Some("managed-secret".into());
+    let state = Mutex::new(managed);
+
+    serve_one_in_mode(&mut stream, &state, &SseHub::default(), ServeMode::Managed)
+        .expect("serve_one");
+
+    let response = String::from_utf8_lossy(&stream.output);
+    assert!(!response.contains("401 Unauthorized"), "{response}");
+    assert!(
+        response.contains("invalid model discovery request"),
+        "{response}"
+    );
+}
+
+#[test]
 fn serve_one_browser_json_routes_reject_simple_request_content_types() {
     // Cross-origin "simple requests" (text/plain, form-encoded, or no
     // Content-Type at all) never trigger a CORS preflight, so a drive-by
@@ -137,6 +174,7 @@ fn serve_one_browser_json_routes_reject_simple_request_content_types() {
     for (method, path) in [
         ("POST", "/api/ai/standard"),
         ("POST", "/api/ai/stream"),
+        ("POST", "/api/ai/models/discover"),
         ("POST", "/api/settings/credentials"),
     ] {
         for content_type in ["text/plain", "application/x-www-form-urlencoded"] {
@@ -491,180 +529,8 @@ fn document_post_route_409s_on_stale_base_version_without_mutating() {
     assert_eq!(s.version, 0);
 }
 
-#[test]
-fn serve_one_unimplemented_api_route_is_404_not_jsonrpc() {
-    // An `/api/mcp/*` route this daemon doesn't implement must 404, not
-    // fall through to JSON-RPC dispatch.
-    let r = serve("POST", "/api/mcp/not-a-route", "");
-    assert!(r.contains("404 Not Found"), "{r}");
-}
-
-#[test]
-fn serve_one_get_root_serves_html_not_jsonrpc() {
-    // `GET /` is the static host-page route now — text/html either way
-    // (200 host page with a bundle, 404 build-help page without one) and
-    // never the old 405 from the JSON-RPC path guard.
-    let r = serve("GET", "/", "");
-    assert!(r.contains("Content-Type: text/html"), "{r}");
-    assert!(!r.contains("405"), "{r}");
-    // `POST /` keeps dispatching JSON-RPC (web_static ignores non-GET).
-    let post = serve(
-        "POST",
-        "/",
-        r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
-    );
-    assert!(post.contains("200 OK"), "{post}");
-    assert!(post.contains(r#""tools""#), "{post}");
-}
-
-#[test]
-fn serve_one_token_authed_shutdown_signals_caller() {
-    std::env::set_var("OPENPENCIL_MCP_TOKEN", "serve-web-shutdown-test");
-    let state = Mutex::new(fresh_state());
-    let hub = SseHub::default();
-    // Wrong token → NOT a shutdown (falls through to JSON-RPC dispatch).
-    let bad =
-        r#"{"jsonrpc":"2.0","id":1,"method":"openpencil/shutdown","params":{"token":"nope"}}"#;
-    let mut stream = mock_stream(&format!(
-        "POST /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{bad}",
-        bad.len()
-    ));
-    let wants_shutdown = serve_one(&mut stream, &state, &hub).expect("serve_one");
-    assert!(!wants_shutdown, "a mismatched token must not shut down");
-    // Matching token → ack + shutdown signal for the accept loop.
-    let good = r#"{"jsonrpc":"2.0","id":2,"method":"openpencil/shutdown","params":{"token":"serve-web-shutdown-test"}}"#;
-    let mut stream = mock_stream(&format!(
-        "POST /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{good}",
-        good.len()
-    ));
-    let wants_shutdown = serve_one(&mut stream, &state, &hub).expect("serve_one");
-    assert!(wants_shutdown);
-    let out = String::from_utf8_lossy(&stream.output);
-    assert!(out.contains(r#""shuttingDown":true"#), "{out}");
-}
-
-#[test]
-fn parse_serve_web_args_accepts_port_doc_and_host() {
-    let parse = |args: &[&str]| parse_serve_web_args(args.iter().map(|s| s.to_string()));
-    // Port only → loopback, empty document.
-    let o = parse(&["3100"]).expect("port only");
-    assert_eq!((o.port, o.managed), (3100, false));
-    assert_eq!(o.path, None);
-    assert_eq!(o.host, "127.0.0.1");
-    assert!(o.allow_origins.is_empty());
-    // Port + doc.
-    let o = parse(&["3100", "/tmp/d.op"]).expect("port+doc");
-    assert_eq!(o.port, 3100);
-    assert_eq!(o.path.as_deref(), Some(std::path::Path::new("/tmp/d.op")));
-    assert_eq!(o.host, "127.0.0.1");
-    // `--host` in both spellings, before or after the doc.
-    let o = parse(&["3100", "--host", "0.0.0.0", "/tmp/d.op"]).expect("host then doc");
-    assert_eq!(o.port, 3100);
-    assert_eq!(o.path.as_deref(), Some(std::path::Path::new("/tmp/d.op")));
-    assert_eq!(o.host, "0.0.0.0");
-    let o = parse(&["3100", "/tmp/d.op", "--host=0.0.0.0"]).expect("doc then host=");
-    assert_eq!(o.port, 3100);
-    assert_eq!(o.path.as_deref(), Some(std::path::Path::new("/tmp/d.op")));
-    assert_eq!(o.host, "0.0.0.0");
-    // Malformed shapes are rejected with a message, not silently dropped.
-    assert!(parse(&[]).is_err(), "missing port");
-    assert!(parse(&["nope"]).is_err(), "non-numeric port");
-    assert!(parse(&["3100", "--host"]).is_err(), "--host without value");
-    assert!(parse(&["3100", "a.op", "b.op"]).is_err(), "two docs");
-}
-
-#[test]
-fn parse_serve_web_args_legacy_positional_unchanged() {
-    let o = parse_serve_web_args(vec!["3100".into(), "doc.op".into()].into_iter()).unwrap();
-    assert_eq!((o.port, o.managed), (3100, false));
-    assert_eq!(o.path.as_deref(), Some(std::path::Path::new("doc.op")));
-    assert_eq!(o.host, "127.0.0.1");
-}
-
-#[test]
-fn parse_serve_web_args_managed_flag_form() {
-    let o = parse_serve_web_args(
-        vec![
-            "--managed".into(),
-            "--port".into(),
-            "0".into(),
-            "--file".into(),
-            "a.op".into(),
-            "--allow-origin".into(),
-            "vscode-webview://x".into(),
-            "--allow-origin".into(),
-            "vscode-webview://y".into(),
-        ]
-        .into_iter(),
-    )
-    .unwrap();
-    assert!(o.managed);
-    assert_eq!(o.port, 0);
-    assert_eq!(o.path.as_deref(), Some(std::path::Path::new("a.op")));
-    assert_eq!(o.allow_origins.len(), 2);
-}
-
-#[test]
-fn handshake_line_is_single_line_json() {
-    let line = handshake_json(41234, "aabbccdd00112233aabbccdd00112233");
-    assert!(!line.contains('\n'));
-    assert!(line.contains(r#""port":41234"#));
-    assert!(line.contains(r#""token":"aabbccdd00112233aabbccdd00112233""#));
-}
-
-#[test]
-fn indicators_endpoint_serves_parseable_relay_json() {
-    let mut s = WebCanvasState::new(EditorState::starter(), 3100);
-
-    let r = handle_web_canvas_request("GET", "/api/mcp/indicators", "", &mut s);
-
-    assert!(r.status.starts_with("200"), "{}", r.body);
-    let remote = op_editor_core::agent_indicators::parse_relay_json(&r.body)
-        .expect("relay body parses back through the browser-side parser");
-    // No design run in this test process — idle registry relays as such.
-    assert!(!remote.run_active);
-}
-
-// --- serve_one layer: managed token auth + CORS allowlist enforcement ---
-
-#[test]
-fn managed_auth_gates_by_method_and_path() {
-    let auth = RequestAuth {
-        managed: true,
-        token: "tok123".into(),
-    };
-    assert!(auth.allows("GET", "/", None)); // static shell
-    assert!(auth.allows("GET", "/index.html", None));
-    assert!(auth.allows("GET", "/pkg/op_host_web.js", None));
-    assert!(auth.allows("GET", "/canvaskit/canvaskit.wasm", None)); // editor can't boot without
-    assert!(auth.allows("GET", "/assets/iconify-catalog-brands.json", None));
-    assert!(auth.allows("GET", "/smoke/step-1b.html", None));
-    assert!(auth.allows("OPTIONS", "/api/mcp/document", None)); // preflight
-    assert!(!auth.allows("POST", "/", None)); // JSON-RPC alias: privileged
-    assert!(!auth.allows("GET", "/api/mcp/events", None)); // SSE: privileged
-    assert!(!auth.allows("POST", "/mcp", Some("wrong")));
-    assert!(auth.allows("POST", "/mcp", Some("tok123")));
-}
-
-#[test]
-fn unmanaged_mode_keeps_open_behavior() {
-    let auth = RequestAuth {
-        managed: false,
-        token: String::new(),
-    };
-    assert!(auth.allows("POST", "/api/mcp/document", None));
-}
-
-#[test]
-fn cors_echoes_only_allowlisted_origin() {
-    let allow = vec!["vscode-webview://abc".to_string()];
-    assert_eq!(
-        cors_origin_for(&allow, Some("vscode-webview://abc")).as_deref(),
-        Some("vscode-webview://abc")
-    );
-    assert_eq!(cors_origin_for(&allow, Some("http://evil.local")), None);
-    assert_eq!(cors_origin_for(&allow, None), None);
-}
-
-#[path = "web_canvas_server_sse_tests.rs"]
-mod sse_tests;
+/// Route fall-through / shutdown-auth / argv-parsing cases, nested here for
+/// the same reason `sse_tests` is: `use super::*` keeps reaching the mock
+/// stream and the `serve` helpers.
+#[path = "web_canvas_server_args_tests.rs"]
+mod args_tests;

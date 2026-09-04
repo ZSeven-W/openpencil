@@ -55,6 +55,7 @@ new_fixture() {
         "$fixture_root/crates/op-editor-ui/src" \
         "$fixture_root/crates/op-host-native/src" \
         "$fixture_root/crates/op-host-desktop/src" \
+        "$fixture_root/crates/op-chat-agent/src" \
         "$fixture_root/crates/op-collab-host/src/runtime/network" \
         "$fixture_root/crates/op-host-services/src" \
         "$fixture_root/crates/op-i18n/src" \
@@ -756,11 +757,17 @@ EOF
 pub fn public_https_client() {}
 EOF
 
-    cat > "$fixture_root/crates/op-host-services/src/provider_dial.rs" <<'EOF'
-fn pinned_client() {
-    let _ = ".no_proxy()";
-    let _ = ".resolve_to_addrs";
+    cat > "$fixture_root/crates/op-chat-agent/src/provider_dial.rs" <<'EOF'
+fn pinned_client(builder: reqwest::ClientBuilder, host: &str, addrs: &[SocketAddr]) {
+    let _client = builder
+        .no_proxy()
+        .resolve_to_addrs(host, addrs)
+        .build();
 }
+EOF
+
+    cat > "$fixture_root/crates/op-host-services/src/provider_dial.rs" <<'EOF'
+pub(crate) use op_chat_agent::provider_dial::client_for;
 EOF
 
     cat > "$fixture_root/crates/op-host-services/src/web_credentials.rs" <<'EOF'

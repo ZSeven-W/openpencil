@@ -1,0 +1,20 @@
+id: landing-profile-hero
+category: landing
+difficulty: obvious
+prompt: |
+  Design ONLY a profile-page hero block — vertically stacked, centered,
+  fills container width. Top to bottom:
+    - 96px circular avatar (blue background, white centered "SL" initial)
+    - bold slate-900 22/700 display name "Sarah Lee"
+    - muted slate-500 14/400 handle "@sarah"
+    - slate-600 14/400 multi-line bio "Designer at Acme. Cat-mom of two."
+  12px gap between elements, 24px top/bottom padding. Do NOT render the
+  page chrome, follower count, or action buttons — just the hero block.
+expected:
+  must_contain_roles:
+    - profile-header
+    - profile-header-avatar
+    - profile-header-name
+    - profile-header-handle
+    - profile-header-bio
+expected_tool_if_any: add_profile_header_v0

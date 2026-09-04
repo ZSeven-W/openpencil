@@ -80,7 +80,9 @@ fn settings_content_metrics(rect: Rect) -> (f32, f32, f32) {
 }
 
 fn codex_mcp_row_rect(rect: Rect) -> Rect {
-    let codex_idx = McpCli::ALL
+    // Rows are painted in `McpCli::DISPLAY` order, so the row index is the
+    // position in DISPLAY, not in ALL.
+    let codex_idx = McpCli::DISPLAY
         .iter()
         .position(|cli| *cli == McpCli::Codex)
         .unwrap();
@@ -154,6 +156,9 @@ fn first_builtin_row_offset() -> f32 {
 fn mcp_client_config_copy_rect(rect: Rect) -> Rect {
     super::agent_settings_mcp::client_config_copy_button_rect(
         crate::widgets::agent_settings_panel::content_viewport(rect),
+        // Every state in this file is `EditorState::default()`, whose
+        // `external_cli_available` is the desktop default.
+        true,
     )
 }
 

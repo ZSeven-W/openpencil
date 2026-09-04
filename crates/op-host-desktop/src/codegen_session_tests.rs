@@ -133,7 +133,7 @@ fn pump_after_cancel_drops_progress_and_terminal_deltas() {
         rx,
         finished: false,
         framework: Framework::React,
-        document_identity: (0, 0),
+        document_identity: (0, 0, 0),
         selection_snapshot: Vec::new(),
         model: None,
         cancel: Arc::new(AtomicBool::new(false)),
@@ -299,6 +299,50 @@ fn pump_drops_terminal_delta_after_live_document_replacement() {
     );
 }
 
+#[test]
+fn pump_drops_late_done_after_remote_commit_preserves_document_generation() {
+    let mut host = WidgetHostNative::new();
+    let launched_identity = document_identity(&host);
+    let host_epoch = host.document_epoch();
+    let document_generation = host.editor_state().document_generation();
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    tx.send(CodegenDelta::Done {
+        code: "pre-commit code".into(),
+        degraded: false,
+        assets: Vec::new(),
+    })
+    .expect("queue old completion");
+    drop(tx);
+    let mut current = Some(CodegenSession {
+        rx,
+        finished: false,
+        framework: Framework::React,
+        document_identity: launched_identity,
+        selection_snapshot: Vec::new(),
+        model: None,
+        cancel: Arc::new(AtomicBool::new(false)),
+        run_epoch: 1,
+    });
+    let mut results = CodegenResults::default();
+
+    let remote = host.editor_state().doc.clone();
+    host.editor_state_mut()
+        .install_verified_document(remote, op_editor_core::EditOrigin::RemoteCommit)
+        .expect("remote commit installs");
+    assert_eq!(host.document_epoch(), host_epoch);
+    assert_eq!(
+        host.editor_state().document_generation(),
+        document_generation
+    );
+    assert_ne!(document_identity(&host), launched_identity);
+
+    assert!(!pump(&mut host, &mut current, &mut results));
+    assert!(current.is_none());
+    assert!(host.editor_state().codegen.code.is_empty());
+    assert!(results.is_empty());
+}
+
 /// A LIVE in-flight run blocks a new launch; a canceled one does not —
 /// the pending Generate proceeds (TS: cancel + regenerate immediately).
 #[test]
@@ -319,7 +363,7 @@ fn launch_blocked_by_live_run_but_not_by_canceled_run() {
         rx: rx_live,
         finished: false,
         framework: Framework::React,
-        document_identity: (0, 0),
+        document_identity: (0, 0, 0),
         selection_snapshot: Vec::new(),
         model: None,
         cancel: Arc::new(AtomicBool::new(false)),
@@ -407,6 +451,26 @@ fn start_allocates_monotonic_run_epochs() {
     s1.cancel();
     assert!(s1.is_canceled());
     assert!(!s2.is_canceled(), "cancel flags are per-run");
+}
+
+#[test]
+fn dropping_a_session_raises_its_worker_cancel_token() {
+    let (_tx, rx) = std::sync::mpsc::channel();
+    let cancel = Arc::new(AtomicBool::new(false));
+    {
+        let _session = CodegenSession {
+            rx,
+            finished: false,
+            framework: Framework::React,
+            document_identity: (0, 0, 0),
+            selection_snapshot: Vec::new(),
+            model: None,
+            cancel: Arc::clone(&cancel),
+            run_epoch: 1,
+        };
+        assert!(!cancel.load(Ordering::Relaxed));
+    }
+    assert!(cancel.load(Ordering::Relaxed));
 }
 
 fn test_input() -> CodegenInput {

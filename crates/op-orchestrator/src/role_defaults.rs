@@ -20,6 +20,7 @@ use serde_json::{json, Value};
 pub enum Theme {
     Light,
     Dark,
+    Unknown, // Unresolved token or unparseable hex — abstain from heuristics
 }
 
 /// Context threaded down the tree walk (port of `RoleContext`).
@@ -108,17 +109,19 @@ fn pad2(v: f64, h: f64) -> Value {
 // ── theme detection (port of detectThemeFromNode) ───────────────────────────
 
 /// Detect light/dark from a node's first solid fill (luminance < 0.3 = dark).
+/// Returns `Unknown` when the input is an unresolved token or unparseable hex so
+/// heuristics that require certainty (like fix_invisible_text_band) can abstain.
 /// Pass the PAGE ROOT — a dark page's card has no fill of its own.
 pub fn detect_theme_from_fill(fill: Option<&str>) -> Theme {
     let Some(color) = fill else {
-        return Theme::Light;
+        return Theme::Unknown; // no fill — can't tell
     };
     let c = color.trim();
     if c.starts_with('$') {
-        return Theme::Light; // unresolved ref — can't tell
+        return Theme::Unknown; // unresolved ref — can't tell
     }
     let Some((r, g, b)) = parse_hex_rgb(c) else {
-        return Theme::Light;
+        return Theme::Unknown; // unparseable hex — can't tell
     };
     // sRGB → WCAG relative luminance.
     let lin = |v: u8| {

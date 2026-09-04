@@ -2,9 +2,9 @@
 //!
 //! Mirrors `apps/web/src/components/editor/top-bar.tsx` file menu
 //! verbatim: New / Open / Save / Save As / Export image, then a
-//! "Recent files" header + entries, finally Clear history. Two more
-//! rows can appear under Export image, each gated on a host capability
-//! flag: a whole frame set at once
+//! "Recent files" header + entries, finally Clear history. Desktop hosts
+//! can insert Save As Template after Save As. Two more rows can appear
+//! under Export image, each gated on a host capability flag: a whole frame set at once
 //! (`EditorUiState::batch_frame_export_supported`) and, on a deck
 //! document, the self-contained slideshow page
 //! (`EditorUiState::deck_html_export_supported`, which gates the whole
@@ -32,6 +32,7 @@ fn t(ui: &EditorUiState, key: &str) -> &'static str {
         "open" => "fileMenu.openFile",
         "save" => "fileMenu.save",
         "saveAs" => "fileMenu.saveAs",
+        "saveAsTemplate" => "menu.saveAsTemplate",
         "exportImage" => "fileMenu.exportImage",
         "exportAllFrames" => "fileMenu.exportAllFrames",
         "exportSlideshowHtml" => "fileMenu.exportSlideshowHtml",
@@ -41,7 +42,7 @@ fn t(ui: &EditorUiState, key: &str) -> &'static str {
         "clearHistory" => "fileMenu.clearHistory",
         _ => return "",
     };
-    let translated = op_i18n::translate(ui.locale, full);
+    let translated = op_i18n::translate(ui.effective_locale(), full);
     if translated == full {
         // A key that is not in the catalogue yet must not surface as
         // "fileMenu.newFromTemplate" in the menu.
@@ -81,6 +82,8 @@ pub enum FileMenuChoice {
     OpenFile,
     Save,
     SaveAs,
+    /// Persist the current document into the desktop user's template library.
+    SaveAsTemplate,
     ExportImage,
     /// Export every top-level frame of the active page (or just the
     /// selected frames) as one PNG each. Only offered by hosts that set
@@ -162,6 +165,10 @@ impl<'a> FileMenu<'a> {
         export_menu_rows::batch_frame_export_available(self.ui)
     }
 
+    fn has_save_as_template_row(&self) -> bool {
+        self.ui.scene_template_center.save_current_supported
+    }
+
     /// Whether the deck-export rows are offered — same predicate the
     /// TopBar quick menu gates its deck rows on.
     fn has_deck_export_rows(&self) -> bool {
@@ -178,7 +185,7 @@ impl<'a> FileMenu<'a> {
     /// export rows precede it. Only meaningful when
     /// [`FileMenu::has_deck_export_rows`] holds.
     fn deck_html_row(&self) -> usize {
-        6 + usize::from(self.has_export_all_row())
+        6 + usize::from(self.has_save_as_template_row()) + usize::from(self.has_export_all_row())
     }
 
     /// Row index of the PowerPoint row, directly under the slideshow one.
@@ -189,14 +196,14 @@ impl<'a> FileMenu<'a> {
     /// Row index of the first recent-file entry. Everything after the
     /// export section shifts with [`FileMenu::export_rows`].
     fn recent_row_start(&self) -> usize {
-        5 + self.export_rows()
+        5 + usize::from(self.has_save_as_template_row()) + self.export_rows()
     }
 
     /// Label for the batch-export row: naming the selected frames when
     /// the selection would narrow the scope, else "all frames".
     fn export_all_label(&self) -> String {
         if self.selected_frames >= 2 {
-            op_i18n::translate(self.ui.locale, "fileMenu.exportSelectedFrames")
+            op_i18n::translate(self.ui.effective_locale(), "fileMenu.exportSelectedFrames")
                 .replace("{{count}}", &self.selected_frames.to_string())
                 .trim_end_matches(['.', '…'])
                 .to_string()
@@ -211,7 +218,7 @@ impl<'a> FileMenu<'a> {
         let mut h = PAD_Y;
         h += ROW_HEIGHT * 3.0; // New + New from template + Open
         h += DIVIDER_GAP * 2.0 + 1.0; // divider
-        h += ROW_HEIGHT * 2.0; // Save + Save As
+        h += ROW_HEIGHT * (2 + usize::from(self.has_save_as_template_row())) as f32;
         h += DIVIDER_GAP * 2.0 + 1.0;
         h += ROW_HEIGHT * self.export_rows() as f32; // Export image (+ all frames)
         h += DIVIDER_GAP * 2.0 + 1.0;
@@ -250,8 +257,15 @@ impl<'a> FileMenu<'a> {
             2 => Some(FileMenuChoice::OpenFile),
             3 => Some(FileMenuChoice::Save),
             4 => Some(FileMenuChoice::SaveAs),
-            5 => Some(FileMenuChoice::ExportImage),
-            6 if self.has_export_all_row() => Some(FileMenuChoice::ExportAllFrames),
+            5 if self.has_save_as_template_row() => Some(FileMenuChoice::SaveAsTemplate),
+            row if row == 5 + usize::from(self.has_save_as_template_row()) => {
+                Some(FileMenuChoice::ExportImage)
+            }
+            row if self.has_export_all_row()
+                && row == 6 + usize::from(self.has_save_as_template_row()) =>
+            {
+                Some(FileMenuChoice::ExportAllFrames)
+            }
             row if self.has_deck_export_rows() && row == self.deck_html_row() => {
                 Some(FileMenuChoice::ExportSlideshowHtml)
             }
@@ -282,7 +296,7 @@ impl<'a> FileMenu<'a> {
             row += 1;
         }
         y += DIVIDER_GAP * 2.0 + 1.0;
-        for _ in 0..2 {
+        for _ in 0..2 + usize::from(self.has_save_as_template_row()) {
             if row_hit(panel.origin.x, y, point) {
                 return MenuHit::Row(row);
             }
@@ -386,7 +400,7 @@ fn file_name(path: &str) -> String {
 }
 
 fn format_age(ui: &EditorUiState, elapsed_secs: u64) -> String {
-    let locale = ui.locale;
+    let locale = ui.effective_locale();
     if elapsed_secs < 60 {
         op_i18n::translate(locale, "fileMenu.justNow").to_string()
     } else if elapsed_secs < 3600 {

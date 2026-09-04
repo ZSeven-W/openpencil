@@ -109,6 +109,7 @@ pub(super) fn apply(plan: &mut OrchestratorPlan, req: &DesignRequest) -> bool {
                 },
                 id_prefix: id,
                 parent_frame_id: None,
+                insert_after_sibling_id: None,
                 elements: Some(format!(
                     "the complete {screen_name} screen, continuing the existing product; reuse its established design system and shared navigation"
                 )),

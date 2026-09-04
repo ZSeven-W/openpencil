@@ -57,6 +57,7 @@ pub(crate) fn normalize_node_shape(value: &mut serde_json::Value) {
     normalize_image_src(obj);
     normalize_text_growth(obj);
     normalize_text_align(obj);
+    normalize_text_content(obj);
     normalize_sizing_keyword(obj, "width");
     normalize_sizing_keyword(obj, "height");
     if let Some(serde_json::Value::Array(children)) = obj.get_mut("children") {
@@ -324,6 +325,27 @@ fn normalize_text_align(obj: &mut serde_json::Map<String, serde_json::Value>) {
     };
     *value = normalized.to_string();
 }
+
+/// Text node `content` must be a string or a styled-text-segment array. A weak
+/// model occasionally writes a JSON number (`2024`, `8.5`) as the content, which
+/// deserializes as neither and fails the whole text node. Coerce numbers to their
+/// string form (`2024` → `"2024"`, `8.5` → `"8.5"`). Booleans and null are left
+/// untouched so the schema can reject them properly.
+fn normalize_text_content(obj: &mut serde_json::Map<String, serde_json::Value>) {
+    if obj.get("type").and_then(serde_json::Value::as_str) != Some("text") {
+        return;
+    }
+    let Some(content) = obj.get_mut("content") else {
+        return;
+    };
+    if let serde_json::Value::Number(num) = content {
+        *content = serde_json::Value::String(num.to_string());
+    }
+}
+
+#[cfg(test)]
+#[path = "batch_design_normalize_tests.rs"]
+mod tests;
 
 fn normalize_layout_keyword(obj: &mut serde_json::Map<String, serde_json::Value>, key: &str) {
     let Some(serde_json::Value::String(value)) = obj.get_mut(key) else {

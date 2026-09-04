@@ -65,9 +65,40 @@ fn the_online_tool_catalog_omits_every_local_resource_tool() {
         );
     }
     // The in-memory catalog is still there — this is a filter, not a shutdown.
-    for kept in ["get_node", "add_page", "insert_node", "batch_design"] {
+    for kept in [
+        "get_node",
+        "add_page",
+        "insert_node",
+        "batch_design",
+        "list_scene_templates",
+        "use_scene_template",
+    ] {
         assert!(names.contains(&kept), "{kept} must still be offered");
     }
+}
+
+#[test]
+fn online_tool_search_cannot_rediscover_hidden_local_tools() {
+    let payload = mcp(
+        &registry(),
+        &verifier(),
+        "tokA",
+        &mcp_call(
+            "ToolSearch",
+            r#"{"query":"select:save_document,get_node","max_results":11}"#,
+        ),
+    );
+    assert_ne!(payload["result"]["isError"], true, "{payload}");
+
+    let result: serde_json::Value =
+        serde_json::from_str(&call_text(&payload)).expect("ToolSearch result JSON");
+    let names: Vec<&str> = result["results"]
+        .as_array()
+        .expect("results array")
+        .iter()
+        .filter_map(|entry| entry["name"].as_str())
+        .collect();
+    assert_eq!(names, ["get_node"], "{result}");
 }
 
 #[test]

@@ -152,6 +152,9 @@ pub(super) fn serve_connection<S: std::io::Read + std::io::Write>(
         );
     }
     if req.method == "OPTIONS" {
+        if design_md_route::is_design_md_path(&req.path) {
+            return design_md_route::write_preflight(stream, cors_origin);
+        }
         // The preflight is scoped exactly like the request it precedes: a
         // browser only proceeds when the reply names ITS origin, so this is
         // what stops a non-accepted extension from reaching the ingress.
@@ -170,9 +173,16 @@ pub(super) fn serve_connection<S: std::io::Read + std::io::Write>(
         // REST route answers `{ok,error}`, not JSON-RPC.
         return serve_document_sync(stream, req_tx, wake_ui, stateful_lock, &req.body);
     }
+    // Content-free design-token evidence from the Chrome extension. This
+    // route queues an asynchronous LLM request only; it never snapshots or
+    // mutates the live document and therefore does not take `stateful_lock`.
+    if design_md_route::is_design_md_path(&req.path) {
+        return design_md_route::serve_design_md(stream, req_tx, wake_ui, &req, cors_origin);
+    }
     // Insert-only browser-extension ingress (`POST /api/import/web-snapshot`).
-    // Deliberately ahead of the token gate — see `snapshot_ingest` for why
-    // this one route is untokened and what that does (and does not) grant.
+    // Deliberately before the general `/mcp` router — see `snapshot_ingest`
+    // for why this one route accepts an extension origin and what that does
+    // (and does not) grant.
     if snapshot_ingest::is_snapshot_ingest_route(&req.method, &req.path) {
         return snapshot_ingest::serve_snapshot_ingest(
             stream,

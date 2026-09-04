@@ -118,6 +118,7 @@ impl DesktopApp {
             self.chat_running_tab = op_editor_core::adjust_running_tab_after_close(running, idx);
         }
         self.host.editor_state_mut().chat.close_tab(idx);
+        self.host.editor_state_mut().rebuild_chat_models();
         // Session set mutated (possibly same-index replacement): rotate the
         // transcript-cache owner so a pre-repaint cursor hint can't pair the
         // closed session's cached geometry with the survivor's messages.
@@ -148,9 +149,53 @@ impl DesktopApp {
     /// tab while the user composes in the new one.
     pub(crate) fn new_chat_tab(&mut self) {
         self.host.editor_state_mut().chat.new_tab();
+        self.host.editor_state_mut().rebuild_chat_models();
         // New active session: rotate the transcript-cache owner so the
         // event-time cursor hint reads `None` until this tab's first paint.
         self.host.force_rotate_chat_owner();
         self.host.mark_editor_state_dirty();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn closing_active_tab_reconciles_the_survivors_model_rows() {
+        let mut app = DesktopApp::new(None);
+        let state = app.host.editor_state_mut();
+        state.editor_ui.agent_settings.builtin_agents.clear();
+        state.rebuild_chat_models();
+        let id = state.editor_ui.agent_settings.add_builtin_agent_config(
+            "Provider",
+            "sk-new",
+            "current-model",
+            op_editor_core::BuiltinAgentKind::OpenAiCompat,
+            "https://example.test/v1",
+        );
+        state.chat.available_models = vec![op_editor_core::ModelEntry::builtin(
+            op_editor_core::AgentProvider::CodexCli,
+            id.clone(),
+            format!("builtin:{id}:old-private-model"),
+            "Old private model",
+        )];
+        state.chat.new_tab();
+        assert_eq!(state.chat.active_index(), 1);
+
+        app.close_chat_tab(1);
+
+        let state = app.host.editor_state();
+        assert_eq!(state.chat.active_index(), 0);
+        assert!(state
+            .chat
+            .available_models
+            .iter()
+            .any(|entry| entry.builtin_model_id() == Some("current-model")));
+        assert!(!state
+            .chat
+            .available_models
+            .iter()
+            .any(|entry| entry.builtin_model_id() == Some("old-private-model")));
     }
 }

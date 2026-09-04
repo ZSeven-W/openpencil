@@ -121,6 +121,7 @@
         prebuiltDesktopRuntimeLibraries =
           runtimeLibraries
           ++ [
+            pkgs.openssl
             pkgs.zlib
             pkgs.stdenv.cc.cc.lib
           ];
@@ -182,6 +183,7 @@
         nativePackage = craneLib.buildPackage (commonArgs
           // {
             pname = "openpencil-native";
+            buildInputs = commonArgs.buildInputs ++ [pkgs.openssl];
             cargoBuildCommand = "cargo build --release --package op-host-desktop --package op-cli --package op-host-web-server";
             installPhase = ''
               runHook preInstall
@@ -383,13 +385,18 @@
           postInstallNormalize = ''
             rm -f packages/node_modules/.bun/node_modules/{string-width,strip-ansi,wrap-ansi}
           '';
-          hash = "sha256-jaGVEagUeYrM2MzjUPvvzIF7DJwafLXJiWLWtts38SI=";
+          hash = "sha256-aY3Nr1+a1o7TojefRcozmntbdfrF2JRtOrRY8Hqs8rE=";
         };
         webSdkPackages = pkgs.stdenvNoCC.mkDerivation {
           pname = "openpencil-web-sdk-packages";
           inherit version;
           src = source;
-          nativeBuildInputs = [bunToolchain.bun pkgs.coreutils pkgs.nodejs];
+          # nodejs_22 (LTS), not pkgs.nodejs: vitest's tinypool 1.x crashes on
+          # teardown under Node >= 23 ("emitter.removeListener is not a
+          # function" after every test passed), which failed this check on
+          # 2026-08-28 twice with all 4 SDK tests green. The wasm derivations
+          # keep pkgs.nodejs — only the vitest runner needs the pin.
+          nativeBuildInputs = [bunToolchain.bun pkgs.coreutils pkgs.nodejs_22];
           buildPhase = ''
             runHook preBuild
             rm -rf packages/node_modules packages/op-web-sdk/wasm
@@ -402,7 +409,7 @@
             patchShebangs packages/node_modules
             find packages/node_modules -type f -exec sed -i \
               -e 's|^#!/usr/bin/env bun$|#!${bunToolchain.bun}/bin/bun|' \
-              -e 's|^#!/usr/bin/env node$|#!${pkgs.nodejs}/bin/node|' {} +
+              -e 's|^#!/usr/bin/env node$|#!${pkgs.nodejs_22}/bin/node|' {} +
             mkdir -p packages/op-web-sdk/wasm
             cp -R ${webSdkWasm}/. packages/op-web-sdk/wasm/
             bun run --cwd packages sync-version:check
@@ -604,7 +611,7 @@
             pkgs.chromium
           ];
           nativeBuildInputs = rustNativeInputs;
-          buildInputs = nativeLibraries;
+          buildInputs = nativeLibraries ++ [pkgs.openssl];
           env = nativeEnv;
         };
 

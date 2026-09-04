@@ -20,73 +20,28 @@ use std::sync::Arc;
 use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest};
 #[cfg(test)]
 use op_codegen::ai::types::CodegenInput;
-use op_editor_core::codegen::Framework;
+#[cfg(test)]
 use op_editor_host_core::codegen::framework_ext;
 #[cfg(test)]
 use op_editor_host_core::codegen_session::run_pipeline;
-pub use op_editor_host_core::codegen_session::{CodegenDelta, CodegenResult, CodegenSession};
+use op_editor_host_core::codegen_session::{
+    drain_codegen_cancel_state, pump_codegen_state, retire_stale_codegen_session,
+};
+#[cfg(test)]
+pub use op_editor_host_core::codegen_session::{CodegenDelta, CodegenResult};
+pub use op_editor_host_core::codegen_session::{
+    CodegenDocumentIdentity, CodegenResults, CodegenSession,
+};
 use op_host_native::WidgetHostNative;
 
 use crate::chat_session::{provider_for_selected_model, selected_cli_model_id};
-
-pub type CodegenDocumentIdentity = (u64, u64);
 
 pub fn document_identity(host: &WidgetHostNative) -> CodegenDocumentIdentity {
     (
         host.document_epoch(),
         host.editor_state().document_generation(),
+        host.editor_state().codegen.document_reset_epoch(),
     )
-}
-
-/// Completed generation payloads keyed by the framework captured when each
-/// run launched. Raw asset bytes stay host-side, but switching framework tabs
-/// must not replace another framework's downloadable result.
-#[derive(Default)]
-pub struct CodegenResults {
-    document_identity: Option<CodegenDocumentIdentity>,
-    entries: Vec<(Framework, CodegenResult)>,
-}
-
-impl CodegenResults {
-    pub fn insert(
-        &mut self,
-        document_identity: CodegenDocumentIdentity,
-        framework: Framework,
-        result: CodegenResult,
-    ) {
-        if self.document_identity != Some(document_identity) {
-            self.document_identity = Some(document_identity);
-            self.entries.clear();
-        }
-        if let Some((_, cached)) = self
-            .entries
-            .iter_mut()
-            .find(|(cached_framework, _)| *cached_framework == framework)
-        {
-            *cached = result;
-        } else {
-            self.entries.push((framework, result));
-        }
-    }
-
-    pub fn get(
-        &self,
-        document_identity: CodegenDocumentIdentity,
-        framework: Framework,
-    ) -> Option<&CodegenResult> {
-        if self.document_identity != Some(document_identity) {
-            return None;
-        }
-        self.entries
-            .iter()
-            .find(|(cached_framework, _)| *cached_framework == framework)
-            .map(|(_, result)| result)
-    }
-
-    #[cfg(test)]
-    fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
 }
 
 /// Pump the in-flight generation's deltas into `editor_state.codegen`.
@@ -98,119 +53,15 @@ pub fn pump(
     current: &mut Option<CodegenSession>,
     results: &mut CodegenResults,
 ) -> bool {
-    let Some(session) = current.as_mut() else {
-        return false;
-    };
-    if session.document_identity != document_identity(host) {
-        // A whole-document replacement superseded this run. Dropping the
-        // receiver plus raising the shared cancel token stops the worker and
-        // guarantees that none of its queued progress/terminal deltas can
-        // mutate or become downloadable from the replacement document.
-        session.cancel();
-        *current = None;
-        return false;
-    }
-    if session.is_canceled() {
-        // Canceled run: drop EVERY delta (Progress would otherwise flip
-        // the phase back to Generating and a late Done / Failed would
-        // overwrite the canceled UI state). Terminal events / disconnect
-        // only retire the session.
-        loop {
-            match session.rx.try_recv() {
-                Ok(CodegenDelta::Progress(_)) => {}
-                Ok(CodegenDelta::Done { .. }) | Ok(CodegenDelta::Failed(_)) => {
-                    session.finished = true;
-                }
-                Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                    session.finished = true;
-                    break;
-                }
-            }
-        }
-        if session.finished {
-            *current = None;
-        }
-        return false;
-    }
-    let mut changed = false;
-    loop {
-        match session.rx.try_recv() {
-            Ok(CodegenDelta::Progress(p)) => {
-                let cg = &mut host.editor_state_mut().codegen;
-                cg.progress = p;
-                cg.phase = op_editor_core::codegen::CodegenPhase::Generating;
-                changed = true;
-            }
-            Ok(CodegenDelta::Done {
-                code,
-                degraded,
-                assets,
-            }) => {
-                let selection_snapshot = std::mem::take(&mut session.selection_snapshot);
-                let metas = assets
-                    .iter()
-                    .map(|a| op_editor_core::codegen::AssetMeta {
-                        relative_path: a.relative_path.clone(),
-                        byte_len: a.bytes.len(),
-                    })
-                    .collect();
-                {
-                    let cg = &mut host.editor_state_mut().codegen;
-                    cg.code = code.clone();
-                    cg.code_scroll.offset = 0.0;
-                    cg.code_selection = None;
-                    cg.degraded = degraded;
-                    cg.assets = metas;
-                    cg.selection_snapshot = selection_snapshot;
-                    cg.phase = op_editor_core::codegen::CodegenPhase::Complete;
-                    cg.pending_generate = false;
-                    cg.pending_regenerate = false;
-                }
-                results.insert(
-                    session.document_identity,
-                    session.framework,
-                    CodegenResult {
-                        code,
-                        framework_ext: framework_ext(session.framework).into(),
-                        assets,
-                    },
-                );
-                session.finished = true;
-                changed = true;
-            }
-            Ok(CodegenDelta::Failed(e)) => {
-                let cg = &mut host.editor_state_mut().codegen;
-                cg.error = Some(e);
-                cg.phase = op_editor_core::codegen::CodegenPhase::Error;
-                cg.pending_generate = false;
-                cg.pending_regenerate = false;
-                session.finished = true;
-                changed = true;
-            }
-            Err(std::sync::mpsc::TryRecvError::Empty) => break,
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                // The worker dropped its sender without a terminal Done/Failed
-                // (e.g. an unexpected early exit). Surface an error rather than
-                // leaving the UI stuck in `Generating` with no live session.
-                if !session.finished {
-                    let cg = &mut host.editor_state_mut().codegen;
-                    cg.error = Some("Code generation ended unexpectedly".into());
-                    cg.phase = op_editor_core::codegen::CodegenPhase::Error;
-                    cg.pending_generate = false;
-                    cg.pending_regenerate = false;
-                    changed = true;
-                }
-                session.finished = true;
-                break;
-            }
-        }
-    }
+    let live_identity = document_identity(host);
+    let changed = pump_codegen_state(
+        &mut host.editor_state_mut().codegen,
+        live_identity,
+        current,
+        results,
+    );
     if changed {
         host.mark_editor_state_dirty();
-    }
-    if session.finished {
-        *current = None;
     }
     changed
 }
@@ -226,14 +77,7 @@ pub fn launch_codegen_if_pending(
     current: &mut Option<CodegenSession>,
 ) -> bool {
     let live_document_identity = document_identity(host);
-    if current
-        .as_ref()
-        .is_some_and(|session| session.document_identity != live_document_identity)
-    {
-        if let Some(stale) = current.take() {
-            stale.cancel();
-        }
-    }
+    retire_stale_codegen_session(current, live_document_identity);
     // A LIVE run blocks a new launch; a canceled run still draining its
     // dropped deltas does not — the fresh run replaces it (and gets a
     // strictly larger run epoch), TS parity: cancel + regenerate is
@@ -282,17 +126,22 @@ pub fn launch_codegen_if_pending(
         .iter()
         .map(|id| id.as_str().to_string())
         .collect();
-    {
-        let cg = &mut host.editor_state_mut().codegen;
-        cg.progress = Default::default();
-        cg.error = None;
-        cg.phase = op_editor_core::codegen::CodegenPhase::Generating;
-    }
-    *current = Some(
-        CodegenSession::start_with_model(provider, input, framework, model)
+    let session = match CodegenSession::try_start_with_model(provider, input, framework, model) {
+        Ok(session) => session
             .with_document_identity(live_document_identity)
             .with_selection_snapshot(selection_snapshot),
-    );
+        Err(error) => {
+            let cg = &mut host.editor_state_mut().codegen;
+            cg.error = Some(error.to_string());
+            cg.phase = op_editor_core::codegen::CodegenPhase::Error;
+            return true;
+        }
+    };
+    let cg = &mut host.editor_state_mut().codegen;
+    cg.progress = Default::default();
+    cg.error = None;
+    cg.phase = op_editor_core::codegen::CodegenPhase::Generating;
+    *current = Some(session);
     true
 }
 
@@ -346,11 +195,8 @@ pub fn drain_codegen_cancel_request(
     host: &mut WidgetHostNative,
     current: &mut Option<CodegenSession>,
 ) -> bool {
-    if !std::mem::take(&mut host.editor_state_mut().codegen.pending_cancel) {
+    if !drain_codegen_cancel_state(&mut host.editor_state_mut().codegen, current) {
         return false;
-    }
-    if let Some(session) = current.as_ref() {
-        session.cancel();
     }
     host.mark_editor_state_dirty();
     true

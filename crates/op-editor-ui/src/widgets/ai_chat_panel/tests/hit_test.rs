@@ -52,6 +52,52 @@ fn no_model_still_allows_quick_action_cards() {
     assert_eq!(panel.example_hover_at(rect, p), Some(0));
 }
 
+/// Keyboard-shrunk compact sheet: a pill whose rect would run under the
+/// bottom-anchored composer is dropped from hover and click hit-testing,
+/// matching paint (which drops it too instead of overlapping the composer).
+#[test]
+fn short_panel_drops_occluded_example_pills_from_hit_testing() {
+    let s = EditorState::new();
+    let panel = AIChatPlaceholder::from_editor(&s);
+    // Short rect — like the compact AI sheet with the software keyboard up:
+    // the raw pill stack runs past the composer block.
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, 300.0);
+    let region = panel.empty_state_region(rect);
+    let content_bottom = region.origin.y + region.size.y;
+    let input = panel.input_rect(rect);
+    assert!(
+        content_bottom <= input.origin.y,
+        "empty-state region must end above the composer"
+    );
+    let pills = crate::widgets::ai_chat_panel_paint::example_card_rects(rect);
+    assert!(
+        pills[3].origin.y + pills[3].size.y > content_bottom,
+        "fixture: the last pill must overlap the composer for this test to bite"
+    );
+    let occluded = Point2D::new(
+        pills[3].origin.x + pills[3].size.x / 2.0,
+        pills[3].origin.y + pills[3].size.y / 2.0,
+    );
+    assert!(
+        !matches!(
+            panel.hit_test(rect, occluded),
+            Some(AIChatHit::Example { .. })
+        ),
+        "a dropped pill must not claim taps aimed at the composer"
+    );
+    assert_eq!(panel.example_hover_at(rect, occluded), None);
+    // Pills that still fit stay clickable.
+    let first = Point2D::new(
+        pills[0].origin.x + pills[0].size.x / 2.0,
+        pills[0].origin.y + pills[0].size.y / 2.0,
+    );
+    assert!(matches!(
+        panel.hit_test(rect, first),
+        Some(AIChatHit::Example { index: 0, .. })
+    ));
+    assert_eq!(panel.example_hover_at(rect, first), Some(0));
+}
+
 #[test]
 fn no_model_disables_model_picker_toggle() {
     let s = EditorState::new();

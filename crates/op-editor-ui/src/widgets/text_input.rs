@@ -3,6 +3,7 @@
 use super::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use jian_core::text_input::TextInputState;
+use jian_widgets::components::text_area::TextArea;
 use jian_widgets::components::text_input::TextInputView;
 use jian_widgets::Tokens;
 
@@ -201,6 +202,34 @@ pub fn single_line_byte_offset_at(
         .byte_offset_at(state, point, false)
 }
 
+/// Resolve a pointer position in a multiline text area before a real paint
+/// geometry snapshot exists. The same Jian [`TextArea`] line wrapping,
+/// visible-window, and glyph-midpoint algorithm used by paint performs the
+/// inverse hit-test; the fallback backend supplies conservative advances.
+pub fn multiline_byte_offset_at(
+    state: &TextInputState,
+    rect: Rect,
+    point: Point2D,
+    font_size: f32,
+    pad_x: f32,
+    max_visible_lines: usize,
+) -> Option<usize> {
+    if !rect.contains(point) {
+        return None;
+    }
+    let area = TextArea {
+        state,
+        placeholder: "",
+        focused: true,
+        font_size,
+        now_ms: 0,
+        pad_x,
+        max_visible_lines,
+    };
+    let mut backend = MeasureOnlyBackend;
+    Some(area.byte_offset_at(&mut backend, rect, point, &jian_widgets::Tokens::dark()))
+}
+
 /// Estimated caret rectangle before a real paint geometry snapshot exists.
 pub fn single_line_caret_rect(
     state: &TextInputState,
@@ -380,5 +409,27 @@ mod tests {
 
         state.set_composition("中文", 0, 1);
         assert!(geometry.caret_rect(&state).is_none());
+    }
+
+    #[test]
+    fn multiline_hit_maps_the_first_visible_touch_row_to_its_source_line() {
+        let rect = Rect::xywh(20.0, 30.0, 300.0, 104.0);
+        let mut state = TextInputState::with_text("model-a\nmodel-b\nmodel-c\nmodel-d\nmodel-e");
+        state.set_caret(state.text().len(), 0);
+
+        let hit = multiline_byte_offset_at(
+            &state,
+            rect,
+            Point2D::new(rect.origin.x + 12.0, rect.origin.y + 6.0),
+            15.0,
+            12.0,
+            4,
+        );
+
+        assert_eq!(
+            hit,
+            Some("model-a\n".len()),
+            "five source lines with a four-line touch viewport show model-b first"
+        );
     }
 }

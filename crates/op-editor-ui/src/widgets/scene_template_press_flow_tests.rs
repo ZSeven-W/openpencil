@@ -102,6 +102,8 @@ fn selecting_a_scene_filters_and_resets_scroll_and_hover() {
 #[test]
 fn choosing_a_card_requests_an_open_and_closes_the_panel() {
     let mut state = open_state();
+    let _guard = crate::widgets::asset_center_template_cards::template_test_support::exclusive_user_templates();
+
     let panel = SceneTemplatePanel::for_editor(&state).expect("open");
     let first = panel.filtered().first().copied().expect("catalogue");
     let expected = first.id.clone();
@@ -183,4 +185,74 @@ fn opening_one_centre_closes_the_other() {
     state.editor_ui.open_prompt_center(0);
     assert!(state.editor_ui.prompt_center.open);
     assert!(!state.editor_ui.scene_template_center.open);
+}
+
+/// Pressing a saved-template card requests that `user:` id and closes the
+/// panel — the same request shape a shipped card raises, which is what lets
+/// the host drain both halves through one path.
+#[test]
+fn choosing_a_saved_template_requests_its_user_id() {
+    let _guard = crate::widgets::asset_center_template_cards::template_test_support::exclusive_user_templates();
+    crate::widgets::asset_center_template_cards::template_test_support::save_template("my-deck");
+
+    let mut state = open_state();
+    let panel = SceneTemplatePanel::for_editor(&state).expect("open");
+    let (_, rect) = panel
+        .card_rects(PANEL)
+        .into_iter()
+        .next()
+        .expect("the saved card is the first card");
+
+    assert_eq!(
+        press_scene_template_center(&mut state, PANEL, point_in(rect), 0),
+        Some(true)
+    );
+    assert!(!state.editor_ui.scene_template_center.open);
+    assert_eq!(
+        state
+            .editor_ui
+            .scene_template_center
+            .take_pending_open()
+            .as_deref(),
+        Some("user:my-deck")
+    );
+}
+
+/// The ✕ on a saved-template card forgets it: memory now, and the id queued
+/// for whichever host has a disk.
+#[test]
+fn deleting_a_saved_template_removes_it_from_memory_and_queues_the_delete() {
+    let _guard = crate::widgets::asset_center_template_cards::template_test_support::exclusive_user_templates();
+    crate::widgets::asset_center_template_cards::template_test_support::save_template("my-deck");
+
+    let mut state = open_state();
+    let panel = SceneTemplatePanel::for_editor(&state).expect("open");
+    let (_index, rect) = panel
+        .card_rects(PANEL)
+        .into_iter()
+        .next()
+        .expect("the saved card is the first card");
+
+    // Hover the card so the delete button is live, then press it.
+    hover_scene_template_center(&mut state, PANEL, point_in(rect));
+    let delete = SceneTemplatePanel::template_delete_rect(rect);
+    assert_eq!(
+        press_scene_template_center(&mut state, PANEL, point_in(delete), 0),
+        Some(true)
+    );
+    assert!(
+        op_editor_core::user_scene_templates::user_scene_templates().is_empty(),
+        "the template is gone from memory"
+    );
+    assert_eq!(
+        state
+            .editor_ui
+            .scene_template_center
+            .take_pending_template_delete(),
+        vec!["user:my-deck".to_string()]
+    );
+    // A second press on the (now gone) card changes nothing.
+    assert!(
+        op_editor_core::user_scene_templates::remove_user_scene_template("user:my-deck").is_none()
+    );
 }

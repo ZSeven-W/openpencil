@@ -158,18 +158,20 @@ impl DesktopApp {
                 && self
                     .host
                     .update_layer_hover(cx, cy, self.viewport_width, self.viewport_height);
-            // A top-most dropdown (file menu / locale / shape / chat model)
-            // paints OVER the layer panel, so when one is open the cursor must
-            // still reach `apply_cursor_move` (which updates its hover)
-            // even inside the panel's x-range. Otherwise the dropdown's left
-            // half — overlapping the sidebar — is short-circuited here and its
-            // rows never highlight (only the right half, clear of the sidebar,
-            // did).
+            // A top-most menu (file / import / locale / shape / layer context /
+            // chat model) paints OVER the layer panel, so when one is open the
+            // cursor must still reach `apply_cursor_move` (which updates its
+            // hover) even inside the panel's x-range. Otherwise the overlay's
+            // left half — overlapping the sidebar — is short-circuited here and
+            // its rows never highlight (only the right half, clear of the
+            // sidebar, did).
             let overlay_open = {
                 let eui = &self.host.editor_state().editor_ui;
                 eui.file_menu_open
+                    || eui.import_menu_open
                     || eui.locale_picker.open
                     || eui.shape_picker.open
+                    || eui.layer_context_menu.is_some()
                     || eui.chat_model_picker.open
             };
             // Side-panel resize starts on the gutter but must keep receiving
@@ -199,10 +201,12 @@ impl DesktopApp {
         // document here rather than inside the press handler: loading is a
         // host capability, and the panel deliberately only records the
         // request.
+        let now_ms = self.clock_start.elapsed().as_millis() as u64;
         should_paint |= crate::scene_template_open::drain_pending_scene_template(
             &mut self.host,
             &mut self.current_path,
             self.window.as_ref(),
+            now_ms,
         );
         // A topic typed into the same panel's generate row replaces the
         // document too, then queues a chat turn on it. The launch has to
@@ -213,6 +217,10 @@ impl DesktopApp {
         // of adding or removing a guide the panel has already put in (or taken
         // out of) the runtime catalogue.
         should_paint |= crate::style_import_host::drain_pending_style_import(self);
+        // The Templates tab's saved-template delete: the disk half of removing
+        // a template the panel has already taken out of the runtime registry.
+        should_paint |=
+            crate::user_template_store::drain_pending_template_delete(&mut self.host, now_ms);
         if crate::scene_template_generate::drain_pending_scene_template_generate(
             &mut self.host,
             &mut self.current_path,

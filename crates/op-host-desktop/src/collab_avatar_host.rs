@@ -57,11 +57,20 @@ impl Drop for AvatarTestGuard {
 /// Rotating the avatar generation **evicts the previous epoch's cached
 /// bytes** — verified directly: register an avatar, complete it, rotate, and
 /// `cached_collab_avatar_bytes` goes from `Some` to `None`. That is why this
-/// exists, and why it is taken by [`crate::collab_runtime`]'s
-/// `advance_generation` rather than only by the tests that call it: the
-/// rotation happens in *production* code, so no amount of discipline at test
-/// call sites can cover it. Guarding the writer covers every collab test
-/// there is and every one anybody writes later.
+/// exists, and why the *writer* is guarded rather than only the tests that
+/// call it: the rotation happens in production code, so no amount of
+/// discipline at test call sites can cover it. Guarding the writer covers
+/// every collab test there is and every one anybody writes later.
+///
+/// CAUTION — op-collab-host has its own equivalent guard inside
+/// `advance_generation`, but a dependency's `#[cfg(test)]` code is compiled
+/// only into THAT crate's own test build, never into this binary's. Any path
+/// in THIS crate that drives a rotation (e.g. `CollabRuntime::leave` on a
+/// fork-save acknowledgement, `save_session.rs`) must therefore take this
+/// lock itself under `#[cfg(test)]` — otherwise a concurrently running test
+/// that holds this lock (the image_decode_host avatar test) still sees its
+/// cached bytes evicted mid-test, which is exactly the linux-aarch64 CI
+/// failure this note comes from.
 ///
 /// Reentrant per thread because several collab tests take this guard and then
 /// drive a runtime that rotates — a plain `Mutex` would deadlock them. A
@@ -171,6 +180,7 @@ mod tests {
     fn png_header() -> Vec<u8> {
         let mut bytes = vec![0; 32];
         bytes[..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
+        bytes[8..12].copy_from_slice(&13_u32.to_be_bytes());
         bytes[12..16].copy_from_slice(b"IHDR");
         bytes[16..20].copy_from_slice(&16_u32.to_be_bytes());
         bytes[20..24].copy_from_slice(&16_u32.to_be_bytes());

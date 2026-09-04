@@ -36,7 +36,7 @@ fn state_with_variables(count: usize) -> EditorState {
     state.set_single_selection(NodeId::new("rect"));
     for i in 0..count {
         assert!(state.create_variable(
-            &format!("color-border-subtle-{i:02}"),
+            &format!("--border-subtle-{i:02}"),
             VariableKind::Color,
             VariableScalar::Str("#DBD8CB".into()),
         ));
@@ -307,7 +307,7 @@ fn painted_name_is_ellipsized_into_its_budget() {
     let mut state = state_from(RECT_DOC);
     state.set_single_selection(NodeId::new("rect"));
     assert!(state.create_variable(
-        "color-border-subtle-on-elevated-surface-extra-long",
+        "--border-subtle-on-elevated-surface-extra-long",
         VariableKind::Color,
         VariableScalar::Str("#DBD8CB".into()),
     ));
@@ -330,7 +330,7 @@ fn painted_name_is_ellipsized_into_its_budget() {
     let (name, name_at) = backend
         .texts
         .iter()
-        .find(|(text, _)| text.starts_with("--color-border"))
+        .find(|(text, _)| text.starts_with("----border"))
         .cloned()
         .expect("the variable name should be painted");
     let (_, hex_at) = backend
@@ -530,7 +530,7 @@ fn press_on_variable_row_binds_and_closes() {
     let panel = PropertyPanel::for_selection(&state).expect("rectangle panel");
     assert_eq!(
         panel.fill_variable_ref.as_deref(),
-        Some("color-border-subtle-02"),
+        Some("--border-subtle-02"),
         "the pressed row is the variable that got bound"
     );
 }
@@ -569,7 +569,7 @@ fn press_after_scroll_binds_the_scrolled_row() {
 #[test]
 fn press_on_unbind_row_unbinds() {
     let mut state = state_with_variables(4);
-    assert!(state.bind_selected_color_variable(ColorTarget::Fill, "color-border-subtle-01"));
+    assert!(state.bind_selected_color_variable(ColorTarget::Fill, "--border-subtle-01"));
     state.editor_ui.property_color_variable_picker_open = Some(ColorTarget::Fill);
     let rect = press_panel_rect(&state);
     let layout = open_layout(&state, rect);

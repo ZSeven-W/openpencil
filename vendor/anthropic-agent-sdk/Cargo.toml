@@ -84,6 +84,9 @@ reqwest = { version = "0.12.28", default-features = false, features = [
   "stream",
 ] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 anyhow = "1.0"
 tokio-test = "0.4"

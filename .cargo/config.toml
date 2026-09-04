@@ -4,8 +4,35 @@
 [net]
 git-fetch-with-cli = true
 
+[env]
+# OpenPencil deliberately uses the user's installed Copilot CLI. SDK 1.x
+# downloads its pinned CLI even with `bundled-cli` disabled unless this opt-out
+# is present, which would make ordinary builds network-dependent.
+COPILOT_SKIP_CLI_DOWNLOAD = { value = "1", force = false }
+
 [term]
 verbose = false
+
+# ---- OpenHarmony (OHOS) cross-compilation --------------------------------
+#
+# `scripts/build-ohos.sh` is the supported entry point: it verifies
+# OHOS_NDK_HOME, adds the rustup target, and exports the CC/CXX/AR/CFLAGS that
+# the `cc` crate and skia-bindings read. These two sections only cover what
+# cargo itself needs — the linker driver — so that a bare
+# `cargo build --target aarch64-unknown-linux-ohos` from the REPO ROOT also
+# links. Cargo resolves a relative `linker` against the current working
+# directory, which is why the build script additionally exports the absolute
+# `CARGO_TARGET_*_LINKER` override (env beats config, so it always wins).
+#
+# `[target.<triple>].ar` is deliberately absent: cargo ignores it. Archiver
+# selection goes through the `AR_<triple>` env var that `cc` reads, set by
+# scripts/build-ohos.sh.
+
+[target.aarch64-unknown-linux-ohos]
+linker = "scripts/ohos/ohos-clang-aarch64.sh"
+
+[target.x86_64-unknown-linux-ohos]
+linker = "scripts/ohos/ohos-clang-x86_64.sh"
 
 [alias]
 # Native desktop dev loop — incremental rebuild + relaunch on save

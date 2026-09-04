@@ -64,8 +64,20 @@ fn agent_turn_uses_private_home_and_minimal_mcp_policy() {
                 "--gemini_dir={}",
                 private_home.join(".gemini").to_string_lossy()
             ),
-            "--app_data_dir=antigravity-cli".to_string()
+            "--app_data_dir=antigravity-cli".to_string(),
+            // The CLI's own log, inside the private turn: its stderr can be as
+            // uninformative as "Agent execution terminated due to error." while
+            // the real cause is only written here. Read back by
+            // `chat_subprocess_antigravity_log::with_log_evidence` on failure.
+            format!(
+                "--log-file={}",
+                private_home.join("cli.log").to_string_lossy()
+            ),
         ]
+    );
+    assert!(
+        private_home.join("cli.log").starts_with(turn.cwd()),
+        "the log must die with the turn directory, not outlive it"
     );
 
     let mcp: serde_json::Value = serde_json::from_slice(
@@ -173,4 +185,54 @@ fn generation_turn_uses_empty_mcp_policy_without_host_config() {
         serde_json::json!(ANTIGRAVITY_DENY_RULES)
     );
     assert_eq!(turn.prompt(), "return only JavaScript");
+}
+
+/// End-to-end wiring: a turn whose CLI wrote its real cause only to its own
+/// log must carry that cause in the failure the user sees. Before this,
+/// Antigravity's uninformative "Agent execution terminated due to error." was
+/// the whole message and the cause took a manual repro to find.
+#[test]
+fn a_failure_message_picks_up_the_cli_log() {
+    // A generation turn: it gets the same private home and log, without
+    // needing a live MCP record this test has no business standing up.
+    let turn = IsolatedTurn::prepare_for(
+        Some(CliName::Antigravity),
+        "design a screen",
+        &[],
+        TurnPurpose::Generation,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    let log = turn.log_file().expect("an antigravity turn logs");
+    fs::write(
+        &log,
+        "ERROR: logging before google.Init: E0827 20:54:36.388855 360 errorreport.go:223] \
+         agent executor error: calling model: FAILED_PRECONDITION (code 400): User location \
+         is not supported for the API use.\n",
+    )
+    .unwrap();
+
+    let message = crate::chat_subprocess_antigravity_log::with_log_evidence(
+        "CLI exited with status 1".to_string(),
+        Some(&turn),
+    );
+    assert!(
+        message.starts_with("CLI exited with status 1"),
+        "the exit status stays the primary account: {message}"
+    );
+    assert!(
+        message.contains("User location is not supported for the API use"),
+        "the logged cause must reach the user: {message}"
+    );
+}
+
+/// A turn with no log (every CLI but Antigravity) leaves the message alone.
+#[test]
+fn a_turn_without_a_log_changes_nothing() {
+    let unchanged = crate::chat_subprocess_antigravity_log::with_log_evidence(
+        "CLI exited with status 1".to_string(),
+        None,
+    );
+    assert_eq!(unchanged, "CLI exited with status 1");
 }

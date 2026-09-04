@@ -9,7 +9,7 @@ use crate::css::cascade::{compute_style_for_viewport, ComputedStyle};
 use crate::css::selectors::PseudoElement;
 use crate::dom::{DomElement, DomNode};
 use crate::mapper::pseudo::{InlinePseudo, MappedPseudo};
-use crate::mapper::{map_element, MapCtx};
+use crate::mapper::{map_element_scoped, MapCtx};
 
 use super::build_text_node_in_path;
 
@@ -35,6 +35,7 @@ struct InlineMapState<'a, 's> {
     inline_nodes: Vec<PenNode>,
     run: Vec<InlineRunItem<'a>>,
     has_inline_box: bool,
+    text_fill_override: Option<&'s str>,
 }
 
 impl InlineMapState<'_, '_> {
@@ -45,27 +46,21 @@ impl InlineMapState<'_, '_> {
             &mut self.run,
             self.root_style,
             self.root_path,
+            self.text_fill_override,
         );
     }
 
     fn finish(&mut self, context: &mut MapCtx<'_>) {
-        finish_inline_context(
-            context,
-            &mut self.nodes,
-            &mut self.inline_nodes,
-            &mut self.run,
-            &mut self.has_inline_box,
-            self.root_style,
-            self.root_path,
-        );
+        finish_inline_context(context, self);
     }
 }
 
-pub(crate) fn map_children<'a>(
+pub(crate) fn map_children<'a, 's>(
     context: &mut MapCtx<'_>,
-    path: &[&'a DomElement],
-    block_style: &ComputedStyle,
+    path: &'s [&'a DomElement],
+    block_style: &'s ComputedStyle,
     dom_children: &'a [DomNode],
+    text_fill_override: Option<&'s str>,
 ) -> Vec<PenNode> {
     let mut state = InlineMapState {
         root_path: path,
@@ -75,6 +70,7 @@ pub(crate) fn map_children<'a>(
         inline_nodes: Vec::new(),
         run: Vec::new(),
         has_inline_box: false,
+        text_fill_override,
     };
     // A list marker precedes `::before` in CSS's box order, and it joins the
     // item's own inline run rather than becoming a node of its own — see
@@ -97,10 +93,26 @@ pub(crate) fn map_children<'a>(
         &mut state,
         path,
         block_style,
+        block_style,
         PseudoElement::Before,
     );
-    map_dom_children(context, &mut state, path, block_style, dom_children, false);
-    map_pseudo_into_context(context, &mut state, path, block_style, PseudoElement::After);
+    map_dom_children(
+        context,
+        &mut state,
+        path,
+        block_style,
+        block_style,
+        dom_children,
+        false,
+    );
+    map_pseudo_into_context(
+        context,
+        &mut state,
+        path,
+        block_style,
+        block_style,
+        PseudoElement::After,
+    );
     state.finish(context);
     state.nodes
 }
@@ -110,6 +122,7 @@ fn map_dom_children<'a>(
     state: &mut InlineMapState<'a, '_>,
     parent_path: &[&'a DomElement],
     parent_style: &ComputedStyle,
+    layout_parent_style: &ComputedStyle,
     dom_children: &'a [DomNode],
     nested: bool,
 ) {
@@ -145,6 +158,7 @@ fn map_dom_children<'a>(
                 state,
                 &child_path,
                 &child_style,
+                layout_parent_style,
                 PseudoElement::Before,
             );
             map_dom_children(
@@ -152,6 +166,7 @@ fn map_dom_children<'a>(
                 state,
                 &child_path,
                 &child_style,
+                layout_parent_style,
                 &element.children,
                 true,
             );
@@ -160,6 +175,7 @@ fn map_dom_children<'a>(
                 state,
                 &child_path,
                 &child_style,
+                layout_parent_style,
                 PseudoElement::After,
             );
             continue;
@@ -168,7 +184,13 @@ fn map_dom_children<'a>(
             && super::inline::is_boxed_inline(element, &child_style, &child_path, context);
         if boxed_inline {
             state.flush(context);
-            if let Some(node) = map_element(context, &child_path, Some(parent_style)) {
+            if let Some(node) = map_element_scoped(
+                context,
+                &child_path,
+                Some(parent_style),
+                Some(layout_parent_style),
+                state.text_fill_override,
+            ) {
                 state.inline_nodes.push(node);
                 state.has_inline_box = true;
             }
@@ -191,7 +213,13 @@ fn map_dom_children<'a>(
             }
         } else {
             state.finish(context);
-            if let Some(node) = map_element(context, &child_path, Some(parent_style)) {
+            if let Some(node) = map_element_scoped(
+                context,
+                &child_path,
+                Some(parent_style),
+                Some(layout_parent_style),
+                state.text_fill_override,
+            ) {
                 state.nodes.push(node);
             }
         }
@@ -203,9 +231,17 @@ fn map_pseudo_into_context(
     state: &mut InlineMapState<'_, '_>,
     path: &[&DomElement],
     style: &ComputedStyle,
+    layout_parent_style: &ComputedStyle,
     pseudo: PseudoElement,
 ) {
-    let Some(mapped) = crate::mapper::pseudo::map_pseudo(context, path, style, pseudo) else {
+    let Some(mapped) = crate::mapper::pseudo::map_pseudo(
+        context,
+        path,
+        style,
+        layout_parent_style,
+        pseudo,
+        state.text_fill_override,
+    ) else {
         return;
     };
     match mapped {
@@ -236,6 +272,7 @@ pub(super) fn collect_run_segments(
     block_style: &ComputedStyle,
     base_style: &super::SegStyle,
     base_context: super::InlineTextContext,
+    text_fill_override: Option<&str>,
 ) -> Vec<super::RawSegment> {
     let mut segments = Vec::new();
     for item in run {
@@ -246,7 +283,10 @@ pub(super) fn collect_run_segments(
                 path,
                 block_style,
                 base_style,
-                base_context,
+                super::InlineTextScope {
+                    context: base_context,
+                    fill_override: text_fill_override,
+                },
                 &mut segments,
             ),
             InlineRunItem::Nested {
@@ -254,14 +294,21 @@ pub(super) fn collect_run_segments(
                 path,
                 parent_style,
             } => {
-                let style = super::segment_style(parent_style, super::nearest_href(path));
+                let style = super::segment_style(
+                    parent_style,
+                    super::nearest_href(path),
+                    text_fill_override,
+                );
                 super::collect_segments(
                     node,
                     context,
                     path,
                     parent_style,
                     &style,
-                    super::InlineTextContext::root(parent_style),
+                    super::InlineTextScope {
+                        context: super::InlineTextContext::root(parent_style),
+                        fill_override: text_fill_override,
+                    },
                     &mut segments,
                 );
             }
@@ -272,7 +319,10 @@ pub(super) fn collect_run_segments(
             } => super::inline::push_inline_pseudo(
                 pseudo,
                 href.clone(),
-                *inherited_context,
+                super::InlineTextScope {
+                    context: *inherited_context,
+                    fill_override: text_fill_override,
+                },
                 &mut segments,
             ),
         }
@@ -280,31 +330,30 @@ pub(super) fn collect_run_segments(
     segments
 }
 
-fn finish_inline_context(
-    context: &mut MapCtx<'_>,
-    output: &mut Vec<PenNode>,
-    inline_nodes: &mut Vec<PenNode>,
-    run: &mut Vec<InlineRunItem<'_>>,
-    has_inline_box: &mut bool,
-    block_style: &ComputedStyle,
-    path: &[&DomElement],
-) {
-    flush_run(context, inline_nodes, run, block_style, path);
-    if inline_nodes.is_empty() {
-        *has_inline_box = false;
+fn finish_inline_context(context: &mut MapCtx<'_>, state: &mut InlineMapState<'_, '_>) {
+    flush_run(
+        context,
+        &mut state.inline_nodes,
+        &mut state.run,
+        state.root_style,
+        state.root_path,
+        state.text_fill_override,
+    );
+    if state.inline_nodes.is_empty() {
+        state.has_inline_box = false;
         return;
     }
-    if !*has_inline_box {
+    if !state.has_inline_box {
         if let Some(line_box) =
-            wrap_smaller_inline_run_with_strut(context, inline_nodes, block_style)
+            wrap_smaller_inline_run_with_strut(context, &mut state.inline_nodes, state.root_style)
         {
-            output.push(line_box);
+            state.nodes.push(line_box);
             return;
         }
-        output.append(inline_nodes);
+        state.nodes.append(&mut state.inline_nodes);
         return;
     }
-    for node in inline_nodes.iter_mut() {
+    for node in &mut state.inline_nodes {
         if let PenNode::Text(text) = node {
             text.width = None;
             text.height = None;
@@ -314,13 +363,16 @@ fn finish_inline_context(
     }
     if context.node_count >= crate::MAX_OUTPUT_NODES {
         context.warn_once(ImportWarning::NodeLimitInlineRow);
-        output.append(inline_nodes);
+        state.nodes.append(&mut state.inline_nodes);
     } else {
         context.node_count += 1;
-        let children = crate::mapper::layer_positioned_children(std::mem::take(inline_nodes));
-        output.push(inline_row(context.generate_id(), children));
+        let children =
+            crate::mapper::layer_positioned_children(std::mem::take(&mut state.inline_nodes));
+        state
+            .nodes
+            .push(inline_row(context.generate_id(), children));
     }
-    *has_inline_box = false;
+    state.has_inline_box = false;
 }
 
 fn flush_run(
@@ -329,14 +381,17 @@ fn flush_run(
     run: &mut Vec<InlineRunItem<'_>>,
     block_style: &ComputedStyle,
     path: &[&DomElement],
+    text_fill_override: Option<&str>,
 ) {
-    if let Some(node) = build_text_node_in_path(context, run, block_style, path) {
+    if let Some(node) = build_text_node_in_path(context, run, block_style, path, text_fill_override)
+    {
         output.push(node);
     }
     run.clear();
 }
 
 fn inline_row(id: String, children: Vec<PenNode>) -> PenNode {
+    let intrinsic = crate::mapper::intrinsic::single_image_outer_size(&children);
     PenNode::Frame(FrameNode {
         base: PenNodeBase {
             id,
@@ -344,8 +399,14 @@ fn inline_row(id: String, children: Vec<PenNode>) -> PenNode {
             ..Default::default()
         },
         container: ContainerProps {
-            width: Some(SizingBehavior::Keyword(SizingKeyword::FillContainer)),
-            height: Some(SizingBehavior::Keyword(SizingKeyword::FitContent)),
+            width: intrinsic
+                .width
+                .map(SizingBehavior::Number)
+                .or(Some(SizingBehavior::Keyword(SizingKeyword::FillContainer))),
+            height: intrinsic
+                .height
+                .map(SizingBehavior::Number)
+                .or(Some(SizingBehavior::Keyword(SizingKeyword::FitContent))),
             layout: Some(LayoutMode::Horizontal),
             align_items: Some(AlignItems::Center),
             ..Default::default()

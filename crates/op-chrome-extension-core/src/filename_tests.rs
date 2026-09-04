@@ -2,7 +2,12 @@
 //! attacker-controlled page title. The offline download is a `.op` document,
 //! so the sanitised stem carries the `.op` suffix.
 
-use crate::filename::op_filename;
+use crate::filename::{design_md_filename, op_filename};
+
+#[test]
+fn the_design_system_download_uses_the_conventional_fixed_name() {
+    assert_eq!(design_md_filename(), "design.md");
+}
 
 #[test]
 fn keeps_an_ordinary_title_readable() {

@@ -58,17 +58,20 @@ pub(super) fn serve_one<S: Read + Write>(
 /// broadcast to SSE subscribers. The state `Mutex` is held only across the
 /// in-memory operation, never across the (long-lived) SSE wait.
 ///
-/// Managed mode (`WebCanvasState::managed_token`) layers a token gate
-/// (`RequestAuth::allows`) in front of every privileged branch below —
-/// only the static GET routes and `OPTIONS` preflight stay tokenless — and
-/// an origin allowlist (`cors_origin_for`) that replaces the permissive
-/// `Access-Control-Allow-Origin: *` with an echo of the exact allowlisted
-/// `Origin` (or no header at all). Non-managed mode is untouched: `auth`
-/// always allows and `cors_origin` is always `Some("*")`.
+/// Managed mode is a single-document, single-operator daemon. Its supervisor
+/// already owns the process through the stdin lease, so ordinary HTTP requests
+/// do not carry a per-request token. Browser requests are still constrained by
+/// the explicit supervisor origin allowlist plus the daemon's own exact
+/// loopback origin: an unrelated `Origin` is rejected before route dispatch,
+/// while native clients without an `Origin` remain usable. The existing
+/// sensitive-POST Host/Origin and JSON-content checks below remain in force in
+/// every single-user mode.
 ///
-/// Returns `Ok(true)` when the client requested a token-authed graceful
-/// shutdown (same `openpencil/shutdown` contract as `--mcp-http`) — the
-/// caller then stops the accept loop so `op stop` never signals a pid.
+/// Returns `Ok(true)` when the client requested a token-authenticated graceful
+/// shutdown (same `openpencil/shutdown` body contract as `--mcp-http`) — the
+/// caller then stops the accept loop so `op stop` never signals a pid. In
+/// managed mode only this lifecycle request, not ordinary traffic, uses the
+/// token emitted in the startup handshake.
 pub(super) fn serve_one_in_mode<S: Read + Write>(
     stream: &mut S,
     state: &Mutex<WebCanvasState>,
@@ -102,13 +105,9 @@ pub(super) fn dispatch<S: Read + Write>(
 ) -> Result<bool> {
     let state = ctx.state;
     let hub = ctx.hub;
-    let (auth, allow_origins) = {
+    let (managed_lifecycle_token, allow_origins) = {
         let guard = state.lock().unwrap_or_else(|p| p.into_inner());
-        let auth = RequestAuth {
-            managed: guard.managed_token.is_some(),
-            token: guard.managed_token.clone().unwrap_or_default(),
-        };
-        (auth, guard.allow_origins.clone())
+        (guard.managed_token.clone(), guard.allow_origins.clone())
     };
     // Online never emits `*`: its requests carry credentials, and a wildcard
     // plus credentials is what lets any page on the internet read another
@@ -116,12 +115,27 @@ pub(super) fn dispatch<S: Read + Write>(
     // local daemon keeps the permissive value it has always used.
     let cors_origin: Option<String> = if ctx.mode.is_online() {
         online_policy::online_cors_origin(&allow_origins, req.origin.as_deref())
-    } else if auth.managed {
-        cors_origin_for(&allow_origins, req.origin.as_deref())
+    } else if matches!(ctx.mode, ServeMode::Managed) {
+        cors_origin_for(&allow_origins, req.origin.as_deref(), req.host.as_deref())
     } else {
         Some("*".to_string())
     };
     let cors_origin = cors_origin.as_deref();
+    if matches!(ctx.mode, ServeMode::Managed)
+        && !managed_request_origin_allowed(
+            &allow_origins,
+            req.origin.as_deref(),
+            req.host.as_deref(),
+        )
+    {
+        crate::mcp_serve::write_mcp_http_response_with_origin(
+            stream,
+            "403 Forbidden",
+            &crate::mcp_serve::rest_error_body("request origin is not allowed"),
+            cors_origin,
+        )?;
+        return Ok(false);
+    }
     if req.method == "OPTIONS" {
         crate::mcp_serve::write_mcp_http_response_with_origin(
             stream,
@@ -181,24 +195,12 @@ pub(super) fn dispatch<S: Read + Write>(
         return crate::web_static::write_static_response(stream, &reply, cors_origin)
             .map(|()| false);
     }
-    // Managed-mode token gate: everything below this point is a privileged
-    // branch (SSE, AI streams, `/mcp`, `/api/*`, the `POST /` JSON-RPC
-    // alias) — the static GET routes above and the `OPTIONS` preflight
-    // already returned. Unmanaged mode's `allows` always returns true, so
-    // this is a no-op there.
-    //
-    // Online mode has already resolved a verified identity for this
-    // connection (that is how `ctx` found its tenant at all), so the
-    // per-instance managed token is not part of its contract.
-    if !auth.allows(&req.method, &req.path, req.token.as_deref()) {
-        crate::mcp_serve::write_mcp_http_response_with_origin(
-            stream,
-            "401 Unauthorized",
-            r#"{"ok":false,"error":"unauthorized"}"#,
-            cors_origin,
-        )?;
-        return Ok(false);
-    }
+    // There is deliberately no managed-mode request-token gate here. Managed
+    // is a single-tenant child process whose authority comes from the local
+    // supervisor's stdin lease and the browser Origin boundary above. Online
+    // mode is unchanged: its accept loop resolves a verified account identity
+    // before constructing `ctx`, and the scope checks immediately below still
+    // constrain that identity on every credentialed route.
     // Scopes apply to every credentialed route, not just the REST tier and
     // `/mcp`. They used to be checked inside the `/api/*` branch, which sits
     // BELOW the specially dispatched routes (AI streams, SSE, figma) — so a
@@ -420,10 +422,12 @@ pub(super) fn dispatch<S: Read + Write>(
         )?;
         return Ok(false);
     }
-    // Token-authed graceful shutdown (`op stop`): same contract as the
-    // `--mcp-http` server — only the exact per-instance token passed by the
-    // spawning CLI (via OPENPENCIL_MCP_TOKEN) authenticates; a stale file, a
-    // recycled pid, or a random client cannot shut the daemon down.
+    // Token-authenticated graceful shutdown (`op stop`): same body-carried
+    // token contract as the `--mcp-http` server. Managed mode accepts the
+    // startup-handshake token here for lifecycle compatibility, but never as
+    // an ordinary request header; local/online operator shutdown continues to
+    // use only OPENPENCIL_MCP_TOKEN. A stale file, recycled pid, or random
+    // client therefore cannot shut the daemon down.
     //
     // Online keeps this branch ONLY because the token comes from the
     // operator's process environment and never from an account credential —
@@ -432,10 +436,14 @@ pub(super) fn dispatch<S: Read + Write>(
     // `OPENPENCIL_MCP_TOKEN` set there is no token that satisfies it.
     let operator_token = crate::mcp_serve::headless_token_from_env();
     if ctx.mode.allows_generic_shutdown() || operator_token.is_some() {
-        if let Some(id) = crate::mcp_serve::shutdown_request_id(
-            &req.body,
-            operator_token.as_deref().unwrap_or_default(),
-        ) {
+        let managed_shutdown = matches!(ctx.mode, ServeMode::Managed)
+            .then_some(managed_lifecycle_token.as_deref())
+            .flatten()
+            .and_then(|token| crate::mcp_serve::shutdown_request_id(&req.body, token));
+        let operator_shutdown = operator_token
+            .as_deref()
+            .and_then(|token| crate::mcp_serve::shutdown_request_id(&req.body, token));
+        if let Some(id) = managed_shutdown.or(operator_shutdown) {
             crate::mcp_serve::write_mcp_http_response_with_origin(
                 stream,
                 "200 OK",
@@ -534,6 +542,10 @@ pub(super) fn dispatch<S: Read + Write>(
                     return false;
                 }
                 let ok = editor.apply(cmd.clone());
+                if ok {
+                    crate::mcp_serve::normalize_mobile_screens_after_apply(editor);
+                    crate::mcp_serve::normalize_icon_paths_after_apply(editor);
+                }
                 applied_any |= ok;
                 ok
             },

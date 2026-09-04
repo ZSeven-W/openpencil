@@ -23,7 +23,10 @@ pub mod intent;
 pub(crate) mod mobile_content_rail;
 mod mobile_reflow;
 pub mod model_profile;
-pub(crate) mod orchestration_self_check;
+// Public (was pub(crate)) so `op-host-services` can reuse the drift detector
+// for `finalize_design`'s advisories — services → orchestrator is the
+// existing dependency direction (DS P2-a item ③).
+pub mod orchestration_self_check;
 pub mod palette_harmonize;
 pub mod parse;
 pub mod plan;
@@ -31,10 +34,13 @@ mod plan_fallback_card;
 pub mod plan_normalize;
 pub mod plan_repair;
 pub mod program_gen;
+pub mod reference_intent;
+pub mod reference_skeleton;
 mod request_dimensions;
 mod resolved_style_prompt;
 pub mod retry;
 pub mod script_gen;
+mod scroll_intent;
 pub mod semantic_palette;
 pub mod stub_providers;
 pub mod style_guide_context;
@@ -54,6 +60,9 @@ pub mod append;
 pub(crate) mod avatar_repair;
 #[cfg(test)]
 mod avatar_repair_tests;
+/// Public (like `orchestration_self_check`) so `op-host-services` can reuse
+/// the trailing-void scan for `finalize_design`'s advisories (DS P2-b item C).
+pub mod board_trailing_void;
 pub(crate) mod chip_repair;
 pub mod cleanup;
 pub(crate) mod cleanup_layout;
@@ -79,6 +88,7 @@ pub mod run;
 mod run_salvage_feedback;
 pub mod scaffold;
 pub mod screen_groups;
+pub(crate) mod section_headline;
 pub(crate) mod section_shell_fill_repair;
 pub(crate) mod sidebar_archetype;
 pub mod spacing_repair;
@@ -120,6 +130,8 @@ mod radial_stub_tests;
 #[cfg(test)]
 mod run_retry_feedback_tests;
 #[cfg(test)]
+mod shadcn_vocabulary_tests;
+#[cfg(test)]
 mod sidebar_archetype_tests;
 #[cfg(test)]
 mod test_support;
@@ -138,13 +150,18 @@ pub use design_type::{
     DesignForm, DesignType, DesignTypePreset,
 };
 pub use intent::classify_intent;
-pub use loop_finalize::{apply_loop_finalize, apply_loop_finalize_counted};
+pub use loop_finalize::{
+    apply_loop_finalize, apply_loop_finalize_counted, record_loop_finalize_counted,
+    RecordLoopFinalizeError, RecordedLoopFinalize,
+};
 pub use mobile_reflow::repair_mobile_trailing_nav_reflow;
 pub use model_profile::{
     accepts_thinking_body_field, is_acp_capability_marker, reasoning_wire_control,
     resolve_model_profile, ModelProfile, ModelTier, ReasoningWireControl,
 };
 pub use prompt::build_orchestrator_prompt;
+pub use reference_intent::{detect_reference_intent, has_reference_trigger, ReferenceIntent};
+pub use reference_skeleton::ReferenceSkeleton;
 pub use repair_record::RepairRecord;
 pub use repair_summary::{CheckCategory, RepairSummary};
 pub use repair_tier::{RepairTier, RepairTierPolicy, TieredPass};

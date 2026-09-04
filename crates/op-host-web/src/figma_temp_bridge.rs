@@ -142,9 +142,14 @@ pub(crate) fn delete_session(session_id: &str, page_count: usize) {
 /// Terminate every isolated parser Worker before a new document replacement
 /// takes ownership. The generation guard still decides whether a queued
 /// completion may install or fall back.
+#[cfg(target_arch = "wasm32")]
 pub(crate) fn cancel_all() {
     op_cancel_all_figma_temp_imports();
 }
+
+/// Non-wasm unit tests never talk to the browser Worker bridge.
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn cancel_all() {}
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {

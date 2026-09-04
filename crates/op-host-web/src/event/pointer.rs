@@ -24,9 +24,23 @@ use op_editor_ui::{Modifiers, ScrollMode, WheelEvent};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum WheelIntent {
-    Zoom { delta_y: f32 },
-    Pan { dx: f32, dy: f32 },
+    Zoom {
+        /// Normalized pixel delta used by panels under the cursor.
+        scroll_delta_y: f32,
+        /// Device-normalized and sensitivity-adjusted canvas zoom delta.
+        canvas_delta_y: f32,
+    },
+    Pan {
+        dx: f32,
+        dy: f32,
+    },
 }
+
+const WHEEL_LINE_PX: f32 = 40.0;
+const REGULAR_ZOOM_GAIN: f32 = 1.35;
+const MODIFIED_ZOOM_GAIN: f32 = 4.0;
+/// Caps one browser event to roughly a 30% viewport scale change.
+const MAX_CANVAS_ZOOM_DELTA: f32 = 175.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MousePressAction {
@@ -84,13 +98,16 @@ pub fn map_offset_to_logical(
 pub fn classify_wheel_intent(
     delta_x: f32,
     delta_y: f32,
-    shift: bool,
-    ctrl: bool,
-    meta: bool,
-    alt: bool,
+    delta_mode: u32,
+    page_width: f32,
+    page_height: f32,
+    modifiers: Modifiers,
 ) -> WheelIntent {
-    let modified_zoom = ctrl || meta || alt;
-    if !modified_zoom && (delta_x != 0.0 || shift) {
+    let modified_zoom = modifiers.intersects(Modifiers::CTRL | Modifiers::CMD | Modifiers::ALT);
+    let horizontal_delta_from_y = normalize_wheel_delta(delta_y, delta_mode, page_width);
+    let delta_x = normalize_wheel_delta(delta_x, delta_mode, page_width);
+    let delta_y = normalize_wheel_delta(delta_y, delta_mode, page_height);
+    if !modified_zoom && (delta_x != 0.0 || modifiers.contains(Modifiers::SHIFT)) {
         if delta_x != 0.0 {
             WheelIntent::Pan {
                 dx: -delta_x,
@@ -98,12 +115,44 @@ pub fn classify_wheel_intent(
             }
         } else {
             WheelIntent::Pan {
-                dx: -delta_y,
+                dx: -horizontal_delta_from_y,
                 dy: 0.0,
             }
         }
     } else {
-        WheelIntent::Zoom { delta_y: -delta_y }
+        let scroll_delta_y = -delta_y;
+        let gain = if modified_zoom {
+            MODIFIED_ZOOM_GAIN
+        } else {
+            REGULAR_ZOOM_GAIN
+        };
+        WheelIntent::Zoom {
+            scroll_delta_y,
+            canvas_delta_y: (scroll_delta_y * gain)
+                .clamp(-MAX_CANVAS_ZOOM_DELTA, MAX_CANVAS_ZOOM_DELTA),
+        }
+    }
+}
+
+/// Convert W3C wheel units to CSS-like pixels before routing the gesture.
+///
+/// Browsers report pixels, lines, or pages depending on the input device.
+/// Treating all three as pixels made line-mode wheels and trackpad pinch feel
+/// dramatically slower than pixel-mode mouse wheels.
+pub fn normalize_wheel_delta(delta: f32, delta_mode: u32, page_extent: f32) -> f32 {
+    if !delta.is_finite() {
+        return 0.0;
+    }
+    let multiplier = match delta_mode {
+        1 => WHEEL_LINE_PX,
+        2 if page_extent.is_finite() && page_extent > 0.0 => page_extent,
+        _ => 1.0,
+    };
+    let normalized = delta * multiplier;
+    if normalized.is_finite() {
+        normalized
+    } else {
+        0.0
     }
 }
 

@@ -76,6 +76,26 @@ impl Phase {
     /// still showed headroom; 13500 keeps ~200 tokens of margin over the
     /// measured 13293.
     ///
+    /// Generation moved again 13500 → 15700 (2026-08-13) when the LOGO review
+    /// contract landed. A mixed brand-review + deck request legitimately needs
+    /// the logo acceptance predicates and all three orthogonal deck contracts
+    /// in one assembly; the measured CJK stress set is just under 15500 tokens.
+    /// At 13500
+    /// the knapsack cut the tail of `slides`, recreating the silent contract-loss
+    /// bug this budget is meant to prevent. The new ceiling keeps the combined
+    /// production prompt byte-complete with a small drift margin.
+    ///
+    /// Generation moved again 15700 → 15850 (2026-08-19) when bar-chart geometry
+    /// and CJK punctuation line-break rules were added to the deck-patterns and
+    /// cjk-typography skills, then 15850 → 16050 (2026-08-23) when schema.md
+    /// gained the payload-dialect rules (bare numbers, snake_case fill types,
+    /// gradient stop `offset`, string text content) that four measured GLM
+    /// rejections proved the model needs stated. A mixed CJK branding + deck request (logo review +
+    /// slides + design rules) measured 15694 tokens; at 15700 the Step 3 knapsack
+    /// truncated the `slides` tail, losing the contract. The new ceiling provides
+    /// headroom for the expanded corpus while keeping all orthogonal skill contracts
+    /// complete.
+    ///
     /// Planning moved 4000 → 6000 for a related reason (2026-07-28). Its
     /// three `Base` skills are budget-EXEMPT but still counted against the
     /// total, and they need ~4500 tokens on their own once
@@ -84,10 +104,14 @@ impl Phase {
     /// `landing-page-predesign` — the phase's only Domain skill — could never
     /// be included on ANY prompt, matched or not. The ceiling now covers the
     /// base set plus that skill with headroom.
+    ///
+    /// Planning moved again 6050 → 6112 when the decomposition corpus gained
+    /// the side-progress-rail rule and squeezed the matched landing-page
+    /// skill's tail.
     pub fn default_budget(self) -> u32 {
         match self {
-            Phase::Planning => 6000,
-            Phase::Generation => 13500,
+            Phase::Planning => 6112,
+            Phase::Generation => 16050,
             Phase::Validation => 3000,
             Phase::Maintenance => 5000,
         }
@@ -96,8 +120,8 @@ impl Phase {
 
 /// Per-phase default token budgets — the TS `DEFAULT_BUDGETS` record.
 pub const DEFAULT_BUDGETS: [(Phase, u32); 4] = [
-    (Phase::Planning, 6000),
-    (Phase::Generation, 13500),
+    (Phase::Planning, 6112),
+    (Phase::Generation, 16050),
     (Phase::Validation, 3000),
     (Phase::Maintenance, 5000),
 ];
@@ -149,6 +173,17 @@ pub struct SkillMeta {
     pub priority: i32,
     pub budget: u32,
     pub category: SkillCategory,
+    /// Optional model-family gate (DS P2-a overlay mechanism). A skill whose
+    /// frontmatter lists `model_families` only enters the candidate set when
+    /// the request's model id (normalized lowercase, `provider/` prefix
+    /// stripped) contains one of the families as a substring. Empty = the
+    /// historical ungated behaviour every existing skill keeps.
+    ///
+    /// Strategic line: output contracts belong in the public corpus, model
+    /// behaviour adaptation belongs in the DS experiment field —
+    /// `skills/overlays/` is the test bed; overlay teaching migrates into
+    /// the public skills only after ab validation graduates it.
+    pub model_families: Vec<String>,
 }
 
 /// A skill after resolution — content possibly truncated to fit its
@@ -181,6 +216,13 @@ pub struct ResolveOptions {
     /// component library is loaded). Empty on every default path, so a
     /// no-library generation is byte-for-byte unchanged.
     pub pinned_skills: Vec<String>,
+    /// Model id of the requesting model, normalized at match time (lowercase,
+    /// `provider/` prefix stripped). Drives the `model_families` overlay gate
+    /// (DS P2-a): a family-gated skill only enters the candidate set when
+    /// this id contains one of its families. Empty (the default) never
+    /// admits a gated skill, so every path that does not know its model
+    /// keeps the historical behaviour.
+    pub model_id: String,
 }
 
 /// Design memory bundle (`ResolveOptions.memory` in the TS).
@@ -290,6 +332,9 @@ pub enum DropReason {
     Deduped,
     /// Removed because its content mismatched the request.
     ContentMismatch,
+    /// Excluded because the skill's `model_families` gate did not admit
+    /// the request's model id (overlay skills only — DS P2-a).
+    ModelFamilyMiss,
 }
 
 /// One skill that was excluded, with the reason it was dropped.
@@ -349,8 +394,8 @@ mod tests {
 
     #[test]
     fn default_budget_table() {
-        assert_eq!(Phase::Planning.default_budget(), 6000);
-        assert_eq!(Phase::Generation.default_budget(), 13500);
+        assert_eq!(Phase::Planning.default_budget(), 6112);
+        assert_eq!(Phase::Generation.default_budget(), 16050);
         assert_eq!(Phase::Validation.default_budget(), 3000);
         assert_eq!(Phase::Maintenance.default_budget(), 5000);
         // The const table agrees with the per-variant method.

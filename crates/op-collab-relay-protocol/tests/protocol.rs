@@ -545,3 +545,127 @@ fn random_capability_and_route_id_are_nonzero() {
     );
     assert_ne!(RouteId::generate().unwrap().as_bytes(), &[0; 16]);
 }
+
+#[test]
+fn reject_close_reasons_round_trip_and_stay_inside_a_close_frame() {
+    use op_collab_relay_protocol::{
+        RelayRejectCode, RELAY_REJECT_CLOSE_PREFIX, RELAY_REJECT_CODES,
+    };
+
+    let mut seen = std::collections::HashSet::new();
+    for code in RELAY_REJECT_CODES {
+        let reason = code.close_reason();
+        assert!(reason.starts_with(RELAY_REJECT_CLOSE_PREFIX));
+        assert_eq!(
+            reason.strip_prefix(RELAY_REJECT_CLOSE_PREFIX),
+            Some(code.label())
+        );
+        // A WebSocket close payload is 125 bytes, two of which are the code.
+        assert!(reason.len() <= 123);
+        assert_eq!(RelayRejectCode::from_close_reason(reason), Some(code));
+        assert!(seen.insert(reason), "close reasons must be unique per code");
+        // Every code is reachable from its wire byte, so the table cannot
+        // silently omit one.
+        assert_eq!(RelayRejectCode::try_from(code as u8).unwrap(), code);
+    }
+    assert_eq!(seen.len(), RELAY_REJECT_CODES.len());
+
+    for other in ["", "idle timeout", "relay-reject:", "relay-reject:unknown"] {
+        assert_eq!(RelayRejectCode::from_close_reason(other), None);
+    }
+}
+
+#[test]
+fn the_waiting_advertisement_round_trips_and_rejects_everything_else() {
+    use op_collab_relay_protocol::{
+        RelayWaitingAdvertisementV1, MAX_ADVERTISED_WAITING_SECS, MAX_RELAY_WAITING_HEADER_BYTES,
+    };
+
+    for (window, renew) in [
+        (60, false),
+        (60, true),
+        (MAX_ADVERTISED_WAITING_SECS, true),
+        (1, false),
+    ] {
+        let advertisement = RelayWaitingAdvertisementV1::new(window, renew).unwrap();
+        let header = advertisement.encode_header();
+        assert!(header.len() <= MAX_RELAY_WAITING_HEADER_BYTES);
+        assert_eq!(
+            RelayWaitingAdvertisementV1::decode_header(&header).unwrap(),
+            advertisement
+        );
+        assert_eq!(advertisement.window_secs(), window);
+        assert_eq!(advertisement.renewable(), renew);
+    }
+
+    assert!(RelayWaitingAdvertisementV1::new(0, true).is_err());
+    assert!(RelayWaitingAdvertisementV1::new(MAX_ADVERTISED_WAITING_SECS + 1, true).is_err());
+    for malformed in [
+        "",
+        "window=60 renew=1",
+        "oprw1 window=60",
+        "oprw1 renew=1 window=60",
+        "oprw1 window=60 renew=2",
+        "oprw1 window=abc renew=1",
+        "oprw1 window=60 renew=1 extra=1",
+        "oprw2 window=60 renew=1",
+        "oprw1 window=0 renew=1",
+    ] {
+        assert!(
+            RelayWaitingAdvertisementV1::decode_header(malformed).is_err(),
+            "{malformed:?} must not decode"
+        );
+    }
+}
+
+#[test]
+fn a_derived_lane_budget_only_ever_narrows_towards_the_relay() {
+    use std::time::Duration;
+
+    use op_collab_relay_protocol::{
+        RelayWaitingAdvertisementV1, MIN_DERIVED_OWNER_LANE_BUDGET_SECS,
+        RELAY_WAITING_SAFETY_MARGIN_SECS,
+    };
+
+    let unrenewable_cap = Duration::from_secs(45);
+    let renewable_cap = Duration::from_secs(300);
+
+    // A fixed 60 s countdown leaves the client's own 45 s ceiling in charge:
+    // 60 - 10 = 50, capped to 45.
+    let fixed = RelayWaitingAdvertisementV1::new(60, false).unwrap();
+    assert_eq!(
+        fixed.derive_lane_budget(unrenewable_cap, renewable_cap),
+        unrenewable_cap
+    );
+
+    // A tighter relay narrows the client below its own ceiling.
+    let tight = RelayWaitingAdvertisementV1::new(30, false).unwrap();
+    assert_eq!(
+        tight.derive_lane_budget(unrenewable_cap, renewable_cap),
+        Duration::from_secs(30 - RELAY_WAITING_SAFETY_MARGIN_SECS)
+    );
+
+    // A renewable lease unlocks the longer ceiling but never exceeds it.
+    let lease = RelayWaitingAdvertisementV1::new(12 * 60 * 60, true).unwrap();
+    assert_eq!(
+        lease.derive_lane_budget(unrenewable_cap, renewable_cap),
+        renewable_cap
+    );
+
+    // Without a lease the long window is still bounded by the short ceiling,
+    // so a relay cannot talk a client into parking past its own recycle.
+    let long_without_lease = RelayWaitingAdvertisementV1::new(12 * 60 * 60, false).unwrap();
+    assert_eq!(
+        long_without_lease.derive_lane_budget(unrenewable_cap, renewable_cap),
+        unrenewable_cap
+    );
+
+    // A degenerate advertisement floors instead of collapsing to zero.
+    for window in [1, RELAY_WAITING_SAFETY_MARGIN_SECS] {
+        let degenerate = RelayWaitingAdvertisementV1::new(window, false).unwrap();
+        assert_eq!(
+            degenerate.derive_lane_budget(unrenewable_cap, renewable_cap),
+            Duration::from_secs(MIN_DERIVED_OWNER_LANE_BUDGET_SECS)
+        );
+    }
+}

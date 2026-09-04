@@ -69,22 +69,25 @@ pub(super) fn owner_confirm_model(ui: &EditorUiState) -> Option<CollabOwnerConfi
     let identity = pending.identity();
     let request_key = pending.request_key().clone();
     Some(CollabOwnerConfirmModel {
-        title: op_i18n::translate(ui.locale, "collab.ownerConfirm.title").to_string(),
-        hint: op_i18n::translate(ui.locale, "collab.ownerConfirm.hint").to_string(),
+        title: op_i18n::translate(ui.effective_locale(), "collab.ownerConfirm.title").to_string(),
+        hint: op_i18n::translate(ui.effective_locale(), "collab.ownerConfirm.hint").to_string(),
         authoritative: vec![
             CollabOwnerIdentityRow {
-                label: op_i18n::translate(ui.locale, "collab.ownerConfirm.account").to_string(),
+                label: op_i18n::translate(ui.effective_locale(), "collab.ownerConfirm.account")
+                    .to_string(),
                 value: identity.subject().to_string(),
             },
             CollabOwnerIdentityRow {
-                label: op_i18n::translate(ui.locale, "collab.ownerConfirm.device").to_string(),
+                label: op_i18n::translate(ui.effective_locale(), "collab.ownerConfirm.device")
+                    .to_string(),
                 value: identity.device_id().to_string(),
             },
         ],
         claimed_name: identity
             .claimed_display_name()
             .map(|name| CollabOwnerIdentityRow {
-                label: op_i18n::translate(ui.locale, "collab.ownerConfirm.claimedName").to_string(),
+                label: op_i18n::translate(ui.effective_locale(), "collab.ownerConfirm.claimedName")
+                    .to_string(),
                 value: name.to_string(),
             }),
         claimed_avatar_url: identity.claimed_avatar_url().map(str::to_string),

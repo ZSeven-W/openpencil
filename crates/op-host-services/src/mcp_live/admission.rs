@@ -32,9 +32,8 @@
 //!
 //! # Browser-extension pinning (`OPENPENCIL_EXTENSION_ALLOWED_IDS`)
 //!
-//! The insert-only snapshot ingress ([`super::snapshot_ingest`]) is the one
-//! route that accepts a `chrome-extension://<id>` origin. Which ids it
-//! accepts has two modes:
+//! The insert-only snapshot ingress ([`super::snapshot_ingest`]) is the open
+//! extension capability. Which ids it accepts has two modes:
 //!
 //! * **Open (default).** Any well-formed extension origin passes. The
 //!   OpenPencil extension is unpublished, so it has no stable Chrome Web
@@ -52,6 +51,12 @@
 //! origin that was accepted ([`cors_origin_for`]) — never `*`, so an
 //! extension that is not the accepted caller cannot read this endpoint's
 //! answers even when the browser lets it issue the request.
+//!
+//! The paid intelligent-design route is stricter. Its boundary and `OPTIONS`
+//! response admit any well-formed extension origin only so an unpaired caller
+//! can read the handler's `extensionNotPaired` fallback signal. The handler
+//! queues model work only when this variable is explicitly non-empty and the
+//! caller's id matches it; snapshot ingress's open mode is never reused.
 
 use std::fmt;
 use std::sync::OnceLock;
@@ -138,11 +143,12 @@ impl fmt::Display for AdmissionDenial {
 /// Gate 1 — browser screening, applied to EVERY request (including the
 /// stateless probes and the REST document-sync route) before any routing.
 ///
-/// One path widens the `Origin` rule: the insert-only snapshot ingress
-/// (`snapshot_ingest`) additionally accepts a browser-extension origin,
-/// because the OpenPencil Chrome extension cannot present this instance's
-/// loopback origin. Every other path — and every other capability —
-/// keeps the strict same-origin rule plus the token gate below.
+/// Two narrow paths widen the `Origin` rule because the OpenPencil Chrome
+/// extension cannot present this instance's loopback origin. Snapshot ingress
+/// accepts a well-formed extension origin for insert-only capture. The paid
+/// design route admits the same origin shape only to return a readable pairing
+/// result, then requires an explicit id match before it queues model work.
+/// Every other capability keeps the strict same-origin rule.
 pub(super) fn check_boundary(
     req: &crate::mcp_serve::HttpRequest,
     admission: &LiveAdmission,
@@ -153,7 +159,14 @@ pub(super) fn check_boundary(
     let origin = req.origin.as_deref();
     let extension_ingest = super::snapshot_ingest::is_snapshot_ingest_path(&req.path)
         && is_browser_extension_origin(origin);
-    if !origin_allowed(origin, admission.port()) && !extension_ingest {
+    // The design route lets any syntactically valid Chrome extension reach
+    // its own handler so an unpaired extension receives a readable,
+    // origin-scoped `extensionNotPaired` response and can fall back locally.
+    // The handler still requires an explicit non-empty allowlist match before
+    // it queues any work.
+    let extension_design = super::design_md_route::is_design_md_path(&req.path)
+        && extension_origin_id(origin).is_some();
+    if !origin_allowed(origin, admission.port()) && !extension_ingest && !extension_design {
         return Err(AdmissionDenial::ForeignOrigin);
     }
     Ok(())
@@ -237,7 +250,7 @@ fn origin_allowed(origin: Option<&str>, expected_port: u16) -> bool {
 /// the surface to installed extensions and nothing else. The shape is
 /// validated strictly (exact length, exact alphabet, no path/query) rather
 /// than by prefix, so `chrome-extension://x/../..` style values are refused.
-fn extension_origin_id(origin: Option<&str>) -> Option<&str> {
+pub(super) fn extension_origin_id(origin: Option<&str>) -> Option<&str> {
     let id = origin.map(str::trim)?.strip_prefix("chrome-extension://")?;
     let well_formed = id.len() == 32
         && id
@@ -286,6 +299,21 @@ fn is_browser_extension_origin(origin: Option<&str>) -> bool {
     extension_origin_allowed(origin, extension_id_allowlist())
 }
 
+/// Whether a syntactically valid extension origin lacks the explicit pairing
+/// the intelligent design route requires. `None`/loopback origins are local
+/// non-browser callers and remain governed by the existing boundary.
+pub(super) fn is_unpaired_extension_origin(origin: Option<&str>) -> bool {
+    is_unpaired_extension_origin_with_allowlist(origin, extension_id_allowlist())
+}
+
+fn is_unpaired_extension_origin_with_allowlist(
+    origin: Option<&str>,
+    allowlist: Option<&[String]>,
+) -> bool {
+    extension_origin_id(origin).is_some()
+        && !allowlist.is_some_and(|allowlist| extension_origin_allowed(origin, Some(allowlist)))
+}
+
 /// The `Access-Control-Allow-Origin` value this endpoint may echo back for
 /// `req` — the ONE origin the boundary accepts for that exact request, or
 /// `None` (emit no header at all).
@@ -307,6 +335,14 @@ pub(super) fn cors_origin_for<'a>(
     // is echoed only on the route it is allowed to reach.
     if super::snapshot_ingest::is_snapshot_ingest_path(&req.path)
         && is_browser_extension_origin(Some(origin))
+    {
+        return Some(origin);
+    }
+    // Echo a well-formed extension origin on the exact design route even when
+    // it is not paired. That makes the handler's 403 readable to the extension
+    // without widening CORS to any other route or origin shape.
+    if super::design_md_route::is_design_md_path(&req.path)
+        && extension_origin_id(Some(origin)).is_some()
     {
         return Some(origin);
     }

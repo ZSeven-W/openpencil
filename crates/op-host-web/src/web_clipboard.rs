@@ -1,9 +1,10 @@
-// Browser boundary: clipboard writes and download clicks require real browser
-// gestures; the CanvasKit bundle gate covers wasm linkability.
-//! Browser clipboard write + file download (Blob + anchor).
+// Browser boundary: clipboard writes, external navigation, and download clicks
+// require host/browser integration; the CanvasKit bundle gate covers wasm
+// linkability.
+//! Browser clipboard, VS Code host relay, and file download (Blob + anchor).
 //!
-//! The two browser-side actions the codegen panel needs: copy generated source
-//! to the clipboard, and download an exported artifact. Pure `web_sys`/`js_sys`
+//! The browser-side actions the editor needs: copy generated source, relay a
+//! narrow host action from an embed, and download an artifact. Pure `web_sys`/`js_sys`
 //! IO against the locked web-sys 0.3.94 bindings — verified by inspection (the
 //! exact signatures: `Navigator::clipboard() -> Clipboard`,
 //! `Clipboard::write_text() -> js_sys::Promise`, `BlobPropertyBag::new() ->
@@ -12,6 +13,21 @@
 #![allow(dead_code)]
 
 use wasm_bindgen::JsCast;
+
+fn is_vscode_embed_state(search: &str, in_iframe: bool) -> bool {
+    in_iframe && op_editor_core::EmbedHost::from_query(search) == op_editor_core::EmbedHost::VsCode
+}
+
+/// Whether this canvas is running inside the VS Code/Cursor relay shell.
+pub fn is_vscode_embed() -> bool {
+    let Some(window) = web_sys::window() else {
+        return false;
+    };
+    let Ok(search) = window.location().search() else {
+        return false;
+    };
+    is_vscode_embed_state(&search, crate::vscode_bridge::in_iframe(&window))
+}
 
 /// Copy `text` to the system clipboard (fire-and-forget).
 ///
@@ -56,6 +72,21 @@ pub fn post_copy_to_parent(text: &str) {
     let _ = parent.post_message(&wasm_bindgen::JsValue::from_str(&msg), "*");
 }
 
+/// Ask a VS Code embedding shell to open an external URL in the user's browser.
+///
+/// `true` means the VS Code embed claimed the navigation, not that a message
+/// was already posted. The URL is held while the bridge proves that the
+/// token-authenticated daemon is running in `managed` mode; failure is a
+/// conservative drop so the auth callback cannot fall back to a nested
+/// `window.open` and bypass the proof.
+pub fn post_open_external_to_parent(url: &str) -> bool {
+    if !is_vscode_embed() {
+        return false;
+    }
+    crate::vscode_bridge::request_external_navigation(url);
+    true
+}
+
 /// Trigger a browser download of `data` as `filename` with MIME type `mime`.
 ///
 /// Builds a `Blob` from the bytes, creates an object URL, clicks a synthetic
@@ -95,4 +126,23 @@ pub fn download_bytes(
     // The browser has captured the Blob for the download; revoke to free it.
     web_sys::Url::revoke_object_url(&url)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_vscode_embed_state;
+
+    #[test]
+    fn external_navigation_relay_is_scoped_to_the_vscode_embed() {
+        assert!(is_vscode_embed_state("?embed=vscode", true));
+        assert!(is_vscode_embed_state("?foo=1&embed=vscode", true));
+        assert!(!is_vscode_embed_state("", true));
+        assert!(!is_vscode_embed_state("?embed=web", true));
+        assert!(!is_vscode_embed_state("?embedded=vscode", true));
+    }
+
+    #[test]
+    fn top_level_query_cannot_spoof_a_vscode_embed() {
+        assert!(!is_vscode_embed_state("?embed=vscode", false));
+    }
 }

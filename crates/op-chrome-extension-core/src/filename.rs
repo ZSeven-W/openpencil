@@ -26,6 +26,15 @@
 
 use crate::js_text::{is_js_space, js_trim, truncate_utf16};
 
+/// The design-system download has a stable conventional name so it can be
+/// imported by any tool that recognises the `design.md` convention.
+pub const DESIGN_MD_FILENAME: &str = "design.md";
+
+/// Download name for an extracted design-system guide.
+pub fn design_md_filename() -> &'static str {
+    DESIGN_MD_FILENAME
+}
+
 /// Longest title stem kept, in UTF-16 code units (JS `slice(0, 80)`).
 const MAX_STEM_UNITS: usize = 80;
 

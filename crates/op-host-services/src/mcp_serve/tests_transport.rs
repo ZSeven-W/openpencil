@@ -494,6 +494,143 @@ fn credential_settings_request_rejects_over_256_kib_before_reading_body() {
 }
 
 #[test]
+fn model_discovery_request_rejects_over_256_kib_before_reading_body() {
+    let request = concat!(
+        "POST /api/ai/models/discover HTTP/1.1\r\n",
+        "Host: x\r\n",
+        "Content-Length: 262145\r\n",
+        "\r\n"
+    );
+    let mut cur = std::io::Cursor::new(request.as_bytes().to_vec());
+
+    let err = read_http_request(&mut cur).expect_err("oversized discovery body must be rejected");
+
+    assert!(matches!(err, McpServeError::Protocol(_)), "{err:?}");
+    assert!(
+        err.to_string()
+            .contains("model discovery body exceeds 256 KiB"),
+        "{err}"
+    );
+}
+
+#[test]
+fn design_md_evidence_requires_one_decimal_content_length() {
+    for (headers, expected_status) in [
+        ("Host: x\r\n", "411 Length Required"),
+        ("Host: x\r\nContent-Length: nope\r\n", "400 Bad Request"),
+        (
+            "Host: x\r\nContent-Length: 2\r\nContent-Length: 2\r\n",
+            "400 Bad Request",
+        ),
+        (
+            "Host: x\r\nContent-Length: 999999999999999999999999999999999999\r\n",
+            "400 Bad Request",
+        ),
+    ] {
+        let request = format!("POST /api/generate/design-md HTTP/1.1\r\n{headers}\r\n{{}}");
+        let mut cur = std::io::Cursor::new(request.into_bytes());
+        let err = read_http_request(&mut cur).expect_err("invalid framing must reject");
+        assert!(
+            matches!(
+                err,
+                McpServeError::Framing { status, .. } if status == expected_status
+            ),
+            "{err:?}"
+        );
+    }
+}
+
+#[test]
+fn design_md_evidence_rejects_over_256_kib_before_reading_body() {
+    let request = concat!(
+        "POST /api/generate/design-md HTTP/1.1\r\n",
+        "Host: x\r\n",
+        "Content-Length: 262145\r\n",
+        "\r\n"
+    );
+    let mut cur = std::io::Cursor::new(request.as_bytes().to_vec());
+    let err = read_http_request(&mut cur).expect_err("oversized evidence must reject");
+    assert!(
+        matches!(
+            err,
+            McpServeError::Framing {
+                status: "413 Payload Too Large",
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+    assert!(err.to_string().contains("256 KiB"));
+}
+
+#[test]
+fn non_post_design_md_body_is_capped_before_it_is_read() {
+    let job_path = "/api/generate/design-md/0123456789abcdef0123456789abcdef";
+    for path in ["/api/generate/design-md", job_path] {
+        for (length, expected_status) in [
+            (262_145, "413 Payload Too Large"),
+            (262_144, "400 Bad Request"),
+        ] {
+            let request =
+                format!("DELETE {path} HTTP/1.1\r\nHost: x\r\nContent-Length: {length}\r\n\r\n");
+            let mut cur = std::io::Cursor::new(request.into_bytes());
+            let err = read_http_request(&mut cur).expect_err("body must reject before read");
+            assert!(
+                matches!(
+                    err,
+                    McpServeError::Framing { status, .. } if status == expected_status
+                ),
+                "{err:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn design_md_evidence_rejects_invalid_utf8_instead_of_replacing_it() {
+    let head = b"POST /api/generate/design-md HTTP/1.1\r\nHost: x\r\nContent-Length: 1\r\n\r\n";
+    let mut request = head.to_vec();
+    request.push(0xff);
+    let mut cur = std::io::Cursor::new(request);
+    let err = read_http_request(&mut cur).expect_err("invalid UTF-8 must reject");
+    assert!(
+        matches!(
+            err,
+            McpServeError::Framing {
+                status: "400 Bad Request",
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+    assert!(err.to_string().contains("valid UTF-8"));
+}
+
+#[test]
+fn design_md_evidence_rejects_ambiguous_content_type_headers() {
+    let request = concat!(
+        "POST /api/generate/design-md HTTP/1.1\r\n",
+        "Host: x\r\n",
+        "Content-Type: application/json\r\n",
+        "Content-Type: text/plain\r\n",
+        "Content-Length: 2\r\n",
+        "\r\n{}"
+    );
+    let mut cur = std::io::Cursor::new(request.as_bytes().to_vec());
+    let err = read_http_request(&mut cur).expect_err("duplicate Content-Type must reject");
+    assert!(
+        matches!(
+            err,
+            McpServeError::Framing {
+                status: "400 Bad Request",
+                ..
+            }
+        ),
+        "{err:?}"
+    );
+}
+
+#[test]
 fn http_transport_serves_initialize() {
     let rpc = r#"{"jsonrpc":"2.0","id":7,"method":"initialize","params":{}}"#;
     let request = format!(

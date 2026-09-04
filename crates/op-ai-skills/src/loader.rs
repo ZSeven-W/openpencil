@@ -11,7 +11,6 @@ use include_dir::Dir;
 
 use crate::frontmatter::parse_skill_frontmatter;
 use crate::types::{Phase, SkillMeta};
-use crate::SKILLS;
 
 /// One registered skill — parsed frontmatter plus its markdown body.
 #[derive(Debug, Clone)]
@@ -51,7 +50,12 @@ fn collect(dir: &Dir, out: &mut Vec<SkillEntry>) {
 
 fn build_registry() -> Vec<SkillEntry> {
     let mut out = Vec::new();
-    collect(&SKILLS, &mut out);
+    // A slim build embeds no phase corpus: the registry is honestly
+    // empty rather than panicking, because its consumers (prompt
+    // composition) never run in that build.
+    if let Some(dir) = crate::phase_corpus_dir() {
+        collect(dir, &mut out);
+    }
     out
 }
 

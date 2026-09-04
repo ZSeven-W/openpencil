@@ -259,15 +259,16 @@ fn append_mode_forces_effective_concurrency_to_one() {
     );
     assert_eq!(summary.subtasks.len(), 2);
 
-    // 1 pre-setup + 2 sub-agent InsertSubtrees = 3 total (no N scaffold roots).
+    // 1 pre-setup + 2 sub-agent InsertSubtrees + 1 finalize status bar = 4 total.
+    // The extra insert is the enforced OS status bar (mobile root contract).
     let inserts = sink
         .applied
         .iter()
         .filter(|c| matches!(c, EditorCommand::InsertSubtree { .. }))
         .count();
     assert_eq!(
-        inserts, 3,
-        "expected 3 InsertSubtrees (1 pre-setup + 2 sub-agents): got {inserts}"
+        inserts, 4,
+        "expected 4 InsertSubtrees (1 pre-setup + 2 sub-agents + 1 status bar): got {inserts}"
     );
 }
 

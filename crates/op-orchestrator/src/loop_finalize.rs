@@ -72,6 +72,15 @@ pub(crate) struct StateDocSink<'a> {
     pub(crate) state: &'a mut EditorState,
 }
 
+// The recording (MCP host-replay) counterpart lives in its sibling module;
+// the re-export keeps `loop_finalize::record_loop_finalize_counted` and its
+// result/error types on their existing paths.
+#[path = "loop_finalize_record.rs"]
+mod loop_finalize_record;
+pub use loop_finalize_record::{
+    record_loop_finalize_counted, RecordLoopFinalizeError, RecordedLoopFinalize,
+};
+
 impl crate::types::DocSink for StateDocSink<'_> {
     fn state(&self) -> &EditorState {
         self.state
@@ -130,7 +139,9 @@ fn locate_section_context(forest: &[PenNode]) -> (bool, Option<String>, f64, The
             .unwrap_or(DEFAULT_CANVAS_WIDTH);
         // A flat-section forest has no page-bg frame: each top-level node is a
         // section, so there is no "redundant page background" to match against.
-        // Theme falls back to Light (matching `detect_theme_from_fill(None)`).
+        // Explicitly default to Light here; `detect_theme_from_fill(None)` now
+        // returns Unknown. Without a page background to detect from, we assume
+        // Light to preserve existing behavior.
         (false, None, width, Theme::Light)
     }
 }
@@ -245,14 +256,19 @@ pub(crate) fn fix_theme_variable_polarity(sink: &mut dyn crate::types::DocSink) 
                 continue;
             }
             let lname = name.to_lowercase();
-            // `border` / `outline` / `divider` sit with the SURFACE family, not
-            // on their own: a hairline lives a step off the page tone, far from
-            // the text tone, so the surface thresholds below classify it
-            // correctly with no extra tuning. They were missing from this list,
-            // which left a dark design's `$color-border` resolving to its
-            // stock-light slot (measured: 0808-gm-1.op kept `#E2E8F0` on a
-            // `#0A0A0A` page — a near-WHITE hairline, which the widget renderer
-            // then used as the tab bar's background).
+            // `border` / `outline` / `divider` / `input` / `ring` sit with
+            // the SURFACE family, not on their own: a hairline lives a step
+            // off the page tone, far from the text tone, so the surface
+            // thresholds below classify it correctly with no extra tuning.
+            // They were missing from this list, which left a dark design's
+            // `$--border` resolving to its stock-light slot (measured:
+            // 0808-gm-1.op kept `#E2E8F0` on a `#0A0A0A` page — a near-WHITE
+            // hairline, which the widget renderer then used as the tab
+            // bar's background). The shadcn rename (B1) replaced the
+            // `color-*` word set with slot names, so the list carries the
+            // new vocabulary (`muted`/`secondary`/`popover`/`sidebar`/
+            // `accent` surfaces, `input`/`ring` hairlines, the status
+            // colours, `scrim`).
             let surface_like = [
                 "surface",
                 "card",
@@ -263,14 +279,33 @@ pub(crate) fn fix_theme_variable_polarity(sink: &mut dyn crate::types::DocSink) 
                 "border",
                 "outline",
                 "divider",
+                "muted",
+                "secondary",
+                "popover",
+                "input",
+                "ring",
+                "sidebar",
+                "accent",
+                "scrim",
+                "success",
+                "warning",
+                "error",
+                "info",
             ]
             .iter()
             .any(|t| lname.contains(t));
+            // A `*-foreground` on-color token is a TEXT colour even when its
+            // base slot word also appears (`--card-foreground`): foreground
+            // wins, mirroring `variable_binding::family_of`.
             let text_like = lname.contains("text") || lname.contains("foreground");
-            if surface_like == text_like {
-                // neither family, or ambiguously both — leave alone
+            let family_is_surface = if text_like {
+                false
+            } else if surface_like {
+                true
+            } else {
+                // neither family — leave alone
                 continue;
-            }
+            };
             let Some(active_hex) = state.resolve_color_variable_hex(name) else {
                 continue;
             };
@@ -280,7 +315,7 @@ pub(crate) fn fix_theme_variable_polarity(sink: &mut dyn crate::types::DocSink) 
             // Every hex present across the variable's theme slots.
             let mut slot_hexes: Vec<String> = Vec::new();
             collect_hex_strings(def.get("value").unwrap_or(&Value::Null), &mut slot_hexes);
-            let violated = if surface_like {
+            let violated = if family_is_surface {
                 (active_lum - bg_lum).abs() > 0.55
             } else {
                 (active_lum - bg_lum).abs() < 0.22
@@ -293,7 +328,7 @@ pub(crate) fn fix_theme_variable_polarity(sink: &mut dyn crate::types::DocSink) 
                 .filter_map(|h| hex_luminance(h).map(|l| (h, l)))
                 .filter(|(h, _)| !h.eq_ignore_ascii_case(&active_hex))
                 .filter(|(_, l)| {
-                    if surface_like {
+                    if family_is_surface {
                         (l - bg_lum).abs() < 0.35
                     } else {
                         (l - bg_lum).abs() > 0.5
@@ -301,7 +336,7 @@ pub(crate) fn fix_theme_variable_polarity(sink: &mut dyn crate::types::DocSink) 
                 })
                 .min_by(|a, b| {
                     let key = |l: f64| {
-                        if surface_like {
+                        if family_is_surface {
                             (l - bg_lum).abs()
                         } else {
                             -(l - bg_lum).abs()
@@ -504,45 +539,59 @@ pub fn apply_loop_finalize_counted(state: &mut EditorState) -> RepairSummary {
     }
 
     {
-        let mut counter = RepairCounter::new();
         let mut base = StateDocSink { state: &mut *state };
-        let mut counting = counter.wrap(&mut base);
-        let sink: &mut dyn crate::types::DocSink = &mut counting;
-        crate::abandoned_duplicate_roots::remove_abandoned_duplicate_roots(sink);
-        crate::cleanup::remove_duplicate_bottom_nav_sections_for_all_roots(sink);
-        // Nav-surface normalization (72px row, space_between, centered items)
-        // previously ran only on the orchestrator path — the agentic loop's
-        // hand-built navs shipped crooked (GLM-5.2 2026-07-11).
-        crate::cleanup::repair_mobile_structural_chrome_for_all_roots(sink);
-        crate::avatar_repair::repair_avatar_slots_for_all_roots(sink);
-        crate::cleanup::anchor_bottom_nav_last_for_all_roots(sink);
-        counter.checkpoint(
-            &mut summary,
-            CheckCategory::Structure,
-            "loop-finalize:chrome-dedupe+avatar+nav-anchor",
-        );
-        crate::mobile_content_rail::repair_mobile_content_rails_for_all_roots(sink);
-        crate::cleanup::distribute_bottom_nav_tabs_for_all_roots(sink);
-        crate::cleanup::collapse_nested_horizontal_padding_for_all_roots(sink);
-        crate::cleanup::expand_absolute_container_to_children_for_all_roots(sink);
-        crate::cleanup::pad_clipping_horizontal_row_for_stroke_for_all_roots(sink);
-        crate::cleanup::equalize_horizontal_card_heights_for_all_roots(sink);
-        crate::cleanup::collapse_fill_container_content_sections_for_all_roots(sink);
-        crate::geometry_validation::repair_mobile_bottom_breathing_for_all_roots(sink);
-        counter.checkpoint(
-            &mut summary,
-            CheckCategory::Layout,
-            "loop-finalize:container-geometry",
-        );
+        run_loop_finalize_prelude(&mut base, &mut summary);
     }
     if state.active_children().is_empty() {
         return summary;
     }
 
-    // -- Resolve the section forest + its page context. --
+    let canvas_width = run_loop_finalize_direct_passes(state, &mut summary);
+    apply_loop_finalize_app_state_hoist(state);
+    {
+        let mut sink = StateDocSink { state: &mut *state };
+        run_loop_finalize_cleanup(&mut sink, canvas_width, &mut summary);
+    }
+    run_loop_finalize_text_fill(state);
+
+    summary
+}
+
+fn run_loop_finalize_prelude(base: &mut dyn crate::types::DocSink, summary: &mut RepairSummary) {
+    let mut counter = RepairCounter::new();
+    let mut counting = counter.wrap(base);
+    let sink: &mut dyn crate::types::DocSink = &mut counting;
+    crate::abandoned_duplicate_roots::remove_abandoned_duplicate_roots(sink);
+    crate::cleanup::remove_duplicate_bottom_nav_sections_for_all_roots(sink);
+    // Nav-surface normalization (72px row, space_between, centered items)
+    // previously ran only on the orchestrator path — the agentic loop's
+    // hand-built navs shipped crooked (GLM-5.2 2026-07-11).
+    crate::cleanup::repair_mobile_structural_chrome_for_all_roots(sink);
+    crate::avatar_repair::repair_avatar_slots_for_all_roots(sink);
+    crate::cleanup::anchor_bottom_nav_last_for_all_roots(sink);
+    counter.checkpoint(
+        summary,
+        CheckCategory::Structure,
+        "loop-finalize:chrome-dedupe+avatar+nav-anchor",
+    );
+    crate::mobile_content_rail::repair_mobile_content_rails_for_all_roots(sink);
+    crate::cleanup::distribute_bottom_nav_tabs_for_all_roots(sink);
+    crate::cleanup::collapse_nested_horizontal_padding_for_all_roots(sink);
+    crate::cleanup::expand_absolute_container_to_children_for_all_roots(sink);
+    crate::cleanup::pad_clipping_horizontal_row_for_stroke_for_all_roots(sink);
+    crate::cleanup::equalize_horizontal_card_heights_for_all_roots(sink);
+    crate::cleanup::collapse_fill_container_content_sections_for_all_roots(sink);
+    crate::geometry_validation::repair_mobile_bottom_breathing_for_all_roots(sink);
+    counter.checkpoint(
+        summary,
+        CheckCategory::Layout,
+        "loop-finalize:container-geometry",
+    );
+}
+
+fn run_loop_finalize_direct_passes(state: &mut EditorState, summary: &mut RepairSummary) -> f64 {
     let (has_wrapper, page_bg, canvas_width, theme) =
         locate_section_context(state.active_children());
-    let light_theme = theme == Theme::Light;
     let root_form = locate_root_form(state.active_children());
     // Violations the section walk below detected and deliberately did not
     // repair (see `crate::deck_echo`). Filled inside the borrow, noted onto
@@ -589,7 +638,7 @@ pub fn apply_loop_finalize_counted(state: &mut EditorState) -> RepairSummary {
             crate::tree_heuristics::apply_tree_heuristics(
                 forest,
                 page_bg.as_deref(),
-                light_theme,
+                theme,
                 prior_accent.as_deref(),
             );
         }
@@ -604,6 +653,10 @@ pub fn apply_loop_finalize_counted(state: &mut EditorState) -> RepairSummary {
         summary.note(echo.line());
     }
 
+    canvas_width
+}
+
+fn apply_loop_finalize_app_state_hoist(state: &mut EditorState) -> Option<EditorCommand> {
     // Hoist node-level `state` into the document root, mirroring the
     // orchestrator's per-subtask `hoist_app_state` — without this the
     // agentic-loop path leaves `$app.*` unseeded, so generated bindings
@@ -619,10 +672,18 @@ pub fn apply_loop_finalize_counted(state: &mut EditorState) -> RepairSummary {
     if matches!(
         &hoist_cmd,
         EditorCommand::MergeAppState { state: hoisted, .. } if !hoisted.is_empty()
-    ) {
-        state.apply(hoist_cmd);
+    ) && state.apply(hoist_cmd.clone())
+    {
+        return Some(hoist_cmd);
     }
+    None
+}
 
+fn run_loop_finalize_cleanup(
+    sink: &mut dyn crate::types::DocSink,
+    canvas_width: f64,
+    summary: &mut RepairSummary,
+) {
     // The app-shell restructure (flat-vertical sidebar dashboard → horizontal
     // [sidebar | content]) runs inside `cleanup::finalize_design` below, the
     // whole-doc finalize point SHARED with the orchestrator path — so both the
@@ -635,18 +696,18 @@ pub fn apply_loop_finalize_counted(state: &mut EditorState) -> RepairSummary {
     //    real top-level nodes — NOT the unwrapped section forest. A synthesized
     //    minimal plan carries the root frame's name (the only plan field the
     //    cleanup passes read — dashboard keyword matching) + its width/fill. --
-    let root_ids: Vec<String> = state
+    let root_ids: Vec<String> = sink
+        .state()
         .active_children()
         .iter()
         .map(|n| n.id_str().to_string())
         .collect();
-    let plan = synthesize_plan(state.active_children(), canvas_width);
-    {
-        let mut sink = StateDocSink { state: &mut *state };
-        let root_id_refs: Vec<&str> = root_ids.iter().map(String::as_str).collect();
-        crate::cleanup::finalize_design_with_summary(&mut sink, &plan, &root_id_refs, &mut summary);
-    }
+    let plan = synthesize_plan(sink.state().active_children(), canvas_width);
+    let root_id_refs: Vec<&str> = root_ids.iter().map(String::as_str).collect();
+    crate::cleanup::finalize_design_with_summary(sink, &plan, &root_id_refs, summary);
+}
 
+fn run_loop_finalize_text_fill(state: &mut EditorState) {
     // Fill-less text → a background-contrasting fill, over the FULLY
     // restructured tree — AFTER the app-shell reshape has moved the sidebar into
     // place — so every text node, including a restructured sidebar's nav labels,
@@ -657,14 +718,17 @@ pub fn apply_loop_finalize_counted(state: &mut EditorState) -> RepairSummary {
     // while the tree is mutated.
     let snapshot = state.clone();
     ensure_text_fill_forest(state.active_children_mut(), &snapshot);
-
-    summary
 }
 
 /// Build the minimal [`OrchestratorPlan`](crate::plan::OrchestratorPlan) the
 /// cleanup passes need. Only `root_frame.name` (dashboard keyword matching) +
 /// `width`/`fill` are read by `finalize_design`; `subtasks` is left empty.
-fn synthesize_plan(forest: &[PenNode], canvas_width: f64) -> crate::plan::OrchestratorPlan {
+///
+/// Public so hosts that drive the cleanup passes over a document that has no
+/// generation plan (the agentic loop, and the MCP `finalize_design` tool in
+/// `op-host-services`) build the same minimal plan instead of each re-deriving
+/// the field contract.
+pub fn synthesize_plan(forest: &[PenNode], canvas_width: f64) -> crate::plan::OrchestratorPlan {
     let root = forest.first();
     let name = root
         .and_then(|n| n.base().name.clone())
@@ -706,3 +770,11 @@ mod polarity_tests;
 #[cfg(test)]
 #[path = "loop_finalize_tier_tests.rs"]
 mod tier_tests;
+
+#[cfg(test)]
+#[path = "loop_finalize_status_bar_tests.rs"]
+mod status_bar_tests;
+
+#[cfg(test)]
+#[path = "loop_finalize_recording_tests.rs"]
+mod recording_tests;

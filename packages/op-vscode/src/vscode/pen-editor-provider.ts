@@ -19,6 +19,7 @@ import {
   isShellControl,
   isShellSaveRequest,
   parseShellCopyText,
+  parseShellExternalUrl,
   parseShellReadyOrigin,
 } from "./shell-messages";
 import { encodeFigBytes, figSaveTargetPath, isFigPath } from "./fig-source";
@@ -280,6 +281,21 @@ export class PenEditorProvider implements vscode.CustomEditorProvider<PenDocumen
     const disposables: vscode.Disposable[] = [];
     disposables.push(
       panel.webview.onDidReceiveMessage((raw: unknown) => {
+        // Browser-bound navigation cannot reliably escape a nested VS Code
+        // webview iframe. The page requests it through a narrow control
+        // message; parseShellExternalUrl applies the scheme/host policy before
+        // the extension invokes the host browser.
+        const externalUrl = parseShellExternalUrl(raw);
+        if (externalUrl !== undefined) {
+          void vscode.env.openExternal(vscode.Uri.parse(externalUrl, true)).then(
+            (opened) => {
+              if (!opened) this.logger.error("the host refused to open the OpenPencil sign-in page");
+            },
+            (error: unknown) =>
+              this.logger.error(`opening the OpenPencil sign-in page failed: ${String(error)}`),
+          );
+          return;
+        }
         // Clipboard relay: the embedded editor can't write the clipboard
         // itself (webview nested-iframe permissions), so it posts the text
         // up for a host-side write. Handled before the control swallow.

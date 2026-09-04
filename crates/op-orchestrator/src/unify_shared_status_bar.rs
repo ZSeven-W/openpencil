@@ -204,7 +204,7 @@ fn list_status_bar_screen_candidates(state: &EditorState) -> Vec<String> {
         .collect()
 }
 
-fn looks_like_fit_content_mobile_root(node: &PenNode) -> bool {
+pub(crate) fn looks_like_fit_content_mobile_root(node: &PenNode) -> bool {
     let PenNode::Frame(frame) = node else {
         return false;
     };

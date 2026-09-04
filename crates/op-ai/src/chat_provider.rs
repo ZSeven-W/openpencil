@@ -41,6 +41,10 @@ pub enum CliName {
     Antigravity,
     /// xAI's Grok Build coding agent CLI (subprocess IPC).
     GrokBuild,
+    /// DeepSeek Harness (`dsh`) — subprocess IPC, ONE shot per turn
+    /// (`dsh --profile headless "<prompt>"` prints the final answer
+    /// and exits; no ACP support).
+    Dsh,
 }
 
 impl CliName {
@@ -52,6 +56,7 @@ impl CliName {
             CliName::OpenCode => "OpenCode",
             CliName::Antigravity => "Antigravity",
             CliName::GrokBuild => "Grok Build",
+            CliName::Dsh => "DeepSeek Harness",
         }
     }
     /// Default binary name on PATH. Users override via
@@ -68,18 +73,22 @@ impl CliName {
             CliName::OpenCode => "opencode",
             CliName::Antigravity => "agy",
             CliName::GrokBuild => "grok",
+            CliName::Dsh => "dsh",
         }
     }
     /// Which backend transport this CLI uses. Mirrors the table in
     /// [[project_agent_runtime]] memory:
-    /// Claude/Copilot/Antigravity/Grok Build = subprocess IPC;
-    /// Codex/OpenCode = HTTP server.
+    /// Claude/Copilot/Codex/Antigravity/Grok Build/DeepSeek Harness =
+    /// subprocess IPC; OpenCode = HTTP server.
     pub fn backend(self) -> ChatProviderKind {
         match self {
-            CliName::ClaudeCode | CliName::Copilot | CliName::Antigravity | CliName::GrokBuild => {
-                ChatProviderKind::Subprocess(self)
-            }
-            CliName::Codex | CliName::OpenCode => ChatProviderKind::HttpServer(self),
+            CliName::ClaudeCode
+            | CliName::Copilot
+            | CliName::Codex
+            | CliName::Antigravity
+            | CliName::GrokBuild
+            | CliName::Dsh => ChatProviderKind::Subprocess(self),
+            CliName::OpenCode => ChatProviderKind::HttpServer(self),
         }
     }
 }
@@ -310,9 +319,27 @@ pub trait ChatProvider: Send + Sync {
     fn provider_label(&self) -> &str;
     fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send>;
 
+    /// Whether [`Self::send_cancellable`] owns a transport that is actually
+    /// aborted when its flag is raised. Callers with a hard deadline must gate
+    /// on this capability instead of assuming every provider can stop paid
+    /// work merely because the trait exposes a cancellation argument.
+    fn supports_cancellable_send(&self) -> bool {
+        false
+    }
+
+    /// Whether this provider guarantees a text-only turn with no local tools,
+    /// filesystem access, MCP surface, or other side effects. Untrusted
+    /// evidence workflows must require this separately from cancellation: an
+    /// abortable coding agent can still act on prompt-injected instructions.
+    fn supports_evidence_only_send(&self) -> bool {
+        false
+    }
+
     /// Start a turn that may be interrupted through `cancel`. Providers with
-    /// an abortable transport should override this; the default preserves the
-    /// existing iterator contract for simple/test providers.
+    /// an abortable transport must override this together with
+    /// [`Self::supports_cancellable_send`]. The default preserves the original
+    /// delegation to [`Self::send`] for existing soft-cancel consumers; callers
+    /// with a hard deadline must first require the explicit capability above.
     fn send_cancellable(
         &self,
         request: ChatRequest,
@@ -570,8 +597,9 @@ mod tests {
     #[test]
     fn cli_name_backend_table_matches_architecture_memo() {
         // project_agent_runtime memory:
-        //  Subprocess IPC = Claude Code / Copilot / Antigravity / Grok Build
-        //  HTTP server   = Codex / OpenCode
+        //  Subprocess IPC = Claude Code / Copilot / Codex / Antigravity /
+        //                   Grok Build / DeepSeek Harness
+        //  HTTP server   = OpenCode
         assert!(matches!(
             CliName::ClaudeCode.backend(),
             ChatProviderKind::Subprocess(_)
@@ -588,9 +616,15 @@ mod tests {
             CliName::GrokBuild.backend(),
             ChatProviderKind::Subprocess(_)
         ));
+        // DeepSeek Harness has no ACP support and no HTTP server mode:
+        // one subprocess, one prompt in, one answer out.
+        assert!(matches!(
+            CliName::Dsh.backend(),
+            ChatProviderKind::Subprocess(_)
+        ));
         assert!(matches!(
             CliName::Codex.backend(),
-            ChatProviderKind::HttpServer(_)
+            ChatProviderKind::Subprocess(_)
         ));
         assert!(matches!(
             CliName::OpenCode.backend(),
@@ -605,14 +639,15 @@ mod tests {
         assert_eq!(CliName::OpenCode.default_binary(), "opencode");
         assert_eq!(CliName::Antigravity.default_binary(), "agy");
         assert_eq!(CliName::GrokBuild.default_binary(), "grok");
+        assert_eq!(CliName::Dsh.default_binary(), "dsh");
     }
 
     #[test]
     fn provider_config_new_seeds_binary_for_cli_kinds() {
         let cfg = ChatProviderConfig::new(ChatProviderKind::Subprocess(CliName::ClaudeCode));
         assert_eq!(cfg.binary, "claude");
-        let cfg2 = ChatProviderConfig::new(ChatProviderKind::HttpServer(CliName::Codex));
-        assert_eq!(cfg2.binary, "codex");
+        let cfg2 = ChatProviderConfig::new(ChatProviderKind::HttpServer(CliName::OpenCode));
+        assert_eq!(cfg2.binary, "opencode");
         // BuiltIn / Acp leave binary empty — built-in needs no
         // spawn target; Acp's binary is user-supplied per-instance.
         let cfg3 = ChatProviderConfig::new(ChatProviderKind::BuiltIn);
@@ -654,6 +689,7 @@ mod tests {
         assert_eq!(CliName::OpenCode.label(), "OpenCode");
         assert_eq!(CliName::Antigravity.label(), "Antigravity");
         assert_eq!(CliName::GrokBuild.label(), "Grok Build");
+        assert_eq!(CliName::Dsh.label(), "DeepSeek Harness");
     }
 
     #[test]

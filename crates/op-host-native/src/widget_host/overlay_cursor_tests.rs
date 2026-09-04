@@ -104,6 +104,49 @@ fn topmost_design_panel_cursor_move_clears_stale_path_anchor_menu_hover() {
     );
 }
 
+#[test]
+fn multi_selection_layer_context_menu_tracks_the_hovered_row() {
+    use op_editor_core::editor_ui_state::{LayerContextMenuState, LayerContextTarget};
+    use op_editor_core::EditorState;
+    use op_editor_ui::widgets::layer_context_menu::LayerContextMenu;
+
+    let mut host = WidgetHostNative::new();
+    host.last_viewport_w = VIEWPORT_W;
+    host.last_viewport_h = VIEWPORT_H;
+    *host.editor_state_mut() = EditorState::sample();
+    host.editor_state_mut().toggle_selection(NodeId::new("n13"));
+    assert_eq!(host.editor_state().selection_count(), 2);
+    host.editor_state_mut().editor_ui.layer_context_menu = Some(LayerContextMenuState {
+        target: LayerContextTarget::Layer(NodeId::new("n11")),
+        anchor_x: 220.0,
+        anchor_y: 120.0,
+        menu: Default::default(),
+    });
+
+    let menu_state = host
+        .editor_state()
+        .editor_ui
+        .layer_context_menu
+        .clone()
+        .expect("menu open");
+    let menu = LayerContextMenu::for_state(host.editor_state(), menu_state);
+    let point = Point2D::new(menu.rect().origin.x + 40.0, menu.rect().origin.y + 22.0);
+    assert_eq!(menu.hovered_row_at(point), Some(0));
+
+    assert!(host.apply_cursor_move(point.x, point.y));
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .layer_context_menu
+            .as_ref()
+            .expect("menu stays open")
+            .menu
+            .hover,
+        Some(0),
+        "the layer menu must preserve the row hover for a multi-selection"
+    );
+}
+
 /// The colour-variable popup used to have no hover state at all, so a
 /// cursor over its rows highlighted whatever inspector control sat
 /// underneath. The popup now owns every point on its chrome: its own row
@@ -122,7 +165,7 @@ fn color_variable_popup_owns_hover_instead_of_the_rail_underneath() {
         .set_single_selection(NodeId::new("n13"));
     for i in 0..6 {
         assert!(host.editor_state_mut().create_variable(
-            &format!("color-surface-{i:02}"),
+            &format!("--card-{i:02}"),
             VariableKind::Color,
             VariableScalar::Str("#DBD8CB".into()),
         ));
