@@ -69,9 +69,14 @@ impl JudgeSelection {
     }
 }
 
-/// Judge batches in order, stopping after the first batch with an On or Weak
-/// candidate. A caller can provide at most two batches to enforce the image
-/// search cost bound.
+/// Judge batches in order, stopping at the first batch with an On candidate.
+/// A batch that only yields Weak candidates is remembered as the fallback and
+/// the next batch is still judged: the 2026-09-05 A/B run showed 63% of judge
+/// calls settling on a Weak first-round pick without ever looking at the
+/// second batch, and the external audit rated a fifth of those picks Off.
+/// A caller can provide at most two batches to enforce the image search cost
+/// bound, and the thumbnails are already downloaded, so the extra round is one
+/// judge call.
 pub fn select_with_judge(
     judge: &dyn ImageRelevanceJudge,
     query: &str,
@@ -88,6 +93,7 @@ pub fn select_with_judge(
         ordered: Vec::new(),
     };
     let mut offset = 0;
+    let mut weak_fallback: Vec<usize> = Vec::new();
 
     for batch in batches {
         if batch.is_empty() {
@@ -120,17 +126,20 @@ pub fn select_with_judge(
         if !on.is_empty() {
             selection.picked = on.first().copied();
             selection.ordered = on;
+            // Earlier Weak candidates outrank this batch's Weak ones: they
+            // came first in provider relevance order.
+            selection.ordered.append(&mut weak_fallback);
             selection.ordered.extend(weak);
             return selection;
         }
-        if !weak.is_empty() {
-            selection.picked = weak.first().copied();
-            selection.ordered = weak;
-            return selection;
-        }
+        weak_fallback.extend(weak);
         offset += batch.len();
     }
 
+    if !weak_fallback.is_empty() {
+        selection.picked = weak_fallback.first().copied();
+        selection.ordered = weak_fallback;
+    }
     selection
 }
 
@@ -222,6 +231,33 @@ mod tests {
         assert_eq!(result.picked, Some(2));
         assert_eq!(result.rounds, 2);
         assert_eq!((result.on, result.weak, result.off), (1, 0, 2));
+    }
+
+    #[test]
+    fn weak_only_first_round_still_judges_the_second_batch() {
+        let judge = ScriptedJudge::new(vec![
+            vec![RelevanceVerdict::Weak, RelevanceVerdict::Off],
+            vec![RelevanceVerdict::Off, RelevanceVerdict::On],
+        ]);
+        let result = select_with_judge(&judge, "vase", "ceramic vase", &[thumbs(2), thumbs(2)]);
+
+        assert_eq!(result.picked, Some(3));
+        assert_eq!(result.ordered_indices(), &[3, 0]);
+        assert_eq!(result.rounds, 2);
+        assert_eq!((result.on, result.weak, result.off), (1, 1, 2));
+    }
+
+    #[test]
+    fn weak_only_rounds_fall_back_to_the_earliest_weak_candidate() {
+        let judge = ScriptedJudge::new(vec![
+            vec![RelevanceVerdict::Off, RelevanceVerdict::Weak],
+            vec![RelevanceVerdict::Weak],
+        ]);
+        let result = select_with_judge(&judge, "vase", "ceramic vase", &[thumbs(2), thumbs(1)]);
+
+        assert_eq!(result.picked, Some(1));
+        assert_eq!(result.ordered_indices(), &[1, 2]);
+        assert_eq!(result.rounds, 2);
     }
 
     #[test]
