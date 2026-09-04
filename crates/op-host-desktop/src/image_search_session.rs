@@ -23,6 +23,8 @@ pub(crate) use op_host_services::web_image_search::{simplify_search_query, sniff
 // desktop session share one predicate vocabulary; the desktop keeps its own
 // provider fetches, memoization, and job bookkeeping. The old paths are
 // re-exported so every existing importer and test stays stable.
+use op_ai::chat_provider::ChatProvider;
+use op_host_services::image_relevance_judge::{ChatVisionJudge, OpenAiCompatVisionJudge};
 use op_image_enrich::net::{ImageRelevanceJudge, NoJudge};
 pub(crate) use op_image_enrich::{
     apply_result, collaboration_image_result_gate, collect_targets, collect_targets_with_scene,
@@ -70,6 +72,45 @@ enum SearchMemoEntry {
         waiters: Vec<mpsc::Sender<Option<String>>>,
     },
     Ready(String),
+}
+
+/// Which relevance judge a session resolved — logged once per session as
+/// `image-search judge: env | provider:<name> | none`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum JudgeChoice {
+    Env,
+    Provider(String),
+    None,
+}
+
+impl JudgeChoice {
+    fn log_label(&self) -> String {
+        match self {
+            JudgeChoice::Env => "env".to_string(),
+            JudgeChoice::Provider(name) => format!("provider:{name}"),
+            JudgeChoice::None => "none".to_string(),
+        }
+    }
+}
+
+/// Pick the relevance judge for one image-search session. The env-configured
+/// OpenAI-compatible judge wins when present; otherwise the user's selected
+/// chat provider backs a [`ChatVisionJudge`] (desktop users configure a
+/// vision-capable provider in the product, not env vars); otherwise
+/// [`NoJudge`] keeps the legacy one-result ladder byte-identical.
+pub(crate) fn resolve_judge(
+    provider: Option<Arc<dyn ChatProvider>>,
+    model: Option<String>,
+) -> (Box<dyn ImageRelevanceJudge>, JudgeChoice) {
+    if let Some(judge) = OpenAiCompatVisionJudge::from_env() {
+        return (Box::new(judge), JudgeChoice::Env);
+    }
+    if let Some(provider) = provider {
+        let choice = JudgeChoice::Provider(provider.provider_label().to_string());
+        let judge = ChatVisionJudge::new(provider).with_model(model);
+        return (Box::new(judge), choice);
+    }
+    (Box::new(NoJudge), JudgeChoice::None)
 }
 
 #[derive(Default)]
@@ -127,6 +168,13 @@ pub(crate) struct ImageSearchSession {
     /// document has enqueued the same intent. Matching the request id avoids
     /// that old completion consuming the new waiters (the classic ABA race).
     next_search_request_id: u64,
+    /// Lazily resolved relevance judge + which source won. `None` until the
+    /// app handler hands over the selected chat provider (`ensure_judge`) or
+    /// the first search actually spawns, whichever comes first — resolving
+    /// any earlier would lock in `none` for a user who configures a model
+    /// only after the window opens. Survives `reset()`: it is process-level
+    /// configuration, not document state.
+    judge: Option<(Arc<dyn ImageRelevanceJudge>, JudgeChoice)>,
 }
 
 // Memo key for the authored stock-search intent — see
@@ -164,6 +212,37 @@ impl ImageSearchSession {
 
     pub(crate) fn is_pending(&self) -> bool {
         !self.jobs.is_empty()
+    }
+
+    /// Whether the relevance judge has been resolved for this session.
+    pub(crate) fn judge_resolved(&self) -> bool {
+        self.judge.is_some()
+    }
+
+    /// Resolve and install the relevance judge once; later calls are no-ops.
+    /// The choice is logged exactly once per session so the active judge
+    /// (env / provider / none) is observable on stderr.
+    pub(crate) fn ensure_judge(
+        &mut self,
+        provider: Option<Arc<dyn ChatProvider>>,
+        model: Option<String>,
+    ) {
+        if self.judge.is_some() {
+            return;
+        }
+        let (judge, choice) = resolve_judge(provider, model);
+        eprintln!("image-search judge: {}", choice.log_label());
+        self.judge = Some((Arc::from(judge), choice));
+    }
+
+    /// The judge for one spawn. Always `Some` after `ensure_judge`; the
+    /// `NoJudge` fallback only covers a spawn that somehow precedes
+    /// resolution, and keeps the legacy one-result ladder byte-identical.
+    fn judge_pair(&self) -> (Arc<dyn ImageRelevanceJudge>, bool) {
+        match &self.judge {
+            Some((judge, choice)) => (Arc::clone(judge), *choice != JudgeChoice::None),
+            None => (Arc::new(NoJudge), false),
+        }
     }
 
     /// Re-admit terminal stock-search failures for a bounded caller-managed
@@ -264,12 +343,19 @@ impl ImageSearchSession {
                 (ImageRequestMode::Search, _) | (ImageRequestMode::Auto, None) => {
                     let request_id = self.next_search_request_id;
                     self.next_search_request_id = self.next_search_request_id.wrapping_add(1);
+                    // A search is actually starting: if the app handler has
+                    // not handed over a provider by now, lock in env/none so
+                    // the choice is logged once and stable for the session.
+                    self.ensure_judge(None, None);
+                    let (judge, judge_enabled) = self.judge_pair();
                     spawn_job(
                         target,
                         credentials.clone(),
                         Arc::clone(&self.used_urls),
                         Arc::clone(&self.search_memo),
                         request_id,
+                        judge,
+                        judge_enabled,
                     )
                 }
             };
@@ -386,13 +472,14 @@ fn spawn_job(
     used_urls: Arc<Mutex<HashSet<String>>>,
     search_memo: Arc<Mutex<HashMap<SearchIntentKey, SearchMemoEntry>>>,
     request_id: u64,
+    judge: Arc<dyn ImageRelevanceJudge>,
+    judge_enabled: bool,
 ) -> ImageSearchJob {
     let (tx, rx) = mpsc::channel();
     let node_id = target.node_id.clone();
     let aspect_ratio = target.aspect_ratio;
     let key = search_intent_key(&target.query, aspect_ratio);
     let intent = Some(intent_fingerprint(&target, None));
-    let (judge, judge_enabled) = configured_image_relevance_judge();
     let judge_intent = target
         .prompt
         .as_deref()
@@ -460,18 +547,6 @@ fn spawn_job(
         intent,
         rx,
     }
-}
-
-fn configured_image_relevance_judge() -> (Arc<dyn ImageRelevanceJudge>, bool) {
-    // TODO(judge): desktop provider adapter. ImageSearchSession is created in
-    // AppState before a selected ChatProvider exists; env is the only safe
-    // provider available at this seam today.
-    if let Some(judge) =
-        op_host_services::image_relevance_judge::OpenAiCompatVisionJudge::from_env()
-    {
-        return (Arc::new(judge), true);
-    }
-    (Arc::new(NoJudge), false)
 }
 
 /// Publish only into the exact Pending entry that launched this request. A

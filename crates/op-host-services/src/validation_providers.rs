@@ -157,7 +157,7 @@ impl ChatVisionLlmClient {
         self
     }
 
-    /// Decode the screenshot base64 into raw PNG bytes for the
+    /// Decode the screenshot base64 into raw image bytes for the
     /// `ChatAttachment`. Providers re-encode (Anthropic image block) or
     /// data-URL it as their wire demands.
     fn screenshot_attachment(image_base64: &str) -> Option<ChatAttachment> {
@@ -165,9 +165,18 @@ impl ChatVisionLlmClient {
         let data = base64::engine::general_purpose::STANDARD
             .decode(image_base64)
             .ok()?;
+        // Label the attachment by its actual bytes: the validation loop
+        // feeds PNG screenshots, the image-relevance judge feeds JPEG
+        // thumbnails. Providers map `media_type` onto their wire image
+        // block, so a mislabeled JPEG would be rejected.
+        let (name, media_type) = if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+            ("design-screenshot.jpg", "image/jpeg")
+        } else {
+            ("design-screenshot.png", "image/png")
+        };
         Some(ChatAttachment {
-            name: "design-screenshot.png".to_string(),
-            media_type: "image/png".to_string(),
+            name: name.to_string(),
+            media_type: media_type.to_string(),
             data,
         })
     }

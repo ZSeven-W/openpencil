@@ -1,6 +1,6 @@
 use super::*;
 
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 fn env_lock() -> MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -84,4 +84,90 @@ fn invalid_response_is_downgraded_to_weak() {
     let fallback = parse_candidate_response(4, Some("not JSON"), Some("also not JSON"));
     assert_eq!(fallback.verdict, RelevanceVerdict::Weak);
     assert_eq!(fallback.reason, "judge unavailable");
+}
+
+// ── ChatVisionJudge ──────────────────────────────────────────────────────
+
+use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, StopReason};
+
+/// Records the requests it receives and replies with a fixed verdict —
+/// same shape as the `RecordingVisionProvider` in `validation_providers`.
+struct ScriptedJudgeProvider {
+    seen: Arc<Mutex<Vec<ChatRequest>>>,
+    reply: String,
+}
+
+impl ChatProvider for ScriptedJudgeProvider {
+    fn provider_label(&self) -> &str {
+        "scripted-judge"
+    }
+    fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+        self.seen.lock().unwrap().push(request);
+        Box::new(
+            vec![
+                ChatDelta::TextDelta(self.reply.clone()),
+                ChatDelta::Done {
+                    stop_reason: StopReason::EndTurn,
+                },
+            ]
+            .into_iter(),
+        )
+    }
+}
+
+fn scripted_judge(reply: &str) -> (ChatVisionJudge, Arc<Mutex<Vec<ChatRequest>>>) {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let provider = Arc::new(ScriptedJudgeProvider {
+        seen: seen.clone(),
+        reply: reply.to_string(),
+    });
+    (ChatVisionJudge::new(provider), seen)
+}
+
+fn fake_jpeg(seed: u8) -> Vec<u8> {
+    vec![0xFF, 0xD8, 0xFF, 0xE0, seed]
+}
+
+#[test]
+fn chat_vision_judge_maps_off_verdict_and_sends_shared_prompt() {
+    let (judge, seen) = scripted_judge(r#"{"verdict":"off","reason":"different subject"}"#);
+    let judged = judge.judge("kyoto temple", "a photo of a kyoto temple", &[fake_jpeg(1)]);
+
+    assert_eq!(judged.len(), 1);
+    assert_eq!(judged[0].index, 0);
+    assert_eq!(judged[0].verdict, RelevanceVerdict::Off);
+    assert_eq!(judged[0].reason, "different subject");
+
+    let requests = seen.lock().unwrap();
+    let request = requests.first().expect("provider called once");
+    assert!(
+        request.user_message.contains("kyoto temple")
+            && request.user_message.contains("a photo of a kyoto temple"),
+        "the shared judge prompt carries query + intent: {}",
+        request.user_message
+    );
+    assert_eq!(request.attachments.len(), 1, "one thumbnail attachment");
+    assert_eq!(request.attachments[0].media_type, "image/jpeg");
+    assert_eq!(request.attachments[0].data, fake_jpeg(1));
+}
+
+#[test]
+fn chat_vision_judge_downgrades_unparseable_reply_to_weak() {
+    let (judge, _seen) = scripted_judge("no JSON in this reply");
+    let judged = judge.judge("q", "i", &[fake_jpeg(1)]);
+    assert_eq!(judged.len(), 1);
+    assert_eq!(judged[0].verdict, RelevanceVerdict::Weak);
+    assert_eq!(judged[0].reason, "judge unavailable");
+}
+
+#[test]
+fn chat_vision_judge_returns_one_verdict_per_thumb_index_aligned() {
+    let (judge, _seen) = scripted_judge(r#"{"verdict":"on","reason":"clear subject match"}"#);
+    let thumbs = vec![fake_jpeg(1), fake_jpeg(2), fake_jpeg(3)];
+    let judged = judge.judge("q", "i", &thumbs);
+    assert_eq!(judged.len(), 3, "one verdict per input thumbnail");
+    for (position, candidate) in judged.iter().enumerate() {
+        assert_eq!(candidate.index, position, "verdicts align with input order");
+        assert_eq!(candidate.verdict, RelevanceVerdict::On);
+    }
 }

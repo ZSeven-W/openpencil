@@ -330,6 +330,18 @@ impl DesktopApp {
             self.host.mark_editor_state_dirty();
             self.redraw_dirty = true;
         }
+        // Background image search: hand the session the selected chat
+        // provider for its relevance judge until one sticks (env judge wins
+        // when configured; see `ImageSearchSession::ensure_judge`). A
+        // provider configured mid-session is still picked up until the
+        // first search actually spawns.
+        if !self.image_search.judge_resolved() {
+            if let Some(provider) = chat_session::provider_for_selected_model(&self.host) {
+                let model = chat_session::selected_cli_model_id(&self.host);
+                self.image_search
+                    .ensure_judge(Some(std::sync::Arc::from(provider)), model);
+            }
+        }
         let (editor_state, layout_scene) = self.host.editor_state_mut_and_layout_scene();
         self.image_search
             .enqueue_missing_with_scene(editor_state, layout_scene);

@@ -1,12 +1,18 @@
-//! OpenAI-compatible multimodal image relevance judge.
+//! OpenAI-compatible multimodal image relevance judge, plus a sibling judge
+//! backed by the user's configured chat provider.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use base64::Engine as _;
 use futures::stream::{self, StreamExt};
+use op_ai::chat_provider::ChatProvider;
 use op_image_enrich::net::{
     block_on_image_runtime, ImageRelevanceJudge, JudgedCandidate, RelevanceVerdict,
 };
+use op_orchestrator::{VisionCallRequest, VisionLlmClient, VisionResponse};
+
+use crate::validation_providers::ChatVisionLlmClient;
 
 const BASE_URL_ENV: &str = "OPENPENCIL_IMAGE_JUDGE_BASE_URL";
 const API_KEY_ENV: &str = "OPENPENCIL_IMAGE_JUDGE_API_KEY";
@@ -20,6 +26,14 @@ const JUDGE_PROMPT: &str = "You are an image relevance judge. Query: {query}. In
 Inspect the image and return ONLY strict JSON: {\"verdict\":\"on\"|\"weak\"|\"off\",\"reason\":\"<=12 words\"}. \
 Use \"off\" when the main subject is different, including a toy, unrelated object, text collage, or wrong scene. \
 Use \"on\" for a clear match and \"weak\" for an ambiguous or partial match.";
+
+/// Render the shared judge instruction. Both judge implementations send the
+/// identical prompt so their verdicts stay comparable.
+fn judge_prompt(query: &str, intent: &str) -> String {
+    JUDGE_PROMPT
+        .replace("{query}", query)
+        .replace("{intent}", intent)
+}
 
 /// A vision judge backed by an OpenAI chat-completions-compatible endpoint.
 #[derive(Clone)]
@@ -98,9 +112,7 @@ impl OpenAiCompatVisionJudge {
             "data:image/jpeg;base64,{}",
             base64::engine::general_purpose::STANDARD.encode(thumb_jpeg)
         );
-        let prompt = JUDGE_PROMPT
-            .replace("{query}", query)
-            .replace("{intent}", intent);
+        let prompt = judge_prompt(query, intent);
         let body = serde_json::json!({
             "model": self.model,
             "max_tokens": MAX_TOKENS,
@@ -161,6 +173,95 @@ impl ImageRelevanceJudge for OpenAiCompatVisionJudge {
                 .buffer_unordered(MAX_CONCURRENT_CALLS)
                 .collect::<Vec<_>>()
                 .await
+        });
+        judged.sort_by_key(|candidate| candidate.index);
+        judged
+    }
+}
+
+/// A vision judge backed by the user's configured chat provider: each
+/// candidate thumbnail is judged by one multimodal chat turn through
+/// [`ChatVisionLlmClient`], reusing the same prompt template and verdict
+/// parsing as [`OpenAiCompatVisionJudge`]. This is the desktop path — users
+/// there configure a vision-capable provider in the product instead of
+/// setting the env judge.
+pub struct ChatVisionJudge {
+    client: ChatVisionLlmClient,
+}
+
+impl ChatVisionJudge {
+    pub fn new(provider: Arc<dyn ChatProvider>) -> Self {
+        Self {
+            client: ChatVisionLlmClient::new(provider),
+        }
+    }
+
+    /// Attach the vision model id to every judge request (`None` keeps the
+    /// provider's own default).
+    pub fn with_model(mut self, model: Option<String>) -> Self {
+        self.client = self.client.with_model(model);
+        self
+    }
+
+    fn judge_one(&self, index: usize, prompt: &str, thumb_jpeg: &[u8]) -> JudgedCandidate {
+        let unavailable = |reason: String| {
+            eprintln!("[IMAGE_JUDGE] candidate={} unavailable: {}", index, reason);
+            JudgedCandidate {
+                index,
+                verdict: RelevanceVerdict::Weak,
+                reason: "judge unavailable".to_string(),
+            }
+        };
+        let request = VisionCallRequest {
+            system: String::new(),
+            message: prompt.to_string(),
+            image_base64: base64::engine::general_purpose::STANDARD.encode(thumb_jpeg),
+            // The client was configured with its model at construction.
+            model: None,
+            provider: None,
+            timeout: REQUEST_TIMEOUT,
+        };
+        match self.client.validate(request) {
+            VisionResponse::Text(text) => match parse_verdict_response(Some(text.as_str()), None) {
+                Some((verdict, reason)) => JudgedCandidate {
+                    index,
+                    verdict,
+                    reason,
+                },
+                None => unavailable("response did not contain a valid verdict JSON".to_string()),
+            },
+            VisionResponse::Skipped { reason } => unavailable(
+                reason.unwrap_or_else(|| "vision provider skipped the call".to_string()),
+            ),
+        }
+    }
+}
+
+impl ImageRelevanceJudge for ChatVisionJudge {
+    fn judge(&self, query: &str, intent: &str, thumbs_jpeg: &[Vec<u8>]) -> Vec<JudgedCandidate> {
+        let prompt = judge_prompt(query, intent);
+        let indexed: Vec<(usize, &Vec<u8>)> = thumbs_jpeg.iter().enumerate().collect();
+        let mut judged = Vec::with_capacity(thumbs_jpeg.len());
+        // `ChatVisionLlmClient::validate` is a blocking sync call, so
+        // concurrency comes from scoped threads in waves of
+        // MAX_CONCURRENT_CALLS — the same cap the async env judge uses.
+        std::thread::scope(|scope| {
+            for chunk in indexed.chunks(MAX_CONCURRENT_CALLS) {
+                let handles: Vec<_> = chunk
+                    .iter()
+                    .map(|&(index, thumb)| {
+                        let prompt = prompt.as_str();
+                        scope.spawn(move || self.judge_one(index, prompt, thumb))
+                    })
+                    .collect();
+                for (&(index, _), handle) in chunk.iter().zip(handles) {
+                    judged.push(handle.join().unwrap_or_else(|_| JudgedCandidate {
+                        index,
+                        verdict: RelevanceVerdict::Weak,
+                        reason: "judge unavailable".to_string(),
+                    }));
+                }
+            }
         });
         judged.sort_by_key(|candidate| candidate.index);
         judged
