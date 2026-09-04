@@ -103,6 +103,44 @@ fn save_editor_state(state: &EditorState, path: &Path) -> Result<(), McpServeErr
         .map_err(|error| McpServeError::Document(format!("save {}: {error}", path.display())))
 }
 
+pub(crate) fn normalize_mobile_screens_after_apply(
+    state: &mut EditorState,
+) -> op_chat_agent::MobileNormalizeReport {
+    let report = op_chat_agent::normalize_mobile_screens(state);
+    let mut changes = Vec::new();
+    if report.status_bars_inserted > 0 {
+        changes.push(format!(
+            "status_bars_inserted={}",
+            report.status_bars_inserted
+        ));
+    }
+    if report.status_bars_replaced > 0 {
+        changes.push(format!(
+            "status_bars_replaced={}",
+            report.status_bars_replaced
+        ));
+    }
+    if report.duplicate_status_bars_removed > 0 {
+        changes.push(format!(
+            "duplicate_status_bars_removed={}",
+            report.duplicate_status_bars_removed
+        ));
+    }
+    if report.viewport_heights_fixed > 0 {
+        changes.push(format!(
+            "viewport_heights_fixed={}",
+            report.viewport_heights_fixed
+        ));
+    }
+    if !changes.is_empty() {
+        eprintln!(
+            "openpencil-desktop mcp: mobile normalization: {}",
+            changes.join(", ")
+        );
+    }
+    report
+}
+
 /// Process one JSON-RPC message line against the editor state.
 fn process_message(
     state: &mut EditorState,
@@ -123,6 +161,7 @@ fn process_message(
         if !state.apply(cmd.clone()) {
             return false;
         }
+        normalize_mobile_screens_after_apply(state);
         if let Err(e) = save_editor_state(state, path) {
             applier_failed = Some(format!("save failed: {e}"));
             return false;

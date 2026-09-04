@@ -283,8 +283,13 @@ impl McpLiveServer {
                         .then(|| crate::design_agent_tools::collect_active_node_ids(state));
                     let applied = state.apply(cmd);
                     if applied {
+                        let mobile_report =
+                            crate::mcp_serve::normalize_mobile_screens_after_apply(state);
                         if let Some(ids_before) = ids_before {
                             self.register_mcp_generation(&ids_before, state);
+                        }
+                        if mobile_report != op_chat_agent::MobileNormalizeReport::default() {
+                            outcome.layout_dirty = true;
                         }
                     }
                     let _ = ack.send(ApplyAck { applied });

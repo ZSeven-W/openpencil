@@ -391,6 +391,46 @@ fn find_empty_space_returns_padded_position_from_active_page_bounds() {
 }
 
 #[test]
+fn file_mcp_applier_normalizes_mobile_document_before_save() {
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "openpencil-mcp-mobile-normalize-{}-{suffix}.op",
+        std::process::id()
+    ));
+    let mut state = op_editor_core::EditorState::new();
+    let operations = r##"root=I(null,{"type":"frame","name":"Screen","width":375,"height":"fit_content","fill":[{"type":"solid","color":"#f7f8fa"}],"children":[{"type":"frame","name":"Status Bar","width":"fill_container","height":62,"children":[{"type":"text","content":"9:41"},{"type":"text","content":"signal wifi battery"}]}]})"##;
+    let line = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "batch_design", "arguments": {"operations": operations}}
+    })
+    .to_string();
+
+    let response = process_message(&mut state, &path, &line)
+        .expect("dispatch")
+        .expect("response");
+    assert!(!response.contains(r#""isError":true"#), "{response}");
+
+    let saved = load_editor_state(&path).expect("saved document");
+    let root = &saved.active_children()[0];
+    assert_eq!(root.width_px(), Some(375.0));
+    assert_eq!(root.height_px(), Some(812.0));
+    let status_bar = &root.children().expect("root children")[0];
+    assert_eq!(status_bar.base().role.as_deref(), Some("status-bar"));
+    assert!(status_bar.children().is_some_and(|children| {
+        children
+            .iter()
+            .any(|child| child.base().name.as_deref() == Some("Levels"))
+    }));
+
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
 fn read_nodes_accepts_structured_ids_over_mcp() {
     let mut state = op_editor_core::EditorState::new();
     assert!(state.apply(EditorCommand::InsertNode {

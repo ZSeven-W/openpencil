@@ -601,3 +601,7 @@ mod scan_tests;
 #[cfg(test)]
 #[path = "design_agent_tools_continuation_tests.rs"]
 mod continuation_tests;
+
+#[cfg(test)]
+#[path = "mobile_normalize_tests.rs"]
+mod mobile_normalize_tests;

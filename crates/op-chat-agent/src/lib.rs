@@ -30,6 +30,8 @@ pub mod runtime;
 pub mod screen_sets;
 pub mod tool_schemas;
 
+pub use design_agent_tools::{normalize_mobile_screens, MobileNormalizeReport};
+
 /// Path-compat alias for `crate::chat_intent::listed_whole_screen_names`
 /// used by `design_agent_tools/root_seed.rs` — only the pure listed-screen
 /// parser moved; the LLM intent pipeline stays in op-host-services.
