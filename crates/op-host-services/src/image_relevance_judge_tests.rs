@@ -171,3 +171,89 @@ fn chat_vision_judge_returns_one_verdict_per_thumb_index_aligned() {
         assert_eq!(candidate.verdict, RelevanceVerdict::On);
     }
 }
+
+// ── env judge inside the image runtime ──────────────────────────────────────
+
+/// Minimal HTTP stub: accepts POSTs on 127.0.0.1:0, drains the request, and
+/// replies with an OpenAI-shaped chat completion whose message content is a
+/// fixed `on` verdict. One std::thread per connection because the judge fires
+/// candidates concurrently. The listener thread is intentionally leaked.
+fn start_verdict_stub() -> u16 {
+    use std::io::{Read, Write};
+
+    fn handle(mut stream: std::net::TcpStream) {
+        let mut head = Vec::new();
+        let mut byte = [0_u8; 1];
+        while !head.ends_with(b"\r\n\r\n") {
+            if stream.read(&mut byte).unwrap_or(0) == 0 || head.len() > 64 * 1024 {
+                return;
+            }
+            head.push(byte[0]);
+        }
+        let head = String::from_utf8_lossy(&head);
+        let content_length = head
+            .lines()
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                if name.trim().eq_ignore_ascii_case("content-length") {
+                    value.trim().parse::<usize>().ok()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0);
+        let mut body = vec![0_u8; content_length];
+        let _ = stream.read_exact(&mut body);
+        let payload =
+            r#"{"choices":[{"message":{"content":"{\"verdict\":\"on\",\"reason\":\"stub\"}"}}]}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            payload.len(),
+            payload
+        );
+        let _ = stream.write_all(response.as_bytes());
+    }
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind stub server");
+    let port = listener.local_addr().expect("stub addr").port();
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            match stream {
+                Ok(stream) => std::thread::spawn(move || handle(stream)),
+                Err(_) => break,
+            };
+        }
+    });
+    port
+}
+
+/// Production reaches `OpenAiCompatVisionJudge::judge` from sync code already
+/// running inside `block_on_image_runtime`; driving the HTTP calls through
+/// that same runtime again panics with "Cannot start a runtime from within a
+/// runtime" and every candidate comes back unjudged. This pins the fix: the
+/// sync judge call must survive running on an image-runtime worker thread.
+#[test]
+fn env_judge_survives_being_called_inside_the_image_runtime() {
+    let _lock = env_lock();
+    let _env = JudgeEnvGuard::clear();
+    let port = start_verdict_stub();
+    std::env::set_var(BASE_URL_ENV, format!("http://127.0.0.1:{port}/v1"));
+    std::env::set_var(API_KEY_ENV, "test-key");
+    std::env::set_var(MODEL_ENV, "vision-model");
+    let judge = OpenAiCompatVisionJudge::from_env().expect("env settings build the judge");
+
+    let judged = op_image_enrich::net::block_on_image_runtime(async move {
+        judge.judge(
+            "kyoto temple",
+            "a photo of a kyoto temple",
+            &[fake_jpeg(1), fake_jpeg(2)],
+        )
+    });
+
+    assert_eq!(judged.len(), 2, "both candidates judged, none lost");
+    for (position, candidate) in judged.iter().enumerate() {
+        assert_eq!(candidate.index, position);
+        assert_eq!(candidate.verdict, RelevanceVerdict::On);
+        assert_eq!(candidate.reason, "stub");
+    }
+}
