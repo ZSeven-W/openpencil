@@ -466,7 +466,7 @@ mod tests {
     }
 
     #[test]
-    fn exhausted_search_retries_preserve_existing_output() {
+    fn exhausted_search_retries_still_write_the_partial_result() {
         let mut state = load(
             r#"{"version":"1.0","children":[{"type":"image","id":"photo","src":"","imageSearchQuery":"mountain lake","width":160,"height":90}]}"#,
         );
@@ -483,11 +483,15 @@ mod tests {
 
         let result = super::super::save_enriched_state(&state, &output, summary);
 
+        // The run still fails loudly, but the document the caller authored is
+        // written rather than discarded — the seeded placeholder is gone.
         assert!(matches!(result, Err(EnrichError::Failed(_))));
-        assert_eq!(
-            std::fs::read(&output).expect("read preserved output"),
-            b"keep-existing-output"
-        );
+        let written = std::fs::read(&output).expect("read written output");
+        assert_ne!(written, b"keep-existing-output");
+        let reloaded =
+            op_host_services::doc_io::load_editor_state(&output, op_editor_core::Locale::EnUs)
+                .expect("the partial result parses");
+        assert_eq!(reloaded.active_children().len(), 1);
         std::fs::remove_dir_all(directory).expect("remove fixture directory");
     }
 }
