@@ -9,6 +9,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use op_editor_core::EditorState;
+use op_host_services::image_relevance_judge::OpenAiCompatVisionJudge;
 
 /// Parsed config for the image-fill post-loop step.
 #[derive(Debug, Clone)]
@@ -43,6 +44,14 @@ impl ImageFillConfig {
     }
 }
 
+/// Resolve the visual relevance judge for the fill step. The env-configured
+/// OpenAI-compatible judge (all three `OPENPENCIL_IMAGE_JUDGE_*` vars present)
+/// wins; otherwise the fill keeps the legacy one-result ladder — which is the
+/// `NoJudge` behavior and stays byte-identical with the pre-judge output.
+fn resolve_judge() -> Option<OpenAiCompatVisionJudge> {
+    OpenAiCompatVisionJudge::from_env()
+}
+
 /// Run the image-fill post-loop step on the provided state.
 ///
 /// Collects image-search targets (nodes with a query but empty `src`), fetches
@@ -53,6 +62,12 @@ pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool
     if !config.enabled {
         return;
     }
+
+    let judge = resolve_judge();
+    eprintln!(
+        "[SMOKE] image judge: {}",
+        if judge.is_some() { "env" } else { "none" }
+    );
 
     let mut targets = op_image_enrich::collect_targets(state, &HashSet::new());
     if targets.is_empty() {
@@ -84,12 +99,35 @@ pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool
             );
         }
 
-        if let Some(url) = op_image_enrich::net::fetch::fetch_first_image_url_blocking(
-            &target.query,
-            target.aspect_ratio,
-            None,
-            &used_urls,
-        ) {
+        let url = match &judge {
+            Some(judge) => {
+                // Same intent rule as the desktop session: the authored image
+                // prompt wins, the search query is the fallback.
+                let intent = target
+                    .prompt
+                    .as_deref()
+                    .filter(|prompt| !prompt.trim().is_empty())
+                    .unwrap_or(target.query.as_str());
+                op_image_enrich::net::fetch::fetch_first_image_url_blocking_with_judge(
+                    &target.query,
+                    target.aspect_ratio,
+                    None,
+                    &used_urls,
+                    judge,
+                    intent,
+                )
+            }
+            // No configured judge deliberately uses the old one-result path;
+            // this is the NoJudge behavior and keeps default output bytes
+            // unchanged.
+            None => op_image_enrich::net::fetch::fetch_first_image_url_blocking(
+                &target.query,
+                target.aspect_ratio,
+                None,
+                &used_urls,
+            ),
+        };
+        if let Some(url) = url {
             if op_image_enrich::apply_result(state, &target.node_id, &url) {
                 if dump {
                     eprintln!(
@@ -206,5 +244,65 @@ mod tests {
         std::env::set_var("OPENPENCIL_SMOKE_IMAGE_DELAY_MS", "xyz");
         let config = ImageFillConfig::from_env();
         assert_eq!(config.delay_ms, 250);
+    }
+
+    // The fill entry delegates the search itself to op-image-enrich's public
+    // fetch fns, so a scripted judge cannot be injected at the op-smoke layer
+    // (the re-ranking policy is covered by op-image-enrich's own judge tests).
+    // What op-smoke owns is judge RESOLUTION, so these tests pin its tri-state.
+
+    fn clear_judge_env() {
+        std::env::remove_var("OPENPENCIL_IMAGE_JUDGE_BASE_URL");
+        std::env::remove_var("OPENPENCIL_IMAGE_JUDGE_API_KEY");
+        std::env::remove_var("OPENPENCIL_IMAGE_JUDGE_MODEL");
+    }
+
+    #[test]
+    fn judge_resolves_env_when_all_three_vars_present() {
+        let _guard = TEST_LOCK.lock();
+        clear_judge_env();
+        std::env::set_var(
+            "OPENPENCIL_IMAGE_JUDGE_BASE_URL",
+            "https://judge.example.com/v1",
+        );
+        std::env::set_var("OPENPENCIL_IMAGE_JUDGE_API_KEY", "test-key");
+        std::env::set_var("OPENPENCIL_IMAGE_JUDGE_MODEL", "test-model");
+        let judge = resolve_judge();
+        clear_judge_env();
+        assert!(judge.is_some());
+    }
+
+    #[test]
+    fn judge_falls_back_to_none_when_any_var_is_missing() {
+        let _guard = TEST_LOCK.lock();
+        clear_judge_env();
+        assert!(resolve_judge().is_none());
+
+        std::env::set_var(
+            "OPENPENCIL_IMAGE_JUDGE_BASE_URL",
+            "https://judge.example.com/v1",
+        );
+        std::env::set_var("OPENPENCIL_IMAGE_JUDGE_MODEL", "test-model");
+        // API key missing.
+        assert!(resolve_judge().is_none());
+
+        std::env::set_var("OPENPENCIL_IMAGE_JUDGE_API_KEY", "test-key");
+        std::env::remove_var("OPENPENCIL_IMAGE_JUDGE_MODEL");
+        // Model missing.
+        assert!(resolve_judge().is_none());
+
+        clear_judge_env();
+    }
+
+    #[test]
+    fn judge_ignores_blank_env_values() {
+        let _guard = TEST_LOCK.lock();
+        clear_judge_env();
+        std::env::set_var("OPENPENCIL_IMAGE_JUDGE_BASE_URL", "   ");
+        std::env::set_var("OPENPENCIL_IMAGE_JUDGE_API_KEY", "test-key");
+        std::env::set_var("OPENPENCIL_IMAGE_JUDGE_MODEL", "test-model");
+        let judge = resolve_judge();
+        clear_judge_env();
+        assert!(judge.is_none());
     }
 }
