@@ -1,8 +1,7 @@
 //! plan 规范化 —— 单屏路径。
 //!
 //! 行为忠实 TS,但**一次性算分类、干净派生**,不做 TS 那种
-//! in-place strip-then-reclassify(`orchestrator.ts:838-845` 自标
-//! fragile)。
+//! in-place strip-then-reclassify(`orchestrator.ts:838-845`)。
 
 use crate::dashboard_columns::{
     infer_dashboard_section_height, infer_dashboard_section_width, is_dashboard_like_prompt,
@@ -17,6 +16,9 @@ mod plan_home_intent;
 mod plan_normalize_nav;
 use plan_normalize_nav::{ensure_requested_bottom_nav_subtask, is_bottom_nav_subtask};
 
+#[path = "plan_normalize_side_rail.rs"]
+mod plan_normalize_side_rail;
+
 #[path = "plan_normalize_dimensions.rs"]
 mod plan_normalize_dimensions;
 
@@ -26,8 +28,7 @@ mod plan_normalize_items;
 #[path = "plan_continuation_contract.rs"]
 mod plan_continuation_contract;
 
-// multiscreen-fanout-break fix (item A) — screen-grouping tests, split out
-// to keep this file's inline `mod tests` from crossing the 800-line cap.
+// multiscreen-fanout-break tests live in a sibling to keep this file below 800 lines.
 #[cfg(test)]
 #[path = "plan_normalize_screen_groups_tests.rs"]
 mod tests_screen_groups;
@@ -144,6 +145,12 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
     }
     let preserve_requested_root_height = preserve_requested_root_height || is_deck || is_card;
 
+    let folded_side_progress_rail = plan_normalize_side_rail::fold_side_progress_rail(plan);
+    tracing::info!(
+        count = folded_side_progress_rail,
+        "plan normalization folded side progress rail subtasks"
+    );
+
     let is_mobile = plan.root_frame.width <= MOBILE_MAX_WIDTH;
 
     if is_mobile {
@@ -174,15 +181,8 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
 
     let root_id = plan.root_frame.id.clone();
 
-    // Screen grouping (multiscreen-fanout-break fix, item A): a plan whose
-    // subtasks span ≥2 distinct `screen` labels must NOT collapse onto the
-    // one shared `root_id` — each group gets its OWN placeholder root-frame
-    // id (`run.rs`'s scaffold phase later builds one real scaffold root per
-    // group and OVERWRITES this placeholder with the post-insert id, exactly
-    // like the single-root path already does for `root_id`). Zero screen
-    // labels, or every subtask sharing the SAME one, both yield
-    // `groups.len() <= 1` — the `else` branch below, byte-identical to
-    // today's single-root assignment (regression lock).
+    // Distinct screen labels get distinct placeholder roots; zero labels or a
+    // single shared label retain the original single-root assignment.
     let groups = crate::screen_groups::group_subtasks_by_screen(&plan.subtasks);
     if groups.len() > 1 {
         for group in &groups {
@@ -221,14 +221,8 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
         }
     }
 
-    // DS P2-a experiment (item ②): repeated item-family bundling, gated to
-    // the deepseek model family. Runs LAST so the merged subtask inherits
-    // the first member's fully-normalized fields (id_prefix / parent_frame_id
-    // / inferred dashboard region). The model travels inside `req.model`
-    // (the call sites already pass the whole request), so no signature
-    // change; an absent model never enables the gate. See
-    // `plan_normalize_items` for the experiment semantics + graduation
-    // condition (ab-validate glm/kimi before removing the gate).
+    // Repeated item-family bundling is gated to the deepseek model family and
+    // runs last so the merged subtask inherits normalized fields.
     plan_normalize_items::bundle_repeated_item_families(plan, req.model.as_deref().unwrap_or(""));
 
     NormInfo {
