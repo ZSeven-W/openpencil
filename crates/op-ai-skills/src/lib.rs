@@ -162,7 +162,10 @@ pub fn guideline_for(topic: &str) -> Option<String> {
     let (_, _, skill_names) = GUIDELINE_TOPICS
         .iter()
         .find(|(name, aliases, _)| *name == topic || aliases.contains(&topic))?;
-    compose_skills(skill_names)
+    compose_skills(skill_names).map(|mut guideline| {
+        guideline.push_str("\n\nWhen you are done, call finalize_design once — it runs the same repair passes the built-in pipeline applies.");
+        guideline
+    })
 }
 
 /// The primary name of every topic [`guideline_for`] accepts, in table

@@ -17,22 +17,24 @@ use jian_ops_schema::style::PenFill;
 /// Per-root cleanup pass: replace childless Frame/Rectangle nodes whose only
 /// fill is an image fill with a still-empty url by a `PenNode::Image` in
 /// place, keeping the node id and the geometry fields both types share.
-pub(super) fn materialize_empty_image_fill_slots(sink: &mut dyn DocSink, root_id: &str) {
+pub(crate) fn materialize_empty_image_fill_slots(sink: &mut dyn DocSink, root_id: &str) -> bool {
     let patches: Vec<(NodeId, String)> = {
         let Some(root) = find_root(sink.state(), root_id) else {
-            return;
+            return false;
         };
         let mut patches = Vec::new();
         collect_materialize_patches(root, &mut patches);
         patches
     };
+    let mut changed = false;
     for (node_id, patch_json) in patches {
-        sink.apply(EditorCommand::PatchNodeData {
+        changed |= sink.apply(EditorCommand::PatchNodeData {
             node_id,
             patch_json,
             page_id: None,
         });
     }
+    changed
 }
 
 fn collect_materialize_patches(node: &PenNode, patches: &mut Vec<(NodeId, String)>) {

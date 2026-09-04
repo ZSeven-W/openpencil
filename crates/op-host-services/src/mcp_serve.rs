@@ -11,8 +11,8 @@
 //! `EditorState::apply(EditorCommand)`; on every successful write the
 //! `PenDocument` is serialized straight back to disk.
 
-use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use crate::import_html_url::import_html_url_snapshot;
 use op_editor_core::{EditorCommand, EditorState};
@@ -65,6 +65,7 @@ use op_mcp::{
     debug_logs_tail_snapshot, debug_screenshot_snapshot, debug_validation_report_snapshot,
 };
 
+pub(crate) mod auto_finalize;
 pub mod error;
 pub mod file_path;
 mod sniff;
@@ -157,16 +158,40 @@ pub(crate) fn normalize_icon_paths_after_apply(
     report
 }
 
+/// Run the two cheap, idempotent repair passes shared by every bare-MCP
+/// document write after the command itself has applied and before it saves.
+pub(crate) fn run_write_repairs_after_apply(state: &mut EditorState) -> bool {
+    normalize_mobile_screens_after_apply(state);
+    normalize_icon_paths_after_apply(state);
+    let mobile_nav_reflowed = op_orchestrator::repair_mobile_trailing_nav_reflow(state);
+    let image_slots_materialized =
+        op_orchestrator::cleanup_image_slots::materialize_empty_image_fill_slots(state);
+    mobile_nav_reflowed || image_slots_materialized
+}
+
 /// Process one JSON-RPC message line against the editor state.
+#[cfg(test)]
 fn process_message(
     state: &mut EditorState,
     path: &Path,
     line: &str,
 ) -> Result<Option<String>, McpServeError> {
+    process_message_with_auto_finalize(state, path, line, None)
+}
+
+fn process_message_with_auto_finalize(
+    state: &mut EditorState,
+    path: &Path,
+    line: &str,
+    mut auto_finalize: Option<&mut auto_finalize::AutoFinalize>,
+) -> Result<Option<String>, McpServeError> {
     if let Some(response) = file_path::process_message_for_file_path_arg(Some(path), line)? {
         return Ok(Some(response));
     }
+    let explicit_finalize =
+        op_mcp::parse_tool_call(line.trim()).is_some_and(|call| call.tool == "finalize_design");
     let mut applier_failed: Option<String> = None;
+    let mut apply_rejected = false;
     // File-backed mode has no live canvas for any tool call to animate —
     // the tool name is accepted (shared signature with the live-MCP path)
     // and deliberately ignored here.
@@ -175,20 +200,41 @@ fn process_message(
         // discipline; `false` means the command rejected and the
         // document was NOT changed.
         if !state.apply(cmd.clone()) {
+            apply_rejected = true;
             return false;
         }
-        normalize_mobile_screens_after_apply(state);
-        normalize_icon_paths_after_apply(state);
+        run_write_repairs_after_apply(state);
         if let Err(e) = save_editor_state(state, path) {
             applier_failed = Some(format!("save failed: {e}"));
             return false;
         }
+        if let Some(auto_finalize) = auto_finalize.as_deref_mut() {
+            auto_finalize.note_write(Instant::now());
+        }
         true
     })?;
-    if let Some(msg) = applier_failed {
+    if let Some(ref msg) = applier_failed {
         eprintln!("openpencil-desktop mcp: {msg}");
     }
+    if explicit_finalize
+        && !apply_rejected
+        && applier_failed.is_none()
+        && response.as_deref().is_some_and(mcp_response_succeeded)
+    {
+        if let Some(auto_finalize) = auto_finalize {
+            auto_finalize.note_finalize(state.document_revision());
+        }
+    }
     Ok(response)
+}
+
+fn mcp_response_succeeded(response: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(response)
+        .ok()
+        .and_then(|value| value.get("result").cloned())
+        .and_then(|result| result.get("isError").cloned())
+        .and_then(|is_error| is_error.as_bool())
+        != Some(true)
 }
 
 pub fn process_message_with_applier<F>(
@@ -304,110 +350,21 @@ where
     Ok((!resp.is_empty()).then_some(resp))
 }
 
-/// Run the stdio MCP server against `path`. Returns Ok(()) on EOF,
-/// Err on unrecoverable IO. Blocks the calling thread for the
-/// lifetime of the stdio connection.
 pub fn run(path: PathBuf) -> Result<(), McpServeError> {
-    let mut state = load_editor_state(&path)?;
-    let stdin = std::io::stdin();
-    let stdout = std::io::stdout();
-    let mut reader = BufReader::new(stdin.lock());
-    let mut writer = BufWriter::new(stdout.lock());
-    let mut line = String::new();
-    loop {
-        line.clear();
-        let n = reader
-            .read_line(&mut line)
-            .map_err(|e| McpServeError::Io(format!("stdin read: {e}")))?;
-        if n == 0 {
-            return Ok(()); // EOF
-        }
-        if let Some(resp) = process_message(&mut state, &path, &line)? {
-            writeln!(writer, "{resp}")
-                .map_err(|e| McpServeError::Io(format!("stdout write: {e}")))?;
-            writer
-                .flush()
-                .map_err(|e| McpServeError::Io(format!("stdout flush: {e}")))?;
-        }
-    }
+    auto_finalize::run(path)
 }
 
-/// Run the MCP server over HTTP on `127.0.0.1:port`. Each connection
-/// carries one JSON-RPC message POSTed to any path; the response is
-/// the JSON-RPC reply as `application/json`. A minimal non-streaming
-/// Streamable-HTTP transport — enough for HTTP MCP clients that POST
-/// one request per connection. Blocks for the listener's lifetime.
 pub fn run_http(path: PathBuf, port: u16) -> Result<(), McpServeError> {
-    // Bound a slow/stalled peer: with bodies now up to 256 MiB, a connection
-    // that opens and then dribbles (or never finishes) its body must not pin
-    // this thread indefinitely. The live server sets the same kind of timeout
-    // on its accepted sockets (`mcp_live.rs`).
-    const HTTP_IO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
-    let mut state = load_editor_state(&path)?;
-    let listener = std::net::TcpListener::bind(("127.0.0.1", port))
-        .map_err(|e| McpServeError::Config(format!("bind 127.0.0.1:{port}: {e}")))?;
-    eprintln!("openpencil-desktop --mcp-http: listening on 127.0.0.1:{port}");
-    for stream in listener.incoming() {
-        match stream {
-            Ok(mut s) => {
-                let _ = s.set_read_timeout(Some(HTTP_IO_TIMEOUT));
-                let _ = s.set_write_timeout(Some(HTTP_IO_TIMEOUT));
-                match serve_http_connection(&mut s, &mut state, &path) {
-                    Ok(true) => {
-                        eprintln!("openpencil-desktop --mcp-http: shutdown requested; exiting");
-                        break;
-                    }
-                    Ok(false) => {}
-                    Err(e) => eprintln!("openpencil-desktop --mcp-http: {e}"),
-                }
-            }
-            Err(e) => eprintln!("openpencil-desktop --mcp-http: accept: {e}"),
-        }
-    }
-    Ok(())
+    auto_finalize::run_http(path, port)
 }
 
-/// Handle one HTTP connection: parse the request, run its JSON-RPC
-/// body through [`process_message`], write the JSON-RPC reply back as
-/// an `application/json` response. Generic over the stream so it is
-/// unit-testable without a real socket.
-/// Returns `Ok(true)` when the client requested a (token-authed) graceful
-/// shutdown — the caller (`run_http`) then stops the accept loop and the
-/// process exits cleanly, so `op stop` never has to signal a pid.
+#[cfg(test)]
 fn serve_http_connection<S: std::io::Read + std::io::Write>(
     stream: &mut S,
     state: &mut EditorState,
-    path: &std::path::Path,
+    path: &Path,
 ) -> Result<bool, McpServeError> {
-    // Routes through the `_with_origin` primitive with the same permissive
-    // `*` value `write_mcp_http_response` supplies.
-    let reply = |stream: &mut S, status: &str, body: &str| {
-        write_mcp_http_response_with_origin(stream, status, body, Some("*"))
-    };
-    let req = read_http_request(stream)?;
-    if req.method == "OPTIONS" {
-        return reply(stream, "204 No Content", "").map(|()| false);
-    }
-    if req.path != "/mcp" && req.path != "/" {
-        return reply(stream, "404 Not Found", r#"{"error":"Not found"}"#).map(|()| false);
-    }
-    if req.method != "POST" {
-        return reply(
-            stream,
-            "400 Bad Request",
-            r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"Invalid or missing session ID"},"id":null}"#,
-        )
-        .map(|()| false);
-    }
-    if let Some(id) = shutdown_request_id(&req.body, &headless_token_from_env().unwrap_or_default())
-    {
-        reply(stream, "200 OK", &shutdown_ok_response(&id))?;
-        return Ok(true);
-    }
-    match process_message(state, path, &req.body)? {
-        Some(response) => reply(stream, "200 OK", &response).map(|()| false),
-        None => reply(stream, "202 Accepted", "").map(|()| false),
-    }
+    auto_finalize::serve_http_connection(stream, state, path, None)
 }
 
 #[derive(Debug)]
@@ -763,6 +720,9 @@ pub(crate) mod design_agent_run_error;
 pub(crate) mod design_agent_run_tool;
 use design_agent_run_tool::run_design_agent_snapshot;
 
+#[cfg(test)]
+#[path = "mcp_serve/auto_finalize_stdio_tests.rs"]
+mod auto_finalize_stdio_tests;
 #[cfg(test)]
 mod codegen_wire_tests;
 #[cfg(test)]

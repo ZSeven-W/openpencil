@@ -48,7 +48,7 @@ mod cleanup_container_geometry;
 #[path = "cleanup_equalize_siblings.rs"]
 mod cleanup_equalize_siblings;
 #[path = "cleanup_image_slots.rs"]
-mod cleanup_image_slots;
+pub(crate) mod cleanup_image_slots;
 #[path = "cleanup_root_and_nav.rs"]
 mod cleanup_root_and_nav;
 #[path = "cleanup_root_transform.rs"]

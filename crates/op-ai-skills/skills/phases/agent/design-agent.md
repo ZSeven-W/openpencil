@@ -24,7 +24,7 @@ If you need access to many tools in one turn, call `ToolSearch` with:
 - Capture the returned style-guide `name` — you will pass it to `spawn_agents` when delegating sub-screens.
 
 **Composition task / editing an existing design:**
-- Call `get_guidelines(topic)` using `"web-app"` or `"mobile"` for product-design principles that apply to the screen you are editing; add `"scroll"` when the request mentions parallax / sticky / scroll effects (it carries the page-scroll contract), `"card"` for a card board, and `"icons"` for the icon_font/lucide icon contract.
+- Call `get_guidelines(topic)` using `"web-app"` or `"mobile"` for product-design principles that apply to the screen you are editing; add `"scroll"` when the request mentions parallax / sticky / scroll effects (it carries the page-scroll contract), `"card"` for a card board, and `"icons"` for the icon_font/lucide icon contract. When you are done, call `finalize_design` once — it runs the same repair passes the built-in pipeline applies.
 - Do NOT pull a full style guide when you are adjusting an existing composition.
 
 **Visual style for new or refreshed work:**

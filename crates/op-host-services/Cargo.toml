@@ -94,6 +94,7 @@ getrandom = "0.3"
 hmac = "0.12"
 sha2 = "0.10"
 tracing = { workspace = true }
+signal-hook = "0.3"
 
 zip = "2"
 memmap2 = "0.9"
