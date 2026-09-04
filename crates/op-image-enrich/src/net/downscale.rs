@@ -31,6 +31,8 @@ const JPEG_QUALITY: u32 = 82;
 const THUMB_MAX_EDGE: i32 = 32;
 const THUMB_BYTE_BUDGET: usize = 4 * 1024;
 const THUMB_JPEG_QUALITIES: [u32; 6] = [60, 50, 40, 30, 20, 10];
+const JUDGE_MAX_EDGE: i32 = 512;
+const JUDGE_JPEG_QUALITY: u32 = 78;
 
 /// Results produced from one decode of a Figma import bitmap. The resolver
 /// decides the final data-URL MIME after the optional replacement lands.
@@ -103,6 +105,39 @@ pub fn make_blur_thumbnail_from_image(src: &Image) -> Option<Vec<u8>> {
         let encoded = thumb.encode(None, EncodedImageFormat::JPEG, *quality)?;
         (encoded.size() <= THUMB_BYTE_BUDGET).then(|| encoded.as_bytes().to_vec())
     })
+}
+
+/// Decode and normalize one downloaded search thumbnail for the visual
+/// judge. A white matte makes transparent catalogue assets comparable while
+/// the longest edge remains at most 512 px and the payload is always JPEG.
+pub fn make_judge_thumbnail(bytes: &[u8]) -> Option<Vec<u8>> {
+    let src = Image::from_encoded(Data::new_copy(bytes)).or_else(|| {
+        let png = decode_via_image_crate(bytes)?;
+        Image::from_encoded(Data::new_copy(&png))
+    })?;
+    let (w, h) = (src.width(), src.height());
+    if w <= 0 || h <= 0 {
+        return None;
+    }
+    let longest = w.max(h);
+    let scale = (JUDGE_MAX_EDGE as f32 / longest as f32).min(1.0);
+    let nw = ((w as f32 * scale).round() as i32).max(1);
+    let nh = ((h as f32 * scale).round() as i32).max(1);
+    let mut surface = surfaces::raster_n32_premul((nw, nh))?;
+    surface.canvas().clear(skia_safe::Color::WHITE);
+    let mut paint = Paint::default();
+    paint.set_anti_alias(true);
+    surface.canvas().draw_image_rect_with_sampling_options(
+        &src,
+        None,
+        Rect::from_xywh(0.0, 0.0, nw as f32, nh as f32),
+        CubicResampler::mitchell(),
+        &paint,
+    );
+    surface
+        .image_snapshot()
+        .encode(None, EncodedImageFormat::JPEG, JUDGE_JPEG_QUALITY)
+        .map(|encoded| encoded.as_bytes().to_vec())
 }
 
 /// Transcode a web-fetched image into a payload the scene renderer can
@@ -339,6 +374,15 @@ mod tests {
         assert!(thumb.len() <= 4 * 1024, "thumbnail stays within 4 KiB");
         let decoded = Image::from_encoded(Data::new_copy(&thumb)).expect("thumbnail decodes");
         assert_eq!(decoded.dimensions(), (32, 16).into());
+    }
+
+    #[test]
+    fn judge_thumbnail_is_a_jpeg_with_a_512px_longest_edge() {
+        let png = solid(2048, 1024, EncodedImageFormat::PNG);
+        let thumb = make_judge_thumbnail(&png).expect("judge thumbnail encodes");
+        assert!(thumb.starts_with(&[0xff, 0xd8]), "judge input is JPEG");
+        let decoded = Image::from_encoded(Data::new_copy(&thumb)).expect("thumbnail decodes");
+        assert_eq!(decoded.dimensions(), (512, 256).into());
     }
 
     #[test]

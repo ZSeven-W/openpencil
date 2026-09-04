@@ -8,9 +8,12 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::net::providers::{
-    fetch_openverse_token, normalize_image_mime_header, simplify_search_query,
-    wikimedia_info_is_image, WebOpenverseCredentials, MAX_EMBEDDED_IMAGE_BYTES,
+    fetch_image_and_judge_thumbnail, fetch_openverse_list_with_aspect, fetch_openverse_token,
+    normalize_image_mime_header, retain_relevant_hits_for_fetch, simplify_search_query,
+    two_keyword_retry, wikimedia_info_is_image, RawHit, WebOpenverseCredentials,
+    MAX_EMBEDDED_IMAGE_BYTES,
 };
+use crate::net::{format_judge_log, select_with_judge, ImageRelevanceJudge};
 use crate::ImageAspectRatio;
 
 pub fn fetch_first_image_url_blocking(
@@ -64,6 +67,139 @@ pub async fn fetch_first_image_url(
         }
     }
     fetch_wikimedia(&client, &query, used_urls).await
+}
+
+/// Visual-judge variant of the desktop enrichment ladder. The no-judge path
+/// above stays untouched so the default session remains byte-identical.
+pub fn fetch_first_image_url_blocking_with_judge(
+    query: &str,
+    aspect_ratio: Option<ImageAspectRatio>,
+    credentials: Option<&WebOpenverseCredentials>,
+    used_urls: &Mutex<HashSet<String>>,
+    judge: &dyn ImageRelevanceJudge,
+    intent: &str,
+) -> Option<String> {
+    let query = query.trim();
+    if query.is_empty() {
+        return None;
+    }
+    crate::net::block_on_image_runtime(fetch_first_image_url_with_judge(
+        query,
+        aspect_ratio,
+        credentials,
+        used_urls,
+        judge,
+        intent,
+    ))
+}
+
+async fn fetch_first_image_url_with_judge(
+    query: &str,
+    aspect_ratio: Option<ImageAspectRatio>,
+    credentials: Option<&WebOpenverseCredentials>,
+    used_urls: &Mutex<HashSet<String>>,
+    judge: &dyn ImageRelevanceJudge,
+    intent: &str,
+) -> Option<String> {
+    let client = reqwest::Client::builder()
+        .use_rustls_tls()
+        .timeout(Duration::from_secs(8))
+        .user_agent(concat!("openpencil-desktop/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .ok()?;
+    let query = simplify_search_query(query);
+    let hits =
+        fetch_relevant_openverse_list_with_aspect(&client, &query, aspect_ratio, credentials)
+            .await
+            .unwrap_or_default();
+    if let Some(url) = fetch_judged_openverse(&client, hits, &query, intent, used_urls, judge).await
+    {
+        return Some(url);
+    }
+
+    // Keep the existing Wikimedia fallback ladder. A visual judge failure or
+    // two all-Off Openverse rounds must never turn into a fail-open search.
+    let words: Vec<&str> = query
+        .split_whitespace()
+        .filter(|word| !word.is_empty())
+        .collect();
+    if words.len() > 2 {
+        let truncated = words[..2].join(" ");
+        if let Some(url) = fetch_wikimedia(&client, &truncated, used_urls).await {
+            return Some(url);
+        }
+    }
+    fetch_wikimedia(&client, &query, used_urls).await
+}
+
+struct PreparedJudgeCandidate {
+    data_url: String,
+    thumb_jpeg: Vec<u8>,
+}
+
+async fn fetch_judged_openverse(
+    client: &reqwest::Client,
+    hits: Vec<RawHit>,
+    query: &str,
+    intent: &str,
+    used_urls: &Mutex<HashSet<String>>,
+    judge: &dyn ImageRelevanceJudge,
+) -> Option<String> {
+    const ROUND_SIZE: usize = 5;
+    const MAX_JUDGE_CANDIDATES: usize = ROUND_SIZE * 2;
+    let mut candidates = Vec::new();
+    for hit in hits.into_iter().take(MAX_JUDGE_CANDIDATES) {
+        let Some((data_url, thumb_jpeg)) =
+            fetch_image_and_judge_thumbnail(client, &hit.thumb_url).await
+        else {
+            continue;
+        };
+        candidates.push(PreparedJudgeCandidate {
+            data_url,
+            thumb_jpeg,
+        });
+    }
+
+    let batches: Vec<Vec<Vec<u8>>> = candidates
+        .chunks(ROUND_SIZE)
+        .map(|batch| {
+            batch
+                .iter()
+                .map(|candidate| candidate.thumb_jpeg.clone())
+                .collect()
+        })
+        .collect();
+    let selection = select_with_judge(judge, query, intent, &batches);
+    eprintln!("[ENRICH] {}", format_judge_log(&selection));
+    for index in selection.ordered_indices() {
+        let Some(candidate) = candidates.get(*index) else {
+            continue;
+        };
+        if claim_unused_image_src(used_urls, &candidate.data_url) {
+            return Some(candidate.data_url.clone());
+        }
+    }
+    None
+}
+
+async fn fetch_relevant_openverse_list_with_aspect(
+    client: &reqwest::Client,
+    query: &str,
+    aspect_ratio: Option<ImageAspectRatio>,
+    credentials: Option<&WebOpenverseCredentials>,
+) -> Option<Vec<RawHit>> {
+    let hits = fetch_openverse_list_with_aspect(client, query, aspect_ratio, credentials).await?;
+    let relevant = retain_relevant_hits_for_fetch(hits, query);
+    if !relevant.is_empty() {
+        return Some(relevant);
+    }
+
+    let Some(retry_query) = two_keyword_retry(query) else {
+        return Some(relevant);
+    };
+    let retry =
+        fetch_openverse_list_with_aspect(client, &retry_query, aspect_ratio, credentials).await?;
+    Some(retain_relevant_hits_for_fetch(retry, query))
 }
 
 async fn fetch_openverse(

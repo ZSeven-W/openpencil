@@ -10,7 +10,13 @@
 
 pub mod downscale;
 pub mod fetch;
+pub mod judge;
 pub mod providers;
+
+pub use judge::{
+    format_judge_log, select_with_judge, ImageRelevanceJudge, JudgeSelection, JudgedCandidate,
+    NoJudge, RelevanceVerdict,
+};
 
 /// Drive one image job's future to completion from a synchronous worker
 /// thread. A dedicated small runtime rather than a per-call one: image jobs

@@ -41,6 +41,26 @@ pub async fn fetch_image_bytes(
     Some((mime, bytes))
 }
 
+/// Download a candidate thumbnail and normalize it to a compact JPEG for the
+/// visual relevance judge. The original download cap still applies before
+/// decoding so a provider cannot make the judge buffer an unbounded body.
+pub async fn fetch_judge_thumbnail(client: &reqwest::Client, url: &str) -> Option<Vec<u8>> {
+    let (_mime, bytes) = fetch_image_bytes(client, url, MAX_EMBEDDED_IMAGE_BYTES).await?;
+    crate::net::downscale::make_judge_thumbnail(&bytes)
+}
+
+/// Download a thumbnail once, retaining a renderer-ready data URL for the
+/// eventual winner and a separate compact JPEG for visual judging.
+pub async fn fetch_image_and_judge_thumbnail(
+    client: &reqwest::Client,
+    url: &str,
+) -> Option<(String, Vec<u8>)> {
+    let (mime, bytes) = fetch_image_bytes(client, url, MAX_EMBEDDED_IMAGE_BYTES).await?;
+    let data_url = crate::net::fetch::renderable_image_data_url(&mime, &bytes)?;
+    let judge_thumbnail = crate::net::downscale::make_judge_thumbnail(&bytes)?;
+    Some((data_url, judge_thumbnail))
+}
+
 /// Read a response body, aborting as soon as it exceeds `cap` — the cap must
 /// hold with or without a Content-Length header, and an over-cap body must
 /// never be fully buffered first (a chunked response could otherwise stream

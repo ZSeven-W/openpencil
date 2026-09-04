@@ -182,7 +182,7 @@ const SCENE_QUERY_OPT_IN_WORDS: &[&str] = &[
 /// white/plain/transparent-background phrase).
 const ISOLATION_RESULT_WORDS: &[&str] = &["isolated", "isolate", "isolation", "cutout"];
 
-pub(super) fn two_keyword_retry(query: &str) -> Option<String> {
+pub(crate) fn two_keyword_retry(query: &str) -> Option<String> {
     let core = concrete_query_words(query);
     // Product prompts commonly put the searchable subject noun near the end
     // (for example "... table lamp terracotta"). Keeping the concrete tail
@@ -262,7 +262,7 @@ fn canonicalize_word(word: &str) -> String {
 /// subject word. When a query contains no concrete words (for example an
 /// all-descriptor prompt), preserve the provider response rather than making
 /// an unprovable relevance decision.
-pub(super) fn retain_relevant_hits(hits: Vec<RawHit>, query: &str) -> Vec<RawHit> {
+pub(crate) fn retain_relevant_hits(hits: Vec<RawHit>, query: &str) -> Vec<RawHit> {
     let strict = retain_relevant_hits_enforcing(hits.clone(), query, true);
     if !strict.is_empty() {
         return strict;

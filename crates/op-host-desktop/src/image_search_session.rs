@@ -23,6 +23,7 @@ pub(crate) use op_host_services::web_image_search::{simplify_search_query, sniff
 // desktop session share one predicate vocabulary; the desktop keeps its own
 // provider fetches, memoization, and job bookkeeping. The old paths are
 // re-exported so every existing importer and test stays stable.
+use op_image_enrich::net::{ImageRelevanceJudge, NoJudge};
 pub(crate) use op_image_enrich::{
     apply_result, collaboration_image_result_gate, collect_targets, collect_targets_with_scene,
     image_request_mode, ImageAspectRatio, ImageRequestMode, ImageSearchTarget,
@@ -391,6 +392,13 @@ fn spawn_job(
     let aspect_ratio = target.aspect_ratio;
     let key = search_intent_key(&target.query, aspect_ratio);
     let intent = Some(intent_fingerprint(&target, None));
+    let (judge, judge_enabled) = configured_image_relevance_judge();
+    let judge_intent = target
+        .prompt
+        .as_deref()
+        .filter(|prompt| !prompt.trim().is_empty())
+        .unwrap_or(target.query.as_str())
+        .to_string();
     // One full search intent, one in-flight request and one session result.
     // Rebuilt nodes subscribe to the same pending request instead of racing
     // duplicate searches; completed intents return from the memo.
@@ -425,12 +433,26 @@ fn spawn_job(
         }
     }
     std::thread::spawn(move || {
-        let url = fetch_first_image_url_blocking(
-            &target.query,
-            aspect_ratio,
-            credentials.as_ref().map(OpenverseCredentials::as_web),
-            &used_urls,
-        );
+        let url = if judge_enabled {
+            fetch_first_image_url_blocking_with_judge(
+                &target.query,
+                aspect_ratio,
+                credentials.as_ref().map(OpenverseCredentials::as_web),
+                &used_urls,
+                judge.as_ref(),
+                &judge_intent,
+            )
+        } else {
+            // No configured judge deliberately uses the old one-result path;
+            // this is the NoJudge behavior and keeps default output bytes
+            // unchanged.
+            fetch_first_image_url_blocking(
+                &target.query,
+                aspect_ratio,
+                credentials.as_ref().map(OpenverseCredentials::as_web),
+                &used_urls,
+            )
+        };
         publish_search_result(&search_memo, key, request_id, url);
     });
     ImageSearchJob {
@@ -438,6 +460,18 @@ fn spawn_job(
         intent,
         rx,
     }
+}
+
+fn configured_image_relevance_judge() -> (Arc<dyn ImageRelevanceJudge>, bool) {
+    // TODO(judge): desktop provider adapter. ImageSearchSession is created in
+    // AppState before a selected ChatProvider exists; env is the only safe
+    // provider available at this seam today.
+    if let Some(judge) =
+        op_host_services::image_relevance_judge::OpenAiCompatVisionJudge::from_env()
+    {
+        return (Arc::new(judge), true);
+    }
+    (Arc::new(NoJudge), false)
 }
 
 /// Publish only into the exact Pending entry that launched this request. A
@@ -519,8 +553,8 @@ fn spawn_unavailable_gen_job(target: ImageSearchTarget) -> ImageSearchJob {
 mod fetch;
 mod intent;
 
-use fetch::fetch_first_image_url_blocking;
 pub(crate) use fetch::fetch_image_data_url;
+use fetch::{fetch_first_image_url_blocking, fetch_first_image_url_blocking_with_judge};
 pub(crate) use intent::{current_intent_fingerprints, intent_fingerprint, search_intent_key};
 
 // `apply_result` + the slot predicates + the target/mode/aspect types live in

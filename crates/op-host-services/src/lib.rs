@@ -82,6 +82,7 @@ mod figma_convert;
 mod figma_convert_error;
 pub mod hub_auth_client;
 pub mod hub_auth_error;
+pub mod image_relevance_judge;
 mod import_html_url;
 pub mod import_html_url_error;
 pub mod loop_blocker_ledger;

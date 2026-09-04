@@ -9,21 +9,30 @@ use super::{
 
 #[derive(Clone)]
 pub struct RawHit {
-    pub(super) id: String,
-    pub(super) thumb_url: String,
-    pub(super) attribution: String,
-    pub(super) title: String,
-    pub(super) relevance_metadata: String,
+    pub(crate) id: String,
+    pub(crate) thumb_url: String,
+    pub(crate) attribution: String,
+    pub(crate) title: String,
+    pub(crate) relevance_metadata: String,
 }
 
 /// `None` = request-level failure (429 / network), `Some([])` = the
 /// catalogue answered with zero hits (the ladder distinguishes the two).
-pub(super) async fn fetch_openverse_list(
+pub(crate) async fn fetch_openverse_list(
     client: &reqwest::Client,
     query: &str,
     credentials: Option<&WebOpenverseCredentials>,
 ) -> Option<Vec<RawHit>> {
-    let url = reqwest::Url::parse_with_params(
+    fetch_openverse_list_with_aspect(client, query, None, credentials).await
+}
+
+pub(crate) async fn fetch_openverse_list_with_aspect(
+    client: &reqwest::Client,
+    query: &str,
+    aspect_ratio: Option<crate::ImageAspectRatio>,
+    credentials: Option<&WebOpenverseCredentials>,
+) -> Option<Vec<RawHit>> {
+    let mut url = reqwest::Url::parse_with_params(
         "https://api.openverse.org/v1/images/",
         &[
             ("q", query),
@@ -31,6 +40,10 @@ pub(super) async fn fetch_openverse_list(
         ],
     )
     .ok()?;
+    if let Some(aspect_ratio) = aspect_ratio {
+        url.query_pairs_mut()
+            .append_pair("aspect_ratio", aspect_ratio.as_openverse_param());
+    }
     let mut request = client.get(url);
     if let Some(credentials) = credentials {
         if let Some(token) = fetch_openverse_token(client, credentials).await {

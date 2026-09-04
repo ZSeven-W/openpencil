@@ -20,23 +20,24 @@ mod download;
 mod relevance;
 
 pub(crate) use catalog::wikimedia_info_is_image;
+pub(crate) use catalog::{fetch_openverse_list, fetch_openverse_list_with_aspect};
 pub use catalog::{
     fetch_openverse_token, parse_openverse_results, parse_wikimedia_results, RawHit,
 };
 pub use download::{
-    fetch_image_bytes, fetch_image_data_url, normalize_image_mime_header, read_capped,
-    sniff_image_mime,
+    fetch_image_and_judge_thumbnail, fetch_image_bytes, fetch_image_data_url,
+    fetch_judge_thumbnail, normalize_image_mime_header, read_capped, sniff_image_mime,
 };
 pub use relevance::simplify_search_query;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use catalog::{
-    fetch_openverse_list, fetch_relevant_wikimedia_list, materialize_first_thumb,
-    materialize_thumbs,
+use catalog::{fetch_relevant_wikimedia_list, materialize_first_thumb, materialize_thumbs};
+use relevance::retain_relevant_hits;
+pub(crate) use relevance::{
+    retain_relevant_hits as retain_relevant_hits_for_fetch, two_keyword_retry,
 };
-use relevance::{retain_relevant_hits, two_keyword_retry};
 
 #[cfg(test)]
 use catalog::fetch_relevant_wikimedia_list_with;
@@ -225,6 +226,23 @@ pub fn run_first_search_blocking_with_timeout(
         .unwrap_or_else(empty_search_outcome)
 }
 
+/// Judge-aware single-result variant used by headless enrichment callers.
+/// The ordinary function above intentionally keeps its existing materializer
+/// for the no-judge path and for the image-search popover.
+pub fn run_first_search_blocking_with_judge(
+    query: &str,
+    credentials: Option<&WebOpenverseCredentials>,
+    remaining: Duration,
+    judge: &dyn crate::net::ImageRelevanceJudge,
+    intent: &str,
+) -> WebImageSearchOutcome {
+    run_with_timeout(
+        remaining,
+        run_first_search_with_judge(query, credentials, judge, intent),
+    )
+    .unwrap_or_else(empty_search_outcome)
+}
+
 fn run_with_timeout<F>(remaining: Duration, future: F) -> Option<F::Output>
 where
     F: std::future::Future,
@@ -287,6 +305,46 @@ async fn run_first_search(
         async move { fetch_image_data_url(&client, &url).await }
     })
     .await
+}
+
+async fn run_first_search_with_judge(
+    query: &str,
+    credentials: Option<&WebOpenverseCredentials>,
+    judge: &dyn crate::net::ImageRelevanceJudge,
+    intent: &str,
+) -> WebImageSearchOutcome {
+    let Ok(client) = reqwest::Client::builder()
+        .use_rustls_tls()
+        .timeout(Duration::from_secs(8))
+        .user_agent(concat!("openpencil-web-daemon/", env!("CARGO_PKG_VERSION")))
+        .build()
+    else {
+        return empty_search_outcome();
+    };
+    let query = simplify_search_query(query);
+    let hits = fetch_relevant_openverse_list(&client, &query, credentials)
+        .await
+        .unwrap_or_default();
+    if let Some(result) = materialize_judged_first(&client, hits, &query, intent, judge).await {
+        return WebImageSearchOutcome {
+            results: vec![result],
+            source: Some("openverse"),
+        };
+    }
+
+    let wiki = fetch_relevant_wikimedia_list(&client, &query).await;
+    let Some(result) = materialize_first_thumb(wiki, &|url: String| {
+        let client = client.clone();
+        async move { fetch_image_data_url(&client, &url).await }
+    })
+    .await
+    else {
+        return empty_search_outcome();
+    };
+    WebImageSearchOutcome {
+        results: vec![result],
+        source: Some("wikimedia"),
+    }
 }
 
 /// The full search ladder over a caller-supplied client + thumbnail
@@ -359,13 +417,61 @@ where
     }
 }
 
+struct PreparedJudgeHit {
+    hit: RawHit,
+    thumb_jpeg: Vec<u8>,
+    data_url: String,
+}
+
+async fn materialize_judged_first(
+    client: &reqwest::Client,
+    hits: Vec<RawHit>,
+    query: &str,
+    intent: &str,
+    judge: &dyn crate::net::ImageRelevanceJudge,
+) -> Option<WebImageSearchHit> {
+    const ROUND_SIZE: usize = 5;
+    const MAX_JUDGE_CANDIDATES: usize = ROUND_SIZE * 2;
+    let mut prepared = Vec::new();
+    for hit in hits.into_iter().take(MAX_JUDGE_CANDIDATES) {
+        let Some((data_url, thumb_jpeg)) =
+            fetch_image_and_judge_thumbnail(client, &hit.thumb_url).await
+        else {
+            continue;
+        };
+        prepared.push(PreparedJudgeHit {
+            hit,
+            thumb_jpeg,
+            data_url,
+        });
+    }
+    let batches: Vec<Vec<Vec<u8>>> = prepared
+        .chunks(ROUND_SIZE)
+        .map(|batch| {
+            batch
+                .iter()
+                .map(|candidate| candidate.thumb_jpeg.clone())
+                .collect()
+        })
+        .collect();
+    let selection = crate::net::select_with_judge(judge, query, intent, &batches);
+    eprintln!("[ENRICH] {}", crate::net::format_judge_log(&selection));
+    let index = selection.ordered_indices().first().copied()?;
+    let candidate = prepared.get(index)?;
+    Some(WebImageSearchHit {
+        id: candidate.hit.id.clone(),
+        thumb_data_url: candidate.data_url.clone(),
+        attribution: candidate.hit.attribution.clone(),
+    })
+}
+
 /// Fetch and relevance-filter the Openverse catalogue, retrying at most once
 /// with the concrete subject phrase. `None` remains a request-level failure:
 /// it falls through to Wikimedia without turning a network error into another
 /// Openverse request. `Some([])` and non-empty-but-fully-filtered replies share
 /// the same single retry, so the two conditions can never trigger duplicate
 /// catalogue requests.
-async fn fetch_relevant_openverse_list(
+pub(crate) async fn fetch_relevant_openverse_list(
     client: &reqwest::Client,
     query: &str,
     credentials: Option<&WebOpenverseCredentials>,

@@ -1,0 +1,253 @@
+//! OpenAI-compatible multimodal image relevance judge.
+
+use std::time::Duration;
+
+use base64::Engine as _;
+use futures::stream::{self, StreamExt};
+use op_image_enrich::net::{
+    block_on_image_runtime, ImageRelevanceJudge, JudgedCandidate, RelevanceVerdict,
+};
+
+const BASE_URL_ENV: &str = "OPENPENCIL_IMAGE_JUDGE_BASE_URL";
+const API_KEY_ENV: &str = "OPENPENCIL_IMAGE_JUDGE_API_KEY";
+const MODEL_ENV: &str = "OPENPENCIL_IMAGE_JUDGE_MODEL";
+const MAX_RETRIES: usize = 2;
+const MAX_TOKENS: u32 = 600;
+const MAX_CONCURRENT_CALLS: usize = 3;
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
+
+const JUDGE_PROMPT: &str = "You are an image relevance judge. Query: {query}. Intent: {intent}. \
+Inspect the image and return ONLY strict JSON: {\"verdict\":\"on\"|\"weak\"|\"off\",\"reason\":\"<=12 words\"}. \
+Use \"off\" when the main subject is different, including a toy, unrelated object, text collage, or wrong scene. \
+Use \"on\" for a clear match and \"weak\" for an ambiguous or partial match.";
+
+/// A vision judge backed by an OpenAI chat-completions-compatible endpoint.
+#[derive(Clone)]
+pub struct OpenAiCompatVisionJudge {
+    client: reqwest::Client,
+    endpoint: String,
+    api_key: String,
+    model: String,
+}
+
+impl OpenAiCompatVisionJudge {
+    /// Construct the judge only when all three opt-in settings are present.
+    /// Invalid endpoint/client configuration is treated as unavailable so
+    /// callers can retain the ordinary no-judge path.
+    pub fn from_env() -> Option<Self> {
+        let base_url = non_blank_env(BASE_URL_ENV)?;
+        let api_key = non_blank_env(API_KEY_ENV)?;
+        let model = non_blank_env(MODEL_ENV)?;
+        let endpoint = chat_completions_endpoint(&base_url)?;
+        let client = reqwest::Client::builder()
+            .use_rustls_tls()
+            .timeout(REQUEST_TIMEOUT)
+            .build()
+            .ok()?;
+        Some(Self {
+            client,
+            endpoint,
+            api_key,
+            model,
+        })
+    }
+
+    async fn judge_one(
+        &self,
+        index: usize,
+        query: &str,
+        intent: &str,
+        thumb_jpeg: Vec<u8>,
+    ) -> JudgedCandidate {
+        let mut last_error = String::from("unknown judge failure");
+        for _attempt in 0..=MAX_RETRIES {
+            match self.request_one(query, intent, &thumb_jpeg).await {
+                Ok((content, reasoning_content)) => {
+                    if let Some((verdict, reason)) =
+                        parse_verdict_response(content.as_deref(), reasoning_content.as_deref())
+                    {
+                        return JudgedCandidate {
+                            index,
+                            verdict,
+                            reason,
+                        };
+                    }
+                    last_error = "response did not contain a valid verdict JSON".to_string();
+                }
+                Err(error) => last_error = error,
+            }
+        }
+        eprintln!(
+            "[IMAGE_JUDGE] candidate={} unavailable: {}",
+            index, last_error
+        );
+        JudgedCandidate {
+            index,
+            verdict: RelevanceVerdict::Weak,
+            reason: "judge unavailable".to_string(),
+        }
+    }
+
+    async fn request_one(
+        &self,
+        query: &str,
+        intent: &str,
+        thumb_jpeg: &[u8],
+    ) -> Result<(Option<String>, Option<String>), String> {
+        let image_url = format!(
+            "data:image/jpeg;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(thumb_jpeg)
+        );
+        let prompt = JUDGE_PROMPT
+            .replace("{query}", query)
+            .replace("{intent}", intent);
+        let body = serde_json::json!({
+            "model": self.model,
+            "max_tokens": MAX_TOKENS,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": image_url}}
+                ]
+            }]
+        });
+        let response = self
+            .client
+            .post(&self.endpoint)
+            .bearer_auth(&self.api_key)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|error| error.to_string())?;
+        if !response.status().is_success() {
+            return Err(format!("HTTP {}", response.status()));
+        }
+        let value: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|error| format!("invalid response JSON: {error}"))?;
+        let message = value
+            .get("choices")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|choices| choices.first())
+            .and_then(|choice| choice.get("message"));
+        let content = message
+            .and_then(|message| message.get("content"))
+            .and_then(value_as_text);
+        let reasoning_content = message
+            .and_then(|message| message.get("reasoning_content"))
+            .and_then(value_as_text);
+        Ok((content, reasoning_content))
+    }
+}
+
+impl ImageRelevanceJudge for OpenAiCompatVisionJudge {
+    fn judge(&self, query: &str, intent: &str, thumbs_jpeg: &[Vec<u8>]) -> Vec<JudgedCandidate> {
+        let query = query.to_string();
+        let intent = intent.to_string();
+        let jobs = thumbs_jpeg
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(index, thumb)| {
+                let judge = self.clone();
+                let query = query.clone();
+                let intent = intent.clone();
+                async move { judge.judge_one(index, &query, &intent, thumb).await }
+            });
+        let mut judged = block_on_image_runtime(async move {
+            stream::iter(jobs)
+                .buffer_unordered(MAX_CONCURRENT_CALLS)
+                .collect::<Vec<_>>()
+                .await
+        });
+        judged.sort_by_key(|candidate| candidate.index);
+        judged
+    }
+}
+
+fn non_blank_env(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn chat_completions_endpoint(base_url: &str) -> Option<String> {
+    let endpoint = if base_url.ends_with("/chat/completions") {
+        base_url.to_string()
+    } else {
+        format!("{}/chat/completions", base_url.trim_end_matches('/'))
+    };
+    reqwest::Url::parse(&endpoint)
+        .ok()
+        .map(|url| url.to_string())
+}
+
+fn value_as_text(value: &serde_json::Value) -> Option<String> {
+    value.as_str().map(str::to_string)
+}
+
+fn parse_verdict_response(
+    content: Option<&str>,
+    reasoning_content: Option<&str>,
+) -> Option<(RelevanceVerdict, String)> {
+    parse_verdict_text(content).or_else(|| parse_verdict_text(reasoning_content))
+}
+
+#[cfg(test)]
+fn parse_candidate_response(
+    index: usize,
+    content: Option<&str>,
+    reasoning_content: Option<&str>,
+) -> JudgedCandidate {
+    if let Some((verdict, reason)) = parse_verdict_response(content, reasoning_content) {
+        return JudgedCandidate {
+            index,
+            verdict,
+            reason,
+        };
+    }
+    JudgedCandidate {
+        index,
+        verdict: RelevanceVerdict::Weak,
+        reason: "judge unavailable".to_string(),
+    }
+}
+
+fn parse_verdict_text(text: Option<&str>) -> Option<(RelevanceVerdict, String)> {
+    let text = text?.trim();
+    let json = serde_json::from_str::<serde_json::Value>(text)
+        .ok()
+        .or_else(|| {
+            let start = text.find('{')?;
+            let end = text.rfind('}')?;
+            (start < end).then(|| serde_json::from_str(&text[start..=end]).ok())?
+        })?;
+    let verdict = match json
+        .get("verdict")?
+        .as_str()?
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "on" => RelevanceVerdict::On,
+        "weak" => RelevanceVerdict::Weak,
+        "off" => RelevanceVerdict::Off,
+        _ => return None,
+    };
+    let reason = json
+        .get("reason")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("")
+        .split_whitespace()
+        .take(12)
+        .collect::<Vec<_>>()
+        .join(" ");
+    Some((verdict, reason))
+}
+
+#[cfg(test)]
+#[path = "image_relevance_judge_tests.rs"]
+mod tests;
