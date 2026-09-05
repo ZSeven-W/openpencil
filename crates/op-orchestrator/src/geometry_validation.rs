@@ -60,7 +60,10 @@ pub(crate) use geometry_interaction_backfill::{
 mod absolute_child_clamp;
 #[path = "geometry_buried_overlay.rs"]
 mod geometry_buried_overlay;
+#[path = "text_fit.rs"]
+mod text_fit;
 pub(crate) use absolute_child_clamp::clamp_absolute_children_into_parent;
+pub(crate) use text_fit::repair_text_fit;
 #[path = "geometry_card_rail_fixes.rs"]
 mod geometry_card_rail_fixes;
 #[path = "geometry_diagnostics_collect.rs"]

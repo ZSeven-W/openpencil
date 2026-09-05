@@ -49,12 +49,15 @@ mod cleanup_container_geometry;
 mod cleanup_equalize_siblings;
 #[path = "cleanup_image_slots.rs"]
 pub(crate) mod cleanup_image_slots;
+#[path = "cleanup_overflow_prepass.rs"]
+mod cleanup_overflow_prepass;
 #[path = "cleanup_root_and_nav.rs"]
 mod cleanup_root_and_nav;
 #[path = "cleanup_root_transform.rs"]
 mod cleanup_root_transform;
 #[path = "cleanup_section_margins.rs"]
 mod cleanup_section_margins;
+use cleanup_overflow_prepass::run_overflow_prepass;
 #[path = "cleanup_section_sizing.rs"]
 mod cleanup_section_sizing;
 #[path = "cleanup_slide_padding.rs"]
@@ -620,13 +623,10 @@ fn run_cleanup_passes_with_summary_and_policy(
                 }
             }
         }
-        // Absolutely-pinned, fixed-size controls that poke out of a
-        // `layout: "none"` parent are shifted back INSIDE the parent BEFORE
-        // the geometry loop below runs: its card-overflow clip fallback would
-        // otherwise crop the control (a real run chopped the right half off a
-        // 44x44 "locate me" button pinned at x=307 in a 327px-wide map block).
-        crate::geometry_validation::clamp_absolute_children_into_parent(sink, rid);
-        counter.checkpoint(summary, CheckCategory::Overflow, "absolute-child-clamp");
+        // Overflow pre-pass: shift pinned controls back inside their parent and
+        // shrink single-line text that outgrew its rail, so the geometry loop
+        // below only sees what a move or a shrink cannot fix.
+        run_overflow_prepass(sink, rid, summary, &mut counter);
         let preserve_root_height = policy.preserve_requested_root_height
             || find_root(sink.state(), rid).is_some_and(|root| {
                 root_has_explicit_fit_content_height(root)
