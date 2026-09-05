@@ -520,13 +520,40 @@ fn codex_turn_args_map_effort_to_reasoning_config() {
 }
 
 #[test]
-fn claude_subprocess_template_ignores_model() {
-    // Claude Code's model rides the SDK adapter (chat_claude.rs); its
-    // subprocess template must not grow a model flag here.
+fn claude_subprocess_template_passes_the_model_alias() {
+    // Headless generation (op-smoke, the arena) selects the Claude model
+    // through the CLI's own `--model` flag; the routed chat still rides
+    // the SDK adapter (chat_claude.rs) and never reaches this template.
     let p = SubprocessProvider::for_cli(CliName::ClaudeCode).unwrap();
-    let base = p.args.clone();
-    let args = p.turn_args(&request_with_model(Some("some-model")));
-    assert_eq!(args, base, "Claude Code args must be unchanged");
+    let args = p.turn_args(&request_with_model(Some("opus")));
+    let at = args
+        .iter()
+        .position(|a| a == "--model")
+        .expect("--model flag present");
+    assert_eq!(args.get(at + 1).map(String::as_str), Some("opus"));
+}
+
+#[test]
+fn claude_generation_turns_disallow_every_tool() {
+    // A generation turn is parsed as text by the orchestrator; the child
+    // must not be able to touch files, run commands or load MCP servers.
+    let p = SubprocessProvider::for_cli_generation(CliName::ClaudeCode).unwrap();
+    assert!(p.args.iter().any(|a| a == "--strict-mcp-config"));
+    let at = p
+        .args
+        .iter()
+        .position(|a| a == "--disallowedTools")
+        .expect("disallowed tools flag");
+    let list = p.args.get(at + 1).expect("tool list");
+    for tool in ["Bash", "Write", "Edit", "Read", "WebFetch", "Task"] {
+        assert!(
+            list.split(',').any(|t| t == tool),
+            "{tool} missing from {list}"
+        );
+    }
+    // The canvas-agent template keeps the CLI's own tool policy.
+    let canvas = SubprocessProvider::for_cli(CliName::ClaudeCode).unwrap();
+    assert!(!canvas.args.iter().any(|a| a == "--disallowedTools"));
 }
 
 #[test]

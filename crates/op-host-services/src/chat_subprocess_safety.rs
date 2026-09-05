@@ -57,6 +57,36 @@ pub fn antigravity_args(purpose: TurnPurpose) -> Vec<String> {
     args
 }
 
+/// Claude Code's one-shot interface: `--print` with the stream-json
+/// transcript the parser understands. A generation turn is text-only —
+/// the orchestrator parses the reply itself — so every tool is disallowed
+/// and no MCP server is loaded; the canvas-agent turn keeps the CLI's own
+/// tool policy because it is expected to drive the OpenPencil MCP server.
+pub fn claude_code_args(purpose: TurnPurpose) -> Vec<String> {
+    let mut args: Vec<String> = Vec::new();
+    if purpose == TurnPurpose::Generation {
+        // `--disallowedTools` is variadic: it swallows every following bare
+        // argument, including the positional prompt. It therefore has to
+        // come first, followed by a single-valued flag, so the prompt that
+        // `PromptMode::PositionalArg` appends last is read as the prompt.
+        args.extend([
+            "--disallowedTools".into(),
+            CLAUDE_CODE_GENERATION_DISALLOWED_TOOLS.into(),
+            "--strict-mcp-config".into(),
+        ]);
+    }
+    args.extend([
+        "--print".into(),
+        "--verbose".into(),
+        "--output-format".into(),
+        "stream-json".into(),
+    ]);
+    args
+}
+
+pub const CLAUDE_CODE_GENERATION_DISALLOWED_TOOLS: &str =
+    "Bash,Write,Edit,MultiEdit,NotebookEdit,Read,Task,Agent,WebFetch,WebSearch,Glob,Grep";
+
 pub fn grok_args(purpose: TurnPurpose) -> Vec<String> {
     let mut args = vec![
         "--no-auto-update".into(),

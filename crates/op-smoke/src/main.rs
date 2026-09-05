@@ -15,8 +15,9 @@
 //! Optional env overrides:
 //! - `OPENPENCIL_ORCHESTRATOR_MODEL` — default `claude-sonnet-4-6`.
 //! - `OPENPENCIL_LLM_PROVIDER` — `anthropic` (default), `openai-compat`,
-//!   or `antigravity` / `agy`. The Antigravity arm reuses the production
-//!   generation-only subprocess transport and the CLI's existing login.
+//!   `antigravity` / `agy`, or `claude` / `claude-code`. The CLI arms reuse
+//!   the production generation-only subprocess transport and the CLI's
+//!   existing login (no API key needed).
 //! - `OPENPENCIL_SMOKE_VALIDATION=1` — opt into the production lint
 //!   pre-validator and post-generation validation stage. The default remains
 //!   skipped so existing smoke traces are unchanged.
@@ -66,8 +67,8 @@ use crate::llm_clients::{DirectOpenAiClient, SmokeLlmClient};
 // items keep their original `crate::<item>` paths.
 pub(crate) use smoke_support::InlineDocSink;
 use smoke_support::{
-    antigravity_llm, loop_thinking_mode, maybe_merge_smoke_library, truthy_env_value,
-    SmokeProviderKind,
+    antigravity_llm, claude_code_llm, loop_thinking_mode, maybe_merge_smoke_library,
+    truthy_env_value, SmokeProviderKind,
 };
 
 /// Headless agentic tool-loop branch (`OPENPENCIL_SMOKE_LOOP=1`).
@@ -219,7 +220,8 @@ async fn main() -> std::process::ExitCode {
                  providers:\n\
                    anthropic (default): OPENPENCIL_ANTHROPIC_API_KEY=...\n\
                    openai-compat: OPENPENCIL_LLM_BASE_URL=... OPENPENCIL_LLM_API_KEY=...\n\
-                   antigravity/agy: uses the logged-in agy CLI\n\n\
+                   antigravity/agy: uses the logged-in agy CLI\n\
+                   claude/claude-code: uses the logged-in claude CLI (model alias e.g. opus)\n\n\
                  common:\n\
                    OPENPENCIL_ORCHESTRATOR_MODEL=<model>\n\
                    OPENPENCIL_SMOKE_OUT=<result.op>\n\
@@ -251,7 +253,7 @@ async fn main() -> std::process::ExitCode {
     let Some(provider_kind) = SmokeProviderKind::parse(&provider_kind_raw) else {
         eprintln!(
             "error: unknown OPENPENCIL_LLM_PROVIDER={provider_kind_raw:?} \
-             (want anthropic|openai-compat|antigravity|agy)"
+             (want anthropic|openai-compat|antigravity|agy|claude|claude-code)"
         );
         return std::process::ExitCode::from(3);
     };
@@ -260,6 +262,7 @@ async fn main() -> std::process::ExitCode {
             SmokeProviderKind::Anthropic => "claude-sonnet-4-6".into(),
             SmokeProviderKind::OpenAiCompat => "gpt-4o-mini".into(),
             SmokeProviderKind::Antigravity => "gemini-3.6-flash-high".into(),
+            SmokeProviderKind::ClaudeCode => "opus".into(),
         });
 
     eprintln!("[SMOKE] provider={} model={model}", provider_kind.label());
@@ -320,6 +323,7 @@ async fn main() -> std::process::ExitCode {
             }
         }
         SmokeProviderKind::Antigravity => antigravity_llm(&model),
+        SmokeProviderKind::ClaudeCode => claude_code_llm(&model),
     };
 
     // `OPENPENCIL_SMOKE_STARTER=1` seeds the fresh-canvas starter frame so a

@@ -19,6 +19,7 @@ pub(crate) enum SmokeProviderKind {
     Anthropic,
     OpenAiCompat,
     Antigravity,
+    ClaudeCode,
 }
 
 impl SmokeProviderKind {
@@ -27,6 +28,7 @@ impl SmokeProviderKind {
             "anthropic" => Some(Self::Anthropic),
             "openai" | "openai-compat" => Some(Self::OpenAiCompat),
             "antigravity" | "agy" => Some(Self::Antigravity),
+            "claude" | "claude-code" => Some(Self::ClaudeCode),
             _ => None,
         }
     }
@@ -36,6 +38,7 @@ impl SmokeProviderKind {
             Self::Anthropic => "anthropic",
             Self::OpenAiCompat => "openai-compat",
             Self::Antigravity => "antigravity",
+            Self::ClaudeCode => "claude-code",
         }
     }
 }
@@ -47,6 +50,17 @@ pub(crate) fn truthy_env_value(value: Option<&str>) -> bool {
             "1" | "true" | "on"
         )
     })
+}
+
+/// Claude Code CLI through the production generation-only subprocess
+/// transport: the logged-in `claude` binary, tools disallowed, model alias
+/// passed as `--model`. This is how a subscription-only Claude runs the
+/// full built-in pipeline (planner → subtasks → finalize) without an API key.
+pub(crate) fn claude_code_llm(model: &str) -> Box<dyn LlmClient> {
+    let provider = SubprocessProvider::for_cli_generation(CliName::ClaudeCode)
+        .expect("Claude Code has a production subprocess transport");
+    let provider: Arc<dyn ChatProvider> = Arc::new(provider);
+    Box::new(ChatProviderLlmClient::new(provider).with_model(Some(model.to_string())))
 }
 
 pub(crate) fn antigravity_llm(model: &str) -> Box<dyn LlmClient> {

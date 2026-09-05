@@ -105,19 +105,15 @@ impl SubprocessProvider {
     fn for_cli_with_purpose(cli: CliName, turn_purpose: safety::TurnPurpose) -> Option<Self> {
         // Per-CLI model selector (third tuple slot): Codex takes
         // `--model <id>` — matching the TS reference. Claude Code's
-        // model rides the SDK adapter (`chat_claude.rs`), so
-        // its subprocess template carries no flag here.
+        // routed chat rides the SDK adapter (`chat_claude.rs`); the
+        // subprocess template is what headless generation (op-smoke,
+        // the arena) uses, so it takes `--model <alias>` as well.
         type Template = (Vec<String>, PromptMode, Option<&'static str>, Vec<String>);
         let (mut args, prompt_mode, model_flag, tail_args): Template = match cli {
             CliName::ClaudeCode => (
-                vec![
-                    "--print".into(),
-                    "--verbose".into(),
-                    "--output-format".into(),
-                    "stream-json".into(),
-                ],
+                safety::claude_code_args(turn_purpose),
                 PromptMode::PositionalArg,
-                None,
+                Some("--model"),
                 Vec::new(),
             ),
             // TS `codex-client.ts` argv plus capability-gated non-persistence:
@@ -619,6 +615,11 @@ impl SubprocessProvider {
                                 // line is text, never an event envelope.
                                 Some(CliName::Dsh) => {
                                     Some(crate::chat_subprocess_dsh::parse_dsh_line(&line))
+                                }
+                                Some(CliName::ClaudeCode) => {
+                                    crate::chat_subprocess_claude_stream::parse_claude_stream_line(
+                                        &line,
+                                    )
                                 }
                                 _ => Some(parse_line(&line)),
                             };
