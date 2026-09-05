@@ -24,6 +24,7 @@ fn painted_button(id: &str, height: Value, child: Value) -> Value {
         "width": "fill_container",
         "height": height,
         "layout": "horizontal",
+        "justifyContent": "center",
         "fill": [{"type": "solid", "color": "$--primary"}],
         "children": [child]
     })
@@ -43,6 +44,17 @@ fn sink_with(root: Value) -> VecDocSink {
     let node: PenNode = serde_json::from_value(root).expect("fixture parses");
     let mut sink = VecDocSink::new();
     sink.apply(EditorCommand::InsertSubtree {
+        nodes: vec![node],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    sink
+}
+
+fn resolved_sink_with(root: Value) -> VecDocSink {
+    let node: PenNode = serde_json::from_value(root).expect("fixture parses");
+    let mut sink = VecDocSink::new();
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
         nodes: vec![node],
         parent_id: NodeId::NONE,
         page_id: None,
@@ -86,6 +98,52 @@ fn login_button_gets_the_48px_floor_and_layout_checkpoint() {
         .records()
         .iter()
         .all(|record| record.pass == "touch-target-floor"));
+}
+
+#[test]
+fn app05_login_button_subtree_uses_its_resolved_fill_container_width() {
+    let mut sink = resolved_sink_with(json!({
+        "type": "frame", "id": "screen", "name": "登录", "width": 375,
+        "height": 812, "layout": "vertical", "children": [{
+            "type": "frame", "id": "login-form", "name": "登录表单",
+            "width": "fill_container", "height": "fit_content", "layout": "vertical",
+            "padding": [0, 24], "children": [{
+                "type": "frame", "id": "login", "name": "登录按钮",
+                "width": "fill_container", "height": "fit_content", "layout": "horizontal",
+                "gap": 8, "justifyContent": "center", "alignItems": "center",
+                "fill": [{"type": "solid", "color": "$--primary"}], "children": [{
+                    "type": "text", "id": "login-label", "fontSize": 17,
+                    "content": "登录", "textGrowth": "auto"
+                }]
+            }]
+        }]
+    }));
+    let rects = resolved_rects(sink.state());
+    let button_rect = rects.get("login").expect("resolved login button rect");
+    assert_eq!(button_rect.w, 327.0);
+    assert!(button_rect.h < TOUCH_TARGET_FLOOR);
+
+    let root_id = sink.state.active_children()[0].id_str().to_string();
+    assert_eq!(repair_touch_target_floor(&mut sink, &root_id), 1);
+    assert_eq!(command_height(&sink.applied, "login"), Some(48));
+}
+
+#[test]
+fn amenity_header_shape_is_not_a_touch_control() {
+    let header = json!({
+        "type": "frame", "id": "amenity-header", "name": "amenity-header",
+        "width": "fill_container", "height": "fit_content", "layout": "horizontal",
+        "justifyContent": "space_between", "alignItems": "center",
+        "stroke": {"thickness": {"top": 1}, "fill": [{
+            "type": "solid", "color": "$--accent"
+        }]},
+        "children": [
+            {"type": "text", "id": "amenity-title", "content": "酒店设施"},
+            {"type": "text", "id": "amenity-more", "content": "更多"}
+        ]
+    });
+    let rects = HashMap::from([("amenity-header".to_string(), rect(280.0, 32.0))]);
+    assert!(collect(header, rects).is_empty());
 }
 
 #[test]

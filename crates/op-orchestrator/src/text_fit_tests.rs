@@ -44,6 +44,21 @@ fn amount_card(text: Value) -> (Value, HashMap<String, Rect>) {
     )
 }
 
+fn estimated_card(text: Value) -> (Value, HashMap<String, Rect>) {
+    (
+        json!({
+            "type": "frame",
+            "id": "card",
+            "width": 327,
+            "height": 100,
+            "clipContent": true,
+            "padding": [0, 28.5],
+            "children": [text]
+        }),
+        HashMap::from([("card".to_string(), rect(0.0, 0.0, 327.0, 100.0))]),
+    )
+}
+
 #[test]
 fn measured_52px_amount_shrinks_to_the_proportional_floor() {
     let (card, rects) = amount_card(json!({
@@ -82,6 +97,66 @@ fn wrapped_paragraph_is_untouched() {
         "fontSize": 40,
         "textGrowth": "fixed-width"
     }));
+
+    assert!(collect(card, rects).is_empty());
+}
+
+#[test]
+fn app19_unbreakable_amount_uses_the_estimate_and_fits_at_41px() {
+    let (card, rects) = estimated_card(json!({
+        "type": "text",
+        "id": "text",
+        "content": "1,286,430.52",
+        "fontFamily": "DM Mono",
+        "fontSize": 44,
+        "fontWeight": 600,
+        "letterSpacing": -0.5,
+        "textGrowth": "fixed-width"
+    }));
+
+    let cmds = collect(card, rects);
+    assert_eq!(update_font_size(&cmds, "text"), Some(41.0));
+    assert!(estimate_unbreakable_text_width(&json!({"content": "1,286,430.52"}), 41.0) <= 270.0);
+}
+
+#[test]
+fn fixed_width_sentence_with_spaces_is_untouched() {
+    let (card, mut rects) = amount_card(json!({
+        "type": "text",
+        "id": "text",
+        "content": "A fixed width sentence",
+        "fontSize": 44,
+        "textGrowth": "fixed-width"
+    }));
+    rects.remove("text");
+
+    assert!(collect(card, rects).is_empty());
+}
+
+#[test]
+fn cjk_fixed_width_text_is_untouched() {
+    let (card, mut rects) = amount_card(json!({
+        "type": "text",
+        "id": "text",
+        "content": "总资产数字",
+        "fontSize": 44,
+        "textGrowth": "fixed-width-height"
+    }));
+    rects.remove("text");
+
+    assert!(collect(card, rects).is_empty());
+}
+
+#[test]
+fn an_unbreakable_token_that_fits_is_untouched() {
+    let (card, mut rects) = amount_card(json!({
+        "type": "text",
+        "id": "text",
+        "content": "1,286,430.52",
+        "fontSize": 44,
+        "textGrowth": "fixed-width-height"
+    }));
+    rects.remove("text");
 
     assert!(collect(card, rects).is_empty());
 }

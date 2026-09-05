@@ -1,9 +1,10 @@
-//! Shrink measured single-line text before a clipping/fixed-width ancestor
-//! falls back to cropping it.
+//! Shrink measured single-line text, plus estimated unbreakable fixed-width
+//! tokens, before a clipping/fixed-width ancestor falls back to cropping them.
 
 use super::*;
 
 const TEXT_FIT_EPS: f64 = 2.0;
+const ESTIMATED_TEXT_FIT_RATIO: f64 = 1.04;
 
 /// Collect font-size repairs for single-line text whose resolved width is
 /// wider than the nearest clipping or width-constrained ancestor.
@@ -39,10 +40,9 @@ fn collect_text_fit_command(
     rects: &HashMap<String, Rect>,
     cmds: &mut Vec<EditorCommand>,
 ) {
-    if !is_single_line_text(text)
-        || ancestors
-            .iter()
-            .any(|node| is_status_bar_node(node) || is_horizontal_scroller(node))
+    if ancestors
+        .iter()
+        .any(|node| is_status_bar_node(node) || is_horizontal_scroller(node))
         || is_status_bar_node(text)
     {
         return;
@@ -51,9 +51,7 @@ fn collect_text_fit_command(
     let Some(text_id) = text.get("id").and_then(Value::as_str) else {
         return;
     };
-    let Some(text_rect) = rects.get(text_id) else {
-        return;
-    };
+    let text_rect = rects.get(text_id);
     let Some(ancestor) = ancestors
         .iter()
         .rev()
@@ -69,8 +67,7 @@ fn collect_text_fit_command(
         return;
     };
     let available = (ancestor_rect.w - horizontal_padding(ancestor)).max(0.0);
-    if !text_rect.w.is_finite() || !available.is_finite() || text_rect.w <= available + TEXT_FIT_EPS
-    {
+    if !available.is_finite() {
         return;
     }
 
@@ -83,14 +80,37 @@ fn collect_text_fit_command(
     if !font_size.is_finite() || font_size <= 0.0 {
         return;
     }
-    let minimum = if font_size >= 32.0 { 24.0 } else { 12.0 };
-    // Do not issue a repair when even the allowed minimum would still be too
-    // wide; that case needs a different structural or author-level decision.
-    if minimum * text_rect.w / font_size > available {
+
+    if is_unbreakable_fixed_width_text(text) {
+        let estimated_width = estimate_unbreakable_text_width(text, font_size);
+        if !estimated_width.is_finite() || estimated_width <= available * ESTIMATED_TEXT_FIT_RATIO {
+            return;
+        }
+        if let Some(new_font_size) = fitted_font_size(font_size, available, estimated_width) {
+            cmds.push(EditorCommand::SetNodeFontSize {
+                node_id: NodeId::new(text_id.to_string()),
+                font_size: new_font_size as f32,
+            });
+        }
         return;
     }
 
-    let new_font_size = (font_size * available / text_rect.w)
+    if !is_single_line_text(text)
+        || !text_rect
+            .map(|rect| rect.w.is_finite() && rect.w > available + TEXT_FIT_EPS)
+            .unwrap_or(false)
+    {
+        return;
+    }
+    let measured_width = text_rect.map(|rect| rect.w).unwrap_or_default();
+    let minimum = if font_size >= 32.0 { 24.0 } else { 12.0 };
+    // Do not issue a repair when even the allowed minimum would still be too
+    // wide; that case needs a different structural or author-level decision.
+    if minimum * measured_width / font_size > available {
+        return;
+    }
+
+    let new_font_size = (font_size * available / measured_width)
         .floor()
         .max(minimum)
         .min(font_size);
@@ -102,6 +122,54 @@ fn collect_text_fit_command(
         node_id: NodeId::new(text_id.to_string()),
         font_size: new_font_size as f32,
     });
+}
+
+fn is_unbreakable_fixed_width_text(v: &Value) -> bool {
+    if !matches!(
+        v.get("textGrowth").and_then(Value::as_str),
+        Some("fixed-width" | "fixed-width-height")
+    ) {
+        return false;
+    }
+    let Some(content) = v.get("content").and_then(Value::as_str) else {
+        return false;
+    };
+    !content.is_empty() && content.is_ascii() && !content.chars().any(char::is_whitespace)
+}
+
+fn estimate_unbreakable_text_width(text: &Value, font_size: f64) -> f64 {
+    text.get("content")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .chars()
+        .map(|character| font_size * character_em(character))
+        .sum()
+}
+
+fn character_em(character: char) -> f64 {
+    if character.is_ascii_digit() {
+        0.62
+    } else if matches!(character, ',' | '.') {
+        0.30
+    } else if character.is_ascii_uppercase() {
+        0.68
+    } else if character.is_ascii_lowercase() {
+        0.55
+    } else {
+        0.35
+    }
+}
+
+fn fitted_font_size(font_size: f64, available: f64, measured_width: f64) -> Option<f64> {
+    let minimum = if font_size >= 32.0 { 24.0 } else { 12.0 };
+    if minimum * measured_width / font_size > available {
+        return None;
+    }
+    let new_font_size = (font_size * available / measured_width)
+        .floor()
+        .max(minimum)
+        .min(font_size);
+    (new_font_size < font_size).then_some(new_font_size)
 }
 
 fn is_single_line_text(v: &Value) -> bool {

@@ -133,6 +133,10 @@ fn is_touch_target_offender(
         return false;
     }
 
+    if !has_control_shape(v) {
+        return false;
+    }
+
     if is_protected_node(v, bottom_nav_ids)
         || ancestors.iter().any(|ancestor| {
             crate::cleanup::is_status_bar_from_json(ancestor)
@@ -158,6 +162,28 @@ fn has_hugging_height(v: &Value) -> bool {
         None | Some(Value::Null) => true,
         Some(Value::String(height)) => height == "fit_content",
         _ => false,
+    }
+}
+
+/// A painted row with text/icon leaves is a control only when its authored
+/// shape supplies an interaction cue: a rounded hit target or centered
+/// content. Section headers commonly share the same paint and child count but
+/// use a square, space-between row, so this fact keeps them out of the floor
+/// repair without relying on names.
+fn has_control_shape(v: &Value) -> bool {
+    v.get("justifyContent").and_then(Value::as_str) == Some("center")
+        || corner_radius_min(v).is_some_and(|radius| radius >= 8.0)
+}
+
+fn corner_radius_min(v: &Value) -> Option<f64> {
+    match v.get("cornerRadius") {
+        Some(Value::Array(values)) if !values.is_empty() => values
+            .iter()
+            .map(number_value)
+            .collect::<Option<Vec<_>>>()
+            .and_then(|values| values.into_iter().reduce(f64::min)),
+        Some(value) => number_value(value),
+        None => None,
     }
 }
 
@@ -191,8 +217,11 @@ fn visible_solid_fill(fill: &Value) -> bool {
     if color.eq_ignore_ascii_case("transparent") {
         return false;
     }
+    if color.starts_with('$') {
+        return true;
+    }
     op_util::hex_color::parse_hex_rgba8(color, op_util::hex_color::HexOptions::LENIENT)
-        .is_none_or(|rgba| rgba[3] != 0)
+        .is_some_and(|rgba| rgba[3] != 0)
 }
 
 fn number_value(value: &Value) -> Option<f64> {
