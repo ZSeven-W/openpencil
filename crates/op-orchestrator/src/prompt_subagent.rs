@@ -307,10 +307,10 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
     let is_scroll = crate::scroll_intent::is_scroll_orchestration_request(&req.prompt);
     let deck_budget = Phase::Generation.default_budget();
     let budget_override = match tier {
-        ModelTier::Basic if is_mobile_layout || is_mobile_screen => Some(9280),
+        ModelTier::Basic if is_mobile_layout || is_mobile_screen => Some(9780),
         ModelTier::Basic if is_deck || is_card || is_scroll => Some(deck_budget),
         ModelTier::Basic => Some(5200),
-        ModelTier::Standard if is_mobile_layout => Some(9500),
+        ModelTier::Standard if is_mobile_layout => Some(10000),
         ModelTier::Standard if is_deck || is_card || is_scroll => Some(deck_budget),
         ModelTier::Standard => Some(6500),
         ModelTier::Full => None,

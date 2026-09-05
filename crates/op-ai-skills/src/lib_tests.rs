@@ -554,3 +554,34 @@ fn guideline_for_icons_carries_the_catalog() {
     }
     assert!(guideline_topics().contains(&"icons"));
 }
+
+#[test]
+fn planning_resolves_the_mobile_predesign_step_for_an_app_brief_without_mobile_keywords() {
+    // "外卖 App 首页（375×812）" never says mobile / 手机; the planner still has
+    // to pick a signature moment for it, so the predesign step keys on "app"
+    // and the phone width as well.
+    let ctx = crate::resolve_skills(
+        crate::Phase::Planning,
+        "外卖 App 首页（375×812）：顶部地址与搜索、分类九宫格、商家列表",
+        &crate::ResolveOptions::default(),
+    );
+    let names: Vec<&str> = ctx.skills.iter().map(|s| s.meta.name.as_str()).collect();
+    assert!(
+        names.contains(&"mobile-app-predesign"),
+        "mobile predesign must resolve for an App brief; got {names:?}"
+    );
+    assert!(
+        !names.contains(&"landing-page-predesign"),
+        "an app brief must not pull the landing-page predesign; got {names:?}"
+    );
+    let ctx = crate::resolve_skills(
+        crate::Phase::Planning,
+        "为开源向量数据库做官网首页（1440，浅色）",
+        &crate::ResolveOptions::default(),
+    );
+    let names: Vec<&str> = ctx.skills.iter().map(|s| s.meta.name.as_str()).collect();
+    assert!(
+        !names.contains(&"mobile-app-predesign"),
+        "a website brief must not pull the mobile predesign; got {names:?}"
+    );
+}

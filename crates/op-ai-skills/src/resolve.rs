@@ -197,7 +197,7 @@ mod tests {
             "design a login form",
             &ResolveOptions::default(),
         );
-        assert_eq!(ctx.budget_max, 16130);
+        assert_eq!(ctx.budget_max, 16630);
         assert!(ctx.budget_used <= ctx.budget_max);
         assert!(
             !ctx.skills.is_empty(),

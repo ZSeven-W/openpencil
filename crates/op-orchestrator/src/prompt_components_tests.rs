@@ -242,7 +242,7 @@ fn basic_tier_components_prompt_keeps_both_manifest_and_teaching() {
     );
 
     // A Basic-tier mobile request — the actual smoke scenario. Mobile routes
-    // through the wider 9280-token budget so the drop is provably tier-caused,
+    // through the wider 9780-token budget so the drop is provably tier-caused,
     // not budget-caused.
     let basic_req = DesignRequest {
         prompt: "Design a 402x874 mobile shop home screen with product cards, \

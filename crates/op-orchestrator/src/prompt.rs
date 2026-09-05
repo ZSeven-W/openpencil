@@ -168,12 +168,17 @@ fn filter_planning_skills_for_prompt(
     skills: Vec<op_ai_skills::ResolvedSkill>,
     prompt: &str,
 ) -> Vec<op_ai_skills::ResolvedSkill> {
-    if detect_design_type(prompt).type_ == DesignType::LandingPage {
-        return skills;
-    }
+    // Each pre-design step belongs to exactly one design type: the keyword
+    // triggers are deliberately loose ("app", "homepage") so the detector,
+    // not the keyword, has the final say.
+    let design_type = detect_design_type(prompt).type_;
     skills
         .into_iter()
-        .filter(|s| s.meta.name != "landing-page-predesign")
+        .filter(|s| match s.meta.name.as_str() {
+            "landing-page-predesign" => design_type == DesignType::LandingPage,
+            "mobile-app-predesign" => design_type == DesignType::MobileScreen,
+            _ => true,
+        })
         .collect()
 }
 

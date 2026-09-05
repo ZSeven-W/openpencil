@@ -6,7 +6,7 @@ trigger:
   keywords: [mobile, phone, ios, android, 移动, 手机]
   flags: [isMobileScreen]
 priority: 25
-budget: 2100
+budget: 2600
 category: domain
 ---
 
@@ -17,6 +17,23 @@ and optional bottom navigation. These are architectural layers, not a requiremen
 to wrap every content section inside one padded App Content frame.
 
 Screen-height contract: use numeric 390-393×844 as a temporary construction seed so an empty skeleton is visible. Before finishing, a normal content-driven mobile page switches its root to `height="fit_content"` (Hug), matching its completed flow. Keep a numeric viewport only when the user explicitly requested that viewport/device frame or the design deliberately contains one clipped viewport body that must consume remaining height.
+
+## 0) SIGNATURE MOMENT — decide it before any node
+
+Correct is not enough; a white page of cards with one accent button is the default every model produces and the user reads it as "template". Every screen commits to ONE signature moment, chosen from the domain's mood, and the rest of the screen stays quiet around it:
+
+- COLOR-BLOCK HEADER: the top 30-40% of the screen is a solid brand-color or dark surface (status bar sits on it in white); the content below rides up on a `cornerRadius: [24,24,0,0]` white sheet. Use for finance, utility, travel, food ordering.
+- HERO NUMBER: one value at 40-56px semibold with a 12-13px caption (balance, calories, minutes, price); everything else ≤ 17px. Use for dashboards, fitness, banking, stats.
+- FULL-BLEED IMAGE + SCRIM: an image touching three edges with a bottom gradient scrim and the title set in white on the scrim. Use for product, recipe, travel, media detail screens.
+- STACKED DEPTH: 2-3 large cards with real depth (tonal surface + one soft shadow, 20-24px radius), not a list of thin rows. Use for cards, tickets, plans, wallets.
+
+Rules that make the moment land:
+
+- The accent colour is spent in ONE block (the header, the hero card, or the CTA band), not sprinkled on every icon tile. Icon tiles and chips are tonal (surface / muted), never rainbow-tinted.
+- Type scale is three sizes, not six: display (the moment) / 15-17 body / 12-13 caption. Section titles 17-20 semibold, never 24+ bold on every section.
+- Section backgrounds carry rhythm: page bg vs surface alternation; no dividers between every row, one hairline at most per group.
+- The bottom CTA (if any) is the second-most-prominent element and the only other place the accent appears at full strength.
+- A plain search + category grid + promo banner + list stack is only acceptable when the user explicitly asks for that inventory; even then the moment goes on the promo banner (full-width image or colour block), not on a small orange strip.
 
 ## 1) STATUS BAR (OS-controlled) — PRE-INSERTED
 
