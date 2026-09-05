@@ -46,3 +46,12 @@ MOBILE NAV SURFACE: Bottom navigation must use role="bottom-tab-bar" (not navbar
 MOBILE NAV SHADOW: Do not add a drop shadow, glow, or detached shadow band behind the bottom navigation. If separation is needed, use a quiet 1px divider or subtle tonal difference that belongs to the page palette.
 
 NO FIXED FOOD TEMPLATE: Do not default to the same search + categories + orange promo + two product cards composition. For food, shopping, travel, fitness, finance, and social apps, choose a domain-specific visual concept and vary the first viewport composition.
+
+## Platform facts (iOS HIG · Material 3) — the numbers behind the rules
+
+- Type: screen title 28–34 (HIG Large Title 34 / Title 1 28; M3 headline 32/28), section title 20–22 (Title 3 20 / Title 2 22; M3 title-large 22), body 16–17 (Body 17; M3 body-large 16), secondary 15, caption/label 12–13 (Caption 12; M3 label 12). Line height ≈ 1.25–1.3× for titles, 1.3–1.4× for body. Weights 400/500/600; no 300 on mobile.
+- Display numbers: one per screen, 36–48 (M3 display-small 36, display-medium 45); never a second one.
+- Touch: 44×44pt (HIG) / 48dp (M3) minimum, 8 between adjacent targets. Buttons 48–52 tall, chips 32–36, list rows 56–72.
+- Margins: 16–24 horizontal (HIG 16/20, M3 16); our rail is 24. Card padding 16, radius 12–16 (M3 12; HIG cards 12–20).
+- Chrome: status bar 62 here; nav/header row 44–56 (HIG 44, M3 top app bar 64); tab bar 49–62 (HIG 49, M3 navigation bar 80 incl. label); FAB 56.
+- Colour roles (M3): one primary for actions and the single hero treatment; surfaces step surface → surface-container-low → surface-container → -high for grouping, so sections read by tone, not by lines.
