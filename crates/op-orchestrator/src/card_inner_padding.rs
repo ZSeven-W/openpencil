@@ -132,16 +132,11 @@ fn is_card_inner_padding_offender(
     if kids.len() == 1 && kids[0].get("type").and_then(Value::as_str) == Some("image") {
         return false;
     }
-    // The card must hold actual content at its edge: at least one direct
-    // text / image / icon LEAF. A frame whose only children are frames is a
-    // structural wrapper, not a card.
-    let has_edge_content = kids.iter().any(|child| {
-        matches!(
-            child.get("type").and_then(Value::as_str),
-            Some("text" | "image" | "icon_font")
-        ) && children(child).is_empty()
-    });
-    if !has_edge_content {
+    // A direct leaf proves edge content. If the card only contains one
+    // structural frame, follow that single chain through unpadded layout
+    // frames so a wrapper cannot hide a flush text/icon leaf. An image-only
+    // chain remains full-bleed by intent and is excluded below.
+    if !has_edge_content_or_unpadded_chain(v) {
         return false;
     }
 
@@ -171,6 +166,51 @@ fn is_card_inner_padding_offender(
     }
 
     true
+}
+
+fn has_edge_content_or_unpadded_chain(v: &Value) -> bool {
+    let kids = children(v);
+    if kids.iter().any(is_content_leaf) {
+        return true;
+    }
+    if kids.len() != 1 {
+        return false;
+    }
+
+    let mut current = &kids[0];
+    loop {
+        if is_content_leaf(current) {
+            // A single image, even through wrappers, is still a deliberate
+            // full-bleed image card rather than padded card content.
+            return current.get("type").and_then(Value::as_str) != Some("image");
+        }
+        if current.get("type").and_then(Value::as_str) != Some("frame")
+            || !matches!(layout_str(current), Some("horizontal" | "vertical"))
+            || !is_zero_padding_and_offset(current)
+        {
+            return false;
+        }
+        let child = children(current);
+        if child.len() != 1 {
+            return false;
+        }
+        current = &child[0];
+    }
+}
+
+fn is_content_leaf(v: &Value) -> bool {
+    matches!(
+        v.get("type").and_then(Value::as_str),
+        Some("text" | "image" | "icon_font")
+    ) && children(v).is_empty()
+}
+
+fn is_zero_padding_and_offset(v: &Value) -> bool {
+    numeric_padding_sides(v).is_some_and(|sides| sides.iter().all(|side| *side == 0.0))
+        && ["x", "y"].iter().all(|key| match v.get(*key) {
+            None | Some(Value::Null) => true,
+            Some(value) => number_value(value).is_some_and(|offset| offset == 0.0),
+        })
 }
 
 fn is_protected_node(v: &Value, bottom_nav_ids: &HashSet<String>) -> bool {

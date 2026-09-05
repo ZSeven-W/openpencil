@@ -130,3 +130,55 @@ fn card_with_existing_padding_is_untouched() {
     collect_card_inner_padding_fixes(&card, &rects, &no_chrome(), &mut cmds);
     assert!(cmds.is_empty(), "padded card untouched: {cmds:?}");
 }
+
+#[test]
+fn unpadded_wrapper_chain_gets_padding_on_the_card() {
+    let card = card(
+        vec![json!({
+            "type":"frame", "id":"wrapper", "layout":"vertical",
+            "children":[{
+                "type":"frame", "id":"row", "layout":"horizontal",
+                "children":[{"type":"text", "id":"hero-number", "text":"1,286,430.52"}]
+            }]
+        })],
+        None,
+    );
+    let rects = HashMap::from([("card".to_string(), rect(0.0, 0.0, 327.0, 80.0))]);
+    let mut cmds = Vec::new();
+    collect_card_inner_padding_fixes(&card, &rects, &no_chrome(), &mut cmds);
+    assert_eq!(
+        padding_of(&cmds, "card"),
+        Some(LayoutPropValue::NumberArray(vec![12.0, 16.0]))
+    );
+    assert_eq!(cmds.len(), 1, "only the card gets the inset: {cmds:?}");
+}
+
+#[test]
+fn padded_wrapper_chain_is_untouched() {
+    let card = card(
+        vec![json!({
+            "type":"frame", "id":"wrapper", "layout":"vertical", "padding":[0,16],
+            "children":[{"type":"text", "id":"label", "text":"Balance"}]
+        })],
+        None,
+    );
+    let rects = HashMap::from([("card".to_string(), rect(0.0, 0.0, 327.0, 80.0))]);
+    let mut cmds = Vec::new();
+    collect_card_inner_padding_fixes(&card, &rects, &no_chrome(), &mut cmds);
+    assert!(cmds.is_empty(), "padded wrapper owns the inset: {cmds:?}");
+}
+
+#[test]
+fn none_layout_wrapper_chain_is_untouched() {
+    let card = card(
+        vec![json!({
+            "type":"frame", "id":"wrapper", "layout":"none",
+            "children":[{"type":"text", "id":"label", "text":"Balance"}]
+        })],
+        None,
+    );
+    let rects = HashMap::from([("card".to_string(), rect(0.0, 0.0, 327.0, 80.0))]);
+    let mut cmds = Vec::new();
+    collect_card_inner_padding_fixes(&card, &rects, &no_chrome(), &mut cmds);
+    assert!(cmds.is_empty(), "absolute wrapper owns placement: {cmds:?}");
+}

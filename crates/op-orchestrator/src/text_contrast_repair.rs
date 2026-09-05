@@ -34,6 +34,10 @@ use jian_scene::layout_scene::SceneNode;
 use op_design_lint::node_util::{is_node_visible, node_fills, node_id, opacity, resolve_color_ref};
 use op_editor_core::{EditorCommand, EditorState, NodeId, PenNodeExt};
 
+#[path = "text_contrast_gradient.rs"]
+mod gradient;
+use gradient::{GradientSource, ResolvedGradient};
+
 /// Palette tokens allowed as a replacement, most-preferred first.
 ///
 /// All are emitted by `design_system` / `palette_harmonize`, so they exist in
@@ -105,7 +109,7 @@ pub(crate) fn repair_chip_text_contrast(sink: &mut dyn DocSink, root_id: &str) -
     let doc = document_for_lint(sink.state());
     let variables = doc.variables.clone().unwrap_or_default();
     let theme = op_design_lint::node_util::default_theme(doc.themes.as_ref());
-    let rects = resolved_sizes(sink.state());
+    let rects = resolved_rects(sink.state());
 
     let mut offenders: Vec<ContrastOffender> = Vec::new();
     collect_chip_offenders(
@@ -142,7 +146,7 @@ fn collect_chip_offenders(
     ancestors: &[&PenNode],
     variables: &op_design_lint::node_util::Variables,
     theme: &op_design_lint::node_util::Theme,
-    rects: &HashMap<String, (f64, f64)>,
+    rects: &HashMap<String, ResolvedRect>,
     root_id: &str,
     out: &mut Vec<ContrastOffender>,
 ) {
@@ -154,9 +158,13 @@ fn collect_chip_offenders(
             if let Some(background) =
                 nearest_chip_background(ancestors, variables, theme, rects, root_id)
             {
-                if let Some(offender) =
-                    below_contrast_threshold(node_id(node), &text_color, background, TARGET_RATIO)
-                {
+                if let Some(offender) = below_contrast_threshold(
+                    node_id(node),
+                    &text_color,
+                    background,
+                    TARGET_RATIO,
+                    rects,
+                ) {
                     out.push(offender);
                 }
             }
@@ -179,7 +187,7 @@ fn nearest_chip_background(
     ancestors: &[&PenNode],
     variables: &op_design_lint::node_util::Variables,
     theme: &op_design_lint::node_util::Theme,
-    rects: &HashMap<String, (f64, f64)>,
+    rects: &HashMap<String, ResolvedRect>,
     root_id: &str,
 ) -> Option<LocatedBackground> {
     let located = nearest_background(ancestors, variables, theme)?;
@@ -197,18 +205,20 @@ enum FillKind {
     /// A usable solid colour (unresolved — may still be a `$ref`).
     Solid(String),
     /// Gradient stop colours (unresolved — may still be `$ref`s).
-    Gradient(Vec<String>),
+    Gradient(GradientSource),
 }
 
 enum ResolvedFill {
     Transparent,
     Unprovable,
     Solid([u8; 4]),
-    Gradient(Vec<String>),
+    Gradient(ResolvedGradient),
 }
 
 struct LocatedBackground {
     colors: Vec<String>,
+    gradient: Option<ResolvedGradient>,
+    source_node_id: Option<String>,
     source_index: Option<usize>,
 }
 
@@ -240,17 +250,26 @@ fn first_usable_fill_kind(fills: Option<&Vec<PenFill>>) -> FillKind {
                 if body.opacity == Some(0.0) {
                     continue;
                 }
-                return FillKind::Gradient(
-                    body.stops.iter().map(|stop| stop.color.clone()).collect(),
-                );
+                return FillKind::Gradient(GradientSource::linear(
+                    f64::from(body.angle.unwrap_or(0.0)),
+                    body.stops
+                        .iter()
+                        .map(|stop| (f64::from(stop.offset), stop.color.clone()))
+                        .collect(),
+                ));
             }
             PenFill::RadialGradient(body) => {
                 if body.opacity == Some(0.0) {
                     continue;
                 }
-                return FillKind::Gradient(
-                    body.stops.iter().map(|stop| stop.color.clone()).collect(),
-                );
+                return FillKind::Gradient(GradientSource::radial(
+                    f64::from(body.cx.unwrap_or(0.5)),
+                    f64::from(body.cy.unwrap_or(0.5)),
+                    body.stops
+                        .iter()
+                        .map(|stop| (f64::from(stop.offset), stop.color.clone()))
+                        .collect(),
+                ));
             }
             PenFill::MeshGradient(body) => {
                 if body.opacity == Some(0.0) {
@@ -292,17 +311,9 @@ fn resolve_fill_kind(
                 ResolvedFill::Solid(rgba)
             }
         }
-        FillKind::Gradient(stops) => {
-            let colors: Vec<String> = stops
-                .iter()
-                .filter_map(|stop| resolve_contrast_color(stop, variables, theme))
-                .collect();
-            if colors.is_empty() {
-                ResolvedFill::Unprovable
-            } else {
-                ResolvedFill::Gradient(colors)
-            }
-        }
+        FillKind::Gradient(source) => gradient::resolve_gradient(source, variables, theme)
+            .map(ResolvedFill::Gradient)
+            .unwrap_or(ResolvedFill::Unprovable),
     }
 }
 
@@ -324,7 +335,9 @@ fn nearest_background(
             ResolvedFill::Unprovable => return None,
             ResolvedFill::Gradient(colors) => {
                 return Some(LocatedBackground {
-                    colors,
+                    colors: colors.colors(),
+                    gradient: Some(colors),
+                    source_node_id: Some(node_id(ancestor).to_string()),
                     source_index: Some(index),
                 });
             }
@@ -338,6 +351,8 @@ fn nearest_background(
                 };
                 return Some(LocatedBackground {
                     colors: vec![color],
+                    gradient: None,
+                    source_node_id: Some(node_id(ancestor).to_string()),
                     source_index: Some(index),
                 });
             }
@@ -345,6 +360,8 @@ fn nearest_background(
     }
     Some(LocatedBackground {
         colors: vec!["#FFFFFF".to_string()],
+        gradient: None,
+        source_node_id: None,
         source_index: None,
     })
 }
@@ -383,18 +400,39 @@ fn below_contrast_threshold(
     text_color: &str,
     background: LocatedBackground,
     threshold: f64,
+    rects: &HashMap<String, ResolvedRect>,
 ) -> Option<ContrastOffender> {
-    let best = background
-        .colors
+    let colors = background_colors_at_text(&background, node_id, rects);
+    let best = colors
         .iter()
         .map(|color| op_design_lint::color::color_contrast(text_color, color))
         .filter(|ratio| ratio.is_finite())
         .max_by(|left, right| left.total_cmp(right))?;
     (best < threshold).then(|| ContrastOffender {
         node_id: node_id.to_string(),
-        background: background.colors,
+        background: colors,
         threshold,
     })
+}
+
+fn background_colors_at_text(
+    background: &LocatedBackground,
+    text_node_id: &str,
+    rects: &HashMap<String, ResolvedRect>,
+) -> Vec<String> {
+    if let (Some(gradient), Some(owner), Some(text)) = (
+        background.gradient.as_ref(),
+        background
+            .source_node_id
+            .as_deref()
+            .and_then(|id| rects.get(id)),
+        rects.get(text_node_id),
+    ) {
+        if let Some(sample) = gradient::sample_at_text(gradient, *owner, *text) {
+            return vec![sample];
+        }
+    }
+    background.colors.clone()
 }
 
 /// The text fill, when its first usable colour comes from a solid fill. A
@@ -491,7 +529,7 @@ fn composite_over(foreground: [u8; 4], background: [u8; 4]) -> String {
 fn is_chip_shape(
     node: &PenNode,
     parent: Option<&PenNode>,
-    rects: &HashMap<String, (f64, f64)>,
+    rects: &HashMap<String, ResolvedRect>,
     root_id: &str,
 ) -> bool {
     if node.id_str() == root_id {
@@ -512,7 +550,7 @@ fn is_chip_shape(
         authored.or_else(|| {
             rects
                 .get(node.id_str())
-                .map(|(w, h)| if axis == 0 { *w } else { *h })
+                .map(|rect| if axis == 0 { rect.w } else { rect.h })
         })
     };
     let Some(height) = resolved(node, 1) else {
@@ -533,9 +571,17 @@ fn is_chip_shape(
     width <= parent_width * CHIP_MAX_WIDTH_RATIO
 }
 
-/// Resolved `(width, height)` per node id through the SAME jian layout pass
-/// the geometry validation loop uses.
-fn resolved_sizes(state: &EditorState) -> HashMap<String, (f64, f64)> {
+/// Resolved absolute rect per node id through the SAME jian layout pass the
+/// geometry validation loop uses.
+#[derive(Clone, Copy, Debug)]
+struct ResolvedRect {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
+fn resolved_rects(state: &EditorState) -> HashMap<String, ResolvedRect> {
     let scene = op_pen_loader::editor_state_to_active_page_layout_scene(state);
     let mut map = HashMap::new();
     if let Some(page) = scene.active_page() {
@@ -544,12 +590,17 @@ fn resolved_sizes(state: &EditorState) -> HashMap<String, (f64, f64)> {
     map
 }
 
-fn collect_sizes(nodes: &[SceneNode], map: &mut HashMap<String, (f64, f64)>) {
+fn collect_sizes(nodes: &[SceneNode], map: &mut HashMap<String, ResolvedRect>) {
     for node in nodes {
         let bounds = node.aggregate_bounds();
         map.insert(
             node.id.clone(),
-            (f64::from(bounds.size.x), f64::from(bounds.size.y)),
+            ResolvedRect {
+                x: f64::from(bounds.origin.x),
+                y: f64::from(bounds.origin.y),
+                w: f64::from(bounds.size.x),
+                h: f64::from(bounds.size.y),
+            },
         );
         collect_sizes(&node.children, map);
     }
@@ -560,6 +611,7 @@ fn collect_contrast_offenders(
     ancestors: &[&PenNode],
     variables: &op_design_lint::node_util::Variables,
     theme: &op_design_lint::node_util::Theme,
+    rects: &HashMap<String, ResolvedRect>,
     out: &mut Vec<ContrastOffender>,
 ) {
     if !is_node_visible(node) {
@@ -568,9 +620,13 @@ fn collect_contrast_offenders(
     if let PenNode::Text(text) = node {
         if let Some(text_color) = resolved_text_color(text.fill.as_ref(), variables, theme) {
             if let Some(background) = nearest_background(ancestors, variables, theme) {
-                if let Some(offender) =
-                    below_contrast_threshold(node_id(node), &text_color, background, TARGET_RATIO)
-                {
+                if let Some(offender) = below_contrast_threshold(
+                    node_id(node),
+                    &text_color,
+                    background,
+                    TARGET_RATIO,
+                    rects,
+                ) {
                     out.push(offender);
                 }
             }
@@ -579,7 +635,7 @@ fn collect_contrast_offenders(
     let mut next = ancestors.to_vec();
     next.push(node);
     for child in node_children_of(node) {
-        collect_contrast_offenders(child, &next, variables, theme, out);
+        collect_contrast_offenders(child, &next, variables, theme, rects, out);
     }
 }
 
@@ -597,8 +653,9 @@ pub(crate) fn repair_text_contrast(sink: &mut dyn DocSink, root_id: &str) -> usi
     let doc = document_for_lint(sink.state());
     let variables = doc.variables.clone().unwrap_or_default();
     let theme = op_design_lint::node_util::default_theme(doc.themes.as_ref());
+    let rects = resolved_rects(sink.state());
     let mut offenders = Vec::new();
-    collect_contrast_offenders(root, &[], &variables, &theme, &mut offenders);
+    collect_contrast_offenders(root, &[], &variables, &theme, &rects, &mut offenders);
 
     let mut patches: Vec<(String, String)> = Vec::new();
     for offender in offenders {
@@ -711,3 +768,7 @@ fn document_for_lint(state: &op_editor_core::EditorState) -> jian_ops_schema::Pe
 #[cfg(test)]
 #[path = "text_contrast_repair_tests.rs"]
 mod text_contrast_repair_tests;
+
+#[cfg(test)]
+#[path = "text_contrast_gradient_tests.rs"]
+mod text_contrast_gradient_tests;
