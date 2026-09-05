@@ -215,6 +215,26 @@ fn image_fill_mode_threads_into_scene_node() {
 }
 
 #[test]
+fn image_video_metadata_threads_into_scene_node() {
+    let src = r#"{
+      "version":"1.0.0","pages":[{"id":"p","name":"P","children":[{
+        "type":"image","id":"hero","width":360,"height":240,
+        "src":"data:image/png;base64,AA==",
+        "video":{"src":"https://cdn.example.com/hero.mp4","autoplay":true,
+          "loop":true,"muted":true,"holdLastFrame":true,"clickToReplay":true}
+      }]}],"children":[]
+    }"#;
+    let scene = editor_state_to_layout_scene(&state_from(src));
+    let video = scene.pages[0].children[0]
+        .video
+        .as_ref()
+        .expect("video metadata reaches the scene");
+    assert_eq!(video.src.as_ref(), "https://cdn.example.com/hero.mp4");
+    assert!(video.autoplay && video.r#loop && video.muted);
+    assert!(video.hold_last_frame && video.click_to_replay);
+}
+
+#[test]
 fn invalid_or_missing_tile_scale_defaults_to_one_in_scene() {
     for tile_scale in ["", ",\"tileScale\":0", ",\"tileScale\":-2"] {
         let src = format!(

@@ -45,6 +45,10 @@ use layer_bounds::{
     node_composite_layer_bounds, sibling_mask_layer_bounds, subtree_intersects_cull,
 };
 
+#[path = "canvas_viewport_paint_video_badge.rs"]
+mod video_badge;
+use video_badge::paint_video_badge;
+
 #[path = "canvas_viewport_paint/entry.rs"]
 mod entry;
 #[path = "canvas_viewport_paint/hits.rs"]
@@ -491,6 +495,9 @@ fn paint_node_inner<'a>(
                 } else {
                     paint_fill_then_stroke(cx, node, world_rect, zoom, node.fill);
                 }
+            }
+            if node.video.is_some() {
+                paint_video_badge(cx, node.bounds, world_rect, zoom);
             }
             // A `rectangle` is a CONTAINER in the canonical schema (it
             // carries `clipContent` like Frame / Group), so models nest

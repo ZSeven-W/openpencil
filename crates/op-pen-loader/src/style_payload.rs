@@ -76,6 +76,7 @@ pub(crate) fn base_payload(base: &PenNodeBase, kind: &str) -> NodePayload {
         layer_blur: None,
         background_blur: None,
         image_src: None,
+        video: None,
         image_fit: None,
         image_blend_mode: None,
         image_transform: None,

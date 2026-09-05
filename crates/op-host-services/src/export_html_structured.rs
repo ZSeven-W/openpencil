@@ -55,6 +55,7 @@ mod fallback;
 mod shape;
 mod text;
 mod vector;
+mod video;
 
 /// Length formatting, shared with the page template so a board size in
 /// a `data-` attribute is spelled the same way as one in a style rule.
@@ -63,6 +64,9 @@ pub use css::num as css_num;
 #[cfg(test)]
 #[path = "export_html_structured/tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "export_html_structured/video_tests.rs"]
+mod video_tests;
 
 /// One board rendered as markup, plus what it cost to get there.
 #[derive(Debug, Clone)]
@@ -279,6 +283,11 @@ fn unexpressible(n: &SceneNode) -> Option<&'static str> {
 }
 
 fn image_unexpressible(n: &SceneNode, src: &str) -> Option<&'static str> {
+    if n.video.is_some() && src.trim().is_empty() {
+        // A video alias may omit its poster. There is no poster URL to
+        // externalize, so the video remains structured over the fill colour.
+        return None;
+    }
     if !src.trim_start().starts_with("data:") {
         // The whole point of the export is that it presents offline. A
         // remote or filesystem reference is not reachable there; the

@@ -111,8 +111,8 @@ pub use library::{
     merge_library_into_state, merge_library_src_into_state, LibraryMergeError, LibraryMergeReport,
 };
 pub use payload::{
-    load_canonical, write_normalized_source_with_current_schema, DocPayload, NodePayload,
-    NormalizedWriteError, PagePayload, StrokePayload,
+    load_canonical, normalize_video_alias, write_normalized_source_with_current_schema, DocPayload,
+    NodePayload, NormalizedWriteError, PagePayload, StrokePayload,
 };
 pub use variables::{var_table_from_payload, var_table_to_payload, VarTablePayload};
 

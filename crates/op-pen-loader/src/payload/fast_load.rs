@@ -131,7 +131,12 @@ pub(super) fn try_load_preserve(
 /// such as `en\u0061bled` is semantically identical after parsing and must not
 /// bypass normalization.
 fn contains_legacy_normalization_marker(src: &str) -> bool {
-    src.contains("\\u") || src.contains("\"enabled\"") || src.contains("\"geometry\"")
+    src.contains("\\u")
+        || src.contains("\"enabled\"")
+        || src.contains("\"geometry\"")
+        // The fast path deserializes directly and therefore cannot rewrite
+        // the authoring-only video alias before PenNode sees its tag.
+        || (src.contains("\"type\"") && src.contains("\"video\""))
 }
 
 fn pending_thumbs(

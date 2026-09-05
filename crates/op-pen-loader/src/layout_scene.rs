@@ -25,11 +25,12 @@ use jian_scene::layout_scene::NodeKind;
 use jian_scene::layout_scene::{
     stable_image_source_id, DropShadow, Effect, LayoutScene, SceneFillLayer, SceneFillType,
     SceneGradient, SceneGradientStop, SceneImageFit, SceneNode, ScenePage, SceneShader,
-    SceneShaderUniform, SceneTextAlign, SceneTextRun, SceneTextVerticalAlign, SceneWidget,
-    SceneWidgetOption,
+    SceneShaderUniform, SceneTextAlign, SceneTextRun, SceneTextVerticalAlign, SceneVideo,
+    SceneWidget, SceneWidgetOption,
 };
 use op_editor_core::render_backend::{Color, ImageBlendMode};
 use op_editor_core::scene_vars::VariableTable;
+use std::sync::Arc;
 
 use crate::payload::{
     DocPayload, GradientPayload, GradientStopPayload, NodePayload, ShaderPayload,
@@ -297,6 +298,14 @@ pub(crate) fn node_payload_to_scene(
         arc_inner_radius: node.arc_inner_radius,
         polygon_sides: node.polygon_sides.clamp(3, 100),
         image_src: node.image_src.as_ref().map(|s| s.as_arc()),
+        video: node.video.as_ref().map(|video| SceneVideo {
+            src: Arc::from(video.src.as_str()),
+            autoplay: video.autoplay,
+            r#loop: video.r#loop,
+            muted: video.muted,
+            hold_last_frame: video.hold_last_frame,
+            click_to_replay: video.click_to_replay,
+        }),
         image_src_id: node
             .image_src
             .as_deref()

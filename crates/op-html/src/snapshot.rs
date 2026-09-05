@@ -456,6 +456,7 @@ impl<'a> SnapshotCtx<'a> {
             shadows: None,
             image_prompt: None,
             image_search_query: None,
+            video: None,
             state: None,
             bindings: None,
             events: None,

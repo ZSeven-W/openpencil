@@ -44,7 +44,21 @@ aspAllowedOrigins: Array<string> | null,
  */
 updater: { kind: string; [key: string]: unknown } | null, };
 
-export type AppLifecycleHooks = { onLaunch: Array<Action> | null, onResume: Array<Action> | null, onBackground: Array<Action> | null, onTerminate: Array<Action> | null, };
+export type AppLifecycleHooks = { onLaunch: Array<Action> | null, onResume: Array<Action> | null, onBackground: Array<Action> | null, onTerminate: Array<Action> | null,
+/**
+ * Event hooks disabled for this lifecycle scope
+ * (`["onUnmount", ...]`). Order is preserved exactly as
+ * authored; the schema layer never dedups or rewrites it.
+ */
+disabledEvents: Array<string> | null,
+/**
+ * Explicit hook evaluation order (`["onMount", "onUnmount", ...]`).
+ * Order is preserved exactly as authored; the schema layer
+ * never dedups or rewrites it.
+ */
+interactionOrder: Array<string> | null, } & ({ [key in string]?: JsonValue });
+
+export type AxisLock = "auto" | "horizontal" | "vertical";
 
 export type BlendMode = "normal" | "darken" | "multiply" | "screen" | "overlay" | "lighten" | "difference" | "hue" | "saturation" | "color" | "luminosity" | "soft_light" | "color_dodge" | "color_burn" | "hard_light" | "exclusion";
 
@@ -66,7 +80,12 @@ export type Capability = "storage" | "network" | "camera" | "microphone" | "loca
  * Checkbox with an optional adjacent `label`. `checked` two-way binds
  * via `bindings.bind:value`.
  */
-export type CheckboxNode = { width: SizingBehavior | null, height: SizingBehavior | null, checked: BoolOrExpression | null, label: string | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+export type CheckboxNode = { width: SizingBehavior | null, height: SizingBehavior | null, checked: BoolOrExpression | null, label: string | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -146,7 +165,12 @@ export type DesignMdTypography = { fontFamily: string | null, headings: string |
  */
 scale: string | null, };
 
-export type EllipseNode = { width: SizingBehavior | null, height: SizingBehavior | null, cornerRadius: number | null, innerRadius: number | null, startAngle: number | null, sweepAngle: number | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+export type EllipseNode = { width: SizingBehavior | null, height: SizingBehavior | null, cornerRadius: number | null, innerRadius: number | null, startAngle: number | null, sweepAngle: number | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -162,7 +186,16 @@ blendMode?: BlendMode | null, theme: { [key in string]?: string } | null, minWid
  * `onBlur`) apply only to input-kind nodes. `on_key` is keyboard, `on_reach_end`
  * is list-scroll-end, etc.
  */
-export type EventHandlers = { onTap: Array<Action> | null, onDoubleTap: Array<Action> | null, onLongPress: Array<Action> | null, onPanStart: Array<Action> | null, onPanUpdate: Array<Action> | null, onPanEnd: Array<Action> | null, onScaleStart: Array<Action> | null, onScaleUpdate: Array<Action> | null, onScaleEnd: Array<Action> | null, onRotateStart: Array<Action> | null, onRotateUpdate: Array<Action> | null, onRotateEnd: Array<Action> | null, onHoverEnter: Array<Action> | null, onHoverLeave: Array<Action> | null, onChange: Array<Action> | null, onSubmit: Array<Action> | null, onFocus: Array<Action> | null, onBlur: Array<Action> | null, onKey: Array<Action> | null, onScroll: Array<Action> | null, onReachEnd: Array<Action> | null, };
+export type EventHandlers = { onTap: Array<Action> | null, onDoubleTap: Array<Action> | null, onLongPress: Array<Action> | null, onPanStart: Array<Action> | null, onPanUpdate: Array<Action> | null, onPanEnd: Array<Action> | null, onScaleStart: Array<Action> | null, onScaleUpdate: Array<Action> | null, onScaleEnd: Array<Action> | null, onRotateStart: Array<Action> | null, onRotateUpdate: Array<Action> | null, onRotateEnd: Array<Action> | null, onHoverEnter: Array<Action> | null, onHoverLeave: Array<Action> | null, onPressStart: Array<Action> | null, onPressEnd: Array<Action> | null, onPressCancel: Array<Action> | null, onSwipe: Array<Action> | null, onContextMenu: Array<Action> | null,
+/**
+ * Raw pointer escape-hatch: fired for pointer Down/Move/Up when the
+ * node (or an ancestor) declares `gestures.rawPointer`.
+ * `SemanticEvent::RawPointer` maps here via
+ * `gesture::semantic::handler_key`; the runtime was already able to
+ * execute it dynamically (it survives round-trip through `extra`),
+ * this field makes it typed so AOT covers it too.
+ */
+onRawPointer: Array<Action> | null, onChange: Array<Action> | null, onSubmit: Array<Action> | null, onFocus: Array<Action> | null, onBlur: Array<Action> | null, onKey: Array<Action> | null, onScroll: Array<Action> | null, onReachEnd: Array<Action> | null, } & ({ [key in string]?: JsonValue });
 
 /**
  * A Tier 1 expression source — represented as a raw string.
@@ -192,7 +225,12 @@ screen: string | null,
  * Breakpoint range for screen variants. Invalid ranges are stripped
  * during responsive screen projection.
  */
-breakpoint: BreakpointRange | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+breakpoint: BreakpointRange | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -201,7 +239,11 @@ maskType?: MaskType | null,
  * Composite this node's complete rendered subtree with the backdrop.
  * Absence is the source-over default; pass-through groups also stay absent.
  */
-blendMode?: BlendMode | null, theme: { [key in string]?: string } | null, width: SizingBehavior | null, height: SizingBehavior | null, layout: LayoutMode | null, gap: NumberOrExpression | null, padding: Padding | null, justifyContent: JustifyContent | null, alignItems: AlignItems | null, clipContent: boolean | null, cornerRadius: CornerRadius | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, minWidth: number | null, maxWidth: number | null, minHeight: number | null, maxHeight: number | null, };
+blendMode?: BlendMode | null, theme: { [key in string]?: string } | null, width: SizingBehavior | null, height: SizingBehavior | null, layout: LayoutMode | null, gap: NumberOrExpression | null, padding: Padding | null, justifyContent: JustifyContent | null, alignItems: AlignItems | null, clipContent: boolean | null,
+/**
+ * Direct child ids that remain pinned while this container scrolls.
+ */
+stickyChildren: Array<string> | null, cornerRadius: CornerRadius | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, minWidth: number | null, maxWidth: number | null, minHeight: number | null, maxHeight: number | null, };
 
 export type GestureOverrides = {
 /**
@@ -226,11 +268,48 @@ longPressDuration: number | null,
  * `None` — falls back to the role heuristic (`Button` / `Link`
  * / `Input` are auto-included; everything else is opt-in).
  */
-focusable: boolean | null, };
+focusable: boolean | null,
+/**
+ * Double-tap detection window in ms (default 300).
+ */
+doubleTapTimeout: number | null,
+/**
+ * Max distance between two taps to still count as a double-tap (px).
+ */
+doubleTapSlop: number | null,
+/**
+ * Minimum travel distance for a swipe to claim (px).
+ */
+swipeMinDistance: number | null,
+/**
+ * Minimum velocity for a swipe to claim (px/s).
+ */
+swipeMinVelocity: number | null,
+/**
+ * Axis constraint applied when judging a swipe.
+ */
+axisLock: AxisLock | null,
+/**
+ * Event hooks disabled on this node (`["onHoverEnter", ...]`).
+ * Order is preserved exactly as authored; the schema layer never
+ * dedups or rewrites the list.
+ */
+disabledEvents: Array<string> | null,
+/**
+ * Explicit handler evaluation order (`["onSwipe", "onTap", ...]`).
+ * Order is preserved exactly as authored; the schema layer never
+ * dedups or rewrites the list.
+ */
+interactionOrder: Array<string> | null, } & ({ [key in string]?: JsonValue });
 
 export type GradientStop = { offset: number, color: string, };
 
-export type GroupNode = { children: Array<PenNode> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+export type GroupNode = { children: Array<PenNode> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -239,14 +318,23 @@ maskType?: MaskType | null,
  * Composite this node's complete rendered subtree with the backdrop.
  * Absence is the source-over default; pass-through groups also stay absent.
  */
-blendMode?: BlendMode | null, theme: { [key in string]?: string } | null, width: SizingBehavior | null, height: SizingBehavior | null, layout: LayoutMode | null, gap: NumberOrExpression | null, padding: Padding | null, justifyContent: JustifyContent | null, alignItems: AlignItems | null, clipContent: boolean | null, cornerRadius: CornerRadius | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, minWidth: number | null, maxWidth: number | null, minHeight: number | null, maxHeight: number | null, };
+blendMode?: BlendMode | null, theme: { [key in string]?: string } | null, width: SizingBehavior | null, height: SizingBehavior | null, layout: LayoutMode | null, gap: NumberOrExpression | null, padding: Padding | null, justifyContent: JustifyContent | null, alignItems: AlignItems | null, clipContent: boolean | null,
+/**
+ * Direct child ids that remain pinned while this container scrolls.
+ */
+stickyChildren: Array<string> | null, cornerRadius: CornerRadius | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, minWidth: number | null, maxWidth: number | null, minHeight: number | null, maxHeight: number | null, };
 
 /**
  * Horizontal anchoring for an absolutely positioned node.
  */
 export type HConstraint = "left" | "right" | "center" | "left_right" | "scale";
 
-export type IconFontNode = { iconFontName: string, iconFontFamily: string | null, width: SizingBehavior | null, height: SizingBehavior | null, fill: Array<PenFill> | null, stroke: PenStroke | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+export type IconFontNode = { iconFontName: string, iconFontFamily: string | null, width: SizingBehavior | null, height: SizingBehavior | null, fill: Array<PenFill> | null, stroke: PenStroke | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -274,7 +362,12 @@ export type ImageFillMode = "fill" | "fit" | "crop" | "tile" | "stretch";
 
 export type ImageFitMode = "fill" | "fit" | "crop" | "tile";
 
-export type ImageNode = { src: string, objectFit: ImageFitMode | null, width: SizingBehavior | null, height: SizingBehavior | null, cornerRadius: CornerRadius | null, effects: Array<PenEffect> | null, exposure: number | null, contrast: number | null, saturation: number | null, temperature: number | null, tint: number | null, highlights: number | null, shadows: number | null, imagePrompt: string | null, imageSearchQuery: string | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+export type ImageNode = { src: string, objectFit: ImageFitMode | null, width: SizingBehavior | null, height: SizingBehavior | null, cornerRadius: CornerRadius | null, effects: Array<PenEffect> | null, exposure: number | null, contrast: number | null, saturation: number | null, temperature: number | null, tint: number | null, highlights: number | null, shadows: number | null, imagePrompt: string | null, imageSearchQuery: string | null, video: VideoMeta | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -293,7 +386,12 @@ export type JustifyContent = "start" | "center" | "end" | "space_between" | "spa
 
 export type LayoutMode = "none" | "vertical" | "horizontal";
 
-export type LineNode = { x2: number | null, y2: number | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+export type LineNode = { x2: number | null, y2: number | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -344,7 +442,19 @@ export type MeshVertexStop = { row: number, col: number, color: string, };
  */
 export type NavigationRoute = { "push": string } | { "replace": string } | { "pop": null };
 
-export type NodeLifecycleHooks = { onMount: Array<Action> | null, onUnmount: Array<Action> | null, };
+export type NodeLifecycleHooks = { onMount: Array<Action> | null, onUnmount: Array<Action> | null,
+/**
+ * Event hooks disabled for this lifecycle scope
+ * (`["onUnmount", ...]`). Order is preserved exactly as
+ * authored; the schema layer never dedups or rewrites it.
+ */
+disabledEvents: Array<string> | null,
+/**
+ * Explicit hook evaluation order (`["onMount", "onUnmount", ...]`).
+ * Order is preserved exactly as authored; the schema layer
+ * never dedups or rewrites it.
+ */
+interactionOrder: Array<string> | null, } & ({ [key in string]?: JsonValue });
 
 /**
  * Numeric input with optional +/- steppers. Precise complement to
@@ -363,7 +473,12 @@ leadingIcon: string | null,
 /**
  * Lucide glyph drawn at the right content edge. See `TextInputNode`.
  */
-trailingIcon: string | null, min: number | null, max: number | null, step: number | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+trailingIcon: string | null, min: number | null, max: number | null, step: number | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -383,7 +498,18 @@ export type Orientation = "portrait" | "landscape" | "auto";
 
 export type Padding = number | [number, number] | [number, number, number, number] | string;
 
-export type PageLifecycleHooks = { onEnter: Array<Action> | null, onLeave: Array<Action> | null, onForeground: Array<Action> | null, onBackground: Array<Action> | null, };
+export type PageLifecycleHooks = { onEnter: Array<Action> | null, onLeave: Array<Action> | null, onForeground: Array<Action> | null, onBackground: Array<Action> | null,
+/**
+ * Event hooks disabled for this lifecycle scope
+ * (`["onTerminate", ...]`). Order is preserved exactly as
+ * authored; the schema layer never dedups or rewrites it.
+ */
+disabledEvents: Array<string> | null,
+/**
+ * Explicit hook evaluation order. Order is preserved exactly
+ * as authored; the schema layer never dedups or rewrites it.
+ */
+interactionOrder: Array<string> | null, } & ({ [key in string]?: JsonValue });
 
 export type PathFillRule = "nonzero" | "evenodd";
 
@@ -395,7 +521,12 @@ export type PathNode = { iconId: string | null, d: string | null, anchors: Array
  * their byte shape. It is the legacy opaque-path marker; newer alpha,
  * vector, and luminance semantics use the shared `mask_type` field.
  */
-mask?: boolean | null, width: SizingBehavior | null, height: SizingBehavior | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+mask?: boolean | null, width: SizingBehavior | null, height: SizingBehavior | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -469,7 +600,12 @@ export type PenPathPointType = "corner" | "mirrored" | "independent";
 
 export type PenStroke = { thickness: StrokeThickness, align: StrokeAlign | null, join: StrokeJoin | null, cap: StrokeCap | null, dashPattern: Array<number> | null, dashOffset: number | null, fill: Array<PenFill> | null, };
 
-export type PolygonNode = { polygonCount: number, width: SizingBehavior | null, height: SizingBehavior | null, cornerRadius: number | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+export type PolygonNode = { polygonCount: number, width: SizingBehavior | null, height: SizingBehavior | null, cornerRadius: number | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -485,10 +621,16 @@ export type PrimitiveType = "int" | "float" | "number" | "string" | "bool" | "ar
 /**
  * Progress indicator. Display-only (not focusable/keyboard-driven):
  * `value` is read from the state graph via `bindings.value`. `max`
- * defaults to 100; `indeterminate` shows an animated unknown-progress
- * state and ignores `value`.
+ * defaults to 100; `indeterminate` shows a deterministic unknown-progress
+ * state and ignores `value`. Hosts may animate that marker, while static and
+ * headless renderers intentionally emit the same stable frame.
  */
-export type ProgressNode = { width: SizingBehavior | null, height: SizingBehavior | null, value: NumberOrExpression | null, max: number | null, indeterminate: boolean | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+export type ProgressNode = { width: SizingBehavior | null, height: SizingBehavior | null, value: NumberOrExpression | null, max: number | null, indeterminate: boolean | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -509,7 +651,12 @@ export type RadioGroupNode = { width: SizingBehavior | null, height: SizingBehav
 /**
  * Currently selected option `value`.
  */
-value: string | null, options: Array<SelectOption> | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+value: string | null, options: Array<SelectOption> | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -520,7 +667,12 @@ maskType?: MaskType | null,
  */
 blendMode?: BlendMode | null, theme: { [key in string]?: string } | null, minWidth: number | null, maxWidth: number | null, minHeight: number | null, maxHeight: number | null, };
 
-export type RectangleNode = { children: Array<PenNode> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+export type RectangleNode = { children: Array<PenNode> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -529,9 +681,18 @@ maskType?: MaskType | null,
  * Composite this node's complete rendered subtree with the backdrop.
  * Absence is the source-over default; pass-through groups also stay absent.
  */
-blendMode?: BlendMode | null, theme: { [key in string]?: string } | null, width: SizingBehavior | null, height: SizingBehavior | null, layout: LayoutMode | null, gap: NumberOrExpression | null, padding: Padding | null, justifyContent: JustifyContent | null, alignItems: AlignItems | null, clipContent: boolean | null, cornerRadius: CornerRadius | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, minWidth: number | null, maxWidth: number | null, minHeight: number | null, maxHeight: number | null, };
+blendMode?: BlendMode | null, theme: { [key in string]?: string } | null, width: SizingBehavior | null, height: SizingBehavior | null, layout: LayoutMode | null, gap: NumberOrExpression | null, padding: Padding | null, justifyContent: JustifyContent | null, alignItems: AlignItems | null, clipContent: boolean | null,
+/**
+ * Direct child ids that remain pinned while this container scrolls.
+ */
+stickyChildren: Array<string> | null, cornerRadius: CornerRadius | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, minWidth: number | null, maxWidth: number | null, minHeight: number | null, maxHeight: number | null, };
 
-export type RefNode = { ref: string, descendants: { [key in string]?: JsonValue } | null, children: Array<PenNode> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+export type RefNode = { ref: string, descendants: { [key in string]?: JsonValue } | null, children: Array<PenNode> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -569,7 +730,12 @@ placeholder: string | null,
 /**
  * Currently selected option `value`.
  */
-value: string | null, options: Array<SelectOption> | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+value: string | null, options: Array<SelectOption> | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -622,7 +788,15 @@ aiAliases: Array<string> | null, };
  * Native SkSL shader fill (v1). Authors may provide RAW source in `sksl`
  * or ask the loader to expand a built-in source through `preset`. The
  * loader currently recognizes only `"turbulence"`; a recognized preset
- * wins when both fields are present.
+ * wins when both fields are present, so the authored `sksl` is ignored at
+ * render time. Unknown preset strings remain on the wire for forward
+ * compatibility and are treated by the loader as if no preset were set.
+ *
+ * RAW `sksl` remains supported and is treated as untrusted: the renderer
+ * entrypoint is `half4 main(float2 fragCoord)`. On compile failure the
+ * backend degrades to a visible solid fill (the first `color` uniform,
+ * else mid-gray) and never panics. Mirrors the sibling gradient bodies
+ * for the shared `opacity`/`blend_mode` tail.
  *
  * Pencil-flavoured WebGL-GLSL import is an explicit follow-up, NOT v1;
  * v1 expects SkSL (Skia's GLSL dialect) verbatim.
@@ -668,7 +842,12 @@ export type SizingKeyword = "fit_content" | "fill_container";
  * Range slider. `value` two-way binds via `bindings.bind:value`;
  * `min`/`max`/`step` default to 0/100/1 at runtime when omitted.
  */
-export type SliderNode = { width: SizingBehavior | null, height: SizingBehavior | null, min: number | null, max: number | null, step: number | null, value: NumberOrExpression | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+export type SliderNode = { width: SizingBehavior | null, height: SizingBehavior | null, min: number | null, max: number | null, step: number | null, value: NumberOrExpression | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -705,7 +884,12 @@ export type StyledTextSegment = { text: string, fontFamily: string | null, fontS
 /**
  * On/off toggle. `checked` two-way binds via `bindings.bind:value`.
  */
-export type SwitchNode = { width: SizingBehavior | null, height: SizingBehavior | null, checked: BoolOrExpression | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+export type SwitchNode = { width: SizingBehavior | null, height: SizingBehavior | null, checked: BoolOrExpression | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -734,7 +918,12 @@ value: string | null,
 /**
  * Panel subtrees, one per tab (parallel to `tabs` by index).
  */
-children: Array<PenNode> | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+children: Array<PenNode> | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -773,7 +962,12 @@ trailingIcon: string | null,
 /**
  * Visible-line window before the content scrolls (chat-style).
  */
-maxVisibleLines: number | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+maxVisibleLines: number | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -826,7 +1020,12 @@ leadingIcon: string | null,
  * Lucide glyph drawn at the right content edge (e.g. `eye` for a
  * password reveal). Decorative in Phase 1 (no toggle behaviour).
  */
-trailingIcon: string | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+trailingIcon: string | null, fill: Array<PenFill> | null, stroke: PenStroke | null, effects: Array<PenEffect> | null, cornerRadius: CornerRadius | null, states: WidgetStates | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -837,7 +1036,12 @@ maskType?: MaskType | null,
  */
 blendMode?: BlendMode | null, theme: { [key in string]?: string } | null, minWidth: number | null, maxWidth: number | null, minHeight: number | null, maxHeight: number | null, };
 
-export type TextNode = { width: SizingBehavior | null, height: SizingBehavior | null, content: TextContent, fontFamily: string | null, fontSize: number | null, fontWeight: FontWeight | null, fontStyle: FontStyleKind | null, letterSpacing: number | null, lineHeight: number | null, textAlign: TextAlign | null, textAlignVertical: TextAlignVertical | null, textGrowth: TextGrowth | null, underline: boolean | null, strikethrough: boolean | null, fill: Array<PenFill> | null, effects: Array<PenEffect> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null, flipX: boolean | null, flipY: boolean | null,
+export type TextNode = { width: SizingBehavior | null, height: SizingBehavior | null, content: TextContent, fontFamily: string | null, fontSize: number | null, fontWeight: FontWeight | null, fontStyle: FontStyleKind | null, letterSpacing: number | null, lineHeight: number | null, textAlign: TextAlign | null, textAlignVertical: TextAlignVertical | null, textGrowth: TextGrowth | null, underline: boolean | null, strikethrough: boolean | null, fill: Array<PenFill> | null, effects: Array<PenEffect> | null, state: { [key in string]?: StateEntry } | null, bindings: { [key in string]?: Expression } | null, events: EventHandlers | null, lifecycle: NodeLifecycleHooks | null, semantics: SemanticsMeta | null, gestures: GestureOverrides | null, route: NavigationRoute | null, id: string, name: string | null, role: string | null, explain: string | null, x: number | null, y: number | null, rotation: number | null, constraints: Constraints | null, opacity: NumberOrExpression | null, enabled: BoolOrExpression | null, visible: boolean | null, locked: boolean | null,
+/**
+ * Keep this node at its authored viewport position while its nearest
+ * scrollable ancestor moves ordinary content.
+ */
+pin: boolean | null, flipX: boolean | null, flipY: boolean | null,
 /**
  * Sibling-mask semantics. Absence means this node is painted normally.
  */
@@ -864,6 +1068,8 @@ export type VariableKind = "color" | "number" | "boolean" | "string";
 export type VariableScalar = boolean | number | string;
 
 export type VariableValue = VariableScalar | Array<ThemedValue>;
+
+export type VideoMeta = { src: string, autoplay: boolean, loop: boolean, muted: boolean, holdLastFrame: boolean, clickToReplay: boolean, videoPrompt: string | null, };
 
 /**
  * Authored overrides for the four auto-derived interaction states.

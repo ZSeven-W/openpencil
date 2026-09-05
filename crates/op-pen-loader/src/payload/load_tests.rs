@@ -386,6 +386,33 @@ fn image_node_without_src_loads_via_injected_empty_src() {
 }
 
 #[test]
+fn video_alias_loads_as_an_image_with_the_poster_source() {
+    let doc = r#"{
+      "version":"1.0.0",
+      "children":[{
+        "type":"video",
+        "id":"hero",
+        "name":"Hero video",
+        "src":"https://cdn.example.com/hero.mp4",
+        "poster":"data:image/png;base64,AA==",
+        "autoplay":true,
+        "playback":{"holdLastFrame":true,"clickToReplay":true}
+      }],
+      "editorMeta":{"preserveAuthoredGeometry":true}
+    }"#;
+    let loaded = load_canonical(doc).expect("video alias must load");
+    let PenNode::Image(image) = &loaded.value.children[0] else {
+        panic!("video alias must become an image node");
+    };
+    assert_eq!(image.src.as_str(), "data:image/png;base64,AA==");
+    let video = image.video.as_ref().expect("video metadata");
+    assert_eq!(video.src, "https://cdn.example.com/hero.mp4");
+    assert!(video.autoplay);
+    assert!(video.hold_last_frame);
+    assert!(video.click_to_replay);
+}
+
+#[test]
 fn node_fill_as_color_string_is_wrapped_into_solid_fill() {
     // Older TS files write a PenNode `fill` as a bare color string where
     // jian expects `Vec<PenFill>`. Must be wrapped, not rejected. The

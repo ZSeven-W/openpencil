@@ -144,6 +144,7 @@ const NODE_KINDS: &[&str] = &[
     "progress",
     "tabs",
     "image",
+    "video",
     "icon_font",
     "ref",
 ];
@@ -174,6 +175,7 @@ fn renest_by_parent(items: Vec<serde_json::Value>) -> Vec<serde_json::Value> {
     let mut seen_parent = false;
     let mut dropped = 0usize;
     for mut item in items {
+        op_pen_loader::normalize_video_alias(&mut item);
         if !is_node_object(&item) {
             continue;
         }
@@ -313,10 +315,15 @@ fn deserialize_roots(roots: Vec<serde_json::Value>) -> Result<Vec<PenNode>, Pars
 /// Normalize model-generated node JSON shorthands and numeric design tokens.
 /// This does not assign ids or validate the result against [`PenNode`].
 pub fn normalize_generated_node_json(value: &mut serde_json::Value) {
+    op_pen_loader::normalize_video_alias(value);
+    normalize_generated_node_json_inner(value);
+}
+
+fn normalize_generated_node_json_inner(value: &mut serde_json::Value) {
     match value {
         serde_json::Value::Array(items) => {
             for item in items {
-                normalize_generated_node_json(item);
+                normalize_generated_node_json_inner(item);
             }
         }
         serde_json::Value::Object(object) => {
@@ -366,7 +373,7 @@ pub fn normalize_generated_node_json(value: &mut serde_json::Value) {
                         }
                     }
                 }
-                normalize_generated_node_json(child);
+                normalize_generated_node_json_inner(child);
             }
         }
         _ => {}

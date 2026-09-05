@@ -40,6 +40,26 @@ fn parse_nodes_defaults_missing_image_src_to_empty_string() {
 }
 
 #[test]
+fn parse_nodes_accepts_the_video_authoring_alias() {
+    let text = r#"[
+      {"type":"video","id":"hero","name":"Hero video",
+       "src":"hero.mp4","poster":"poster.png",
+       "autoplay":true,"playback":{"loop":true,"clickToReplay":true}}
+    ]"#;
+
+    let nodes = parse_nodes(text).expect("video alias should parse");
+    let PenNode::Image(image) = &nodes[0] else {
+        panic!("video alias must become an image node");
+    };
+    assert_eq!(image.src.as_str(), "poster.png");
+    let video = image.video.as_ref().expect("video metadata");
+    assert_eq!(video.src, "hero.mp4");
+    assert!(video.autoplay);
+    assert!(video.r#loop);
+    assert!(video.click_to_replay);
+}
+
+#[test]
 fn parse_nodes_skips_prose_bracket_before_fenced_array() {
     // 弱模型在真正 JSON 之前写了带 `[` 的推理散文。老逻辑取第一个
     // `[` 会抓到 `[step 1]` 报 "expected ident";新逻辑扫描所有平衡

@@ -14,6 +14,26 @@ use super::test_fixtures::sample;
 use super::{McpTool, ToolOutcome};
 
 #[test]
+fn batch_program_accepts_the_video_authoring_alias() {
+    let mut state = sample();
+    let program = r#"hero=I(null, {"type":"video","name":"Hero video","src":"hero.mp4","poster":"poster.png","playback":{"muted":true,"holdLastFrame":true}})"#;
+
+    let (envelope, command) = call_operations(&state, program);
+    assert!(envelope.get("errors").is_none(), "{envelope}");
+    let hero_id = binding_id(&envelope, "hero");
+    assert!(state.apply(command.expect("video alias program emits a command")));
+
+    let hero = op_editor_core::walkers::find_node(state.active_children(), &NodeId::new(&hero_id))
+        .expect("video node applies");
+    let json = serde_json::to_value(hero).expect("canonical video node JSON");
+    assert_eq!(json["type"], "image");
+    assert_eq!(json["src"], "poster.png");
+    assert_eq!(json["video"]["src"], "hero.mp4");
+    assert_eq!(json["video"]["muted"], true);
+    assert_eq!(json["video"]["holdLastFrame"], true);
+}
+
+#[test]
 fn post_process_flag_marks_the_envelope() {
     let state = sample();
     let tool = batch_design_snapshot(&state);
