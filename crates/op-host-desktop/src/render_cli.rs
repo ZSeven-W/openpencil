@@ -37,15 +37,15 @@ pub fn run_cli_if_requested() -> bool {
         .get(pos + 3)
         .and_then(|s| s.parse().ok())
         .unwrap_or(2.0);
-    // Transparent border (doc px) around each node. Defaults to the
-    // editor export frame (16 px); `OPENPENCIL_RENDER_MARGIN=0` gives a
-    // tight crop so the render-parity benchmark matches Pencil's
-    // `export_nodes`, which adds no frame (otherwise every node reads as
-    // +2*margin wider/taller than its baseline).
+    // Transparent border (doc px) around each node. Defaults to a tight
+    // crop, the same as the editor's own raster export (its frame was
+    // removed; `op_render_export::MARGIN` is 0): a 375-wide phone screen
+    // must come out 375 px wide, not 407. `OPENPENCIL_RENDER_MARGIN=<px>`
+    // opts back into a frame for eyeballing.
     let margin: f32 = std::env::var("OPENPENCIL_RENDER_MARGIN")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(16.0);
+        .unwrap_or(0.0);
     let out_dir = PathBuf::from(out_dir);
     if let Err(e) = std::fs::create_dir_all(&out_dir) {
         eprintln!("render-shots: mkdir {}: {e}", out_dir.display());
