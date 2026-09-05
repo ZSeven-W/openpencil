@@ -77,6 +77,16 @@ pub fn match_trigger(
         }
         // Every named flag must be present and `true`.
         SkillTrigger::Flags(needed) => needed.iter().all(|f| flags.get(f).copied() == Some(true)),
+        SkillTrigger::Either {
+            keywords,
+            flags: needed,
+        } => {
+            match_trigger(
+                &SkillTrigger::Keywords(keywords.clone()),
+                user_message,
+                flags,
+            ) || match_trigger(&SkillTrigger::Flags(needed.clone()), user_message, flags)
+        }
     }
 }
 
@@ -240,6 +250,15 @@ mod tests {
     fn flags_trigger_requires_all_flags() {
         let mut flags = HashMap::new();
         flags.insert("isCodeGen".to_string(), true);
+        let either = SkillTrigger::Either {
+            keywords: vec!["手机".into()],
+            flags: vec!["isMobileScreen".into()],
+        };
+        let mut mobile = HashMap::new();
+        mobile.insert("isMobileScreen".to_string(), true);
+        assert!(match_trigger(&either, "外卖 App 首页（375×812）", &mobile));
+        assert!(match_trigger(&either, "手机端首页", &HashMap::new()));
+        assert!(!match_trigger(&either, "官网首页", &HashMap::new()));
         let t = SkillTrigger::Flags(vec!["isCodeGen".into()]);
         assert!(match_trigger(&t, "anything", &flags));
         let t2 = SkillTrigger::Flags(vec!["isCodeGen".into(), "missing".into()]);

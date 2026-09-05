@@ -4,6 +4,7 @@ description: Mobile app three-section architecture with enforced Blueprint
 phase: [generation]
 trigger:
   keywords: [mobile, phone, ios, android, 移动, 手机]
+  flags: [isMobileScreen]
 priority: 25
 budget: 2100
 category: domain

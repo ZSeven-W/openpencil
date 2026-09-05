@@ -85,7 +85,7 @@ fn relevance_score(meta: &crate::types::SkillMeta, intent: &str) -> i64 {
     match &meta.trigger {
         SkillTrigger::Always => 1,
         SkillTrigger::Flags(_) => 0,
-        SkillTrigger::Keywords(keywords) => {
+        SkillTrigger::Keywords(keywords) | SkillTrigger::Either { keywords, .. } => {
             let msg = intent.to_lowercase();
             keywords
                 .iter()

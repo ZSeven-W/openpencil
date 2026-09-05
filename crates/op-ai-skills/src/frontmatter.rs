@@ -228,8 +228,22 @@ pub fn parse_skill_frontmatter(raw: &str) -> Option<(SkillMeta, String)> {
             // Indented entries belong to `trigger:` — it is the only
             // key in the skill schema with nested children.
             match e.key.as_str() {
-                "keywords" => trigger = SkillTrigger::Keywords(parse_array(&e.value)),
-                "flags" => trigger = SkillTrigger::Flags(parse_array(&e.value)),
+                "keywords" => {
+                    let keywords = parse_array(&e.value);
+                    trigger = match trigger {
+                        SkillTrigger::Flags(flags) => SkillTrigger::Either { keywords, flags },
+                        _ => SkillTrigger::Keywords(keywords),
+                    };
+                }
+                "flags" => {
+                    let flags = parse_array(&e.value);
+                    trigger = match trigger {
+                        SkillTrigger::Keywords(keywords) => {
+                            SkillTrigger::Either { keywords, flags }
+                        }
+                        _ => SkillTrigger::Flags(flags),
+                    };
+                }
                 _ => {}
             }
         }

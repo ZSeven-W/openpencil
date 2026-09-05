@@ -139,6 +139,14 @@ pub enum SkillTrigger {
     Keywords(Vec<String>),
     /// Included when every named flag is set in `ResolveOptions`.
     Flags(Vec<String>),
+    /// Included when the message matches any keyword OR every named flag
+    /// is set. Domain skills whose subject a planner can detect (a phone
+    /// screen from its dimensions) use this so a brief that never says
+    /// "mobile" — "外卖 App 首页（375×812）" — still loads the domain rules.
+    Either {
+        keywords: Vec<String>,
+        flags: Vec<String>,
+    },
 }
 
 /// Budget-priority class. `Base` is always kept; `Domain` fills the
