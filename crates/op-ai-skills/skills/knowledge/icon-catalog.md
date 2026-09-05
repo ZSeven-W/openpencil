@@ -24,7 +24,7 @@ ICONS — ALWAYS USE icon_font, NEVER `path` NODES:
 
 - Sizes: 14 / 20 / 24px. `fill` is the icon color (string or fill array).
 - Icon-only buttons: `frame(w=44, h=44, layout=horizontal, alignItems=center, justifyContent=center)` containing one `icon_font`.
-- Use lucide names from the list below. NEVER invent names — unknown names fall back to a small circle on canvas.
+- Use lucide names from the list below. NEVER invent names — unknown names fall back to a small circle on canvas. Old lucide names are invalid: more-horizontal→ellipsis, check-circle→circle-check, help-circle→circle-question-mark, grid→grid-3x3, edit→square-pen, sliders→sliders-vertical, bar-chart-2→chart-no-axes-column-increasing.
 
 DO NOT use `path` nodes for icons. The legacy "PascalCase + Icon suffix on a path node" pattern is bug-prone:
 when the model wraps it in a frame with a generic child name like "Icon Path" or "Search Icon Path", the resolver

@@ -224,6 +224,7 @@ pub mod scroll_flow;
 
 // Step 4 — icon glyph drawer for editor chrome (lucide-flavored line art).
 pub mod icon_catalog;
+pub mod icon_catalog_aliases;
 pub mod icons;
 mod icons_lookup;
 #[cfg(test)]
