@@ -18,6 +18,7 @@ fn palette() -> Variables {
         ("--card", "#FFFFFF", "#1E293B"),
         ("--muted", "#F1F5F9", "#334155"),
         ("--background", "#0B1220", "#020617"),
+        ("--gradient-navy", "#334155", "#334155"),
     ]
     .into_iter()
     .map(|(name, light, dark)| {
@@ -311,6 +312,144 @@ fn readable_text_is_left_untouched() {
     );
 }
 
+fn contrast_sink(
+    root_fill: Option<serde_json::Value>,
+    panel_fill: Option<serde_json::Value>,
+    text_fill: serde_json::Value,
+) -> (VecDocSink, String) {
+    let mut sink = VecDocSink::new();
+    sink.state.doc.variables = Some(palette());
+    sink.state.doc.themes = Some(
+        [(
+            "Mode".to_string(),
+            vec!["Light".to_string(), "Dark".to_string()],
+        )]
+        .into_iter()
+        .collect(),
+    );
+    let mut tree = json!({
+        "type": "frame", "id": "board", "width": 390, "height": 844,
+        "children": [{
+            "type": "frame", "id": "panel", "width": 300, "height": 80,
+            "children": [{
+                "type": "text", "id": "label", "content": "Balance",
+                "fontSize": 16, "fill": [{"type": "solid", "color": text_fill}]
+            }]
+        }]
+    });
+    if let Some(fill) = root_fill {
+        tree["fill"] = json!([fill]);
+    }
+    if let Some(fill) = panel_fill {
+        tree["children"][0]["fill"] = json!([fill]);
+    }
+    let tree: jian_ops_schema::node::PenNode = serde_json::from_value(tree).expect("tree");
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    (sink, "board".to_string())
+}
+
+fn contrast_label_fill(sink: &VecDocSink) -> String {
+    serde_json::to_value(&sink.state.active_children()[0]).expect("serialize")["children"][0]
+        ["children"][0]["fill"][0]["color"]
+        .as_str()
+        .expect("label fill")
+        .to_string()
+}
+
+#[test]
+fn semi_transparent_solid_is_composited_over_the_light_page() {
+    let (mut sink, root_id) = contrast_sink(
+        Some(json!( {"type": "solid", "color": "#F4F6FA"} )),
+        Some(json!({"type": "solid", "color": "#2563EB15"})),
+        json!("$--card"),
+    );
+
+    assert_eq!(repair_text_contrast(&mut sink, &root_id), 1);
+    assert_eq!(contrast_label_fill(&sink), "$--foreground");
+}
+
+#[test]
+fn opaque_eight_digit_solid_remains_a_real_blue_background() {
+    let (mut sink, root_id) = contrast_sink(
+        Some(json!({"type": "solid", "color": "#F4F6FA"})),
+        Some(json!({"type": "solid", "color": "#2563EBFF"})),
+        json!("$--card"),
+    );
+
+    assert_eq!(repair_text_contrast(&mut sink, &root_id), 0);
+    assert_eq!(contrast_label_fill(&sink), "$--card");
+}
+
+#[test]
+fn fully_transparent_solid_walks_up_to_the_real_background() {
+    let (mut sink, root_id) = contrast_sink(
+        Some(json!({"type": "solid", "color": "#F4F6FA"})),
+        Some(json!({"type": "solid", "color": "#2563EB00"})),
+        json!("$--card"),
+    );
+
+    assert_eq!(repair_text_contrast(&mut sink, &root_id), 1);
+    assert_eq!(contrast_label_fill(&sink), "$--foreground");
+}
+
+#[test]
+fn gradient_contrast_uses_the_best_stop_for_detection() {
+    let dark_gradient = json!({
+        "type": "linear_gradient",
+        "stops": [
+            {"offset": 0.0, "color": "$--gradient-navy"},
+            {"offset": 1.0, "color": "#4338CA"}
+        ]
+    });
+    let (mut sink, root_id) = contrast_sink(
+        Some(dark_gradient.clone()),
+        None,
+        json!("$--muted-foreground"),
+    );
+    assert_eq!(repair_text_contrast(&mut sink, &root_id), 1);
+    assert_eq!(contrast_label_fill(&sink), "$--card");
+
+    let (mut sink, root_id) = contrast_sink(Some(dark_gradient), None, json!("$--card"));
+    assert_eq!(repair_text_contrast(&mut sink, &root_id), 0);
+
+    let light_gradient = json!({
+        "type": "linear_gradient",
+        "stops": [
+            {"offset": 0.0, "color": "#F8FAFC"},
+            {"offset": 1.0, "color": "#FFFFFF"}
+        ]
+    });
+    let (mut sink, root_id) = contrast_sink(Some(light_gradient), None, json!("$--card"));
+    assert_eq!(repair_text_contrast(&mut sink, &root_id), 1);
+    assert_eq!(contrast_label_fill(&sink), "$--foreground");
+}
+
+#[test]
+fn image_mesh_and_shader_backgrounds_are_skipped() {
+    let fills = [
+        json!({"type": "image", "url": "photo.png"}),
+        json!({
+            "type": "mesh_gradient", "rows": 2, "cols": 2,
+            "stops": [
+                {"row": 0, "col": 0, "color": "#000000"},
+                {"row": 0, "col": 1, "color": "#FFFFFF"},
+                {"row": 1, "col": 0, "color": "#000000"},
+                {"row": 1, "col": 1, "color": "#FFFFFF"}
+            ]
+        }),
+        json!({"type": "shader", "sksl": "half4 main(float2 p) { return half4(0); }"}),
+    ];
+    for fill in fills {
+        let (mut sink, root_id) = contrast_sink(Some(fill), None, json!("$--card"));
+        assert_eq!(repair_text_contrast(&mut sink, &root_id), 0);
+        assert_eq!(contrast_label_fill(&sink), "$--card");
+    }
+}
+
 // ── chip/badge contrast branch (DS P1-a, pass 2) ────────────────────────────
 
 /// The measured 0814 defect, rendered: a dark deck card carrying a light
@@ -428,7 +567,7 @@ fn a_dark_chip_with_white_text_is_left_alone() {
 }
 
 #[test]
-fn a_gradient_chip_is_skipped_unprovable_background() {
+fn a_gradient_chip_is_scored_across_all_stops() {
     use serde_json::json;
 
     let mut sink = VecDocSink::new();
@@ -437,11 +576,11 @@ fn a_gradient_chip_is_skipped_unprovable_background() {
         json!({
             "type": "linear_gradient",
             "stops": [
-                {"offset": 0.0, "color": "#FFFFFF"},
-                {"offset": 1.0, "color": "#E2E8F0"}
+                {"offset": 0.0, "color": "$--gradient-navy"},
+                {"offset": 1.0, "color": "#4338CA"}
             ]
         }),
-        json!({"type": "solid", "color": "#FFFFFF"}),
+        json!({"type": "solid", "color": "$--muted-foreground"}),
     ))
     .expect("tree");
     sink.state.apply(EditorCommand::InsertAuthoredSubtree {
@@ -450,11 +589,8 @@ fn a_gradient_chip_is_skipped_unprovable_background() {
         page_id: None,
     });
 
-    assert_eq!(
-        repair_chip_text_contrast(&mut sink, "board"),
-        0,
-        "a gradient chip's effective background cannot be proven from the tree"
-    );
+    assert_eq!(repair_chip_text_contrast(&mut sink, "board"), 1);
+    assert_eq!(chip_label_fill(&sink), "$--card");
 }
 
 #[test]
