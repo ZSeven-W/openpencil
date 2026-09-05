@@ -481,6 +481,12 @@ pub(crate) fn stroke_to_payload(s: Option<&PenStroke>) -> Option<StrokePayload> 
             (sides.iter().copied().fold(0.0_f32, f32::max), Some(sides))
         }
     };
+    // A zero-width stroke is no stroke. Skia paints width 0 as a one-pixel
+    // hairline on every side, so a row whose author wrote `thickness: 0`
+    // (the "last row has no divider" idiom) grew a full border.
+    if width <= 0.0 {
+        return None;
+    }
     // No fabricated fallback here: an unresolvable stroke paint stays `None`
     // so downstream consumers can tell "the author wrote no paint" apart from
     // "the author wrote black". Fabricating opaque black at this seam painted
@@ -605,5 +611,37 @@ mod color_tests {
             stops.iter().all(|s| s.color[0] > 0.0),
             "rgb must not collapse to black"
         );
+    }
+}
+
+#[cfg(test)]
+mod stroke_tests {
+    use super::*;
+
+    fn stroke(json: serde_json::Value) -> PenStroke {
+        serde_json::from_value(json).expect("stroke json")
+    }
+
+    #[test]
+    fn zero_width_stroke_is_no_stroke_not_a_hairline() {
+        let none = stroke(serde_json::json!({
+            "thickness": 0,
+            "fill": [{"type": "solid", "color": "#E5E7EB"}]
+        }));
+        assert!(stroke_to_payload(Some(&none)).is_none());
+
+        let sided_zero = stroke(serde_json::json!({
+            "thickness": {"bottom": 0},
+            "fill": [{"type": "solid", "color": "#E5E7EB"}]
+        }));
+        assert!(stroke_to_payload(Some(&sided_zero)).is_none());
+
+        let bottom_only = stroke(serde_json::json!({
+            "thickness": {"bottom": 1},
+            "fill": [{"type": "solid", "color": "#E5E7EB"}]
+        }));
+        let payload = stroke_to_payload(Some(&bottom_only)).expect("bottom divider stays");
+        assert_eq!(payload.width, 1.0);
+        assert_eq!(payload.sides, Some([0.0, 0.0, 1.0, 0.0]));
     }
 }
