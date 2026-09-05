@@ -12,6 +12,15 @@ pub(super) fn run_overflow_prepass(
     summary: &mut RepairSummary,
     counter: &mut RepairCounter,
 ) {
+    // A `fill_container` child of a `layout: "none"` stack that is also
+    // pinned at a positive x/y gets the stack's FULL size from jian, so the
+    // offset pushes it past the right/bottom edge (a real run clipped the
+    // taxi search card at x=24 in the 375-wide "搜索区堆叠"). Rewrite the
+    // keyword to the parent's resolved size minus twice the offset BEFORE the
+    // clamp, so the clamp and the clip fallback never see the overflow.
+    crate::geometry_validation::repair_none_stack_insets(sink, root_id);
+    counter.checkpoint(summary, CheckCategory::Overflow, "none-stack-inset");
+
     // Absolutely-pinned, fixed-size controls that poke out of a
     // `layout: "none"` parent are shifted back INSIDE the parent: the clip
     // fallback would otherwise crop the control (a real run chopped the right
@@ -36,4 +45,12 @@ pub(super) fn run_overflow_prepass(
     // overflow handling.
     crate::geometry_validation::repair_touch_target_floor(sink, root_id);
     counter.checkpoint(summary, CheckCategory::Layout, "touch-target-floor");
+
+    // A painted, rounded card with no authored padding lets its content sit
+    // flush against the card edge (a real run left the fitness exercise
+    // rows' thumbnails touching the card's left edge). Give it the standard
+    // card inset [12, 16] — a layout repair, not overflow handling, so it is
+    // checkpointed under Layout.
+    crate::geometry_validation::repair_card_inner_padding(sink, root_id);
+    counter.checkpoint(summary, CheckCategory::Layout, "card-inner-padding");
 }

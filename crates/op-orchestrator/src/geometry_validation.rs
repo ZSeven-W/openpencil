@@ -58,13 +58,19 @@ pub(crate) use geometry_interaction_backfill::{
 };
 #[path = "absolute_child_clamp.rs"]
 mod absolute_child_clamp;
+#[path = "card_inner_padding.rs"]
+mod card_inner_padding;
 #[path = "geometry_buried_overlay.rs"]
 mod geometry_buried_overlay;
+#[path = "none_stack_inset.rs"]
+mod none_stack_inset;
 #[path = "text_fit.rs"]
 mod text_fit;
 #[path = "touch_target_floor.rs"]
 mod touch_target_floor;
 pub(crate) use absolute_child_clamp::clamp_absolute_children_into_parent;
+pub(crate) use card_inner_padding::repair_card_inner_padding;
+pub(crate) use none_stack_inset::repair_none_stack_insets;
 pub(crate) use text_fit::repair_text_fit;
 pub(crate) use touch_target_floor::repair_touch_target_floor;
 #[path = "geometry_card_rail_fixes.rs"]
