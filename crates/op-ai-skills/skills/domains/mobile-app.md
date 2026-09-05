@@ -18,24 +18,17 @@ to wrap every content section inside one padded App Content frame.
 
 Screen-height contract: use numeric 390-393×844 as a temporary construction seed so an empty skeleton is visible. Before finishing, a normal content-driven mobile page switches its root to `height="fit_content"` (Hug), matching its completed flow. Keep a numeric viewport only when the user explicitly requested that viewport/device frame or the design deliberately contains one clipped viewport body that must consume remaining height.
 
-## 0) SIGNATURE MOMENT — decide it before any node
+## 0) EXPRESSION LAYER — where the look comes from
 
-Correct is not enough; a white page of cards with one accent button is the default every model produces and the user reads it as "template". Every screen commits to ONE signature moment, chosen from the domain's mood, and the rest of the screen stays quiet around it:
+Correct structure is the floor, not the design. The look of a screen comes from three authorities, in this order; do not invent a fourth:
 
-- HERO CARD (colour block): ONE painted card inside the 24px rail, `cornerRadius: 24` on all four corners, brand or dark fill, holding the greeting/title plus the primary control (address, search, balance). It never touches the screen edges and never sits under the status bar — the pre-inserted status bar keeps the page background, so an edge-to-edge block or a `[0,0,24,24]` half-rounded shape reads as a cropped card. Text inside uses white / white at 70%, never `$--foreground`. Pick it only when the header carries a control; a plain title does not earn a block.
-- HERO NUMBER: one value at 40-56px semibold with a 12-13px caption (balance, calories, minutes, price); everything else ≤ 17px. Size it to fit one line inside the card rail: 8+ characters (e.g. "$52,480.16") → 40-44px, never 52px+. Use for dashboards, fitness, banking, stats.
-- FULL-BLEED IMAGE + SCRIM: an image touching both side edges directly under the status bar, a bottom gradient scrim frame, and the title in white on the scrim; the back button is a 40px circle at the image's top-left (16/16). Use for product, recipe, travel, media detail screens. A map is never a photo: draw a tonal placeholder (surface fill, faint road lines, pin) with no imageSearchQuery.
-- STACKED DEPTH: 2-3 large cards with real depth (tonal surface + one soft shadow, 20-24px radius), not a list of thin rows. Use for cards, tickets, plans, wallets.
-
-Rules that make the moment land:
+1. THE SELECTED STYLE GUIDE decides the signature treatment. Its "Key aesthetics" bullets name the display face, how the accent is spent, card depth and the hero idiom (gradient cards, glow, editorial serif, pastel blocks). Apply that treatment to the FIRST content section (greeting/title/primary control) and keep the rest of the screen quiet. Commit to it fully — a dark guide stays dark, a playful one stays playful; never average toward a neutral white template.
+2. PLATFORM TYPE + COLOR ROLES (iOS HIG / Material 3): screen title 28–34 semibold (Large Title / headline-large), section titles 20–22 (title-large), body 16–17, labels 12–13; at most ONE display size per screen, 40–57 for a hero number (display-small/medium) and sized to fit its rail on one line (8+ characters → 40–44). Sections separate by tonal surface tiers (surface / surface-container low→high), not by hairlines under every row and never by painting a section with the accent; the accent belongs to actions and the single hero treatment.
+3. STRUCTURE STAYS: status bar untouched, one content column with the 24px rail, gap-based spacing, one bottom idiom. Expressive moves are the ones the layout engine can build: a hero CARD inside the rail (`cornerRadius: 24` all corners, brand or dark fill, white text — never an edge-to-edge block or a `[0,0,24,24]` half-rounded shape, which reads as a cropped card under the page-coloured status bar); FULL-BLEED MEDIA touching both sides under the status bar with a bottom gradient scrim frame and white title, back button a 40px circle at 16/16; a DISPLAY NUMBER with a 12–13px caption; STACKED CARDS with tonal surface and one soft shadow. A map is a tonal placeholder, never a photo.
 
 - Overlap only inside a `layout: "none"` stack whose children carry NUMERIC x, y, width and height; `width: fill_container` plus an x offset overflows the stack and gets clipped. Do not float a card over the header on a phone screen — stack them in flow.
-
-- The accent colour is spent in ONE block (the header, the hero card, or the CTA band), not sprinkled on every icon tile. Icon tiles and chips are tonal (surface / muted), never rainbow-tinted.
-- Type scale is three sizes, not six: display (the moment) / 15-17 body / 12-13 caption. Section titles 17-20 semibold, never 24+ bold on every section.
-- Section backgrounds carry rhythm: page bg vs surface alternation; no dividers between every row, one hairline at most per group.
-- The bottom CTA (if any) is the second-most-prominent element and the only other place the accent appears at full strength.
-- A plain search + category grid + promo banner + list stack is only acceptable when the user explicitly asks for that inventory; even then the moment goes on the promo banner (full-width image or colour block), not on a small orange strip.
+- Icon tiles and chips are tonal (surface / muted fill); siblings in one grid share one fill, stroke and icon colour.
+- A plain search + category grid + promo banner + list stack is acceptable only when the brief asks for that inventory; even then the style guide's treatment lands on the first section, not on a small accent strip.
 
 ## 1) STATUS BAR (OS-controlled) — PRE-INSERTED
 
