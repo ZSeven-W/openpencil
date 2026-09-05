@@ -6,7 +6,7 @@ trigger:
   keywords: [mobile, phone, ios, android, 移动, 手机]
   flags: [isMobileScreen]
 priority: 25
-budget: 2700
+budget: 2800
 category: domain
 ---
 
@@ -22,12 +22,14 @@ Screen-height contract: use numeric 390-393×844 as a temporary construction see
 
 Correct is not enough; a white page of cards with one accent button is the default every model produces and the user reads it as "template". Every screen commits to ONE signature moment, chosen from the domain's mood, and the rest of the screen stays quiet around it:
 
-- COLOR-BLOCK HEADER: the top 30-40% of the screen is ONE frame with a solid brand-color or dark fill and `cornerRadius: [0,0,24,24]` (status bar sits on it, so its text and icons are white); the sections below stay on the page background. No separate "sheet lip" strip (flow layout cannot overlap it). Every text inside the block uses white / white-at-70%, never `$--foreground` or `$--muted-foreground`. Use for finance, utility, travel, food ordering.
+- HERO CARD (colour block): ONE painted card inside the 24px rail, `cornerRadius: 24` on all four corners, brand or dark fill, holding the greeting/title plus the primary control (address, search, balance). It never touches the screen edges and never sits under the status bar — the pre-inserted status bar keeps the page background, so an edge-to-edge block or a `[0,0,24,24]` half-rounded shape reads as a cropped card. Text inside uses white / white at 70%, never `$--foreground`. Pick it only when the header carries a control; a plain title does not earn a block.
 - HERO NUMBER: one value at 40-56px semibold with a 12-13px caption (balance, calories, minutes, price); everything else ≤ 17px. Size it to fit one line inside the card rail: 8+ characters (e.g. "$52,480.16") → 40-44px, never 52px+. Use for dashboards, fitness, banking, stats.
-- FULL-BLEED IMAGE + SCRIM: an image touching three edges with a bottom gradient scrim and the title set in white on the scrim. Use for product, recipe, travel, media detail screens. A map is never a photo: draw a tonal placeholder (surface fill, faint road lines, pin) with no imageSearchQuery.
+- FULL-BLEED IMAGE + SCRIM: an image touching both side edges directly under the status bar, a bottom gradient scrim frame, and the title in white on the scrim; the back button is a 40px circle at the image's top-left (16/16). Use for product, recipe, travel, media detail screens. A map is never a photo: draw a tonal placeholder (surface fill, faint road lines, pin) with no imageSearchQuery.
 - STACKED DEPTH: 2-3 large cards with real depth (tonal surface + one soft shadow, 20-24px radius), not a list of thin rows. Use for cards, tickets, plans, wallets.
 
 Rules that make the moment land:
+
+- Overlap only inside a `layout: "none"` stack whose children carry NUMERIC x, y, width and height; `width: fill_container` plus an x offset overflows the stack and gets clipped. Do not float a card over the header on a phone screen — stack them in flow.
 
 - The accent colour is spent in ONE block (the header, the hero card, or the CTA band), not sprinkled on every icon tile. Icon tiles and chips are tonal (surface / muted), never rainbow-tinted.
 - Type scale is three sizes, not six: display (the moment) / 15-17 body / 12-13 caption. Section titles 17-20 semibold, never 24+ bold on every section.
