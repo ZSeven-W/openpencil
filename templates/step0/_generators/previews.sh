@@ -57,7 +57,10 @@ DEFAULT_TEMPLATES=(screenshot-tutorial knowledge-carousel before-after slide-dec
          ledger-tick-deck \
          event-poster-deck \
          brand-concept-sheet \
-         logo-qa-board)
+         logo-qa-board \
+         event-invitation-card livestream-teaser-card hiring-poster-card \
+         course-enroll-card conference-agenda-card product-launch-card \
+         annual-report-card music-fest-poster-card book-club-invite-card)
 
 if [ "$#" -gt 0 ]; then
   templates=("$@")

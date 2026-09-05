@@ -145,6 +145,15 @@ pub(crate) fn scene_template_preview(template_id: &str) -> Option<TemplatePrevie
         "ledger-tick-deck" => preview!(64, "ledger-tick-deck"),
         "brand-concept-sheet" => preview!(65, "brand-concept-sheet"),
         "logo-qa-board" => preview!(66, "logo-qa-board"),
+        "event-invitation-card" => preview!(67, "event-invitation-card"),
+        "livestream-teaser-card" => preview!(68, "livestream-teaser-card"),
+        "hiring-poster-card" => preview!(69, "hiring-poster-card"),
+        "course-enroll-card" => preview!(70, "course-enroll-card"),
+        "conference-agenda-card" => preview!(71, "conference-agenda-card"),
+        "product-launch-card" => preview!(72, "product-launch-card"),
+        "annual-report-card" => preview!(73, "annual-report-card"),
+        "music-fest-poster-card" => preview!(74, "music-fest-poster-card"),
+        "book-club-invite-card" => preview!(75, "book-club-invite-card"),
         _ => None,
     }
 }

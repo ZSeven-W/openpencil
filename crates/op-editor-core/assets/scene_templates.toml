@@ -1,116 +1,6 @@
-# Scene Template Center catalogue.
-#
-# One entry per shipped template document. `id` must match both the embedded
-# document (assets/scene_templates/<id>.op) and its card preview
-# (op-editor-ui/assets/scene_template_previews/<id>.jpg) — `scene_template_catalog`
-# asserts that at load time, so a half-added template fails loudly instead of
-# rendering as a blank card.
-#
-# Parsed by `scene_template_catalog.rs` with the same small TOML subset the
-# Prompt Center uses: quoted strings, string arrays, plain integers.
-#
-# `style_guide` is optional and names an entry in the style-guide registry
-# (`op-ai-skills/skills/style-guides/<name>.md`). Its presence is what puts the
-# "generate from this" action on a card, so it is only set where generating
-# from the template would actually reproduce it: the deck and web templates.
-# The card / tutorial / carousel / comparison / infographic templates are left
-# without one because the generation pipeline has no design type for them yet —
-# "卡片" classifies as a 400px Component (`op_orchestrator::detect_design_type`),
-# so a button here would promise a knowledge card and deliver a widget, and
-# "信息图" triggers no branch at all, so a 1080-wide long-form graphic would come
-# back as a 1200-wide landing page.
-
-[[template]]
-id = "screenshot-tutorial"
-scene = "tutorial"
-title_key = "sceneTemplate.item.screenshotTutorial.title"
-title_fallback = "三步截图教程卡"
-summary_key = "sceneTemplate.item.screenshotTutorial.summary"
-summary_fallback = "封面、三个操作步骤和结尾行动号召，替换截图与说明即可发布。"
-tags = ["教程", "步骤", "小红书", "tutorial", "howto"]
-frames = 5
-frame_width = 1080
-frame_height = 1440
-[[template]]
-id = "knowledge-carousel"
-scene = "carousel"
-title_key = "sceneTemplate.item.knowledgeCarousel.title"
-title_fallback = "知识观点轮播"
-summary_key = "sceneTemplate.item.knowledgeCarousel.summary"
-summary_fallback = "封面、三个论点和总结页，适合把一个观点拆成可滑动的连续卡片。"
-tags = ["知识", "观点", "轮播", "小红书", "carousel"]
-frames = 5
-frame_width = 1080
-frame_height = 1440
-[[template]]
-id = "slide-deck"
-scene = "slides"
-title_key = "sceneTemplate.item.slideDeck.title"
-title_fallback = "演示文稿 · 六页"
-summary_key = "sceneTemplate.item.slideDeck.summary"
-summary_fallback = "封面、目录、要点、数据、图表和结尾，16:9 投影比例，替换文案即可上台。"
-tags = ["PPT", "演示", "汇报", "幻灯片", "slides", "deck", "presentation"]
-frames = 6
-frame_width = 1920
-frame_height = 1080
-style_guide = "corporate-blue-light"
-[[template]]
-id = "knowledge-card-vertical"
-scene = "card"
-title_key = "sceneTemplate.item.knowledgeCardVertical.title"
-title_fallback = "知识卡片 · 竖版"
-summary_key = "sceneTemplate.item.knowledgeCardVertical.summary"
-summary_fallback = "3:4 单张图文卡，标题、四条要点和署名条，换掉文案就能发小红书。"
-tags = ["卡片", "知识", "小红书", "图文", "card", "note"]
-frames = 1
-frame_width = 1080
-frame_height = 1440
-[[template]]
-id = "knowledge-card-square"
-scene = "card"
-title_key = "sceneTemplate.item.knowledgeCardSquare.title"
-title_fallback = "知识卡片 · 方版"
-summary_key = "sceneTemplate.item.knowledgeCardSquare.summary"
-summary_fallback = "1:1 方形卡，同一套版式的紧凑版，适合公众号头图与朋友圈。"
-tags = ["卡片", "知识", "方形", "公众号", "card", "square"]
-frames = 1
-frame_width = 1080
-frame_height = 1080
-[[template]]
-id = "before-after"
-scene = "comparison"
-title_key = "sceneTemplate.item.beforeAfter.title"
-title_fallback = "改版前后对比"
-summary_key = "sceneTemplate.item.beforeAfter.summary"
-summary_fallback = "左右并置的前后对比，配改动说明，适合复盘与作品展示。"
-tags = ["对比", "前后", "复盘", "comparison", "before after"]
-frames = 1
-frame_width = 1600
-frame_height = 900
-[[template]]
-id = "pitch-deck-dark"
-scene = "slides"
-title_key = "sceneTemplate.item.pitchDeckDark.title"
-title_fallback = "路演 deck · 深色"
-summary_key = "sceneTemplate.item.pitchDeckDark.summary"
-summary_fallback = "封面、问题、方案、数据、里程碑和联系页，深底大字，适合融资路演与产品发布。"
-tags = ["路演", "融资", "创业", "深色", "PPT", "pitch", "deck", "startup", "dark"]
-frames = 6
-frame_width = 1920
-frame_height = 1080
-style_guide = "midnight-minimal-dark"
-[[template]]
-id = "lecture-deck-light"
-scene = "slides"
-title_key = "sceneTemplate.item.lectureDeckLight.title"
-title_fallback = "课件 deck · 浅色"
-summary_key = "sceneTemplate.item.lectureDeckLight.summary"
-summary_fallback = "课程封面、学习目标、概念讲解、例题、对比表和小结作业，纸白底耐看，适合上课投影。"
-tags = ["课件", "教学", "讲课", "教育", "PPT", "lecture", "teaching", "course", "light"]
-frames = 6
-frame_width = 1920
-frame_height = 1080
-style_guide = "education-friendly-light"
+# The catalogue parser prepends scene_templates_prefix.toml here. Keeping the
+# prefix separate leaves room for new records while every TOML source file
+# stays below the repository's 800-line limit.
 [[template]]
 id = "minimal-keynote"
 scene = "slides"
@@ -797,3 +687,111 @@ tags = ["标志", "评审", "验收", "融合", "四格", "logo", "qa", "review"
 frames = 1
 frame_width = 1600
 frame_height = 1000
+
+[[template]]
+id = "event-invitation-card"
+scene = "card"
+title_key = "sceneTemplate.item.eventInvitationCard.title"
+title_fallback = "技术沙龙邀请函"
+summary_key = "sceneTemplate.item.eventInvitationCard.summary"
+summary_fallback = "4:5 活动邀请卡：主题大字、时间地点双卡、三位嘉宾、报名二维码和主办方 logo 行，深蓝紫调适合活动预热。"
+tags = ["卡片", "邀请函", "活动", "沙龙", "二维码", "card", "invitation", "event", "meetup"]
+frames = 1
+frame_width = 1080
+frame_height = 1350
+
+[[template]]
+id = "livestream-teaser-card"
+scene = "card"
+title_key = "sceneTemplate.item.livestreamTeaserCard.title"
+title_fallback = "直播预告卡"
+summary_key = "sceneTemplate.item.livestreamTeaserCard.summary"
+summary_fallback = "4:5 直播预告：主题大字配倒计时三格、两位主讲、平台胶囊和预约二维码卡，深色渐变带出开播提醒。"
+tags = ["卡片", "直播", "预告", "倒计时", "预约", "card", "livestream", "teaser", "countdown"]
+frames = 1
+frame_width = 1080
+frame_height = 1350
+
+[[template]]
+id = "hiring-poster-card"
+scene = "card"
+title_key = "sceneTemplate.item.hiringPosterCard.title"
+title_fallback = "招聘海报"
+summary_key = "sceneTemplate.item.hiringPosterCard.summary"
+summary_fallback = "4:5 招聘海报：岗位大字、团队照片占位、编号要求、薪资与投递二维码，浅色版面方便替换职位信息。"
+tags = ["卡片", "招聘", "海报", "岗位", "团队", "card", "hiring", "poster", "recruiting"]
+frames = 1
+frame_width = 1080
+frame_height = 1350
+
+[[template]]
+id = "course-enroll-card"
+scene = "card"
+title_key = "sceneTemplate.item.courseEnrollCard.title"
+title_fallback = "课程招募卡"
+summary_key = "sceneTemplate.item.courseEnrollCard.summary"
+summary_fallback = "4:5 课程招募：课程名、开课信息条、四格亮点、讲师、早鸟价和报名二维码，暖色调适合招生发布。"
+tags = ["卡片", "课程", "招募", "学习", "报名", "card", "course", "enrollment", "education"]
+frames = 1
+frame_width = 1080
+frame_height = 1350
+
+[[template]]
+id = "conference-agenda-card"
+scene = "card"
+title_key = "sceneTemplate.item.conferenceAgendaCard.title"
+title_fallback = "大会议程卡"
+summary_key = "sceneTemplate.item.conferenceAgendaCard.summary"
+summary_fallback = "4:5 大会议程：大会名、五场时间轴、茶歇和赞助 logo 行，黑底橙字适合会议日程发布。"
+tags = ["卡片", "大会", "议程", "会议", "时间轴", "card", "conference", "agenda", "schedule"]
+frames = 1
+frame_width = 1080
+frame_height = 1350
+
+[[template]]
+id = "product-launch-card"
+scene = "card"
+title_key = "sceneTemplate.item.productLaunchCard.title"
+title_fallback = "新品上市卡"
+summary_key = "sceneTemplate.item.productLaunchCard.summary"
+summary_fallback = "4:5 新品上市卡：产品占位、三条卖点、价格与首发优惠，再接购买二维码，极简白底突出产品。"
+tags = ["卡片", "新品", "上市", "产品", "优惠", "card", "product", "launch", "offer"]
+frames = 1
+frame_width = 1080
+frame_height = 1350
+
+[[template]]
+id = "annual-report-card"
+scene = "card"
+title_key = "sceneTemplate.item.annualReportCard.title"
+title_fallback = "年度数据报告卡"
+summary_key = "sceneTemplate.item.annualReportCard.summary"
+summary_fallback = "4:5 年度数据报告：四大数字、年度一句话、Top3 榜单和二维码，渐变紫底适合年终复盘。"
+tags = ["卡片", "年度", "报告", "数据", "榜单", "card", "annual", "report", "metrics"]
+frames = 1
+frame_width = 1080
+frame_height = 1350
+
+[[template]]
+id = "music-fest-poster-card"
+scene = "card"
+title_key = "sceneTemplate.item.musicFestPosterCard.title"
+title_fallback = "音乐节海报"
+summary_key = "sceneTemplate.item.musicFestPosterCard.summary"
+summary_fallback = "3:4 音乐节海报：主标题、日期场地、三舞台阵容、三档票价、购票二维码和特别支持，荧光撞色适合演出预热。"
+tags = ["卡片", "音乐节", "海报", "演出", "票务", "card", "music", "festival", "poster", "concert"]
+frames = 1
+frame_width = 1080
+frame_height = 1440
+
+[[template]]
+id = "book-club-invite-card"
+scene = "card"
+title_key = "sceneTemplate.item.bookClubInviteCard.title"
+title_fallback = "读书会邀请卡"
+summary_key = "sceneTemplate.item.bookClubInviteCard.summary"
+summary_fallback = "4:5 读书会邀请：书名作者、封面占位、领读人、时间地点、三话题和报名二维码，纸色底适合线下活动。"
+tags = ["卡片", "读书会", "阅读", "书籍", "邀请", "card", "book", "club", "reading", "invitation"]
+frames = 1
+frame_width = 1080
+frame_height = 1350

@@ -18,7 +18,10 @@ use crate::catalog_toml::{
     non_empty, parse_string_array, parse_text, required, set_once, ValueError,
 };
 
-const SCENE_TEMPLATES_TOML: &str = include_str!("../assets/scene_templates.toml");
+const SCENE_TEMPLATES_TOML: &str = concat!(
+    include_str!("../assets/scene_templates_prefix.toml"),
+    include_str!("../assets/scene_templates.toml")
+);
 
 /// The shipped documents.
 ///
@@ -135,6 +138,15 @@ pub fn scene_template_document_route(template_id: &str) -> Option<&'static str> 
         "ledger-tick-deck" => route!("ledger-tick-deck"),
         "brand-concept-sheet" => route!("brand-concept-sheet"),
         "logo-qa-board" => route!("logo-qa-board"),
+        "event-invitation-card" => route!("event-invitation-card"),
+        "livestream-teaser-card" => route!("livestream-teaser-card"),
+        "hiring-poster-card" => route!("hiring-poster-card"),
+        "course-enroll-card" => route!("course-enroll-card"),
+        "conference-agenda-card" => route!("conference-agenda-card"),
+        "product-launch-card" => route!("product-launch-card"),
+        "annual-report-card" => route!("annual-report-card"),
+        "music-fest-poster-card" => route!("music-fest-poster-card"),
+        "book-club-invite-card" => route!("book-club-invite-card"),
         _ => None,
     }
 }
@@ -217,6 +229,15 @@ pub fn scene_template_document(template_id: &str) -> Option<&'static str> {
         "ledger-tick-deck" => template_document!("ledger-tick-deck"),
         "brand-concept-sheet" => template_document!("brand-concept-sheet"),
         "logo-qa-board" => template_document!("logo-qa-board"),
+        "event-invitation-card" => template_document!("event-invitation-card"),
+        "livestream-teaser-card" => template_document!("livestream-teaser-card"),
+        "hiring-poster-card" => template_document!("hiring-poster-card"),
+        "course-enroll-card" => template_document!("course-enroll-card"),
+        "conference-agenda-card" => template_document!("conference-agenda-card"),
+        "product-launch-card" => template_document!("product-launch-card"),
+        "annual-report-card" => template_document!("annual-report-card"),
+        "music-fest-poster-card" => template_document!("music-fest-poster-card"),
+        "book-club-invite-card" => template_document!("book-club-invite-card"),
         _ => None,
     }
 }

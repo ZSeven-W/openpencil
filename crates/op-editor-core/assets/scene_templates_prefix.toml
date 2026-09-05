@@ -1,0 +1,117 @@
+# Scene Template Center catalogue prefix.
+#
+# The catalogue parser concatenates this prefix with scene_templates.toml so
+# each checked-in source file remains below the repository's 800-line limit.
+# These are the first eight entries in catalogue order.
+#
+# One entry per shipped template document. `id` must match both the embedded
+# document (assets/scene_templates/<id>.op) and its card preview
+# (op-editor-ui/assets/scene_template_previews/<id>.jpg) — `scene_template_catalog`
+# asserts that at load time, so a half-added template fails loudly instead of
+# rendering as a blank card.
+#
+# Parsed by `scene_template_catalog.rs` with the same small TOML subset the
+# Prompt Center uses: quoted strings, string arrays, plain integers.
+#
+# `style_guide` is optional and names an entry in the style-guide registry
+# (`op-ai-skills/skills/style-guides/<name>.md`). Its presence is what puts the
+# "generate from this" action on a card, so it is only set where generating
+# from the template would actually reproduce it: the deck and web templates.
+# The card / tutorial / carousel / comparison / infographic templates are left
+# without one because the generation pipeline has no design type for them yet —
+# "卡片" classifies as a 400px Component (`op_orchestrator::detect_design_type`),
+# so a button here would promise a knowledge card and deliver a widget, and
+# "信息图" triggers no branch at all, so a 1080-wide long-form graphic would come
+# back as a 1200-wide landing page.
+
+[[template]]
+id = "screenshot-tutorial"
+scene = "tutorial"
+title_key = "sceneTemplate.item.screenshotTutorial.title"
+title_fallback = "三步截图教程卡"
+summary_key = "sceneTemplate.item.screenshotTutorial.summary"
+summary_fallback = "封面、三个操作步骤和结尾行动号召，替换截图与说明即可发布。"
+tags = ["教程", "步骤", "小红书", "tutorial", "howto"]
+frames = 5
+frame_width = 1080
+frame_height = 1440
+[[template]]
+id = "knowledge-carousel"
+scene = "carousel"
+title_key = "sceneTemplate.item.knowledgeCarousel.title"
+title_fallback = "知识观点轮播"
+summary_key = "sceneTemplate.item.knowledgeCarousel.summary"
+summary_fallback = "封面、三个论点和总结页，适合把一个观点拆成可滑动的连续卡片。"
+tags = ["知识", "观点", "轮播", "小红书", "carousel"]
+frames = 5
+frame_width = 1080
+frame_height = 1440
+[[template]]
+id = "slide-deck"
+scene = "slides"
+title_key = "sceneTemplate.item.slideDeck.title"
+title_fallback = "演示文稿 · 六页"
+summary_key = "sceneTemplate.item.slideDeck.summary"
+summary_fallback = "封面、目录、要点、数据、图表和结尾，16:9 投影比例，替换文案即可上台。"
+tags = ["PPT", "演示", "汇报", "幻灯片", "slides", "deck", "presentation"]
+frames = 6
+frame_width = 1920
+frame_height = 1080
+style_guide = "corporate-blue-light"
+[[template]]
+id = "knowledge-card-vertical"
+scene = "card"
+title_key = "sceneTemplate.item.knowledgeCardVertical.title"
+title_fallback = "知识卡片 · 竖版"
+summary_key = "sceneTemplate.item.knowledgeCardVertical.summary"
+summary_fallback = "3:4 单张图文卡，标题、四条要点和署名条，换掉文案就能发小红书。"
+tags = ["卡片", "知识", "小红书", "图文", "card", "note"]
+frames = 1
+frame_width = 1080
+frame_height = 1440
+[[template]]
+id = "knowledge-card-square"
+scene = "card"
+title_key = "sceneTemplate.item.knowledgeCardSquare.title"
+title_fallback = "知识卡片 · 方版"
+summary_key = "sceneTemplate.item.knowledgeCardSquare.summary"
+summary_fallback = "1:1 方形卡，同一套版式的紧凑版，适合公众号头图与朋友圈。"
+tags = ["卡片", "知识", "方形", "公众号", "card", "square"]
+frames = 1
+frame_width = 1080
+frame_height = 1080
+[[template]]
+id = "before-after"
+scene = "comparison"
+title_key = "sceneTemplate.item.beforeAfter.title"
+title_fallback = "改版前后对比"
+summary_key = "sceneTemplate.item.beforeAfter.summary"
+summary_fallback = "左右并置的前后对比，配改动说明，适合复盘与作品展示。"
+tags = ["对比", "前后", "复盘", "comparison", "before after"]
+frames = 1
+frame_width = 1600
+frame_height = 900
+[[template]]
+id = "pitch-deck-dark"
+scene = "slides"
+title_key = "sceneTemplate.item.pitchDeckDark.title"
+title_fallback = "路演 deck · 深色"
+summary_key = "sceneTemplate.item.pitchDeckDark.summary"
+summary_fallback = "封面、问题、方案、数据、里程碑和联系页，深底大字，适合融资路演与产品发布。"
+tags = ["路演", "融资", "创业", "深色", "PPT", "pitch", "deck", "startup", "dark"]
+frames = 6
+frame_width = 1920
+frame_height = 1080
+style_guide = "midnight-minimal-dark"
+[[template]]
+id = "lecture-deck-light"
+scene = "slides"
+title_key = "sceneTemplate.item.lectureDeckLight.title"
+title_fallback = "课件 deck · 浅色"
+summary_key = "sceneTemplate.item.lectureDeckLight.summary"
+summary_fallback = "课程封面、学习目标、概念讲解、例题、对比表和小结作业，纸白底耐看，适合上课投影。"
+tags = ["课件", "教学", "讲课", "教育", "PPT", "lecture", "teaching", "course", "light"]
+frames = 6
+frame_width = 1920
+frame_height = 1080
+style_guide = "education-friendly-light"

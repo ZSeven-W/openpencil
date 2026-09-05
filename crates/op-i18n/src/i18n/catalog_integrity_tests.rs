@@ -251,7 +251,7 @@ fn placeholders(value: &str) -> BTreeSet<String> {
 fn every_locale_has_exactly_the_english_key_set() {
     let all_tables = tables();
     let expected = table_keys(all_tables[0].0, all_tables[0].1, all_tables[0].2);
-    assert_eq!(expected.len(), 1679, "update the intentional catalog size");
+    assert_eq!(expected.len(), 1697, "update the intentional catalog size");
 
     for (name, main, git, lookup) in all_tables {
         let actual = table_keys(name, main, git);
@@ -304,6 +304,24 @@ fn scene_template_catalog_is_complete_in_all_fifteen_locales() {
         "sceneTemplate.item.minimalKeynote.summary",
         "sceneTemplate.item.gradientTech.title",
         "sceneTemplate.item.gradientTech.summary",
+        "sceneTemplate.item.eventInvitationCard.title",
+        "sceneTemplate.item.eventInvitationCard.summary",
+        "sceneTemplate.item.livestreamTeaserCard.title",
+        "sceneTemplate.item.livestreamTeaserCard.summary",
+        "sceneTemplate.item.hiringPosterCard.title",
+        "sceneTemplate.item.hiringPosterCard.summary",
+        "sceneTemplate.item.courseEnrollCard.title",
+        "sceneTemplate.item.courseEnrollCard.summary",
+        "sceneTemplate.item.conferenceAgendaCard.title",
+        "sceneTemplate.item.conferenceAgendaCard.summary",
+        "sceneTemplate.item.productLaunchCard.title",
+        "sceneTemplate.item.productLaunchCard.summary",
+        "sceneTemplate.item.annualReportCard.title",
+        "sceneTemplate.item.annualReportCard.summary",
+        "sceneTemplate.item.musicFestPosterCard.title",
+        "sceneTemplate.item.musicFestPosterCard.summary",
+        "sceneTemplate.item.bookClubInviteCard.title",
+        "sceneTemplate.item.bookClubInviteCard.summary",
         "fileMenu.newFromTemplate",
     ] {
         for (name, _, _, lookup) in tables() {
