@@ -620,6 +620,13 @@ fn run_cleanup_passes_with_summary_and_policy(
                 }
             }
         }
+        // Absolutely-pinned, fixed-size controls that poke out of a
+        // `layout: "none"` parent are shifted back INSIDE the parent BEFORE
+        // the geometry loop below runs: its card-overflow clip fallback would
+        // otherwise crop the control (a real run chopped the right half off a
+        // 44x44 "locate me" button pinned at x=307 in a 327px-wide map block).
+        crate::geometry_validation::clamp_absolute_children_into_parent(sink, rid);
+        counter.checkpoint(summary, CheckCategory::Overflow, "absolute-child-clamp");
         let preserve_root_height = policy.preserve_requested_root_height
             || find_root(sink.state(), rid).is_some_and(|root| {
                 root_has_explicit_fit_content_height(root)
