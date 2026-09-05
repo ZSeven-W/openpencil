@@ -194,6 +194,26 @@ pub fn role(node: &PenNode) -> Option<&str> {
     base(node).role.as_deref()
 }
 
+/// True when a node's `role` marks it as mobile screen chrome — the OS status
+/// bar or any bottom-navigation form. Shared by the spacing detectors'
+/// mobile-page shape filter and the slop detectors' chrome exemption (a tab
+/// bar legitimately IS an icon+label row and must not read as slop).
+pub fn is_mobile_screen_chrome(node: &PenNode) -> bool {
+    matches!(
+        role(node)
+            .unwrap_or("")
+            .trim()
+            .to_ascii_lowercase()
+            .as_str(),
+        "status-bar"
+            | "bottom-tab-bar"
+            | "bottom-nav"
+            | "bottom-navigation-bar"
+            | "tab-bar"
+            | "tabbar"
+    )
+}
+
 /// A node's `rotation` in degrees. jian `rotation` is `Option<f64>`; a
 /// missing value is `0.0`, matching the TS `typeof rotation === 'number'`
 /// guard treating `undefined` as not-rotated.

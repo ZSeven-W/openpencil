@@ -47,6 +47,9 @@ fn set_property(node: &mut PenNode, property: FixProperty, suggested: &Value) ->
         FixProperty::Fill => false,
         // widget-a11y is detect-only — the label must be authored, no auto-fix.
         FixProperty::Label => false,
+        // slop three-card-feature-row is detect-only — restructuring a layout
+        // is a design decision, no auto-fix.
+        FixProperty::Layout => false,
         // Remove is handled in apply_fixes, never dispatched here.
         FixProperty::Remove => false,
     }

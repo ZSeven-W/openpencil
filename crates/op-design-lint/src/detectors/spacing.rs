@@ -16,8 +16,8 @@ use serde_json::Value;
 
 use crate::issue::{FixProperty, Issue, IssueCategory, IssueSeverity};
 use crate::node_util::{
-    children, fmt_num, has_stroke, json_number, node_fills, node_id, node_kind, padding,
-    raw_padding_value, role, NodeKind,
+    children, fmt_num, has_stroke, is_mobile_screen_chrome, json_number, node_fills, node_id,
+    node_kind, padding, raw_padding_value, role, NodeKind,
 };
 
 const DEFAULT_MOBILE_SECTION_RAIL: f64 = 24.0;
@@ -328,22 +328,6 @@ fn looks_like_mobile_page(node: &PenNode, depth: usize) -> bool {
         }
         _ => false,
     }
-}
-
-fn is_mobile_screen_chrome(node: &PenNode) -> bool {
-    matches!(
-        role(node)
-            .unwrap_or("")
-            .trim()
-            .to_ascii_lowercase()
-            .as_str(),
-        "status-bar"
-            | "bottom-tab-bar"
-            | "bottom-nav"
-            | "bottom-navigation-bar"
-            | "tab-bar"
-            | "tabbar"
-    )
 }
 
 /// Port of `detectEdgeSectionPadding` (`detectors-spacing.ts:100-197`).

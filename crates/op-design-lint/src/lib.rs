@@ -16,15 +16,16 @@ pub mod node_mut;
 pub mod node_util;
 pub mod plan;
 
-pub use color::{color_contrast, parse_hex_color, relative_luminance, Rgb};
+pub use color::{color_contrast, hsl, parse_hex_color, relative_luminance, Rgb};
 pub use detectors::{
     detect_absolute_positioning_share, detect_all, detect_edge_section_padding,
     detect_empty_filled_panel, detect_empty_paths, detect_excessive_frame_effects,
     detect_excessive_nesting_depth, detect_invisible_containers,
-    detect_mixed_sibling_corner_radius, detect_mixed_sibling_padding, detect_redundant_wrappers,
-    detect_sibling_inconsistencies, detect_stacked_horizontal_padding, detect_text_bg_contrast,
-    detect_text_corner_radius, detect_text_effect, detect_text_explicit_heights,
-    detect_text_stroke, detect_top_anchored_bars, detect_unexpected_rotation,
+    detect_mixed_sibling_corner_radius, detect_mixed_sibling_padding, detect_purple_glow_gradient,
+    detect_redundant_wrappers, detect_rounded_card_wall, detect_sibling_inconsistencies,
+    detect_stacked_horizontal_padding, detect_text_bg_contrast, detect_text_corner_radius,
+    detect_text_effect, detect_text_explicit_heights, detect_text_stroke,
+    detect_three_card_feature_row, detect_top_anchored_bars, detect_unexpected_rotation,
     detect_unlabeled_inputs,
 };
 pub use fixes::{apply_fixes, detect_and_fix};

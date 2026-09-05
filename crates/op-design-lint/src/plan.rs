@@ -53,6 +53,8 @@ pub struct PlannedFix {
 /// | `Padding`       | `SetPadding(Value)`            | uniform or [L,T,R,B] array    |
 /// | `Stroke`        | `SetStroke(Value)`             | full PenStroke JSON object    |
 /// | `Fill`          | *(filtered out — no-op)*       | `apply_fixes` returns `false` |
+/// | `Label`         | *(filtered out — no-op)*       | detect-only (widget-a11y)     |
+/// | `Layout`        | *(filtered out — no-op)*       | detect-only (slop rules)      |
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlannedAction {
     /// Remove the node from its parent (mirrors `fixes::apply_remove`).
@@ -170,6 +172,8 @@ pub fn detect_and_plan(doc: &PenDocument) -> Vec<PlannedFix> {
             FixProperty::Fill => continue,
             // widget-a11y is detect-only (no auto-fix) — skip.
             FixProperty::Label => continue,
+            // slop three-card-feature-row is detect-only (no auto-fix) — skip.
+            FixProperty::Layout => continue,
             // Remove is handled above; this arm is unreachable.
             FixProperty::Remove => continue,
         };
