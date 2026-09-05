@@ -153,6 +153,52 @@ const SLIDES_WORDS: &[&str] = &[
     "路演",
 ];
 const MOBILE_WORDS: &[&str] = &["mobile", "手机", "phone", "移动端", "ios", "android"];
+
+/// `375×812` / `390x844` / `360 x 800` written into the brief is a phone
+/// frame even when the words around it are "App 首页" or "screen": a portrait
+/// board 320-480 wide is never a desktop or landing canvas.
+fn mentions_phone_dimensions(lower: &str) -> bool {
+    let chars: Vec<char> = lower.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if !chars[i].is_ascii_digit() {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < chars.len() && chars[i].is_ascii_digit() {
+            i += 1;
+        }
+        let width: u32 = chars[start..i]
+            .iter()
+            .collect::<String>()
+            .parse()
+            .unwrap_or(0);
+        let mut j = i;
+        while j < chars.len() && chars[j] == ' ' {
+            j += 1;
+        }
+        if j < chars.len() && (chars[j] == 'x' || chars[j] == '×' || chars[j] == '*') {
+            j += 1;
+            while j < chars.len() && chars[j] == ' ' {
+                j += 1;
+            }
+            let hstart = j;
+            while j < chars.len() && chars[j].is_ascii_digit() {
+                j += 1;
+            }
+            let height: u32 = chars[hstart..j]
+                .iter()
+                .collect::<String>()
+                .parse()
+                .unwrap_or(0);
+            if (320..=480).contains(&width) && height > width {
+                return true;
+            }
+        }
+    }
+    false
+}
 /// Words that mean "social card series" on their own — a platform name or a
 /// delivery format, neither of which describes anything else we generate.
 const CARD_PLATFORM_WORDS: &[&str] = &[
@@ -260,7 +306,7 @@ pub fn detect_design_type(prompt: &str) -> DesignTypePreset {
         return SLIDES;
     }
     // ④ 移动端。
-    if contains_any(&lower, MOBILE_WORDS) {
+    if contains_any(&lower, MOBILE_WORDS) || mentions_phone_dimensions(&lower) {
         return MOBILE;
     }
     // ⑤ 数据型工作区 / dashboard。
@@ -422,6 +468,26 @@ mod tests {
         assert_eq!(
             detect_design_type("a profile card").type_,
             DesignType::Component
+        );
+    }
+
+    #[test]
+    fn phone_dimensions_in_the_brief_mean_a_mobile_screen() {
+        assert_eq!(
+            detect_design_type("外卖 App 首页（375×812）：顶部地址与搜索").type_,
+            DesignType::MobileScreen
+        );
+        assert_eq!(
+            detect_design_type("Workout detail screen (390x844) with a hero image").type_,
+            DesignType::MobileScreen
+        );
+        assert_ne!(
+            detect_design_type("官网首页（1440×900，浅色）").type_,
+            DesignType::MobileScreen
+        );
+        assert_ne!(
+            detect_design_type("横幅 1200x300 banner").type_,
+            DesignType::MobileScreen
         );
     }
 

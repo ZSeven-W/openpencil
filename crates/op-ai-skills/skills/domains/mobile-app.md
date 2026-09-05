@@ -22,7 +22,7 @@ Screen-height contract: use numeric 390-393×844 as a temporary construction see
 
 Correct is not enough; a white page of cards with one accent button is the default every model produces and the user reads it as "template". Every screen commits to ONE signature moment, chosen from the domain's mood, and the rest of the screen stays quiet around it:
 
-- COLOR-BLOCK HEADER: the top 30-40% of the screen is a solid brand-color or dark surface (status bar sits on it in white); the content below rides up on a `cornerRadius: [24,24,0,0]` white sheet. Use for finance, utility, travel, food ordering.
+- COLOR-BLOCK HEADER: the top 30-40% of the screen is ONE frame with a solid brand-color or dark fill and `cornerRadius: [0,0,24,24]` (status bar sits on it, so its text and icons are white); the sections below stay on the page background. No separate "sheet lip" strip (flow layout cannot overlap it). Every text inside the block uses white / white-at-70%, never `$--foreground` or `$--muted-foreground`. Use for finance, utility, travel, food ordering.
 - HERO NUMBER: one value at 40-56px semibold with a 12-13px caption (balance, calories, minutes, price); everything else ≤ 17px. Use for dashboards, fitness, banking, stats.
 - FULL-BLEED IMAGE + SCRIM: an image touching three edges with a bottom gradient scrim and the title set in white on the scrim. Use for product, recipe, travel, media detail screens.
 - STACKED DEPTH: 2-3 large cards with real depth (tonal surface + one soft shadow, 20-24px radius), not a list of thin rows. Use for cards, tickets, plans, wallets.
