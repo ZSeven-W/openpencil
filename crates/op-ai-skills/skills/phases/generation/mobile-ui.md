@@ -49,6 +49,8 @@ NO FIXED FOOD TEMPLATE: Do not default to the same search + categories + orange 
 
 ## Platform facts (iOS HIG · Material 3) — the numbers behind the rules
 
+Each value names its platform (HIG = iOS 17 Dynamic Type "Large"; M3 = Material 3, 2024). "Our rail 24", "status bar 62" and the 12–16 card padding are this project's own parameters, not platform rules.
+
 - Type: screen title 28–34 (HIG Large Title 34 / Title 1 28; M3 headline 32/28), section title 20–22 (Title 3 20 / Title 2 22; M3 title-large 22), body 16–17 (Body 17; M3 body-large 16), secondary 15, caption/label 12–13 (Caption 12; M3 label 12). Line height ≈ 1.25–1.3× for titles, 1.3–1.4× for body. Weights 400/500/600; no 300 on mobile.
 - Display numbers: one per screen, 36–48 (M3 display-small 36, display-medium 45); never a second one.
 - Touch: 44×44pt (HIG) / 48dp (M3) minimum, 8 between adjacent targets. Buttons 48–52 tall, chips 32–36, list rows 56–72.

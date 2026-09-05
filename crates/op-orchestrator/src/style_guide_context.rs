@@ -412,7 +412,21 @@ pub(crate) fn rank_style_guides_for_prompt(
 /// and background color are intentionally dropped so the style guide no longer
 /// dictates "what type / what color" — the model picks palette from the prompt.
 pub(crate) fn format_guide_metadata_line(guide: &ParsedStyleGuide, _mode: PlanningMode) -> String {
-    format!("- {} [{}]", guide.name, guide.platform.as_str())
+    // The planner picks a guide by mood, so it has to see the mood: the
+    // first "Key aesthetics" bullet rides along with the name and platform.
+    // Name and platform alone made the pick a blind draw (review 2026-09-06).
+    // Only the bullet's label ("Electric lime on black"), not its sentence:
+    // sixty-odd guides ride in one planning prompt, so each line must stay
+    // a handful of tokens.
+    let lead = op_ai_skills::style_guide::key_aesthetics(&guide.content, 1)
+        .into_iter()
+        .next()
+        .map(|bullet| bullet.split(':').next().unwrap_or("").trim().to_string())
+        .filter(|label| !label.is_empty());
+    match lead {
+        Some(label) => format!("- {} [{}] — {}", guide.name, guide.platform.as_str(), label),
+        None => format!("- {} [{}]", guide.name, guide.platform.as_str()),
+    }
 }
 
 /// 一份 guide 的详细 snippet —— softened (user direction 2026-06-23): FONT

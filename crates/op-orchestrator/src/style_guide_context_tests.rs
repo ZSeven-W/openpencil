@@ -266,13 +266,24 @@ fn rank_industry_tag_outweighs_plain_tag() {
 }
 
 #[test]
-fn metadata_line_is_name_only_no_type_or_color() {
-    // Softened: names only — no `:: tags` (type) and no ` bg:` (color).
+fn metadata_line_is_name_platform_and_lead_aesthetic_no_type_or_color() {
+    // Softened (2026-06-23): no `:: tags` (type) and no ` bg:` (color).
+    // Re-opened (2026-09-06): the planner picks by mood, so the line carries
+    // the guide's lead "Key aesthetics" label — a few words, no hex, no tags.
     let g = &style_guide_registry()[0];
     let line = format_guide_metadata_line(g, PlanningMode::Rich);
-    assert_eq!(line, format!("- {} [{}]", g.name, g.platform.as_str()));
+    let head = format!("- {} [{}]", g.name, g.platform.as_str());
+    assert!(line.starts_with(&head), "{line}");
+    match op_ai_skills::style_guide::key_aesthetics(&g.content, 1).first() {
+        Some(lead) => {
+            let label = lead.split(':').next().unwrap_or("").trim();
+            assert_eq!(line, format!("{head} — {label}"));
+        }
+        None => assert_eq!(line, head),
+    }
     assert!(!line.contains(" :: "), "type tags must be dropped: {line}");
     assert!(!line.contains(" bg:"), "bg color must be dropped: {line}");
+    assert!(!line.contains('#'), "no hex in the candidate line: {line}");
 }
 
 #[test]

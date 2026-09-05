@@ -112,9 +112,12 @@ impl Phase {
     /// Planning moved again 6050 → 6112 when the decomposition corpus gained
     /// the side-progress-rail rule and squeezed the matched landing-page
     /// skill's tail.
+    /// Then 6112 → 6300 (2026-09-06): every style-guide candidate line in the
+    /// planner now carries its lead "Key aesthetics" label so the planner can
+    /// pick by mood instead of by name; ~60 guides × a few tokens each.
     pub fn default_budget(self) -> u32 {
         match self {
-            Phase::Planning => 6112,
+            Phase::Planning => 6300,
             Phase::Generation => 16830,
             Phase::Validation => 3000,
             Phase::Maintenance => 5000,
@@ -124,7 +127,7 @@ impl Phase {
 
 /// Per-phase default token budgets — the TS `DEFAULT_BUDGETS` record.
 pub const DEFAULT_BUDGETS: [(Phase, u32); 4] = [
-    (Phase::Planning, 6112),
+    (Phase::Planning, 6300),
     (Phase::Generation, 16830),
     (Phase::Validation, 3000),
     (Phase::Maintenance, 5000),
@@ -406,7 +409,7 @@ mod tests {
 
     #[test]
     fn default_budget_table() {
-        assert_eq!(Phase::Planning.default_budget(), 6112);
+        assert_eq!(Phase::Planning.default_budget(), 6300);
         assert_eq!(Phase::Generation.default_budget(), 16830);
         assert_eq!(Phase::Validation.default_budget(), 3000);
         assert_eq!(Phase::Maintenance.default_budget(), 5000);

@@ -148,7 +148,7 @@ pub(crate) fn build_style_guide_instruction(
     if !tags.is_empty() {
         lines.push(format!("- Tags: {}", tags.join(", ")));
     }
-    let aesthetics = op_ai_skills::style_guide::key_aesthetics(&guide.content, 5);
+    let aesthetics = op_ai_skills::style_guide::key_aesthetics(&guide.content, 8);
     if !aesthetics.is_empty() {
         lines.push(
             "- Key aesthetics (the signature treatment — apply it to the first content section):"
