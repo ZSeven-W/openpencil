@@ -370,3 +370,18 @@ fn unknown_id_defaults_standard() {
         ModelTier::Standard
     );
 }
+
+#[test]
+fn claude_cli_aliases_resolve_to_the_full_tier() {
+    for alias in ["opus", "sonnet", "fable", "Opus"] {
+        assert_eq!(
+            resolve_model_profile(alias).tier,
+            ModelTier::Full,
+            "alias {alias} must not fall to the weak default"
+        );
+    }
+    assert_ne!(
+        resolve_model_profile("opus-mini-unknown").tier,
+        ModelTier::Full
+    );
+}

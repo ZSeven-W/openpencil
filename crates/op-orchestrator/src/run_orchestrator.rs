@@ -51,6 +51,14 @@ impl Orchestrator {
                 plan.style_guide_name,
                 plan.subtasks.len()
             );
+            for subtask in &plan.subtasks {
+                let elements = subtask.elements.as_deref().unwrap_or("");
+                let head: String = elements.chars().take(160).collect();
+                eprintln!(
+                    "[PLAN] subtask {} ({}) elements={head:?}",
+                    subtask.id, subtask.label
+                );
+            }
         }
 
         // Surface the FULL planned task list upfront (TS parity) so the UI can

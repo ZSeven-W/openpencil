@@ -94,6 +94,15 @@ pub fn is_acp_capability_marker(model_id: &str) -> bool {
 
 /// 模型表 —— verbatim 移植自 `model-profiles.ts:22-95`,首个命中胜出。
 const MODEL_PROFILES: &[Entry] = &[
+    // Claude Code CLI aliases (`--model opus|sonnet|fable`): the subprocess
+    // transport passes them verbatim, and an unmatched id falls to the
+    // conservative default tier, which budgets Opus like a weak model.
+    e(
+        Match::Exact(&["opus", "sonnet", "fable", "claude"]),
+        ModelTier::Full,
+        false,
+        "Claude (CLI alias)",
+    ),
     // Full tier
     e(
         Match::Sub("claude-fable"),
