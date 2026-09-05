@@ -40,6 +40,19 @@ impl Orchestrator {
         let append_result =
             apply_append_context_to_plan(&mut plan, request.append_context.as_ref());
 
+        // `OPENPENCIL_DEBUG_PLAN=1` prints what the planner decided beyond the
+        // subtask list: headless runs (op-smoke, the arena) otherwise cannot
+        // tell whether a style guide was picked or a phone root was planned.
+        if std::env::var_os("OPENPENCIL_DEBUG_PLAN").is_some() {
+            eprintln!(
+                "[PLAN] root={}x{} styleGuideName={:?} subtasks={}",
+                plan.root_frame.width,
+                plan.root_frame.height,
+                plan.style_guide_name,
+                plan.subtasks.len()
+            );
+        }
+
         // Surface the FULL planned task list upfront (TS parity) so the UI can
         // render the complete checklist immediately, rather than revealing
         // subtasks one-by-one as each starts.
