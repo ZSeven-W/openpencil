@@ -138,11 +138,23 @@ pub(crate) fn build_style_guide_instruction(
         return Some(s);
     }
 
-    // Standard/Basic: a compact summary.
+    // Standard/Basic: a compact summary. The guide's "Key aesthetics"
+    // bullets ride along: they are its expression layer (display face, how
+    // the accent is spent, card depth, hero idiom), and a summary of palette
+    // and radii alone left weak models producing the same neutral template
+    // under every guide.
     let mut lines = vec![format!("VISUAL STYLE GUIDE SUMMARY ({name}):")];
     let tags: Vec<String> = guide.tags.iter().take(6).cloned().collect();
     if !tags.is_empty() {
         lines.push(format!("- Tags: {}", tags.join(", ")));
+    }
+    let aesthetics = op_ai_skills::style_guide::key_aesthetics(&guide.content, 5);
+    if !aesthetics.is_empty() {
+        lines.push(
+            "- Key aesthetics (the signature treatment — apply it to the first content section):"
+                .into(),
+        );
+        lines.extend(aesthetics.iter().map(|a| format!("  - {a}")));
     }
     let has_colors = !colors.is_empty();
     lines.extend(colors);

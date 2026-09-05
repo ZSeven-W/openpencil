@@ -12,6 +12,7 @@
 
 pub mod card;
 pub mod design_md_import;
+pub mod key_aesthetics;
 pub mod loader;
 pub mod mapping;
 pub mod parser;
@@ -27,6 +28,7 @@ pub use card::{style_guide_card, StyleGuideCard, STYLE_CARD_SWATCH_CAP};
 pub use design_md_import::{
     parse_design_md, slugify, DesignMdImportError, ImportedDesignMd, MAX_DESIGN_MD_BYTES,
 };
+pub use key_aesthetics::key_aesthetics;
 pub use loader::{parse_style_guide_file, select_style_guide, style_guide_registry, SelectOptions};
 pub use mapping::{build_style_mapping, ColorReplacement, PropertyReplacement, RadiusReplacement};
 pub use parser::{extract_style_guide_values, StyleGuideValues};

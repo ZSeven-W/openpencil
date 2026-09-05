@@ -460,3 +460,17 @@ fn a_colourless_guide_drops_the_exact_colors_instruction() {
         "nothing to obey, so nothing should be demanded:\n{summary}"
     );
 }
+
+#[test]
+fn compact_style_summary_carries_the_guides_key_aesthetics() {
+    // Weak tiers used to receive palette, fonts and radii only — the guide's
+    // expression layer never reached them, so every guide produced the same
+    // neutral template.
+    let text = crate::prompt::build_style_guide_instruction(
+        Some("dark-bold-mobile"),
+        crate::model_profile::ModelTier::Basic,
+    )
+    .expect("shipped guide resolves");
+    assert!(text.contains("Key aesthetics"), "{text}");
+    assert!(text.contains("Electric lime"), "{text}");
+}
