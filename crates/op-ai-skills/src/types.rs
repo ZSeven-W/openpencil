@@ -91,7 +91,7 @@ impl Phase {
     /// gained the payload-dialect rules (bare numbers, snake_case fill types,
     /// gradient stop `offset`, string text content) that four measured GLM
     /// rejections proved the model needs stated. Then 16050 → 16130 (2026-09-05)
-    /// when schema.md gained the video-on-image line, and 16130 → 16630 the same
+    /// when schema.md gained the video-on-image line, and 16130 → 16730 the same
     /// day when mobile-app gained its signature-moment section (budget 2100 →
     /// 2600); each step kept the mixed logo + deck assembly from clipping the
     /// `slides` tail. A mixed CJK branding + deck request (logo review +
@@ -115,7 +115,7 @@ impl Phase {
     pub fn default_budget(self) -> u32 {
         match self {
             Phase::Planning => 6112,
-            Phase::Generation => 16630,
+            Phase::Generation => 16730,
             Phase::Validation => 3000,
             Phase::Maintenance => 5000,
         }
@@ -125,7 +125,7 @@ impl Phase {
 /// Per-phase default token budgets — the TS `DEFAULT_BUDGETS` record.
 pub const DEFAULT_BUDGETS: [(Phase, u32); 4] = [
     (Phase::Planning, 6112),
-    (Phase::Generation, 16630),
+    (Phase::Generation, 16730),
     (Phase::Validation, 3000),
     (Phase::Maintenance, 5000),
 ];
@@ -407,7 +407,7 @@ mod tests {
     #[test]
     fn default_budget_table() {
         assert_eq!(Phase::Planning.default_budget(), 6112);
-        assert_eq!(Phase::Generation.default_budget(), 16630);
+        assert_eq!(Phase::Generation.default_budget(), 16730);
         assert_eq!(Phase::Validation.default_budget(), 3000);
         assert_eq!(Phase::Maintenance.default_budget(), 5000);
         // The const table agrees with the per-variant method.
