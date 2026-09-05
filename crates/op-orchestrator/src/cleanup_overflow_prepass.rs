@@ -29,4 +29,11 @@ pub(super) fn run_overflow_prepass(
         crate::geometry_validation::repair_text_fit(sink, root_id);
     }
     counter.checkpoint(summary, CheckCategory::Overflow, "text-fit");
+
+    // Phone controls whose resolved touch area is below the mobile floor get a
+    // numeric height before the geometry loop runs. This is deliberately a
+    // separate layout checkpoint because the pass is a target-size repair, not
+    // overflow handling.
+    crate::geometry_validation::repair_touch_target_floor(sink, root_id);
+    counter.checkpoint(summary, CheckCategory::Layout, "touch-target-floor");
 }

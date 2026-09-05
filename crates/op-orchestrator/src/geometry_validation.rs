@@ -62,8 +62,11 @@ mod absolute_child_clamp;
 mod geometry_buried_overlay;
 #[path = "text_fit.rs"]
 mod text_fit;
+#[path = "touch_target_floor.rs"]
+mod touch_target_floor;
 pub(crate) use absolute_child_clamp::clamp_absolute_children_into_parent;
 pub(crate) use text_fit::repair_text_fit;
+pub(crate) use touch_target_floor::repair_touch_target_floor;
 #[path = "geometry_card_rail_fixes.rs"]
 mod geometry_card_rail_fixes;
 #[path = "geometry_diagnostics_collect.rs"]
