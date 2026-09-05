@@ -64,6 +64,8 @@ mod cleanup_section_sizing;
 mod cleanup_slide_padding;
 #[path = "cleanup_status_bar.rs"]
 mod cleanup_status_bar;
+#[path = "sibling_style_drift.rs"]
+mod sibling_style_drift;
 pub(crate) use cleanup_status_bar::{is_status_bar, is_status_bar_from_json};
 #[path = "finalize_enforce_status_bar.rs"]
 mod finalize_enforce_status_bar;
@@ -597,9 +599,10 @@ fn run_cleanup_passes_with_summary_and_policy(
         // Sibling-item scalar alignment (DS P1-a) runs AFTER slot
         // materialization: an empty image-slot rect becomes an Image node
         // above, so the structure comparison below sees the FINAL tree shape
-        // instead of treating the not-yet-materialized slot as drift.
-        equalize_sibling_items(sink, rid);
-        counter.checkpoint(summary, CheckCategory::Structure, "equalize-sibling-items");
+        // instead of treating the not-yet-materialized slot as drift. The
+        // paired style-drift vote runs right after it, behind its own
+        // Structure checkpoint, inside the shared driver.
+        equalize_siblings_and_style_drift(sink, rid, summary, &mut counter);
         // No-nav mobile screens share one deterministic closing contract:
         // 24-32px of bottom room. The repair reads the same resolved geometry
         // as the diagnostic and grows only root padding, never business nodes.

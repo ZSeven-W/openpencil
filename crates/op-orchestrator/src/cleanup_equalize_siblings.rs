@@ -105,6 +105,22 @@ pub(super) fn equalize_sibling_items(sink: &mut dyn DocSink, root_id: &str) -> u
     applied
 }
 
+/// Driver for the sibling passes (mounted in `cleanup.rs`, which is at the
+/// 800-line cap): scalar equalization first, then the style-drift vote —
+/// each behind its own Structure checkpoint so the summary attributes the
+/// edits separately.
+pub(super) fn equalize_siblings_and_style_drift(
+    sink: &mut dyn DocSink,
+    root_id: &str,
+    summary: &mut RepairSummary,
+    counter: &mut RepairCounter,
+) {
+    equalize_sibling_items(sink, root_id);
+    counter.checkpoint(summary, CheckCategory::Structure, "equalize-sibling-items");
+    super::sibling_style_drift::repair_sibling_style_drift(sink, root_id);
+    counter.checkpoint(summary, CheckCategory::Structure, "sibling-style-drift");
+}
+
 /// One editable family member: the frame plus the structure it shares.
 struct Member<'a> {
     node: &'a PenNode,
