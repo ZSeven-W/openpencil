@@ -225,6 +225,7 @@ async fn main() -> std::process::ExitCode {
                  common:\n\
                    OPENPENCIL_ORCHESTRATOR_MODEL=<model>\n\
                    OPENPENCIL_SMOKE_OUT=<result.op>\n\
+                   OPENPENCIL_SMOKE_PIN_STYLE_GUIDE=<style guide name>\n\
                    OPENPENCIL_SMOKE_VALIDATION=1"
             );
             return std::process::ExitCode::from(2);
@@ -494,7 +495,13 @@ async fn main() -> std::process::ExitCode {
             .unwrap_or(1),
         validation_enabled,
         visual_ref_enabled: false,
-        pinned_style_guide: None,
+        // `OPENPENCIL_SMOKE_PIN_STYLE_GUIDE=<name>` fixes the style guide so an
+        // ablation can vary one contract (corpus, pass, tier) while the look
+        // stays constant; unset keeps the planner's own choice.
+        pinned_style_guide: std::env::var("OPENPENCIL_SMOKE_PIN_STYLE_GUIDE")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
         reference_skeleton: None,
     };
     let abort = AbortFlag::new();
