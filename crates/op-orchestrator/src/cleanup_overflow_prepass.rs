@@ -28,6 +28,15 @@ pub(super) fn run_overflow_prepass(
     crate::geometry_validation::clamp_absolute_children_into_parent(sink, root_id);
     counter.checkpoint(summary, CheckCategory::Overflow, "absolute-child-clamp");
 
+    // A pinned child WIDER than its parent can never be shifted inside.
+    // When its authored left inset still leaves at least half the parent,
+    // mirror that inset on the right (a real run cut the bookmark button
+    // off the app-18 fitness hero's 343px "Hero Top Controls" row pinned at
+    // x=16 inside a 327px hero stack). Separate checkpoint so QualityChecked
+    // shows which of the two absolute-child rules fired.
+    crate::geometry_validation::shrink_oversized_absolute_children_into_parent(sink, root_id);
+    counter.checkpoint(summary, CheckCategory::Overflow, "absolute-child-shrink");
+
     // A single-line text leaf measured wider than its nearest clipping or
     // fixed-width ancestor is shrunk proportionally. Screens only: deck and
     // card boards keep their headline size and are wrapped by the later

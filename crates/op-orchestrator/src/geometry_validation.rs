@@ -68,7 +68,9 @@ mod none_stack_inset;
 mod text_fit;
 #[path = "touch_target_floor.rs"]
 mod touch_target_floor;
-pub(crate) use absolute_child_clamp::clamp_absolute_children_into_parent;
+pub(crate) use absolute_child_clamp::{
+    clamp_absolute_children_into_parent, shrink_oversized_absolute_children_into_parent,
+};
 pub(crate) use card_inner_padding::repair_card_inner_padding;
 pub(crate) use none_stack_inset::repair_none_stack_insets;
 pub(crate) use text_fit::repair_text_fit;
@@ -312,10 +314,12 @@ pub fn geometry_validate_and_fix_for_form(
             collect_rail_width_collapse_fixes(&v, &rects, &mut cmds);
             // BEFORE the clip fallback: a fixed-size absolute child that fits
             // its `layout: "none"` parent is shifted back inside, never
-            // cropped (the cleanup driver already ran this as its own
-            // `absolute-child-clamp` step; direct callers of this loop get it
-            // here).
+            // cropped; a child WIDER than the parent keeps its left inset
+            // mirrored on the right (the cleanup driver already ran both as
+            // their own `absolute-child-clamp` / `absolute-child-shrink`
+            // steps; direct callers of this loop get them here).
             absolute_child_clamp::collect_absolute_child_clamp_fixes(&v, &rects, &mut cmds);
+            absolute_child_clamp::collect_absolute_child_shrink_fixes(&v, &rects, &mut cmds);
             collect_card_overflow_clips(&v, &rects, &mut cmds);
             cmds
         };
