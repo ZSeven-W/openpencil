@@ -170,6 +170,8 @@ mod press_surface_tiers;
 mod preview_frame;
 mod preview_frame_teardown;
 mod preview_slideshow;
+#[cfg(feature = "canvaskit")]
+mod preview_video;
 #[cfg(test)]
 mod prompt_center_host_tests;
 mod prompt_center_press;

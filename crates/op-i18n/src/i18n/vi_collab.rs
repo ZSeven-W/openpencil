@@ -175,6 +175,16 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.deepSeekHarness" => "Mô hình DeepSeek Harness",
         "settings.agents.deleteProvider" => "Xóa nhà cung cấp",
         "chat.mcpRequired" => "{cli} cần bật tích hợp OpenPencil MCP trong Cài đặt",
+        "video.title" => "Video",
+        "video.url" => "URL video",
+        "video.posterThisImage" => "poster là hình ảnh này",
+        "video.autoplay" => "Tự động phát",
+        "video.loop" => "Lặp lại",
+        "video.muted" => "Tắt tiếng",
+        "video.holdLastFrame" => "Giữ khung hình cuối",
+        "video.clickToReplay" => "Nhấp để phát lại",
+        "video.add" => "Thêm video",
+        "video.remove" => "Xóa video",
         _ => return None,
     })
 }

@@ -448,6 +448,31 @@ pub fn apply_property_action(
                 Some(op_editor_core::editor_ui_state::FileAction::RelinkImage);
             Handled
         }
+        A::AddVideo => {
+            let _ = state.add_selected_video();
+            Handled
+        }
+        A::RemoveVideo => {
+            let _ = state.remove_selected_video();
+            Handled
+        }
+        A::ToggleVideoAutoplay
+        | A::ToggleVideoLoop
+        | A::ToggleVideoMuted
+        | A::ToggleVideoHoldLastFrame
+        | A::ToggleVideoClickToReplay => {
+            if let Some(field) = crate::widgets::property_panel_video::playback_field(action) {
+                let current = state.selected_video().is_some_and(|video| match field {
+                    op_editor_core::VideoPlaybackField::Autoplay => video.autoplay,
+                    op_editor_core::VideoPlaybackField::Loop => video.r#loop,
+                    op_editor_core::VideoPlaybackField::Muted => video.muted,
+                    op_editor_core::VideoPlaybackField::HoldLastFrame => video.hold_last_frame,
+                    op_editor_core::VideoPlaybackField::ClickToReplay => video.click_to_replay,
+                });
+                let _ = state.set_selected_video_playback(field, !current);
+            }
+            Handled
+        }
         A::ToggleFontWeightPicker => {
             let ui = &mut state.editor_ui;
             ui.font_weight_picker_open = !ui.font_weight_picker_open;

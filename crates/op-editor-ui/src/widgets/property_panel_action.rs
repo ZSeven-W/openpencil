@@ -377,6 +377,20 @@ pub enum PropertyPanelAction {
     /// User clicked Relink on the local-asset warning row — host
     /// pops a file dialog and rewrites the image node's `src`.
     RelinkImage,
+    /// Add default video metadata to the selected image node.
+    AddVideo,
+    /// Remove video metadata from the selected image node.
+    RemoveVideo,
+    /// Toggle the selected image node's video autoplay policy.
+    ToggleVideoAutoplay,
+    /// Toggle the selected image node's video loop policy.
+    ToggleVideoLoop,
+    /// Toggle the selected image node's video muted policy.
+    ToggleVideoMuted,
+    /// Toggle whether the selected image node's video holds its last frame.
+    ToggleVideoHoldLastFrame,
+    /// Toggle click-to-replay handling for the selected image node's video.
+    ToggleVideoClickToReplay,
     /// User clicked the typography weight dropdown — host toggles
     /// `editor_ui.font_weight_picker_open`.
     ToggleFontWeightPicker,

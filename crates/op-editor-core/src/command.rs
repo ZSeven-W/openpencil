@@ -57,6 +57,16 @@ pub enum StrokeSide {
     Left,
 }
 
+/// Which boolean playback policy field an image-node video command writes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VideoPlaybackField {
+    Autoplay,
+    Loop,
+    Muted,
+    HoldLastFrame,
+    ClickToReplay,
+}
+
 /// Wire-friendly value payload for [`EditorCommand::SetVariableScalar`]
 /// — a non-color scalar variable's new value.
 #[derive(Debug, Clone, PartialEq)]
@@ -498,6 +508,18 @@ pub enum EditorCommand {
     SetNodeFillHex { node_id: NodeId, hex: String },
     /// Rename a node by id.
     SetNodeName { node_id: NodeId, name: String },
+    /// Set the URL of an image node's optional video metadata.
+    SetImageVideoSrc { node_id: NodeId, src: String },
+    /// Set one boolean playback policy field on an image node's video.
+    SetImageVideoPlayback {
+        node_id: NodeId,
+        field: VideoPlaybackField,
+        value: bool,
+    },
+    /// Attach default video metadata to an image node.
+    AddImageVideo { node_id: NodeId },
+    /// Remove video metadata from an image node.
+    RemoveImageVideo { node_id: NodeId },
     /// `Cmd+C` — deep-clone the selection into the clipboard.
     CopySelected,
     /// `Cmd+X` — copy the selection, then delete it.

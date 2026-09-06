@@ -135,6 +135,9 @@ mod property_panel_text_tests;
 pub mod property_panel_typography;
 #[cfg(test)]
 mod property_panel_vector_fidelity_tests;
+pub mod property_panel_video;
+#[cfg(test)]
+mod property_panel_video_tests;
 pub mod property_panel_visibility;
 #[cfg(test)]
 mod property_panel_wash_tests;
@@ -438,7 +441,7 @@ pub use canvas_viewport::{
     arc_handle_positions, path_handle_positions, rotate_point, rotation_corner_at_point,
     selection_handle_at_point, ArcHandle, CanvasNodeDragOverlay, CanvasViewport, SelectionHandle,
 };
-pub use canvas_viewport_paint::paint_scene_page;
+pub use canvas_viewport_paint::{paint_scene_page, paint_scene_page_without_video_badge};
 pub use canvas_viewport_widget::widget_text_inset_left;
 pub use preview_device_switcher::PreviewDeviceSwitcher;
 pub use scene_paint_options::{paint_scene_page_with, paint_scene_subtree, PaintSceneOptions};

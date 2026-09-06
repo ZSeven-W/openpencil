@@ -109,6 +109,8 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     // Hidden IME-capture input (#54) — composition is wired to `apply_ime`
     // below; focus is driven from `input_active()` in `repaint`.
     let ime = crate::ime_input::ImeInput::create(&canvas);
+    let video_overlay = crate::video_overlay::VideoOverlayLayer::create(&canvas)
+        .ok_or_else(|| JsValue::from_str("mount_ck: document unavailable for video preview"))?;
     let inner = Rc::new(RefCell::new(CkInner {
         backend,
         host,
@@ -117,6 +119,7 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
         canvas: canvas.clone(),
         a11y,
         ime,
+        video_overlay,
     }));
     // Reset the credential-sync queue BEFORE the first repaint and before the
     // rAF coalescer is installed below. `repaint` calls

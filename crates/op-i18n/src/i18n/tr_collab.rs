@@ -163,6 +163,16 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.deepSeekHarness" => "DeepSeek Harness modelleri",
         "settings.agents.deleteProvider" => "Sağlayıcıyı sil",
         "chat.mcpRequired" => "{cli} için Ayarlar'da OpenPencil MCP entegrasyonunu açın",
+        "video.title" => "Video",
+        "video.url" => "Video URL'si",
+        "video.posterThisImage" => "poster bu görseldir",
+        "video.autoplay" => "Otomatik oynat",
+        "video.loop" => "Döngü",
+        "video.muted" => "Sessiz",
+        "video.holdLastFrame" => "Son kareyi tut",
+        "video.clickToReplay" => "Yeniden oynatmak için tıklayın",
+        "video.add" => "Video ekle",
+        "video.remove" => "Videoyu kaldır",
         _ => return None,
     })
 }

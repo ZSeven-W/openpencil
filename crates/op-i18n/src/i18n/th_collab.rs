@@ -165,6 +165,16 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.deepSeekHarness" => "โมเดล DeepSeek Harness",
         "settings.agents.deleteProvider" => "ลบผู้ให้บริการ",
         "chat.mcpRequired" => "{cli} ต้องเปิดการเชื่อมต่อ OpenPencil MCP ในการตั้งค่า",
+        "video.title" => "วิดีโอ",
+        "video.url" => "URL วิดีโอ",
+        "video.posterThisImage" => "โปสเตอร์คือรูปภาพนี้",
+        "video.autoplay" => "เล่นอัตโนมัติ",
+        "video.loop" => "เล่นวน",
+        "video.muted" => "ปิดเสียง",
+        "video.holdLastFrame" => "ค้างเฟรมสุดท้าย",
+        "video.clickToReplay" => "คลิกเพื่อเล่นซ้ำ",
+        "video.add" => "เพิ่มวิดีโอ",
+        "video.remove" => "ลบวิดีโอ",
         _ => return None,
     })
 }

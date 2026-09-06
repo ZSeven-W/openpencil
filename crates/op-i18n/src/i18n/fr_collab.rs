@@ -163,6 +163,16 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.deepSeekHarness" => "Modèles DeepSeek Harness",
         "settings.agents.deleteProvider" => "Supprimer le fournisseur",
         "chat.mcpRequired" => "{cli} nécessite l'intégration MCP OpenPencil activée dans les Réglages",
+        "video.title" => "Vidéo",
+        "video.url" => "URL vidéo",
+        "video.posterThisImage" => "l'affiche est cette image",
+        "video.autoplay" => "Lecture automatique",
+        "video.loop" => "Boucle",
+        "video.muted" => "Muet",
+        "video.holdLastFrame" => "Garder la dernière image",
+        "video.clickToReplay" => "Cliquer pour rejouer",
+        "video.add" => "Ajouter une vidéo",
+        "video.remove" => "Supprimer la vidéo",
         _ => return None,
     })
 }

@@ -130,6 +130,7 @@ fn finish_active_mask(
                 generation_accent: None,
                 queued_shell_ids: None,
                 mask_source: true,
+                show_video_badge: options.show_video_badge,
                 suppress_node_composite_id: Some(node.id.as_str()),
                 // Mask coverage must stay exact even mid-gesture — a
                 // skipped sub-pixel mask leaf would change what the

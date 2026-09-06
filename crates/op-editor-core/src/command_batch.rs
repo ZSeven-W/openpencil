@@ -131,6 +131,10 @@ fn batchable(cmd: &EditorCommand) -> bool {
         | C::AlignSelected { .. }
         | C::SetNodeFillHex { .. }
         | C::SetNodeName { .. }
+        | C::SetImageVideoSrc { .. }
+        | C::SetImageVideoPlayback { .. }
+        | C::AddImageVideo { .. }
+        | C::RemoveImageVideo { .. }
         | C::ImportSvg { .. }
         | C::SetNodeLayoutProp { .. }
         | C::ReplaceFontFamily { .. }

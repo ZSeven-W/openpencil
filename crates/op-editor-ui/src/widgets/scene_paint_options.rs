@@ -28,24 +28,25 @@ pub fn paint_scene_page_with(
     options: PaintSceneOptions<'_>,
 ) {
     if options.only_root.is_none() {
-        let _ = super::canvas_viewport_paint::paint_scene_nodes_with_options_hiding(
-            cx,
-            &page.children,
-            viewport_origin,
-            zoom,
-            None,
-            cull,
-            None,
-            None,
-            None,
-            None,
-            options.skip_node,
-            0,
-            None,
-            None,
-            None,
-            false,
-        );
+        let _ =
+            super::canvas_viewport_paint::paint_scene_nodes_with_options_hiding_without_video_badge(
+                cx,
+                &page.children,
+                viewport_origin,
+                zoom,
+                None,
+                cull,
+                None,
+                None,
+                None,
+                None,
+                options.skip_node,
+                0,
+                None,
+                None,
+                None,
+                false,
+            );
         return;
     }
 
@@ -55,7 +56,7 @@ pub fn paint_scene_page_with(
                 continue;
             }
         }
-        super::canvas_viewport_paint::paint_node_with_options_hiding(
+        super::canvas_viewport_paint::paint_node_with_options_hiding_without_video_badge(
             cx,
             child,
             viewport_origin,
@@ -96,7 +97,7 @@ pub fn paint_scene_subtree(
         origin: Point2D::new(f32::MIN / 2.0, f32::MIN / 2.0),
         size: Point2D::new(f32::MAX, f32::MAX),
     };
-    super::canvas_viewport_paint::paint_node_with_options_hiding(
+    super::canvas_viewport_paint::paint_node_with_options_hiding_without_video_badge(
         cx,
         node,
         viewport_origin,

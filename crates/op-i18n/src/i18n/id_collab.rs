@@ -163,6 +163,16 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.deepSeekHarness" => "Model DeepSeek Harness",
         "settings.agents.deleteProvider" => "Hapus penyedia",
         "chat.mcpRequired" => "{cli} memerlukan integrasi OpenPencil MCP yang aktif di Pengaturan",
+        "video.title" => "Video",
+        "video.url" => "URL video",
+        "video.posterThisImage" => "poster adalah gambar ini",
+        "video.autoplay" => "Putar otomatis",
+        "video.loop" => "Ulangi",
+        "video.muted" => "Bisukan",
+        "video.holdLastFrame" => "Tahan bingkai terakhir",
+        "video.clickToReplay" => "Klik untuk memutar ulang",
+        "video.add" => "Tambah video",
+        "video.remove" => "Hapus video",
         _ => return None,
     })
 }

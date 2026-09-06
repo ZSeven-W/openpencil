@@ -15,14 +15,71 @@
 
 use jian_core::render::widget_style::{resolve_authored_widget_visual, with_visual_opacity};
 use jian_core::widget_state::WidgetState;
-use op_editor_ui::layout_scene::{LayoutScene, SceneNode};
-use op_editor_ui::widgets::{paint_scene_page, PaintCx};
+use op_editor_ui::layout_scene::{LayoutScene, SceneNode, SceneVideo};
+use op_editor_ui::widgets::{paint_scene_page_without_video_badge, PaintCx};
 use op_editor_ui::{Color, Point2D, Rect, RenderBackend};
 
 use crate::scene_helpers::apply_widget_state;
 use crate::session::PreviewSession;
 
+/// A video poster that a web preview host should mount as a DOM media
+/// element. The scene remains the source of truth for geometry; this DTO
+/// keeps decoding out of the CanvasKit painter and lets native preview ignore
+/// the media entirely.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreviewVideoOverlay {
+    pub node_id: String,
+    pub scene_rect: Rect,
+    pub poster: Option<std::sync::Arc<str>>,
+    pub video: SceneVideo,
+}
+
 impl PreviewSession {
+    /// Return visible video posters in the active preview scene. When
+    /// `only_root` is supplied, only that page-root subtree is considered;
+    /// device-frame preview uses this to avoid mounting videos from sibling
+    /// artboards that are not being presented.
+    pub fn video_overlays(&self, only_root: Option<&str>) -> Vec<PreviewVideoOverlay> {
+        let overlaid;
+        let scene = if self.runtime.widget_states.iter().next().is_none()
+            && self.binding_sites.is_empty()
+            && !self.ui_actions.has_visual_state()
+            && !self.binding_overlay.has_visual_state()
+            && !self.animation.has_visual_state()
+        {
+            &self.scene
+        } else {
+            overlaid = self.overlay_runtime_state(&self.scene);
+            &overlaid
+        };
+        let Some(page) = scene.active_page() else {
+            return Vec::new();
+        };
+        let roots: Vec<&SceneNode> = match only_root {
+            Some(root_id) => page
+                .children
+                .iter()
+                .filter(|node| node.id == root_id)
+                .collect(),
+            None => page.children.iter().collect(),
+        };
+        let mut result = Vec::new();
+        for root in roots {
+            collect_video_overlays(root, &mut result);
+        }
+        result
+    }
+
+    /// Whether `node_id` is in the visible scene subtree rooted at
+    /// `ancestor_id`. Device-frame preview uses this to map a pinned video
+    /// through the pinned strip origin instead of the scrolling content.
+    pub fn video_overlay_is_in_subtree(&self, ancestor_id: &str, node_id: &str) -> bool {
+        self.scene
+            .active_page()
+            .and_then(|page| page.find(ancestor_id))
+            .is_some_and(|ancestor| subtree_contains(ancestor, node_id))
+    }
+
     /// Paint the live preview by rendering the session's own design
     /// `LayoutScene` (built from the promoted document) with the current
     /// widget runtime state overlaid, then a focus caret on top.
@@ -78,7 +135,7 @@ impl PreviewSession {
             let mut cx = PaintCx {
                 backend: &mut *backend,
             };
-            paint_scene_page(&mut cx, page, viewport_origin, zoom, cull);
+            paint_scene_page_without_video_badge(&mut cx, page, viewport_origin, zoom, cull);
         }
         self.paint_focus_caret(backend, scene, viewport_origin, zoom, now_ms);
         backend.restore();
@@ -212,6 +269,31 @@ impl PreviewSession {
         let node = doc.tree.nodes.get(key)?;
         Some(jian_core::document::tree::node_schema_id(&node.schema).to_owned())
     }
+}
+
+fn collect_video_overlays(node: &SceneNode, out: &mut Vec<PreviewVideoOverlay>) {
+    if node.hidden {
+        return;
+    }
+    if let Some(video) = node.video.clone() {
+        out.push(PreviewVideoOverlay {
+            node_id: node.id.clone(),
+            scene_rect: node.bounds,
+            poster: node.image_src.clone(),
+            video,
+        });
+    }
+    for child in node.visible_children() {
+        collect_video_overlays(child, out);
+    }
+}
+
+fn subtree_contains(node: &SceneNode, id: &str) -> bool {
+    node.id == id
+        || node
+            .visible_children()
+            .iter()
+            .any(|child| subtree_contains(child, id))
 }
 
 /// Contrast-derived foreground for the focus caret, resolved from the

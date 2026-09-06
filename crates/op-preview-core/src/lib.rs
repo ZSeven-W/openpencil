@@ -122,6 +122,7 @@ pub use present::PinnedPaint;
 /// The live preview runtime session — constructed by
 /// [`PreviewSession::enter`] from a snapshot of the editor document.
 pub use session::PreviewSession;
+pub use session_paint::PreviewVideoOverlay;
 
 /// Internal re-export: `input` overlays live widget state through the
 /// shared scene formatter helper.

@@ -19,7 +19,7 @@ mod widget_props;
 
 pub use summaries::{
     EffectKind, EffectSummary, EllipseArcSummary, FillSummary, GradientStopSummary, IconSummary,
-    LayoutPaddingSummary, TextSummary, WidgetKind, WidgetSummary,
+    LayoutPaddingSummary, TextSummary, VideoSummary, WidgetKind, WidgetSummary,
 };
 
 /// Map a `PenNode` variant onto shell-core's `document::NodeKind`,
@@ -120,6 +120,8 @@ pub struct NodeSnapshot {
     pub has_corner_radius: bool,
     pub can_create_component: bool,
     pub is_image_node: bool,
+    /// Optional video playback metadata carried by an Image node.
+    pub video: Option<VideoSummary>,
     pub icon: Option<IconSummary>,
     pub text: Option<TextSummary>,
     /// Form-widget props, `Some` only when the selection is one of the

@@ -179,6 +179,16 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.deepSeekHarness" => "DeepSeek Harness 모델",
         "settings.agents.deleteProvider" => "프로바이더 삭제",
         "chat.mcpRequired" => "{cli}을(를) 사용하려면 설정에서 OpenPencil MCP 연동을 켜세요",
+        "video.title" => "비디오",
+        "video.url" => "비디오 URL",
+        "video.posterThisImage" => "포스터는 이 이미지입니다",
+        "video.autoplay" => "자동 재생",
+        "video.loop" => "반복 재생",
+        "video.muted" => "음소거",
+        "video.holdLastFrame" => "마지막 프레임 유지",
+        "video.clickToReplay" => "클릭하여 다시 재생",
+        "video.add" => "비디오 추가",
+        "video.remove" => "비디오 제거",
         _ => return None,
     })
 }

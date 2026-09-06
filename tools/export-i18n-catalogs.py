@@ -14,7 +14,7 @@ from typing import Iterable
 REPO_ROOT = Path(__file__).resolve().parents[1]
 I18N_DIR = REPO_ROOT / "crates" / "op-i18n" / "src" / "i18n"
 LOCALE_FILE = I18N_DIR.parent / "locale.rs"
-EXPECTED_KEY_COUNT = 1697
+EXPECTED_KEY_COUNT = 1707
 TABLE_SUFFIXES = ("", "_git", "_panel", "_collab")
 
 # Module stem, Locale variant, and the exact value returned by Locale::code().
@@ -290,7 +290,8 @@ def export_catalogs(output_dir: Path) -> None:
             catalogs[stem], ensure_ascii=False, separators=(",", ":"), sort_keys=True
         )
         temporary_path = output_dir / f".{code}.json.tmp"
-        temporary_path.write_text(f"{payload}\n", encoding="utf-8", newline="\n")
+        with temporary_path.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(f"{payload}\n")
         temporary_path.replace(output_path)
 
     actual_files = {path.name for path in output_dir.iterdir()}

@@ -21,15 +21,8 @@
 //! "changed" — see its doc comment for why a no-op merge must still
 //! return `true`.
 //!
-//! ### Module layout
-//!
-//! This file is the spine: [`EditorState::apply`] itself, the single
-//! `match` over every [`EditorCommand`] variant. The supporting code
-//! lives in sibling submodules (per the 800-line-per-file ceiling):
-//!
-//! - `helpers` — enum-string parsers, the dirty-marking classifier,
-//!   page-index resolution and the active-page insert shims
-//! - `app_state` — the `MergeAppState` merge with its ownership rules
+//! The `apply` match is the spine; enum parsers, page resolution, and app-state
+//! merging live in sibling modules to keep this file under the 800-line cap.
 //!
 use crate::align::AlignAction;
 use crate::command::{EditorCommand, VariableScalarPayload};
@@ -785,12 +778,17 @@ impl EditorState {
             EditorCommand::MergeAppState { plan_idx, state } => {
                 self.merge_app_state(plan_idx, state)
             }
-            // `promote_legacy_widgets` owns its history snapshot — it
-            // pushes onto the undo stack only when at least one frame is
-            // promoted, so a zero-promotion run is a clean no-op. The
-            // promotion count + per-node notes are surfaced by the
-            // dedicated method; here `apply` reports only changed-or-not.
             EditorCommand::PromoteLegacyWidgets => self.promote_legacy_widgets().changed(),
+            EditorCommand::SetImageVideoSrc { node_id, src } => {
+                self.apply_video_src(&node_id, &src)
+            }
+            EditorCommand::SetImageVideoPlayback {
+                node_id,
+                field,
+                value,
+            } => self.video_policy(&node_id, field, value),
+            EditorCommand::AddImageVideo { node_id } => self.apply_add_video(&node_id),
+            EditorCommand::RemoveImageVideo { node_id } => self.apply_remove_video(&node_id),
         };
         if changed && marks_document_dirty && self.revision == revision_before {
             self.mark_document_changed();

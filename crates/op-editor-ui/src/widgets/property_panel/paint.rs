@@ -230,6 +230,18 @@ impl Widget for PropertyPanel {
                 w,
             );
         }
+        if caps.image && self.snapshot.video.is_some() {
+            y = crate::widgets::property_panel_video::paint_video_section(
+                cx,
+                &self.theme,
+                &self.snapshot,
+                &edit_ctx,
+                self.locale,
+                x,
+                y,
+                w,
+            );
+        }
         if caps.opacity {
             y = sections::paint_layer_section(
                 cx,

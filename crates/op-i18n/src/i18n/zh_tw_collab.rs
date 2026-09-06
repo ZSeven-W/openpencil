@@ -163,6 +163,16 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.provider.deepSeekHarness" => "DeepSeek Harness 模型",
         "settings.agents.deleteProvider" => "刪除服務商",
         "chat.mcpRequired" => "{cli} 需要在設定中開啟 OpenPencil MCP 整合",
+        "video.title" => "影片",
+        "video.url" => "影片 URL",
+        "video.posterThisImage" => "海報就是這張圖片",
+        "video.autoplay" => "自動播放",
+        "video.loop" => "循環播放",
+        "video.muted" => "靜音",
+        "video.holdLastFrame" => "停在最後一幀",
+        "video.clickToReplay" => "點擊重播",
+        "video.add" => "新增影片",
+        "video.remove" => "移除影片",
         _ => return None,
     })
 }

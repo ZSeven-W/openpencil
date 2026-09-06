@@ -124,6 +124,8 @@ features = [
   "HtmlCanvasElement",
   "HtmlElement",
   "HtmlInputElement",
+  "HtmlMediaElement",
+  "HtmlVideoElement",
   # IndexedDB persistence for user-imported fonts (Phase 4, font_store_idb).
   # Compile-time binding toggles only — the `web` stub baseline stays green.
   "IdbDatabase",

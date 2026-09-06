@@ -60,9 +60,15 @@ mod reveal;
 #[path = "canvas_viewport_paint/shapes.rs"]
 mod shapes;
 
-pub use entry::{paint_node, paint_scene_page, paint_scene_page_with_options};
+pub use entry::{
+    paint_node, paint_scene_page, paint_scene_page_with_options,
+    paint_scene_page_without_video_badge,
+};
+#[allow(unused_imports)]
 pub(crate) use entry::{
-    paint_node_with_options, paint_node_with_options_hiding, paint_scene_nodes_with_options_hiding,
+    paint_node_with_options, paint_node_with_options_hiding,
+    paint_node_with_options_hiding_without_video_badge, paint_scene_nodes_with_options_hiding,
+    paint_scene_nodes_with_options_hiding_without_video_badge,
 };
 pub use hits::PaintNodeHits;
 use hits::PaintNodeOptions;
@@ -496,7 +502,7 @@ fn paint_node_inner<'a>(
                     paint_fill_then_stroke(cx, node, world_rect, zoom, node.fill);
                 }
             }
-            if node.video.is_some() {
+            if options.show_video_badge && node.video.is_some() {
                 paint_video_badge(cx, node.bounds, world_rect, zoom);
             }
             // A `rectangle` is a CONTAINER in the canonical schema (it

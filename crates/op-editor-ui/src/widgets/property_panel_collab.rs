@@ -58,6 +58,13 @@ pub fn collab_gate_action(action: &PropertyPanelAction) -> op_editor_core::Colla
         | A::SelectImageSearchResult(_)
         | A::ApplyGeneratedImage
         | A::RelinkImage => G::Document(D::Unsupported(U::ExternalAssets)),
+        A::AddVideo
+        | A::RemoveVideo
+        | A::ToggleVideoAutoplay
+        | A::ToggleVideoLoop
+        | A::ToggleVideoMuted
+        | A::ToggleVideoHoldLastFrame
+        | A::ToggleVideoClickToReplay => G::Document(D::Unsupported(U::UnsupportedNodeProperty)),
         A::ClearPageBackground => G::Document(D::Unsupported(U::PageBackground)),
         A::SetTextAlign(_)
         | A::SetTextVerticalAlign(_)
