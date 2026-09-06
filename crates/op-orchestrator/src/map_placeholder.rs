@@ -36,14 +36,20 @@ pub fn map_placeholder(
     theme: Theme,
 ) -> Vec<MapPlaceholderPatch> {
     let mut patches = Vec::new();
-    collect_patches(root, rects, theme, &mut patches);
+    collect_patches(root, rects, theme, false, &mut patches);
     patches
 }
+
+/// Minimum width for a frame/rectangle to count as a map slot. A model that
+/// draws its own map names the inner blocks `map-park` / `map-water`; those
+/// decorations must not each become a nested mini map.
+const MIN_SHAPE_MAP_WIDTH: f64 = 200.0;
 
 fn collect_patches(
     node: &PenNode,
     rects: &HashMap<String, ResolvedRect>,
     theme: Theme,
+    inside_map_named: bool,
     patches: &mut Vec<MapPlaceholderPatch>,
 ) {
     if node
@@ -54,13 +60,22 @@ fn collect_patches(
     {
         return;
     }
-    if let Some(patch) = map_patch(node, rects, theme) {
-        patches.push(patch);
-        return;
+    // Inside a container the model already named as a map (a hand-drawn
+    // map), nothing below is a slot: the container itself was rejected as a
+    // candidate because it carries texts/controls, and its children are its
+    // decorations.
+    // An explicit image slot is a slot wherever it sits; only shapes are
+    // demoted to decorations inside a map-named container.
+    if !inside_map_named || matches!(node, PenNode::Image(_)) {
+        if let Some(patch) = map_patch(node, rects, theme) {
+            patches.push(patch);
+            return;
+        }
     }
+    let map_named = inside_map_named || node.base().name.as_deref().is_some_and(has_map_name_word);
     if let Some(children) = node.children() {
         for child in children {
-            collect_patches(child, rects, theme, patches);
+            collect_patches(child, rects, theme, map_named, patches);
         }
     }
 }
@@ -75,6 +90,9 @@ fn map_patch(
     }
 
     let (width, height) = dimensions(node, rects);
+    if !matches!(node, PenNode::Image(_)) && width < MIN_SHAPE_MAP_WIDTH {
+        return None;
+    }
     let patch = build_map_placeholder(node, width, height, theme);
     Some(MapPlaceholderPatch {
         node_id: node.id_str().to_string(),

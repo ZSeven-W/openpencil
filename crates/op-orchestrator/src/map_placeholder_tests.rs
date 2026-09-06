@@ -327,3 +327,81 @@ fn applying_map_patch_preserves_pinned_control_and_removes_targets() {
     assert!(map_placeholder(rewritten, &rects(), Theme::Light).is_empty());
     assert!(collect_targets(&state, &HashSet::new()).is_empty());
 }
+
+#[test]
+fn decorations_inside_a_hand_drawn_map_and_small_map_shapes_are_left_alone() {
+    // GLM-5.3-Flash drew its own map and named the inner blocks map-park /
+    // map-water; each was turned into a nested mini map. A map-named
+    // container's children are decorations, and a lone map-named shape
+    // narrower than 200 px is not a slot either. A wide leaf still is.
+    let root: PenNode = serde_json::from_value(json!({
+        "type": "frame",
+        "id": "root",
+        "name": "Ride Home",
+        "width": 375,
+        "height": 812,
+        "layout": "vertical",
+        "children": [
+            {
+                "type": "frame",
+                "id": "map-canvas",
+                "name": "map-canvas",
+                "width": 327,
+                "height": 320,
+                "layout": "none",
+                "children": [
+                    {"type": "rectangle", "id": "park", "name": "map-park", "x": 20, "y": 30, "width": 110, "height": 90},
+                    {"type": "text", "id": "road-label", "name": "road-label", "content": "科苑南路", "x": 60, "y": 10}
+                ]
+            },
+            {"type": "rectangle", "id": "lone-water", "name": "map-water", "width": 110, "height": 90},
+            {"type": "rectangle", "id": "wide-tile", "name": "map-tile", "width": 327, "height": 300}
+        ]
+    }))
+    .expect("fixture");
+    let rects = HashMap::from([
+        (
+            "map-canvas".to_string(),
+            ResolvedRect {
+                x: 24.0,
+                y: 62.0,
+                width: 327.0,
+                height: 320.0,
+            },
+        ),
+        (
+            "park".to_string(),
+            ResolvedRect {
+                x: 44.0,
+                y: 92.0,
+                width: 110.0,
+                height: 90.0,
+            },
+        ),
+        (
+            "lone-water".to_string(),
+            ResolvedRect {
+                x: 24.0,
+                y: 400.0,
+                width: 110.0,
+                height: 90.0,
+            },
+        ),
+        (
+            "wide-tile".to_string(),
+            ResolvedRect {
+                x: 24.0,
+                y: 500.0,
+                width: 327.0,
+                height: 300.0,
+            },
+        ),
+    ]);
+    let patches = map_placeholder(&root, &rects, Theme::Light);
+    let ids: Vec<&str> = patches.iter().map(|p| p.node_id.as_str()).collect();
+    assert_eq!(
+        ids,
+        vec!["wide-tile"],
+        "only the wide leaf is a map slot; got {ids:?}"
+    );
+}
