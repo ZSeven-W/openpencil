@@ -185,7 +185,7 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
             "width": block_width,
             "height": block_height,
             "cornerRadius": 6,
-            "fill": solid_fill("$--card")
+            "fill": solid_fill("$--accent")
         }));
     }
 
@@ -213,7 +213,9 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
     }));
 
     let lower_left = &blocks[(GRID_ROWS - 1) * GRID_COLUMNS];
-    let upper_right = &blocks[GRID_COLUMNS - 1];
+    // End on the middle row so the pin stays clear of the top band where
+    // models pin search bars and back buttons.
+    let upper_right = &blocks[GRID_COLUMNS * (GRID_ROWS / 2) + GRID_COLUMNS - 1];
     let start = block_center(lower_left);
     let end = block_center(upper_right);
     blocks.push(json!({
@@ -226,7 +228,7 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
         "height": height,
         "d": format!("M {} {} L {} {} L {} {}", start.0, start.1, end.0, start.1, end.0, end.1),
         "stroke": {
-            "thickness": 4,
+            "thickness": 5,
             "cap": "round",
             "join": "round",
             "fill": solid_fill("$--primary")

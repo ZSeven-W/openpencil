@@ -155,7 +155,7 @@ fn city_map_becomes_a_vector_placeholder_and_clears_search_intent() {
         .position(|child| child["name"].as_str() == Some("map-road-v"))
         .unwrap();
     assert!(route_index > road_h_index && route_index > road_v_index);
-    assert_eq!(children[route_index]["stroke"]["thickness"], json!(4));
+    assert_eq!(children[route_index]["stroke"]["thickness"], json!(5));
     assert_eq!(children[route_index]["stroke"]["join"], json!("round"));
     assert_eq!(children[route_index]["stroke"]["cap"], json!("round"));
     assert_eq!(
