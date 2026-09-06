@@ -423,10 +423,16 @@ pub(crate) fn format_guide_metadata_line(guide: &ParsedStyleGuide, _mode: Planni
         .next()
         .map(|bullet| bullet.split(':').next().unwrap_or("").trim().to_string())
         .filter(|label| !label.is_empty());
-    match lead {
+    let mut line = match lead {
         Some(label) => format!("- {} [{}] — {}", guide.name, guide.platform.as_str(), label),
         None => format!("- {} [{}]", guide.name, guide.platform.as_str()),
+    };
+    let recipes = op_ai_skills::style_guide::signature_recipes(&guide.content, 2);
+    if !recipes.is_empty() {
+        line.push_str(" · recipes: ");
+        line.push_str(&recipes.join(" / "));
     }
+    line
 }
 
 /// 一份 guide 的详细 snippet —— softened (user direction 2026-06-23): FONT
@@ -583,11 +589,23 @@ pub(crate) fn build_planning_style_guide_context(
         } else {
             format_guide_snippet(&guide)
         };
+        let metadata_line = {
+            let metadata = format_guide_metadata_line(&guide, mode);
+            if guide.is_user() {
+                let display_prefix = format!("- {}", guide.name);
+                metadata
+                    .strip_prefix(&display_prefix)
+                    .map(|suffix| format!("- {label}{suffix}"))
+                    .unwrap_or(metadata)
+            } else {
+                metadata
+            }
+        };
         let lines: Vec<String> = vec![
             "The user pinned a style guide in the Asset Center. Use it — do NOT \
              pick a different one."
                 .to_string(),
-            format!("- {label} [{}]", guide.platform.as_str()),
+            metadata_line,
             String::new(),
             snippet,
             String::new(),

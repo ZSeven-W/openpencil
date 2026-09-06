@@ -21,6 +21,11 @@ Key aesthetics:
 - **Pastel palette**: Muted pinks, lavenders, and warm grays for a cohesive dreamy feel
 - **Integrated bottom nav**: full-width bottom navigation with pink active indicator
 
+Signature recipes:
+
+- **Contained groups** — Group pastel cards in soft background shapes with 24px negative space; keep #EC4899 as the single interactive role — HIG Layout
+- **One curated palette moment** — Let one #EC4899 feature block fill at least 25% of the #FFF5F7 first screen; keep lavender and gray surfaces neutral — ADA 2025 Lumy
+
 ## Color System
 
 ### Core Backgrounds

@@ -21,6 +21,11 @@ Key aesthetics:
 - **Data density**: Tighter spacing and smaller type for information-heavy screens
 - **Integrated bottom nav**: full-width bottom navigation with amber active indicator
 
+Signature recipes:
+
+- **Contained groups** — Group dense JetBrains Mono metrics inside #18181B shapes with 24px negative space, not divider lines; reserve #F59E0B for status — HIG Layout
+- **Three-step type** — Use 34px JetBrains Mono display, 17px body, and 12px captions, with #F59E0B only for signal — HIG Typography
+
 ## Color System
 
 ### Core Backgrounds

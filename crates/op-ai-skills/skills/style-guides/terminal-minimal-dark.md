@@ -21,6 +21,11 @@ Key aesthetics:
 - **Minimal chrome**: Borders are thin (#1E293B) and surfaces barely separate from the background
 - **Integrated bottom nav**: bottom navigation uses compact icon+label items inside the page flow
 
+Signature recipes:
+
+- **Three-step type** — Use 34px JetBrains Mono display, 17px body, and 12px captions; reserve #22D3EE for active signals on #0A0F1C — HIG Typography
+- **Labels stay** — Keep text labels beside every terminal icon action, with a 24px content rail and no unlabeled glyph-only controls — M3 Expressive
+
 ## Color System
 
 ### Core Backgrounds

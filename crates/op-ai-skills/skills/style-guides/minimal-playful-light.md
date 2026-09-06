@@ -21,6 +21,11 @@ Key aesthetics:
 - **Icon-only tab bar**: Bottom navigation with icons only (no labels) for a clean, minimal footprint
 - **Light and open**: Pure #FFFFFF background with subtle gray borders (#E5E5E5) for structure
 
+Signature recipes:
+
+- **Consistent illustration set** — Use one Bricolage Grotesque illustration set across the #FFFFFF icon grid and empty state, aligned inside the 24px rail — ADA 2025 Vocabulary
+- **Dim-and-highlight "now"** — Highlight the current playful task in #FF6B6B and dim the other 12px captions to create a clear now state — ADA 2025 Mela
+
 ## Color System
 
 ### Core Backgrounds

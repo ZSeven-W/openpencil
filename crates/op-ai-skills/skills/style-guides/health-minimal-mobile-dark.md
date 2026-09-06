@@ -21,6 +21,11 @@ Key aesthetics:
 - **Data clarity**: Generous whitespace around metrics, clear hierarchy for at-a-glance reading
 - **Integrated bottom nav**: full-width bottom navigation with green active indicator
 
+Signature recipes:
+
+- **One curated palette moment** — Let one #22C55E progress block occupy at least 25% of the #111111 first screen; keep other surfaces neutral — ADA 2025 Lumy
+- **Dim-and-highlight "now"** — Highlight the current health metric in #22C55E and dim the other 12px captions against #111111 — ADA 2025 Mela
+
 ## Color System
 
 ### Core Backgrounds

@@ -21,6 +21,11 @@ Key aesthetics:
 - **Gradient buttons**: Violet-to-pink gradients on primary actions create visual magnetism
 - **Integrated bottom nav**: full-width bottom navigation with violet active indicator
 
+Signature recipes:
+
+- **Consistent illustration set** — Repeat one Poppins-led illustration set across the #FFFFFF story grid and empty state, aligned on the 24px rail — ADA 2025 Vocabulary
+- **Oversized secondary CTA** — Make the primary gradient CTA 56px high, violet-to-pink from #8B5CF6 to #EC4899, with other buttons quiet — M3 Expressive
+
 ## Color System
 
 ### Core Backgrounds

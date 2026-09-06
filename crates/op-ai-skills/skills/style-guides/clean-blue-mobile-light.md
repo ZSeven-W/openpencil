@@ -21,6 +21,11 @@ Key aesthetics:
 - **Integrated bottom nav**: full-width bottom navigation with blue active indicator
 - **Clean separation**: Light borders (#E5E7EB) and subtle surfaces provide structure without visual weight
 
+Signature recipes:
+
+- **Oversized secondary CTA** — Make the primary action 56px high, fill it with the #2563EB accent, and leave sibling controls neutral — M3 Expressive
+- **Three-step type** — Set the title to 34px SF Pro Semibold, body to 17px Regular, and captions to 12px in #111827 primary text — HIG Typography
+
 ## Color System
 
 ### Core Backgrounds

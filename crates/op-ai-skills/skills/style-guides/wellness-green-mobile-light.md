@@ -21,6 +21,11 @@ Key aesthetics:
 - **Earth tones**: Warm grays and muted greens for secondary text and borders
 - **Integrated bottom nav**: full-width bottom navigation with green active indicator
 
+Signature recipes:
+
+- **Top-leading protagonist** — Place the #16A34A daily-score protagonist at the top-leading side, occupying at least 25% of the #F7FDF4 first screen — HIG Layout
+- **Dim-and-highlight "now"** — Highlight today's #16A34A wellness measure and dim the other 12px captions so the current state is unmistakable — ADA 2025 Mela
+
 ## Color System
 
 ### Core Backgrounds

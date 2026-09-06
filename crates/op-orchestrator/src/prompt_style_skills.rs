@@ -156,6 +156,11 @@ pub(crate) fn build_style_guide_instruction(
         );
         lines.extend(aesthetics.iter().map(|a| format!("  - {a}")));
     }
+    let recipes = op_ai_skills::style_guide::signature_recipes(&guide.content, 2);
+    if !recipes.is_empty() {
+        lines.push("- Signature recipes (realise both in the first screen):".into());
+        lines.extend(recipes.iter().map(|recipe| format!("  - {recipe}")));
+    }
     let has_colors = !colors.is_empty();
     lines.extend(colors);
     if let Some(f) = &v.typography.display_font {

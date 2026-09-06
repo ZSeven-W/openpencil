@@ -21,6 +21,11 @@ Key aesthetics:
 - **Photography-led hierarchy**: Food images, crops, price typography, and whitespace create the visual hook
 - **Integrated navigation**: Bottom navigation stays quiet and full-width, with orange used as an active cue
 
+Signature recipes:
+
+- **Scrim for text on photo** — Put a gradient scrim behind white food copy on the hero image, which fills at least 25% of the #FFFCF6 first screen — HIG Images
+- **One curated palette moment** — Let one #FF5A1F price/CTA block carry brand color across at least 25% of the #FFFCF6 first screen; keep the rest neutral — ADA 2025 Lumy
+
 ## Color System
 
 ### Core Backgrounds

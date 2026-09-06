@@ -122,7 +122,7 @@ impl Phase {
     /// byte-complete.
     pub fn default_budget(self) -> u32 {
         match self {
-            Phase::Planning => 6500,
+            Phase::Planning => 6600,
             Phase::Generation => 16830,
             Phase::Validation => 3000,
             Phase::Maintenance => 5000,
@@ -131,8 +131,11 @@ impl Phase {
 }
 
 /// Per-phase default token budgets — the TS `DEFAULT_BUDGETS` record.
+/// Planning 6500 → 6600 (2026-09-07): the style-guide catalog line now carries
+/// two signature-recipe names per guide, which pushed the runtime-augmented
+/// style-guide-selector to 1528 tokens (budget 1500 → 1600).
 pub const DEFAULT_BUDGETS: [(Phase, u32); 4] = [
-    (Phase::Planning, 6500),
+    (Phase::Planning, 6600),
     (Phase::Generation, 16830),
     (Phase::Validation, 3000),
     (Phase::Maintenance, 5000),
@@ -414,7 +417,7 @@ mod tests {
 
     #[test]
     fn default_budget_table() {
-        assert_eq!(Phase::Planning.default_budget(), 6500);
+        assert_eq!(Phase::Planning.default_budget(), 6600);
         assert_eq!(Phase::Generation.default_budget(), 16830);
         assert_eq!(Phase::Validation.default_budget(), 3000);
         assert_eq!(Phase::Maintenance.default_budget(), 5000);

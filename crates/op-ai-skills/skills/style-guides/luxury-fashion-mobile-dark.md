@@ -21,6 +21,11 @@ Key aesthetics:
 - **High contrast**: White text on dark backgrounds with gold punctuation for dramatic hierarchy
 - **Integrated bottom nav**: full-width bottom navigation with gold active indicator
 
+Signature recipes:
+
+- **Mesh gradient as protagonist** — Make gold #C9A962 mesh-gradient product card the top-leading protagonist, occupying ≥25% of the #1A1A1A screen — ADA 2025 Denim
+- **Scrim for text on photo** — When editorial photography carries text, cover it with a gradient scrim and keep the white title in the 24px rail — HIG Images
+
 ## Color System
 
 ### Core Backgrounds

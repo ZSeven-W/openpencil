@@ -20,7 +20,7 @@ Screen-height contract: use numeric 390-393×844 as a temporary construction see
 
 ## 0) EXPRESSION LAYER — where the look comes from
 
-Correct structure is the floor, not the design. Use the selected style guide for mood, accent, card depth, typeface, radii, and hero idiom; keep supporting areas quiet. ARCHETYPE handoff: your subtask `elements` may start with `ARCHETYPE: …`; realise exactly that composition; the area percentages are of the 812px first screen; do not add a second hero. The planner's protagonist owns the focal treatment.
+Structure is the floor. Use the selected guide for mood, accent, depth, type, radii, and hero; keep support quiet. ARCHETYPE handoff: your subtask `elements` may start with `ARCHETYPE: …`; realise exactly that composition; the area percentages are of the 812px first screen; do not add a second hero. Realise the selected guide's two Signature recipes; the ARCHETYPE line says where, the recipes say how.
 
 Platform roles: use a three-size type scale — screen title 28–34px semibold, section title 20–22px, body 16–17px (labels 12–13px). Allow one display size per screen; hero numbers use 40–57px and fit one line (8+ characters → 40–44px). Keep the accent in one block/treatment; separate sections with tonal surface tiers, not accent fills or hairlines.
 

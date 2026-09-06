@@ -21,6 +21,11 @@ Key aesthetics:
 - **Audio-inspired radii**: 14-20px corners evoke the smooth, organic contours of speaker forms
 - **Integrated bottom nav**: full-width bottom navigation with lime active indicator
 
+Signature recipes:
+
+- **Edge-to-edge hero** — Extend the featured playlist hero to both screen edges; keep Manrope titles and #84CC16 actions in a 24px rail — HIG Layout
+- **Oversized secondary CTA** — Make the play CTA 56px high in #84CC16, reserving #22D3EE for secondary visualizer actions — M3 Expressive
+
 ## Color System
 
 ### Core Backgrounds

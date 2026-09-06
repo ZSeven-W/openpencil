@@ -350,7 +350,7 @@ mod tests {
         };
         let ctx = resolve_skills(Phase::Planning, "plan a landing page", &opts);
         assert!(ctx.memory.document_context.is_some());
-        assert_eq!(ctx.budget_max, 6500);
+        assert_eq!(ctx.budget_max, 6600);
     }
 
     #[test]
