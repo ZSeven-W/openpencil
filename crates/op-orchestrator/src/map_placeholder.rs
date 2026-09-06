@@ -14,10 +14,12 @@ use op_editor_core::PenNodeExt;
 use serde_json::{json, Value};
 
 const MAP_PLACEHOLDER_NAME_SUFFIX: &str = " (map placeholder)";
-const STREET_MIN: f64 = 14.0;
-const STREET_MAX: f64 = 18.0;
-const ROAD_MIN: f64 = 10.0;
-const ROAD_MAX: f64 = 14.0;
+const MAP_PLACEHOLDER_WIDTH: f64 = 327.0;
+const MAP_PLACEHOLDER_HEIGHT: f64 = 300.0;
+const GRID_COLUMNS: usize = 4;
+const GRID_ROWS: usize = 3;
+const STREET_WIDTH: f64 = 12.0;
+const ROAD_WIDTH: f64 = 10.0;
 
 /// One pure map-placeholder rewrite.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,8 +28,8 @@ pub struct MapPlaceholderPatch {
     pub patch_json: String,
 }
 
-/// Build patches for every map-intent image, frame, or rectangle below
-/// `root`. Marked placeholders are skipped so running cleanup twice is stable.
+/// Build patches for every eligible map-intent node below `root`. Marked
+/// placeholders are skipped so running cleanup twice is stable.
 pub fn map_placeholder(
     root: &PenNode,
     rects: &HashMap<String, ResolvedRect>,
@@ -44,6 +46,14 @@ fn collect_patches(
     theme: Theme,
     patches: &mut Vec<MapPlaceholderPatch>,
 ) {
+    if node
+        .base()
+        .name
+        .as_deref()
+        .is_some_and(|name| name.ends_with(MAP_PLACEHOLDER_NAME_SUFFIX))
+    {
+        return;
+    }
     if let Some(patch) = map_patch(node, rects, theme) {
         patches.push(patch);
         return;
@@ -60,11 +70,7 @@ fn map_patch(
     rects: &HashMap<String, ResolvedRect>,
     theme: Theme,
 ) -> Option<MapPlaceholderPatch> {
-    let name = node.base().name.as_deref().unwrap_or_default();
-    if name.ends_with(MAP_PLACEHOLDER_NAME_SUFFIX) {
-        return None;
-    }
-    if !contains_map_words(node) {
+    if !is_map_placeholder_candidate(node) {
         return None;
     }
 
@@ -76,28 +82,46 @@ fn map_patch(
     })
 }
 
-fn contains_map_words(node: &PenNode) -> bool {
-    let name_matches = node.base().name.as_deref().is_some_and(has_map_name_word);
-    let image_name_matches = node.base().name.as_deref().is_some_and(has_map_word);
+fn is_map_placeholder_candidate(node: &PenNode) -> bool {
     match node {
         PenNode::Image(image) => {
-            image_name_matches
+            node.base().name.as_deref().is_some_and(has_map_word)
                 || image
                     .image_search_query
                     .as_deref()
                     .is_some_and(has_map_word)
                 || image.image_prompt.as_deref().is_some_and(has_map_word)
         }
-        PenNode::Frame(frame) => {
-            name_matches
-                || frame
-                    .image_search_query
-                    .as_deref()
-                    .is_some_and(has_map_word)
+        PenNode::Frame(_) | PenNode::Rectangle(_) => {
+            node.base().name.as_deref().is_some_and(has_map_name_word)
+                && !contains_protected_descendant(node)
         }
-        PenNode::Rectangle(_) => name_matches,
         _ => false,
     }
+}
+
+fn contains_protected_descendant(node: &PenNode) -> bool {
+    node.children().is_some_and(|children| {
+        children
+            .iter()
+            .any(|child| is_protected_node(child) || contains_protected_descendant(child))
+    })
+}
+
+fn is_protected_node(node: &PenNode) -> bool {
+    matches!(
+        node,
+        PenNode::Text(_)
+            | PenNode::Image(_)
+            | PenNode::TextInput(_)
+            | PenNode::Select(_)
+            | PenNode::Checkbox(_)
+            | PenNode::Switch(_)
+            | PenNode::Slider(_)
+            | PenNode::RadioGroup(_)
+            | PenNode::NumberInput(_)
+            | PenNode::Tabs(_)
+    )
 }
 
 fn has_map_word(value: &str) -> bool {
@@ -125,38 +149,33 @@ fn dimensions(node: &PenNode, rects: &HashMap<String, ResolvedRect>) -> (f64, f6
     let width = resolved
         .map(|rect| rect.width)
         .filter(|value| value.is_finite() && *value > 0.0)
-        .or_else(|| node.width_px())
-        .unwrap_or(320.0);
-    let height = resolved
-        .map(|rect| rect.height)
-        .filter(|value| value.is_finite() && *value > 0.0)
-        .or_else(|| node.height_px())
-        .unwrap_or(200.0);
+        .unwrap_or(MAP_PLACEHOLDER_WIDTH);
+    let height = if height_needs_placeholder_size(node) {
+        MAP_PLACEHOLDER_HEIGHT
+    } else {
+        resolved
+            .map(|rect| rect.height)
+            .filter(|value| value.is_finite() && *value > 0.0)
+            .or_else(|| node.height_px())
+            .unwrap_or(MAP_PLACEHOLDER_HEIGHT)
+    };
     (width.max(1.0), height.max(1.0))
 }
 
-/// Build the vector-like map scene. The FNV-1a seed affects the street width,
-/// block count, and block inset; the same node id therefore always yields the
-/// same geometry without relying on a toolchain- or process-seeded hasher.
+/// Build the vector-like map scene with a fixed 4-by-3 block grid.
 pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: Theme) -> Value {
     let id = node.id_str();
-    let seed = fnv1a(id.as_bytes());
-    let street = (STREET_MIN + f64::from((seed % 5) as u32)).min(STREET_MAX);
-    let road = (ROAD_MIN + f64::from(((seed >> 8) % 5) as u32)).min(ROAD_MAX);
-    let block_count = 4 + (seed % 3) as usize;
-    let rows = block_count.div_ceil(3);
-    let cell_width = ((width - 2.0 * street) / 3.0).max(1.0);
-    let cell_height = ((height - (rows.saturating_sub(1) as f64) * street) / rows as f64).max(1.0);
-    let inset = f64::from(((seed >> 16) % 5) as u32).min(4.0);
+    let width = width.max(1.0);
+    let height = height.max(1.0);
+    let block_width = ((width - 5.0 * STREET_WIDTH) / GRID_COLUMNS as f64).max(1.0);
+    let block_height = ((height - 4.0 * STREET_WIDTH) / GRID_ROWS as f64).max(1.0);
 
-    let mut blocks = Vec::with_capacity(block_count);
-    for index in 0..block_count {
-        let column = index % 3;
-        let row = index / 3;
-        let x = column as f64 * (cell_width + street) + inset;
-        let y = row as f64 * (cell_height + street) + inset;
-        let block_width = (cell_width - 2.0 * inset).max(1.0);
-        let block_height = (cell_height - 2.0 * inset).max(1.0);
+    let mut blocks = Vec::with_capacity(GRID_COLUMNS * GRID_ROWS + 7);
+    for index in 0..(GRID_COLUMNS * GRID_ROWS) {
+        let column = index % GRID_COLUMNS;
+        let row = index / GRID_COLUMNS;
+        let x = STREET_WIDTH + column as f64 * (block_width + STREET_WIDTH);
+        let y = STREET_WIDTH + row as f64 * (block_height + STREET_WIDTH);
         blocks.push(json!({
             "type": "rectangle",
             "id": format!("{id}-map-block-{}", index + 1),
@@ -170,8 +189,8 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
         }));
     }
 
-    let road_y = clamp(height * 0.45 - road / 2.0, 0.0, (height - road).max(0.0));
-    let road_x = clamp(width * 0.60 - road / 2.0, 0.0, (width - road).max(0.0));
+    let road_y = STREET_WIDTH + block_height + STREET_WIDTH / 2.0;
+    let road_x = STREET_WIDTH + block_width + STREET_WIDTH / 2.0;
     blocks.push(json!({
         "type": "rectangle",
         "id": format!("{id}-map-road-h"),
@@ -179,7 +198,7 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
         "x": 0,
         "y": road_y,
         "width": width,
-        "height": road,
+        "height": ROAD_WIDTH,
         "fill": solid_fill("$--background")
     }));
     blocks.push(json!({
@@ -188,13 +207,13 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
         "name": "map-road-v",
         "x": road_x,
         "y": 0,
-        "width": road,
+        "width": ROAD_WIDTH,
         "height": height,
         "fill": solid_fill("$--background")
     }));
 
-    let lower_left = &blocks[(rows - 1) * 3];
-    let upper_right = &blocks[2.min(block_count - 1)];
+    let lower_left = &blocks[(GRID_ROWS - 1) * GRID_COLUMNS];
+    let upper_right = &blocks[GRID_COLUMNS - 1];
     let start = block_center(lower_left);
     let end = block_center(upper_right);
     blocks.push(json!({
@@ -272,7 +291,7 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
             .unwrap_or("Map"),
         MAP_PLACEHOLDER_NAME_SUFFIX
     );
-    json!({
+    let mut patch = json!({
         "type": "frame",
         "name": map_name,
         "layout": "none",
@@ -282,7 +301,22 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
         "imagePrompt": null,
         "children": blocks,
         "explain": "map placeholder"
-    })
+    });
+    if height_needs_placeholder_size(node) {
+        patch["height"] = json!(MAP_PLACEHOLDER_HEIGHT);
+    }
+    patch
+}
+
+fn height_needs_placeholder_size(node: &PenNode) -> bool {
+    let Ok(serialized) = serde_json::to_value(node) else {
+        return false;
+    };
+    match serialized.get("height") {
+        None => true,
+        Some(Value::String(value)) => value == "fit_content",
+        _ => false,
+    }
 }
 
 fn block_center(value: &Value) -> (f64, f64) {
@@ -308,15 +342,6 @@ fn solid_fill_with_opacity(color: &str, opacity: f64) -> Value {
 
 fn clamp(value: f64, low: f64, high: f64) -> f64 {
     value.max(low).min(high)
-}
-
-fn fnv1a(bytes: &[u8]) -> u64 {
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    for byte in bytes {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    hash
 }
 
 #[cfg(test)]
