@@ -19,7 +19,9 @@ pub mod design_md_policy;
 //  generic sequential path; dashboard_columns keeps only normalizer predicates.)
 pub mod design_system;
 pub mod design_type;
+pub mod image_fallback_policy;
 pub mod intent;
+pub mod map_placeholder;
 pub(crate) mod mobile_content_rail;
 mod mobile_reflow;
 pub mod model_profile;
@@ -65,6 +67,8 @@ mod avatar_repair_tests;
 pub mod board_trailing_void;
 pub(crate) mod chip_repair;
 pub mod cleanup;
+#[path = "cleanup_image_fallback.rs"]
+mod cleanup_image_fallback;
 /// Cheap image-slot materialization for hosts that apply one MCP write at a
 /// time. The whole-document cleanup driver uses the same underlying pass.
 pub mod cleanup_image_slots {
@@ -190,6 +194,11 @@ pub use design_system::{
 pub use design_type::{
     classify_root_form, classify_root_form_node, classify_root_form_value, detect_design_type,
     DesignForm, DesignType, DesignTypePreset,
+};
+pub use image_fallback_policy::{
+    apply_image_fallback_policy_to_state, icon_name_for_query, image_fallback_policy,
+    ImageFallbackBranch, ImageFallbackPatch, ResolvedRect,
+    SEARCH_FAILED_PLACEHOLDER_SRC as IMAGE_SEARCH_FAILED_PLACEHOLDER_SRC,
 };
 pub use intent::classify_intent;
 pub use loop_finalize::{

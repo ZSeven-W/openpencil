@@ -4865,6 +4865,7 @@ dependencies = [
  "op-design-lint",
  "op-editor-core",
  "op-editor-ui",
+ "op-image-enrich",
  "op-mcp",
  "op-pen-loader",
  "op-util",

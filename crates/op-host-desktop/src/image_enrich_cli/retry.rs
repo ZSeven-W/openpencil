@@ -481,7 +481,7 @@ mod tests {
         let output = directory.join("output.op");
         std::fs::write(&output, b"keep-existing-output").expect("seed output");
 
-        let result = super::super::save_enriched_state(&state, &output, summary);
+        let result = super::super::save_enriched_state(&mut state, &output, summary);
 
         // The run still fails loudly, but the document the caller authored is
         // written rather than discarded — the seeded placeholder is gone.

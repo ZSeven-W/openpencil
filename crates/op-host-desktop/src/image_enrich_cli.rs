@@ -228,11 +228,11 @@ fn enrich_document(request: &EnrichRequest) -> Result<EnrichSummary, EnrichError
         });
     }
     let summary = result?;
-    save_enriched_state(&state, &request.output, summary)
+    save_enriched_state(&mut state, &request.output, summary)
 }
 
 fn save_enriched_state(
-    state: &EditorState,
+    state: &mut EditorState,
     output: &Path,
     summary: EnrichSummary,
 ) -> Result<EnrichSummary, EnrichError> {
@@ -242,6 +242,10 @@ fn save_enriched_state(
     // plus five downloaded images when a single apparel shot had no match in
     // the stock library (2026-09-04). Write the partial result, then report
     // the failure — the non-zero exit still makes it loud.
+    // Cleanup runs before this late enrichment pass. Reuse the orchestrator's
+    // shared policy here so failed and still-empty slots are materialized
+    // before the partial result is persisted.
+    op_orchestrator::apply_image_fallback_policy_to_state(state, true);
     op_host_services::doc_io::save_to_path(state, output).map_err(|error| EnrichError::Save {
         path: output.to_path_buf(),
         message: error.to_string(),

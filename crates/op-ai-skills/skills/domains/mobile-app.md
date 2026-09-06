@@ -24,7 +24,7 @@ Correct structure is the floor, not the design. Use the selected style guide for
 
 Platform roles: use a three-size type scale — screen title 28–34px semibold, section title 20–22px, body 16–17px (labels 12–13px). Allow one display size per screen; hero numbers use 40–57px and fit one line (8+ characters → 40–44px). Keep the accent in one block/treatment; separate sections with tonal surface tiers, not accent fills or hairlines.
 
-Buildable focal idioms include a hero card inside the rail, full-bleed media touching both sides under the status bar with a bottom gradient scrim and white title, a display number with a 12–13px caption, or stacked tonal cards with one soft shadow. A map is a tonal placeholder, never a photo. Icon tiles and chips are tonal; siblings in one grid share fill, stroke, and icon colour. Overlap only inside a `layout: "none"` stack whose children carry numeric x, y, width, and height; do not float a card over the header.
+Focal idioms include a hero card in the rail, full-bleed media under the status bar with gradient scrim/white title, display number + 12–13px caption, or stacked tonal cards with soft shadow. For maps, emit an image with imageSearchQuery: "map" and size; the pipeline draws the map placeholder. Icon tiles/chips are tonal; siblings in one grid share fill, stroke, and icon colour. Overlap only inside a layout:none stack with numeric x, y, width, height; do not float a card over the header.
 - A plain search + category grid + promo banner + list stack is acceptable only when the brief asks for that inventory; even then the style guide's treatment lands on the first section, not on a small accent strip.
 
 ## 1) STATUS BAR (OS-controlled) — PRE-INSERTED

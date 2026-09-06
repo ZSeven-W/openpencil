@@ -33,12 +33,8 @@ pub(crate) use cleanup_mobile_chrome::{
 };
 #[path = "cleanup_mobile_dense.rs"]
 mod cleanup_mobile_dense;
-
-// Repair-pass submodules: this file keeps the public surface (`finalize_design`
-// / `run_cleanup_passes` / the `*_for_all_roots` drivers) plus the shared
-// predicates; each repair family lives in its own file and is re-imported here
-// so the drivers (and the test modules mounted below) see the same flat
-// namespace as before.
+// Repair-pass submodules keep the public cleanup drivers and shared predicates
+// flat, while each repair family lives in its own file.
 #[path = "cleanup_bottom_nav_repairs.rs"]
 mod cleanup_bottom_nav_repairs;
 #[path = "cleanup_clip_row_stroke.rs"]
@@ -476,6 +472,7 @@ fn run_cleanup_passes_with_summary_and_policy(
         rid = apply_root_transform(sink, &rid, crate::ring_repair::wrap_ring_fragments);
         debug_probe_child_height(sink, &rid, "table_flush");
         counter.checkpoint(summary, CheckCategory::Structure, "chip+ring-extract");
+        super::cleanup_image_fallback::repair_map_placeholders(sink, &rid, summary, &mut counter);
         // Chip/badge text contrast (DS P1-a): the specific, provable chip
         // branch runs BEFORE the generic contrast repair so the chip-scoped
         // proof (solid chip fill, chip shape) wins the repair and the generic
@@ -729,6 +726,8 @@ fn run_cleanup_passes_with_summary_and_policy(
     // not `root_ids`) so it also links pre-existing screens from earlier turns.
     crate::wire_screen_navigation::wire_screen_navigation(sink);
     counter.checkpoint(summary, CheckCategory::Structure, "shared-chrome+nav");
+
+    super::cleanup_image_fallback::repair_image_fallback_policy(sink, summary, &mut counter);
 }
 
 #[cfg(test)]
