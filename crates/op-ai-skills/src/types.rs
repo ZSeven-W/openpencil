@@ -115,9 +115,14 @@ impl Phase {
     /// Then 6112 → 6300 (2026-09-06): every style-guide candidate line in the
     /// planner now carries its lead "Key aesthetics" label so the planner can
     /// pick by mood instead of by name; ~60 guides × a few tokens each.
+    /// Planning moved again 6300 → 6500 (2026-09-06) when the mobile screen
+    /// archetype corpus replaced the pre-design step. Its 591-token body was
+    /// otherwise cut to 452 tokens in the phone planning prompt, removing the
+    /// ARCHETYPE handoff contract; the extra headroom keeps the selected table
+    /// byte-complete.
     pub fn default_budget(self) -> u32 {
         match self {
-            Phase::Planning => 6300,
+            Phase::Planning => 6500,
             Phase::Generation => 16830,
             Phase::Validation => 3000,
             Phase::Maintenance => 5000,
@@ -127,7 +132,7 @@ impl Phase {
 
 /// Per-phase default token budgets — the TS `DEFAULT_BUDGETS` record.
 pub const DEFAULT_BUDGETS: [(Phase, u32); 4] = [
-    (Phase::Planning, 6300),
+    (Phase::Planning, 6500),
     (Phase::Generation, 16830),
     (Phase::Validation, 3000),
     (Phase::Maintenance, 5000),
@@ -409,7 +414,7 @@ mod tests {
 
     #[test]
     fn default_budget_table() {
-        assert_eq!(Phase::Planning.default_budget(), 6300);
+        assert_eq!(Phase::Planning.default_budget(), 6500);
         assert_eq!(Phase::Generation.default_budget(), 16830);
         assert_eq!(Phase::Validation.default_budget(), 3000);
         assert_eq!(Phase::Maintenance.default_budget(), 5000);

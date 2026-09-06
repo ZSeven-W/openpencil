@@ -556,10 +556,9 @@ fn guideline_for_icons_carries_the_catalog() {
 }
 
 #[test]
-fn planning_resolves_the_mobile_predesign_step_for_an_app_brief_without_mobile_keywords() {
-    // "外卖 App 首页（375×812）" never says mobile / 手机; the planner still has
-    // to pick a signature moment for it, so the predesign step keys on "app"
-    // and the phone width as well.
+fn planning_resolves_the_mobile_screen_archetype_for_phone_briefs() {
+    // "外卖 App 首页（375×812）" never says mobile / 手机; the archetype package
+    // still resolves from the app keyword and phone-sized brief.
     let ctx = crate::resolve_skills(
         crate::Phase::Planning,
         "外卖 App 首页（375×812）：顶部地址与搜索、分类九宫格、商家列表",
@@ -567,8 +566,8 @@ fn planning_resolves_the_mobile_predesign_step_for_an_app_brief_without_mobile_k
     );
     let names: Vec<&str> = ctx.skills.iter().map(|s| s.meta.name.as_str()).collect();
     assert!(
-        names.contains(&"mobile-app-predesign"),
-        "mobile predesign must resolve for an App brief; got {names:?}"
+        names.contains(&"mobile-screen-archetypes"),
+        "mobile screen archetypes must resolve for an App brief; got {names:?}"
     );
     assert!(
         !names.contains(&"landing-page-predesign"),
@@ -581,7 +580,18 @@ fn planning_resolves_the_mobile_predesign_step_for_an_app_brief_without_mobile_k
     );
     let names: Vec<&str> = ctx.skills.iter().map(|s| s.meta.name.as_str()).collect();
     assert!(
-        !names.contains(&"mobile-app-predesign"),
-        "a website brief must not pull the mobile predesign; got {names:?}"
+        !names.contains(&"mobile-screen-archetypes"),
+        "a website brief must not pull the mobile screen archetypes; got {names:?}"
+    );
+
+    let ctx = crate::resolve_skills(
+        crate::Phase::Planning,
+        "Mobile banking home",
+        &crate::ResolveOptions::default(),
+    );
+    let names: Vec<&str> = ctx.skills.iter().map(|s| s.meta.name.as_str()).collect();
+    assert!(
+        names.contains(&"mobile-screen-archetypes"),
+        "mobile banking must resolve screen archetypes; got {names:?}"
     );
 }

@@ -32,6 +32,29 @@ fn provider_planning_prompt_carries_quality_guardrails() {
 }
 
 #[test]
+fn phone_planning_prompt_uses_the_archetype_handoff_and_gate() {
+    let mut phone = req();
+    phone.prompt = "Mobile banking home".into();
+    let phone_prompt = build_orchestrator_prompt(&phone, PlanningMode::Rich, AbortFlag::new());
+    assert!(phone_prompt
+        .call_request
+        .system_prompt
+        .contains("ARCHETYPE:"));
+    assert!(!phone_prompt
+        .call_request
+        .system_prompt
+        .contains("SIGNATURE MOMENT"));
+
+    let mut landing = req();
+    landing.prompt = "官网首页（1440）".into();
+    let landing_prompt = build_orchestrator_prompt(&landing, PlanningMode::Rich, AbortFlag::new());
+    assert!(!landing_prompt
+        .call_request
+        .system_prompt
+        .contains("ARCHETYPE:"));
+}
+
+#[test]
 fn minimal_prompt_has_short_suffix_no_snippets() {
     let pp = build_orchestrator_prompt(&req(), PlanningMode::Minimal, AbortFlag::new());
     assert!(pp

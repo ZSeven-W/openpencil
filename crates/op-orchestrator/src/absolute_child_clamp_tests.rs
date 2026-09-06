@@ -139,9 +139,7 @@ fn control_past_the_bottom_edge_is_shifted_up() {
 
 fn update_node_width(cmds: &[EditorCommand], id: &str) -> Option<Option<i32>> {
     cmds.iter().find_map(|cmd| match cmd {
-        EditorCommand::UpdateNode {
-            node_id, width, ..
-        } if node_id.as_str() == id => Some(*width),
+        EditorCommand::UpdateNode { node_id, width, .. } if node_id.as_str() == id => Some(*width),
         _ => None,
     })
 }
@@ -171,8 +169,10 @@ fn wider_than_parent_row_is_shrunk_to_mirrored_insets() {
     // row (back button … bookmark button) authored for a 375-wide full-bleed
     // hero, pinned at x=16 inside a hero stack that resolved to 327px.
     // 16 + 343 = 359 > 327 and no shift can fit a 343px child in 327px.
-    let hero = hero_stack_with(json!({"type":"frame","id":"controls","name":"Hero Top Controls",
-               "x":16,"y":16,"width":343,"height":44,"children":[]}));
+    let hero = hero_stack_with(
+        json!({"type":"frame","id":"controls","name":"Hero Top Controls",
+               "x":16,"y":16,"width":343,"height":44,"children":[]}),
+    );
     let rects = hero_rects("controls", 16.0, 343.0);
     let mut cmds = Vec::new();
     collect_absolute_child_shrink_fixes(&hero, &rects, &mut cmds);
@@ -319,12 +319,19 @@ fn the_shrink_is_recorded_under_its_own_label() {
             &root_id,
         );
         assert_eq!(applied, 1, "the oversized row is shrunk");
-        counter.checkpoint(&mut summary, CheckCategory::Overflow, "absolute-child-shrink");
+        counter.checkpoint(
+            &mut summary,
+            CheckCategory::Overflow,
+            "absolute-child-shrink",
+        );
     }
     assert!(
-        summary.records().iter().any(|record| record.pass == "absolute-child-shrink"
-            && record.node_name.as_deref() == Some("Hero Top Controls")
-            && record.detail.contains("width 343 → 295")),
+        summary
+            .records()
+            .iter()
+            .any(|record| record.pass == "absolute-child-shrink"
+                && record.node_name.as_deref() == Some("Hero Top Controls")
+                && record.detail.contains("width 343 → 295")),
         "the record names the rule, the node, and the resize: {:?}",
         summary.records()
     );

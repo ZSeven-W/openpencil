@@ -20,14 +20,11 @@ Screen-height contract: use numeric 390-393×844 as a temporary construction see
 
 ## 0) EXPRESSION LAYER — where the look comes from
 
-Correct structure is the floor, not the design. The look of a screen comes from three authorities, in this order; do not invent a fourth:
+Correct structure is the floor, not the design. Use the selected style guide for mood, accent, card depth, typeface, radii, and hero idiom; keep supporting areas quiet. ARCHETYPE handoff: your subtask `elements` may start with `ARCHETYPE: …`; realise exactly that composition; the area percentages are of the 812px first screen; do not add a second hero. The planner's protagonist owns the focal treatment.
 
-1. THE SELECTED STYLE GUIDE decides the signature treatment. Its "Key aesthetics" bullets name the display face, how the accent is spent, card depth and the hero idiom (gradient cards, glow, editorial serif, pastel blocks). Apply that treatment where the guide says it belongs (usually the first content section — greeting/title/primary control — or the media the screen is about) and keep the rest of the screen quiet. Commit to it fully — a dark guide stays dark, a playful one stays playful; never average toward a neutral white template.
-2. PLATFORM TYPE + COLOR ROLES (iOS HIG / Material 3): screen title 28–34 semibold (Large Title / headline-large), section titles 20–22 (title-large), body 16–17, labels 12–13; at most ONE display size per screen, 40–57 for a hero number (display-small/medium) and sized to fit its rail on one line (8+ characters → 40–44). Sections separate by tonal surface tiers (surface / surface-container low→high), not by hairlines under every row and never by painting a section with the accent; the accent belongs to actions and the single hero treatment.
-3. STRUCTURE STAYS: status bar untouched, one content column with the 24px rail, gap-based spacing, one bottom idiom. Radii, shadows, type faces and how much the accent may spread are the GUIDE's numbers, not this file's. Expressive moves are the ones the layout engine can build — a hero CARD inside the rail (rounded on all four corners at the guide's card radius; never an edge-to-edge block or a half-rounded shape under the page-coloured status bar), FULL-BLEED MEDIA touching both sides under the status bar with a bottom gradient scrim frame and white title (back button a 40px circle at 16/16), a DISPLAY NUMBER with a 12–13px caption, STACKED CARDS with tonal surface and one soft shadow — and a guide may call for a different one (photography-led, editorial type, playful blocks); follow the guide. A map is a tonal placeholder, never a photo.
+Platform roles: use a three-size type scale — screen title 28–34px semibold, section title 20–22px, body 16–17px (labels 12–13px). Allow one display size per screen; hero numbers use 40–57px and fit one line (8+ characters → 40–44px). Keep the accent in one block/treatment; separate sections with tonal surface tiers, not accent fills or hairlines.
 
-- Overlap only inside a `layout: "none"` stack whose children carry NUMERIC x, y, width and height; `width: fill_container` plus an x offset overflows the stack and gets clipped. Do not float a card over the header on a phone screen — stack them in flow.
-- Icon tiles and chips are tonal (surface / muted fill); siblings in one grid share one fill, stroke and icon colour.
+Buildable focal idioms include a hero card inside the rail, full-bleed media touching both sides under the status bar with a bottom gradient scrim and white title, a display number with a 12–13px caption, or stacked tonal cards with one soft shadow. A map is a tonal placeholder, never a photo. Icon tiles and chips are tonal; siblings in one grid share fill, stroke, and icon colour. Overlap only inside a `layout: "none"` stack whose children carry numeric x, y, width, and height; do not float a card over the header.
 - A plain search + category grid + promo banner + list stack is acceptable only when the brief asks for that inventory; even then the style guide's treatment lands on the first section, not on a small accent strip.
 
 ## 1) STATUS BAR (OS-controlled) — PRE-INSERTED
@@ -85,7 +82,7 @@ Rules:
 - Design for one-handed use: primary actions in lower half
 - When the screen is explicitly a fixed viewport, use at most one clipped content viewport; otherwise keep the content wrapper Hug Height. Avoid nested scrolls.
 - Touch targets: minimum 44x44px
-- Do not repeat the same predictable mobile stack of search + categories + orange promo + two cards. Choose a distinct concept for the domain and make one signature moment carry the personality.
+- Do not repeat the same predictable mobile stack of search + categories + orange promo + two cards. Choose a distinct concept for the domain and let the handed-off archetype carry the personality.
 
 DO NOT:
 

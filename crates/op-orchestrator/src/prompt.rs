@@ -176,7 +176,7 @@ fn filter_planning_skills_for_prompt(
         .into_iter()
         .filter(|s| match s.meta.name.as_str() {
             "landing-page-predesign" => design_type == DesignType::LandingPage,
-            "mobile-app-predesign" => design_type == DesignType::MobileScreen,
+            "mobile-screen-archetypes" => design_type == DesignType::MobileScreen,
             _ => true,
         })
         .collect()

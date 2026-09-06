@@ -187,11 +187,15 @@ pub fn build_compact_planning_prompt(
     };
 
     // 组装 system prompt。
+    let focal_rule = if preset.type_ == DesignType::MobileScreen {
+        "For a phone screen, pick exactly ONE archetype per screen and put in the owning subtask `elements`: ARCHETYPE: <name> — protagonist <what>, first screen <x>% , <spatial relation>, display <n>px / body <n>px, imagery <rule>. Put `quiet section: tonal surfaces, no accent fills, one hairline max` first in every other subtask's `elements`, then keep its parts list."
+    } else {
+        "Plan one SIGNATURE MOMENT in the first viewport: a memorable focal module with strong composition, brand personality, and restrained supporting sections."
+    };
     let mut lines: Vec<String> = vec![
         FIXED_HEAD.to_string(),
         subtask_hint.to_string(),
-        "Plan one SIGNATURE MOMENT in the first viewport: a memorable focal module with strong composition, brand personality, and restrained supporting sections."
-            .to_string(),
+        focal_rule.to_string(),
         "Plan one WOW FACTOR that is specific to the requested product/domain; avoid generic tinted wrappers, heavy shadows, or repeated rounded boxes as the main visual idea."
             .to_string(),
         "Do not plan the same predictable mobile stack of search + categories + orange promo + two cards. Keep mobile top rhythm tight: no huge empty band between header/title and first useful module."
@@ -245,7 +249,8 @@ mod tests {
         assert!(cp.system.starts_with("You are a UI planning assistant."));
         assert!(cp.system.contains("width=375 and height=812"));
         assert!(cp.system.contains("Create 2-4 cohesive subtasks"));
-        assert!(cp.system.contains("SIGNATURE MOMENT"));
+        assert!(cp.system.contains("ARCHETYPE:"));
+        assert!(!cp.system.contains("SIGNATURE MOMENT"));
         assert!(cp.system.contains("WOW FACTOR"));
         assert!(cp.system.contains("predictable mobile stack"));
         assert!(cp.system.contains("mobile top rhythm tight"));
