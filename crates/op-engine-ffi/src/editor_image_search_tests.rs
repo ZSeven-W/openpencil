@@ -38,6 +38,13 @@ fn slot_src(host: &WidgetHostNative) -> String {
     }
 }
 
+fn slot_is_fallback(host: &WidgetHostNative) -> bool {
+    let state = host.editor_state();
+    let node = op_editor_core::walkers::find_node(state.active_children(), &NodeId::new("img1"))
+        .expect("slot survives");
+    op_image_enrich::is_image_fallback(node)
+}
+
 fn pump_until_settled(search: &mut MobileImageSearch, host: &mut WidgetHostNative) {
     let started = Instant::now();
     let mut now_ms = 10;
@@ -115,7 +122,7 @@ fn failed_search_lands_the_shared_placeholder_not_an_eternal_grey_slot() {
     let mut host = host_with_search_slot("pasta plate");
     let mut search = MobileImageSearch::with_fetcher(failing_fetcher);
     pump_until_settled(&mut search, &mut host);
-    assert_eq!(slot_src(&host), SEARCH_FAILED_PLACEHOLDER_SRC);
+    assert!(slot_is_fallback(&host));
 }
 
 #[test]

@@ -37,13 +37,12 @@ use std::time::{Duration, Instant};
 
 use op_editor_core::{walkers, EditorCommand, EditorState, NodeId, PenNodeExt as _};
 use op_image_enrich::{
-    apply_result, collect_targets, ImageRequestMode, ImageSearchTarget,
-    SEARCH_FAILED_PLACEHOLDER_SRC,
+    apply_result, collect_targets, is_failed_image_slot_for_host, ImageRequestMode,
+    ImageSearchTarget, SEARCH_FAILED_PLACEHOLDER_SRC,
 };
 use op_mcp::{McpTool, ToolErrorCode, ToolOutcome};
 
 use jian_ops_schema::node::PenNode;
-use jian_ops_schema::style::PenFill;
 
 /// Default overall budget, matching the `--enrich-images` CLI default.
 const DEFAULT_TIMEOUT_SECONDS: u64 = 120;
@@ -497,23 +496,5 @@ fn node_has_failure_sentinel(state: &EditorState, node_id: &NodeId) -> bool {
 }
 
 fn node_contains_failure_sentinel(node: &PenNode) -> bool {
-    match node {
-        PenNode::Image(image) => image.src == SEARCH_FAILED_PLACEHOLDER_SRC,
-        PenNode::Frame(frame) => fills_have_failure_sentinel(frame.container.fill.as_deref()),
-        PenNode::Rectangle(rectangle) => {
-            fills_have_failure_sentinel(rectangle.container.fill.as_deref())
-        }
-        _ => false,
-    }
-}
-
-fn fills_have_failure_sentinel(fills: Option<&[PenFill]>) -> bool {
-    fills.is_some_and(|fills| {
-        fills.iter().any(|fill| {
-            matches!(
-                fill,
-                PenFill::Image(image) if image.url == SEARCH_FAILED_PLACEHOLDER_SRC
-            )
-        })
-    })
+    is_failed_image_slot_for_host(node)
 }

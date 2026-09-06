@@ -352,10 +352,19 @@ fn failed_search_writes_the_adaptive_placeholder_sentinel() {
     };
 
     assert!(session.poll_into(&mut state));
-    let PenNode::Image(image) = &state.active_children()[0] else {
-        panic!("expected image");
+    let PenNode::Frame(frame) = &state.active_children()[0] else {
+        panic!("expected fallback frame");
     };
-    assert_eq!(image.src, SEARCH_FAILED_PLACEHOLDER_SRC);
+    assert!(frame
+        .base
+        .name
+        .as_deref()
+        .is_some_and(|name| name.ends_with(" (image fallback)")));
+    assert!(frame
+        .base
+        .explain
+        .as_deref()
+        .is_some_and(|explain| explain.starts_with("image fallback:")));
     assert!(
         session.completed.contains("img1"),
         "failed slot must not re-enqueue this session"

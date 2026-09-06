@@ -13,6 +13,7 @@ use op_editor_core::{
     CollabUnsupportedFeature, EditorState, NodeId,
 };
 
+use crate::fallback_policy::apply_image_fallback_policy_to_node;
 use crate::targets::{
     has_empty_image_fill, is_frame_placeholder_still_unfilled, is_image_area_rectangle_by_heuristic,
 };
@@ -137,5 +138,12 @@ pub fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str) -> boo
         // also clear `children`, which changes the visible layer rows.
         state.mark_document_changed();
     }
-    changed
+    let fallback_changed = if url == SEARCH_FAILED_PLACEHOLDER_SRC {
+        // The sentinel must land first: callers that inspect the tree while
+        // recording a failed search still observe the original contract.
+        apply_image_fallback_policy_to_node(state, node_id)
+    } else {
+        false
+    };
+    changed || fallback_changed
 }

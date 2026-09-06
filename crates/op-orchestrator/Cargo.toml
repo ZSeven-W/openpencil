@@ -18,6 +18,7 @@ op-ai-skills = { path = "../op-ai-skills" }
 # Already in the dep tree via op-mcp; direct dep makes `editor_state_to_layout_scene`
 # callable. Default features (skia-measure) match op-mcp's snapshot_layout.
 op-pen-loader = { path = "../op-pen-loader" }
+op-image-enrich = { path = "../op-image-enrich" }
 jian-scene = { path = "../../vendor/jian/crates/jian-scene" }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 # Canonical hex-color parsing (dependency-free).
@@ -30,6 +31,5 @@ tracing = { workspace = true }
 tokio = { version = "1", features = ["sync", "rt", "macros"] }
 
 [dev-dependencies]
-op-image-enrich = { path = "../op-image-enrich" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

@@ -127,8 +127,11 @@ pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool
                 &used_urls,
             ),
         };
-        if let Some(url) = url {
-            if op_image_enrich::apply_result(state, &target.node_id, &url) {
+        let resolved = url
+            .as_deref()
+            .unwrap_or(op_image_enrich::SEARCH_FAILED_PLACEHOLDER_SRC);
+        if op_image_enrich::apply_result(state, &target.node_id, resolved) {
+            if let Some(url) = url {
                 if dump {
                     eprintln!(
                         "[SMOKE] image applied: node_id={} url={url}",
@@ -138,14 +141,14 @@ pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool
                 filled += 1;
             } else if dump {
                 eprintln!(
-                    "[SMOKE] image apply failed: node_id={} (collab gate or node gone)",
-                    target.node_id
+                    "[SMOKE] image search returned nothing: query={:?}; fallback tile applied",
+                    target.query
                 );
             }
         } else if dump {
             eprintln!(
-                "[SMOKE] image search returned nothing: query={:?}",
-                target.query
+                "[SMOKE] image apply failed: node_id={} (collab gate or node gone)",
+                target.node_id
             );
         }
 
@@ -165,9 +168,36 @@ pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool
 #[cfg(test)]
 mod tests {
     use super::*;
+    use jian_ops_schema::node::PenNode;
+    use op_editor_core::{EditorState, NodeId};
     use std::sync::Mutex;
 
     static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn failed_search_result_becomes_a_fallback_tile() {
+        let mut state = EditorState::new();
+        let node: PenNode = serde_json::from_value(serde_json::json!({
+            "type": "image",
+            "id": "smoke-slot",
+            "src": "",
+            "imageSearchQuery": "coffee cup",
+            "width": 56,
+            "height": 56
+        }))
+        .expect("image fixture");
+        state.active_children_mut().push(node);
+
+        assert!(op_image_enrich::apply_result(
+            &mut state,
+            &NodeId::new("smoke-slot"),
+            op_image_enrich::SEARCH_FAILED_PLACEHOLDER_SRC
+        ));
+        let node =
+            op_editor_core::walkers::find_node(state.active_children(), &NodeId::new("smoke-slot"))
+                .expect("fallback survives");
+        assert!(op_image_enrich::is_image_fallback(node));
+    }
 
     #[test]
     fn config_defaults_are_correct() {

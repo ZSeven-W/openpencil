@@ -20,11 +20,19 @@
 //! container, gated by the collaboration external-assets rule.
 
 mod apply;
+mod fallback_policy;
 #[cfg(feature = "net")]
 pub mod net;
 mod targets;
 
-pub use apply::{apply_result, collaboration_image_result_gate, SEARCH_FAILED_PLACEHOLDER_SRC};
+pub use apply::{apply_result, collaboration_image_result_gate};
+pub use fallback_policy::{
+    apply_image_fallback_policy_to_node, fallback_request_mode, fallback_search_query_for_host,
+    icon_name_for_query, image_fallback_policy, image_fallback_policy_with_widths,
+    is_failed_image_slot_for_host, is_image_fallback, restore_image_fallback_node,
+    ImageFallbackBranch, ImageFallbackPatch, IMAGE_FALLBACK_NAME_SUFFIX,
+    SEARCH_FAILED_PLACEHOLDER_SRC,
+};
 pub use targets::{
     collect_targets, collect_targets_with_scene, has_empty_image_fill, image_request_mode,
     is_frame_placeholder_still_unfilled, is_image_area_rectangle_by_heuristic, ImageAspectRatio,

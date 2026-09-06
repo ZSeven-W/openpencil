@@ -6,7 +6,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 
 use op_editor_core::agent_settings::ImageGenProfile;
-use op_editor_core::{EditorState, NodeId};
+use op_editor_core::{walkers, EditorState, NodeId};
 // Provider plumbing shared with the web daemon (single-sourced in
 // op-host-services): keyword simplification, Openverse token exchange, and
 // image mime handling. The desktop keeps its own `fetch_image_data_url`
@@ -28,7 +28,7 @@ use op_host_services::image_relevance_judge::{ChatVisionJudge, OpenAiCompatVisio
 use op_image_enrich::net::{ImageRelevanceJudge, NoJudge};
 pub(crate) use op_image_enrich::{
     apply_result, collaboration_image_result_gate, collect_targets, collect_targets_with_scene,
-    image_request_mode, ImageAspectRatio, ImageRequestMode, ImageSearchTarget,
+    image_request_mode, is_image_fallback, ImageAspectRatio, ImageRequestMode, ImageSearchTarget,
     SEARCH_FAILED_PLACEHOLDER_SRC,
 };
 
@@ -441,7 +441,10 @@ impl ImageSearchSession {
                     let url = url.unwrap_or_else(|| SEARCH_FAILED_PLACEHOLDER_SRC.to_string());
                     if apply_result(state, &job.node_id, &url) {
                         changed = true;
-                        if url == SEARCH_FAILED_PLACEHOLDER_SRC {
+                        if url == SEARCH_FAILED_PLACEHOLDER_SRC
+                            && walkers::find_node(state.active_children(), &job.node_id)
+                                .is_some_and(is_image_fallback)
+                        {
                             self.completed.insert(id);
                         }
                     } else {
