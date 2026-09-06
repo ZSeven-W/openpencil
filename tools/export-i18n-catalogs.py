@@ -14,7 +14,7 @@ from typing import Iterable
 REPO_ROOT = Path(__file__).resolve().parents[1]
 I18N_DIR = REPO_ROOT / "crates" / "op-i18n" / "src" / "i18n"
 LOCALE_FILE = I18N_DIR.parent / "locale.rs"
-EXPECTED_KEY_COUNT = 1679
+EXPECTED_KEY_COUNT = 1697
 TABLE_SUFFIXES = ("", "_git", "_panel", "_collab")
 
 # Module stem, Locale variant, and the exact value returned by Locale::code().

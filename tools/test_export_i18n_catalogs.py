@@ -110,7 +110,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(list(root.iterdir()), [])
             self.assertIn("15 locales", result.stdout)
-            self.assertIn("1679 keys", result.stdout)
+            self.assertIn("1697 keys", result.stdout)
 
     def test_export_writes_exact_lazy_locale_set_deterministically(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
