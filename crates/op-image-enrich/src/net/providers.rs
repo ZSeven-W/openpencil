@@ -36,7 +36,7 @@ use std::time::Duration;
 use catalog::{fetch_relevant_wikimedia_list, materialize_first_thumb, materialize_thumbs};
 use relevance::retain_relevant_hits;
 pub(crate) use relevance::{
-    retain_relevant_hits as retain_relevant_hits_for_fetch, two_keyword_retry,
+    retain_relevant_hits as retain_relevant_hits_for_fetch, rewrite_queries, two_keyword_retry,
 };
 
 #[cfg(test)]

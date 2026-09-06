@@ -194,6 +194,81 @@ pub(crate) fn two_keyword_retry(query: &str) -> Option<String> {
     (!retry.is_empty() && retry != primary).then_some(retry)
 }
 
+/// Style and staging words stripped from an intent-derived rewrite. The
+/// judged-ladder rewrite wants the subject of the image prompt, not its art
+/// direction. Multi-word forms are matched per token because the tokenizer
+/// splits on non-alphanumerics ("close-up" → "close up", "high quality" →
+/// "high" + "quality").
+const INTENT_STYLE_WORDS: &[&str] = &[
+    "photo",
+    "photography",
+    "professional",
+    "shot",
+    "close",
+    "closeup",
+    "image",
+    "stock",
+    "high",
+    "quality",
+    "4k",
+    "hd",
+    "cinematic",
+    "lighting",
+    "background",
+    "minimal",
+];
+
+/// Up to two rewritten queries for the judged Openverse ladder, in attempt
+/// order. The visual judge can reject every primary candidate (k=0 after the
+/// lexical filter, or all Off verdicts) while a looser phrasing still has
+/// good hits — the two-keyword retry inside the list fetch only fires on a
+/// zero-hit response, so judge-rejected slots used to fall straight to the
+/// Wikimedia ladder.
+///
+/// 1. The last two content words of the query.
+/// 2. The leading subject words of the intent (the image prompt) with stop
+///    words and style words removed, capped at three words.
+///
+/// Candidates that are empty, equal to the original query, or equal to an
+/// earlier rewrite are dropped, so the caller's cost bound is at most two
+/// extra Openverse list calls per slot.
+pub(crate) fn rewrite_queries(query: &str, intent: &str) -> Vec<String> {
+    let mut rewrites: Vec<String> = Vec::new();
+    let mut push = |rewrite: Option<String>| {
+        if let Some(rewrite) = rewrite {
+            if !rewrite.is_empty() && rewrite != query && !rewrites.contains(&rewrite) {
+                rewrites.push(rewrite);
+            }
+        }
+    };
+    push(two_keyword_rewrite(query));
+    push(intent_rewrite(intent));
+    rewrites
+}
+
+/// The last two content words of the query — tighter than
+/// [`two_keyword_retry`]'s three-word tail, which equals the primary query
+/// for the common three-word subject phrase and therefore never fires there.
+fn two_keyword_rewrite(query: &str) -> Option<String> {
+    let core = concrete_query_words(query);
+    let tail = &core[core.len().saturating_sub(2)..];
+    (!tail.is_empty()).then(|| tail.join(" "))
+}
+
+/// The leading subject words of the intent with stop words and style words
+/// removed, capped at three words. `None` when nothing searchable remains.
+fn intent_rewrite(intent: &str) -> Option<String> {
+    let words: Vec<String> = lexical_words(intent)
+        .into_iter()
+        .filter(|word| {
+            !IMAGE_SEARCH_STOP_WORDS.contains(&word.as_str())
+                && !INTENT_STYLE_WORDS.contains(&word.as_str())
+        })
+        .take(3)
+        .collect();
+    (!words.is_empty()).then(|| words.join(" "))
+}
+
 pub(super) fn core_query_words(query: &str) -> Vec<String> {
     concrete_query_words(query)
         .into_iter()
@@ -466,5 +541,61 @@ pub fn simplify_search_query(prompt: &str) -> String {
         prompt.chars().take(30).collect()
     } else {
         keywords.join(" ")
+    }
+}
+
+#[cfg(test)]
+mod rewrite_queries_tests {
+    use super::rewrite_queries;
+
+    #[test]
+    fn two_keyword_rewrite_precedes_the_intent_rewrite() {
+        assert_eq!(
+            rewrite_queries(
+                "female dermatologist portrait",
+                "professional photo of a female dermatologist in a clinic",
+            ),
+            vec![
+                "dermatologist portrait".to_string(),
+                "female dermatologist clinic".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn intent_rewrite_strips_style_words() {
+        assert_eq!(
+            rewrite_queries(
+                "fitness model gym workout",
+                "professional photo of a fitness model in a gym, cinematic lighting, 4k hd",
+            ),
+            vec!["gym workout".to_string(), "fitness model gym".to_string(),]
+        );
+    }
+
+    #[test]
+    fn empty_intent_keeps_only_the_two_keyword_rewrite() {
+        assert_eq!(
+            rewrite_queries("oak desk lamp", ""),
+            vec!["desk lamp".to_string()]
+        );
+    }
+
+    #[test]
+    fn rewrites_matching_the_query_or_each_other_are_dropped() {
+        // Both rewrites resolve to the primary query itself: nothing to retry.
+        assert!(rewrite_queries(
+            "dermatologist portrait",
+            "photo of a dermatologist portrait"
+        )
+        .is_empty());
+        // The intent rewrite duplicates the two-keyword rewrite: deduped.
+        assert_eq!(
+            rewrite_queries(
+                "dermatologist clinic portrait",
+                "professional photo clinic portrait",
+            ),
+            vec!["clinic portrait".to_string()]
+        );
     }
 }

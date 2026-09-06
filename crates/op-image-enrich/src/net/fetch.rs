@@ -1,6 +1,13 @@
 //! Provider fetches (Openverse + Wikimedia fallback), result ranking and
 //! the data-URL embed. Carved out of the `image_search_session.rs` spine
 //! to keep it under the 800-line cap; pure code motion.
+//!
+//! The judged ladder (`fetch_first_image_url_with_judge`) runs: primary
+//! Openverse query → up to two judge rewrites (`rewrite_queries`: the
+//! two-keyword tail of the query, then the intent-derived subject) through
+//! the same judged Openverse path → the judged Wikimedia fallback ladder.
+//! The no-judge path keeps the original Openverse → truncated-retry →
+//! Wikimedia order unchanged.
 
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
@@ -9,9 +16,9 @@ use std::time::Duration;
 
 use crate::net::providers::{
     fetch_image_and_judge_thumbnail, fetch_openverse_list_with_aspect, fetch_openverse_token,
-    normalize_image_mime_header, retain_relevant_hits_for_fetch, simplify_search_query,
-    two_keyword_retry, wikimedia_info_is_image, RawHit, WebOpenverseCredentials,
-    MAX_EMBEDDED_IMAGE_BYTES,
+    normalize_image_mime_header, retain_relevant_hits_for_fetch, rewrite_queries,
+    simplify_search_query, two_keyword_retry, wikimedia_info_is_image, RawHit,
+    WebOpenverseCredentials, MAX_EMBEDDED_IMAGE_BYTES,
 };
 use crate::net::{format_judge_log, select_with_judge, ImageRelevanceJudge};
 use crate::ImageAspectRatio;
@@ -112,9 +119,38 @@ async fn fetch_first_image_url_with_judge(
         fetch_relevant_openverse_list_with_aspect(&client, &query, aspect_ratio, credentials)
             .await
             .unwrap_or_default();
-    if let Some(url) = fetch_judged_openverse(&client, hits, &query, intent, used_urls, judge).await
+    if let Some(url) =
+        fetch_judged_openverse(&client, hits, &query, intent, used_urls, judge, "openverse").await
     {
         return Some(url);
+    }
+
+    // The judge rejected every primary candidate (k=0 after the lexical
+    // filter, or all Off verdicts): the zero-hit two-keyword retry inside
+    // the list fetch never fires here, so rewrite the query and run each
+    // rewrite through the same judged Openverse path before the Wikimedia
+    // ladder. `rewrite_queries` returns at most two candidates, bounding
+    // the extra cost at two Openverse list calls per slot; the two-batch
+    // judge bound per call is unchanged.
+    for rewrite in rewrite_queries(&query, intent) {
+        eprintln!("[ENRICH] judge-rewrite: \"{query}\" → \"{rewrite}\"");
+        let hits =
+            fetch_relevant_openverse_list_with_aspect(&client, &rewrite, aspect_ratio, credentials)
+                .await
+                .unwrap_or_default();
+        if let Some(url) = fetch_judged_openverse(
+            &client,
+            hits,
+            &rewrite,
+            intent,
+            used_urls,
+            judge,
+            "openverse-rewrite",
+        )
+        .await
+        {
+            return Some(url);
+        }
     }
 
     // The Wikimedia fallback ladder is judged as well. Until 2026-09-05 it
@@ -149,6 +185,7 @@ async fn fetch_judged_openverse(
     intent: &str,
     used_urls: &Mutex<HashSet<String>>,
     judge: &dyn ImageRelevanceJudge,
+    source: &str,
 ) -> Option<String> {
     const ROUND_SIZE: usize = 5;
     const MAX_JUDGE_CANDIDATES: usize = ROUND_SIZE * 2;
@@ -175,7 +212,7 @@ async fn fetch_judged_openverse(
         })
         .collect();
     let selection = select_with_judge(judge, query, intent, &batches);
-    eprintln!("[ENRICH] {} source=openverse", format_judge_log(&selection));
+    eprintln!("[ENRICH] {} source={source}", format_judge_log(&selection));
     for index in selection.ordered_indices() {
         let Some(candidate) = candidates.get(*index) else {
             continue;
