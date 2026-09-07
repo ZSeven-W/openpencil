@@ -49,8 +49,11 @@ const CODEX_ENV_ALLOWLIST: &[&str] = &[
     "http_proxy",
     "https_proxy",
     "no_proxy",
-    // Windows-essential vars
+    // Windows-essential vars. Matched case-insensitively (see
+    // `codex_env_allowed`) because Windows reports these in their native
+    // casing, e.g. `SystemRoot` / `windir` / `ComSpec` / `SystemDrive`.
     "SYSTEMROOT",
+    "WINDIR",
     "COMSPEC",
     "USERPROFILE",
     "APPDATA",
@@ -118,14 +121,35 @@ fn load_codex_config_env_keys() -> Vec<String> {
 /// prefixes + config.toml `env_key` opt-ins (TS `filterCodexEnv`).
 pub fn codex_child_env() -> Vec<(String, String)> {
     let extra = load_codex_config_env_keys();
-    std::env::vars()
-        .filter(|(k, _)| {
-            CODEX_ENV_ALLOWLIST.contains(&k.as_str())
-                || extra.iter().any(|e| e == k)
-                || k.starts_with("OPENAI_")
-                || k.starts_with("CODEX_")
-        })
+    filter_codex_env(std::env::vars(), &extra)
+}
+
+fn filter_codex_env<I>(vars: I, extra: &[String]) -> Vec<(String, String)>
+where
+    I: IntoIterator<Item = (String, String)>,
+{
+    vars.into_iter()
+        .filter(|(key, _)| codex_env_allowed(key, extra))
         .collect()
+}
+
+/// Windows environment keys are case-insensitive, and the OS hands them to a
+/// process in their native casing — `SystemRoot`, `windir`, `ComSpec`,
+/// `SystemDrive`, `Path`. An exact match against the uppercase allowlist
+/// therefore dropped every one of them, and a Codex child launched without
+/// `SystemRoot` cannot load the Winsock service providers under
+/// `%SystemRoot%\System32`: the turn dies with `WSAEPROVIDERFAILEDINIT`
+/// (os error 10106). Compare the system allowlist case-insensitively, the way
+/// `op_acp::client::local_env_allowed` already does. The `env_key` opt-ins and
+/// the `OPENAI_` / `CODEX_` prefixes stay exact: those are provider names the
+/// user spells out, not host variables.
+fn codex_env_allowed(key: &str, extra: &[String]) -> bool {
+    CODEX_ENV_ALLOWLIST
+        .iter()
+        .any(|allowed| allowed.eq_ignore_ascii_case(key))
+        || extra.iter().any(|e| e == key)
+        || key.starts_with("OPENAI_")
+        || key.starts_with("CODEX_")
 }
 
 /// Budget for the one-shot `codex exec --help` capability probe. Generous
@@ -414,6 +438,75 @@ pub fn codex_reasoning_effort(thinking: ThinkingMode, effort: EffortLevel) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn owned(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+            .collect()
+    }
+
+    /// Windows hands the environment over in its native casing, so the
+    /// allowlist has to match case-insensitively. Losing `SystemRoot` here is
+    /// what made the Codex turn fail Winsock init with os error 10106.
+    #[test]
+    fn codex_env_keeps_windows_native_key_casing() {
+        let kept = filter_codex_env(
+            owned(&[
+                ("SystemRoot", r"C:\Windows"),
+                ("windir", r"C:\Windows"),
+                ("ComSpec", r"C:\Windows\System32\cmd.exe"),
+                ("SystemDrive", "C:"),
+                ("Path", r"C:\Windows\System32"),
+                ("PathExt", ".COM;.EXE;.BAT;.CMD"),
+                ("UserProfile", r"C:\Users\dev"),
+            ]),
+            &[],
+        );
+        let names: Vec<&str> = kept.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(
+            names,
+            vec![
+                "SystemRoot",
+                "windir",
+                "ComSpec",
+                "SystemDrive",
+                "Path",
+                "PathExt",
+                "UserProfile",
+            ]
+        );
+    }
+
+    /// The relaxed casing must not widen the secret boundary: only the
+    /// allowlist, the `OPENAI_` / `CODEX_` prefixes and the config.toml
+    /// `env_key` opt-ins get through.
+    #[test]
+    fn codex_env_still_filters_secrets_and_honours_opt_ins() {
+        let kept = filter_codex_env(
+            owned(&[
+                ("SystemRoot", r"C:\Windows"),
+                ("ANTHROPIC_API_KEY", "secret"),
+                ("GITHUB_TOKEN", "secret"),
+                ("AWS_SECRET_ACCESS_KEY", "secret"),
+                ("ALL_PROXY", "socks5://127.0.0.1:7897"),
+                ("OPENAI_API_KEY", "sk-test"),
+                ("CODEX_HOME", "/tmp/codex"),
+                ("MY_PROVIDER_KEY", "opted-in"),
+            ]),
+            &["MY_PROVIDER_KEY".to_string()],
+        );
+        let names: Vec<&str> = kept.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(
+            names,
+            vec![
+                "SystemRoot",
+                "OPENAI_API_KEY",
+                "CODEX_HOME",
+                "MY_PROVIDER_KEY",
+            ]
+        );
+    }
 
     #[test]
     fn codex_config_env_keys_extracts_quoted_values() {
