@@ -504,6 +504,10 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
         output_rule,
     );
 
+    if subtask.bleed_hero {
+        user_prompt.push_str("\nThis section is full-bleed: give the section frame no horizontal padding, let its first media node (image or colour block) span the full root width, and put every text or control that follows inside one inner frame with `padding: [0,24]`.");
+    }
+
     // (Mobile UI guardrails now load from the `mobile-ui` skill — see the
     // `isMobileScreen` flag + dynamic-content setup above.)
 

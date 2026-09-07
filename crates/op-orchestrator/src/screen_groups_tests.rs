@@ -11,6 +11,7 @@ fn subtask_with_screen(id: &str, screen: Option<&str>) -> Subtask {
     Subtask {
         id: id.into(),
         label: id.into(),
+        bleed_hero: false,
         id_prefix: id.into(),
         region: Region {
             width: 1200.0,

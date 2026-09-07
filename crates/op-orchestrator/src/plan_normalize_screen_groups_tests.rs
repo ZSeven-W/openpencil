@@ -34,6 +34,7 @@ fn subtask_with_screen(id: &str, label: &str, screen: Option<&str>) -> Subtask {
             width: 100.0,
             height: 100.0,
         },
+        bleed_hero: false,
         id_prefix: String::new(),
         parent_frame_id: None,
         insert_after_sibling_id: None,

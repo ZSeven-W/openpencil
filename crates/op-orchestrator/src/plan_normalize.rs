@@ -24,6 +24,9 @@ mod plan_normalize_dimensions;
 #[path = "plan_normalize_items.rs"]
 mod plan_normalize_items;
 
+#[path = "plan_normalize_hero.rs"]
+mod plan_normalize_hero;
+
 #[path = "plan_continuation_contract.rs"]
 mod plan_continuation_contract;
 
@@ -223,6 +226,7 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
     // Repeated item-family bundling is gated to the deepseek model family and
     // runs last so the merged subtask inherits normalized fields.
     plan_normalize_items::bundle_repeated_item_families(plan, req.model.as_deref().unwrap_or(""));
+    plan_normalize_hero::mark_bleed_hero_subtasks(plan);
 
     NormInfo {
         is_mobile,
@@ -255,6 +259,7 @@ mod tests {
                 width: 100.0,
                 height: 100.0,
             },
+            bleed_hero: false,
             id_prefix: String::new(),
             parent_frame_id: None,
             insert_after_sibling_id: None,
@@ -392,7 +397,6 @@ mod tests {
         assert_eq!(p.root_frame.gap, Some(12.0));
         assert_eq!(p.root_frame.padding, Some(0.0));
     }
-
     #[test]
     fn normalize_mobile_zero_gap_uses_section_spacing() {
         let mut p = plan(390.0, vec![subtask("hero", "Hero")]);
@@ -402,7 +406,6 @@ mod tests {
 
         assert_eq!(p.root_frame.gap, Some(16.0));
     }
-
     #[test]
     fn normalize_mobile_zero_height_uses_default_viewport() {
         let mut p = plan(390.0, vec![subtask("hero", "Hero")]);
@@ -410,7 +413,6 @@ mod tests {
         normalize(&mut p, &req());
         assert_eq!(p.root_frame.height, 812.0);
     }
-
     #[test]
     fn normalize_mobile_preserves_positive_height() {
         let mut p = plan(390.0, vec![subtask("hero", "Hero")]);
@@ -418,7 +420,6 @@ mod tests {
         normalize(&mut p, &req());
         assert_eq!(p.root_frame.height, 844.0);
     }
-
     #[test]
     fn normalize_strips_status_bar_subtask_on_mobile() {
         let mut p = plan(
@@ -429,7 +430,6 @@ mod tests {
         assert_eq!(p.subtasks.len(), 1);
         assert_eq!(p.subtasks[0].id, "hero");
     }
-
     #[test]
     fn normalize_strips_status_bar_mentions_from_mobile_subtask_elements() {
         let mut st = subtask("delivery-header", "Delivery Header");
@@ -456,7 +456,6 @@ mod tests {
             "non-status-bar element fragments should be preserved"
         );
     }
-
     #[test]
     fn normalize_keeps_status_bar_subtask_on_desktop() {
         // 桌面端不剔除(只有移动端 scaffold 注入固定状态栏)。
@@ -467,7 +466,6 @@ mod tests {
         normalize(&mut p, &req());
         assert_eq!(p.subtasks.len(), 2);
     }
-
     #[test]
     fn normalize_adds_requested_bottom_nav_subtask_on_mobile() {
         let mut p = plan(
@@ -496,7 +494,6 @@ mod tests {
             .unwrap_or_default()
             .contains("bottom-tab-bar"));
     }
-
     #[test]
     fn normalize_does_not_duplicate_existing_bottom_nav_subtask() {
         let mut p = plan(
@@ -551,14 +548,12 @@ mod tests {
     // -----------------------------------------------------------------------
     // Task C1 — dashboard branch
     // -----------------------------------------------------------------------
-
     fn dash_req(prompt: &str) -> DesignRequest {
         DesignRequest {
             prompt: prompt.into(),
             ..Default::default()
         }
     }
-
     /// Build a dashboard-like plan with a sidebar + two data subtasks.
     fn dashboard_plan(root_width: f64) -> OrchestratorPlan {
         let st_sidebar = Subtask {
@@ -568,6 +563,7 @@ mod tests {
                 width: 100.0,
                 height: 500.0,
             },
+            bleed_hero: false,
             id_prefix: String::new(),
             parent_frame_id: None,
             insert_after_sibling_id: None,
@@ -586,6 +582,7 @@ mod tests {
                 width: 800.0,
                 height: 300.0,
             },
+            bleed_hero: false,
             id_prefix: String::new(),
             parent_frame_id: None,
             insert_after_sibling_id: None,
@@ -603,6 +600,7 @@ mod tests {
                 width: 800.0,
                 height: 0.0,
             },
+            bleed_hero: false,
             id_prefix: String::new(),
             parent_frame_id: None,
             insert_after_sibling_id: None,
@@ -705,6 +703,7 @@ mod tests {
                     width: 800.0,
                     height: 2000.0,
                 },
+                bleed_hero: false,
                 id_prefix: String::new(),
                 parent_frame_id: None,
                 insert_after_sibling_id: None,
@@ -747,6 +746,7 @@ mod tests {
                     width: 800.0,
                     height: 50.0,
                 },
+                bleed_hero: false,
                 id_prefix: String::new(),
                 parent_frame_id: None,
                 insert_after_sibling_id: None,

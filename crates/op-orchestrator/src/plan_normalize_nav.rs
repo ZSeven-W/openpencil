@@ -72,6 +72,7 @@ pub(super) fn ensure_requested_bottom_nav_subtask(
             width: plan.root_frame.width,
             height: 78.0,
         },
+        bleed_hero: false,
         id_prefix: String::new(),
         parent_frame_id: None,
         insert_after_sibling_id: None,

@@ -153,6 +153,7 @@ mod tests {
                 width: 1440.0,
                 height: 400.0,
             },
+            bleed_hero: false,
             id_prefix: id.into(),
             parent_frame_id: None,
             insert_after_sibling_id: None,

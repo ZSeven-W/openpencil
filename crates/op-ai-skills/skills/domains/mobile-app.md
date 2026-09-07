@@ -87,7 +87,7 @@ Rules:
 DO NOT:
 
 - Put the 24px content rail on the root page or duplicate it on an inner wrapper
-- Let an ordinary root-direct content section touch the screen edge
+- Let an ordinary root-direct content section touch the screen edge (the ONE full-bleed hero section is the exception: padding 0, media spans the root, text in an inner 24px inset)
 - Use spacer elements for bottom space (use padding-bottom)
 - Cram multiple competing sections above the fold
 

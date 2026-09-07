@@ -169,6 +169,38 @@ fn empty_screen_route_inventory_matches_public_builder_byte_for_byte() {
 }
 
 #[test]
+fn full_bleed_instruction_is_scoped_to_the_marked_subtask() {
+    let ordinary = subtask();
+    let mut hero = ordinary.clone();
+    hero.bleed_hero = true;
+    let plan = plan();
+    let req = req();
+    let exact = "This section is full-bleed: give the section frame no horizontal padding, let its first media node (image or colour block) span the full root width, and put every text or control that follows inside one inner frame with `padding: [0,24]`.";
+
+    let (ordinary_call, _) = build_subagent_prompt(
+        &ordinary,
+        &plan,
+        &req,
+        AbortFlag::new(),
+        false,
+        false,
+        &ComponentLibrary::default(),
+    );
+    let (hero_call, _) = build_subagent_prompt(
+        &hero,
+        &plan,
+        &req,
+        AbortFlag::new(),
+        false,
+        false,
+        &ComponentLibrary::default(),
+    );
+
+    assert!(!ordinary_call.user_prompt.contains(exact));
+    assert!(hero_call.user_prompt.contains(exact));
+}
+
+#[test]
 fn subagent_prompt_honors_explicit_radius_and_spacing_numbers() {
     let mobile_req = DesignRequest {
         prompt: "设计一个美食移动端首页，圆角和间距要统一，圆角 8 px，间距 12 px".into(),
@@ -194,6 +226,7 @@ fn subagent_prompt_honors_explicit_radius_and_spacing_numbers() {
             width: 402.0,
             height: 640.0,
         },
+        bleed_hero: false,
         id_prefix: "content".into(),
         parent_frame_id: Some("page".into()),
         insert_after_sibling_id: None,
@@ -259,6 +292,7 @@ fn mobile_food_prompt_avoids_fixed_food_template() {
             width: 402.0,
             height: 640.0,
         },
+        bleed_hero: false,
         id_prefix: "content".into(),
         parent_frame_id: Some("page".into()),
         insert_after_sibling_id: None,
@@ -341,6 +375,7 @@ fn chinese_mobile_food_prompt_carries_language_consistency_rule() {
             width: 390.0,
             height: 640.0,
         },
+        bleed_hero: false,
         id_prefix: "content".into(),
         parent_frame_id: Some("page".into()),
         insert_after_sibling_id: None,

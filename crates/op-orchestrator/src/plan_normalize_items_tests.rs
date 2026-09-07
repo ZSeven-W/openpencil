@@ -23,6 +23,7 @@ fn item(id: &str, label: &str, screen: Option<&str>, height: f64) -> Subtask {
             width: 1080.0,
             height,
         },
+        bleed_hero: false,
         id_prefix: String::new(),
         parent_frame_id: None,
         insert_after_sibling_id: None,

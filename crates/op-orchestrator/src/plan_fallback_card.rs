@@ -101,6 +101,7 @@ pub(crate) fn build_fallback_card_plan(
                     width: preset.width,
                     height: preset.root_height,
                 },
+                bleed_hero: false,
                 id_prefix: id,
                 // `plan_normalize` rewrites this per screen group.
                 parent_frame_id: None,

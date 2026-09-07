@@ -50,6 +50,7 @@ fn subtask() -> Subtask {
             width: 1200.0,
             height: 400.0,
         },
+        bleed_hero: false,
         id_prefix: "hero".into(),
         parent_frame_id: None,
         insert_after_sibling_id: None,

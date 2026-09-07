@@ -323,6 +323,9 @@ fn collect_repairs(root: &PenNode) -> Vec<RailRepair> {
         if adopted_ids.contains(section.id_str()) {
             continue;
         }
+        if crate::hero_bleed::is_bleed_section_node(section) {
+            continue;
+        }
 
         if is_ordinary_root_leaf(section) {
             let wrapper_id = unique_wrapper_id(section.id_str(), &mut known_ids);

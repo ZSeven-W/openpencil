@@ -93,6 +93,9 @@ pub(super) fn unify_transparent_section_margins(sink: &mut dyn DocSink, root_id:
         let PenNode::Frame(frame) = child else {
             continue;
         };
+        if crate::hero_bleed::is_bleed_section_or_flush_media_node(child) {
+            continue;
+        }
         if !frame.container.is_fill_container_width() {
             continue;
         }

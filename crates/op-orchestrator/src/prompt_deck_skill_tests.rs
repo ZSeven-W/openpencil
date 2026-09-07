@@ -44,6 +44,7 @@ fn deck_subtask() -> crate::plan::Subtask {
             width: 1920.0,
             height: 1080.0,
         },
+        bleed_hero: false,
         id_prefix: "cover".into(),
         parent_frame_id: None,
         insert_after_sibling_id: None,

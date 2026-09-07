@@ -121,6 +121,7 @@ mod geometry_echo {
                 width: 375.0,
                 height: 200.0,
             },
+            bleed_hero: false,
             id_prefix: "goals".into(),
             parent_frame_id: None,
             insert_after_sibling_id: None,

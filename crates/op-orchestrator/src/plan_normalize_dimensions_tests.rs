@@ -24,6 +24,7 @@ fn subtask(id: &str, label: &str, width: f64, height: f64) -> Subtask {
         id: id.into(),
         label: label.into(),
         region: Region { width, height },
+        bleed_hero: false,
         id_prefix: String::new(),
         parent_frame_id: None,
         insert_after_sibling_id: None,

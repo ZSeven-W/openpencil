@@ -130,6 +130,7 @@ fn plan_from_state(sink: &dyn DocSink, specs: &[SpawnAgentSpec]) -> Orchestrator
             id: spec.id.clone(),
             label: spec.label.clone(),
             region: Region { width, height },
+            bleed_hero: false,
             id_prefix: spec.id.clone(),
             parent_frame_id: spec.parent_frame_id.clone(),
             insert_after_sibling_id: None,

@@ -108,6 +108,9 @@ fn is_card_inner_padding_offender(
     bottom_nav_ids: &HashSet<String>,
     ancestors: &[&Value],
 ) -> bool {
+    if crate::hero_bleed::is_bleed_section_or_flush_media(v) {
+        return false;
+    }
     if v.get("type").and_then(Value::as_str) != Some("frame")
         || !matches!(layout_str(v), Some("horizontal" | "vertical"))
         || !has_visible_solid_fill_or_stroke(v)

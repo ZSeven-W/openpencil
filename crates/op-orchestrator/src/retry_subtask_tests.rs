@@ -82,6 +82,7 @@ fn failed_subtask(parent_frame_id: Option<&str>) -> Subtask {
             width: 390.0,
             height: 300.0,
         },
+        bleed_hero: false,
         id_prefix: "browse-all-grid".into(),
         parent_frame_id: parent_frame_id.map(str::to_string),
         insert_after_sibling_id: None,

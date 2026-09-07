@@ -30,6 +30,7 @@ fn subtask(id: &str, label: &str, elements: Option<&str>) -> Subtask {
             width: 1200.0,
             height: 300.0,
         },
+        bleed_hero: false,
         id_prefix: id.into(),
         parent_frame_id: None,
         insert_after_sibling_id: None,

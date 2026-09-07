@@ -493,6 +493,8 @@ fn run_cleanup_passes_with_summary_and_policy(
         // detectors, so it only ever fired for a user running
         // `lint_document` by hand.
         crate::text_contrast_repair::repair_text_contrast(sink, &rid);
+        crate::hero_bleed::enforce(sink, plan, &rid);
+        counter.checkpoint(summary, CheckCategory::Structure, "hero-bleed");
         // Section-margin ownership (DS P1.5) runs BEFORE the wrapper-double-inset
         // stripper below: unifying first hands the stripper the group already
         // normalized, and the floor afterwards then sees no flush content left.
@@ -789,11 +791,9 @@ mod cleanup_image_slots_tests;
 #[cfg(test)]
 #[path = "cleanup_card_height_equalize_tests.rs"]
 mod tests_card_height_equalize;
-
-#[cfg(test)]
-#[path = "cleanup_desktop_dashboard_tests.rs"]
-mod tests_desktop_dashboard;
-
 #[cfg(test)]
 #[path = "cleanup_deck_geometry_tests.rs"]
 mod tests_deck_geometry;
+#[cfg(test)]
+#[path = "cleanup_desktop_dashboard_tests.rs"]
+mod tests_desktop_dashboard;

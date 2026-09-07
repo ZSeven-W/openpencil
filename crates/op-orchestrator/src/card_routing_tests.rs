@@ -144,6 +144,7 @@ fn the_card_board_survives_plan_normalization() {
                 width: 1080.0,
                 height: 1440.0,
             },
+            bleed_hero: false,
             id_prefix: String::new(),
             parent_frame_id: None,
             insert_after_sibling_id: None,

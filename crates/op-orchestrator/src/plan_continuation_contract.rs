@@ -107,6 +107,7 @@ pub(super) fn apply(plan: &mut OrchestratorPlan, req: &DesignRequest) -> bool {
                     width: context.screen_width,
                     height: context.screen_height,
                 },
+                bleed_hero: false,
                 id_prefix: id,
                 parent_frame_id: None,
                 insert_after_sibling_id: None,

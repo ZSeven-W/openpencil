@@ -66,6 +66,9 @@ fn collect_in_tree<'a>(
     ancestors: &mut Vec<&'a Value>,
     cmds: &mut Vec<EditorCommand>,
 ) {
+    if crate::hero_bleed::is_bleed_section_or_flush_media(v) {
+        return;
+    }
     // Only an explicit `layout: "none"` stack pins children by x/y while still
     // honouring their `fill_container` keywords; a layout-less container
     // defaults to a row flow where an authored x/y carries no inset intent.

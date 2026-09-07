@@ -14,6 +14,7 @@ fn subtask() -> Subtask {
             width: 390.0,
             height: 200.0,
         },
+        bleed_hero: false,
         id_prefix: "section".into(),
         parent_frame_id: None,
         insert_after_sibling_id: None,

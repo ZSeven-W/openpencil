@@ -44,6 +44,7 @@ fn card_subtask() -> crate::plan::Subtask {
             width: 1080.0,
             height: 600.0,
         },
+        bleed_hero: false,
         id_prefix: "rule-01".into(),
         parent_frame_id: None,
         insert_after_sibling_id: None,

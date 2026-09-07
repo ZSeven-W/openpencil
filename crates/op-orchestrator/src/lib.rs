@@ -115,6 +115,7 @@ pub(crate) mod cleanup_layout;
 pub(crate) mod cleanup_typography;
 pub mod concurrent;
 pub mod geometry_validation;
+pub(crate) mod hero_bleed;
 pub mod loop_finalize;
 pub mod nav_issues;
 pub mod prompt;

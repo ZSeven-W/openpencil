@@ -61,6 +61,10 @@ pub struct Subtask {
     pub id: String,
     pub label: String,
     pub region: Region,
+    /// Derived by plan normalization from the section's visual archetype.
+    /// The planner does not own this field and it is never serialized back.
+    #[serde(default, skip_serializing)]
+    pub bleed_hero: bool,
     /// 规范化后赋值 = `id`。
     #[serde(default)]
     pub id_prefix: String,
@@ -211,6 +215,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                         width: context.screen_width,
                         height: context.screen_height,
                     },
+                    bleed_hero: false,
                     id_prefix: id,
                     parent_frame_id: None,
                     insert_after_sibling_id: None,
@@ -277,6 +282,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                         width,
                         height: top_h,
                     },
+                    bleed_hero: false,
                     id_prefix: "top-summary".into(),
                     parent_frame_id: Some("page".into()),
                     insert_after_sibling_id: None,
@@ -298,6 +304,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                         width,
                         height: main_h,
                     },
+                    bleed_hero: false,
                     id_prefix: "main-content".into(),
                     parent_frame_id: Some("page".into()),
                     insert_after_sibling_id: None,
@@ -334,6 +341,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                     width: WIDTH,
                     height: SECTION_HEIGHT,
                 },
+                bleed_hero: false,
                 id_prefix: id,
                 parent_frame_id: None,
                 insert_after_sibling_id: None,
@@ -403,6 +411,7 @@ fn build_fallback_deck_plan(req: &DesignRequest, preset: DesignTypePreset) -> Or
                     width: preset.width,
                     height: preset.root_height,
                 },
+                bleed_hero: false,
                 id_prefix: id,
                 // Left to `plan_normalize`, which rewrites it per screen group.
                 parent_frame_id: None,
@@ -688,6 +697,7 @@ mod tests {
                 width: 1200.0,
                 height: 400.0,
             },
+            bleed_hero: false,
             id_prefix: "hero".into(),
             parent_frame_id: None,
             insert_after_sibling_id: None,
@@ -710,6 +720,7 @@ mod tests {
                 width: 1200.0,
                 height: 400.0,
             },
+            bleed_hero: false,
             id_prefix: "features".into(),
             parent_frame_id: None,
             insert_after_sibling_id: None,
@@ -734,6 +745,7 @@ mod tests {
                 width: 1200.0,
                 height: 400.0,
             },
+            bleed_hero: false,
             id_prefix: "hero".into(),
             parent_frame_id: None,
             insert_after_sibling_id: None,

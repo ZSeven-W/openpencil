@@ -32,6 +32,7 @@ fn hero_subtask() -> crate::plan::Subtask {
             width: 1440.0,
             height: 720.0,
         },
+        bleed_hero: false,
         id_prefix: "hero".into(),
         parent_frame_id: None,
         insert_after_sibling_id: None,
