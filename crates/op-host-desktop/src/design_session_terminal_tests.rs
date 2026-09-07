@@ -22,6 +22,7 @@ fn failed_subtask(id: &str, label: &str) -> op_orchestrator::plan::Subtask {
         generated_root_id: None,
         existing_section_labels: None,
         retry_feedback: None,
+        bleed_hero: false,
     }
 }
 
