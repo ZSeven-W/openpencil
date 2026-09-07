@@ -3,9 +3,35 @@
 //! `providers.rs` spine to keep it under the 800-line cap; pure code motion.
 
 use super::{
+    pacing::{
+        cache_token, cached_token, drop_cached_token, record_response, retry_after_seconds,
+        retry_delay, token_lock, wait_for_request,
+    },
     read_capped, retain_relevant_hits, two_keyword_retry, WebImageSearchHit,
     WebOpenverseCredentials, MAX_EMBEDDED_IMAGE_BYTES, SEARCH_CANDIDATE_COUNT, SEARCH_RESULT_COUNT,
 };
+
+/// Catalogue/token calls get a longer budget than the shared 8 s client
+/// timeout: Openverse answers a cold query in ~9 s on a slow day, and a
+/// timed-out list request is indistinguishable from "no results" downstream.
+const CATALOGUE_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// `reqwest::Error`'s `Display` stops at "error sending request"; the cause
+/// (timeout, connection reset, TLS) sits in the source chain.
+pub(crate) fn error_chain(err: &dyn std::error::Error) -> String {
+    let mut parts = vec![err.to_string()];
+    let mut source = err.source();
+    while let Some(inner) = source {
+        parts.push(inner.to_string());
+        source = inner.source();
+    }
+    parts.join(": ")
+}
+
+struct TokenResult {
+    token: String,
+    from_cache: bool,
+}
 
 #[derive(Clone)]
 pub struct RawHit {
@@ -44,18 +70,89 @@ pub(crate) async fn fetch_openverse_list_with_aspect(
         url.query_pairs_mut()
             .append_pair("aspect_ratio", aspect_ratio.as_openverse_param());
     }
-    let mut request = client.get(url);
+    let json = fetch_openverse_json(client, url, query, credentials).await?;
+    Some(parse_openverse_results(&json))
+}
+
+pub(crate) async fn fetch_openverse_json(
+    client: &reqwest::Client,
+    url: reqwest::Url,
+    query: &str,
+    credentials: Option<&WebOpenverseCredentials>,
+) -> Option<serde_json::Value> {
+    let mut token = None;
+    let mut token_was_cached = false;
     if let Some(credentials) = credentials {
-        if let Some(token) = fetch_openverse_token(client, credentials).await {
-            request = request.bearer_auth(token);
+        if let Some(result) = fetch_openverse_token_with_source(client, credentials, false).await {
+            token = Some(result.token);
+            token_was_cached = result.from_cache;
         }
     }
-    let resp = request.send().await.ok()?;
-    if !resp.status().is_success() {
-        return None;
+
+    let mut retried_429 = false;
+    let mut refreshed_401 = false;
+    loop {
+        if !wait_for_request().await {
+            return None;
+        }
+        let mut request = client.get(url.clone()).timeout(CATALOGUE_REQUEST_TIMEOUT);
+        if let Some(token) = token.as_deref() {
+            request = request.bearer_auth(token);
+        }
+        let resp = match request.send().await {
+            Ok(resp) => resp,
+            Err(err) => {
+                // A transport failure (today: Openverse cold queries taking
+                // longer than the shared 8 s client timeout) used to vanish
+                // as a silent `k=0`; name it so the log tells a slow API
+                // apart from an empty catalogue.
+                eprintln!(
+                    "[ENRICH] openverse: request failed for \"{query}\": {}",
+                    error_chain(&err)
+                );
+                return None;
+            }
+        };
+        let status = resp.status();
+        let retry_after = if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            Some(retry_after_seconds(resp.headers()))
+        } else {
+            None
+        };
+        record_response(resp.headers());
+        if !status.is_success() {
+            if let Some(retry_after) = retry_after {
+                eprintln!(
+                    "[ENRICH] openverse: HTTP {status} for \"{query}\" (retry-after={retry_after}s)"
+                );
+            } else {
+                eprintln!("[ENRICH] openverse: HTTP {status} for \"{query}\"");
+            }
+            if status == reqwest::StatusCode::TOO_MANY_REQUESTS && !retried_429 {
+                retried_429 = true;
+                retry_delay(resp.headers()).await;
+                continue;
+            }
+            if status == reqwest::StatusCode::UNAUTHORIZED && token_was_cached && !refreshed_401 {
+                refreshed_401 = true;
+                if let Some(credentials) = credentials {
+                    drop_cached_token(&credentials.client_id);
+                    if let Some(result) =
+                        fetch_openverse_token_with_source(client, credentials, true).await
+                    {
+                        token = Some(result.token);
+                        token_was_cached = result.from_cache;
+                    } else {
+                        token = None;
+                        token_was_cached = false;
+                    }
+                    continue;
+                }
+            }
+            return None;
+        }
+        return read_json_capped(resp).await;
     }
-    let json = read_json_capped(resp).await?;
-    Some(parse_openverse_results(&json))
 }
 
 /// Catalogue-list bodies are small JSON; 4 MiB bounds a misbehaving reply.
@@ -316,23 +413,87 @@ pub async fn fetch_openverse_token(
     client: &reqwest::Client,
     credentials: &WebOpenverseCredentials,
 ) -> Option<String> {
-    let resp = client
-        .post("https://api.openverse.org/v1/auth_tokens/token/")
-        .form(&[
-            ("grant_type", "client_credentials"),
-            ("client_id", credentials.client_id.as_str()),
-            ("client_secret", credentials.client_secret.as_str()),
-        ])
-        .send()
+    fetch_openverse_token_with_source(client, credentials, false)
         .await
-        .ok()?;
-    if !resp.status().is_success() {
-        return None;
+        .map(|result| result.token)
+}
+
+async fn fetch_openverse_token_with_source(
+    client: &reqwest::Client,
+    credentials: &WebOpenverseCredentials,
+    force_refresh: bool,
+) -> Option<TokenResult> {
+    let lock = token_lock(&credentials.client_id);
+    let _guard = lock.lock().await;
+    if !force_refresh {
+        if let Some(token) = cached_token(&credentials.client_id) {
+            return Some(TokenResult {
+                token,
+                from_cache: true,
+            });
+        }
+    } else {
+        drop_cached_token(&credentials.client_id);
     }
-    let json = read_json_capped(resp).await?;
-    json.get("access_token")
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim)
-        .filter(|token| !token.is_empty())
-        .map(str::to_string)
+
+    let mut retried_429 = false;
+    loop {
+        if !wait_for_request().await {
+            return None;
+        }
+        let resp = client
+            .post("https://api.openverse.org/v1/auth_tokens/token/")
+            .form(&[
+                ("grant_type", "client_credentials"),
+                ("client_id", credentials.client_id.as_str()),
+                ("client_secret", credentials.client_secret.as_str()),
+            ])
+            .timeout(CATALOGUE_REQUEST_TIMEOUT)
+            .send()
+            .await;
+        let resp = match resp {
+            Ok(resp) => resp,
+            Err(err) => {
+                eprintln!(
+                    "[ENRICH] openverse-token: request failed: {}",
+                    error_chain(&err)
+                );
+                return None;
+            }
+        };
+        let status = resp.status();
+        let retry_after = if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            Some(retry_after_seconds(resp.headers()))
+        } else {
+            None
+        };
+        record_response(resp.headers());
+        if !status.is_success() {
+            if let Some(retry_after) = retry_after {
+                eprintln!("[ENRICH] openverse-token: HTTP {status} (retry-after={retry_after}s)");
+            } else {
+                eprintln!("[ENRICH] openverse-token: HTTP {status}");
+            }
+            if status == reqwest::StatusCode::TOO_MANY_REQUESTS && !retried_429 {
+                retried_429 = true;
+                retry_delay(resp.headers()).await;
+                continue;
+            }
+            return None;
+        }
+        let json = read_json_capped(resp).await?;
+        let token = json
+            .get("access_token")
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|token| !token.is_empty())
+            .map(str::to_string)?;
+        if let Some(expires_in) = json.get("expires_in").and_then(serde_json::Value::as_u64) {
+            cache_token(&credentials.client_id, token.clone(), expires_in);
+        }
+        return Some(TokenResult {
+            token,
+            from_cache: false,
+        });
+    }
 }

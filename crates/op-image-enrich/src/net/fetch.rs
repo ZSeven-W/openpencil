@@ -15,7 +15,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use crate::net::providers::{
-    fetch_image_and_judge_thumbnail, fetch_openverse_list_with_aspect, fetch_openverse_token,
+    fetch_image_and_judge_thumbnail, fetch_openverse_json, fetch_openverse_list_with_aspect,
     normalize_image_mime_header, retain_relevant_hits_for_fetch, rewrite_queries,
     simplify_search_query, two_keyword_retry, wikimedia_info_is_image, RawHit,
     WebOpenverseCredentials, MAX_EMBEDDED_IMAGE_BYTES,
@@ -189,6 +189,7 @@ async fn fetch_judged_openverse(
 ) -> Option<String> {
     const ROUND_SIZE: usize = 5;
     const MAX_JUDGE_CANDIDATES: usize = ROUND_SIZE * 2;
+    let taken = hits.len().min(MAX_JUDGE_CANDIDATES);
     let mut candidates = Vec::new();
     for hit in hits.into_iter().take(MAX_JUDGE_CANDIDATES) {
         let Some((data_url, thumb_jpeg)) =
@@ -200,6 +201,14 @@ async fn fetch_judged_openverse(
             data_url,
             thumb_jpeg,
         });
+    }
+    if candidates.len() < taken {
+        // Thumbnail downloads that fail are the last silent way to a `k=0`;
+        // name them so a slow CDN is not read as an empty catalogue.
+        eprintln!(
+            "[ENRICH] {source}: \"{query}\" thumbnails fetched {}/{taken}",
+            candidates.len()
+        );
     }
 
     let batches: Vec<Vec<Vec<u8>>> = candidates
@@ -325,7 +334,14 @@ async fn fetch_relevant_openverse_list_with_aspect(
     };
     let retry =
         fetch_openverse_list_with_aspect(client, &retry_query, aspect_ratio, credentials).await?;
-    Some(retain_relevant_hits_for_fetch(retry, query))
+    let retry_total = retry.len();
+    let relevant = retain_relevant_hits_for_fetch(retry, query);
+    if relevant.is_empty() && retry_total > 0 {
+        eprintln!(
+            "[ENRICH] openverse: \"{query}\" {retry_total} hits for \"{retry_query}\", none lexically relevant"
+        );
+    }
+    Some(relevant)
 }
 
 async fn fetch_openverse(
@@ -336,17 +352,7 @@ async fn fetch_openverse(
     used_urls: &Mutex<HashSet<String>>,
 ) -> Option<String> {
     let url = openverse_search_url(query, aspect_ratio)?;
-    let mut request = client.get(url);
-    if let Some(credentials) = credentials {
-        if let Some(token) = fetch_openverse_token(client, credentials).await {
-            request = request.bearer_auth(token);
-        }
-    }
-    let resp = request.send().await.ok()?;
-    if !resp.status().is_success() {
-        return None;
-    }
-    let json: serde_json::Value = resp.json().await.ok()?;
+    let json = fetch_openverse_json(client, url, query, credentials).await?;
     let results = json.get("results")?.as_array()?;
     let (result, identity) = claim_openverse_result(results, query, used_urls)?;
     let mut candidates = Vec::new();

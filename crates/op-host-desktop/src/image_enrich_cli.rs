@@ -7,6 +7,10 @@
 //! intentionally search-only: Auto and Search targets use stock search, while
 //! an explicit Generate target fails instead of silently changing acquisition
 //! mode.
+//!
+//! Headless Openverse credentials may also be supplied with
+//! `OPENPENCIL_OPENVERSE_CLIENT_ID` and `OPENPENCIL_OPENVERSE_CLIENT_SECRET`.
+//! These are used only when both persisted Openverse settings are empty.
 
 use std::ffi::OsString;
 use std::fmt;

@@ -286,10 +286,21 @@ fn concrete_query_words(query: &str) -> Vec<String> {
         .collect()
 }
 
+/// Lower-cased ASCII word tokens. A hyphen joining two alphanumerics stays
+/// inside the word ("push-up", "t-shirt"): splitting it used to turn the
+/// rewrite of "push-up exercise" into "up exercise".
 fn lexical_words(value: &str) -> Vec<String> {
+    let lower = value.to_lowercase();
+    let chars: Vec<char> = lower.chars().collect();
     let mut normalized = String::with_capacity(value.len());
-    for ch in value.to_lowercase().chars() {
-        if ch.is_ascii_alphanumeric() {
+    for (index, &ch) in chars.iter().enumerate() {
+        let joins_word = ch == '-'
+            && index > 0
+            && chars[index - 1].is_ascii_alphanumeric()
+            && chars
+                .get(index + 1)
+                .is_some_and(char::is_ascii_alphanumeric);
+        if ch.is_ascii_alphanumeric() || joins_word {
             normalized.push(ch);
         } else {
             normalized.push(' ');

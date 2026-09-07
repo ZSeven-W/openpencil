@@ -40,11 +40,20 @@ pub(crate) struct OpenverseCredentials(WebOpenverseCredentials);
 impl OpenverseCredentials {
     pub(crate) fn from_state(state: &EditorState) -> Option<Self> {
         let settings = &state.editor_ui.agent_settings;
-        WebOpenverseCredentials::from_parts(
-            &settings.openverse_client_id,
-            &settings.openverse_client_secret,
-        )
-        .map(Self)
+        let (client_id, client_secret) = if settings.openverse_client_id.trim().is_empty()
+            && settings.openverse_client_secret.trim().is_empty()
+        {
+            (
+                std::env::var("OPENPENCIL_OPENVERSE_CLIENT_ID").unwrap_or_default(),
+                std::env::var("OPENPENCIL_OPENVERSE_CLIENT_SECRET").unwrap_or_default(),
+            )
+        } else {
+            (
+                settings.openverse_client_id.clone(),
+                settings.openverse_client_secret.clone(),
+            )
+        };
+        WebOpenverseCredentials::from_parts(&client_id, &client_secret).map(Self)
     }
 
     pub(crate) fn as_web(&self) -> &WebOpenverseCredentials {

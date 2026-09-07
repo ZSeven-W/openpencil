@@ -292,3 +292,13 @@ fn isolated_query_requires_positive_isolation_metadata() {
 
     assert_eq!(ids, ["isolated", "white-background", "cutout"]);
 }
+
+#[test]
+fn hyphenated_compound_survives_the_two_keyword_rewrite() {
+    // The two-word tail equals the query itself, so no rewrite is offered.
+    assert!(rewrite_queries("push-up exercise", "").is_empty());
+    let rewrites = rewrite_queries("dark gym push-up exercise", "");
+    assert_eq!(rewrites[0], "push-up exercise");
+    let rewrites = rewrite_queries("fresh - salad bowl", "");
+    assert_eq!(rewrites[0], "salad bowl");
+}

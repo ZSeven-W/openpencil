@@ -17,10 +17,13 @@
 
 mod catalog;
 mod download;
+pub(crate) mod pacing;
 mod relevance;
 
 pub(crate) use catalog::wikimedia_info_is_image;
-pub(crate) use catalog::{fetch_openverse_list, fetch_openverse_list_with_aspect};
+pub(crate) use catalog::{
+    fetch_openverse_json, fetch_openverse_list, fetch_openverse_list_with_aspect,
+};
 pub use catalog::{
     fetch_openverse_token, parse_openverse_results, parse_wikimedia_results, RawHit,
 };

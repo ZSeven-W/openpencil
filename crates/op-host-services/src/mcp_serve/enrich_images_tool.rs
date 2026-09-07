@@ -139,10 +139,23 @@ struct WebSearchBackend {
 impl WebSearchBackend {
     fn from_state(state: &EditorState) -> Self {
         let settings = &state.editor_ui.agent_settings;
+        let (client_id, client_secret) = if settings.openverse_client_id.trim().is_empty()
+            && settings.openverse_client_secret.trim().is_empty()
+        {
+            (
+                std::env::var("OPENPENCIL_OPENVERSE_CLIENT_ID").unwrap_or_default(),
+                std::env::var("OPENPENCIL_OPENVERSE_CLIENT_SECRET").unwrap_or_default(),
+            )
+        } else {
+            (
+                settings.openverse_client_id.clone(),
+                settings.openverse_client_secret.clone(),
+            )
+        };
         Self {
             credentials: crate::web_image_search::WebOpenverseCredentials::from_parts(
-                &settings.openverse_client_id,
-                &settings.openverse_client_secret,
+                &client_id,
+                &client_secret,
             ),
         }
     }

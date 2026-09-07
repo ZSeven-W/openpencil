@@ -24,8 +24,23 @@ pub async fn fetch_image_bytes(
     url: &str,
     cap: usize,
 ) -> Option<(String, Vec<u8>)> {
-    let resp = client.get(url).send().await.ok()?;
+    let resp = match client.get(url).send().await {
+        Ok(resp) => resp,
+        Err(err) => {
+            eprintln!(
+                "[ENRICH] image download failed: {}: {}",
+                short_url(url),
+                super::catalog::error_chain(&err)
+            );
+            return None;
+        }
+    };
     if !resp.status().is_success() {
+        eprintln!(
+            "[ENRICH] image download HTTP {}: {}",
+            resp.status(),
+            short_url(url)
+        );
         return None;
     }
     let header_mime = resp
@@ -108,4 +123,9 @@ pub fn sniff_image_mime(bytes: &[u8]) -> Option<&'static str> {
         return Some("image/webp");
     }
     None
+}
+
+/// Scheme + host + path (query stripped) for log lines.
+fn short_url(url: &str) -> &str {
+    url.split('?').next().unwrap_or(url)
 }
