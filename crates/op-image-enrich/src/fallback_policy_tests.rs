@@ -109,3 +109,44 @@ fn retry_inverse_restores_the_same_image_id_and_intent() {
     assert_eq!(restored.src, "");
     assert_eq!(restored.image_search_query.as_deref(), Some("forest trail"));
 }
+
+#[test]
+fn a_failed_slot_under_overlay_text_becomes_a_silent_block() {
+    // The hero shape: a `layout: none` stack with the title laid over the
+    // image. The tile must not put an icon or a caption under that title.
+    let stack: PenNode = serde_json::from_value(json!({
+        "type": "frame", "id": "stack", "layout": "none", "width": 375, "height": 350,
+        "children": [
+            {"type": "frame", "id": "overlay", "x": 0, "y": 105, "width": 375,
+             "children": [{"type": "text", "id": "title", "content": "Full Body Burn"}]},
+            {"type": "image", "id": "hero", "name": "Hero image", "x": 0, "y": 0,
+             "src": SEARCH_FAILED_PLACEHOLDER_SRC, "imageSearchQuery": "dark gym workout",
+             "width": 375, "height": 350}
+        ]
+    }))
+    .expect("valid stack fixture");
+
+    let patches = image_fallback_policy(&stack, false);
+    assert_eq!(patches.len(), 1);
+    assert_eq!(patches[0].node_id, "hero");
+    assert_eq!(patches[0].branch, ImageFallbackBranch::Covered);
+    let patch = patch_value(&patches[0]);
+    assert_eq!(patch["children"], json!([]));
+    assert_eq!(patch["fill"][0]["color"], "$--muted");
+    assert_eq!(patch["imageSearchQuery"], "dark gym workout");
+
+    // The same slot in a stack WITHOUT text keeps the icon + caption tile.
+    let plain: PenNode = serde_json::from_value(json!({
+        "type": "frame", "id": "stack", "layout": "none", "width": 375, "height": 350,
+        "children": [
+            {"type": "image", "id": "hero", "name": "Hero image", "x": 0, "y": 0,
+             "src": SEARCH_FAILED_PLACEHOLDER_SRC, "imageSearchQuery": "dark gym workout",
+             "width": 375, "height": 350}
+        ]
+    }))
+    .expect("valid stack fixture");
+    assert_eq!(
+        image_fallback_policy(&plain, false)[0].branch,
+        ImageFallbackBranch::Media
+    );
+}

@@ -297,7 +297,11 @@ pub fn detect_design_type(prompt: &str) -> DesignTypePreset {
     // ② 单组件:触发词命中 且 disqualifier 不命中。
     let trigger = contains_any(&lower, COMPONENT_TRIGGER_LATIN)
         || contains_any(&lower, COMPONENT_TRIGGER_CJK);
-    if trigger && !contains_any(&lower, COMPONENT_DISQUALIFIER) {
+    // Phone geometry is a screen contract even when a component trigger appears.
+    if trigger
+        && !contains_any(&lower, COMPONENT_DISQUALIFIER)
+        && !mentions_phone_dimensions(&lower)
+    {
         return COMPONENT;
     }
     // ③ 演示文稿。放在移动端之前:"手机端演示" 说的是内容形态是 deck,
@@ -479,6 +483,13 @@ mod tests {
         );
         assert_eq!(
             detect_design_type("Workout detail screen (390x844) with a hero image").type_,
+            DesignType::MobileScreen
+        );
+        assert_eq!(
+            detect_design_type(
+                "短视频平台首页（375×812，暗色）：顶部分类标签、推荐视频六卡、底部导航。"
+            )
+            .type_,
             DesignType::MobileScreen
         );
         assert_ne!(

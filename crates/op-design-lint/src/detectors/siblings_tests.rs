@@ -311,6 +311,87 @@ mod mixed_padding_tests {
     }
 
     #[test]
+    fn ignores_coloured_full_bleed_section_when_matching_sibling_padding() {
+        let root = node(json!({
+            "type": "frame", "id": "root", "width": 375, "height": 812,
+            "layout": "vertical",
+            "children": [
+                {"type": "frame", "id": "status", "role": "status-bar"},
+                {
+                    "type": "frame", "id": "map", "padding": [0, 0],
+                    "children": [{
+                        "type": "frame", "id": "map-placeholder",
+                        "width": "fill_container",
+                        "fill": [{"type": "solid", "color": "#223344"}]
+                    }]
+                },
+                {"type": "frame", "id": "section-a", "padding": [0, 24, 0, 24]},
+                {"type": "frame", "id": "section-b", "padding": [0, 24, 0, 24]},
+                {"type": "frame", "id": "section-c", "padding": [0, 24, 0, 24]}
+            ]
+        }));
+
+        assert!(detect_mixed_sibling_padding(&root).is_empty());
+    }
+
+    #[test]
+    fn ignores_full_bleed_section_whose_media_sits_in_a_transparent_none_stack() {
+        // The shape the orchestrator's hero-bleed pass leaves behind: a
+        // transparent overlay stack that spans the width, holding the map
+        // placeholder plus controls; the section itself has no padding.
+        let root = node(json!({
+            "type": "frame", "id": "root", "width": 375, "height": 812,
+            "layout": "vertical",
+            "children": [
+                {"type": "frame", "id": "status", "role": "status-bar"},
+                {
+                    "type": "frame", "id": "map", "padding": [0, 0],
+                    "children": [{
+                        "type": "frame", "id": "stack", "layout": "none",
+                        "width": "fill_container", "height": 280,
+                        "children": [
+                            {"type": "frame", "id": "recenter", "width": "fill_container",
+                             "fill": [{"type": "solid", "color": "#ffffff"}]},
+                            {"type": "ellipse", "id": "dot", "width": 14, "x": 169},
+                            {"type": "frame", "id": "map-placeholder",
+                             "width": "fill_container", "x": 0,
+                             "fill": [{"type": "solid", "color": "#223344"}]}
+                        ]
+                    }]
+                },
+                {"type": "frame", "id": "section-a", "padding": [0, 24, 0, 24]},
+                {"type": "frame", "id": "section-b", "padding": [0, 24, 0, 24]},
+                {"type": "frame", "id": "section-c", "padding": [0, 24, 0, 24]}
+            ]
+        }));
+
+        assert!(detect_mixed_sibling_padding(&root).is_empty());
+    }
+
+    #[test]
+    fn ignores_image_full_bleed_section_when_matching_sibling_padding() {
+        let root = node(json!({
+            "type": "frame", "id": "root", "width": 375, "height": 812,
+            "layout": "vertical",
+            "children": [
+                {"type": "frame", "id": "status", "role": "status-bar"},
+                {
+                    "type": "frame", "id": "hero", "padding": [0, 0],
+                    "children": [{
+                        "type": "image", "id": "hero-image",
+                        "width": "fill_container", "src": "hero.png"
+                    }]
+                },
+                {"type": "frame", "id": "section-a", "padding": [0, 24, 0, 24]},
+                {"type": "frame", "id": "section-b", "padding": [0, 24, 0, 24]},
+                {"type": "frame", "id": "section-c", "padding": [0, 24, 0, 24]}
+            ]
+        }));
+
+        assert!(detect_mixed_sibling_padding(&root).is_empty());
+    }
+
+    #[test]
     fn current_value_normalizes_integral_padding_to_json_integer() {
         // jian deserializes JSON `20` into `Padding`'s f64 fields; the
         // `current_value` must serialize back as the integer `20`, not the

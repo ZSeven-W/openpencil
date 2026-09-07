@@ -44,6 +44,16 @@ pub(super) fn debug_probe_child_height(sink: &dyn DocSink, root_id: &str, tag: &
         if name.to_lowercase().contains("sidebar") {
             eprintln!("[CLEANUP-PROBE] {tag}: {name} height={:?}", c.get("height"));
         }
+        if name.ends_with(" (bleed)") {
+            eprintln!(
+                "[CLEANUP-PROBE] {tag}: {name} padding={:?} first-child-width={:?}",
+                c.get("padding"),
+                c.get("children")
+                    .and_then(|children| children.as_array())
+                    .and_then(|children| children.first())
+                    .and_then(|first| first.get("width"))
+            );
+        }
     }
 }
 

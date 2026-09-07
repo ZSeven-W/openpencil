@@ -118,7 +118,7 @@ fn is_image_only_section(node: &PenNode) -> bool {
     })
 }
 
-fn is_full_bleed_section(node: &PenNode, root_width: f64) -> bool {
+pub(super) fn is_full_bleed_section(node: &PenNode, root_width: f64) -> bool {
     let child_role = role(node).unwrap_or("").to_lowercase();
     FULL_BLEED_ROLES.contains(&child_role.as_str())
         || is_image_only_section(node)
@@ -127,7 +127,29 @@ fn is_full_bleed_section(node: &PenNode, root_width: f64) -> bool {
 
 fn has_transparent_full_bleed_media_child(node: &PenNode, root_width: f64) -> bool {
     is_transparent_container(node)
-        && children(node).iter().any(|child| {
+        && children(node)
+            .iter()
+            .any(|child| is_full_bleed_media(child, root_width, true))
+}
+
+/// A media child that spans the width: an image / media-role node, a
+/// text-free coloured block, or (one level only) a transparent `layout: none`
+/// stack that spans the width and holds such a node — the shape the
+/// orchestrator's hero-bleed pass leaves behind when the hero image sits in
+/// an overlay stack with its scrim and controls.
+fn is_full_bleed_media(child: &PenNode, root_width: f64, look_into_stack: bool) -> bool {
+    if look_into_stack
+        && matches!(node_kind(child), NodeKind::Frame)
+        && is_transparent_container(child)
+        && layout_is_none(child)
+        && node_spans_width(child, root_width)
+    {
+        return children(child)
+            .iter()
+            .any(|nested| is_full_bleed_media(nested, root_width, false));
+    }
+    {
+        {
             let child_role = role(child).unwrap_or("").trim().to_ascii_lowercase();
             let role_is_media = matches!(
                 child_role.as_str(),
@@ -143,14 +165,44 @@ fn has_transparent_full_bleed_media_child(node: &PenNode, root_width: f64) -> bo
                             .iter()
                             .any(|fill| fill.get("type").and_then(Value::as_str) == Some("image"))
                     });
-            (role_is_media || image_like) && node_spans_width(child, root_width)
+            let coloured_media = is_coloured_media(child);
+            (role_is_media || image_like || coloured_media) && node_spans_width(child, root_width)
+        }
+    }
+}
+
+fn layout_is_none(node: &PenNode) -> bool {
+    match node {
+        PenNode::Frame(node) => node.container.layout == Some(LayoutMode::None),
+        _ => false,
+    }
+}
+
+fn is_coloured_media(node: &PenNode) -> bool {
+    matches!(node_kind(node), NodeKind::Frame | NodeKind::Rectangle)
+        && serde_json::to_value(node).ok().is_some_and(|value| {
+            value
+                .get("fill")
+                .and_then(Value::as_array)
+                .is_some_and(|fills| {
+                    fills.iter().any(|fill| {
+                        matches!(
+                            fill.get("type").and_then(Value::as_str),
+                            Some("solid" | "linear_gradient" | "radial_gradient")
+                        )
+                    })
+                })
         })
+        && !children(node)
+            .iter()
+            .any(|child| matches!(node_kind(child), NodeKind::Text))
 }
 
 fn node_spans_width(node: &PenNode, root_width: f64) -> bool {
     node_width(node).is_some_and(|width| {
         matches!(width, SizingBehavior::Keyword(SizingKeyword::FillContainer))
-            || matches!(width, SizingBehavior::Number(width) if *width >= root_width - 1.0)
+            || (root_width > 0.0
+                && matches!(width, SizingBehavior::Number(width) if *width >= root_width - 1.0))
     })
 }
 
@@ -164,7 +216,7 @@ fn node_width(node: &PenNode) -> Option<&SizingBehavior> {
     }
 }
 
-fn numeric_width(node: &PenNode) -> Option<f64> {
+pub(super) fn numeric_width(node: &PenNode) -> Option<f64> {
     match node_width(node) {
         Some(SizingBehavior::Number(width)) => Some(*width),
         _ => None,

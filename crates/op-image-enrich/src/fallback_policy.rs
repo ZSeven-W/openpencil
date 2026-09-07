@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use jian_ops_schema::node::PenNode;
+use jian_ops_schema::node::{container::LayoutMode, PenNode};
 use jian_ops_schema::style::PenFill;
 use op_editor_core::{walkers, EditorCommand, EditorState, NodeId, PenNodeExt};
 use serde_json::{json, Value};
@@ -23,6 +23,10 @@ const SVG_PLACEHOLDER_SRC_PREFIX: &str = "data:image/svg+xml;charset=utf-8,%3Csv
 pub enum ImageFallbackBranch {
     Thumb,
     Media,
+    /// A media slot underneath overlay text (the hero image in a `layout:
+    /// none` stack with a title on top): a silent tonal block, no icon and no
+    /// caption, so the tile never collides with the content laid over it.
+    Covered,
 }
 
 impl ImageFallbackBranch {
@@ -30,6 +34,7 @@ impl ImageFallbackBranch {
         match self {
             Self::Thumb => "thumb",
             Self::Media => "media",
+            Self::Covered => "covered",
         }
     }
 }
@@ -53,7 +58,7 @@ pub fn image_fallback_policy_with_widths(
     after_enrich: bool,
 ) -> Vec<ImageFallbackPatch> {
     let mut patches = Vec::new();
-    collect_patches(root, resolved_widths, after_enrich, &mut patches);
+    collect_patches(root, resolved_widths, after_enrich, false, &mut patches);
     patches
 }
 
@@ -61,23 +66,40 @@ fn collect_patches(
     node: &PenNode,
     resolved_widths: &HashMap<String, f64>,
     after_enrich: bool,
+    covered_by_overlay: bool,
     patches: &mut Vec<ImageFallbackPatch>,
 ) {
-    if let Some(patch) = fallback_patch(node, resolved_widths, after_enrich) {
+    if let Some(patch) = fallback_patch(node, resolved_widths, after_enrich, covered_by_overlay) {
         patches.push(patch);
         return;
     }
     if let Some(children) = node.children() {
+        let child_covered = is_overlay_stack_with_text(node, children);
         for child in children {
-            collect_patches(child, resolved_widths, after_enrich, patches);
+            collect_patches(child, resolved_widths, after_enrich, child_covered, patches);
         }
     }
+}
+
+/// A `layout: none` frame whose children include text: everything in it is
+/// stacked, so a media slot there sits underneath (or behind) that text.
+fn is_overlay_stack_with_text(node: &PenNode, children: &[PenNode]) -> bool {
+    matches!(node, PenNode::Frame(frame) if frame.container.layout == Some(LayoutMode::None))
+        && children.iter().any(has_text_descendant)
+}
+
+fn has_text_descendant(node: &PenNode) -> bool {
+    matches!(node, PenNode::Text(_))
+        || node
+            .children()
+            .is_some_and(|children| children.iter().any(has_text_descendant))
 }
 
 fn fallback_patch(
     node: &PenNode,
     resolved_widths: &HashMap<String, f64>,
     after_enrich: bool,
+    covered_by_overlay: bool,
 ) -> Option<ImageFallbackPatch> {
     if !matches!(
         node,
@@ -99,6 +121,8 @@ fn fallback_patch(
         .unwrap_or(160.0);
     let branch = if width <= 96.0 {
         ImageFallbackBranch::Thumb
+    } else if covered_by_overlay {
+        ImageFallbackBranch::Covered
     } else {
         ImageFallbackBranch::Media
     };
@@ -110,6 +134,7 @@ fn fallback_patch(
         ImageFallbackBranch::Media => {
             media_patch(node, &name, &icon_name, &caption_for_query(&query), width)
         }
+        ImageFallbackBranch::Covered => covered_patch(node, &name),
     };
     Some(ImageFallbackPatch {
         node_id: node.id_str().to_string(),
@@ -383,6 +408,20 @@ fn media_patch(node: &PenNode, name: &str, icon_name: &str, caption: &str, width
                 }
             ],
             "explain": fallback_explain(node, ImageFallbackBranch::Media)
+        }),
+    )
+}
+
+fn covered_patch(node: &PenNode, name: &str) -> Value {
+    fallback_frame_patch(
+        node,
+        json!({
+            "type": "frame",
+            "name": name,
+            "fill": solid_fill("$--muted"),
+            "stroke": null,
+            "children": [],
+            "explain": fallback_explain(node, ImageFallbackBranch::Covered)
         }),
     )
 }

@@ -154,6 +154,83 @@ fn section_whose_first_non_status_child_is_text_is_untouched() {
 }
 
 #[test]
+fn none_stack_finds_and_flushes_later_image_and_scrim() {
+    let mut root = evidence_root();
+    root["children"][1] = json!({
+        "type": "frame", "id": "hero-section", "name": "Workout Hero",
+        "width": "fill_container", "height": "fit_content",
+        "layout": "vertical", "padding": [0, 24, 0, 24],
+        "children": [{
+            "type": "frame", "id": "hero-stack", "name": "Hero Media Stack",
+            "layout": "none", "width": 327, "height": 284,
+            "children": [
+                {
+                    "type": "frame", "id": "hero-content", "name": "Hero Content",
+                    "x": 24, "width": 327,
+                    "children": [{"type": "text", "id": "hero-title", "content": "Workout"}]
+                },
+                {
+                    "type": "frame", "id": "back-button", "name": "Back Button",
+                    "x": 16, "width": 44,
+                    "children": [{"type": "text", "id": "back-label", "content": "Back"}]
+                },
+                {
+                    "type": "rectangle", "id": "hero-scrim", "name": "Hero Scrim",
+                    "x": 0, "width": 327,
+                    "fill": [{"type": "linear_gradient", "stops": []}]
+                },
+                {
+                    "type": "image", "id": "hero-image", "name": "Workout Hero Image",
+                    "x": 0, "width": 327, "height": 284, "src": "workout.png"
+                }
+            ]
+        }]
+    });
+    let mut sink = sink_with(root);
+    let mut workout_plan = plan();
+    workout_plan.subtasks[0].label = "Workout Hero".into();
+
+    assert_eq!(enforce(&mut sink, &workout_plan, "root"), 1);
+
+    let hero = root_value(&sink)["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|child| child["name"] == "Workout Hero (bleed)")
+        .cloned()
+        .expect("bleed hero section");
+    assert_eq!(hero["name"], "Workout Hero (bleed)");
+    assert_eq!(hero["padding"], json!([0.0, 0.0, 0.0, 0.0]));
+    let stack = &hero["children"][0];
+    assert_eq!(stack["width"], "fill_container");
+    assert_eq!(stack["children"][0]["x"], 24.0);
+    assert_eq!(stack["children"][0]["width"], 327.0);
+    assert_eq!(stack["children"][2]["width"], "fill_container");
+    assert_eq!(stack["children"][2]["x"], 0.0);
+    assert_eq!(stack["children"][3]["width"], "fill_container");
+    assert_eq!(stack["children"][3]["x"], 0.0);
+}
+
+#[test]
+fn none_stack_without_media_is_untouched() {
+    let mut root = evidence_root();
+    root["children"][1]["children"] = json!([{
+        "type": "frame", "id": "hero-stack", "layout": "none", "width": 327,
+        "children": [
+            {"type": "frame", "id": "copy", "width": 327,
+             "children": [{"type": "text", "id": "title", "content": "Workout"}]},
+            {"type": "frame", "id": "button", "width": 44,
+             "children": [{"type": "text", "id": "label", "content": "Back"}]}
+        ]
+    }]);
+    let mut sink = sink_with(root);
+    let before = root_value(&sink);
+
+    assert_eq!(enforce(&mut sink, &plan(), "root"), 0);
+    assert_eq!(root_value(&sink), before);
+}
+
+#[test]
 fn whole_cleanup_driver_keeps_the_bleed_section_flush() {
     let mut sink = sink_with(evidence_root());
     let mut summary = crate::repair_summary::RepairSummary::default();

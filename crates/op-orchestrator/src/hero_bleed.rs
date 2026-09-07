@@ -61,16 +61,13 @@ pub(crate) fn enforce(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_id: 
     };
 
     let mut next_children = children;
+    let chosen_original_width = value_at_path_mut(&mut next_children, &media_path)
+        .and_then(|media| media.get("width").and_then(Value::as_f64));
     let Some(media) = value_at_path_mut(&mut next_children, &media_path) else {
         return 0;
     };
     media["width"] = Value::String("fill_container".into());
-    if media
-        .get("x")
-        .is_some_and(|x| !x.is_null() && x.as_f64().is_some())
-    {
-        media["x"] = json!(0);
-    }
+    media["x"] = json!(0);
     // A none-stack is the media's containing viewport. It must stretch too;
     // otherwise a fixed-width authored stack would still clip the hero.
     if media_path.len() == 2 {
@@ -79,6 +76,26 @@ pub(crate) fn enforce(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_id: 
             .and_then(Value::as_object_mut)
         {
             stack.insert("width".into(), Value::String("fill_container".into()));
+            if let Some(stack_children) = stack.get_mut("children").and_then(Value::as_array_mut) {
+                let chosen_index = media_path[1];
+                for (index, child) in stack_children.iter_mut().enumerate() {
+                    if index == chosen_index
+                        || crate::cleanup::is_status_bar_from_json(child)
+                        || !child
+                            .get("width")
+                            .and_then(Value::as_f64)
+                            .is_some_and(|width| {
+                                chosen_original_width.is_some_and(|chosen| width == chosen)
+                            })
+                        || !matches!(child.get("type").and_then(Value::as_str), Some("image"))
+                            && !is_coloured_media(child)
+                    {
+                        continue;
+                    }
+                    child["width"] = Value::String("fill_container".into());
+                    child["x"] = json!(0);
+                }
+            }
         }
     }
 
@@ -224,12 +241,16 @@ fn is_flush_media(value: &Value) -> bool {
         return value
             .get("children")
             .and_then(Value::as_array)
-            .and_then(|children| {
+            .is_some_and(|children| {
                 children
                     .iter()
-                    .find(|child| !crate::cleanup::is_status_bar_from_json(child))
-            })
-            .is_some_and(is_flush_media);
+                    .filter(|child| !crate::cleanup::is_status_bar_from_json(child))
+                    .any(|child| {
+                        (child.get("type").and_then(Value::as_str) == Some("image")
+                            || is_coloured_media(child))
+                            && child.get("width").and_then(Value::as_str) == Some("fill_container")
+                    })
+            });
     }
     false
 }
@@ -248,13 +269,18 @@ fn first_media_path(children: &[Value], first_index: usize) -> Option<Vec<usize>
         let nested = first.get("children").and_then(Value::as_array)?;
         let nested_index = nested
             .iter()
-            .position(|child| !crate::cleanup::is_status_bar_from_json(child))?;
-        let nested_child = nested.get(nested_index)?;
-        if nested_child.get("type").and_then(Value::as_str) == Some("image")
-            || is_coloured_media(nested_child)
-        {
-            return Some(vec![first_index, nested_index]);
-        }
+            .enumerate()
+            .filter(|(_, child)| !crate::cleanup::is_status_bar_from_json(child))
+            .find(|(_, child)| child.get("type").and_then(Value::as_str) == Some("image"))
+            .or_else(|| {
+                nested
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, child)| !crate::cleanup::is_status_bar_from_json(child))
+                    .find(|(_, child)| is_coloured_media(child))
+            })
+            .map(|(index, _)| index)?;
+        return Some(vec![first_index, nested_index]);
     }
     if is_coloured_media(first) {
         return Some(vec![first_index]);

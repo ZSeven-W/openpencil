@@ -339,6 +339,9 @@ mod tests {
     use op_editor_core::EditorState;
     use op_orchestrator::PreValidator;
 
+    #[path = "pre_validator_bleed_tests.rs"]
+    mod bleed_tests;
+
     /// Minimal `DocSink` for tests — wraps an `EditorState`, applies
     /// commands through `EditorState::apply`. Modeled on
     /// `op-orchestrator::test_support::VecDocSink`.

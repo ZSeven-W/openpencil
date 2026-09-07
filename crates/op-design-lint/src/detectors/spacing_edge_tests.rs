@@ -377,6 +377,35 @@ fn transparent_full_bleed_media_overlay_is_not_inset() {
 }
 
 #[test]
+fn coloured_full_bleed_media_overlay_is_not_inset() {
+    let root = node(json!({
+        "type":"frame","id":"root","width":375,"height":812,"layout":"vertical",
+        "children":[
+            {
+                "type":"frame","id":"map-section","padding":[0,0],
+                "children":[
+                    {
+                        "type":"frame","id":"map-placeholder",
+                        "width":"fill_container",
+                        "fill":[{"type":"linear_gradient","stops":[]}]
+                    },
+                    {
+                        "type":"frame","id":"map-inset","padding":[0,24],
+                        "children":[{"type":"text","id":"map-title","content":"Map"}]
+                    }
+                ]
+            },
+            {
+                "type":"frame","id":"body","padding":[0,24],
+                "children":[{"type":"text","id":"body-title","content":"Body"}]
+            }
+        ]
+    }));
+
+    assert!(detect_edge_section_padding(&root).is_empty());
+}
+
+#[test]
 fn nested_fit_content_component_without_mobile_chrome_is_not_a_screen() {
     let root = node(json!({
         "type":"frame","id":"desktop-root","width":1200,"height":900,"layout":"vertical",
