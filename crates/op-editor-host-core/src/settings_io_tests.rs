@@ -1,4 +1,5 @@
 use super::*;
+use op_editor_core::ImageTestStatus;
 
 #[path = "settings_io_checked_tests.rs"]
 mod checked_tests;
@@ -694,6 +695,26 @@ fn image_generation_profiles_round_trip_through_payload() {
         dst.editor_ui.agent_settings.image_gen_profiles[1].base_url,
         Some("https://images.example/v1".into())
     );
+}
+
+#[test]
+fn atlas_image_generation_profile_round_trips_through_payload() {
+    let profile = ImageGenProfile {
+        id: "igp-atlas".into(),
+        name: "Atlas Cloud".into(),
+        provider: ImageGenProvider::Atlas,
+        api_key: "image-key".into(),
+        model: "google/nano-banana-2-lite/text-to-image".into(),
+        base_url: None,
+        test_status: ImageTestStatus::Idle,
+    };
+
+    let payload = crate::settings_payload::image_gen_profile_to_payload(&profile);
+    assert_eq!(payload.provider, "atlas");
+    let restored = crate::settings_payload::image_gen_profile_from_payload(payload)
+        .expect("Atlas profile should deserialize");
+    assert_eq!(restored.provider, ImageGenProvider::Atlas);
+    assert_eq!(restored.model, profile.model);
 }
 
 #[test]

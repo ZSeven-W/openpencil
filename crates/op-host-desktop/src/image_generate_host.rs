@@ -1,7 +1,7 @@
 //! Desktop entry for the image Generate popover.
 //!
 //! The provider backends (OpenAI / custom OpenAI-compatible, Gemini
-//! inline-image, Replicate prediction polling — a port of the TS
+//! inline-image, Replicate / Atlas prediction polling — a port of the TS
 //! `server/api/ai/image-generate.ts`) are single-sourced in
 //! `op_host_services::web_image_generate`; this residual owns only the
 //! desktop-specific parts: the desktop user-agent client, the skia
@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use op_editor_core::agent_settings::{ImageGenProfile, ImageGenProvider};
 use op_host_services::web_image_generate::{
-    generate_gemini, generate_openai, generate_replicate, ImageGenerateError,
+    generate_atlas, generate_gemini, generate_openai, generate_replicate, ImageGenerateError,
 };
 
 use crate::image_search_session::fetch_image_data_url;
@@ -65,6 +65,7 @@ async fn run_generate(
         ImageGenProvider::Replicate => {
             generate_replicate(&client, prompt, profile, width, height).await?
         }
+        ImageGenProvider::Atlas => generate_atlas(&client, prompt, profile, width, height).await?,
     };
     if url.starts_with("data:") {
         // Inline base64 (Gemini / OpenAI b64_json) → shrink an oversized

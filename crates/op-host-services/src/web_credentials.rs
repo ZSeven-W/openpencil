@@ -502,6 +502,7 @@ fn parse_image_profile(payload: ImageGenProfilePayload) -> Result<ImageGenProfil
         "openai" => ImageGenProvider::OpenAi,
         "gemini" => ImageGenProvider::Gemini,
         "replicate" => ImageGenProvider::Replicate,
+        "atlas" => ImageGenProvider::Atlas,
         "custom" => ImageGenProvider::Custom,
         _ => return Err(WebCredentialError::UnsupportedImageGenProvider),
     };
