@@ -520,11 +520,18 @@ fn command_candidates(command: &str, path: &str) -> Vec<PathBuf> {
     let mut out = Vec::new();
     for dir in std::env::split_paths(path) {
         let base = dir.join(command);
-        out.push(base.clone());
+        // Windows executable extensions lead: `CreateProcessW` cannot run an
+        // extensionless file, and `npm i -g` leaves a POSIX `foo` shell script
+        // next to `foo.cmd` / `foo.ps1`. `is_executable_candidate` is only an
+        // `is_file()` check off Unix, so probing the bare name first selects
+        // that shell script and `build_local_command` — which dispatches on
+        // the resolved extension — falls through to a direct spawn that fails
+        // with os error 193. The npm fallback block below already omits it.
         #[cfg(windows)]
         for ext in ["exe", "cmd", "bat", "com", "ps1"] {
             out.push(base.with_extension(ext));
         }
+        out.push(base);
     }
     #[cfg(unix)]
     if let Some(home) = std::env::var_os("HOME") {
