@@ -69,6 +69,13 @@ pub(super) fn progress_label(p: &Progress) -> String {
             format!("• Subtask `{id}` done ({node_count} nodes)")
         }
         Progress::SubtaskFailed { id, error } => format!("• Subtask `{id}` failed: {error}"),
+        Progress::SubtaskIncomplete {
+            id,
+            expected,
+            delivered,
+        } => format!(
+            "• Subtask `{id}` incomplete: {delivered} of {expected} promised item(s) delivered"
+        ),
         Progress::SubtaskSkills {
             id,
             included,

@@ -83,7 +83,7 @@ pub(super) async fn run_screen_group_worker(
             });
         };
         let mut buffer = BufferDocSink::new(snapshot.clone());
-        let outcome = run_subtask_retry_ladder(
+        let mut outcome = run_subtask_retry_ladder(
             subtask,
             plan,
             request,
@@ -102,6 +102,9 @@ pub(super) async fn run_screen_group_worker(
 
         let commands = into_replayable_commands(buffer, &outcome);
         let local_commands = commands.clone();
+        // The staging snapshot allocates local ids; the real replay may
+        // remap them because sibling workers commit in completion order.
+        outcome.inserted_root_ids.clear();
         let (ack_tx, ack_rx) = oneshot::channel();
         if event_tx
             .send(WorkerSignal::SubtaskSettled(Box::new(SubtaskReplay {
@@ -195,6 +198,7 @@ pub(super) fn apply_worker_event(
             }
 
             let is_zero = outcome.node_count == 0;
+            let is_incomplete = crate::subtask_completeness::is_incomplete_outcome(&outcome);
             let subtask = &plan.subtasks[plan_idx];
             let terminal = if is_zero {
                 Progress::SubtaskFailed {
@@ -209,7 +213,11 @@ pub(super) fn apply_worker_event(
             };
             per_subtask[plan_idx] = Some((outcome, is_zero));
             // Done is observable only after the atomic real-sink commit/ack.
-            emit(group_idx, terminal, on_progress);
+            // An incomplete result already emitted its dedicated terminal
+            // progress event inside the worker; do not overwrite it with Done.
+            if !is_incomplete {
+                emit(group_idx, terminal, on_progress);
+            }
             let _ = ack.send(committed);
         }
     }

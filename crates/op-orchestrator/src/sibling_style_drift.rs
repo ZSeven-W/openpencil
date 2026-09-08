@@ -194,7 +194,7 @@ fn sibling_groups<'a>(candidates: Vec<&'a PenNode>) -> Vec<Vec<Member<'a>>> {
 /// The structural signature: the tree of node kinds and child counts,
 /// ignoring names, text content and icon names. Two tiles with the same
 /// signature are structural twins, e.g. `frame[frame[icon_font],text]`.
-fn structural_signature(node: &PenNode) -> String {
+pub(crate) fn structural_signature(node: &PenNode) -> String {
     let mut out = String::new();
     push_signature(node, &mut out);
     out

@@ -112,14 +112,9 @@ pub fn rubric_report(state: &EditorState, run_summary: Option<&RunSummary>) -> V
     report
 }
 
-/// Whether every PLANNED subtask actually delivered content. Delivered ⟺
-/// `node_count > 0` — provably equivalent to `error.is_none()` at both
-/// `SubtaskOutcome` construction sites (`subagent.rs`'s `fail()` closure
-/// always pairs `node_count: 0` with `error: Some(..)`; the success tail
-/// always pairs `error: None` with the real count), so either predicate
-/// agrees. `node_count > 0` is used directly since "content actually
-/// landed" is the more literal signal and doesn't depend on every future
-/// caller keeping the error field wired correctly.
+/// Whether every planned subtask delivered content. A non-empty but short
+/// repeated-item section is also incomplete, so this report includes the
+/// orchestrator's dedicated gate flag rather than relying on node count alone.
 fn completeness_report(summary: &RunSummary) -> Value {
     let planned = summary.subtasks.len();
     let delivered = summary.subtasks.iter().filter(|s| s.node_count > 0).count();
@@ -129,11 +124,13 @@ fn completeness_report(summary: &RunSummary) -> Value {
         .filter(|s| s.node_count == 0)
         .map(|s| s.id.as_str())
         .collect();
+    let incomplete_subtask_failure = summary.incomplete_subtask_failure;
     json!({
         "plannedSubtasks": planned,
         "deliveredSubtasks": delivered,
         "permanentFailures": permanent_failures,
-        "complete": permanent_failures.is_empty(),
+        "incompleteSubtaskFailure": incomplete_subtask_failure,
+        "complete": permanent_failures.is_empty() && !incomplete_subtask_failure,
     })
 }
 
@@ -493,6 +490,7 @@ mod tests {
             total_nodes: subtasks.iter().map(|s| s.node_count).sum(),
             subtasks,
             unfilled_screens: Vec::new(),
+            incomplete_subtask_failure: false,
         }
     }
 
@@ -541,6 +539,20 @@ mod tests {
             completeness["permanentFailures"],
             serde_json::json!(["revenue-chart", "activity-table"]),
             "{rubric}"
+        );
+        assert_eq!(completeness["complete"], serde_json::json!(false));
+    }
+
+    #[test]
+    fn completeness_gate_marks_a_non_empty_short_list_incomplete() {
+        let state = state_from(trivial_doc());
+        let mut summary = run_summary(vec![subtask_ok("merchants", 1)]);
+        summary.incomplete_subtask_failure = true;
+        let completeness = rubric_report(&state, Some(&summary))["completeness"].clone();
+        assert_eq!(completeness["permanentFailures"], serde_json::json!([]));
+        assert_eq!(
+            completeness["incompleteSubtaskFailure"],
+            serde_json::json!(true)
         );
         assert_eq!(completeness["complete"], serde_json::json!(false));
     }

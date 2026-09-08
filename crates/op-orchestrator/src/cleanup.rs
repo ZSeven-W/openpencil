@@ -67,6 +67,7 @@ mod cleanup_status_bar;
 #[path = "sibling_style_drift.rs"]
 mod sibling_style_drift;
 pub(crate) use cleanup_status_bar::{is_status_bar, is_status_bar_from_json};
+pub(crate) use sibling_style_drift::structural_signature;
 #[path = "finalize_enforce_status_bar.rs"]
 mod finalize_enforce_status_bar;
 

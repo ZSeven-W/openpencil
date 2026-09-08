@@ -22,26 +22,13 @@ pub trait DocSink: Send {
     fn state(&self) -> &EditorState;
     /// 应用一条编辑命令;返回 `false` 表示命令被拒(文档未变)。
     fn apply(&mut self, cmd: EditorCommand) -> bool;
-    /// Apply an `InsertSubtree` and return the post-remap root ids.
-    /// `None` = rejected (document unchanged).
-    ///
-    /// The default implementation routes through `apply` and returns
-    /// `Some(vec![])` on success — post-remap ids are unavailable on
-    /// buffered / remote sinks where the real `EditorState` is not local.
-    /// Override on immediate-apply sinks (e.g. `VecDocSink`) to surface
-    /// the real remapped ids from `EditorState::insert_subtree_returning_root_ids`.
+    /// Apply an `InsertSubtree` and return post-remap root ids when available.
     fn insert_subtree_returning_root_ids(
         &mut self,
         nodes: Vec<PenNode>,
         parent_id: &NodeId,
     ) -> Option<Vec<String>> {
-        // Diff the parent's child ids around the apply so EVERY sink reports
-        // the post-remap root ids. The old default returned an empty list,
-        // which no production sink (desktop RemoteDocSink, web
-        // WebDesignDocSink, op-smoke) overrode — so salvage re-ordering,
-        // append-scope cleanup and geometry echo all silently saw "no
-        // roots" outside the unit-test sinks (found 2026-09-04 when a
-        // salvaged hero stayed below the footer in a real run).
+        // Diff child ids around the apply so immediate sinks report remapped ids.
         let before = child_ids_under(self.state(), parent_id);
         let applied = self.apply(EditorCommand::InsertSubtree {
             nodes,
@@ -63,6 +50,19 @@ pub trait DocSink: Send {
     fn begin_undo_batch(&mut self);
     /// 关闭当前 undo 批。
     fn end_undo_batch(&mut self);
+    /// Roll back roots inserted by the current attempt.
+    fn rollback_inserted_roots(&mut self, root_ids: &[String]) {
+        for root_id in root_ids {
+            self.apply(EditorCommand::DeleteNode {
+                node_id: NodeId::new(root_id.clone()),
+                page_id: None,
+            });
+        }
+    }
+    /// Whether this sink buffers commands instead of applying them to the live document.
+    fn is_buffered(&self) -> bool {
+        false
+    }
 }
 
 /// Child ids of `parent_id` in document order (page-level children when the
@@ -345,10 +345,7 @@ pub enum Intent {
 #[derive(Debug, Clone)]
 pub enum Progress {
     Planning,
-    /// Planning produced the FULL subtask list — emitted ONCE right after
-    /// planning so the UI can show the complete task checklist upfront (TS
-    /// parity), instead of revealing tasks one-by-one as each starts. Pairs
-    /// `id` with `label` so the UI can mark each row done on `SubtaskDone`.
+    /// Planning produced the full subtask checklist.
     Planned {
         subtasks: Vec<(String, String)>,
     },
@@ -365,10 +362,13 @@ pub enum Progress {
         id: String,
         error: String,
     },
-    /// Per-subtask skill-load report — emitted right after the sub-agent
-    /// prompt is built (from the merged `SkillLoadReport`). `dropped` carries
-    /// `(name, reason_display)` pairs for diagnostics; user-facing activity
-    /// deliberately omits skill, token-budget, and context-drop internals.
+    /// Emitted once when a promised repeated-item section remains short after the ladder.
+    SubtaskIncomplete {
+        id: String,
+        expected: usize,
+        delivered: usize,
+    },
+    /// Per-subtask skill-load report emitted after the sub-agent prompt is built.
     SubtaskSkills {
         id: String,
         included: Vec<SkillBrief>,
@@ -392,13 +392,8 @@ pub enum Progress {
         id: String,
         issue_count: usize,
     },
-    /// Emitted ONCE, right before `RunSummary` is returned, whenever the
-    /// "promise-delivery" invariant check (`unfilled_screens::detect_unfilled_screens`)
-    /// finds a scaffolded screen that never received real content — the
-    /// classic-path honest report (postmortem 0718-1-glm-1: a silently
-    /// delivered blank screen). `names` are already marked on the canvas
-    /// (`" (unfilled)"` suffix) by the time this fires. Never emitted when
-    /// nothing is unfilled.
+    /// Emitted before `RunSummary` when the promise-delivery check finds an
+    /// unfilled scaffolded screen; names are already marked on the canvas.
     UnfilledScreens {
         names: Vec<String>,
     },
@@ -647,9 +642,11 @@ pub struct RunSummary {
     /// "promise-delivery" invariant's classic-path honest report. Empty on
     /// the common path. Each name is also already marked on the canvas
     /// itself (`unfilled_screens::mark_unfilled_screens`'s " (unfilled)"
-    /// suffix) before this summary is built, so a caller that only reads
-    /// this field and one that only looks at the canvas see the same story.
+    /// suffix) before this summary is built, so callers reading either see the same story.
     pub unfilled_screens: Vec<String>,
+    /// True when at least one promised repeated-item subtask remained short
+    /// after its retry ladder, even though its last non-empty result was kept.
+    pub incomplete_subtask_failure: bool,
 }
 
 /// `run()` 的失败。

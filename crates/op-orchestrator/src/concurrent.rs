@@ -33,11 +33,8 @@
 //!   meaningful) — `run.rs` takes the untouched sequential path whenever this
 //!   returns `1`, so single-screen / single-group plans are a byte-identical
 //!   regression lock.
-//! - [`BufferDocSink`] — an isolated buffering [`DocSink`] that collects
-//!   applied [`EditorCommand`]s without touching the real document. The
-//!   screen-group executor creates one fresh buffer per subtask, and only a
-//!   successful subtask may release that buffer to the single real-sink
-//!   writer.
+//! - [`BufferDocSink`] — isolated command buffering with a local staging state;
+//!   successful commands are replayed atomically into the real sink.
 //! - [`run_subtask_retry_ladder`] — the 3-attempt tier-gated retry ladder,
 //!   extracted from `run.rs`'s sequential loop so BOTH the sequential path
 //!   and each screen-group worker share the IDENTICAL retry semantics —
@@ -99,22 +96,13 @@ pub(crate) fn effective_concurrency(concurrency: u32, group_count: usize) -> u32
 
 // ── BufferDocSink ─────────────────────────────────────────────────────────────
 
-/// An isolated buffering [`DocSink`] that collects every applied
-/// [`EditorCommand`] into an in-memory `Vec` without touching the real document.
-///
-/// The snapshot is immutable for one subtask, so that subtask never observes
-/// its own uncommitted commands. After an atomic real-sink commit, the
-/// screen-group worker mirrors the same batch into its group-local snapshot;
-/// the next same-group subtask therefore sees committed predecessors without
-/// absorbing race-dependent sibling-group state.
-///
-/// The screen-group executor gives each subtask a fresh instance. A failed
-/// subtask drops the instance unopened; a successful one transfers its
-/// commands to the executor for serialized replay into the real `DocSink`.
+/// An isolated command buffer with a staging snapshot for structural gates.
+/// Failed attempts reset it; successful commands are replayed atomically.
 pub(crate) struct BufferDocSink {
-    /// Group-local `EditorState` snapshot taken before this buffered subtask.
-    /// Returned by `state()` unchanged for read-only generation context.
+    /// Group-local staging state taken before this buffered subtask.
+    /// It mirrors buffered commands so local structural gates can inspect them.
     snapshot: EditorState,
+    initial_snapshot: EditorState,
     /// All `EditorCommand`s collected via `apply()` calls.
     pub commands: Vec<EditorCommand>,
     /// Tracks undo-batch nesting depth (for parity with `DocSink` contract).
@@ -122,10 +110,11 @@ pub(crate) struct BufferDocSink {
 }
 
 impl BufferDocSink {
-    /// Create a new buffer sink from one immutable subtask snapshot.
+    /// Create an isolated buffer sink from one group-local snapshot.
     pub(crate) fn new(snapshot: EditorState) -> Self {
         Self {
-            snapshot,
+            snapshot: snapshot.clone(),
+            initial_snapshot: snapshot,
             commands: Vec::new(),
             batch_depth: 0,
         }
@@ -137,12 +126,10 @@ impl DocSink for BufferDocSink {
         &self.snapshot
     }
 
-    /// Buffer the command for later replay; always returns `true`.
-    ///
-    /// We return `true` unconditionally — the real document is not touched
-    /// here; the per-worker result is validated after replay.
+    /// Buffer the command and mirror it into staging; real replay is later.
     fn apply(&mut self, cmd: EditorCommand) -> bool {
-        self.commands.push(cmd);
+        self.commands.push(cmd.clone());
+        let _ = self.snapshot.apply(cmd);
         true
     }
 
@@ -152,6 +139,15 @@ impl DocSink for BufferDocSink {
 
     fn end_undo_batch(&mut self) {
         self.batch_depth -= 1;
+    }
+
+    fn rollback_inserted_roots(&mut self, _root_ids: &[String]) {
+        self.commands.clear();
+        self.snapshot = self.initial_snapshot.clone();
+    }
+
+    fn is_buffered(&self) -> bool {
+        true
     }
 }
 
@@ -248,6 +244,11 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         prior_outcomes,
     )
     .await;
+    let completeness1 = if abort.is_set() {
+        None
+    } else {
+        crate::subtask_completeness::reject_incomplete_attempt(sink, subtask, &outcome1)
+    };
 
     // Evaluate the non-retryable predicate once from attempt-1's error
     // (faithful to the sequential path: computed before the retry chain and
@@ -258,8 +259,9 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         .map(is_non_retryable)
         .unwrap_or(false);
 
-    let retryable = |o: &SubtaskOutcome| {
-        o.error.is_some() && o.node_count == 0 && !abort.is_set() && !non_retryable
+    let retryable = |o: &SubtaskOutcome, incomplete: bool| {
+        (incomplete || (o.error.is_some() && o.node_count == 0 && !non_retryable))
+            && !abort.is_set()
     };
 
     // A self-check quality rejection (`orchestration_self_check` fatally
@@ -277,7 +279,14 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         .error
         .as_deref()
         .is_some_and(is_self_check_rejection);
-    let attempt2_subtask = if attempt1_self_check_rejection {
+    let attempt2_subtask = if let Some(failure) = completeness1.as_ref() {
+        Subtask {
+            retry_feedback: Some(crate::plan::RetryFeedback::Completeness(
+                failure.feedback.clone(),
+            )),
+            ..subtask.clone()
+        }
+    } else if attempt1_self_check_rejection {
         Subtask {
             retry_feedback: outcome1
                 .error
@@ -291,7 +300,7 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
 
     // Attempt 2 — reduced_complexity iff Basic tier AND attempt 1 wasn't a
     // self-check quality rejection.
-    let outcome2 = if retryable(&outcome1) {
+    let outcome2 = if retryable(&outcome1, completeness1.is_some()) {
         tracing::warn!(
             subtask = %subtask.id,
             error = outcome1.error.as_deref().unwrap_or(""),
@@ -300,9 +309,10 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         on_progress(Progress::SubtaskRetry {
             id: subtask.id.clone(),
             attempt: 2,
-            reason: outcome1
-                .error
-                .clone()
+            reason: completeness1
+                .as_ref()
+                .map(|failure| failure.feedback.clone())
+                .or_else(|| outcome1.error.clone())
                 .unwrap_or_else(|| "zero nodes generated".into()),
         });
         Some(
@@ -325,9 +335,23 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
     } else {
         None
     };
+    let completeness2 = if abort.is_set() {
+        None
+    } else {
+        outcome2.as_ref().and_then(|outcome| {
+            crate::subtask_completeness::reject_incomplete_attempt(sink, subtask, outcome)
+        })
+    };
 
     let outcome_after2 = outcome2.as_ref().unwrap_or(&outcome1);
-    let attempt3_subtask = if outcome_after2
+    let attempt3_subtask = if let Some(failure) = completeness2.as_ref() {
+        Subtask {
+            retry_feedback: Some(crate::plan::RetryFeedback::Completeness(
+                failure.feedback.clone(),
+            )),
+            ..subtask.clone()
+        }
+    } else if outcome_after2
         .error
         .as_deref()
         .is_some_and(is_self_check_rejection)
@@ -348,7 +372,7 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
     };
 
     // Attempt 3 — minimal skills (last-ditch fallback).
-    let outcome3 = if retryable(outcome_after2) {
+    let outcome3 = if retryable(outcome_after2, completeness2.is_some()) {
         tracing::warn!(
             subtask = %subtask.id,
             error = outcome_after2.error.as_deref().unwrap_or(""),
@@ -357,9 +381,10 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         on_progress(Progress::SubtaskRetry {
             id: subtask.id.clone(),
             attempt: 3,
-            reason: outcome_after2
-                .error
-                .clone()
+            reason: completeness2
+                .as_ref()
+                .map(|failure| failure.feedback.clone())
+                .or_else(|| outcome_after2.error.clone())
                 .unwrap_or_else(|| "zero nodes generated".into()),
         });
         Some(
@@ -382,21 +407,40 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
     } else {
         None
     };
+    let completeness3 = if abort.is_set() {
+        None
+    } else {
+        outcome3.as_ref().and_then(|outcome| {
+            crate::subtask_completeness::incomplete_attempt(sink, subtask, outcome)
+        })
+    };
 
     // Whichever attempt actually won, carry along the (reduced_complexity,
     // minimal_skills) it used — the geometry_echo retry below reuses the
     // SAME tier, never escalating or de-escalating.
-    let (outcome, reduced_complexity, minimal_skills) = if let Some(o3) = outcome3 {
-        (o3, true, true)
-    } else if let Some(o2) = outcome2 {
-        (
-            o2,
-            tier == ModelTier::Basic && !attempt1_self_check_rejection,
-            false,
-        )
-    } else {
-        (outcome1, false, false)
-    };
+    let (mut outcome, reduced_complexity, minimal_skills, final_completeness) =
+        if let Some(o3) = outcome3 {
+            (o3, true, true, completeness3)
+        } else if let Some(o2) = outcome2 {
+            (
+                o2,
+                tier == ModelTier::Basic && !attempt1_self_check_rejection,
+                false,
+                completeness2,
+            )
+        } else {
+            (outcome1, false, false, completeness1)
+        };
+
+    if let Some(failure) = final_completeness {
+        crate::subtask_completeness::retain_incomplete_outcome(&mut outcome, &failure);
+        on_progress(Progress::SubtaskIncomplete {
+            id: subtask.id.clone(),
+            expected: failure.expected,
+            delivered: failure.delivered,
+        });
+        return outcome;
+    }
 
     maybe_geometry_echo_with_outcomes(
         subtask,
@@ -416,29 +460,12 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
     .await
 }
 
-/// One in-loop self-correction round: after a subtask's content actually
-/// LANDED (`outcome.node_count > 0`), run the REAL resolved layout + the
-/// geometry-detector family's DETECT-only half
-/// (`geometry_validation::geometry_diagnostics_for_roots`) against exactly
-/// what this subtask inserted. Any violation gets echoed back into a
-/// same-tier, same-skill retry — ONE round only, matching the self-check
-/// quality-rejection contract above (`RetryFeedback::Geometry`,
-/// `prompt.rs`'s "GEOMETRY FIX REQUIRED" wording). If the retry produces
-/// real content, it REPLACES the original insert (delete the old roots,
-/// adopt the new outcome); if it fails, the ORIGINAL — still-violated but
-/// real — content is kept. Either way, `cleanup.rs`'s deterministic
-/// geometry fixers remain the final net, unchanged: this step is a
-/// best-effort head-start on correctness, not a replacement for them.
+/// One in-loop self-correction round for real resolved-layout violations.
 ///
 /// A no-op (zero extra LLM calls) whenever:
 /// - `outcome.node_count == 0` — nothing landed, nothing to check;
-/// - `outcome.inserted_root_ids` is empty — the concurrent screen-group
-///   path's [`BufferDocSink`] never surfaces real ids (its `state()` is a
-///   frozen per-subtask snapshot that never reflects its own uncommitted
-///   inserts — see that type's doc), so there is nothing live to lay out
-///   or address for a replace. Geometry echo is therefore SEQUENTIAL-PATH
-///   ONLY today; a buffered worker's subtasks fall back to the
-///   deterministic net after replay, same as before this step existed.
+/// - `outcome.inserted_root_ids` is empty — a sink that cannot surface
+///   post-insert ids has nothing live to lay out or address for a replace.
 /// - the diagnostics come back empty — the common case, zero cost;
 /// - the run-wide [`GeometryEchoBudget`] is exhausted.
 #[allow(clippy::too_many_arguments)]
@@ -491,7 +518,11 @@ async fn maybe_geometry_echo_with_outcomes(
     prior_outcomes: &[SubtaskOutcome],
     outcome: SubtaskOutcome,
 ) -> SubtaskOutcome {
-    if outcome.node_count == 0 || outcome.inserted_root_ids.is_empty() || abort.is_set() {
+    if outcome.node_count == 0
+        || outcome.inserted_root_ids.is_empty()
+        || abort.is_set()
+        || sink.is_buffered()
+    {
         return outcome;
     }
     let issues = crate::geometry_validation::geometry_diagnostics_for_roots(
@@ -549,12 +580,7 @@ async fn maybe_geometry_echo_with_outcomes(
     // to-1-new-node only) because a subtask can produce N top-level roots
     // on either side — this generalizes to N-old/M-new without assuming a
     // 1:1 shape.
-    for root_id in &outcome.inserted_root_ids {
-        sink.apply(EditorCommand::DeleteNode {
-            node_id: op_editor_core::NodeId::new(root_id.clone()),
-            page_id: None,
-        });
-    }
+    crate::subtask_completeness::rollback_inserted_roots(sink, &outcome.inserted_root_ids);
     retried
 }
 
@@ -571,6 +597,7 @@ pub(crate) struct ConcurrentPhaseResult {
     pub outcomes: Vec<SubtaskOutcome>,
     pub aborted_mid: bool,
     pub zero_node_failure: bool,
+    pub incomplete_subtask_failure: bool,
     /// `(plan_index, outcomes_index)` for every zero-node outcome — `run.rs`'s
     /// end-of-run salvage pass retries exactly these, unchanged.
     pub salvage: Vec<(usize, usize)>,
@@ -743,10 +770,14 @@ pub(crate) async fn run_screen_groups_concurrent(
         }
     }
 
+    let incomplete_subtask_failure = outcomes
+        .iter()
+        .any(crate::subtask_completeness::is_incomplete_outcome);
     ConcurrentPhaseResult {
         outcomes,
         aborted_mid,
         zero_node_failure,
+        incomplete_subtask_failure,
         salvage,
     }
 }

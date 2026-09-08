@@ -152,6 +152,7 @@ fn worker_event_ids(event: &Progress) -> Vec<&str> {
         Progress::SubtaskStarted { id, .. }
         | Progress::SubtaskDone { id, .. }
         | Progress::SubtaskFailed { id, .. }
+        | Progress::SubtaskIncomplete { id, .. }
         | Progress::SubtaskSkills { id, .. }
         | Progress::SubtaskRetry { id, .. }
         | Progress::GeometryEcho { id, .. }

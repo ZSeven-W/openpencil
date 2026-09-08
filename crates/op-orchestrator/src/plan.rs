@@ -113,6 +113,8 @@ pub enum RetryFeedback {
     /// structural violation (`geometry_validation::geometry_diagnostics_for_roots`,
     /// the `geometry_echo` step) — carries the joined diagnostic lines.
     Geometry(String),
+    /// A repeated-item promise was present, but the previous attempt was too short.
+    Completeness(String),
 }
 
 /// 规划阶段的完整产物。字段对齐规划语料 `decomposition.md`。

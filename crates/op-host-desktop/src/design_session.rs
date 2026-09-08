@@ -352,6 +352,18 @@ fn apply_progress(msg: &mut ChatMessage, progress: &[Progress], locale: Locale) 
                 ChatActivityStatus::Error,
                 Some(subtask_failure_detail(locale, error)),
             ),
+            Progress::SubtaskIncomplete {
+                id,
+                expected,
+                delivered,
+            } => update_activity(
+                msg,
+                id,
+                ChatActivityStatus::Error,
+                Some(format!(
+                    "Only {delivered} of {expected} promised item(s) delivered"
+                )),
+            ),
             Progress::SubtaskRetry { id, attempt, .. } => update_activity(
                 msg,
                 id,

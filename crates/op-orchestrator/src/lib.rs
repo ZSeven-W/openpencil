@@ -143,6 +143,7 @@ pub mod spawn_concurrent;
 pub(crate) mod spread_screen_roots;
 pub mod stub_repair;
 pub mod subagent;
+pub mod subtask_completeness;
 pub mod table_repair;
 pub mod template_provenance;
 pub(crate) mod text_contrast_repair;

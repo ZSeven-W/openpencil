@@ -31,7 +31,6 @@ fn persisted_subtask_json() -> String {
     })
     .unwrap()
 }
-
 fn persisted_request_json() -> String {
     serde_json::to_string(&op_orchestrator::DesignRequest {
         prompt: "design profile".into(),
@@ -48,7 +47,6 @@ fn persisted_request_json() -> String {
     })
     .unwrap()
 }
-
 fn activity(id: &str, status: ChatActivityStatus) -> ChatActivity {
     ChatActivity {
         id: id.into(),
@@ -58,7 +56,6 @@ fn activity(id: &str, status: ChatActivityStatus) -> ChatActivity {
         content_offset: None,
     }
 }
-
 #[test]
 fn worker_scoped_progress_builds_one_stable_message_per_screen_group() {
     let (delta_tx, delta_rx) = mpsc::channel::<DesignDelta>();
@@ -221,6 +218,7 @@ fn worker_summary_finishes_all_messages_and_keeps_retry_on_owning_worker() {
             }],
             total_nodes: 0,
             unfilled_screens: Vec::new(),
+            incomplete_subtask_failure: false,
         })))
         .unwrap();
 
@@ -570,6 +568,7 @@ fn partial_summary_marks_omitted_active_rows_error() {
             }],
             total_nodes: 7,
             unfilled_screens: Vec::new(),
+            incomplete_subtask_failure: false,
         })))
         .unwrap();
     assert!(pump_progress(&mut host, &mut current, None));

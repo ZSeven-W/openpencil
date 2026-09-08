@@ -55,6 +55,7 @@ fn failed_middle_subtask_records_the_last_root_of_the_prior_outcome() {
         ],
         total_nodes: 3,
         unfilled_screens: Vec::new(),
+        incomplete_subtask_failure: false,
     };
 
     assert!(super::workers::finish_design_success(

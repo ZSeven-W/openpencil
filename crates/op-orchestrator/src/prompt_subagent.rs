@@ -517,9 +517,9 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
     // two wordings (`plan::RetryFeedback`):
     // - `SelfCheck` — `orchestration_self_check` rejected it BEFORE
     //   insertion (retry ladder attempt 2; `retry::is_self_check_rejection`).
-    // - `Geometry` — the REAL resolved layout of an already-INSERTED
-    //   subtree proved a structural violation (the `geometry_echo` step,
-    //   `concurrent::run_subtask_retry_ladder`'s tail).
+    // - `Geometry` — the REAL resolved layout of an already-INSERTED subtree
+    //   proved a structural violation (the geometry_echo step).
+    // - `Completeness` — a promised repeated-item family was too short.
     if let Some(feedback) = subtask.retry_feedback.as_ref() {
         let block = match feedback {
             crate::plan::RetryFeedback::SelfCheck(reason) => format!(
@@ -535,8 +535,13 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
                  attempt at this exact section has these structural problems:\n{reason}\n\
 - Regenerate the section fixing exactly these — do not change anything else \
   about the approach.\n\
-- Keep using the full skill set and design detail from your previous attempt; \
-  these are layout/structure problems, not a signal to simplify."
+                 - Keep using the full skill set and design detail from your previous attempt; \
+                 these are layout/structure problems, not a signal to simplify."
+            ),
+            crate::plan::RetryFeedback::Completeness(reason) => format!(
+                "\n\nCOMPLETENESS FIX REQUIRED: your previous attempt delivered too few repeated items:\n{reason}\n\
+- Emit every promised item as a sibling in this exact section.\n\
+- Keep the section's visual treatment and detail; only fix the missing repeated items."
             ),
         };
         user_prompt.push_str(&block);

@@ -66,6 +66,7 @@ fn failed_run_summary() -> RunSummary {
         ],
         total_nodes: 12,
         unfilled_screens: Vec::new(),
+        incomplete_subtask_failure: false,
     }
 }
 
