@@ -251,7 +251,7 @@ fn placeholders(value: &str) -> BTreeSet<String> {
 fn every_locale_has_exactly_the_english_key_set() {
     let all_tables = tables();
     let expected = table_keys(all_tables[0].0, all_tables[0].1, all_tables[0].2);
-    assert_eq!(expected.len(), 1707, "update the intentional catalog size");
+    assert_eq!(expected.len(), 1717, "update the intentional catalog size");
 
     for (name, main, git, lookup) in all_tables {
         let actual = table_keys(name, main, git);
@@ -322,6 +322,16 @@ fn scene_template_catalog_is_complete_in_all_fifteen_locales() {
         "sceneTemplate.item.musicFestPosterCard.summary",
         "sceneTemplate.item.bookClubInviteCard.title",
         "sceneTemplate.item.bookClubInviteCard.summary",
+        "sceneTemplate.item.aiSupportPitchDeck.title",
+        "sceneTemplate.item.aiSupportPitchDeck.summary",
+        "sceneTemplate.item.quarterlyReviewDeck.title",
+        "sceneTemplate.item.quarterlyReviewDeck.summary",
+        "sceneTemplate.item.quicksortLectureDeck.title",
+        "sceneTemplate.item.quicksortLectureDeck.summary",
+        "sceneTemplate.item.compoundEffectCard.title",
+        "sceneTemplate.item.compoundEffectCard.summary",
+        "sceneTemplate.item.analyticsMetricCard.title",
+        "sceneTemplate.item.analyticsMetricCard.summary",
         "fileMenu.newFromTemplate",
     ] {
         for (name, _, _, lookup) in tables() {

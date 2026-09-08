@@ -2,65 +2,6 @@
 # prefix separate leaves room for new records while every TOML source file
 # stays below the repository's 800-line limit.
 [[template]]
-id = "minimal-keynote"
-scene = "slides"
-title_key = "sceneTemplate.item.minimalKeynote.title"
-title_fallback = "极简 Keynote"
-summary_key = "sceneTemplate.item.minimalKeynote.summary"
-summary_fallback = "纯白留白、超大字号、一页一句话居中，九页里没有一张卡片，目录只有细线和数字，适合发布会与主题演讲。"
-tags = ["极简", "留白", "发布会", "演讲", "keynote", "minimal", "PPT", "slides", "目录"]
-frames = 9
-frame_width = 1920
-frame_height = 1080
-style_guide = "portfolio-minimal-light"
-[[template]]
-id = "gradient-tech"
-scene = "slides"
-title_key = "sceneTemplate.item.gradientTech.title"
-title_fallback = "渐变科技风"
-summary_key = "sceneTemplate.item.gradientTech.summary"
-summary_fallback = "深色渐变底加玻璃拟态卡，含架构、性能对比与客户墙，适合开发者产品发布。"
-tags = ["渐变", "科技", "玻璃", "深色", "开发者", "gradient", "tech", "glass", "PPT"]
-frames = 6
-frame_width = 1920
-frame_height = 1080
-style_guide = "cyber-gradient-dark"
-[[template]]
-id = "saas-landing-orange"
-scene = "web"
-title_key = "sceneTemplate.item.saasLandingOrange.title"
-title_fallback = "SaaS 落地页 · 橙色"
-summary_key = "sceneTemplate.item.saasLandingOrange.summary"
-summary_fallback = "浅底黑卡配橙色主色的产品营销长页：导航、Hero 与产品截图、能力三卡、工作流演示、客户评价和订阅页脚，换掉文案就是一版官网。"
-tags = ["落地页", "官网", "营销", "橙色", "SaaS", "landing", "marketing", "web", "orange"]
-frames = 1
-frame_width = 1200
-frame_height = 3240
-style_guide = "editorial-orange-light"
-[[template]]
-id = "product-landing-light"
-scene = "web"
-title_key = "sceneTemplate.item.productLandingLight.title"
-title_fallback = "产品落地页 · 浅色"
-summary_key = "sceneTemplate.item.productLandingLight.summary"
-summary_fallback = "纸白报刊风的产品长页：Hero 交互演示卡、能力分栏、数据看板、新旧方案对比和三档定价，适合 SaaS 官网与产品发布。"
-tags = ["落地页", "官网", "定价", "浅色", "报刊", "landing", "product", "pricing", "web", "light"]
-frames = 1
-frame_width = 1200
-frame_height = 5374
-style_guide = "broadsheet-lime-light"
-[[template]]
-id = "punch-quote-card"
-scene = "card"
-title_key = "sceneTemplate.item.punchQuoteCard.title"
-title_fallback = "金句卡 · 大字报"
-summary_key = "sceneTemplate.item.punchQuoteCard.summary"
-summary_fallback = "3:4 墨底金句卡，两行巨标题加一条亮黄标语，只讲一句话，适合观点与语录。"
-tags = ["卡片", "金句", "语录", "观点", "深色", "小红书", "card", "quote", "poster", "dark"]
-frames = 1
-frame_width = 1080
-frame_height = 1440
-[[template]]
 id = "journal-checklist-card"
 scene = "card"
 title_key = "sceneTemplate.item.journalChecklistCard.title"
@@ -665,6 +606,42 @@ frame_height = 1080
 style_guide = "ledger-tick"
 
 [[template]]
+id = "ai-support-pitch-deck"
+scene = "slides"
+title_key = "sceneTemplate.item.aiSupportPitchDeck.title"
+title_fallback = "智能客服路演档"
+summary_key = "sceneTemplate.item.aiSupportPitchDeck.summary"
+summary_fallback = "深蓝底白字的创业路演十页：主题封面、成本对比大数字、三条曲线结论、五步闭环、上线九十天三指标，适合 SaaS 融资路演与产品发布。"
+tags = ["路演", "融资", "创业", "SaaS", "客服", "PPT", "slides", "deck", "pitch", "startup"]
+frames = 10
+frame_width = 1920
+frame_height = 1080
+
+[[template]]
+id = "quarterly-review-deck"
+scene = "slides"
+title_key = "sceneTemplate.item.quarterlyReviewDeck.title"
+title_fallback = "季度业务复盘档"
+summary_key = "sceneTemplate.item.quarterlyReviewDeck.summary"
+summary_fallback = "浅底蓝调的复盘十一页：议程页、四条业务线各一页 KPI 三联卡加增长引擎与待改进，结尾下季目标，适合经营复盘与季度汇报。"
+tags = ["复盘", "季度", "汇报", "KPI", "经营", "PPT", "slides", "deck", "review", "business"]
+frames = 11
+frame_width = 1920
+frame_height = 1080
+
+[[template]]
+id = "quicksort-lecture-deck"
+scene = "slides"
+title_key = "sceneTemplate.item.quicksortLectureDeck.title"
+title_fallback = "算法讲解课件档"
+summary_key = "sceneTemplate.item.quicksortLectureDeck.summary"
+summary_fallback = "米白纸感配墨绿的七页课件：学习目标、分区与递归两步、分区演示上下两页带数组格与基准高亮、复杂度对照表，适合算法与编程教学。"
+tags = ["课件", "教学", "算法", "排序", "讲解", "PPT", "slides", "deck", "lecture", "education"]
+frames = 7
+frame_width = 1920
+frame_height = 1080
+
+[[template]]
 id = "brand-concept-sheet"
 scene = "comparison"
 title_key = "sceneTemplate.item.brandConceptSheet.title"
@@ -795,3 +772,27 @@ tags = ["卡片", "读书会", "阅读", "书籍", "邀请", "card", "book", "cl
 frames = 1
 frame_width = 1080
 frame_height = 1350
+
+[[template]]
+id = "compound-effect-card"
+scene = "card"
+title_key = "sceneTemplate.item.compoundEffectCard.title"
+title_fallback = "思维模型知识卡"
+summary_key = "sceneTemplate.item.compoundEffectCard.summary"
+summary_fallback = "暖橙纸感 4:5 知识卡：编号眉标、大字标题、一段定义、三条要点各带序号圆标，底部账号与二维码，适合知识类账号的系列卡片。"
+tags = ["卡片", "知识", "思维模型", "干货", "二维码", "card", "knowledge", "insight"]
+frames = 1
+frame_width = 1080
+frame_height = 1350
+
+[[template]]
+id = "analytics-metric-card"
+scene = "card"
+title_key = "sceneTemplate.item.analyticsMetricCard.title"
+title_fallback = "数据看板分享卡"
+summary_key = "sceneTemplate.item.analyticsMetricCard.summary"
+summary_fallback = "深色 1200×630 数据卡：主指标大数字与环比徽标、右侧横向条形图、底部三格次要指标，适合社交分享与周报配图。"
+tags = ["卡片", "数据", "指标", "看板", "分享", "card", "metric", "analytics", "dark"]
+frames = 1
+frame_width = 1200
+frame_height = 630

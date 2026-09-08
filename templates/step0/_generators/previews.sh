@@ -60,7 +60,9 @@ DEFAULT_TEMPLATES=(screenshot-tutorial knowledge-carousel before-after slide-dec
          logo-qa-board \
          event-invitation-card livestream-teaser-card hiring-poster-card \
          course-enroll-card conference-agenda-card product-launch-card \
-         annual-report-card music-fest-poster-card book-club-invite-card)
+         annual-report-card music-fest-poster-card book-club-invite-card \
+         ai-support-pitch-deck quarterly-review-deck quicksort-lecture-deck \
+         compound-effect-card analytics-metric-card)
 
 if [ "$#" -gt 0 ]; then
   templates=("$@")

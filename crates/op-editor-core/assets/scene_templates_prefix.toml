@@ -2,7 +2,7 @@
 #
 # The catalogue parser concatenates this prefix with scene_templates.toml so
 # each checked-in source file remains below the repository's 800-line limit.
-# These are the first eight entries in catalogue order.
+# These are the first thirteen entries in catalogue order.
 #
 # One entry per shipped template document. `id` must match both the embedded
 # document (assets/scene_templates/<id>.op) and its card preview
@@ -115,3 +115,63 @@ frames = 6
 frame_width = 1920
 frame_height = 1080
 style_guide = "education-friendly-light"
+
+[[template]]
+id = "minimal-keynote"
+scene = "slides"
+title_key = "sceneTemplate.item.minimalKeynote.title"
+title_fallback = "极简 Keynote"
+summary_key = "sceneTemplate.item.minimalKeynote.summary"
+summary_fallback = "纯白留白、超大字号、一页一句话居中，九页里没有一张卡片，目录只有细线和数字，适合发布会与主题演讲。"
+tags = ["极简", "留白", "发布会", "演讲", "keynote", "minimal", "PPT", "slides", "目录"]
+frames = 9
+frame_width = 1920
+frame_height = 1080
+style_guide = "portfolio-minimal-light"
+[[template]]
+id = "gradient-tech"
+scene = "slides"
+title_key = "sceneTemplate.item.gradientTech.title"
+title_fallback = "渐变科技风"
+summary_key = "sceneTemplate.item.gradientTech.summary"
+summary_fallback = "深色渐变底加玻璃拟态卡，含架构、性能对比与客户墙，适合开发者产品发布。"
+tags = ["渐变", "科技", "玻璃", "深色", "开发者", "gradient", "tech", "glass", "PPT"]
+frames = 6
+frame_width = 1920
+frame_height = 1080
+style_guide = "cyber-gradient-dark"
+[[template]]
+id = "saas-landing-orange"
+scene = "web"
+title_key = "sceneTemplate.item.saasLandingOrange.title"
+title_fallback = "SaaS 落地页 · 橙色"
+summary_key = "sceneTemplate.item.saasLandingOrange.summary"
+summary_fallback = "浅底黑卡配橙色主色的产品营销长页：导航、Hero 与产品截图、能力三卡、工作流演示、客户评价和订阅页脚，换掉文案就是一版官网。"
+tags = ["落地页", "官网", "营销", "橙色", "SaaS", "landing", "marketing", "web", "orange"]
+frames = 1
+frame_width = 1200
+frame_height = 3240
+style_guide = "editorial-orange-light"
+[[template]]
+id = "product-landing-light"
+scene = "web"
+title_key = "sceneTemplate.item.productLandingLight.title"
+title_fallback = "产品落地页 · 浅色"
+summary_key = "sceneTemplate.item.productLandingLight.summary"
+summary_fallback = "纸白报刊风的产品长页：Hero 交互演示卡、能力分栏、数据看板、新旧方案对比和三档定价，适合 SaaS 官网与产品发布。"
+tags = ["落地页", "官网", "定价", "浅色", "报刊", "landing", "product", "pricing", "web", "light"]
+frames = 1
+frame_width = 1200
+frame_height = 5374
+style_guide = "broadsheet-lime-light"
+[[template]]
+id = "punch-quote-card"
+scene = "card"
+title_key = "sceneTemplate.item.punchQuoteCard.title"
+title_fallback = "金句卡 · 大字报"
+summary_key = "sceneTemplate.item.punchQuoteCard.summary"
+summary_fallback = "3:4 墨底金句卡，两行巨标题加一条亮黄标语，只讲一句话，适合观点与语录。"
+tags = ["卡片", "金句", "语录", "观点", "深色", "小红书", "card", "quote", "poster", "dark"]
+frames = 1
+frame_width = 1080
+frame_height = 1440

@@ -154,6 +154,11 @@ pub(crate) fn scene_template_preview(template_id: &str) -> Option<TemplatePrevie
         "annual-report-card" => preview!(73, "annual-report-card"),
         "music-fest-poster-card" => preview!(74, "music-fest-poster-card"),
         "book-club-invite-card" => preview!(75, "book-club-invite-card"),
+        "ai-support-pitch-deck" => preview!(76, "ai-support-pitch-deck"),
+        "quarterly-review-deck" => preview!(77, "quarterly-review-deck"),
+        "quicksort-lecture-deck" => preview!(78, "quicksort-lecture-deck"),
+        "compound-effect-card" => preview!(79, "compound-effect-card"),
+        "analytics-metric-card" => preview!(80, "analytics-metric-card"),
         _ => None,
     }
 }
