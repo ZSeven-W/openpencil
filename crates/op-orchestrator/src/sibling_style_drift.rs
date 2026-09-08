@@ -52,6 +52,7 @@ use crate::types::DocSink;
 use std::collections::BTreeMap;
 
 use jian_ops_schema::node::container::CornerRadius;
+use jian_ops_schema::node::container::LayoutMode;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::style::PenFill;
 use op_design_lint::node_util::{children as node_children, is_node_visible, node_kind_str};
@@ -123,6 +124,7 @@ fn twin_families(children: &[PenNode]) -> Vec<Vec<Member<'_>>> {
     if !rows
         .iter()
         .all(|row| structural_signature(row) == row_signature)
+        && !reflowed_row_family(rows.as_slice())
     {
         return Vec::new();
     }
@@ -131,6 +133,39 @@ fn twin_families(children: &[PenNode]) -> Vec<Vec<Member<'_>>> {
             .flat_map(|row| node_children(row).iter())
             .collect(),
     )
+}
+
+/// Category-grid reflow keeps the tile signature but may leave the final row
+/// shorter than the others (for example 5+4). Permit that split only when all
+/// rows are horizontal and every tile still has the same structural shape.
+fn reflowed_row_family(rows: &[&PenNode]) -> bool {
+    if !rows.iter().all(|row| {
+        matches!(
+            row,
+            PenNode::Frame(frame) if frame.container.layout == Some(LayoutMode::Horizontal)
+        )
+    }) {
+        return false;
+    }
+
+    let mut tile_signature = None;
+    for row in rows {
+        let children = node_children(row);
+        if children.is_empty() {
+            return false;
+        }
+        for tile in children {
+            let signature = structural_signature(tile);
+            if let Some(expected) = tile_signature.as_deref() {
+                if signature != expected {
+                    return false;
+                }
+            } else {
+                tile_signature = Some(signature);
+            }
+        }
+    }
+    true
 }
 
 /// Group candidate siblings by structural signature; every group with at

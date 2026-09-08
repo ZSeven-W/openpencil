@@ -35,12 +35,16 @@ pub(crate) use cleanup_mobile_chrome::{
 mod cleanup_mobile_dense;
 // Repair-pass submodules keep the public cleanup drivers and shared predicates
 // flat, while each repair family lives in its own file.
+#[path = "category_grid_density.rs"]
+mod category_grid_density;
 #[path = "cleanup_bottom_nav_repairs.rs"]
 mod cleanup_bottom_nav_repairs;
 #[path = "cleanup_clip_row_stroke.rs"]
 mod cleanup_clip_row_stroke;
 #[path = "cleanup_container_geometry.rs"]
 mod cleanup_container_geometry;
+#[path = "cleanup_empty_content_bar.rs"]
+mod cleanup_empty_content_bar;
 #[path = "cleanup_equalize_siblings.rs"]
 mod cleanup_equalize_siblings;
 #[path = "cleanup_image_slots.rs"]
@@ -66,6 +70,7 @@ pub(crate) use cleanup_status_bar::{is_status_bar, is_status_bar_from_json};
 #[path = "finalize_enforce_status_bar.rs"]
 mod finalize_enforce_status_bar;
 
+use category_grid_density::repair_category_grid_density;
 use cleanup_bottom_nav_repairs::*;
 use cleanup_clip_row_stroke::*;
 use cleanup_container_geometry::*;
@@ -495,6 +500,10 @@ fn run_cleanup_passes_with_summary_and_policy(
         crate::text_contrast_repair::repair_text_contrast(sink, &rid);
         crate::hero_bleed::enforce(sink, plan, &rid);
         counter.checkpoint(summary, CheckCategory::Structure, "hero-bleed");
+        repair_category_grid_density(sink, &rid);
+        counter.checkpoint(summary, CheckCategory::Structure, "category-grid-density");
+        cleanup_empty_content_bar::remove_empty_content_bars(sink, &rid);
+        counter.checkpoint(summary, CheckCategory::Structure, "empty-content-bar");
         // Section-margin ownership (DS P1.5) runs BEFORE the wrapper-double-inset
         // stripper below: unifying first hands the stripper the group already
         // normalized, and the floor afterwards then sees no flush content left.
@@ -733,67 +742,5 @@ fn run_cleanup_passes_with_summary_and_policy(
 }
 
 #[cfg(test)]
-#[path = "cleanup_tests.rs"]
-mod tests;
-
-#[cfg(test)]
-#[path = "cleanup_repair_summary_tests.rs"]
-mod tests_repair_summary;
-
-#[cfg(test)]
-#[path = "cleanup_repair_tier_tests.rs"]
-mod tests_repair_tier;
-
-#[cfg(test)]
-#[path = "cleanup_abandoned_duplicate_roots_tests.rs"]
-mod tests_abandoned_duplicate_roots;
-
-#[cfg(test)]
-#[path = "cleanup_mobile_dense_tests.rs"]
-mod tests_mobile_dense;
-
-#[cfg(test)]
-#[path = "cleanup_mobile_chrome_tests.rs"]
-mod tests_mobile_chrome;
-
-#[cfg(test)]
-#[path = "cleanup_mobile_bottom_nav_dedup_tests.rs"]
-mod tests_mobile_bottom_nav_dedup;
-
-#[cfg(test)]
-#[path = "cleanup_bottom_nav_tests.rs"]
-mod tests_bottom_nav;
-
-#[cfg(test)]
-#[path = "cleanup_nested_horizontal_padding_tests.rs"]
-mod tests_nested_horizontal_padding;
-
-#[cfg(test)]
-#[path = "cleanup_rail_wrapper_gutter_tests.rs"]
-mod tests_rail_wrapper_gutter;
-
-#[cfg(test)]
-#[path = "cleanup_absolute_container_tests.rs"]
-mod tests_absolute_container;
-
-#[cfg(test)]
-#[path = "cleanup_fill_container_content_tests.rs"]
-mod tests_fill_container_content;
-
-#[cfg(test)]
-#[path = "cleanup_clip_row_stroke_tests.rs"]
-mod tests_clip_row_stroke;
-
-#[cfg(test)]
-#[path = "cleanup_image_slots_tests.rs"]
-mod cleanup_image_slots_tests;
-
-#[cfg(test)]
-#[path = "cleanup_card_height_equalize_tests.rs"]
-mod tests_card_height_equalize;
-#[cfg(test)]
-#[path = "cleanup_deck_geometry_tests.rs"]
-mod tests_deck_geometry;
-#[cfg(test)]
-#[path = "cleanup_desktop_dashboard_tests.rs"]
-mod tests_desktop_dashboard;
+#[path = "cleanup_tests_mounts.rs"]
+mod test_modules;

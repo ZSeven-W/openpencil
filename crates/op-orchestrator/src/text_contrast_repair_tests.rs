@@ -19,6 +19,7 @@ fn palette() -> Variables {
         ("--muted", "#F1F5F9", "#334155"),
         ("--background", "#0B1220", "#020617"),
         ("--gradient-navy", "#334155", "#334155"),
+        ("--color-error-foreground", "#0F172A", "#0F172A"),
     ]
     .into_iter()
     .map(|(name, light, dark)| {
@@ -310,6 +311,90 @@ fn readable_text_is_left_untouched() {
         0,
         "already-readable text must not be rewritten"
     );
+}
+
+#[test]
+fn dark_icon_on_its_solid_marker_gets_a_light_palette_counterpart() {
+    let mut sink = VecDocSink::new();
+    sink.state.doc.variables = Some(palette());
+    sink.state.doc.themes = Some(
+        [("Mode".to_string(), vec!["Light".to_string()])]
+            .into_iter()
+            .collect(),
+    );
+    let tree: jian_ops_schema::node::PenNode = serde_json::from_value(json!({
+        "type": "frame", "id": "board", "width": 390, "height": 844,
+        "children": [{
+            "type": "frame", "id": "marker", "width": 28, "height": 28,
+            "fill": [{"type": "solid", "color": "#0F172A"}],
+            "children": [{"type": "icon_font", "id": "flag", "iconFontName": "flag",
+                "fill": [{"type": "solid", "color": "$--color-error-foreground"}]}]
+        }]
+    }))
+    .expect("tree");
+    sink.state.apply(EditorCommand::InsertSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+
+    let doc = document_for_lint(&sink.state);
+    let vars = doc.variables.clone().unwrap();
+    let theme = op_design_lint::node_util::default_theme(doc.themes.as_ref());
+    let root = &sink.state.active_children()[0];
+    let root_id = root.id_str().to_string();
+    let marker = root.children().unwrap().first().unwrap();
+    let bg = nearest_background(&[root, marker], &vars, &theme);
+    if let Some(background) = bg {
+        let rects = resolved_rects(&sink.state);
+        assert!(below_contrast_threshold("flag", "#0F172A", background, 1.5, &rects).is_some());
+    }
+    let mut offenders = Vec::new();
+    collect_contrast_offenders(
+        root,
+        &[],
+        &vars,
+        &theme,
+        &resolved_rects(&sink.state),
+        &mut offenders,
+    );
+    assert_eq!(offenders.len(), 1);
+    assert_eq!(repair_text_contrast(&mut sink, &root_id), 1);
+    let serialized = serde_json::to_value(&sink.state.active_children()[0]).expect("serialize");
+    let icon_fill = serialized["children"][0]["children"][0]["fill"][0]["color"]
+        .as_str()
+        .expect("icon fill");
+    let icon = token_hex(
+        icon_fill.trim_start_matches('$'),
+        &palette(),
+        &light_theme(),
+    )
+    .expect("light replacement token");
+    assert_ne!(icon_fill, "$--color-error-foreground");
+    assert!(op_design_lint::color::color_contrast(&icon, "#0F172A") > 1.5);
+}
+
+#[test]
+fn readable_icon_on_its_solid_marker_is_left_untouched() {
+    let mut sink = VecDocSink::new();
+    sink.state.doc.variables = Some(palette());
+    let tree: jian_ops_schema::node::PenNode = serde_json::from_value(json!({
+        "type": "frame", "id": "board", "width": 390, "height": 844,
+        "children": [{
+            "type": "frame", "id": "marker", "width": 28, "height": 28,
+            "fill": [{"type": "solid", "color": "#0F172A"}],
+            "children": [{"type": "icon_font", "id": "flag", "iconFontName": "flag",
+                "fill": [{"type": "solid", "color": "#FFFFFF"}]}]
+        }]
+    }))
+    .expect("tree");
+    sink.state.apply(EditorCommand::InsertSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+
+    assert_eq!(repair_text_contrast(&mut sink, "board"), 0);
 }
 
 fn contrast_sink(

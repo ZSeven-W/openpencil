@@ -449,7 +449,7 @@ fn is_transparent_color(color: &str) -> bool {
     parse_color_rgba(color).is_some_and(|rgba| rgba[3] == 0)
 }
 
-fn parse_color_rgba(color: &str) -> Option<[u8; 4]> {
+pub(crate) fn parse_color_rgba(color: &str) -> Option<[u8; 4]> {
     const OPTIONS: op_util::hex_color::HexOptions = op_util::hex_color::HexOptions {
         require_hash: true,
         allow_rgb_shorthand: true,
@@ -617,17 +617,26 @@ fn collect_contrast_offenders(
     if !is_node_visible(node) {
         return;
     }
-    if let PenNode::Text(text) = node {
-        if let Some(text_color) = resolved_text_color(text.fill.as_ref(), variables, theme) {
+    if matches!(node, PenNode::Text(_) | PenNode::IconFont(_)) {
+        if let Some(text_color) = resolved_text_color(node_fills(node), variables, theme) {
             if let Some(background) = nearest_background(ancestors, variables, theme) {
-                if let Some(offender) = below_contrast_threshold(
-                    node_id(node),
-                    &text_color,
-                    background,
-                    TARGET_RATIO,
-                    rects,
-                ) {
-                    out.push(offender);
+                let is_icon = matches!(node, PenNode::IconFont(_));
+                // Icons need the same palette-backed repair as text, but only
+                // when they are effectively indistinguishable from a solid
+                // ancestor. Gradients and the implicit page background do not
+                // provide the narrow evidence this contract requires.
+                if !is_icon || (background.gradient.is_none() && background.source_index.is_some())
+                {
+                    let threshold = if is_icon { 1.5 } else { TARGET_RATIO };
+                    if let Some(offender) = below_contrast_threshold(
+                        node_id(node),
+                        &text_color,
+                        background,
+                        threshold,
+                        rects,
+                    ) {
+                        out.push(offender);
+                    }
                 }
             }
         }

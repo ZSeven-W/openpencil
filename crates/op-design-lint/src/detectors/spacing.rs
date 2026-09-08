@@ -121,8 +121,28 @@ fn is_image_only_section(node: &PenNode) -> bool {
 pub(super) fn is_full_bleed_section(node: &PenNode, root_width: f64) -> bool {
     let child_role = role(node).unwrap_or("").to_lowercase();
     FULL_BLEED_ROLES.contains(&child_role.as_str())
+        || carries_bleed_marker(node)
         || is_image_only_section(node)
         || has_transparent_full_bleed_media_child(node, root_width)
+}
+
+/// The orchestrator's hero-bleed pass renames the section it flattened with
+/// a ` (bleed)` suffix. Honour that decision here instead of re-deriving it:
+/// a map canvas with overlay labels, or any shape the structural predicates
+/// below do not recognise, must not be padded back by a later validator.
+fn carries_bleed_marker(node: &PenNode) -> bool {
+    node_name(node).is_some_and(|name| name.trim_end().ends_with(BLEED_NAME_SUFFIX))
+}
+
+const BLEED_NAME_SUFFIX: &str = "(bleed)";
+
+fn node_name(node: &PenNode) -> Option<&str> {
+    match node {
+        PenNode::Frame(n) => n.base.name.as_deref(),
+        PenNode::Group(n) => n.base.name.as_deref(),
+        PenNode::Rectangle(n) => n.base.name.as_deref(),
+        _ => None,
+    }
 }
 
 fn has_transparent_full_bleed_media_child(node: &PenNode, root_width: f64) -> bool {

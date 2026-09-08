@@ -76,6 +76,29 @@ fn plan() -> OrchestratorPlan {
 
 fn sink_with(root: Value) -> VecDocSink {
     let mut sink = VecDocSink::new();
+    sink.state.doc.variables = Some(
+        [
+            ("--foreground", "#0F172A"),
+            ("--color-error-foreground", "#0F172A"),
+        ]
+        .into_iter()
+        .map(|(name, color)| {
+            (
+                name.to_string(),
+                serde_json::from_value(json!({
+                    "type": "color",
+                    "value": [{"value": color, "theme": {"Mode": "Light"}}]
+                }))
+                .expect("hero color variable"),
+            )
+        })
+        .collect(),
+    );
+    sink.state.doc.themes = Some(
+        [("Mode".to_string(), vec!["Light".to_string()])]
+            .into_iter()
+            .collect(),
+    );
     sink.state.doc.children = vec![serde_json::from_value(root).expect("root fixture")];
     sink
 }
@@ -228,6 +251,176 @@ fn none_stack_without_media_is_untouched() {
 
     assert_eq!(enforce(&mut sink, &plan(), "root"), 0);
     assert_eq!(root_value(&sink), before);
+}
+
+#[test]
+fn app18_shaped_image_stack_gets_scrim_and_light_overlay_copy() {
+    let mut root = evidence_root();
+    root["children"][1] = json!({
+        "type": "frame", "id": "hero-section", "name": "Hero Image Header",
+        "width": "fill_container", "height": "fit_content", "layout": "vertical",
+        "children": [{
+            "type": "frame", "id": "hero-stack", "name": "hero-stack",
+            "width": 375, "height": 340, "layout": "none", "children": [
+                {"type": "frame", "id": "back", "name": "Back Button",
+                 "fill": [{"type": "solid", "color": "#0B1A0F80"}],
+                 "children": [{"type": "icon_font", "id": "back-icon", "iconFontName": "arrow-left", "fill":
+                    [{"type": "solid", "color": "$--color-error-foreground"}]}]},
+                {"type": "frame", "id": "copy", "name": "Hero Content", "children": [
+                    {"type": "text", "id": "eyebrow", "content": "CATEGORY", "fontSize": 12,
+                     "fill": [{"type": "solid", "color": "$--foreground"}]},
+                    {"type": "text", "id": "title", "name": "workout-title", "content": "Power Flow", "fontSize": 48,
+                     "fill": [{"type": "solid", "color": "$--color-error-foreground"}]},
+                    {"type": "frame", "id": "meta", "children": [
+                        {"type": "text", "id": "meta-text", "content": "32 min", "fontSize": 14,
+                         "fill": [{"type": "solid", "color": "$--foreground"}]}
+                    ]}
+                ]},
+                {"type": "image", "id": "hero-photo", "width": 375, "height": 340,
+                 "src": "workout.png"}
+            ]
+        }]
+    });
+    let mut sink = sink_with(root);
+    let mut hero_plan = plan();
+    hero_plan.subtasks[0].label = "Hero Image Header".into();
+
+    assert_eq!(enforce(&mut sink, &hero_plan, "root"), 1);
+    let hero = root_value(&sink)["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|child| child["name"] == "Hero Image Header (bleed)")
+        .cloned()
+        .expect("bleed hero section");
+    let stack = &hero["children"][0];
+    let children = stack["children"].as_array().expect("stack children");
+    let image_index = children
+        .iter()
+        .position(|child| child["type"] == "image")
+        .unwrap();
+    assert_eq!(children[image_index + 1]["name"], "Hero Image Header scrim");
+    assert_eq!(
+        children[image_index + 1]["fill"][0]["type"],
+        "linear_gradient"
+    );
+    assert_eq!(children[image_index + 1]["fill"][0]["angle"], 90.0);
+    assert_eq!(
+        children[image_index + 1]["fill"][0]["stops"][0]["color"],
+        "#00000000"
+    );
+    assert_eq!(
+        children[image_index + 1]["fill"][0]["stops"][1]["color"],
+        "#000000A6"
+    );
+    assert_eq!(
+        children[image_index + 1]["fill"][0]["explain"],
+        "hero scrim"
+    );
+    assert_eq!(children[1]["children"][0]["fill"][0]["color"], "#FFFFFFCC");
+    assert_eq!(children[1]["children"][1]["fill"][0]["color"], "#FFFFFF");
+    assert_eq!(
+        children[1]["children"][2]["children"][0]["fill"][0]["color"],
+        "#FFFFFFCC"
+    );
+    assert_eq!(
+        children[0]["children"][0]["fill"][0]["color"],
+        "$--color-error-foreground"
+    );
+}
+
+#[test]
+fn image_stack_with_gradient_after_media_does_not_get_a_second_scrim() {
+    let mut root = evidence_root();
+    root["children"][1] = json!({
+        "type": "frame", "id": "hero-section", "name": "Hero", "children": [{
+            "type": "frame", "id": "stack", "layout": "none", "width": 375, "height": 300,
+            "children": [
+                {"type": "image", "id": "photo", "width": 375, "height": 300, "src": "hero.png"},
+                {"type": "rectangle", "id": "overlay", "width": 375, "height": 300,
+                 "fill": [{"type": "linear_gradient", "angle": 90, "stops": []}]},
+                {"type": "text", "id": "title", "content": "Power Flow", "fontSize": 48,
+                 "fill": [{"type": "solid", "color": "#0F172A"}]}
+            ]
+        }]
+    });
+    let mut sink = sink_with(root);
+    assert_eq!(enforce(&mut sink, &plan(), "root"), 1);
+    let stack = &hero_value(&sink)["children"][0];
+    assert_eq!(
+        stack["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|child| { child["fill"][0]["type"] == "linear_gradient" })
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn coloured_media_hero_gets_no_image_scrim() {
+    let mut root = evidence_root();
+    root["children"][1] = json!({
+        "type": "frame", "id": "hero-section", "name": "Colour Hero", "children": [{
+            "type": "frame", "id": "stack", "layout": "none", "width": 375, "height": 200,
+            "children": [
+                {"type": "frame", "id": "colour", "width": 375, "height": 200,
+                 "fill": [{"type": "solid", "color": "#0F172A"}]},
+                {"type": "text", "id": "title", "content": "Power Flow", "fontSize": 48,
+                 "fill": [{"type": "solid", "color": "#0F172A"}]}
+            ]
+        }]
+    });
+    let mut sink = sink_with(root);
+    let mut coloured_plan = plan();
+    coloured_plan.subtasks[0].label = "Colour Hero".into();
+    assert_eq!(enforce(&mut sink, &coloured_plan, "root"), 1);
+    let hero = root_value(&sink)["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|child| child["name"] == "Colour Hero (bleed)")
+        .cloned()
+        .expect("bleed hero section");
+    let stack = &hero["children"][0];
+    assert_eq!(stack["children"].as_array().unwrap().len(), 2);
+    assert_eq!(stack["children"][1]["fill"][0]["color"], "#0F172A");
+}
+
+#[test]
+fn text_inside_solid_chip_in_image_stack_is_not_recoloured() {
+    let mut root = evidence_root();
+    root["children"][1] = json!({
+        "type": "frame", "id": "hero-section", "name": "Hero", "children": [{
+            "type": "frame", "id": "stack", "layout": "none", "width": 375, "height": 200,
+            "children": [
+                {"type": "image", "id": "photo", "width": 375, "height": 200, "src": "hero.png"},
+                {"type": "frame", "id": "chip", "fill": [{"type": "solid", "color": "#FFFFFF"}],
+                 "children": [{"type": "text", "id": "chip-label", "content": "VIP", "fontSize": 14,
+                    "fill": [{"type": "solid", "color": "#0F172A"}]}]},
+                {"type": "text", "id": "title", "content": "Power Flow", "fontSize": 48,
+                 "fill": [{"type": "solid", "color": "#0F172A"}]}
+            ]
+        }]
+    });
+    let mut sink = sink_with(root);
+    assert_eq!(enforce(&mut sink, &plan(), "root"), 1);
+    let stack = &hero_value(&sink)["children"][0];
+    let chip = stack["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|child| child["id"] == "chip")
+        .expect("chip");
+    let title = stack["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|child| child["id"] == "title")
+        .expect("title");
+    assert_eq!(chip["children"][0]["fill"][0]["color"], "#0F172A");
+    assert_eq!(title["fill"][0]["color"], "#FFFFFF");
 }
 
 #[test]
