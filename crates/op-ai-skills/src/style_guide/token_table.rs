@@ -512,10 +512,11 @@ fn px_values(line: &str) -> Vec<(i64, String)> {
         // Up to the next clause break — that is where this number's
         // description ends and the next one's begins.
         let tail = &line[index..];
-        let end = tail
-            .find([',', ';', '.', ')', '(', '—'])
-            .unwrap_or(tail.len())
-            .min(48);
+        let end = tail.floor_char_boundary(
+            tail.find([',', ';', '.', ')', '(', '—'])
+                .unwrap_or(tail.len())
+                .min(48),
+        );
         out.push((value, tail[..end].to_string()));
     }
     out
