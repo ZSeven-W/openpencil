@@ -272,6 +272,8 @@ pub fn common_props(figma: &FigValue, id: String) -> PenNodeBase {
         mask_type: figma_mask_type(figma),
         blend_mode: map_blend_mode(figma.get_str("blendMode")),
         theme: None,
+        transition: None,
+        animations: None,
         // Figma import never authors responsive size constraints.
         constraints: None,
     }

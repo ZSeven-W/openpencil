@@ -130,6 +130,7 @@ pub fn detect_and_plan(doc: &PenDocument) -> Vec<PlannedFix> {
         // mirroring the `set_property` dispatch in `fixes.rs`. Skip combinations
         // that `set_property` returns `false` for (Fill, non-fit_content Height, etc.).
         let action = match issue.property {
+            FixProperty::None => continue,
             FixProperty::Height => {
                 if issue.suggested_value.as_str() == Some("fit_content") {
                     PlannedAction::SetHeightFitContent

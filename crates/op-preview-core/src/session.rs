@@ -58,6 +58,7 @@ pub(crate) struct ResetSeed {
     pub(crate) presenting: bool,
     pub(crate) measure: Rc<dyn MeasureBackend>,
     pub(crate) host_capabilities: op_preview_contracts::PreviewHostCapabilities,
+    pub(crate) host_motion_preference: jian_ops_schema::motion::MotionPreference,
 }
 
 /// A live preview runtime built from a snapshot of the editor document.
@@ -134,6 +135,10 @@ pub struct PreviewSession {
     pub(crate) reset_seed: ResetSeed,
     /// R7 one bounded timeline plus its injected AnimationSink queue.
     pub(crate) animation: crate::animation::PreviewAnimationState,
+    /// P1 node-level motion declarations and per-screen trigger state.
+    pub(crate) motion: crate::motion::PreviewMotionState,
+    /// Host reduced-motion preference; document preference can only reduce it.
+    pub(crate) host_motion_preference: jian_ops_schema::motion::MotionPreference,
     /// APP MODE state (routed multi-screen doc), or `None` for the
     /// classic single-page workbench preview. `pub(crate)`
     /// so `app_mode`'s `is_app_mode` can read it. See [`AppMode`].
@@ -263,6 +268,33 @@ impl PreviewSession {
         measure: Rc<dyn MeasureBackend>,
         host_capabilities: op_preview_contracts::PreviewHostCapabilities,
     ) -> Result<Self, PreviewEnterError> {
+        Self::enter_with_host_motion_preference(
+            doc,
+            canvas_size,
+            active_theme,
+            active_page_index,
+            preserve_authored_geometry,
+            presenting,
+            measure,
+            host_capabilities,
+            jian_ops_schema::motion::MotionPreference::Full,
+        )
+    }
+
+    /// Preview entry with the host's reduced-motion preference known before
+    /// lifecycle animations are admitted.
+    #[allow(clippy::too_many_arguments)]
+    pub fn enter_with_host_motion_preference(
+        doc: &jian_ops_schema::PenDocument,
+        canvas_size: (f32, f32),
+        active_theme: &std::collections::BTreeMap<String, String>,
+        active_page_index: usize,
+        preserve_authored_geometry: bool,
+        presenting: bool,
+        measure: Rc<dyn MeasureBackend>,
+        host_capabilities: op_preview_contracts::PreviewHostCapabilities,
+        host_motion_preference: jian_ops_schema::motion::MotionPreference,
+    ) -> Result<Self, PreviewEnterError> {
         let reset_seed = ResetSeed {
             document: doc.clone(),
             canvas_size,
@@ -272,6 +304,7 @@ impl PreviewSession {
             presenting,
             measure: measure.clone(),
             host_capabilities,
+            host_motion_preference,
         };
         let debug = crate::debug_trace::PreviewDebugState::default();
         let _ = canvas_size; // layout is root-derived, not canvas-derived.
@@ -388,6 +421,7 @@ impl PreviewSession {
             .iter()
             .filter_map(format_warning)
             .collect::<Vec<_>>();
+        warnings.extend(crate::motion::load_warnings(&layout_doc));
 
         // Clone the prepared + promoted document BEFORE the runtime
         // consumes it: this is the exact tree (refs/tokens resolved,
@@ -480,8 +514,8 @@ impl PreviewSession {
         animation.set_trace(debug.trace.clone());
         runtime.set_animation_sink(Rc::new(animation.clone()));
         runtime.enable_action_reporting();
-
-        Ok(Self {
+        let motion = crate::motion::PreviewMotionState::default();
+        let session = Self {
             runtime,
             measure,
             available: primary_available,
@@ -499,6 +533,8 @@ impl PreviewSession {
             debug,
             reset_seed,
             animation,
+            motion,
+            host_motion_preference,
             app,
             gesture_mappings: HashMap::new(),
             transition: None,
@@ -507,7 +543,9 @@ impl PreviewSession {
             host_capabilities,
             effects,
             ui_actions,
-        })
+        };
+        session.start_mount_animations(0);
+        Ok(session)
     }
 
     /// The formatted load warnings collected on `enter` (for the
@@ -741,10 +779,9 @@ impl PreviewSession {
     }
 }
 
-/// The measurement backend preview tests solve layout against — the same
-/// skia backend the native host injects, so test geometry matches
+/// The measurement backend preview tests solve layout against the same skia
+/// backend the native host injects, so test geometry matches
 /// production. Kept in one place so the 45 call sites don't each spell
-/// out the construction.
 #[cfg(all(test, not(target_os = "windows")))]
 pub(crate) fn test_measure() -> Rc<dyn MeasureBackend> {
     Rc::new(jian_skia::SkiaMeasure::new())

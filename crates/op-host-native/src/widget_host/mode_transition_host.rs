@@ -38,7 +38,7 @@ impl WidgetHostNative {
     /// destination device-frame rect, so this can't be reordered.
     pub fn enter_preview(&mut self, canvas_size: (f32, f32)) -> bool {
         self.enter_preview_with_builder(canvas_size, |state, presenting| {
-            crate::preview::PreviewSession::enter(
+            crate::preview::PreviewSession::enter_with_host_motion_preference(
                 &state.doc,
                 canvas_size,
                 &state.ui.variables.active_theme,
@@ -46,6 +46,8 @@ impl WidgetHostNative {
                 state.editor_ui.preserve_authored_geometry,
                 presenting,
                 std::rc::Rc::new(jian_skia::SkiaMeasure::new()),
+                op_preview_core::PreviewHostCapabilities::none(),
+                host_motion_preference(),
             )
         })
     }
@@ -287,5 +289,13 @@ impl WidgetHostNative {
         self.preview_mode_transition
             .as_ref()
             .is_some_and(|t| t.is_active(self.now_ms))
+    }
+}
+
+fn host_motion_preference() -> jian_ops_schema::motion::MotionPreference {
+    if std::env::var("OPENPENCIL_REDUCED_MOTION").ok().as_deref() == Some("1") {
+        jian_ops_schema::motion::MotionPreference::Reduced
+    } else {
+        jian_ops_schema::motion::MotionPreference::Full
     }
 }

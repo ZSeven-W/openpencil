@@ -723,6 +723,7 @@ mod tests {
             logic_modules: None,
             design_md: None,
             conversion: None,
+            motion: None,
             responsive: None,
         };
         if let PenNode::Frame(f) = &mut doc.children[0] {

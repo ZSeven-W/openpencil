@@ -245,7 +245,7 @@ mod tests {
         assert!(matches!(skill.meta.trigger, SkillTrigger::Keywords(_)));
         assert!(matches!(skill.meta.category, SkillCategory::Domain));
         assert_eq!(skill.meta.priority, 25);
-        assert_eq!(skill.meta.budget, 1800);
+        assert_eq!(skill.meta.budget, 2000);
         assert!(skill.meta.phase.contains(&Phase::Generation));
         // Body must teach the exact field/action names the jian schema expects.
         assert!(

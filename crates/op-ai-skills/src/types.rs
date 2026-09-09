@@ -69,6 +69,11 @@ impl Phase {
     /// cross-tier contract), so the fix is headroom rather than merging them
     /// back together.
     ///
+    /// Generation moved again 16830 → 17100 (2026-09-10): the generation
+    /// schema and interactivity skills gained the slim P1 motion language;
+    /// the extra room keeps their motion recipe complete in the mixed
+    /// generation prompt instead of trimming its tail.
+    ///
     /// Generation moved again 13200 → 13500 (2026-08-11): nine new style guides
     /// and the projector-board corpus additions grew the deck set, so a deck
     /// prompt now resolves 13293 tokens with `design-principles` (438) included.
@@ -123,7 +128,7 @@ impl Phase {
     pub fn default_budget(self) -> u32 {
         match self {
             Phase::Planning => 6600,
-            Phase::Generation => 16830,
+            Phase::Generation => 17100,
             Phase::Validation => 3000,
             Phase::Maintenance => 5000,
         }
@@ -131,12 +136,14 @@ impl Phase {
 }
 
 /// Per-phase default token budgets — the TS `DEFAULT_BUDGETS` record.
+/// Generation 16830 → 17100 (2026-09-10): motion language was added to the
+/// schema/interactivity corpus; the phase total grows with those contracts.
 /// Planning 6500 → 6600 (2026-09-07): the style-guide catalog line now carries
 /// two signature-recipe names per guide, which pushed the runtime-augmented
 /// style-guide-selector to 1528 tokens (budget 1500 → 1600).
 pub const DEFAULT_BUDGETS: [(Phase, u32); 4] = [
     (Phase::Planning, 6600),
-    (Phase::Generation, 16830),
+    (Phase::Generation, 17100),
     (Phase::Validation, 3000),
     (Phase::Maintenance, 5000),
 ];
@@ -418,7 +425,7 @@ mod tests {
     #[test]
     fn default_budget_table() {
         assert_eq!(Phase::Planning.default_budget(), 6600);
-        assert_eq!(Phase::Generation.default_budget(), 16830);
+        assert_eq!(Phase::Generation.default_budget(), 17100);
         assert_eq!(Phase::Validation.default_budget(), 3000);
         assert_eq!(Phase::Maintenance.default_budget(), 5000);
         // The const table agrees with the per-variant method.

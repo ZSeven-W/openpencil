@@ -159,6 +159,7 @@ impl PreviewSession {
     /// deterministic scene snapshot.
     pub(crate) fn overlay_runtime_state(&self, base: &LayoutScene) -> LayoutScene {
         let mut scene = self.overlay_runtime_state_without_animation(base);
+        self.observe_motion(&scene);
         self.animation.apply_to_scene(&mut scene);
         scene
     }

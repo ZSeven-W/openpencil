@@ -176,6 +176,7 @@ fn compact_subagent_skills<T: SkillNamed>(
             "cjk-typography",
             "mobile-app",
             "mobile-ui",
+            "interactivity",
             // Deck teaching. Keyword-gated at the resolve layer (deck words
             // only), so a no-op on every non-deck prompt. Required on a deck:
             // the allow-set used to drop `slides` unconditionally, so a
@@ -227,6 +228,7 @@ fn compact_subagent_skills<T: SkillNamed>(
                 "text-rules",
                 "mobile-app",
                 "mobile-ui",
+                "interactivity",
                 "style-defaults",
                 "design-md",
                 "variables",

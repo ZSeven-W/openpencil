@@ -371,10 +371,18 @@ fn base_layout_no_longer_contradicts_the_sticky_runtime() {
                 "functional",
                 "prototype",
                 "stateful",
+                "motion",
+                "animation",
+                "animated",
+                "mount",
+                "inView",
+                "transition",
                 "交互",
                 "可交互",
                 "原型",
                 "可点击",
+                "动效",
+                "动画",
             ]
             .into_iter()
             .map(str::to_owned)

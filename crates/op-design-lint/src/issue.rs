@@ -49,6 +49,8 @@ pub enum IssueCategory {
     /// different in kind: the fill degrades to a flat colour at paint time, so
     /// what ships is not the design that was authored.
     ShaderInvalid,
+    /// Node-level motion budget and compositor whitelist warnings.
+    MotionBudget,
     /// Slop rule: a saturated purple-blue gradient wash covering a large share
     /// of the board. Report-only (the right accent comes from the style guide).
     #[serde(rename = "slop/purple-glow-gradient")]
@@ -68,6 +70,8 @@ pub enum IssueCategory {
 /// `#[serde(rename)]` keeps each on-wire string identical to TS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FixProperty {
+    #[serde(rename = "__none")]
+    None,
     #[serde(rename = "__remove")]
     Remove,
     #[serde(rename = "cornerRadius")]
@@ -107,6 +111,7 @@ impl FixProperty {
     /// without round-tripping through `serde_json`.
     pub fn wire_str(self) -> &'static str {
         match self {
+            FixProperty::None => "__none",
             FixProperty::Remove => "__remove",
             FixProperty::CornerRadius => "cornerRadius",
             FixProperty::Effects => "effects",
@@ -180,6 +185,7 @@ mod tests {
     #[test]
     fn wire_str_matches_serde_rename_for_every_variant() {
         for property in [
+            FixProperty::None,
             FixProperty::Remove,
             FixProperty::CornerRadius,
             FixProperty::Effects,

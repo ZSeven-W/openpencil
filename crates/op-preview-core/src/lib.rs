@@ -77,6 +77,7 @@ mod input_event;
 mod interaction_state;
 mod invalidation;
 mod mode_transition;
+mod motion;
 mod present;
 mod scene_helpers;
 mod session;
@@ -97,6 +98,7 @@ pub use input_event::{
 /// R4 interaction state — per-pointer pressed + hover node tracking.
 pub use interaction_state::InteractionState;
 pub use invalidation::InvalidationKind;
+pub use jian_ops_schema::motion::MotionPreference;
 /// Frozen Preview contract DTOs, re-exported so consumers of this crate
 /// (UI, FFI, hosts) need not take the leaf dependency directly.
 pub use op_preview_contracts::{
@@ -172,6 +174,8 @@ mod tests_input_trace;
 mod tests_interaction;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_interaction_state;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_motion;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_multi_pointer;
 #[cfg(all(test, not(target_os = "windows")))]

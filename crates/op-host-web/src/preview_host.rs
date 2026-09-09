@@ -51,7 +51,7 @@ pub fn enter_preview(
 
     // Enter preview with the measure backend wired. The session takes ownership
     // of the `Rc` and holds it for the lifetime of hit-test queries.
-    PreviewSession::enter(
+    PreviewSession::enter_with_host_motion_preference(
         doc,
         canvas_size,
         active_theme,
@@ -59,5 +59,18 @@ pub fn enter_preview(
         false, // preserve_authored_geometry: web preview does not preserve hand-drawn bounds
         presenting,
         measure_backend,
+        op_preview_core::PreviewHostCapabilities::none(),
+        host_motion_preference(),
     )
+}
+
+fn host_motion_preference() -> jian_ops_schema::motion::MotionPreference {
+    let reduced = web_sys::window()
+        .and_then(|window| window.match_media("(prefers-reduced-motion: reduce)").ok())
+        .is_some_and(|query| query.matches());
+    if reduced {
+        jian_ops_schema::motion::MotionPreference::Reduced
+    } else {
+        jian_ops_schema::motion::MotionPreference::Full
+    }
 }

@@ -275,7 +275,8 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
     //
     // The arm is the Generation phase default rather than a literal, because
     // the deck path IS the worst case that default was last sized for
-    // (`Phase::Generation` moved 12000 → 13200 when `deck-contract` landed).
+    // (`Phase::Generation` is now 17100 after the motion corpus addition;
+    // earlier raises included 12000 → 13200 when `deck-contract` landed).
     // Restating it as a number is what let the old 11500 rot when the corpus
     // grew under it: the deck skills were then silently dropped/tail-cut,
     // which `prompt_deck_skill_tests` now asserts against.
@@ -287,9 +288,9 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
     // 2026-08-04 `slides` failure, in a card jacket.
     //
     // Measured 2026-08-09 on that file's fixtures, every resolved skill
-    // untruncated: Basic 11529/13200, Standard and Full both 12548/13200.
+    // untruncated: the deck arm follows the current 17100 generation default.
     // Standard lands on Full's exact skill set here — at an unbounded budget
-    // it also carries `design-principles` (12986), and at 13200 the deck
+    // it also carries `design-principles`; the deck
     // corpus crowds that Knowledge skill out. That is NOT this arm's doing:
     // Full tier reads the same default and loses it identically, so the deck
     // load simply fills the phase. Buying it back means raising the phase
@@ -305,13 +306,41 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
     let is_deck = is_deck_board(plan);
     let is_card = is_card_board(plan);
     let is_scroll = crate::scroll_intent::is_scroll_orchestration_request(&req.prompt);
+    let is_interactivity = [
+        "interactive",
+        "interactivity",
+        "clickable",
+        "functional",
+        "prototype",
+        "stateful",
+        "motion",
+        "animation",
+        "animated",
+        "mount",
+        "inview",
+        "transition",
+        "交互",
+        "可交互",
+        "原型",
+        "可点击",
+        "动效",
+        "动画",
+    ]
+    .iter()
+    .any(|keyword| req.prompt.to_ascii_lowercase().contains(keyword));
     let deck_budget = Phase::Generation.default_budget();
     let budget_override = match tier {
-        ModelTier::Basic if is_mobile_layout || is_mobile_screen => Some(10400),
+        ModelTier::Basic if is_mobile_layout || is_mobile_screen => {
+            Some(if is_interactivity { 10600 } else { 10400 })
+        }
         ModelTier::Basic if is_deck || is_card || is_scroll => Some(deck_budget),
+        ModelTier::Basic if is_interactivity => Some(5400),
         ModelTier::Basic => Some(5200),
-        ModelTier::Standard if is_mobile_layout => Some(10500),
+        ModelTier::Standard if is_mobile_layout => {
+            Some(if is_interactivity { 10700 } else { 10500 })
+        }
         ModelTier::Standard if is_deck || is_card || is_scroll => Some(deck_budget),
+        ModelTier::Standard if is_interactivity => Some(6700),
         ModelTier::Standard => Some(6500),
         ModelTier::Full => None,
     };
@@ -345,7 +374,7 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
     // standing example: `design_system_covered` is true on essentially every
     // real request, so the budget bought it, the filter dropped it, and the
     // 554 tokens were never returned to the skills that had just lost to it —
-    // a deck prompt reported 12548/13200 while `design-principles` (438) sat
+    // a deck prompt reported less than the phase ceiling while `design-principles` (438) sat
     // in the dropped list as BudgetExhausted, because at knapsack time only 98
     // tokens were actually free. Ordering, not sizing: raising the ceiling
     // would have hidden it rather than fixed it.
@@ -579,10 +608,8 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
     // Assemble the per-subtask skill-load report from the FINAL skill set
     // (post tier/dedup filtering). `budget_max` reflects the tier budget
     // override. Full-tier falls through to `Phase::Generation::default_budget()`
-    // (13200 today — see that constant's doc comment for both raises: 8000 →
-    // 12000 because image-rich data-list sections overflowed and truncated
-    // their scripts to zero generated nodes, then 12000 → 13200 when
-    // `deck-contract` joined the deck corpus). This used to be a bare literal
+    // (17100 today — see that constant's doc comment for the corpus raises).
+    // This used to be a bare literal
     // that only affected this diagnostic number — `resolve_skills` (called
     // above via `resolve_generation_skills`) independently fell back to the
     // OLD default for a `None` override, so Full tier's real skill trimming

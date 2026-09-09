@@ -3,13 +3,15 @@ name: interactivity
 description: State, bindings, and events so generated widgets are functional
 phase: [generation]
 trigger:
-  keywords: [interactive, interactivity, clickable, functional, prototype, stateful, 交互, 可交互, 原型, 可点击]
+  keywords: [interactive, interactivity, clickable, functional, prototype, stateful, motion, animation, animated, mount, inView, transition, 交互, 可交互, 原型, 可点击, 动效, 动画]
 priority: 25
-budget: 1800
+budget: 2000
 category: domain
 ---
 
 INTERACTIVITY (state + bindings + events):
+
+MOTION — use a 200–500 ms `mount` fade-up for a hero or first content, and `inView` fade-up reveals for repeated cards with staggered `delayMs`; use the Material 3 easing tokens `standard`, `emphasized`, `emphasizedDecelerate`, or `emphasizedAccelerate`, and keep lifecycle motion separate from a scroll timeline.
 
 STATE — declare reactive values on the node that owns them (`StateSchema`):
 

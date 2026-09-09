@@ -4,7 +4,7 @@ description: PenNode type definitions and property schemas
 phase: [generation]
 trigger: null
 priority: 0
-budget: 2130
+budget: 2250
 category: base
 ---
 
@@ -50,3 +50,6 @@ Fill variant types use snake_case: "linear_gradient", "radial_gradient", "mesh_g
 RAIL CARDS: cards in a horizontal scroll row must ALL share the same fixed pixel width — never "fill_container" (it crushes them to a sliver beside a fixed sibling).
 PADDING: number (uniform), [v, h], or [top, right, bottom, left].
 cornerRadius is a number. fill is ALWAYS an array. Do NOT set x/y on children inside layout frames.
+
+- Motion: document `motion` is `"full"|"reduced"`; nodes may declare `transition` and `animations` with camelCase fields, M3 easing names, and registry-property keyframes.
+- Motion properties are compositor-safe: prefer `opacity`, `translateX/Y`, `scaleX/Y`, `rotation`, `fill`, `stroke`, and `cornerRadius`; keep `mount` and `inView` as time triggers, not scroll timelines.

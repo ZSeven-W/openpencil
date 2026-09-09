@@ -34,6 +34,7 @@ fn empty_doc() -> PenDocument {
         logic_modules: None,
         design_md: None,
         conversion: None,
+        motion: None,
         responsive: None,
     }
 }

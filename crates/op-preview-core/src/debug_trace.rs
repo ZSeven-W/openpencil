@@ -581,7 +581,7 @@ impl crate::session::PreviewSession {
 
     pub fn reset(&mut self) -> Result<(), crate::PreviewEnterError> {
         let seed = self.reset_seed.clone();
-        let rebuilt = crate::PreviewSession::enter_with_capabilities(
+        let rebuilt = crate::PreviewSession::enter_with_host_motion_preference(
             &seed.document,
             seed.canvas_size,
             &seed.active_theme,
@@ -590,6 +590,7 @@ impl crate::session::PreviewSession {
             seed.presenting,
             seed.measure,
             seed.host_capabilities,
+            seed.host_motion_preference,
         )?;
         *self = rebuilt;
         self.debug.trace.record_control("reset", 0);

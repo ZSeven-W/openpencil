@@ -12,9 +12,10 @@ use jian_ops_schema::node::PenNode;
 use jian_ops_schema::PenDocument;
 
 use crate::design_form::{classify_root_form_node, DesignForm};
-use crate::issue::Issue;
+use crate::issue::{Issue, IssueCategory};
 
 pub mod empty_filled_panel;
+pub mod motion_budget;
 pub mod shader_budget;
 pub mod siblings;
 pub mod slop;
@@ -34,6 +35,7 @@ mod slop_tests;
 mod spacing_edge_tests;
 
 pub use empty_filled_panel::*;
+pub use motion_budget::*;
 pub use shader_budget::*;
 pub use siblings::*;
 pub use slop::*;
@@ -94,6 +96,7 @@ pub fn detect_all_for_form(root: &PenNode, doc: &PenDocument, form: DesignForm) 
     // form today, because a phone and a desktop page genuinely have different
     // fragment-pass headroom.
     combined.extend(detect_shader_budget(root, form));
+    combined.extend(detect_motion_budget(root, form));
     // Phase E5 — widget a11y. No TS counterpart; runs late so it never
     // shadows an earlier detector under the `{node_id}:{property}` dedup.
     combined.extend(detect_unlabeled_inputs(root));
@@ -107,7 +110,14 @@ pub fn detect_all_for_form(root: &PenNode, doc: &PenDocument, form: DesignForm) 
     let mut seen = HashSet::new();
     combined
         .into_iter()
-        .filter(|issue| seen.insert(format!("{}:{}", issue.node_id, issue.property.wire_str())))
+        .filter(|issue| {
+            let key = if issue.category == IssueCategory::MotionBudget {
+                format!("{}:{:?}:{}", issue.node_id, issue.category, issue.reason)
+            } else {
+                format!("{}:{}", issue.node_id, issue.property.wire_str())
+            };
+            seen.insert(key)
+        })
         .collect()
 }
 

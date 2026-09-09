@@ -13,6 +13,7 @@ use serde_json::Value;
 /// was written. `Remove` is handled by the caller (`apply_fixes`), not here.
 fn set_property(node: &mut PenNode, property: FixProperty, suggested: &Value) -> bool {
     match property {
+        FixProperty::None => false,
         FixProperty::Height => {
             // text-explicit-height → "fit_content"
             if suggested.as_str() == Some("fit_content") {

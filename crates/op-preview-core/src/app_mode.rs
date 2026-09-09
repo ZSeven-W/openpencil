@@ -457,6 +457,8 @@ impl PreviewSession {
         self.route_generation = self.route_generation.saturating_add(1);
         self.transition_tap = None;
         self.animation.clear();
+        self.motion.reset_screen();
+        self.start_mount_animations(now_ms);
         let route = self.runtime.nav.current();
         self.debug
             .trace
