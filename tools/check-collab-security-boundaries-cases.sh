@@ -326,6 +326,37 @@ mv \
 expect_failure "requires the split production policy fail-closed regression" \
     "production/test issuer isolation regression test"
 
+new_fixture large-external-cfg-test-list
+# Regression: the gate used to decide external-module membership with
+# `printf '%s\n' "$cfg_test_external_sources" | grep -Fxq`. grep -q exits on
+# its first match while printf is still writing, so a membership list longer
+# than the pipe buffer made printf die of SIGPIPE (exit 141), pipefail flipped
+# the whole pipeline to false, and a covered literal failed as uncovered (CI,
+# commit b23409a1d). 1000 `#[cfg(test)] mod tests;` declarations yield a
+# ~96 KiB membership list. Both guarded literals are moved into genuine
+# external cfg(test) modules declared by op-auth-bridge sources: their
+# membership entries sort near the top of the list (op-auth-bridge before
+# op-util), so grep matches in its first read and exits while printf still
+# has far more buffered than any pipe can hold — the race fires every run
+# instead of only when buffer timing loses.
+awk -v root="$fixture_root" 'BEGIN {
+    for (i = 1; i <= 1000; i++) {
+        path = root "/crates/op-util/src/cfg_test_external_" i ".rs"
+        printf "#[cfg(test)]\nmod tests;\n" > path
+        close(path)
+    }
+}'
+cat > "$fixture_root/crates/op-auth-bridge/src/collab_verifier.rs" <<'EOF'
+#[cfg(test)]
+#[path = "collab_verifier_tests.rs"]
+mod tests;
+EOF
+cat > "$fixture_root/crates/op-auth-bridge/src/collab_verifier_tests.rs" <<'EOF'
+#[test]
+fn production_signed_policy_path_never_falls_back_to_raw_jwks() {}
+EOF
+expect_pass "keeps cfg(test) literal membership SIGPIPE-free on a large external source list"
+
 new_fixture sensitive-key-file
 : > "$fixture_root/crates/op-collab-transport/peer.key"
 expect_failure "rejects key-shaped repository fixtures" \
