@@ -327,7 +327,7 @@ fn first_solid_color(fills: Option<&Vec<PenFill>>) -> Option<String> {
 /// True for a 9-char `#RRGGBBAA` hex whose alpha pair is `00` — a fully
 /// transparent solid, treated the same as `opacity == 0`.
 fn is_transparent_hex(color: &str) -> bool {
-    color.len() == 9 && color[7..].eq_ignore_ascii_case("00")
+    color.len() == 9 && color.is_ascii() && color[7..].eq_ignore_ascii_case("00")
 }
 
 /// Port of `isLargeText` (`detectors-typography.ts:87-99`). WCAG 2.x large
@@ -434,6 +434,57 @@ mod tests {
         assert!(
             detect_text_bg_contrast(&root, &doc(json!({"version": "1.0", "children": []})))
                 .is_empty()
+        );
+    }
+
+    /// A fill color the model wrote as a name rather than a hex must not
+    /// panic the detector. `深蓝色` is nine UTF-8 bytes, so the byte-length
+    /// test in `is_transparent_hex` accepts it and the `[7..]` slice lands
+    /// inside the last character.
+    #[test]
+    fn tolerates_a_non_ascii_fill_color() {
+        let root = node(json!({
+            "type": "frame", "id": "page",
+            "fill": [{"type": "solid", "color": "#FFFFFF"}],
+            "children": [
+                {
+                    "type": "text", "id": "t1", "content": "Hello",
+                    "fill": [{"type": "solid", "color": "深蓝色"}]
+                }
+            ]
+        }));
+        // The color does not resolve, so the node is skipped — but the walk
+        // must finish instead of panicking.
+        assert!(
+            detect_text_bg_contrast(&root, &doc(json!({"version": "1.0", "children": []})))
+                .is_empty()
+        );
+    }
+
+    /// The transparent-alpha skip itself is unchanged: a `#RRGGBBAA` fill
+    /// with alpha `00` is passed over so the next fill supplies the color.
+    #[test]
+    fn skips_a_zero_alpha_fill_for_the_next_one() {
+        let root = node(json!({
+            "type": "frame", "id": "page",
+            "fill": [{"type": "solid", "color": "#FFFFFF"}],
+            "children": [
+                {
+                    "type": "text", "id": "t1", "content": "Hello",
+                    "fill": [
+                        {"type": "solid", "color": "#00000000"},
+                        {"type": "solid", "color": "#FCFCFC"}
+                    ]
+                }
+            ]
+        }));
+        let issues =
+            detect_text_bg_contrast(&root, &doc(json!({"version": "1.0", "children": []})));
+        assert_eq!(issues.len(), 1);
+        assert!(
+            issues[0].reason.contains("text=#FCFCFC"),
+            "the zero-alpha fill must be skipped: {}",
+            issues[0].reason
         );
     }
 
