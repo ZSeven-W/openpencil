@@ -318,9 +318,21 @@ impl WidgetHost {
         let Some(_session) = self.preview.as_mut() else {
             return false;
         };
+        let held = self
+            .preview_pressed_pids
+            .contains(&LEGACY_WEB_PREVIEW_POINTER_ID);
         let Some(doc_point) =
             self.preview_screen_to_scene_point(screen_x, screen_y, viewport_w, viewport_h)
         else {
+            if !held {
+                let cleared = self
+                    .preview
+                    .as_mut()
+                    .is_some_and(op_preview_core::PreviewSession::clear_hover);
+                if cleared {
+                    self.mark_dirty();
+                }
+            }
             return false;
         };
         // Check edge-swipe BEFORE updating preview_last_doc, so cancel
@@ -340,16 +352,17 @@ impl WidgetHost {
         // down leaves its gesture machine believing a drag is in flight,
         // and every later Down/Up stops resolving as a tap — which reads
         // as "the nav works once, then goes dead".
-        let phase = if self
-            .preview_pressed_pids
-            .contains(&LEGACY_WEB_PREVIEW_POINTER_ID)
-        {
+        let phase = if held {
             PointerPhase::Move
         } else {
             PointerPhase::Hover
         };
         self.preview_last_doc_by_pid
             .insert(LEGACY_WEB_PREVIEW_POINTER_ID, (doc_point.x, doc_point.y));
+        let interaction_before = self
+            .preview
+            .as_ref()
+            .map(|preview| preview.interaction().clone());
         if let Some(session) = self.preview.as_mut() {
             let emitted = session.dispatch_pointer_for_id_at(
                 LEGACY_WEB_PREVIEW_POINTER_ID,
@@ -359,11 +372,12 @@ impl WidgetHost {
                 phase,
                 self.now_ms,
             );
-            if emitted
-                || self
-                    .preview_pressed_pids
-                    .contains(&LEGACY_WEB_PREVIEW_POINTER_ID)
-            {
+            let interaction_changed = self
+                .preview
+                .as_ref()
+                .zip(interaction_before.as_ref())
+                .is_some_and(|(preview, before)| preview.interaction() != before);
+            if emitted || interaction_changed || held {
                 self.mark_dirty();
             }
             true

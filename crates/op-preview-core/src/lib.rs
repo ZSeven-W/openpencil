@@ -186,6 +186,8 @@ mod tests_tabs;
 mod tests_transition;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_ui_actions;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_widget_states;
 // Same platform gate as `tests_app_mode` / `tests_transition`, whose
 // fixture and helpers this file reuses: those are excluded on Windows,
 // so a Windows build cannot see `test_measure`, `TWO_SCREEN_DOC_JSON`

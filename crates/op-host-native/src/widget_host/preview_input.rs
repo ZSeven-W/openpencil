@@ -239,10 +239,29 @@ impl WidgetHostNative {
     ) -> bool {
         use jian_core::gesture::pointer::{PointerKind, PointerPhase};
         let (vw, vh) = (self.last_viewport_w, self.last_viewport_h);
+        let held = self.preview_pressed_pids.contains(&pointer_id);
         if self.over_topmost_panel(screen_x, screen_y, vw, vh) {
+            if !held {
+                let cleared = self
+                    .preview
+                    .as_mut()
+                    .is_some_and(op_preview_core::PreviewSession::clear_hover);
+                if cleared {
+                    self.mark_dirty();
+                }
+            }
             return false;
         }
         let Some(doc) = self.preview_doc_point(screen_x, screen_y, vw, vh) else {
+            if !held {
+                let cleared = self
+                    .preview
+                    .as_mut()
+                    .is_some_and(op_preview_core::PreviewSession::clear_hover);
+                if cleared {
+                    self.mark_dirty();
+                }
+            }
             return false;
         };
         // Track C-4: a held drag that crosses the edge-swipe threshold
@@ -258,7 +277,7 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
-        let phase = if self.preview_pressed_pids.contains(&pointer_id) {
+        let phase = if held {
             PointerPhase::Move
         } else {
             PointerPhase::Hover
@@ -266,10 +285,19 @@ impl WidgetHostNative {
         self.preview_last_doc_by_pid
             .insert(pointer_id, (doc.x, doc.y));
         let t_ms = self.preview_pointer_time_ms();
+        let interaction_before = self
+            .preview
+            .as_ref()
+            .map(|preview| preview.interaction().clone());
         let emitted = self.preview.as_mut().is_some_and(|p| {
             p.dispatch_pointer_for_id_at(pointer_id, PointerKind::Mouse, doc.x, doc.y, phase, t_ms)
         });
-        if emitted || self.preview_pressed_pids.contains(&pointer_id) {
+        let interaction_changed = self
+            .preview
+            .as_ref()
+            .zip(interaction_before.as_ref())
+            .is_some_and(|(preview, before)| preview.interaction() != before);
+        if emitted || interaction_changed || held {
             self.mark_dirty();
         }
         true

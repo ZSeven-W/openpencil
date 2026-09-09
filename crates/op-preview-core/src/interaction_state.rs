@@ -201,4 +201,14 @@ impl InteractionState {
         self.pressed.clear();
         self.publish_primary();
     }
+
+    /// Clear the current non-Touch hover sample when the host moves over a
+    /// surface that owns the cursor above the preview, or leaves the canvas.
+    pub(crate) fn clear_hover(&mut self) -> bool {
+        let changed = self.hovered.take().is_some();
+        if changed {
+            self.publish_primary();
+        }
+        changed
+    }
 }

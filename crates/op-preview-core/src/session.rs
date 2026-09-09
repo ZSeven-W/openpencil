@@ -555,6 +555,12 @@ impl PreviewSession {
         &self.interaction
     }
 
+    /// Clear a mouse/pen hover sample when the host moves outside the
+    /// preview-owned surface. Returns whether the visual state changed.
+    pub fn clear_hover(&mut self) -> bool {
+        self.interaction.clear_hover()
+    }
+
     /// Resolve a node's authored visibility through the R5 Preview-only
     /// action overrides. R6 consumes this while building the unified overlay.
     pub fn action_visibility_for(&self, node_id: &str, authored: bool) -> bool {

@@ -321,9 +321,11 @@ impl super::PreviewSession {
         // chain did not consume must not leak to a later uncertified one.
         self.runtime
             .set_activation(envelope.activation.map(|a| a.raw()));
+        let interaction_before = self.interaction.clone();
         let mut outcome = self.dispatch_input_inner(envelope);
         self.runtime.set_activation(None);
         self.pending_activation = restore_activation;
+        outcome.needs_redraw |= self.interaction != interaction_before;
         outcome.effects_enqueued = self.effects.total_enqueued() - enqueued_before;
         let animation_now = self.runtime.now_ms;
         outcome.needs_redraw |=
