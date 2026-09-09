@@ -29,6 +29,7 @@ impl Session {
     /// Advance generation without touching a Metal/EGL surface.
     pub(crate) fn pump_background_work(&mut self, now_ms: u64) -> FfiResult<bool> {
         self.advance_global_clock(now_ms);
+        self.pump_editor_preview();
         #[cfg(feature = "editor")]
         {
             let revision_before = self

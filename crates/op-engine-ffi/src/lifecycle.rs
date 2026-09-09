@@ -553,6 +553,7 @@ impl Session {
             return Err(FfiError::new(OpStatus::Suspended, "engine is suspended"));
         }
         self.advance_global_clock(now_ms);
+        self.pump_editor_preview();
         #[cfg(feature = "editor")]
         crate::editor_template::drain_pending_scene_template(self)?;
         #[cfg(feature = "editor")]
@@ -646,6 +647,7 @@ impl Session {
         stride: usize,
     ) -> FfiResult<()> {
         self.advance_global_clock(now_ms);
+        self.pump_editor_preview();
         #[cfg(feature = "editor")]
         crate::editor_template::drain_pending_scene_template(self)?;
         #[cfg(feature = "editor")]

@@ -46,6 +46,9 @@ impl DesktopApp {
     pub(super) fn refresh_host_clock(&mut self) {
         let now_ms = self.clock_start.elapsed().as_millis() as u64;
         self.host.set_now_ms(now_ms);
+        if self.host.pump_preview() {
+            self.request_redraw(true);
+        }
     }
 
     /// Next wake instant on a fixed `period_ms` grid anchored at

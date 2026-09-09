@@ -102,14 +102,24 @@ fn swipe_engine() -> OpEngine {
     engine
 }
 
-/// The host's single public clock readout. In preview mode the deadline
-/// list pins to `now_ms + 33 ms`.
+/// The host's frame deadline. Since the preview stopped pinning a blanket
+/// `now_ms + 33` wake, an idle session reports `None`; the host clock
+/// itself is read through `host_now_ms`.
 fn host_deadline_ms(engine: &mut OpEngine) -> Option<u64> {
     engine
         .session_mut_for_test()
         .editor()
         .expect("editor host")
         .next_animation_deadline_ms()
+}
+
+/// The widget host's global clock (`WidgetHostNative::now_ms`).
+fn host_now_ms(engine: &mut OpEngine) -> u64 {
+    engine
+        .session_mut_for_test()
+        .editor()
+        .expect("editor host")
+        .now_ms()
 }
 
 /// The session's global clock (the value every frame pump / background
@@ -175,10 +185,18 @@ fn app_state_string(engine: &mut OpEngine, key: &str) -> Option<String> {
 fn dedicated_time_stamped_pointer_entries_swipe_without_an_intervening_frame() {
     let mut engine = swipe_engine();
     let pointer = &mut engine as *mut OpEngine;
+    // The preview no longer pins a blanket `now + 33` wake: an idle session
+    // (no animation track, no runtime timer) reports no deadline at all, so
+    // the clock itself is what proves the host starts at 0.
+    assert_eq!(
+        session_now_ms(&mut engine),
+        0,
+        "fresh host clock starts at 0"
+    );
     assert_eq!(
         host_deadline_ms(&mut engine),
-        Some(33),
-        "fresh host clock starts at 0 (preview pins the deadline to now + 33)"
+        None,
+        "an idle preview owns no frame deadline"
     );
 
     // Down at t=0 on the frame body below the floating device-switcher
@@ -202,8 +220,8 @@ fn dedicated_time_stamped_pointer_entries_swipe_without_an_intervening_frame() {
         OpStatus::Ok
     );
     assert_eq!(
-        host_deadline_ms(&mut engine),
-        Some(133),
+        host_now_ms(&mut engine),
+        100,
         "the host clock must jump to the event timestamp, not stay at the last frame pump"
     );
     assert_eq!(session_now_ms(&mut engine), 100);
@@ -247,7 +265,8 @@ fn out_of_order_dedicated_events_keep_global_clocks_and_swipe_uses_factual_delta
         OpStatus::Ok
     );
     assert_eq!(session_now_ms(&mut engine), 2000);
-    assert_eq!(host_deadline_ms(&mut engine), Some(2033));
+    // Idle preview: no blanket tick, so no deadline follows the clock.
+    assert_eq!(host_deadline_ms(&mut engine), None);
 
     // The gesture's own timestamps sit BEHIND the pumped clock. The
     // swipe start stays below the floating device-switcher pill so the
@@ -271,9 +290,9 @@ fn out_of_order_dedicated_events_keep_global_clocks_and_swipe_uses_factual_delta
         "the session clock must not regress to an out-of-order event"
     );
     assert_eq!(
-        host_deadline_ms(&mut engine),
-        Some(2033),
-        "the host global clock must stay at the frame pump time (2000 + 33)"
+        host_now_ms(&mut engine),
+        2000,
+        "the host global clock must stay at the frame pump time"
     );
     // Swipe measured the factual 100 ms pair delta (950 → 1050) even
     // though the global clock reads 2000.
@@ -305,7 +324,8 @@ fn cancel_and_early_returns_advance_global_clocks_monotonically() {
         OpStatus::Ok
     );
     assert_eq!(session_now_ms(&mut engine), 300);
-    assert_eq!(host_deadline_ms(&mut engine), Some(333));
+    // Idle preview: no blanket tick, so no deadline follows the clock.
+    assert_eq!(host_deadline_ms(&mut engine), None);
 
     // An out-of-order Cancel (behind the current clock) leaves it alone.
     assert_eq!(
@@ -313,7 +333,8 @@ fn cancel_and_early_returns_advance_global_clocks_monotonically() {
         OpStatus::Ok
     );
     assert_eq!(session_now_ms(&mut engine), 300);
-    assert_eq!(host_deadline_ms(&mut engine), Some(333));
+    // Idle preview: no blanket tick, so no deadline follows the clock.
+    assert_eq!(host_deadline_ms(&mut engine), None);
 
     // Safe-area miss: the early return must still have advanced the
     // global clock to the event's own time first (400).
@@ -322,7 +343,8 @@ fn cancel_and_early_returns_advance_global_clocks_monotonically() {
         OpStatus::Ok
     );
     assert_eq!(session_now_ms(&mut engine), 400);
-    assert_eq!(host_deadline_ms(&mut engine), Some(433));
+    // Idle preview: no blanket tick, so no deadline follows the clock.
+    assert_eq!(host_deadline_ms(&mut engine), None);
 
     // Pointer-capture miss (press lands in the top safe-area band): the
     // capture gate returns before any host routing, but the clock has
@@ -341,7 +363,8 @@ fn cancel_and_early_returns_advance_global_clocks_monotonically() {
         OpStatus::Ok
     );
     assert_eq!(session_now_ms(&mut engine), 600);
-    assert_eq!(host_deadline_ms(&mut engine), Some(633));
+    // Idle preview: no blanket tick, so no deadline follows the clock.
+    assert_eq!(host_deadline_ms(&mut engine), None);
 
     // Cancel through the generic route carries its factual time too.
     assert_eq!(
@@ -349,5 +372,6 @@ fn cancel_and_early_returns_advance_global_clocks_monotonically() {
         OpStatus::Ok
     );
     assert_eq!(session_now_ms(&mut engine), 700);
-    assert_eq!(host_deadline_ms(&mut engine), Some(733));
+    // Idle preview: no blanket tick, so no deadline follows the clock.
+    assert_eq!(host_deadline_ms(&mut engine), None);
 }

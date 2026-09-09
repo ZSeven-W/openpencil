@@ -240,12 +240,32 @@ impl WidgetHostNative {
     /// backward. The event's own factual timestamp travels separately
     /// through the scoped `preview_event_time_ms` context; see
     /// `apply_press_at` / `preview_dispatch_press`.
+    /// The host's global clock as last pushed by `set_now_ms` — the frame
+    /// pump, background tick, and time-stamped pointer entries all advance
+    /// it, so tests read it directly instead of inferring it from a frame
+    /// deadline (an idle preview owns no deadline).
+    pub fn now_ms(&self) -> u64 {
+        self.now_ms
+    }
+
     pub fn set_now_ms(&mut self, now_ms: u64) {
         self.now_ms = self.now_ms.max(now_ms);
         if let Some(preview) = self.preview.as_mut() {
             preview.set_now_ms(self.now_ms);
-            let _ = preview.pump(self.now_ms);
         }
+    }
+
+    /// Pump the live preview session once for this frame: flush due gesture
+    /// timers, poll action tasks and advance the animation timeline at the
+    /// host's global clock. Frame pumps and background ticks call this; the
+    /// pointer entries deliberately do not — an event carrying a timestamp
+    /// behind the global clock must not pump a gesture it is still feeding.
+    /// Returns whether the session wants a repaint.
+    pub fn pump_preview(&mut self) -> bool {
+        let now_ms = self.now_ms;
+        self.preview
+            .as_mut()
+            .is_some_and(|preview| preview.pump(now_ms).needs_redraw)
     }
 }
 
