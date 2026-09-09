@@ -57,14 +57,19 @@ fn is_etxtbsy(error: &io::Error) -> bool {
 mod tests {
     use super::*;
 
-    /// The ETXTBSY errno on both Linux and macOS.
-    const ETXTBSY_ERRNO: i32 = 26;
-
     #[test]
     fn etxtbsy_is_retried_until_the_spawn_succeeds() {
+        // Built by kind, not raw errno: on Windows errno 26 in the raw
+        // namespace is ERROR_NOT_READY, an unrelated condition.
         let mut script = [
-            Err(io::Error::from_raw_os_error(ETXTBSY_ERRNO)),
-            Err(io::Error::from_raw_os_error(ETXTBSY_ERRNO)),
+            Err(io::Error::new(
+                io::ErrorKind::ExecutableFileBusy,
+                "text file busy",
+            )),
+            Err(io::Error::new(
+                io::ErrorKind::ExecutableFileBusy,
+                "text file busy",
+            )),
             Ok(()),
         ]
         .into_iter();
@@ -95,13 +100,32 @@ mod tests {
         let mut calls = 0usize;
         let result: io::Result<()> = retry_etxtbsy(|| {
             calls += 1;
-            Err(io::Error::from_raw_os_error(ETXTBSY_ERRNO))
+            Err(io::Error::new(
+                io::ErrorKind::ExecutableFileBusy,
+                "still busy",
+            ))
         });
         assert_eq!(calls, SPAWN_ATTEMPTS, "spawn attempts are capped");
+        let error = result.unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::ExecutableFileBusy);
         assert_eq!(
-            result.unwrap_err().raw_os_error(),
-            Some(ETXTBSY_ERRNO),
+            error.to_string(),
+            "still busy",
             "the original error is surfaced after the budget is gone"
         );
+    }
+
+    /// The raw errno arm of the classifier. Unix-only: errno 26 is
+    /// `ETXTBSY` on Linux and macOS, while 13 (`EACCES`) must stay
+    /// unclassified so a permissions problem is never retried.
+    #[cfg(unix)]
+    #[test]
+    fn raw_etxtbsy_errno_classifies_as_busy() {
+        assert!(is_etxtbsy(&io::Error::from_raw_os_error(26)));
+        assert!(!is_etxtbsy(&io::Error::from_raw_os_error(13)));
+        assert!(!is_etxtbsy(&io::Error::new(
+            io::ErrorKind::NotFound,
+            "no such agent"
+        )));
     }
 }
