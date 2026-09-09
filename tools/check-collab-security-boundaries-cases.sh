@@ -326,6 +326,19 @@ mv \
 expect_failure "requires the split production policy fail-closed regression" \
     "production/test issuer isolation regression test"
 
+new_fixture integration-fixture-header-removed
+# The gate captures the fixture header without a pipeline (`sed | grep -q`
+# raced grep's early exit under pipefail); this mutation proves the rewritten
+# check still fails closed when the feature gate is missing.
+sed '1d' \
+    "$fixture_root/crates/op-auth-bridge/tests/collab_verifier.rs" \
+    > "$fixture_root/crates/op-auth-bridge/tests/collab_verifier.rs.next"
+mv \
+    "$fixture_root/crates/op-auth-bridge/tests/collab_verifier.rs.next" \
+    "$fixture_root/crates/op-auth-bridge/tests/collab_verifier.rs"
+expect_failure "requires the test-issuer feature gate on auth integration fixtures" \
+    "auth integration fixtures must require feature"
+
 new_fixture large-external-cfg-test-list
 # Regression: the gate used to decide external-module membership with
 # `printf '%s\n' "$cfg_test_external_sources" | grep -Fxq`. grep -q exits on

@@ -378,12 +378,15 @@ if [[ -n "$ordinary_ticket_deserializer" ]]; then
     record_failure "dedicated ticket decoder must not materialize ordinary strings or Values:
 $ordinary_ticket_deserializer"
 fi
-credential_probe_line=$(grep -nE \
+# `grep -m1` lets grep stop on its own match while `cut` drains the pipe to
+# EOF; `head -1` exits after one line and can SIGPIPE grep under pipefail,
+# leaving the captured line number empty on a covered anchor.
+credential_probe_line=$(grep -m1 -nE \
     '^[[:space:]]*declared_kind_rejecting_renew_ticket\(bytes\)\?;' \
-    crates/op-collab/src/codec.rs | head -1 | cut -d: -f1 || true)
-generic_value_decode_line=$(grep -nF \
+    crates/op-collab/src/codec.rs | cut -d: -f1 || true)
+generic_value_decode_line=$(grep -m1 -nF \
     'let mut value = decode_json_value(bytes, limits)?;' \
-    crates/op-collab/src/codec.rs | head -1 | cut -d: -f1 || true)
+    crates/op-collab/src/codec.rs | cut -d: -f1 || true)
 if [[ -z "$credential_probe_line" || -z "$generic_value_decode_line" ]] \
     || [[ "$credential_probe_line" -ge "$generic_value_decode_line" ]]; then
     record_failure \
@@ -392,9 +395,9 @@ fi
 # The guest-to-owner envelope ceiling is selected from authenticated local
 # connection direction before the discriminator or generic Value is parsed.
 # An attacker-declared Snapshot kind must never select the 64 MiB owner budget.
-inbound_direction_limit_line=$(grep -nE \
+inbound_direction_limit_line=$(grep -m1 -nE \
     '^[[:space:]]*enforce_inbound_envelope_limit\(inbound_direction, bytes\.len\(\), limits\)\?;' \
-    crates/op-collab/src/codec.rs | head -1 | cut -d: -f1 || true)
+    crates/op-collab/src/codec.rs | cut -d: -f1 || true)
 if [[ -z "$inbound_direction_limit_line" || -z "$credential_probe_line" \
         || -z "$generic_value_decode_line" ]] \
     || [[ "$inbound_direction_limit_line" -ge "$credential_probe_line" ]] \
@@ -654,10 +657,15 @@ require_cfg_test_literal \
     "production_signed_policy_path_never_falls_back_to_raw_jwks" \
     "production/test issuer isolation regression test"
 
-if [[ -f crates/op-auth-bridge/tests/collab_verifier.rs ]] \
-    && ! sed -n '1,5p' crates/op-auth-bridge/tests/collab_verifier.rs \
-        | grep -Fq '#![cfg(feature = "test-issuer")]'; then
-    record_failure "auth integration fixtures must require feature = \"test-issuer\""
+# Capture the header without a pipeline: `sed | grep -q` races grep's early
+# exit under pipefail — grep can match and exit while sed is still writing,
+# sed dies of SIGPIPE (exit 141), and pipefail turns a passing fixture into a
+# spurious failure.
+if [[ -f crates/op-auth-bridge/tests/collab_verifier.rs ]]; then
+    collab_verifier_header=$(sed -n '1,5p' crates/op-auth-bridge/tests/collab_verifier.rs)
+    if [[ "$collab_verifier_header" != *'#![cfg(feature = "test-issuer")]'* ]]; then
+        record_failure "auth integration fixtures must require feature = \"test-issuer\""
+    fi
 fi
 
 production_fixture_hits=
