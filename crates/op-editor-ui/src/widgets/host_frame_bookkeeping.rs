@@ -99,6 +99,23 @@ pub fn earliest(current: Option<u64>, deadline: u64) -> Option<u64> {
     Some(current.map_or(deadline, |current| current.min(deadline)))
 }
 
+/// Fold a preview session deadline into the host's shared deadline chain.
+///
+/// Preview deadlines are absolute host-clock milliseconds. A stale deadline
+/// can otherwise re-arm a native timer or browser pump at the current instant
+/// forever, so a reported deadline is always kept at least one millisecond in
+/// the future. `None` leaves the existing host clauses unchanged.
+pub fn fold_preview_deadline(
+    current: Option<u64>,
+    preview_deadline: Option<u64>,
+    now_ms: u64,
+) -> Option<u64> {
+    let Some(deadline) = preview_deadline else {
+        return current;
+    };
+    earliest(current, deadline.max(now_ms.saturating_add(1)))
+}
+
 /// The platform-independent part of the next animation wake-up: agent
 /// reveal + generation-scan indicators, the canvas layout transition,
 /// the focused text input's caret blink, and the two hover dwells (the
@@ -149,4 +166,18 @@ pub fn base_animation_deadline_ms(
         next = earliest(next, deadline);
     }
     next
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fold_preview_deadline;
+
+    #[test]
+    fn preview_deadline_is_folded_and_clamped_only_when_present() {
+        assert_eq!(fold_preview_deadline(None, None, 100), None);
+        assert_eq!(fold_preview_deadline(Some(150), None, 100), Some(150));
+        assert_eq!(fold_preview_deadline(None, Some(116), 100), Some(116));
+        assert_eq!(fold_preview_deadline(None, Some(100), 100), Some(101));
+        assert_eq!(fold_preview_deadline(Some(300), Some(200), 100), Some(200));
+    }
 }

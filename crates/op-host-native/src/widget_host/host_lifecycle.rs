@@ -244,6 +244,7 @@ impl WidgetHostNative {
         self.now_ms = self.now_ms.max(now_ms);
         if let Some(preview) = self.preview.as_mut() {
             preview.set_now_ms(self.now_ms);
+            let _ = preview.pump(self.now_ms);
         }
     }
 }

@@ -177,11 +177,9 @@ impl ScreenTransition {
     }
 
     /// Next wake time for the host's animation loop — same shape as
-    /// `op_editor_ui::widgets::CanvasLayoutTransition::next_deadline_ms`,
-    /// though the host doesn't actually need this: `next_animation_deadline_ms`
-    /// already ticks ~30fps for the whole `self.preview.is_some()` window.
-    /// Kept for parity / a future host that wants a tighter wake schedule.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// `op_editor_ui::widgets::CanvasLayoutTransition::next_deadline_ms`.
+    /// `PreviewSession::next_wake_deadline_ms` folds this into the host's
+    /// deadline chain so an idle preview no longer needs a blanket tick.
     pub(crate) fn next_deadline_ms(&self, now_ms: u64) -> Option<u64> {
         if !self.is_active(now_ms) {
             return None;

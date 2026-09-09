@@ -235,6 +235,13 @@ impl WidgetHostNative {
             self.layout_transition.as_ref(),
             self.now_ms,
         );
+        next = bookkeeping::fold_preview_deadline(
+            next,
+            self.preview
+                .as_ref()
+                .and_then(|preview| preview.next_wake_deadline_ms()),
+            self.now_ms,
+        );
         // Gesture-end full-quality repaint: wake once the
         // interactive-degrade window closes. Quantized UP to a 50 ms
         // grid so consecutive gesture ticks report the SAME deadline —
@@ -253,11 +260,6 @@ impl WidgetHostNative {
         // for the next wake here rather than dirtying the whole host.
         if let Some(at) = self.slide_thumbs.wake_deadline_ms() {
             next = bookkeeping::earliest(next, at);
-        }
-        // While previewing, keep the loop ticking (~30 fps) so the live
-        // runtime's caret blink + any time-driven widget state animates.
-        if self.preview.is_some() {
-            next = bookkeeping::earliest(next, self.now_ms.saturating_add(33));
         }
         // While a `git clone` runs, keep the loop ticking so
         // `poll_git_clone_job` drains the worker's result later.

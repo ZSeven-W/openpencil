@@ -456,6 +456,9 @@ impl super::PreviewSession {
         [
             self.runtime.next_wake_ms(),
             self.animation.next_deadline_ms(),
+            self.transition
+                .as_ref()
+                .and_then(|transition| transition.next_deadline_ms(self.last_now_ms)),
         ]
         .into_iter()
         .flatten()

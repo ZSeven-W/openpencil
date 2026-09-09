@@ -126,6 +126,31 @@ fn opacity_animation_reaches_exact_midpoint_and_terminal_fill() {
 }
 
 #[test]
+fn running_animation_owns_a_frame_deadline_and_pump_advances_it() {
+    let idle = opacity_session(Vec::new(), 1.0);
+    assert_eq!(idle.next_wake_deadline_ms(), None);
+
+    let mut session = opacity_session(
+        vec![opacity_action(
+            Some(1.0),
+            0.2,
+            600,
+            0,
+            2,
+            "alternate",
+            "forwards",
+        )],
+        1.0,
+    );
+    tap(&mut session);
+    assert_eq!(session.next_wake_deadline_ms(), Some(16));
+
+    let before = opacity(&session);
+    let _ = session.pump(200);
+    assert_ne!(opacity(&session), before);
+}
+
+#[test]
 fn host_clock_push_ticks_the_same_session_timeline() {
     let mut session = opacity_session(
         vec![opacity_action(

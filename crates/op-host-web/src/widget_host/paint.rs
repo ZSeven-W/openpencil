@@ -104,6 +104,7 @@ impl WidgetHost {
                 // transition, so every tap after the first screen switch is
                 // silently dropped.
                 preview.set_now_ms(self.now_ms);
+                let _ = preview.pump(self.now_ms);
                 let outcome = preview.reconcile(self.now_ms);
                 if outcome.repaint {
                     let warnings = preview.warnings().to_vec();
@@ -583,7 +584,12 @@ impl WidgetHost {
                 .preview
                 .as_ref()
                 .is_some_and(|session| session.transition_active());
-            if mode_animating || screen_animating {
+            let preview_wake_pending = self.preview_wake_deadline_ms().is_some();
+            if crate::preview_pump::needs_next_paint(
+                mode_animating,
+                screen_animating,
+                preview_wake_pending,
+            ) {
                 crate::repaint_coalescer::request();
             }
         }

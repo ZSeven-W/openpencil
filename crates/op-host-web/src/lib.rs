@@ -41,6 +41,7 @@ mod live_sync;
 // Daemon → browser agent-indicator relay (poll + local mirror + rAF pump).
 #[cfg(feature = "canvaskit")]
 mod agent_indicator_sync;
+mod preview_pump;
 // Top-bar hover-tooltip dwell → rAF repaint (the web host has no
 // animation-deadline scheduler of its own).
 #[cfg(feature = "canvaskit")]

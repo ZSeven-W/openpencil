@@ -478,25 +478,29 @@ impl WidgetHost {
         self.wall_now_secs = wall_now_secs;
     }
 
-    // Caret-blink / animation scheduling — tested + ready to wire, but the
-    // CanvasKit mount repaints on events rather than a blink-deadline pump.
+    // Caret-blink / animation scheduling. The browser pump consumes this
+    // deadline while native folds the same session deadline into its runner.
     #[allow(dead_code)]
     pub fn caret_animation_active(&self) -> bool {
         self.editor_state.active_text_input().is_some()
     }
 
-    /// Companion to `caret_animation_active` — unwired for the same reason
-    /// (the CanvasKit mount has no deadline pump to feed it).
-    #[allow(dead_code)]
+    /// The preview-only wake deadline used by the browser frame pump and the
+    /// paint-side self-perpetuating clause.
+    pub(crate) fn preview_wake_deadline_ms(&self) -> Option<u64> {
+        self.preview
+            .as_ref()
+            .and_then(|preview| preview.next_wake_deadline_ms())
+    }
+
+    /// Next absolute millisecond at which this host owes a repaint.
     pub fn next_animation_deadline_ms(&self) -> Option<u64> {
-        // The web host contributes no platform clauses of its own — the
-        // native spine folds gesture-degrade / pan-cache / preview / git-clone
-        // wake-ups onto this same base.
-        bookkeeping::base_animation_deadline_ms(
+        let next = bookkeeping::base_animation_deadline_ms(
             &self.editor_state,
             self.layout_transition.as_ref(),
             self.now_ms,
-        )
+        );
+        bookkeeping::fold_preview_deadline(next, self.preview_wake_deadline_ms(), self.now_ms)
     }
 
     /// Whether a top-bar tooltip is waiting out its dwell — i.e. a

@@ -178,6 +178,7 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 );
                 b.repaint();
                 drop(b);
+                crate::preview_pump::ensure(&inner_for_paint);
                 crate::web_fonts::drain_font_requests(&inner_for_paint);
                 crate::bundled_fonts_web::drain_pending_apply(&inner_for_paint);
                 crate::web_fonts::drain_missing_fonts_detection(&inner_for_paint);
