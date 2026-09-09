@@ -558,6 +558,94 @@ fn explicit_bottom_nav_with_missing_layout_is_repaired_not_demoted() {
     assert_eq!(nav_json["layout"], json!("horizontal"));
 }
 
+/// GLM app-03 rep-1 shape: the named bottom-nav wrapper is VERTICAL and holds
+/// the real tab row (an unnamed structural row of icon+label tabs) plus a
+/// home-indicator clearance frame. The surface patch must land on the tab
+/// row — not on the wrapper, which would lay the clearance out beside the
+/// tabs on one horizontal row.
+#[test]
+fn structural_tab_row_in_named_wrapper_gets_surface_patch_wrapper_stays_vertical() {
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_value(json!({
+        "type": "frame", "id": "root", "name": "App", "width": 375, "height": 812,
+        "layout": "vertical",
+        "children": [
+            {"type": "frame", "id": "content", "name": "Content",
+             "width": "fill_container", "height": 718, "children": []},
+            {
+                "type": "frame", "id": "bottom-nav", "name": "Bottom Navigation Bar",
+                "width": "fill_container", "height": 94, "layout": "vertical",
+                "children": [
+                    {"type": "frame", "id": "tab-row", "name": "Tab Items Row",
+                     "width": "fill_container", "height": 62, "layout": "horizontal",
+                     "children": [
+                        tab("home", "HOME", "home"),
+                        tab("cards", "CARDS", "wallet"),
+                        tab("insights", "INSIGHTS", "chart-pie"),
+                        tab("profile", "PROFILE", "user")
+                     ]},
+                    {"type": "frame", "id": "clearance", "name": "Home Indicator Clearance",
+                     "width": "fill_container", "height": 22, "layout": "horizontal",
+                     "children": [
+                        {"type": "rectangle", "id": "indicator", "name": "Home Indicator",
+                         "width": 120, "height": 5, "children": []}
+                     ]}
+                ]
+            }
+        ]
+    }))
+    .expect("nav wrapper with clearance json");
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    sink.applied.clear();
+
+    crate::cleanup::repair_mobile_structural_chrome_for_all_roots(&mut sink);
+
+    let root = sink.state.active_children().first().expect("root");
+    let wrapper = find_node(root, "bottom-nav").expect("wrapper survives");
+    let wrapper_json = serde_json::to_value(wrapper).expect("wrapper serializes");
+    assert_eq!(
+        wrapper_json["layout"],
+        json!("vertical"),
+        "wrapper must stay a vertical stack above the clearance: {wrapper_json}"
+    );
+    assert_eq!(wrapper_json["gap"], json!(0.0));
+    assert_eq!(wrapper_json["width"], json!("fill_container"));
+    assert_eq!(wrapper_json["height"], json!("fit_content"));
+
+    let row = find_node(root, "tab-row").expect("tab row survives");
+    assert_eq!(
+        row.base().role.as_deref(),
+        Some("bottom-tab-bar"),
+        "the structural tab row carries the nav surface patch"
+    );
+    let row_json = serde_json::to_value(row).expect("row serializes");
+    assert_eq!(row_json["layout"], json!("horizontal"));
+    assert_eq!(row_json["height"], json!(72.0));
+    assert_eq!(row_json["width"], json!("fill_container"));
+    assert_eq!(row_json["justifyContent"], json!("space_between"));
+
+    for id in ["home-tab", "cards-tab", "insights-tab", "profile-tab"] {
+        let tab_json = serde_json::to_value(find_node(root, id).expect("tab survives"))
+            .expect("tab serializes");
+        assert_eq!(tab_json["width"], json!("fill_container"), "tab {id}");
+        assert_eq!(tab_json["height"], json!("fill_container"), "tab {id}");
+        assert_eq!(tab_json["gap"], json!(4.0), "tab {id}");
+    }
+
+    let clearance = find_node(root, "clearance").expect("clearance survives");
+    let clearance_json = serde_json::to_value(clearance).expect("clearance serializes");
+    assert_eq!(
+        clearance_json["height"],
+        json!(22.0),
+        "the clearance frame must be untouched: {clearance_json}"
+    );
+    assert_eq!(clearance_json["layout"], json!("horizontal"));
+}
+
 fn tab(id: &str, label: &str, icon: &str) -> serde_json::Value {
     json!({
         "type": "frame",
