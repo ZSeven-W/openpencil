@@ -38,6 +38,13 @@ copied=0
 while IFS= read -r -d '' artifact; do
     name=${artifact##*/}
     case "$name" in
+        # The VS Code extension's bundled daemon. It rides inside each
+        # platform vsix and is not a release asset of its own; without this
+        # arm its Windows build matches `*.exe` below, once per Windows
+        # target, so the duplicate-basename guard rejects every release.
+        op-host-web-server | op-host-web-server.exe)
+            continue
+            ;;
         *.tar.gz | *.zip | *.dmg | *.exe | *.AppImage | *.deb | *.tgz | *.vsix | *.apk | *.aab | SHA256SUMS.android.txt)
             ;;
         *)
