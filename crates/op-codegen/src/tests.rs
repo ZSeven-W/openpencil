@@ -244,6 +244,101 @@ fn html_emits_div_per_node_with_position_and_fill() {
     assert!(html.contains("rgb(255,0,0)"));
 }
 
+fn html_style_block(html: &str) -> &str {
+    let start = html.find("<style>\n").expect("motion style block") + "<style>\n".len();
+    let end = html[start..].find("</style>").expect("style close") + start;
+    &html[start..end]
+}
+
+#[test]
+fn html_motion_export_matches_the_golden_css() {
+    let doc = jian_ops_schema::load_str(
+        r#"{
+          "version":"1.0",
+          "children":[
+            {"type":"rectangle","id":"hero","width":320,"height":180,
+             "transition":{"durationMs":150,"easing":"standard","properties":["opacity"]},
+             "animations":[{"trigger":"mount","keyframes":[
+               {"offset":0,"values":{"opacity":0,"translateY":16}},
+               {"offset":1,"values":{"opacity":1,"translateY":0}}
+             ],"durationMs":400,"easing":"emphasizedDecelerate","fillMode":"forwards"}]},
+            {"type":"rectangle","id":"card","x":0,"y":200,"width":320,"height":96,
+             "animations":[{"trigger":"inView","keyframes":[
+               {"offset":0,"values":{"opacity":0,"translateY":12}},
+               {"offset":1,"values":{"opacity":1,"translateY":0}}
+             ],"durationMs":320,"delayMs":60,"easing":"standard","once":true}]}
+          ]
+        }"#,
+    )
+    .expect("motion document")
+    .value;
+    let html = Html.generate(&doc);
+    let expected = concat!(
+        "@keyframes op-hero-0 {\n",
+        "  0% {\n",
+        "    opacity: 0;\n",
+        "    transform: translate(0px, 16px);\n",
+        "  }\n",
+        "  100% {\n",
+        "    opacity: 1;\n",
+        "    transform: translate(0px, 0px);\n",
+        "  }\n",
+        "}\n",
+        "@keyframes op-card-0 {\n",
+        "  0% {\n",
+        "    opacity: 0;\n",
+        "    transform: translate(0px, 12px);\n",
+        "  }\n",
+        "  100% {\n",
+        "    opacity: 1;\n",
+        "    transform: translate(0px, 0px);\n",
+        "  }\n",
+        "}\n",
+        "@media (prefers-reduced-motion: reduce) {\n",
+        "  [data-op-motion-node=\"hero\"] {\n",
+        "    animation: none;\n",
+        "    transition: none;\n",
+        "  }\n",
+        "  [data-op-motion-node=\"card\"] {\n",
+        "    animation: none;\n",
+        "    transition: none;\n",
+        "  }\n",
+        "}\n"
+    );
+    assert_eq!(html_style_block(&html), expected);
+    assert!(html.contains("data-op-motion-node=\"hero\""));
+    assert!(html.contains("transition:opacity 150ms cubic-bezier(0.2,0,0,1)"));
+    assert!(html.contains("animation-timeline:view();animation-range:entry 0% entry 40%"));
+}
+
+#[test]
+fn html_motion_export_honours_authored_reduced_preference() {
+    let doc = jian_ops_schema::load_str(
+        r#"{"version":"1.0","motion":"reduced","children":[
+          {"type":"rectangle","id":"n1","animations":[
+            {"trigger":"mount","keyframes":[{"offset":0,"values":{"opacity":0}},
+            {"offset":1,"values":{"opacity":1}}],"durationMs":300}
+          ]}
+        ]}"#,
+    )
+    .expect("reduced motion document")
+    .value;
+    let html = Html.generate(&doc);
+    let css = html_style_block(&html);
+    assert!(css.contains("/* Authored motion preference: reduced */"));
+    assert!(
+        css.contains("[data-op-motion-node=\"n1\"] {\n  animation: none;\n  transition: none;\n}")
+    );
+}
+
+#[test]
+fn html_without_motion_has_no_extra_css() {
+    let html = Html.generate(&empty_doc());
+    assert!(!html.contains("<style>"));
+    assert!(!html.contains("data-op-motion-node"));
+    assert!(!html.contains("@keyframes"));
+}
+
 #[test]
 fn html_emits_span_for_text_and_escapes_body() {
     let doc = doc_with_nodes(vec![text("n10", 0.0, 0.0, 100.0, 24.0, "Hello & <world>")]);

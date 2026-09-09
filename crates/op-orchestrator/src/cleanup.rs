@@ -64,6 +64,8 @@ mod cleanup_section_sizing;
 mod cleanup_slide_padding;
 #[path = "cleanup_status_bar.rs"]
 mod cleanup_status_bar;
+#[path = "motion_recipes.rs"]
+mod motion_recipes;
 #[path = "sibling_style_drift.rs"]
 mod sibling_style_drift;
 pub(crate) use cleanup_status_bar::{is_status_bar, is_status_bar_from_json};
@@ -505,6 +507,8 @@ fn run_cleanup_passes_with_summary_and_policy(
         counter.checkpoint(summary, CheckCategory::Structure, "category-grid-density");
         cleanup_empty_content_bar::remove_empty_content_bars(sink, &rid);
         counter.checkpoint(summary, CheckCategory::Structure, "empty-content-bar");
+        motion_recipes::apply(sink, &rid);
+        counter.checkpoint(summary, CheckCategory::Structure, "motion-recipes");
         // Section-margin ownership (DS P1.5) runs BEFORE the wrapper-double-inset
         // stripper below: unifying first hands the stripper the group already
         // normalized, and the floor afterwards then sees no flush content left.
@@ -742,6 +746,9 @@ fn run_cleanup_passes_with_summary_and_policy(
     super::cleanup_image_fallback::repair_image_fallback_policy(sink, summary, &mut counter);
 }
 
+#[cfg(test)]
+#[path = "motion_recipes_tests.rs"]
+mod motion_recipes_tests;
 #[cfg(test)]
 #[path = "cleanup_tests_mounts.rs"]
 mod test_modules;

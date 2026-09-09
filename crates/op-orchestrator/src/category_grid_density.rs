@@ -198,7 +198,7 @@ fn repair_tile(tile: &Value, plan: &mut RepairPlan) {
     push_patch(label, label_fields, plan);
 }
 
-fn category_grid_rows(node: &Value) -> Option<&[Value]> {
+pub(super) fn category_grid_rows(node: &Value) -> Option<&[Value]> {
     if node.get("type").and_then(Value::as_str) != Some("frame")
         || node.get("layout").and_then(Value::as_str) != Some("vertical")
     {
