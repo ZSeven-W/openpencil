@@ -393,7 +393,8 @@ async fn connect_local(config: &AcpAgentConfig) -> Result<AcpConnection, AcpErro
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    let mut child = cmd.spawn().map_err(|e| AcpError::Spawn(e.to_string()))?;
+    let mut child =
+        spawn::spawn_with_etxtbsy_retry(&mut cmd).map_err(|e| AcpError::Spawn(e.to_string()))?;
     let stdin = child
         .stdin
         .take()
@@ -761,6 +762,9 @@ async fn connect_remote(config: &AcpAgentConfig) -> Result<AcpConnection, AcpErr
         }
     }
 }
+
+#[path = "client_spawn.rs"]
+mod spawn;
 
 #[path = "client_lifecycle.rs"]
 mod lifecycle;
