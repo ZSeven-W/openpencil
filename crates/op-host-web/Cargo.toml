@@ -142,6 +142,9 @@ features = [
   "KeyboardEvent",
   # `daemon_base` derives the daemon origin from `window.location`.
   "Location",
+  # Preview reads the host reduced-motion preference via `Window::match_media`
+  # (preview_host `host_motion_preference`).
+  "MediaQueryList",
   # postMessage bridge (`vscode_bridge`): the window `message` listener reads
   # `MessageEvent::{data,origin,source}`.
   "MessageEvent",

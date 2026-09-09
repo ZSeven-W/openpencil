@@ -65,8 +65,12 @@ pub fn enter_preview(
 }
 
 fn host_motion_preference() -> jian_ops_schema::motion::MotionPreference {
+    // `match_media` yields `Result<Option<MediaQueryList>, JsValue>`: an `Err`
+    // (JS exception) or `None` (no MediaQueryList) means the host preference is
+    // unknowable — fall back to full motion.
     let reduced = web_sys::window()
         .and_then(|window| window.match_media("(prefers-reduced-motion: reduce)").ok())
+        .flatten()
         .is_some_and(|query| query.matches());
     if reduced {
         jian_ops_schema::motion::MotionPreference::Reduced
