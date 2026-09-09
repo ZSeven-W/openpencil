@@ -226,7 +226,7 @@ fn at_keyword(prelude: &str, name: &str) -> bool {
     let expected_len = name.len() + 1;
     prelude
         .get(..expected_len)
-        .is_some_and(|prefix| prefix[0..1].eq("@") && prefix[1..].eq_ignore_ascii_case(name))
+        .is_some_and(|prefix| prefix.starts_with('@') && prefix[1..].eq_ignore_ascii_case(name))
         && prelude[expected_len..]
             .chars()
             .next()
@@ -431,5 +431,41 @@ mod tests {
         assert!(warnings.is_empty(), "{warnings:?}");
         assert!(output.contains(".主题{color:red}"));
         assert!(output.contains(r#".按钮{content:"你好"}"#));
+    }
+
+    #[test]
+    fn a_prelude_opening_on_a_non_ascii_character_is_not_an_at_keyword() {
+        // The three non-ASCII cases above all keep an ASCII byte first. A
+        // stylesheet may open on a multi-byte one instead — a UTF-8 BOM
+        // ahead of `@charset` is the everyday shape, and `decode_css_bytes`
+        // only strips it from a linked sheet, not from an inline `<style>`.
+        // None of these are at-rules this scanner handles; each must simply
+        // say so and leave the sheet alone.
+        let fetcher = |_: &str| None;
+        for source in [
+            "\u{feff}@charset \"utf-8\";.root{color:red}",
+            "\u{feff}@layer base;.root{color:red}",
+            "\u{feff}@import 'a.css';.root{color:red}",
+            "中文;.root{color:red}",
+        ] {
+            let (output, _) = expand(source, &fetcher);
+            assert!(
+                output.contains(".root{color:red}"),
+                "source: {source:?}, output: {output:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn ascii_charset_and_layer_preludes_keep_their_meaning() {
+        let fetcher = |_: &str| Some(b".imported{color:red}".to_vec());
+        let (output, warnings) = expand(
+            "@charset \"utf-8\";@layer base;@import 'a.css';.root{color:blue}",
+            &fetcher,
+        );
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(output.starts_with("@charset \"utf-8\";@layer base;"));
+        assert!(output.contains(".imported{color:red}"));
+        assert!(output.contains(".root{color:blue}"));
     }
 }
