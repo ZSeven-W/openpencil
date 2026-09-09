@@ -77,11 +77,14 @@ cfg_test_external_module_files() {
     local source_dir
     local relative_path
     while IFS= read -r source_file; do
+        # Membership is matched as an exact line, so every entry must be in
+        # the same canonical form (no leading ./) that the lookups below use.
+        source_file=${source_file#./}
         source_dir=${source_file%/*}
         base=${source_file##*/}
         base=${base%.rs}
         while IFS= read -r relative_path; do
-            printf '%s/%s\n' "$source_dir" "$relative_path"
+            printf '%s/%s\n' "$source_dir" "${relative_path#./}"
         done < <(awk -v parent_base="$base" '
             function reset_attributes() {
                 cfg_test = 0
@@ -194,10 +197,17 @@ require_cfg_test_literal() {
             continue
         fi
 
-        if printf '%s\n' "$cfg_test_external_sources" \
-            | grep -Fxq -- "$source_file"; then
-            return
-        fi
+        # Exact-line membership without a pipeline: `printf | grep -Fxq`
+        # races grep's early exit under pipefail — on a list longer than the
+        # pipe buffer grep can match and exit while printf is still writing,
+        # printf dies of SIGPIPE (exit 141), and pipefail flips this
+        # membership to false for a covered literal (CI, ubuntu).
+        source_file=${source_file#./}
+        case $'\n'"$cfg_test_external_sources"$'\n' in
+            *$'\n'"$source_file"$'\n'*)
+                return
+                ;;
+        esac
 
         if awk -v literal="$literal" '
             /^[[:space:]]*#\[cfg\(test\)\][[:space:]]*$/ {
@@ -661,6 +671,9 @@ while IFS= read -r source_file; do
     # Exact-line containment without a pipeline: `printf | grep -q` races
     # grep's early exit under pipefail — printf can take SIGPIPE after grep
     # already matched, flipping this exemption to false intermittently.
+    # Compare in the same canonical form (no leading ./) used to build the
+    # list and by require_cfg_test_literal.
+    source_file=${source_file#./}
     case $'\n'"$cfg_test_external_sources"$'\n' in
         *$'\n'"$source_file"$'\n'*)
             continue
