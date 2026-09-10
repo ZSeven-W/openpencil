@@ -178,6 +178,10 @@ pub struct PreviewSession {
     /// R5 Preview-only visibility overrides, scroll requests, and their
     /// accumulated redraw/hit-test invalidation work.
     pub(crate) ui_actions: crate::ui_actions::PreviewUiActions,
+    /// Cached at enter/reset: skip switch-tween overlay clones when none exist.
+    pub(crate) has_switch_widgets: bool,
+    #[cfg(test)]
+    pub(crate) overlay_builds_for_test: std::cell::Cell<u64>,
 }
 
 impl PreviewSession {
@@ -521,6 +525,7 @@ impl PreviewSession {
         runtime.set_animation_sink(Rc::new(animation.clone()));
         runtime.enable_action_reporting();
         let motion = crate::motion::PreviewMotionState::default();
+        let has_switch_widgets = crate::motion::runtime_has_switch_widgets(&runtime);
         let session = Self {
             runtime,
             measure,
@@ -549,6 +554,9 @@ impl PreviewSession {
             host_capabilities,
             effects,
             ui_actions,
+            has_switch_widgets,
+            #[cfg(test)]
+            overlay_builds_for_test: std::cell::Cell::new(0),
         };
         session.motion.set_initial_lifecycle_values(
             &session.runtime,

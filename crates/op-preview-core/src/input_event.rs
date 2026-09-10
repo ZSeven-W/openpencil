@@ -435,6 +435,10 @@ impl super::PreviewSession {
         if now_ms > self.last_now_ms {
             self.last_now_ms = now_ms;
         }
+        let binding_changed = self.binding_values() != binding_before;
+        if directive.needs_paint || binding_changed {
+            self.sync_toggle_progress();
+        }
         let animation_invalidation = self.tick_animation(now_ms);
         let mut outcome = PreviewDispatchOutcome {
             semantic_handlers: Vec::new(),

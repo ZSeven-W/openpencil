@@ -174,6 +174,34 @@ fn switch_off_paints_authored_inactive_track_and_left_knob() {
 }
 
 #[test]
+fn switch_half_progress_places_knob_at_midpoint() {
+    let rect = Rect::xywh(0.0, 0.0, 40.0, 20.0);
+    let node = authored_widget_node(
+        NodeKind::Rect,
+        SceneWidget {
+            kind: "switch".into(),
+            checked: Some(false),
+            toggle_progress: Some(0.5),
+            ..Default::default()
+        },
+        rect,
+        7.0,
+    );
+    let b = paint(&node, rect);
+    let knob = b.round_rects[1].0;
+    let pad = 2.0;
+    let d = (rect.size.y - pad * 2.0).max(2.0);
+    let off_x = rect.origin.x + pad;
+    let on_x = rect.origin.x + rect.size.x - d - pad;
+    let mid_x = off_x + (on_x - off_x) * 0.5;
+    assert!(
+        (knob.origin.x - mid_x).abs() < 0.01,
+        "toggle_progress=0.5 must place the knob at the midpoint, got x={} expected {mid_x}",
+        knob.origin.x
+    );
+}
+
+#[test]
 fn zero_radius_legacy_widgets_keep_intrinsic_rounding() {
     let switch_rect = Rect::xywh(0.0, 0.0, 40.0, 20.0);
     let switch = widget_node(

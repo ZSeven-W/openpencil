@@ -351,6 +351,7 @@ impl PreviewSession {
             ev.pressure = 0.0;
         }
         let emitted = !self.runtime.dispatch_pointer(ev).is_empty();
+        self.sync_toggle_progress();
         let binding_changed =
             self.finish_binding_update(&binding_before) != crate::InvalidationKind::None;
         emitted || binding_changed
@@ -399,7 +400,9 @@ impl PreviewSession {
             event.buttons = MouseButtons::empty();
             event.pressure = 0.0;
         }
-        self.runtime.dispatch_pointer(event)
+        let events = self.runtime.dispatch_pointer(event);
+        self.sync_toggle_progress();
+        events
     }
 
     /// Cancel one pointer's live stream by id WITHOUT needing its last

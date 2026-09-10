@@ -111,7 +111,7 @@ fn session_for(doc: &jian_ops_schema::PenDocument) -> PreviewSession {
     .expect("enter preview")
 }
 
-fn switch_track_at(session: &mut PreviewSession, y: f32) -> Color {
+fn paint_switch_fills(session: &mut PreviewSession) -> Vec<(Rect, Color)> {
     let mut recorder = WidgetPaintRecorder::default();
     session.paint_scene(
         &mut recorder,
@@ -120,12 +120,93 @@ fn switch_track_at(session: &mut PreviewSession, y: f32) -> Color {
         1.0,
         0,
     );
-    recorder
-        .round_fills
+    recorder.round_fills
+}
+
+fn switch_track_at(session: &mut PreviewSession, y: f32) -> Color {
+    switch_paint_at(session, y).track
+}
+
+struct SwitchPaint {
+    track: Color,
+    knob_rect: Rect,
+    knob: Color,
+}
+
+fn switch_paint_at(session: &mut PreviewSession, y: f32) -> SwitchPaint {
+    let fills = paint_switch_fills(session);
+    let idx = fills
         .iter()
-        .find(|(rect, _)| (rect.origin.y - y).abs() < 0.1)
-        .map(|(_, color)| *color)
-        .expect("switch track should paint")
+        .position(|(rect, _)| (rect.origin.y - y).abs() < 0.1)
+        .expect("switch track should paint");
+    let track = fills[idx].1;
+    let (knob_rect, knob) = fills
+        .get(idx + 1)
+        .copied()
+        .expect("switch knob should paint");
+    SwitchPaint {
+        track,
+        knob_rect,
+        knob,
+    }
+}
+
+fn tap_switch(session: &mut PreviewSession, id: &str) {
+    let (x, y, w, h) = session.node_rect(id).expect("switch runtime rect");
+    assert!(
+        session.dispatch_tap(x + w / 2.0, y + h / 2.0),
+        "tap on the switch should be handled"
+    );
+    // Leave the pointer so hover/pressed overlays do not tint the track.
+    session.dispatch_pointer_phase(200.0, 200.0, PointerPhase::Hover);
+}
+
+fn color_channel_between(mid: f32, a: f32, b: f32) -> bool {
+    let (lo, hi) = if a < b { (a, b) } else { (b, a) };
+    mid + 1e-4 >= lo && mid - 1e-4 <= hi
+}
+
+fn color_strictly_between(mid: Color, a: Color, b: Color) -> bool {
+    color_channel_between(mid.r, a.r, b.r)
+        && color_channel_between(mid.g, a.g, b.g)
+        && color_channel_between(mid.b, a.b, b.b)
+        && color_channel_between(mid.a, a.a, b.a)
+        && mid != a
+        && mid != b
+}
+
+fn toggle_doc(transition: Option<&str>, reduced: bool) -> jian_ops_schema::PenDocument {
+    let motion = if reduced {
+        r#""motion": "reduced","#
+    } else {
+        ""
+    };
+    let transition = transition.unwrap_or("");
+    let source = format!(
+        r##"{{
+        "version": "1.1",
+        "formatVersion": "1.1",
+        {motion}
+        "id": "toggle",
+        "app": {{ "name": "toggle", "version": "1", "id": "toggle" }},
+        "children": [{{
+            "type": "switch", "id": "switch", "width": 44, "height": 24,
+            "checked": false,
+            "fill": [{{ "type": "solid", "color": "#102030" }}],
+            "stroke": {{ "thickness": 1, "fill": [{{ "type": "solid", "color": "#aabbcc" }}] }}
+            {transition}
+        }}]
+    }}"##
+    );
+    jian_ops_schema::load_str(&source)
+        .expect("toggle fixture parses")
+        .value
+}
+
+fn live_session_for(doc: &jian_ops_schema::PenDocument) -> PreviewSession {
+    let mut session = session_for(doc);
+    session.begin_lifecycle(0);
+    session
 }
 
 #[test]
@@ -281,5 +362,136 @@ fn hover_state_change_requests_an_immediate_repaint() {
     assert!(
         !unchanged.needs_redraw,
         "a stationary hover must not request extra work"
+    );
+}
+
+#[test]
+fn switch_toggle_tweens_knob_and_track_over_short3() {
+    let doc = toggle_doc(None, false);
+    let mut session = live_session_for(&doc);
+    let off = switch_paint_at(&mut session, 0.0);
+    let off_x = off.knob_rect.origin.x;
+
+    tap_switch(&mut session, "switch");
+    let at_tap = switch_paint_at(&mut session, 0.0);
+    assert!(
+        (at_tap.knob_rect.origin.x - off_x).abs() < 1.0,
+        "knob must still be near the off x at t=0, got {} (off={off_x})",
+        at_tap.knob_rect.origin.x
+    );
+
+    session.pump(75);
+    let mid = switch_paint_at(&mut session, 0.0);
+    session.pump(150);
+    let on = switch_paint_at(&mut session, 0.0);
+    let on_x = on.knob_rect.origin.x;
+
+    assert!(
+        mid.knob_rect.origin.x > off_x && mid.knob_rect.origin.x < on_x,
+        "knob x at 75ms must sit between off ({off_x}) and on ({on_x}), got {}",
+        mid.knob_rect.origin.x
+    );
+    assert!(
+        color_strictly_between(mid.track, off.track, on.track),
+        "track colour at 75ms must sit between inactive {:?} and active {:?}, got {:?}",
+        off.track,
+        on.track,
+        mid.track
+    );
+    assert!(
+        color_strictly_between(mid.knob, off.knob, on.knob),
+        "knob colour at 75ms must sit between ends"
+    );
+    assert!(
+        (on.knob_rect.origin.x - (off_x + 20.0)).abs() < 0.5,
+        "on-look knob should sit 20px right of off, off={off_x} on={}",
+        on.knob_rect.origin.x
+    );
+    assert_eq!(on.track, Color::rgba_u8(16, 32, 48, 1.0));
+    assert_eq!(off.track, Color::rgba_u8(170, 187, 204, 1.0));
+}
+
+#[test]
+fn switch_toggle_uses_node_transition_duration() {
+    let doc = toggle_doc(
+        Some(r#","transition": { "durationMs": 400, "easing": "linear" }"#),
+        false,
+    );
+    let mut session = live_session_for(&doc);
+    let off = switch_paint_at(&mut session, 0.0);
+    tap_switch(&mut session, "switch");
+    let _ = switch_paint_at(&mut session, 0.0);
+    session.pump(150);
+    let mid = switch_paint_at(&mut session, 0.0);
+    session.pump(400);
+    let on = switch_paint_at(&mut session, 0.0);
+    assert!(
+        mid.knob_rect.origin.x > off.knob_rect.origin.x
+            && mid.knob_rect.origin.x < on.knob_rect.origin.x,
+        "400ms transition must still be mid-tween at 150ms, off={} mid={} on={}",
+        off.knob_rect.origin.x,
+        mid.knob_rect.origin.x,
+        on.knob_rect.origin.x
+    );
+    assert!(
+        color_strictly_between(mid.track, off.track, on.track),
+        "track must still be between ends at 150ms of a 400ms tween"
+    );
+}
+
+#[test]
+fn switch_toggle_is_instant_when_motion_is_reduced() {
+    let doc = toggle_doc(None, true);
+    let mut session = live_session_for(&doc);
+    tap_switch(&mut session, "switch");
+    let at_tap = switch_paint_at(&mut session, 0.0);
+    assert_eq!(
+        at_tap.track,
+        Color::rgba_u8(16, 32, 48, 1.0),
+        "reduced motion must paint the on look at t=0 after the tap"
+    );
+    let pad = 2.0_f32;
+    let d = (24.0_f32 - pad * 2.0).max(2.0);
+    let on_x = 44.0 - d - pad;
+    assert!(
+        (at_tap.knob_rect.origin.x - on_x).abs() < 0.01,
+        "reduced-motion knob must sit at the on x {on_x}, got {}",
+        at_tap.knob_rect.origin.x
+    );
+    assert_eq!(session.active_animation_track_count(), 0);
+}
+
+#[test]
+fn switch_toggle_retargets_from_sampled_progress() {
+    let doc = toggle_doc(None, false);
+    let mut session = live_session_for(&doc);
+    let off = switch_paint_at(&mut session, 0.0);
+    tap_switch(&mut session, "switch");
+    let _ = switch_paint_at(&mut session, 0.0);
+    session.pump(75);
+    let mid = switch_paint_at(&mut session, 0.0);
+    tap_switch(&mut session, "switch");
+    let retargeted = switch_paint_at(&mut session, 0.0);
+    assert!(
+        (retargeted.knob_rect.origin.x - mid.knob_rect.origin.x).abs() < 1.0,
+        "retarget must start from the sampled knob x {}, jumped to {}",
+        mid.knob_rect.origin.x,
+        retargeted.knob_rect.origin.x
+    );
+    session.pump(150);
+    let returning = switch_paint_at(&mut session, 0.0);
+    assert!(
+        returning.knob_rect.origin.x < retargeted.knob_rect.origin.x,
+        "after retarget the knob must travel back toward off, from {} to {}",
+        retargeted.knob_rect.origin.x,
+        returning.knob_rect.origin.x
+    );
+    session.pump(225);
+    let back = switch_paint_at(&mut session, 0.0);
+    assert!(
+        (back.knob_rect.origin.x - off.knob_rect.origin.x).abs() < 0.01,
+        "return tween should land on the off look, got {} expected {}",
+        back.knob_rect.origin.x,
+        off.knob_rect.origin.x
     );
 }

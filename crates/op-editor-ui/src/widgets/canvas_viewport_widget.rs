@@ -113,6 +113,26 @@ fn ui_color(color: jian_core::scene::Color) -> Color {
     )
 }
 
+fn lerp_u8(from: u8, to: u8, t: f32) -> u8 {
+    (f32::from(from) + (f32::from(to) - f32::from(from)) * t)
+        .round()
+        .clamp(0.0, 255.0) as u8
+}
+
+fn lerp_jian_color(
+    from: jian_core::scene::Color,
+    to: jian_core::scene::Color,
+    t: f32,
+) -> jian_core::scene::Color {
+    let t = t.clamp(0.0, 1.0);
+    jian_core::scene::Color::rgba(
+        lerp_u8(from.r(), to.r(), t),
+        lerp_u8(from.g(), to.g(), t),
+        lerp_u8(from.b(), to.b(), t),
+        lerp_u8(from.a(), to.a(), t),
+    )
+}
+
 /// Switch: authored active / inactive track plus a contrast-derived knob.
 fn paint_switch(
     cx: &mut PaintCx<'_>,
@@ -123,18 +143,20 @@ fn paint_switch(
     zoom: f32,
 ) {
     let on = w.checked.unwrap_or(false);
+    let p = w
+        .toggle_progress
+        .unwrap_or(if on { 1.0 } else { 0.0 })
+        .clamp(0.0, 1.0);
     let (x, y, ww, h) = rect_parts(r);
-    let track = if on { visual.active } else { visual.inactive };
-    let foreground = if on {
-        visual.active_foreground
-    } else {
-        visual.inactive_foreground
-    };
+    let track = lerp_jian_color(visual.inactive, visual.active, p);
+    let foreground = lerp_jian_color(visual.inactive_foreground, visual.active_foreground, p);
     let radius = authored_radius_or(node, w, h / 2.0, zoom);
     cx.backend.fill_round_rect(r, radius, ui_color(track));
     let pad = 2.0;
     let d = (h - pad * 2.0).max(2.0);
-    let kx = if on { x + ww - d - pad } else { x + pad };
+    let off_x = x + pad;
+    let on_x = x + ww - d - pad;
+    let kx = off_x + (on_x - off_x) * p;
     cx.backend
         .fill_round_rect(Rect::xywh(kx, y + pad, d, d), d / 2.0, ui_color(foreground));
 }

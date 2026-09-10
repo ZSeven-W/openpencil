@@ -328,3 +328,136 @@ fn reduced_host_motion_applies_hover_state_without_a_transition_track() {
     let fill = color(&session, "button");
     assert!(fill.b > 0.9 && fill.r < 0.1, "reduced hover fill: {fill:?}");
 }
+
+fn delayed_lifecycle_doc(
+    trigger: &str,
+    delay_ms: u64,
+    duration_ms: u64,
+    fill_mode: Option<&str>,
+) -> serde_json::Value {
+    let mut animation = serde_json::json!({
+        "trigger": trigger,
+        "keyframes": [
+            {"offset": 0, "values": {"opacity": 0}},
+            {"offset": 1, "values": {"opacity": 1}}
+        ],
+        "durationMs": duration_ms,
+        "delayMs": delay_ms,
+        "easing": "linear"
+    });
+    if let Some(fill_mode) = fill_mode {
+        animation["fillMode"] = serde_json::json!(fill_mode);
+    }
+    serde_json::json!({
+        "version": "1.1",
+        "formatVersion": "1.1",
+        "children": [{
+            "type": "frame",
+            "id": "screen",
+            "width": 200,
+            "height": 100,
+            "children": [{
+                "type": "rectangle",
+                "id": "card",
+                "x": 0,
+                "y": 10,
+                "width": 100,
+                "height": 40,
+                "opacity": 1,
+                "fill": [{"type": "solid", "color": "#ffffff"}],
+                "animations": [animation]
+            }]
+        }]
+    })
+}
+
+#[test]
+fn delayed_in_view_animation_holds_first_keyframe_during_delay() {
+    let mut session = session_for_at(delayed_lifecycle_doc("inView", 200, 400, None), 600_000);
+    let _ = session.preview_scene_for_test();
+    session.pump(600_100);
+    assert!(
+        (opacity(&session, "card") - 0.0).abs() < 0.001,
+        "inView delay must hold keyframe 0, got {}",
+        opacity(&session, "card")
+    );
+    session.pump(600_300);
+    let mid = opacity(&session, "card");
+    assert!(
+        mid > 0.0 && mid < 1.0,
+        "inView must be mid-tween after the delay, got {mid}"
+    );
+    session.pump(600_700);
+    assert!((opacity(&session, "card") - 1.0).abs() < 0.001);
+}
+
+#[test]
+fn delayed_mount_animation_holds_first_keyframe_during_delay() {
+    let mut session = session_for_at(delayed_lifecycle_doc("mount", 200, 400, None), 600_000);
+    let _ = session.preview_scene_for_test();
+    session.pump(600_100);
+    assert!(
+        (opacity(&session, "card") - 0.0).abs() < 0.001,
+        "mount delay must hold keyframe 0, got {}",
+        opacity(&session, "card")
+    );
+    session.pump(600_300);
+    let mid = opacity(&session, "card");
+    assert!(
+        mid > 0.0 && mid < 1.0,
+        "mount must be mid-tween after the delay, got {mid}"
+    );
+    session.pump(600_700);
+    assert!((opacity(&session, "card") - 1.0).abs() < 0.001);
+}
+
+#[test]
+fn fill_mode_none_still_holds_first_keyframe_during_delay_then_releases() {
+    let mut session = session_for_at(
+        delayed_lifecycle_doc("mount", 200, 200, Some("none")),
+        600_000,
+    );
+    let _ = session.preview_scene_for_test();
+    session.pump(600_100);
+    assert!(
+        (opacity(&session, "card") - 0.0).abs() < 0.001,
+        "fillMode none must still hold keyframe 0 during delay, got {}",
+        opacity(&session, "card")
+    );
+    session.pump(600_300);
+    let mid = opacity(&session, "card");
+    assert!(
+        mid > 0.0 && mid < 1.0,
+        "fillMode none must be mid-tween after the delay, got {mid}"
+    );
+    session.pump(600_500);
+    assert!((opacity(&session, "card") - 1.0).abs() < 0.001);
+    assert_eq!(session.active_animation_track_count(), 0);
+}
+
+#[test]
+fn stationary_pump_does_not_clone_scene_without_switches() {
+    let mut session = session_for(serde_json::json!({
+        "version": "1.1",
+        "formatVersion": "1.1",
+        "children": [{
+            "type": "rectangle",
+            "id": "card",
+            "width": 100,
+            "height": 40,
+            "opacity": 1,
+            "fill": [{"type": "solid", "color": "#ffffff"}]
+        }]
+    }));
+    let _ = session.preview_scene_for_test();
+    let builds = session.overlay_builds_for_test();
+    for i in 0..100 {
+        session.pump(i);
+        assert_eq!(session.active_animation_track_count(), 0);
+    }
+    assert_eq!(
+        session.overlay_builds_for_test(),
+        builds,
+        "a stationary pump must not rebuild the overlay when the document has no switch"
+    );
+}

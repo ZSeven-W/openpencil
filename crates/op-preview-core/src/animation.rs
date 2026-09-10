@@ -411,11 +411,18 @@ fn bezier(t: f32, first: f32, second: f32) -> f32 {
     3.0 * inverse * inverse * t * first + 3.0 * inverse * t * t * second + t * t * t
 }
 
+fn interpolate_kind(property: &AnimationProperty) -> AnimationInterpolate {
+    match property {
+        AnimationProperty::ToggleProgress => AnimationInterpolate::Linear,
+        other => animatable_property_registry()
+            .get(other.name())
+            .map(|entry| entry.interpolate)
+            .unwrap_or(AnimationInterpolate::Discrete),
+    }
+}
+
 fn interpolate_track(track: &Track, progress: f32) -> serde_json::Value {
-    let interpolate = animatable_property_registry()
-        .get(track.request.property.name())
-        .map(|entry| entry.interpolate)
-        .unwrap_or(AnimationInterpolate::Discrete);
+    let interpolate = interpolate_kind(&track.request.property);
     if let Some(stops) = &track.request.stops {
         return interpolate_stops(stops, interpolate, progress);
     }
@@ -540,10 +547,7 @@ fn track_deadline(track: &Track, now_ms: u64) -> Option<u64> {
             (elapsed / track.request.duration_ms + 1).saturating_mul(track.request.duration_ms),
         )
         .min(end);
-    let interpolate = animatable_property_registry()
-        .get(track.request.property.name())
-        .map(|entry| entry.interpolate)
-        .unwrap_or(AnimationInterpolate::Discrete);
+    let interpolate = interpolate_kind(&track.request.property);
     if interpolate == AnimationInterpolate::Discrete {
         Some(next_iteration)
     } else {
@@ -560,6 +564,14 @@ fn track_key(track: &Track) -> TrackKey {
 }
 
 fn apply_overrides(node: &mut SceneNode, overrides: &BTreeMap<TrackKey, serde_json::Value>) {
+    for ((target, property), value) in overrides {
+        if target == &node.id && *property == AnimationProperty::ToggleProgress {
+            if let (Some(widget), Some(progress)) = (node.widget.as_mut(), value.as_f64()) {
+                widget.toggle_progress = Some(progress as f32);
+            }
+            break;
+        }
+    }
     let mut node_overrides: Vec<_> = overrides
         .iter()
         .filter(|((target, _), _)| target == &node.id)
@@ -598,6 +610,16 @@ pub(crate) fn sample_scene_property(
         AnimationProperty::CornerRadius => serde_json::json!(node.corner_radius),
         AnimationProperty::Width => serde_json::json!(node.bounds.size.x),
         AnimationProperty::Height => serde_json::json!(node.bounds.size.y),
+        AnimationProperty::ToggleProgress => {
+            let widget = node.widget.as_ref()?;
+            serde_json::json!(widget.toggle_progress.unwrap_or(
+                if widget.checked.unwrap_or(false) {
+                    1.0
+                } else {
+                    0.0
+                }
+            ))
+        }
         AnimationProperty::ShaderUniform(_) | AnimationProperty::Custom(_) => return None,
     })
 }

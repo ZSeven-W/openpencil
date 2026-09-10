@@ -340,6 +340,7 @@ fn widget_payload_to_scene(w: &crate::payload::WidgetPayload) -> SceneWidget {
     SceneWidget {
         kind: w.kind.clone(),
         checked: w.checked,
+        toggle_progress: None,
         value_num: w.value_num,
         value_str: w.value_str.clone(),
         placeholder: w.placeholder.clone(),

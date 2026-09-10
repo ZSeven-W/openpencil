@@ -16,6 +16,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 const MOTION_TRACK_BUDGET: usize = 32;
+/// Material 3 `md.sys.motion.duration.short3` (150 ms) with the
+/// `standard` curve (`md.sys.motion.easing.standard`, cubic-bezier(0.2, 0, 0, 1)).
+/// Used as the intrinsic switch on/off tween when the node has no `transition`.
+/// Sources: https://m3.material.io/styles/motion/easing-and-duration/tokens-specs
+/// and https://m3.material.io/components/switch/specs
+const SWITCH_TOGGLE_DURATION_MS: u64 = 150;
 
 pub(crate) fn load_warnings(document: &jian_ops_schema::PenDocument) -> Vec<String> {
     let mut warnings = Vec::new();
@@ -197,6 +203,76 @@ impl PreviewMotionState {
                 } else {
                     let _ = animation.start_immediate(request, current, Some(desired), now_ms);
                 }
+            }
+        }
+    }
+
+    pub(crate) fn observe_toggle_progress(
+        &self,
+        runtime: &jian_core::Runtime,
+        scene: &LayoutScene,
+        animation: &PreviewAnimationState,
+        effective: MotionPreference,
+        now_ms: u64,
+    ) {
+        let Some(page) = scene.active_page() else {
+            return;
+        };
+        let mut switches = Vec::new();
+        collect_switches(&page.children, &mut switches);
+        let property = AnimationProperty::ToggleProgress;
+        for (target, checked) in switches {
+            let desired = serde_json::json!(if checked { 1.0 } else { 0.0 });
+            let key = (target.clone(), property.clone());
+            let previous = self
+                .inner
+                .borrow_mut()
+                .observed
+                .insert(key, desired.clone());
+            let Some(previous) = previous else {
+                continue;
+            };
+            if previous == desired {
+                continue;
+            }
+            let current = animation
+                .current_override(&target, &property)
+                .unwrap_or(previous);
+            if current == desired {
+                continue;
+            }
+            if effective == MotionPreference::Reduced {
+                animation.set_instant(&target, &property, desired.clone(), Some(&desired));
+                continue;
+            }
+            if !self.track_budget_available(animation, &target, &property) {
+                tracing::warn!(
+                    target = %target,
+                    property = "toggleProgress",
+                    "preview motion track budget exceeded"
+                );
+                animation.set_instant(&target, &property, desired.clone(), Some(&desired));
+                continue;
+            }
+            let (duration_ms, easing) = toggle_timing(runtime, &target);
+            let request = AnimationRequest {
+                target: target.clone(),
+                property: property.clone(),
+                from: Some(current.clone()),
+                to: desired.clone(),
+                stops: None,
+                duration_ms,
+                delay_ms: 0,
+                easing,
+                iterations: 1,
+                direction: AnimationDirection::Normal,
+                fill_mode: AnimationFillMode::Forwards,
+                requested_at_ms: now_ms,
+            };
+            if animation.start_immediate(request, current, Some(desired), now_ms)
+                && animation.has_active(&target, &property)
+            {
+                self.remember_track(&target, &property);
             }
         }
     }
@@ -396,9 +472,13 @@ impl PreviewMotionState {
                 easing: easing_from_schema(&declaration.easing),
                 iterations: declaration.iterations.max(1),
                 direction: AnimationDirection::Normal,
+                // Lifecycle keyframe 0 is the pre-reveal look. Schema P1 only
+                // has forwards|none, so map those onto Both|Backwards to hold
+                // the first keyframe for the whole delay instead of painting
+                // the authored value until `delayMs` elapses.
                 fill_mode: match declaration.fill_mode {
-                    NodeAnimationFillMode::Forwards => AnimationFillMode::Forwards,
-                    NodeAnimationFillMode::None => AnimationFillMode::None,
+                    NodeAnimationFillMode::Forwards => AnimationFillMode::Both,
+                    NodeAnimationFillMode::None => AnimationFillMode::Backwards,
                 },
                 requested_at_ms: now_ms.saturating_add(declaration.delay_ms),
             };
@@ -455,6 +535,14 @@ impl crate::session::PreviewSession {
         self.motion
             .set_initial_lifecycle_values(&self.runtime, &self.scene, &self.animation);
         self.start_mount_animations(now_ms);
+        let scene = self.overlay_runtime_state_without_animation(&self.scene);
+        self.motion.observe_toggle_progress(
+            &self.runtime,
+            &scene,
+            &self.animation,
+            self.effective_motion_preference(),
+            now_ms,
+        );
     }
 
     pub(crate) fn observe_motion(&self, scene: &LayoutScene) {
@@ -469,6 +557,13 @@ impl crate::session::PreviewSession {
             effective,
             self.last_now_ms,
         );
+        self.motion.observe_toggle_progress(
+            &self.runtime,
+            scene,
+            &self.animation,
+            effective,
+            self.last_now_ms,
+        );
         self.motion.observe_in_view(
             &self.runtime,
             scene,
@@ -476,6 +571,70 @@ impl crate::session::PreviewSession {
             effective,
             self.last_now_ms,
         );
+    }
+
+    /// Re-read switch `checked` after runtime input so the intrinsic
+    /// toggle tween starts at the event timestamp, not the next paint.
+    pub(crate) fn sync_toggle_progress(&self) {
+        if !self.has_switch_widgets || !self.motion.lifecycle_started() {
+            return;
+        }
+        let scene = self.overlay_runtime_state_without_animation(&self.scene);
+        self.motion.observe_toggle_progress(
+            &self.runtime,
+            &scene,
+            &self.animation,
+            self.effective_motion_preference(),
+            self.last_now_ms,
+        );
+    }
+}
+
+pub(crate) fn runtime_has_switch_widgets(runtime: &jian_core::Runtime) -> bool {
+    runtime.document.as_ref().is_some_and(|document| {
+        document
+            .tree
+            .nodes
+            .values()
+            .any(|node| matches!(node.schema, jian_ops_schema::node::PenNode::Switch(_)))
+    })
+}
+
+fn collect_switches(nodes: &[SceneNode], out: &mut Vec<(String, bool)>) {
+    for node in nodes {
+        if node
+            .widget
+            .as_ref()
+            .is_some_and(|widget| widget.kind == "switch")
+        {
+            let checked = node
+                .widget
+                .as_ref()
+                .and_then(|widget| widget.checked)
+                .unwrap_or(false);
+            out.push((node.id.clone(), checked));
+        }
+        collect_switches(&node.children, out);
+    }
+}
+
+fn document_transition(
+    runtime: &jian_core::Runtime,
+    id: &str,
+) -> Option<jian_ops_schema::motion::Transition> {
+    let document = runtime.document.as_ref()?;
+    let key = document.tree.by_id.get(id).copied()?;
+    let node = document.tree.nodes.get(key)?;
+    node.schema.motion_declarations().0.cloned()
+}
+
+fn toggle_timing(runtime: &jian_core::Runtime, target: &str) -> (u64, Easing) {
+    match document_transition(runtime, target) {
+        Some(transition) => (
+            transition.duration_ms,
+            easing_from_schema(&transition.easing),
+        ),
+        None => (SWITCH_TOGGLE_DURATION_MS, Easing::Standard),
     }
 }
 
@@ -518,6 +677,16 @@ fn scene_property(node: &SceneNode, property: &AnimationProperty) -> Option<Valu
         AnimationProperty::Fill => serde_json::Value::String(scene_color(node.fill?)),
         AnimationProperty::Stroke => serde_json::Value::String(scene_color(node.stroke?.color)),
         AnimationProperty::CornerRadius => serde_json::json!(node.corner_radius),
+        AnimationProperty::ToggleProgress => {
+            let widget = node.widget.as_ref()?;
+            serde_json::json!(widget.toggle_progress.unwrap_or(
+                if widget.checked.unwrap_or(false) {
+                    1.0
+                } else {
+                    0.0
+                }
+            ))
+        }
         _ => return None,
     })
 }

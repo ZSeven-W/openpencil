@@ -15,4 +15,10 @@ impl PreviewSession {
     pub fn preview_scene_for_test(&self) -> LayoutScene {
         self.overlay_runtime_state(&self.scene)
     }
+
+    /// Test-only: how many times the runtime overlay cloned the scene.
+    #[cfg(test)]
+    pub fn overlay_builds_for_test(&self) -> u64 {
+        self.overlay_builds_for_test.get()
+    }
 }

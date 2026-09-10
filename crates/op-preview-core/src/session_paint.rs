@@ -191,6 +191,9 @@ impl PreviewSession {
         &self,
         base: &LayoutScene,
     ) -> LayoutScene {
+        #[cfg(test)]
+        self.overlay_builds_for_test
+            .set(self.overlay_builds_for_test.get() + 1);
         let mut scene = base.clone();
         let focused_id = self.focused_schema_id();
         let state_variables = self.state_variables();
