@@ -1,4 +1,5 @@
 use crate::session::PreviewSession;
+#[cfg(any(all(test, not(target_os = "windows")), feature = "testing"))]
 use op_editor_ui::layout_scene::LayoutScene;
 
 impl PreviewSession {
