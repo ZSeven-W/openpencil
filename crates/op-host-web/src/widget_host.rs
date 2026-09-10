@@ -562,9 +562,12 @@ impl WidgetHost {
     /// observes one monotonic identity and host caches cannot alias revision 0.
     #[cfg(feature = "canvaskit")]
     pub(crate) fn replace_editor_state(&mut self, state: op_editor_core::EditorState) {
+        self.finish_exit_teardown();
         self.editor_state = state;
+        self.editor_state.editor_ui.exit_preview();
         self.document_epoch = self.document_epoch.wrapping_add(1).max(1);
         self.force_rotate_layer_panel_owner();
+        self.layout_transition = None;
         self.scene_cache.invalidate();
         self.mark_editor_state_dirty();
     }

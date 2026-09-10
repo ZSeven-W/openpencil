@@ -243,10 +243,14 @@ impl WidgetHostNative {
         if !self.collab_allows_user_action(op_editor_core::CollabGateAction::ReplaceDocument) {
             return false;
         }
+        self.drop_preview_runtime();
         self.editor_state = state;
+        self.editor_state.editor_ui.exit_preview();
         self.document_epoch = self.document_epoch.wrapping_add(1);
+        self.layout_transition = None;
         self.scene_cache.invalidate();
         self.editor_state_dirty = true;
+        self.drop_pan_cache();
         true
     }
 
@@ -264,6 +268,7 @@ impl WidgetHostNative {
             return Err(Box::new(document));
         }
 
+        self.drop_preview_runtime();
         // `replace_document` deliberately preserves editor chrome and app
         // preferences while clearing every document-scoped draft and stale id.
         self.editor_state.replace_document(document);
@@ -271,10 +276,8 @@ impl WidgetHostNative {
         self.editor_state.editor_ui.file_name_display = file_name;
         self.editor_state.editor_ui.mobile_sheet = None;
         self.editor_state.editor_ui.pending_file_action = None;
-        self.editor_state.editor_ui.exit_preview();
         self.editor_state.mark_saved_revision();
 
-        self.preview = None;
         self.layout_transition = None;
         self.document_epoch = self.document_epoch.wrapping_add(1);
         self.force_rotate_layer_panel_owner();
@@ -314,6 +317,10 @@ impl WidgetHostNative {
             return false;
         }
         let imported_document_dirty = state.editor_ui.document_dirty;
+        // The preview runtime (if any) was built from the document being
+        // replaced; drop it before the shell UI is cloned so the retained
+        // `editor_ui` carries no preview-mode state into the import.
+        self.drop_preview_runtime();
         let mut preserved = self.editor_state.editor_ui.clone();
         preserved.figma_import_in_progress = false;
         preserved.file_name_display = state.editor_ui.file_name_display.take();
