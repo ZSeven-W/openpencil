@@ -76,6 +76,7 @@ fn paint_caret(opacity: f32) -> Color {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
     session.set_now_ms(0);

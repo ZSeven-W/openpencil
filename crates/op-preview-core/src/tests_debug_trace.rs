@@ -61,6 +61,7 @@ fn enter() -> PreviewSession {
             share: true,
             ..PreviewHostCapabilities::none()
         },
+        0,
     )
     .expect("enter")
 }

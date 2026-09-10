@@ -60,6 +60,7 @@ fn preview_uses_active_page_for_runtime() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview on page 1");
 
@@ -150,6 +151,7 @@ fn marked_doc_enters_app_mode_mounting_entry_screen() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     assert!(session.is_app_mode());
@@ -169,6 +171,7 @@ fn unmarked_doc_keeps_workbench_mode() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     assert!(!session.is_app_mode());
@@ -195,6 +198,7 @@ fn unmarked_doc_reports_no_screen_rect_so_centering_is_skipped() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     assert!(!session.is_app_mode());
@@ -228,6 +232,7 @@ fn tap_push_switches_screen_via_reconcile() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     // Tap the nav button center (scene coords; screens sit at origin in
@@ -254,6 +259,7 @@ fn unknown_push_appends_warning_and_stays() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     session.router_for_test().push("/missing");
@@ -277,6 +283,7 @@ fn warning_only_reconcile_reports_no_switch() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     session.router_for_test().push("/missing");
@@ -312,6 +319,7 @@ fn bound_input_value_survives_screen_roundtrip() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
 
@@ -385,6 +393,7 @@ fn reenter_after_exit_resets_to_entry_screen_and_state() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     session.router_for_test().push("/detail");
@@ -403,6 +412,7 @@ fn reenter_after_exit_resets_to_entry_screen_and_state() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     assert_eq!(

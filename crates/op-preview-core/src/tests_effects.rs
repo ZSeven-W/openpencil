@@ -52,6 +52,7 @@ fn enter_with(caps: PreviewHostCapabilities) -> PreviewSession {
         false,
         test_measure(),
         caps,
+        0,
     )
     .expect("enter preview")
 }
@@ -92,6 +93,7 @@ fn enter_confirm_doc(caps: PreviewHostCapabilities) -> PreviewSession {
         false,
         test_measure(),
         caps,
+        0,
     )
     .expect("enter preview")
 }
@@ -330,6 +332,7 @@ fn open_url_schemes_are_validated_before_enqueue() {
         false,
         test_measure(),
         caps,
+        0,
     )
     .expect("enter preview");
     assert_eq!(tap(&mut s), 1, "only the tel: URL enqueued");

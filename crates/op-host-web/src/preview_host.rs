@@ -43,6 +43,7 @@ pub fn enter_preview(
     active_page_index: usize,
     op_ck: &crate::canvaskit::OpCk,
     presenting: bool,
+    now_ms: u64,
 ) -> Result<PreviewSession, op_preview_core::PreviewEnterError> {
     // Construct the browser-backed text measurement backend.
     // It uses the same browser Canvas2D measureText + font stack the design canvas does,
@@ -61,6 +62,7 @@ pub fn enter_preview(
         measure_backend,
         op_preview_core::PreviewHostCapabilities::none(),
         host_motion_preference(),
+        now_ms,
     )
 }
 

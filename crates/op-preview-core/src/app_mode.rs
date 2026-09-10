@@ -458,7 +458,7 @@ impl PreviewSession {
         self.transition_tap = None;
         self.animation.clear();
         self.motion.reset_screen();
-        self.start_mount_animations(now_ms);
+        self.begin_lifecycle(now_ms);
         let route = self.runtime.nav.current();
         self.debug
             .trace

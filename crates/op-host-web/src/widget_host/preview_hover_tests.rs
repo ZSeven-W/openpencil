@@ -52,6 +52,7 @@ fn bare_web_cursor_move_sets_preview_session_hover() {
             false,
             false,
             jian_core::layout::measure::default_backend(),
+            0,
         )
         .expect("web preview session"),
     );

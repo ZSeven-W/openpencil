@@ -33,6 +33,7 @@ fn runtime_tab_switch_keeps_visual_and_hit_mapping_on_the_same_panel() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter tabs preview");
 

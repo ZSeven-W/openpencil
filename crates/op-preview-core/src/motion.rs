@@ -63,6 +63,7 @@ fn collect_load_warnings(nodes: &[jian_ops_schema::node::PenNode], warnings: &mu
 
 #[derive(Default)]
 struct MotionInner {
+    lifecycle_started: bool,
     observed: BTreeMap<(String, AnimationProperty), Value>,
     fired_in_view: BTreeSet<String>,
     visible_in_view: BTreeSet<String>,
@@ -77,6 +78,19 @@ pub(crate) struct PreviewMotionState {
 impl PreviewMotionState {
     pub(crate) fn reset_screen(&self) {
         *self.inner.borrow_mut() = MotionInner::default();
+    }
+
+    pub(crate) fn begin_lifecycle(&self) -> bool {
+        let mut inner = self.inner.borrow_mut();
+        if inner.lifecycle_started {
+            return false;
+        }
+        inner.lifecycle_started = true;
+        true
+    }
+
+    pub(crate) fn lifecycle_started(&self) -> bool {
+        self.inner.borrow().lifecycle_started
     }
 
     fn prune_tracks(&self, animation: &PreviewAnimationState) {
@@ -195,6 +209,9 @@ impl PreviewMotionState {
         effective: MotionPreference,
         now_ms: u64,
     ) {
+        if !self.lifecycle_started() {
+            return;
+        }
         let Some(page) = scene.active_page() else {
             return;
         };
@@ -262,6 +279,62 @@ impl PreviewMotionState {
                     );
                 }
             }
+        }
+    }
+
+    pub(crate) fn set_initial_lifecycle_values(
+        &self,
+        runtime: &jian_core::Runtime,
+        scene: &LayoutScene,
+        animation: &PreviewAnimationState,
+    ) {
+        for (target, _, animations) in node_declarations(runtime, false) {
+            for declaration in animations {
+                if !matches!(
+                    declaration.trigger,
+                    MotionTrigger::Mount | MotionTrigger::InView
+                ) {
+                    continue;
+                }
+                self.set_node_animation_initial_values(&target, &declaration, scene, animation);
+            }
+        }
+    }
+
+    fn set_node_animation_initial_values(
+        &self,
+        target: &str,
+        declaration: &NodeAnimation,
+        scene: &LayoutScene,
+        animation: &PreviewAnimationState,
+    ) {
+        let Some(_node) = scene.active_page().and_then(|page| page.find(target)) else {
+            return;
+        };
+        let mut by_property: BTreeMap<String, Vec<(f32, Value)>> = BTreeMap::new();
+        for keyframe in &declaration.keyframes {
+            for (property, value) in &keyframe.values {
+                by_property
+                    .entry(property.clone())
+                    .or_default()
+                    .push((keyframe.offset, value.clone()));
+            }
+        }
+        for (name, stops) in by_property {
+            if !P1_MOTION_PROPERTIES.contains(&name.as_str()) {
+                continue;
+            }
+            let Some(descriptor) = animatable_property_registry().get(&name) else {
+                continue;
+            };
+            let property = AnimationProperty::from_registered(&name, descriptor.apply);
+            let Some(base) = sample_scene_property(scene, target, &property) else {
+                continue;
+            };
+            let Some((_, first)) = stops.first() else {
+                continue;
+            };
+            animation.set_instant(target, &property, first.clone(), Some(&base));
         }
     }
 
@@ -341,16 +414,14 @@ impl PreviewMotionState {
 impl crate::session::PreviewSession {
     pub fn set_motion_preference(&mut self, host: MotionPreference) {
         self.host_motion_preference = host;
+        let lifecycle_started = self.motion.lifecycle_started();
         self.animation.clear();
         self.motion.reset_screen();
-        let effective = self.effective_motion_preference();
-        self.motion.start_mount_animations(
-            &self.runtime,
-            &self.scene,
-            &self.animation,
-            effective,
-            self.last_now_ms,
-        );
+        self.motion
+            .set_initial_lifecycle_values(&self.runtime, &self.scene, &self.animation);
+        if lifecycle_started {
+            self.begin_lifecycle(self.last_now_ms);
+        }
     }
 
     pub fn effective_motion_preference(&self) -> MotionPreference {
@@ -372,7 +443,24 @@ impl crate::session::PreviewSession {
         );
     }
 
+    /// Admit lifecycle animations only after the host has put the preview on
+    /// its steady surface. Before this edge, lifecycle declarations paint at
+    /// their first keyframe and in-view observation is disabled.
+    pub fn begin_lifecycle(&mut self, now_ms: u64) {
+        if !self.motion.begin_lifecycle() {
+            return;
+        }
+        let now_ms = self.last_now_ms.max(now_ms);
+        self.last_now_ms = now_ms;
+        self.motion
+            .set_initial_lifecycle_values(&self.runtime, &self.scene, &self.animation);
+        self.start_mount_animations(now_ms);
+    }
+
     pub(crate) fn observe_motion(&self, scene: &LayoutScene) {
+        if !self.motion.lifecycle_started() {
+            return;
+        }
         let effective = self.effective_motion_preference();
         self.motion.observe_transitions(
             &self.runtime,

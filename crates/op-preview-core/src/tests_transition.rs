@@ -35,6 +35,7 @@ fn push_reconcile_starts_a_push_transition() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     let (bx, by) = go_button_center(&session);
@@ -62,6 +63,7 @@ fn pop_reconcile_starts_a_pop_transition() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     session.router_for_test().push("/detail");
@@ -90,6 +92,7 @@ fn same_depth_replace_starts_a_replace_transition() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     // `replace` keeps the stack at depth 1 — a tab-switch shape, not a push.
@@ -117,6 +120,7 @@ fn mid_animation_switch_replaces_the_transition_outright() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     let (bx, by) = go_button_center(&session);
@@ -196,6 +200,7 @@ fn paint_framed_animated_composites_two_layers_while_active() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     let (bx, by) = go_button_center(&session);
@@ -233,6 +238,7 @@ fn paint_framed_animated_falls_back_to_single_layer_once_finished() {
         false,
         false,
         test_measure(),
+        0,
     )
     .unwrap();
     let (bx, by) = go_button_center(&session);

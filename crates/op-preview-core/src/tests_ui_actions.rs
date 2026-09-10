@@ -63,6 +63,7 @@ fn safe_ui_chain_parses_and_dismiss_keyboard_reaches_the_effect_queue() {
             dismiss_keyboard: true,
             ..PreviewHostCapabilities::none()
         },
+        0,
     )
     .expect("safe UI actions must load");
 

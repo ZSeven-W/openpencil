@@ -21,6 +21,7 @@ fn enter(source: &str) -> PreviewSession {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter pointer binding fixture")
 }

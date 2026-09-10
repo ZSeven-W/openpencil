@@ -106,6 +106,7 @@ fn session_for(doc: &jian_ops_schema::PenDocument) -> PreviewSession {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview")
 }

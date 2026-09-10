@@ -30,6 +30,7 @@ fn enter_doc(src: &str) -> PreviewSession {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview")
 }
@@ -295,6 +296,7 @@ fn reconcile_dispatches_mount_unmount_around_a_screen_switch() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter app mode");
     assert_eq!(

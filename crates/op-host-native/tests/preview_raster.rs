@@ -68,6 +68,7 @@ fn preview_paints_resolved_orange_at_the_swatch() {
         false,
         false,
         std::rc::Rc::new(jian_skia::SkiaMeasure::new()),
+        0,
     )
     .expect("enter preview");
 

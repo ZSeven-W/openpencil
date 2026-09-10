@@ -82,6 +82,7 @@ mod present;
 mod scene_helpers;
 mod session;
 mod session_paint;
+mod test_helpers;
 mod transition;
 mod ui_actions;
 

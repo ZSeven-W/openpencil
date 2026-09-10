@@ -80,6 +80,7 @@ fn opacity_session(actions: Vec<serde_json::Value>, authored: f64) -> PreviewSes
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter")
 }
@@ -116,6 +117,7 @@ fn opacity_animation_reaches_exact_midpoint_and_terminal_fill() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter");
     tap(&mut session);

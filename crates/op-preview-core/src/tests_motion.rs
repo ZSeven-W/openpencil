@@ -5,6 +5,29 @@ use jian_core::gesture::pointer::{PointerKind, PointerPhase};
 use op_editor_ui::layout_scene::SceneNode;
 
 fn session_for(source: serde_json::Value) -> PreviewSession {
+    session_for_at(source, 0)
+}
+
+fn session_for_at(source: serde_json::Value, now_ms: u64) -> PreviewSession {
+    let doc = jian_ops_schema::load_str(&source.to_string())
+        .expect("motion fixture")
+        .value;
+    let mut session = PreviewSession::enter(
+        &doc,
+        (400.0, 400.0),
+        &std::collections::BTreeMap::new(),
+        0,
+        false,
+        false,
+        test_measure(),
+        now_ms,
+    )
+    .expect("preview session");
+    session.begin_lifecycle(now_ms);
+    session
+}
+
+fn session_for_at_without_lifecycle(source: serde_json::Value, now_ms: u64) -> PreviewSession {
     let doc = jian_ops_schema::load_str(&source.to_string())
         .expect("motion fixture")
         .value;
@@ -16,6 +39,7 @@ fn session_for(source: serde_json::Value) -> PreviewSession {
         false,
         false,
         test_measure(),
+        now_ms,
     )
     .expect("preview session")
 }
@@ -60,6 +84,97 @@ fn mount_animation_samples_keyframe_stops_across_pumped_frames() {
 }
 
 #[test]
+fn mount_animation_started_at_a_late_host_clock_still_plays() {
+    let mut session = session_for_at(
+        serde_json::json!({
+            "version":"1.1","formatVersion":"1.1",
+            "children":[{"type":"rectangle","id":"hero","width":100,"height":100,
+                "opacity":1,"fill":[{"type":"solid","color":"#ffffff"}],
+                "animations":[{"trigger":"mount","keyframes":[
+                    {"offset":0,"values":{"opacity":0}},
+                    {"offset":1,"values":{"opacity":1}}
+                ],"durationMs":400,"easing":"linear"}]}]
+        }),
+        600_000,
+    );
+    let _ = session.preview_scene_for_test();
+    session.pump(600_100);
+    let mid = opacity(&session, "hero");
+    assert!(mid > 0.0 && mid < 1.0, "late-clock mount opacity: {mid}");
+    session.pump(600_500);
+    assert!((opacity(&session, "hero") - 1.0).abs() < 0.001);
+}
+
+#[test]
+fn lifecycle_animations_wait_for_begin_lifecycle() {
+    let mut session = session_for_at_without_lifecycle(
+        serde_json::json!({
+            "version":"1.1","formatVersion":"1.1",
+            "children":[{"type":"frame","id":"screen","width":200,"height":100,
+                "children":[
+                    {"type":"rectangle","id":"hero","x":0,"y":0,"width":100,"height":40,
+                        "opacity":1,"fill":[{"type":"solid","color":"#ffffff"}],
+                        "animations":[{"trigger":"mount","keyframes":[
+                            {"offset":0,"values":{"opacity":0}},
+                            {"offset":1,"values":{"opacity":1}}
+                        ],"durationMs":400,"easing":"linear"}]},
+                    {"type":"rectangle","id":"card","x":0,"y":10,"width":100,"height":40,
+                        "opacity":1,"fill":[{"type":"solid","color":"#ffffff"}],
+                        "animations":[{"trigger":"inView","keyframes":[
+                            {"offset":0,"values":{"opacity":0}},
+                            {"offset":1,"values":{"opacity":1}}
+                        ],"durationMs":400,"easing":"linear"}]}
+                ]}]
+        }),
+        600_000,
+    );
+
+    session.pump(600_300);
+    assert!((opacity(&session, "hero") - 0.0).abs() < 0.001);
+    assert!((opacity(&session, "card") - 0.0).abs() < 0.001);
+    assert_eq!(session.active_animation_track_count(), 0);
+
+    session.begin_lifecycle(600_300);
+    session.preview_scene_for_test();
+    session.pump(600_400);
+    assert!(
+        opacity(&session, "hero") > 0.0 && opacity(&session, "hero") < 1.0,
+        "mount should be mid-tween after lifecycle begins"
+    );
+    assert!(
+        opacity(&session, "card") > 0.0 && opacity(&session, "card") < 1.0,
+        "inView should be mid-tween after lifecycle begins"
+    );
+    session.pump(600_800);
+    assert!((opacity(&session, "hero") - 1.0).abs() < 0.001);
+    assert!((opacity(&session, "card") - 1.0).abs() < 0.001);
+}
+
+#[test]
+fn reduced_motion_begin_lifecycle_is_instant_and_idempotent() {
+    let mut session = session_for_at_without_lifecycle(
+        serde_json::json!({
+            "version":"1.1","formatVersion":"1.1","motion":"reduced",
+            "children":[{"type":"rectangle","id":"hero","width":100,"height":40,
+                "opacity":1,"fill":[{"type":"solid","color":"#ffffff"}],
+                "animations":[{"trigger":"mount","keyframes":[
+                    {"offset":0,"values":{"opacity":0}},
+                    {"offset":1,"values":{"opacity":1}}
+                ],"durationMs":400}]}]
+        }),
+        600_000,
+    );
+
+    assert!((opacity(&session, "hero") - 0.0).abs() < 0.001);
+    session.begin_lifecycle(600_000);
+    assert!((opacity(&session, "hero") - 1.0).abs() < 0.001);
+    assert_eq!(session.active_animation_track_count(), 0);
+    session.begin_lifecycle(600_100);
+    assert!((opacity(&session, "hero") - 1.0).abs() < 0.001);
+    assert_eq!(session.active_animation_track_count(), 0);
+}
+
+#[test]
 fn in_view_animation_fires_once_after_page_scroll_reveals_node() {
     let mut session = session_for(serde_json::json!({
         "version":"1.1","formatVersion":"1.1",
@@ -78,6 +193,29 @@ fn in_view_animation_fires_once_after_page_scroll_reveals_node() {
     assert_eq!(session.active_animation_track_count(), 1);
     session.preview_scene_for_test();
     assert_eq!(session.active_animation_track_count(), 1);
+}
+
+#[test]
+fn in_view_animation_started_at_a_late_host_clock_still_plays() {
+    let mut session = session_for_at(
+        serde_json::json!({
+            "version":"1.1","formatVersion":"1.1",
+            "children":[{"type":"frame","id":"screen","width":200,"height":100,
+                "children":[{"type":"rectangle","id":"card","x":0,"y":10,"width":100,"height":40,
+                    "opacity":1,"fill":[{"type":"solid","color":"#ffffff"}],
+                    "animations":[{"trigger":"inView","keyframes":[
+                        {"offset":0,"values":{"opacity":0}},
+                        {"offset":1,"values":{"opacity":1}}
+                    ],"durationMs":400,"easing":"linear"}]}]}]
+        }),
+        600_000,
+    );
+    let _ = session.preview_scene_for_test();
+    session.pump(600_100);
+    let mid = opacity(&session, "card");
+    assert!(mid > 0.0 && mid < 1.0, "late-clock inView opacity: {mid}");
+    session.pump(600_500);
+    assert!((opacity(&session, "card") - 1.0).abs() < 0.001);
 }
 
 #[test]

@@ -49,6 +49,7 @@ fn enter() -> PreviewSession {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter event payload fixture")
 }

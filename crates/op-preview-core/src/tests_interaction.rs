@@ -64,6 +64,7 @@ fn legacy_role_promotion_is_recorded_as_warning() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview on legacy doc");
     for w in session.warnings() {
@@ -85,6 +86,7 @@ fn focus_seeds_widget_state_for_caret() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
     session.set_now_ms(0);
@@ -123,6 +125,7 @@ fn preview_promotes_role_input_frame_to_interactive_field() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
     session.set_now_ms(0);
@@ -189,6 +192,7 @@ fn hover_move_fires_on_hover_enter() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter");
     session.set_now_ms(0);
@@ -231,6 +235,7 @@ fn slider_drag_moves_value() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter");
     session.set_now_ms(0);
@@ -272,6 +277,7 @@ fn wheel_routes_only_to_on_scroll_handler() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter");
     assert!(
@@ -288,6 +294,7 @@ fn wheel_routes_only_to_on_scroll_handler() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter");
     assert!(

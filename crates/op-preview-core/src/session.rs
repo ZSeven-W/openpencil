@@ -230,6 +230,7 @@ impl PreviewSession {
     /// Returns [`PreviewEnterError`] if serialization, parsing, runtime
     /// build, or layout fails — the host then declines to enter preview and
     /// surfaces the rendered message.
+    #[allow(clippy::too_many_arguments)]
     pub fn enter(
         doc: &jian_ops_schema::PenDocument,
         canvas_size: (f32, f32),
@@ -238,6 +239,7 @@ impl PreviewSession {
         preserve_authored_geometry: bool,
         presenting: bool,
         measure: Rc<dyn MeasureBackend>,
+        now_ms: u64,
     ) -> Result<Self, PreviewEnterError> {
         // R4: the legacy wrapper is fail-closed — no declared host
         // capabilities means effects are denied, never silently allowed.
@@ -250,6 +252,7 @@ impl PreviewSession {
             presenting,
             measure,
             op_preview_contracts::PreviewHostCapabilities::none(),
+            now_ms,
         )
     }
 
@@ -267,6 +270,7 @@ impl PreviewSession {
         presenting: bool,
         measure: Rc<dyn MeasureBackend>,
         host_capabilities: op_preview_contracts::PreviewHostCapabilities,
+        now_ms: u64,
     ) -> Result<Self, PreviewEnterError> {
         Self::enter_with_host_motion_preference(
             doc,
@@ -278,6 +282,7 @@ impl PreviewSession {
             measure,
             host_capabilities,
             jian_ops_schema::motion::MotionPreference::Full,
+            now_ms,
         )
     }
 
@@ -294,6 +299,7 @@ impl PreviewSession {
         measure: Rc<dyn MeasureBackend>,
         host_capabilities: op_preview_contracts::PreviewHostCapabilities,
         host_motion_preference: jian_ops_schema::motion::MotionPreference,
+        now_ms: u64,
     ) -> Result<Self, PreviewEnterError> {
         let reset_seed = ResetSeed {
             document: doc.clone(),
@@ -538,13 +544,17 @@ impl PreviewSession {
             app,
             gesture_mappings: HashMap::new(),
             transition: None,
-            last_now_ms: 0,
+            last_now_ms: now_ms,
             interaction: crate::interaction_state::InteractionState::default(),
             host_capabilities,
             effects,
             ui_actions,
         };
-        session.start_mount_animations(0);
+        session.motion.set_initial_lifecycle_values(
+            &session.runtime,
+            &session.scene,
+            &session.animation,
+        );
         Ok(session)
     }
 
@@ -702,24 +712,6 @@ impl PreviewSession {
     #[cfg(any(all(test, not(target_os = "windows")), feature = "testing"))]
     pub fn app_state_value_for_test(&self, key: &str) -> Option<jian_core::value::RuntimeValue> {
         self.runtime.state.app_get(key)
-    }
-
-    /// Narrow test-only clock readout: the session's current monotonic
-    /// time (`last_now_ms`). Cross-crate tests (op-host-native's
-    /// timestamp regression suite) assert the global clock stays where
-    /// the frame pump put it even when pointer events carry out-of-order
-    /// factual timestamps.
-    #[cfg(any(all(test, not(target_os = "windows")), feature = "testing"))]
-    pub fn now_ms_for_test(&self) -> u64 {
-        self.last_now_ms
-    }
-
-    /// Test-only: the session's own scene with live runtime widget
-    /// values overlaid — what `paint_scene` walks — so render tests can
-    /// assert widget values without a backend.
-    #[cfg(all(test, not(target_os = "windows")))]
-    pub(crate) fn preview_scene_for_test(&self) -> LayoutScene {
-        self.overlay_runtime_state(&self.scene)
     }
 
     /// Test-only: the absolute layout rect `(x, y, w, h)` the runtime

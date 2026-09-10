@@ -74,6 +74,7 @@ fn enter(
         false,
         test_measure(),
         capabilities,
+        0,
     )
     .expect("enter")
 }

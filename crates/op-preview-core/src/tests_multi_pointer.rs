@@ -59,6 +59,7 @@ fn enter() -> PreviewSession {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview")
 }
@@ -205,6 +206,7 @@ fn cowin_delivers_scale_before_rotate_in_one_burst() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
     const TOUCH: PointerKind = PointerKind::Touch;

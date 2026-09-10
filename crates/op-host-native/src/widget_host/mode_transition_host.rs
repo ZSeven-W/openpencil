@@ -15,6 +15,14 @@
 use super::WidgetHostNative;
 
 impl WidgetHostNative {
+    #[cfg(all(test, not(target_os = "windows")))]
+    pub(crate) fn preview_scene_for_test(&self) -> op_editor_ui::layout_scene::LayoutScene {
+        self.preview
+            .as_ref()
+            .expect("preview session")
+            .preview_scene_for_test()
+    }
+
     /// Whether the canvas is currently in Preview (Play) mode with a
     /// live runtime.
     pub fn preview_active(&self) -> bool {
@@ -37,7 +45,7 @@ impl WidgetHostNative {
     /// a few lines down needs the session installed to compute the
     /// destination device-frame rect, so this can't be reordered.
     pub fn enter_preview(&mut self, canvas_size: (f32, f32)) -> bool {
-        self.enter_preview_with_builder(canvas_size, |state, presenting| {
+        self.enter_preview_with_builder(canvas_size, |state, presenting, now_ms| {
             crate::preview::PreviewSession::enter_with_host_motion_preference(
                 &state.doc,
                 canvas_size,
@@ -48,6 +56,7 @@ impl WidgetHostNative {
                 std::rc::Rc::new(jian_skia::SkiaMeasure::new()),
                 op_preview_core::PreviewHostCapabilities::none(),
                 host_motion_preference(),
+                now_ms,
             )
         })
     }
@@ -58,6 +67,7 @@ impl WidgetHostNative {
         build: impl FnOnce(
             &op_editor_core::EditorState,
             bool,
+            u64,
         )
             -> Result<crate::preview::PreviewSession, crate::preview::PreviewEnterError>,
     ) -> bool {
@@ -85,7 +95,7 @@ impl WidgetHostNative {
         }
         let presenting =
             op_editor_core::preview_slideshow::slideshow_for_document(&self.editor_state).is_some();
-        match build(&self.editor_state, presenting) {
+        match build(&self.editor_state, presenting, self.now_ms) {
             Ok(mut session) => {
                 let source_rect = session.framed_root().map(|(_, rect)| {
                     self.doc_rect_to_screen_rect(rect, canvas_size.0, canvas_size.1)
@@ -117,6 +127,8 @@ impl WidgetHostNative {
                         settled,
                         self.now_ms,
                     ));
+                } else if let Some(preview) = self.preview.as_mut() {
+                    preview.begin_lifecycle(self.now_ms);
                 }
                 self.mark_dirty();
                 true
@@ -262,14 +274,20 @@ impl WidgetHostNative {
         if transition.kind() == crate::preview::ModeTransitionKind::Exit {
             self.finish_exit_teardown();
         } else {
+            let now_ms = self.now_ms;
+            if let Some(preview) = self.preview.as_mut() {
+                preview.begin_lifecycle(now_ms);
+            }
             self.preview_mode_transition = None;
         }
     }
 
-    /// The actual Preview-mode teardown deferred by `exit_preview` —
-    /// shared by `settle_mode_transition` (the animation finished on
-    /// its own) and `enter_preview` (the user re-opened before it did).
-    fn finish_exit_teardown(&mut self) {
+    /// Drop every host-side Preview runtime and its derived interaction state.
+    ///
+    /// Whole-document replacement uses this synchronously because an exit
+    /// merge animation cannot survive a new editor state. The ordinary exit
+    /// path also calls it once its deferred animation has finished.
+    pub(in crate::widget_host) fn drop_preview_runtime(&mut self) {
         self.preview = None;
         self.clear_device_preview_state();
         self.preview_pressed_pids.clear();
@@ -279,6 +297,13 @@ impl WidgetHostNative {
         self.slideshow_press_screen = None;
         self.editor_state.editor_ui.exit_preview();
         self.preview_mode_transition = None;
+    }
+
+    /// The actual Preview-mode teardown deferred by `exit_preview` —
+    /// shared by `settle_mode_transition` (the animation finished on
+    /// its own) and `enter_preview` (the user re-opened before it did).
+    fn finish_exit_teardown(&mut self) {
+        self.drop_preview_runtime();
     }
 
     /// Whether input should be discarded because a Track M-1 merge
