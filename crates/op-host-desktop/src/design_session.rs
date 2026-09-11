@@ -364,6 +364,25 @@ fn apply_progress(msg: &mut ChatMessage, progress: &[Progress], locale: Locale) 
                     "Only {delivered} of {expected} promised item(s) delivered"
                 )),
             ),
+            Progress::SubtaskLanguageMismatch {
+                id,
+                checked,
+                mismatched,
+            } => update_activity(
+                msg,
+                id,
+                ChatActivityStatus::Error,
+                Some(format!(
+                    "{mismatched} of {checked} text node(s) not in the brief's language"
+                )),
+            ),
+            Progress::PlanCoverageRetry { missing } => append_narration(
+                msg,
+                &format!(
+                    "• Plan missed section(s): {} — re-planning",
+                    missing.join(", ")
+                ),
+            ),
             Progress::SubtaskRetry { id, attempt, .. } => update_activity(
                 msg,
                 id,

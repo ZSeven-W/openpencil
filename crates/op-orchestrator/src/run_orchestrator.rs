@@ -32,7 +32,7 @@ impl Orchestrator {
         // -- 阶段 1:规划(单档 Rich + 规范化)--
         // `planning_loop` 内部已 normalize 并回传 `NormInfo`,此处不再二次规范化。
         on_progress(Progress::Planning);
-        let (mut plan, norm) = planning_loop(&request, llm, abort).await?;
+        let (mut plan, norm) = planning_loop(&request, llm, abort, on_progress).await?;
 
         // -- S3b-4 Task B2 call site 1: apply append context (TS :737) --
         // Must run AFTER planning_loop (which calls normalize) so root_frame.id
@@ -447,6 +447,8 @@ impl Orchestrator {
 
                     let zero = outcome.node_count == 0;
                     let incomplete = crate::subtask_completeness::is_incomplete_outcome(&outcome);
+                    let language_mismatch =
+                        crate::output_language::is_language_mismatch_outcome(&outcome);
                     incomplete_subtask_failure |= incomplete;
                     let node_count = outcome.node_count;
                     let err_msg = outcome.error.clone();
@@ -470,9 +472,10 @@ impl Orchestrator {
                         }
                         break;
                     }
-                    if incomplete {
-                        // The shared ladder already emitted SubtaskIncomplete;
-                        // do not overwrite that terminal state with SubtaskDone.
+                    if incomplete || language_mismatch {
+                        // The shared ladder already emitted SubtaskIncomplete
+                        // or SubtaskLanguageMismatch; do not overwrite that
+                        // terminal state with SubtaskDone.
                         continue;
                     }
                     if zero {

@@ -362,11 +362,21 @@ pub enum Progress {
         id: String,
         error: String,
     },
-    /// Emitted once when a promised repeated-item section remains short after the ladder.
+    /// Repeated-item section still short after the ladder.
     SubtaskIncomplete {
         id: String,
         expected: usize,
         delivered: usize,
+    },
+    /// Copy language disagrees with the brief after one retry.
+    SubtaskLanguageMismatch {
+        id: String,
+        checked: usize,
+        mismatched: usize,
+    },
+    /// Parsed plan omitted a section the brief enumerated; one re-plan follows.
+    PlanCoverageRetry {
+        missing: Vec<String>,
     },
     /// Per-subtask skill-load report emitted after the sub-agent prompt is built.
     SubtaskSkills {
@@ -376,29 +386,22 @@ pub enum Progress {
         budget_used: u32,
         budget_max: u32,
     },
-    /// Emitted on each subtask retry with the reason (e.g. "zero nodes
-    /// generated"). `attempt` is the 1-based attempt number being retried into.
+    /// Retry into `attempt` (1-based) with the given reason.
     SubtaskRetry {
         id: String,
         attempt: u8,
         reason: String,
     },
-    /// Emitted once, right before a `geometry_echo` in-loop self-correction
-    /// retry starts (`concurrent::run_subtask_retry_ladder`'s tail) — a
-    /// fact line so the progress panel shows this step actually working,
-    /// not a silent extra LLM call. `issue_count` is how many diagnostic
-    /// lines `geometry_validation::geometry_diagnostics_for_roots` found.
+    /// geometry_echo in-loop self-correction is about to retry.
     GeometryEcho {
         id: String,
         issue_count: usize,
     },
-    /// Emitted before `RunSummary` when the promise-delivery check finds an
-    /// unfilled scaffolded screen; names are already marked on the canvas.
+    /// Promise-delivery check found an unfilled scaffolded screen.
     UnfilledScreens {
         names: Vec<String>,
     },
-    /// Emitted after each sub-agent LLM reply is applied — lets the UI
-    /// show a live node count while the subtask is still running.
+    /// Live node count while a subtask is still running.
     SubtaskNodes {
         id: String,
         nodes_so_far: usize,

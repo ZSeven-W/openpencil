@@ -52,10 +52,12 @@ fn plan_json(guide: Option<&str>) -> String {
 
 fn plan_for(pinned: Option<&str>, model_choice: Option<&str>) -> OrchestratorPlan {
     let llm = ScriptedLlm::new(vec![ScriptResponse::Text(plan_json(model_choice))]);
+    let mut on_progress = |_p: Progress| {};
     let (plan, _norm) = futures::executor::block_on(planning_loop(
         &pinned_req(pinned),
         &llm,
         &AbortFlag::default(),
+        &mut on_progress,
     ))
     .expect("planning succeeds");
     plan
@@ -84,10 +86,12 @@ fn the_fallback_plan_carries_the_pin_too() {
         ScriptResponse::Text("not json at all".into()),
         ScriptResponse::Text("still not json".into()),
     ]);
+    let mut on_progress = |_p: Progress| {};
     let (plan, _norm) = futures::executor::block_on(planning_loop(
         &pinned_req(Some(PINNED)),
         &llm,
         &AbortFlag::default(),
+        &mut on_progress,
     ))
     .expect("the fallback plan is not an error");
     assert_eq!(plan.style_guide_name.as_deref(), Some(PINNED));
@@ -129,9 +133,14 @@ fn design_md_still_outranks_a_pin() {
         generation_notes: None,
     });
     let llm = ScriptedLlm::new(vec![ScriptResponse::Text(plan_json(None))]);
-    let (plan, _norm) =
-        futures::executor::block_on(planning_loop(&request, &llm, &AbortFlag::default()))
-            .expect("planning succeeds");
+    let mut on_progress = |_p: Progress| {};
+    let (plan, _norm) = futures::executor::block_on(planning_loop(
+        &request,
+        &llm,
+        &AbortFlag::default(),
+        &mut on_progress,
+    ))
+    .expect("planning succeeds");
     assert_ne!(
         plan.style_guide_name.as_deref(),
         Some(PINNED),

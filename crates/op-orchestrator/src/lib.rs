@@ -32,6 +32,7 @@ pub mod orchestration_self_check;
 pub mod palette_harmonize;
 pub mod parse;
 pub mod plan;
+pub mod plan_coverage;
 mod plan_fallback_card;
 pub mod plan_normalize;
 pub mod plan_repair;

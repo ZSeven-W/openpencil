@@ -206,3 +206,138 @@ fn transport_failure_still_downgrades_skills_on_attempt2_for_basic_tier() {
         prompts[2].len()
     );
 }
+
+const COVERING_PLAN_JSON: &str = r##"{
+  "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
+                 "layout": "vertical", "gap": 0,
+                 "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
+  "subtasks": [
+    { "id": "hero", "label": "Hero", "region": { "width": 1200, "height": 400 } },
+    { "id": "pricing", "label": "Pricing Table", "region": { "width": 1200, "height": 400 } },
+    { "id": "faq", "label": "FAQ", "region": { "width": 1200, "height": 400 } }
+  ]
+}"##;
+
+fn enumerated_req() -> DesignRequest {
+    DesignRequest {
+        prompt: "a landing page with hero, pricing table and FAQ".into(),
+        model: None,
+        provider: None,
+        design_md: None,
+        concurrency: 1,
+        continuation_context: None,
+        append_context: None,
+        validation_enabled: false,
+        visual_ref_enabled: false,
+        pinned_style_guide: None,
+        reference_skeleton: None,
+    }
+}
+
+fn planning_prompt_count(llm: &ScriptedLlm, brief: &str) -> usize {
+    llm.user_prompts()
+        .iter()
+        .filter(|prompt| prompt.starts_with(brief))
+        .count()
+}
+
+/// First plan omits enumerated sections → exactly one re-plan carrying the
+/// coverage feedback paragraph.
+#[test]
+fn missing_plan_section_issues_one_replan_with_feedback() {
+    let brief = enumerated_req().prompt;
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(PLAN_JSON.into()),
+        ScriptResponse::Text(COVERING_PLAN_JSON.into()),
+        ScriptResponse::Text(node_json("hero")),
+        ScriptResponse::Text(node_json("pricing")),
+        ScriptResponse::Text(node_json("faq")),
+    ]);
+    let mut sink = VecDocSink::new();
+    let mut events = Vec::new();
+    let mut on_progress = |p: Progress| events.push(p);
+    futures::executor::block_on(Orchestrator::new().run(
+        enumerated_req(),
+        &mut sink,
+        &llm,
+        &mut on_progress,
+        &AbortFlag::new(),
+        &stub_providers(),
+    ))
+    .expect("coverage re-plan run succeeds");
+
+    assert_eq!(planning_prompt_count(&llm, &brief), 2);
+    let feedback = crate::plan_coverage::coverage_feedback(&["pricing table".into(), "FAQ".into()]);
+    assert!(
+        llm.user_prompts()[1].contains(&feedback),
+        "second planning prompt must carry coverage feedback, got {}",
+        llm.user_prompts()[1]
+    );
+    assert!(events.iter().any(|event| matches!(
+        event,
+        Progress::PlanCoverageRetry { missing }
+            if missing == &["pricing table".to_string(), "FAQ".to_string()]
+    )));
+}
+
+/// A plan that already covers every enumerated section is requested once.
+#[test]
+fn covering_plan_issues_exactly_one_plan_request() {
+    let brief = enumerated_req().prompt;
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(COVERING_PLAN_JSON.into()),
+        ScriptResponse::Text(node_json("hero")),
+        ScriptResponse::Text(node_json("pricing")),
+        ScriptResponse::Text(node_json("faq")),
+    ]);
+    let mut sink = VecDocSink::new();
+    let mut events = Vec::new();
+    let mut on_progress = |p: Progress| events.push(p);
+    futures::executor::block_on(Orchestrator::new().run(
+        enumerated_req(),
+        &mut sink,
+        &llm,
+        &mut on_progress,
+        &AbortFlag::new(),
+        &stub_providers(),
+    ))
+    .expect("covering plan run succeeds");
+
+    assert_eq!(planning_prompt_count(&llm, &brief), 1);
+    assert!(!events
+        .iter()
+        .any(|event| matches!(event, Progress::PlanCoverageRetry { .. })));
+}
+
+/// A second plan that still misses sections is kept; the gate never loops.
+#[test]
+fn second_incomplete_plan_is_kept_without_another_retry() {
+    let brief = enumerated_req().prompt;
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(PLAN_JSON.into()),
+        ScriptResponse::Text(PLAN_JSON.into()),
+        ScriptResponse::Text(node_json("hero")),
+        ScriptResponse::Text(node_json("feat")),
+    ]);
+    let mut sink = VecDocSink::new();
+    let mut events = Vec::new();
+    let mut on_progress = |p: Progress| events.push(p);
+    futures::executor::block_on(Orchestrator::new().run(
+        enumerated_req(),
+        &mut sink,
+        &llm,
+        &mut on_progress,
+        &AbortFlag::new(),
+        &stub_providers(),
+    ))
+    .expect("second incomplete plan still runs");
+
+    assert_eq!(planning_prompt_count(&llm, &brief), 2);
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, Progress::PlanCoverageRetry { .. }))
+            .count(),
+        1
+    );
+}

@@ -160,6 +160,7 @@ async fn planning_loop(
     request: &DesignRequest,
     llm: &dyn LlmClient,
     abort: &AbortFlag,
+    on_progress: &mut dyn FnMut(Progress),
 ) -> Result<(OrchestratorPlan, NormInfo), OrchestratorError> {
     // TWO attempts before the heuristic fallback: a truncated stream or a
     // transient provider blip fails the parse once and usually succeeds
@@ -178,17 +179,9 @@ async fn planning_loop(
                     return Err(OrchestratorError::Aborted);
                 }
                 if let Some((mut plan, _repaired)) = parse_orchestrator_response(&raw, request) {
-                    // 回填 forced_style_guide_name(若 plan 未携带)
-                    if plan.style_guide_name.is_none() {
-                        if let Some(forced) = forced_style_guide_name {
-                            plan.style_guide_name = Some(forced);
-                        }
-                    }
-                    // A pinned guide outranks whatever the model chose — and
-                    // whatever it forgot to choose. Applied here rather than in
-                    // the backfill above because the backfill only ever has a
-                    // value on the Compact planning path.
-                    crate::style_guide_context::enforce_pinned_style_guide(&mut plan, request);
+                    apply_plan_pins(&mut plan, forced_style_guide_name, request);
+                    plan =
+                        maybe_replan_for_coverage(request, llm, abort, on_progress, plan).await?;
                     let norm = normalize(&mut plan, request);
                     return Ok((plan, norm));
                 }
@@ -232,6 +225,65 @@ async fn planning_loop(
     crate::style_guide_context::enforce_pinned_style_guide(&mut fallback, request);
     let norm = normalize(&mut fallback, request);
     Ok((fallback, norm))
+}
+
+fn apply_plan_pins(
+    plan: &mut OrchestratorPlan,
+    forced_style_guide_name: Option<String>,
+    request: &DesignRequest,
+) {
+    if plan.style_guide_name.is_none() {
+        if let Some(forced) = forced_style_guide_name {
+            plan.style_guide_name = Some(forced);
+        }
+    }
+    crate::style_guide_context::enforce_pinned_style_guide(plan, request);
+}
+
+/// After a successful parse, re-request the plan once when the brief named
+/// sections the plan does not cover. Fallback plans never enter this path.
+async fn maybe_replan_for_coverage(
+    request: &DesignRequest,
+    llm: &dyn LlmClient,
+    abort: &AbortFlag,
+    on_progress: &mut dyn FnMut(Progress),
+    plan: OrchestratorPlan,
+) -> Result<OrchestratorPlan, OrchestratorError> {
+    let required = crate::plan_coverage::required_sections(&request.prompt);
+    let missing = crate::plan_coverage::missing_sections(&required, &plan);
+    if missing.is_empty() {
+        return Ok(plan);
+    }
+    eprintln!("[PLAN] coverage: missing {}", missing.join(", "));
+    on_progress(Progress::PlanCoverageRetry {
+        missing: missing.clone(),
+    });
+    let feedback = crate::plan_coverage::coverage_feedback(&missing);
+    let mut pp = build_orchestrator_prompt(request, PlanningMode::Rich, abort.clone());
+    pp.call_request.user_prompt.push_str("\n\n");
+    pp.call_request.user_prompt.push_str(&feedback);
+    let forced_style_guide_name = pp.forced_style_guide_name.clone();
+    match collect_text(llm.call(pp.call_request)).await {
+        Ok(raw) => {
+            if abort.is_set() {
+                return Err(OrchestratorError::Aborted);
+            }
+            if let Some((mut retry_plan, _)) = parse_orchestrator_response(&raw, request) {
+                apply_plan_pins(&mut retry_plan, forced_style_guide_name, request);
+                let still_missing = crate::plan_coverage::missing_sections(&required, &retry_plan);
+                if !still_missing.is_empty() {
+                    eprintln!(
+                        "[PLAN] coverage: still missing {} after retry",
+                        still_missing.join(", ")
+                    );
+                }
+                return Ok(retry_plan);
+            }
+            Ok(plan)
+        }
+        Err(error) if error.aborted => Err(OrchestratorError::Aborted),
+        Err(_) => Ok(plan),
+    }
 }
 
 /// 消费一次 LLM 调用的流 —— 拼接所有 `Text` chunk,丢弃 `Thinking`。
