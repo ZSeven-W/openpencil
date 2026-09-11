@@ -17,6 +17,7 @@ mod defaults;
 mod exports;
 pub mod git_panel;
 pub mod groups;
+pub mod home;
 mod methods;
 pub mod pickers;
 pub mod slides_panel_state;
@@ -61,6 +62,13 @@ pub struct EditorUiState {
     /// Page-lifetime color scheme imposed by an embedding host. Paint-only;
     /// separate from `theme_mode`, so host theme changes never persist.
     pub host_theme_override: Option<ThemeMode>,
+    /// First-launch surface preference. Home and Canvas share one document;
+    /// this only decides which chrome is visible when the app starts without
+    /// a file argument.
+    pub entry_surface: EntrySurface,
+    /// Drafting-table Home chrome state. Transient except for
+    /// `entry_surface`, which is persisted in app settings.
+    pub home: HomeState,
     /// UI locale — TopBar Globe cycles.
     pub locale: Locale,
     /// A runtime catalog selected in the web picker but not installed yet.

@@ -15,6 +15,7 @@ pub use super::groups::{
     PromptCenterState, PromptFilter, SaveNameDialogState, SceneFilter, SceneTemplateCenterState,
     SceneTemplateFocus, SizeToggleState, StyleImportState,
 };
+pub use super::home::{EntrySurface, HomeDevice, HomeFamily, HomeHit, HomeState};
 pub use super::pickers::{
     CanvasDropIndicator, CanvasOverlayLine, CanvasOverlayRect, CompositingPickerTarget,
     EffectParamFocus, FontPickerPurpose, LayerContextMenuState, MissingFontSurface,

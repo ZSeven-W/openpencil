@@ -324,6 +324,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.foodAppDesc" => "ออกแบบหน้าแรกแอป",
         "ai.quickAction.bottomNavDesc" => "แถบนำทาง 5 แท็บ",
         "ai.quickAction.colorPaletteDesc" => "แนะนำจานสี",
+        "fileMenu.home" => "Drafting table",
         "fileMenu.newFile" => "ไฟล์ใหม่",
         "fileMenu.exportAllFrames" => "ส่งออกเฟรมทั้งหมด...",
         "fileMenu.exportSelectedFrames" => "ส่งออก {{count}} เฟรม...",

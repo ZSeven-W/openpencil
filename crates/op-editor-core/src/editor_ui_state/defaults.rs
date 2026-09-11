@@ -4,9 +4,10 @@
 //! Split out of the `editor_ui_state` spine (800-line file ceiling).
 
 use super::{
-    DesignMdPanelState, EditorUiState, EmbedHost, ExportFormat, FlexLayout, GitPanelState, Locale,
-    PencilCursorStyle, PreviewState, PromptCenterState, PropertyTab, SaveNameDialogState,
-    SceneTemplateCenterState, SizeToggleState, ThemeMode, UpdateStatus,
+    DesignMdPanelState, EditorUiState, EmbedHost, EntrySurface, ExportFormat, FlexLayout,
+    GitPanelState, HomeState, Locale, PencilCursorStyle, PreviewState, PromptCenterState,
+    PropertyTab, SaveNameDialogState, SceneTemplateCenterState, SizeToggleState, ThemeMode,
+    UpdateStatus,
 };
 use crate::tool::Tool;
 use std::collections::HashSet;
@@ -23,6 +24,8 @@ impl Default for EditorUiState {
             mobile_sheet: None,
             theme_mode: ThemeMode::Dark,
             host_theme_override: None,
+            entry_surface: EntrySurface::default(),
+            home: HomeState::default(),
             locale: Locale::ZhCn,
             pending_locale: None,
             locale_persistence_override: None,

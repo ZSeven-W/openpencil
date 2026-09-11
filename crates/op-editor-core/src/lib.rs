@@ -349,15 +349,16 @@ pub use edit_transaction::{
 pub use editor_ui_state::{
     AssetCenterTab, BooleanOp, CloneField, CloneFormState, CommitDiffPatch, CommitDiffSummary,
     CommitDiffView, CompositingPickerTarget, CustomPrompt, DesignMdPanelState, DesignMdRequest,
-    EditorUiState, EmbedHost, ExportFormat, FileAction, FillType, FlexLayout, FontPickerPurpose,
-    GitBranchPickerMode, GitCandidateFile, GitCommitSummary, GitDiffTarget, GitDiffView,
-    GitFileEntry, GitOverflowView, GitPanelAction, GitPanelState, ImageAdjustmentField,
-    ImageFillMode, LayerContextMenuState, LeftPanelTab, Locale, MergeConflictRow, MergeResolveFile,
-    MergeResolveState, MissingFontSurface, PaddingEditMode, PageRenameState, PencilCursorStyle,
-    PreviewDeviceKind, PreviewState, PromptCenterFocus, PromptCenterState, PromptFilter,
-    PropertyTab, RecentFile, SceneFilter, SceneTemplateCenterState, SceneTemplateFocus,
-    SizeToggleState, SlidesDrag, SlidesPanelState, SlidesPanelTarget, StyleImportState, ThemeMode,
-    UpdateStatus, VariableRowFocus, WindowControlRequest,
+    EditorUiState, EmbedHost, EntrySurface, ExportFormat, FileAction, FillType, FlexLayout,
+    FontPickerPurpose, GitBranchPickerMode, GitCandidateFile, GitCommitSummary, GitDiffTarget,
+    GitDiffView, GitFileEntry, GitOverflowView, GitPanelAction, GitPanelState, HomeDevice,
+    HomeFamily, HomeHit, HomeState, ImageAdjustmentField, ImageFillMode, LayerContextMenuState,
+    LeftPanelTab, Locale, MergeConflictRow, MergeResolveFile, MergeResolveState,
+    MissingFontSurface, PaddingEditMode, PageRenameState, PencilCursorStyle, PreviewDeviceKind,
+    PreviewState, PromptCenterFocus, PromptCenterState, PromptFilter, PropertyTab, RecentFile,
+    SceneFilter, SceneTemplateCenterState, SceneTemplateFocus, SizeToggleState, SlidesDrag,
+    SlidesPanelState, SlidesPanelTarget, StyleImportState, ThemeMode, UpdateStatus,
+    VariableRowFocus, WindowControlRequest,
 };
 pub use export_dialog_state::ExportDialogButton;
 pub use export_quick_menu_state::ExportQuickRow;

@@ -324,6 +324,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.foodAppDesc" => "アプリのホームページデザイン",
         "ai.quickAction.bottomNavDesc" => "5 タブナビゲーションバー",
         "ai.quickAction.colorPaletteDesc" => "カラーパレットの提案",
+        "fileMenu.home" => "Drafting table",
         "fileMenu.newFile" => "新規ファイル",
         "fileMenu.exportAllFrames" => "すべてのフレームを書き出し...",
         "fileMenu.exportSelectedFrames" => "{{count}} 件のフレームを書き出し...",

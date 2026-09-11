@@ -244,6 +244,7 @@ pub fn preserve_app_preferences(previous: &EditorState, next: &mut EditorState) 
     let previous_selected_model = previous.chat.selected_model_entry().cloned();
     next.editor_ui.theme_mode = previous.editor_ui.theme_mode;
     next.editor_ui.locale = previous.editor_ui.locale;
+    next.editor_ui.entry_surface = previous.editor_ui.entry_surface;
     next.editor_ui.recent_files = previous.editor_ui.recent_files.clone();
     next.editor_ui.font_import_supported = previous.editor_ui.font_import_supported;
     next.editor_ui.batch_frame_export_supported = previous.editor_ui.batch_frame_export_supported;

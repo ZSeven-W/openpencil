@@ -69,6 +69,8 @@ pub enum WindowControlRequest {
 /// `ExportImageConfirm` commits.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileAction {
+    /// Show the drafting-table Home surface over the current document.
+    Home,
     New,
     Open,
     Save,

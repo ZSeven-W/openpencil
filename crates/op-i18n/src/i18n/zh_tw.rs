@@ -334,6 +334,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.foodAppDesc" => "App 首頁設計",
         "ai.quickAction.bottomNavDesc" => "5 個 Tab 導航列",
         "ai.quickAction.colorPaletteDesc" => "應用配色推薦",
+        "fileMenu.home" => "制圖台",
         "fileMenu.newFile" => "新建檔案",
         "fileMenu.openFile" => "開啟檔案...",
         "fileMenu.save" => "儲存",

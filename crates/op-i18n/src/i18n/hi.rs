@@ -324,6 +324,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.foodAppDesc" => "ऐप होमपेज डिज़ाइन",
         "ai.quickAction.bottomNavDesc" => "5-टैब नेविगेशन बार",
         "ai.quickAction.colorPaletteDesc" => "कलर पैलेट अनुशंसा",
+        "fileMenu.home" => "Drafting table",
         "fileMenu.newFile" => "नई फ़ाइल",
         "fileMenu.exportAllFrames" => "सभी फ़्रेम निर्यात करें...",
         "fileMenu.exportSelectedFrames" => "{{count}} फ़्रेम निर्यात करें...",

@@ -351,6 +351,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.foodAppDesc" => "App homepage design",
         "ai.quickAction.bottomNavDesc" => "5-tab navigation bar",
         "ai.quickAction.colorPaletteDesc" => "Color palette recommendation",
+        "fileMenu.home" => "Drafting table",
         "fileMenu.newFile" => "New file",
         "fileMenu.openFile" => "Open file...",
         "fileMenu.save" => "Save",

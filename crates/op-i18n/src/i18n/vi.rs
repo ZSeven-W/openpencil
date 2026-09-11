@@ -324,6 +324,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.foodAppDesc" => "Thiết kế trang chủ ứng dụng",
         "ai.quickAction.bottomNavDesc" => "Thanh điều hướng 5 tab",
         "ai.quickAction.colorPaletteDesc" => "Gợi ý bảng màu",
+        "fileMenu.home" => "Drafting table",
         "fileMenu.newFile" => "Tệp mới",
         "fileMenu.exportAllFrames" => "Xuất tất cả khung...",
         "fileMenu.exportSelectedFrames" => "Xuất {{count}} khung...",
