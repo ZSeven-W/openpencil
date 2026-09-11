@@ -2,31 +2,8 @@
 //! and — since the multiscreen-fanout-break fix's item D-lite (2026-07-17) —
 //! by the classic Orchestrator's INTER-screen-group executor.
 //!
-//! ## History
-//! The orchestrator's former multi-screen concurrent path (screen grouping +
-//! N-root scaffold + semaphore/`join_all` worker fan-in) was collapsed into
-//! the sequential path by `aca0d3a0` (2026-07-02): its M3 quality gate only
-//! ever measured concurrency WITHIN one screen (parallel sections of the
-//! SAME root) against sequential — found byte-identical output, only
-//! differing in wall-clock time, so the executor was deleted as unpaid-for
-//! complexity. Item A (2026-07-17) revived the PURE partitioning half
-//! (`screen_groups::group_subtasks_by_screen` + N-root scaffold,
-//! `run_screen_groups.rs`) but kept every group's subtasks running
-//! sequentially — the structural bug (`plan_normalize` folding every subtask
-//! onto one root) was the actual break; concurrency was orthogonal to it.
-//!
-//! Item D-lite (this module's new half) revives GENUINE concurrency, but
-//! scoped ONLY to DISTINCT screen groups — never same-screen section
-//! parallelism, which is exactly what `aca0d3a0`'s data verdict evaluated
-//! and found not worth the complexity. That verdict does not transfer here:
-//! N independent screens (N independent root subtrees, N independent
-//! design-agent turns with no shared mutable state) is a different question
-//! from "does splitting ONE screen's sections across workers help" — the
-//! former is the ⚡Nx "team size" UI setting's entire premise (`agent_team_size`
-//! → `DesignRequest.concurrency`), which had been dead for the classic path
-//! since the retirement; this module makes it live again.
-//!
-//! What's here:
+//! Sequential and concurrent screen-group execution share the same retry
+//! ladder so retry semantics cannot drift. What's here:
 //! - [`clamp_concurrency`] — the defensive `[1, 6]` permit cap.
 //! - [`effective_concurrency`] — `min(clamp(request.concurrency), groups.len())`,
 //!   forced to `1` when there's at most one group (no parallelism possible or
@@ -244,11 +221,14 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         prior_outcomes,
     )
     .await;
-    let completeness1 = if abort.is_set() {
-        None
+    let (completeness1, language1) = if abort.is_set() {
+        (None, None)
     } else {
-        crate::subtask_completeness::reject_incomplete_attempt(sink, subtask, &outcome1)
+        crate::output_language::inspect_insert_gates(sink, request, subtask, &outcome1)
     };
+    if completeness1.is_some() || language1.is_some() {
+        crate::subtask_completeness::rollback_inserted_roots(sink, &outcome1.inserted_root_ids);
+    }
 
     // Evaluate the non-retryable predicate once from attempt-1's error
     // (faithful to the sequential path: computed before the retry chain and
@@ -259,9 +239,8 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         .map(is_non_retryable)
         .unwrap_or(false);
 
-    let retryable = |o: &SubtaskOutcome, incomplete: bool| {
-        (incomplete || (o.error.is_some() && o.node_count == 0 && !non_retryable))
-            && !abort.is_set()
+    let retryable = |o: &SubtaskOutcome, gate: bool| {
+        (gate || (o.error.is_some() && o.node_count == 0 && !non_retryable)) && !abort.is_set()
     };
 
     // A self-check quality rejection (`orchestration_self_check` fatally
@@ -279,28 +258,22 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         .error
         .as_deref()
         .is_some_and(is_self_check_rejection);
-    let attempt2_subtask = if let Some(failure) = completeness1.as_ref() {
-        Subtask {
-            retry_feedback: Some(crate::plan::RetryFeedback::Completeness(
-                failure.feedback.clone(),
-            )),
-            ..subtask.clone()
-        }
-    } else if attempt1_self_check_rejection {
-        Subtask {
-            retry_feedback: outcome1
+    let attempt2_subtask = Subtask {
+        retry_feedback: crate::output_language::retry_feedback_for_gates(
+            completeness1.as_ref(),
+            language1.as_ref(),
+            outcome1
                 .error
                 .clone()
-                .map(crate::plan::RetryFeedback::SelfCheck),
-            ..subtask.clone()
-        }
-    } else {
-        subtask.clone()
+                .filter(|_| attempt1_self_check_rejection),
+        ),
+        ..subtask.clone()
     };
+    let language_retry_used = completeness1.is_none() && language1.is_some();
 
     // Attempt 2 — reduced_complexity iff Basic tier AND attempt 1 wasn't a
-    // self-check quality rejection.
-    let outcome2 = if retryable(&outcome1, completeness1.is_some()) {
+    // self-check quality rejection or a language retry.
+    let outcome2 = if retryable(&outcome1, completeness1.is_some() || language1.is_some()) {
         tracing::warn!(
             subtask = %subtask.id,
             error = outcome1.error.as_deref().unwrap_or(""),
@@ -312,6 +285,7 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
             reason: completeness1
                 .as_ref()
                 .map(|failure| failure.feedback.clone())
+                .or_else(|| language1.as_ref().map(|failure| failure.feedback.clone()))
                 .or_else(|| outcome1.error.clone())
                 .unwrap_or_else(|| "zero nodes generated".into()),
         });
@@ -323,7 +297,7 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
                 llm,
                 sink,
                 abort,
-                tier == ModelTier::Basic && !attempt1_self_check_rejection,
+                tier == ModelTier::Basic && !attempt1_self_check_rejection && language1.is_none(),
                 false,
                 agent_indicator_epoch,
                 reveal_now_millis(),
@@ -335,32 +309,35 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
     } else {
         None
     };
-    let completeness2 = if abort.is_set() {
-        None
+    let (completeness2, language2) = if abort.is_set() {
+        (None, None)
     } else {
-        outcome2.as_ref().and_then(|outcome| {
-            crate::subtask_completeness::reject_incomplete_attempt(sink, subtask, outcome)
-        })
+        outcome2
+            .as_ref()
+            .map(|outcome| {
+                crate::output_language::inspect_insert_gates(sink, request, subtask, outcome)
+            })
+            .unwrap_or((None, None))
     };
+    let language_retry2 = language2.is_some() && !language_retry_used;
+    if completeness2.is_some() || language_retry2 {
+        if let Some(outcome) = outcome2.as_ref() {
+            crate::subtask_completeness::rollback_inserted_roots(sink, &outcome.inserted_root_ids);
+        }
+    }
 
     let outcome_after2 = outcome2.as_ref().unwrap_or(&outcome1);
-    let attempt3_subtask = if let Some(failure) = completeness2.as_ref() {
+    let attempt3_feedback = crate::output_language::retry_feedback_for_gates(
+        completeness2.as_ref(),
+        language2.as_ref().filter(|_| language_retry2),
+        outcome_after2
+            .error
+            .clone()
+            .filter(|error| is_self_check_rejection(error)),
+    );
+    let attempt3_subtask = if attempt3_feedback.is_some() {
         Subtask {
-            retry_feedback: Some(crate::plan::RetryFeedback::Completeness(
-                failure.feedback.clone(),
-            )),
-            ..subtask.clone()
-        }
-    } else if outcome_after2
-        .error
-        .as_deref()
-        .is_some_and(is_self_check_rejection)
-    {
-        Subtask {
-            retry_feedback: outcome_after2
-                .error
-                .clone()
-                .map(crate::plan::RetryFeedback::SelfCheck),
+            retry_feedback: attempt3_feedback,
             ..subtask.clone()
         }
     } else if attempt2_subtask.retry_feedback.is_some() {
@@ -371,8 +348,9 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         subtask.clone()
     };
 
-    // Attempt 3 — minimal skills (last-ditch fallback).
-    let outcome3 = if retryable(outcome_after2, completeness2.is_some()) {
+    // Attempt 3 — minimal skills (last-ditch fallback). Language only
+    // consumes this rung when attempt 2 was the first language mismatch.
+    let outcome3 = if retryable(outcome_after2, completeness2.is_some() || language_retry2) {
         tracing::warn!(
             subtask = %subtask.id,
             error = outcome_after2.error.as_deref().unwrap_or(""),
@@ -384,6 +362,12 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
             reason: completeness2
                 .as_ref()
                 .map(|failure| failure.feedback.clone())
+                .or_else(|| {
+                    language2
+                        .as_ref()
+                        .filter(|_| language_retry2)
+                        .map(|failure| failure.feedback.clone())
+                })
                 .or_else(|| outcome_after2.error.clone())
                 .unwrap_or_else(|| "zero nodes generated".into()),
         });
@@ -407,29 +391,33 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
     } else {
         None
     };
-    let completeness3 = if abort.is_set() {
-        None
+    let (completeness3, language3) = if abort.is_set() {
+        (None, None)
     } else {
-        outcome3.as_ref().and_then(|outcome| {
-            crate::subtask_completeness::incomplete_attempt(sink, subtask, outcome)
-        })
+        outcome3
+            .as_ref()
+            .map(|outcome| {
+                crate::output_language::inspect_insert_gates(sink, request, subtask, outcome)
+            })
+            .unwrap_or((None, None))
     };
 
     // Whichever attempt actually won, carry along the (reduced_complexity,
     // minimal_skills) it used — the geometry_echo retry below reuses the
     // SAME tier, never escalating or de-escalating.
-    let (mut outcome, reduced_complexity, minimal_skills, final_completeness) =
+    let (mut outcome, reduced_complexity, minimal_skills, final_completeness, final_language) =
         if let Some(o3) = outcome3 {
-            (o3, true, true, completeness3)
+            (o3, true, true, completeness3, language3)
         } else if let Some(o2) = outcome2 {
             (
                 o2,
-                tier == ModelTier::Basic && !attempt1_self_check_rejection,
+                tier == ModelTier::Basic && !attempt1_self_check_rejection && language1.is_none(),
                 false,
                 completeness2,
+                language2,
             )
         } else {
-            (outcome1, false, false, completeness1)
+            (outcome1, false, false, completeness1, language1)
         };
 
     if let Some(failure) = final_completeness {
@@ -438,6 +426,21 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
             id: subtask.id.clone(),
             expected: failure.expected,
             delivered: failure.delivered,
+        });
+        return outcome;
+    }
+    if let Some(failure) = final_language {
+        crate::output_language::retain_mismatch_outcome(&mut outcome, &failure);
+        tracing::warn!(
+            subtask = %subtask.id,
+            checked = failure.checked,
+            mismatched = failure.mismatched,
+            "subtask output language mismatch kept after retry"
+        );
+        on_progress(Progress::SubtaskLanguageMismatch {
+            id: subtask.id.clone(),
+            checked: failure.checked,
+            mismatched: failure.mismatched,
         });
         return outcome;
     }

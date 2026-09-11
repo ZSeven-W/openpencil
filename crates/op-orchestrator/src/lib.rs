@@ -119,6 +119,7 @@ pub mod geometry_validation;
 pub(crate) mod hero_bleed;
 pub mod loop_finalize;
 pub mod nav_issues;
+pub mod output_language;
 pub mod prompt;
 pub mod radial_repair;
 pub mod repair_record;

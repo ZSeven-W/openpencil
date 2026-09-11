@@ -164,18 +164,6 @@ pub fn delivered_item_count(sink: &dyn DocSink, inserted_root_ids: &[String]) ->
     }
 }
 
-/// Return a completeness failure and remove its roots, or leave a complete
-/// attempt untouched. The caller decides whether the last incomplete rung is kept.
-pub(crate) fn reject_incomplete_attempt(
-    sink: &mut dyn DocSink,
-    subtask: &Subtask,
-    outcome: &SubtaskOutcome,
-) -> Option<CompletenessFailure> {
-    let failure = incomplete_attempt(sink, subtask, outcome)?;
-    rollback_inserted_roots(sink, &outcome.inserted_root_ids);
-    Some(failure)
-}
-
 pub(crate) fn incomplete_attempt(
     sink: &dyn DocSink,
     subtask: &Subtask,

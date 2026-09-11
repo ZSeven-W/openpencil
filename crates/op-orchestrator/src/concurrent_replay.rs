@@ -199,6 +199,8 @@ pub(super) fn apply_worker_event(
 
             let is_zero = outcome.node_count == 0;
             let is_incomplete = crate::subtask_completeness::is_incomplete_outcome(&outcome);
+            let is_language_mismatch =
+                crate::output_language::is_language_mismatch_outcome(&outcome);
             let subtask = &plan.subtasks[plan_idx];
             let terminal = if is_zero {
                 Progress::SubtaskFailed {
@@ -213,9 +215,9 @@ pub(super) fn apply_worker_event(
             };
             per_subtask[plan_idx] = Some((outcome, is_zero));
             // Done is observable only after the atomic real-sink commit/ack.
-            // An incomplete result already emitted its dedicated terminal
-            // progress event inside the worker; do not overwrite it with Done.
-            if !is_incomplete {
+            // Incomplete / language-mismatch results already emitted their
+            // dedicated terminal progress event inside the worker.
+            if !is_incomplete && !is_language_mismatch {
                 emit(group_idx, terminal, on_progress);
             }
             let _ = ack.send(committed);

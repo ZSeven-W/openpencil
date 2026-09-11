@@ -115,6 +115,8 @@ pub enum RetryFeedback {
     Geometry(String),
     /// A repeated-item promise was present, but the previous attempt was too short.
     Completeness(String),
+    /// Generated copy was in a different language than the brief.
+    Language(String),
 }
 
 /// 规划阶段的完整产物。字段对齐规划语料 `decomposition.md`。
