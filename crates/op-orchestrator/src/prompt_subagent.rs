@@ -275,7 +275,7 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
     //
     // The arm is the Generation phase default rather than a literal, because
     // the deck path IS the worst case that default was last sized for
-    // (`Phase::Generation` is now 17100 after the motion corpus addition;
+    // (`Phase::Generation` is now 17150 after the motion keyframe example;
     // earlier raises included 12000 → 13200 when `deck-contract` landed).
     // Restating it as a number is what let the old 11500 rot when the corpus
     // grew under it: the deck skills were then silently dropped/tail-cut,
@@ -288,7 +288,7 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
     // 2026-08-04 `slides` failure, in a card jacket.
     //
     // Measured 2026-08-09 on that file's fixtures, every resolved skill
-    // untruncated: the deck arm follows the current 17100 generation default.
+    // untruncated: the deck arm follows the current 17150 generation default.
     // Standard lands on Full's exact skill set here — at an unbounded budget
     // it also carries `design-principles`; the deck
     // corpus crowds that Knowledge skill out. That is NOT this arm's doing:
@@ -542,13 +542,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
 
     // Quality-rejection feedback echoed back into a SAME-tier retry instead
     // of silently narrowing the skill set — the content was otherwise
-    // real, so the model just needs to fix the flagged issue. Two sources,
-    // two wordings (`plan::RetryFeedback`):
-    // - `SelfCheck` — `orchestration_self_check` rejected it BEFORE
-    //   insertion (retry ladder attempt 2; `retry::is_self_check_rejection`).
-    // - `Geometry` — the REAL resolved layout of an already-INSERTED subtree
-    //   proved a structural violation (the geometry_echo step).
-    // - `Completeness` — a promised repeated-item family was too short.
+    // real, so the model just needs to fix the flagged issue.
     if let Some(feedback) = subtask.retry_feedback.as_ref() {
         let block = match feedback {
             crate::plan::RetryFeedback::SelfCheck(reason) => format!(
@@ -571,6 +565,10 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
                 "\n\nCOMPLETENESS FIX REQUIRED: your previous attempt delivered too few repeated items:\n{reason}\n\
 - Emit every promised item as a sibling in this exact section.\n\
 - Keep the section's visual treatment and detail; only fix the missing repeated items."
+            ),
+            crate::plan::RetryFeedback::Language(reason) => format!(
+                "\n\nLANGUAGE FIX REQUIRED: {reason}\n\
+- Keep layout, structure, and brand/acronym tokens unchanged."
             ),
         };
         user_prompt.push_str(&block);
@@ -608,7 +606,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
     // Assemble the per-subtask skill-load report from the FINAL skill set
     // (post tier/dedup filtering). `budget_max` reflects the tier budget
     // override. Full-tier falls through to `Phase::Generation::default_budget()`
-    // (17100 today — see that constant's doc comment for the corpus raises).
+    // (17150 today — see that constant's doc comment for the corpus raises).
     // This used to be a bare literal
     // that only affected this diagnostic number — `resolve_skills` (called
     // above via `resolve_generation_skills`) independently fell back to the

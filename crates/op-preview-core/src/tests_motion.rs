@@ -84,6 +84,30 @@ fn mount_animation_samples_keyframe_stops_across_pumped_frames() {
 }
 
 #[test]
+fn mount_animation_plays_flat_keyframe_properties() {
+    let mut session = session_for(serde_json::json!({
+        "version":"1.1","formatVersion":"1.1",
+        "children":[{"type":"rectangle","id":"hero","width":100,"height":100,
+            "opacity":1,"fill":[{"type":"solid","color":"#ffffff"}],
+            "animations":[{"trigger":"mount","durationMs":100,"easing":"linear","keyframes":[
+                {"offset":0,"opacity":0,"translateY":16},
+                {"offset":1,"opacity":1,"translateY":0}
+            ]}]}]
+    }));
+    assert_eq!(session.active_animation_track_count(), 2);
+    session.pump(0);
+    assert!((opacity(&session, "hero") - 0.0).abs() < 0.001);
+    session.pump(50);
+    let mid = opacity(&session, "hero");
+    assert!(
+        mid > 0.0 && mid < 1.0,
+        "flat keyframe mount opacity mid-tween: {mid}"
+    );
+    session.pump(100);
+    assert!((opacity(&session, "hero") - 1.0).abs() < 0.001);
+}
+
+#[test]
 fn mount_animation_started_at_a_late_host_clock_still_plays() {
     let mut session = session_for_at(
         serde_json::json!({
