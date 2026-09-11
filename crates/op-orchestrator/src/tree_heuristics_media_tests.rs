@@ -6,6 +6,11 @@
 //! the original file.
 
 use super::*;
+use crate::cleanup::run_cleanup_passes_with_summary;
+use crate::plan::{OrchestratorPlan, RootFrameSpec};
+use crate::repair_summary::RepairSummary;
+use crate::test_support::VecDocSink;
+use op_editor_core::{EditorState, PenNodeExt};
 use serde_json::json;
 
 #[test]
@@ -376,6 +381,97 @@ fn mixed_text_band_not_filled() {
     ]});
     fix_invisible_text_band(&mut band, Theme::Light, "$--primary");
     assert!(band.get("fill").is_none(), "mixed text → not a hidden band");
+}
+
+fn next_panel_fixture() -> serde_json::Value {
+    let document: serde_json::Value =
+        serde_json::from_str(include_str!("test_fixtures/next_panel_before_cleanup.op"))
+            .expect("next panel fixture JSON");
+    document["children"][0]["children"][2].clone()
+}
+
+#[test]
+fn next_panel_fixture_cleanup_keeps_white_surface_and_border() {
+    let document: jian_ops_schema::PenDocument =
+        serde_json::from_str(include_str!("test_fixtures/next_panel_before_cleanup.op"))
+            .expect("next panel fixture document");
+    let mut sink = VecDocSink {
+        state: EditorState::from_document(document),
+        applied: Vec::new(),
+        batch_depth: 0,
+    };
+    let plan = OrchestratorPlan {
+        root_frame: RootFrameSpec {
+            id: "root".into(),
+            name: "Result screen".into(),
+            width: 1440.0,
+            height: 900.0,
+            layout: Some("vertical".into()),
+            gap: None,
+            padding: None,
+            fill: None,
+        },
+        subtasks: Vec::new(),
+        style_guide_name: None,
+    };
+    let mut summary = RepairSummary::default();
+    run_cleanup_passes_with_summary(&mut sink, &plan, &["root"], &mut summary);
+    let panel = sink
+        .state
+        .active_children()
+        .iter()
+        .find_map(|root| find_value(root, "panel"))
+        .expect("fixture panel");
+
+    assert_eq!(
+        panel["fill"],
+        json!([{"type": "solid", "color": "#FFFFFF"}])
+    );
+    assert_eq!(panel["stroke"]["thickness"], 1.0);
+    assert_eq!(panel["stroke"]["fill"][0]["color"], "#EDE8E0");
+    assert_eq!(panel["fill"][0]["color"], "#FFFFFF");
+    assert!(!summary
+        .records()
+        .iter()
+        .any(|record| { record.node_id == "panel" && record.detail.starts_with("fill ") }));
+}
+
+fn find_value(node: &PenNode, id: &str) -> Option<serde_json::Value> {
+    if node.id_str() == id {
+        return serde_json::to_value(node).ok();
+    }
+    node.children()?
+        .iter()
+        .find_map(|child| find_value(child, id))
+}
+
+#[test]
+fn next_panel_body_and_buttons_block_nested_accent_wall() {
+    let mut panel = next_panel_fixture();
+    panel["children"][0]["fill"] = json!([{"type": "solid", "color": "#FFFFFF"}]);
+
+    let mut nested_content = json!({
+        "type": "frame",
+        "id": "panel-content",
+        "fill": [{"type": "solid", "color": "#FFFFFF"}],
+        "children": []
+    });
+    let children = panel["children"].as_array_mut().expect("panel children");
+    let description = children.remove(1);
+    nested_content["children"] = json!([description]);
+    nested_content["children"]
+        .as_array_mut()
+        .expect("nested content children")
+        .extend(children.drain(1..));
+    panel["children"] = json!([panel["children"][0].clone(), nested_content]);
+
+    fix_invisible_text_band(&mut panel, Theme::Light, "$--primary");
+
+    assert_eq!(
+        panel["fill"],
+        json!([{"type": "solid", "color": "#FFFFFF"}]),
+        "dark body/button copy under nested surfaces must not create an accent wall"
+    );
 }
 
 #[test]

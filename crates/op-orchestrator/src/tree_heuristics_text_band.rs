@@ -40,6 +40,91 @@ pub(super) fn is_light_text(color: &str) -> bool {
     LIGHT_TEXT_HEXES.contains(&normalize_hex(color).as_str())
 }
 
+/// A text colour that would become unreadable if this container were painted
+/// with the accent. Accent tokens themselves stay unknown here: their
+/// resolved value belongs to the document variable table, and a button may
+/// intentionally use an accent token for its own foreground.
+fn is_dark_text(color: &str) -> bool {
+    if is_light_text(color) || is_accent_ref(color) {
+        return false;
+    }
+    if matches!(
+        color,
+        "$--foreground"
+            | "$--card-foreground"
+            | "$--muted-foreground"
+            | "$--secondary-foreground"
+            | "$--popover-foreground"
+            | "$--sidebar-foreground"
+            | "$--color-error-foreground"
+            | "$--color-info-foreground"
+            | "$--color-success-foreground"
+            | "$--color-warning-foreground"
+    ) {
+        return true;
+    }
+    let normalized = normalize_hex(color);
+    if SAFE_DARK_HEXES.contains(&normalized.as_str()) {
+        return true;
+    }
+    let Some(hex) = normalized.strip_prefix('#') else {
+        return false;
+    };
+    if hex.len() < 6 || !hex.is_ascii() {
+        return false;
+    }
+    let Ok(r) = u8::from_str_radix(&hex[0..2], 16) else {
+        return false;
+    };
+    let Ok(g) = u8::from_str_radix(&hex[2..4], 16) else {
+        return false;
+    };
+    let Ok(b) = u8::from_str_radix(&hex[4..6], 16) else {
+        return false;
+    };
+    (0.299 * f64::from(r) + 0.587 * f64::from(g) + 0.114 * f64::from(b)) / 255.0 < 0.6
+}
+
+/// True when a container combines prose with buttons. This is the shape of a
+/// content panel, not a promo band: a dark descendant text colour is evidence
+/// that painting the whole container with the accent would fail contrast.
+fn has_body_text_and_button(node: &Value) -> bool {
+    fn walk(node: &Value, inside_button: bool, body: &mut bool, button: &mut bool) {
+        let is_button = matches!(role_of(node), Some("button") | Some("icon-button"));
+        *button |= is_button;
+        if node.get("type").and_then(Value::as_str) == Some("text") && !inside_button {
+            let role = role_of(node);
+            if !matches!(role, Some("heading") | Some("label") | Some("caption")) {
+                *body = true;
+            }
+        }
+        for child in children_of(node) {
+            walk(child, inside_button || is_button, body, button);
+        }
+    }
+
+    let (mut body, mut button) = (false, false);
+    walk(node, false, &mut body, &mut button);
+    body && button
+}
+
+/// Inspect all text descendants, including text inside a child surface. The
+/// ordinary surface tally deliberately skips those surfaces because their
+/// text does not describe the parent's background; this separate guard is
+/// only for the content-panel-plus-buttons contrast veto above.
+fn has_dark_text_descendant(node: &Value) -> bool {
+    for child in children_of(node) {
+        if child.get("type").and_then(Value::as_str) == Some("text") {
+            if first_solid_color(child).is_some_and(|color| is_dark_text(&color)) {
+                return true;
+            }
+        } else if has_dark_text_descendant(child) {
+            return true;
+        }
+    }
+    false
+}
+
 /// Tally text colors that sit DIRECTLY on this container's (unfilled) surface.
 /// Do NOT descend into a child that carries its own renderable fill — a button
 /// / avatar / chip has its own surface, so its text colour says nothing about
@@ -120,6 +205,14 @@ pub(super) fn fix_invisible_text_band(node: &mut Value, theme: super::Theme, des
     // luminance, so "light text on no fill" is a false positive here. Stamping the
     // accent would turn OS chrome into a coloured band.
     if crate::cleanup::is_status_bar_from_json(node) {
+        return;
+    }
+    if has_body_text_and_button(node) && has_dark_text_descendant(node) {
+        // A content panel can contain white/light text in one nested surface
+        // and dark body/button text in another. The surface tally skips both
+        // child surfaces by design, but the dark text still vetoes painting
+        // the parent with the accent. This is a contrast proof, not a node-name
+        // heuristic; unrecognized unresolved text refs remain unclassified.
         return;
     }
     // Skip only when the node ALREADY paints a non-light surface (a colored or
