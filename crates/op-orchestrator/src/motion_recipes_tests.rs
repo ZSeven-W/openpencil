@@ -38,6 +38,28 @@ fn category_tile(id: &str) -> Value {
     })
 }
 
+fn card_shell(id: &str, preview: Value) -> Value {
+    let rows = (0..5)
+        .map(|index| {
+            json!({
+                "type": "frame",
+                "id": format!("{id}-micro-{index}"),
+                "width": 320,
+                "height": 12,
+                "fill": [{"type": "solid", "color": "#d9d9d9"}]
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({
+        "type": "frame", "id": id, "name": format!("Card {id}"),
+        "width": 360, "height": 300,
+        "stroke": {"thickness": 1, "fill": [{"type": "solid", "color": "#ffffff"}]},
+        "events": {"onTap": []},
+        "children": [preview, {"type": "frame", "id": format!("{id}-micro-stack"),
+            "width": 320, "height": 80, "children": rows}]
+    })
+}
+
 fn mobile_root(children: Vec<Value>) -> Value {
     json!({
         "type": "frame", "id": "root", "name": "App Home", "width": 390,
@@ -186,5 +208,137 @@ fn landing_page_gets_feature_family_reveal() {
                 .unwrap_or(0),
             delay
         );
+    }
+}
+
+#[test]
+fn card_shells_with_different_previews_form_one_family() {
+    let shells = vec![
+        card_shell(
+            "shell-0",
+            json!({"type": "image", "id": "shell-0-preview", "src": "preview.png", "width": 320, "height": 180}),
+        ),
+        card_shell(
+            "shell-1",
+            json!({"type": "frame", "id": "shell-1-preview", "width": 320, "height": 180,
+                "children": [text("shell-1-preview-label", 16.0)]}),
+        ),
+        card_shell(
+            "shell-2",
+            json!({"type": "frame", "id": "shell-2-preview", "width": 320, "height": 180,
+                "children": [{"type": "icon_font", "id": "shell-2-preview-icon",
+                    "iconFontName": "sparkles", "width": 24, "height": 24}]}),
+        ),
+    ];
+    let mut sink = sink_with(mobile_root(vec![json!({
+        "type": "frame", "id": "shell-row", "width": 360, "height": 920,
+        "children": shells
+    })]));
+
+    apply(&mut sink, "root");
+    for (index, delay) in [0, 60, 120].into_iter().enumerate() {
+        let node = node_json(&sink, &format!("shell-{index}"));
+        assert_eq!(node["animations"][0]["trigger"], "inView");
+        assert_eq!(
+            node["animations"][0]["delayMs"].as_u64().unwrap_or(0),
+            delay
+        );
+        assert_eq!(node["transition"]["durationMs"], 150);
+        assert_eq!(
+            node["transition"]["properties"],
+            json!(["fill", "opacity", "scaleX", "scaleY"])
+        );
+    }
+    for index in 0..3 {
+        for row in 0..5 {
+            assert!(
+                node_json(&sink, &format!("shell-{index}-micro-{row}"))["animations"].is_null()
+            );
+            assert!(
+                node_json(&sink, &format!("shell-{index}-micro-{row}"))["transition"].is_null()
+            );
+        }
+    }
+}
+
+#[test]
+fn nested_micro_rows_are_not_animated_once_the_shell_is() {
+    let mut sink = sink_with(mobile_root(vec![json!({
+        "type": "frame", "id": "shell-row", "width": 360, "height": 920,
+        "children": (0..3)
+            .map(|index| card_shell(&format!("shell-{index}"),
+                json!({"type": "frame", "id": format!("shell-{index}-preview"),
+                    "width": 320, "height": 180,
+                    "children": [{"type": "text", "id": format!("shell-{index}-preview-label"),
+                        "content": format!("Preview {index}")}]})
+            ))
+            .collect::<Vec<_>>()
+    })]));
+
+    apply(&mut sink, "root");
+    for index in 0..3 {
+        assert_eq!(
+            node_json(&sink, &format!("shell-{index}"))["animations"][0]["trigger"],
+            "inView"
+        );
+    }
+    for index in 0..3 {
+        for row in 0..5 {
+            let node = node_json(&sink, &format!("shell-{index}-micro-{row}"));
+            assert!(node["animations"].is_null());
+            assert!(node["transition"].is_null());
+        }
+    }
+}
+
+#[test]
+fn outer_family_beats_inner_family_under_budget() {
+    let shells: Vec<Value> = (0..30)
+        .map(|index| {
+            let rows = (0..5)
+                .map(|row| json!({
+                    "type": "frame", "id": format!("shell-{index}-inner-{row}"),
+                    "width": 320, "height": 12,
+                    "fill": [{"type": "solid", "color": "#d9d9d9"}],
+                    "children": [{"type": "text", "id": format!("shell-{index}-inner-{row}-label"),
+                        "content": "micro", "width": 40, "height": 4}]
+                }))
+                .collect::<Vec<_>>();
+            let preview_children = (0..(index % 4 + 1))
+                .map(|child| text(&format!("shell-{index}-preview-{child}"), 16.0))
+                .collect::<Vec<_>>();
+            json!({
+                "type": "frame", "id": format!("shell-{index}"),
+                "name": format!("Card {index}"), "width": 360, "height": 300,
+                "stroke": {"thickness": 1, "fill": [{"type": "solid", "color": "#ffffff"}]},
+                "children": [{"type": "frame", "id": format!("shell-{index}-preview"),
+                    "width": 320, "height": 180, "children": preview_children},
+                    {"type": "frame", "id": format!("shell-{index}-inner-stack"),
+                    "width": 320, "height": 80, "children": rows}]
+            })
+        })
+        .collect();
+    let mut sink = sink_with(mobile_root(vec![json!({
+        "type": "frame", "id": "shell-row", "width": 360, "height": 920,
+        "children": shells
+    })]));
+
+    apply(&mut sink, "root");
+    assert_eq!(motion_count(&sink), 24);
+    for index in 0..24 {
+        assert!(
+            node_json(&sink, &format!("shell-{index}"))["animations"].is_object()
+                || node_json(&sink, &format!("shell-{index}"))["animations"].is_array()
+        );
+    }
+    for index in 24..30 {
+        assert!(node_json(&sink, &format!("shell-{index}"))["animations"].is_null());
+    }
+    for index in 0..30 {
+        for row in 0..5 {
+            assert!(
+                node_json(&sink, &format!("shell-{index}-inner-{row}"))["animations"].is_null()
+            );
+        }
     }
 }
