@@ -34,6 +34,7 @@ pub mod tree;
 // Step 2 compositions (built on top of the primitives, driven by
 // `op_editor_core::EditorState`).
 pub(crate) mod font_picker_cache;
+pub mod home_surface;
 pub mod layer_context_menu;
 pub mod layer_panel;
 pub(crate) mod layer_panel_cache;
@@ -49,6 +50,7 @@ mod layer_panel_touch_tests;
 mod layer_panel_walkers;
 pub mod path_anchor_context_menu;
 pub mod prompt_center_panel;
+pub use home_surface::{HomeLayout, HomeSurface};
 pub(crate) mod prompt_center_previews;
 pub mod scene_template_panel;
 pub use scene_template_panel::{
