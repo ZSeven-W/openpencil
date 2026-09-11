@@ -48,6 +48,7 @@ impl WidgetHost {
                     return;
                 }
                 self.editor_state.editor_ui.pending_file_action = Some(match choice {
+                    FileMenuChoice::Home => FileAction::Home,
                     FileMenuChoice::NewFile => FileAction::New,
                     FileMenuChoice::OpenFile => FileAction::Open,
                     FileMenuChoice::Save => FileAction::Save,

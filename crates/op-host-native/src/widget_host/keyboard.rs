@@ -14,6 +14,9 @@ impl WidgetHostNative {
     /// Typed-char router: settings → rename → text-edit → variable
     /// row → property → chat.
     pub fn apply_text(&mut self, c: char) -> bool {
+        if self.editor_state.editor_ui.home.visible {
+            return self.home_text(c);
+        }
         // The mobile save-name dialog is fully modal — it owns every
         // keystroke while open, above every other input surface.
         if let Some(changed) =

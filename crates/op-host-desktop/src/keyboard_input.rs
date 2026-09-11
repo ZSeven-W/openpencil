@@ -38,6 +38,7 @@ impl DesktopApp {
             panel.search_open || panel.generate_open
         };
         let prompt_center_open = self.host.editor_state().editor_ui.prompt_center.open;
+        let home_visible = self.host.home_visible();
         match logical_key {
             // Named-key shortcuts fire only when no Cmd/Ctrl is held.
             Key::Named(NamedKey::Backspace) if !self.zoom_modifier => {
@@ -62,6 +63,15 @@ impl DesktopApp {
                 if self.launch_chat_if_pending() {
                     self.request_redraw(true);
                 }
+            }
+            Key::Named(NamedKey::ArrowLeft) if home_visible && !self.zoom_modifier => {
+                consumed = self.host.apply_home_caret(false, self.shift_modifier);
+            }
+            Key::Named(NamedKey::ArrowRight) if home_visible && !self.zoom_modifier => {
+                consumed = self.host.apply_home_caret(true, self.shift_modifier);
+            }
+            Key::Named(NamedKey::ArrowUp | NamedKey::ArrowDown) if home_visible => {
+                consumed = true;
             }
             Key::Named(NamedKey::Space) if !self.zoom_modifier && !self.host.input_active_pub() => {
                 // Transient space-pan (TS parity) — released in the
@@ -213,6 +223,18 @@ impl DesktopApp {
                     consumed = true;
                 } else {
                     match lower.as_str() {
+                        "n" if home_visible => {
+                            let outcome = persistence::run_action(
+                                op_editor_core::editor_ui_state::FileAction::New,
+                                &mut self.host,
+                                &mut self.current_path,
+                                self.window.as_ref(),
+                            );
+                            consumed = outcome == op_host_services::doc_io::ActionOutcome::Saved;
+                            if consumed {
+                                self.mark_document_saved();
+                            }
+                        }
                         // Cmd+, toggles the settings modal.
                         "," => consumed = self.host.apply_toggle_agent_settings(),
                         "s" => {

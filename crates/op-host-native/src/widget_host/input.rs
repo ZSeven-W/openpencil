@@ -23,6 +23,9 @@ impl WidgetHostNative {
         // Preview (Play) mode disables every editor edit shortcut — the
         // canvas belongs to the live runtime, so duplicate / nudge /
         // boolean-op / etc. must all bail.
+        if self.editor_state.editor_ui.home.visible {
+            return true;
+        }
         if self.preview.is_some() {
             return true;
         }
@@ -581,6 +584,11 @@ impl WidgetHostNative {
         }
         if let Some(changed) = self.update_touch_panel_gesture(x, y) {
             return changed;
+        }
+        if let Some(consumed) =
+            self.cursor_move_home(x, y, self.last_viewport_w, self.last_viewport_h)
+        {
+            return consumed;
         }
         // Session-switch owner rotation before the cursor_probe resolve below
         // stores the canonical build (mirrors the paint entry).

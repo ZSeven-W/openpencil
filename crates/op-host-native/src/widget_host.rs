@@ -118,6 +118,7 @@ mod git_panel_placement_tests;
 mod git_press;
 mod helpers;
 mod history_guard;
+mod home;
 mod host_lifecycle;
 mod host_requests;
 mod html_import_diagnostics_dispatch;

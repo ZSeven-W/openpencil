@@ -135,6 +135,10 @@ impl WidgetHostNative {
         false
     }
 
+    pub fn apply_home_caret(&mut self, forward: bool, extend: bool) -> bool {
+        self.home_caret(forward, extend)
+    }
+
     /// Up / Down arrow on the focused chat input — one VISUAL line, so a
     /// wrapped prompt navigates the way it reads. Consumes the key at the
     /// first / last row too (collapsing to text start / end), which is what

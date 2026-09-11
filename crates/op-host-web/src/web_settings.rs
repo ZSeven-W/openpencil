@@ -65,6 +65,7 @@ pub(super) fn reset_account_scoped_settings(state: &mut EditorState) {
     eui.pending_locale = None;
     eui.locale_persistence_override = None;
     eui.recent_files.clear();
+    eui.entry_surface = op_editor_core::EditorUiState::default().entry_surface;
     eui.agent_settings.mcp_server.port = defaults.mcp_server.port;
     eui.agent_settings.mcp_cli_enabled = defaults.mcp_cli_enabled;
     eui.agent_settings.images_advanced_open = defaults.images_advanced_open;
@@ -202,6 +203,7 @@ pub(crate) struct Fingerprint {
     auto_update_enabled: bool,
     experimental_features_enabled: bool,
     recent_files: Vec<RecentFile>,
+    entry_surface: op_editor_core::EntrySurface,
 }
 
 impl CredentialFingerprint {
@@ -253,6 +255,8 @@ struct SettingsPayload {
     active_image_gen_profile_id: Option<String>,
     #[serde(default)]
     recent_files: Option<Vec<RecentFilePayload>>,
+    #[serde(default)]
+    entry_surface: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -275,6 +279,7 @@ pub(crate) fn fingerprint(state: &EditorState) -> Fingerprint {
         auto_update_enabled: eui.agent_settings.auto_update_enabled,
         experimental_features_enabled: eui.agent_settings.experimental_features_enabled,
         recent_files: eui.recent_files.clone(),
+        entry_surface: eui.entry_surface,
     }
 }
 
@@ -371,6 +376,7 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
                 })
                 .collect(),
         ),
+        entry_surface: Some(eui.entry_surface.as_str().into()),
     }
 }
 
@@ -402,6 +408,9 @@ fn apply_payload(state: &mut EditorState, payload: SettingsPayload) {
     // which reaches it through `payload_theme_of` rather than through here.
     if let Some(locale) = payload.locale.as_deref().and_then(str_to_locale) {
         eui.locale = locale;
+    }
+    if let Some(surface) = payload.entry_surface.as_deref() {
+        eui.entry_surface = op_editor_core::EntrySurface::from_str(surface);
     }
     if let Some(port) = payload.mcp_port {
         eui.agent_settings.mcp_server.port = port.max(1024);

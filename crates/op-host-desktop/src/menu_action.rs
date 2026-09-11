@@ -77,6 +77,15 @@ impl DesktopApp {
         let transaction = !matches!(action, A::Undo | A::Redo)
             && self.collab_runtime.begin_local_edit(&mut self.host);
         let consumed = match action {
+            A::Home => {
+                let outcome = persistence::run_action(
+                    op_editor_core::editor_ui_state::FileAction::Home,
+                    &mut self.host,
+                    &mut self.current_path,
+                    self.window.as_ref(),
+                );
+                outcome == op_host_services::doc_io::ActionOutcome::Noop
+            }
             A::New => {
                 if persistence::run_action(
                     op_editor_core::editor_ui_state::FileAction::New,

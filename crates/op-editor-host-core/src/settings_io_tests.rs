@@ -447,6 +447,24 @@ fn preferred_agent_team_size_round_trips_and_seeds_chat_on_load() {
 }
 
 #[test]
+fn entry_surface_preference_round_trips_and_changes_fingerprint() {
+    let mut src = EditorState::new();
+    src.editor_ui.entry_surface = op_editor_core::EntrySurface::Canvas;
+    let before = fingerprint(&src);
+    let json = serde_json::to_string(&to_payload(&src)).unwrap();
+    assert!(json.contains("\"entry_surface\":\"canvas\""));
+
+    let payload: SettingsPayload = serde_json::from_str(&json).unwrap();
+    let mut dst = EditorState::new();
+    apply_payload(&mut dst, payload);
+    assert_eq!(
+        dst.editor_ui.entry_surface,
+        op_editor_core::EntrySurface::Canvas
+    );
+    assert_ne!(before, fingerprint(&EditorState::new()));
+}
+
+#[test]
 fn legacy_settings_without_preferred_agent_team_size_default_to_one() {
     // A settings.json written before this field existed must still load —
     // `SettingsPayload::preferred_agent_team_size` deserializes to `None`

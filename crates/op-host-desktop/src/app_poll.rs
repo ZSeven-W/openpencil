@@ -147,7 +147,8 @@ impl DesktopApp {
     pub(crate) fn drain_pending_cursor_move(&mut self) -> bool {
         if let Some((cx, cy)) = self.pending_cursor_move.take() {
             let model_picker_open = self.host.editor_state().editor_ui.chat_model_picker.open;
-            let over_layer_panel = !model_picker_open
+            let over_layer_panel = !self.host.home_visible()
+                && !model_picker_open
                 && self.host.cursor_over_layer_panel(
                     cx,
                     cy,

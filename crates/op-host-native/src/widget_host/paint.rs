@@ -9,8 +9,8 @@ use op_editor_ui::widgets::editor_state_ext::theme_for;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
 use op_editor_ui::widgets::{
     variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar, CanvasViewport, GitPanel,
-    LayoutCx, LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar, TopBar,
-    Widget, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    HomeSurface, LayoutCx, LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar,
+    TopBar, Widget, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -37,6 +37,17 @@ impl WidgetHostNative {
             },
             self.theme.background,
         );
+
+        if let Some(home) = HomeSurface::for_editor_at(&self.editor_state, self.now_ms) {
+            let mut cx = PaintCx {
+                backend: &mut *frame,
+            };
+            home.paint(
+                &mut cx,
+                Rect::xywh(0.0, 0.0, viewport_width, viewport_height),
+            );
+            return;
+        }
 
         let dpi = frame.dpi_scale();
 

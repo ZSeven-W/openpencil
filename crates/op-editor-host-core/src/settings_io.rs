@@ -71,6 +71,7 @@ pub struct Fingerprint {
     image_gen_profiles: Vec<ImageGenProfile>,
     active_image_gen_profile_id: Option<String>,
     preferred_agent_team_size: u32,
+    entry_surface: op_editor_core::EntrySurface,
 }
 
 pub fn fingerprint(state: &EditorState) -> Fingerprint {
@@ -92,6 +93,7 @@ pub fn fingerprint(state: &EditorState) -> Fingerprint {
         image_gen_profiles: eui.agent_settings.image_gen_profiles.clone(),
         active_image_gen_profile_id: eui.agent_settings.active_image_gen_profile_id.clone(),
         preferred_agent_team_size: eui.preferred_agent_team_size,
+        entry_surface: eui.entry_surface,
     }
 }
 
@@ -148,6 +150,9 @@ struct SettingsPayload {
     /// so an old file is fully backward-compatible.
     #[serde(default)]
     preferred_agent_team_size: Option<u32>,
+    /// First-launch surface; older settings default to Home.
+    #[serde(default)]
+    entry_surface: Option<String>,
 }
 
 /// Resolve the platform-specific settings path. `None` when no
@@ -220,6 +225,7 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
                 .collect(),
         ),
         preferred_agent_team_size: Some(eui.preferred_agent_team_size),
+        entry_surface: Some(eui.entry_surface.as_str().into()),
     }
 }
 
@@ -328,6 +334,9 @@ fn apply_payload_with_options(
     }
     if let Some(size) = payload.preferred_agent_team_size {
         eui.preferred_agent_team_size = size.clamp(1, 6);
+    }
+    if let Some(surface) = payload.entry_surface.as_deref() {
+        eui.entry_surface = op_editor_core::EntrySurface::from_str(surface);
     }
     // Seed tab 0's ⚡Nx from the persisted preference — `load` runs before
     // any tab has been created beyond the default single tab, so this is

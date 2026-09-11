@@ -208,6 +208,11 @@ impl WidgetHostNative {
     ) -> bool {
         self.last_viewport_w = viewport_width;
         self.last_viewport_h = viewport_height;
+        // Home is a full-surface first-launch entry and owns every pointer
+        // event before document chrome or canvas tiers can see it.
+        if let Some(consumed) = self.press_home(x, y, viewport_width, viewport_height) {
+            return consumed;
+        }
         // Tier 0 — the mobile save-name dialog is fully modal while open
         // (only the FFI hosts ever open it; desktop state stays closed).
         if let Some(consumed) =

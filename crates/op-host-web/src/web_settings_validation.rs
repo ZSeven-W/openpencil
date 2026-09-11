@@ -205,6 +205,7 @@ fn settings_payload_with_legacy_model_card_migration(
             "image_gen_profiles",
             "active_image_gen_profile_id",
             "recent_files",
+            "entry_surface",
         ],
         "browser settings",
     )?;

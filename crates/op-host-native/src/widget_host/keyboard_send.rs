@@ -8,6 +8,18 @@ use super::WidgetHostNative;
 
 impl WidgetHostNative {
     pub fn apply_send(&mut self) -> bool {
+        if self.editor_state.editor_ui.home.visible {
+            let Some(prompt) = self.editor_state.editor_ui.home.generation_prompt() else {
+                return true;
+            };
+            self.editor_state.editor_ui.home.visible = false;
+            self.editor_state.chat.focus_input_at_end(self.now_ms);
+            self.editor_state.chat.set_input_text(prompt);
+            let sent = self.editor_state.chat.begin_send();
+            self.editor_state.chat.focused = false;
+            self.mark_dirty();
+            return sent;
+        }
         // Enter in the save-name dialog confirms (mobile keyboards send it
         // as the "done" action); a blank name swallows the key instead.
         if self.editor_state.editor_ui.save_name_dialog.open {

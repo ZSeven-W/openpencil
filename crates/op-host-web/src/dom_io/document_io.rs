@@ -41,6 +41,14 @@ pub(crate) fn drain_pending_file_action<C: RepaintContext + 'static>(inner: &Inn
         return;
     };
     match action {
+        FileAction::Home => {
+            let mut b = inner.borrow_mut();
+            let ui = &mut b.host_mut().editor_state_mut().editor_ui;
+            ui.entry_surface = op_editor_core::EntrySurface::Home;
+            ui.home.visible = true;
+            b.host_mut().mark_editor_state_dirty();
+            let _ = b.repaint();
+        }
         FileAction::New => new_document(inner),
         FileAction::Open => open_document(inner),
         FileAction::Save => save_document(inner, true),

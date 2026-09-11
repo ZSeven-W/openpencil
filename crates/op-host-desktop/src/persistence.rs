@@ -206,6 +206,7 @@ fn load_into_host(
     let loaded = loaded?;
     let mut state = loaded.state;
     preserve_app_preferences(host.editor_state(), &mut state);
+    state.editor_ui.home.visible = false;
     let bound_path = crate::legacy_op_upgrade::prompt_and_save(
         &mut state,
         path,
@@ -385,6 +386,7 @@ pub fn run_action(
             }
             let mut state = EditorState::starter();
             preserve_app_preferences(host.editor_state(), &mut state);
+            state.editor_ui.home.visible = false;
             if !host.replace_editor_state(state) {
                 return ActionOutcome::Noop;
             }
@@ -399,6 +401,12 @@ pub fn run_action(
             *current_path = None;
             refresh_title(current_path, window);
             ActionOutcome::Saved
+        }
+        FileAction::Home => {
+            host.editor_state_mut().editor_ui.entry_surface = op_editor_core::EntrySurface::Home;
+            host.editor_state_mut().editor_ui.home.visible = true;
+            host.mark_editor_state_dirty();
+            ActionOutcome::Noop
         }
         FileAction::Open => ActionOutcome::saved_or_noop(handle_open(host, current_path, window)),
         FileAction::Save => handle_save(host, current_path, window).into_action_outcome(),

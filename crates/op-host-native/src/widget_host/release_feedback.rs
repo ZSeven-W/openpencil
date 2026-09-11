@@ -6,6 +6,7 @@ use op_editor_ui::widgets::{FontWeightChoice, PropertyPanelAction};
 
 impl WidgetHostNative {
     pub(in crate::widget_host) fn release_pressed_feedback(&mut self) -> bool {
+        let home_pressed = self.editor_state.editor_ui.home.pressed.take().is_some();
         let pressed_button = self.editor_state.editor_ui.pressed_button.take();
         let button_released = pressed_button.is_some();
         let tracked_picker_pressed = self
@@ -27,7 +28,8 @@ impl WidgetHostNative {
         self.commit_deferred_pressed_button(pressed_button);
         self.commit_deferred_tracked_picker(tracked_picker_pressed);
 
-        let released = button_released || tracked_picker_released || icon_picker_released;
+        let released =
+            home_pressed || button_released || tracked_picker_released || icon_picker_released;
         if released {
             self.mark_dirty();
         }
