@@ -213,6 +213,11 @@ impl WidgetHostNative {
         if let Some(consumed) = self.press_home(x, y, viewport_width, viewport_height) {
             return consumed;
         }
+        // The post-generation result view is the same kind of takeover;
+        // it owns every pointer event while visible.
+        if let Some(consumed) = self.press_result_view(x, y, viewport_width, viewport_height) {
+            return consumed;
+        }
         // Tier 0 — the mobile save-name dialog is fully modal while open
         // (only the FFI hosts ever open it; desktop state stays closed).
         if let Some(consumed) =

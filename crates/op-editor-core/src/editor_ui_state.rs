@@ -20,6 +20,7 @@ pub mod groups;
 pub mod home;
 mod methods;
 pub mod pickers;
+pub mod result_view;
 pub mod slides_panel_state;
 #[cfg(test)]
 mod tests;
@@ -69,6 +70,9 @@ pub struct EditorUiState {
     /// Drafting-table Home chrome state. Transient except for
     /// `entry_surface`, which is persisted in app settings.
     pub home: HomeState,
+    /// Post-generation 成品视图 chrome state. Fully transient — never
+    /// persisted across documents (see `preserve_app_preferences`).
+    pub result_view: ResultViewState,
     /// UI locale — TopBar Globe cycles.
     pub locale: Locale,
     /// A runtime catalog selected in the web picker but not installed yet.

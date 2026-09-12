@@ -590,6 +590,11 @@ impl WidgetHostNative {
         {
             return consumed;
         }
+        if let Some(consumed) =
+            self.cursor_move_result_view(x, y, self.last_viewport_w, self.last_viewport_h)
+        {
+            return consumed;
+        }
         // Session-switch owner rotation before the cursor_probe resolve below
         // stores the canonical build (mirrors the paint entry).
         self.rotate_chat_owner_if_session_changed();

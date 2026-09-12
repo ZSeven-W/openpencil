@@ -21,6 +21,7 @@ pub use super::pickers::{
     EffectParamFocus, FontPickerPurpose, LayerContextMenuState, MissingFontSurface,
     PageRenameState, PreviewDeviceKind, VariableRowFocus,
 };
+pub use super::result_view::{ResultHit, ResultViewState};
 pub use super::slides_panel_state::{
     LeftPanelTab, SlidesDrag, SlidesPanelState, SlidesPanelTarget,
 };

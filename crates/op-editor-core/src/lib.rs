@@ -346,6 +346,9 @@ pub use document_install::{DocumentInstallError, DocumentInstallReport, Prepared
 pub use edit_transaction::{
     CompletedLocalEdit, EditOrigin, LocalEditCapture, LocalEditError, LocalEditOutcome,
 };
+pub use editor_ui_state::result_view::{
+    RESULT_ENTER_BOARD_MS, RESULT_ENTER_PANEL_MS, RESULT_ENTER_STAGGER_MS,
+};
 pub use editor_ui_state::{
     AssetCenterTab, BooleanOp, CloneField, CloneFormState, CommitDiffPatch, CommitDiffSummary,
     CommitDiffView, CompositingPickerTarget, CustomPrompt, DesignMdPanelState, DesignMdRequest,
@@ -356,9 +359,9 @@ pub use editor_ui_state::{
     LeftPanelTab, Locale, MergeConflictRow, MergeResolveFile, MergeResolveState,
     MissingFontSurface, PaddingEditMode, PageRenameState, PencilCursorStyle, PreviewDeviceKind,
     PreviewState, PromptCenterFocus, PromptCenterState, PromptFilter, PropertyTab, RecentFile,
-    SceneFilter, SceneTemplateCenterState, SceneTemplateFocus, SizeToggleState, SlidesDrag,
-    SlidesPanelState, SlidesPanelTarget, StyleImportState, ThemeMode, UpdateStatus,
-    VariableRowFocus, WindowControlRequest,
+    ResultHit, ResultViewState, SceneFilter, SceneTemplateCenterState, SceneTemplateFocus,
+    SizeToggleState, SlidesDrag, SlidesPanelState, SlidesPanelTarget, StyleImportState, ThemeMode,
+    UpdateStatus, VariableRowFocus, WindowControlRequest,
 };
 pub use export_dialog_state::ExportDialogButton;
 pub use export_quick_menu_state::ExportQuickRow;

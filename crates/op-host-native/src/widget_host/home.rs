@@ -104,10 +104,24 @@ impl WidgetHostNative {
         Some(true)
     }
 
-    fn queue_home_send(&mut self) -> bool {
+    pub(in crate::widget_host) fn queue_home_send(&mut self) -> bool {
         let Some(prompt) = self.editor_state.editor_ui.home.generation_prompt() else {
             return false;
         };
+        // Arm the M1a reopen intent: when THIS turn finishes, the desktop
+        // idle edge opens the 成品视图 over the canvas. Family and brief
+        // are copied now because Home is about to hide.
+        let family = self
+            .editor_state
+            .editor_ui
+            .home
+            .bound
+            .unwrap_or(HomeFamily::AppUi);
+        let brief = self.editor_state.editor_ui.home.draft.trim().to_string();
+        self.editor_state
+            .editor_ui
+            .result_view
+            .arm_for_generation(family, brief);
         self.editor_state.editor_ui.home.visible = false;
         self.editor_state.chat.focus_input_at_end(self.now_ms);
         self.editor_state.chat.set_input_text(prompt);

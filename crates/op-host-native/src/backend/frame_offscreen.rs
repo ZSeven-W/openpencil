@@ -107,6 +107,19 @@ impl<'a> NativeFrameBackend<'a> {
     /// a scaled destination — Figma-style soft zoom until the gesture
     /// ends and the sharp repaint lands.
     pub fn draw_offscreen_layer_to(&mut self, image: &skia_safe::Image, clip: Rect, dst: Rect) {
+        self.draw_offscreen_layer_to_with_alpha(image, clip, dst, 1.0);
+    }
+
+    /// Alpha-blit variant — the result view's boards fade in over their
+    /// entrance window, so their rasters must composite at the same
+    /// phase the widget's placeholder slots paint at.
+    pub fn draw_offscreen_layer_to_with_alpha(
+        &mut self,
+        image: &skia_safe::Image,
+        clip: Rect,
+        dst: Rect,
+        alpha: f32,
+    ) {
         let save = self.canvas.save();
         self.canvas.clip_rect(
             skia_safe::Rect::from_xywh(clip.origin.x, clip.origin.y, clip.size.x, clip.size.y),
@@ -117,12 +130,14 @@ impl<'a> NativeFrameBackend<'a> {
             skia_safe::FilterMode::Linear,
             skia_safe::MipmapMode::None,
         );
+        let mut paint = skia_safe::Paint::default();
+        paint.set_alpha_f(alpha.clamp(0.0, 1.0));
         self.canvas.draw_image_rect_with_sampling_options(
             image,
             None,
             skia_safe::Rect::from_xywh(dst.origin.x, dst.origin.y, dst.size.x, dst.size.y),
             sampling,
-            &skia_safe::Paint::default(),
+            &paint,
         );
         self.canvas.restore_to_count(save);
     }

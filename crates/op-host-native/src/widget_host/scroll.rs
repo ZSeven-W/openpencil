@@ -481,6 +481,10 @@ impl WidgetHostNative {
         if self.try_scroll_home(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
+        // The result view takeover swallows the wheel entirely.
+        if self.try_scroll_result_view() {
+            return true;
+        }
         if self.try_scroll_figma_import(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }

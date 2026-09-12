@@ -246,6 +246,14 @@ impl WidgetHostNative {
         self.drop_preview_runtime();
         self.editor_state = state;
         self.editor_state.editor_ui.exit_preview();
+        // A New / Open while a Home-launched generation is still running
+        // must never pop a result view for boards that no longer exist —
+        // the incoming state never carries the flag, but reset it anyway
+        // so the seam guarantees that itself.
+        self.editor_state
+            .editor_ui
+            .result_view
+            .reset_for_new_document();
         self.document_epoch = self.document_epoch.wrapping_add(1);
         self.layout_transition = None;
         self.scene_cache.invalidate();
@@ -272,6 +280,13 @@ impl WidgetHostNative {
         // `replace_document` deliberately preserves editor chrome and app
         // preferences while clearing every document-scoped draft and stale id.
         self.editor_state.replace_document(document);
+        // ...and that preservation would carry a stale result view /
+        // reopen intent across the swap. Clear it here for the same
+        // reason as `replace_editor_state` above.
+        self.editor_state
+            .editor_ui
+            .result_view
+            .reset_for_new_document();
         op_pen_loader::apply_editor_meta_or_legacy_fallback(&mut self.editor_state, editor_meta);
         self.editor_state.editor_ui.file_name_display = file_name;
         self.editor_state.editor_ui.mobile_sheet = None;

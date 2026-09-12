@@ -9,14 +9,18 @@ use super::WidgetHostNative;
 impl WidgetHostNative {
     pub fn apply_send(&mut self) -> bool {
         if self.editor_state.editor_ui.home.visible {
-            let Some(prompt) = self.editor_state.editor_ui.home.generation_prompt() else {
+            if self
+                .editor_state
+                .editor_ui
+                .home
+                .generation_prompt()
+                .is_none()
+            {
                 return true;
-            };
-            self.editor_state.editor_ui.home.visible = false;
-            self.editor_state.chat.focus_input_at_end(self.now_ms);
-            self.editor_state.chat.set_input_text(prompt);
-            let sent = self.editor_state.chat.begin_send();
-            self.editor_state.chat.focused = false;
+            }
+            // Same wrapped-launch path as the sheet's Send button — one
+            // implementation arms the result view and queues the turn.
+            let sent = self.queue_home_send();
             self.mark_dirty();
             return sent;
         }

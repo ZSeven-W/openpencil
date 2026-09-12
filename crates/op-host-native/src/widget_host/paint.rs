@@ -38,10 +38,13 @@ impl WidgetHostNative {
             self.theme.background,
         );
 
-        if self.editor_state.editor_ui.home.visible {
-            // The Home headline resolves its serif at paint time. Load the
-            // native family snapshot before constructing the surface so the
-            // first frame does not fall back to the editor sans face.
+        if self.editor_state.editor_ui.home.visible
+            || self.editor_state.editor_ui.result_view.visible
+        {
+            // The Home headline and the result-view title resolve their
+            // serif at paint time. Load the native family snapshot before
+            // constructing the surface so the first frame does not fall
+            // back to the editor sans face.
             self.ensure_system_fonts_loaded();
         }
         if let Some(home) = HomeSurface::for_editor_at(&self.editor_state, self.now_ms) {
@@ -52,6 +55,12 @@ impl WidgetHostNative {
                 &mut cx,
                 Rect::xywh(0.0, 0.0, viewport_width, viewport_height),
             );
+            return;
+        }
+        // The post-generation result view is the same kind of full-surface
+        // takeover as Home: widget paint, board rasters, then return.
+        if self.result_view_visible() {
+            self.paint_result_view(frame, viewport_width, viewport_height);
             return;
         }
 

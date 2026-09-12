@@ -91,6 +91,7 @@ mod provider_probe_host;
 mod remote_image_host;
 mod render_cli;
 mod render_cli_error;
+mod result_view_trigger;
 mod save_session;
 mod scene_template_generate;
 mod scene_template_open;

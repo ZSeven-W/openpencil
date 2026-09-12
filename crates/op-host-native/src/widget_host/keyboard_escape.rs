@@ -17,6 +17,13 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // The result view is a full-surface takeover: Escape drops back
+        // to the canvas beneath it (same as its Professional link).
+        if self.editor_state.editor_ui.result_view.visible {
+            self.editor_state.editor_ui.result_view.hide();
+            self.mark_dirty();
+            return true;
+        }
         // Escape EXITS preview mode (top priority) — drops the runtime
         // and returns to the design surface.
         if self.preview.is_some() {

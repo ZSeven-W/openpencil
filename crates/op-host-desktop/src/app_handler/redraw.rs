@@ -316,6 +316,44 @@ impl DesktopApp {
             && self.sub_agents.is_empty()
         {
             self.chat_running_tab = None;
+            // M1a: a Home-launched generation that just finished takes
+            // the stage with the 成品视图. The boards come from the
+            // active page's top-level frames (the indicator handle that
+            // tracked this turn's new frames is torn down by the same
+            // pumps above, so the page's boards are the authoritative
+            // outcome). An empty outcome stays on the canvas.
+            let awaiting = self
+                .host
+                .editor_state()
+                .editor_ui
+                .result_view
+                .awaiting_generation;
+            if awaiting {
+                let boards =
+                    op_editor_core::preview_slideshow::active_page_boards(self.host.editor_state());
+                if crate::result_view_trigger::should_open_result_view(
+                    awaiting,
+                    self.current_chat.is_none(),
+                    self.current_design.is_none(),
+                    self.sub_agents.is_empty(),
+                    boards.len(),
+                ) {
+                    let now_ms = self.host.now_ms();
+                    self.host
+                        .editor_state_mut()
+                        .editor_ui
+                        .result_view
+                        .open(boards, now_ms);
+                } else {
+                    self.host
+                        .editor_state_mut()
+                        .editor_ui
+                        .result_view
+                        .cancel_awaited_generation();
+                }
+                self.host.mark_editor_state_dirty();
+                self.redraw_dirty = true;
+            }
         }
         // Starter ghost: painted from the moment a design prompt
         // clears the blank starter until the generated design's root

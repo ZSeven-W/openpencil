@@ -165,6 +165,13 @@ pub fn base_animation_deadline_ms(
     {
         next = earliest(next, deadline);
     }
+    // The result view's entrance motion (staggered board rise + panel
+    // slide) settles without any input event behind it, so its final
+    // instants have to reach the scheduler or the boards would freeze
+    // mid-rise until the next mouse move.
+    if let Some(deadline) = state.editor_ui.result_view.entrance_deadline_ms(now_ms) {
+        next = earliest(next, deadline);
+    }
     next
 }
 

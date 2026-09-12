@@ -224,6 +224,7 @@ mod property_scroll;
 mod release;
 mod release_feedback;
 mod responsive_geometry;
+mod result_view;
 mod scene_state;
 #[cfg(test)]
 mod scene_template_host_tests;
