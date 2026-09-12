@@ -205,3 +205,82 @@ fn antigravity_keeps_linux_keyring_session_but_grok_does_not() {
         assert!(!allowed_env(CliName::GrokBuild, key), "{key}");
     }
 }
+
+/// Windows hands the environment over in its native casing, so an uppercase
+/// allowlist matched with `contains` drops `Path`, `SystemRoot`, `windir`,
+/// `ComSpec` and `ProgramData` — the guarded CLI then starts with no PATH and
+/// no Winsock provider root.
+#[test]
+fn guarded_child_env_keeps_windows_native_key_casing() {
+    let vars = vec![
+        ("Path".to_string(), r"C:\Windows\System32".to_string()),
+        ("SystemRoot".to_string(), r"C:\Windows".to_string()),
+        ("windir".to_string(), r"C:\Windows".to_string()),
+        (
+            "ComSpec".to_string(),
+            r"C:\Windows\System32\cmd.exe".to_string(),
+        ),
+        ("ProgramData".to_string(), r"C:\ProgramData".to_string()),
+        ("UserProfile".to_string(), r"C:\Users\dev".to_string()),
+        ("DATABASE_URL".to_string(), "secret".to_string()),
+    ];
+
+    for cli in [CliName::GrokBuild, CliName::Antigravity, CliName::Dsh] {
+        let keys: Vec<String> = filtered_env(cli, vars.clone())
+            .into_iter()
+            .map(|(key, _)| key)
+            .collect();
+        assert_eq!(
+            keys,
+            vec![
+                "Path",
+                "SystemRoot",
+                "windir",
+                "ComSpec",
+                "ProgramData",
+                "UserProfile",
+            ],
+            "{cli:?} dropped natively-cased Windows keys"
+        );
+    }
+}
+
+/// The private-HOME rewrite has to find `SystemRoot` in its real casing to
+/// build the sandbox PATH, and has to strip the inherited `Path` rather than
+/// leave a second, host-valued entry behind it.
+#[test]
+#[cfg(windows)]
+fn isolated_env_reads_native_cased_system_root_and_strips_host_path() {
+    let turn = IsolatedTurn::prepare_for(
+        Some(CliName::Antigravity),
+        "return only JavaScript",
+        &[],
+        TurnPurpose::Generation,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+
+    let mut env = vec![
+        ("Path".to_string(), r"C:\host\tools".to_string()),
+        ("SystemRoot".to_string(), r"D:\Windows".to_string()),
+        ("TEMP".to_string(), r"C:\host\temp".to_string()),
+    ];
+    append_isolated_env(&mut env, Some(&turn));
+
+    let path_entries: Vec<&(String, String)> = env
+        .iter()
+        .filter(|(key, _)| key.eq_ignore_ascii_case("PATH"))
+        .collect();
+    assert_eq!(
+        path_entries.len(),
+        1,
+        "the host PATH must be replaced, not shadowed: {env:?}"
+    );
+    assert_eq!(path_entries[0].1, r"D:\Windows\System32;D:\Windows");
+    let temp = env
+        .iter()
+        .find(|(key, _)| key == "TEMP")
+        .expect("private TEMP");
+    assert!(Path::new(&temp.1).starts_with(turn.cwd()), "{temp:?}");
+}
