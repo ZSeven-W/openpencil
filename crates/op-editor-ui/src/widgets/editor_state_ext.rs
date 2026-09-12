@@ -278,6 +278,7 @@ pub fn topbar_button_hover(
         W::ToggleSidebar => O::ToggleSidebar,
         W::ToggleFileMenu => O::ToggleFileMenu,
         W::OpenImportMenu => O::OpenImportMenu,
+        W::Home => O::Home,
         W::ToggleTheme => O::ToggleTheme,
         W::ToggleLocale => O::ToggleLocale,
         W::OpenExportMenu => O::OpenExportMenu,

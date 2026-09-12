@@ -164,7 +164,8 @@ impl WidgetHost {
                 | TopBarHit::ToggleFileMenu
                 | TopBarHit::OpenExportMenu
                 | TopBarHit::OpenAssetCenter
-                | TopBarHit::OpenImportMenu => {}
+                | TopBarHit::OpenImportMenu
+                | TopBarHit::Home => {}
                 TopBarHit::ToggleGitPanel => {
                     self.editor_state.editor_ui.git_panel.open ^= true;
                 }

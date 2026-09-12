@@ -18,6 +18,8 @@ pub enum TopBarButton {
     ToggleFileMenu,
     /// Figma logo — opens the .fig import modal.
     OpenImportMenu,
+    /// House icon — returns to the Home surface (制图台).
+    Home,
     /// Sun / Moon icon — flips the theme.
     ToggleTheme,
     /// Globe + chevron — opens the locale picker.

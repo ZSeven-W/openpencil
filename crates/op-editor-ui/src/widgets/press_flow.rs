@@ -425,6 +425,14 @@ pub fn apply_shared_top_bar_hit(
             core_press::toggle_import_menu(&mut state.editor_ui);
             TopBarPress::Handled
         }
+        TopBarHit::Home => {
+            // Same path as File ▸ 制图台 (`FileMenuChoice::Home`).
+            state.editor_ui.pending_file_action =
+                Some(op_editor_core::editor_ui_state::FileAction::Home);
+            state.editor_ui.file_menu_open = false;
+            state.editor_ui.file_menu.hover = None;
+            TopBarPress::Handled
+        }
         TopBarHit::ToggleFileMenu => {
             core_press::toggle_file_menu(&mut state.editor_ui);
             TopBarPress::FileMenuToggled

@@ -407,6 +407,9 @@ pub mod status_bar;
 pub mod tooltip;
 pub mod top_bar;
 mod top_bar_geometry;
+#[cfg(test)]
+#[path = "top_bar_home_tests.rs"]
+mod top_bar_home_tests;
 mod top_bar_paint;
 #[cfg(test)]
 mod top_bar_tests;

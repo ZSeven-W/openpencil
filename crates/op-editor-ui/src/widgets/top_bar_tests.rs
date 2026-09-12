@@ -181,13 +181,15 @@ fn narrow_dirty_title_drops_git_before_filename_extension_or_status() {
     bar.agent_count = 0;
     bar.mcp_count = 0;
     bar.label_agents_and_mcp = "Agents & MCP";
-    // Two ICON_BUTTONs wider than the fixture used before the export and
-    // Asset Center buttons joined the right cluster: the title slot ends
-    // where that cluster begins, so the window that produces "Git dropped,
-    // name intact" moved right by exactly the width of the new buttons.
+    // Wider than the original fixture by the right-cluster buttons that
+    // joined later (export + Asset Center) plus the Home button now sitting
+    // left of the title slot (icon + its leading divider). The title slot
+    // ends where chrome begins, so the window that produces "Git dropped,
+    // name intact" moves by exactly the width of those new controls.
+    let home_span = ICON_BUTTON + DIVIDER_GAP + DIVIDER_W + DIVIDER_GAP;
     let rect = Rect {
         origin: Point2D::ZERO,
-        size: Point2D::new(620.0 + ICON_BUTTON * 2.0, TOP_BAR_HEIGHT),
+        size: Point2D::new(620.0 + ICON_BUTTON * 2.0 + home_span, TOP_BAR_HEIGHT),
     };
 
     let layout = bar.title_layout(rect, title_test_width);

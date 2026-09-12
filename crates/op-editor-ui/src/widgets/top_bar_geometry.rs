@@ -57,6 +57,20 @@ impl TopBar {
         }
     }
 
+    /// Home (制图台) button, right of the import button. Canonical anchor
+    /// shared by hit-test, paint, and the hover tooltip so they cannot drift.
+    pub fn home_button_rect(&self, top_bar_rect: Rect) -> Rect {
+        let divider_span = DIVIDER_GAP + DIVIDER_W + DIVIDER_GAP;
+        let import = self.import_button_rect(top_bar_rect);
+        Rect {
+            origin: Point2D::new(
+                import.origin.x + FILE_MENU_BUTTON_WIDTH + divider_span,
+                import.origin.y,
+            ),
+            size: Point2D::new(ICON_BUTTON, ICON_BUTTON),
+        }
+    }
+
     /// Whether the Preview (Play) button paints / hit-tests. Gated only by
     /// the host capability (`PREVIEW_BUTTON_AVAILABLE`, native and web) —
     /// preview interaction graduated out of the experimental-features gate
@@ -367,6 +381,12 @@ impl TopBar {
                     return None;
                 }
                 self.import_button_rect(top_bar_rect)
+            }
+            B::Home => {
+                if !self.file_controls_visible() {
+                    return None;
+                }
+                self.home_button_rect(top_bar_rect)
             }
             B::ToggleGitPanel => {
                 if !GIT_BUTTON_AVAILABLE || !self.file_controls_visible() {

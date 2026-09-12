@@ -1,6 +1,6 @@
 //! Bounded file-title layout for the `TopBar`.
 //!
-//! The title lives in the center slot between the import button and the
+//! The title lives in the center slot between the Home button and the
 //! agent chip. The visible file-name / edited-marker / Git-button group is
 //! centered against the full window whenever the slot has room; left/right
 //! chrome only clamps it in genuinely narrow layouts. Long file names are
@@ -39,8 +39,8 @@ impl TopBar {
         let chip_text = self.chip_text();
         let chip_text_w = measure(&chip_text, 11.0);
         let chip_rect = self.agent_chip_rect(top_bar_rect, chip_text_w);
-        let import_rect = self.import_button_rect(top_bar_rect);
-        let slot_left = import_rect.origin.x + import_rect.size.x + TITLE_SIDE_GAP;
+        let home_rect = self.home_button_rect(top_bar_rect);
+        let slot_left = home_rect.origin.x + home_rect.size.x + TITLE_SIDE_GAP;
         let slot_right = chip_rect.origin.x - TITLE_SIDE_GAP;
         let slot_width = (slot_right - slot_left).max(0.0);
         let slot = Rect {

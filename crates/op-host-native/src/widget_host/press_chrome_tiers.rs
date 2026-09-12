@@ -180,7 +180,8 @@ impl WidgetHostNative {
                 | TopBarHit::ToggleFileMenu
                 | TopBarHit::OpenExportMenu
                 | TopBarHit::OpenAssetCenter
-                | TopBarHit::OpenImportMenu => return Some(true),
+                | TopBarHit::OpenImportMenu
+                | TopBarHit::Home => return Some(true),
                 TopBarHit::ToggleFullscreen => {
                     // The widget host doesn't own the winit window — raise
                     // an intent the desktop runner consumes next frame.

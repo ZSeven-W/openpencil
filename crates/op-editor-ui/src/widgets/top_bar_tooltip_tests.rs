@@ -5,6 +5,7 @@
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::TopBarButton;
 
+use crate::widgets::editor_state_ext::translate;
 use crate::widgets::test_capture_backend::CaptureBackend;
 use crate::widgets::top_bar_tooltip::{
     self, paint_top_bar_tooltip, ALL_TOP_BAR_BUTTONS, TOOLTIP_DWELL_MS,
@@ -169,6 +170,15 @@ fn every_open_surface_suppresses_exactly_its_own_button() {
             }
         }
     }
+}
+
+#[test]
+fn home_button_tooltip_reuses_file_menu_home_label() {
+    let ui = EditorUiState::default();
+    assert_eq!(
+        top_bar_tooltip::tooltip_for(&ui, TopBarButton::Home).label,
+        translate(&ui, "fileMenu.home"),
+    );
 }
 
 #[test]

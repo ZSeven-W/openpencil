@@ -261,6 +261,8 @@ mod toolbar_actions;
 mod toolbar_hover;
 #[cfg(test)]
 mod top_bar_tooltip_tests;
+mod top_bar_home_tests;
+#[cfg(test)]
 mod touch_panel_gesture;
 #[cfg(test)]
 mod touch_panel_gesture_tests;
