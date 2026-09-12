@@ -1,16 +1,22 @@
 //! Immediate-mode paint pass for the 制图台 Home surface.
 
-use super::{HomeLayout, HomeSurface};
+use super::{HomeLayout, HomePalette, HomeSurface, HOME_TOPBAR_H};
 use crate::widgets::canvas_viewport_image::{
     has_cached_image_bytes, note_pending_decode, required_raster_edge, store_remote_image_bytes,
 };
 use crate::widgets::property_panel_text_input::paint_text_input_view;
 use crate::widgets::{draw_icon, Icon, PaintCx};
-use crate::{Color, ImageDrawMode, Point2D, Rect, TextLayout};
-use op_editor_core::{HomeDevice, HomeFamily, HomeHit, ThemeMode};
+use crate::{Color, ImageDrawMode, Point2D, Rect, TextLayout, Theme};
+use op_editor_core::{EditorUiState, HomeDevice, HomeFamily, HomeHit, ThemeMode};
 
 const SANS: &str = "system-ui";
-const SERIF: &str = "Songti SC";
+const MONO: &str = "SF Mono";
+const SERIF_CANDIDATES: [&str; 4] = [
+    "Songti SC",
+    "STSong",
+    "Noto Serif CJK SC",
+    "Source Han Serif SC",
+];
 
 fn text(
     cx: &mut PaintCx<'_>,
@@ -24,40 +30,95 @@ fn text(
     cx.backend.draw_text(&layout, origin);
 }
 
-fn label_color(surface: &HomeSurface<'_>) -> Color {
-    surface.theme.foreground
+fn text_weighted(
+    cx: &mut PaintCx<'_>,
+    content: &str,
+    origin: Point2D,
+    size: f32,
+    color: Color,
+    family: &str,
+    weight: u16,
+) {
+    let layout = TextLayout::single_run(content, family, size, color.to_jian(), Point2D::ZERO)
+        .with_font_weight(weight);
+    cx.backend.draw_text(&layout, origin);
 }
 
-fn paper(surface: &HomeSurface<'_>) -> Color {
-    if surface.ui.effective_theme_mode() == ThemeMode::Light {
-        Color::rgb_u8(0xF4, 0xF1, 0xEA)
-    } else {
-        surface.theme.background
+#[allow(clippy::too_many_arguments)]
+fn draw_spaced_text(
+    cx: &mut PaintCx<'_>,
+    content: &str,
+    origin: Point2D,
+    size: f32,
+    color: Color,
+    family: &str,
+    weight: u16,
+    spacing: f32,
+) {
+    let mut x = origin.x;
+    for character in content.chars() {
+        let glyph = character.to_string();
+        text_weighted(
+            cx,
+            &glyph,
+            Point2D::new(x, origin.y),
+            size,
+            color,
+            family,
+            weight,
+        );
+        x += cx.backend.measure_text_family(&glyph, size, family) + spacing;
     }
+}
+
+fn spaced_width(cx: &mut PaintCx<'_>, content: &str, size: f32, family: &str, spacing: f32) -> f32 {
+    content
+        .chars()
+        .map(|character| {
+            cx.backend
+                .measure_text_family(&character.to_string(), size, family)
+                + spacing
+        })
+        .sum::<f32>()
+        - spacing
+}
+
+fn label_color(surface: &HomeSurface<'_>) -> Color {
+    home_palette(surface).ink
+}
+
+fn home_palette(surface: &HomeSurface<'_>) -> HomePalette {
+    HomePalette::for_mode(surface.ui.effective_theme_mode())
 }
 
 fn line(surface: &HomeSurface<'_>) -> Color {
-    if surface.ui.effective_theme_mode() == ThemeMode::Light {
-        Color::rgb_u8(0xD9, 0xD3, 0xC6)
-    } else {
-        surface.theme.border
-    }
-}
-
-fn sheet(surface: &HomeSurface<'_>) -> Color {
-    if surface.ui.effective_theme_mode() == ThemeMode::Light {
-        Color::rgb_u8(0xFF, 0xFD, 0xF9)
-    } else {
-        surface.theme.card
-    }
+    home_palette(surface).line
 }
 
 fn graphite(surface: &HomeSurface<'_>) -> Color {
-    if surface.ui.effective_theme_mode() == ThemeMode::Light {
-        Color::rgb_u8(0x5E, 0x5A, 0x52)
-    } else {
-        surface.theme.muted_foreground
-    }
+    home_palette(surface).graphite
+}
+
+fn blue(surface: &HomeSurface<'_>) -> Color {
+    home_palette(surface).blue
+}
+
+fn home_input_theme(palette: HomePalette) -> Theme {
+    let mut theme = Theme::light();
+    theme.background = palette.sheet;
+    theme.foreground = palette.ink;
+    theme.card = palette.sheet;
+    theme.card_foreground = palette.ink;
+    theme.primary = palette.blue;
+    theme.primary_foreground = palette.sheet;
+    theme.muted = palette.paper_2;
+    theme.muted_foreground = palette.ash;
+    theme.border = palette.line;
+    theme.input = palette.line;
+    theme.ring = palette.blue;
+    theme.accent = palette.blue_soft;
+    theme.accent_foreground = palette.blue_2;
+    theme
 }
 
 fn paint_button(
@@ -70,40 +131,29 @@ fn paint_button(
 ) {
     let hovered = surface.state.hover == Some(hit);
     let pressed = surface.state.pressed == Some(hit);
-    let fill = if active {
-        surface.theme.foreground
-    } else {
-        sheet(surface)
-    };
-    let fg = if active {
-        paper(surface)
-    } else {
-        label_color(surface)
-    };
+    let palette = home_palette(surface);
+    let fill = if active { palette.ink } else { palette.sheet };
+    let fg = if active { palette.paper } else { palette.ink };
     cx.backend.fill_round_rect(rect, rect.size.y / 2.0, fill);
     if hovered || pressed {
         cx.backend.fill_round_rect(
             rect,
             rect.size.y / 2.0,
             if pressed {
-                surface.theme.primary.with_alpha(0.20)
+                palette.blue.with_alpha(0.20)
             } else {
-                surface.theme.primary.with_alpha(0.10)
+                palette.graphite.with_alpha(0.10)
             },
         );
     }
     cx.backend.stroke_round_rect(
         rect,
         rect.size.y / 2.0,
-        if active {
-            surface.theme.foreground
-        } else {
-            line(surface)
-        },
+        if active { palette.ink } else { line(surface) },
         1.0,
     );
     let width = rect.size.x;
-    let approx = text_label.chars().count() as f32 * 7.0;
+    let approx = cx.backend.measure_text_family(text_label, 14.0, SANS);
     text(
         cx,
         text_label,
@@ -119,15 +169,11 @@ fn paint_button(
 
 pub(super) fn paint_home(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect) {
     let layout = surface.layout(rect.size.x, rect.size.y);
-    let bg = paper(surface);
+    let palette = home_palette(surface);
+    let bg = palette.paper;
     cx.backend.fill_rect(rect, bg);
     // Drafting ground: static dot grid and blue margin rule.
-    let dots =
-        label_color(surface).with_alpha(if surface.ui.effective_theme_mode() == ThemeMode::Light {
-            0.10
-        } else {
-            0.08
-        });
+    let dots = palette.dots;
     let mut x = 12.0;
     while x < rect.size.x {
         let mut y = 12.0;
@@ -141,11 +187,10 @@ pub(super) fn paint_home(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: 
     cx.backend.stroke_line(
         Point2D::new(56.0, 0.0),
         Point2D::new(56.0, rect.size.y),
-        surface.theme.primary.with_alpha(0.28),
+        palette.margin_rule,
         1.0,
     );
 
-    // M1: entrance choreography.
     paint_wordmark(surface, cx, rect);
     text(
         cx,
@@ -158,28 +203,56 @@ pub(super) fn paint_home(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: 
         graphite(surface),
         SANS,
     );
-    text(
+    if surface.state.hover == Some(HomeHit::Professional) {
+        cx.backend.stroke_line(
+            Point2D::new(
+                layout.professional.origin.x,
+                layout.professional.origin.y + 25.0,
+            ),
+            Point2D::new(
+                layout.professional.origin.x + layout.professional.size.x,
+                layout.professional.origin.y + 25.0,
+            ),
+            palette.blue,
+            1.0,
+        );
+    }
+    cx.backend.save();
+    cx.backend.clip_rect(Rect::xywh(
+        0.0,
+        HOME_TOPBAR_H,
+        rect.size.x,
+        (layout.footer.origin.y - HOME_TOPBAR_H).max(0.0),
+    ));
+    let headline_family = headline_family(surface);
+    let headline_text = "你想做成什么？";
+    let spacing = 52.0 * 0.01;
+    let headline_width = spaced_width(cx, headline_text, 52.0, headline_family, spacing);
+    draw_spaced_text(
         cx,
-        "你想做成什么？",
+        headline_text,
         Point2D::new(
-            layout.headline.origin.x + 42.0,
-            layout.headline.origin.y + 42.0,
+            layout.headline.origin.x + (layout.headline.size.x - headline_width) / 2.0,
+            layout.headline.origin.y + 43.0,
         ),
-        44.0,
-        label_color(surface),
-        headline_family(surface),
+        52.0,
+        palette.ink,
+        headline_family,
+        600,
+        spacing,
     );
-    cx.backend.stroke_line(
-        Point2D::new(
-            layout.headline.origin.x + 120.0,
-            layout.headline.origin.y + 51.0,
-        ),
-        Point2D::new(
-            layout.headline.origin.x + 282.0,
-            layout.headline.origin.y + 55.0,
-        ),
-        surface.theme.primary,
-        2.0,
+    let underline_start = layout.headline.origin.x
+        + (layout.headline.size.x - headline_width) / 2.0
+        + cx.backend
+            .measure_text_family("你想", 52.0, headline_family)
+        + spacing * 2.0;
+    let underline_width = spaced_width(cx, "做成什么", 52.0, headline_family, spacing);
+    paint_wavy_underline(
+        cx,
+        underline_start,
+        layout.headline.origin.y + 50.0,
+        underline_width,
+        palette.blue,
     );
     text(
         cx,
@@ -204,26 +277,45 @@ pub(super) fn paint_home(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: 
             family.label(),
         );
     }
-    if surface.state.bound.is_some() {
-        paint_expected(surface, cx, layout);
-    }
+    paint_expected(surface, cx, layout);
     for (index, family) in HomeFamily::ALL.into_iter().enumerate() {
         paint_card(surface, cx, layout.cards[index], family);
     }
+    cx.backend.restore();
     paint_footer(surface, cx, layout);
 }
 
 fn headline_family(surface: &HomeSurface<'_>) -> &'static str {
-    let has_serif = surface
-        .ui
-        .bundled_font_families
-        .iter()
-        .chain(surface.ui.system_font_families.iter())
-        .any(|family| family.contains("Song") || family.contains("Serif") || family.contains("宋"));
-    if has_serif {
-        SERIF
-    } else {
-        SANS
+    resolve_headline_family(surface.ui)
+}
+
+fn resolve_headline_family(ui: &EditorUiState) -> &'static str {
+    for candidate in SERIF_CANDIDATES {
+        if ui
+            .system_font_families
+            .iter()
+            .chain(ui.bundled_font_families.iter())
+            .any(|family| family.eq_ignore_ascii_case(candidate))
+        {
+            return candidate;
+        }
+    }
+    SANS
+}
+
+fn paint_wavy_underline(cx: &mut PaintCx<'_>, x: f32, y: f32, width: f32, color: Color) {
+    let segment = width / 6.0;
+    let points = [
+        Point2D::new(x, y),
+        Point2D::new(x + segment, y - 1.0),
+        Point2D::new(x + segment * 2.0, y + 0.5),
+        Point2D::new(x + segment * 3.0, y - 0.5),
+        Point2D::new(x + segment * 4.0, y + 0.8),
+        Point2D::new(x + segment * 5.0, y - 0.4),
+        Point2D::new(x + width, y),
+    ];
+    for pair in points.windows(2) {
+        cx.backend.stroke_line(pair[0], pair[1], color, 2.2);
     }
 }
 
@@ -232,7 +324,7 @@ fn paint_wordmark(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect) {
     cx.backend
         .stroke_round_rect(mark, 4.0, label_color(surface), 1.5);
     cx.backend
-        .fill_round_rect(Rect::xywh(84.0, 26.0, 8.0, 8.0), 1.0, surface.theme.primary);
+        .fill_round_rect(Rect::xywh(84.0, 26.0, 8.0, 8.0), 1.0, blue(surface));
     text(
         cx,
         "OpenPencil",
@@ -245,31 +337,47 @@ fn paint_wordmark(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect) {
 }
 
 fn paint_sheet(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, layout: HomeLayout) {
+    let palette = home_palette(surface);
+    // Home owns its focus treatment. The editor's normal blue ring must not
+    // leak into the drafting-table surface.
+    cx.backend.fill_drop_shadow(
+        Rect::xywh(
+            layout.sheet.origin.x - 3.0,
+            layout.sheet.origin.y - 3.0,
+            layout.sheet.size.x + 6.0,
+            layout.sheet.size.y + 6.0,
+        ),
+        14.0,
+        6.0,
+        palette.blue_soft.with_alpha(0.55),
+    );
     cx.backend
-        .fill_round_rect(layout.sheet, 14.0, sheet(surface));
+        .fill_round_rect(layout.sheet, 14.0, palette.sheet);
     cx.backend
-        .stroke_round_rect(layout.sheet, 14.0, line(surface), 1.0);
+        .stroke_round_rect(layout.sheet, 14.0, palette.blue.with_alpha(0.55), 1.0);
     for tick in 1..28 {
         let x = layout.sheet.origin.x + tick as f32 * 22.0;
         cx.backend.stroke_line(
             Point2D::new(x, layout.sheet.origin.y),
-            Point2D::new(x, layout.sheet.origin.y + 8.0),
-            line(surface).with_alpha(0.45),
+            Point2D::new(x, layout.sheet.origin.y + 9.0),
+            palette.line.with_alpha(0.45),
             1.0,
         );
     }
     let placeholder = surface
         .state
         .bound
-        .map_or("先写一句你想做的东西……", HomeFamily::placeholder);
+        .unwrap_or(HomeFamily::AppUi)
+        .placeholder();
+    let input_theme = home_input_theme(palette);
     paint_text_input_view(
         cx,
-        &surface.theme,
+        &input_theme,
         &surface.state.input,
         layout.sheet_text,
         16.0,
-        4.0,
-        layout.sheet_text.origin.y + 20.0,
+        0.0,
+        layout.sheet_text.origin.y + 25.0,
         surface.now_ms,
         if surface.state.draft.is_empty() {
             placeholder
@@ -279,185 +387,232 @@ fn paint_sheet(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, layout: HomeLayo
         surface.state.visible,
     );
     let refs = [
-        (layout.screenshot, HomeHit::Attachment, "截图"),
-        (layout.reference_link, HomeHit::ReferenceLink, "参考链接"),
-        (layout.figma, HomeHit::Figma, "Figma"),
-        (layout.example, HomeHit::TryExample, "试试这个示例"),
+        (layout.screenshot, HomeHit::Attachment, "截图", Icon::Image),
+        (
+            layout.reference_link,
+            HomeHit::ReferenceLink,
+            "参考链接",
+            Icon::ArrowUpRight,
+        ),
+        (layout.figma, HomeHit::Figma, "Figma", Icon::Pen),
+        (
+            layout.example,
+            HomeHit::TryExample,
+            "试试这个示例",
+            Icon::Sparkles,
+        ),
     ];
-    for (rect, hit, label) in refs {
+    for (rect, hit, label, icon) in refs {
         let disabled = matches!(hit, HomeHit::ReferenceLink | HomeHit::Figma);
         let color = if disabled {
-            graphite(surface).with_alpha(0.45)
+            palette.graphite.with_alpha(0.65)
         } else {
-            graphite(surface)
+            palette.graphite
         };
         if surface.state.hover == Some(hit) && !disabled {
-            cx.backend
-                .fill_round_rect(rect, 8.0, surface.theme.primary.with_alpha(0.08));
+            cx.backend.fill_round_rect(rect, 8.0, palette.paper_2);
         }
+        draw_icon(
+            cx.backend,
+            icon,
+            Point2D::new(rect.origin.x, rect.origin.y + 6.0),
+            14.0,
+            color,
+            1.25,
+        );
         text(
             cx,
             label,
-            Point2D::new(rect.origin.x + 4.0, rect.origin.y + 19.0),
+            Point2D::new(rect.origin.x + 19.0, rect.origin.y + 19.0),
             13.0,
             color,
             SANS,
         );
         if disabled && surface.state.hover == Some(hit) {
             let tooltip = Rect::xywh(rect.origin.x, rect.origin.y - 28.0, 68.0, 22.0);
-            cx.backend
-                .fill_round_rect(tooltip, 7.0, surface.theme.foreground);
+            cx.backend.fill_round_rect(tooltip, 7.0, palette.ink);
             text(
                 cx,
                 "即将支持",
                 Point2D::new(tooltip.origin.x + 10.0, tooltip.origin.y + 15.0),
                 11.0,
-                paper(surface),
+                palette.paper,
                 SANS,
             );
         }
     }
     let send_fill = if surface.state.draft.trim().is_empty() {
-        graphite(surface).with_alpha(0.30)
+        palette.ink.with_alpha(0.28)
     } else {
-        surface.theme.primary
+        palette.blue
     };
     cx.backend.fill_oval(layout.send, send_fill);
     if surface.state.pressed == Some(HomeHit::Send) {
         cx.backend
-            .stroke_oval(layout.send, surface.theme.foreground.with_alpha(0.30), 2.0);
+            .stroke_oval(layout.send, palette.ink.with_alpha(0.30), 2.0);
     }
     draw_icon(
         cx.backend,
         Icon::ArrowUp,
-        Point2D::new(layout.send.origin.x + 10.0, layout.send.origin.y + 10.0),
+        Point2D::new(layout.send.origin.x + 11.0, layout.send.origin.y + 11.0),
         18.0,
-        paper(surface),
+        palette.paper,
         1.8,
     );
     text(
         cx,
         "⏎ 发送",
-        Point2D::new(layout.send.origin.x - 58.0, layout.send.origin.y + 23.0),
+        Point2D::new(layout.send.origin.x - 58.0, layout.send.origin.y + 25.0),
         12.0,
-        graphite(surface),
-        "SF Mono",
+        palette.ash,
+        MONO,
     );
 }
 
 fn paint_expected(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, layout: HomeLayout) {
+    let palette = home_palette(surface);
+    let Some(family) = surface.state.bound else {
+        return;
+    };
     text(
         cx,
-        "预期产物",
+        "预期产物：",
         Point2D::new(layout.expected.origin.x, layout.expected.origin.y + 20.0),
         13.0,
-        graphite(surface),
+        palette.graphite,
         SANS,
     );
-    if let Some(family) = surface.state.bound {
-        let mut x = layout.expected.origin.x + 62.0;
-        for output in family.expected_outputs() {
-            let w = output.chars().count() as f32 * 13.0 + 20.0;
-            let pill = Rect::xywh(x, layout.expected.origin.y + 1.0, w, 28.0);
-            cx.backend
-                .fill_round_rect(pill, 14.0, surface.theme.primary.with_alpha(0.18));
-            text(
-                cx,
-                output,
-                Point2D::new(x + 10.0, layout.expected.origin.y + 20.0),
-                12.0,
-                surface.theme.primary,
-                SANS,
-            );
-            x += w + 6.0;
-        }
-        if surface.state.bound == Some(HomeFamily::AppUi) {
-            let active = if surface.state.device == HomeDevice::Mobile {
-                layout.device_mobile
+    let mut x = layout.expected.origin.x + 72.0;
+    for output in family.expected_outputs() {
+        let w = cx.backend.measure_text_family(output, 12.0, SANS) + 20.0;
+        let pill = Rect::xywh(x, layout.expected.origin.y + 1.0, w, 24.0);
+        cx.backend.fill_round_rect(pill, 12.0, palette.blue_soft);
+        text(
+            cx,
+            output,
+            Point2D::new(x + 10.0, layout.expected.origin.y + 18.0),
+            12.0,
+            palette.blue_2,
+            SANS,
+        );
+        x += w + 6.0;
+    }
+    if family == HomeFamily::AppUi {
+        text(
+            cx,
+            "给哪种设备？",
+            Point2D::new(
+                layout.expected.origin.x + 374.0,
+                layout.expected.origin.y + 18.0,
+            ),
+            13.0,
+            palette.graphite,
+            SANS,
+        );
+        let active = if surface.state.device == HomeDevice::Mobile {
+            layout.device_mobile
+        } else {
+            layout.device_desktop
+        };
+        let inactive = if surface.state.device == HomeDevice::Mobile {
+            layout.device_desktop
+        } else {
+            layout.device_mobile
+        };
+        cx.backend.fill_round_rect(inactive, 13.0, palette.sheet);
+        cx.backend
+            .stroke_round_rect(inactive, 13.0, palette.line, 1.0);
+        cx.backend.fill_round_rect(active, 13.0, palette.ink);
+        text(
+            cx,
+            "手机",
+            Point2D::new(
+                layout.device_mobile.origin.x + 9.0,
+                layout.device_mobile.origin.y + 18.0,
+            ),
+            12.0,
+            if surface.state.device == HomeDevice::Mobile {
+                palette.paper
             } else {
-                layout.device_desktop
-            };
-            let inactive = if surface.state.device == HomeDevice::Mobile {
-                layout.device_desktop
+                palette.graphite
+            },
+            SANS,
+        );
+        text(
+            cx,
+            "桌面",
+            Point2D::new(
+                layout.device_desktop.origin.x + 9.0,
+                layout.device_desktop.origin.y + 18.0,
+            ),
+            12.0,
+            if surface.state.device == HomeDevice::Desktop {
+                palette.paper
             } else {
-                layout.device_mobile
-            };
-            cx.backend.fill_round_rect(inactive, 14.0, sheet(surface));
-            cx.backend
-                .stroke_round_rect(inactive, 14.0, line(surface), 1.0);
-            cx.backend
-                .fill_round_rect(active, 14.0, surface.theme.foreground);
-            text(
-                cx,
-                "手机",
-                Point2D::new(
-                    layout.device_mobile.origin.x + 15.0,
-                    layout.device_mobile.origin.y + 19.0,
-                ),
-                13.0,
-                if surface.state.device == HomeDevice::Mobile {
-                    paper(surface)
-                } else {
-                    graphite(surface)
-                },
-                SANS,
-            );
-            text(
-                cx,
-                "桌面",
-                Point2D::new(
-                    layout.device_desktop.origin.x + 15.0,
-                    layout.device_desktop.origin.y + 19.0,
-                ),
-                13.0,
-                if surface.state.device == HomeDevice::Desktop {
-                    paper(surface)
-                } else {
-                    graphite(surface)
-                },
-                SANS,
-            );
-        }
+                palette.graphite
+            },
+            SANS,
+        );
     }
 }
 
 fn paint_card(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect, family: HomeFamily) {
     let hover = surface.state.hover == Some(HomeHit::Card(family));
     let pressed = surface.state.pressed == Some(HomeHit::Card(family));
-    cx.backend.fill_round_rect(rect, 14.0, sheet(surface));
+    let palette = home_palette(surface);
+    let paint_rect = if hover {
+        Rect::xywh(rect.origin.x, rect.origin.y - 6.0, rect.size.x, rect.size.y)
+    } else {
+        rect
+    };
+    if surface.ui.effective_theme_mode() == ThemeMode::Light {
+        cx.backend.fill_drop_shadow(
+            Rect::xywh(
+                paint_rect.origin.x - 2.0,
+                paint_rect.origin.y + 2.0,
+                paint_rect.size.x + 4.0,
+                paint_rect.size.y + 4.0,
+            ),
+            14.0,
+            8.0,
+            Color::BLACK.with_alpha(0.10),
+        );
+    }
+    cx.backend.fill_round_rect(paint_rect, 14.0, palette.sheet);
     if hover || pressed {
         cx.backend.fill_round_rect(
-            rect,
+            paint_rect,
             14.0,
-            surface
-                .theme
-                .primary
-                .with_alpha(if pressed { 0.18 } else { 0.08 }),
+            palette.blue.with_alpha(if pressed { 0.18 } else { 0.08 }),
         );
     }
     cx.backend.stroke_round_rect(
-        rect,
+        paint_rect,
         14.0,
         if surface.state.bound == Some(family) {
-            surface.theme.primary
+            palette.blue
         } else {
-            line(surface)
+            palette.line
         },
         1.0,
     );
     let art = Rect::xywh(
-        rect.origin.x,
-        rect.origin.y,
-        rect.size.x,
-        (rect.size.y - 66.0).max(60.0),
+        paint_rect.origin.x,
+        paint_rect.origin.y,
+        paint_rect.size.x,
+        (paint_rect.size.y.min(200.0) - 64.0).max(40.0),
     );
-    cx.backend.fill_rect(
-        art,
-        if surface.ui.effective_theme_mode() == ThemeMode::Light {
-            Color::rgb_u8(0xED, 0xE8, 0xDE)
-        } else {
-            surface.theme.muted
-        },
+    cx.backend.fill_rect(art, palette.paper_2);
+    let tag = Rect::xywh(art.origin.x + 12.0, art.origin.y + 12.0, 44.0, 22.0);
+    cx.backend
+        .fill_round_rect(tag, 7.0, palette.sheet.with_alpha(0.86));
+    text(
+        cx,
+        "示例",
+        Point2D::new(tag.origin.x + 8.0, tag.origin.y + 15.0),
+        11.0,
+        palette.graphite,
+        MONO,
     );
     match family {
         HomeFamily::AppUi => paint_app_flow(surface, cx, art),
@@ -469,14 +624,15 @@ fn paint_card(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect, famil
         }
         HomeFamily::EventPoster => paint_template_preview(surface, cx, art, "event-poster-deck"),
     }
-    let title_y = rect.origin.y + rect.size.y - 43.0;
-    text(
+    let title_y = paint_rect.origin.y + paint_rect.size.y - 43.0;
+    text_weighted(
         cx,
         family.label(),
-        Point2D::new(rect.origin.x + 14.0, title_y),
+        Point2D::new(paint_rect.origin.x + 14.0, title_y),
         15.0,
-        label_color(surface),
+        palette.ink,
         SANS,
+        650,
     );
     let desc = match family {
         HomeFamily::AppUi => "一句话或一张截图，到可编辑的高保真界面",
@@ -487,56 +643,63 @@ fn paint_card(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect, famil
     text(
         cx,
         desc,
-        Point2D::new(rect.origin.x + 14.0, title_y + 22.0),
-        11.5,
-        graphite(surface),
+        Point2D::new(paint_rect.origin.x + 14.0, title_y + 22.0),
+        12.5,
+        palette.graphite,
         SANS,
     );
 }
 
 fn paint_app_flow(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, art: Rect) {
-    let phone_w = 48.0;
-    let phone_h = (art.size.y - 28.0).min(112.0);
+    let palette = home_palette(surface);
+    let phone_w = 56.0;
+    let phone_h = art.size.y.min(136.0) - 30.0;
     let y = art.origin.y + (art.size.y - phone_h) / 2.0;
     let start_x = art.origin.x + (art.size.x - phone_w * 3.0 - 48.0) / 2.0;
     for index in 0..3 {
         let x = start_x + index as f32 * (phone_w + 24.0);
-        let phone = Rect::xywh(x, y, phone_w, phone_h);
-        cx.backend.fill_round_rect(phone, 8.0, sheet(surface));
+        let nudged = if surface.state.hover == Some(HomeHit::Card(HomeFamily::AppUi)) && index == 1
+        {
+            Rect::xywh(x + 3.0, y - 3.0, phone_w, phone_h)
+        } else {
+            Rect::xywh(x, y, phone_w, phone_h)
+        };
+        let phone = nudged;
+        cx.backend.fill_round_rect(phone, 8.0, palette.sheet);
         cx.backend
-            .stroke_round_rect(phone, 8.0, graphite(surface), 1.0);
+            .stroke_round_rect(phone, 8.0, palette.graphite, 1.2);
         cx.backend.fill_rect(
             Rect::xywh(x + 7.0, y + 12.0, phone_w - 14.0, 7.0),
-            line(surface),
+            palette.line,
         );
         cx.backend.fill_rect(
             Rect::xywh(x + 7.0, y + 28.0, phone_w - 14.0, 6.0),
-            line(surface),
+            palette.line,
         );
         cx.backend.fill_rect(
             Rect::xywh(x + 7.0, y + 42.0, phone_w - 14.0, 6.0),
-            line(surface),
+            palette.line,
         );
         cx.backend.fill_round_rect(
             Rect::xywh(x + 7.0, y + phone_h - 22.0, phone_w - 14.0, 10.0),
             3.0,
             if index == 1 {
-                surface.theme.primary
+                palette.blue
             } else {
-                graphite(surface).with_alpha(0.35)
+                palette.graphite.with_alpha(0.35)
             },
         );
         if index < 2 {
             cx.backend.stroke_line(
                 Point2D::new(x + phone_w + 5.0, y + phone_h / 2.0),
                 Point2D::new(x + phone_w + 18.0, y + phone_h / 2.0),
-                surface.theme.primary,
+                palette.blue,
                 1.5,
             );
             cx.backend.stroke_line(
                 Point2D::new(x + phone_w + 14.0, y + phone_h / 2.0 - 4.0),
                 Point2D::new(x + phone_w + 18.0, y + phone_h / 2.0),
-                surface.theme.primary,
+                palette.blue,
                 1.5,
             );
         }
@@ -563,44 +726,73 @@ fn paint_template_preview(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect:
         cx.backend
             .draw_image_with_mode(rect, asset.image_id, bytes, ImageDrawMode::Fill);
     } else {
-        cx.backend.fill_rect(rect, surface.theme.muted);
+        cx.backend.fill_rect(rect, home_palette(surface).paper_2);
     }
 }
 
 fn paint_footer(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, layout: HomeLayout) {
+    let palette = home_palette(surface);
     text(
         cx,
-        "最近项目",
+        "最近项目（空）",
         Point2D::new(layout.footer.origin.x, layout.footer.origin.y + 16.0),
         13.0,
-        graphite(surface),
+        palette.graphite,
         SANS,
     );
     text(
         cx,
         "·",
-        Point2D::new(layout.footer.origin.x + 72.0, layout.footer.origin.y + 16.0),
+        Point2D::new(layout.footer.origin.x + 88.0, layout.footer.origin.y + 16.0),
         13.0,
-        graphite(surface),
+        palette.graphite,
         SANS,
     );
     text(
         cx,
         "新建空白画布",
-        Point2D::new(layout.footer.origin.x + 88.0, layout.footer.origin.y + 16.0),
+        Point2D::new(
+            layout.footer.origin.x + 104.0,
+            layout.footer.origin.y + 16.0,
+        ),
         13.0,
-        label_color(surface),
+        palette.ink,
         SANS,
     );
     text(
         cx,
-        "打开文件",
+        "·  打开文件",
         Point2D::new(
-            layout.footer.origin.x + 190.0,
+            layout.footer.origin.x + 206.0,
             layout.footer.origin.y + 16.0,
         ),
         13.0,
-        label_color(surface),
+        palette.ink,
         SANS,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{resolve_headline_family, EditorUiState};
+    use std::sync::Arc;
+
+    #[test]
+    fn headline_serif_resolution_follows_the_authored_candidate_order() {
+        let ui = EditorUiState {
+            system_font_families: Arc::new(vec!["Source Han Serif SC".into(), "Songti SC".into()]),
+            ..EditorUiState::default()
+        };
+        assert_eq!(resolve_headline_family(&ui), "Songti SC");
+    }
+
+    #[test]
+    fn headline_serif_resolution_falls_back_to_sans_when_unavailable() {
+        let ui = EditorUiState {
+            system_font_families: Arc::new(vec!["PingFang SC".into()]),
+            bundled_font_families: Arc::new(vec!["Inter".into()]),
+            ..EditorUiState::default()
+        };
+        assert_eq!(resolve_headline_family(&ui), "system-ui");
+    }
 }

@@ -151,6 +151,10 @@ pub struct HomeState {
     pub draft: String,
     pub hover: Option<HomeHit>,
     pub pressed: Option<HomeHit>,
+    /// Scroll offset for a home stack that is taller than the viewport.
+    /// The footer and top bar stay pinned while the drafting-table content
+    /// moves inside the area between them.
+    pub scroll_y: f32,
     /// The same caret/selection machinery used by the chat composer. `draft`
     /// remains the public Home contract; this field keeps native text input,
     /// IME, clipboard, and caret edits lossless.
@@ -166,6 +170,7 @@ impl Default for HomeState {
             draft: String::new(),
             hover: None,
             pressed: None,
+            scroll_y: 0.0,
             input: TextInputState::default(),
         }
     }

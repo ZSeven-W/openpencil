@@ -119,6 +119,7 @@ mod git_press;
 mod helpers;
 mod history_guard;
 mod home;
+mod home_scroll;
 mod host_lifecycle;
 mod host_requests;
 mod html_import_diagnostics_dispatch;
@@ -260,9 +261,9 @@ mod theme_tests;
 mod toolbar_actions;
 mod toolbar_hover;
 #[cfg(test)]
-mod top_bar_tooltip_tests;
 mod top_bar_home_tests;
 #[cfg(test)]
+mod top_bar_tooltip_tests;
 mod touch_panel_gesture;
 #[cfg(test)]
 mod touch_panel_gesture_tests;

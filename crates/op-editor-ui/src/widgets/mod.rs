@@ -50,7 +50,7 @@ mod layer_panel_touch_tests;
 mod layer_panel_walkers;
 pub mod path_anchor_context_menu;
 pub mod prompt_center_panel;
-pub use home_surface::{HomeLayout, HomeSurface};
+pub use home_surface::{HomeLayout, HomeSurface, HOME_TOPBAR_H};
 pub(crate) mod prompt_center_previews;
 pub mod scene_template_panel;
 pub use scene_template_panel::{

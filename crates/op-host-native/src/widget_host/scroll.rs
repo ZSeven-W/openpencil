@@ -478,6 +478,9 @@ impl WidgetHostNative {
         viewport_height: f32,
         zoom_intent: bool,
     ) -> bool {
+        if self.try_scroll_home(x, y, delta_y, viewport_width, viewport_height) {
+            return true;
+        }
         if self.try_scroll_figma_import(x, y, delta_y, viewport_width, viewport_height) {
             return true;
         }
@@ -650,6 +653,9 @@ impl WidgetHostNative {
         viewport_height: f32,
     ) -> bool {
         let cancelled = self.cancel_native_touch_gestures();
+        if self.try_scroll_home(x, y, dy, viewport_width, viewport_height) {
+            return true;
+        }
         if self.try_scroll_missing_fonts_picker(x, y, dy, viewport_width, viewport_height) {
             return true;
         }

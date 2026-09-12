@@ -11,6 +11,10 @@ use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Point2D, Rect};
 use op_editor_core::{EditorState, HomeDevice, HomeFamily, HomeHit, HomeState};
 
+#[path = "home_surface_palette.rs"]
+mod palette;
+pub use palette::HomePalette;
+
 pub const HOME_TOPBAR_H: f32 = 64.0;
 const CONTENT_MAX_W: f32 = 720.0;
 const PAGE_PAD: f32 = 48.0;
@@ -18,6 +22,15 @@ const CARD_MAX_W: f32 = 280.0;
 const CARD_GAP: f32 = 22.0;
 const CARD_ROW_GAP: f32 = 18.0;
 const FOOTER_H: f32 = 22.0;
+const FOOTER_BOTTOM_GAP: f32 = 14.0;
+const STACK_BOTTOM_GAP: f32 = 14.0;
+const HEADLINE_H: f32 = 52.0;
+const SUBTITLE_H: f32 = 18.0;
+const SHEET_H: f32 = 150.0;
+const CHIP_H: f32 = 38.0;
+const EXPECTED_H: f32 = 26.0;
+const CARDS_GAP: f32 = 40.0;
+const CARD_H: f32 = 200.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HomeLayout {
@@ -46,6 +59,35 @@ impl HomeLayout {
 
     pub fn card_family(index: usize) -> Option<HomeFamily> {
         HomeFamily::ALL.get(index).copied()
+    }
+
+    fn translated_stack(self, scroll_y: f32) -> Self {
+        let translate = |rect: Rect| {
+            Rect::xywh(
+                rect.origin.x,
+                rect.origin.y - scroll_y,
+                rect.size.x,
+                rect.size.y,
+            )
+        };
+        Self {
+            headline: translate(self.headline),
+            subtitle: translate(self.subtitle),
+            sheet: translate(self.sheet),
+            sheet_text: translate(self.sheet_text),
+            screenshot: translate(self.screenshot),
+            reference_link: translate(self.reference_link),
+            figma: translate(self.figma),
+            example: translate(self.example),
+            send: translate(self.send),
+            chips: self.chips.map(translate),
+            expected: translate(self.expected),
+            device_mobile: translate(self.device_mobile),
+            device_desktop: translate(self.device_desktop),
+            cards: self.cards.map(translate),
+            footer: self.footer,
+            professional: self.professional,
+        }
     }
 }
 
@@ -77,94 +119,127 @@ impl<'a> HomeSurface<'a> {
         viewport_height: f32,
         bound: Option<HomeFamily>,
     ) -> HomeLayout {
+        Self::layout_for_scrolled(viewport_width, viewport_height, bound, 0.0)
+    }
+
+    pub fn layout_for_scrolled(
+        viewport_width: f32,
+        viewport_height: f32,
+        bound: Option<HomeFamily>,
+        scroll_y: f32,
+    ) -> HomeLayout {
         let width = viewport_width.max(1.0);
         let height = viewport_height.max(1.0);
         let narrow = width <= 1180.0;
-        let headline_y = if height < 820.0 { 82.0 } else { 112.0 };
-        let headline = Rect::xywh((width - 520.0) / 2.0, headline_y, 520.0, 58.0);
-        let subtitle = Rect::xywh((width - 520.0) / 2.0, headline.origin.y + 67.0, 520.0, 22.0);
+        let footer = Rect::xywh(
+            PAGE_PAD,
+            height - FOOTER_BOTTOM_GAP - FOOTER_H,
+            width - PAGE_PAD * 2.0,
+            FOOTER_H,
+        );
+        let top = HOME_TOPBAR_H;
+        let bottom = if narrow {
+            (footer.origin.y - STACK_BOTTOM_GAP).max(top)
+        } else {
+            footer.origin.y.max(top)
+        };
+        let pre_cards_h = HEADLINE_H
+            + 14.0
+            + SUBTITLE_H
+            + 34.0
+            + SHEET_H
+            + 18.0
+            + CHIP_H
+            + 14.0
+            + EXPECTED_H
+            + CARDS_GAP;
+        let columns = if narrow { 2 } else { 4 };
+        let rows: usize = if narrow { 2 } else { 1 };
+        let card_height = if narrow {
+            (((bottom - top) - pre_cards_h - CARD_ROW_GAP) / 2.0).clamp(104.0, CARD_H)
+        } else {
+            CARD_H
+        };
+        let stack_height = pre_cards_h
+            + card_height * rows as f32
+            + CARD_ROW_GAP * (rows.saturating_sub(1) as f32);
+        let stack_top = if narrow {
+            top.max(top + ((bottom - top - stack_height) / 2.0).max(0.0))
+        } else {
+            top + ((bottom - top - stack_height) / 2.0).max(0.0)
+        };
+        let headline = Rect::xywh((width - 520.0) / 2.0, stack_top, 520.0, HEADLINE_H);
+        let subtitle = Rect::xywh(
+            (width - 520.0) / 2.0,
+            headline.origin.y + HEADLINE_H + 14.0,
+            520.0,
+            SUBTITLE_H,
+        );
         let sheet_width = CONTENT_MAX_W.min((width - PAGE_PAD * 2.0).max(260.0));
-        let sheet_height = if height < 820.0 { 132.0 } else { 150.0 };
         let sheet = Rect::xywh(
             (width - sheet_width) / 2.0,
-            subtitle.origin.y + subtitle.size.y + 28.0,
+            subtitle.origin.y + SUBTITLE_H + 34.0,
             sheet_width,
-            sheet_height,
+            SHEET_H,
         );
         let sheet_text = Rect::xywh(
-            sheet.origin.x + 20.0,
+            sheet.origin.x + 24.0,
             sheet.origin.y + 20.0,
             sheet.size.x - 40.0,
-            (sheet.size.y - 68.0).max(32.0),
+            34.0,
         );
-        let refs_top = sheet.origin.y + sheet.size.y - 46.0;
-        let screenshot = Rect::xywh(sheet.origin.x + 12.0, refs_top, 62.0, 28.0);
-        let reference_link = Rect::xywh(screenshot.origin.x + 62.0, refs_top, 92.0, 28.0);
-        let figma = Rect::xywh(reference_link.origin.x + 92.0, refs_top, 58.0, 28.0);
-        let example = Rect::xywh(figma.origin.x + 58.0, refs_top, 112.0, 28.0);
+        let refs_top = sheet.origin.y + sheet.size.y - 45.0;
+        let screenshot = Rect::xywh(sheet.origin.x + 24.0, refs_top, 70.0, 28.0);
+        let reference_link = Rect::xywh(screenshot.origin.x + 70.0, refs_top, 108.0, 28.0);
+        let figma = Rect::xywh(reference_link.origin.x + 108.0, refs_top, 68.0, 28.0);
+        let example = Rect::xywh(figma.origin.x + 68.0, refs_top, 126.0, 28.0);
         let send = Rect::xywh(
-            sheet.origin.x + sheet.size.x - 54.0,
-            sheet.origin.y + sheet.size.y - 48.0,
-            38.0,
-            38.0,
+            sheet.origin.x + sheet.size.x - 56.0,
+            sheet.origin.y + sheet.size.y - 52.0,
+            40.0,
+            40.0,
         );
 
         let chip_widths = [106.0, 106.0, 106.0, 106.0];
         let chip_gap = 8.0;
         let chips_width = chip_widths.iter().sum::<f32>() + chip_gap * 3.0;
         let chips_x = (width - chips_width) / 2.0;
-        let chips_y = sheet.origin.y + sheet.size.y + 16.0;
+        let chips_y = sheet.origin.y + sheet.size.y + 18.0;
         let chips = [
-            Rect::xywh(chips_x, chips_y, chip_widths[0], 38.0),
+            Rect::xywh(chips_x, chips_y, chip_widths[0], CHIP_H),
             Rect::xywh(
                 chips_x + (chip_widths[0] + chip_gap),
                 chips_y,
                 chip_widths[1],
-                38.0,
+                CHIP_H,
             ),
             Rect::xywh(
                 chips_x + (chip_widths[0] + chip_gap) * 2.0,
                 chips_y,
                 chip_widths[2],
-                38.0,
+                CHIP_H,
             ),
             Rect::xywh(
                 chips_x + (chip_widths[0] + chip_gap) * 3.0,
                 chips_y,
                 chip_widths[3],
-                38.0,
+                CHIP_H,
             ),
         ];
 
-        let expected = bound.map_or(Rect::ZERO, |_| {
-            Rect::xywh((width - 470.0) / 2.0, chips_y + 48.0, 470.0, 30.0)
-        });
-        let hero_bottom = if bound.is_some() {
-            expected.origin.y + expected.size.y
-        } else {
-            chips_y + 38.0
-        };
-
-        let columns = if narrow { 2 } else { 4 };
-        let rows = if narrow { 2 } else { 1 };
+        let expected = Rect::xywh(
+            (width - 580.0) / 2.0,
+            chips_y + CHIP_H + 14.0,
+            580.0,
+            EXPECTED_H,
+        );
         let card_width = if narrow {
             ((width - PAGE_PAD * 2.0 - CARD_GAP) / 2.0).min(CARD_MAX_W)
         } else {
             CARD_MAX_W
         };
-        let card_height = if narrow {
-            ((height - 44.0 - FOOTER_H - CARD_ROW_GAP - hero_bottom - 28.0) / 2.0)
-                .clamp(104.0, 196.0)
-        } else {
-            196.0
-        };
         let grid_width = card_width * columns as f32 + CARD_GAP * (columns - 1) as f32;
-        let grid_top = (height
-            - 44.0
-            - FOOTER_H
-            - card_height * rows as f32
-            - CARD_ROW_GAP * (rows - 1) as f32)
-            .max(hero_bottom + 28.0);
+        let grid_top = expected.origin.y + EXPECTED_H + CARDS_GAP;
         let grid_x = (width - grid_width) / 2.0;
         let mut cards = [Rect::ZERO; 4];
         for (index, card) in cards.iter_mut().enumerate() {
@@ -177,34 +252,28 @@ impl<'a> HomeSurface<'a> {
                 card_height,
             );
         }
-        let footer = Rect::xywh(
-            PAGE_PAD,
-            height - 14.0 - FOOTER_H,
-            width - PAGE_PAD * 2.0,
-            FOOTER_H,
-        );
         let professional = Rect::xywh((width - 270.0).max(PAGE_PAD), 22.0, 222.0, 28.0);
         let device_mobile = if bound == Some(HomeFamily::AppUi) {
             Rect::xywh(
-                expected.origin.x + 282.0,
-                expected.origin.y + 1.0,
-                76.0,
-                28.0,
+                expected.origin.x + 474.0,
+                expected.origin.y,
+                52.0,
+                EXPECTED_H,
             )
         } else {
             Rect::ZERO
         };
         let device_desktop = if bound == Some(HomeFamily::AppUi) {
             Rect::xywh(
-                expected.origin.x + 358.0,
-                expected.origin.y + 1.0,
-                76.0,
-                28.0,
+                expected.origin.x + 526.0,
+                expected.origin.y,
+                52.0,
+                EXPECTED_H,
             )
         } else {
             Rect::ZERO
         };
-        HomeLayout {
+        let layout = HomeLayout {
             headline,
             subtitle,
             sheet,
@@ -221,11 +290,32 @@ impl<'a> HomeSurface<'a> {
             cards,
             footer,
             professional,
-        }
+        };
+        layout.translated_stack(scroll_y.max(0.0))
+    }
+
+    pub fn max_scroll_for(
+        viewport_width: f32,
+        viewport_height: f32,
+        bound: Option<HomeFamily>,
+    ) -> f32 {
+        let layout = Self::layout_for(viewport_width, viewport_height, bound);
+        let content_bottom = layout
+            .cards
+            .iter()
+            .map(|card| card.origin.y + card.size.y)
+            .fold(layout.expected.origin.y + layout.expected.size.y, f32::max);
+        (content_bottom - layout.footer.origin.y + STACK_BOTTOM_GAP).max(0.0)
     }
 
     pub fn layout(&self, viewport_width: f32, viewport_height: f32) -> HomeLayout {
-        Self::layout_for(viewport_width, viewport_height, self.state.bound)
+        let max_scroll = Self::max_scroll_for(viewport_width, viewport_height, self.state.bound);
+        Self::layout_for_scrolled(
+            viewport_width,
+            viewport_height,
+            self.state.bound,
+            self.state.scroll_y.clamp(0.0, max_scroll),
+        )
     }
 
     pub fn hit_test(

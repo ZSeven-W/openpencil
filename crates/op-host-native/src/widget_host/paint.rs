@@ -38,6 +38,12 @@ impl WidgetHostNative {
             self.theme.background,
         );
 
+        if self.editor_state.editor_ui.home.visible {
+            // The Home headline resolves its serif at paint time. Load the
+            // native family snapshot before constructing the surface so the
+            // first frame does not fall back to the editor sans face.
+            self.ensure_system_fonts_loaded();
+        }
         if let Some(home) = HomeSurface::for_editor_at(&self.editor_state, self.now_ms) {
             let mut cx = PaintCx {
                 backend: &mut *frame,
