@@ -21,9 +21,44 @@ fn button_dark_bg_gets_white_text() {
     );
 }
 
+/// The shadcn rename (c40a4f69) rewrote the five saturated-accent roots in
+/// place and landed `--primary` and `--color-error` twice each, so the token
+/// the old `color-danger` maps to — `--destructive`, seeded at `#EF4444` with
+/// a `#FFFFFF` foreground — fell out of the list. A destructive button then
+/// took the `None => return` arm and kept the model's default-dark icon.
+#[test]
+fn destructive_token_button_flips_dark_icon_to_white() {
+    for token in ["$--destructive", "$--color-error", "$--color-success"] {
+        let mut btn = json!({
+            "type":"frame","role":"icon-button",
+            "fill":[{"type":"solid","color": token}],
+            "children":[{"type":"icon_font","iconFontName":"trash",
+                "fill":[{"type":"solid","color":"#0F172A"}]}]
+        });
+        fix_button_foreground_contrast(&mut btn);
+        assert_eq!(
+            btn["children"][0]["fill"],
+            json!([{"type":"solid","color":"#FFFFFF"}]),
+            "{token} button must flip its dark icon to white"
+        );
+    }
+
+    // `--color-warning` stays excluded: a light amber reads better dark.
+    let mut warning = json!({
+        "type":"frame","role":"icon-button",
+        "fill":[{"type":"solid","color":"$--color-warning"}],
+        "children":[{"type":"icon_font","fill":[{"type":"solid","color":"#0F172A"}]}]
+    });
+    fix_button_foreground_contrast(&mut warning);
+    assert_eq!(
+        warning["children"][0]["fill"],
+        json!([{"type":"solid","color":"#0F172A"}])
+    );
+}
+
 #[test]
 fn accent_token_button_flips_dark_icon_to_white() {
-    // Regression: a `$--primary` (or `$--primary`) button binds its bg
+    // Regression: a `$--primary` (or `$--destructive`) button binds its bg
     // hex only at render time, so the contrast pass could not read its
     // luminance and left the model's default-dark icon on the orange accent.
     let mut btn = json!({
