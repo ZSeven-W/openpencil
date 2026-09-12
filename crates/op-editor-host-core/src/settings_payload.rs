@@ -147,6 +147,7 @@ pub fn image_gen_profile_to_payload(profile: &ImageGenProfile) -> ImageGenProfil
             ImageGenProvider::OpenAi => "openai",
             ImageGenProvider::Gemini => "gemini",
             ImageGenProvider::Replicate => "replicate",
+            ImageGenProvider::Atlas => "atlas",
             ImageGenProvider::Custom => "custom",
         }
         .into(),
@@ -161,6 +162,7 @@ pub fn image_gen_profile_from_payload(payload: ImageGenProfilePayload) -> Option
         "openai" => ImageGenProvider::OpenAi,
         "gemini" => ImageGenProvider::Gemini,
         "replicate" => ImageGenProvider::Replicate,
+        "atlas" => ImageGenProvider::Atlas,
         "custom" => ImageGenProvider::Custom,
         _ => return None,
     };
