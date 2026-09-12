@@ -225,6 +225,14 @@ impl GitRepo {
         let Some(rel_str) = rel.to_str() else {
             return Ok(());
         };
+        // `<rev>:<path>` addresses a *tree* entry, and git tree entries are
+        // `/`-separated on every platform. `rel_to_workdir` hands back an OS
+        // path, so on Windows this is `designs\home.op` and the lookup misses
+        // for anything below the repository root — only a root-level file, which
+        // has no separator, resolves. `git_session::tracked_relpath` normalizes
+        // for the same reason; `MAIN_SEPARATOR` keeps a literal backslash in a
+        // Unix filename intact.
+        let rel_str = rel_str.replace(std::path::MAIN_SEPARATOR, "/");
         let object = repo.revparse_single(&format!("{commit}:{rel_str}"))?;
         let blob = object.peel_to_blob()?;
         let abs = self.workdir().join(&rel);

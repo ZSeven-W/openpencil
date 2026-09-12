@@ -143,6 +143,30 @@ fn restore_reverts_a_modified_file() {
     assert_eq!(content, "committed");
 }
 
+/// The git panel restores through `git_session.tracked_file()`, an absolute
+/// path, so `rel_to_workdir` yields an OS-separated relative path. A `<rev>:
+/// <path>` revspec only understands `/`, so on Windows every document below
+/// the repository root failed to resolve — root-level files happened to work
+/// because they carry no separator, which is why both existing tests missed it.
+#[test]
+fn restore_reverts_a_file_below_the_repository_root() {
+    let Some(tr) = TempRepo::new("restore-subdir") else {
+        return;
+    };
+    std::fs::create_dir_all(tr.dir.join("designs")).expect("mkdir");
+    tr.write("designs/a.op", "committed");
+    tr.repo.stage_all().expect("stage");
+    tr.repo.commit("init").expect("commit");
+
+    let absolute = tr.dir.join("designs").join("a.op");
+    std::fs::write(&absolute, "scratch edit").expect("write");
+    assert!(!tr.repo.status().expect("status").is_clean());
+
+    tr.repo.restore(&absolute, "HEAD").expect("restore");
+    assert_eq!(std::fs::read_to_string(&absolute).unwrap(), "committed");
+    assert!(tr.repo.status().expect("status").is_clean());
+}
+
 #[test]
 fn restore_rolls_a_file_back_to_an_older_commit() {
     let Some(tr) = TempRepo::new("restore-commit") else {
