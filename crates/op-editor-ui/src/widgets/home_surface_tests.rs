@@ -88,6 +88,19 @@ fn home_hit_test_resolves_chip_and_send() {
     );
 }
 
+#[test]
+fn home_card_tag_label_distinguishes_the_app_flow_card() {
+    assert_eq!(
+        super::paint::card_tag_label(HomeFamily::AppUi),
+        "示例 · 三屏"
+    );
+    for family in HomeFamily::ALL {
+        if family != HomeFamily::AppUi {
+            assert_eq!(super::paint::card_tag_label(family), "示例");
+        }
+    }
+}
+
 fn center(rect: Rect) -> Point2D {
     Point2D::new(
         rect.origin.x + rect.size.x / 2.0,

@@ -1,12 +1,14 @@
 //! Immediate-mode paint pass for the 制图台 Home surface.
 
+#[path = "home_surface_paint_cards.rs"]
+mod cards;
+
+use self::cards::{paint_app_flow, paint_template_preview};
 use super::{HomeLayout, HomePalette, HomeSurface, HOME_TOPBAR_H};
-use crate::widgets::canvas_viewport_image::{
-    has_cached_image_bytes, note_pending_decode, required_raster_edge, store_remote_image_bytes,
-};
+use crate::widgets::brand_icons::paint_figma_logo;
 use crate::widgets::property_panel_text_input::paint_text_input_view;
 use crate::widgets::{draw_icon, Icon, PaintCx};
-use crate::{Color, ImageDrawMode, Point2D, Rect, TextLayout, Theme};
+use crate::{Color, Point2D, Rect, TextLayout, Theme};
 use op_editor_core::{EditorUiState, HomeDevice, HomeFamily, HomeHit, ThemeMode};
 
 const SANS: &str = "system-ui";
@@ -387,39 +389,45 @@ fn paint_sheet(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, layout: HomeLayo
         surface.state.visible,
     );
     let refs = [
-        (layout.screenshot, HomeHit::Attachment, "截图", Icon::Image),
+        (
+            layout.screenshot,
+            HomeHit::Attachment,
+            "截图",
+            Some(Icon::Image),
+        ),
         (
             layout.reference_link,
             HomeHit::ReferenceLink,
             "参考链接",
-            Icon::ArrowUpRight,
+            Some(Icon::ArrowUpRight),
         ),
-        (layout.figma, HomeHit::Figma, "Figma", Icon::Pen),
+        // The Figma row carries the brand mark, not a lucide glyph.
+        (layout.figma, HomeHit::Figma, "Figma", None),
         (
             layout.example,
             HomeHit::TryExample,
             "试试这个示例",
-            Icon::Sparkles,
+            Some(Icon::Sparkles),
         ),
     ];
     for (rect, hit, label, icon) in refs {
         let disabled = matches!(hit, HomeHit::ReferenceLink | HomeHit::Figma);
-        let color = if disabled {
-            palette.graphite.with_alpha(0.65)
-        } else {
-            palette.graphite
+        let hovered = surface.state.hover == Some(hit);
+        // The example entry is the sheet's one accent (prototype `.refs .ex`).
+        let color = match hit {
+            HomeHit::TryExample if hovered => palette.blue_2,
+            HomeHit::TryExample => palette.blue,
+            _ if disabled => palette.graphite.with_alpha(0.65),
+            _ => palette.graphite,
         };
-        if surface.state.hover == Some(hit) && !disabled {
+        if hovered && !disabled {
             cx.backend.fill_round_rect(rect, 8.0, palette.paper_2);
         }
-        draw_icon(
-            cx.backend,
-            icon,
-            Point2D::new(rect.origin.x, rect.origin.y + 6.0),
-            14.0,
-            color,
-            1.25,
-        );
+        let icon_origin = Point2D::new(rect.origin.x, rect.origin.y + 6.0);
+        match icon {
+            Some(icon) => draw_icon(cx.backend, icon, icon_origin, 14.0, color, 1.25),
+            None => paint_figma_logo(cx.backend, icon_origin, 14.0, color),
+        }
         text(
             cx,
             label,
@@ -428,7 +436,7 @@ fn paint_sheet(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, layout: HomeLayo
             color,
             SANS,
         );
-        if disabled && surface.state.hover == Some(hit) {
+        if disabled && hovered {
             let tooltip = Rect::xywh(rect.origin.x, rect.origin.y - 28.0, 68.0, 22.0);
             cx.backend.fill_round_rect(tooltip, 7.0, palette.ink);
             text(
@@ -556,6 +564,15 @@ fn paint_expected(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, layout: HomeL
     }
 }
 
+/// Corner tag on a family card's art; the App card names its three screens.
+pub(super) fn card_tag_label(family: HomeFamily) -> &'static str {
+    if family == HomeFamily::AppUi {
+        "示例 · 三屏"
+    } else {
+        "示例"
+    }
+}
+
 fn paint_card(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect, family: HomeFamily) {
     let hover = surface.state.hover == Some(HomeHit::Card(family));
     let pressed = surface.state.pressed == Some(HomeHit::Card(family));
@@ -603,17 +620,6 @@ fn paint_card(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect, famil
         (paint_rect.size.y.min(200.0) - 64.0).max(40.0),
     );
     cx.backend.fill_rect(art, palette.paper_2);
-    let tag = Rect::xywh(art.origin.x + 12.0, art.origin.y + 12.0, 44.0, 22.0);
-    cx.backend
-        .fill_round_rect(tag, 7.0, palette.sheet.with_alpha(0.86));
-    text(
-        cx,
-        "示例",
-        Point2D::new(tag.origin.x + 8.0, tag.origin.y + 15.0),
-        11.0,
-        palette.graphite,
-        MONO,
-    );
     match family {
         HomeFamily::AppUi => paint_app_flow(surface, cx, art),
         HomeFamily::KnowledgeCards => {
@@ -624,6 +630,23 @@ fn paint_card(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect, famil
         }
         HomeFamily::EventPoster => paint_template_preview(surface, cx, art, "event-poster-deck"),
     }
+    // The tag is the art's topmost layer (prototype `.card .tag`): it
+    // paints after the family art so the App card's first phone cannot
+    // cover it.
+    let tag_label = card_tag_label(family);
+    let label_w = cx.backend.measure_text_family(tag_label, 11.0, MONO);
+    let tag_w = (label_w + 16.0).max(44.0);
+    let tag = Rect::xywh(art.origin.x + 12.0, art.origin.y + 12.0, tag_w, 22.0);
+    cx.backend
+        .fill_round_rect(tag, 7.0, palette.sheet.with_alpha(0.86));
+    text(
+        cx,
+        tag_label,
+        Point2D::new(tag.origin.x + 8.0, tag.origin.y + 15.0),
+        11.0,
+        palette.graphite,
+        MONO,
+    );
     let title_y = paint_rect.origin.y + paint_rect.size.y - 43.0;
     text_weighted(
         cx,
@@ -648,86 +671,6 @@ fn paint_card(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect, famil
         palette.graphite,
         SANS,
     );
-}
-
-fn paint_app_flow(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, art: Rect) {
-    let palette = home_palette(surface);
-    let phone_w = 56.0;
-    let phone_h = art.size.y.min(136.0) - 30.0;
-    let y = art.origin.y + (art.size.y - phone_h) / 2.0;
-    let start_x = art.origin.x + (art.size.x - phone_w * 3.0 - 48.0) / 2.0;
-    for index in 0..3 {
-        let x = start_x + index as f32 * (phone_w + 24.0);
-        let nudged = if surface.state.hover == Some(HomeHit::Card(HomeFamily::AppUi)) && index == 1
-        {
-            Rect::xywh(x + 3.0, y - 3.0, phone_w, phone_h)
-        } else {
-            Rect::xywh(x, y, phone_w, phone_h)
-        };
-        let phone = nudged;
-        cx.backend.fill_round_rect(phone, 8.0, palette.sheet);
-        cx.backend
-            .stroke_round_rect(phone, 8.0, palette.graphite, 1.2);
-        cx.backend.fill_rect(
-            Rect::xywh(x + 7.0, y + 12.0, phone_w - 14.0, 7.0),
-            palette.line,
-        );
-        cx.backend.fill_rect(
-            Rect::xywh(x + 7.0, y + 28.0, phone_w - 14.0, 6.0),
-            palette.line,
-        );
-        cx.backend.fill_rect(
-            Rect::xywh(x + 7.0, y + 42.0, phone_w - 14.0, 6.0),
-            palette.line,
-        );
-        cx.backend.fill_round_rect(
-            Rect::xywh(x + 7.0, y + phone_h - 22.0, phone_w - 14.0, 10.0),
-            3.0,
-            if index == 1 {
-                palette.blue
-            } else {
-                palette.graphite.with_alpha(0.35)
-            },
-        );
-        if index < 2 {
-            cx.backend.stroke_line(
-                Point2D::new(x + phone_w + 5.0, y + phone_h / 2.0),
-                Point2D::new(x + phone_w + 18.0, y + phone_h / 2.0),
-                palette.blue,
-                1.5,
-            );
-            cx.backend.stroke_line(
-                Point2D::new(x + phone_w + 14.0, y + phone_h / 2.0 - 4.0),
-                Point2D::new(x + phone_w + 18.0, y + phone_h / 2.0),
-                palette.blue,
-                1.5,
-            );
-        }
-    }
-}
-
-fn paint_template_preview(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect, id: &str) {
-    let Some(asset) = crate::widgets::scene_template_previews::scene_template_preview(id) else {
-        return;
-    };
-    let Some(bytes) = asset.bytes else {
-        op_editor_core::web_assets::request(asset.route);
-        return;
-    };
-    if !has_cached_image_bytes(asset.image_id) {
-        store_remote_image_bytes(asset.image_id, bytes.to_vec());
-    }
-    let max_edge = required_raster_edge(rect, cx.backend.dpi_scale());
-    let sharp = cx.backend.image_decoded(asset.image_id, bytes, max_edge);
-    if !sharp {
-        note_pending_decode(asset.image_id, max_edge);
-    }
-    if sharp || cx.backend.image_resident(asset.image_id) {
-        cx.backend
-            .draw_image_with_mode(rect, asset.image_id, bytes, ImageDrawMode::Fill);
-    } else {
-        cx.backend.fill_rect(rect, home_palette(surface).paper_2);
-    }
 }
 
 fn paint_footer(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, layout: HomeLayout) {
