@@ -35,6 +35,19 @@
 
 ## 为什么选择 OpenPencil
 
+<a href="https://www.infistar.cc/register?aff=LLZC3RLG&amp;ref_source=link" title="Infistar.cc 无限星河">
+  <img src="./screenshot/infistar-sponsor-banner.png" alt="Infistar.cc 无限星河 — 一站式全球大模型 API 服务平台" width="100%" />
+</a>
+
+### [OpenPencil × Infistar.cc 无限星河｜全模型 API · 驱动 AI 原生设计创作](https://www.infistar.cc/register?aff=LLZC3RLG&ref_source=link)
+
+感谢 [Infistar.cc 无限星河](https://www.infistar.cc/register?aff=LLZC3RLG&ref_source=link) 赞助并为 OpenPencil 提供模型服务支持！
+
+- ⚡ **稳定承载复杂设计任务：** 提供企业级高并发通道与多节点冗余，价格低至官方渠道 1 折，稳定支持长任务、流式响应与连续工具调用。
+- 🧠 **一个 API Key 接入主流模型：** 全面支持 ChatGPT、Claude、Gemini、Kimi、GLM、DeepSeek 等模型，兼容 OpenAI、Anthropic 等主流接口，可在 OpenPencil 中灵活配置模型服务。
+- 🎨 **赋能 AI 原生矢量设计：** 适用于提示词生成设计、画布内容修改、多模型协同、图片生成及设计方案迭代，让 AI Agent 更高效地完成从创意到成稿的全过程。
+- 🎁 **OpenPencil 用户专属福利：** 通过 [专属推广链接](https://www.infistar.cc/register?aff=LLZC3RLG&ref_source=link) 注册并完成首次调用，即可领取 **5 美元等值测试额度 / 首充专属优惠**！
+
 <table>
 <tr>
 <td width="50%">
@@ -71,11 +84,20 @@
 <tr>
 <td width="50%">
 
+### 🎨 风格指南
+
+内置风格指南库，支持基于标签的模糊匹配。可将视觉风格（glassmorphism、brutalist、retro 等）应用到 AI 生成的设计。提供 MCP 工具供外部智能体访问。
+
+</td>
+<td width="50%">
+
 ### 📦 设计即代码
 
 `.op` 文件是 JSON — 人类可读、对 Git 友好、可进行 diff 对比。设计变量生成 CSS 自定义属性。代码导出为 React + Tailwind 或 HTML + CSS。
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🖥️ 全平台运行
@@ -83,8 +105,6 @@
 Web 应用 + macOS、Windows 和 Linux 原生桌面端 — 单一 Rust 核心，单个自包含二进制文件，无需浏览器引擎。`.op` 文件关联 — 双击即可打开。
 
 </td>
-</tr>
-<tr>
 <td width="50%">
 
 ### ⌨️ CLI — `op`
@@ -92,11 +112,36 @@ Web 应用 + macOS、Windows 和 Linux 原生桌面端 — 单一 Rust 核心，
 从终端控制设计工具。`op design`、`op insert` — 批量设计 DSL、节点操作。支持从文件或 stdin 管道输入。可搭配桌面应用或 Web 服务器使用。
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🎯 多平台代码导出
 
 从单个 `.op` 文件导出到 React + Tailwind、HTML + CSS、Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native。设计变量自动转换为 CSS 自定义属性。
+
+</td>
+<td width="50%">
+
+### 🧩 可嵌入 SDK
+
+`op-web-sdk`（vanilla）+ `op-web-sdk-react` / `op-web-sdk-vue` 适配器 — 在你自己的应用中嵌入只读 `.op` 查看器，由编辑器同款 wasm 渲染器驱动。
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🛡️ 设计系统套件
+
+管理可复用 UIKit，支持风格切换与组件组合。可从 `.pen` 文件导入/导出套件。内置注册中心，并提供 MCP 工具供外部访问。
+
+</td>
+<td width="50%">
+
+### 👥 实时协同
+
+通过经过身份验证的点对点会话一起设计，支持公共中继与内置的区域协作 Hub。使用短配对码加入，查看实时远程光标，并通过逐条编辑详情与回放解决冲突。
 
 </td>
 </tr>
@@ -121,6 +166,10 @@ scoop install openpencil
 ```
 
 **Linux / Windows 直接下载：** [GitHub Releases](https://github.com/ZSeven-W/openpencil/releases) — `.exe`（Windows）、`.AppImage` / `.deb`（Linux）
+
+Windows `.exe` 安装程序、两个 Scoop 软件包以及 `install-op.ps1` CLI 安装程序会在每次安装或升级时检查，并在需要时维护所固定的、经 Microsoft 签名的 Visual C++ v14 运行时。便携版 Windows `.zip` 归档与 Windows VSIX 软件包不会运行提权的系统安装程序；直接使用这些产物前，请先安装 Microsoft 的[最新支持的 Visual C++ 可再发行组件](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)。
+
+> 杀毒软件标记了 Windows 安装程序？这是新发布、低流行度版本已知的启发式误报 — 请参阅[如何验证你的下载](docs/security/antivirus-false-positives.md)。
 
 **Nix（Linux x86_64）：**
 
@@ -192,6 +241,14 @@ git submodule sync --recursive && git submodule update --init --recursive
 bash scripts/start-web-rust.sh
 ```
 
+浏览器中录入的内置提供商、图像生成与 Openverse 凭据默认保存在同源 `localStorage`（`openpencil-rust-web-credentials`）中，与普通 Web 首选项分开存储。AI 请求所需的凭据会随该请求一起发送，但守护进程不会将浏览器快照写入 `settings.json`。
+
+私有部署可以通过 `OPENPENCIL_PERSIST_WEB_CREDENTIALS_SERVER=true` 选择启用服务器端持久化。该设置是部署级的；每个被接受的浏览器快照都会替换共享的、由浏览器持有的副本。仅应在受信任、具备访问控制、只有一个活跃管理员配置文件且位于 HTTPS 之后的部署中启用。关闭该设置后，之前持久化的浏览器持有凭据会在下次启动时被移除，同时保留操作员持有的配置。与所有 `localStorage` 一样，同源脚本可以读取这些值，因此 Web 源必须避免不受信任的脚本与 XSS。在降级到早于该开关的版本之前，请先关闭该设置并启动一次当前版本，以清除浏览器持有的副本。
+
+Web 宿主仅支持内置的 API 密钥智能体。CLI 与 ACP 智能体仍为原生端专属：它们不会显示在 Web 模型选择器中，也不会存储于浏览器凭据快照、同步到服务器，或通过 Web 连接路由暴露。浏览器对凭据与 AI 端点的请求默认允许 loopback/localhost 源。公开反向代理必须另行将 `OPENPENCIL_WEB_ALLOWED_ORIGINS` 设置为以逗号分隔的精确源列表，例如 `https://demo.openpencil.dev`。
+
+服务器端持久化不允许浏览器控制的请求访问 loopback、私有、链路本地、元数据或保留的提供商端点。有意使用内部提供商的受信任私有部署必须另行将 `OPENPENCIL_WEB_AI_ENDPOINT_ALLOWLIST` 设置为以逗号分隔的精确 URL 源列表，例如 `http://127.0.0.1:11434,https://llm.internal.example`。
+
 或以桌面应用形式运行：
 
 ```bash
@@ -232,8 +289,11 @@ docker run -p 3100:3100 openpencil-web-rust
 
 - **文字转设计** — 描述一个页面，实时以流式动画在画布上生成
 - **编排器** — 将复杂页面分解为空间子任务，支持并行生成
+- **Agent 团队** — 并发团队成员，具备委派工具、每位成员的画布指示器与回退策略
 - **设计修改** — 选中元素后，用自然语言描述更改
 - **视觉输入** — 附加截图或线框图作为参考进行设计
+- **风格指南** — 通过基于标签的模糊匹配应用视觉风格（glassmorphism、brutalist、retro 等）
+- **Anti-slop** — 跨代生成多样性追踪，避免重复的 AI 输出
 
 **多智能体支持**
 
@@ -256,6 +316,7 @@ docker run -p 3100:3100 openpencil-web-rust
 - 从终端进行设计自动化：通过任意 MCP 兼容的智能体读取、创建和修改 `.op` 文件
 - **分层设计工作流** — `design_skeleton` → `design_content` → `design_refine`，实现更高保真度的多区块设计
 - **分段提示词检索** — 按需加载所需的设计知识（schema、layout、roles、icons、planning 等）
+- **风格指南工具** — `get_style_guide_tags` 与 `get_style_guide`，通过 MCP 应用视觉风格
 - 多页面支持 — 通过 MCP 工具创建、重命名、重新排序和复制页面
 
 **代码生成**
@@ -265,10 +326,26 @@ docker run -p 3100:3100 openpencil-web-rust
 
 ## CLI — `op`
 
-全局安装后即可从终端控制设计工具：
+通过 Homebrew 或安装脚本安装后，即可从终端控制设计工具：
 
 ```bash
 brew install zseven-w/openpencil/op
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | OP_PRERELEASE=1 bash
+```
+
+```powershell
+irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
+```
+
+```powershell
+$env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
 ```
 
 ```bash
@@ -384,11 +461,11 @@ OpenPencil 是 **[ZSeven-W](https://github.com/ZSeven-W)** 出品的一系列纯
 
 | 项目 | 简介 |
 | ---- | ---- |
-| **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | OpenPencil 的 DeepSeek Harness 插件 — 在对话中提供精确的多画板 `.op` 预览、可交互画布，以及带智能体原生设计工具的托管编辑器。 |
-| **[Zode](https://github.com/ZSeven-W/zode)** | 面向终端的开源、AI 原生编程助手 — 一个快速的 Rust TUI（`ratatui`），可读取你的代码、运行命令、搜索文件并管理 git。通过 MCP 驱动 OpenPencil。 |
+| <img src="./screenshot/logo-dsh-openpencil.png" alt="DSH OpenPencil" width="40" /> **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | OpenPencil 的 DeepSeek Harness 插件 — 在对话中提供精确的多画板 `.op` 预览、可交互画布，以及带智能体原生设计工具的托管编辑器。 |
+| <img src="./screenshot/logo-zode.png" alt="Zode logo" width="40" /> **[Zode](https://github.com/ZSeven-W/zode)** | 面向终端的开源、AI 原生编程助手 — 一个快速的 Rust TUI（`ratatui`），可读取你的代码、运行命令、搜索文件并管理 git。通过 MCP 驱动 OpenPencil。 |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | 用于交付 LLM 智能体的纯 Rust 异步运行时 — 多提供商、端到端工具能力、结构化权限、真正的 MCP、零 `unsafe`。为 OpenPencil 内置的智能体运行时（`vendor/agent`）和 Zode 提供动力。 |
-| **[jian](https://github.com/ZSeven-W/jian)** | 纯 Rust、GPU-Skia UI 框架 — 组件、布局、事件和热重载集于一栈。将声明式的 `.op` 文档变为原生、AI 可控的应用，无需 JS 运行时、无 DOM、无 Electron。OpenPencil 的 UI 框架（`vendor/jian`）。 |
-| **[noema](https://github.com/ZSeven-W/noema)** | 面向编程智能体的本地优先、非向量记忆系统。以可检视的文件形式提供持久记忆、为新条目提供审阅队列，以及词法式（无需嵌入）召回 — 适用于 Zode、Codex、Claude Code 和 MCP 运行时。 |
+| <img src="./screenshot/logo-jian-rounded.png" alt="jian logo" width="40" /> **[jian](https://github.com/ZSeven-W/jian)** | 纯 Rust、GPU-Skia UI 框架 — 组件、布局、事件和热重载集于一栈。将声明式的 `.op` 文档变为原生、AI 可控的应用，无需 JS 运行时、无 DOM、无 Electron。OpenPencil 的 UI 框架（`vendor/jian`）。 |
+| <img src="./screenshot/logo-noema-rounded.png" alt="noema logo" width="84" /> **[noema](https://github.com/ZSeven-W/noema)** | 面向编程智能体的本地优先、非向量记忆系统。以可检视的文件形式提供持久记忆、为新条目提供审阅队列，以及词法式（无需嵌入）召回 — 适用于 Zode、Codex、Claude Code 和 MCP 运行时。 |
 
 ## 为什么选择 Rust
 
@@ -424,7 +501,12 @@ openpencil/
 │   ├── op-editor-core/       规范的 `.op`（PenDocument）编辑器状态 + EditorCommand + 设计变量
 │   ├── op-editor-ui/         平台无关组件 + RenderBackend 门面（wasm32 兼容）
 │   ├── op-editor-host-core/  所有宿主共用、与传输层无关的宿主状态机
+│   ├── op-collab/            开放的协同 wire 类型、规范哈希与精确文档应用
+│   ├── op-collab-transport/  原生 Noise/TCP 传输、有界准入与可选的 LAN 发现
+│   ├── op-collab-smoke/      双进程身份验证协同恢复矩阵
 │   ├── op-host-native/       原生宿主库 — winit + skia-safe GL（桌面端 + 移动端）
+│   ├── op-engine-ffi/        Player C ABI — 将画布嵌入 iOS / Android 外壳
+│   ├── op-engine-jni/        op-engine-ffi 的 Android JNI 编组层
 │   ├── op-host-web/          浏览器构建产物 — wasm32 cdylib，CanvasKit 渲染器
 │   ├── op-host-desktop/      桌面应用二进制 `openpencil-desktop`；同时也是 `--serve-web` 守护进程
 │   ├── op-host-services/     无头 serve-web / MCP 守护进程库
@@ -489,6 +571,39 @@ cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon cat
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
+
+### Rust workspace 详情
+
+Rust 化已经完成 — Rust workspace 就是产品本身。启动规格：`openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md`（v7 已冻结）。
+
+```bash
+# 安装 Rust 工具链（rust-toolchain.toml 自动固定 1.94）
+rustup toolchain install 1.94
+rustup target add wasm32-unknown-unknown
+
+# build / test / lint
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo check --target wasm32-unknown-unknown -p op-collab --no-default-features
+cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web  # kickoff §1.2 wasm32 不变量
+cargo deny check && cargo deny --target wasm32-unknown-unknown check bans        # cargo-deny（native + wasm32 bans；CI 使用 cargo-deny-action@v2）
+```
+
+**入口 crates（`crates/` — 构建目标）：**
+
+| Crate           | 类别                                                                              | wasm32       |
+| --------------- | -------------------------------------------------------------------------------- | ------------ |
+| op-host-web     | 浏览器构建产物入口 — wasm32 cdylib，通过 CanvasKit 渲染                           | ✅           |
+| op-host-native  | 原生宿主库 — WidgetHostNative + skia-safe GL 后端（桌面端 + 移动端）             | ❌（仅原生） |
+| op-engine-ffi   | Player C ABI — 一个引擎、三种外壳（iOS Metal / Android EGL / host raster）        | ❌（仅原生） |
+| op-engine-jni   | op-engine-ffi 的 Android JNI 编组层（引擎线程、注册表、回调）                     | ❌（仅原生） |
+| op-host-desktop | 桌面端二进制 `openpencil-desktop`（winit + skia-safe GL）— 同时也是托管 Web 构建产物的 `--serve-web` 守护进程 | ❌（仅原生） |
+| op-cli          | `op` 命令行工具                                                                   | ❌（仅原生） |
+
+**共享库 crates：** `op-editor-core`（规范的 `.op` 状态）、`op-editor-ui`（平台无关组件 + `RenderBackend`）、`op-editor-host-core`（与传输层无关的宿主状态机）、`op-collab`（开放、与传输层无关的协同协议/哈希/精确应用）、`op-collab-transport`（原生 Noise/TCP、有界准入与可选 LAN 发现）、`op-mcp`、`op-ai`、`op-ai-skills`、`op-codegen`、`op-orchestrator`、`op-figma`、`op-git`、`op-opmerge`、`op-pen-loader`、`op-design-lint`、`op-config-store`、`op-process-io`、`op-acp`、`op-i18n`、`op-rpc-transport` — 另有 `op-collab-smoke`（双进程身份验证协同/恢复矩阵）与 `op-smoke`（无头设计回合测试运行器）。移动端播放器位于 `packaging/`（基于 `op-engine-ffi` / `op-engine-jni` 的 `ios` + `android` 外壳）。浏览器构建产物通过官方 CanvasKit skia WASM 渲染（单独加载），因此已退役的 `skia-safe-op` wasm fork 与 `wasm-libc-shim` 不再存在。
+
+**子模块：** `vendor/agent` → `github.com/ZSeven-W/agent-rs`（跨产品 Rust Agent 运行时）。
 
 ## 参与贡献
 
