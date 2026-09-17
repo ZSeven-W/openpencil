@@ -82,6 +82,10 @@ pub(crate) enum McpConfigError {
     /// The dsh patch file carries only one of the two OpenPencil markers —
     /// the managed block was hand-edited. Refuse to touch it.
     DshPatchMarkersMismatched { path: PathBuf },
+    /// Cline's settings carry an `openpencil` server that does not point at
+    /// a local OpenPencil endpoint — the user's own entry. Refuse to
+    /// overwrite or delete it.
+    ClineForeignEntry { path: PathBuf },
     /// The shared crash-safe file primitives refused. Carries their message.
     AtomicFile(String),
     /// A multi-file transaction failed and its undo failed too. Keeps the
@@ -145,6 +149,13 @@ impl fmt::Display for McpConfigError {
                 write!(
                     f,
                     "{} contains a manually added mcp-openpencil entry; remove it manually to disable this integration",
+                    path.display()
+                )
+            }
+            McpConfigError::ClineForeignEntry { path } => {
+                write!(
+                    f,
+                    "{} already defines an openpencil MCP server that OpenPencil did not create; rename or remove it manually",
                     path.display()
                 )
             }

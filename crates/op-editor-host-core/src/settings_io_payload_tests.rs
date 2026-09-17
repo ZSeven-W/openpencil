@@ -13,14 +13,46 @@ fn eleven_cli_mcp_payload_keeps_its_toggles_and_leaves_zcode_off() {
     )
     .unwrap();
     let mut dst = EditorState::new();
-    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 13];
+    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 14];
 
     apply_payload(&mut dst, payload);
 
     assert_eq!(
         dst.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, true, false, true, false, true, true, false, true, false, false, false]
+        [
+            true, false, true, false, true, false, true, true, false, true, false, false, false,
+            false
+        ]
     );
+}
+
+#[test]
+fn thirteen_cli_mcp_payload_keeps_every_toggle_and_leaves_cline_off() {
+    // The layout written before Cline was appended: DeepSeek Harness is
+    // the last (13th) slot and must keep its toggle.
+    let payload: SettingsPayload = serde_json::from_str(
+        r#"{"version":1,"mcp_cli_enabled":[true,false,true,false,true,false,true,true,false,true,false,true,true]}"#,
+    )
+    .unwrap();
+    let mut dst = EditorState::new();
+    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 14];
+
+    apply_payload(&mut dst, payload);
+
+    assert_eq!(
+        dst.editor_ui.agent_settings.mcp_cli_enabled,
+        [
+            true, false, true, false, true, false, true, true, false, true, false, true, true,
+            false
+        ]
+    );
+}
+
+#[test]
+fn fourteen_cli_mcp_payload_round_trips_the_cline_toggle() {
+    let mut flags = vec![false; 14];
+    flags[13] = true;
+    assert_eq!(migrate_mcp_cli_flags(flags).last(), Some(&true));
 }
 
 #[test]
@@ -35,7 +67,10 @@ fn eight_cli_mcp_payload_drops_gemini_without_shifting_later_clis() {
 
     assert_eq!(
         dst.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, false, true, false, true, true, false, false, false, false, false, false]
+        [
+            true, false, false, true, false, true, true, false, false, false, false, false, false,
+            false
+        ]
     );
 }
 
