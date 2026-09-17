@@ -400,3 +400,204 @@ fn path_fill_rule_imports_from_attribute_style_and_group_inheritance() {
         assert_eq!(path.fill_rule, Some(expected));
     }
 }
+
+// ── `transform` attributes and `<style>` sheets (issue #214) ────────
+//
+// Design-tool exports (MasterGo, Figma) lean on nested `<g transform>`,
+// rotated shapes and class-based fills; before this the transforms were
+// ignored and the classes dropped, so an export landed at the wrong
+// place in the wrong colour.
+
+fn size_of(node: &PenNode) -> (f64, f64) {
+    (
+        node.width_px().expect("width"),
+        node.height_px().expect("height"),
+    )
+}
+
+fn solid_hex(fill: &Option<Vec<jian_ops_schema::style::PenFill>>) -> String {
+    match fill.as_ref().and_then(|f| f.first()) {
+        Some(jian_ops_schema::style::PenFill::Solid(b)) => b.color.to_ascii_lowercase(),
+        other => panic!("expected a solid fill, got {other:?}"),
+    }
+}
+
+#[test]
+fn translate_and_uniform_scale_compose_through_groups_and_keep_shapes() {
+    let svg = r#"<svg>
+        <g transform="translate(100 50)">
+            <g transform="scale(2)">
+                <rect x="5" y="5" width="10" height="20" transform="translate(1 2)"/>
+                <circle cx="10" cy="10" r="5"/>
+            </g>
+        </g>
+    </svg>"#;
+    let mut s = state_with(vec![]);
+    let mut next = 1u64;
+    // The two shapes sit inside nested `<g>`s, so the importer sees one
+    // top-level node: the inner group carrying both.
+    assert_eq!(s.import_svg(&mut next, svg, (0.0, 0.0)), 1);
+    let kids = imported_nodes(&s);
+    let kids: Vec<&PenNode> = match kids[0] {
+        PenNode::Group(g) => g
+            .children
+            .as_ref()
+            .expect("group children")
+            .iter()
+            .collect(),
+        other => panic!("expected the nested group, got {other:?}"),
+    };
+    // (5+1, 5+2) scaled by 2 then moved by (100, 50)
+    match kids[0] {
+        PenNode::Rectangle(r) => {
+            assert_eq!(r.base.x, Some(112.0));
+            assert_eq!(r.base.y, Some(64.0));
+            assert_eq!(size_of(kids[0]), (20.0, 40.0));
+        }
+        other => panic!("expected the rect to stay a rect, got {other:?}"),
+    }
+    match kids[1] {
+        PenNode::Ellipse(e) => {
+            assert_eq!(e.base.x, Some(110.0));
+            assert_eq!(e.base.y, Some(60.0));
+        }
+        other => panic!("expected the circle to stay an ellipse, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_rotated_rect_becomes_a_path_with_the_rotated_corners() {
+    // rotate(90) about the origin: (x, y) -> (-y, x). The 10×20 rect at
+    // (0,0) lands at x ∈ [-20, 0], y ∈ [0, 10].
+    let svg = r##"<svg><rect x="0" y="0" width="10" height="20" transform="rotate(90)" fill="#00ff00"/></svg>"##;
+    let mut s = state_with(vec![]);
+    let mut next = 1u64;
+    assert_eq!(s.import_svg(&mut next, svg, (0.0, 0.0)), 1);
+    let kids = imported_nodes(&s);
+    let path = match kids[0] {
+        PenNode::Path(p) => p,
+        other => panic!("expected a path, got {other:?}"),
+    };
+    assert_eq!(path.base.name.as_deref(), Some("Rect"));
+    assert_eq!(path.base.x, Some(-20.0));
+    assert_eq!(path.base.y, Some(0.0));
+    assert_eq!(size_of(kids[0]), (20.0, 10.0));
+    assert_eq!(path.closed, Some(true));
+    assert_eq!(solid_hex(&path.fill), "#00ff00");
+}
+
+#[test]
+fn a_rotated_rounded_rect_keeps_its_corners_and_its_frame() {
+    // rotate(90) about the origin: the 20×10 rounded rect at (0,0) lands
+    // at x ∈ [-10, 0], y ∈ [0, 20]. Its outline is four lines joined by
+    // four quarter arcs, which the path reader must accept.
+    let svg =
+        r#"<svg><rect x="0" y="0" width="20" height="10" rx="3" transform="rotate(90)"/></svg>"#;
+    let mut s = state_with(vec![]);
+    let mut next = 1u64;
+    assert_eq!(s.import_svg(&mut next, svg, (0.0, 0.0)), 1);
+    let kids = imported_nodes(&s);
+    let path = match kids[0] {
+        PenNode::Path(p) => p,
+        other => panic!("expected a path, got {other:?}"),
+    };
+    let d = path.d.as_deref().expect("path d");
+    assert_eq!(d.matches('A').count(), 4, "{d}");
+    assert_eq!(d.matches('L').count(), 4, "{d}");
+    assert_eq!(path.base.x, Some(-10.0));
+    assert_eq!(path.base.y, Some(0.0));
+    assert_eq!(size_of(kids[0]), (10.0, 20.0));
+}
+
+#[test]
+fn a_non_uniform_scale_traces_a_circle_as_cubics_and_a_matrix_moves_a_path() {
+    let svg = r#"<svg>
+        <circle cx="10" cy="10" r="10" transform="scale(2 1)"/>
+        <path d="M0 0 H10 V10" transform="matrix(1 0 0 1 100 100)"/>
+    </svg>"#;
+    let mut s = state_with(vec![]);
+    let mut next = 1u64;
+    assert_eq!(s.import_svg(&mut next, svg, (0.0, 0.0)), 2);
+    let kids = imported_nodes(&s);
+    let circle = match kids[0] {
+        PenNode::Path(p) => p,
+        other => panic!("expected the squashed circle as a path, got {other:?}"),
+    };
+    let d = circle.d.as_deref().expect("path d");
+    assert!(
+        !d.contains('A') && d.contains('C'),
+        "arcs must be traced as cubics under an anisotropic scale: {d}"
+    );
+    let (w, h) = size_of(kids[0]);
+    // r=10 circle scaled ×2 in x: 40 wide, 20 tall, from (0,0)
+    assert!((w - 40.0).abs() < 1.0 && (h - 20.0).abs() < 1.0, "{w}×{h}");
+    assert_eq!(circle.base.x, Some(0.0));
+    let path = match kids[1] {
+        PenNode::Path(p) => p,
+        other => panic!("expected path, got {other:?}"),
+    };
+    assert_eq!(path.base.x, Some(100.0));
+    assert_eq!(path.base.y, Some(100.0));
+}
+
+#[test]
+fn a_rotated_path_keeps_its_shape_in_the_new_orientation() {
+    // A horizontal 10-unit line rotated 90° is a vertical 10-unit line.
+    let svg = r##"<svg><path d="M0 0 H10" transform="rotate(90)" stroke="#000"/></svg>"##;
+    let mut s = state_with(vec![]);
+    let mut next = 1u64;
+    assert_eq!(s.import_svg(&mut next, svg, (0.0, 0.0)), 1);
+    let kids = imported_nodes(&s);
+    let (w, h) = size_of(kids[0]);
+    assert!(w <= 1.0 && (h - 10.0).abs() <= 1.0, "{w}×{h}");
+}
+
+#[test]
+fn stroke_width_follows_the_transform_scale() {
+    let svg = r##"<svg><g transform="scale(3)"><line x1="0" y1="0" x2="10" y2="0" stroke="#000" stroke-width="2"/></g></svg>"##;
+    let mut s = state_with(vec![]);
+    let mut next = 1u64;
+    assert_eq!(s.import_svg(&mut next, svg, (0.0, 0.0)), 1);
+    let kids = imported_nodes(&s);
+    let stroke = match kids[0] {
+        PenNode::Path(p) => p.stroke.as_ref().expect("stroke"),
+        other => panic!("expected path, got {other:?}"),
+    };
+    match stroke.thickness {
+        jian_ops_schema::style::StrokeThickness::Uniform(w) => assert_eq!(w, 6.0),
+        ref other => panic!("expected a uniform stroke, got {other:?}"),
+    }
+}
+
+#[test]
+fn style_sheet_classes_and_ids_colour_the_shapes_they_select() {
+    let svg = r##"<svg>
+        <style>.brand { fill: #ff0000 } #hero { fill: #0000ff } rect { stroke: #00ff00; stroke-width: 4 }</style>
+        <rect class="brand" x="0" y="0" width="10" height="10"/>
+        <rect id="hero" class="brand" x="20" y="0" width="10" height="10"/>
+        <rect x="40" y="0" width="10" height="10" fill="#123456" style="fill:#abcdef"/>
+    </svg>"##;
+    let mut s = state_with(vec![]);
+    let mut next = 1u64;
+    assert_eq!(s.import_svg(&mut next, svg, (0.0, 0.0)), 3);
+    let kids = imported_nodes(&s);
+    let rect = |i: usize| match kids[i] {
+        PenNode::Rectangle(r) => r,
+        other => panic!("expected rect, got {other:?}"),
+    };
+    assert_eq!(solid_hex(&rect(0).container.fill), "#ff0000");
+    assert_eq!(
+        solid_hex(&rect(1).container.fill),
+        "#0000ff",
+        "#id outranks .class"
+    );
+    assert_eq!(
+        solid_hex(&rect(2).container.fill),
+        "#abcdef",
+        "inline style outranks the sheet"
+    );
+    let stroke = rect(0).container.stroke.as_ref().expect("tag rule stroke");
+    assert!(
+        matches!(stroke.thickness, jian_ops_schema::style::StrokeThickness::Uniform(w) if w == 4.0)
+    );
+}
