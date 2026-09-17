@@ -487,6 +487,29 @@ fn a_rotated_rect_becomes_a_path_with_the_rotated_corners() {
 }
 
 #[test]
+fn a_rotated_rounded_rect_keeps_its_corners_and_its_frame() {
+    // rotate(90) about the origin: the 20×10 rounded rect at (0,0) lands
+    // at x ∈ [-10, 0], y ∈ [0, 20]. Its outline is four lines joined by
+    // four quarter arcs, which the path reader must accept.
+    let svg =
+        r#"<svg><rect x="0" y="0" width="20" height="10" rx="3" transform="rotate(90)"/></svg>"#;
+    let mut s = state_with(vec![]);
+    let mut next = 1u64;
+    assert_eq!(s.import_svg(&mut next, svg, (0.0, 0.0)), 1);
+    let kids = imported_nodes(&s);
+    let path = match kids[0] {
+        PenNode::Path(p) => p,
+        other => panic!("expected a path, got {other:?}"),
+    };
+    let d = path.d.as_deref().expect("path d");
+    assert_eq!(d.matches('A').count(), 4, "{d}");
+    assert_eq!(d.matches('L').count(), 4, "{d}");
+    assert_eq!(path.base.x, Some(-10.0));
+    assert_eq!(path.base.y, Some(0.0));
+    assert_eq!(size_of(kids[0]), (10.0, 20.0));
+}
+
+#[test]
 fn a_non_uniform_scale_traces_a_circle_as_cubics_and_a_matrix_moves_a_path() {
     let svg = r#"<svg>
         <circle cx="10" cy="10" r="10" transform="scale(2 1)"/>

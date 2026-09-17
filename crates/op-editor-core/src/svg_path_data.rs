@@ -248,7 +248,17 @@ fn segment_bounds(segments: &[Segment]) -> Option<SvgPathBounds> {
                 last_quad_ctrl = Some((qx, qy));
                 last_cubic_ctrl = None;
             }
-            Segment::Arc(_, _, _, _, _, x, y) => {
+            Segment::Arc(rx, ry, rot, large, sweep, x, y) => {
+                // An arc's extrema rarely sit on its endpoints (a circle drawn
+                // as four quarter arcs has them there only while unrotated),
+                // so trace it as cubics and take their bounds.
+                let mut from = (cx, cy);
+                for [x1, y1, x2, y2, px, py] in
+                    arc_to_cubics(cx, cy, rx, ry, rot, large != 0.0, sweep != 0.0, x, y)
+                {
+                    include_cubic_bounds(&mut include, [from, (x1, y1), (x2, y2), (px, py)]);
+                    from = (px, py);
+                }
                 include(x, y);
                 cx = x;
                 cy = y;
@@ -541,11 +551,19 @@ pub(crate) fn transform_svg_path(d: &str, m: [f64; 6]) -> Option<String> {
                     let scale = det.abs().sqrt();
                     let turn = b.atan2(a).to_degrees();
                     let (tx, ty) = map(x, y);
-                    let sweep = if det < 0.0 { 1.0 - sweep } else { sweep };
+                    // A mirrored similarity is s·R(turn)·diag(1, −1): the
+                    // reflection sends an axis at φ to −φ before the turn, so
+                    // the ellipse's x-axis ends up at turn − rot, and the arc
+                    // runs the other way round.
+                    let (rot, sweep) = if det < 0.0 {
+                        (turn - rot, 1.0 - sweep)
+                    } else {
+                        (turn + rot, sweep)
+                    };
                     out.push(Segment::Arc(
                         rx * scale,
                         ry * scale,
-                        rot + turn,
+                        rot,
                         large,
                         sweep,
                         tx,
@@ -719,10 +737,42 @@ mod tests {
     }
 
     #[test]
-    fn a_mirror_flips_the_arc_sweep() {
+    fn a_mirror_flips_the_arc_sweep_and_reflects_the_axis() {
         let d = transform_svg_path("M0 0 A5 5 0 0 1 10 0", [-1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
             .expect("path");
         assert_eq!(d, "M 0 0 A 5 5 180 0 0 -10 0");
+        // An ellipse tilted 30° reflected across the y axis tilts −30°
+        // (150° here, as the mirror's own turn is 180°).
+        let d = transform_svg_path("M0 0 A8 4 30 0 1 10 0", [-1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
+            .expect("path");
+        assert_eq!(d, "M 0 0 A 8 4 150 0 0 -10 0");
+    }
+
+    #[test]
+    fn bounds_follow_an_arc_past_its_endpoints() {
+        // A half circle of radius 10 from (0,0) to (20,0) bulging up to y = -10.
+        let b = svg_path_bounds("M0 0 A10 10 0 0 1 20 0").expect("bounds");
+        assert!(
+            (b.x - 0.0).abs() < 1e-3 && (b.w - 20.0).abs() < 1e-3,
+            "{b:?}"
+        );
+        assert!(
+            (b.y + 10.0).abs() < 1e-3 && (b.h - 10.0).abs() < 1e-3,
+            "{b:?}"
+        );
+        // The same arc rotated 90° as an arc command: bulges to x = +10.
+        let d = transform_svg_path("M0 0 A10 10 0 0 1 20 0", [0.0, 1.0, -1.0, 0.0, 0.0, 0.0])
+            .expect("path");
+        assert!(d.contains('A'), "{d}");
+        let b = svg_path_bounds(&d).expect("bounds");
+        assert!(
+            (b.x - 0.0).abs() < 1e-3 && (b.w - 10.0).abs() < 1e-3,
+            "{b:?}"
+        );
+        assert!(
+            (b.y - 0.0).abs() < 1e-3 && (b.h - 20.0).abs() < 1e-3,
+            "{b:?}"
+        );
     }
 
     #[test]

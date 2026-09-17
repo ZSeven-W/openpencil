@@ -21,22 +21,36 @@ use super::*;
 #[derive(Debug, Clone, PartialEq)]
 struct CssRule {
     selector: Selector,
-    declarations: Vec<(String, String)>,
+    declarations: Vec<Declaration>,
+}
+
+/// One `property: value` pair, with whether it carried `!important`.
+#[derive(Debug, Clone, PartialEq)]
+struct Declaration {
+    property: String,
+    value: String,
+    important: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 enum Selector {
     Tag(String),
     Class(String),
+    /// `rect.cls`: the class, restricted to one element type.
+    TagClass(String, String),
     Id(String),
 }
 
 impl Selector {
+    /// CSS specificity collapsed to one rank: (ids, classes, tags)
+    /// compares lexicographically, and the four shapes here never tie
+    /// across ranks.
     fn specificity(&self) -> u8 {
         match self {
             Selector::Tag(_) => 0,
             Selector::Class(_) => 1,
-            Selector::Id(_) => 2,
+            Selector::TagClass(..) => 2,
+            Selector::Id(_) => 3,
         }
     }
 }
@@ -76,8 +90,10 @@ impl Stylesheet {
     }
 
     /// The declarations that apply to an element with `tag`, `id` and
-    /// `class` attributes, later and more specific rules winning, as a
-    /// property → value map in winning order.
+    /// `class` attributes, as a property → value map in winning order:
+    /// more specific and later rules win, and an `!important`
+    /// declaration wins over every ordinary one whatever its rule's
+    /// specificity.
     fn declarations_for(&self, tag: &str, attrs: &[(String, String)]) -> Vec<(String, String)> {
         let id = attrs.iter().find(|(k, _)| k == "id").map(|(_, v)| v.trim());
         let classes: Vec<&str> = attrs
@@ -85,24 +101,34 @@ impl Stylesheet {
             .find(|(k, _)| k == "class")
             .map(|(_, v)| v.split_whitespace().collect())
             .unwrap_or_default();
+        let has_class = |c: &str| classes.contains(&c);
         let mut matched: Vec<(u8, usize, &CssRule)> = self
             .rules
             .iter()
             .enumerate()
             .filter(|(_, rule)| match &rule.selector {
                 Selector::Tag(t) => t == tag,
-                Selector::Class(c) => classes.iter().any(|k| k == c),
+                Selector::Class(c) => has_class(c),
+                Selector::TagClass(t, c) => t == tag && has_class(c),
                 Selector::Id(i) => id == Some(i.as_str()),
             })
             .map(|(order, rule)| (rule.selector.specificity(), order, rule))
             .collect();
         matched.sort_by_key(|(specificity, order, _)| (*specificity, *order));
         let mut out: Vec<(String, String)> = Vec::new();
-        for (_, _, rule) in matched {
-            for (k, v) in &rule.declarations {
-                match out.iter_mut().find(|(ok, _)| ok == k) {
-                    Some(slot) => slot.1 = v.clone(),
-                    None => out.push((k.clone(), v.clone())),
+        // Two passes in the same order: ordinary declarations first, then
+        // the important ones on top of them.
+        for important in [false, true] {
+            for (_, _, rule) in &matched {
+                for decl in rule
+                    .declarations
+                    .iter()
+                    .filter(|d| d.important == important)
+                {
+                    match out.iter_mut().find(|(k, _)| *k == decl.property) {
+                        Some(slot) => slot.1 = decl.value.clone(),
+                        None => out.push((decl.property.clone(), decl.value.clone())),
+                    }
                 }
             }
         }
@@ -145,30 +171,43 @@ fn strip_cdata(text: &str) -> &str {
 
 /// Parse `selector { decl; decl } …` blocks. A selector list
 /// (`.a, .b`) yields one rule per simple selector; a selector the
-/// importer cannot match is skipped along with its block.
+/// importer cannot match is skipped along with its block, and an
+/// at-rule (`@media`, `@font-face`, …) is skipped as a whole, nested
+/// braces included, so neither its conditional rules nor the rule
+/// after it are misread.
 fn parse_rules(css: &str, out: &mut Vec<CssRule>) {
     let css = strip_comments(css);
     let mut rest = css.as_str();
     while let Some(open) = rest.find('{') {
         let selectors = rest[..open].trim();
+        if selectors.starts_with('@') {
+            rest = match balanced_block_end(rest, open) {
+                Some(end) => &rest[end + 1..],
+                None => break,
+            };
+            continue;
+        }
         let Some(close_rel) = rest[open..].find('}') else {
             break;
         };
         let block = &rest[open + 1..open + close_rel];
         rest = &rest[open + close_rel + 1..];
-        if selectors.starts_with('@') {
-            continue; // @media / @font-face: not a rule the importer applies
-        }
-        let declarations: Vec<(String, String)> = block
+        let declarations: Vec<Declaration> = block
             .split(';')
             .filter_map(|decl| decl.split_once(':'))
             .map(|(k, v)| {
-                (
-                    k.trim().to_ascii_lowercase(),
-                    v.trim().trim_end_matches("!important").trim().to_string(),
-                )
+                let value = v.trim();
+                let (value, important) = match value.strip_suffix("!important") {
+                    Some(bare) => (bare.trim(), true),
+                    None => (value, false),
+                };
+                Declaration {
+                    property: k.trim().to_ascii_lowercase(),
+                    value: value.to_string(),
+                    important,
+                }
             })
-            .filter(|(k, v)| KNOWN_PROPERTIES.contains(&k.as_str()) && !v.is_empty())
+            .filter(|d| KNOWN_PROPERTIES.contains(&d.property.as_str()) && !d.value.is_empty())
             .collect();
         if declarations.is_empty() {
             continue;
@@ -185,6 +224,24 @@ fn parse_rules(css: &str, out: &mut Vec<CssRule>) {
     }
 }
 
+/// Index of the `}` that closes the `{` at `open`, counting nesting.
+fn balanced_block_end(s: &str, open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (i, c) in s[open..].char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(open + i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 fn parse_simple_selector(s: &str) -> Option<Selector> {
     if s.is_empty()
         || s.chars()
@@ -199,11 +256,11 @@ fn parse_simple_selector(s: &str) -> Option<Selector> {
     if let Some(id) = s.strip_prefix('#') {
         return (!id.is_empty()).then(|| Selector::Id(id.to_string()));
     }
-    // `rect.cls` — a tag qualified by a class — matches on the class
-    // with the tag's element restriction dropped; exports rarely emit
-    // it and the class alone is the safer of the two readings.
-    if let Some((_, class)) = s.split_once('.') {
-        return (!class.is_empty()).then(|| Selector::Class(class.to_string()));
+    // `rect.cls` — the class restricted to one element type.
+    if let Some((tag, class)) = s.split_once('.') {
+        let tag_ok = !tag.is_empty() && tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+        return (tag_ok && !class.is_empty() && !class.contains('.'))
+            .then(|| Selector::TagClass(tag.to_ascii_lowercase(), class.to_string()));
     }
     s.chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '-')
@@ -285,6 +342,51 @@ mod tests {
         s.apply(&mut tree);
         assert_eq!(attr(&tree[0], "fill"), Some("#222"));
         assert_eq!(attr(&tree[1], "fill"), Some("#111"));
+    }
+
+    #[test]
+    fn an_important_declaration_beats_a_more_specific_ordinary_one() {
+        let s = sheet(".a { fill: #111 !important } #x { fill: #222 } .a { stroke: red !important; stroke: blue }");
+        let mut tree = vec![el("rect", &[("class", "a"), ("id", "x")])];
+        s.apply(&mut tree);
+        assert_eq!(attr(&tree[0], "fill"), Some("#111"));
+        assert_eq!(attr(&tree[0], "stroke"), Some("red"));
+    }
+
+    #[test]
+    fn a_tag_qualified_class_applies_only_to_that_tag() {
+        let s = sheet("rect.k { fill: #111 } .k { fill: #222 }");
+        let mut tree = vec![
+            el("rect", &[("class", "k")]),
+            el("circle", &[("class", "k")]),
+        ];
+        s.apply(&mut tree);
+        assert_eq!(
+            attr(&tree[0], "fill"),
+            Some("#111"),
+            "rect.k outranks .k on a rect"
+        );
+        assert_eq!(
+            attr(&tree[1], "fill"),
+            Some("#222"),
+            "rect.k does not reach a circle"
+        );
+    }
+
+    #[test]
+    fn an_at_rule_is_skipped_whole_and_the_rule_after_it_survives() {
+        let s = sheet("@media print { .a { fill: red } .b { fill: red } } .b { fill: #222 }");
+        let mut tree = vec![el("rect", &[("class", "a")]), el("rect", &[("class", "b")])];
+        s.apply(&mut tree);
+        assert!(
+            attr(&tree[0], "fill").is_none(),
+            "a rule conditional on @media must not apply"
+        );
+        assert_eq!(
+            attr(&tree[1], "fill"),
+            Some("#222"),
+            "the rule after the block still lands"
+        );
     }
 
     #[test]
