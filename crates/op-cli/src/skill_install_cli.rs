@@ -3,6 +3,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::skill_install_cline;
 use crate::skill_install_error::{BundleError, FsAction, SkillInstallError};
 
 type Result<T> = std::result::Result<T, SkillInstallError>;
@@ -12,12 +13,12 @@ pub(crate) const VERSION_SENTINEL: &str = "__OPENPENCIL_VERSION__";
 // Top-level bundle version plus four embedded plugin/package manifest versions.
 const EXPECTED_VERSION_SENTINEL_COUNT: usize = 5;
 const REPO: &str = "zseven-w/openpencil-skill";
-const SKILL_NAME: &str = "openpencil-skill";
+pub(crate) const SKILL_NAME: &str = "openpencil-skill";
 
 #[derive(Debug, Clone)]
-struct SkillBundle {
-    version: String,
-    files: Vec<(String, String)>,
+pub(crate) struct SkillBundle {
+    pub(crate) version: String,
+    pub(crate) files: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +27,7 @@ enum Target {
     Codex,
     Cursor,
     OpenCode,
+    Cline,
 }
 
 impl Target {
@@ -35,6 +37,7 @@ impl Target {
             "codex" => Ok(Target::Codex),
             "cursor" => Ok(Target::Cursor),
             "opencode" | "open-code" => Ok(Target::OpenCode),
+            "cline" | "cline-cli" => Ok(Target::Cline),
             _ => Err(SkillInstallError::UnknownTarget(raw.to_string())),
         }
     }
@@ -45,6 +48,7 @@ impl Target {
             Target::Codex => "codex",
             Target::Cursor => "cursor",
             Target::OpenCode => "opencode",
+            Target::Cline => "cline",
         }
     }
 }
@@ -125,6 +129,11 @@ fn detect_targets(home: &Path) -> Vec<Target> {
     if command_exists("opencode") {
         targets.push(Target::OpenCode);
     }
+    // The CLI ships as an npm shim; the VS Code extension has no binary but
+    // shares the same `~/.cline/skills` scan root, so an existing root counts.
+    if command_exists("cline") || cline_root(home, env::var_os("CLINE_DIR")).exists() {
+        targets.push(Target::Cline);
+    }
     targets
 }
 
@@ -134,8 +143,22 @@ fn command_exists(name: &str) -> bool {
     };
     env::split_paths(&path_var).any(|dir| {
         let candidate = dir.join(name);
-        candidate.is_file() || candidate.with_extension("exe").is_file()
+        candidate.is_file() || executable_shim_exists(&candidate)
     })
+}
+
+#[cfg(windows)]
+fn executable_shim_exists(candidate: &Path) -> bool {
+    // npm-installed CLIs (Cline among them) land on PATH as `.cmd` / `.ps1`
+    // shims rather than `.exe` binaries.
+    ["exe", "cmd", "bat"]
+        .iter()
+        .any(|ext| candidate.with_extension(ext).is_file())
+}
+
+#[cfg(not(windows))]
+fn executable_shim_exists(candidate: &Path) -> bool {
+    candidate.with_extension("exe").is_file()
 }
 
 fn install_target(target: Target, home: &Path, bundle: &SkillBundle) -> Result<()> {
@@ -144,6 +167,9 @@ fn install_target(target: Target, home: &Path, bundle: &SkillBundle) -> Result<(
         Target::Codex => install_codex(home, bundle),
         Target::Cursor => write_bundle_to(&home.join(".cursor/plugins").join(SKILL_NAME), bundle),
         Target::OpenCode => install_opencode(home, bundle),
+        Target::Cline => {
+            skill_install_cline::install(&cline_root(home, env::var_os("CLINE_DIR")), bundle)
+        }
     }
 }
 
@@ -153,7 +179,19 @@ fn uninstall_target(target: Target, home: &Path) -> Result<()> {
         Target::Codex => uninstall_codex(home),
         Target::Cursor => remove_path(&home.join(".cursor/plugins").join(SKILL_NAME)),
         Target::OpenCode => uninstall_opencode(home),
+        Target::Cline => {
+            skill_install_cline::uninstall(&cline_root(home, env::var_os("CLINE_DIR")))
+        }
     }
+}
+
+/// Cline's global root: `CLINE_DIR` when set (and non-blank), else
+/// `~/.cline` — the same precedence as Cline's `resolveClineDir()`.
+pub(crate) fn cline_root(home: &Path, cline_dir: Option<std::ffi::OsString>) -> PathBuf {
+    cline_dir
+        .filter(|dir| !dir.to_string_lossy().trim().is_empty())
+        .map(|dir| PathBuf::from(dir.to_string_lossy().trim()))
+        .unwrap_or_else(|| home.join(".cline"))
 }
 
 fn install_claude(home: &Path, bundle: &SkillBundle) -> Result<()> {
@@ -315,7 +353,7 @@ fn load_bundle() -> Result<SkillBundle> {
     Ok(SkillBundle { version, files })
 }
 
-fn write_bundle_to(dest: &Path, bundle: &SkillBundle) -> Result<()> {
+pub(crate) fn write_bundle_to(dest: &Path, bundle: &SkillBundle) -> Result<()> {
     fs::create_dir_all(dest).map_err(|e| SkillInstallError::fs(FsAction::Create, dest, e))?;
     for (relative, content) in &bundle.files {
         let path = dest.join(relative);
@@ -328,7 +366,7 @@ fn write_bundle_to(dest: &Path, bundle: &SkillBundle) -> Result<()> {
     Ok(())
 }
 
-fn link_or_copy_dir(target: &Path, link_path: &Path) -> Result<()> {
+pub(crate) fn link_or_copy_dir(target: &Path, link_path: &Path) -> Result<()> {
     #[cfg(unix)]
     {
         std::os::unix::fs::symlink(target, link_path)
@@ -358,7 +396,7 @@ fn copy_dir_recursive(src: &Path, dest: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn remove_path(path: &Path) -> Result<()> {
+pub(crate) fn remove_path(path: &Path) -> Result<()> {
     // Only a missing entry is "nothing to remove"; any other metadata error
     // (permissions, I/O) must propagate — treating it as absence would let a
     // later create step fail with a misleading error, or silently keep a

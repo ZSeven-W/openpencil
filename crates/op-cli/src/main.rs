@@ -17,6 +17,7 @@ mod page_theme_cli;
 mod path_args;
 mod skill_export_cli;
 mod skill_install_cli;
+mod skill_install_cline;
 mod skill_install_error;
 mod template_cli;
 

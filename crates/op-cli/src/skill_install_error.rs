@@ -94,6 +94,9 @@ pub(crate) enum SkillInstallError {
         target: PathBuf,
         detail: String,
     },
+    /// A discovery entry the installer would write is already occupied by
+    /// something it did not create (e.g. the user's own skill of that name).
+    NotOwned(PathBuf),
     /// An agent config file exists but its root is not a JSON object.
     NotAJsonObject(PathBuf),
     /// A config key that must hold an object holds something else.
@@ -133,10 +136,10 @@ impl fmt::Display for SkillInstallError {
         match self {
             SkillInstallError::UnknownTarget(raw) => write!(
                 f,
-                "unknown target {raw:?}; available: claude, codex, cursor, opencode"
+                "unknown target {raw:?}; available: claude, codex, cursor, opencode, cline"
             ),
             SkillInstallError::NoTargetsDetected => f.write_str(
-                "no supported AI coding agents detected; pass --target claude|codex|cursor|opencode",
+                "no supported AI coding agents detected; pass --target claude|codex|cursor|opencode|cline",
             ),
             SkillInstallError::HomeUnavailable => f.write_str("home directory not available"),
             SkillInstallError::Fs {
@@ -157,6 +160,11 @@ impl fmt::Display for SkillInstallError {
             SkillInstallError::NotAJsonObject(path) => {
                 write!(f, "{} must contain a JSON object", path.display())
             }
+            SkillInstallError::NotOwned(path) => write!(
+                f,
+                "{} already exists and was not created by openpencil; move it aside and retry",
+                path.display()
+            ),
             SkillInstallError::NotAnObject(key) => write!(f, "{key} is not an object"),
             SkillInstallError::Bundle(e) => write!(f, "{e}"),
         }
