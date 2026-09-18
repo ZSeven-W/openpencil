@@ -58,7 +58,7 @@ pub struct Fingerprint {
     theme: ThemeMode,
     locale: Locale,
     port: u16,
-    cli: [bool; 13],
+    cli: [bool; 14],
     images_adv: bool,
     openverse_client_id: String,
     openverse_client_secret: String,

@@ -73,6 +73,7 @@ mod macos_app;
 mod mcp_config_error;
 mod mcp_config_io;
 mod mcp_integrations;
+mod mcp_integrations_cline;
 mod mcp_integrations_dsh;
 mod mcp_port_file;
 mod mcp_runtime;

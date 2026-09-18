@@ -198,7 +198,7 @@ pub(crate) struct Fingerprint {
     theme: ThemeMode,
     locale: Locale,
     port: u16,
-    cli: [bool; 13],
+    cli: [bool; 14],
     images_adv: bool,
     auto_update_enabled: bool,
     experimental_features_enabled: bool,

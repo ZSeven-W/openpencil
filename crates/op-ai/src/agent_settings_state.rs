@@ -108,7 +108,7 @@ impl AgentProvider {
 /// Terminal-side MCP integrations the user can flip on/off. Order
 /// matches the product's MCP settings grid (Claude / Codex / OpenCode /
 /// Kiro / Copilot / Antigravity / Grok Build / Gemini / Qwen / Cursor /
-/// Kimi / ZCode / DeepSeek Harness) so the index is reusable for both
+/// Kimi / ZCode / DeepSeek Harness / Cline) so the index is reusable for both
 /// layout and `mcp_cli_enabled[i]`. Kept in sync with
 /// `op_editor_core::agent_settings::McpCli`; append only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,10 +126,11 @@ pub enum McpCli {
     Kimi,
     ZCode,
     Dsh,
+    Cline,
 }
 
 impl McpCli {
-    pub const ALL: [McpCli; 13] = [
+    pub const ALL: [McpCli; 14] = [
         McpCli::ClaudeCode,
         McpCli::Codex,
         McpCli::OpenCode,
@@ -143,6 +144,7 @@ impl McpCli {
         McpCli::Kimi,
         McpCli::ZCode,
         McpCli::Dsh,
+        McpCli::Cline,
     ];
     pub fn label(self) -> &'static str {
         match self {
@@ -159,6 +161,7 @@ impl McpCli {
             McpCli::Kimi => "Kimi CLI",
             McpCli::ZCode => "ZCode",
             McpCli::Dsh => "DeepSeek Harness",
+            McpCli::Cline => "Cline CLI",
         }
     }
 }
@@ -198,7 +201,7 @@ pub struct AgentSettings {
     /// host on wheel input.
     pub scroll_y: f32,
     pub mcp_server: McpServer,
-    pub mcp_cli_enabled: [bool; 13],
+    pub mcp_cli_enabled: [bool; 14],
     pub images_advanced_open: bool,
     pub images_search_ready: bool,
     /// Currently-focused editable input on the modal. `None` while
@@ -225,7 +228,7 @@ impl Default for AgentSettings {
             connected: [false; 7],
             scroll_y: 0.0,
             mcp_server: McpServer::default(),
-            mcp_cli_enabled: [false; 13],
+            mcp_cli_enabled: [false; 14],
             images_advanced_open: true,
             images_search_ready: true,
             focus: None,

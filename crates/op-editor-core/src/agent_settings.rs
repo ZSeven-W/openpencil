@@ -85,6 +85,7 @@ pub enum McpCli {
     Kimi,
     ZCode,
     Dsh,
+    Cline,
 }
 
 impl McpCli {
@@ -92,9 +93,9 @@ impl McpCli {
     /// array, and `migrate_mcp_cli_flags` reads persisted settings by the
     /// same index. Inserting in the middle silently reassigns a user's
     /// saved toggles to the wrong CLIs. New CLIs must be appended at the
-    /// end (12 → 13) and appended to `DISPLAY` wherever the product wants
+    /// end (13 → 14) and appended to `DISPLAY` wherever the product wants
     /// the row to show.
-    pub const ALL: [McpCli; 13] = [
+    pub const ALL: [McpCli; 14] = [
         McpCli::ClaudeCode,
         McpCli::Codex,
         McpCli::OpenCode,
@@ -108,6 +109,7 @@ impl McpCli {
         McpCli::Kimi,
         McpCli::ZCode,
         McpCli::Dsh,
+        McpCli::Cline,
     ];
 
     /// Row order on the MCP tab's terminal-integrations list. Deliberately
@@ -115,7 +117,7 @@ impl McpCli {
     /// (row `i` shows `DISPLAY[i]`) while the toggle state is read through
     /// [`McpCli::index`] into the append-only `mcp_cli_enabled` layout.
     /// Kept a permutation of `ALL`; `tests_agent_settings.rs` asserts that.
-    pub const DISPLAY: [McpCli; 13] = [
+    pub const DISPLAY: [McpCli; 14] = [
         McpCli::ClaudeCode,
         McpCli::Codex,
         McpCli::Dsh,
@@ -129,6 +131,7 @@ impl McpCli {
         McpCli::Cursor,
         McpCli::Kimi,
         McpCli::ZCode,
+        McpCli::Cline,
     ];
 
     /// Position in [`McpCli::ALL`] — the index of this CLI's toggle in
@@ -155,6 +158,7 @@ impl McpCli {
             McpCli::Kimi => "Kimi CLI",
             McpCli::ZCode => "ZCode",
             McpCli::Dsh => "DeepSeek Harness",
+            McpCli::Cline => "Cline CLI",
         }
     }
 }
@@ -307,7 +311,7 @@ pub struct AgentSettings {
     pub acp_preset_installed: BTreeMap<String, bool>,
     pub scroll_y: jian_core::scroll::ScrollState,
     pub mcp_server: McpServer,
-    pub mcp_cli_enabled: [bool; 13],
+    pub mcp_cli_enabled: [bool; 14],
     pub mcp_client_config_copied_at_ms: Option<u64>,
     pub hover_agent_settings_close: bool,
     pub hover_mcp_server_button: bool,
@@ -387,7 +391,7 @@ impl Default for AgentSettings {
             acp_preset_installed: BTreeMap::new(),
             scroll_y: Default::default(),
             mcp_server: McpServer::default(),
-            mcp_cli_enabled: [false; 13],
+            mcp_cli_enabled: [false; 14],
             mcp_client_config_copied_at_ms: None,
             hover_agent_settings_close: false,
             hover_mcp_server_button: false,

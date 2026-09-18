@@ -1,7 +1,7 @@
 use super::WidgetHost;
 use op_editor_core::{EditorState, NodeId, SettingsFocus};
 use op_editor_ui::widgets::{LayerPanel, LayerPanelHit, TopBarHit, TOP_BAR_HEIGHT};
-use op_editor_ui::{Point2D, Rect};
+use op_editor_ui::Point2D;
 
 const VIEWPORT_W: f32 = 1200.0;
 const VIEWPORT_H: f32 = 800.0;
@@ -66,12 +66,7 @@ fn selection_changing_right_press_closes_image_search() {
         .search_query
         .set_text("hero query");
 
-    let rect = Rect::xywh(
-        0.0,
-        TOP_BAR_HEIGHT,
-        host.editor_state.editor_ui.layer_panel_width,
-        VIEWPORT_H - TOP_BAR_HEIGHT,
-    );
+    let rect = host.layers_content_rect(VIEWPORT_H);
     let panel = LayerPanel::from_editor(&host.editor_state);
     let mut point = None;
     let mut y = rect.origin.y;
