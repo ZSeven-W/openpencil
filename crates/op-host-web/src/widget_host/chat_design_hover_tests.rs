@@ -57,6 +57,7 @@ fn assert_chat_and_lower_hover_cleared(host: &WidgetHost) {
 #[test]
 fn cursor_move_tracks_hovered_design_json_card_for_copy_reveal() {
     let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.enter_chat_tab();
     host.editor_state
         .chat
         .messages
@@ -266,6 +267,8 @@ fn regular_chat_wins_when_overlapping_variables_panel() {
     host.last_viewport_w = viewport_w;
     host.last_viewport_h = viewport_h;
     host.editor_state.editor_ui.variables_panel_open = true;
+    // A tall variables panel overlaps the floor-docked composer card.
+    host.editor_state.editor_ui.variables_panel_size = Some((744.0, 760.0));
     host.editor_state.editor_ui.variables_panel_hover =
         Some(op_editor_core::VariablesPanelButton::Close);
     host.editor_state.editor_ui.canvas_hover_node = Some(NodeId::new("stale-canvas"));
@@ -300,13 +303,12 @@ fn regular_chat_wins_when_overlapping_variables_panel() {
 }
 
 #[test]
-fn align_toolbar_whole_rect_wins_above_maximized_chat() {
+fn align_toolbar_padding_clears_chat_and_lower_hover() {
     let mut host = WidgetHost::new();
     let (viewport_w, viewport_h) = (1440.0, 900.0);
     host.last_viewport_w = viewport_w;
     host.last_viewport_h = viewport_h;
     seed_two_selected_rects(&mut host);
-    host.editor_state.chat.maximized = true;
     host.editor_state.editor_ui.chat_header_hover = Some(op_editor_core::ChatHeaderButton::NewChat);
     host.editor_state.editor_ui.canvas_hover_node = Some(NodeId::new("stale-canvas"));
 
@@ -325,18 +327,12 @@ fn align_toolbar_whole_rect_wins_above_maximized_chat() {
         None,
         "probe must land in opaque toolbar padding, not an action button"
     );
-    assert!(
-        AIChatPlaceholder::from_editor(&host.editor_state)
-            .owned_by(host.chat_panel_owner)
-            .cursor_probe(
-                host.ai_chat_rect(viewport_w, viewport_h)
-                    .expect("maximized chat rect"),
-                point,
-            )
-            .hit
-            .is_some(),
-        "the lower maximized Chat would otherwise own the same point"
-    );
+    // Docked chat no longer overlaps the toolbar; padding still owns the
+    // pointer and must clear stale chat hover in the same move.
+    assert!(!host
+        .ai_chat_rect(viewport_w, viewport_h)
+        .expect("composer card")
+        .contains(point));
 
     assert!(host.apply_cursor_move(point.x, point.y));
     assert_eq!(host.editor_state.editor_ui.chat_header_hover, None);
@@ -353,11 +349,11 @@ fn context_menu_footprint_clears_chat_and_lower_hover_in_one_move() {
     let (viewport_w, viewport_h) = (1440.0, 900.0);
     host.last_viewport_w = viewport_w;
     host.last_viewport_h = viewport_h;
-    host.editor_state.chat.maximized = true;
+    host.editor_state.editor_ui.enter_chat_tab();
     host.editor_state.ui.path_anchor_menu = Some(PathAnchorMenuState {
         node_id: NodeId::new("anchor-node"),
         anchor_index: 0,
-        x: 420.0,
+        x: 40.0,
         y: 220.0,
         menu: Default::default(),
     });
@@ -377,7 +373,7 @@ fn context_menu_footprint_clears_chat_and_lower_hover_in_one_move() {
         .owned_by(host.chat_panel_owner)
         .cursor_probe(
             host.ai_chat_rect(viewport_w, viewport_h)
-                .expect("maximized chat"),
+                .expect("pinned chat"),
             point,
         )
         .hit
@@ -414,14 +410,13 @@ fn status_bar_footprint_clears_chat_and_lower_hover_in_one_move() {
 }
 
 #[test]
-fn static_color_picker_owns_point_above_maximized_chat() {
+fn static_color_picker_clears_chat_and_lower_hover() {
     let mut host = WidgetHost::new();
     let (viewport_w, viewport_h) = (1440.0, 900.0);
     host.last_viewport_w = viewport_w;
     host.last_viewport_h = viewport_h;
     host.editor_state = EditorState::sample();
     host.editor_state.set_single_selection(NodeId::new("n13"));
-    host.editor_state.chat.maximized = true;
     assert!(host
         .editor_state
         .open_color_picker(op_editor_core::ui_draft::ColorTarget::Fill, 220.0,));
@@ -439,9 +434,11 @@ fn static_color_picker_owns_point_above_maximized_chat() {
         rect.origin.x + rect.size.x / 2.0,
         rect.origin.y + rect.size.y / 2.0,
     );
-    assert!(host
+    // The property popup and composer are disjoint; popup ownership must
+    // still clear stale chat hover in one move.
+    assert!(!host
         .ai_chat_rect(viewport_w, viewport_h)
-        .expect("maximized chat")
+        .expect("composer card")
         .contains(point));
 
     assert!(host.apply_cursor_move(point.x, point.y));
@@ -450,7 +447,7 @@ fn static_color_picker_owns_point_above_maximized_chat() {
 }
 
 #[test]
-fn property_image_popup_wins_above_chat_model_picker() {
+fn property_image_popup_clears_chat_model_picker_hover() {
     let mut host = WidgetHost::new();
     let (viewport_w, viewport_h) = (1440.0, 900.0);
     host.last_viewport_w = viewport_w;
@@ -458,7 +455,6 @@ fn property_image_popup_wins_above_chat_model_picker() {
     let _ = host
         .editor_state
         .insert_image_node_at_viewport("Hero photo", "https://x/y.png");
-    host.editor_state.chat.maximized = true;
     host.editor_state.editor_ui.image_panel.search_open = true;
     open_model_picker(&mut host);
     host.editor_state.editor_ui.chat_model_picker.hover = Some(0);
@@ -477,14 +473,14 @@ fn property_image_popup_wins_above_chat_model_picker() {
     };
     let chat_rect = host
         .ai_chat_rect(viewport_w, viewport_h)
-        .expect("maximized chat");
+        .expect("composer card");
     let mut owned_point = None;
     let mut y = TOP_BAR_HEIGHT;
     while y < viewport_h && owned_point.is_none() {
         let mut x = 0.0;
         while x < viewport_w {
             let point = Point2D::new(x, y);
-            if panel.image_popovers_contain(property_rect, point) && chat_rect.contains(point) {
+            if panel.image_popovers_contain(property_rect, point) {
                 owned_point = Some(point);
                 break;
             }
@@ -492,12 +488,18 @@ fn property_image_popup_wins_above_chat_model_picker() {
         }
         y += 4.0;
     }
-    let point = owned_point.expect("image search popup must overlap maximized Chat");
+    let point = owned_point.expect("image search popup");
+    assert!(!chat_rect.contains(point));
+    assert!(!host
+        .chat_model_picker_rect(viewport_w, viewport_h)
+        .expect("model picker")
+        .contains(point));
 
     assert!(host.apply_cursor_move(point.x, point.y));
     assert!(host.editor_state.editor_ui.image_panel.search_open);
     assert!(host.editor_state.editor_ui.chat_model_picker.open);
     assert_chat_and_lower_hover_cleared(&host);
+    assert_eq!(host.editor_state.editor_ui.chat_model_picker.hover, None);
 }
 
 #[test]
