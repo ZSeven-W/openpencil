@@ -447,6 +447,82 @@
             touch $out
           '';
 
+        # Generic browser-capture toolchain: pinned Playwright drives the
+        # packaged Chromium, executes the bundled snapshot extractor in the
+        # page, and optionally imports the result via the native CLI. The
+        # caller serves the application; this package owns only capture.
+        snapshotCaptureEnv = py-harbor.lib.mkPythonEnv {
+          inherit pkgs;
+          packages = ps: [ps.playwright];
+        };
+        snapshotCapture = pkgs.writeShellApplication {
+          name = "openpencil-snapshot-capture";
+          runtimeInputs = [
+            snapshotCaptureEnv
+            pkgs.chromium
+            pkgs.nodejs
+            opCliPackage
+          ];
+          text = ''
+            export OPENPENCIL_SNAPSHOT_EXTRACTOR="${./crates/op-html/assets/snapshot-extractor.js}"
+            export OPENPENCIL_CHROMIUM="${pkgs.chromium}/bin/chromium"
+            export OPENPENCIL_OP_BIN="${opCliPackage}/bin/op"
+            export FONTCONFIG_FILE="${pkgs.makeFontsConf {
+              fontDirectories = [pkgs.dejavu_fonts];
+            }}"
+            exec python "${./tools/snapshot-capture.py}" "$@"
+          '';
+        };
+        snapshotCaptureFixture = pkgs.writeText "snapshot-capture-fixture.html" ''
+          <!doctype html><html><head><title>Capture Fixture</title>
+          <style>.hidden{display:none}.t{color:#112233;font-size:18px}</style>
+          </head><body><div><h1 class="t">Hello hydrated</h1>
+          <div class="hidden">must not appear</div>
+          <svg width="20" height="20"><rect width="20" height="20" fill="red"/></svg>
+          <canvas width="30" height="30"></canvas>
+          </div></body></html>
+        '';
+        snapshotCaptureSmoke =
+          pkgs.runCommand "openpencil-snapshot-capture-smoke" {
+            nativeBuildInputs = [snapshotCapture pkgs.python3 pkgs.curl];
+          } ''
+            export HOME="$TMPDIR"
+            mkdir -p "$TMPDIR/site"
+            cp ${snapshotCaptureFixture} "$TMPDIR/site/index.html"
+            (cd "$TMPDIR/site" && python3 -m http.server 18998 >/dev/null 2>&1 &)
+            server=$!
+            trap 'kill $server 2>/dev/null || true' EXIT
+            for _ in $(seq 1 50); do
+              curl -sf http://127.0.0.1:18998/ >/dev/null && break
+              sleep 0.2
+            done
+            openpencil-snapshot-capture --url http://127.0.0.1:18998/ \
+              --out "$TMPDIR/snapshot.json" --to-op "$TMPDIR/doc.op"
+            python3 - "$TMPDIR/snapshot.json" "$TMPDIR/doc.op" <<'EOF'
+            import json, sys
+            snap = json.load(open(sys.argv[1]))
+            assert snap["version"] == 1, snap.get("version")
+            texts = []
+
+            def walk(node):
+                yield node
+                for child in node.get("children", []):
+                    yield from walk(child)
+
+            for node in walk(snap["root"]):
+                if node.get("kind") == "text":
+                    texts.append(node["text"])
+            assert any("Hello hydrated" in text for text in texts), texts
+            assert not any("must not appear" in text for text in texts), texts
+            tags = sorted(node.get("tag") for node in walk(snap["root"])
+                          if node.get("kind") == "image")
+            assert tags == ["canvas", "svg"], tags
+            doc = open(sys.argv[2], encoding="utf-8").read()
+            assert "Hello hydrated" in doc, "native document lost page text"
+            EOF
+            touch $out
+          '';
+
         # Exercise the same `nix run` surface that users consume, inside a
         # clean NixOS VM rather than only evaluating the derivations.
         prebuiltTestFlake = pkgs.writeTextDir "flake.nix" ''
@@ -557,6 +633,7 @@
           web-sdk-packages = webSdkPackages;
           appimage = appimage;
           python-tools = pythonCheck;
+          snapshot-capture = snapshotCapture;
         };
 
         apps = {
@@ -579,6 +656,10 @@
           web-server = {
             type = "app";
             program = "${webServerPackage}/bin/op-host-web-server";
+          };
+          snapshot-capture = {
+            type = "app";
+            program = "${snapshotCapture}/bin/openpencil-snapshot-capture";
           };
           integration-export = {
             type = "app";
@@ -624,6 +705,7 @@
           web-sdk-wasm = webSdkWasm;
           web-sdk-packages = webSdkPackages;
           python = pythonCheck;
+          snapshot-capture-smoke = snapshotCaptureSmoke;
           prebuilt = prebuiltDesktopPackage;
           prebuilt-cli = prebuiltCliPackage;
           prebuilt-runtime = prebuiltRuntimeTest;
