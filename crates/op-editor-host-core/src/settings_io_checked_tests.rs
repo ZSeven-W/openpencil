@@ -129,7 +129,10 @@ fn checked_settings_load_migrates_retired_gemini_cli_slots() {
     );
     assert_eq!(
         state.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, false, true, false, true, true, false, false, false, false, false, false]
+        [
+            true, false, false, true, false, true, true, false, false, false, false, false, false,
+            false
+        ]
     );
     let _ = std::fs::remove_dir_all(root);
 }

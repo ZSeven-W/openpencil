@@ -242,13 +242,16 @@ fn six_cli_mcp_payload_migrates_to_new_cli_count() {
     )
     .unwrap();
     let mut dst = EditorState::new();
-    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 13];
+    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 14];
 
     apply_payload(&mut dst, payload);
 
     assert_eq!(
         dst.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, false, true, true, false, false, false, false, false, false, false, false]
+        [
+            true, false, false, true, true, false, false, false, false, false, false, false, false,
+            false
+        ]
     );
 }
 
@@ -259,13 +262,16 @@ fn seven_cli_mcp_payload_keeps_its_toggles_and_leaves_the_new_clis_off() {
     )
     .unwrap();
     let mut dst = EditorState::new();
-    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 13];
+    dst.editor_ui.agent_settings.mcp_cli_enabled = [true; 14];
 
     apply_payload(&mut dst, payload);
 
     assert_eq!(
         dst.editor_ui.agent_settings.mcp_cli_enabled,
-        [true, false, true, false, true, false, true, false, false, false, false, false, false]
+        [
+            true, false, true, false, true, false, true, false, false, false, false, false, false,
+            false
+        ]
     );
 }
 

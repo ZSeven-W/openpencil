@@ -14,6 +14,9 @@ use crate::mcp_config_error::McpConfigError;
 use crate::mcp_config_io::{
     atomic_write, grok_config_has_openpencil, update_grok_config, FileSnapshot,
 };
+use crate::mcp_integrations_cline::{
+    cline_config_has_openpencil, cline_settings_path, update_cline_config, ClineEnv,
+};
 use crate::mcp_integrations_dsh::{dsh_config_has_openpencil, update_dsh_patch_config};
 
 const SERVER_NAME: &str = "openpencil";
@@ -32,9 +35,9 @@ pub(crate) fn set_cli_enabled(
     set_cli_enabled_at_path(cli, enabled, port, path)
 }
 
-pub(crate) fn detect_enabled_clis() -> [bool; 13] {
+pub(crate) fn detect_enabled_clis() -> [bool; 14] {
     let Some(home) = dirs::home_dir() else {
-        return [false; 13];
+        return [false; 14];
     };
     detect_enabled_clis_for_home(&home, true)
 }
@@ -56,12 +59,12 @@ pub(crate) fn set_cli_enabled_at_home(
 }
 
 /// Like [`detect_enabled_clis`] but against an explicit home dir (no env).
-pub(crate) fn detect_enabled_clis_at_home(home: &Path) -> [bool; 13] {
+pub(crate) fn detect_enabled_clis_at_home(home: &Path) -> [bool; 14] {
     detect_enabled_clis_for_home(home, false)
 }
 
-fn detect_enabled_clis_for_home(home: &Path, use_env: bool) -> [bool; 13] {
-    let mut flags = [false; 13];
+fn detect_enabled_clis_for_home(home: &Path, use_env: bool) -> [bool; 14] {
+    let mut flags = [false; 14];
     for (idx, cli) in McpCli::ALL.iter().copied().enumerate() {
         flags[idx] = if cli == McpCli::Antigravity {
             antigravity_config_has_openpencil(&config_path(cli, home, use_env))
@@ -90,6 +93,7 @@ fn set_cli_enabled_at_path(
         McpCli::Kimi => update_mcp_servers_json(&path, enabled, kimi_server(port))?,
         McpCli::ZCode => update_zcode_config(&path, enabled, port)?,
         McpCli::Dsh => update_dsh_patch_config(&path, enabled, port)?,
+        McpCli::Cline => update_cline_config(&path, enabled, port)?,
         McpCli::ClaudeCode | McpCli::GithubCopilot | McpCli::GeminiCli | McpCli::Cursor => {
             update_json_config(&path, enabled, port)?
         }
@@ -110,6 +114,7 @@ fn cli_config_has_openpencil(cli: McpCli, path: &Path) -> bool {
         McpCli::Kiro => kiro_config_has_openpencil(path),
         McpCli::ZCode => zcode_config_has_openpencil(path),
         McpCli::Dsh => dsh_config_has_openpencil(path),
+        McpCli::Cline => cline_config_has_openpencil(path),
         // Every remaining CLI keys its servers off `mcpServers.openpencil`;
         // only the value shape differs, so presence is the same check.
         McpCli::ClaudeCode
@@ -121,7 +126,7 @@ fn cli_config_has_openpencil(cli: McpCli, path: &Path) -> bool {
     }
 }
 
-fn config_path(cli: McpCli, home: &Path, use_env: bool) -> PathBuf {
+pub(crate) fn config_path(cli: McpCli, home: &Path, use_env: bool) -> PathBuf {
     match cli {
         McpCli::ClaudeCode => home.join(".claude.json"),
         McpCli::Codex => {
@@ -177,6 +182,16 @@ fn config_path(cli: McpCli, home: &Path, use_env: bool) -> PathBuf {
             } else {
                 home.join(".dsh").join("cordis.patch.yml")
             }
+        }
+        // Cline resolves its MCP settings through three env overrides; see
+        // `mcp_integrations_cline` for the precedence.
+        McpCli::Cline => {
+            let env = if use_env {
+                ClineEnv::from_process()
+            } else {
+                ClineEnv::default()
+            };
+            cline_settings_path(home, &env)
         }
         McpCli::GrokBuild => {
             if use_env {
@@ -533,7 +548,7 @@ fn update_antigravity_config(path: &Path, enabled: bool, port: u16) -> Result<()
     write_json_object(path, &root)
 }
 
-fn read_json_object(path: &Path) -> Result<Map<String, Value>, McpConfigError> {
+pub(crate) fn read_json_object(path: &Path) -> Result<Map<String, Value>, McpConfigError> {
     // `std::io::Error` / `serde_json::Error` come from crates this pass does
     // not own, so their messages ride along as text.
     let text = match fs::read_to_string(path) {
@@ -561,7 +576,10 @@ fn read_json_object(path: &Path) -> Result<Map<String, Value>, McpConfigError> {
         })
 }
 
-fn write_json_object(path: &Path, root: &Map<String, Value>) -> Result<(), McpConfigError> {
+pub(crate) fn write_json_object(
+    path: &Path,
+    root: &Map<String, Value>,
+) -> Result<(), McpConfigError> {
     let text = serde_json::to_string_pretty(root).map_err(|e| McpConfigError::Serialize {
         path: path.to_path_buf(),
         message: e.to_string(),

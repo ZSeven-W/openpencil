@@ -1,4 +1,4 @@
-use super::{ChatDragState, WidgetHost};
+use super::WidgetHost;
 use op_editor_core::agent_settings::{
     AgentSettingsTab, ImageGenField, ImageGenProvider, SettingsFocus,
 };
@@ -39,7 +39,7 @@ fn seed_layer_for_context_menu(host: &mut WidgetHost) {
 }
 
 fn first_layer_row_point(host: &WidgetHost, viewport_h: f32) -> Point2D {
-    let rect = host.layer_panel_rect(viewport_h);
+    let rect = host.layers_content_rect(viewport_h);
     let panel = LayerPanel::from_editor(&host.editor_state);
     let x = 48.0;
     let mut y = rect.origin.y + 1.0;
@@ -122,37 +122,36 @@ fn chat_model_row_wins_over_variables_panel_and_preset_menu() {
 }
 
 #[test]
-fn right_press_on_model_picker_does_not_open_covered_layer_context_menu() {
+fn right_press_on_model_picker_does_not_open_layer_context_menu() {
     let mut host = WidgetHost::new();
     seed_layer_for_context_menu(&mut host);
     seed_two_chat_models(&mut host);
     let viewport = (1200.0, 800.0);
     let layer_point = first_layer_row_point(&host, viewport.1);
-    host.chat_drag = Some(ChatDragState {
-        grab_dx: 0.0,
-        grab_dy: 0.0,
-        pos_x: 0.0,
-        pos_y: 0.0,
-    });
     host.editor_state.editor_ui.chat_model_picker.open = true;
-    let initial_picker = host
-        .chat_model_picker_rect(viewport.0, viewport.1)
-        .expect("initial picker rect");
-    host.chat_drag.as_mut().expect("chat drag").pos_y +=
-        layer_point.y - (initial_picker.origin.y + initial_picker.size.y / 2.0);
     let picker = host
         .chat_model_picker_rect(viewport.0, viewport.1)
         .expect("picker rect");
-    assert!(picker.contains(layer_point));
+    let point = Point2D::new(
+        picker.origin.x + 24.0,
+        picker.origin.y
+            + ai_chat_model_picker::MODEL_SEARCH_H
+            + ai_chat_model_picker::MODEL_PICKER_PAD_Y
+            + ai_chat_model_picker::MODEL_GROUP_H
+            + ai_chat_model_picker::MODEL_ROW_H / 2.0,
+    );
+    assert!(picker.contains(point));
+    // The composer picker is beside the Layers rail, never dragged over it.
+    assert!(layer_point.x < picker.origin.x);
 
-    assert!(host.apply_right_press(layer_point.x, layer_point.y, viewport.0, viewport.1));
+    assert!(host.apply_right_press(point.x, point.y, viewport.0, viewport.1));
 
     assert!(host.editor_state.editor_ui.layer_context_menu.is_none());
     assert!(host.editor_state.editor_ui.chat_model_picker.open);
 }
 
 #[test]
-fn collapsing_chat_closes_model_picker() {
+fn composer_header_opens_chat_tab_after_dismissing_model_picker() {
     let mut host = WidgetHost::new();
     seed_two_chat_models(&mut host);
     host.editor_state.editor_ui.chat_model_picker.open = true;
@@ -160,11 +159,16 @@ fn collapsing_chat_closes_model_picker() {
         .editor_ui
         .chat_model_picker_input
         .set_text("gpt");
+    host.editor_state.chat.focused = true;
     let chat = host.ai_chat_rect(1200.0, 800.0).unwrap();
 
-    assert!(host.apply_press(chat.origin.x + 25.0, chat.origin.y + 18.0, 1200.0, 800.0,));
-
-    assert!(host.editor_state.chat.is_minimized());
+    // The picker is modal over the composer; dismiss it before using the header.
+    assert!(host.apply_click(
+        chat.origin.x + chat.size.x - 28.0,
+        chat.origin.y + chat.size.y - 20.0,
+        1200.0,
+        800.0,
+    ));
     assert!(!host.editor_state.editor_ui.chat_model_picker.open);
     assert!(host
         .editor_state
@@ -172,6 +176,22 @@ fn collapsing_chat_closes_model_picker() {
         .chat_model_picker_input
         .text()
         .is_empty());
+    assert_eq!(
+        host.editor_state.editor_ui.slides_panel.tab,
+        op_editor_core::LeftPanelTab::Layers
+    );
+    let chat = host.ai_chat_rect(1200.0, 800.0).unwrap();
+    assert!(host.apply_click(
+        chat.origin.x + chat.size.x / 2.0,
+        chat.origin.y + 15.0,
+        1200.0,
+        800.0,
+    ));
+    assert_eq!(
+        host.editor_state.editor_ui.slides_panel.tab,
+        op_editor_core::LeftPanelTab::Chat
+    );
+    assert!(!host.editor_state.chat.is_minimized());
 }
 
 #[test]

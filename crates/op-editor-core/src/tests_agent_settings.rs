@@ -31,7 +31,7 @@ fn default_settings_are_quiescent() {
 #[test]
 fn tab_and_cli_arrays_cover_all_variants() {
     assert_eq!(AgentSettingsTab::ALL.len(), 6);
-    assert_eq!(McpCli::ALL.len(), 13);
+    assert_eq!(McpCli::ALL.len(), 14);
     assert_eq!(
         AgentSettings::default().mcp_cli_enabled.len(),
         McpCli::ALL.len(),
@@ -129,6 +129,8 @@ fn display_order_is_a_permutation_of_all_with_dsh_third() {
     // Append-only invariant: DeepSeek Harness is the 13th (last) slot, so
     // persisted flags for the previous twelve CLIs keep their meaning.
     assert_eq!(McpCli::Dsh.index(), 12);
+    // Cline was appended after it (13 → 14 slots).
+    assert_eq!(McpCli::Cline.index(), 13);
 }
 
 #[test]

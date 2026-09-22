@@ -414,7 +414,7 @@ cat design.dsl | op design - # Pipe from stdin
 
 Supports three input methods: inline string, `@filepath` (read from file), or `-` (read from stdin). Works with the desktop app, web server, or headless file-backed server. See the [CLI command reference](./crates/op-cli/src/usage.txt) for all commands.
 
-**LLM Skill** — install the [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) plugin to teach AI agents how to design with `op`. Run `op install` for detected agents, or target one explicitly with `op install --target codex`.
+**LLM Skill** — install the [OpenPencil Skill](https://github.com/ZSeven-W/openpencil-skill) plugin to teach AI agents how to design with `op`. Run `op install` for detected agents, or target one explicitly with `op install --target codex` (targets: `claude`, `codex`, `cursor`, `opencode`, `cline`).
 
 ## Features
 
