@@ -34,6 +34,11 @@ impl WidgetHostNative {
         if self.preview_slideshow_active() {
             return None;
         }
+        // The Home takeover replaces the canvas chrome on screen; its ghost
+        // app-bar rect must not claim taps aimed at the Home top bar.
+        if self.editor_state.editor_ui.home.visible {
+            return None;
+        }
         let point = Point2D::new(x, y);
         if self.editor_state.editor_ui.touch_chrome() {
             let bar = MobileAppBar::for_editor(&self.editor_state);

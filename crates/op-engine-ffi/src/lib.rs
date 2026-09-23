@@ -78,6 +78,8 @@ mod editor_model_discovery;
 mod editor_pointer;
 #[cfg(all(feature = "editor", test))]
 mod editor_pointer_clock_tests;
+#[cfg(all(feature = "editor", test))]
+mod editor_pointer_home_tests;
 #[cfg(feature = "editor")]
 mod editor_pointer_release;
 #[cfg(all(test, feature = "editor"))]
