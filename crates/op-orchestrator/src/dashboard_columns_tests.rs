@@ -328,3 +328,28 @@ fn section_width_activity_returns_38_percent_of_main() {
     let expected = (940.0_f64 * 0.38).round();
     assert_eq!(infer_dashboard_section_width(&st, 1200.0), expected);
 }
+
+#[test]
+fn chinese_nav_bar_is_a_top_bar_not_a_sidebar() {
+    assert!(!is_sidebar_subtask(&subtask("nav", "导航栏", None)));
+    assert!(!is_sidebar_subtask(&subtask("nav", "顶部导航", None)));
+    assert!(is_sidebar_subtask(&subtask("nav", "侧边导航栏", None)));
+    assert!(is_strong_sidebar_subtask(&subtask("rail", "侧栏", None)));
+}
+
+#[test]
+fn chinese_landing_sections_read_as_landing_anatomy() {
+    let plan = plan_with(
+        1440.0,
+        vec![
+            subtask("s1", "首屏主视觉", None),
+            subtask("s2", "内饰图文", None),
+            subtask("s3", "页脚", None),
+        ],
+    );
+    assert!(plan_has_landing_anatomy(&plan));
+    assert!(!is_dashboard_like_prompt(
+        "做一个汽车落地页，含性能指标和续航图表",
+        &plan
+    ));
+}

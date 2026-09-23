@@ -78,7 +78,9 @@ pub(crate) fn is_dashboard_like_prompt(prompt: &str, plan: &OrchestratorPlan) ->
 
 pub(crate) fn plan_has_landing_anatomy(plan: &OrchestratorPlan) -> bool {
     let identities: Vec<String> = plan.subtasks.iter().map(subtask_identity_text).collect();
-    let has_hero = identities.iter().any(|text| text.contains("hero"));
+    let has_hero = identities
+        .iter()
+        .any(|text| text.contains("hero") || text.contains("首屏") || text.contains("英雄"));
     let has_supporting_story = identities.iter().any(|text| {
         text.contains("feature")
             || text.contains("capabilit")
@@ -86,6 +88,13 @@ pub(crate) fn plan_has_landing_anatomy(plan: &OrchestratorPlan) -> bool {
             || text.contains("testimonial")
             || text.contains("customer proof")
             || text.contains("logo")
+            || text.contains("特性")
+            || text.contains("功能")
+            || text.contains("亮点")
+            || text.contains("卖点")
+            || text.contains("图文")
+            || text.contains("评价")
+            || text.contains("案例")
     });
     let has_conversion_end = identities.iter().any(|text| {
         text.contains("pricing")
@@ -93,6 +102,9 @@ pub(crate) fn plan_has_landing_anatomy(plan: &OrchestratorPlan) -> bool {
             || text.contains("footer")
             || text.contains("final cta")
             || text.contains("call to action")
+            || text.contains("页脚")
+            || text.contains("定价")
+            || text.contains("常见问题")
     });
     has_hero && has_supporting_story && has_conversion_end
 }
@@ -142,6 +154,12 @@ fn has_strong_sidebar_keyword(text: &str) -> bool {
         || text.contains("left nav")
         || text.contains("nav rail")
         || text.contains("navigation rail")
+        // Chinese plans name the rail directly; checked before the top-bar
+        // words below, so "侧边导航栏" stays a sidebar.
+        || text.contains("侧边栏")
+        || text.contains("侧栏")
+        || text.contains("侧边导航")
+        || text.contains("左侧导航")
 }
 
 /// `/(sidebar|side bar|navigation|nav|menu)/`
@@ -161,10 +179,21 @@ fn has_topbar_keyword(text: &str) -> bool {
         || text.contains("navigation bar")
         || text.contains("nav bar")
         || text.contains("navbar")
+        // "导航栏" is literally "navigation bar" — a landing page's top nav. A
+        // GLM-5.3-Flash EV page planned `nav (导航栏)` first and, with no
+        // top-bar word it could read, was scaffolded as a sidebar dashboard.
+        || text.contains("导航栏")
+        || text.contains("顶栏")
+        || text.contains("顶部导航")
+        || text.contains("顶部栏")
+        || text.contains("页头")
 }
 
 fn has_explicit_landing_page_intent(text: &str) -> bool {
-    text.contains("landing page") || text.contains("landing-page")
+    text.contains("landing page")
+        || text.contains("landing-page")
+        || text.contains("落地页")
+        || text.contains("着陆页")
 }
 
 fn has_explicit_dashboard_intent(text: &str) -> bool {
