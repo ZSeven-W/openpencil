@@ -16,8 +16,9 @@ use super::{
 /// by converting the parent in place (`layout:none` + concentric children).
 ///
 /// The gates mirror [`radial_stack_repair`]'s own acceptance conditions, read
-/// off the authored tree: zero padding, an unambiguous single-centre layer
-/// order, and arcs that fill most of the parent box. A parent that fails them
+/// off the authored tree: zero padding, a recognised radial layer order (one
+/// or several centre-content children), and arcs that fill most of the
+/// parent box. A parent that fails them
 /// is a general-purpose container (a padded card, a section with its own
 /// heading, a KPI tile) that merely HOLDS a ring, and converting it would
 /// absolutely-position its unrelated content — so this module declines it and

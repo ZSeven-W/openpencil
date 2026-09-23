@@ -198,19 +198,8 @@ fn end_to_end_pump_round_trips_apply_and_progress_via_actor_channels() {
 /// `ChatMessage.failed_subtasks`, JSON-encoded, keyed by the same id the
 /// row's `ChatActivity` carries — the exact lookup
 /// `ChatState::begin_subtask_retry` performs on a "Retry" click.
-#[test]
-fn pump_progress_captures_failed_subtask_specs_for_manual_retry() {
-    let (delta_tx, delta_rx) = mpsc::channel::<DesignDelta>();
-    let (cmd_tx, cmd_rx) = mpsc::channel::<DesignCmdReq>();
-    let mut current = Some(DesignSession::from_channels(delta_rx, cmd_rx));
-    let mut host = WidgetHostNative::new();
-    host.editor_state_mut().editor_ui.locale = Locale::EnUs;
-    host.editor_state_mut()
-        .chat
-        .messages
-        .push(op_editor_core::ChatMessage::assistant_streaming());
-
-    let subtask = op_orchestrator::plan::Subtask {
+fn hero_subtask() -> op_orchestrator::plan::Subtask {
+    op_orchestrator::plan::Subtask {
         id: "hero".into(),
         label: "Hero".into(),
         region: op_orchestrator::plan::Region {
@@ -224,9 +213,25 @@ fn pump_progress_captures_failed_subtask_specs_for_manual_retry() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
         bleed_hero: false,
-    };
+    }
+}
+
+#[test]
+fn pump_progress_captures_failed_subtask_specs_for_manual_retry() {
+    let (delta_tx, delta_rx) = mpsc::channel::<DesignDelta>();
+    let (cmd_tx, cmd_rx) = mpsc::channel::<DesignCmdReq>();
+    let mut current = Some(DesignSession::from_channels(delta_rx, cmd_rx));
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.locale = Locale::EnUs;
+    host.editor_state_mut()
+        .chat
+        .messages
+        .push(op_editor_core::ChatMessage::assistant_streaming());
+
+    let subtask = hero_subtask();
     let fake_worker = thread::spawn(move || {
         let sink = RemoteDocSink::new(cmd_tx, EditorState::new());
         let _ = delta_tx.send(DesignDelta::Done(Ok(RunSummary {
@@ -279,24 +284,7 @@ fn pump_progress_captures_failed_subtask_specs_for_manual_retry() {
 }
 
 fn persisted_subtask_json() -> String {
-    serde_json::to_string(&op_orchestrator::plan::Subtask {
-        id: "hero".into(),
-        label: "Hero".into(),
-        region: op_orchestrator::plan::Region {
-            width: 1200.0,
-            height: 400.0,
-        },
-        id_prefix: "hero".into(),
-        parent_frame_id: None,
-        insert_after_sibling_id: None,
-        elements: None,
-        screen: None,
-        generated_root_id: None,
-        existing_section_labels: None,
-        retry_feedback: None,
-        bleed_hero: false,
-    })
-    .unwrap()
+    serde_json::to_string(&hero_subtask()).unwrap()
 }
 
 fn persisted_request_json() -> String {

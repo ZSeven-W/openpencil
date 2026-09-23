@@ -243,6 +243,7 @@ fn subagent_prompt_append_mode_injected_when_labels_present() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: Some(vec!["Hero".into(), "Pricing".into()]),
+        covers: None,
         retry_feedback: None,
     };
     let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
@@ -279,6 +280,7 @@ fn subagent_prompt_no_append_mode_when_labels_none() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
     let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
@@ -307,6 +309,7 @@ fn subagent_prompt_no_append_mode_when_labels_empty() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: Some(vec![]),
+        covers: None,
         retry_feedback: None,
     };
     let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
@@ -339,6 +342,7 @@ fn subagent_prompt_injects_self_check_feedback_when_present() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: Some(crate::plan::RetryFeedback::SelfCheck(
             "self-check failed: radial-stack-not-concentric at n14: progress-ring track, \
              progress arc, and measurable centre content must share one point"
@@ -379,6 +383,7 @@ fn subagent_prompt_omits_self_check_feedback_when_absent() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
     let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
@@ -409,6 +414,7 @@ fn subagent_prompt_injects_geometry_feedback_with_distinct_wording() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: Some(crate::plan::RetryFeedback::Geometry(
             "Card (n9): resolved 420px wide inside its 390px parent — it spills out".into(),
         )),
@@ -466,6 +472,7 @@ fn subtask_intent_includes_prompt_label_and_hints() {
         screen: Some("home".into()),
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
     let intent = subtask_intent(&req, &sub);

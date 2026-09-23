@@ -362,6 +362,7 @@ fn coerce_subtask(
             screen: None,
             generated_root_id: None,
             existing_section_labels: None,
+            covers: None,
             retry_feedback: None,
         });
     }
@@ -402,6 +403,12 @@ fn coerce_subtask(
     // screen aliasing: screen ?? page
     let screen = as_string(&candidate["screen"]).or_else(|| as_string(&candidate["page"]));
 
+    // covers backfill: an array of non-empty strings survives the repair
+    // path verbatim (same contract as the strict parse — the planner copied
+    // the brief's own wording, and the coverage gate needs exactly that
+    // wording).
+    let covers = coerce_covers(&candidate["covers"]);
+
     Some(Subtask {
         id: as_string(&candidate["id"]).unwrap_or_else(|| make_safe_section_id(&label, index)),
         label,
@@ -417,8 +424,21 @@ fn coerce_subtask(
         screen,
         generated_root_id: None,
         existing_section_labels: None,
+        covers,
         retry_feedback: None,
     })
+}
+
+/// Coerces a `covers` value into `Some(Vec<String>)`: only an array with at
+/// least one non-empty trimmed string qualifies; anything else is `None`, so
+/// `"covers": []` degrades to "no backfill" rather than an empty claim.
+fn coerce_covers(value: &Value) -> Option<Vec<String>> {
+    let entries: Vec<String> = value.as_array()?.iter().filter_map(as_string).collect();
+    if entries.is_empty() {
+        None
+    } else {
+        Some(entries)
+    }
 }
 
 /// Coerces a value into a comma-joined elements string, matching the TS

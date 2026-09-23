@@ -594,6 +594,12 @@ fn run_cleanup_passes_with_summary_and_policy(
         strip_decorative_filled_strokes(sink, rid);
         counter.checkpoint(summary, CheckCategory::Hierarchy, "text-hierarchy+strokes");
         crate::radial_repair::repair_radial_stacks(sink, rid);
+        crate::square_ring_repair::repair_square_ring_wrappers(sink, rid);
+        // Fake count-up rolls (start/end texts stacked at the same x/y in a
+        // `layout:none` window) paint BOTH layers statically — and the lower
+        // index (the START value) paints on top. Hide every layer but the
+        // last before geometry validation sees the window.
+        crate::stacked_text_repair::repair_stacked_overlapping_texts(sink, rid);
         crate::stub_repair::remove_empty_decorated_stubs(sink, rid);
         // A section's header row whose second child is the ENTIRE content
         // body (not a chevron/badge), with the body redundantly repeating
@@ -674,6 +680,8 @@ fn run_cleanup_passes_with_summary_and_policy(
         // `fill_container`; re-centre against the final resolved bounds so
         // arc/label coordinates do not drift off-centre.
         crate::radial_repair::repair_radial_stacks(sink, rid);
+        crate::square_ring_repair::repair_square_ring_wrappers(sink, rid);
+        crate::stacked_text_repair::repair_stacked_overlapping_texts(sink, rid);
         adjust_root_height_to_content(sink, rid, preserve_root_height);
         debug_probe_child_height(sink, rid, "adjust_root_height");
         counter.checkpoint(summary, CheckCategory::Layout, "radial+root-height");

@@ -22,6 +22,7 @@ fn subtask() -> Subtask {
         screen: Some("Screen".into()),
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     }
 }

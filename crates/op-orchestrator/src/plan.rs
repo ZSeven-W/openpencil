@@ -88,6 +88,17 @@ pub struct Subtask {
     /// port of TS `SubTask.existingSectionLabels` (`ai-types.ts:134`)。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub existing_section_labels: Option<Vec<String>>,
+    /// Brief sections this subtask covers, backfilled by the planner by
+    /// copying the brief's OWN wording verbatim (no translation, no
+    /// rewriting). The plan-coverage gate trusts these via normalized
+    /// equality before falling back to its legacy substring match.
+    /// `None` = the planner did not backfill (old models / old prompt).
+    #[serde(
+        default,
+        deserialize_with = "deserialize_covers",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub covers: Option<Vec<String>>,
     /// Set by the retry ladder (`concurrent::run_subtask_retry_ladder`) to
     /// echo a reason back into the SAME-tier retry prompt instead of
     /// silently narrowing the skill set — see [`RetryFeedback`] for the two
@@ -98,8 +109,18 @@ pub struct Subtask {
     pub retry_feedback: Option<RetryFeedback>,
 }
 
-/// Why a subtask is being retried WITH its rejection reason echoed into the
-/// prompt (as opposed to a plain zero-node retry, which carries no
+/// Deserialize `covers` so an empty array means "no backfill" (`None`), the
+/// same contract the repair path's `coerce_covers` enforces — the gate treats
+/// a present-but-empty claim as absent, never as a vacuous coverage claim.
+fn deserialize_covers<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = Option::<Vec<String>>::deserialize(deserializer)?;
+    Ok(raw.filter(|entries| !entries.is_empty()))
+}
+
+/// Why a subtask is being retried WITH its rejection reason echoed into the/// prompt (as opposed to a plain zero-node retry, which carries no
 /// feedback) — drives the exact wording `prompt.rs`'s `retry_feedback`
 /// block injects, so the model can tell "geometry problem in real content
 /// you should keep" apart from "structural problem caught before your
@@ -228,7 +249,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                     )),
                     screen: Some(screen_name.clone()),
                     generated_root_id: None,
-                    existing_section_labels: None,
+                    existing_section_labels: None, covers: None,
                     retry_feedback: None,
                 }
             })
@@ -298,7 +319,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                     ),
                     screen: None,
                     generated_root_id: None,
-                    existing_section_labels: None,
+                    existing_section_labels: None, covers: None,
                     retry_feedback: None,
                 },
                 Subtask {
@@ -320,7 +341,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                     ),
                     screen: None,
                     generated_root_id: None,
-                    existing_section_labels: None,
+                    existing_section_labels: None, covers: None,
                     retry_feedback: None,
                 },
             ],
@@ -353,6 +374,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                 screen: None,
                 generated_root_id: None,
                 existing_section_labels: None,
+                covers: None,
                 retry_feedback: None,
             }
         })
@@ -424,6 +446,7 @@ fn build_fallback_deck_plan(req: &DesignRequest, preset: DesignTypePreset) -> Or
                 screen: Some(title),
                 generated_root_id: None,
                 existing_section_labels: None,
+                covers: None,
                 retry_feedback: None,
             }
         })
@@ -573,6 +596,12 @@ fn explicit_mobile_size(prompt: &str) -> Option<(f64, f64)> {
 #[path = "plan_fallback_deck_tests.rs"]
 mod fallback_deck_tests;
 
+// covers-backfill parse/repair passthrough tests live in a sibling to keep
+// this file below the 800-line budget.
+#[cfg(test)]
+#[path = "plan_covers_tests.rs"]
+mod covers_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -709,6 +738,7 @@ mod tests {
             screen: None,
             generated_root_id: None,
             existing_section_labels: None,
+            covers: None,
             retry_feedback: None,
         };
         assert!(st.existing_section_labels.is_none());
@@ -732,6 +762,7 @@ mod tests {
             screen: None,
             generated_root_id: None,
             existing_section_labels: Some(vec!["Hero".into(), "About".into()]),
+            covers: None,
             retry_feedback: None,
         };
         let labels = st.existing_section_labels.as_ref().unwrap();
@@ -757,6 +788,7 @@ mod tests {
             screen: None,
             generated_root_id: None,
             existing_section_labels: None,
+            covers: None,
             retry_feedback: None,
         };
         let json = serde_json::to_string(&st).expect("serialize");

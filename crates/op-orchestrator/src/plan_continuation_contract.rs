@@ -116,7 +116,7 @@ pub(super) fn apply(plan: &mut OrchestratorPlan, req: &DesignRequest) -> bool {
                 )),
                 screen: Some(screen_name),
                 generated_root_id: None,
-                existing_section_labels: None,
+                existing_section_labels: None, covers: None,
                 retry_feedback: None,
             });
         }

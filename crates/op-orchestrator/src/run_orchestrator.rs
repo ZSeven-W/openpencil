@@ -366,236 +366,204 @@ impl Orchestrator {
         let (
             mut outcomes,
             mut aborted_mid,
-            mut zero_node_failure,
-            mut incomplete_subtask_failure,
+            zero_node_failure,
+            incomplete_subtask_failure,
             salvage,
-        ): (Vec<SubtaskOutcome>, bool, bool, bool, Vec<(usize, usize)>) =
-            if effective_concurrency > 1 {
-                // Item D-lite: ≥2 screen groups AND the user's ⚡Nx setting
-                // allows it — run the groups genuinely CONCURRENTLY (never
-                // same-screen section parallelism; see the module doc for why
-                // that distinction matters against `aca0d3a0`'s data verdict).
-                let result = crate::concurrent::run_screen_groups_concurrent(
-                    &groups,
-                    &group_identities,
+        ): (Vec<SubtaskOutcome>, bool, bool, bool, Vec<(usize, usize)>) = if effective_concurrency
+            > 1
+        {
+            // Item D-lite: ≥2 screen groups AND the user's ⚡Nx setting
+            // allows it — run the groups genuinely CONCURRENTLY (never
+            // same-screen section parallelism; see the module doc for why
+            // that distinction matters against `aca0d3a0`'s data verdict).
+            let result = crate::concurrent::run_screen_groups_concurrent(
+                &groups,
+                &group_identities,
+                &plan,
+                &request,
+                llm,
+                sink,
+                abort,
+                tier,
+                effective_concurrency,
+                self.agent_indicator_epoch,
+                &geometry_echo_budget,
+                on_progress,
+            )
+            .await;
+            (
+                result.outcomes,
+                result.aborted_mid,
+                result.zero_node_failure,
+                result.incomplete_subtask_failure,
+                result.salvage,
+            )
+        } else {
+            // Single group / single screen / append mode — the ORIGINAL
+            // sequential loop, unchanged in behavior (byte-identical
+            // regression lock), just calling the extracted retry ladder.
+            //
+            // Self-diagnostic (2026-07-17, sequential-execution root-cause
+            // hunt): when ≥2 screen groups exist but this branch still ran
+            // (i.e. `effective_concurrency == 1` despite `groups.len() > 1`),
+            // announce it — this is the dual of `ConcurrentGroupsStarted`. By
+            // `effective_concurrency`'s own contract this can only happen
+            // when `clamp_concurrency(request.concurrency) <= 1`, so the
+            // announced `requested_workers` value is diagnostic gold: `1`
+            // here proves the ⚡Nx picker's value never reached
+            // `DesignRequest.concurrency` for this turn; anything `> 1`
+            // would mean `effective_concurrency` itself has a bug.
+            if groups.len() > 1 {
+                on_progress(Progress::ScreenGroupsSequential {
+                    group_count: groups.len(),
+                    requested_workers: request.concurrency,
+                });
+            }
+            let mut outcomes: Vec<SubtaskOutcome> = Vec::new();
+            let mut aborted_mid = false;
+            let mut zero_node_failure = false;
+            let mut incomplete_subtask_failure = false;
+            // (subtask index, outcomes index) of every all-attempts-failed
+            // subtask, for the end-of-run salvage pass below.
+            let mut salvage: Vec<(usize, usize)> = Vec::new();
+            // Provider-limit circuit breaker state (motion50 fix 1): how
+            // many subtasks IN A ROW failed on the provider's session/
+            // usage quota. Two consecutive quota failures mean the
+            // account is exhausted until a wall-clock reset — the ladder's
+            // seconds-scale retries cannot recover, so the run stops
+            // spending model calls.
+            let mut consecutive_provider_limit_failures = 0usize;
+            for (subtask_index, subtask) in plan.subtasks.iter().enumerate() {
+                if abort.is_set() {
+                    aborted_mid = true;
+                    break;
+                }
+                let outcome = crate::concurrent::run_subtask_retry_ladder_with_outcomes(
+                    subtask,
                     &plan,
                     &request,
                     llm,
                     sink,
                     abort,
                     tier,
-                    effective_concurrency,
                     self.agent_indicator_epoch,
                     &geometry_echo_budget,
                     on_progress,
+                    &outcomes,
                 )
                 .await;
-                (
-                    result.outcomes,
-                    result.aborted_mid,
-                    result.zero_node_failure,
-                    result.incomplete_subtask_failure,
-                    result.salvage,
-                )
-            } else {
-                // Single group / single screen / append mode — the ORIGINAL
-                // sequential loop, unchanged in behavior (byte-identical
-                // regression lock), just calling the extracted retry ladder.
-                //
-                // Self-diagnostic (2026-07-17, sequential-execution root-cause
-                // hunt): when ≥2 screen groups exist but this branch still ran
-                // (i.e. `effective_concurrency == 1` despite `groups.len() > 1`),
-                // announce it — this is the dual of `ConcurrentGroupsStarted`. By
-                // `effective_concurrency`'s own contract this can only happen
-                // when `clamp_concurrency(request.concurrency) <= 1`, so the
-                // announced `requested_workers` value is diagnostic gold: `1`
-                // here proves the ⚡Nx picker's value never reached
-                // `DesignRequest.concurrency` for this turn; anything `> 1`
-                // would mean `effective_concurrency` itself has a bug.
-                if groups.len() > 1 {
-                    on_progress(Progress::ScreenGroupsSequential {
-                        group_count: groups.len(),
-                        requested_workers: request.concurrency,
-                    });
-                }
-                let mut outcomes: Vec<SubtaskOutcome> = Vec::new();
-                let mut aborted_mid = false;
-                let mut zero_node_failure = false;
-                let mut incomplete_subtask_failure = false;
-                // (subtask index, outcomes index) of every all-attempts-failed
-                // subtask, for the end-of-run salvage pass below.
-                let mut salvage: Vec<(usize, usize)> = Vec::new();
-                for (subtask_index, subtask) in plan.subtasks.iter().enumerate() {
-                    if abort.is_set() {
-                        aborted_mid = true;
-                        break;
-                    }
-                    let outcome = crate::concurrent::run_subtask_retry_ladder_with_outcomes(
-                        subtask,
-                        &plan,
-                        &request,
-                        llm,
-                        sink,
-                        abort,
-                        tier,
-                        self.agent_indicator_epoch,
-                        &geometry_echo_budget,
-                        on_progress,
-                        &outcomes,
-                    )
-                    .await;
 
-                    let zero = outcome.node_count == 0;
-                    let incomplete = crate::subtask_completeness::is_incomplete_outcome(&outcome);
-                    let language_mismatch =
-                        crate::output_language::is_language_mismatch_outcome(&outcome);
-                    incomplete_subtask_failure |= incomplete;
-                    let node_count = outcome.node_count;
-                    let err_msg = outcome.error.clone();
-                    outcomes.push(outcome);
+                let zero = outcome.node_count == 0;
+                let incomplete = crate::subtask_completeness::is_incomplete_outcome(&outcome);
+                let language_mismatch =
+                    crate::output_language::is_language_mismatch_outcome(&outcome);
+                incomplete_subtask_failure |= incomplete;
+                let node_count = outcome.node_count;
+                let err_msg = outcome.error.clone();
+                outcomes.push(outcome);
 
-                    // abort 在 run_subtask 期间被置位 —— 优先于零节点判定归
-                    // abort 路径(否则 mid-stream abort 会被误判为错误路径,
-                    // 错误地移除 scaffold root 并返回 NoContent 而非 Aborted)。
-                    if abort.is_set() {
-                        aborted_mid = true;
-                        if zero {
-                            on_progress(Progress::SubtaskFailed {
-                                id: subtask.id.clone(),
-                                error: err_msg.unwrap_or_else(|| "aborted".into()),
-                            });
-                        } else {
-                            on_progress(Progress::SubtaskDone {
-                                id: subtask.id.clone(),
-                                node_count,
-                            });
+                // Provider-limit circuit breaker (motion50 fix 1): two
+                // CONSECUTIVE quota failures set the AbortFlag and announce
+                // it once. Everything downstream already honours the flag —
+                // the check right below breaks the loop, and the salvage
+                // pass is `!abort.is_set()`-gated — so no further model
+                // calls happen this run. A successful (or non-quota)
+                // subtask resets the consecutive counter.
+                if !abort.is_set() {
+                    if err_msg
+                        .as_deref()
+                        .is_some_and(crate::retry::is_provider_limit)
+                    {
+                        consecutive_provider_limit_failures += 1;
+                        if consecutive_provider_limit_failures >= 2 {
+                            let reason = err_msg.clone().unwrap_or_default();
+                            tracing::warn!(
+                                reason = %reason,
+                                "provider limit hit on two consecutive subtasks; aborting the run"
+                            );
+                            abort.set();
+                            on_progress(Progress::RunAborted { reason });
                         }
-                        break;
+                    } else {
+                        consecutive_provider_limit_failures = 0;
                     }
-                    if incomplete || language_mismatch {
-                        // The shared ladder already emitted SubtaskIncomplete
-                        // or SubtaskLanguageMismatch; do not overwrite that
-                        // terminal state with SubtaskDone.
-                        continue;
-                    }
-                    if zero {
-                        // 零节点失败(非 abort,全部 3 次皆失败)。**不 break** ——
-                        // 一个 section 失败不该放弃后续所有 subtask。各 subtask
-                        // 独立 InsertSubtree 到 root、互不依赖;break 会把失败点
-                        // 之后的必要内容(bottom nav 等)全丢掉(用户报的"管线丢
-                        // 内容")。跳过这个、继续后面的;`zero_node_failure` 仍标记
-                        // "至少一个失败",最终若**全部**零内容(zero_content)才删
-                        // scaffold root。
-                        on_progress(Progress::SubtaskFailed {
-                            id: subtask.id.clone(),
-                            error: err_msg.unwrap_or_default(),
-                        });
-                        zero_node_failure = true;
-                        salvage.push((subtask_index, outcomes.len() - 1));
-                        continue;
-                    }
-                    on_progress(Progress::SubtaskDone {
-                        id: subtask.id.clone(),
-                        node_count,
-                    });
                 }
-                (
-                    outcomes,
-                    aborted_mid,
-                    zero_node_failure,
-                    incomplete_subtask_failure,
-                    salvage,
-                )
-            };
 
-        // -- 阶段 4.4:失败抢救轮 --
-        // 瞬时故障(供应商网络抖动、偶发空回复)会把一个 subtask 的 3 次
-        // 紧挨着的尝试全部烧掉(measured:Ark 连续 3 次 "empty content from
-        // provider" → 侧栏子任务整段消失,设计**无侧栏出厂**且无可见信号)。
-        // 其余 subtask 跑完后隔了几十秒再给每个失败者最后一次完整尝试 ——
-        // 瞬时故障此时多已恢复;仍失败的维持 SubtaskFailed,不再重试。
-        // Reuse attempt 3's minimal skill tier and persisted subtask feedback.
-        // This keeps deterministic self-check guidance while still giving
-        // transient provider failures one final recovery window.
-        if !salvage.is_empty() && !abort.is_set() {
-            for (subtask_index, outcome_index) in salvage {
+                // abort 在 run_subtask 期间被置位 —— 优先于零节点判定归
+                // abort 路径(否则 mid-stream abort 会被误判为错误路径,
+                // 错误地移除 scaffold root 并返回 NoContent 而非 Aborted)。
                 if abort.is_set() {
                     aborted_mid = true;
+                    if zero {
+                        on_progress(Progress::SubtaskFailed {
+                            id: subtask.id.clone(),
+                            error: err_msg.unwrap_or_else(|| "aborted".into()),
+                        });
+                    } else {
+                        on_progress(Progress::SubtaskDone {
+                            id: subtask.id.clone(),
+                            node_count,
+                        });
+                    }
                     break;
                 }
-                if !crate::run_salvage_feedback::should_salvage(outcomes.get(outcome_index)) {
+                if incomplete || language_mismatch {
+                    // The shared ladder already emitted SubtaskIncomplete
+                    // or SubtaskLanguageMismatch; do not overwrite that
+                    // terminal state with SubtaskDone.
                     continue;
                 }
-                let subtask = crate::run_salvage_feedback::subtask_for_salvage(
-                    outcomes.get(outcome_index),
-                    &plan.subtasks[subtask_index],
-                );
-                let prior_outcomes = outcomes.get(..outcome_index).unwrap_or(&[]);
-                on_progress(scope_progress_for_subtask(
-                    &groups,
-                    &group_identities,
-                    subtask_index,
-                    Progress::SubtaskRetry {
+                if zero {
+                    // 零节点失败(非 abort,全部 3 次皆失败)。**不 break** ——
+                    // 一个 section 失败不该放弃后续所有 subtask。各 subtask
+                    // 独立 InsertSubtree 到 root、互不依赖;break 会把失败点
+                    // 之后的必要内容(bottom nav 等)全丢掉(用户报的"管线丢
+                    // 内容")。跳过这个、继续后面的;`zero_node_failure` 仍标记
+                    // "至少一个失败",最终若**全部**零内容(zero_content)才删
+                    // scaffold root。
+                    on_progress(Progress::SubtaskFailed {
                         id: subtask.id.clone(),
-                        attempt: 4,
-                        reason: "salvage pass after transient failures".into(),
-                    },
-                ));
-                let mut outcome = run_subtask_with_reveal_at_and_outcomes(
-                    &subtask,
-                    &plan,
-                    &request,
-                    llm,
-                    sink,
-                    abort,
-                    true,
-                    true,
-                    self.agent_indicator_epoch,
-                    reveal_now_millis(),
-                    None,
-                    prior_outcomes,
-                )
-                .await;
-                if outcome.node_count > 0 {
-                    // The salvage appended the section after everything
-                    // generated since it first failed; put it back where
-                    // the plan placed it.
-                    crate::run_salvage_feedback::restore_planned_order(
-                        sink,
-                        &plan,
-                        &outcomes,
-                        subtask_index,
-                        &outcome,
-                    );
-                    on_progress(scope_progress_for_subtask(
-                        &groups,
-                        &group_identities,
-                        subtask_index,
-                        Progress::SubtaskDone {
-                            id: subtask.id.clone(),
-                            node_count: outcome.node_count,
-                        },
-                    ));
-                    outcomes[outcome_index] = outcome;
-                } else {
-                    let error = crate::run_salvage_feedback::finalize_failed_salvage(&mut outcome);
-                    on_progress(scope_progress_for_subtask(
-                        &groups,
-                        &group_identities,
-                        subtask_index,
-                        Progress::SubtaskFailed {
-                            id: subtask.id.clone(),
-                            error,
-                        },
-                    ));
-                    outcomes[outcome_index] = outcome;
+                        error: err_msg.unwrap_or_default(),
+                    });
+                    zero_node_failure = true;
+                    salvage.push((subtask_index, outcomes.len() - 1));
+                    continue;
                 }
+                on_progress(Progress::SubtaskDone {
+                    id: subtask.id.clone(),
+                    node_count,
+                });
             }
-            zero_node_failure = outcomes.iter().any(|o| o.node_count == 0);
-            incomplete_subtask_failure = outcomes
-                .iter()
-                .any(crate::subtask_completeness::is_incomplete_outcome);
-        }
+            (
+                outcomes,
+                aborted_mid,
+                zero_node_failure,
+                incomplete_subtask_failure,
+                salvage,
+            )
+        };
+
+        // -- 阶段 4.4:失败抢救轮 --
+        // Extracted verbatim to the `run_salvage_pass` sibling module (spine
+        // budget); the contract is unchanged — see its module doc.
+        let (zero_node_failure, incomplete_subtask_failure) =
+            super::run_salvage_pass::run_salvage_pass(
+                sink,
+                &plan,
+                &request,
+                llm,
+                abort,
+                &groups,
+                &group_identities,
+                self.agent_indicator_epoch,
+                salvage,
+                &mut outcomes,
+                &mut aborted_mid,
+                zero_node_failure,
+                incomplete_subtask_failure,
+                on_progress,
+            )
+            .await;
 
         tracing::debug!(
             incomplete_subtask_failure,

@@ -87,6 +87,11 @@ pub(super) fn progress_label(p: &Progress) -> String {
             "• Plan missed section(s): {} — re-planning",
             missing.join(", ")
         ),
+        // Run-level circuit breaker (motion50 fix 1): the quota message IS the
+        // user-facing reason.
+        Progress::RunAborted { reason } => {
+            format!("• Run aborted: {reason}")
+        }
         Progress::SubtaskSkills {
             id,
             included,

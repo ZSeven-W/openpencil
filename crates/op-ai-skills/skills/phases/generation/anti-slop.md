@@ -14,7 +14,9 @@ ANTI-SLOP RULES (mandatory for every design):
 ## Visual Diversity
 
 1. NO flat solid-color backgrounds for major sections.
-   Use at minimum: subtle gradient, noise texture, geometric pattern, or layered fills.
+   Give each a texture that fits it: noise, geometric pattern, layered fills,
+   photography, or a gradient — a gradient is one option, not the default,
+   and never the answer for every section.
 
 2. Card layouts must NOT be identical.
    Each card group needs at least 1 differentiating element (size, image placement, accent).

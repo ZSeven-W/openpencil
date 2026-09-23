@@ -102,6 +102,7 @@ fn subagent_prompt_carries_subtask_and_script_format() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
     let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
@@ -177,6 +178,7 @@ fn subagent_prompt_reduced_complexity_carries_script_format() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
     let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), true, false);
@@ -210,6 +212,7 @@ fn subagent_prompt_carries_ts_layout_contract() {
             screen: None,
             generated_root_id: None,
             existing_section_labels: None,
+            covers: None,
             retry_feedback: None,
         },
         Subtask {
@@ -227,6 +230,7 @@ fn subagent_prompt_carries_ts_layout_contract() {
             screen: None,
             generated_root_id: None,
             existing_section_labels: None,
+            covers: None,
             retry_feedback: None,
         },
     ];
@@ -299,6 +303,7 @@ fn subagent_prompt_minimal_skills_has_schema_and_script_format() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
     // minimal_skills=true: the system prompt should contain schema skill
@@ -340,6 +345,7 @@ fn subagent_prompt_reduced_complexity_basic_is_shorter_than_full() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
     // req() uses model "claude" which is Full tier — no narrowing.
@@ -386,6 +392,7 @@ fn subagent_prompt_reduced_complexity_full_tier_skill_filtering_is_noop() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
     // req() uses "claude" which maps to Full tier → reduced_complexity's skill
@@ -441,6 +448,7 @@ fn subagent_prompt_reduced_complexity_keeps_script_gen_even_on_full_tier() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
     let (full_cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);
@@ -568,6 +576,7 @@ fn subagent_prompt_basic_mobile_food_keeps_mobile_app_skill() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
 
@@ -614,6 +623,7 @@ fn subagent_prompt_teaches_camelcase_property_names() {
         screen: Some("Cover".into()),
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
     let (cr, _) = bsp(&st, &plan(), &req(), AbortFlag::new(), false, false);

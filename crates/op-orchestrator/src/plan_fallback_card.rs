@@ -110,6 +110,7 @@ pub(crate) fn build_fallback_card_plan(
                 screen: Some(title),
                 generated_root_id: None,
                 existing_section_labels: None,
+                covers: None,
                 retry_feedback: None,
             }
         })

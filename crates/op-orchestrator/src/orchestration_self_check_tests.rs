@@ -546,3 +546,56 @@ fn a_hero_among_isomorphic_siblings_is_not_echoed() {
         "a hero among a majority-consistent family is exempt: {report:?}"
     );
 }
+
+fn dish_row(action_size: f64) -> serde_json::Value {
+    json!([
+        {
+            "type": "frame",
+            "id": "dish-row-1",
+            "name": "菜品行-招牌汉堡",
+            "width": "fill_container",
+            "height": "fit_content",
+            "layout": "horizontal",
+            "gap": 12,
+            "children": [
+                {"type": "image", "id": "dish-photo", "width": 80, "height": 80,
+                 "imageSearchQuery": "burger"},
+                {
+                    "type": "frame",
+                    "id": "dish-info",
+                    "width": "fill_container",
+                    "layout": "vertical",
+                    "children": [
+                        {"type": "text", "id": "dish-name", "content": "招牌双层牛肉堡"},
+                        {"type": "text", "id": "dish-price", "content": "¥32"}
+                    ]
+                },
+                {
+                    "type": "frame",
+                    "id": "add-button",
+                    "name": "加入按钮",
+                    "width": action_size,
+                    "height": action_size,
+                    "children": [{"type": "icon_font", "iconFontName": "plus"}]
+                }
+            ]
+        }
+    ])
+}
+
+#[test]
+fn accepts_a_thumbnail_dish_row_whose_text_column_fills_the_rest() {
+    let report = check_value_forest(&dish_row(28.0), 375.0);
+    assert!(!report.has_fatal(), "{report:?}");
+}
+
+#[test]
+fn a_thumbnail_dish_row_with_an_oversized_square_action_is_still_rejected() {
+    let report = check_value_forest(&dish_row(64.0), 375.0);
+    assert!(
+        report
+            .failure_message()
+            .contains("mobile-featured-card-bad-split"),
+        "{report:?}"
+    );
+}

@@ -4,7 +4,7 @@ description: Orchestrator task decomposition — splits UI requests into cohesiv
 phase: [planning]
 trigger: null
 priority: 0
-budget: 3704
+budget: 3798
 category: base
 ---
 
@@ -64,6 +64,7 @@ FORMAT:
 RULES:
 
 - ELEMENT BOUNDARIES: Each subtask MUST have an "elements" field listing the specific UI elements it contains. Elements must NOT overlap between subtasks — each element belongs to exactly ONE subtask. Example: if "Login Form" owns the submit button, "Social Login" must NOT repeat it.
+- COVERS BACKFILL: when the request enumerates sections (e.g. 含英雄、定价三档、页脚), each subtask delivering one MUST carry `"covers": ["<section>"]` with the name copied VERBATIM from the request — never translated or rewritten (e.g. `{"id":"hero","label":"Hero Section","covers":["英雄"]}`). Matched exactly modulo whitespace/punctuation/case; omit when the request names no sections.
 - STYLE SELECTION: Choose light or dark theme based on user intent. Dark: user mentions dark/cyber/terminal/neon/夜间/暗黑/deep/gaming/noir. Light (default): all other cases — SaaS, marketing, education, e-commerce, productivity, social. Never default to dark unless the content clearly calls for it.
 - Detect the design type FIRST, then choose the appropriate structure and subtask count.
 - Multi-section pages (type 1): Navigation Bar is the FIRST subtask — a sticky nav and any scroll progress bar belong INSIDE it, never a separate subtask — then Hero, feature sections, CTA, footer (6-10 subtasks)

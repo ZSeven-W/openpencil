@@ -22,39 +22,45 @@
 //!
 //! So this module re-centres and reorders whatever `authored_radial_patch`
 //! declined to touch for wrapper-shape or padding reasons, without resizing
-//! anything it didn't already have a size for. What still keeps a stack
-//! unfixable here (echoed back instead of guessed): more than one
-//! centre-content child (ambiguous order), a child whose size can be
-//! neither read nor estimated at all, a child that doesn't fit inside the
-//! wrapper's box no matter how it's centred (an authoring-size bug, not a
-//! position bug), or arc diameters too mismatched to plausibly be the same
-//! ring (`radial_layers` classifies track vs. progress by sweep angle /
+//! anything it didn't already have a size for. With several centre-content
+//! children (a big number plus a caption — the natural timer-ring shape)
+//! centring each would stack them on one point, so their authored x/y is
+//! kept and only the arcs are re-centred. What still keeps a stack
+//! unfixable here (echoed back instead of guessed): a child whose size can
+//! be neither read nor estimated at all, a child that doesn't fit inside
+//! the wrapper's box no matter how it's centred (an authoring-size bug, not
+//! a position bug), or arc diameters too mismatched to plausibly be the
+//! same ring (`radial_layers` classifies track vs. progress by sweep angle /
 //! naming alone, not by size, so nothing upstream has already vetted that
 //! the pairing is size-plausible).
 
 use serde_json::Value;
 
 use super::{
-    estimated_subtree_size, has_numeric, is_arc_ellipse, numeric, radial_layer_order,
-    radial_layers, valid_size, MIN_SAFE_ARC_DIAMETER_RATIO,
+    estimated_subtree_size, has_numeric, is_arc_ellipse, numeric, radial_layers, valid_size,
+    MIN_SAFE_ARC_DIAMETER_RATIO,
 };
 
 /// `(x, y, width, height)`.
 type Placement = (f64, f64, f64, f64);
 
-/// Re-centre every direct child of `node` on the wrapper's full box and fix
-/// its paint order to centre/progress/track. Returns `false` (no-op) when
-/// `node` isn't a recognised radial stack with an unambiguous layer order,
-/// or when the wrapper's own size or any child's size can't be read or
+/// Re-centre every direct arc child of `node` on the wrapper's full box and
+/// fix the paint order to centre/progress/track. Centre-content children of
+/// a multi-centre stack keep their authored x/y (the author placed the big
+/// number above the caption; centring each would stack them on one point).
+/// Returns `false` (no-op) when `node` isn't a recognised radial stack, or
+/// when the wrapper's own size or any child's size can't be read or
 /// estimated — those cases are left for the caller to report rather than
 /// guess at.
 pub(super) fn force_concentric_radial_stack(node: &mut Value) -> bool {
-    let Some(order) = radial_layer_order(node) else {
+    let Some(layers) = radial_layers(node) else {
         return false;
     };
+    let order = super::layer_order(&layers);
     let Some(placements) = concentric_placements(node) else {
         return false;
     };
+    let keep_authored_centres = layers.centres.len() > 1;
 
     let mut changed = set_if_different(node, "layout", Value::String("none".into()));
     changed |= set_if_different(node, "gap", Value::from(0.0));
@@ -64,7 +70,7 @@ pub(super) fn force_concentric_radial_stack(node: &mut Value) -> bool {
     let kids = node
         .get_mut("children")
         .and_then(Value::as_array_mut)
-        .expect("radial_layer_order already confirmed children exist");
+        .expect("radial_layers already confirmed children exist");
     changed |= order.iter().copied().ne(0..kids.len());
 
     // Pair each original child with its computed placement before
@@ -80,15 +86,17 @@ pub(super) fn force_concentric_radial_stack(node: &mut Value) -> bool {
         else {
             continue;
         };
-        let had_width = has_numeric(&child, "width");
-        let had_height = has_numeric(&child, "height");
-        changed |= set_if_different(&mut child, "x", Value::from(x));
-        changed |= set_if_different(&mut child, "y", Value::from(y));
-        if !had_width {
-            changed |= set_if_different(&mut child, "width", Value::from(width.round()));
-        }
-        if !had_height {
-            changed |= set_if_different(&mut child, "height", Value::from(height.round()));
+        if !keep_authored_centres || is_arc_ellipse(&child) {
+            let had_width = has_numeric(&child, "width");
+            let had_height = has_numeric(&child, "height");
+            changed |= set_if_different(&mut child, "x", Value::from(x));
+            changed |= set_if_different(&mut child, "y", Value::from(y));
+            if !had_width {
+                changed |= set_if_different(&mut child, "width", Value::from(width.round()));
+            }
+            if !had_height {
+                changed |= set_if_different(&mut child, "height", Value::from(height.round()));
+            }
         }
         kids.push(child);
     }
@@ -96,21 +104,19 @@ pub(super) fn force_concentric_radial_stack(node: &mut Value) -> bool {
 }
 
 /// True when `node` is a recognised radial stack that this lenient pass
-/// still can't call safe: the layer order is ambiguous, the children
-/// aren't already in centre/progress/track order, it isn't overlaid
-/// (`layout:none`), a child's authored x/y doesn't match the centred
-/// placement, or the placements can't even be computed (unmeasurable
-/// wrapper/child size). `node` not being a radial stack at all is *not*
-/// unsafe — there's nothing to check — so this checks `radial_layers`
-/// itself first rather than reusing `radial_layer_order`'s `None`, which
-/// also covers the very different "ambiguous order" case.
+/// still can't call safe: the children aren't already in
+/// centre/progress/track order, it isn't overlaid (`layout:none`), an arc's
+/// authored x/y doesn't match the centred placement, or the placements
+/// can't even be computed (unmeasurable wrapper/child size). Centre-content
+/// children of a multi-centre stack are exempt from the x/y check — their
+/// positions are the author's call; only the arcs must share the centre.
+/// `node` not being a radial stack at all is *not* unsafe — there's
+/// nothing to check.
 pub(super) fn is_still_off_center(node: &Value) -> bool {
-    if radial_layers(node).is_none() {
+    let Some(layers) = radial_layers(node) else {
         return false;
-    }
-    let Some(order) = radial_layer_order(node) else {
-        return true;
     };
+    let order = super::layer_order(&layers);
     let Some(placements) = concentric_placements(node) else {
         return true;
     };
@@ -120,6 +126,7 @@ pub(super) fn is_still_off_center(node: &Value) -> bool {
     if order.iter().copied().ne(0..placements.len()) {
         return true;
     }
+    let skip_centre_xy = layers.centres.len() > 1;
     let kids = node
         .get("children")
         .and_then(Value::as_array)
@@ -129,12 +136,18 @@ pub(super) fn is_still_off_center(node: &Value) -> bool {
         .iter()
         .zip(kids)
         .any(|((x, y, _width, _height), child)| {
+            if skip_centre_xy && !is_arc_ellipse(child) {
+                return false;
+            }
             numeric(child, "x") != Some(*x) || numeric(child, "y") != Some(*y)
         })
 }
 
 /// The centred `(x, y, width, height)` every direct child of `node` should
-/// sit at against the wrapper's full `width`×`height` box (padding is
+/// sit at against the wrapper's full `width`×`height` box. In a
+/// multi-centre stack only the arc entries are consumed — centre-content
+/// children keep their authored x/y, while their width/height still feed
+/// the measurement and fit gates. (Padding is
 /// deliberately not subtracted — see the module doc: jian positions an
 /// explicit-inset absolute child from the border box, ignoring the
 /// parent's padding, so a padding-aware centre would be centring against a

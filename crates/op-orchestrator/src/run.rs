@@ -51,6 +51,11 @@ use run_screen_groups::insert_screen_group_roots;
 #[path = "run_orchestrator.rs"]
 mod run_orchestrator;
 
+// Phase 4.4 (end-of-run salvage pass) — extracted from `run_orchestrator.rs`
+// to keep the run driver under the 800-line file budget.
+#[path = "run_salvage_pass.rs"]
+mod run_salvage_pass;
+
 /// TS `replaceEmptyFrame` parity: detect a single EMPTY top-level frame (the
 /// fresh-canvas starter) that can be REUSED as the design root instead of
 /// inserting a brand-new root. Returns its id when the active page holds
@@ -250,15 +255,27 @@ async fn maybe_replan_for_coverage(
     plan: OrchestratorPlan,
 ) -> Result<OrchestratorPlan, OrchestratorError> {
     let required = crate::plan_coverage::required_sections(&request.prompt);
-    let missing = crate::plan_coverage::missing_sections(&required, &plan);
-    if missing.is_empty() {
+    let check = crate::plan_coverage::check_coverage(&required, &plan);
+    if check.missing.is_empty() {
+        // Only log the passing gate when the planner backfilled covers —
+        // legacy plans keep their silent pass, byte for byte.
+        if crate::plan_coverage::plan_has_covers(&plan) {
+            eprintln!(
+                "[PLAN] coverage: ok covered-by: {}",
+                check.covered_by_line()
+            );
+        }
         return Ok(plan);
     }
-    eprintln!("[PLAN] coverage: missing {}", missing.join(", "));
+    eprintln!(
+        "[PLAN] coverage: missing {} (covered-by: {})",
+        check.missing.join(", "),
+        check.covered_by_line()
+    );
     on_progress(Progress::PlanCoverageRetry {
-        missing: missing.clone(),
+        missing: check.missing.clone(),
     });
-    let feedback = crate::plan_coverage::coverage_feedback(&missing);
+    let feedback = crate::plan_coverage::coverage_feedback(&check.missing);
     let mut pp = build_orchestrator_prompt(request, PlanningMode::Rich, abort.clone());
     pp.call_request.user_prompt.push_str("\n\n");
     pp.call_request.user_prompt.push_str(&feedback);
@@ -270,11 +287,12 @@ async fn maybe_replan_for_coverage(
             }
             if let Some((mut retry_plan, _)) = parse_orchestrator_response(&raw, request) {
                 apply_plan_pins(&mut retry_plan, forced_style_guide_name, request);
-                let still_missing = crate::plan_coverage::missing_sections(&required, &retry_plan);
-                if !still_missing.is_empty() {
+                let retry_check = crate::plan_coverage::check_coverage(&required, &retry_plan);
+                if !retry_check.missing.is_empty() {
                     eprintln!(
-                        "[PLAN] coverage: still missing {} after retry",
-                        still_missing.join(", ")
+                        "[PLAN] coverage: still missing {} after retry (covered-by: {})",
+                        retry_check.missing.join(", "),
+                        retry_check.covered_by_line()
                     );
                 }
                 return Ok(retry_plan);

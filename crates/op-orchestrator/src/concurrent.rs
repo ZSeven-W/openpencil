@@ -48,6 +48,12 @@ use tokio::sync::{mpsc, Semaphore};
 mod replay;
 use replay::{apply_worker_event, run_screen_group_worker, WorkerSignal};
 
+// The `geometry_echo` in-loop self-correction tail of the retry ladder —
+// extracted to a sibling file to keep this module under the 800-line budget.
+#[path = "concurrent_echo.rs"]
+mod echo;
+use echo::maybe_geometry_echo_with_outcomes;
+
 /// Clamps a raw concurrency value to the valid range `[1, 6]`.
 ///
 /// This mirrors the store-side clamp in TS (store clamps to [1,6] before
@@ -463,130 +469,6 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
     .await
 }
 
-/// One in-loop self-correction round for real resolved-layout violations.
-///
-/// A no-op (zero extra LLM calls) whenever:
-/// - `outcome.node_count == 0` — nothing landed, nothing to check;
-/// - `outcome.inserted_root_ids` is empty — a sink that cannot surface
-///   post-insert ids has nothing live to lay out or address for a replace.
-/// - the diagnostics come back empty — the common case, zero cost;
-/// - the run-wide [`GeometryEchoBudget`] is exhausted.
-#[allow(clippy::too_many_arguments)]
-#[allow(dead_code)]
-async fn maybe_geometry_echo(
-    subtask: &Subtask,
-    plan: &OrchestratorPlan,
-    request: &DesignRequest,
-    llm: &dyn LlmClient,
-    sink: &mut dyn DocSink,
-    abort: &AbortFlag,
-    reduced_complexity: bool,
-    minimal_skills: bool,
-    agent_indicator_epoch: Option<u64>,
-    budget: &GeometryEchoBudget,
-    on_progress: &mut dyn FnMut(Progress),
-    outcome: SubtaskOutcome,
-) -> SubtaskOutcome {
-    maybe_geometry_echo_with_outcomes(
-        subtask,
-        plan,
-        request,
-        llm,
-        sink,
-        abort,
-        reduced_complexity,
-        minimal_skills,
-        agent_indicator_epoch,
-        budget,
-        on_progress,
-        &[],
-        outcome,
-    )
-    .await
-}
-
-#[allow(clippy::too_many_arguments)]
-async fn maybe_geometry_echo_with_outcomes(
-    subtask: &Subtask,
-    plan: &OrchestratorPlan,
-    request: &DesignRequest,
-    llm: &dyn LlmClient,
-    sink: &mut dyn DocSink,
-    abort: &AbortFlag,
-    reduced_complexity: bool,
-    minimal_skills: bool,
-    agent_indicator_epoch: Option<u64>,
-    budget: &GeometryEchoBudget,
-    on_progress: &mut dyn FnMut(Progress),
-    prior_outcomes: &[SubtaskOutcome],
-    outcome: SubtaskOutcome,
-) -> SubtaskOutcome {
-    if outcome.node_count == 0
-        || outcome.inserted_root_ids.is_empty()
-        || abort.is_set()
-        || sink.is_buffered()
-    {
-        return outcome;
-    }
-    let issues = crate::geometry_validation::geometry_diagnostics_for_roots(
-        sink.state(),
-        &outcome.inserted_root_ids,
-    );
-    if issues.is_empty() {
-        return outcome;
-    }
-    if !budget.try_consume() {
-        return outcome;
-    }
-
-    on_progress(Progress::GeometryEcho {
-        id: subtask.id.clone(),
-        issue_count: issues.len(),
-    });
-    tracing::info!(
-        subtask = %subtask.id,
-        issue_count = issues.len(),
-        "geometry echo: resolved-layout violation(s) found, retrying in-loop"
-    );
-
-    let echo_subtask = Subtask {
-        retry_feedback: Some(crate::plan::RetryFeedback::Geometry(issues.join("\n"))),
-        ..subtask.clone()
-    };
-    let retried = run_subtask_with_reveal_at_and_outcomes(
-        &echo_subtask,
-        plan,
-        request,
-        llm,
-        sink,
-        abort,
-        reduced_complexity,
-        minimal_skills,
-        agent_indicator_epoch,
-        reveal_now_millis(),
-        None,
-        prior_outcomes,
-    )
-    .await;
-
-    if retried.node_count == 0 {
-        // The echo retry itself failed (LLM error, parse failure, or a
-        // fresh self-check rejection) — keep the ORIGINAL, still-real
-        // content rather than lose it; the deterministic net in
-        // `cleanup.rs` picks up whatever geometry issues remain.
-        return outcome;
-    }
-
-    // Adopt the corrected content: drop the original insert now that a
-    // real replacement has landed. Delete-then-keep-the-new-insert rather
-    // than a literal `EditorCommand::ReplaceSubtree` (which is 1-old-root-
-    // to-1-new-node only) because a subtask can produce N top-level roots
-    // on either side — this generalizes to N-old/M-new without assuming a
-    // 1:1 shape.
-    crate::subtask_completeness::rollback_inserted_roots(sink, &outcome.inserted_root_ids);
-    retried
-}
-
 // ── Screen-group concurrent executor ────────────────────────────────────────
 
 /// Result of the concurrent screen-group phase, in the same shape `run.rs`'s
@@ -719,13 +601,20 @@ pub(crate) async fn run_screen_groups_concurrent(
     let mut per_subtask: Vec<Option<(SubtaskOutcome, bool)>> = vec![None; plan.subtasks.len()];
     let mut aborted_mid = abort.is_set();
     let mut remaining = groups.len();
+    // Provider-limit circuit breaker (motion50 fix 1), concurrent analogue of
+    // the sequential loop's counter: two consecutive SETTLED subtasks that
+    // failed on the provider's session/usage quota (in completion order, the
+    // parallel reading of "consecutive") set the shared `AbortFlag` — every
+    // worker checks it before starting its next subtask, so no further model
+    // calls are spent on an exhausted account.
+    let mut consecutive_provider_limit_failures = 0usize;
     // Poll the event channel and worker set TOGETHER. This loop is the ONE
     // real-document writer: it drains one successful subtask atomically,
     // then acks that worker so the same group may proceed to its next subtask.
     while remaining > 0 {
         tokio::select! {
             Some(event) = event_rx.recv() => {
-                apply_worker_event(
+                match apply_worker_event(
                     event,
                     groups,
                     group_identities,
@@ -734,7 +623,21 @@ pub(crate) async fn run_screen_groups_concurrent(
                     agent_indicator_epoch,
                     &mut per_subtask,
                     on_progress,
-                );
+                ) {
+                    Some(true) => {
+                        consecutive_provider_limit_failures += 1;
+                        if consecutive_provider_limit_failures >= 2 && !abort.is_set() {
+                            abort.set();
+                            on_progress(Progress::RunAborted {
+                                reason: "provider session/usage limit hit on two consecutive \
+                                         subtasks"
+                                    .into(),
+                            });
+                        }
+                    }
+                    Some(false) => consecutive_provider_limit_failures = 0,
+                    None => {}
+                }
             }
             Some((_g_idx, result)) = worker_futures.next() => {
                 remaining -= 1;
@@ -784,6 +687,9 @@ pub(crate) async fn run_screen_groups_concurrent(
         salvage,
     }
 }
+
+#[cfg(test)]
+use echo::maybe_geometry_echo;
 
 #[cfg(test)]
 #[path = "concurrent_tests.rs"]

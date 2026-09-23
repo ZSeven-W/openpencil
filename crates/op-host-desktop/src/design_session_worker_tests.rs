@@ -26,6 +26,7 @@ fn persisted_subtask_json() -> String {
         screen: Some("Profile".into()),
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
         bleed_hero: false,
     })

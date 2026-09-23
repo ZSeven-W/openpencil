@@ -352,23 +352,13 @@ fn apply_progress(msg: &mut ChatMessage, progress: &[Progress], locale: Locale) 
                 ChatActivityStatus::Error,
                 Some(subtask_failure_detail(locale, error)),
             ),
-            Progress::SubtaskIncomplete {
-                id,
-                expected,
-                delivered,
-            } => update_activity(
+            Progress::SubtaskIncomplete { id, expected, delivered } => update_activity(
                 msg,
                 id,
                 ChatActivityStatus::Error,
-                Some(format!(
-                    "Only {delivered} of {expected} promised item(s) delivered"
-                )),
+                Some(format!("Only {delivered} of {expected} promised item(s) delivered")),
             ),
-            Progress::SubtaskLanguageMismatch {
-                id,
-                checked,
-                mismatched,
-            } => update_activity(
+            Progress::SubtaskLanguageMismatch { id, checked, mismatched } => update_activity(
                 msg,
                 id,
                 ChatActivityStatus::Error,
@@ -383,6 +373,10 @@ fn apply_progress(msg: &mut ChatMessage, progress: &[Progress], locale: Locale) 
                     missing.join(", ")
                 ),
             ),
+            // Run-level circuit breaker (motion50 fix 1) — untranslated, like the other diagnostic lines.
+            Progress::RunAborted { reason } => {
+                append_narration(msg, &format!("• Run aborted: {reason}"))
+            }
             Progress::SubtaskRetry { id, attempt, .. } => update_activity(
                 msg,
                 id,

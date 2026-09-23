@@ -14,6 +14,8 @@ use futures::StreamExt;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
+use serde_json::Value;
+use std::collections::BTreeSet;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// 执行一个 subtask。总是返回 [`SubtaskOutcome`];调用方据
@@ -333,9 +335,11 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
         );
         if recheck.has_fatal() {
             let message = recheck.failure_message();
+            let subtree = rejected_subtree_digest(&nodes, &recheck);
             tracing::warn!(
                 subtask = %subtask.id,
                 issues = %message,
+                subtree = %subtree,
                 "subagent self-check rejected generated nodes (unfixable after auto-fix)"
             );
             return fail(format!("self-check failed: {message}"));
@@ -692,6 +696,99 @@ fn normalize_section_roots_for_parent_layout(nodes: &mut [PenNode]) {
             }
             _ => {}
         }
+    }
+}
+
+const SUBTREE_DIGEST_MAX_CHILDREN: usize = 12;
+
+/// Node fields carried into a rejection-log digest (depth 2): the rejected
+/// node itself plus its direct children.
+fn subtree_digest(node: &Value) -> Value {
+    let mut digest = serde_json::Map::new();
+    for key in ["id", "type", "name", "x", "y", "width", "height", "layout"] {
+        if let Some(value) = node.get(key).filter(|value| !value.is_null()) {
+            digest.insert(key.to_string(), value.clone());
+        }
+    }
+    Value::Object(digest)
+}
+
+/// One-line JSON summary of `node` plus its direct children (depth 2, at
+/// most 12 children, `+N more` beyond) — the structural evidence that makes
+/// a self-check rejection diagnosable from the log alone.
+fn rejected_subtree_summary(node: &Value) -> String {
+    let kids = node
+        .get("children")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let mut items = vec![subtree_digest(node)];
+    for child in kids.iter().take(SUBTREE_DIGEST_MAX_CHILDREN) {
+        items.push(subtree_digest(child));
+    }
+    let extra = kids.len().saturating_sub(SUBTREE_DIGEST_MAX_CHILDREN);
+    if extra > 0 {
+        items.push(Value::String(format!("+{extra} more")));
+    }
+    Value::Array(items).to_string()
+}
+
+/// `rejected_subtree_summary` for every node the report names, joined into
+/// one log field; falls back to the forest roots when it names none.
+fn rejected_subtree_digest(
+    nodes: &[PenNode],
+    report: &crate::orchestration_self_check::SelfCheckReport,
+) -> String {
+    let ids: BTreeSet<&str> = report
+        .issues
+        .iter()
+        .filter_map(|issue| issue.node_id.as_deref())
+        .collect();
+    let Ok(forest) = serde_json::to_value(nodes) else {
+        return "unavailable".to_string();
+    };
+    let (mut roots, mut summaries): (Vec<&Value>, Vec<String>) = Default::default();
+    collect_rejected_summaries(&forest, &ids, &mut roots, &mut summaries);
+    if summaries.is_empty() {
+        summaries.extend(roots.iter().map(|root| rejected_subtree_summary(root)));
+    }
+    if summaries.is_empty() {
+        return "unavailable".into();
+    }
+    summaries.join("; ")
+}
+
+fn collect_rejected_summaries<'a>(
+    node: &'a Value,
+    ids: &BTreeSet<&str>,
+    roots: &mut Vec<&'a Value>,
+    summaries: &mut Vec<String>,
+) {
+    match node {
+        Value::Array(forest) => {
+            for root in forest {
+                collect_rejected_summaries(root, ids, roots, summaries);
+            }
+        }
+        Value::Object(_) => {
+            roots.push(node);
+            if node
+                .get("id")
+                .and_then(Value::as_str)
+                .is_some_and(|id| ids.contains(id))
+            {
+                summaries.push(rejected_subtree_summary(node));
+            }
+            for child in node
+                .get("children")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                collect_rejected_summaries(child, ids, roots, summaries);
+            }
+        }
+        _ => {}
     }
 }
 

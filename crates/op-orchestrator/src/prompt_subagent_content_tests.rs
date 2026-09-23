@@ -234,6 +234,7 @@ fn subagent_prompt_honors_explicit_radius_and_spacing_numbers() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
 
@@ -300,6 +301,7 @@ fn mobile_food_prompt_avoids_fixed_food_template() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
 
@@ -383,6 +385,7 @@ fn chinese_mobile_food_prompt_carries_language_consistency_rule() {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     };
 

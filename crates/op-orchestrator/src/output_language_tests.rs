@@ -170,6 +170,7 @@ fn subtask() -> Subtask {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     }
 }

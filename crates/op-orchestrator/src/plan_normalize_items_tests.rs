@@ -31,6 +31,7 @@ fn item(id: &str, label: &str, screen: Option<&str>, height: f64) -> Subtask {
         screen: screen.map(str::to_string),
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     }
 }

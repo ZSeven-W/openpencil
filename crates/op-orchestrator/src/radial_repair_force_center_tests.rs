@@ -125,14 +125,44 @@ fn declines_when_arc_diameters_are_too_mismatched_to_be_the_same_ring() {
 }
 
 #[test]
-fn declines_when_more_than_one_direct_child_is_non_arc_centre_content() {
+fn multiple_centre_children_keep_their_positions_while_arcs_are_centred() {
+    // The motion50 app-01 shape: a big number plus a caption (plus the ring
+    // itself) is the natural authored structure of a timer ring, not an
+    // ambiguity. Tier 2 must overlay the wrapper and centre the arcs while
+    // leaving every centre child exactly where the author put it.
     let mut node = ring(56.0, 56.0, None);
-    node["children"].as_array_mut().unwrap().push(
-        json!({"type": "text", "id": "extra-label", "width": 20, "height": 10, "content": "x"}),
-    );
+    node["children"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"type": "text", "id": "extra-label", "x": 4, "y": 30,
+               "width": 20, "height": 10, "content": "x"}));
+    assert!(is_still_off_center(&node), "precondition: flow wrapper");
 
-    assert!(!force_concentric_radial_stack(&mut node));
-    assert!(is_still_off_center(&node));
+    assert!(force_concentric_radial_stack(&mut node));
+
+    assert_eq!(node["layout"], json!("none"));
+    for id in ["track", "progress"] {
+        let arc = child(&node, id);
+        assert_eq!(
+            (arc["x"].as_f64(), arc["y"].as_f64()),
+            (Some(0.0), Some(0.0)),
+            "arc {id} centred in the 56x56 box sits at the origin"
+        );
+    }
+    let extra = child(&node, "extra-label");
+    assert_eq!(
+        (extra["x"].as_f64(), extra["y"].as_f64()),
+        (Some(4.0), Some(30.0)),
+        "authored centre-content positions are the author's call"
+    );
+    let order: Vec<&str> = node["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(order, ["centre", "extra-label", "progress", "track"]);
+    assert!(!is_still_off_center(&node));
 }
 
 #[test]

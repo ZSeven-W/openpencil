@@ -145,6 +145,10 @@ pub(super) async fn run_screen_group_worker(
 
 /// Apply one worker event. This is called only from the executor's select loop,
 /// keeping the real `DocSink` single-writer even while model calls overlap.
+///
+/// Returns `Some(is_provider_limit)` when a `SubtaskSettled` hand-off was
+/// processed (the bool feeds the executor's consecutive-quota-failure circuit
+/// breaker, motion50 fix 1), `None` for plain progress events.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn apply_worker_event(
     event: WorkerSignal,
@@ -155,7 +159,7 @@ pub(super) fn apply_worker_event(
     agent_indicator_epoch: Option<u64>,
     per_subtask: &mut [Option<(SubtaskOutcome, bool)>],
     on_progress: &mut dyn FnMut(Progress),
-) {
+) -> Option<bool> {
     let emit = |group_idx: usize, event: Progress, on_progress: &mut dyn FnMut(Progress)| {
         let group = groups
             .get(group_idx)
@@ -171,7 +175,10 @@ pub(super) fn apply_worker_event(
         ));
     };
     match event {
-        WorkerSignal::Progress { group_idx, event } => emit(group_idx, event, on_progress),
+        WorkerSignal::Progress { group_idx, event } => {
+            emit(group_idx, event, on_progress);
+            None
+        }
         WorkerSignal::SubtaskSettled(replay) => {
             let SubtaskReplay {
                 group_idx,
@@ -180,6 +187,13 @@ pub(super) fn apply_worker_event(
                 commands,
                 ack,
             } = *replay;
+            // Read before the replay-rejection rewrite below: a local commit
+            // failure must not masquerade as (or erase evidence of) a provider
+            // quota error for the circuit breaker.
+            let is_limit_failure = outcome
+                .error
+                .as_deref()
+                .is_some_and(crate::retry::is_provider_limit);
             let was_zero = outcome.node_count == 0;
             debug_assert_eq!(commands.is_some(), !was_zero);
             let committed = commands.is_some_and(|commands| {
@@ -221,6 +235,7 @@ pub(super) fn apply_worker_event(
                 emit(group_idx, terminal, on_progress);
             }
             let _ = ack.send(committed);
+            Some(is_limit_failure)
         }
     }
 }

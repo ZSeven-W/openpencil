@@ -57,6 +57,14 @@ property). Use a state counter instead: set $app.n via repeated interval
 events, bind the Text content to $app.n. Prefer this only when asked;
 otherwise show the final number statically.
 
+NEVER stack two or more Text nodes at the same x/y inside a `layout:none`
+window to fake a roll (e.g. a `0` start node under a `12` end node). Every
+node paints in any static state, lower indexes paint ON TOP, so the export
+shows the START value with the end value bleeding through. Same for an
+odometer: a clipped window over a vertical 0-9 digit strip renders its FIRST
+digit, so a countdown exports as `0 0 0`. One Text node per value with the
+real digits (`02`, `15`); animate `opacity` / `translateY` on that node.
+
 ## Baseline constraint (accept it, do not fight it)
 
 The layout engine has no font-metrics baseline pass. Words of DIFFERENT

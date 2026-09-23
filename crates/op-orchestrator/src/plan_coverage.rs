@@ -4,7 +4,7 @@
 //! that promised N repeated items and delivered 0–1. This one fires when the
 //! section was never planned at all.
 
-use crate::plan::OrchestratorPlan;
+use crate::plan::{OrchestratorPlan, Subtask};
 use regex::Regex;
 use std::sync::LazyLock;
 
@@ -78,6 +78,39 @@ static CJK_YOU_PARTS_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^(?:[0-9]+|[一二三四五六七八九十]+)\s*个\s*(?:部分|区域|模块)")
         .expect("valid 有-parts skip")
 });
+
+/// Motion/interaction direction words (motion50 fix 3, lane1/web-07 et al.).
+/// A candidate clause carrying one of these is an animation/interaction
+/// instruction (`安装块 mount`, `课程卡 inView 上浮交错`, `代码区 sticky 随
+/// 滚动高亮不同行`, `9）:封面`-style residue aside), never a layout section —
+/// generating one phantom requirement used to burn a pointless
+/// `PlanCoverageRetry` on nearly every brief. Matched lowercase.
+const MOTION_WORDS: &[&str] = &[
+    "mount",
+    "inview",
+    "transition",
+    "ontap",
+    "pressed",
+    "hover",
+    "视差",
+    "parallax",
+    "sticky",
+    "交错",
+    "stagger",
+    "滚动",
+    "数字滚动",
+    "count-up",
+    "逐字",
+    "逐词",
+    "揭示",
+    "动效",
+    "动画",
+    "淡入",
+    "滑入",
+    "缩放",
+    "ms",
+    "easing",
+];
 
 /// Extract section nouns the brief EXPLICITLY enumerates. High-precision only.
 pub fn required_sections(brief: &str) -> Vec<String> {
@@ -171,12 +204,98 @@ pub fn required_sections(brief: &str) -> Vec<String> {
 
 /// Required sections the plan's subtask labels/elements do not cover.
 pub fn missing_sections(required: &[String], plan: &OrchestratorPlan) -> Vec<String> {
+    check_coverage(required, plan).missing
+}
+
+/// How one required section came to be covered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CoverageSource {
+    /// A subtask's `covers` backfill matched the section after normalization.
+    Covers,
+    /// The legacy label/elements substring match found it.
+    Text,
+}
+
+impl CoverageSource {
+    fn tag(self) -> &'static str {
+        match self {
+            CoverageSource::Covers => "covers",
+            CoverageSource::Text => "text",
+        }
+    }
+}
+
+/// The gate's full verdict: the missing sections plus, for every covered
+/// section, which subtask covered it and how — the `covered-by:` diagnostic
+/// line's raw material.
+#[derive(Debug, Clone, Default)]
+pub struct CoverageCheck {
+    pub missing: Vec<String>,
+    /// `(section, subtask id, source)` per covered section, in required
+    /// order.
+    pub covered_by: Vec<(String, String, CoverageSource)>,
+}
+
+impl CoverageCheck {
+    /// `hero(covers) tokens(text)` — one entry per covered section, `-` when
+    /// nothing was covered.
+    pub fn covered_by_line(&self) -> String {
+        if self.covered_by.is_empty() {
+            return "-".to_string();
+        }
+        self.covered_by
+            .iter()
+            .map(|(_, id, source)| format!("{id}({})", source.tag()))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
+/// Whether any subtask carries a non-empty `covers` backfill. Gates the
+/// diagnostics: a plan without backfill logs exactly as it did before the
+/// field existed.
+pub fn plan_has_covers(plan: &OrchestratorPlan) -> bool {
+    plan.subtasks.iter().any(covers_present)
+}
+
+/// The gate, two tiers per required section (plan-coverage v2):
+///
+/// 1. **Planner backfill** — any subtask whose `covers` entry equals the
+///    section after normalization (whitespace/full-half-width punctuation
+///    stripped, lowercased) covers it. The planner copies the brief's own
+///    wording, so exact equality is the contract — never a substring.
+/// 2. **Legacy substring** — the pre-v2 `label + elements` haystack match,
+///    unchanged, as the fallback for old models that do not backfill.
+///
+/// Tier 1 is strictly additive: with no backfill anywhere it can never fire,
+/// so a plan without `covers` gets byte-identical verdicts.
+pub fn check_coverage(required: &[String], plan: &OrchestratorPlan) -> CoverageCheck {
     let haystack = plan_haystack(plan);
-    required
-        .iter()
-        .filter(|section| !section_covered(section, &haystack))
-        .cloned()
-        .collect()
+    let mut check = CoverageCheck::default();
+    for section in required {
+        if let Some(id) = covering_subtask_id(plan, |st| {
+            covers_entry_matches(section, st.covers.as_deref())
+        }) {
+            check
+                .covered_by
+                .push((section.clone(), id, CoverageSource::Covers));
+            continue;
+        }
+        if section_covered(section, &haystack) {
+            // Annotate with the first subtask whose own text matches; the
+            // verdict itself stays the whole-plan haystack's (all-tokens
+            // matching may span subtask boundaries).
+            let id =
+                covering_subtask_id(plan, |st| section_covered(section, &subtask_haystack(st)))
+                    .unwrap_or_else(|| "plan".to_string());
+            check
+                .covered_by
+                .push((section.clone(), id, CoverageSource::Text));
+            continue;
+        }
+        check.missing.push(section.clone());
+    }
+    check
 }
 
 /// Prompt-side paragraph appended to a one-shot re-plan request.
@@ -187,15 +306,91 @@ pub fn coverage_feedback(missing: &[String]) -> String {
     )
 }
 
+fn covering_subtask_id(
+    plan: &OrchestratorPlan,
+    matches: impl Fn(&Subtask) -> bool,
+) -> Option<String> {
+    plan.subtasks
+        .iter()
+        .find(|st| matches(st))
+        .map(|st| st.id.clone())
+}
+
+fn covers_present(st: &Subtask) -> bool {
+    st.covers
+        .as_ref()
+        .is_some_and(|entries| !entries.is_empty())
+}
+
+/// A `covers` entry matches the required section on normalized equality —
+/// `定价` does NOT match `定价三档`.
+fn covers_entry_matches(section: &str, covers: Option<&[String]>) -> bool {
+    let target = normalize_for_equality(section);
+    !target.is_empty()
+        && covers.is_some_and(|entries| {
+            entries
+                .iter()
+                .any(|entry| normalize_for_equality(entry) == target)
+        })
+}
+
+/// Normalize a section name / covers entry for equality: drop whitespace and
+/// full/half-width punctuation, lowercase. `英雄 区` and `英雄区。` both
+/// reduce to `英雄区`.
+fn normalize_for_equality(text: &str) -> String {
+    text.chars()
+        .filter(|ch| !ch.is_whitespace() && !is_punctuation_for_equality(*ch))
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// ASCII punctuation plus the common full-width/CJK punctuation forms.
+fn is_punctuation_for_equality(ch: char) -> bool {
+    ch.is_ascii_punctuation()
+        || matches!(
+            ch,
+            '，' | '。'
+                | '、'
+                | '；'
+                | '：'
+                | '！'
+                | '？'
+                | '…'
+                | '—'
+                | '～'
+                | '·'
+                | '“'
+                | '”'
+                | '‘'
+                | '’'
+                | '（'
+                | '）'
+                | '《'
+                | '》'
+                | '「'
+                | '」'
+                | '『'
+                | '』'
+                | '【'
+                | '】'
+        )
+}
+
 fn plan_haystack(plan: &OrchestratorPlan) -> String {
+    plan.subtasks
+        .iter()
+        .map(subtask_haystack)
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+fn subtask_haystack(st: &Subtask) -> String {
     let mut haystack = String::new();
-    for subtask in &plan.subtasks {
-        haystack.push_str(&subtask.label);
+    haystack.push_str(&st.label);
+    haystack.push(' ');
+    if let Some(elements) = &st.elements {
+        haystack.push_str(elements);
         haystack.push(' ');
-        if let Some(elements) = &subtask.elements {
-            haystack.push_str(elements);
-            haystack.push(' ');
-        }
     }
     haystack.to_lowercase()
 }
@@ -287,18 +482,61 @@ fn normalize_section(raw: &str, declared: bool) -> Option<String> {
             )
         })
         .to_string();
+    // Paren-balance gate BEFORE the strip: an item whose parentheses don't
+    // pair up is the residue of a clause that item-splitting cut in half
+    // (`完成屏(时长`, `连续天数统计)`, `9)：封面`) — never a section name
+    // (motion50 fix 3, app-01).
+    if has_unbalanced_parens(&text) {
+        return None;
+    }
     text = PARENS.replace_all(&text, "").into_owned();
     let text = strip_trailing_junk(text.trim());
     let text = strip_leading_count(text.trim());
     let text = text.trim();
     if text.is_empty()
         || is_negated_section(text)
+        || is_motion_clause(text)
+        || is_descriptor_clause(text)
         || is_sentence_length(text)
         || is_short_field_noun(text, declared)
     {
         return None;
     }
     Some(text.to_string())
+}
+
+/// `（`/`（`-class and `(`/`)`-class parens must each pair up inside the item.
+fn has_unbalanced_parens(text: &str) -> bool {
+    let mut full = 0i32;
+    let mut half = 0i32;
+    for ch in text.chars() {
+        match ch {
+            '（' => full += 1,
+            '）' => full -= 1,
+            '(' => half += 1,
+            ')' => half -= 1,
+            _ => {}
+        }
+    }
+    full != 0 || half != 0
+}
+
+/// A clause carrying an animation/interaction direction word is not a section.
+/// Runs on the PAREN-STRIPPED text so a genuine section whose parenthetical
+/// note mentions motion (`英雄(… count-up)`) survives (motion50 fix 3).
+fn is_motion_clause(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    MOTION_WORDS.iter().any(|needle| lower.contains(needle))
+}
+
+/// A `含`-carrying item (`每张含标题`) is a per-item descriptor clause — the
+/// verb phrase describes what REPEATED content must include, not a section
+/// noun. The intro-anchored captures already scope enumeration extraction to
+/// 包含/含有/colon-led segments; an intro verb INSIDE an item therefore marks a
+/// descriptor, and demanding it as a section used to burn a pointless
+/// PlanCoverageRetry (motion50 lane0/other-03).
+fn is_descriptor_clause(text: &str) -> bool {
+    text.contains('含')
 }
 
 /// Strip trailing quantity/descriptor tails: `共…` tail, then `<count>[measure][tail]`,

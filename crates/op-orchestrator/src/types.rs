@@ -378,6 +378,10 @@ pub enum Progress {
     PlanCoverageRetry {
         missing: Vec<String>,
     },
+    /// Run-level provider-limit breaker (motion50 fix 1): no further model calls this run.
+    RunAborted {
+        reason: String,
+    },
     /// Per-subtask skill-load report emitted after the sub-agent prompt is built.
     SubtaskSkills {
         id: String,
@@ -410,8 +414,7 @@ pub enum Progress {
     /// (D-lite "three-piece" visibility fix, 2026-07-17) — a user-facing
     /// confirmation that `group_count` screens are about to run against
     /// `workers` overlapping workers, so ⚡Nx's effect is legible instead of
-    /// silent. Never emitted on the sequential path (`workers == 1` never
-    /// fires this — see `run.rs`'s `effective_concurrency` branch).
+    /// silent. Never emitted on the sequential path (see `effective_concurrency`).
     ConcurrentGroupsStarted {
         group_count: usize,
         workers: u32,
@@ -422,8 +425,8 @@ pub enum Progress {
     /// (sequential-execution root-cause hunt, 2026-07-17): `requested_workers`
     /// is the raw, unclamped `DesignRequest.concurrency` this turn carried —
     /// `1` proves the ⚡Nx picker's value never reached the orchestrator for
-    /// this turn; any value `> 1` here would mean `effective_concurrency`
-    /// itself has a bug (its contract guarantees `> 1` whenever
+    /// this turn; any value `> 1` would mean `effective_concurrency` itself
+    /// has a bug (its contract guarantees `> 1` whenever
     /// `group_count > 1 && clamp_concurrency(requested_workers) > 1`).
     ScreenGroupsSequential {
         group_count: usize,
@@ -432,11 +435,10 @@ pub enum Progress {
     /// Progress emitted by one screen-group agent in the concurrent classic
     /// orchestrator path. The boxed inner event keeps the recursive enum
     /// finite-sized while preserving the ordinary [`Progress`] vocabulary for
-    /// subtask lifecycle updates.
-    ///
-    /// `group_idx` identifies the screen group, not a semaphore worker slot:
-    /// three screen groups running with a concurrency limit of two still have
-    /// three stable identities and three independent progress streams.
+    /// subtask lifecycle updates. `group_idx` identifies the screen group,
+    /// not a semaphore worker slot: three screen groups running with a
+    /// concurrency limit of two still have three stable identities and three
+    /// independent progress streams.
     WorkerScoped(WorkerEvent),
     CleanupDone,
     /// The user-visible quality credential for the classic path — emitted
@@ -448,7 +450,6 @@ pub enum Progress {
     /// A separate variant rather than a payload on `CleanupDone` so existing
     /// `CleanupDone` matchers (ordering assertions, the "polishing" narration)
     /// keep working untouched.
-    ///
     /// Deliberately carries NO leftover-issue count: the promise-delivery
     /// check (`Progress::UnfilledScreens`) runs later in the pipeline, so
     /// anything claimed here about remaining work would be a guess. Renderers

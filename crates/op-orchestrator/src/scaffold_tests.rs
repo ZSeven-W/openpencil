@@ -216,6 +216,7 @@ fn st(id: &str, label: &str) -> Subtask {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     }
 }
@@ -411,6 +412,7 @@ fn a_screen_group_per_slide_emits_a_root_per_slide() {
             screen: Some((*screen).to_string()),
             generated_root_id: None,
             existing_section_labels: None,
+            covers: None,
             retry_feedback: None,
         })
         .collect();
@@ -483,6 +485,7 @@ fn screen_group_plan(
             screen: Some(screen),
             generated_root_id: None,
             existing_section_labels: None,
+            covers: None,
             retry_feedback: None,
         });
     }

@@ -122,6 +122,72 @@ fn self_check_flags_direct_radial_arcs_in_explicit_or_default_flow() {
 }
 
 #[test]
+fn radial_rejection_message_names_the_wrapper_and_arc_mistakes_separately() {
+    // Mistake 1: the wrapper is still in flex flow. The model must be told
+    // to overlay it, not to guess at "explicit concentric coordinates".
+    let flow = fixed_ring(Some("vertical"));
+    let report = check_value_forest(&json!([flow]), 390.0);
+    let message = report
+        .issues
+        .iter()
+        .find(|issue| issue.code == "radial-stack-not-concentric")
+        .expect("flow wrapper must be rejected")
+        .message
+        .clone();
+    assert!(
+        message.contains("set the wrapper layout to none"),
+        "flow-wrapper mistake must carry the overlay instruction: {message}"
+    );
+
+    // Mistake 2: the wrapper is already `layout:none` and the arcs carry
+    // explicit coordinates, but one arc does not share the wrapper's
+    // centre. The instruction must target the arc geometry, and must not
+    // waste the retry on a wrapper that is already correct.
+    let mut off_centre = fixed_ring(Some("none"));
+    off_centre["gap"] = json!(0);
+    off_centre["justifyContent"] = json!("start");
+    off_centre["alignItems"] = json!("start");
+    let mut children = off_centre["children"]
+        .take()
+        .as_array()
+        .cloned()
+        .expect("children");
+    let mut track = children.remove(0);
+    let mut progress = children.remove(0);
+    let mut centre = children.remove(0);
+    track["x"] = json!(0);
+    track["y"] = json!(0);
+    progress["x"] = json!(10);
+    progress["y"] = json!(2);
+    centre["x"] = json!(20);
+    centre["y"] = json!(38);
+    off_centre["children"] = json!([centre, progress, track]);
+    let report = check_value_forest(&json!([off_centre]), 390.0);
+    assert!(
+        has_radial_issue(&report),
+        "off-centre arc must stay rejected: {report:?}"
+    );
+    let message = report
+        .issues
+        .iter()
+        .find(|issue| issue.code == "radial-stack-not-concentric")
+        .expect("off-centre arc must be rejected")
+        .message
+        .clone();
+    assert!(
+        message.contains(
+            "give every arc the same width/height and x=(wrapper-w)/2, \
+             y=(wrapper-h)/2 in a fixed square layout:none wrapper"
+        ),
+        "arc mistake must carry the concentric-arc instruction: {message}"
+    );
+    assert!(
+        !message.contains("set the wrapper layout to none"),
+        "the wrapper is already none — that instruction would mislead: {message}"
+    );
+}
+
+#[test]
 fn self_check_accepts_canonical_stack_and_ignores_unrelated_ellipse_shapes() {
     let forest = json!([
         canonical_fixed_ring(),

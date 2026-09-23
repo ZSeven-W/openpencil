@@ -32,6 +32,7 @@ fn subtask(id: &str, label: &str, width: f64, height: f64) -> Subtask {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     }
 }

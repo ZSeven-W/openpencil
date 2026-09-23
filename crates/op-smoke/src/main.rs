@@ -651,7 +651,24 @@ async fn main() -> std::process::ExitCode {
                 eprintln!("[FINAL] generation OK but OPENPENCIL_SMOKE_OUT write failed");
                 std::process::ExitCode::from(4)
             } else {
-                std::process::ExitCode::SUCCESS
+                // motion50 fix 1: a run that produced ZERO done subtasks, or
+                // that ended with the abort flag set (the provider-limit
+                // circuit breaker among others), must not exit 0 — the lane
+                // runner reads 0 as success (measured: lane1/web-10 delivered
+                // scaffold-only output and exited 0). The doc was already
+                // saved above so the scaffold stays inspectable.
+                match no_done_subtasks_exit_code(abort.is_set(), done_subtask_count(&summary)) {
+                    Some(code) => {
+                        eprintln!(
+                            "[FINAL] run delivered no completed subtasks \
+                             (done={}, abort_set={}) — failing with exit {code}",
+                            done_subtask_count(&summary),
+                            abort.is_set()
+                        );
+                        std::process::ExitCode::from(code)
+                    }
+                    None => std::process::ExitCode::SUCCESS,
+                }
             }
         }
         Err(e) => {
@@ -659,6 +676,19 @@ async fn main() -> std::process::ExitCode {
             std::process::ExitCode::from(1)
         }
     }
+}
+
+/// "Done" for smoke purposes: the subtask landed content. Incomplete /
+/// language-mismatch keep their nodes, so they still count as delivered work.
+fn done_subtask_count(summary: &op_orchestrator::RunSummary) -> usize {
+    summary.subtasks.iter().filter(|s| s.node_count > 0).count()
+}
+
+/// The exit-2 decision (motion50 fix 1): `Some(2)` when the abort flag is set
+/// or no subtask delivered content, `None` for a healthy run. A pure function
+/// so the rule is unit-testable without driving `main`.
+fn no_done_subtasks_exit_code(abort_set: bool, done_count: usize) -> Option<u8> {
+    (abort_set || done_count == 0).then_some(2)
 }
 
 #[cfg(test)]
@@ -684,6 +714,23 @@ mod provider_tests {
             Some(SmokeProviderKind::OpenAiCompat)
         );
         assert_eq!(SmokeProviderKind::parse("unknown"), None);
+    }
+
+    // ── motion50 fix 1: a scaffold-only or aborted run must exit non-zero ───
+
+    #[test]
+    fn zero_done_subtasks_forces_exit_two() {
+        assert_eq!(no_done_subtasks_exit_code(false, 0), Some(2));
+    }
+
+    #[test]
+    fn an_aborted_run_forces_exit_two_even_with_done_subtasks() {
+        assert_eq!(no_done_subtasks_exit_code(true, 3), Some(2));
+    }
+
+    #[test]
+    fn a_healthy_run_exits_zero() {
+        assert_eq!(no_done_subtasks_exit_code(false, 2), None);
     }
 
     #[test]

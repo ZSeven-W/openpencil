@@ -143,6 +143,8 @@ pub(crate) mod sidebar_archetype;
 pub mod spacing_repair;
 pub mod spawn_concurrent;
 pub(crate) mod spread_screen_roots;
+pub(crate) mod square_ring_repair;
+pub(crate) mod stacked_text_repair;
 pub mod stub_repair;
 pub mod subagent;
 pub mod subtask_completeness;

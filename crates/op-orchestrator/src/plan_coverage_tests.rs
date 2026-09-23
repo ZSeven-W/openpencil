@@ -30,6 +30,7 @@ fn subtask(id: &str, label: &str, elements: Option<&str>) -> Subtask {
         screen: None,
         generated_root_id: None,
         existing_section_labels: None,
+        covers: None,
         retry_feedback: None,
     }
 }
@@ -245,4 +246,269 @@ fn required_sections_never_requires_negated_sections() {
             "real sections around the negation must survive, got {sections:?}"
         );
     }
+}
+
+// ── motion50 fix 3: motion clauses and paren fragments are not sections ─────
+
+const MOTION50_APP01_BRIEF: &str = "冥想 App 三屏可交互原型（各 375×812）：首页(问候+今日推荐卡+课程列表四条)、呼吸练习屏(大呼吸圆环+计时+暂停)、完成屏(时长与连续天数统计)。交互：首页「开始今日练习」onTap 进呼吸屏，呼吸屏「完成」onTap 进完成屏。动效：呼吸圆环 mount 用 emphasizedDecelerate 缩放淡入 500ms，课程卡 inView fade-up 交错 delayMs 60ms 递增，完成屏统计数字滚动。深色午夜蓝渐变 + 柔光玻璃卡，一个签名瞬间：呼吸圆环外的三层同心光晕。";
+
+const MOTION50_WEB07_BRIEF: &str = "开源项目官网（1440 宽长页）：英雄(项目名+一句话+安装命令块+GitHub 星标 count-up)、特性六格、代码示例区、生态 logo、贡献者头像墙、页脚。滚动动效：安装块 mount、特性格 inView 交错、代码区 sticky 随滚动高亮不同行。终端深色 + 等宽字。";
+
+const MOTION50_OTHER03_BRIEF: &str = "知识卡片一组三张（1080×1350）：主题「如何做好一次设计评审」，每张含标题、三条要点、底部署名条。动效：标题逐字揭示、要点 inView 交错。高对比撞色 + 大字号，适合社媒。";
+
+/// motion50 lane1/web-07: the motion sentence's clauses ("安装块 mount",
+/// "特性格 inView 交错", "代码区 sticky 随滚动高亮不同行") are animation
+/// directions, not sections — and the hero's parenthesised "count-up" note
+/// must not drag the genuine 英雄 section down with it.
+#[test]
+fn motion_direction_clauses_are_never_sections() {
+    let sections = required_sections(MOTION50_WEB07_BRIEF);
+    for phantom in ["mount", "inView", "sticky", "count-up"] {
+        assert!(
+            !sections.iter().any(|s| s.contains(phantom)),
+            "{phantom} clause must not become a section, got {sections:?}"
+        );
+    }
+    for genuine in [
+        "英雄",
+        "特性六格",
+        "代码示例区",
+        "生态 logo",
+        "贡献者头像墙",
+        "页脚",
+    ] {
+        assert!(
+            sections.iter().any(|s| s == genuine),
+            "genuine section {genuine} must survive, got {sections:?}"
+        );
+    }
+}
+
+/// motion50 app-01: splitting "完成屏(时长与连续天数统计)" on 与 leaves two
+/// unbalanced-paren fragments — neither is a section.
+#[test]
+fn unbalanced_paren_fragments_are_never_sections() {
+    let sections = required_sections(MOTION50_APP01_BRIEF);
+    assert_eq!(sections, vec!["首页", "呼吸练习屏"], "got {sections:?}");
+}
+
+/// motion50 lane0/other-03: "每张含标题" is a per-item descriptor clause (a
+/// 含-led sentence fragment), not a section noun; the motion sentence's
+/// "标题逐字揭示 / 要点 inView 交错" are animation directions.
+#[test]
+fn per_item_descriptor_and_motion_clauses_are_never_sections() {
+    let sections = required_sections(MOTION50_OTHER03_BRIEF);
+    for phantom in ["每张含标题", "逐字揭示", "inView"] {
+        assert!(
+            !sections.iter().any(|s| s.contains(phantom)),
+            "{phantom} must not become a section, got {sections:?}"
+        );
+    }
+    for genuine in ["三条要点", "底部署名条"] {
+        assert!(
+            sections.iter().any(|s| s == genuine),
+            "genuine section {genuine} must survive, got {sections:?}"
+        );
+    }
+}
+
+/// The gate must keep firing on a genuinely missing section.
+#[test]
+fn a_truly_missing_priced_section_still_fires() {
+    let required = required_sections("产品官网（1440）：包含定价三档、关于我们、页脚");
+    assert!(
+        required.iter().any(|s| s.contains("定价")),
+        "定价 must stay a required section, got {required:?}"
+    );
+    let covering_except_pricing = plan(vec![subtask(
+        "about",
+        "关于我们 + 页脚",
+        Some("team intro and footer links"),
+    )]);
+    let missing = missing_sections(&required, &covering_except_pricing);
+    assert!(
+        missing.iter().any(|s| s.contains("定价")),
+        "coverage gate must still report the missing 定价 section, got {missing:?}"
+    );
+}
+
+// ── covers backfill (plan-coverage v2): trust the planner's own claims ──────
+
+/// The 0919 GLM-Flash web-11 brief: the plan names every section (English
+/// labels, Chinese section titles inside elements), yet the gate reported
+/// 英雄 / 色板与字阶展示 / 快速开始代码块 / 页脚 missing — synonym and language
+/// drift the substring matcher can never bridge.
+const WEB11_BRIEF: &str = "设计系统文档站首页（1440 宽长页）：英雄（标题+搜索框）、组件网格九个、设计原则三条、色板与字阶展示、快速开始代码块、页脚。交互：组件卡 hover 显示描述，代码块可复制。滚动动效：组件格 inView 交错，色板 mount 逐块展开，代码块 sticky。风格由你决定，要求信息清晰、层级分明。";
+
+fn covered_subtask(id: &str, label: &str, elements: Option<&str>, covers: &[&str]) -> Subtask {
+    let mut st = subtask(id, label, elements);
+    st.covers = Some(covers.iter().map(|entry| entry.to_string()).collect());
+    st
+}
+
+/// The plan the planner actually ships for web-11 — English labels, free-text
+/// elements, and each subtask carrying the brief section it covers verbatim.
+fn web11_plan(covers: bool) -> OrchestratorPlan {
+    let backfill = |id: &str, label: &str, elements: &str, section: &str| {
+        if covers {
+            covered_subtask(id, label, Some(elements), &[section])
+        } else {
+            subtask(id, label, Some(elements))
+        }
+    };
+    plan(vec![
+        backfill(
+            "hero",
+            "Hero Section",
+            "eyebrow, headline, large search input",
+            "英雄",
+        ),
+        backfill(
+            "grid",
+            "Component Grid",
+            "cards with mini previews",
+            "组件网格",
+        ),
+        backfill(
+            "principles",
+            "Design Principles",
+            "numbered principle cards",
+            "设计原则",
+        ),
+        backfill(
+            "tokens",
+            "Color Palette & Type Scale",
+            "swatch ramp rows, type specimens",
+            "色板与字阶展示",
+        ),
+        backfill(
+            "quickstart",
+            "Quick Start Code Block",
+            "numbered steps, tabbed code panel",
+            "快速开始代码块",
+        ),
+        backfill(
+            "footer",
+            "Footer",
+            "brand block, link columns, copyright",
+            "页脚",
+        ),
+    ])
+}
+
+/// web-11 with the planner's covers backfill: every required section is
+/// claimed verbatim, so the gate must pass. (Red before the fix: the
+/// substring matcher cannot see 英雄 in "Hero Section" etc.)
+#[test]
+fn web11_plan_with_covers_backfill_passes_the_gate() {
+    let required = required_sections(WEB11_BRIEF);
+    for section in [
+        "英雄",
+        "组件网格",
+        "设计原则",
+        "色板与字阶展示",
+        "快速开始代码块",
+        "页脚",
+    ] {
+        assert!(
+            required.iter().any(|s| s == section),
+            "web-11 brief must require {section}, got {required:?}"
+        );
+    }
+    let missing = missing_sections(&required, &web11_plan(true));
+    assert!(
+        missing.is_empty(),
+        "covers backfill must cover every web-11 section, still missing {missing:?}"
+    );
+}
+
+/// The same plan with every covers stripped: no subtask backfills, so the
+/// legacy substring verdict must hold unchanged — this is the old-model /
+/// old-prompt fallback path, identical to pre-fix behavior.
+#[test]
+fn web11_plan_without_covers_keeps_the_legacy_verdict() {
+    let required = required_sections(WEB11_BRIEF);
+    let missing = missing_sections(&required, &web11_plan(false));
+    assert_eq!(
+        missing,
+        vec![
+            "英雄",
+            "组件网格",
+            "设计原则",
+            "色板与字阶展示",
+            "快速开始代码块",
+            "页脚",
+        ],
+        "without covers the English-labeled plan must still report every section missing"
+    );
+}
+
+/// covers entries match on normalized EQUALITY, never as substrings: a
+/// subtask claiming `定价` does not satisfy the required `定价三档`.
+#[test]
+fn covers_entry_is_equality_not_substring() {
+    let required = vec!["定价三档".to_string()];
+    let pricing_only = plan(vec![covered_subtask("pricing", "Pricing", None, &["定价"])]);
+    let missing = missing_sections(&required, &pricing_only);
+    assert!(
+        missing.iter().any(|s| s == "定价三档"),
+        "covers [定价] must NOT cover the required 定价三档, got {missing:?}"
+    );
+}
+
+/// Normalization before that equality: whitespace, full/half-width
+/// punctuation, and case differences do not break a covers match.
+#[test]
+fn covers_match_after_whitespace_and_punctuation_normalization() {
+    let required = vec!["英雄区".to_string()];
+    for entry in ["英雄 区", "英雄区。", "英雄区，"] {
+        let covered = plan(vec![covered_subtask(
+            "hero",
+            "Hero Section",
+            None,
+            &[entry],
+        )]);
+        assert!(
+            missing_sections(&required, &covered).is_empty(),
+            "covers [{entry}] must cover 英雄区 after normalization"
+        );
+    }
+    let required = vec!["FAQ".to_string()];
+    let covered = plan(vec![covered_subtask("faq", "FAQ Section", None, &["faq"])]);
+    assert!(
+        missing_sections(&required, &covered).is_empty(),
+        "covers [faq] must cover FAQ after lowercasing"
+    );
+}
+
+/// The diagnostic contract: `check_coverage` says WHICH subtask covered each
+/// section and whether that came from the covers backfill or the legacy
+/// substring text.
+#[test]
+fn coverage_check_reports_the_source_per_section() {
+    let required = vec!["英雄".to_string(), "定价三档".to_string()];
+    let mixed = plan(vec![
+        covered_subtask("hero", "Hero Section", None, &["英雄"]),
+        subtask("pricing", "Pricing", Some("定价三档 pricing cards")),
+    ]);
+    let check = check_coverage(&required, &mixed);
+    assert!(check.missing.is_empty());
+    assert_eq!(
+        check.covered_by,
+        vec![
+            (
+                "英雄".to_string(),
+                "hero".to_string(),
+                CoverageSource::Covers
+            ),
+            (
+                "定价三档".to_string(),
+                "pricing".to_string(),
+                CoverageSource::Text
+            ),
+        ],
+        "covered-by must attribute hero to covers and 定价三档 to text, got {:?}",
+        check.covered_by
+    );
+    assert_eq!(check.covered_by_line(), "hero(covers) pricing(text)");
 }

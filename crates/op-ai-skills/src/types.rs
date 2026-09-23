@@ -126,13 +126,13 @@ impl Phase {
     /// planner now carries its lead "Key aesthetics" label so the planner can
     /// pick by mood instead of by name; ~60 guides × a few tokens each.
     /// Planning moved again 6300 → 6500 (2026-09-06) when the mobile screen
-    /// archetype corpus replaced the pre-design step. Its 591-token body was
-    /// otherwise cut to 452 tokens in the phone planning prompt, removing the
-    /// ARCHETYPE handoff contract; the extra headroom keeps the selected table
-    /// byte-complete.
+    /// archetype corpus replaced the pre-design step, and 6500 → 6700
+    /// (2026-09-21) when decomposition gained the covers backfill rule; both
+    /// times the archetype table was otherwise tail-cut in the phone planning
+    /// prompt, removing the ARCHETYPE handoff contract.
     pub fn default_budget(self) -> u32 {
         match self {
-            Phase::Planning => 6600,
+            Phase::Planning => 6700,
             Phase::Generation => 17150,
             Phase::Validation => 3000,
             Phase::Maintenance => 5000,
@@ -147,9 +147,10 @@ impl Phase {
 /// keyframe example (~46 tokens) and its per-skill budget 2250 → 2300.
 /// Planning 6500 → 6600 (2026-09-07): the style-guide catalog line now carries
 /// two signature-recipe names per guide, which pushed the runtime-augmented
-/// style-guide-selector to 1528 tokens (budget 1500 → 1600).
+/// style-guide-selector to 1528 tokens (budget 1500 → 1600). 6600 → 6700
+/// (2026-09-21): decomposition's covers backfill rule re-cut the archetypes.
 pub const DEFAULT_BUDGETS: [(Phase, u32); 4] = [
-    (Phase::Planning, 6600),
+    (Phase::Planning, 6700),
     (Phase::Generation, 17150),
     (Phase::Validation, 3000),
     (Phase::Maintenance, 5000),
@@ -431,7 +432,7 @@ mod tests {
 
     #[test]
     fn default_budget_table() {
-        assert_eq!(Phase::Planning.default_budget(), 6600);
+        assert_eq!(Phase::Planning.default_budget(), 6700);
         assert_eq!(Phase::Generation.default_budget(), 17150);
         assert_eq!(Phase::Validation.default_budget(), 3000);
         assert_eq!(Phase::Maintenance.default_budget(), 5000);

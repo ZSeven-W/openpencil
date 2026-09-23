@@ -341,3 +341,270 @@ fn second_incomplete_plan_is_kept_without_another_retry() {
         1
     );
 }
+
+// ── motion50 fix 3: motion clauses / paren fragments must not trip the gate ─
+
+fn motion50_req(prompt: &str) -> DesignRequest {
+    DesignRequest {
+        prompt: prompt.into(),
+        model: None,
+        provider: None,
+        design_md: None,
+        concurrency: 1,
+        continuation_context: None,
+        append_context: None,
+        validation_enabled: false,
+        visual_ref_enabled: false,
+        pinned_style_guide: None,
+        reference_skeleton: None,
+    }
+}
+
+fn single_subtask_plan_json(label: &str) -> String {
+    format!(
+        r##"{{"rootFrame": {{ "id": "root", "name": "Page", "width": 1200, "height": 800,
+                 "layout": "vertical", "gap": 0,
+                 "fill": [{{ "type": "solid", "color": "#FFFFFF" }}] }},
+  "subtasks": [
+    {{ "id": "s1", "label": "{label}", "region": {{ "width": 1200, "height": 800 }} }}
+  ]}}"##
+    )
+}
+
+/// A one-subtask generation that satisfies the repeated-item completeness
+/// gate: three sibling frames (a family of 3) with CJK copy so the output-
+/// language gate stays quiet too. Needed because the other-03 covering label
+/// must carry the literal required section "三条要点", which the completeness
+/// gate parses as a promise of 3 items.
+fn three_item_json() -> String {
+    r#"I(null, {"type":"frame","name":"Sec","x":0,"y":0,"width":1200,"height":300,"layout":"vertical","children":[
+      {"type":"frame","name":"Item","x":0,"y":0,"width":1200,"height":80,"children":[{"type":"text","content":"页面内容","fontSize":16}]},
+      {"type":"frame","name":"Item","x":0,"y":0,"width":1200,"height":80,"children":[{"type":"text","content":"页面内容","fontSize":16}]},
+      {"type":"frame","name":"Item","x":0,"y":0,"width":1200,"height":80,"children":[{"type":"text","content":"页面内容","fontSize":16}]}
+    ]});"#
+    .to_string()
+}
+
+/// The three motion50 briefs whose coverage retries were pure noise (samples:
+/// lane1/web-07, lane0/other-03, app-01/smoke.log): a plan naming every REAL
+/// section must pass the gate without a single PlanCoverageRetry.
+#[test]
+fn motion50_briefs_with_covering_plans_skip_the_coverage_retry() {
+    for (brief, covering_label) in [
+        (
+            "冥想 App 三屏可交互原型（各 375×812）：首页(问候+今日推荐卡+课程列表四条)、呼吸练习屏(大呼吸圆环+计时+暂停)、完成屏(时长与连续天数统计)。交互：首页「开始今日练习」onTap 进呼吸屏，呼吸屏「完成」onTap 进完成屏。动效：呼吸圆环 mount 用 emphasizedDecelerate 缩放淡入 500ms，课程卡 inView fade-up 交错 delayMs 60ms 递增，完成屏统计数字滚动。深色午夜蓝渐变 + 柔光玻璃卡，一个签名瞬间：呼吸圆环外的三层同心光晕。",
+            "首页 + 呼吸练习屏 + 完成屏",
+        ),
+        (
+            "开源项目官网（1440 宽长页）：英雄(项目名+一句话+安装命令块+GitHub 星标 count-up)、特性六格、代码示例区、生态 logo、贡献者头像墙、页脚。滚动动效：安装块 mount、特性格 inView 交错、代码区 sticky 随滚动高亮不同行。终端深色 + 等宽字。",
+            "英雄 + 特性六格 + 代码示例区 + 生态 logo + 贡献者头像墙 + 页脚",
+        ),
+        (
+            "知识卡片一组三张（1080×1350）：主题「如何做好一次设计评审」，每张含标题、三条要点、底部署名条。动效：标题逐字揭示、要点 inView 交错。高对比撞色 + 大字号，适合社媒。",
+            "主题「如何做好一次设计评审」 三条要点 底部署名条",
+        ),
+    ] {
+        let llm = ScriptedLlm::new(vec![
+            ScriptResponse::Text(single_subtask_plan_json(covering_label)),
+            ScriptResponse::Text(three_item_json()),
+        ]);
+        let mut sink = VecDocSink::new();
+        let mut events = Vec::new();
+        let mut on_progress = |p: Progress| events.push(p);
+        futures::executor::block_on(Orchestrator::new().run(
+            motion50_req(brief),
+            &mut sink,
+            &llm,
+            &mut on_progress,
+            &AbortFlag::new(),
+            &stub_providers(),
+        ))
+        .expect("motion50 brief must run");
+
+        assert_eq!(
+            planning_prompt_count(&llm, brief),
+            1,
+            "brief must not trigger a coverage re-plan: {brief}"
+        );
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, Progress::PlanCoverageRetry { .. })),
+            "PlanCoverageRetry must not fire for a covering plan: {brief}"
+        );
+    }
+}
+
+/// The gate keeps its teeth: a plan that really omits an enumerated section
+/// still triggers exactly one coverage retry.
+#[test]
+fn a_truly_missing_section_still_triggers_the_coverage_retry() {
+    let brief = "产品官网（1440）：包含定价三档、关于我们、页脚";
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(single_subtask_plan_json("关于我们 + 页脚")),
+        // The re-plan adds the missing section.
+        ScriptResponse::Text(single_subtask_plan_json("定价三档 关于我们 页脚")),
+        ScriptResponse::Text(node_json("页面内容")),
+        ScriptResponse::Text(node_json("页面内容")),
+    ]);
+    let mut sink = VecDocSink::new();
+    let mut events = Vec::new();
+    let mut on_progress = |p: Progress| events.push(p);
+    futures::executor::block_on(Orchestrator::new().run(
+        motion50_req(brief),
+        &mut sink,
+        &llm,
+        &mut on_progress,
+        &AbortFlag::new(),
+        &stub_providers(),
+    ))
+    .expect("coverage re-plan run succeeds");
+
+    assert_eq!(planning_prompt_count(&llm, brief), 2);
+    assert!(events
+        .iter()
+        .any(|event| matches!(event, Progress::PlanCoverageRetry { .. })));
+}
+
+// ── motion50 fix 1: provider session/usage quota circuit breaker ────────────
+
+const PLAN3_JSON: &str = r##"{
+  "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
+                 "layout": "vertical", "gap": 0,
+                 "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
+  "subtasks": [
+    { "id": "hero", "label": "Hero", "region": { "width": 1200, "height": 400 } },
+    { "id": "feat", "label": "Features", "region": { "width": 1200, "height": 400 } },
+    { "id": "foot", "label": "Footer", "region": { "width": 1200, "height": 400 } }
+  ]
+}"##;
+
+fn limit_fail(message: &str) -> ScriptResponse {
+    ScriptResponse::Fail(crate::types::LlmError {
+        message: message.into(),
+        aborted: false,
+    })
+}
+
+/// motion50 fix 1 (lane1/web-10): two consecutive subtasks failing on the
+/// provider's session/usage quota must trip a run-level circuit breaker — the
+/// abort flag is set, the THIRD subtask never reaches the model, and the run
+/// ends aborted instead of "success with scaffold only".
+#[test]
+fn two_consecutive_provider_limit_failures_circuit_break_the_run() {
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(PLAN3_JSON.into()),
+        limit_fail("You've hit your session limit · resets 2:50pm (Asia/Shanghai)"),
+        limit_fail("You've hit your usage limit · resets 3pm (Asia/Shanghai)"),
+        // No further responses on purpose: subtask 3 and the salvage pass
+        // must never call the model.
+    ]);
+    let mut sink = VecDocSink::new();
+    let mut events = Vec::new();
+    let abort = AbortFlag::new();
+    let result = futures::executor::block_on(Orchestrator::new().run(
+        req(),
+        &mut sink,
+        &llm,
+        &mut |p: Progress| events.push(p),
+        &abort,
+        &stub_providers(),
+    ));
+    assert!(
+        matches!(result, Err(OrchestratorError::Aborted)),
+        "the run must end aborted, got {result:?}"
+    );
+    assert!(
+        abort.is_set(),
+        "the circuit breaker must set the abort flag"
+    );
+    // planning + exactly one call per failed subtask (the quota error is
+    // non-retryable, so each burns a single attempt). 4+ calls means the
+    // third subtask or the salvage pass still reached the model.
+    assert_eq!(
+        llm.system_prompts().len(),
+        3,
+        "expected planning + 2 subtask calls only"
+    );
+    assert_eq!(
+        events
+            .iter()
+            .filter(|event| matches!(event, Progress::SubtaskFailed { .. }))
+            .count(),
+        2
+    );
+    // The user-facing announcement carries the provider's quota message.
+    assert!(events.iter().any(|event| matches!(
+        event,
+        Progress::RunAborted { reason }
+            if reason.contains("session limit") || reason.contains("usage limit")
+    )));
+}
+
+// ── plan-coverage v2: the covers backfill suppresses the false retry ────────
+
+/// The 0919 GLM-Flash web-11 brief, whose every section the plan genuinely
+/// carried while the gate still burned a re-plan on 英雄 / 色板与字阶展示 /
+/// 快速开始代码块 / 页脚.
+const WEB11_BRIEF: &str = "设计系统文档站首页（1440 宽长页）：英雄（标题+搜索框）、组件网格九个、设计原则三条、色板与字阶展示、快速开始代码块、页脚。交互：组件卡 hover 显示描述，代码块可复制。滚动动效：组件格 inView 交错，色板 mount 逐块展开，代码块 sticky。风格由你决定，要求信息清晰、层级分明。";
+
+const WEB11_COVERS_PLAN_JSON: &str = r##"{
+  "rootFrame": { "id": "root", "name": "Page", "width": 1440, "height": 800,
+                 "layout": "vertical", "gap": 0,
+                 "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
+  "subtasks": [
+    { "id": "hero", "label": "Hero Section", "elements": "eyebrow, headline, large search input",
+      "covers": ["英雄"], "region": { "width": 1440, "height": 400 } },
+    { "id": "grid", "label": "Component Grid", "elements": "cards with mini previews",
+      "covers": ["组件网格"], "region": { "width": 1440, "height": 400 } },
+    { "id": "principles", "label": "Design Principles", "elements": "numbered principle cards",
+      "covers": ["设计原则"], "region": { "width": 1440, "height": 400 } },
+    { "id": "tokens", "label": "Color Palette & Type Scale", "elements": "swatch ramp rows, type specimens",
+      "covers": ["色板与字阶展示"], "region": { "width": 1440, "height": 400 } },
+    { "id": "quickstart", "label": "Quick Start Code Block", "elements": "numbered steps, tabbed code panel",
+      "covers": ["快速开始代码块"], "region": { "width": 1440, "height": 400 } },
+    { "id": "footer", "label": "Footer", "elements": "brand block, link columns, copyright",
+      "covers": ["页脚"], "region": { "width": 1440, "height": 400 } }
+  ]
+}"##;
+
+/// A covering plan that carries the covers backfill is requested exactly
+/// once and never emits a PlanCoverageRetry — the 0919 web-11 false positive
+/// is gone. (The same script would burn a second planning call pre-fix.)
+#[test]
+fn web11_covering_plan_with_covers_skips_the_coverage_retry() {
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(WEB11_COVERS_PLAN_JSON.into()),
+        ScriptResponse::Text(WEB11_COVERS_PLAN_JSON.into()),
+        ScriptResponse::Text(node_json("页面内容")),
+        ScriptResponse::Text(node_json("页面内容")),
+        ScriptResponse::Text(node_json("页面内容")),
+        ScriptResponse::Text(node_json("页面内容")),
+        ScriptResponse::Text(node_json("页面内容")),
+        ScriptResponse::Text(node_json("页面内容")),
+    ]);
+    let mut sink = VecDocSink::new();
+    let mut events = Vec::new();
+    let mut on_progress = |p: Progress| events.push(p);
+    futures::executor::block_on(Orchestrator::new().run(
+        motion50_req(WEB11_BRIEF),
+        &mut sink,
+        &llm,
+        &mut on_progress,
+        &AbortFlag::new(),
+        &stub_providers(),
+    ))
+    .expect("web-11 covering run succeeds");
+
+    assert_eq!(
+        planning_prompt_count(&llm, WEB11_BRIEF),
+        1,
+        "a covers-backfilled covering plan must be requested exactly once"
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|event| matches!(event, Progress::PlanCoverageRetry { .. })),
+        "covers backfill must suppress the PlanCoverageRetry"
+    );
+}

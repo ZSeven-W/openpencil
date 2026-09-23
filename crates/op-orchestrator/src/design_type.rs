@@ -201,6 +201,9 @@ fn mentions_phone_dimensions(lower: &str) -> bool {
 }
 /// Words that mean "social card series" on their own — a platform name or a
 /// delivery format, neither of which describes anything else we generate.
+/// (motion50 fix 2: 轮播/carousel used to live here but is an ordinary App /
+/// web component — it moved to `CARD_NOUNS` so it only reads as a card set
+/// when a series word backs it up.)
 const CARD_PLATFORM_WORDS: &[&str] = &[
     "小红书",
     "小紅書",
@@ -211,13 +214,14 @@ const CARD_PLATFORM_WORDS: &[&str] = &[
     "公眾號",
     "图文",
     "圖文",
-    "轮播",
-    "輪播",
-    "carousel",
 ];
 /// `卡片` / `card` is ALSO the component rung's trigger word, so on its own it
 /// stays ambiguous. Paired with a series word it is unambiguously a set.
-const CARD_NOUNS: &[&str] = &["卡片", "卡", "card", "cards"];
+/// 轮播/輪播/carousel sit here since motion50 fix 2: a carousel is a component
+/// (`CARD_PLATFORM_WORDS` alone used to classify any brief mentioning one as a
+/// card series — measured on app-10: an explicit 375×812 App brief rendered as
+/// two 1080×1440 boards).
+const CARD_NOUNS: &[&str] = &["卡片", "卡", "card", "cards", "轮播", "輪播", "carousel"];
 const CARD_SERIES_WORDS: &[&str] = &["系列", "一套", "多张", "多張", "组图", "組圖", "series"];
 /// A card noun inside a COMPONENT request is still a component — "卡片组件"
 /// asks for one card, not a set of them. Mirrors how the deck rung uses
@@ -230,14 +234,47 @@ pub(crate) fn is_card_series_prompt(lower: &str) -> bool {
     is_card_series(lower)
 }
 
+/// An explicit screen declaration in the brief (motion50 fix 2): mobile
+/// words, a written phone frame size, dashboard words, or slides words.
+/// When the brief names its surface, the card platform words must not
+/// single-handedly reclassify it as a Card board.
+/// A landing-page / website brief declares its canvas as clearly as
+/// "375×812" does. web-10 ("…内饰图文两段…") and web-13 ("…服务三卡…")
+/// in the 0918 motion50 rerun were still routed to Card / Component
+/// because "官网（1440 宽长页）" counted for nothing here.
+const LANDING_WORDS: &[&str] = &[
+    "官网",
+    "落地页",
+    "长页",
+    "网站",
+    "站点",
+    "landing",
+    "website",
+    "homepage",
+];
+
+fn declares_screen_type(lower: &str) -> bool {
+    contains_any(lower, LANDING_WORDS)
+        || contains_any(lower, MOBILE_WORDS)
+        || mentions_phone_dimensions(lower)
+        || contains_any(lower, DASHBOARD_WORDS)
+        || contains_any(lower, SLIDES_WORDS)
+}
+
 fn is_card_series(lower: &str) -> bool {
     if contains_any(lower, CARD_DISQUALIFIER) {
         return false;
     }
+    // The strong card-noun + series-word combo always reads as a card set.
+    let strong = contains_any(lower, CARD_NOUNS) && contains_any(lower, CARD_SERIES_WORDS);
     if contains_any(lower, CARD_PLATFORM_WORDS) {
-        return true;
+        // Platform words alone are downsized (motion50 fix 2): an explicit
+        // screen declaration (mobile words / phone dimensions / dashboard /
+        // slides) wins — "电商 App…商品页(大图轮播占位)" is a phone screen
+        // whose section happens to be a carousel, not a card series.
+        return strong || !declares_screen_type(lower);
     }
-    contains_any(lower, CARD_NOUNS) && contains_any(lower, CARD_SERIES_WORDS)
+    strong
 }
 /// 数据型工作区 / dashboard 触发词 —— 命中 → DesktopScreen。
 const DASHBOARD_WORDS: &[&str] = &[
@@ -300,6 +337,7 @@ pub fn detect_design_type(prompt: &str) -> DesignTypePreset {
     // Phone geometry is a screen contract even when a component trigger appears.
     if trigger
         && !contains_any(&lower, COMPONENT_DISQUALIFIER)
+        && !contains_any(&lower, LANDING_WORDS)
         && !mentions_phone_dimensions(&lower)
     {
         return COMPONENT;
@@ -614,5 +652,55 @@ mod tests {
         assert_eq!(p.type_, DesignType::LandingPage);
         assert_eq!(p.width, 1200.0);
         assert_eq!(p.root_height, 0.0);
+    }
+
+    // ── motion50 fix 2: carousel is an ordinary App component, not a card
+    //    platform ─────────────────────────────────────────────────────────────
+
+    /// motion50 app-10 (lane2): "轮播" inside a brief that explicitly declares
+    /// a phone frame must not flip the request to the Card preset — the run
+    /// produced two 1080×1440 boards with the 375×812 content crammed into
+    /// their top-left corners.
+    #[test]
+    fn a_carousel_inside_an_explicit_phone_brief_is_not_a_card_series() {
+        let app10 = "电商商品详情 App 两屏可交互（375×812）：商品页(大图轮播占位+价格+规格选择+评价三条+底部加购条)、购物车页(商品两条+金额汇总+结算)。交互：规格胶囊 onTap 切换，「加入购物车」onTap 进购物车。动效：价格数字滚动，规格切换 transition，加购按钮 pressed 缩放。高级黑白 + 一处荧光强调。";
+        let preset = detect_design_type(app10);
+        assert_eq!(preset.type_, DesignType::MobileScreen, "{app10}");
+        assert_eq!((preset.width, preset.height), (375.0, 812.0), "{app10}");
+    }
+
+    #[test]
+    fn an_app_banner_carousel_is_a_mobile_screen() {
+        assert_eq!(
+            detect_design_type("App 首页含 banner 轮播（375×812）").type_,
+            DesignType::MobileScreen
+        );
+    }
+
+    /// The genuine card readings are untouched: with no screen declaration in
+    /// the brief, platform words (轮播 included) still deliver a Card board.
+    #[test]
+    fn a_carousel_series_without_a_screen_declaration_stays_a_card() {
+        assert_eq!(
+            detect_design_type("小红书图文轮播一套 6 张").type_,
+            DesignType::Card
+        );
+        assert_eq!(detect_design_type("公众号图文").type_, DesignType::Card);
+    }
+
+    #[test]
+    fn a_declared_landing_page_outranks_card_and_component_triggers() {
+        // web-10 / web-13 of the 0918 rerun: "图文" (card platform word) and
+        // "卡片" (component trigger) inside an explicit 官网/长页 brief.
+        let car = "新能源汽车车型页（1440 宽长页）：满幅车身英雄、性能三指标、外观颜色选择、内饰图文两段、续航图表、预约试驾表单、页脚。";
+        assert_eq!(detect_design_type(car).type_, DesignType::LandingPage);
+        let counsel = "心理咨询服务官网（1440 宽长页）：英雄（插画+预约 CTA）、服务三卡片、咨询师四人、流程四步、常见问题、页脚。";
+        assert_eq!(detect_design_type(counsel).type_, DesignType::LandingPage);
+        // The plain forms keep their rungs.
+        assert_eq!(
+            detect_design_type("做一个卡片组件").type_,
+            DesignType::Component
+        );
+        assert_eq!(detect_design_type("公众号图文").type_, DesignType::Card);
     }
 }

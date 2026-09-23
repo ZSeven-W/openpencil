@@ -147,6 +147,14 @@ pub(super) fn collect_diagnostics_with_context(
         if let Some(line) = crate::stub_repair::empty_decorated_stub_diagnostic(v, resolved_size) {
             out.push(line);
         }
+        if let Some(line) =
+            crate::square_ring_repair::square_ring_wrapper_diagnostic(v, resolved_size)
+        {
+            out.push(line);
+        }
+        if let Some(line) = crate::stacked_text_repair::stacked_overlapping_text_diagnostic(v) {
+            out.push(line);
+        }
     }
     if out.len() < MAX_DIAGNOSTICS {
         for line in crate::sidebar_archetype::horizontal_navbar_archetype_diagnostics(v, |id| {

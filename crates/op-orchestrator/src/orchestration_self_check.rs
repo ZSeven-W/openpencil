@@ -100,7 +100,7 @@ fn check_node(node: &Value, canvas_width: f64, in_scroller: bool, report: &mut S
         report.issues.push(SelfCheckIssue {
             code: "radial-stack-not-concentric",
             node_id: string_prop(node, "id").map(str::to_string),
-            message: "progress-ring track, progress arc, and measurable centre content must share a fixed near-square layout:none wrapper with explicit concentric coordinates and front-to-back child order: centre, progress, track".into(),
+            message: radial_concentric_repair_hint(node),
             severity: SelfCheckSeverity::Fatal,
         });
     }
@@ -200,6 +200,64 @@ fn auto_fix_product_row_overflow(node: &mut Value) -> bool {
     changed
 }
 
+/// Executable per-mistake instructions for `radial-stack-not-concentric`:
+/// the two common wrong shapes (wrapper still in flex flow; arcs not
+/// sharing the wrapper's centre) each get their own fix sentence, joined
+/// when both apply, instead of one generic paragraph the model has to
+/// decode across four retries.
+fn radial_concentric_repair_hint(node: &Value) -> String {
+    let mut hints: Vec<&str> = Vec::new();
+    if node.get("layout").and_then(Value::as_str) != Some("none") {
+        hints.push("set the wrapper layout to none");
+    }
+    if !radial_arcs_share_wrapper_centre(node) {
+        hints.push(
+            "give every arc the same width/height and x=(wrapper-w)/2, \
+             y=(wrapper-h)/2 in a fixed square layout:none wrapper",
+        );
+    }
+    if hints.is_empty() {
+        // Unmeasurable or oversized centre content, wrong painter order, …
+        hints.push(
+            "give every direct child explicit width/height and paint centre \
+             content first, then progress arc, then full track, concentric in \
+             one fixed square layout:none wrapper",
+        );
+    }
+    hints.join("; ")
+}
+
+/// True when every arc child already sits at the centred position for its
+/// own size against the wrapper's box — the geometry contract the
+/// concentric hint teaches. Unreadable wrapper or arc geometry counts as
+/// not sharing.
+fn radial_arcs_share_wrapper_centre(node: &Value) -> bool {
+    let Some(layers) = crate::radial_repair::radial_layers(node) else {
+        return true;
+    };
+    let (Some(box_w), Some(box_h)) = (numeric_prop(node, "width"), numeric_prop(node, "height"))
+    else {
+        return false;
+    };
+    let kids = children(node).map(Vec::as_slice).unwrap_or(&[]);
+    layers
+        .progress
+        .iter()
+        .chain(layers.tracks.iter())
+        .all(|index| {
+            let Some(child) = kids.get(*index) else {
+                return false;
+            };
+            let (Some(width), Some(height)) =
+                (numeric_prop(child, "width"), numeric_prop(child, "height"))
+            else {
+                return false;
+            };
+            numeric_prop(child, "x") == Some(((box_w - width) / 2.0).round())
+                && numeric_prop(child, "y") == Some(((box_h - height) / 2.0).round())
+        })
+}
+
 fn is_clipping_horizontal_scroller(node: &Value) -> bool {
     string_prop(node, "layout") == Some("horizontal")
         && node.get("clipContent").and_then(Value::as_bool) == Some(true)
@@ -263,6 +321,10 @@ fn is_mobile_category_row_loose_spacing(node: &Value, canvas_width: f64) -> bool
             .unwrap_or(false)
 }
 
+/// Widest image a list-row thumbnail can have. The rejected featured split
+/// this check exists for carries a 170px photo; dish-row thumbnails run 56–96.
+const THUMBNAIL_ROW_MAX_IMAGE_WIDTH: f64 = 120.0;
+
 fn is_mobile_featured_card_split_badly(node: &Value, canvas_width: f64) -> bool {
     if canvas_width > 480.0
         || string_prop(node, "type") != Some("frame")
@@ -287,6 +349,21 @@ fn is_mobile_featured_card_split_badly(node: &Value, canvas_width: f64) -> bool 
     let content_width = (card_width - horizontal_padding(node)).max(0.0);
     if content_width <= 0.0 {
         return false;
+    }
+
+    // A THUMBNAIL LIST ROW — a small leading photo beside a text column that
+    // fills the rest — has no blank half by construction: the fill column
+    // takes every pixel the image leaves. It is the standard delivery/menu dish
+    // row, and treating its ~25% image ratio as a bad split rejected a
+    // GLM-5.3-Flash `dish-list` (6 rows, 80px photos) four times until the
+    // section was dropped from the screen entirely.
+    let fills_remaining_width = children
+        .iter()
+        .any(|child| string_prop(child, "width") == Some("fill_container"));
+    if fills_remaining_width
+        && largest_descendant_image_width(node) <= THUMBNAIL_ROW_MAX_IMAGE_WIDTH
+    {
+        return has_oversized_square_action(node);
     }
 
     let gap = numeric_prop(node, "gap").unwrap_or(0.0);
