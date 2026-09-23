@@ -21,6 +21,7 @@ impl Default for EditorUiState {
             chat_tab_width_bumped: false,
             size_class: crate::size_class::EditorSizeClass::Expanded,
             touch: false,
+            keyboard_occlusion: 0.0,
             external_cli_available: true,
             mobile_sheet: None,
             theme_mode: ThemeMode::Dark,

@@ -216,6 +216,14 @@ impl WidgetHostNative {
         if let Some(consumed) = self.press_home_overlays(x, y, viewport_width, viewport_height) {
             return consumed;
         }
+        // Touch + compact Home defers its taps to release so a one-finger
+        // drag can scroll the page column (desktop keeps the immediate
+        // press — the arm declines without touch chrome).
+        if allow_touch_panel_defer
+            && self.begin_home_touch_gesture(x, y, viewport_width, viewport_height)
+        {
+            return true;
+        }
         if let Some(consumed) = self.press_home(x, y, viewport_width, viewport_height) {
             return consumed;
         }

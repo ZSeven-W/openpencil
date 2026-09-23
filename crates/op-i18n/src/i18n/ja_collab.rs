@@ -332,6 +332,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.returnEdit" => "編集に戻る",
         "workspace.backToWorkspace" => "ワークスペースに戻る →",
         "workspace.failed.note" => "生成が中断されました。要件と参考素材は保持されているので、再試行できます。",
+        "home.mode.normal" => "ノーマル",
+        "home.mode.professional" => "プロ",
+        "home.nav.create" => "作成",
+        "home.nav.projects" => "作品",
+        "home.nav.settings" => "設定",
         _ => return None,
     })
 }

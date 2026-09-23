@@ -316,6 +316,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.returnEdit" => "Voltar a editar",
         "workspace.backToWorkspace" => "Voltar ao espaço de trabalho →",
         "workspace.failed.note" => "A geração foi interrompida. Seu briefing e referências foram mantidos — você pode tentar de novo.",
+        "home.mode.normal" => "Normal",
+        "home.mode.professional" => "Profissional",
+        "home.nav.create" => "Criar",
+        "home.nav.projects" => "Trabalhos",
+        "home.nav.settings" => "Ajustes",
         _ => return None,
     })
 }

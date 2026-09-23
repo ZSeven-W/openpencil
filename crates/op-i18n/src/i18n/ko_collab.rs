@@ -332,6 +332,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.returnEdit" => "편집으로 돌아가기",
         "workspace.backToWorkspace" => "작업 공간으로 돌아가기 →",
         "workspace.failed.note" => "생성이 중단되었습니다. 요청과 참고 자료는 유지되며 다시 시도할 수 있습니다.",
+        "home.mode.normal" => "일반",
+        "home.mode.professional" => "전문",
+        "home.nav.create" => "창작",
+        "home.nav.projects" => "작품",
+        "home.nav.settings" => "설정",
         _ => return None,
     })
 }

@@ -3,11 +3,73 @@
 use super::WidgetHostNative;
 use op_editor_core::{EntrySurface, HomeDevice, HomeFamily, HomeHit, InfoKind, SlideRatio};
 use op_editor_ui::widgets::HomeSurface;
-use op_editor_ui::Point2D;
+use op_editor_ui::{Point2D, Rect};
+
+/// The keyboard-safe gap kept under the composer's input box while the
+/// software keyboard is up (the same margin the agent-settings reveal
+/// uses).
+const HOME_COMPOSER_GAP: f32 = 12.0;
 
 impl WidgetHostNative {
     pub fn home_visible(&self) -> bool {
         self.editor_state.editor_ui.home.visible
+    }
+
+    /// Pull the Home composer above the software keyboard, the same way
+    /// `ensure_focused_agent_settings_visible` serves the settings modal:
+    /// recompute the composer's input rect at the current scroll, then
+    /// advance `home.scroll_y` until the box clears the keyboard band (or
+    /// reaches the page's furthest scroll). Desktop Home has no software
+    /// keyboard, so only touch hosts scroll.
+    pub(in crate::widget_host) fn ensure_home_composer_visible(
+        &mut self,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        if !self.editor_state.editor_ui.touch_chrome()
+            || !self.editor_state.editor_ui.home.visible
+            || !self.editor_state.editor_ui.home.composer_focused
+            || self.keyboard_occlusion <= 0.0
+            || viewport_w <= 0.0
+            || viewport_h <= 0.0
+        {
+            return false;
+        }
+        let (composer, current_scroll, max_scroll) = {
+            let Some(home) = HomeSurface::for_editor_at(&self.editor_state, self.now_ms) else {
+                return false;
+            };
+            let chip_w = op_editor_ui::widgets::home_surface::model_chip_width(&home.chip_label);
+            let compact = self.editor_state.editor_ui.compact_layout();
+            let max_scroll = self.home_max_scroll(viewport_w, viewport_h, chip_w, compact);
+            // Reveal the whole composer, not just the box being typed in:
+            // a visible caret with the 开始设计 button still under the
+            // keyboard is a dead end on a phone.
+            let layout = home.layout(viewport_w, viewport_h);
+            let composer = Rect {
+                origin: layout.input_box.origin,
+                size: Point2D::new(
+                    layout.input_box.size.x,
+                    (layout.send.origin.y + layout.send.size.y - layout.input_box.origin.y)
+                        .max(layout.input_box.size.y),
+                ),
+            };
+            (composer, home.state.scroll_y, max_scroll)
+        };
+        // Only an occluded box moves the page. The agent-settings reveal
+        // leaves an already-visible field where it is for the same reason:
+        // pulling the page back up under the user is a worse surprise than
+        // the slack it would recover.
+        let deficit = (composer.origin.y + composer.size.y + HOME_COMPOSER_GAP
+            - self.keyboard_visible_bottom(viewport_h))
+        .max(0.0);
+        let next = (current_scroll + deficit).clamp(0.0, max_scroll);
+        let scroll = &mut self.editor_state.editor_ui.home.scroll_y;
+        if (*scroll - next).abs() <= f32::EPSILON {
+            return false;
+        }
+        *scroll = next;
+        true
     }
 
     pub(in crate::widget_host) fn press_home(
@@ -27,6 +89,7 @@ impl WidgetHostNative {
         let Some(hit) = hit else {
             // A press outside the 更多 popover closes it, like the
             // prototype's document-level click handler.
+            self.editor_state.editor_ui.home.composer_focused = false;
             if self.editor_state.editor_ui.home.more_open {
                 self.editor_state.editor_ui.home.more_open = false;
                 self.mark_dirty();
@@ -34,6 +97,11 @@ impl WidgetHostNative {
             return Some(true);
         };
         self.editor_state.editor_ui.home.pressed = Some(hit);
+        // The software keyboard follows the composer, not the surface: the
+        // input box owns the focus, every other target releases it (a
+        // touch tap replays through this same ladder on release, so both
+        // the immediate and the deferred path stay consistent).
+        self.editor_state.editor_ui.home.composer_focused = matches!(hit, HomeHit::Sheet);
         if self.editor_state.editor_ui.home.more_open
             && !matches!(hit, HomeHit::More | HomeHit::MoreItem(_))
         {
@@ -46,6 +114,10 @@ impl WidgetHostNative {
                     .editor_ui
                     .home
                     .set_caret(caret, self.now_ms);
+                // Raise-with-focus ordering: when the software keyboard is
+                // already up (occlusion set before this tap landed), the
+                // composer must still be pulled above it.
+                self.ensure_home_composer_visible(viewport_width, viewport_height);
             }
             HomeHit::Tab(family) | HomeHit::MoreItem(family) => {
                 self.editor_state
@@ -119,6 +191,28 @@ impl WidgetHostNative {
             HomeHit::Professional => {
                 self.editor_state.editor_ui.home.hide();
                 self.editor_state.editor_ui.entry_surface = EntrySurface::Canvas;
+            }
+            HomeHit::ModeNormal => {
+                // Home IS the normal mode: the 普通 half of the compact
+                // top bar switch only confirms the segment already
+                // selected. No surface change, no document change.
+            }
+            HomeHit::NavCreate => {
+                // 创作 is the page the compact Home already shows; the
+                // tap resets the reading position instead.
+                self.editor_state.editor_ui.home.scroll_y = 0.0;
+            }
+            HomeHit::NavProjects => {
+                // The 作品 (works) list is the phase-2 work-reading
+                // surface; the tab paints as unavailable until it lands.
+            }
+            HomeHit::NavSettings => {
+                // The settings destination the compact nav and the top
+                // bar's gear share: the existing agent-settings modal
+                // (Home already paints it above the takeover).
+                self.editor_state.editor_ui.agent_settings_open = true;
+                self.editor_state.editor_ui.agent_settings.tab =
+                    op_editor_core::AgentSettingsTab::Agents;
             }
             HomeHit::ModelChip => {
                 if !self.editor_state.has_usable_chat_agent() {
@@ -557,3 +651,9 @@ mod tests {
         )
     }
 }
+#[cfg(test)]
+#[path = "home_compact_tests.rs"]
+mod compact_tests;
+#[cfg(test)]
+#[path = "home_ime_focus_tests.rs"]
+mod ime_focus_tests;

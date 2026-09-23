@@ -356,6 +356,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.returnEdit" => "Back to edit",
         "workspace.backToWorkspace" => "Back to workspace →",
         "workspace.failed.note" => "Generation was interrupted. Your brief and references are kept — you can retry.",
+        "home.mode.normal" => "Normal",
+        "home.mode.professional" => "Professional",
+        "home.nav.create" => "Create",
+        "home.nav.projects" => "Works",
+        "home.nav.settings" => "Settings",
         _ => return None,
     })
 }

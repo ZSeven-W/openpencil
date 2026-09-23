@@ -32,6 +32,8 @@ mod connect;
 
 #[path = "home_surface_layout.rs"]
 pub(crate) mod layout;
+pub use layout::compact::BOTTOM_NAV_H as HOME_BOTTOM_NAV_H;
+pub use layout::max_scroll_for_mode;
 pub use layout::{HomeLayout, EXPLORE_FAMILIES};
 
 /// Top bar height; the page content scrolls under it.
@@ -184,14 +186,25 @@ impl<'a> HomeSurface<'a> {
 
     pub fn layout(&self, viewport_width: f32, viewport_height: f32) -> HomeLayout {
         let chip_w = model::model_chip_width(&self.chip_label);
-        let max_scroll =
-            Self::max_scroll_for(viewport_width, viewport_height, self.state.task, chip_w);
-        Self::layout_for_scrolled(
+        let compact = self.ui.compact_layout();
+        // The page lays out against the full viewport — a software
+        // keyboard covers the bottom, it does not resize the window — but
+        // the band it covers has to come out of the SCROLL RANGE or the
+        // content under it can never be brought into view.
+        let max_scroll = layout::max_scroll_for_mode(
+            viewport_width,
+            (viewport_height - self.ui.keyboard_occlusion.max(0.0)).max(0.0),
+            self.state.task,
+            chip_w,
+            compact,
+        );
+        layout::layout_for_scrolled_mode(
             viewport_width,
             viewport_height,
             self.state.task,
             self.state.scroll_y.clamp(0.0, max_scroll),
             chip_w,
+            compact,
         )
     }
 
@@ -223,11 +236,31 @@ impl<'a> HomeSurface<'a> {
         if layout.professional.contains(point) {
             return Some(HomeHit::Professional);
         }
+        if layout.mode_normal.size.y > 0.0 && layout.mode_normal.contains(point) {
+            return Some(HomeHit::ModeNormal);
+        }
+        // The compact top bar's settings gear shares the bottom nav's
+        // settings destination.
+        if layout.settings.size.y > 0.0 && layout.settings.contains(point) {
+            return Some(HomeHit::NavSettings);
+        }
         if layout.open_file.contains(point) {
             return Some(HomeHit::OpenFile);
         }
         if self.ui.account_ui_available && layout.account.contains(point) {
             return Some(HomeHit::Account);
+        }
+        // The compact bottom nav (创作 / 作品 / 设置) is pinned chrome
+        // painted over the scrolling page, so it answers before any
+        // page target.
+        for (index, rect) in layout.nav_items.iter().enumerate() {
+            if rect.size.y > 0.0 && rect.contains(point) {
+                return Some(match index {
+                    0 => HomeHit::NavCreate,
+                    1 => HomeHit::NavProjects,
+                    _ => HomeHit::NavSettings,
+                });
+            }
         }
         if self.state.more_open && layout.more_popover.contains(point) {
             for (index, rect) in layout.more_rows.iter().enumerate() {
@@ -375,6 +408,10 @@ mod tests;
 #[cfg(test)]
 #[path = "home_surface_layout_tests.rs"]
 mod layout_tests;
+
+#[cfg(test)]
+#[path = "home_surface_compact_layout_tests.rs"]
+mod compact_layout_tests;
 
 #[cfg(test)]
 #[path = "home_surface_motion_tests.rs"]

@@ -316,6 +316,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.returnEdit" => "Düzenlemeye dön",
         "workspace.backToWorkspace" => "Çalışma alanına dön →",
         "workspace.failed.note" => "Üretim kesildi. Brief'in ve referansların korundu — yeniden deneyebilirsin.",
+        "home.mode.normal" => "Normal",
+        "home.mode.professional" => "Profesyonel",
+        "home.nav.create" => "Oluştur",
+        "home.nav.projects" => "Çalışmalar",
+        "home.nav.settings" => "Ayarlar",
         _ => return None,
     })
 }

@@ -55,6 +55,13 @@ pub struct EditorUiState {
     /// bottom dock, sheets), and the single open mobile sheet.
     pub size_class: crate::size_class::EditorSizeClass,
     pub touch: bool,
+    /// Height of the bottom band a raised software keyboard covers, in
+    /// logical points (0 when none is up). The shells report it; layout
+    /// that has to stay reachable — the scrollable range of a surface the
+    /// keyboard overlaps — subtracts it from the viewport height. The
+    /// surfaces themselves still lay out against the full viewport: the
+    /// keyboard covers the bottom, it does not resize the window.
+    pub keyboard_occlusion: f32,
     /// Whether external CLI agents (Claude Code, Codex, …) can run on this
     /// platform. Mobile shells (iOS / Android / HarmonyOS) cannot spawn
     /// subprocess CLIs, so their FFI clears this and the chat catalog plus

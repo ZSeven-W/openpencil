@@ -316,6 +316,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.returnEdit" => "返回修改",
         "workspace.backToWorkspace" => "回到工作區 →",
         "workspace.failed.note" => "產生中斷了。需求與參考素材已保留，可以直接重試。",
+        "home.mode.normal" => "普通",
+        "home.mode.professional" => "專業",
+        "home.nav.create" => "創作",
+        "home.nav.projects" => "作品",
+        "home.nav.settings" => "設定",
         _ => return None,
     })
 }

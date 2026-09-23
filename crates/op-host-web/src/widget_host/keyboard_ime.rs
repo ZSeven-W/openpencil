@@ -8,7 +8,18 @@ impl WidgetHost {
     /// Whether the browser's hidden IME capture input should own DOM focus.
     /// A generate popup without a configured provider has no visible editor,
     /// even though the popup still swallows canvas shortcuts.
+    ///
+    /// Twin of the native host's `ime.rs::text_input_focus_active` (keep
+    /// both in sync): the desktop Home surface IS the composer and always
+    /// owns the keyboard, while a touch shell's software keyboard follows
+    /// the composer's own focus or it could never be dismissed.
     pub(crate) fn text_input_focus_active(&self) -> bool {
+        if self.editor_state.editor_ui.home.visible {
+            if !self.editor_state.editor_ui.touch_chrome() {
+                return true;
+            }
+            return self.editor_state.editor_ui.home.composer_focused;
+        }
         let panel = &self.editor_state.editor_ui.image_panel;
         if panel.search_open || panel.generate_open {
             let configured = self
@@ -196,5 +207,27 @@ mod tests {
                 .text(),
             "Hero photo"
         );
+    }
+
+    #[test]
+    fn home_keyboard_focus_matches_the_native_twin() {
+        let mut host = WidgetHost::new();
+        host.editor_state.editor_ui.home.visible = true;
+
+        // Desktop web mirrors the native desktop reading: the surface IS
+        // the composer, so the hidden input owns focus before any press.
+        assert!(host.text_input_focus_active());
+
+        // Touch follows the composer's own focus bit — the software
+        // keyboard must be dismissable by pressing anywhere else.
+        host.editor_state.editor_ui.touch = true;
+        assert!(
+            !host.text_input_focus_active(),
+            "an untouched touch Home must not raise the keyboard"
+        );
+        host.editor_state.editor_ui.home.composer_focused = true;
+        assert!(host.text_input_focus_active());
+        host.editor_state.editor_ui.home.composer_focused = false;
+        assert!(!host.text_input_focus_active());
     }
 }

@@ -318,6 +318,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.returnEdit" => "กลับไปแก้ไข",
         "workspace.backToWorkspace" => "กลับไปพื้นที่ทำงาน →",
         "workspace.failed.note" => "การสร้างถูกขัดจังหวะ คำสั่งและข้อมูลอ้างอิงยังอยู่ ลองใหม่ได้เลย",
+        "home.mode.normal" => "ปกติ",
+        "home.mode.professional" => "มืออาชีพ",
+        "home.nav.create" => "สร้าง",
+        "home.nav.projects" => "ผลงาน",
+        "home.nav.settings" => "การตั้งค่า",
         _ => return None,
     })
 }

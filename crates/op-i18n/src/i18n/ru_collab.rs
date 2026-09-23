@@ -346,6 +346,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.returnEdit" => "Вернуться к правке",
         "workspace.backToWorkspace" => "Вернуться в рабочую область →",
         "workspace.failed.note" => "Генерация прервана. Бриф и материалы сохранены — можно повторить.",
+        "home.mode.normal" => "Обычный",
+        "home.mode.professional" => "Профи",
+        "home.nav.create" => "Создание",
+        "home.nav.projects" => "Проекты",
+        "home.nav.settings" => "Настройки",
         _ => return None,
     })
 }

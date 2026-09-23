@@ -316,6 +316,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.returnEdit" => "Zurück zur Bearbeitung",
         "workspace.backToWorkspace" => "Zurück zum Arbeitsbereich →",
         "workspace.failed.note" => "Die Generierung wurde unterbrochen. Brief und Referenzen bleiben erhalten – du kannst es erneut versuchen.",
+        "home.mode.normal" => "Normal",
+        "home.mode.professional" => "Professionell",
+        "home.nav.create" => "Erstellen",
+        "home.nav.projects" => "Werke",
+        "home.nav.settings" => "Einstellungen",
         _ => return None,
     })
 }

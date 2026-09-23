@@ -211,11 +211,16 @@ impl WidgetHostNative {
             0.0
         };
         if (self.keyboard_occlusion - next).abs() <= f32::EPSILON {
+            self.ensure_home_composer_visible(self.last_viewport_w, self.last_viewport_h);
             return self
                 .ensure_focused_agent_settings_visible(self.last_viewport_w, self.last_viewport_h);
         }
         self.keyboard_occlusion = next;
+        // Surfaces the keyboard overlaps read the band from the shared UI
+        // state so paint, hit-test and scroll clamping all agree on it.
+        self.editor_state.editor_ui.keyboard_occlusion = next;
         self.reveal_property_keyboard_owner();
+        self.ensure_home_composer_visible(self.last_viewport_w, self.last_viewport_h);
         self.ensure_focused_agent_settings_visible(self.last_viewport_w, self.last_viewport_h);
         true
     }

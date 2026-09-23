@@ -100,6 +100,9 @@ pub fn paint_touch_icon(
 /// App-bar hit results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MobileAppBarHit {
+    /// Back to Home — the 普通 half of the phone's 普通 / 专业 switch,
+    /// compact phones only.
+    Home,
     /// Layers sheet.
     Layers,
     /// Frame all active-page content in the canvas viewport.
@@ -112,11 +115,13 @@ pub enum MobileAppBarHit {
     Overflow,
 }
 
-/// The compact app bar: layers + title on the left, fit / undo / redo /
-/// overflow on the right.
+/// The compact app bar: home (phones) + layers + title left, fit / undo /
+/// redo / overflow right.
 pub struct MobileAppBar {
     pub title: String,
     pub theme: Theme,
+    /// Phones carry the back-to-Home target in the title band.
+    pub compact: bool,
 }
 
 impl MobileAppBar {
@@ -131,6 +136,7 @@ impl MobileAppBar {
         Self {
             title,
             theme: super::editor_state_ext::theme_for(&state.editor_ui),
+            compact: state.editor_ui.compact_layout(),
         }
     }
 
@@ -148,6 +154,17 @@ impl MobileAppBar {
                 rect.origin.x + 6.0,
                 rect.origin.y + (rect.size.y - TOUCH_TARGET) / 2.0,
             ),
+            size: Point2D::new(TOUCH_TARGET, TOUCH_TARGET),
+        }
+    }
+
+    /// The back-to-Home (普通模式) target: a 44 pt icon button right of
+    /// the layers slot, inside the title band. Compact phones only —
+    /// the Home top bar's 专业 segment is the other half of the switch.
+    pub fn home_rect(rect: Rect) -> Rect {
+        let layers = Self::layers_rect(rect);
+        Rect {
+            origin: Point2D::new(layers.origin.x + TOUCH_TARGET + 4.0, layers.origin.y),
             size: Point2D::new(TOUCH_TARGET, TOUCH_TARGET),
         }
     }
@@ -203,9 +220,24 @@ impl MobileAppBar {
             false,
         );
 
+        // Compact phones: the back-to-Home target rides in the title
+        // band, right of layers.
+        if self.compact {
+            self.paint_icon(
+                cx,
+                Self::home_rect(rect),
+                Icon::from_name("home").unwrap_or(Icon::Home),
+                false,
+            );
+        }
+
         // Center: truncated document title (17pt).
         let layers = Self::layers_rect(rect);
-        let title_x = layers.origin.x + TOUCH_TARGET + 4.0;
+        let title_x = if self.compact {
+            Self::home_rect(rect).origin.x + TOUCH_TARGET + 4.0
+        } else {
+            layers.origin.x + TOUCH_TARGET + 4.0
+        };
         let title_right = Self::fit_rect(rect).origin.x - 4.0;
         let title_area = Rect {
             origin: Point2D::new(title_x, rect.origin.y),
@@ -257,6 +289,9 @@ impl MobileAppBar {
     }
 
     pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<MobileAppBarHit> {
+        if self.compact && Self::home_rect(rect).contains(point) {
+            return Some(MobileAppBarHit::Home);
+        }
         if Self::layers_rect(rect).contains(point) {
             return Some(MobileAppBarHit::Layers);
         }

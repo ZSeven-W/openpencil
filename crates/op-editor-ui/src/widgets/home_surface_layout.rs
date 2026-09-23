@@ -97,6 +97,14 @@ pub struct HomeLayout {
     /// enabled the account gate, so it cannot be hit or painted.
     pub account: Rect,
     pub professional: Rect,
+    /// The 普通 / 专业 segmented control of the compact (phone) top bar:
+    /// the whole control plus its 普通 segment. The 专业 segment reuses
+    /// `professional`. Zero on the desktop composition.
+    pub mode_switch: Rect,
+    pub mode_normal: Rect,
+    /// The compact top bar's settings gear (shares the bottom nav's
+    /// NavSettings hit). Zero on the desktop composition.
+    pub settings: Rect,
     // Page column
     pub welcome: Rect,
     pub welcome_sub: Rect,
@@ -139,6 +147,10 @@ pub struct HomeLayout {
     /// The 接入卡 modal centred over the composer.
     pub connect_card: Rect,
     pub connect_rows: [Rect; 3],
+    /// The compact (phone) bottom nav (创作 / 作品 / 设置): the bar plus
+    /// its three equal items. Zero on the desktop composition.
+    pub bottom_nav: Rect,
+    pub nav_items: [Rect; 3],
 }
 
 impl HomeLayout {
@@ -188,6 +200,54 @@ pub fn layout_for(
 
 #[allow(clippy::too_many_lines)]
 pub fn layout_for_scrolled(
+    viewport_width: f32,
+    viewport_height: f32,
+    task: HomeFamily,
+    scroll_y: f32,
+    model_chip_label_w: f32,
+) -> HomeLayout {
+    layout_for_scrolled_mode(
+        viewport_width,
+        viewport_height,
+        task,
+        scroll_y,
+        model_chip_label_w,
+        false,
+    )
+}
+
+/// The mode-aware core behind [`layout_for_scrolled`]. `compact` is the
+/// host's `EditorUiState::compact_layout()` — the phone (touch +
+/// compact size class) composition; every other caller keeps the
+/// desktop branch and its exact rects.
+pub(crate) fn layout_for_scrolled_mode(
+    viewport_width: f32,
+    viewport_height: f32,
+    task: HomeFamily,
+    scroll_y: f32,
+    model_chip_label_w: f32,
+    compact: bool,
+) -> HomeLayout {
+    if compact {
+        return compact::compact_layout_for_scrolled(
+            viewport_width,
+            viewport_height,
+            task,
+            scroll_y,
+            model_chip_label_w,
+        );
+    }
+    wide_layout_for_scrolled(
+        viewport_width,
+        viewport_height,
+        task,
+        scroll_y,
+        model_chip_label_w,
+    )
+}
+
+#[allow(clippy::too_many_lines)]
+fn wide_layout_for_scrolled(
     viewport_width: f32,
     viewport_height: f32,
     task: HomeFamily,
@@ -598,6 +658,11 @@ pub fn layout_for_scrolled(
         new_canvas,
         connect_card,
         connect_rows,
+        mode_switch: Rect::ZERO,
+        mode_normal: Rect::ZERO,
+        settings: Rect::ZERO,
+        bottom_nav: Rect::ZERO,
+        nav_items: [Rect::ZERO; 3],
     }
 }
 
@@ -609,9 +674,47 @@ pub fn max_scroll_for(
     task: HomeFamily,
     model_chip_label_w: f32,
 ) -> f32 {
+    max_scroll_for_mode(
+        viewport_width,
+        viewport_height,
+        task,
+        model_chip_label_w,
+        false,
+    )
+}
+
+/// The mode-aware core behind [`max_scroll_for`]: the compact page's
+/// last row is the featured example card, and its scrollable height is
+/// bounded by the bottom nav, not the viewport edge.
+pub fn max_scroll_for_mode(
+    viewport_width: f32,
+    viewport_height: f32,
+    task: HomeFamily,
+    model_chip_label_w: f32,
+    compact: bool,
+) -> f32 {
+    if compact {
+        let layout = compact::compact_layout_for_scrolled(
+            viewport_width,
+            viewport_height,
+            task,
+            0.0,
+            model_chip_label_w,
+        );
+        let visible_bottom = viewport_height - compact::BOTTOM_NAV_H;
+        return (layout.preview.origin.y + layout.preview.size.y + compact::PAGE_PAD_BOTTOM
+            - visible_bottom)
+            .max(0.0);
+    }
     let layout = layout_for(viewport_width, viewport_height, task, model_chip_label_w);
     (layout.recent.origin.y + layout.recent.size.y + 20.0 - viewport_height).max(0.0)
 }
+
+/// The phone (compact) branch of the Home geometry — the 2×4 task
+/// grid, the compact composer, the single featured example, the bottom
+/// nav, and the 普通 / 专业 top bar switch.
+#[path = "home_surface_layout_compact.rs"]
+pub(crate) mod compact;
 
 /// The 看看还能做什么 cards (knowledge / tutorial / poster).
 pub const EXPLORE_FAMILIES: [HomeFamily; 3] = [

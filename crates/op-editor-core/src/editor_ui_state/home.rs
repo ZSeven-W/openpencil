@@ -274,6 +274,16 @@ pub enum HomeHit {
     OpenFile,
     /// The top bar's 进入专业画布 button.
     Professional,
+    /// The 普通 half of the compact (phone) top bar's 普通 / 专业
+    /// segmented control. Home IS the normal mode, so the press only
+    /// confirms the already-selected segment.
+    ModeNormal,
+    /// The compact bottom nav's 创作 tab (the Home page itself).
+    NavCreate,
+    /// The compact bottom nav's 作品 tab.
+    NavProjects,
+    /// The compact bottom nav's 设置 tab (and the top bar's gear).
+    NavSettings,
     /// The 接入卡's free-tier row.
     ConnectFreeTier,
     /// The 接入卡's own-API-key row.
@@ -295,6 +305,12 @@ pub struct HomeState {
     pub draft: String,
     pub hover: Option<HomeHit>,
     pub pressed: Option<HomeHit>,
+    /// Whether the composer's input box currently owns the text focus.
+    /// Desktop Home ignores it (the surface IS the composer, so it always
+    /// reports keyboard focus); touch shells raise and dismiss the
+    /// software keyboard off this bit, so it must follow the last pressed
+    /// target instead of staying latched to the surface.
+    pub composer_focused: bool,
     /// Scroll offset for a home stack that is taller than the viewport.
     /// The top bar stays pinned while the page content scrolls under it.
     pub scroll_y: f32,
@@ -334,6 +350,7 @@ impl Default for HomeState {
             draft: String::new(),
             hover: None,
             pressed: None,
+            composer_focused: false,
             scroll_y: 0.0,
             shown_at_ms: 0,
             input: TextInputState::default(),
@@ -354,6 +371,7 @@ impl HomeState {
         self.visible = false;
         self.hover = None;
         self.pressed = None;
+        self.composer_focused = false;
         self.shown_at_ms = 0;
         self.connect_card_open = false;
         self.more_open = false;

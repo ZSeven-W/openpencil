@@ -295,6 +295,16 @@ impl WidgetHostNative {
         let hit = bar.hit_test(bar_rect, point)?;
         let now = self.now_ms;
         match hit {
+            op_editor_ui::widgets::MobileAppBarHit::Home => {
+                // The 普通 half of the phone's mode switch, on the
+                // professional canvas: the SAME EditorState comes back
+                // under the Home takeover — no document swap, so page
+                // selection and undo history ride through unchanged
+                // (the mirror of `HomeHit::Professional`).
+                let ui = &mut self.editor_state.editor_ui;
+                ui.entry_surface = op_editor_core::EntrySurface::Home;
+                ui.home.visible = true;
+            }
             op_editor_ui::widgets::MobileAppBarHit::Layers => {
                 if self.editor_state.editor_ui.expanded_touch_layout() {
                     self.cancel_native_touch_gestures();

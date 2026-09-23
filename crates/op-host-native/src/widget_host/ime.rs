@@ -23,12 +23,20 @@ use op_editor_ui::Rect;
 use super::WidgetHostNative;
 
 impl WidgetHostNative {
-    /// True when a text input currently owns the keyboard — the same
-    /// conditions `apply_text` routes on (keep in sync with
-    /// `keyboard.rs::apply_text`).
+    /// True when a text input currently owns the keyboard — the flag the
+    /// shells poll to raise / dismiss the software keyboard. Text routing
+    /// is a separate concern: `apply_text` / `apply_ime_*` still key off
+    /// `home.visible` so desktop Home keeps typing into the draft no
+    /// matter which target was pressed last.
     pub fn text_input_focus_active(&self) -> bool {
         if self.editor_state.editor_ui.home.visible {
-            return true;
+            // Desktop Home IS the composer: it always owns the keyboard.
+            // Touch shells raise a software keyboard, so it must follow the
+            // composer's own focus or it can never be dismissed.
+            if !self.editor_state.editor_ui.touch_chrome() {
+                return true;
+            }
+            return self.editor_state.editor_ui.home.composer_focused;
         }
         // The save-name dialog opens with its field focused, so the mobile
         // shell raises the software keyboard as soon as it appears.

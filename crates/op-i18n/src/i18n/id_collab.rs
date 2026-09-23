@@ -316,6 +316,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.returnEdit" => "Kembali mengedit",
         "workspace.backToWorkspace" => "Kembali ke ruang kerja →",
         "workspace.failed.note" => "Pembuatan terputus. Brief dan referensimu tetap tersimpan — kamu bisa mencoba lagi.",
+        "home.mode.normal" => "Biasa",
+        "home.mode.professional" => "Pro",
+        "home.nav.create" => "Buat",
+        "home.nav.projects" => "Karya",
+        "home.nav.settings" => "Pengaturan",
         _ => return None,
     })
 }

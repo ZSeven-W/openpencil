@@ -328,6 +328,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.returnEdit" => "Quay lại chỉnh sửa",
         "workspace.backToWorkspace" => "Về vùng làm việc →",
         "workspace.failed.note" => "Quá trình tạo bị gián đoạn. Yêu cầu và tài liệu tham khảo vẫn được giữ — bạn có thể thử lại.",
+        "home.mode.normal" => "Thường",
+        "home.mode.professional" => "Chuyên nghiệp",
+        "home.nav.create" => "Tạo",
+        "home.nav.projects" => "Tác phẩm",
+        "home.nav.settings" => "Cài đặt",
         _ => return None,
     })
 }

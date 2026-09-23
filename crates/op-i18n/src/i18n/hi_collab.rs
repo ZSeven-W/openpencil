@@ -320,6 +320,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.returnEdit" => "एडिट पर लौटें",
         "workspace.backToWorkspace" => "वर्कस्पेस पर लौटें →",
         "workspace.failed.note" => "जनरेशन बाधित हुई। आपका ब्रीफ़ और रेफ़रेंस सुरक्षित हैं — आप फिर कोशिश कर सकते हैं।",
+        "home.mode.normal" => "सामान्य",
+        "home.mode.professional" => "प्रोफेशनल",
+        "home.nav.create" => "बनाएँ",
+        "home.nav.projects" => "कृतियाँ",
+        "home.nav.settings" => "सेटिंग्स",
         _ => return None,
     })
 }

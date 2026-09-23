@@ -26,6 +26,8 @@ pub(in crate::widget_host) enum TouchPanelTarget {
     Layers,
     Slides,
     ChatTranscript,
+    /// The compact (phone) Home page column.
+    Home,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -263,6 +265,39 @@ impl WidgetHostNative {
         true
     }
 
+    /// Arm the one-finger scroll for the compact (phone) Home page
+    /// column. Desktop Home keeps its immediate press — only touch +
+    /// compact defers the tap to release so a drag can scroll the page
+    /// and a stationary tap replays through the ordinary press ladder.
+    /// Overlays Home opens (settings modal, sign-in, model picker) run
+    /// their own tiers BEFORE the Home takeover in the ladder, so any
+    /// point that reaches this arm belongs to the page.
+    pub(in crate::widget_host) fn begin_home_touch_gesture(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> bool {
+        let ui = &self.editor_state.editor_ui;
+        if !ui.touch_chrome() || !ui.compact_layout() || !ui.home.visible {
+            return false;
+        }
+        // The pinned top bar and bottom nav answer taps, not scrolls.
+        if y < op_editor_ui::widgets::home_surface::HOME_TOPBAR_H
+            || y > viewport_height - op_editor_ui::widgets::home_surface::HOME_BOTTOM_NAV_H
+        {
+            return false;
+        }
+        self.arm_touch_panel_gesture_at(
+            Point2D::new(x, y),
+            viewport_width,
+            viewport_height,
+            TouchPanelTarget::Home,
+        );
+        true
+    }
+
     /// Arm after the Slides sub-surface has declined and before ordinary
     /// LayerPanel code can seed its mouse reorder candidate.
     pub(in crate::widget_host) fn begin_layers_touch_gesture(&mut self, ctx: &PressCtx) -> bool {
@@ -441,6 +476,15 @@ impl WidgetHostNative {
             // delta makes the conversation track the finger (see the shared
             // negation note above).
             TouchPanelTarget::ChatTranscript => self.try_scroll_chat_transcript(
+                gesture.start.x,
+                gesture.start.y,
+                scroll_dy,
+                gesture.viewport_w,
+                gesture.viewport_h,
+            ),
+            // The compact Home page column scrolls under one finger;
+            // the pinned top bar and bottom nav answer taps instead.
+            TouchPanelTarget::Home => self.try_scroll_home(
                 gesture.start.x,
                 gesture.start.y,
                 scroll_dy,
@@ -675,6 +719,7 @@ impl WidgetHostNative {
         }
         match target {
             TouchPanelTarget::Canvas => !self.mobile_sheet_is_modal(),
+            TouchPanelTarget::Home => ui.home.visible && ui.compact_layout(),
             TouchPanelTarget::AssetCenter => ui.scene_template_center.open,
             TouchPanelTarget::Property => {
                 (ui.mobile_sheet == Some(MobileSheetKind::Properties)

@@ -70,6 +70,8 @@ mod editor_image_import;
 mod editor_image_search;
 #[cfg(feature = "editor")]
 mod editor_ime;
+#[cfg(all(feature = "editor", test))]
+mod editor_ime_home_focus_tests;
 #[cfg(feature = "editor")]
 mod editor_model_discovery;
 #[cfg(feature = "editor")]
