@@ -350,9 +350,13 @@ impl EditorUiState {
     /// is a launcher: type into it, or open it, and the rail switches to
     /// the Agent tab where the conversation actually happens.
     pub fn chat_composer_only(&self) -> bool {
-        if self.touch_chrome() || self.workspace.visible || self.preview.mode {
+        if self.touch_chrome() || self.preview.mode {
             return false;
         }
+        // A workspace whose dock is SHUT used to fall through to the
+        // floating panel — the one desktop state that still had two
+        // homes for the conversation. It gets the composer card like
+        // every other unpinned desktop state.
         !self.chat_pinned()
     }
 

@@ -287,3 +287,26 @@ fn the_account_menu_anchors_to_homes_own_avatar() {
     assert!(home.origin.y < 60.0, "in the top bar: {home:?}");
     assert!(home.origin.x < pro.origin.x, "left of the pro avatar");
 }
+
+/// The picker's own footer action must reach the agent settings. It sat
+/// inert because the press path asked only "which model row is this",
+/// and the footer answers that question with "chrome".
+#[test]
+fn the_home_picker_footer_opens_agent_settings_on_the_agents_tab() {
+    use op_editor_ui::widgets::ai_chat_model_picker::MODEL_FOOTER_H;
+    let mut host = host_with_usable_agent();
+    let chip = chip_center(&host);
+    assert!(host.apply_press(chip.x, chip.y, W, H));
+    let card = host.home_model_picker_geometry(W, H).expect("picker open");
+    let footer = Point2D::new(
+        card.origin.x + 40.0,
+        card.origin.y + card.size.y - MODEL_FOOTER_H / 2.0,
+    );
+    assert!(host.apply_press(footer.x, footer.y, W, H));
+    assert!(host.editor_state().editor_ui.agent_settings_open);
+    assert_eq!(
+        host.editor_state().editor_ui.agent_settings.tab,
+        op_editor_core::AgentSettingsTab::Agents
+    );
+    assert!(!host.editor_state().editor_ui.chat_model_picker.open);
+}

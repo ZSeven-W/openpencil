@@ -418,10 +418,22 @@ impl<'a> AIChatPlaceholder<'a> {
     ///
     /// [`max_input_lines`]: crate::widgets::ai_chat_input_text::max_input_lines
     pub(crate) fn input_area_height_for_input_width(&self, input_w: f32, panel_h: f32) -> f32 {
+        // The panel-share rule exists to keep a dragged-down panel's
+        // TRANSCRIPT readable. The composer-only card has no transcript
+        // to protect, and measuring its growth against its own height is
+        // circular: it settled at one visible line, so a long prompt
+        // pasted into it showed a single row. Measure it against a fixed
+        // budget instead, which lets it grow to `INPUT_MAX_LINES` and
+        // stop there.
+        let budget_h = if self.composer_only {
+            COMPOSER_ONLY_PROBE_H
+        } else {
+            panel_h
+        };
         let lines = crate::widgets::ai_chat_input_text::visible_input_line_count(
             self.state.input.text(),
             input_w,
-            panel_h,
+            budget_h,
         );
         crate::widgets::ai_chat_input_text::input_area_height(lines)
     }
@@ -570,15 +582,16 @@ impl<'a> AIChatPlaceholder<'a> {
     /// focus. Unfocused it is the box alone (the design brief calls for
     /// nothing but the input until you engage with it).
     pub fn composer_only_height(&self, width: f32) -> f32 {
-        let composer = self.input_height_for_width(width, COMPOSER_ONLY_PROBE_H);
         let header = if self.state.focused {
             COMPOSER_HEADER_HEIGHT
         } else {
             0.0
         };
-        // No extra padding: the composer block already carries its own,
-        // and a second helping left a dead band above the placeholder.
-        composer + header
+        // One pass is enough now that the composer measures itself
+        // against a fixed budget rather than the card it is sizing:
+        // paint asking again with the card's own height gets the same
+        // answer, so there is no dead band to iterate away.
+        self.input_height_for_width(width, COMPOSER_ONLY_PROBE_H) + header
     }
 
     pub fn input_rect(&self, rect: Rect) -> Rect {

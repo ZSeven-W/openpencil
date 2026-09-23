@@ -216,6 +216,14 @@ pub fn apply_chat_hit(state: &mut EditorState, hit: AIChatHit, now_ms: u64) -> C
             state.editor_ui.chat_model_picker_input.touch(now_ms);
             ChatClickStep::Dirty
         }
+        AIChatHit::ConnectMoreModels => {
+            // Same destination Home's picker sends it to: the agent
+            // settings, on the tab that lists agents.
+            state.editor_ui.close_chat_model_picker();
+            state.editor_ui.agent_settings_open = true;
+            state.editor_ui.agent_settings.tab = op_editor_core::AgentSettingsTab::Agents;
+            ChatClickStep::Dirty
+        }
         AIChatHit::ClearModelSearch => {
             state.editor_ui.chat_model_picker_input.set_text("");
             state.editor_ui.chat_model_picker.scroll.offset = 0.0;

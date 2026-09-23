@@ -253,6 +253,17 @@ impl WidgetHostNative {
             self.mark_dirty();
             return Some(true);
         }
+        // The footer action, before the row question: `model_picker_hit`
+        // folds every piece of chrome into `Inside`, so asking it alone
+        // left the blue 接入更多模型 row painted and inert.
+        if op_editor_ui::widgets::ai_chat_model_picker::footer_action_hit(card, point) {
+            let ui = &mut self.editor_state.editor_ui;
+            ui.close_chat_model_picker();
+            ui.agent_settings_open = true;
+            ui.agent_settings.tab = op_editor_core::AgentSettingsTab::Agents;
+            self.mark_dirty();
+            return Some(true);
+        }
         let models = self.editor_state.chat.available_models.clone();
         let hit = model_picker_hit(
             &self.editor_state.editor_ui.chat_model_picker,

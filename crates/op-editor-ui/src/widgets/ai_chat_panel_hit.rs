@@ -31,6 +31,9 @@ impl<'a> AIChatPlaceholder<'a> {
         ) {
             return Some(AIChatHit::ClearModelSearch);
         }
+        if crate::widgets::ai_chat_model_picker::footer_action_hit(picker, point) {
+            return Some(AIChatHit::ConnectMoreModels);
+        }
         match crate::widgets::ai_chat_model_picker::model_picker_hit(
             self.model_picker,
             picker,

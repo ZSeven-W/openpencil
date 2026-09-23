@@ -43,6 +43,10 @@ pub enum AIChatHit {
     FocusModelSearch,
     /// Click on the clear affordance inside the model-picker search.
     ClearModelSearch,
+    /// The model picker's 接入更多模型 footer action. Chrome as far as
+    /// the row hit-test is concerned, so it needs its own variant or it
+    /// paints as a blue action and does nothing.
+    ConnectMoreModels,
     /// Click on the thinking-mode chip — host cycles
     /// `ChatState::thinking_mode`.
     CycleThinking,

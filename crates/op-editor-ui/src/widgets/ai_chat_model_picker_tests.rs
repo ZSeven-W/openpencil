@@ -655,3 +655,27 @@ fn footer_row_is_chrome_never_a_model_row() {
         SelectHit::Inside
     );
 }
+
+/// The footer is chrome to `model_picker_hit`, which answers only the
+/// "which model row" question. Asking it alone is how the blue
+/// 接入更多模型 action ended up painted and inert.
+#[test]
+fn the_footer_action_has_its_own_hit_because_the_row_test_calls_it_chrome() {
+    use crate::widgets::ai_chat_model_picker::{footer_action_hit, MODEL_FOOTER_H};
+    let card = Rect::xywh(40.0, 60.0, 300.0, 240.0);
+    let inside = Point2D::new(
+        card.origin.x + 30.0,
+        card.origin.y + card.size.y - MODEL_FOOTER_H / 2.0,
+    );
+    assert!(footer_action_hit(card, inside));
+    // A point in the list band above it is not the footer.
+    assert!(!footer_action_hit(
+        card,
+        Point2D::new(card.origin.x + 30.0, card.origin.y + 80.0)
+    ));
+    // Nor is anything past the card's bottom edge.
+    assert!(!footer_action_hit(
+        card,
+        Point2D::new(card.origin.x + 30.0, card.origin.y + card.size.y + 4.0)
+    ));
+}

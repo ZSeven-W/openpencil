@@ -270,6 +270,24 @@ pub fn model_picker_hit(
     hit
 }
 
+/// The fixed footer action row at the card's bottom edge.
+fn footer_rect(rect: Rect) -> Rect {
+    Rect {
+        origin: Point2D::new(rect.origin.x, rect.origin.y + rect.size.y - MODEL_FOOTER_H),
+        size: Point2D::new(rect.size.x, MODEL_FOOTER_H.min(rect.size.y)),
+    }
+}
+
+/// Whether `point` lands on the picker's 接入更多模型 footer action.
+///
+/// Separate from [`model_picker_hit`], which answers "which MODEL row"
+/// and folds every piece of chrome into `Inside`. The footer is chrome
+/// by that reckoning, so a caller that only asked the row question
+/// painted a blue action that did nothing when clicked.
+pub fn footer_action_hit(rect: Rect, point: Point2D) -> bool {
+    footer_rect(rect).contains(point)
+}
+
 pub fn search_clear_hit(rect: Rect, point: Point2D, search: &str) -> bool {
     !search.is_empty() && search_clear_rect(rect).contains(point)
 }
