@@ -323,6 +323,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.create" => "สร้าง",
         "home.nav.projects" => "ผลงาน",
         "home.nav.settings" => "การตั้งค่า",
+        "collab.chat.imageGenName" => "การสร้างภาพด้วย AI",
+        "collab.chat.imageGenConfigure" => "ตั้งค่าโมเดลสร้างภาพ",
         _ => return None,
     })
 }

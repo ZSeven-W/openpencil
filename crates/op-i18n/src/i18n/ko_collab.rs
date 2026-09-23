@@ -337,6 +337,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.create" => "창작",
         "home.nav.projects" => "작품",
         "home.nav.settings" => "설정",
+        "collab.chat.imageGenName" => "AI 이미지 생성",
+        "collab.chat.imageGenConfigure" => "이미지 생성 모델 설정하기",
         _ => return None,
     })
 }

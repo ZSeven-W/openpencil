@@ -731,3 +731,59 @@ fn images_register_link_hit_test_returns_open_register_link() {
         "clicking the Register-at-Openverse link should map to OpenRegisterLink"
     );
 }
+
+#[test]
+fn workbench_profile_test_press_requires_base_url_and_queues_the_probe() {
+    use crate::widgets::agent_settings_panel::AgentSettingsHit;
+    use crate::widgets::agent_settings_press_flow::apply_agent_settings_hit;
+    use op_editor_core::host_settings_commit::SettingsCommitScope;
+
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::Images;
+    state.editor_ui.agent_settings.add_image_gen_profile();
+    let profile = &mut state.editor_ui.agent_settings.image_gen_profiles[0];
+    profile.provider = op_editor_core::agent_settings::ImageGenProvider::Workbench;
+    profile.api_key = "wb-key".into();
+    profile.model = "Qwen-Image-2.1".into();
+
+    // Without base_url the Workbench profile has no endpoint: the press is
+    // a config fault — Invalid, and no probe is queued.
+    apply_agent_settings_hit(
+        &mut state,
+        AgentSettingsHit::TestGenConfig(0),
+        SettingsCommitScope::Operator,
+        0,
+    );
+    assert_eq!(
+        state.editor_ui.agent_settings.image_gen_profiles[0].test_status,
+        op_editor_core::agent_settings::ImageTestStatus::Invalid
+    );
+    assert!(state
+        .editor_ui
+        .agent_settings
+        .pending_image_gen_test
+        .is_none());
+
+    // With base_url the press marks Testing and raises the host seam.
+    state.editor_ui.agent_settings.image_gen_profiles[0].base_url =
+        Some("http://127.0.0.1:9".into());
+    apply_agent_settings_hit(
+        &mut state,
+        AgentSettingsHit::TestGenConfig(0),
+        SettingsCommitScope::Operator,
+        0,
+    );
+    assert_eq!(
+        state.editor_ui.agent_settings.image_gen_profiles[0].test_status,
+        op_editor_core::agent_settings::ImageTestStatus::Testing
+    );
+    assert_eq!(
+        state
+            .editor_ui
+            .agent_settings
+            .pending_image_gen_test
+            .as_deref(),
+        Some("igp-1"),
+        "the Workbench test press must queue the host probe"
+    );
+}

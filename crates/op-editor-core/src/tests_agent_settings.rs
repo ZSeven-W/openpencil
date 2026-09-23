@@ -336,3 +336,61 @@ fn add_acp_agent_assigns_id_and_defaults_to_local_config() {
     assert!(s.acp_agents[0].enabled);
     assert!(!s.acp_agents[0].connected);
 }
+
+#[test]
+fn image_gen_toggle_defaults_off() {
+    let s = AgentSettings::default();
+    assert!(!s.image_gen_enabled, "the toggle must default to off");
+    assert!(!s.image_gen_active());
+}
+
+#[test]
+fn image_gen_active_is_the_full_truth_table() {
+    fn settings(enabled: bool, configured: bool) -> AgentSettings {
+        let mut s = AgentSettings {
+            image_gen_enabled: enabled,
+            ..AgentSettings::default()
+        };
+        if configured {
+            s.add_image_gen_profile();
+            s.image_gen_profiles[0].api_key = "sk-live".into();
+        }
+        s
+    }
+    // (enabled, available) → active
+    assert!(settings(true, true).image_gen_active());
+    assert!(!settings(true, false).image_gen_active());
+    assert!(!settings(false, true).image_gen_active());
+    assert!(!settings(false, false).image_gen_active());
+}
+
+#[test]
+fn image_gen_available_mirrors_image_generation_configured() {
+    let mut s = AgentSettings::default();
+    assert!(!s.image_gen_available());
+    s.add_image_gen_profile();
+    // A profile without an API key is not a usable configuration.
+    assert!(!s.image_gen_available());
+    s.image_gen_profiles[0].api_key = "sk-live".into();
+    assert!(s.image_gen_available());
+    assert_eq!(
+        s.image_gen_available(),
+        s.image_generation_configured(),
+        "image_gen_available must stay the configured predicate"
+    );
+}
+
+#[test]
+fn workbench_profiles_need_base_url_to_count_as_configured() {
+    let mut s = AgentSettings::default();
+    s.add_image_gen_profile();
+    s.image_gen_profiles[0].provider = ImageGenProvider::Workbench;
+    s.image_gen_profiles[0].api_key = "wb-key".into();
+    s.image_gen_profiles[0].base_url = None;
+    assert!(
+        !s.image_generation_configured(),
+        "a Workbench profile without an endpoint must not count as configured"
+    );
+    s.image_gen_profiles[0].base_url = Some("http://10.0.0.9".into());
+    assert!(s.image_generation_configured());
+}

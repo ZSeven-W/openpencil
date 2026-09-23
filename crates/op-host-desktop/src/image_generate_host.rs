@@ -12,7 +12,8 @@ use std::time::Duration;
 
 use op_editor_core::agent_settings::{ImageGenProfile, ImageGenProvider};
 use op_host_services::web_image_generate::{
-    generate_atlas, generate_gemini, generate_openai, generate_replicate, ImageGenerateError,
+    generate_atlas, generate_gemini, generate_openai, generate_replicate, generate_workbench,
+    ImageGenerateError, WorkbenchPolling,
 };
 
 use crate::image_search_session::fetch_image_data_url;
@@ -47,10 +48,21 @@ async fn run_generate(
     width: Option<f64>,
     height: Option<f64>,
 ) -> Result<String, ImageGenerateError> {
-    let client = reqwest::Client::builder()
+    let mut builder = reqwest::Client::builder()
         .use_rustls_tls()
         .timeout(Duration::from_secs(120))
-        .user_agent(concat!("openpencil-desktop/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("openpencil-desktop/", env!("CARGO_PKG_VERSION")));
+    // A self-hosted workbench on a LAN/tailnet must not go through the
+    // system proxy the GUI grafts from the login shell (it answers 502).
+    if profile.provider == ImageGenProvider::Workbench
+        && profile
+            .base_url
+            .as_deref()
+            .is_some_and(op_host_services::web_image_generate::bypasses_proxy)
+    {
+        builder = builder.no_proxy();
+    }
+    let client = builder
         .build()
         .map_err(|e| ImageGenerateError::ClientBuild {
             message: e.to_string(),
@@ -66,6 +78,17 @@ async fn run_generate(
             generate_replicate(&client, prompt, profile, width, height).await?
         }
         ImageGenProvider::Atlas => generate_atlas(&client, prompt, profile, width, height).await?,
+        ImageGenProvider::Workbench => {
+            generate_workbench(
+                &client,
+                prompt,
+                profile,
+                width,
+                height,
+                WorkbenchPolling::default(),
+            )
+            .await?
+        }
     };
     if url.starts_with("data:") {
         // Inline base64 (Gemini / OpenAI b64_json) → shrink an oversized

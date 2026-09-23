@@ -337,15 +337,17 @@ pub enum ImageGenProvider {
     Replicate,
     Atlas,
     Custom,
+    Workbench,
 }
 
 impl ImageGenProvider {
-    pub const ALL: [ImageGenProvider; 5] = [
+    pub const ALL: [ImageGenProvider; 6] = [
         ImageGenProvider::OpenAi,
         ImageGenProvider::Gemini,
         ImageGenProvider::Replicate,
         ImageGenProvider::Atlas,
         ImageGenProvider::Custom,
+        ImageGenProvider::Workbench,
     ];
 
     pub fn label(self) -> &'static str {
@@ -355,6 +357,7 @@ impl ImageGenProvider {
             ImageGenProvider::Replicate => "Replicate",
             ImageGenProvider::Atlas => "Atlas Cloud",
             ImageGenProvider::Custom => "Custom",
+            ImageGenProvider::Workbench => "Workbench (self-hosted)",
         }
     }
 
@@ -365,6 +368,7 @@ impl ImageGenProvider {
             ImageGenProvider::Replicate => "black-forest-labs/flux-1.1-pro",
             ImageGenProvider::Atlas => "google/nano-banana-2-lite/text-to-image",
             ImageGenProvider::Custom => "model-name",
+            ImageGenProvider::Workbench => "Qwen-Image-2.1",
         }
     }
 
@@ -384,6 +388,22 @@ pub struct ImageGenProfile {
     pub model: String,
     pub base_url: Option<String>,
     pub test_status: ImageTestStatus,
+}
+
+impl ImageGenProfile {
+    /// Whether this profile can actually serve a generation request. Every
+    /// provider dials a preset host, so only the API key is mandatory —
+    /// except Workbench, whose submit/poll endpoint IS the user's own
+    /// machine and therefore a required field.
+    pub fn usable(&self) -> bool {
+        let has_key = !self.api_key.trim().is_empty();
+        let needs_endpoint = matches!(self.provider, ImageGenProvider::Workbench);
+        let has_endpoint = self
+            .base_url
+            .as_deref()
+            .is_some_and(|base| !base.trim().is_empty());
+        has_key && (!needs_endpoint || has_endpoint)
+    }
 }
 
 /// Openverse credential-registration help page opened from the Images

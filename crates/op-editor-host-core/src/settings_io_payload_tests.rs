@@ -542,3 +542,38 @@ fn explicit_saved_builtin_preset_is_preserved_during_load() {
         BuiltinAgentPresetKey::Doubao
     );
 }
+
+#[test]
+fn image_gen_enabled_round_trips_and_fingerprint_tracks_it() {
+    let mut src = EditorState::new();
+    assert!(
+        !src.editor_ui.agent_settings.image_gen_enabled,
+        "the persisted default is off"
+    );
+    src.editor_ui.agent_settings.add_image_gen_profile();
+    src.editor_ui.agent_settings.image_gen_profiles[0].api_key = "image-key".into();
+    src.editor_ui.agent_settings.image_gen_enabled = true;
+
+    let json = serde_json::to_string(&to_payload(&src)).unwrap();
+    assert!(json.contains("\"image_gen_enabled\""));
+    let payload: SettingsPayload = serde_json::from_str(&json).unwrap();
+    let mut dst = EditorState::new();
+    apply_payload(&mut dst, payload);
+    assert!(dst.editor_ui.agent_settings.image_gen_enabled);
+
+    // A settings file written before the field existed must load as off.
+    let legacy = serde_json::from_str::<SettingsPayload>(
+        &serde_json::to_string(&to_payload(&EditorState::new()))
+            .unwrap()
+            .replace(",\"image_gen_enabled\":false", ""),
+    )
+    .unwrap();
+    let mut older = EditorState::new();
+    apply_payload(&mut older, legacy);
+    assert!(!older.editor_ui.agent_settings.image_gen_enabled);
+
+    // Toggling the flag must trip the fingerprint so the file re-saves.
+    let before = fingerprint(&dst);
+    dst.editor_ui.agent_settings.image_gen_enabled = false;
+    assert_ne!(before, fingerprint(&dst));
+}

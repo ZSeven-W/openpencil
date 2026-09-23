@@ -13,6 +13,8 @@
 // `ai_chat_panel.rs` declares this module with an explicit `#[path]`, so
 // the child modules need explicit paths too (rustc otherwise resolves
 // them against `ai_chat_panel/` instead of `ai_chat_panel/tests/`).
+#[path = "tests/footer_image_gen.rs"]
+mod footer_image_gen;
 #[path = "tests/footer_layout.rs"]
 mod footer_layout;
 #[path = "tests/hit_test.rs"]

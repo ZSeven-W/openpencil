@@ -133,6 +133,7 @@ fn bottom_toolbar_min_width_rects_do_not_overlap() {
     let ordered = [
         footer.model,
         footer.prompt_center,
+        footer.image_gen,
         footer.speed,
         footer.attach,
         footer.send,
@@ -429,6 +430,10 @@ fn thinking_toggle_is_dropped_before_the_model_pill_becomes_unreadable() {
         smallest.thinking.size.x > 0.0,
         "the toggle must survive down to the minimum panel width"
     );
+    assert_eq!(
+        smallest.image_gen.size.x, 0.0,
+        "one 24 px slot had to go at the minimum width — the image-gen toggle pays first"
+    );
 
     let narrow = Rect::xywh(0.0, 0.0, 240.0, AI_CHAT_HEIGHT);
     let dropped = footer_at(240.0);
@@ -444,12 +449,18 @@ fn thinking_toggle_is_dropped_before_the_model_pill_becomes_unreadable() {
         Some(AIChatHit::CycleThinking),
         "a dropped slot must not be clickable"
     );
-    // The row closes the hole rather than leaving a 24 px gap in it…
+    // The row closes the hole rather than leaving gaps in it: at this
+    // width BOTH toggles have dropped (image-gen pays first), so the
+    // library button sits against the ⚡ chip again…
+    assert_eq!(
+        dropped.image_gen.size.x, 0.0,
+        "the image-gen toggle is the first control to drop"
+    );
     assert!(
         (dropped.prompt_center.origin.x + dropped.prompt_center.size.x - dropped.speed.origin.x)
             .abs()
             <= 4.01,
-        "library button must sit against the ⚡ chip once the toggle is gone"
+        "library button must sit against the ⚡ chip once both toggles are gone"
     );
     // …and the width it gave up went back to the model pill.
     assert!(

@@ -251,7 +251,7 @@ fn placeholders(value: &str) -> BTreeSet<String> {
 fn every_locale_has_exactly_the_english_key_set() {
     let all_tables = tables();
     let expected = table_keys(all_tables[0].0, all_tables[0].1, all_tables[0].2);
-    assert_eq!(expected.len(), 1857, "update the intentional catalog size");
+    assert_eq!(expected.len(), 1859, "update the intentional catalog size");
 
     for (name, main, git, lookup) in all_tables {
         let actual = table_keys(name, main, git);
@@ -352,7 +352,7 @@ fn collaboration_catalog_is_complete_in_all_fifteen_locales() {
         .collect();
     assert_eq!(
         keys.len(),
-        114,
+        116,
         "update the intentional collaboration key set"
     );
     for key in keys {

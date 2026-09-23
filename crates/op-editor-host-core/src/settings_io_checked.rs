@@ -27,6 +27,7 @@ pub(super) fn validate_payload_fields(raw: &serde_json::Value) -> Result<()> {
             "acp_agents",
             "image_gen_profiles",
             "active_image_gen_profile_id",
+            "image_gen_enabled",
             "recent_files",
             "preferred_agent_team_size",
             "entry_surface",

@@ -43,6 +43,11 @@ fn a_repeat_query_gets_the_same_photo_back_not_a_dedup_downgrade() {
         1,
         Arc::new(NoJudge),
         false,
+        format!(
+            "search|{}|{:?}",
+            "kitten photo".to_lowercase(),
+            Option::<op_image_enrich::ImageAspectRatio>::None
+        ),
     );
     let answer = job
         .rx
@@ -50,7 +55,7 @@ fn a_repeat_query_gets_the_same_photo_back_not_a_dedup_downgrade() {
         .expect("the memo answers without touching the network");
     assert_eq!(
         answer,
-        Some(good),
+        JobOutcome::Search(Some(good)),
         "the rebuilt card gets ITS photo back, not the next-best junk result"
     );
 }
@@ -89,6 +94,11 @@ fn a_pending_search_intent_is_singleflight() {
         8,
         Arc::new(NoJudge),
         false,
+        format!(
+            "search|{}|{:?}",
+            "bali, indonesia",
+            Option::<op_image_enrich::ImageAspectRatio>::None
+        ),
     );
 
     let waiters = match memo.lock().unwrap().remove(&key) {
@@ -97,11 +107,13 @@ fn a_pending_search_intent_is_singleflight() {
     };
     assert_eq!(waiters.len(), 1, "no second fetch thread was created");
     waiters[0]
-        .send(Some("https://example.org/bali.jpg".into()))
+        .send(JobOutcome::Search(Some(
+            "https://example.org/bali.jpg".into(),
+        )))
         .unwrap();
     assert_eq!(
         job.rx.recv_timeout(Duration::from_secs(1)).unwrap(),
-        Some("https://example.org/bali.jpg".into())
+        JobOutcome::Search(Some("https://example.org/bali.jpg".into()))
     );
 }
 
@@ -151,7 +163,7 @@ fn stale_pre_reset_request_cannot_publish_into_same_key_in_new_session() {
     ));
     assert_eq!(
         new_rx.recv_timeout(Duration::from_secs(1)).unwrap(),
-        Some("https://new.example/bali.jpg".into())
+        JobOutcome::Search(Some("https://new.example/bali.jpg".into()))
     );
 }
 

@@ -55,6 +55,9 @@ pub enum ImageGenerateError {
     MissingApiKey,
     /// The profile carries no non-blank model id.
     MissingModel,
+    /// The profile's provider requires an explicit endpoint and carries
+    /// none (Workbench: submit/poll against the user's own machine).
+    MissingBaseUrl,
 
     // --- endpoint screening (SSRF guards) ---
     /// The browser-supplied `base_url` failed URL-shape screening. The
@@ -124,6 +127,19 @@ pub enum ImageGenerateError {
     },
     /// A provider poll loop hit its wall-clock deadline.
     PredictionTimeout { provider: &'static str },
+    /// The provider is temporarily occupied by other work (Workbench's
+    /// single GPU serving the LLM: `qwen_mode_active` / HTTP 409).
+    /// Transient by contract — a caller may fall back or retry later.
+    Busy { provider: &'static str },
+    /// A submit/poll job hit its configurable wall-clock budget. Transient.
+    Timeout { provider: &'static str },
+    /// The provider accepted the job and then reported a terminal failure
+    /// (`status: "failed"` / `"canceled"`). Transient workload failure,
+    /// not a configuration fault.
+    Upstream {
+        provider: &'static str,
+        message: String,
+    },
     /// The generated image's remote url could not be fetched into a
     /// `data:` URL.
     DownloadFailed,
@@ -138,6 +154,7 @@ impl fmt::Display for ImageGenerateError {
             ImageGenerateError::UnknownProvider => f.write_str("unknown image provider"),
             ImageGenerateError::MissingApiKey => f.write_str("missing api key"),
             ImageGenerateError::MissingModel => f.write_str("missing model"),
+            ImageGenerateError::MissingBaseUrl => f.write_str("missing base url"),
             ImageGenerateError::EndpointNotAllowed => {
                 f.write_str("provider endpoint is not allowed")
             }
@@ -190,6 +207,15 @@ impl fmt::Display for ImageGenerateError {
             ImageGenerateError::PredictionTimeout { provider } => {
                 write!(f, "{provider} prediction timed out after 120 seconds")
             }
+            ImageGenerateError::Busy { provider } => {
+                write!(f, "{provider} is busy with another job")
+            }
+            ImageGenerateError::Timeout { provider } => {
+                write!(f, "{provider} generation timed out")
+            }
+            ImageGenerateError::Upstream { provider, message } => {
+                write!(f, "{provider} job failed: {message}")
+            }
             ImageGenerateError::DownloadFailed => {
                 f.write_str("generated image could not be downloaded")
             }
@@ -198,6 +224,38 @@ impl fmt::Display for ImageGenerateError {
 }
 
 impl std::error::Error for ImageGenerateError {}
+
+impl ImageGenerateError {
+    /// Whether this failure happened AT RUNTIME on a generation that was
+    /// already attempted — the transient classes (busy / timeout /
+    /// upstream job failure / network) for which silently degrading to a
+    /// stock-search image is the agreed fallback. Configuration faults
+    /// (`NotConfigured`, missing key/model/base url, endpoint screening)
+    /// deliberately answer `false`: swapping in a library photo would
+    /// mask a setup error the user needs to see.
+    pub fn is_degradable(&self) -> bool {
+        matches!(
+            self,
+            ImageGenerateError::Busy { .. }
+                | ImageGenerateError::Timeout { .. }
+                | ImageGenerateError::Upstream { .. }
+                | ImageGenerateError::Request { .. }
+                | ImageGenerateError::PollRequest { .. }
+                | ImageGenerateError::DownloadFailed
+                | ImageGenerateError::PredictionTimeout { .. }
+                | ImageGenerateError::PredictionFailed { .. }
+                // An attempted call the provider answered badly (4xx/5xx,
+                // an unreadable body, a lost job id) is a runtime failure of
+                // that attempt, not a missing configuration: the slot still
+                // deserves a stock photo rather than a blank placeholder.
+                | ImageGenerateError::Provider(_)
+                | ImageGenerateError::PollStatus { .. }
+                | ImageGenerateError::ResponseParse { .. }
+                | ImageGenerateError::PollParse { .. }
+                | ImageGenerateError::MissingPredictionId { .. }
+        )
+    }
+}
 
 /// Single-table adaptation of the connect-time endpoint guard, so the dial
 /// sites collapse to `?`. Both `Display` impls render the same sentence, so

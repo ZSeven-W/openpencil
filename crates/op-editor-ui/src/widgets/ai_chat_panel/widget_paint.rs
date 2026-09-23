@@ -371,6 +371,29 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
             );
         }
 
+        // Image-gen toggle tooltip — same contract as the thinking toggle's:
+        // a bare glyph whose meaning the tooltip spells out. Unconfigured
+        // points at setup; configured names the control.
+        if self.footer_hover == Some(op_editor_core::ChatFooterButton::ImageGen)
+            && footer.image_gen.size.x > 0.0
+        {
+            let key = if self.image_gen_available {
+                "collab.chat.imageGenName"
+            } else {
+                "collab.chat.imageGenConfigure"
+            };
+            let label = op_i18n::translate(self.locale, key);
+            crate::widgets::tooltip::paint_tooltip(
+                cx,
+                &self.theme,
+                footer.image_gen,
+                label,
+                None,
+                crate::widgets::tooltip::TooltipPlacement::Above,
+                Some((rect.origin.x + 4.0, rect.origin.x + rect.size.x - 4.0)),
+            );
+        }
+
         // Pinned-style detail card — last of all, so it hangs over the input
         // block, and anchored ABOVE its chip so the ✕ on that row stays both
         // visible and clickable. Present only once the dwell has elapsed; the

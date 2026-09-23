@@ -31,6 +31,10 @@ pub use error::ImageGenerateError;
 mod atlas;
 pub use atlas::generate_atlas;
 
+#[path = "web_image_generate_workbench.rs"]
+mod workbench;
+pub use workbench::{bypasses_proxy, generate_workbench, test_workbench, WorkbenchPolling};
+
 /// Truncation cap for surfaced provider errors (TS parity).
 const ERROR_MESSAGE_CAP: usize = 200;
 
@@ -42,7 +46,7 @@ const MAX_PROVIDER_BODY_BYTES: usize = 16 * 1024 * 1024;
 
 /// Read a provider response's status + body under
 /// [`MAX_PROVIDER_BODY_BYTES`] (streaming abort, not read-then-check).
-async fn read_provider_body(
+pub(crate) async fn read_provider_body(
     provider: &'static str,
     resp: reqwest::Response,
 ) -> Result<(reqwest::StatusCode, String), ImageGenerateError> {
@@ -111,6 +115,7 @@ fn parse_profile(
         "replicate" => ImageGenProvider::Replicate,
         "atlas" => ImageGenProvider::Atlas,
         "custom" => ImageGenProvider::Custom,
+        "workbench" => ImageGenProvider::Workbench,
         _ => return Err(ImageGenerateError::UnknownProvider),
     };
     let api_key = profile
@@ -150,7 +155,7 @@ fn daemon_active_profile(state: &op_editor_core::EditorState) -> Option<ImageGen
         .iter()
         .find(|p| Some(&p.id) == settings.active_image_gen_profile_id.as_ref())
         .or_else(|| settings.image_gen_profiles.first())
-        .filter(|p| !p.api_key.trim().is_empty())
+        .filter(|p| p.usable())
         .cloned()
 }
 
@@ -225,6 +230,17 @@ async fn run_generate(request: &WebImageGenerateRequest) -> Result<String, Image
                 profile,
                 request.width,
                 request.height,
+            )
+            .await?
+        }
+        ImageGenProvider::Workbench => {
+            generate_workbench(
+                &client,
+                &request.prompt,
+                profile,
+                request.width,
+                request.height,
+                WorkbenchPolling::default(),
             )
             .await?
         }
@@ -318,7 +334,7 @@ fn gemini_aspect_ratio(width: Option<f64>, height: Option<f64>) -> Option<&'stat
     })
 }
 
-fn provider_error(provider: &str, status: reqwest::StatusCode, body: &str) -> String {
+pub(crate) fn provider_error(provider: &str, status: reqwest::StatusCode, body: &str) -> String {
     // TS: prefer the provider's error.message, else status + slice.
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(body) {
         if let Some(message) = json

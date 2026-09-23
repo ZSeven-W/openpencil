@@ -221,6 +221,10 @@ fn enrich_document(request: &EnrichRequest) -> Result<EnrichSummary, EnrichError
     op_host_services::settings_io::load(&mut state);
     state.editor_ui.agent_settings.image_gen_profiles.clear();
     state.editor_ui.agent_settings.active_image_gen_profile_id = None;
+    // Opt-in generation for batch artifacts: the exact product state of
+    // "image-gen toggle on + one Workbench profile", assembled from the
+    // environment so no credential is ever persisted by this process.
+    install_env_generation_profile(&mut state);
 
     let original_page = state.ui.active_page_index;
     let result = enrich_state(&mut state, request.timeout);
@@ -233,6 +237,36 @@ fn enrich_document(request: &EnrichRequest) -> Result<EnrichSummary, EnrichError
     }
     let summary = result?;
     save_enriched_state(&mut state, &request.output, summary)
+}
+
+/// `OPENPENCIL_ENRICH_WORKBENCH_BASE_URL` + `_KEY` (+ optional `_MODEL`)
+/// switch this one-shot process from search-only to "generate, degrade to
+/// search on runtime failure" — the same path the GUI takes with the chat
+/// image-gen toggle on. Unset, the command stays search-only.
+fn install_env_generation_profile(state: &mut EditorState) {
+    let var = |name: &str| std::env::var(name).ok().filter(|v| !v.trim().is_empty());
+    let (Some(base_url), Some(api_key)) = (
+        var("OPENPENCIL_ENRICH_WORKBENCH_BASE_URL"),
+        var("OPENPENCIL_ENRICH_WORKBENCH_KEY"),
+    ) else {
+        return;
+    };
+    let settings = &mut state.editor_ui.agent_settings;
+    settings
+        .image_gen_profiles
+        .push(op_editor_core::agent_settings::ImageGenProfile {
+            id: "env-workbench".into(),
+            name: "Workbench (env)".into(),
+            provider: op_editor_core::agent_settings::ImageGenProvider::Workbench,
+            api_key,
+            model: var("OPENPENCIL_ENRICH_WORKBENCH_MODEL")
+                .unwrap_or_else(|| "Qwen-Image-2.1".into()),
+            base_url: Some(base_url),
+            test_status: op_editor_core::agent_settings::ImageTestStatus::Idle,
+        });
+    settings.active_image_gen_profile_id = Some("env-workbench".into());
+    settings.image_gen_enabled = true;
+    eprintln!("image-enrich: generation enabled (workbench profile from env)");
 }
 
 fn save_enriched_state(

@@ -321,6 +321,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.create" => "Criar",
         "home.nav.projects" => "Trabalhos",
         "home.nav.settings" => "Ajustes",
+        "collab.chat.imageGenName" => "Geração de imagens com IA",
+        "collab.chat.imageGenConfigure" => "Configurar um modelo de geração de imagens",
         _ => return None,
     })
 }

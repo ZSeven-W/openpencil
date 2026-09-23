@@ -321,6 +321,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.create" => "Buat",
         "home.nav.projects" => "Karya",
         "home.nav.settings" => "Pengaturan",
+        "collab.chat.imageGenName" => "Generasi gambar AI",
+        "collab.chat.imageGenConfigure" => "Siapkan model generasi gambar",
         _ => return None,
     })
 }

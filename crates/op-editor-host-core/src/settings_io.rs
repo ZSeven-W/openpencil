@@ -70,6 +70,7 @@ pub struct Fingerprint {
     acp_agents: Vec<AcpAgentConfig>,
     image_gen_profiles: Vec<ImageGenProfile>,
     active_image_gen_profile_id: Option<String>,
+    image_gen_enabled: bool,
     preferred_agent_team_size: u32,
     entry_surface: op_editor_core::EntrySurface,
     chat_agent: String,
@@ -94,6 +95,7 @@ pub fn fingerprint(state: &EditorState) -> Fingerprint {
         acp_agents: eui.agent_settings.acp_agents.clone(),
         image_gen_profiles: eui.agent_settings.image_gen_profiles.clone(),
         active_image_gen_profile_id: eui.agent_settings.active_image_gen_profile_id.clone(),
+        image_gen_enabled: eui.agent_settings.image_gen_enabled,
         preferred_agent_team_size: eui.preferred_agent_team_size,
         entry_surface: eui.entry_surface,
         chat_agent: selected_chat_agent_name(eui),
@@ -188,6 +190,9 @@ struct SettingsPayload {
     image_gen_profiles: Option<Vec<ImageGenProfilePayload>>,
     #[serde(default)]
     active_image_gen_profile_id: Option<String>,
+    /// Chat-panel image-generation toggle; older files default to off.
+    #[serde(default)]
+    image_gen_enabled: Option<bool>,
     #[serde(default)]
     recent_files: Option<Vec<RecentFilePayload>>,
     /// User's last-set ⚡Nx parallel-agents team size — seeds tab 0's
@@ -293,6 +298,7 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
                 .collect(),
         ),
         active_image_gen_profile_id: eui.agent_settings.active_image_gen_profile_id.clone(),
+        image_gen_enabled: Some(eui.agent_settings.image_gen_enabled),
         recent_files: Some(
             eui.recent_files
                 .iter()
@@ -402,6 +408,9 @@ fn apply_payload_with_options(
             .image_gen_profiles
             .first()
             .map(|profile| profile.id.clone());
+    }
+    if let Some(enabled) = payload.image_gen_enabled {
+        eui.agent_settings.image_gen_enabled = enabled;
     }
     if let Some(list) = payload.recent_files {
         eui.recent_files = list

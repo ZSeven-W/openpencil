@@ -434,6 +434,12 @@ impl DesktopApp {
         if self.drain_provider_connect() {
             self.redraw_dirty = true;
         }
+        // Drain the Workbench image-gen status probe (Settings →
+        // Images → Test) — spawn the requested probe, land the
+        // finished one into the profile's test status.
+        if self.drain_image_gen_test() {
+            self.redraw_dirty = true;
+        }
         if self.drain_acp_agent_connect() {
             self.redraw_dirty = true;
         }

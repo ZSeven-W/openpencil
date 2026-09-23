@@ -23,14 +23,17 @@ fn poll_into_applies_finished_job_to_placeholder_frame() {
     ));
 
     let (tx, rx) = std::sync::mpsc::channel();
-    tx.send(Some("https://example.com/photo.jpg".to_string()))
-        .unwrap();
+    tx.send(super::super::JobOutcome::Search(Some(
+        "https://example.com/photo.jpg".to_string(),
+    )))
+    .unwrap();
     let mut session = ImageSearchSession {
         in_flight: HashSet::from(["photo".to_string()]),
         completed: HashSet::new(),
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("photo"),
             intent: None,
+            fallback_target: None,
             rx,
         }],
         ..Default::default()
@@ -64,13 +67,16 @@ fn poll_discards_standalone_image_result_after_collaboration_binds() {
     // document was standalone, then the editor joined as a collaborator
     // before the worker result reached the UI-thread sink.
     let (tx, rx) = std::sync::mpsc::channel();
-    tx.send(Some("https://result.example.com/burger.jpg".to_string()))
-        .unwrap();
+    tx.send(super::super::JobOutcome::Search(Some(
+        "https://result.example.com/burger.jpg".to_string(),
+    )))
+    .unwrap();
     let mut session = ImageSearchSession {
         in_flight: HashSet::from(["img1".to_string()]),
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("img1"),
             intent: None,
+            fallback_target: None,
             rx,
         }],
         ..Default::default()
@@ -120,14 +126,17 @@ fn successful_apply_does_not_suppress_later_unfilled_retry() {
     ));
 
     let (tx, rx) = std::sync::mpsc::channel();
-    tx.send(Some("https://example.com/photo.jpg".to_string()))
-        .unwrap();
+    tx.send(super::super::JobOutcome::Search(Some(
+        "https://example.com/photo.jpg".to_string(),
+    )))
+    .unwrap();
     let mut session = ImageSearchSession {
         in_flight: HashSet::from(["photo".to_string()]),
         completed: HashSet::new(),
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("photo"),
             intent: None,
+            fallback_target: None,
             rx,
         }],
         ..Default::default()
@@ -178,14 +187,15 @@ fn poll_into_completion_invalidates_scan_gate() {
     // A completed (here: failed) job mutates `in_flight`/`completed`, which
     // must force one rescan on the next `enqueue_missing` even though the
     // document revision did not change.
-    let (tx, rx) = std::sync::mpsc::channel::<Option<String>>();
-    tx.send(None).unwrap();
+    let (tx, rx) = std::sync::mpsc::channel::<super::super::JobOutcome>();
+    tx.send(super::super::JobOutcome::Search(None)).unwrap();
     let mut session = ImageSearchSession {
         in_flight: HashSet::from(["img1".to_string()]),
         completed: HashSet::new(),
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("img1"),
             intent: None,
+            fallback_target: None,
             rx,
         }],
         ..Default::default()
@@ -230,13 +240,16 @@ fn poll_discards_a_result_when_the_nodes_image_intent_changed() {
     state.mark_document_changed();
 
     let (tx, rx) = std::sync::mpsc::channel();
-    tx.send(Some("https://stale.example.com/burger.jpg".to_string()))
-        .unwrap();
+    tx.send(super::super::JobOutcome::Search(Some(
+        "https://stale.example.com/burger.jpg".to_string(),
+    )))
+    .unwrap();
     let mut session = ImageSearchSession {
         in_flight: HashSet::from(["img1".to_string()]),
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("img1"),
             intent: Some(expected),
+            fallback_target: None,
             rx,
         }],
         ..Default::default()
@@ -278,13 +291,16 @@ fn poll_discards_a_result_when_only_provider_truncated_words_changed() {
     state.mark_document_changed();
 
     let (tx, rx) = std::sync::mpsc::channel();
-    tx.send(Some("https://stale.example.com/blue-dome.jpg".to_string()))
-        .unwrap();
+    tx.send(super::super::JobOutcome::Search(Some(
+        "https://stale.example.com/blue-dome.jpg".to_string(),
+    )))
+    .unwrap();
     let mut session = ImageSearchSession {
         in_flight: HashSet::from(["img1".to_string()]),
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("img1"),
             intent: Some(expected),
+            fallback_target: None,
             rx,
         }],
         ..Default::default()
@@ -328,11 +344,14 @@ fn poll_shares_one_stale_intent_scan_across_a_completed_batch() {
     let mut jobs = Vec::new();
     for id in ["img1", "img2"] {
         let (tx, rx) = std::sync::mpsc::channel();
-        tx.send(Some(format!("https://result.example.com/{id}.jpg")))
-            .unwrap();
+        tx.send(super::super::JobOutcome::Search(Some(format!(
+            "https://result.example.com/{id}.jpg"
+        ))))
+        .unwrap();
         jobs.push(ImageSearchJob {
             node_id: NodeId::new(id),
             intent: Some(expected_by_id[id].clone()),
+            fallback_target: None,
             rx,
         });
     }
@@ -380,6 +399,7 @@ fn poll_does_not_scan_intents_while_all_jobs_are_pending() {
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("img1"),
             intent: Some(intent_fingerprint(&target, None)),
+            fallback_target: None,
             rx,
         }],
         ..Default::default()
@@ -530,6 +550,7 @@ fn document_replacement_reset_drops_stale_pending_job_so_it_cannot_apply_to_new_
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("photo"),
             intent: None,
+            fallback_target: None,
             rx,
         }],
         ..Default::default()
@@ -553,9 +574,9 @@ fn document_replacement_reset_drops_stale_pending_job_so_it_cannot_apply_to_new_
 
     // The stale job resolves AFTER the replacement — its result must not land on
     // the new document's unrelated "photo" node.
-    let _ = tx.send(Some(
+    let _ = tx.send(super::super::JobOutcome::Search(Some(
         "https://stale.example.com/old-document-photo.jpg".to_string(),
-    ));
+    )));
 
     let changed = session.poll_into(&mut new_state);
 

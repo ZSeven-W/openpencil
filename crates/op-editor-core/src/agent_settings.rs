@@ -325,6 +325,14 @@ pub struct AgentSettings {
     pub openverse_credential_owner: Option<String>,
     pub image_gen_profiles: Vec<ImageGenProfile>,
     pub active_image_gen_profile_id: Option<String>,
+    /// Chat-panel image-generation toggle. Off by default; it only takes
+    /// effect while a usable profile exists, so consumers gate on
+    /// [`AgentSettings::image_gen_active`] rather than the raw flag.
+    pub image_gen_enabled: bool,
+    /// Workbench test-button request seam: the profile id whose Test press
+    /// still needs the host's `GET /workbench-api/qwen-image/status`
+    /// probe. Runtime-only — never persisted.
+    pub pending_image_gen_test: Option<String>,
     pub image_gen_provider_menu_open: Option<usize>,
     pub hover_image_gen_provider_option: Option<(usize, ImageGenProvider)>,
     pub hover_image_gen_profile_header: Option<usize>,
@@ -403,6 +411,8 @@ impl Default for AgentSettings {
             openverse_credential_owner: None,
             image_gen_profiles: Vec::new(),
             active_image_gen_profile_id: None,
+            image_gen_enabled: false,
+            pending_image_gen_test: None,
             image_gen_provider_menu_open: None,
             hover_image_gen_provider_option: None,
             hover_image_gen_profile_header: None,

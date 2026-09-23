@@ -126,6 +126,12 @@ pub struct AIChatPlaceholder<'a> {
     pub composer_only: bool,
     /// Which bottom-toolbar chat control the cursor is over.
     pub footer_hover: Option<op_editor_core::ChatFooterButton>,
+    /// Whether an image-generation profile is usable at all (the 🖼
+    /// toggle paints disabled and routes to Settings when not).
+    pub(crate) image_gen_available: bool,
+    /// The chat image-generation toggle's current flag (`image_gen_active`
+    /// is the two combined — this alone is just the user's switch).
+    pub(crate) image_gen_enabled: bool,
     pub header_pressed: Option<op_editor_core::ChatHeaderButton>,
     pub footer_pressed: Option<op_editor_core::ChatFooterButton>,
     /// Localised empty-state example cards.
@@ -235,6 +241,8 @@ impl<'a> AIChatPlaceholder<'a> {
             composer_only: ui.chat_composer_only(),
             header_hover: ui.chat_header_hover,
             footer_hover: ui.chat_footer_hover,
+            image_gen_available: ui.agent_settings.image_gen_available(),
+            image_gen_enabled: ui.agent_settings.image_gen_enabled,
             header_pressed: match ui.pressed_button {
                 Some(op_editor_core::ButtonPressTarget::ChatHeader(button)) => Some(button),
                 _ => None,
@@ -563,6 +571,17 @@ impl<'a> AIChatPlaceholder<'a> {
         Some(self.model_picker_rect(rect, input_rect))
     }
 
+    /// Bounding rect of the footer's image-generation toggle, or `None`
+    /// when the row was too narrow to lay it out. Public so widget hosts
+    /// (and their press tests) can target the control without re-deriving
+    /// the footer geometry.
+    pub fn footer_image_gen_rect(&self, rect: Rect) -> Option<Rect> {
+        let input_rect = self.input_rect(rect);
+        let toolbar_top = input_rect.origin.y + INPUT_AREA_HEIGHT;
+        let footer = self.footer_layout(rect, input_rect, toolbar_top);
+        (footer.image_gen.size.x > 0.0).then_some(footer.image_gen)
+    }
+
     /// Bounding rect of the Parallel Agents picker dropdown overlay.
     /// The picker lists 6 rows of "Nx" (N=1..=6) above the speed chip.
     /// `None` when the picker is closed.
@@ -692,6 +711,10 @@ pub(crate) struct FooterLayout {
     /// Zero-width when the row is too narrow to hold it (see
     /// `footer_layout`); `contains()` is then always false.
     pub(crate) thinking: Rect,
+    /// Image-generation toggle — 🖼 icon, flips `image_gen_enabled` when a
+    /// profile is configured and opens the Images settings tab otherwise.
+    /// Same zero-width degradation rule as `thinking`.
+    pub(crate) image_gen: Rect,
     /// Speed/effort chip — ⚡ icon + effort label in gold, no bg.
     /// Retained next to the model pill; clicking cycles effort level.
     pub(crate) speed: Rect,

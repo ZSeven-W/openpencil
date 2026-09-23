@@ -32,6 +32,9 @@ pub enum ChatFooterButton {
     SpeedChip,
     /// Thinking-mode button (🧠) — cycles Adaptive → Disabled → Enabled.
     ThinkingMode,
+    /// Image-generation toggle (🖼) — flips `image_gen_enabled` when a
+    /// profile is configured, otherwise jumps to the Images settings tab.
+    ImageGen,
     /// Compact Agent Team size chip in the bottom toolbar.
     AgentTeam,
     /// Paperclip attachment button.

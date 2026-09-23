@@ -54,6 +54,7 @@ mod image_decode_host;
 mod image_downscale;
 mod image_drop_host;
 mod image_enrich_cli;
+mod image_gen_test_host;
 mod image_generate_host;
 mod image_panel_host;
 mod image_search_session;
@@ -341,6 +342,10 @@ struct DesktopApp {
     /// drained on the UI thread by `drain_forwarded_files`.
     forwarded_files: single_instance::ForwardQueue,
     iconify_job: Option<iconify_host::IconifyJob>,
+    /// In-flight Workbench image-gen status probe (Settings → Images →
+    /// Test) — spawned from the `pending_image_gen_test` seam, drained by
+    /// `drain_image_gen_test`.
+    image_gen_test_job: Option<image_gen_test_host::ImageGenTestJob>,
     /// The `component_browser_open` value last written to
     /// `uikits.json` — `drain_kit_io` rewrites the store when the live
     /// value drifts (TS persists `browserOpen` on every toggle).

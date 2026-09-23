@@ -204,6 +204,7 @@ fn settings_payload_with_legacy_model_card_migration(
             "builtin_agents",
             "image_gen_profiles",
             "active_image_gen_profile_id",
+            "image_gen_enabled",
             "recent_files",
             "entry_surface",
         ],
@@ -533,7 +534,7 @@ fn validate_credential_semantics(
     for profile in image_profiles {
         if !matches!(
             profile.provider.as_str(),
-            "openai" | "gemini" | "replicate" | "atlas" | "custom"
+            "openai" | "gemini" | "replicate" | "atlas" | "custom" | "workbench"
         ) {
             return Err(SettingsValidationError::UnknownImageProvider);
         }

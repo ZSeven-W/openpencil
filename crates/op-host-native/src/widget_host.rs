@@ -62,6 +62,8 @@ mod chat_design_hover;
 #[cfg(test)]
 mod chat_design_hover_tests;
 #[cfg(test)]
+mod chat_image_gen_tests;
+#[cfg(test)]
 mod chat_input_caret_tests;
 mod chat_model_picker_caret;
 #[cfg(test)]

@@ -267,6 +267,7 @@ fn paint_footer_neutral_hovers_use_visible_feedback() {
         op_editor_core::ChatFooterButton::PromptCenter,
         op_editor_core::ChatFooterButton::SpeedChip,
         op_editor_core::ChatFooterButton::ThinkingMode,
+        op_editor_core::ChatFooterButton::ImageGen,
         op_editor_core::ChatFooterButton::AddAttachment,
     ];
 
@@ -289,6 +290,7 @@ fn paint_footer_neutral_hovers_use_visible_feedback() {
             op_editor_core::ChatFooterButton::ModelPicker => footer.model,
             op_editor_core::ChatFooterButton::SpeedChip => footer.speed,
             op_editor_core::ChatFooterButton::ThinkingMode => footer.thinking,
+            op_editor_core::ChatFooterButton::ImageGen => footer.image_gen,
             op_editor_core::ChatFooterButton::AgentTeam => footer.agent_team,
             op_editor_core::ChatFooterButton::AddAttachment => footer.attach,
             op_editor_core::ChatFooterButton::Send => footer.send,

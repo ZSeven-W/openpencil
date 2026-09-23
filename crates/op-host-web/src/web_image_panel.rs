@@ -247,6 +247,7 @@ fn profile_json(profile: &ImageGenProfile) -> serde_json::Value {
         ImageGenProvider::Replicate => "replicate",
         ImageGenProvider::Atlas => "atlas",
         ImageGenProvider::Custom => "custom",
+        ImageGenProvider::Workbench => "workbench",
     };
     let mut json = serde_json::json!({
         "provider": provider,

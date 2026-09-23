@@ -439,7 +439,22 @@ impl AgentSettings {
 
     pub fn image_generation_configured(&self) -> bool {
         self.active_image_gen_profile()
-            .is_some_and(|profile| !profile.api_key.trim().is_empty())
+            .is_some_and(|profile| profile.usable())
+    }
+
+    /// Whether any image-generation profile is usable at all. Pure alias of
+    /// [`Self::image_generation_configured`], named for the chat toggle's
+    /// vocabulary so call sites read as "can generation be turned on".
+    pub fn image_gen_available(&self) -> bool {
+        self.image_generation_configured()
+    }
+
+    /// The single predicate every consumer of the chat image-generation
+    /// toggle must use: the user's switch AND a usable profile. A turned-on
+    /// switch without configuration (or a profile with the switch off) must
+    /// behave exactly like no generation at all.
+    pub fn image_gen_active(&self) -> bool {
+        self.image_gen_enabled && self.image_gen_available()
     }
 
     pub fn add_image_gen_profile(&mut self) -> String {

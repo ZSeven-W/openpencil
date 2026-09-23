@@ -187,6 +187,7 @@ impl DesktopApp {
             collab_runtime: crate::collab_runtime::DesktopCollabRuntime::new(),
             forwarded_files: single_instance::ForwardQueue::default(),
             iconify_job: None,
+            image_gen_test_job: None,
             kit_browser_open_persisted,
             provider_connect_job: None,
             provider_reconnect_queue: Vec::new(),

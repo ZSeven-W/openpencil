@@ -55,10 +55,27 @@ pub(crate) fn apply_entry_hit(
                 .image_gen_profiles
                 .get_mut(index)
             {
-                profile.test_status = if profile.api_key.trim().is_empty() {
-                    ImageTestStatus::Invalid
-                } else {
+                // Workbench is the one provider without a preset host: its
+                // endpoint is a required field, and its probe is a real
+                // status request the host must run (raised as a seam here —
+                // the editor layer never dials).
+                let workbench = matches!(
+                    profile.provider,
+                    op_editor_core::agent_settings::ImageGenProvider::Workbench
+                );
+                let has_endpoint = profile
+                    .base_url
+                    .as_deref()
+                    .is_some_and(|base| !base.trim().is_empty());
+                let ready = !profile.api_key.trim().is_empty() && (!workbench || has_endpoint);
+                profile.test_status = if ready {
+                    if workbench {
+                        state.editor_ui.agent_settings.pending_image_gen_test =
+                            Some(profile.id.clone());
+                    }
                     ImageTestStatus::Testing
+                } else {
+                    ImageTestStatus::Invalid
                 };
             }
             SettingsPressOutcome::handled()

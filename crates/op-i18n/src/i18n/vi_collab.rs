@@ -333,6 +333,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.create" => "Tạo",
         "home.nav.projects" => "Tác phẩm",
         "home.nav.settings" => "Cài đặt",
+        "collab.chat.imageGenName" => "Tạo hình ảnh bằng AI",
+        "collab.chat.imageGenConfigure" => "Thiết lập mô hình tạo hình ảnh",
         _ => return None,
     })
 }

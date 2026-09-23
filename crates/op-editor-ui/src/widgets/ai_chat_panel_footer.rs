@@ -53,6 +53,9 @@ pub(crate) const FOOTER_PROMPT_W: f32 = 24.0;
 /// Width of the thinking-mode toggle — same bare-icon slot as attach, so
 /// the right cluster keeps one rhythm.
 pub(crate) const FOOTER_THINKING_W: f32 = 24.0;
+/// Width of the image-generation toggle — another bare-icon slot in the
+/// same rhythm as thinking/attach.
+pub(crate) const FOOTER_IMAGE_GEN_W: f32 = 24.0;
 /// Narrowest the model pill may be squeezed to before the row drops the
 /// thinking toggle instead. A pill this size still shows a readable model
 /// name; below it the user cannot tell which model is selected, and an
@@ -114,24 +117,36 @@ impl<'a> AIChatPlaceholder<'a> {
         let speed_h = 22.0;
         let speed = Rect::xywh(speed_x, cy - speed_h / 2.0, FOOTER_SPEED_W, speed_h);
 
-        // Thinking-mode toggle — immediately left of the parallel-agents
-        // chip: both answer "how does the next turn run", so they read as one
-        // pair. Dropped to a zero-width rect when keeping it would squeeze the
-        // model pill below its floor.
-        let thinking_room = speed_x
-            - FOOTER_GAP
-            - FOOTER_THINKING_W
-            - FOOTER_GAP
-            - FOOTER_PROMPT_W
-            - FOOTER_GAP
-            - model_x;
-        let thinking_fits = thinking_room >= FOOTER_MODEL_PILL_MIN_W;
-        let thinking_w = if thinking_fits {
-            FOOTER_THINKING_W
+        // Image-generation toggle (immediately left of ⚡) and thinking-mode
+        // toggle (immediately left of that): both answer "how does the next
+        // turn run". A row too narrow for everything degrades instead of
+        // squeezing the model pill below its floor — and the image-gen
+        // toggle pays first: it is the row's newest, most optional control,
+        // so the thinking toggle keeps its "survives down to the minimum
+        // panel width" contract. Both drop to zero-width rects.
+        let cluster_room = speed_x - FOOTER_GAP - FOOTER_PROMPT_W - FOOTER_GAP - model_x;
+        let both_fit =
+            cluster_room - FOOTER_GAP - FOOTER_IMAGE_GEN_W - FOOTER_GAP - FOOTER_THINKING_W
+                >= FOOTER_MODEL_PILL_MIN_W;
+        let thinking_fits =
+            cluster_room - FOOTER_GAP - FOOTER_THINKING_W >= FOOTER_MODEL_PILL_MIN_W;
+        let (image_gen_w, thinking_w) = if both_fit {
+            (FOOTER_IMAGE_GEN_W, FOOTER_THINKING_W)
+        } else if thinking_fits {
+            (0.0, FOOTER_THINKING_W)
         } else {
-            0.0
+            (0.0, 0.0)
         };
-        let thinking_x = speed_x - FOOTER_GAP - thinking_w;
+        let image_gen_x = speed_x - FOOTER_GAP - image_gen_w;
+        let image_gen = Rect::xywh(
+            image_gen_x,
+            cy - FOOTER_IMAGE_GEN_W / 2.0,
+            image_gen_w,
+            FOOTER_IMAGE_GEN_W,
+        );
+
+        let thinking_x =
+            image_gen_x - if image_gen_w > 0.0 { FOOTER_GAP } else { 0.0 } - thinking_w;
         let thinking = Rect::xywh(
             thinking_x,
             cy - FOOTER_THINKING_W / 2.0,
@@ -140,7 +155,8 @@ impl<'a> AIChatPlaceholder<'a> {
         );
 
         // Prompt Center — immediately left of the thinking toggle.
-        let prompt_x = thinking_x - if thinking_fits { FOOTER_GAP } else { 0.0 } - FOOTER_PROMPT_W;
+        let prompt_x =
+            thinking_x - if thinking_w > 0.0 { FOOTER_GAP } else { 0.0 } - FOOTER_PROMPT_W;
         let prompt_center = Rect::xywh(
             prompt_x,
             cy - FOOTER_PROMPT_W / 2.0,
@@ -163,6 +179,7 @@ impl<'a> AIChatPlaceholder<'a> {
             model,
             prompt_center,
             thinking,
+            image_gen,
             speed,
             agent_team,
             attach,
@@ -465,6 +482,60 @@ pub(crate) fn paint_bottom_toolbar(
         widget.footer_hover == Some(ChatFooterButton::ThinkingMode),
         widget.footer_pressed == Some(ChatFooterButton::ThinkingMode),
     );
+
+    // --- Image-generation toggle — 🖼, left of the ⚡ chip ---
+    // Unconfigured paints as disabled (faded; the press routes to the
+    // Images settings tab). Configured+on uses the theme accent; the
+    // deliberate-off state carries the same slash the thinking toggle
+    // uses, so "off" never rests on a muted-vs-muted colour step alone.
+    let image_gen_hover = widget.footer_hover == Some(ChatFooterButton::ImageGen)
+        || widget.footer_pressed == Some(ChatFooterButton::ImageGen);
+    if footer.image_gen.size.x > 0.0 {
+        if image_gen_hover {
+            cx.backend.fill_round_rect(
+                footer.image_gen,
+                6.0,
+                chat_neutral_feedback_color(
+                    &widget.theme,
+                    widget.footer_pressed == Some(ChatFooterButton::ImageGen),
+                ),
+            );
+        }
+        let (image_gen_color, image_gen_slash) = if !widget.image_gen_available {
+            ((widget.theme.muted_foreground).with_alpha(0.38), false)
+        } else if widget.image_gen_enabled {
+            (widget.theme.primary, false)
+        } else {
+            (widget.theme.muted_foreground, true)
+        };
+        let image_gen_icon_size = 14.0;
+        let image_gen_origin = Point2D::new(
+            footer.image_gen.origin.x + (footer.image_gen.size.x - image_gen_icon_size) / 2.0,
+            footer.image_gen.origin.y + (footer.image_gen.size.y - image_gen_icon_size) / 2.0,
+        );
+        draw_icon(
+            cx.backend,
+            Icon::Image,
+            image_gen_origin,
+            image_gen_icon_size,
+            image_gen_color,
+            1.4,
+        );
+        if image_gen_slash {
+            cx.backend.stroke_line(
+                Point2D::new(
+                    image_gen_origin.x + 1.0,
+                    image_gen_origin.y + image_gen_icon_size - 1.0,
+                ),
+                Point2D::new(
+                    image_gen_origin.x + image_gen_icon_size - 1.0,
+                    image_gen_origin.y + 1.0,
+                ),
+                image_gen_color,
+                1.4,
+            );
+        }
+    }
 
     // --- Parallel-agents chip (#32) — ⚡ in gold + "{N}x" label, no background ---
     // Repurposed from the old effort/speed chip. The chip shows the current

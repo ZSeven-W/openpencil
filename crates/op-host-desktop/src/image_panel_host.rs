@@ -230,7 +230,7 @@ pub(crate) fn active_image_gen_profile(
         .editor_ui
         .agent_settings
         .active_image_gen_profile()
-        .filter(|p| !p.api_key.trim().is_empty())
+        .filter(|p| p.usable())
 }
 
 // --- Asset status (TS resolveRuntimeAssetSource + warning gating) ----

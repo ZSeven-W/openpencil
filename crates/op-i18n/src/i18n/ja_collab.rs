@@ -337,6 +337,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.create" => "作成",
         "home.nav.projects" => "作品",
         "home.nav.settings" => "設定",
+        "collab.chat.imageGenName" => "AI画像生成",
+        "collab.chat.imageGenConfigure" => "画像生成モデルを設定する",
         _ => return None,
     })
 }

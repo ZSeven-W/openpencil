@@ -340,12 +340,13 @@ fn failed_search_writes_the_adaptive_placeholder_sentinel() {
         .push(image_node("img1", "", Some("nonexistent subject")));
 
     let (tx, rx) = std::sync::mpsc::channel();
-    tx.send(None).unwrap();
+    tx.send(super::super::JobOutcome::Search(None)).unwrap();
     let mut session = ImageSearchSession {
         in_flight: HashSet::from(["img1".to_string()]),
         jobs: vec![ImageSearchJob {
             node_id: NodeId::new("img1"),
             intent: None,
+            fallback_target: None,
             rx,
         }],
         ..Default::default()

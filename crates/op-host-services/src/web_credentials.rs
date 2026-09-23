@@ -504,6 +504,7 @@ fn parse_image_profile(payload: ImageGenProfilePayload) -> Result<ImageGenProfil
         "replicate" => ImageGenProvider::Replicate,
         "atlas" => ImageGenProvider::Atlas,
         "custom" => ImageGenProvider::Custom,
+        "workbench" => ImageGenProvider::Workbench,
         _ => return Err(WebCredentialError::UnsupportedImageGenProvider),
     };
 

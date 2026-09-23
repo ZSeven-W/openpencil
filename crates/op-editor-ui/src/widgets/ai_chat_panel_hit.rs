@@ -284,6 +284,13 @@ impl<'a> AIChatPlaceholder<'a> {
                 if footer.thinking.size.x > 0.0 && (footer.thinking).contains(point) {
                     return Some(AIChatHit::CycleThinking);
                 }
+                // Live even while streaming for the same reason as thinking:
+                // the toggle sets what the NEXT turn does. Always clickable —
+                // an unconfigured press routes to Settings instead of
+                // toggling (decided in `apply_chat_hit`).
+                if footer.image_gen.size.x > 0.0 && (footer.image_gen).contains(point) {
+                    return Some(AIChatHit::ToggleImageGen);
+                }
                 if (footer.speed).contains(point) {
                     // The ⚡ chip is now the Parallel Agents chip (#32).
                     // While streaming the chip is inert (parity with old effort chip).
@@ -615,6 +622,9 @@ impl<'a> AIChatPlaceholder<'a> {
         // Same zero-width guard as the press path — see `hit_test`.
         if footer.thinking.size.x > 0.0 && (footer.thinking).contains(point) {
             return Some(op_editor_core::ChatFooterButton::ThinkingMode);
+        }
+        if footer.image_gen.size.x > 0.0 && (footer.image_gen).contains(point) {
+            return Some(op_editor_core::ChatFooterButton::ImageGen);
         }
         if (footer.speed).contains(point) {
             return Some(op_editor_core::ChatFooterButton::SpeedChip);
