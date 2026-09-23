@@ -110,7 +110,8 @@ pub(super) fn paint_composer(
             surface.state.hover,
             Some(HomeHit::Sheet) | Some(HomeHit::Send)
         );
-    cx.backend.fill_round_rect(input_box, 10.0, palette.panel);
+    cx.backend
+        .fill_round_rect(input_box, 10.0, palette.surface_input);
     if engaged {
         cx.backend.fill_round_rect(
             Rect::xywh(
@@ -202,7 +203,7 @@ pub(super) fn paint_composer(
     // The inline replace-confirm strip rides above the input's bottom.
     if surface.state.replace_pending {
         let strip = shift(layout.replace_strip, rise);
-        cx.backend.fill_round_rect(strip, 8.0, palette.panel);
+        cx.backend.fill_round_rect(strip, 8.0, palette.raised);
         cx.backend
             .stroke_round_rect(strip, 8.0, fade(palette.blue, 0.4), 1.0);
         text(
@@ -244,11 +245,12 @@ pub(super) fn paint_composer(
                 } else if hovered {
                     palette.button_hover
                 } else {
-                    palette.panel
+                    palette.raised
                 },
             );
             if !primary {
-                cx.backend.stroke_round_rect(button, 7.0, palette.line, 1.0);
+                cx.backend
+                    .stroke_round_rect(button, 7.0, palette.raised_line, 1.0);
             }
             let label_w = cx.backend.measure_text_family(label, 12.0, SANS);
             text(
@@ -352,6 +354,13 @@ pub(super) fn paint_composer(
         },
     );
     let label_w = cx.backend.measure_text_family(send_label, 15.0, SANS);
+    // White reads on the live blue; on the disabled slab it does not,
+    // so the label follows the fill instead of being hardcoded.
+    let send_ink = if !connect_mode && empty {
+        palette.disabled_primary_ink
+    } else {
+        Color::WHITE
+    };
     text_weighted(
         cx,
         send_label,
@@ -360,7 +369,7 @@ pub(super) fn paint_composer(
             jian_widgets::centered_text_baseline_y(send_rect, 15.0),
         ),
         15.0,
-        Color::WHITE,
+        send_ink,
         550,
     );
     draw_icon(
@@ -371,7 +380,7 @@ pub(super) fn paint_composer(
             send_rect.origin.y + (send_rect.size.y - 21.0) / 2.0,
         ),
         21.0,
-        Color::WHITE,
+        send_ink,
         2.0,
     );
 }
@@ -428,7 +437,7 @@ fn paint_soon_tooltip(
     let w = cx.backend.measure_text_family(label, 11.0, SANS) + 20.0;
     let tooltip = Rect::xywh(anchor.origin.x, anchor.origin.y - 28.0, w, 22.0);
     cx.backend
-        .fill_round_rect(tooltip, 7.0, fade(palette.ink, 0.9));
+        .fill_round_rect(tooltip, 7.0, palette.tooltip_fill);
     text(
         cx,
         label,
@@ -437,7 +446,7 @@ fn paint_soon_tooltip(
             jian_widgets::centered_text_baseline_y(tooltip, 11.0),
         ),
         11.0,
-        Color::WHITE,
+        palette.tooltip_ink,
     );
 }
 
@@ -633,48 +642,5 @@ fn paint_template_switched(
 }
 
 fn fade_palette(palette: StudioPalette, factor: f32) -> StudioPalette {
-    let faded = |color| fade(color, factor);
-    StudioPalette {
-        page: faded(palette.page),
-        panel: faded(palette.panel),
-        line: faded(palette.line),
-        ink: faded(palette.ink),
-        muted: faded(palette.muted),
-        sub: faded(palette.sub),
-        context: faded(palette.context),
-        divider: faded(palette.divider),
-        blue: faded(palette.blue),
-        blue_hover: faded(palette.blue_hover),
-        blue_soft: faded(palette.blue_soft),
-        segment_bg: faded(palette.segment_bg),
-        segment_line: faded(palette.segment_line),
-        input_line: faded(palette.input_line),
-        placeholder: faded(palette.placeholder),
-        yellow: faded(palette.yellow),
-        disabled_primary: faded(palette.disabled_primary),
-        preview: faded(palette.preview),
-        preview_line: faded(palette.preview_line),
-        selected_tab: faded(palette.selected_tab),
-        tab_hover: faded(palette.tab_hover),
-        tab_fill: faded(palette.tab_fill),
-        tab_hover_fill: faded(palette.tab_hover_fill),
-        tab_hover_line: faded(palette.tab_hover_line),
-        tab_selected_fill: faded(palette.tab_selected_fill),
-        tab_selected_line: faded(palette.tab_selected_line),
-        tabs_hairline: faded(palette.tabs_hairline),
-        button_hover: faded(palette.button_hover),
-        button_hover_line: faded(palette.button_hover_line),
-        eyebrow: faded(palette.eyebrow),
-        preview_desc: faded(palette.preview_desc),
-        preview_footer: faded(palette.preview_footer),
-        status_green: faded(palette.status_green),
-        chip_bg: faded(palette.chip_bg),
-        chip_line: faded(palette.chip_line),
-        tint_knowledge: faded(palette.tint_knowledge),
-        tint_tutorial: faded(palette.tint_tutorial),
-        tint_poster: faded(palette.tint_poster),
-        tile_knowledge: faded(palette.tile_knowledge),
-        tile_tutorial: faded(palette.tile_tutorial),
-        tile_poster: faded(palette.tile_poster),
-    }
+    palette.faded(factor)
 }

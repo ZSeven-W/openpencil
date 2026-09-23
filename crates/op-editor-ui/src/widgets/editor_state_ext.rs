@@ -16,9 +16,34 @@ use op_editor_core::editor_ui_state::{EditorUiState, ThemeMode};
 /// Resolve the active editor [`Theme`] from the UI theme mode.
 /// Mirrors the old `Document::theme()`.
 pub fn theme_for(ui: &EditorUiState) -> Theme {
-    match ui.effective_theme_mode() {
+    let mode = ui.effective_theme_mode();
+    let theme = match mode {
         ThemeMode::Dark => Theme::dark(),
         ThemeMode::Light => Theme::light(),
+    };
+    if !ui.workspace.active {
+        return theme;
+    }
+    // Normal mode: the editor chrome that shows inside the generation
+    // workspace (the Agent conversation, its input, its menus) sits
+    // beside Studio surfaces, and the editor's own dark is a neutral
+    // grey while Studio's is a cool slate — the seam between them is
+    // visible on one screen. Retint the surfaces to the Studio tones
+    // and leave every other token, and the professional editor's theme,
+    // exactly as they are.
+    let studio = crate::widgets::home_surface::StudioPalette::for_mode(mode);
+    Theme {
+        background: studio.panel,
+        card: studio.panel,
+        popover: studio.raised,
+        border: studio.line,
+        input: studio.surface_input,
+        foreground: studio.ink,
+        card_foreground: studio.ink,
+        popover_foreground: studio.ink,
+        muted_foreground: studio.muted,
+        canvas_surface: studio.canvas,
+        ..theme
     }
 }
 

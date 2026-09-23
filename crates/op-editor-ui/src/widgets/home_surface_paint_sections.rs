@@ -54,7 +54,7 @@ pub(super) fn paint_explore(
         ),
     );
     cx.backend
-        .fill_round_rect(underline, 1.5, fade(palette.blue, alpha));
+        .fill_round_rect(underline, 1.5, fade(palette.link, alpha));
     cx.backend.restore();
     let sub_w =
         cx.backend
@@ -161,7 +161,7 @@ pub(super) fn paint_recent(
         if hovered {
             palette.button_hover
         } else {
-            palette.panel
+            palette.raised
         },
     );
     cx.backend.stroke_round_rect(
@@ -170,7 +170,7 @@ pub(super) fn paint_recent(
         if hovered {
             palette.button_hover_line
         } else {
-            palette.line
+            palette.raised_line
         },
         1.0,
     );
@@ -201,48 +201,5 @@ pub(super) fn paint_recent(
 
 /// Every palette token at `factor` of its alpha (an entrance fade).
 pub(super) fn fade_all(palette: StudioPalette, factor: f32) -> StudioPalette {
-    let faded = |color| fade(color, factor);
-    StudioPalette {
-        page: faded(palette.page),
-        panel: faded(palette.panel),
-        line: faded(palette.line),
-        ink: faded(palette.ink),
-        muted: faded(palette.muted),
-        sub: faded(palette.sub),
-        context: faded(palette.context),
-        divider: faded(palette.divider),
-        blue: faded(palette.blue),
-        blue_hover: faded(palette.blue_hover),
-        blue_soft: faded(palette.blue_soft),
-        segment_bg: faded(palette.segment_bg),
-        segment_line: faded(palette.segment_line),
-        input_line: faded(palette.input_line),
-        placeholder: faded(palette.placeholder),
-        yellow: faded(palette.yellow),
-        disabled_primary: faded(palette.disabled_primary),
-        preview: faded(palette.preview),
-        preview_line: faded(palette.preview_line),
-        selected_tab: faded(palette.selected_tab),
-        tab_hover: faded(palette.tab_hover),
-        tab_fill: faded(palette.tab_fill),
-        tab_hover_fill: faded(palette.tab_hover_fill),
-        tab_hover_line: faded(palette.tab_hover_line),
-        tab_selected_fill: faded(palette.tab_selected_fill),
-        tab_selected_line: faded(palette.tab_selected_line),
-        tabs_hairline: faded(palette.tabs_hairline),
-        button_hover: faded(palette.button_hover),
-        button_hover_line: faded(palette.button_hover_line),
-        eyebrow: faded(palette.eyebrow),
-        preview_desc: faded(palette.preview_desc),
-        preview_footer: faded(palette.preview_footer),
-        status_green: faded(palette.status_green),
-        chip_bg: faded(palette.chip_bg),
-        chip_line: faded(palette.chip_line),
-        tint_knowledge: faded(palette.tint_knowledge),
-        tint_tutorial: faded(palette.tint_tutorial),
-        tint_poster: faded(palette.tint_poster),
-        tile_knowledge: faded(palette.tile_knowledge),
-        tile_tutorial: faded(palette.tile_tutorial),
-        tile_poster: faded(palette.tile_poster),
-    }
+    palette.faded(factor)
 }

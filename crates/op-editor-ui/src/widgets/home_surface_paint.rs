@@ -116,6 +116,12 @@ fn spaced_width(cx: &mut PaintCx<'_>, content: &str, size: f32, spacing: f32) ->
 }
 
 pub(super) fn paint_home(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect) {
+    // The phone (touch + compact) composition is a separate metric set
+    // over the same state — see `home_surface_paint_compact.rs`.
+    if surface.ui.compact_layout() {
+        compact::paint_home_compact(surface, cx, rect);
+        return;
+    }
     let layout = surface.layout(rect.size.x, rect.size.y);
     let palette = StudioPalette::for_mode(surface.ui.effective_theme_mode());
     cx.backend.fill_rect(rect, palette.page);
@@ -178,12 +184,12 @@ fn paint_top_bar(
     let locale = surface.ui.locale;
     cx.backend.fill_rect(
         Rect::xywh(0.0, 0.0, layout.tabs_row.size.x, HOME_TOPBAR_H),
-        palette.panel,
+        palette.topbar,
     );
     cx.backend.stroke_line(
         Point2D::new(0.0, HOME_TOPBAR_H),
         Point2D::new(layout.tabs_row.size.x, HOME_TOPBAR_H),
-        palette.line,
+        palette.topbar_line,
         1.0,
     );
     // Official mark, 34×34 (the PNG carries internal padding, so its
@@ -263,7 +269,7 @@ fn paint_top_bar(
             if pressed || hovered {
                 palette.button_hover
             } else {
-                palette.panel
+                palette.raised
             },
         );
         cx.backend.stroke_round_rect(
@@ -272,7 +278,7 @@ fn paint_top_bar(
             if hovered {
                 palette.button_hover_line
             } else {
-                palette.line
+                palette.raised_line
             },
             1.0,
         );
@@ -326,7 +332,7 @@ fn paint_welcome(
     // them behind the glyphs (`.marker{z-index:-1}`), and painting them
     // after the text let an opaque yellow band cover the lower half of
     // 做点什么 instead of highlighting it.
-    paint_marker(cx, marked_x, baseline, marked_w, palette.yellow);
+    paint_marker(cx, marked_x, baseline, marked_w, palette);
     text_weighted(
         cx,
         marked,
@@ -384,7 +390,7 @@ fn paint_tabs(
             Point2D::new(icon_x, icon_y),
             icon_size,
             if selected {
-                palette.blue
+                palette.tab_selected_ink
             } else {
                 fade(palette.ink, 0.75)
             },
@@ -396,7 +402,11 @@ fn paint_tabs(
             task.name,
             Point2D::new(copy_x, rect.origin.y + 24.0),
             14.0,
-            if selected { palette.blue } else { palette.ink },
+            if selected {
+                palette.tab_selected_ink
+            } else {
+                palette.ink
+            },
             if selected { 650 } else { 500 },
         );
         text(
@@ -417,7 +427,7 @@ fn paint_tabs(
                     2.0,
                 ),
                 1.0,
-                palette.blue,
+                palette.tab_selected_bar,
             );
         }
     }
@@ -519,9 +529,9 @@ fn paint_more_popover(
         12.0,
         fade(palette.ink, 0.12),
     );
-    cx.backend.fill_round_rect(popover, 12.0, palette.panel);
+    cx.backend.fill_round_rect(popover, 12.0, palette.raised);
     cx.backend
-        .stroke_round_rect(popover, 12.0, palette.line, 1.0);
+        .stroke_round_rect(popover, 12.0, palette.raised_line, 1.0);
     text(
         cx,
         copy::home_str(locale, "home.tabs.moreCaption"),
@@ -580,6 +590,8 @@ pub(super) mod art;
 pub(super) mod art_screens;
 #[path = "home_surface_paint_cards.rs"]
 pub(super) mod cards;
+#[path = "home_surface_paint_compact.rs"]
+mod compact;
 #[path = "home_surface_paint_panels.rs"]
 pub(super) mod panels;
 #[path = "home_surface_paint_sections.rs"]

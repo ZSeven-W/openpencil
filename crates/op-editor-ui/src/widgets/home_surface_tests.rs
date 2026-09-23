@@ -39,14 +39,70 @@ fn studio_palette_owns_the_exact_light_and_dark_tokens() {
     assert_hex(light.tile_tutorial, "68A6FF");
     assert_hex(light.tile_poster, "C9FA15");
 
+    // The founder-approved dark values (prototype `dark-theme.css`).
     let dark = StudioPalette::dark();
-    assert_hex(dark.page, "0F1524");
-    assert_hex(dark.panel, "161D30");
-    assert_hex(dark.line, "25304A");
-    assert_hex(dark.ink, "EEF2FA");
-    assert_hex(dark.muted, "8B97AE");
+    assert_hex(dark.page, "10131A");
+    assert_hex(dark.panel, "191E28");
+    assert_hex(dark.line, "293244");
+    assert_hex(dark.ink, "EDF1F8");
+    assert_hex(dark.muted, "A0AEC3");
+    assert_hex(dark.placeholder, "8F9DB3");
+    assert_hex(dark.topbar, "141821");
+    assert_hex(dark.topbar_line, "262F3E");
+    assert_hex(dark.raised, "222A38");
+    assert_hex(dark.raised_line, "303A4D");
+    assert_hex(dark.surface_input, "131821");
+    assert_hex(dark.input_line, "364157");
+    assert_hex(dark.button_hover, "2A3445");
+    assert_hex(dark.preview, "1B2538");
+    assert_hex(dark.preview_line, "2A3952");
+    assert_hex(dark.disabled_primary, "253754");
+    assert_hex(dark.disabled_primary_ink, "93A8C8");
+    assert_hex(dark.tab_selected_fill, "202F4C");
+    assert_hex(dark.tab_selected_line, "3B5682");
+    assert_hex(dark.tab_selected_ink, "A7C6FF");
+    assert_hex(dark.canvas, "111620");
+    assert_hex(dark.canvas_dot, "303A4E");
+    assert_hex(dark.tint_knowledge, "2B2321");
+    assert_hex(dark.tint_tutorial, "1D293C");
+    assert_hex(dark.tint_poster, "252C1D");
+
+    // Three contracts the dark theme must not break.
+    // 1. The button blue stays the button blue; only the TEXT blue lifts.
     assert_hex(dark.blue, "075BFF");
+    assert_hex(dark.link, "8BB3FF");
+    assert_ne!(dark.blue, dark.link);
+    // 2. Cards, inset inputs and raised popovers stay three distinct
+    //    surfaces — this is what a single `panel` token cannot express.
+    assert_ne!(dark.panel, dark.surface_input);
+    assert_ne!(dark.panel, dark.raised);
+    assert_ne!(dark.surface_input, dark.raised);
+    // 3. The work keeps its own colours: the yellow marker, the sticker's
+    //    dark ink and the three bright example tiles are theme-independent.
     assert_hex(dark.yellow, "F3FF23");
+    assert_hex(dark.sticker_ink, "182019");
+    assert_eq!(dark.tile_knowledge, light.tile_knowledge);
+    assert_eq!(dark.tile_tutorial, light.tile_tutorial);
+    assert_eq!(dark.tile_poster, light.tile_poster);
+    // The marker becomes an underline in dark so it cannot sit behind
+    // near-white glyphs.
+    assert!(!light.marker_underline);
+    assert!(dark.marker_underline);
+}
+
+#[test]
+fn fading_the_palette_touches_every_colour_and_no_flag() {
+    // The three surfaces that crossfade share one implementation, so a
+    // token added later cannot be left at full alpha on one of them.
+    let full = StudioPalette::dark();
+    let half = full.faded(0.5);
+    assert_eq!(half.page.a, full.page.a * 0.5);
+    assert_eq!(half.raised.a, full.raised.a * 0.5);
+    assert_eq!(half.surface_input.a, full.surface_input.a * 0.5);
+    assert_eq!(half.canvas_dot.a, full.canvas_dot.a * 0.5);
+    assert_eq!(half.link.a, full.link.a * 0.5);
+    assert_eq!(half.sticker_ink.a, full.sticker_ink.a * 0.5);
+    assert_eq!(half.marker_underline, full.marker_underline);
 }
 
 #[test]

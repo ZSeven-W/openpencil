@@ -40,6 +40,31 @@ pub(super) fn text_weighted(
     cx.backend.draw_text(&layout, origin);
 }
 
+/// The torn silhouette of the headline marker, in percent of its box.
+const VERTICES: [(f32, f32); 21] = [
+    (0.0, 29.0),
+    (4.0, 11.0),
+    (7.0, 27.0),
+    (17.0, 13.0),
+    (22.0, 27.0),
+    (34.0, 8.0),
+    (45.0, 24.0),
+    (61.0, 4.0),
+    (72.0, 17.0),
+    (94.0, 8.0),
+    (99.0, 34.0),
+    (97.0, 63.0),
+    (100.0, 89.0),
+    (85.0, 82.0),
+    (72.0, 100.0),
+    (61.0, 90.0),
+    (44.0, 97.0),
+    (31.0, 77.0),
+    (18.0, 99.0),
+    (2.0, 81.0),
+    (5.0, 53.0),
+];
+
 /// The jagged yellow marker band under the 做点什么 run plus its two
 /// rays right of the question mark (prototype `.marker` / `.rays`).
 pub(super) fn paint_marker(
@@ -47,8 +72,45 @@ pub(super) fn paint_marker(
     x: f32,
     baseline_y: f32,
     width: f32,
-    yellow: Color,
+    palette: StudioPalette,
 ) {
+    let yellow = palette.marker;
+    if palette.marker_underline {
+        // Dark mode: the headline is near-white, so the band that sits
+        // BEHIND the glyphs in light mode would swallow them. The
+        // prototype pulls it down into a thin rule under the baseline
+        // (`.marker:before{height:8px;bottom:-2px}`) and keeps the same
+        // torn edge, at half the amplitude.
+        let top = baseline_y + 2.0;
+        let band_h = 8.0;
+        let left = x - 5.0;
+        let right = x + width + 2.0;
+        let band_w = right - left;
+        let points: Vec<Point2D> = VERTICES
+            .iter()
+            .map(|(px, py)| {
+                // Compress the jag toward the strip's middle so an 8 px
+                // rule keeps a torn silhouette instead of dissolving.
+                let compressed = 50.0 + (py - 50.0) * 0.55;
+                Point2D::new(
+                    left + px / 100.0 * band_w,
+                    top + compressed / 100.0 * band_h,
+                )
+            })
+            .collect();
+        cx.backend.fill_polygon(&points, yellow);
+        for (offset, height, angle) in [(0.0f32, 14.0f32, 28.0f32), (10.0f32, 10.0f32, 68.0f32)] {
+            let ray = Rect::xywh(right + 6.0 + offset, baseline_y - 12.0, 5.0, height);
+            cx.backend.save();
+            cx.backend.rotate(
+                angle.to_radians(),
+                Point2D::new(ray.origin.x + 2.5, ray.origin.y + ray.size.y),
+            );
+            cx.backend.fill_round_rect(ray, 3.0, yellow);
+            cx.backend.restore();
+        }
+        return;
+    }
     // The prototype seats the 15 px band at the text run's bottom
     // (`bottom:0; height:15px`, behind the glyphs): its top rides the
     // baseline − 6 so the band overlaps the lower 40 % of 做点什么 and
@@ -58,29 +120,6 @@ pub(super) fn paint_marker(
     let left = x - 5.0;
     let right = x + width + 2.0;
     let band_w = right - left;
-    const VERTICES: [(f32, f32); 21] = [
-        (0.0, 29.0),
-        (4.0, 11.0),
-        (7.0, 27.0),
-        (17.0, 13.0),
-        (22.0, 27.0),
-        (34.0, 8.0),
-        (45.0, 24.0),
-        (61.0, 4.0),
-        (72.0, 17.0),
-        (94.0, 8.0),
-        (99.0, 34.0),
-        (97.0, 63.0),
-        (100.0, 89.0),
-        (85.0, 82.0),
-        (72.0, 100.0),
-        (61.0, 90.0),
-        (44.0, 97.0),
-        (31.0, 77.0),
-        (18.0, 99.0),
-        (2.0, 81.0),
-        (5.0, 53.0),
-    ];
     let points: Vec<Point2D> = VERTICES
         .iter()
         .map(|(px, py)| Point2D::new(left + px / 100.0 * band_w, top + py / 100.0 * band_h))
@@ -124,7 +163,7 @@ pub(super) fn paint_sticker(
             jian_widgets::centered_text_baseline_y(sticker, 12.0),
         ),
         12.0,
-        palette.ink,
+        palette.sticker_ink,
         700,
     );
     cx.backend.restore();
@@ -371,7 +410,7 @@ pub(super) fn paint_explore_card(
         copy::task_icon(family),
         Point2D::new(tile_rect.origin.x + 6.0, tile_rect.origin.y + 6.0),
         16.0,
-        Color::WHITE,
+        palette.tile_ink,
         1.6,
     );
     text_weighted(
@@ -408,8 +447,9 @@ pub(super) fn paint_explore_card(
         28.0,
     );
     cx.backend
-        .fill_round_rect(pill, 7.0, Color::rgba_u8(0xFF, 0xFF, 0xFF, 0.85));
-    cx.backend.stroke_round_rect(pill, 7.0, Color::WHITE, 1.0);
+        .fill_round_rect(pill, 7.0, palette.card_link_fill);
+    cx.backend
+        .stroke_round_rect(pill, 7.0, palette.card_link_line, 1.0);
     text(
         cx,
         view,
@@ -418,14 +458,14 @@ pub(super) fn paint_explore_card(
             jian_widgets::centered_text_baseline_y(pill, 12.0),
         ),
         12.0,
-        palette.ink,
+        palette.card_link_ink,
     );
     draw_icon(
         cx.backend,
         Icon::ArrowUpRight,
         Point2D::new(pill.origin.x + pill.size.x - 16.0, pill.origin.y + 7.0),
         13.0,
-        palette.blue,
+        palette.link,
         1.5,
     );
     // Art column: the family's two-piece composition.

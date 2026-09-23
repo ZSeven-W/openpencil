@@ -97,8 +97,9 @@ pub(super) fn paint_connect_card(
         16.0,
         fade(palette.ink, 0.18),
     );
-    cx.backend.fill_round_rect(*card, 14.0, palette.panel);
-    cx.backend.stroke_round_rect(*card, 14.0, palette.line, 1.0);
+    cx.backend.fill_round_rect(*card, 14.0, palette.raised);
+    cx.backend
+        .stroke_round_rect(*card, 14.0, palette.raised_line, 1.0);
     let title_layout = TextLayout::single_run(
         title,
         "system-ui",

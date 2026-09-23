@@ -23,8 +23,19 @@ impl<'a> CanvasViewport<'a> {
     /// refreshing on `editor_state_dirty`.
     pub fn from_editor(state: &EditorState, scene: &'a LayoutScene) -> Self {
         let theme = theme_for(&state.editor_ui);
+        // The normal-mode workspace recedes behind the work on its own
+        // studio backdrop; the professional editor keeps the editor
+        // theme's canvas surface unchanged.
+        let fallback = if state.editor_ui.workspace.active {
+            crate::widgets::home_surface::StudioPalette::for_mode(
+                state.editor_ui.effective_theme_mode(),
+            )
+            .canvas
+        } else {
+            theme.canvas_surface
+        };
         let (canvas_background, show_grid) =
-            crate::widgets::canvas_viewport_background::resolve(state, theme.canvas_surface);
+            crate::widgets::canvas_viewport_background::resolve(state, fallback);
         let viewport = DocViewport {
             pan_x: state.viewport.pan_x,
             pan_y: state.viewport.pan_y,

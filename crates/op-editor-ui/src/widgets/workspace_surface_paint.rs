@@ -44,23 +44,7 @@ fn fade(color: Color, factor: f32) -> Color {
 
 /// Fade every palette token by `factor` (the entrance crossfade).
 fn fade_all(palette: StudioPalette, factor: f32) -> StudioPalette {
-    // StudioPalette is Copy with ~40 fields; fade the handful the
-    // entrance actually washes rather than re-declaring the struct.
-    StudioPalette {
-        page: fade(palette.page, factor),
-        panel: fade(palette.panel, factor),
-        line: fade(palette.line, factor),
-        ink: fade(palette.ink, factor),
-        muted: fade(palette.muted, factor),
-        sub: fade(palette.sub, factor),
-        blue: fade(palette.blue, factor),
-        blue_soft: fade(palette.blue_soft, factor),
-        segment_bg: fade(palette.segment_bg, factor),
-        segment_line: fade(palette.segment_line, factor),
-        button_hover: fade(palette.button_hover, factor),
-        button_hover_line: fade(palette.button_hover_line, factor),
-        ..palette
-    }
+    palette.faded(factor)
 }
 
 fn tr(locale: op_i18n::Locale, key: &'static str) -> &'static str {
@@ -186,11 +170,11 @@ fn paint_header(
     palette: StudioPalette,
 ) {
     let locale = surface.ui.locale;
-    cx.backend.fill_rect(layout.header, palette.panel);
+    cx.backend.fill_rect(layout.header, palette.topbar);
     cx.backend.stroke_line(
         Point2D::new(0.0, layout.header.size.y),
         Point2D::new(layout.header.size.x, layout.header.size.y),
-        palette.line,
+        palette.topbar_line,
         1.0,
     );
 
@@ -202,7 +186,7 @@ fn paint_header(
         if back_hovered {
             palette.button_hover
         } else {
-            palette.panel
+            palette.raised
         },
     );
     cx.backend.stroke_round_rect(
@@ -211,7 +195,7 @@ fn paint_header(
         if back_hovered {
             palette.button_hover_line
         } else {
-            palette.line
+            palette.raised_line
         },
         1.0,
     );
@@ -240,7 +224,7 @@ fn paint_header(
             layout.doc_tile.origin.y + (layout.doc_tile.size.y - 17.0) / 2.0,
         ),
         17.0,
-        palette.blue,
+        palette.link,
         1.6,
     );
 
@@ -293,7 +277,7 @@ fn paint_header(
             if pressed || hovered {
                 palette.button_hover
             } else {
-                palette.panel
+                palette.raised
             },
         );
         cx.backend.stroke_round_rect(
@@ -302,7 +286,7 @@ fn paint_header(
             if hovered {
                 palette.button_hover_line
             } else {
-                palette.line
+                palette.raised_line
             },
             1.0,
         );
@@ -373,7 +357,7 @@ fn paint_toolbar(
         Point2D::new(toggle.origin.x + 5.0, toggle.origin.y + 5.0),
         18.0,
         if surface.ui.sidebar_open {
-            palette.blue
+            palette.link
         } else {
             palette.muted
         },
@@ -413,7 +397,7 @@ fn paint_toolbar(
             ),
             12.0,
             if selected {
-                palette.blue
+                palette.link
             } else {
                 palette.muted
             },
@@ -543,7 +527,7 @@ fn paint_strip(
         return;
     };
     let locale = surface.ui.locale;
-    cx.backend.fill_rect(strip, palette.panel);
+    cx.backend.fill_rect(strip, palette.topbar);
     cx.backend.stroke_line(
         Point2D::new(strip.origin.x, strip.origin.y),
         Point2D::new(strip.origin.x + strip.size.x, strip.origin.y),
