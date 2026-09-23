@@ -745,3 +745,55 @@ fn mobile_featured_food_card_clamps_oversized_media_band() {
     );
     assert_eq!(card["clipContent"], json!(true));
 }
+
+/// The floating cart bar a delivery detail screen ends with — measured on
+/// GLM-5.3-Flash and Opus 5.5 pages (0923), both squashed to a 16px strip.
+fn floating_cart_bar() -> Value {
+    json!({
+        "type":"frame","name":"购物车条","layout":"vertical","width":"fill_container",
+        "children":[{
+            "type":"frame","name":"cart-bar-card","layout":"horizontal",
+            "width":"fill_container","height":64,"padding":[10,16],"gap":12,
+            "cornerRadius":32,"fill":[{"type":"solid","color":"#21140F"}],
+            "children":[
+                {"type":"frame","name":"cart-icon-cluster","layout":"none","width":48,"height":44,
+                 "children":[
+                    {"type":"frame","name":"cart-count-badge","width":18,"height":18,"x":30,"y":0,
+                     "fill":[{"type":"solid","color":"#FF5A1F"}],
+                     "children":[{"type":"text","name":"cart-count","content":"2"}]},
+                    {"type":"frame","name":"cart-disc","width":40,"height":40,"x":0,"y":4,
+                     "cornerRadius":20,"fill":[{"type":"solid","color":"#3A291D"}],
+                     "children":[{"type":"icon_font","name":"cart-icon","iconFontName":"shopping-cart",
+                                  "width":20,"height":20}]}
+                 ]},
+                {"type":"frame","name":"cart-total-block","layout":"vertical","width":"fill_container",
+                 "children":[{"type":"text","content":"¥45"},{"type":"text","content":"配送费 ¥3"}]},
+                {"type":"frame","role":"button","name":"checkout-button","width":104,"height":44,
+                 "children":[{"type":"text","content":"去结算"}]}
+            ]
+        }]
+    })
+}
+
+#[test]
+fn a_floating_cart_bar_is_not_restyled_as_its_own_count_badge() {
+    let mut bar = floating_cart_bar();
+    post_pass_value(&mut bar, Some(Value::Null), 375.0);
+    let card = &bar["children"][0];
+    assert_ne!(card["role"], json!("badge"), "{card:#}");
+    assert_eq!(card["height"], json!(64), "{card:#}");
+    assert_eq!(card["cornerRadius"], json!(32), "{card:#}");
+    let cluster = &card["children"][0];
+    assert_ne!(cluster["role"], json!("badge"), "{cluster:#}");
+    assert_eq!(cluster["height"], json!(44), "{cluster:#}");
+}
+
+#[test]
+fn the_real_count_badge_inside_a_cart_bar_is_still_normalised() {
+    let mut bar = floating_cart_bar();
+    post_pass_value(&mut bar, Some(Value::Null), 375.0);
+    let badge = &bar["children"][0]["children"][0]["children"][0];
+    assert_eq!(badge["role"], json!("badge"), "{badge:#}");
+    assert_eq!(badge["width"], json!(16));
+    assert_eq!(badge["cornerRadius"], json!(999));
+}

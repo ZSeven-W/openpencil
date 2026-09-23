@@ -201,16 +201,42 @@ pub(super) fn is_short_count_text(node: &Value) -> bool {
     !content.is_empty() && content.len() <= 2 && content.chars().all(|c| c.is_ascii_digit())
 }
 
-pub(super) fn has_short_count_text(node: &Value) -> bool {
-    is_short_count_text(node)
-        || node
-            .get("children")
-            .and_then(Value::as_array)
-            .map(|children| children.iter().any(has_short_count_text))
-            .unwrap_or(false)
+/// Largest box a cart ICON (glyph, or the small button wrapping one) can
+/// occupy. Without it every node NAMED "cart…" qualified — a GLM-5.3-Flash
+/// and an Opus 5.5 delivery page (0923) both had their whole floating
+/// `cart-bar` row matched as "the cart icon", and the pass then styled the
+/// bar itself as a 16px count badge, squashing it flat.
+const CART_ICON_MAX_BOX: f64 = 56.0;
+/// Largest box a count badge can occupy.
+const COUNT_BADGE_MAX_BOX: f64 = 28.0;
+
+fn fits_box(node: &Value, max: f64) -> bool {
+    ["width", "height"].iter().all(|key| {
+        node.get(*key)
+            .and_then(Value::as_f64)
+            .is_none_or(|size| size <= max)
+    }) && ["width", "height"]
+        .iter()
+        .all(|key| node.get(*key).and_then(Value::as_str) != Some("fill_container"))
+}
+
+fn is_glyph(node: &Value) -> bool {
+    matches!(
+        node.get("type").and_then(Value::as_str),
+        Some("icon_font" | "path")
+    )
 }
 
 pub(super) fn is_cart_icon_node(node: &Value) -> bool {
+    let is_icon = is_glyph(node)
+        || (fits_box(node, CART_ICON_MAX_BOX)
+            && node
+                .get("children")
+                .and_then(Value::as_array)
+                .is_some_and(|children| children.iter().any(is_glyph)));
+    if !is_icon {
+        return false;
+    }
     let label = semantic_label(node);
     label.contains("shopping-cart")
         || label.contains("shopping cart")
@@ -220,8 +246,19 @@ pub(super) fn is_cart_icon_node(node: &Value) -> bool {
         || label.contains("购物车")
 }
 
+/// A count badge is the number itself, or a SMALL frame whose only content is
+/// that number. Recursing into any descendant made every ancestor of the
+/// badge — the icon cluster, the whole cart bar — a "count badge" too.
 pub(super) fn is_count_badge_candidate(node: &Value) -> bool {
-    matches!(role_of(node), Some("badge")) || has_short_count_text(node)
+    if !fits_box(node, COUNT_BADGE_MAX_BOX) {
+        return false;
+    }
+    if matches!(role_of(node), Some("badge")) || is_short_count_text(node) {
+        return true;
+    }
+    node.get("children")
+        .and_then(Value::as_array)
+        .is_some_and(|children| children.len() == 1 && is_short_count_text(&children[0]))
 }
 
 pub(super) fn style_count_badge(node: &mut Value) {
@@ -269,7 +306,7 @@ pub(super) fn normalize_cart_count_badges(node: &mut Value) {
     }
 
     if matches!(role_of(node), Some("icon-button") | Some("button"))
-        || semantic_label(node).contains("cart")
+        || (semantic_label(node).contains("cart") && fits_box(node, CART_ICON_MAX_BOX + 8.0))
     {
         node["fill"] = solid_fill("#FFFFFF");
         node["stroke"] = neutral_stroke("#E5E7EB");
