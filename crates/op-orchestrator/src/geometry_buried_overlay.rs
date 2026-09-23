@@ -31,6 +31,12 @@
 //! Repair: move the buried overlay ahead of whatever covers it — the same
 //! `M(overlayId, stackId, 0)` the corpus prescribes, expressed as
 //! `EditorCommand::MoveNode { index: Some(0) }`.
+//!
+//! Two image-specific shapes sit beside it, both measured on GLM-5.3-Flash
+//! pages whose generated photos never reached the render: an image hidden by
+//! an EMPTY backdrop plate (moved just ahead of the plate), and a content card
+//! painted opaque over a scrimmed photo (its fill cleared — the scrim is the
+//! author's own proof the photo was meant to show).
 
 use std::collections::HashMap;
 
@@ -120,8 +126,117 @@ fn rect_of<'a>(v: &Value, rects: &'a HashMap<String, Rect>) -> Option<&'a Rect> 
         .and_then(|id| rects.get(id))
 }
 
-/// Emit a `MoveNode` to index 0 for every content-bearing overlay buried under
-/// an opaque earlier sibling of the same `layout:none` stack.
+/// The index of the first EMPTY opaque plate that hides an image — the offset
+/// "backdrop" a model authors after (i.e. over) the photo it was meant to sit
+/// behind. Measured on a GLM-5.3-Flash brewery page: a 744×636 cream
+/// `visual-backdrop` rectangle at a lower index than the 768×636 process photo
+/// painted a blank panel where the generated image should be.
+///
+/// The size gate above cannot see this — image and plate are peers in size —
+/// but the deck exception it protects does not apply either: a deck's FRONT
+/// card carries content, while this cover carries nothing at all. An empty
+/// plate over a picture hides the only thing in the stack worth seeing.
+fn image_plate_cover(kids: &[Value], index: usize, rects: &HashMap<String, Rect>) -> Option<usize> {
+    let image = &kids[index];
+    if image.get("type").and_then(Value::as_str) != Some("image") {
+        return None;
+    }
+    let image_rect = rect_of(image, rects)?;
+    kids[..index].iter().position(|cover| {
+        paints_opaque(cover)
+            && !bears_content(cover)
+            && rect_of(cover, rects)
+                .is_some_and(|c| covered_fraction(image_rect, c) >= MIN_BURIED_FRACTION)
+    })
+}
+
+/// Is this node a SCRIM — a fill that deliberately lets what is behind it
+/// through? Every colour in its first fill must carry a low alpha
+/// (`#RRGGBBAA` under ~0.8), whether a solid or each stop of a gradient.
+fn is_translucent_scrim(v: &Value) -> bool {
+    let Some(first) = v
+        .get("fill")
+        .and_then(Value::as_array)
+        .and_then(|a| a.first())
+    else {
+        return false;
+    };
+    let see_through = |color: &Value| {
+        color.as_str().is_some_and(|hex| {
+            let hex = hex.trim();
+            hex.len() == 9
+                && hex.starts_with('#')
+                && u8::from_str_radix(&hex[7..9], 16).is_ok_and(|a| a < 0xCC)
+        })
+    };
+    match first.get("type").and_then(Value::as_str) {
+        Some("solid") => first.get("color").is_some_and(see_through),
+        Some("linear_gradient" | "radial_gradient") => first
+            .get("stops")
+            .and_then(Value::as_array)
+            .is_some_and(|stops| {
+                !stops.is_empty()
+                    && stops
+                        .iter()
+                        .all(|stop| stop.get("color").is_some_and(see_through))
+            }),
+        _ => false,
+    }
+}
+
+fn bears_image(v: &Value) -> bool {
+    v.get("type").and_then(Value::as_str) == Some("image") || children(v).iter().any(bears_image)
+}
+
+/// A content card painted opaque over a scrimmed image. Measured on a
+/// GLM-5.3-Flash EV page hero: `[scroll-hint, hero-content ($--card, the
+/// headline + CTAs), hero-scrim (a #…4D gradient), hero-parallax-bg (the car
+/// photo)]`. The scrim exists only to darken the photo under the text, which
+/// proves the author meant the photo to show; the opaque card fill above both
+/// hides the scrim AND the photo, so the render is a flat panel. Clearing the
+/// card's fill turns it back into the text layer the scrim was built for.
+fn collect_scrimmed_image_cover_fixes(
+    kids: &[Value],
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    for (image_index, image) in kids.iter().enumerate() {
+        if !bears_image(image) {
+            continue;
+        }
+        let Some(image_rect) = rect_of(image, rects) else {
+            continue;
+        };
+        let covers = |node: &Value| {
+            rect_of(node, rects)
+                .is_some_and(|r| covered_fraction(image_rect, r) >= MIN_BURIED_FRACTION)
+        };
+        let Some(scrim_index) = kids[..image_index]
+            .iter()
+            .position(|node| is_translucent_scrim(node) && covers(node))
+        else {
+            continue;
+        };
+        for card in &kids[..scrim_index] {
+            if !(paints_opaque(card) && bears_content(card) && !bears_image(card) && covers(card)) {
+                continue;
+            }
+            let Some(card_id) = card.get("id").and_then(Value::as_str) else {
+                continue;
+            };
+            cmds.push(EditorCommand::PatchNodeData {
+                node_id: NodeId::new(card_id.to_string()),
+                patch_json: r#"{"fill":[]}"#.to_string(),
+                page_id: None,
+            });
+        }
+    }
+}
+
+/// Emit a `MoveNode` for every content-bearing overlay buried under an opaque
+/// earlier sibling of the same `layout:none` stack: small overlays go to index
+/// 0, an image hidden by an empty plate goes just ahead of that plate (so any
+/// badge already above both stays on top).
 pub(super) fn collect_buried_overlay_fixes(
     v: &Value,
     rects: &HashMap<String, Rect>,
@@ -129,6 +244,7 @@ pub(super) fn collect_buried_overlay_fixes(
 ) {
     if layout_str(v) == Some("none") {
         let kids = children(v);
+        collect_scrimmed_image_cover_fixes(kids, rects, cmds);
         // Later index = painted EARLIER = further back. Walk from the back
         // forward so the rescued overlays keep their relative order once each
         // lands at index 0.
@@ -147,9 +263,13 @@ pub(super) fn collect_buried_overlay_fixes(
                             && overlay_area <= c.w * c.h * OVERLAY_MAX_AREA_RATIO
                     })
             });
-            if !buried {
+            let target_index = if buried {
+                0
+            } else if let Some(plate_index) = image_plate_cover(kids, index, rects) {
+                plate_index
+            } else {
                 continue;
-            }
+            };
             let (Some(stack_id), Some(overlay_id)) = (
                 v.get("id").and_then(Value::as_str),
                 overlay.get("id").and_then(Value::as_str),
@@ -160,7 +280,7 @@ pub(super) fn collect_buried_overlay_fixes(
                 node_id: NodeId::new(overlay_id.to_string()),
                 target_parent: NodeId::new(stack_id.to_string()),
                 page_id: None,
-                index: Some(0),
+                index: Some(target_index),
             });
         }
     }
