@@ -332,6 +332,11 @@ impl WidgetHost {
         if self.editor_state.chat.available_models.is_empty() {
             return false;
         }
+        // Same as the click path: a send from the composer-only card
+        // moves the user to the rail's Agent tab, where the reply is.
+        if self.editor_state.editor_ui.chat_composer_only() {
+            self.editor_state.editor_ui.enter_chat_tab();
+        }
         // Real send with the AI transport (`codegen`); an honest
         // offline error on transport-less builds. See
         // `click.rs::begin_chat_send`.

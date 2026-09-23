@@ -159,6 +159,13 @@ impl WidgetHost {
                 if self.editor_state.chat.available_models.is_empty() {
                     return true;
                 }
+                // A send from the composer-only card starts a
+                // conversation, and a conversation lives in the rail's
+                // Agent tab — hand the user there so the reply is not
+                // streaming somewhere they cannot see.
+                if self.editor_state.editor_ui.chat_composer_only() {
+                    self.editor_state.editor_ui.enter_chat_tab();
+                }
                 let sent = self.begin_chat_send();
                 if sent {
                     self.mark_dirty();

@@ -85,12 +85,18 @@ fn a_page_with_no_boards_has_nothing_to_list_and_shows_no_tab() {
     empty.last_viewport_w = VW;
     empty.last_viewport_h = VH;
     assert!(active_page_boards(&empty.editor_state).is_empty());
-    assert!(empty.slides_tab_row(VH).is_none());
+    // The row itself now always exists — Chat and Layers are offered on
+    // every document. What a board-less page must not offer is the
+    // SLIDES tab, so the row comes back with a zero-width slides rect
+    // and a stale Slides selection cannot strand the rail.
+    let row = empty.slides_tab_row(VH).expect("the rail always tabs");
+    assert_eq!(row.slides.size.x, 0.0, "no slides tab without boards");
+    assert!(row.chat.size.x > 0.0 && row.layers.size.x > 0.0);
     assert!(empty.slides_panel_frame(VW, VH).is_none());
     assert_eq!(
         empty.layers_content_rect(VH).origin.y,
-        op_editor_ui::widgets::TOP_BAR_HEIGHT,
-        "a document without a tab row keeps the whole rail"
+        row.row.origin.y + row.row.size.y,
+        "and the layer tree starts under the tab row"
     );
 }
 
