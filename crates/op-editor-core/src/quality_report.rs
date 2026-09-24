@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use crate::walkers::find_node;
 use crate::{EditorState, NodeId, PenNodeExt};
 
+mod localize;
 mod topics;
 
 pub use topics::{lint_topics, topic_for_family, topic_for_lint, topic_for_pass, QualityTopic};

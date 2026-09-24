@@ -242,7 +242,8 @@ fn paint_row(
                 6.0,
             );
             cx.backend.fill_round_rect(dot, 3.0, ATTENTION);
-            let label = ellipsize(cx, &entry.label(), rect.size.x - 24.0, 12.0);
+            let full = entry.localized_label(surface.ui.locale, false);
+            let label = ellipsize(cx, &full, rect.size.x - 24.0, 12.0);
             text(
                 cx,
                 &label,
@@ -274,7 +275,8 @@ fn paint_row(
                 palette.status_green,
                 1.8,
             );
-            let label = ellipsize(cx, &entry.label(), rect.size.x - 24.0, 12.0);
+            let full = entry.localized_label(surface.ui.locale, true);
+            let label = ellipsize(cx, &full, rect.size.x - 24.0, 12.0);
             text(
                 cx,
                 &label,

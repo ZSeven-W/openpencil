@@ -155,7 +155,7 @@ const PASS_TOPICS: &[(&str, QualityTopic)] = &[
 /// code-shape findings (redundant wrappers, nesting depth, absolute
 /// share, empty paths) are invisible on the canvas, and the "slop"
 /// rules are taste opinions, not facts.
-const LINT_TOPICS: &[(&str, QualityTopic)] = &[
+pub(super) const LINT_TOPICS: &[(&str, QualityTopic)] = &[
     ("text-bg-contrast", QualityTopic::Contrast),
     ("edge-section-padding", QualityTopic::Spacing),
     ("stacked-horizontal-padding", QualityTopic::Spacing),
