@@ -377,6 +377,13 @@ pub const TOOL_PROFILES: &[ToolProfile] = &[
     ),
     ToolProfile::new("batch_design", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new("batch_get", ToolAccess::Read, ToolSurface::InMemory),
+    ToolProfile::new(
+        "brand_extract",
+        ToolAccess::Write,
+        // Fetches a caller-chosen website (or reads a caller-chosen image
+        // path) from the daemon host; the network is the wider surface.
+        ToolSurface::OutboundNetwork,
+    ),
     ToolProfile::new("clear_selection", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new(
         "codegen_assemble",

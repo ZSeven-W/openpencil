@@ -56,6 +56,10 @@ fn the_denied_set_is_exactly_the_reviewed_list() {
     assert_eq!(
         denied,
         vec![
+            // Fetches a caller-chosen website / reads a caller-chosen image
+            // path from the daemon host — denied online for the same reasons
+            // import_html_url and import_svg are.
+            "brand_extract",
             "codegen_assemble",
             "codegen_clean",
             "codegen_plan",

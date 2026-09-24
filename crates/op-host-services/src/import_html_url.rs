@@ -15,8 +15,8 @@ use crate::provider_dial::{client_for, EndpointDialPolicy};
 use crate::web_image_search::{read_capped, ImageJobSlot};
 
 const ALLOWLIST_ENV: &str = "OPENPENCIL_WEB_AI_ENDPOINT_ALLOWLIST";
-const PAGE_BYTES_CAP: usize = 10 * 1024 * 1024;
-const RESOURCE_BYTES_CAP: usize = 4 * 1024 * 1024;
+pub(crate) const PAGE_BYTES_CAP: usize = 10 * 1024 * 1024;
+pub(crate) const RESOURCE_BYTES_CAP: usize = 4 * 1024 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_REDIRECTS: usize = 10;
 
@@ -143,10 +143,23 @@ pub(crate) fn import_page_from_url(
     })
 }
 
-struct FetchedResource {
-    bytes: Vec<u8>,
-    content_type: Option<String>,
-    final_url: reqwest::Url,
+pub(crate) struct FetchedResource {
+    pub bytes: Vec<u8>,
+    pub content_type: Option<String>,
+    pub final_url: reqwest::Url,
+}
+
+/// One policy-screened, size-capped, time-limited GET (redirects re-screened
+/// hop by hop) — the importer's own fetch, for other read-only consumers such
+/// as brand extraction. Callable from any thread: it blocks through
+/// `block_on_anywhere`.
+pub(crate) fn fetch_screened(
+    raw_url: &str,
+    cap: usize,
+) -> Result<FetchedResource, ImportHtmlUrlError> {
+    let allowlist = std::env::var(ALLOWLIST_ENV).ok();
+    let url = screen_import_url_with_allowlist(raw_url, allowlist.as_deref())?;
+    block_on_anywhere(fetch_capped(url, cap, allowlist.as_deref()))
 }
 
 async fn fetch_capped(

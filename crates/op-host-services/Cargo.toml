@@ -32,6 +32,7 @@ dev-op-auth-abi-v2 = [
 #     (figma_convert.rs). ---
 op-figma = { path = "../op-figma" }
 op-html = { path = "../op-html" }
+op-brand = { path = "../op-brand" }
 op-editor-core = { path = "../op-editor-core" }
 op-builtin-model-discovery = { path = "../op-builtin-model-discovery" }
 # Device-login proxy for the web editor (prebuilt library or inert stub).

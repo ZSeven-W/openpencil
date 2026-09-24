@@ -173,6 +173,7 @@ pub(super) fn rebuild_registry(
     register_tool!("import_svg", import_svg_snapshot());
     register_tool!("import_html", import_html_snapshot());
     register_tool!("import_html_url", import_html_url_snapshot());
+    register_tool!("brand_extract", brand_extract_snapshot(doc));
     register_tool!("import_web_snapshot", import_web_snapshot_tool());
     register_tool!("update_node", update_node_snapshot());
     register_tool!("delete_node", delete_node_snapshot());
