@@ -1,0 +1,16 @@
+[package]
+name = "op-brand"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Deterministic brand extraction: website HTML/CSS or a screenshot -> shadcn-vocabulary design variables"
+
+# Pure library: no network, no filesystem, no model calls. Hosts inject the
+# page fetcher (`BrandFetcher`) and hand over image bytes, so every path here
+# is unit-testable offline.
+[dependencies]
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+op-html = { path = "../op-html" }
+serde_json = { workspace = true }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

@@ -23,6 +23,7 @@ pub mod align;
 pub mod align_guides;
 pub mod auth_routes;
 pub mod blank_starter;
+pub mod brand_kit;
 pub mod bridge_protocol;
 pub mod button_press_state;
 mod catalog_toml;
@@ -297,6 +298,7 @@ pub use agent_settings_connection::{
     DEFAULT_LOCAL_DAEMON_ORIGIN, DEFAULT_MCP_PORT,
 };
 pub use align::AlignAction;
+pub use brand_kit::{design_md_is_brand_kit, BrandKitPayload, BRAND_KIT_MARKER};
 pub use button_press_state::ButtonPressTarget;
 pub use chat::{
     AgentProvider, ChatAnchor, ChatImage, ChatMessage, ChatRole, ChatState, ChatToolCall,

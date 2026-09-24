@@ -4139,6 +4139,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-brand"
+version = "0.8.5"
+dependencies = [
+ "image",
+ "jian-ops-schema",
+ "op-html",
+ "serde_json",
+]
+
+[[package]]
 name = "op-builtin-model-discovery"
 version = "0.8.5"
 dependencies = [
@@ -4191,6 +4201,7 @@ dependencies = [
  "base64",
  "jian-ops-schema",
  "op-ai-skills",
+ "op-brand",
  "op-config-store",
  "op-editor-core",
  "op-figma",
@@ -4719,6 +4730,7 @@ dependencies = [
  "op-ai",
  "op-ai-skills",
  "op-auth-bridge",
+ "op-brand",
  "op-builtin-model-discovery",
  "op-chat-agent",
  "op-collab-host",
@@ -4865,6 +4877,7 @@ dependencies = [
  "jian-ops-schema",
  "jian-scene",
  "op-ai-skills",
+ "op-brand",
  "op-design-lint",
  "op-editor-core",
  "op-editor-ui",

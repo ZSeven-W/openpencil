@@ -33,3 +33,6 @@ tokio = { version = "1", features = ["sync", "rt", "macros"] }
 [dev-dependencies]
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+# End-to-end proof that an extracted brand kit feeds the generation binding
+# path (seed keeps it, literal brand hexes bind to it).
+op-brand = { path = "../op-brand" }

@@ -43,6 +43,7 @@ crates/
 ├── op-host-desktop/      Desktop binary `openpencil-desktop` (winit + skia-safe GL); also the `--serve-web` daemon
 ├── op-cli/               `op` command-line tool
 ├── op-util/              Dependency-free leaf: shared collaboration-id grammar + hex-colour / JSON / XML helpers
+├── op-brand/             Pure brand extraction: website HTML/CSS (fetcher injected) or screenshot pixels → shadcn-vocabulary design variables + design.md (`BrandKit`); applied via `EditorState::apply_brand_kit` (one undo step), MCP `brand_extract`, `op brand:extract`, Studio Home 加链接
 └── …                     op-mcp / op-ai / op-ai-skills / op-codegen / op-orchestrator / op-figma /
                           op-git / op-opmerge / op-pen-loader / op-design-lint / op-config-store /
                           op-process-io / op-acp / op-i18n / op-rpc-transport / op-smoke /

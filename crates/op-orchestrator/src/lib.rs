@@ -66,6 +66,8 @@ mod avatar_repair_tests;
 /// Public (like `orchestration_self_check`) so `op-host-services` can reuse
 /// the trailing-void scan for `finalize_design`'s advisories (DS P2-b item C).
 pub mod board_trailing_void;
+#[cfg(test)]
+mod brand_kit_binding_tests;
 pub(crate) mod chip_repair;
 pub mod cleanup;
 #[path = "cleanup_image_fallback.rs"]
