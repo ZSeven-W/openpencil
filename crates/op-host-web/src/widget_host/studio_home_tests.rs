@@ -33,7 +33,7 @@ fn served_home_host() -> WidgetHost {
     host
 }
 
-fn layout(host: &WidgetHost) -> op_editor_ui::widgets::HomeLayout {
+fn home_layout(host: &WidgetHost) -> op_editor_ui::widgets::HomeLayout {
     HomeSurface::for_editor(&host.editor_state)
         .expect("home visible")
         .layout(W, H)
@@ -111,7 +111,7 @@ fn enter_on_a_typed_brief_opens_the_workspace_and_queues_a_pinned_run() {
 #[test]
 fn send_on_an_empty_box_without_any_model_opens_the_connect_card() {
     let mut host = home_host();
-    let send = center(layout(&host).send);
+    let send = center(home_layout(&host).send);
     assert!(host.apply_press(send.x, send.y, W, H));
     assert!(host.editor_state.editor_ui.home.connect_card_open);
     assert!(host.editor_state.chat.pending_send.is_none());
@@ -132,7 +132,7 @@ fn send_on_an_empty_box_opens_the_example_as_an_instant_draft() {
         .editor_ui
         .home
         .set_task(HomeFamily::Presentation, 0);
-    let send = center(layout(&host).send);
+    let send = center(home_layout(&host).send);
     assert!(host.apply_press(send.x, send.y, W, H));
     let workspace = &host.editor_state.editor_ui.workspace;
     assert!(workspace.active, "the draft opens the workspace");
@@ -212,7 +212,7 @@ fn saved_work_is_swapped_for_a_fresh_page_without_asking() {
 #[test]
 fn professional_leaves_home_for_the_canvas_and_remembers_it() {
     let mut host = home_host();
-    let professional = layout(&host).professional;
+    let professional = home_layout(&host).professional;
     let at = Point2D::new(professional.origin.x + 4.0, professional.origin.y + 4.0);
     assert!(host.apply_press(at.x, at.y, W, H));
     assert!(!host.home_visible());
