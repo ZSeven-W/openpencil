@@ -335,6 +335,33 @@ fn text_shadow_inherits_onto_descendant_text_nodes() {
     ));
 }
 
+/// The importer copies CSS angles through untouched because the editor
+/// canvas reads `.op` angles like CSS (`angle - 90` before projecting:
+/// 0 = bottom→top, 90 = left→right, 180 = top→bottom). Pin every keyword
+/// direction so a "fix" that shifts by 90° cannot land silently.
+#[test]
+fn linear_gradient_directions_keep_the_canvas_angle_convention() {
+    for (direction, expected) in [
+        ("", 180.0),
+        ("to top,", 0.0),
+        ("to right,", 90.0),
+        ("to bottom,", 180.0),
+        ("to left,", 270.0),
+        ("to bottom right,", 135.0),
+        ("-90deg,", 270.0),
+        ("0.25turn,", 90.0),
+    ] {
+        let value = format!("linear-gradient({direction}#000000,#ffffff)");
+        let style = computed(&[("background-image", value.as_str())]);
+        let (fills, _) =
+            run(|context| map_fill(&style, context, (100.0, 50.0), (true, true), false).unwrap());
+        let PenFill::LinearGradient(gradient) = &fills[0] else {
+            panic!("{direction}: expected a linear gradient")
+        };
+        assert_eq!(gradient.angle, Some(expected), "direction: {direction:?}");
+    }
+}
+
 #[test]
 fn every_non_visible_overflow_value_clips() {
     use jian_ops_schema::node::PenNode;

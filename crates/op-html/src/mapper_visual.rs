@@ -390,10 +390,12 @@ fn map_gradient(value: &str, style: &ComputedStyle, context: &mut MapCtx<'_>) ->
         }))
     } else {
         Some(PenFill::LinearGradient(LinearGradientBody {
-            // CSS angles and canonical `.op` angles share the same
-            // convention: 0deg points bottom-to-top, 90deg left-to-right,
-            // and the CSS default is 180deg (top-to-bottom). The renderer
-            // performs the screen-coordinate projection itself.
+            // Copied through unchanged ON PURPOSE: the editor canvas
+            // (`linear_gradient_endpoints`, `angle - 90`), SVG export and
+            // HTML export all read `.op` angles like CSS (0 = bottom→top,
+            // 90 = left→right, 180 = top→bottom). The jian runtime
+            // renderer and the React codegen use `.op 90 = top→bottom`;
+            // that divergence is theirs — shifting here would break the canvas.
             angle: Some(angle.rem_euclid(360.0)),
             stops: stops
                 .into_iter()
