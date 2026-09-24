@@ -624,7 +624,7 @@ fn paint_example(
     cx.backend.clip_round_rect(art, 8.0);
     match surface.state.task {
         HomeFamily::AppUi => {
-            super::art::paint_app_art(cx, art, palette, draft.device, phase);
+            super::art::paint_app_art(cx, art, palette, draft.device, phase, surface.ui.locale);
         }
         HomeFamily::Presentation => {
             let aspect = match draft.ratio {

@@ -6,7 +6,8 @@
 //! phone/window width the way the prototype's `cqw` units do.
 
 use super::super::fade;
-use super::cards::{text, text_weighted};
+use super::art_copy::{art, text_fit, text_fit_centred, text_fit_right};
+use super::cards::text_weighted;
 use super::StudioPalette;
 use crate::widgets::canvas_viewport_image::{
     has_cached_image_bytes, note_pending_decode, required_raster_edge, store_remote_image_bytes,
@@ -15,6 +16,7 @@ use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, ImageAdjustments, ImageDrawMode, Point2D, Rect, RenderBackend};
 use op_editor_core::HomeDevice;
+use op_i18n::Locale;
 
 /// Stable cache id for the embedded demo photo (mirrors the login
 /// modal's brand-logo id policy).
@@ -66,13 +68,15 @@ pub(super) fn draw_coffee_photo(
 /// The App task's art: three phone mock-ups (mobile) or one desktop
 /// counter window (desktop), scaled to fill `area` (prototype
 /// `phones()` / `desktopApplication()`). `phase` is the art-switch
-/// progress: opacity .2→1, rise 8 px, scale .985→1.
+/// progress: opacity .2→1, rise 8 px, scale .985→1. Every string on
+/// the mock-ups is `locale`'s (see `home_surface_paint_art_copy.rs`).
 pub(super) fn paint_app_art(
     cx: &mut PaintCx<'_>,
     area: Rect,
     _palette: StudioPalette,
     device: HomeDevice,
     phase: f32,
+    locale: Locale,
 ) {
     let dy = (1.0 - phase) * 8.0;
     let alpha = 0.2 + 0.8 * phase;
@@ -95,7 +99,13 @@ pub(super) fn paint_app_art(
             let y = area.origin.y + (area.size.y - phone_h).max(0.0) / 2.0;
             for screen in 0..3 {
                 let x = start_x + screen as f32 * (phone_w + gap);
-                paint_phone(cx, Rect::xywh(x, y, phone_w, phone_h), screen, alpha);
+                paint_phone(
+                    cx,
+                    Rect::xywh(x, y, phone_w, phone_h),
+                    screen,
+                    alpha,
+                    locale,
+                );
             }
         }
         HomeDevice::Desktop => {
@@ -105,7 +115,7 @@ pub(super) fn paint_app_art(
             let win_h = win_w / 1.5;
             let x = area.origin.x + (area.size.x - win_w) / 2.0;
             let y = area.origin.y + (area.size.y - win_h).max(0.0) / 2.0;
-            paint_counter_window(cx, Rect::xywh(x, y, win_w, win_h), alpha);
+            paint_counter_window(cx, Rect::xywh(x, y, win_w, win_h), alpha, locale);
         }
     }
     cx.backend.restore();
@@ -130,6 +140,7 @@ pub(super) struct PhoneScreen<'a> {
     pub(super) status_h: f32,
     pub(super) inks: &'a PhoneInks,
     pub(super) alpha: f32,
+    pub(super) locale: Locale,
 }
 
 pub(super) fn phone_inks(alpha: f32) -> PhoneInks {
@@ -141,7 +152,7 @@ pub(super) fn phone_inks(alpha: f32) -> PhoneInks {
 }
 
 #[allow(clippy::too_many_lines)]
-fn paint_phone(cx: &mut PaintCx<'_>, phone: Rect, screen: u8, alpha: f32) {
+fn paint_phone(cx: &mut PaintCx<'_>, phone: Rect, screen: u8, alpha: f32, locale: Locale) {
     let w = phone.size.x;
     let q = |cqw: f32| cqw * w / 100.0;
     let s = w / PHONE_REFERENCE_W;
@@ -194,6 +205,7 @@ fn paint_phone(cx: &mut PaintCx<'_>, phone: Rect, screen: u8, alpha: f32) {
         status_h,
         inks: &inks,
         alpha,
+        locale,
     };
     match screen {
         0 => super::art_screens::paint_home_screen(cx, &frame),
@@ -245,10 +257,10 @@ fn paint_phone(cx: &mut PaintCx<'_>, phone: Rect, screen: u8, alpha: f32) {
         fade(Color::WHITE, alpha),
     );
     let items: [(Icon, &str); 4] = [
-        (Icon::Home, "首页"),
-        (Icon::LayoutGrid, "菜单"),
-        (Icon::ShoppingBag, "订单"),
-        (Icon::User, "我的"),
+        (Icon::Home, art(locale, "home.art.navHome")),
+        (Icon::LayoutGrid, art(locale, "home.art.menu")),
+        (Icon::ShoppingBag, art(locale, "home.art.orders")),
+        (Icon::User, art(locale, "home.art.navMe")),
     ];
     let item_w = w / 4.0;
     for (index, (icon, label)) in items.into_iter().enumerate() {
@@ -263,12 +275,15 @@ fn paint_phone(cx: &mut PaintCx<'_>, phone: Rect, screen: u8, alpha: f32) {
             color,
             1.6,
         );
-        text(
+        text_fit_centred(
             cx,
             label,
-            Point2D::new(centre_x - q(3.5), nav_y + q(15.0)),
+            centre_x,
+            nav_y + q(15.0),
             q(4.0),
+            item_w - q(2.0),
             color,
+            400,
         );
     }
     cx.backend.restore();
@@ -278,7 +293,7 @@ fn paint_phone(cx: &mut PaintCx<'_>, phone: Rect, screen: u8, alpha: f32) {
 /// sidebar, a 2×2 stat grid and four in-flight orders
 /// (`expanded-scenes.js` `desktopApplication`).
 #[allow(clippy::too_many_lines)]
-fn paint_counter_window(cx: &mut PaintCx<'_>, window: Rect, alpha: f32) {
+fn paint_counter_window(cx: &mut PaintCx<'_>, window: Rect, alpha: f32, locale: Locale) {
     let ww = window.size.x;
     let q = |cqw: f32| cqw * ww / 100.0;
     let s = ww / 360.0;
@@ -343,23 +358,28 @@ fn paint_counter_window(cx: &mut PaintCx<'_>, window: Rect, alpha: f32) {
         1.0,
     );
     let mut sy = aside.origin.y + q(4.0);
-    text_weighted(
+    text_fit(
         cx,
-        "门店工作台",
+        art(locale, "home.art.workbench"),
         Point2D::new(aside.origin.x + q(2.0), sy + q(1.9)),
         q(1.9),
+        aside_w - q(3.0),
         ink,
         700,
     );
     sy += q(1.9) + q(5.0);
-    let items = ["订单管理", "营业概览", "商品管理"];
+    let items = [
+        art(locale, "home.art.orderMgmt"),
+        art(locale, "home.art.overview"),
+        art(locale, "home.art.products"),
+    ];
     for (index, item) in items.into_iter().enumerate() {
         let row = Rect::xywh(aside.origin.x + q(1.0), sy, aside_w - q(2.0), q(4.5));
         if index == 0 {
             cx.backend
                 .fill_round_rect(row, q(0.7), fade(Color::rgb_u8(0xE9, 0xF1, 0xFF), alpha));
         }
-        text(
+        text_fit(
             cx,
             item,
             Point2D::new(
@@ -367,39 +387,48 @@ fn paint_counter_window(cx: &mut PaintCx<'_>, window: Rect, alpha: f32) {
                 row.origin.y + row.size.y / 2.0 + q(0.7),
             ),
             q(1.5),
+            row.size.x - q(2.0),
             if index == 0 { blue } else { ink },
+            400,
         );
         sy += q(4.5) + q(3.0);
     }
-    text(
+    text_fit(
         cx,
-        "晨光旗舰店",
+        art(locale, "home.art.storeName"),
         Point2D::new(
             aside.origin.x + q(2.0),
             aside.origin.y + aside.size.y - q(4.0),
         ),
         q(1.4),
+        aside_w - q(3.0),
         fade(Color::rgb_u8(0xA7, 0xB2, 0xC5), alpha),
+        400,
     );
     // Main column: heading, 2×2 stats, in-flight orders.
     let main_x = window.origin.x + aside_w + q(4.0);
     let main_w = window.origin.x + ww - q(4.0) - main_x;
     let mut my = aside.origin.y + q(3.0);
-    text_weighted(
+    // The open badge claims its measured width first; the greeting
+    // shrinks into whatever is left of the row.
+    let open_w = text_fit_right(
         cx,
-        "今天，也要好好营业。",
+        art(locale, "home.art.open"),
+        main_x + main_w,
+        my + q(2.0),
+        q(1.3),
+        main_w * 0.3,
+        fade(Color::rgb_u8(0x41, 0xA0, 0x79), alpha),
+        400,
+    );
+    text_fit(
+        cx,
+        art(locale, "home.art.greeting"),
         Point2D::new(main_x, my + q(2.8)),
         q(2.8),
+        main_w - open_w - q(4.0),
         ink,
         600,
-    );
-    let open_w = q(1.3) * 4.0 + q(1.0);
-    text(
-        cx,
-        "门店营业中",
-        Point2D::new(main_x + main_w - open_w, my + q(2.0)),
-        q(1.3),
-        fade(Color::rgb_u8(0x41, 0xA0, 0x79), alpha),
     );
     cx.backend.fill_oval(
         Rect::xywh(
@@ -413,10 +442,10 @@ fn paint_counter_window(cx: &mut PaintCx<'_>, window: Rect, alpha: f32) {
     my += q(2.8) + q(3.0);
     // 2×2 stat grid.
     let stats = [
-        ("今日订单", "128"),
-        ("待制作", "06"),
-        ("已完成", "122"),
-        ("客单价", "¥26"),
+        (art(locale, "home.art.todayOrders"), "128"),
+        (art(locale, "home.art.toMake"), "06"),
+        (art(locale, "home.art.completed"), "122"),
+        (art(locale, "home.art.avgTicket"), "¥26"),
     ];
     let cell_gap = q(2.0);
     let cell_w = (main_w - cell_gap) / 2.0;
@@ -436,12 +465,14 @@ fn paint_counter_window(cx: &mut PaintCx<'_>, window: Rect, alpha: f32) {
             fade(Color::rgb_u8(0xE0, 0xE7, 0xF3), alpha),
             1.0,
         );
-        text(
+        text_fit(
             cx,
             label,
             Point2D::new(cell.origin.x + q(2.0), cell.origin.y + q(3.3)),
             q(1.3),
+            cell_w - q(4.0),
             fade(Color::rgb_u8(0x94, 0xA2, 0xB8), alpha),
+            400,
         );
         text_weighted(
             cx,
@@ -468,30 +499,44 @@ fn paint_counter_window(cx: &mut PaintCx<'_>, window: Rect, alpha: f32) {
         fade(Color::rgb_u8(0xE0, 0xE7, 0xF2), alpha),
         1.0,
     );
-    text_weighted(
+    let count = art(locale, "home.art.orderCount").replace("{{count}}", "6");
+    let count_w = text_fit_right(
         cx,
-        "进行中的订单",
+        &count,
+        table.origin.x + table.size.x - q(2.5),
+        table.origin.y + q(3.0),
+        q(1.2),
+        table.size.x * 0.3,
+        fade(Color::rgb_u8(0x9E, 0xAB, 0xC0), alpha),
+        400,
+    );
+    text_fit(
+        cx,
+        art(locale, "home.art.activeOrders"),
         Point2D::new(table.origin.x + q(2.5), table.origin.y + q(3.6)),
         q(2.0),
+        table.size.x - count_w - q(7.0),
         ink,
         600,
     );
-    text(
-        cx,
-        "6 笔订单",
-        Point2D::new(
-            table.origin.x + table.size.x - q(2.5) - q(6.0),
-            table.origin.y + q(3.0),
-        ),
-        q(1.2),
-        fade(Color::rgb_u8(0x9E, 0xAB, 0xC0), alpha),
-    );
+    let pickup = art(locale, "home.art.pickupInStore");
+    let delivery = art(locale, "home.art.delivery");
+    let making = art(locale, "home.art.inProgress");
+    let start = art(locale, "home.art.startMaking");
     let orders = [
-        ("#1028  经典拿铁 × 2", "1 分钟前 · 到店自取", "开始制作"),
-        ("#1027  燕麦拿铁 × 1", "2 分钟前 · 到店自取", "制作中"),
-        ("#1026  美式咖啡 × 2", "4 分钟前 · 外送", "制作中"),
-        ("#1025  卡布奇诺 × 1", "5 分钟前 · 到店自取", "制作中"),
-    ];
+        ("#1028", "home.art.classicLatte", 2, 1, pickup, start),
+        ("#1027", "home.art.oatLatte", 1, 2, pickup, making),
+        ("#1026", "home.art.americano", 2, 4, delivery, making),
+        ("#1025", "home.art.cappuccino", 1, 5, pickup, making),
+    ]
+    .map(|(number, drink, qty, minutes, how, action)| {
+        let ago = art(locale, "home.art.minutesAgo").replace("{{count}}", &minutes.to_string());
+        (
+            format!("{number}  {} × {qty}", art(locale, drink)),
+            format!("{ago} · {how}"),
+            action,
+        )
+    });
     let body_top = table.origin.y + q(5.0);
     let row_h = (table.origin.y + table.size.y - q(1.0) - body_top) / 4.0;
     for (index, (title, meta, action)) in orders.into_iter().enumerate() {
@@ -504,35 +549,45 @@ fn paint_counter_window(cx: &mut PaintCx<'_>, window: Rect, alpha: f32) {
                 1.0,
             );
         }
-        text(
-            cx,
-            title,
-            Point2D::new(table.origin.x + q(2.5), row_y + q(2.2)),
-            q(1.8),
-            ink,
-        );
-        text(
-            cx,
-            meta,
-            Point2D::new(table.origin.x + q(2.5), row_y + q(4.4)),
-            q(1.2),
-            fade(Color::rgb_u8(0xA0, 0xAE, 0xC3), alpha),
-        );
-        let pill_w = q(1.4) * 4.0 + q(2.0);
+        // The action pill sizes to its label (capped), and the order
+        // text shrinks into the space left of it.
+        let pill_size = super::art_copy::fit_size(cx, action, q(1.4), 400, table.size.x * 0.3);
+        let pill_w = super::art_copy::measure(cx, action, pill_size, 400) + q(2.0);
         let pill = Rect::xywh(
             table.origin.x + table.size.x - q(2.5) - pill_w,
             row_y + q(1.2),
             pill_w,
             q(3.2),
         );
+        let text_w = pill.origin.x - (table.origin.x + q(2.5)) - q(1.5);
+        text_fit(
+            cx,
+            &title,
+            Point2D::new(table.origin.x + q(2.5), row_y + q(2.2)),
+            q(1.8),
+            text_w,
+            ink,
+            400,
+        );
+        text_fit(
+            cx,
+            &meta,
+            Point2D::new(table.origin.x + q(2.5), row_y + q(4.4)),
+            q(1.2),
+            text_w,
+            fade(Color::rgb_u8(0xA0, 0xAE, 0xC3), alpha),
+            400,
+        );
         cx.backend
             .fill_round_rect(pill, q(0.5), fade(Color::rgb_u8(0xF0, 0xF5, 0xFF), alpha));
-        text(
+        text_fit(
             cx,
             action,
             Point2D::new(pill.origin.x + q(1.0), pill.origin.y + q(2.1)),
-            q(1.4),
+            pill_size,
+            pill_w,
             blue,
+            400,
         );
     }
 }

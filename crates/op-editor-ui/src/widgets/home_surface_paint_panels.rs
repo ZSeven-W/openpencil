@@ -546,7 +546,7 @@ pub(super) fn paint_preview(
     );
     let draft = surface.state.task_draft();
     match surface.state.task {
-        HomeFamily::AppUi => paint_app_art(cx, art, palette, draft.device, phase),
+        HomeFamily::AppUi => paint_app_art(cx, art, palette, draft.device, phase, locale),
         HomeFamily::Presentation => {
             let aspect = match draft.ratio {
                 SlideRatio::Wide169 => Some(16.0 / 9.0),
