@@ -332,3 +332,43 @@ fn retry_after_a_stopped_refine_refines_the_same_draft_again() {
         "nothing was swapped out"
     );
 }
+
+#[test]
+fn a_failed_refine_shows_the_retry_banner_and_keeps_the_draft() {
+    let mut host = home_on(HomeFamily::ScreenshotTutorial);
+    connect_model(&mut host);
+    press_send(&mut host);
+    let _ = host.take_replaced_home_document();
+    let boards = active_page_boards(host.editor_state());
+    assert!(!boards.is_empty(), "the draft is on the page");
+    // The launcher drained the refine turn; the provider then ended it
+    // the way every transport ends a dead turn: `error: ...` text.
+    {
+        let state = host.editor_state_mut();
+        state.chat.pending_send = None;
+        state.chat.launch_route = LaunchRoute::Auto;
+        let mut reply = op_editor_core::ChatMessage::assistant("error: 401 invalid api key");
+        reply.streaming = false;
+        state.chat.messages.push(reply);
+    }
+    // The idle edge through the SAME verdicts the desktop runner uses.
+    let state = host.editor_state();
+    let failed = op_editor_core::workspace_run::last_assistant_failed(state);
+    let produced = op_editor_core::workspace_run::produced_board_count(state);
+    let epoch = state.editor_ui.workspace.run_epoch;
+    assert!(host.settle_workspace_idle_edge(epoch, produced, failed, W, H));
+    let state = host.editor_state();
+    assert_eq!(state.editor_ui.workspace.phase, WorkspacePhase::Failed);
+    assert_eq!(
+        active_page_boards(state),
+        boards,
+        "a failed refine keeps the draft it was refining"
+    );
+    let surface = WorkspaceSurface::for_editor(state).expect("workspace");
+    let layout = surface.layout(W, H);
+    assert!(
+        surface.banner_buttons(&layout).is_some(),
+        "the failure banner offers Retry"
+    );
+    assert!(!state.editor_ui.workspace.draft_banner_visible());
+}

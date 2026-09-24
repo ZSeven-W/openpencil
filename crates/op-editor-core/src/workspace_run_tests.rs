@@ -107,3 +107,14 @@ fn streaming_assistants_report_generating() {
     state.chat.messages.push(message);
     assert!(assistant_streaming(&state));
 }
+
+#[test]
+fn an_error_transcript_is_a_failure() {
+    // Every provider transport ends a dead turn as `error: ...` text; a
+    // refine over an existing draft has boards, so this is the only
+    // signal its failure leaves behind.
+    let errored = ChatMessage::assistant("error: 429 rate limited");
+    assert!(last_assistant_failed(&editor_with_last(errored)));
+    let prose = ChatMessage::assistant("No error: the layout is fine.");
+    assert!(!last_assistant_failed(&editor_with_last(prose)));
+}

@@ -12,12 +12,23 @@ use crate::chat::ChatMessage;
 use crate::{ChatRole, EditorState};
 
 /// Whether the last assistant message reports a failed turn: a failed
-/// orchestrator subtask, a completion with failures, or an errored
-/// activity row. The workspace's Failed banner keys off this.
+/// orchestrator subtask, a completion with failures, an errored
+/// activity row, or a turn that ended as `error: …` transcript text.
+/// The workspace's Failed banner keys off this.
+///
+/// The `error:` text is how every provider transport ends a turn that
+/// never produced anything (`apply_poll_to_message_with`, the design
+/// worker's `finish_design_error`). Board count usually catches those
+/// runs as zero-board failures, but a template draft's refine turn runs
+/// over boards that already exist — so without this arm a refine that
+/// died settled as Done and the user never saw the Retry banner.
 pub fn last_assistant_failed(state: &EditorState) -> bool {
     let Some(message) = last_assistant_message(state) else {
         return false;
     };
+    if message.content.trim_start().starts_with("error:") {
+        return true;
+    }
     if !message.failed_subtasks.is_empty() {
         return true;
     }

@@ -14,7 +14,7 @@
 //! every OTHER top-level board back (`restore_other_boards`).
 
 use op_ai::chat_provider::ChatToolResult;
-use op_editor_core::{workspace_page_edit, workspace_run, ChatRole, EditorState, WorkspacePhase};
+use op_editor_core::{workspace_page_edit, workspace_run, EditorState, WorkspacePhase};
 use op_host_native::WidgetHostNative;
 
 /// What the launcher should send for `user_text`: the text itself, or —
@@ -77,18 +77,6 @@ pub(crate) fn mark_run_stopped(host: &mut WidgetHostNative) -> bool {
     workspace.mark_stopped(epoch)
 }
 
-/// Mobile errors land as `error: …` transcript text rather than failed
-/// subtask rows, so they count as a failed run here too.
-fn last_assistant_errored(state: &EditorState) -> bool {
-    state
-        .chat
-        .messages
-        .iter()
-        .rev()
-        .find(|message| message.role == ChatRole::Assistant)
-        .is_some_and(|message| message.content.trim_start().starts_with("error:"))
-}
-
 /// The run ended (finished, or never launched): settle the workspace
 /// through the shared verdicts and the epoch fence.
 pub(crate) fn settle_finished_run(host: &mut WidgetHostNative, viewport: (f32, f32)) -> bool {
@@ -99,7 +87,9 @@ pub(crate) fn settle_finished_run(host: &mut WidgetHostNative, viewport: (f32, f
     }
     let epoch = workspace.run_epoch;
     let boards = workspace_run::produced_board_count(state);
-    let failed = workspace_run::last_assistant_failed(state) || last_assistant_errored(state);
+    // Mobile errors land as `error: …` transcript text; the shared verdict
+    // counts those too.
+    let failed = workspace_run::last_assistant_failed(state);
     host.settle_workspace_idle_edge(epoch, boards, failed, viewport.0, viewport.1)
 }
 
