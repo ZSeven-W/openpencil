@@ -749,14 +749,10 @@ pub struct EditorUiState {
     pub prompt_center: PromptCenterState,
     /// Floating Scene Template Center panel.
     pub scene_template_center: SceneTemplateCenterState,
-    /// Style guide the user pinned in the Asset Center, by `name`.
-    ///
-    /// Policy, not data: it never touches the node tree, it only tells the
-    /// next generation which aesthetic to use instead of letting the prompt
-    /// pick one. Persisted with the document (see `EditorMeta`) because "this
-    /// file looks like that" outlives the session that decided it. A name the
-    /// registry no longer carries is not an error — generation falls back to
-    /// its own ranking.
+    /// Style guide the user pinned in the Asset Center, by `name`. Policy,
+    /// not data: it only tells the next generation which aesthetic to use.
+    /// Persisted with the document (`EditorMeta`); a name the registry no
+    /// longer carries falls back to generation's own ranking.
     pub pinned_style_guide: Option<String>,
 
     // --- Component browser ------------------------------------------

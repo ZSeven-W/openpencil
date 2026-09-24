@@ -378,6 +378,14 @@ mod tests {
         app.mcp_integrations_home = Some(home.clone());
         let claude = McpCli::ClaudeCode.index();
         let config = home.join(".claude.json");
+        // Every test in this process shares one sandboxed settings.json, so a
+        // sibling test may have saved enabled CLIs or the lean profile that
+        // `DesktopApp::new` just loaded. Start from a known baseline.
+        {
+            let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
+            settings.mcp_cli_enabled = [false; 13];
+            settings.mcp_lean_profile = false;
+        }
 
         // Enable Claude Code on the full catalog.
         let before = {
