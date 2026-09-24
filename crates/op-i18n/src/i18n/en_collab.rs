@@ -281,7 +281,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.task.app.desktopTitle" => "Daybreak · store console",
         "home.task.app.desktopDesc" => "Desktop app · orders and store management",
         "home.task.app.desktopPages" => "Order list / Order detail / Overview",
-        "home.task.web.name" => "Web pages",
+        "home.task.web.name" => "Websites",
         "home.task.web.summary" => "Sites & landing pages",
         "home.task.web.label" => "Describe your site or page",
         "home.task.web.placeholder" => "A coffee-brand site with a hero, product intro, brand story, and store info.",

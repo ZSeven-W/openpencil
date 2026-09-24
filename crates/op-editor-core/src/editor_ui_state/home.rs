@@ -79,8 +79,8 @@ impl HomeFamily {
     /// Home surface itself resolves copy through i18n `home.task.<id>.*`).
     pub const fn label(self) -> &'static str {
         match self {
-            Self::AppUi => "App 界面",
-            Self::Web => "网页设计",
+            Self::AppUi => "应用界面",
+            Self::Web => "网站设计",
             Self::Presentation => "演示文稿",
             Self::KnowledgeCards => "图文卡片",
             Self::ScreenshotTutorial => "截图教程",
