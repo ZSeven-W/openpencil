@@ -119,6 +119,7 @@ fn retrying_a_stopped_run_starts_on_a_fresh_page_and_keeps_the_partial_one() {
     let mut host = host_with_first_brief_sent();
     first_run_drew_a_design(&mut host);
     host.editor_state_mut().editor_ui.workspace.phase = op_editor_core::WorkspacePhase::Stopped;
+    let brief = host.editor_state().editor_ui.workspace.brief.clone();
     let (w, h) = (1440.0, 900.0);
     let retry = {
         let surface = op_editor_ui::widgets::workspace_surface::WorkspaceSurface::for_editor_at(
@@ -144,8 +145,10 @@ fn retrying_a_stopped_run_starts_on_a_fresh_page_and_keeps_the_partial_one() {
         op_editor_core::blank_starter::active_page_is_blank_starter(host.editor_state()),
         "the retry draws on a fresh page"
     );
-    assert_eq!(
-        host.editor_state().editor_ui.workspace.phase,
-        op_editor_core::WorkspacePhase::Generating
-    );
+    // Swapping the page resets the workspace; the retry must bring it back,
+    // or the run goes on behind a workspace that has vanished.
+    let workspace = &host.editor_state().editor_ui.workspace;
+    assert!(workspace.active && workspace.visible, "the workspace stays up");
+    assert_eq!(workspace.brief, brief);
+    assert_eq!(workspace.phase, op_editor_core::WorkspacePhase::Generating);
 }

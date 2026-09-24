@@ -253,7 +253,16 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.workspace.phase == op_editor_core::WorkspacePhase::Stopped
             && !op_editor_core::blank_starter::active_page_is_blank_starter(&self.editor_state)
         {
-            self.start_fresh_document_for_home();
+            // The page swap resets the workspace like any document swap;
+            // this is the same run on a new page, so carry it across.
+            let workspace = self.editor_state.editor_ui.workspace.clone();
+            if self.start_fresh_document_for_home() {
+                let restored = &mut self.editor_state.editor_ui.workspace;
+                *restored = workspace;
+                restored.fitted_board_count = 0;
+                restored.fitted_bounds = None;
+                restored.selected = 0;
+            }
         }
         self.editor_state.editor_ui.workspace.resume_generating(0);
         self.editor_state.chat.focus_input_at_end(self.now_ms);
