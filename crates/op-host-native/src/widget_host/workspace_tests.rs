@@ -256,7 +256,9 @@ fn the_dock_handle_drag_clamps_the_width() {
     host.apply_cursor_move(700.0, 500.0);
     assert_eq!(host.editor_state().editor_ui.layer_panel_width, 440.0);
     host.apply_cursor_move(-2_000.0, 500.0);
-    assert_eq!(host.editor_state().editor_ui.layer_panel_width, 240.0);
+    // Studio spec: the conversation dock stays 280–440 (the professional
+    // layers panel keeps its own 240 floor).
+    assert_eq!(host.editor_state().editor_ui.layer_panel_width, 280.0);
     host.apply_cursor_move(330.0, 500.0);
     // Press landed 2 px inside the 5 px handle: start_x = 317, so the
     // width tracks the press-relative delta (320 + 13).
@@ -333,5 +335,25 @@ fn a_second_home_brief_starts_on_a_fresh_page() {
     assert_eq!(
         host.editor_state().editor_ui.workspace.family,
         HomeFamily::Presentation
+    );
+}
+
+#[test]
+fn touch_chrome_never_shows_the_pointer_workspace() {
+    // Its presses are dropped under touch chrome, so painting it would leave
+    // a phone or tablet looking at a desktop workspace nobody can tap.
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.home.visible = true;
+    host.editor_state_mut().editor_ui.home.task = HomeFamily::AppUi;
+    host.editor_state_mut()
+        .editor_ui
+        .home
+        .set_draft("做一个咖啡点单 App");
+    assert!(host.queue_home_send());
+    assert!(host.workspace_visible(), "pointer hosts show the workspace");
+    host.editor_state_mut().editor_ui.touch = true;
+    assert!(
+        !host.workspace_visible(),
+        "touch hosts keep their own chrome until the phone reader exists"
     );
 }

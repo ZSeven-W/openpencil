@@ -121,7 +121,11 @@ pub struct WorkspaceLayout {
     pub zoom_fit: Rect,
     pub zoom_in: Rect,
     pub strip: Option<Rect>,
+    /// Thumbnail slots, left to right. Slot `i` shows board
+    /// `thumb_first + i` — a deck longer than the strip slides this window
+    /// to keep the selected board in view instead of dropping the tail.
     pub thumbs: Vec<Rect>,
+    pub thumb_first: usize,
     pub overview: Rect,
     pub play: Option<Rect>,
     /// The canvas region the host paints the real canvas into.
@@ -135,6 +139,28 @@ pub struct WorkspaceLayout {
 /// sizes the deck strip's thumbnail row. `dock_width` / `collapsed` are
 /// the LEFT PANEL's `layer_panel_width` and `!sidebar_open` — passed in
 /// as values so the pure function stays testable.
+/// First board of the thumbnail window: centred on the selection, clamped so
+/// the window never runs past either end of the deck.
+pub fn thumb_window_start(board_count: usize, slots: usize, selected: usize) -> usize {
+    if slots == 0 || board_count <= slots {
+        return 0;
+    }
+    selected
+        .min(board_count - 1)
+        .saturating_sub(slots / 2)
+        .min(board_count - slots)
+}
+
+impl WorkspaceLayout {
+    /// The strip slot showing `board`, if it is inside the window.
+    pub fn thumb_rect(&self, board: usize) -> Option<Rect> {
+        board
+            .checked_sub(self.thumb_first)
+            .and_then(|slot| self.thumbs.get(slot))
+            .copied()
+    }
+}
+
 pub fn layout_for(
     viewport_width: f32,
     viewport_height: f32,
@@ -284,6 +310,7 @@ pub fn layout_for(
         zoom_in,
         strip,
         thumbs,
+        thumb_first: 0,
         overview,
         play,
         canvas,
@@ -340,7 +367,7 @@ impl<'a> WorkspaceSurface<'a> {
     }
 
     pub fn layout(&self, viewport_width: f32, viewport_height: f32) -> WorkspaceLayout {
-        layout_for(
+        let mut layout = layout_for(
             viewport_width,
             viewport_height,
             self.state.family,
@@ -348,13 +375,28 @@ impl<'a> WorkspaceSurface<'a> {
             self.ui.layer_panel_width,
             !self.ui.sidebar_open,
             self.boards.len(),
-        )
+        );
+        layout.thumb_first =
+            thumb_window_start(self.boards.len(), layout.thumbs.len(), self.state.selected);
+        layout
     }
 
     /// Failed-phase banner actions, resolved against the canvas so the
     /// hit-test and paint share one answer (layout_for is failure-blind).
+    /// Present runs only on a finished result with boards. The strip paints
+    /// the tile disabled otherwise, and the press must agree with the paint.
+    pub fn play_enabled(&self) -> bool {
+        self.state.phase == op_editor_core::WorkspacePhase::Done && !self.boards.is_empty()
+    }
+
+    /// Retry / back-to-edit actions for a run that did not finish: a failed
+    /// run, or one the user stopped (stopping used to leave no way to try
+    /// again short of retyping the brief on Home).
     pub fn banner_buttons(&self, layout: &WorkspaceLayout) -> Option<(Rect, Rect)> {
-        if self.state.phase != op_editor_core::WorkspacePhase::Failed {
+        if !matches!(
+            self.state.phase,
+            op_editor_core::WorkspacePhase::Failed | op_editor_core::WorkspacePhase::Stopped
+        ) {
             return None;
         }
         let cy = layout.canvas.origin.y + 28.0;
@@ -400,15 +442,17 @@ impl<'a> WorkspaceSurface<'a> {
             if strip.contains(point) {
                 if let Some(play) = layout.play {
                     if play.contains(point) {
-                        return Some(WorkspaceHit::Play);
+                        // A disabled tile swallows the press instead of
+                        // presenting a half-drawn deck.
+                        return self.play_enabled().then_some(WorkspaceHit::Play);
                     }
                 }
                 if layout.overview.contains(point) {
                     return Some(WorkspaceHit::Overview);
                 }
-                for (index, rect) in layout.thumbs.iter().enumerate() {
+                for (slot, rect) in layout.thumbs.iter().enumerate() {
                     if rect.contains(point) {
-                        return Some(WorkspaceHit::Thumb(index));
+                        return Some(WorkspaceHit::Thumb(layout.thumb_first + slot));
                     }
                 }
                 return Some(WorkspaceHit::Overview);

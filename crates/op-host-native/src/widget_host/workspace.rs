@@ -26,9 +26,16 @@ pub(in crate::widget_host) struct WorkspaceDockDrag {
     pub(in crate::widget_host) start_w: f32,
 }
 
+/// Narrowest the generation workspace's conversation dock may be dragged.
+const WORKSPACE_DOCK_MIN_WIDTH: f32 = 280.0;
+
 impl WidgetHostNative {
+    /// The generation workspace is a pointer surface: its presses are
+    /// dropped under touch chrome, so it must not paint there either — a
+    /// phone or tablet showed a desktop workspace nobody could tap. Touch
+    /// keeps the mobile chrome until the phone reader lands.
     pub fn workspace_visible(&self) -> bool {
-        self.editor_state.editor_ui.workspace.visible
+        self.editor_state.editor_ui.workspace.visible && !self.editor_state.editor_ui.touch_chrome()
     }
 
     /// The chrome tier — runs after Home and the modal tiers, ahead of
@@ -166,6 +173,15 @@ impl WidgetHostNative {
         let Some(prompt) = family.generation_prompt(&options) else {
             return;
         };
+        // A stopped run may have drawn part of the design. Retrying on top of
+        // it would stack a second attempt over the first; start on a fresh
+        // page instead and hand the partial one to the shell like any
+        // design a new Home brief replaces.
+        if self.editor_state.editor_ui.workspace.phase == op_editor_core::WorkspacePhase::Stopped
+            && !op_editor_core::blank_starter::active_page_is_blank_starter(&self.editor_state)
+        {
+            self.start_fresh_document_for_home();
+        }
         self.editor_state.editor_ui.workspace.resume_generating(0);
         self.editor_state.chat.focus_input_at_end(self.now_ms);
         self.editor_state.chat.set_input_text(prompt);
@@ -300,9 +316,14 @@ impl WidgetHostNative {
         }
         // A live dock drag follows the cursor even off the handle.
         if let Some(drag) = self.workspace_dock_drag {
-            self.editor_state
-                .editor_ui
-                .set_layer_panel_width(drag.start_w + (x - drag.start_x));
+            // The Studio spec keeps the conversation at 280–440: under 280 its
+            // composer and model chip start to clip. The professional layers
+            // panel shares the width field but keeps its own 240 floor.
+            let width = (drag.start_w + (x - drag.start_x)).clamp(
+                WORKSPACE_DOCK_MIN_WIDTH,
+                op_editor_core::LAYER_PANEL_MAX_WIDTH,
+            );
+            self.editor_state.editor_ui.set_layer_panel_width(width);
             self.mark_dirty();
             return Some(true);
         }

@@ -105,6 +105,8 @@ fn surface_hit(
         active: true,
         family,
         view,
+        // A finished result: Present is only live once the run is Done.
+        phase: WorkspacePhase::Done,
         ..op_editor_core::WorkspaceState::default()
     };
     // The dock IS the left panel: the surface reads the panel's own
@@ -401,4 +403,104 @@ fn the_strip_tiles_share_the_thumbnail_rows_geometry() {
     let last = *layout.thumbs.last().expect("thumbnails");
     assert!(layout.overview.origin.x + layout.overview.size.x < thumb.origin.x);
     assert!(last.origin.x + last.size.x < play.origin.x);
+}
+
+#[test]
+fn stopped_phase_offers_retry_too() {
+    let mut editor = editor_with_boards(2);
+    editor.editor_ui.workspace = op_editor_core::WorkspaceState {
+        visible: true,
+        active: true,
+        phase: WorkspacePhase::Stopped,
+        ..op_editor_core::WorkspaceState::default()
+    };
+    let surface = WorkspaceSurface::for_editor_at(&editor, 0).expect("workspace visible");
+    let layout = surface.layout(1440.0, 900.0);
+    let (retry, _) = surface
+        .banner_buttons(&layout)
+        .expect("a stopped run must offer a way to try again");
+    assert_eq!(
+        surface.hit_test_layout(
+            &layout,
+            Point2D::new(retry.origin.x + 2.0, retry.origin.y + 2.0)
+        ),
+        Some(WorkspaceHit::Retry)
+    );
+}
+
+#[test]
+fn present_is_inert_while_the_run_is_still_generating() {
+    let mut editor = editor_with_boards(3);
+    editor.editor_ui.workspace = op_editor_core::WorkspaceState {
+        visible: true,
+        active: true,
+        family: HomeFamily::Presentation,
+        phase: WorkspacePhase::Generating,
+        ..op_editor_core::WorkspaceState::default()
+    };
+    editor.editor_ui.layer_panel_width = 320.0;
+    editor.editor_ui.sidebar_open = true;
+    let surface = WorkspaceSurface::for_editor_at(&editor, 0).expect("workspace visible");
+    let layout = surface.layout(1440.0, 900.0);
+    let play = layout.play.expect("deck strip carries Present");
+    assert!(!surface.play_enabled());
+    assert_eq!(
+        surface.hit_test_layout(
+            &layout,
+            Point2D::new(play.origin.x + 2.0, play.origin.y + 2.0)
+        ),
+        None,
+        "the tile paints disabled, so the press must not present a half-drawn deck"
+    );
+}
+
+#[test]
+fn the_thumbnail_window_follows_the_selection() {
+    assert_eq!(
+        thumb_window_start(5, 8, 4),
+        0,
+        "a deck that fits never slides"
+    );
+    assert_eq!(thumb_window_start(20, 6, 0), 0);
+    assert_eq!(thumb_window_start(20, 6, 10), 7, "centred on the selection");
+    assert_eq!(thumb_window_start(20, 6, 19), 14, "clamped at the end");
+    assert_eq!(thumb_window_start(20, 0, 10), 0);
+}
+
+#[test]
+fn a_long_deck_keeps_its_late_slides_reachable_from_the_strip() {
+    // Measured: the strip dropped every board past what fit, so on a long
+    // deck the later slides had no thumbnail to press.
+    let boards = 30;
+    let mut editor = editor_with_boards(boards);
+    editor.editor_ui.workspace = op_editor_core::WorkspaceState {
+        visible: true,
+        active: true,
+        family: HomeFamily::Presentation,
+        phase: WorkspacePhase::Done,
+        selected: 27,
+        ..op_editor_core::WorkspaceState::default()
+    };
+    editor.editor_ui.layer_panel_width = 320.0;
+    editor.editor_ui.sidebar_open = true;
+    let surface = WorkspaceSurface::for_editor_at(&editor, 0).expect("workspace visible");
+    let layout = surface.layout(1440.0, 900.0);
+    assert!(
+        layout.thumbs.len() < boards,
+        "the fixture must overflow the strip"
+    );
+    let rect = layout
+        .thumb_rect(27)
+        .expect("the selected late slide has a thumbnail slot");
+    assert_eq!(
+        surface.hit_test_layout(
+            &layout,
+            Point2D::new(rect.origin.x + 2.0, rect.origin.y + 2.0)
+        ),
+        Some(WorkspaceHit::Thumb(27))
+    );
+    assert!(
+        layout.thumb_rect(0).is_none(),
+        "the head scrolled out of the window"
+    );
 }

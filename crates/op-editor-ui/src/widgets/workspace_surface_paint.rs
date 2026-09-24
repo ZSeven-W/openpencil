@@ -551,7 +551,7 @@ fn paint_strip(
         },
     );
     if let Some(play) = layout.play {
-        let enabled = surface.state.phase == WorkspacePhase::Done && !surface.boards.is_empty();
+        let enabled = surface.play_enabled();
         paint_strip_tile(
             cx,
             play,
@@ -567,7 +567,8 @@ fn paint_strip(
     }
 
     // Thumbnail plates (the host blits the real rasters on top).
-    for (index, thumb) in layout.thumbs.iter().enumerate() {
+    for (slot, thumb) in layout.thumbs.iter().enumerate() {
+        let index = layout.thumb_first + slot;
         let selected =
             surface.state.selected == index && surface.state.view != WorkspaceView::Overview;
         let plate = Rect::xywh(
@@ -704,9 +705,14 @@ fn paint_failed_banner(
         retry.size.y + 28.0,
     );
     cx.backend.fill_rect(banner, fade(palette.chip_bg, 0.9));
+    let note = if surface.state.phase == WorkspacePhase::Stopped {
+        "workspace.phase.stopped"
+    } else {
+        "workspace.failed.note"
+    };
     text(
         cx,
-        tr(locale, "workspace.failed.note"),
+        tr(locale, note),
         Point2D::new(
             banner.origin.x + 18.0,
             jian_widgets::centered_text_baseline_y(banner, 13.0) - 30.0,

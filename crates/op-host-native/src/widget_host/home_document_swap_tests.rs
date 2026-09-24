@@ -113,3 +113,39 @@ fn staged_attachments_cross_the_document_swap() {
         "the screenshot staged for this brief must travel with it"
     );
 }
+
+#[test]
+fn retrying_a_stopped_run_starts_on_a_fresh_page_and_keeps_the_partial_one() {
+    let mut host = host_with_first_brief_sent();
+    first_run_drew_a_design(&mut host);
+    host.editor_state_mut().editor_ui.workspace.phase = op_editor_core::WorkspacePhase::Stopped;
+    let (w, h) = (1440.0, 900.0);
+    let retry = {
+        let surface = op_editor_ui::widgets::workspace_surface::WorkspaceSurface::for_editor_at(
+            host.editor_state(),
+            0,
+        )
+        .expect("workspace visible");
+        let layout = surface.layout(w, h);
+        surface
+            .banner_buttons(&layout)
+            .expect("a stopped run offers Retry")
+            .0
+    };
+    assert_eq!(
+        host.press_workspace(retry.origin.x + 4.0, retry.origin.y + 4.0, w, h),
+        Some(true)
+    );
+    let replaced = host
+        .take_replaced_home_document()
+        .expect("the partial design is handed to the shell, not overdrawn");
+    assert!(replaced.had_unsaved_changes);
+    assert!(
+        op_editor_core::blank_starter::active_page_is_blank_starter(host.editor_state()),
+        "the retry draws on a fresh page"
+    );
+    assert_eq!(
+        host.editor_state().editor_ui.workspace.phase,
+        op_editor_core::WorkspacePhase::Generating
+    );
+}

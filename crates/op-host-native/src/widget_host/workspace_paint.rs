@@ -70,7 +70,7 @@ impl WidgetHostNative {
             let Some(image) = self.slide_thumbs.image(board_id) else {
                 continue;
             };
-            let Some(thumb) = layout.thumbs.get(index) else {
+            let Some(thumb) = layout.thumb_rect(index) else {
                 continue;
             };
             let plate = Rect::xywh(
@@ -95,7 +95,7 @@ impl WidgetHostNative {
         let mut wanted: Vec<(String, &op_editor_ui::layout_scene::SceneNode, Point2D)> = Vec::new();
         for (index, board_id) in boards.iter().enumerate() {
             if let Some(node) = page.find(board_id) {
-                if let Some(thumb) = layout.thumbs.get(index) {
+                if let Some(thumb) = layout.thumb_rect(index) {
                     wanted.push((
                         board_id.clone(),
                         node,
