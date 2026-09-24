@@ -32,6 +32,10 @@ pub enum AiEvent {
     /// A reasoning fragment (`{"thinking":"…"}`) — the chat transcript
     /// renders these in the message's collapsible thinking block.
     Thinking(String),
+    /// The finished design run's audited quality report
+    /// (`{"qualityReport":…}`), sent once ahead of `done` when the run
+    /// reported quality checks. The Studio workspace shows it as its chip.
+    QualityReport(Box<op_editor_core::QualityReport>),
     /// The stream finished successfully.
     Done,
     /// The proxy reported an error for this turn.
@@ -258,6 +262,11 @@ pub(crate) fn parse_event(payload: &str) -> Option<AiEvent> {
             return Some(AiEvent::AgentIdentity { name, color });
         }
     }
+    if let Some(report) = obj.get("qualityReport") {
+        return serde_json::from_value(report.clone())
+            .ok()
+            .map(|report| AiEvent::QualityReport(Box::new(report)));
+    }
     if let Some(delta) = nonempty_str(obj, "delta") {
         return Some(AiEvent::Delta(delta));
     }
@@ -318,6 +327,22 @@ mod tests {
             parse_event(r#"{"error":"boom"}"#),
             Some(AiEvent::Error("boom".into()))
         );
+    }
+
+    #[test]
+    fn parse_event_reads_the_quality_report_frame() {
+        let report = op_editor_core::QualityReport {
+            audited: true,
+            notes: vec!["kept".into()],
+            ..Default::default()
+        };
+        let payload = serde_json::json!({ "qualityReport": report }).to_string();
+        assert_eq!(
+            parse_event(&payload),
+            Some(AiEvent::QualityReport(Box::new(report)))
+        );
+        // A malformed report is dropped rather than read as some other frame.
+        assert_eq!(parse_event(r#"{"qualityReport":42}"#), None);
     }
 
     #[test]

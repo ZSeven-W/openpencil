@@ -103,6 +103,7 @@ pub mod public_https_client;
 pub mod quality_credential;
 pub mod reference_context;
 pub mod reference_context_error;
+pub mod run_quality;
 #[cfg(test)]
 pub(crate) mod test_support;
 // Settings persistence moved to op-editor-host-core (feature `settings-io`)

@@ -593,7 +593,7 @@ fn fire_request<C: RepaintContext + 'static>(
             }
             // Reasoning fragments are a chat-transcript affordance; the codegen
             // pipeline consumes only the answer text.
-            AiEvent::Thinking(_) => {}
+            AiEvent::Thinking(_) | AiEvent::QualityReport(_) => {}
             AiEvent::Done => {
                 // Feed the buffered text into the pipeline, mark complete, queue a
                 // progress delta, then re-drive (next batch req or re-step).

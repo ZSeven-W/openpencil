@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use op_editor_core::{ChatMessage, QualityRepairRecord, QualityTopic};
+use op_editor_core::{ChatMessage, QualityRepairRecord, QualityReport, QualityTopic};
 use op_orchestrator::SubtaskOutcome;
 use serde_json::json;
 

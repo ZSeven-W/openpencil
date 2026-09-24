@@ -315,3 +315,60 @@ fn retrying_a_stopped_run_redraws_on_a_fresh_page_inside_the_same_workspace() {
         op_editor_core::LaunchRoute::Orchestrator
     );
 }
+
+fn audited_report(note: &str) -> op_editor_core::QualityReport {
+    let mut report = op_editor_core::QualityReport::default();
+    report.ingest_repairs(
+        &["overflow".to_string()],
+        &[op_editor_core::QualityRepairRecord {
+            pass: "geometry-validation".into(),
+            family: "overflow".into(),
+            node_id: "title".into(),
+            node_name: Some("Title".into()),
+            detail: "width 420 → 327".into(),
+        }],
+        &[note.to_string()],
+    );
+    report.ingest_audit(&[], Vec::new());
+    report
+}
+
+#[test]
+fn the_daemons_quality_report_shows_on_its_own_run_once_done() {
+    let mut host = running_host();
+    launch(&mut host, 7);
+    let report = audited_report("first");
+    let locale = host.editor_state.editor_ui.effective_locale();
+    let line = report.transcript_line(locale);
+    assert!(host.apply_run_quality(7, None, report.clone()));
+    let workspace = &host.editor_state.editor_ui.workspace;
+    assert_eq!(workspace.quality.as_ref(), Some(&report));
+    assert!(
+        workspace.finished_quality().is_none(),
+        "no chip while the run is still generating"
+    );
+    let reply = host
+        .editor_state
+        .chat
+        .messages
+        .iter()
+        .rev()
+        .find(|m| m.streaming)
+        .expect("streaming reply");
+    assert!(reply.content.contains(&line), "summary line in the reply");
+
+    finish_stream(&mut host);
+    land_boards(&mut host);
+    host.drive_workspace_run(W, H, false, 5_000);
+    host.drive_workspace_run(W, H, false, 5_000 + WEB_SETTLE_GRACE_MS);
+    let workspace = &host.editor_state.editor_ui.workspace;
+    assert_eq!(workspace.phase, WorkspacePhase::Done);
+    assert_eq!(workspace.finished_quality(), Some(&report));
+
+    // A late report from an older turn never replaces this run's report.
+    host.apply_run_quality(6, None, audited_report("stale"));
+    assert_eq!(
+        host.editor_state.editor_ui.workspace.quality.as_ref(),
+        Some(&report)
+    );
+}

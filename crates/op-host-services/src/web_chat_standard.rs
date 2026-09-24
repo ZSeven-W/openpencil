@@ -40,6 +40,9 @@ use events::{
 #[path = "web_chat_standard_reference.rs"]
 mod reference;
 
+#[path = "web_chat_standard_quality.rs"]
+mod quality;
+
 #[path = "web_chat_standard_model_selection.rs"]
 mod model_selection;
 use model_selection::selected_model_id;
@@ -667,9 +670,12 @@ fn stream_new_design_route<W: Write>(
     write_agent_identity_event(out, &identity)?;
     let epoch = op_editor_core::agent_indicators::begin();
     op_editor_core::agent_indicators::confirm_cursor_agent(epoch, &identity.color, &identity.name);
+    let mut folded_quality = None;
     let summary = {
         let out_ref = &mut *out;
+        let quality_ref = &mut folded_quality;
         let mut on_progress = move |p: Progress| {
+            crate::run_quality::fold_quality_event(quality_ref, &p);
             let _ = write_thinking_event(out_ref, &format!("\n{}", progress_label(&p)));
         };
         crate::chat_runtime::block_on_anywhere(Orchestrator::new().with_indicator_epoch(epoch).run(
@@ -694,6 +700,11 @@ fn stream_new_design_route<W: Write>(
                 .filter(|o| o.error.is_none())
                 .count();
             let failed = summary.subtasks.len() - ok;
+            if let Some(report) =
+                quality::finished_run_report(folded_quality, target.state, &summary)
+            {
+                quality::write_quality_report_event(out, &report)?;
+            }
             write_delta_event(
                 out,
                 &format!(

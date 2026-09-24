@@ -243,6 +243,14 @@ fn start_pump<C: RepaintContext + 'static>(
             // queue borrow across editor-state mutation.
             let evt = queue.borrow_mut().pop_front();
             let Some(evt) = evt else { break };
+            // The finished run's quality report belongs to the Studio
+            // workspace this turn was stamped on, not to the bubble text.
+            if let AiEvent::QualityReport(report) = evt {
+                changed |= b
+                    .host_mut()
+                    .apply_run_quality(generation, running_tab(), *report);
+                continue;
+            }
             // Write into the tab this run is bound to (MT.3 session-per-tab),
             // not whichever tab is active now.
             let target = b
@@ -413,6 +421,8 @@ pub(crate) fn apply_event_to_chat(chat: &mut ChatState, evt: &AiEvent) -> bool {
             msg.streaming = false;
         }
         AiEvent::Done => msg.streaming = false,
+        // Routed to the workspace by the pump before it reaches here.
+        AiEvent::QualityReport(_) => {}
     }
     terminal
 }

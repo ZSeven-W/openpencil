@@ -19,7 +19,7 @@ use op_editor_core::preview_slideshow::active_page_boards;
 use op_editor_core::workspace_run::{
     assistant_streaming, awaiting_launch, last_assistant_failed, produced_board_count,
 };
-use op_editor_core::{ChatRole, WorkspacePhase};
+use op_editor_core::{ChatRole, QualityReport, WorkspacePhase};
 use op_editor_ui::widgets::host_overlay_geometry::zoom_to_fit;
 
 /// How long the pump keeps a run open after its turn went idle, so the
@@ -66,6 +66,44 @@ impl WidgetHost {
             return true;
         }
         false
+    }
+
+    /// The daemon's audited quality report for the chat turn launched as
+    /// `epoch`. The workspace keeps it only when that turn is still its run
+    /// (the chip then shows once the run settles Done); a report for an
+    /// older run is never pinned on a newer one. Either way the turn's own
+    /// streaming reply gets the one-line summary, as desktop appends it.
+    pub fn apply_run_quality(
+        &mut self,
+        epoch: u64,
+        running_tab: Option<usize>,
+        report: QualityReport,
+    ) -> bool {
+        let locale = self.editor_state.editor_ui.effective_locale();
+        let line = (!report.is_empty()).then(|| report.transcript_line(locale));
+        let mut changed = false;
+        if let Some(line) = line {
+            let chat = self.editor_state.chat.run_tab_mut(running_tab);
+            if let Some(reply) = chat.messages.iter_mut().rev().find(|m| m.streaming) {
+                if !reply.content.contains(&line) {
+                    if !reply.content.trim().is_empty() {
+                        reply.content.push_str("\n\n");
+                    }
+                    reply.content.push_str(&line);
+                    changed = true;
+                }
+            }
+        }
+        let workspace = &mut self.editor_state.editor_ui.workspace;
+        if workspace.active && workspace.run_epoch == epoch {
+            workspace.quality = Some(report);
+            workspace.quality_open = false;
+            changed = true;
+        }
+        if changed {
+            self.mark_dirty();
+        }
+        changed
     }
 
     /// One pump frame. `turn_in_flight` is whether the web chat still holds
