@@ -139,6 +139,9 @@ pub struct WorkspaceLayout {
     /// The viewport height the layout was built for (the quality panel
     /// clamps its height against it).
     pub viewport_h: f32,
+    /// The open chat drawer's settled rect (narrow windows only). `None`
+    /// while docked or while the drawer is shut.
+    pub drawer: Option<Rect>,
 }
 
 /// Pure layout: shared by paint, hit-test and the host. `board_count`
@@ -323,6 +326,7 @@ pub fn layout_for(
         retry,
         return_edit,
         viewport_h: vh,
+        drawer: None,
     }
 }
 
@@ -385,15 +389,27 @@ impl<'a> WorkspaceSurface<'a> {
     }
 
     pub fn layout(&self, viewport_width: f32, viewport_height: f32) -> WorkspaceLayout {
+        // A narrow window's chat is a drawer OVER the canvas: the chrome
+        // lays out as if the dock were collapsed, and the drawer rides on
+        // top of it.
+        let drawer_mode = self.ui.workspace_drawer_active();
         let mut layout = layout_for(
             viewport_width,
             viewport_height,
             self.state.family,
             // The dock IS the left panel: one width, one open flag.
             self.ui.layer_panel_width,
-            !self.ui.sidebar_open,
+            drawer_mode || !self.ui.sidebar_open,
             self.boards.len(),
         );
+        if drawer_mode && self.state.drawer_open {
+            layout.drawer = Some(Rect::xywh(
+                0.0,
+                WORKSPACE_HEADER_H,
+                self.ui.workspace_drawer_width(viewport_width),
+                (viewport_height - WORKSPACE_HEADER_H).max(0.0),
+            ));
+        }
         layout.thumb_first =
             thumb_window_start(self.boards.len(), layout.thumbs.len(), self.state.selected);
         layout
@@ -498,6 +514,16 @@ impl<'a> WorkspaceSurface<'a> {
         if let Some(panel) = self.quality_panel(layout) {
             if let Some(hit) = panel.hit_test(point) {
                 return Some(hit);
+            }
+        }
+        // The open drawer covers everything below the header: presses on
+        // it belong to the chat panel, presses beside it close it.
+        if let Some(drawer) = layout.drawer {
+            if drawer.contains(point) {
+                return None;
+            }
+            if point.y >= WORKSPACE_HEADER_H {
+                return Some(WorkspaceHit::DrawerScrim);
             }
         }
         if let Some(hit) = self.variant_bar_hit(layout, point) {
@@ -635,6 +661,8 @@ mod banner;
 #[path = "workspace_variants_bar.rs"]
 mod variants_bar;
 pub use variants_bar::{variant_bar_layout, VariantBarItem};
+#[path = "workspace_surface_drawer.rs"]
+mod drawer;
 #[path = "workspace_quality_paint.rs"]
 mod quality_paint;
 

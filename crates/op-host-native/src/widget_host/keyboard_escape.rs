@@ -347,6 +347,14 @@ impl WidgetHostNative {
         if self.exit_image_crop_edit() {
             return true;
         }
+        // A narrow window's open chat drawer shuts before anything below
+        // it (this also releases the chat input it held).
+        if self.editor_state.editor_ui.workspace_drawer_active()
+            && self.editor_state.editor_ui.workspace.drawer_open
+            && self.set_workspace_drawer_open(false)
+        {
+            return true;
+        }
         if escape::escape_chat_focus(&mut self.editor_state, self.now_ms) {
             self.mark_dirty();
             return true;

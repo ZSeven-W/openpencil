@@ -234,6 +234,20 @@ pub fn pinned_chat(state: &EditorState, viewport_w: f32, viewport_h: f32) -> Opt
         return None;
     }
     if ui.workspace.visible {
+        // Narrow window: the chat is a drawer over the canvas, at its
+        // settled (open) rect — the host slides the paint, not the hits.
+        if ui.workspace.drawer_mode {
+            return Some(if ui.workspace.drawer_open {
+                PinnedChat::At(Rect::xywh(
+                    0.0,
+                    op_editor_core::WORKSPACE_HEADER_H,
+                    ui.workspace_drawer_width(viewport_w),
+                    (viewport_h - op_editor_core::WORKSPACE_HEADER_H).max(0.0),
+                ))
+            } else {
+                PinnedChat::Closed
+            });
+        }
         return if ui.sidebar_open {
             Some(PinnedChat::At(Rect::xywh(
                 0.0,
@@ -285,7 +299,8 @@ pub fn canvas_origin(state: &EditorState) -> (f32, f32) {
         return (0.0, crate::widgets::works_reader::READER_HEADER_H);
     }
     if workspace_docked(state) {
-        let dock_x = if state.editor_ui.sidebar_open {
+        // A drawer overlays the canvas instead of pushing it.
+        let dock_x = if state.editor_ui.sidebar_open && !state.editor_ui.workspace.drawer_mode {
             state.editor_ui.layer_panel_width
         } else {
             0.0

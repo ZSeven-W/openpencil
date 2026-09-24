@@ -420,7 +420,9 @@ impl WidgetHostNative {
                 == Some(op_editor_core::size_class::MobileSheetKind::Ai);
         if let Some(chat_rect) = self
             .ai_chat_rect(viewport_width, viewport_height)
-            .filter(|_| !presenting && chat_open)
+            .filter(|_| {
+                !presenting && chat_open && !self.editor_state.editor_ui.workspace_drawer_active()
+            })
         {
             // Owner-stamp so paint stores the canonical build under THIS host's
             // owner — the display-frame cursor hint reads it back by that owner.
@@ -455,6 +457,7 @@ impl WidgetHostNative {
         if workspace_visible {
             self.paint_workspace_strip(frame, viewport_width, viewport_height);
             self.paint_workspace_banners(frame, viewport_width, viewport_height);
+            self.paint_workspace_drawer(frame, viewport_width, viewport_height);
             // The report panel floats above everything the workspace paints.
             self.paint_workspace_quality_overlay(frame, viewport_width, viewport_height);
         }

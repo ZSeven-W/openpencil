@@ -353,6 +353,9 @@ pub use editor_ui_state::home::{HOME_ART_SWITCH_MS, HOME_ENTER_FRAME_MS, HOME_EN
 pub use editor_ui_state::home_example_draft::{
     example_draft_template, refine_prompt, HomeSendMode,
 };
+pub use editor_ui_state::workspace::drawer::{
+    WORKSPACE_DRAWER_BREAKPOINT, WORKSPACE_DRAWER_MIN_GUTTER, WORKSPACE_DRAWER_SLIDE_MS,
+};
 pub use editor_ui_state::workspace::{
     clamp_variant_count, infer_reading_family, pick_workspace_variant, reader_is_paged,
     reads_as_long_page, variant_letter, variant_pick_commands, PageEditTarget, ReaderHit,

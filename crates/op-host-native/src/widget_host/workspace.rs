@@ -50,9 +50,22 @@ impl WidgetHostNative {
         if !self.workspace_visible() || self.editor_state.editor_ui.touch_chrome() {
             return None;
         }
+        self.sync_workspace_drawer(viewport_width);
         let surface = WorkspaceSurface::for_editor_at(&self.editor_state, self.now_ms)?;
         let layout = surface.layout(viewport_width, viewport_height);
         let hit = surface.hit_test_layout(&layout, Point2D::new(x, y));
+        // Any press outside the open drawer shuts it; a press on the
+        // scrim does nothing else (it is a dismissal, not a canvas click).
+        if layout
+            .drawer
+            .is_some_and(|drawer| !drawer.contains(Point2D::new(x, y)))
+        {
+            self.set_workspace_drawer_open(false);
+            if hit == Some(WorkspaceHit::DrawerScrim) {
+                self.mark_dirty();
+                return Some(true);
+            }
+        }
         // An open report panel closes on any press outside it (the press
         // itself still reaches whatever is underneath).
         if self.editor_state.editor_ui.workspace.quality_open
@@ -101,10 +114,19 @@ impl WidgetHostNative {
                 self.editor_state.tool = restore.unwrap_or(Tool::Select);
             }
             WorkspaceHit::ToggleDock => {
-                // The dock's collapse toggle collapses the LEFT PANEL:
-                // one column, one open flag.
-                self.editor_state.editor_ui.sidebar_open =
-                    !self.editor_state.editor_ui.sidebar_open;
+                if self.editor_state.editor_ui.workspace_drawer_active() {
+                    // Narrow window: the toggle slides the drawer.
+                    let open = !self.editor_state.editor_ui.workspace.drawer_open;
+                    self.set_workspace_drawer_open(open);
+                } else {
+                    // The dock's collapse toggle collapses the LEFT PANEL:
+                    // one column, one open flag.
+                    self.editor_state.editor_ui.sidebar_open =
+                        !self.editor_state.editor_ui.sidebar_open;
+                }
+            }
+            WorkspaceHit::DrawerScrim => {
+                self.set_workspace_drawer_open(false);
             }
             WorkspaceHit::DockResize => {
                 self.workspace_dock_drag = Some(WorkspaceDockDrag {
@@ -231,6 +253,40 @@ impl WidgetHostNative {
         self.apply_workspace_fit(viewport_w, viewport_h);
         self.mark_dirty();
         changed
+    }
+
+    /// Re-derive the chat drawer mode from the window width (every frame
+    /// and every press see the same answer). Returns whether it changed.
+    pub(in crate::widget_host) fn sync_workspace_drawer(&mut self, viewport_w: f32) -> bool {
+        let changed = self
+            .editor_state
+            .editor_ui
+            .workspace
+            .sync_drawer_mode(viewport_w);
+        if changed {
+            self.mark_dirty();
+        }
+        changed
+    }
+
+    /// Open or shut the narrow-window chat drawer with its slide. Shutting
+    /// it also releases the chat input, so keystrokes never land in a
+    /// conversation the user can no longer see.
+    pub(in crate::widget_host) fn set_workspace_drawer_open(&mut self, open: bool) -> bool {
+        let now_ms = self.now_ms.max(1);
+        if !self
+            .editor_state
+            .editor_ui
+            .workspace
+            .set_drawer_open(open, now_ms)
+        {
+            return false;
+        }
+        if !open {
+            self.editor_state.chat.blur_input(self.now_ms);
+        }
+        self.mark_dirty();
+        true
     }
 
     /// A remaining-issue row was clicked: select the node it names and
@@ -662,3 +718,5 @@ mod quality_tests;
 #[cfg(test)]
 #[path = "workspace_variants_tests.rs"]
 mod variants_tests;
+#[path = "workspace_drawer_tests.rs"]
+mod drawer_tests;

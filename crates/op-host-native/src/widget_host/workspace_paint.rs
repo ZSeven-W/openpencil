@@ -27,6 +27,9 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.workspace.shown_at_ms == 0 {
             self.editor_state.editor_ui.workspace.shown_at_ms = self.now_ms.max(1);
         }
+        // The chrome, the canvas region and the chat pass below all read
+        // the drawer mode, so it is settled before any of them paints.
+        self.sync_workspace_drawer(viewport_w);
         // The dock always shows the EXPANDED chat — a minimized bar
         // dragged in from an earlier session would have no working
         // expand affordance (its floating controls are pinned-gated),
@@ -41,6 +44,58 @@ impl WidgetHostNative {
             backend: &mut *frame,
         };
         surface.paint(&mut cx, Rect::xywh(0.0, 0.0, viewport_w, viewport_h));
+    }
+
+    /// Paint the narrow-window chat drawer: the scrim, the sheet, and the
+    /// chat panel slid to the drawer's current position. The ordinary chat
+    /// pass skips the panel in drawer mode so it can sit above the deck
+    /// strip and the canvas banners here. Hits keep the settled rect.
+    pub(in crate::widget_host) fn paint_workspace_drawer(
+        &mut self,
+        frame: &mut NativeFrameBackend<'_>,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) {
+        let (offset_x, width) = {
+            let Some(surface) = WorkspaceSurface::for_editor_at(&self.editor_state, self.now_ms)
+            else {
+                return;
+            };
+            if !surface.drawer_painting() {
+                return;
+            }
+            let mut cx = op_editor_ui::widgets::PaintCx {
+                backend: &mut *frame,
+            };
+            surface.paint_drawer_sheet(&mut cx, Rect::xywh(0.0, 0.0, viewport_w, viewport_h));
+            (
+                surface.drawer_offset_x(viewport_w),
+                self.editor_state
+                    .editor_ui
+                    .workspace_drawer_width(viewport_w),
+            )
+        };
+        let rect = Rect::xywh(
+            0.0,
+            op_editor_core::WORKSPACE_HEADER_H,
+            width,
+            (viewport_h - op_editor_core::WORKSPACE_HEADER_H).max(0.0),
+        );
+        let chat = op_editor_ui::widgets::AIChatPlaceholder::from_editor_at(
+            &self.editor_state,
+            self.now_ms,
+        )
+        .owned_by(self.chat_panel_owner);
+        use op_editor_ui::RenderBackend;
+        frame.save();
+        frame.translate(Point2D::new(offset_x, 0.0));
+        {
+            let mut cx = op_editor_ui::widgets::PaintCx {
+                backend: &mut *frame,
+            };
+            chat.paint(&mut cx, rect);
+        }
+        frame.restore();
     }
 
     /// Paint the expanded quality-report panel over the canvas and the

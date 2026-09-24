@@ -363,7 +363,7 @@ fn paint_toolbar(
         Icon::PanelLeft,
         Point2D::new(toggle.origin.x + 5.0, toggle.origin.y + 5.0),
         18.0,
-        if surface.ui.sidebar_open {
+        if surface.ui.chat_pinned() {
             palette.link
         } else {
             palette.muted

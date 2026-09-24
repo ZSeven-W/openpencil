@@ -14,6 +14,8 @@
 
 use super::home::{HomeFamily, TaskDraft};
 
+#[path = "workspace_drawer.rs"]
+pub mod drawer;
 #[path = "workspace_reader.rs"]
 mod reader;
 #[path = "workspace_variants.rs"]
@@ -127,6 +129,9 @@ pub enum WorkspaceHit {
     DraftAction,
     /// The variants bar's "use this" button for direction `index`.
     UseVariant(usize),
+    /// Anywhere below the header outside the open chat drawer (narrow
+    /// windows): the press closes the drawer and goes no further.
+    DrawerScrim,
 }
 
 /// Transient state for the generation workspace. Never persisted.
@@ -195,6 +200,15 @@ pub struct WorkspaceState {
     pub variant_count: u8,
     /// The directions that have landed so far, in slot order.
     pub variants: Vec<WorkspaceVariant>,
+    /// The window is narrow enough that the chat is a drawer over the
+    /// canvas instead of a docked column (see `workspace_drawer.rs`).
+    /// Synced from the viewport width by the host.
+    pub drawer_mode: bool,
+    /// The drawer is open (only meaningful in `drawer_mode`).
+    pub drawer_open: bool,
+    /// Wall-clock instant of the last open/shut, for the slide; `0` means
+    /// settled.
+    pub drawer_moved_at_ms: u64,
 }
 
 impl Default for WorkspaceState {
@@ -224,6 +238,9 @@ impl Default for WorkspaceState {
             reader_pressed: None,
             variant_count: 0,
             variants: Vec::new(),
+            drawer_mode: false,
+            drawer_open: false,
+            drawer_moved_at_ms: 0,
         }
     }
 }
@@ -263,6 +280,10 @@ impl WorkspaceState {
         self.page_edit_running = None;
         self.reader_pressed = None;
         self.clear_variants();
+        // A new run in a narrow window gives the design the width; the
+        // conversation is one toggle away.
+        self.drawer_open = false;
+        self.drawer_moved_at_ms = 0;
     }
 
     /// Record that this workspace's boards are the instant draft loaded
@@ -449,6 +470,8 @@ impl WorkspaceState {
         self.page_edit_running = None;
         self.reader_pressed = None;
         self.clear_variants();
+        self.drawer_open = false;
+        self.drawer_moved_at_ms = 0;
     }
 
     /// The next frame instant the entrance motion still needs, or
@@ -475,6 +498,11 @@ impl EditorUiState {
             return false;
         }
         if self.workspace.visible {
+            // A narrow window's chat is a drawer: pinned while it is open,
+            // regardless of the docked column's own flag.
+            if self.workspace.drawer_mode {
+                return self.workspace.drawer_open;
+            }
             return self.sidebar_open;
         }
         self.sidebar_open && self.slides_panel.tab == LeftPanelTab::Chat

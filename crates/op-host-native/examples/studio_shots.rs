@@ -9,7 +9,7 @@
 //! ```
 //! `filter` keeps only the shots whose name contains it.
 
-use op_editor_core::{HomeDevice, HomeFamily};
+use op_editor_core::{HomeDevice, HomeFamily, TaskDraft};
 use op_host_native::backend::{NativeBackend, NativeFrameBackend};
 use op_host_native::widget_host::WidgetHostNative;
 use op_i18n::Locale;
@@ -31,6 +31,59 @@ fn home_host(locale: Locale, task: HomeFamily, device: HomeDevice) -> WidgetHost
     )];
     state.chat.selected_model = 0;
     host.set_now_ms(1_000);
+    host
+}
+
+fn resource(name: &str) -> String {
+    format!(
+        "{}/../../packaging/ios/Resources/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    )
+}
+
+/// A desktop workspace over the sample `file`, settled Done as `family`
+/// with a short conversation in the dock, at a `w`-wide window.
+fn workspace_host(
+    locale: Locale,
+    file: &str,
+    family: HomeFamily,
+    w: f32,
+    h: f32,
+) -> WidgetHostNative {
+    let mut host = WidgetHostNative::new();
+    let src = std::fs::read_to_string(resource(file)).expect("read sample document");
+    let loaded = op_pen_loader::load_canonical(&src).expect("parse sample document");
+    let mut state = op_editor_core::EditorState::from_document(loaded.value);
+    state.editor_ui.locale = locale;
+    state.editor_ui.theme_mode = op_editor_core::ThemeMode::Light;
+    assert!(host.replace_editor_state(state));
+    host.set_now_ms(1_000);
+    let brief = "A product intro deck for OpenPencil";
+    host.editor_state_mut()
+        .editor_ui
+        .open_workspace_for_generation(family, brief, TaskDraft::default(), 0, 1_000, None);
+    {
+        let chat = &mut host.editor_state_mut().chat;
+        chat.messages.push(op_editor_core::ChatMessage::user(brief));
+        chat.messages.push(op_editor_core::ChatMessage::assistant(
+            "Drafted 5 slides: cover, agenda, three feature pages. Tell me what to change.",
+        ));
+    }
+    host.editor_state_mut()
+        .editor_ui
+        .workspace
+        .sync_drawer_mode(w);
+    let boards = op_editor_core::preview_slideshow::active_page_boards(host.editor_state()).len();
+    host.settle_workspace_idle_edge(0, boards, false, w, h);
+    host
+}
+
+/// [`workspace_host`] with the narrow window's drawer slid open.
+fn open_drawer(mut host: WidgetHostNative) -> WidgetHostNative {
+    host.editor_state_mut()
+        .editor_ui
+        .workspace
+        .set_drawer_open(true, 0);
     host
 }
 
@@ -92,6 +145,33 @@ fn scenarios() -> Vec<Scenario> {
         }),
         ("home-app-desktop-zh", 1440.0, 900.0, || {
             home_host(Locale::ZhCn, HomeFamily::AppUi, HomeDevice::Desktop)
+        }),
+        ("ws-wide-1280-en", 1280.0, 800.0, || {
+            workspace_host(
+                Locale::EnUs,
+                "ppt-demo.op",
+                HomeFamily::Presentation,
+                1280.0,
+                800.0,
+            )
+        }),
+        ("ws-narrow-820-closed-en", 820.0, 760.0, || {
+            workspace_host(
+                Locale::EnUs,
+                "ppt-demo.op",
+                HomeFamily::Presentation,
+                820.0,
+                760.0,
+            )
+        }),
+        ("ws-narrow-820-open-en", 820.0, 760.0, || {
+            open_drawer(workspace_host(
+                Locale::EnUs,
+                "ppt-demo.op",
+                HomeFamily::Presentation,
+                820.0,
+                760.0,
+            ))
         }),
     ]
 }

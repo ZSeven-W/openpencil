@@ -151,6 +151,9 @@ impl WidgetHostNative {
         if !self.editor_state.editor_ui.sidebar_open
             || self.editor_state.editor_ui.touch_chrome()
             || self.editor_state.editor_ui.preview.mode
+            // A drawer paints its own edge; the rail's would float over
+            // the full-width canvas.
+            || self.editor_state.editor_ui.workspace_drawer_active()
         {
             return;
         }
