@@ -4,7 +4,7 @@ description: Orchestrator task decomposition — splits UI requests into cohesiv
 phase: [planning]
 trigger: null
 priority: 0
-budget: 3798
+budget: 3840
 category: base
 ---
 
@@ -71,7 +71,7 @@ RULES:
 - SIDE PROGRESS RAILS DO NOT EXIST: a page root is a vertical flow, so a "right-side / vertical scroll progress rail" cannot be a subtask — it would render as a full-width empty band. When the user asks for one, plan the progress indicator INSIDE the Navigation Bar subtask as a 4px bar bound to scroll progress, and do not emit a separate rail subtask.
 - REFERENCE SKELETON: when the prompt carries a "REFERENCE SKELETON" block, the section ORDER, COUNT (±1) and column rhythm come from that block — one subtask per skeleton section, in that order, matching each section's role (nav → Navigation Bar, hero → Hero Section, …) and its column count in "elements" (e.g. "3 feature cards" for rhythm 3). Height hints scale from the block's height percentages. Everything else — headlines, copy, brand name, imagery, colors — must be ORIGINAL for the user's product; never reproduce the reference's text or brand. The skeleton is a structure guide, not content.
 - Single-task mobile screens (type 2 — login, signup, profile, settings, a single form/detail view): do NOT include Navigation Bar, Hero, CTA, or footer. Only include the actual UI elements needed (1-5 subtasks).
-- Mobile app HOME / feed / main / discover screens (type 2 but MULTI-section — a food/shopping/social/delivery app homepage, a dashboard feed, etc.): plan the sections that genuinely fit THIS product and prompt. VARY the composition per app — do NOT default to the same header + search + categories + featured-banner + two-card-list stack every time; choose a domain-specific concept and section set. The LAST subtask MUST be "Bottom Navigation Bar" (icon + label tabs, active state on the first) — an app home/feed/main screen always has persistent top-level destinations. Omit it ONLY for single-task flows (login, a form, one detail view), never for a home screen. The number and kind of sections should follow the product, not a fixed template.
+- Mobile app HOME / feed / main / discover screens (type 2 but MULTI-section — a food/shopping/social/delivery app homepage, a dashboard feed, etc.): plan the sections that genuinely fit THIS product and prompt. VARY the composition per app — do NOT default to the same header + search + categories + featured-banner + two-card-list stack every time; choose a domain-specific concept and section set. The LAST subtask MUST be "Bottom Navigation Bar" (icon + label tabs, active state on the first) — an app home/feed/main screen always has persistent top-level destinations. Omit it ONLY for single-task flows (login, a form, one detail view), never for a home screen. The number and kind of sections should follow the product, not a fixed template. Food/takeout homes: write the category grid as FOOD images (round dish cut-outs), never icon tiles or plates; store rows carry delivery time + promo tags.
 - FORM INTEGRITY: Keep a form's core elements (inputs + submit button) in the same subtask. Splitting inputs into one subtask and the button into another causes duplicate buttons.
 - Combine related elements: "Hero with title + image + CTA" = ONE subtask, not three.
 - Each subtask generates a meaningful section (~10-30 nodes). Only split if it would exceed 40 nodes.

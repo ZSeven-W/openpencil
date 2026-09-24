@@ -177,6 +177,11 @@ fn compact_subagent_skills<T: SkillNamed>(
             "mobile-app",
             "mobile-ui",
             "interactivity",
+            // Food-delivery anatomy (home feed, store page, dish rows, cart
+            // bar). Keyword-gated at the resolve layer (外卖 / takeout /
+            // restaurant words), so a no-op off a food brief; on one it is the
+            // only domain teaching a weak model gets for that product.
+            "food-delivery",
             // Deck teaching. Keyword-gated at the resolve layer (deck words
             // only), so a no-op on every non-deck prompt. Required on a deck:
             // the allow-set used to drop `slides` unconditionally, so a

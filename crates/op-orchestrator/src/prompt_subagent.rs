@@ -275,7 +275,7 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
     //
     // The arm is the Generation phase default rather than a literal, because
     // the deck path IS the worst case that default was last sized for
-    // (`Phase::Generation` is now 17150 after the motion keyframe example;
+    // (`Phase::Generation` is now 20300 so motion-bearing mobile briefs keep `mobile-app`;
     // earlier raises included 12000 → 13200 when `deck-contract` landed).
     // Restating it as a number is what let the old 11500 rot when the corpus
     // grew under it: the deck skills were then silently dropped/tail-cut,
@@ -288,7 +288,7 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
     // 2026-08-04 `slides` failure, in a card jacket.
     //
     // Measured 2026-08-09 on that file's fixtures, every resolved skill
-    // untruncated: the deck arm follows the current 17150 generation default.
+    // untruncated: the deck arm follows the current generation default (20300).
     // Standard lands on Full's exact skill set here — at an unbounded budget
     // it also carries `design-principles`; the deck
     // corpus crowds that Knowledge skill out. That is NOT this arm's doing:
@@ -606,7 +606,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
     // Assemble the per-subtask skill-load report from the FINAL skill set
     // (post tier/dedup filtering). `budget_max` reflects the tier budget
     // override. Full-tier falls through to `Phase::Generation::default_budget()`
-    // (17150 today — see that constant's doc comment for the corpus raises).
+    // (20300 today — see that constant's doc comment for the corpus raises).
     // This used to be a bare literal
     // that only affected this diagnostic number — `resolve_skills` (called
     // above via `resolve_generation_skills`) independently fell back to the
