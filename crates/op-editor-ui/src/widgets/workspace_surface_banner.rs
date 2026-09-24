@@ -31,7 +31,10 @@ impl WorkspaceSurface<'_> {
     }
 }
 
-/// The soft strip behind a banner's actions, with its note above them.
+/// The strip behind a banner: from the canvas top edge to just below the
+/// actions, opaque so board labels and art never show through, with the
+/// note centred in the band above the buttons (they sit at the canvas top
+/// + 28, see `banner_buttons` / `draft_banner_button`).
 fn paint_banner_strip(
     cx: &mut PaintCx<'_>,
     layout: &WorkspaceLayout,
@@ -39,20 +42,32 @@ fn paint_banner_strip(
     note: &str,
     palette: StudioPalette,
 ) {
+    let top = layout.canvas.origin.y;
+    let bottom = first_button.origin.y + first_button.size.y + 12.0;
     let banner = Rect::xywh(
         layout.canvas.origin.x,
-        first_button.origin.y - 14.0,
+        top,
         layout.canvas.size.x,
-        first_button.size.y + 28.0,
+        bottom - top,
     );
-    cx.backend
-        .fill_rect(banner, super::paint::fade(palette.chip_bg, 0.9));
+    cx.backend.fill_rect(banner, palette.chip_bg);
+    cx.backend.fill_rect(
+        Rect::xywh(banner.origin.x, bottom - 1.0, banner.size.x, 1.0),
+        palette.line,
+    );
+    let note_band = Rect::xywh(
+        banner.origin.x,
+        top,
+        banner.size.x,
+        first_button.origin.y - top,
+    );
+    let note_w = cx.backend.measure_text_family(note, 13.0, SANS);
     text(
         cx,
         note,
         Point2D::new(
-            banner.origin.x + 18.0,
-            jian_widgets::centered_text_baseline_y(banner, 13.0) - 30.0,
+            banner.origin.x + ((banner.size.x - note_w) / 2.0).max(18.0),
+            jian_widgets::centered_text_baseline_y(note_band, 13.0) + 2.0,
         ),
         13.0,
         palette.sub,
