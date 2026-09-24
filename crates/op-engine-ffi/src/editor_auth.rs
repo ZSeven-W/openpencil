@@ -308,6 +308,10 @@ pub(crate) fn take_shell_action(session: &mut Session) -> FfiResult<i32> {
         }
     }
 
+    if let Some(action) = crate::editor_chat_attachment::drain_attachment_pick(session)? {
+        return Ok(action);
+    }
+
     if let Some(action) = crate::editor_export::drain_codegen_export(session)? {
         return Ok(action);
     }
