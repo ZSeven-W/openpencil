@@ -310,6 +310,10 @@ impl WidgetHostNative {
                         Some(op_editor_core::FileAction::OpenRecent(index));
                 }
             }
+            HomeHit::Variants => {
+                let home = &mut self.editor_state.editor_ui.home;
+                home.variants_on = !home.variants_on;
+            }
             HomeHit::ReferenceLink | HomeHit::Figma => {
                 // Visible but disabled in M1; the tooltip explains why.
             }
@@ -419,6 +423,13 @@ impl WidgetHostNative {
         // the design-agent loop burns their budget thinking). The
         // desktop launcher consumes the route on the next drain.
         self.editor_state.chat.launch_route = op_editor_core::LaunchRoute::Orchestrator;
+        // The 3-directions toggle turns the brief into N side-by-side
+        // directions, each pinned to its own style guide.
+        if self.editor_state.editor_ui.home.variants_on {
+            let count = op_editor_core::DEFAULT_VARIANT_COUNT;
+            self.editor_state.editor_ui.workspace.begin_variants(count);
+            self.editor_state.chat.launch_route = op_editor_core::LaunchRoute::Variants(count);
+        }
         let sent = self.editor_state.chat.begin_send();
         self.editor_state.chat.focused = false;
         sent

@@ -198,7 +198,39 @@ impl WidgetHostNative {
             WorkspaceHit::QualityItem { topic, item } => {
                 self.focus_quality_item(topic, item, viewport_w, viewport_h);
             }
+            WorkspaceHit::UseVariant(index) => {
+                self.use_workspace_variant(index, viewport_w, viewport_h);
+            }
         }
+    }
+
+    /// Keep direction `index` of a side-by-side run as the working
+    /// design: the others move to their own page (see
+    /// `op_editor_core::pick_workspace_variant`) and the camera refits
+    /// the one that stayed.
+    pub(in crate::widget_host) fn use_workspace_variant(
+        &mut self,
+        index: usize,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        if !self.editor_state.editor_ui.workspace.variant_pick_enabled() {
+            return false;
+        }
+        let other_page = op_i18n::translate(
+            self.editor_state.editor_ui.locale,
+            "workspace.variants.otherPage",
+        );
+        let changed =
+            op_editor_core::pick_workspace_variant(&mut self.editor_state, index, other_page);
+        let workspace = &mut self.editor_state.editor_ui.workspace;
+        workspace.view = WorkspaceView::default_for(workspace.family);
+        workspace.selected = 0;
+        workspace.fitted_board_count = 0;
+        workspace.fitted_bounds = None;
+        self.apply_workspace_fit(viewport_w, viewport_h);
+        self.mark_dirty();
+        changed
     }
 
     /// A remaining-issue row was clicked: select the node it names and
@@ -268,6 +300,13 @@ impl WidgetHostNative {
         self.editor_state.chat.focus_input_at_end(self.now_ms);
         self.editor_state.chat.set_input_text(prompt);
         self.editor_state.chat.launch_route = op_editor_core::LaunchRoute::Orchestrator;
+        // A side-by-side run retries as one: the same number of directions.
+        let workspace = &mut self.editor_state.editor_ui.workspace;
+        if workspace.is_variants_run() {
+            let count = workspace.variant_count;
+            workspace.begin_variants(count);
+            self.editor_state.chat.launch_route = op_editor_core::LaunchRoute::Variants(count);
+        }
         let sent = self.editor_state.chat.begin_send();
         self.editor_state.chat.focused = false;
         if sent {
@@ -619,3 +658,7 @@ mod tests;
 #[cfg(test)]
 #[path = "workspace_quality_tests.rs"]
 mod quality_tests;
+
+#[cfg(test)]
+#[path = "workspace_variants_tests.rs"]
+mod variants_tests;

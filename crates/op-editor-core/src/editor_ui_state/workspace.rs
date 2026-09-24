@@ -125,6 +125,8 @@ pub enum WorkspaceHit {
     /// The template draft banner's action: 接入模型 while no model can
     /// answer, 让 AI 细化 once one can.
     DraftAction,
+    /// The variants bar's "use this" button for direction `index`.
+    UseVariant(usize),
 }
 
 /// Transient state for the generation workspace. Never persisted.

@@ -127,6 +127,8 @@ pub struct HomeLayout {
     pub screenshot: Rect,
     pub reference_link: Rect,
     pub figma: Rect,
+    /// The 3-directions toggle (zero on the compact composition).
+    pub variants: Rect,
     pub submit_row: Rect,
     pub model_chip: Rect,
     pub send: Rect,
@@ -476,6 +478,13 @@ fn wide_layout_for_scrolled(
         copy::estimate_text_w("Figma", 14.0) + 16.0 + 8.0 + 2.0,
         28.0,
     );
+    let variants = Rect::xywh(
+        figma.origin.x + figma.size.x + 21.0,
+        screenshot.origin.y,
+        copy::estimate_text_w(copy::home_str(self_locale(), "home.tools.variants"), 13.0)
+            + super::variants_toggle::VARIANTS_CHIP_PAD,
+        28.0,
+    );
     let submit_row = Rect::xywh(
         inner_x,
         composer.origin.y + composer.size.y - COMPOSER_PAD_BOTTOM - SUBMIT_ROW_H,
@@ -641,6 +650,7 @@ fn wide_layout_for_scrolled(
         screenshot,
         reference_link,
         figma,
+        variants,
         submit_row,
         model_chip,
         send,

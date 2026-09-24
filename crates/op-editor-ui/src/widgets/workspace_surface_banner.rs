@@ -25,6 +25,7 @@ impl WorkspaceSurface<'_> {
         );
         paint_failed_banner(self, cx, &layout, palette);
         paint_draft_banner(self, cx, &layout, palette);
+        super::variants_bar::paint_variant_bar(self, cx, &layout, palette);
     }
 }
 

@@ -500,6 +500,9 @@ impl<'a> WorkspaceSurface<'a> {
                 return Some(hit);
             }
         }
+        if let Some(hit) = self.variant_bar_hit(layout, point) {
+            return Some(hit);
+        }
         if let Some(button) = self.draft_banner_button(layout) {
             if button.contains(point) {
                 return Some(WorkspaceHit::DraftAction);
@@ -629,6 +632,9 @@ pub(crate) use paint::{family_label, phase_key};
 
 #[path = "workspace_surface_banner.rs"]
 mod banner;
+#[path = "workspace_variants_bar.rs"]
+mod variants_bar;
+pub use variants_bar::{variant_bar_layout, VariantBarItem};
 #[path = "workspace_quality_paint.rs"]
 mod quality_paint;
 

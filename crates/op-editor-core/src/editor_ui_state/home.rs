@@ -247,6 +247,9 @@ pub enum HomeHit {
     ReferenceLink,
     /// The Figma tool (disabled M1).
     Figma,
+    /// The 3-directions toggle: the next send generates
+    /// [`crate::DEFAULT_VARIANT_COUNT`] directions side by side.
+    Variants,
     /// The model button on the submit row.
     ModelChip,
     /// The 开始设计 primary button.
@@ -346,6 +349,10 @@ pub struct HomeState {
     /// The compact bottom nav's 作品 page is on show instead of the
     /// 创作 page. Phone-only; every hide returns to 创作.
     pub works_open: bool,
+    /// The composer's 3-directions toggle: the next send asks for
+    /// several distinct directions side by side instead of one design.
+    /// Session state shared by every task, like the model chip.
+    pub variants_on: bool,
 }
 
 impl Default for HomeState {
@@ -368,6 +375,7 @@ impl Default for HomeState {
             card_hover_since_ms: 0,
             card_hover_leaving: None,
             works_open: false,
+            variants_on: false,
         }
     }
 }

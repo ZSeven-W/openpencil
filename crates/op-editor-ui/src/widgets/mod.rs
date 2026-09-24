@@ -55,8 +55,8 @@ pub mod workspace_quality;
 pub use workspace_quality::{QualityPanelLayout, QualityRow, QualityRowKind};
 pub mod workspace_surface;
 pub use workspace_surface::{
-    family_has_strip, family_views, layout_for as workspace_layout_for, workspace_enter,
-    WorkspaceLayout, WorkspaceSurface,
+    family_has_strip, family_views, layout_for as workspace_layout_for, variant_bar_layout,
+    workspace_enter, VariantBarItem, WorkspaceLayout, WorkspaceSurface,
 };
 pub mod works_reader;
 pub use works_reader::{ReaderLayout, WorksReader};

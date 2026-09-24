@@ -309,6 +309,12 @@ pub(super) fn paint_composer(
     if figma_hover {
         paint_soon_tooltip(surface, cx, figma, palette);
     }
+    super::super::variants_toggle::paint_variants_toggle(
+        surface,
+        cx,
+        shift(layout.variants, rise),
+        palette,
+    );
 
     // ── submit row ───────────────────────────────────────────────────
     super::super::model::paint_model_chip(surface, cx, shift(layout.model_chip, rise), palette);

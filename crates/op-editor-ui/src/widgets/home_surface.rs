@@ -30,6 +30,9 @@ pub use model::{
 #[path = "home_surface_connect.rs"]
 mod connect;
 
+#[path = "home_surface_variants.rs"]
+mod variants_toggle;
+
 #[path = "home_surface_layout.rs"]
 pub(crate) mod layout;
 
@@ -368,6 +371,9 @@ impl<'a> HomeSurface<'a> {
         }
         if layout.figma.contains(point) {
             return Some(HomeHit::Figma);
+        }
+        if layout.variants.size.x > 0.0 && layout.variants.contains(point) {
+            return Some(HomeHit::Variants);
         }
         if layout.input_box.contains(point) {
             return Some(HomeHit::Sheet);

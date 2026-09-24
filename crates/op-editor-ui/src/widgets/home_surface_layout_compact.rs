@@ -338,6 +338,7 @@ pub(super) fn compact_layout_for_scrolled(
         screenshot,
         reference_link,
         figma,
+        variants: Rect::ZERO,
         submit_row,
         model_chip,
         send,

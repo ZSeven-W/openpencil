@@ -137,8 +137,10 @@ fn compact_composer_keeps_every_target_at_the_touch_floor() {
     for option in layout.segment_options.into_iter().take(2) {
         assert_min_touch(option, "segment option");
     }
-    // No Figma tool on the phone.
+    // No Figma tool on the phone, and no 3-directions toggle: the phone
+    // reader pages one board at a time and has no side-by-side stage.
     assert_eq!(layout.figma, Rect::ZERO);
+    assert_eq!(layout.variants, Rect::ZERO);
 }
 
 #[test]
