@@ -94,6 +94,7 @@ fn stdio_eof_auto_finalizes_and_saves_the_file_document() {
         &path,
         &mut auto,
         &shutdown,
+        tool_profile::McpAccessProfile::UNRESTRICTED,
     )
     .expect("stdio session");
 
@@ -145,9 +146,15 @@ fn explicit_finalize_design_marks_the_current_revision_finalized() {
     auto.note_write(std::time::Instant::now());
     let line = r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"finalize_design","arguments":{}}}"#;
 
-    let response = process_message_with_auto_finalize(&mut state, &path, line, Some(&mut auto))
-        .expect("dispatch")
-        .expect("response");
+    let response = process_message_with_auto_finalize(
+        &mut state,
+        &path,
+        line,
+        Some(&mut auto),
+        tool_profile::McpAccessProfile::UNRESTRICTED,
+    )
+    .expect("dispatch")
+    .expect("response");
     assert!(!response.contains(r#""isError":true"#), "{response}");
     assert!(
         !auto.due(std::time::Instant::now(), state.document_revision()),

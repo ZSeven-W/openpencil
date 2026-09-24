@@ -11,6 +11,11 @@ pub(super) fn rebuild_registry(
     requested_tool: Option<&str>,
     profile: tool_profile::McpAccessProfile,
 ) -> ToolRegistry {
+    // The lean catalog has its own six-tool registry (two of them compose
+    // several full-catalog tools); nothing else is constructed for it.
+    if profile.catalog == tool_catalog::McpToolCatalog::Lean {
+        return lean_profile::lean_registry(doc, requested_tool);
+    }
     let mut r = ToolRegistry::default();
 
     macro_rules! register_tool {

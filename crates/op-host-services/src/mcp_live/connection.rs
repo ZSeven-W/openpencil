@@ -4,6 +4,8 @@
 //! `mcp_live.rs` to keep the spine under the 800-line cap.
 
 use super::*;
+use crate::mcp_serve::tool_catalog::McpToolCatalog;
+use crate::mcp_serve::tool_profile::McpAccessProfile;
 
 /// RAII decrement for the live-connection counter — see its use in the
 /// per-connection thread. `Drop` runs during normal exit AND panic unwind, so a
@@ -193,9 +195,13 @@ pub(super) fn serve_connection<S: std::io::Read + std::io::Write>(
             cors_origin,
         );
     }
-    if req.path != "/mcp" && req.path != "/" {
+    // `/mcp` (and `/`) serve the full catalog; `/mcp/lean` the six-tool lean
+    // one the terminal-integration writer installs when asked to.
+    let Some(catalog) = McpToolCatalog::for_http_path(&req.path) else {
         return write_http(stream, "404 Not Found", r#"{"error":"Not found"}"#);
-    }
+    };
+    let profile = McpAccessProfile::UNRESTRICTED.with_catalog(catalog);
+    let full_catalog = catalog == McpToolCatalog::Full;
     if req.method != "POST" {
         return write_http(
             stream,
@@ -256,7 +262,7 @@ pub(super) fn serve_connection<S: std::io::Read + std::io::Write>(
     // File-backed path (`--file` arg): handle the whole read-modify-write
     // while holding the lock.
     if let Some(response) =
-        crate::mcp_serve::file_path::process_message_for_file_path_arg(None, &req.body)?
+        crate::mcp_serve::file_path::process_message_for_file_path_arg(None, &req.body, profile)?
     {
         return write_json_rpc_response(stream, &response);
     }
@@ -267,23 +273,31 @@ pub(super) fn serve_connection<S: std::io::Read + std::io::Write>(
     // generic dispatch, which reports UnknownTool exactly like the
     // headless registry that never registered the tool.
     #[cfg(feature = "mcp-debug-tools")]
-    if let Some(response) =
-        screenshot::maybe_serve(&req.body, op_mcp::debug_tools_enabled(), |shot_req| {
-            request_screenshot(req_tx, wake_ui, shot_req)
+    if let Some(response) = full_catalog
+        .then(|| {
+            screenshot::maybe_serve(&req.body, op_mcp::debug_tools_enabled(), |shot_req| {
+                request_screenshot(req_tx, wake_ui, shot_req)
+            })
         })
+        .flatten()
     {
         return write_json_rpc_response(stream, &response);
     }
     // These tools need either no editor snapshot (`set_active_page`) or only
     // page metadata (`list_pages`). Keep them on the normal MCP
     // parser/registry/serializer path, but do not deep-clone the live document.
-    if let Some(response) = process_lightweight_live_tool(&req.body, req_tx, wake_ui)? {
-        return write_json_rpc_response(stream, &response);
+    // Neither tool is in the lean catalog, so a lean request skips the fast
+    // path and gets the profiled refusal below.
+    if full_catalog {
+        if let Some(response) = process_lightweight_live_tool(&req.body, req_tx, wake_ui)? {
+            return write_json_rpc_response(stream, &response);
+        }
     }
     let mut state = request_snapshot(req_tx, wake_ui)?;
-    let response = crate::mcp_serve::process_message_with_applier(
+    let response = crate::mcp_serve::process_message_with_applier_profiled(
         &mut state,
         &req.body,
+        profile,
         |tool_name, local_state, cmd| match request_apply(
             req_tx,
             wake_ui,
@@ -345,3 +359,7 @@ pub(super) fn process_lightweight_live_tool(
         },
     )?)
 }
+
+#[cfg(test)]
+#[path = "lean_route_tests.rs"]
+mod lean_route_tests;

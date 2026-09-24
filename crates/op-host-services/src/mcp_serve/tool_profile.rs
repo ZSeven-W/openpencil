@@ -26,9 +26,8 @@
 //! The refusal happens BEFORE the tool runs, so a path-traversal argument on
 //! a denied tool never reaches the code that would open it.
 
-#[cfg(feature = "mcp-debug-tools")]
-use super::schemas::DEBUG_TOOL_SCHEMAS;
 use super::schemas::TOOL_SCHEMAS;
+use super::tool_catalog::{self, McpToolCatalog};
 
 /// Whether a tool mutates the document.
 ///
@@ -100,6 +99,8 @@ pub enum ToolRefusal {
     UserTemplateDenied,
     /// The caller's credential does not carry the scope this tool needs.
     ScopeInsufficient,
+    /// The tool exists but the session serves a narrower tool catalog.
+    NotInCatalog(McpToolCatalog),
 }
 
 impl ToolRefusal {
@@ -110,6 +111,7 @@ impl ToolRefusal {
             Self::LocalResourceDenied => "tool-not-available",
             Self::UserTemplateDenied => "user-template-not-available",
             Self::ScopeInsufficient => "scope-insufficient",
+            Self::NotInCatalog(_) => "tool-not-in-profile",
         }
     }
 
@@ -129,6 +131,9 @@ impl ToolRefusal {
                 self.code(),
                 MCP_WRITE_SCOPE
             ),
+            Self::NotInCatalog(catalog) => {
+                tool_catalog::not_in_catalog_message(self.code(), catalog, tool)
+            }
         }
     }
 }
@@ -141,6 +146,7 @@ impl std::fmt::Display for ToolRefusal {
                 "user-saved scene templates are not available on this deployment"
             }
             Self::ScopeInsufficient => "credential lacks the required scope",
+            Self::NotInCatalog(_) => "tool is not part of this session's tool profile",
         })
     }
 }
@@ -225,6 +231,8 @@ pub struct McpAccessProfile {
     /// Refuse every tool whose surface is not shareable.
     pub deny_unshareable_tools: bool,
     pub scopes: McpScopes,
+    /// Which slice of the catalog is offered (see `tool_catalog`).
+    pub catalog: McpToolCatalog,
 }
 
 impl McpAccessProfile {
@@ -233,14 +241,24 @@ impl McpAccessProfile {
     pub const UNRESTRICTED: Self = Self {
         deny_unshareable_tools: false,
         scopes: McpScopes::FULL,
+        catalog: McpToolCatalog::Full,
     };
+
+    /// A local operator on the lean six-tool catalog.
+    pub const LEAN: Self = Self::UNRESTRICTED.with_catalog(McpToolCatalog::Lean);
 
     /// The public multi-account profile.
     pub const fn online(scopes: McpScopes) -> Self {
         Self {
             deny_unshareable_tools: true,
             scopes,
+            catalog: McpToolCatalog::Full,
         }
+    }
+
+    /// The same deployment and scope decisions over a different catalog.
+    pub const fn with_catalog(self, catalog: McpToolCatalog) -> Self {
+        Self { catalog, ..self }
     }
 
     /// Whether `tool` may appear in this profile's `tools/list`.
@@ -249,7 +267,8 @@ impl McpAccessProfile {
     /// still see that a write tool exists, and be told why when it calls one.
     /// Hiding it would look like the tool had been removed.
     pub fn lists(&self, tool: &str) -> bool {
-        !self.deny_unshareable_tools || surface_of(tool).is_shareable()
+        self.catalog.admits(tool)
+            && (!self.deny_unshareable_tools || surface_of(tool).is_shareable())
     }
 
     /// Why `tool` may not be called, if it may not.
@@ -257,6 +276,11 @@ impl McpAccessProfile {
     /// Denial ranks above scope: a tool that is off for everyone should say
     /// so rather than suggesting a bigger token would help.
     pub fn refuse(&self, tool: &str) -> Option<ToolRefusal> {
+        // Outside the catalog first: the tool may well be allowed, just not
+        // offered here, and saying so points the caller at the right fix.
+        if !self.catalog.admits(tool) {
+            return Some(ToolRefusal::NotInCatalog(self.catalog));
+        }
         if self.deny_unshareable_tools && !surface_of(tool).is_shareable() {
             return Some(ToolRefusal::LocalResourceDenied);
         }
@@ -723,51 +747,12 @@ pub(crate) fn tool_search_schemas(profile: McpAccessProfile) -> &'static [&'stat
         .as_slice()
 }
 
-/// Names that only exist in a build with the debug-tool feature.
-///
-/// They stay classified in every build so the deny decision cannot be lost
-/// by flipping a feature flag; the parity test knows they are absent from the
-/// catalog when the feature is off.
-pub const DEBUG_ONLY_TOOLS: &[&str] = &[
-    "debug_logs_tail",
-    "debug_screenshot",
-    "debug_validation_report",
-];
-
-pub fn is_debug_only_tool(name: &str) -> bool {
-    DEBUG_ONLY_TOOLS.contains(&name)
-}
-
-/// Every catalog name this build advertises.
-///
-/// Only the parity tests consume this outside a debug-tool build; it stays
-/// compiled either way so the two builds cannot drift.
-#[cfg_attr(not(feature = "mcp-debug-tools"), allow(dead_code))]
-pub(crate) fn catalog_tool_names() -> Vec<String> {
-    #[cfg_attr(not(feature = "mcp-debug-tools"), allow(unused_mut))]
-    let mut names: Vec<String> = TOOL_SCHEMAS
-        .iter()
-        .filter_map(|schema| schema_name(schema))
-        .collect();
-    #[cfg(feature = "mcp-debug-tools")]
-    names.extend(
-        DEBUG_TOOL_SCHEMAS
-            .iter()
-            .filter_map(|schema| schema_name(schema)),
-    );
-    names
-}
-
-/// Pull `"name":"…"` out of a schema entry.
-///
-/// The schemas are pre-serialized JSON string constants, and the name is
-/// always the first member, so this reads it without a JSON parse.
-pub(crate) fn schema_name(schema: &str) -> Option<String> {
-    let rest = schema.split_once(r#""name":"#)?.1.trim_start();
-    let rest = rest.strip_prefix('"')?;
-    let end = rest.find('"')?;
-    Some(rest[..end].to_string())
-}
+#[path = "tool_profile_names.rs"]
+mod names;
+#[allow(unused_imports)]
+pub(crate) use names::catalog_tool_names;
+pub(crate) use names::schema_name;
+pub use names::{is_debug_only_tool, DEBUG_ONLY_TOOLS};
 
 #[cfg(test)]
 #[path = "tool_profile_tests.rs"]

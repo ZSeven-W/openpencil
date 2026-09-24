@@ -16,9 +16,12 @@ struct TargetFileCall {
     path: PathBuf,
 }
 
+/// `profile` is the session's: a call retargeted at another file is served
+/// under the same catalog and deployment rules as one against the primary.
 pub fn process_message_for_file_path_arg(
     current_path: Option<&Path>,
     line: &str,
+    profile: super::tool_profile::McpAccessProfile,
 ) -> Result<Option<String>, McpServeError> {
     let Some(target) = target_file_call(line, current_path)? else {
         return Ok(None);
@@ -28,8 +31,11 @@ pub fn process_message_for_file_path_arg(
     }
     let mut target_state = super::load_editor_state(&target.path)?;
     let mut applier_failed: Option<String> = None;
-    let response =
-        super::process_message_with_applier(&mut target_state, line, |_tool_name, state, cmd| {
+    let response = super::process_message_with_applier_profiled(
+        &mut target_state,
+        line,
+        profile,
+        |_tool_name, state, cmd| {
             if !state.apply(cmd.clone()) {
                 return false;
             }
@@ -39,7 +45,8 @@ pub fn process_message_for_file_path_arg(
                 return false;
             }
             true
-        })?;
+        },
+    )?;
     if let Some(msg) = applier_failed {
         eprintln!("openpencil-desktop mcp: {msg}");
     }

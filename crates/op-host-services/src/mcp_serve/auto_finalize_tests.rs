@@ -113,6 +113,7 @@ fn disabled_env_keeps_stdio_eof_from_finalizing() {
         &path,
         &mut auto,
         &shutdown,
+        super::super::tool_profile::McpAccessProfile::UNRESTRICTED,
     )
     .expect("stdio session");
 

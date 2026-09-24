@@ -105,9 +105,15 @@ impl McpTool for ExportNodes {
 /// Snapshot constructor — derives the layout scene from the live editor
 /// state at registration time (same pattern as `get_screenshot_snapshot`).
 pub fn export_nodes_snapshot(state: &EditorState) -> ExportNodes {
-    ExportNodes {
-        scene: op_pen_loader::editor_state_to_active_page_layout_scene(state),
-    }
+    export_nodes_from_scene(op_pen_loader::editor_state_to_active_page_layout_scene(
+        state,
+    ))
+}
+
+/// Build the tool over an already-derived scene (see
+/// `screenshot_tool::get_screenshot_from_scene`).
+pub(crate) fn export_nodes_from_scene(scene: LayoutScene) -> ExportNodes {
+    ExportNodes { scene }
 }
 
 /// Render each node as a raster image and assemble the `files` array.

@@ -98,15 +98,28 @@ impl McpTool for GetScreenshot {
 /// Snapshot constructor — derives the layout scene and resolves the root
 /// node id from the live editor state at registration time.
 pub fn get_screenshot_snapshot(state: &EditorState) -> GetScreenshot {
-    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(state);
-    let root_node_id = scene
-        .active_page()
-        .and_then(|page| page.children.first())
-        .map(|node| node.id.clone());
+    get_screenshot_from_scene(op_pen_loader::editor_state_to_active_page_layout_scene(
+        state,
+    ))
+}
+
+/// Build the tool over an already-derived scene, so a caller that needs the
+/// same scene for another tool (the lean profile's export path) derives the
+/// layout once.
+pub(crate) fn get_screenshot_from_scene(scene: LayoutScene) -> GetScreenshot {
+    let root_node_id = scene_root_node_id(&scene);
     GetScreenshot {
         scene,
         root_node_id,
     }
+}
+
+/// The node the `"root"` alias names: the active page's first top-level node.
+pub(crate) fn scene_root_node_id(scene: &LayoutScene) -> Option<String> {
+    scene
+        .active_page()
+        .and_then(|page| page.children.first())
+        .map(|node| node.id.clone())
 }
 
 #[cfg(test)]

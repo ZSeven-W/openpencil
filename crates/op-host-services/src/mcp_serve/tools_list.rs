@@ -7,9 +7,11 @@
 
 use op_editor_core::EditorState;
 
+use super::lean_profile::lean_tool_schemas;
 #[cfg(feature = "mcp-debug-tools")]
 use super::schemas::DEBUG_TOOL_SCHEMAS;
 use super::schemas::TOOL_SCHEMAS;
+use super::tool_catalog::McpToolCatalog;
 use super::tool_profile;
 
 pub(super) fn tools_list_response(
@@ -22,6 +24,19 @@ pub(super) fn tools_list_response(
     // advertised, so a client never plans around one it cannot call.
     let listed =
         |schema: &str| tool_profile::schema_name(schema).is_none_or(|name| profile.lists(&name));
+    // The lean catalog advertises its own derived schemas — never the kit
+    // insert tools or debug tools, which it does not serve.
+    if profile.catalog == McpToolCatalog::Lean {
+        let entries: Vec<&str> = lean_tool_schemas()
+            .iter()
+            .map(String::as_str)
+            .filter(|schema| listed(schema))
+            .collect();
+        return format!(
+            r#"{{"jsonrpc":"2.0","id":{id_raw},"result":{{"tools":[{}]}}}}"#,
+            entries.join(",")
+        );
+    }
     let mut entries: Vec<String> = TOOL_SCHEMAS
         .iter()
         .filter(|schema| listed(schema))
