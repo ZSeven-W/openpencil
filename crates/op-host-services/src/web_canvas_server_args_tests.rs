@@ -22,7 +22,10 @@ fn serve_one_get_root_serves_html_not_jsonrpc() {
     // never the old 405 from the JSON-RPC path guard.
     let r = serve("GET", "/", "");
     assert!(r.contains("Content-Type: text/html"), "{r}");
-    assert!(!r.contains("405"), "{r}");
+    // Check the status line only: the 404 build-help page echoes the
+    // checkout path, which may itself contain "405".
+    let status = r.lines().next().unwrap_or_default();
+    assert!(!status.contains("405"), "{r}");
     // `POST /` keeps dispatching JSON-RPC (web_static ignores non-GET).
     let post = serve(
         "POST",
