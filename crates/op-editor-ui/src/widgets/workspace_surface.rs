@@ -69,6 +69,8 @@ const STRIP_ACTION_H: f32 = THUMB_H + THUMB_LABEL_H;
 /// Failed-phase banner buttons.
 const BANNER_BUTTON_W: f32 = 96.0;
 const BANNER_BUTTON_H: f32 = 34.0;
+/// Width kept between the pager arrows for the position label.
+const PAGER_LABEL_W: f32 = 44.0;
 /// The template draft banner's single action (接入模型 / 让 AI 细化).
 const DRAFT_BUTTON_W: f32 = 132.0;
 /// The shared-document banner's Make-one-like-this action.
@@ -258,7 +260,8 @@ pub fn layout_for(
         || views.contains(&WorkspaceView::Single { index: 0 });
     let next = show_pager
         .then(|| Rect::xywh(right - TOOLBAR_ICON, icon_y, TOOLBAR_ICON, TOOLBAR_BUTTON_H));
-    right -= TOOLBAR_ICON + 2.0;
+    // Room for the "3 / 12" position label painted between the arrows.
+    right -= TOOLBAR_ICON + PAGER_LABEL_W;
     let prev = show_pager
         .then(|| Rect::xywh(right - TOOLBAR_ICON, icon_y, TOOLBAR_ICON, TOOLBAR_BUTTON_H));
 

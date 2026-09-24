@@ -565,3 +565,14 @@ fn a_long_deck_keeps_its_late_slides_reachable_from_the_strip() {
         "the head scrolled out of the window"
     );
 }
+
+#[test]
+fn the_pager_keeps_room_for_its_position_label() {
+    // The "3 / 12" label paints between the arrows; with a 2 px gap it was
+    // drawn under the chevrons and only a sliver showed.
+    let layout = layout_1440_900(HomeFamily::Presentation, false, 12);
+    let (prev, next) = (layout.prev.unwrap(), layout.next.unwrap());
+    let gap = next.origin.x - (prev.origin.x + prev.size.x);
+    assert!(gap >= 40.0, "gap {gap}");
+    assert!(next.origin.x + next.size.x <= layout.zoom_out.origin.x);
+}
