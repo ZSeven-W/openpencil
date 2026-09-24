@@ -253,13 +253,11 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.home.connect_card_open = false;
             }
             HomeHit::Send => {
-                if !self.editor_state.has_usable_chat_agent() {
-                    // The send would fail silently — open the connect
-                    // card instead of queueing a dead turn.
-                    self.editor_state.editor_ui.home.connect_card_open = true;
-                } else {
-                    self.queue_home_send();
-                }
+                // One decision for the label and the press: a brief of the
+                // user's own generates, an empty box (or the unchanged
+                // example) opens the example's instant template draft, and
+                // nothing runnable opens the connect card.
+                self.home_send();
             }
             HomeHit::NewCanvas => {
                 self.editor_state.editor_ui.pending_file_action =

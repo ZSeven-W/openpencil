@@ -157,3 +157,12 @@ fn launch_route_defaults_to_auto_and_only_orchestrator_bypasses_the_loop() {
     chat.new_chat();
     assert_eq!(chat.launch_route, crate::LaunchRoute::Auto);
 }
+
+#[test]
+fn only_the_refine_route_forces_an_in_place_edit() {
+    assert!(crate::LaunchRoute::Refine.forces_in_place_refine());
+    assert!(!crate::LaunchRoute::Auto.forces_in_place_refine());
+    assert!(!crate::LaunchRoute::Orchestrator.forces_in_place_refine());
+    // A refine is never a new design: it must not claim design intent.
+    assert!(!crate::LaunchRoute::Refine.implies_design_intent());
+}

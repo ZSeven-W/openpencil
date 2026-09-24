@@ -18,6 +18,7 @@ mod exports;
 pub mod git_panel;
 pub mod groups;
 pub mod home;
+pub mod home_example_draft;
 mod methods;
 pub mod pickers;
 pub mod slides_panel_state;

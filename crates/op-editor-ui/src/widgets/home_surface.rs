@@ -229,6 +229,22 @@ impl<'a> HomeSurface<'a> {
         copy::task_copy(self.ui.locale, family, self.state.draft_for(family)).example
     }
 
+    /// What the Send button does right now. Paint and the host's press
+    /// both read this, so the label never promises a different action
+    /// than the press takes.
+    pub fn send_mode(&self) -> op_editor_core::HomeSendMode {
+        self.state
+            .send_mode(self.example_prompt(), self.usable_agent)
+    }
+
+    /// Whether the Send button's "the example will be used" hint shows:
+    /// hovering the button while the box is still empty.
+    pub fn send_example_hint_visible(&self) -> bool {
+        self.state.hover == Some(HomeHit::Send)
+            && self.state.draft.trim().is_empty()
+            && self.send_mode() == op_editor_core::HomeSendMode::UseExample
+    }
+
     pub fn hit_test(
         &self,
         viewport_width: f32,

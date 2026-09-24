@@ -172,7 +172,23 @@ impl WidgetHostNative {
                 self.toggle_preview_with_cached_viewport();
             }
             WorkspaceHit::Retry => {
-                self.retry_workspace_brief();
+                // A template draft's run is a refine of those boards:
+                // retrying it refines them again in place rather than
+                // generating a second design over the draft.
+                if self
+                    .editor_state
+                    .editor_ui
+                    .workspace
+                    .draft_template
+                    .is_some()
+                {
+                    self.queue_draft_refine();
+                } else {
+                    self.retry_workspace_brief();
+                }
+            }
+            WorkspaceHit::DraftAction => {
+                self.run_workspace_draft_action();
             }
             WorkspaceHit::QualityChip => {
                 let workspace = &mut self.editor_state.editor_ui.workspace;

@@ -124,6 +124,14 @@ pub enum LaunchRoute {
     Auto,
     /// Skip the design-agent loop; run the orchestrator pipeline.
     Orchestrator,
+    /// Edit the SELECTED boards in place through the modify route.
+    ///
+    /// Studio Home's one-click start pins this after it loads a template
+    /// as the instant draft: the refine brief quotes the example, whose
+    /// wording ("做一份 5 页 PPT") reads to every keyword classifier as a
+    /// NEW design — which would draw a second deck beside the draft instead
+    /// of editing it. The route decides the intent, not the wording.
+    Refine,
 }
 
 impl LaunchRoute {
@@ -147,6 +155,12 @@ impl LaunchRoute {
     /// a collapsed thinking block).
     pub fn implies_design_intent(self) -> bool {
         matches!(self, Self::Orchestrator)
+    }
+
+    /// True when the turn must edit the selected boards in place and
+    /// never fall through to a new-design or chat route.
+    pub fn forces_in_place_refine(self) -> bool {
+        matches!(self, Self::Refine)
     }
 }
 

@@ -348,6 +348,9 @@ pub use edit_transaction::{
     CompletedLocalEdit, EditOrigin, LocalEditCapture, LocalEditError, LocalEditOutcome,
 };
 pub use editor_ui_state::home::{HOME_ART_SWITCH_MS, HOME_ENTER_FRAME_MS, HOME_ENTER_WINDOW_MS};
+pub use editor_ui_state::home_example_draft::{
+    example_draft_template, refine_prompt, HomeSendMode,
+};
 pub use editor_ui_state::workspace::{
     WorkspaceHit, WorkspacePhase, WorkspaceState, WorkspaceView, WORKSPACE_DECK_STRIP_H,
     WORKSPACE_ENTER_MS, WORKSPACE_HEADER_H, WORKSPACE_TOOLBAR_H,

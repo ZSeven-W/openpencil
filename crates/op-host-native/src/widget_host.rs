@@ -124,6 +124,7 @@ mod home;
 mod home_document_swap;
 pub use home_document_swap::ReplacedHomeDocument;
 mod home_overlays;
+mod home_quick_start;
 mod home_scroll;
 mod host_lifecycle;
 mod host_requests;

@@ -340,6 +340,67 @@ fn failed_phase_surfaces_the_banner_buttons() {
 }
 
 #[test]
+fn a_waiting_template_draft_surfaces_its_banner_action_over_the_canvas() {
+    let mut editor = editor_with_boards(2);
+    editor.editor_ui.workspace = op_editor_core::WorkspaceState {
+        visible: true,
+        active: true,
+        ..op_editor_core::WorkspaceState::default()
+    };
+    editor
+        .editor_ui
+        .workspace
+        .adopt_template_draft("knowledge-carousel", false);
+    let surface = WorkspaceSurface::for_editor_at(&editor, 0).expect("workspace visible");
+    let layout = surface.layout(1440.0, 900.0);
+    let button = surface.draft_banner_button(&layout).expect("draft banner");
+    assert!(layout.canvas.contains(Point2D::new(
+        button.origin.x + button.size.x / 2.0,
+        button.origin.y + button.size.y / 2.0
+    )));
+    assert_eq!(
+        surface.hit_test_layout(
+            &layout,
+            Point2D::new(button.origin.x + 2.0, button.origin.y + 2.0)
+        ),
+        Some(WorkspaceHit::DraftAction)
+    );
+
+    // The banner paints in the canvas pass, not with the chrome: painted
+    // under the canvas background its button was invisible.
+    let mut chrome = crate::widgets::test_capture_backend::CaptureBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut chrome,
+        };
+        surface.paint(&mut cx, Rect::xywh(0.0, 0.0, 1440.0, 900.0));
+    }
+    assert!(!chrome
+        .round_fills
+        .iter()
+        .any(|(rect, _, _)| *rect == button));
+    let mut banners = crate::widgets::test_capture_backend::CaptureBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut banners,
+        };
+        surface.paint_canvas_banners(&mut cx, Rect::xywh(0.0, 0.0, 1440.0, 900.0));
+    }
+    assert!(banners
+        .round_fills
+        .iter()
+        .any(|(rect, _, _)| *rect == button));
+    let connect = op_i18n::translate(editor.editor_ui.locale, "home.submit.connect");
+    assert!(banners.texts.iter().any(|(text, _)| text == connect));
+
+    // Once the refine is under way the banner retires.
+    editor.editor_ui.workspace.begin_draft_refine();
+    let surface = WorkspaceSurface::for_editor_at(&editor, 0).expect("workspace visible");
+    let layout = surface.layout(1440.0, 900.0);
+    assert!(surface.draft_banner_button(&layout).is_none());
+}
+
+#[test]
 fn the_header_back_circle_clears_the_macos_traffic_lights() {
     // The frameless desktop window draws the close/minimize/zoom buttons
     // over the app's own header at roughly x 12..72. Anything the user

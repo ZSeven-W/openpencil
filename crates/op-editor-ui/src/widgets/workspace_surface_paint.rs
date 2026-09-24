@@ -2,8 +2,9 @@
 //! white header (back circle, doc tile, title + subtitle, 导出 /
 //! 专业编辑), the canvas toolbar (chat toggle, view segments, pager,
 //! zoom), the dock background + drag handle, the deck strip's
-//! placeholder plates, and the failed-phase banner. The real canvas and
-//! the pinned chat panel are painted by the host between these layers.
+//! placeholder plates. The real canvas and the pinned chat panel are
+//! painted by the host between these layers; the canvas banners paint
+//! after them (`workspace_surface_banner.rs`).
 
 use super::workspace_enter;
 use super::{StudioPalette, WorkspaceLayout, WorkspaceSurface};
@@ -15,9 +16,9 @@ use op_editor_core::{
     WORKSPACE_TOOLBAR_H,
 };
 
-const SANS: &str = "system-ui";
+pub(super) const SANS: &str = "system-ui";
 
-fn text(cx: &mut PaintCx<'_>, content: &str, origin: Point2D, size: f32, color: Color) {
+pub(super) fn text(cx: &mut PaintCx<'_>, content: &str, origin: Point2D, size: f32, color: Color) {
     let layout = crate::TextLayout::single_run(content, SANS, size, color.to_jian(), Point2D::ZERO);
     cx.backend.draw_text(&layout, origin);
 }
@@ -35,7 +36,7 @@ fn text_weighted(
     cx.backend.draw_text(&layout, origin);
 }
 
-fn fade(color: Color, factor: f32) -> Color {
+pub(super) fn fade(color: Color, factor: f32) -> Color {
     Color {
         a: color.a * factor,
         ..color
@@ -43,11 +44,11 @@ fn fade(color: Color, factor: f32) -> Color {
 }
 
 /// Fade every palette token by `factor` (the entrance crossfade).
-fn fade_all(palette: StudioPalette, factor: f32) -> StudioPalette {
+pub(super) fn fade_all(palette: StudioPalette, factor: f32) -> StudioPalette {
     palette.faded(factor)
 }
 
-fn tr(locale: op_i18n::Locale, key: &'static str) -> &'static str {
+pub(super) fn tr(locale: op_i18n::Locale, key: &'static str) -> &'static str {
     op_i18n::translate(locale, key)
 }
 
@@ -119,7 +120,6 @@ fn view_label(locale: op_i18n::Locale, family: HomeFamily, view: WorkspaceView) 
 
 pub(super) fn paint_workspace(surface: &WorkspaceSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect) {
     let layout = surface.layout(rect.size.x, rect.size.y);
-    let locale = surface.ui.locale;
     let (_, alpha) = workspace_enter(
         surface.ui.motion_stamp(surface.state.shown_at_ms),
         surface.now_ms,
@@ -163,7 +163,8 @@ pub(super) fn paint_workspace(surface: &WorkspaceSurface<'_>, cx: &mut PaintCx<'
     paint_header(surface, cx, &layout, palette);
     paint_toolbar(surface, cx, &layout, palette);
     paint_strip(surface, cx, &layout, palette);
-    paint_failed_banner(surface, cx, &layout, palette, locale);
+    // The canvas banners paint over the canvas, not here — see
+    // `WorkspaceSurface::paint_canvas_banners`.
 }
 
 fn paint_header(
@@ -691,84 +692,4 @@ fn paint_strip_tile(
         CAPTION,
         ink,
     );
-}
-
-fn paint_failed_banner(
-    surface: &WorkspaceSurface<'_>,
-    cx: &mut PaintCx<'_>,
-    layout: &WorkspaceLayout,
-    palette: StudioPalette,
-    locale: op_i18n::Locale,
-) {
-    let Some((retry, return_edit)) = surface.banner_buttons(layout) else {
-        return;
-    };
-    // A soft strip behind the actions so they read as one banner.
-    let banner = Rect::xywh(
-        layout.canvas.origin.x,
-        retry.origin.y - 14.0,
-        layout.canvas.size.x,
-        retry.size.y + 28.0,
-    );
-    cx.backend.fill_rect(banner, fade(palette.chip_bg, 0.9));
-    let note = if surface.state.phase == WorkspacePhase::Stopped {
-        "workspace.phase.stopped"
-    } else {
-        "workspace.failed.note"
-    };
-    text(
-        cx,
-        tr(locale, note),
-        Point2D::new(
-            banner.origin.x + 18.0,
-            jian_widgets::centered_text_baseline_y(banner, 13.0) - 30.0,
-        ),
-        13.0,
-        palette.sub,
-    );
-    for (button, hit, label, filled) in [
-        (
-            retry,
-            WorkspaceHit::Retry,
-            tr(locale, "workspace.retry"),
-            true,
-        ),
-        (
-            return_edit,
-            WorkspaceHit::ReturnEdit,
-            tr(locale, "workspace.returnEdit"),
-            false,
-        ),
-    ] {
-        let hovered = surface.state.hover == Some(hit);
-        cx.backend.fill_round_rect(
-            button,
-            8.0,
-            if filled {
-                if hovered {
-                    palette.blue_hover
-                } else {
-                    palette.blue
-                }
-            } else if hovered {
-                palette.button_hover
-            } else {
-                palette.panel
-            },
-        );
-        if !filled {
-            cx.backend.stroke_round_rect(button, 8.0, palette.line, 1.0);
-        }
-        let label_w = cx.backend.measure_text_family(label, 13.0, SANS);
-        text(
-            cx,
-            label,
-            Point2D::new(
-                button.origin.x + (button.size.x - label_w) / 2.0,
-                jian_widgets::centered_text_baseline_y(button, 13.0),
-            ),
-            13.0,
-            if filled { palette.panel } else { palette.ink },
-        );
-    }
 }

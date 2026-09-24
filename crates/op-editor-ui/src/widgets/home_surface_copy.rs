@@ -206,6 +206,33 @@ pub(crate) fn task_icon(family: HomeFamily) -> crate::widgets::icons::Icon {
     }
 }
 
+/// The Send button's label for what the press will actually do — the
+/// wide and compact composers both read it so the two faces of one button
+/// cannot drift.
+pub(crate) fn send_label_key(mode: op_editor_core::HomeSendMode) -> &'static str {
+    match mode {
+        op_editor_core::HomeSendMode::Start => "home.submit.start",
+        op_editor_core::HomeSendMode::UseExample => "home.submit.example",
+        op_editor_core::HomeSendMode::Connect => "home.submit.connect",
+    }
+}
+
+/// The largest label size (from `base` down to 11 px) whose measured width
+/// fits `max_w`, so a long translation of the Send label shrinks inside the
+/// fixed button instead of spilling past its rounded edge.
+pub(crate) fn fit_label_size(
+    backend: &mut dyn crate::RenderBackend,
+    label: &str,
+    base: f32,
+    max_w: f32,
+) -> f32 {
+    let mut size = base;
+    while size > 11.0 && backend.measure_text_family(label, size, SANS) > max_w {
+        size -= 0.5;
+    }
+    size
+}
+
 /// Backend-free width estimate for the fixed studio labels (CJK glyph =
 /// its point size, Latin/digit ≈ 0.55 em). Only used to size rects whose
 /// text is known at compile time; paint still measures for real.

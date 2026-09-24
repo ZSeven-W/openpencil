@@ -110,6 +110,9 @@ pub enum WorkspaceHit {
         topic: usize,
         item: usize,
     },
+    /// The template draft banner's action: 接入模型 while no model can
+    /// answer, 让 AI 细化 once one can.
+    DraftAction,
 }
 
 /// Transient state for the generation workspace. Never persisted.
@@ -158,6 +161,15 @@ pub struct WorkspaceState {
     pub quality: Option<QualityReport>,
     /// The header chip's report panel is expanded.
     pub quality_open: bool,
+    /// The scene template a one-click (empty-box) start loaded as this
+    /// workspace's instant first draft. `Some` makes the run a REFINE of
+    /// those boards: Retry re-runs the refine in place instead of
+    /// generating a fresh design over the draft.
+    pub draft_template: Option<&'static str>,
+    /// The template draft is still waiting for its AI refinement — no
+    /// model was connected when it loaded. The draft banner offers the
+    /// connect (or, once connected, the refine) action while this holds.
+    pub draft_awaiting_refine: bool,
 }
 
 impl Default for WorkspaceState {
@@ -180,6 +192,8 @@ impl Default for WorkspaceState {
             fitted_bounds: None,
             quality: None,
             quality_open: false,
+            draft_template: None,
+            draft_awaiting_refine: false,
         }
     }
 }
@@ -213,6 +227,45 @@ impl WorkspaceState {
         self.fitted_board_count = 0;
         self.fitted_bounds = None;
         self.clear_quality();
+        self.draft_template = None;
+        self.draft_awaiting_refine = false;
+    }
+
+    /// Record that this workspace's boards are the instant draft loaded
+    /// from `template`. With `refine_now` the refine turn is queued
+    /// right away (a model is connected) and the phase stays
+    /// Generating; without it the draft IS the result for now — the phase
+    /// settles Done at once and the draft banner offers the connect path.
+    pub fn adopt_template_draft(&mut self, template: &'static str, refine_now: bool) {
+        self.draft_template = Some(template);
+        self.draft_awaiting_refine = !refine_now;
+        self.phase = if refine_now {
+            WorkspacePhase::Generating
+        } else {
+            WorkspacePhase::Done
+        };
+    }
+
+    /// Whether the draft banner (connect / refine) is up: a template
+    /// draft that has not been refined yet, and no run in flight.
+    pub fn draft_banner_visible(&self) -> bool {
+        self.active
+            && self.draft_template.is_some()
+            && self.draft_awaiting_refine
+            && self.phase == WorkspacePhase::Done
+    }
+
+    /// A refine turn of the template draft is being queued: the banner
+    /// retires and the workspace generates again. `run_epoch` resets to
+    /// unstamped until the launch identifies the new run.
+    pub fn begin_draft_refine(&mut self) -> bool {
+        if !self.active || self.draft_template.is_none() {
+            return false;
+        }
+        self.draft_awaiting_refine = false;
+        self.phase = WorkspacePhase::Generating;
+        self.run_epoch = 0;
+        true
     }
 
     /// 专业编辑: drop the chrome (rails come back, the previous tool is
@@ -353,6 +406,8 @@ impl WorkspaceState {
         self.fitted_bounds = None;
         self.selected = 0;
         self.clear_quality();
+        self.draft_template = None;
+        self.draft_awaiting_refine = false;
     }
 
     /// The next frame instant the entrance motion still needs, or

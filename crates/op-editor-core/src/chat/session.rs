@@ -204,6 +204,13 @@ impl ChatState {
         self.pending_copy_text = Some(text.into());
     }
 
+    /// Title an untitled conversation after `prompt` — for turns whose sent
+    /// text is a wrapper around the user's words (a Home refine brief), so
+    /// the title reads as the request rather than the wrapper's preamble.
+    pub fn title_from_prompt_if_untitled(&mut self, prompt: &str) {
+        self.auto_title_from_prompt(prompt);
+    }
+
     fn auto_title_from_prompt(&mut self, prompt: &str) {
         if self.title.trim().is_empty() || self.title == DEFAULT_CHAT_TITLE {
             if let Some(title) = suggest_chat_title(prompt) {

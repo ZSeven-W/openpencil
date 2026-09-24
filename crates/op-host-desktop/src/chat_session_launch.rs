@@ -49,6 +49,10 @@ fn prepare_design_request_and_snapshot(
 pub(super) mod launch_design;
 use launch_design::{launch_design_loop_turn, stamp_design_turn_scenario};
 
+// The pinned in-place refine of a Home template draft, split out at the cap.
+#[path = "chat_session_launch_refine.rs"]
+mod launch_refine;
+
 /// Drain `chat.pending_send` (raised by `ChatState::begin_send`) and
 /// route it.
 ///
@@ -112,6 +116,16 @@ fn launch_if_pending_inner(
     let launch_route = std::mem::take(&mut host.editor_state_mut().chat.launch_route);
     host.mark_editor_state_dirty();
     let effective_user_text = resolve_turn_user_text(host.editor_state(), &user_text);
+    // A pinned refine edits the selected template draft in place, for
+    // every provider kind — the route decides, not the brief's wording.
+    if launch_route.forces_in_place_refine() {
+        return launch_refine::launch_draft_refine_turn(
+            host,
+            &effective_user_text,
+            current_chat,
+            current_design,
+        );
+    }
     // TS parity (ai-chat-handlers.ts:560-679): builtin / ACP entries
     // take their own early-return paths; ONLY external CLI providers
     // run the standard-mode classify → modify/new/chat pipeline.

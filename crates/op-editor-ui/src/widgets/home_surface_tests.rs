@@ -187,6 +187,50 @@ fn tasks_without_a_segment_hide_the_control() {
 }
 
 #[test]
+fn an_empty_box_makes_send_start_from_the_example_and_says_so() {
+    use op_editor_core::HomeSendMode;
+    let mut state = visible_home();
+    state.editor_ui.home.set_task(HomeFamily::Web, 1);
+    let home = HomeSurface::for_editor(&state).expect("home");
+    // No model, but the web example has a template draft: still live.
+    assert_eq!(home.send_mode(), HomeSendMode::UseExample);
+    assert!(
+        !home.send_example_hint_visible(),
+        "the hint waits for hover"
+    );
+    let send = home.layout(1440.0, 900.0).send;
+    assert_eq!(
+        home.hit_test(1440.0, 900.0, center(send)),
+        Some(HomeHit::Send)
+    );
+
+    state.editor_ui.home.hover = Some(HomeHit::Send);
+    let home = HomeSurface::for_editor(&state).expect("home");
+    assert!(home.send_example_hint_visible());
+    let mut backend = crate::widgets::test_capture_backend::CaptureBackend::default();
+    {
+        let mut cx = crate::widgets::PaintCx {
+            backend: &mut backend,
+        };
+        crate::widgets::Widget::paint(&home, &mut cx, Rect::xywh(0.0, 0.0, 1440.0, 900.0));
+    }
+    let locale = state.editor_ui.locale;
+    for key in ["home.submit.example", "home.submit.exampleHint"] {
+        let label = op_i18n::translate(locale, key);
+        assert!(
+            backend.texts.iter().any(|(text, _)| text == label),
+            "{key} painted"
+        );
+    }
+
+    // A brief of the user's own is not the example.
+    state.editor_ui.home.set_draft("我的面包店官网");
+    let home = HomeSurface::for_editor(&state).expect("home");
+    assert_eq!(home.send_mode(), HomeSendMode::Connect);
+    assert!(!home.send_example_hint_visible());
+}
+
+#[test]
 fn model_chip_label_reuses_the_chat_selection_and_empties_without_an_agent() {
     let mut state = op_editor_core::EditorState::new();
     assert_eq!(

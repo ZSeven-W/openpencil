@@ -69,6 +69,8 @@ const STRIP_ACTION_H: f32 = THUMB_H + THUMB_LABEL_H;
 /// Failed-phase banner buttons.
 const BANNER_BUTTON_W: f32 = 96.0;
 const BANNER_BUTTON_H: f32 = 34.0;
+/// The template draft banner's single action (接入模型 / 让 AI 细化).
+const DRAFT_BUTTON_W: f32 = 132.0;
 
 /// ease-out-cubic — the settle curve the entrance choreography uses.
 fn ease_out_cubic(t: f32) -> f32 {
@@ -335,6 +337,9 @@ pub struct WorkspaceSurface<'a> {
     /// The active page's board ids, in document order.
     pub boards: Vec<String>,
     pub now_ms: u64,
+    /// Whether any chat agent can answer — the draft banner offers the
+    /// refine once one can, and the connect path until then.
+    pub usable_agent: bool,
 }
 
 impl<'a> WorkspaceSurface<'a> {
@@ -368,6 +373,7 @@ impl<'a> WorkspaceSurface<'a> {
             title,
             boards: op_editor_core::preview_slideshow::active_page_boards(state),
             now_ms,
+            usable_agent: state.has_usable_chat_agent(),
         })
     }
 
@@ -446,6 +452,23 @@ impl<'a> WorkspaceSurface<'a> {
         ))
     }
 
+    /// The template draft banner's action (接入模型 / 让 AI 细化), shown
+    /// while a one-click draft waits for its refinement. Resolved against
+    /// the canvas like the failed banner so paint and hit-test agree.
+    pub fn draft_banner_button(&self, layout: &WorkspaceLayout) -> Option<Rect> {
+        if !self.state.draft_banner_visible() {
+            return None;
+        }
+        let cy = layout.canvas.origin.y + 28.0;
+        let cx = layout.canvas.origin.x + layout.canvas.size.x / 2.0;
+        Some(Rect::xywh(
+            cx - DRAFT_BUTTON_W / 2.0,
+            cy,
+            DRAFT_BUTTON_W,
+            BANNER_BUTTON_H,
+        ))
+    }
+
     pub fn hit_test(
         &self,
         viewport_width: f32,
@@ -468,6 +491,11 @@ impl<'a> WorkspaceSurface<'a> {
         if let Some(panel) = self.quality_panel(layout) {
             if let Some(hit) = panel.hit_test(point) {
                 return Some(hit);
+            }
+        }
+        if let Some(button) = self.draft_banner_button(layout) {
+            if button.contains(point) {
+                return Some(WorkspaceHit::DraftAction);
             }
         }
         if let Some((retry, return_edit)) = self.banner_buttons(layout) {
@@ -591,6 +619,8 @@ impl Widget for WorkspaceSurface<'_> {
 #[path = "workspace_surface_paint.rs"]
 mod paint;
 
+#[path = "workspace_surface_banner.rs"]
+mod banner;
 #[path = "workspace_quality_paint.rs"]
 mod quality_paint;
 

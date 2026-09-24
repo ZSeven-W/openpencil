@@ -313,14 +313,12 @@ pub(super) fn paint_composer(
     // ── submit row ───────────────────────────────────────────────────
     super::super::model::paint_model_chip(surface, cx, shift(layout.model_chip, rise), palette);
     let send = shift(layout.send, rise);
-    let empty = surface.state.draft.trim().is_empty();
-    let connect_mode = !surface.usable_agent;
+    // An empty box is no longer a dead button: it starts from the
+    // example (see `HomeSendMode`), so the slab always paints live.
+    let mode = surface.send_mode();
+    let connect_mode = mode == op_editor_core::HomeSendMode::Connect;
     let send_hover = surface.state.hover == Some(HomeHit::Send);
-    let fill = if connect_mode {
-        palette.blue
-    } else if empty {
-        palette.disabled_primary
-    } else if send_hover {
+    let fill = if !connect_mode && send_hover {
         palette.blue_hover
     } else {
         palette.blue
@@ -332,7 +330,7 @@ pub(super) fn paint_composer(
         send
     };
     cx.backend.fill_round_rect(send_rect, 9.0, fill);
-    if !connect_mode && !empty {
+    if !connect_mode {
         cx.backend.fill_drop_shadow(
             Rect::xywh(
                 send_rect.origin.x + 4.0,
@@ -345,30 +343,21 @@ pub(super) fn paint_composer(
             fade(palette.blue, 0.16),
         );
     }
-    let send_label = copy::home_str(
-        locale,
-        if connect_mode {
-            "home.submit.connect"
-        } else {
-            "home.submit.start"
-        },
-    );
-    let label_w = cx.backend.measure_text_family(send_label, 15.0, SANS);
-    // White reads on the live blue; on the disabled slab it does not,
-    // so the label follows the fill instead of being hardcoded.
-    let send_ink = if !connect_mode && empty {
-        palette.disabled_primary_ink
-    } else {
-        Color::WHITE
-    };
+    let send_label = copy::home_str(locale, copy::send_label_key(mode));
+    // "Start with example" and its translations run longer than 开始设计;
+    // the label shrinks to fit the fixed slab rather than overflow it.
+    let label_size =
+        copy::fit_label_size(cx.backend, send_label, 15.0, send_rect.size.x - 16.0 - 31.0);
+    let label_w = cx.backend.measure_text_family(send_label, label_size, SANS);
+    let send_ink = Color::WHITE;
     text_weighted(
         cx,
         send_label,
         Point2D::new(
             send_rect.origin.x + (send_rect.size.x - label_w - 21.0 - 10.0) / 2.0,
-            jian_widgets::centered_text_baseline_y(send_rect, 15.0),
+            jian_widgets::centered_text_baseline_y(send_rect, label_size),
         ),
-        15.0,
+        label_size,
         send_ink,
         550,
     );
@@ -382,6 +371,40 @@ pub(super) fn paint_composer(
         21.0,
         send_ink,
         2.0,
+    );
+    if surface.send_example_hint_visible() {
+        paint_send_example_hint(surface, cx, send_rect, palette);
+    }
+}
+
+/// The hover hint over an empty-box Send: say that the example brief is
+/// what will run, so the one-click start is discoverable rather than a
+/// surprise. Right-aligned to the button so it never leaves the composer.
+pub(in crate::widgets) fn paint_send_example_hint(
+    surface: &HomeSurface<'_>,
+    cx: &mut PaintCx<'_>,
+    anchor: Rect,
+    palette: StudioPalette,
+) {
+    let label = copy::home_str(surface.ui.locale, "home.submit.exampleHint");
+    let w = cx.backend.measure_text_family(label, 11.0, SANS) + 20.0;
+    let tooltip = Rect::xywh(
+        anchor.origin.x + anchor.size.x - w,
+        anchor.origin.y - 28.0,
+        w,
+        22.0,
+    );
+    cx.backend
+        .fill_round_rect(tooltip, 7.0, palette.tooltip_fill);
+    text(
+        cx,
+        label,
+        Point2D::new(
+            tooltip.origin.x + 10.0,
+            jian_widgets::centered_text_baseline_y(tooltip, 11.0),
+        ),
+        11.0,
+        palette.tooltip_ink,
     );
 }
 

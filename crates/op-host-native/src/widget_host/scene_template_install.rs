@@ -11,6 +11,30 @@ impl WidgetHostNative {
         state: op_editor_core::EditorState,
         replaces_starter: bool,
     ) -> Result<(), Box<op_editor_core::EditorState>> {
+        self.install_template_state(state, replaces_starter, true)
+    }
+
+    /// The same commit for Home's one-click template draft, WITHOUT arming
+    /// the one-shot missing-font prompt. The draft is shipped content the
+    /// user did not pick font by font, and a modal landing over the
+    /// "instant" draft would swallow the very presses (its banner, Retry,
+    /// Stop) the workspace is showing — the desktop template-open drain
+    /// does not prompt for shipped templates either. The Settings Fonts
+    /// tab still reports whatever is missing.
+    pub(in crate::widget_host) fn install_home_template_draft_state(
+        &mut self,
+        state: op_editor_core::EditorState,
+        replaces_starter: bool,
+    ) -> Result<(), Box<op_editor_core::EditorState>> {
+        self.install_template_state(state, replaces_starter, false)
+    }
+
+    fn install_template_state(
+        &mut self,
+        state: op_editor_core::EditorState,
+        replaces_starter: bool,
+        detect_missing_fonts: bool,
+    ) -> Result<(), Box<op_editor_core::EditorState>> {
         let action = if replaces_starter {
             op_editor_core::CollabGateAction::ReplaceDocument
         } else {
@@ -35,7 +59,9 @@ impl WidgetHostNative {
         self.scene_cache.invalidate();
         self.editor_state_dirty = true;
         self.drop_pan_cache();
-        self.arm_missing_fonts_detection();
+        if detect_missing_fonts {
+            self.arm_missing_fonts_detection();
+        }
         Ok(())
     }
 }

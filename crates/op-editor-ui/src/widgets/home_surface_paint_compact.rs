@@ -448,43 +448,29 @@ fn paint_composer(
     // Submit: model chip + 开始设计.
     model::paint_model_chip(surface, cx, shift(layout.model_chip, rise), palette);
     let send = shift(layout.send, rise);
-    let empty = surface.state.draft.trim().is_empty();
-    let connect_mode = !surface.usable_agent;
+    // Same rule as the wide composer: an empty box starts from the
+    // example, so the slab is always live (see `HomeSendMode`).
+    let mode = surface.send_mode();
+    let connect_mode = mode == op_editor_core::HomeSendMode::Connect;
     let send_hover = surface.state.hover == Some(HomeHit::Send);
-    let fill = if connect_mode {
-        palette.blue
-    } else if empty {
-        palette.disabled_primary
-    } else if send_hover {
+    let fill = if !connect_mode && send_hover {
         palette.blue_hover
     } else {
         palette.blue
     };
     cx.backend.fill_round_rect(send, 10.0, fill);
-    // Same rule as the wide composer: white does not read on the
-    // disabled slab, so the label follows the fill.
-    let send_ink = if !connect_mode && empty {
-        palette.disabled_primary_ink
-    } else {
-        Color::WHITE
-    };
-    let send_label = copy::home_str(
-        locale,
-        if connect_mode {
-            "home.submit.connect"
-        } else {
-            "home.submit.start"
-        },
-    );
-    let label_w = cx.backend.measure_text_family(send_label, 13.0, SANS);
+    let send_ink = Color::WHITE;
+    let send_label = copy::home_str(locale, copy::send_label_key(mode));
+    let label_size = copy::fit_label_size(cx.backend, send_label, 13.0, send.size.x - 12.0 - 24.0);
+    let label_w = cx.backend.measure_text_family(send_label, label_size, SANS);
     text_weighted(
         cx,
         send_label,
         Point2D::new(
             send.origin.x + (send.size.x - label_w - 16.0 - 8.0) / 2.0,
-            jian_widgets::centered_text_baseline_y(send, 13.0),
+            jian_widgets::centered_text_baseline_y(send, label_size),
         ),
-        13.0,
+        label_size,
         send_ink,
         550,
     );
@@ -499,6 +485,9 @@ fn paint_composer(
         send_ink,
         2.0,
     );
+    if surface.send_example_hint_visible() {
+        super::panels::paint_send_example_hint(surface, cx, send, palette);
+    }
 }
 
 // ── the featured example ───────────────────────────────────────────────
