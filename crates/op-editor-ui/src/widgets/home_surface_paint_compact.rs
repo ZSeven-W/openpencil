@@ -28,13 +28,18 @@ pub(super) fn paint_home_compact(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>
     let shown_at = surface.state.shown_at_ms;
     let enter = |block| enter_phase(block, shown_at, surface.now_ms);
 
+    // A focused composer folds the grid, the example and the bottom nav
+    // away (`collapse_for_focused_composer`); their rects are empty.
+    let focused = surface.state.composer_focused;
+    let bottom_band = if focused { 0.0 } else { BOTTOM_NAV_H };
+
     // ── the scrolling page column ─────────────────────────────────────
     cx.backend.save();
     cx.backend.clip_rect(Rect::xywh(
         0.0,
         HOME_TOPBAR_H,
         rect.size.x,
-        (rect.size.y - HOME_TOPBAR_H - BOTTOM_NAV_H).max(0.0),
+        (rect.size.y - HOME_TOPBAR_H - bottom_band).max(0.0),
     ));
     paint_hero(
         surface,
@@ -43,20 +48,26 @@ pub(super) fn paint_home_compact(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>
         enter(HomeEnterBlock::Welcome),
         palette,
     );
-    paint_grid(surface, cx, &layout, enter(HomeEnterBlock::Tabs), palette);
+    if !focused {
+        paint_grid(surface, cx, &layout, enter(HomeEnterBlock::Tabs), palette);
+    }
     let (panels_dy, panels_alpha) = enter(HomeEnterBlock::Panels);
     paint_composer(surface, cx, &layout, panels_dy, panels_alpha, palette);
-    paint_example(
-        surface,
-        cx,
-        &layout,
-        enter(HomeEnterBlock::Explore),
-        palette,
-    );
+    if !focused {
+        paint_example(
+            surface,
+            cx,
+            &layout,
+            enter(HomeEnterBlock::Explore),
+            palette,
+        );
+    }
     cx.backend.restore();
 
     // ── the pinned chrome ─────────────────────────────────────────────
-    paint_bottom_nav(surface, cx, &layout, palette);
+    if !focused {
+        paint_bottom_nav(surface, cx, &layout, palette);
+    }
     paint_top_bar(surface, cx, &layout, rect.size.x, palette);
 
     if surface.state.connect_card_open {
@@ -537,18 +548,27 @@ fn paint_example(
         copy::home_str(locale, "home.preview.sticker"),
         palette,
     );
+    // The 22 px sticker sits on the column top; the title's baseline clears
+    // it (at +30 its glyphs ran into the sticker), and both lines stop at the
+    // column edge instead of running under the art on the right.
+    let title = crate::util::ellipsize_to_width(task_copy.example_title, column.size.x, |s| {
+        cx.backend.measure_text_family(s, 14.0, SANS)
+    });
     text_weighted(
         cx,
-        task_copy.example_title,
-        Point2D::new(column.origin.x, column.origin.y + 30.0),
+        &title,
+        Point2D::new(column.origin.x, column.origin.y + 40.0),
         14.0,
         palette.ink,
         650,
     );
+    let desc = crate::util::ellipsize_to_width(task_copy.example_desc, column.size.x, |s| {
+        cx.backend.measure_text_family(s, 10.0, SANS)
+    });
     text(
         cx,
-        task_copy.example_desc,
-        Point2D::new(column.origin.x, column.origin.y + 50.0),
+        &desc,
+        Point2D::new(column.origin.x, column.origin.y + 58.0),
         10.0,
         palette.preview_desc,
     );

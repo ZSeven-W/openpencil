@@ -359,3 +359,55 @@ pub(super) fn compact_layout_for_scrolled(
         nav_items,
     }
 }
+
+/// Space between the hero line and the lifted composer while it has focus.
+const FOCUSED_COMPOSER_GAP: f32 = 12.0;
+
+/// Collapse the page around a focused composer (mobile spec: 聚焦输入时收起
+/// 用途宫格、精选示例和主导航). The task grid, the featured example and the
+/// bottom nav fold away and the composer lifts to sit under the hero, so the
+/// input, its tools and Send share the space the software keyboard leaves.
+/// Collapsed parts become empty rects: nothing hit-tests inside them and the
+/// painter skips them.
+pub(crate) fn collapse_for_focused_composer(layout: &mut HomeLayout) {
+    let target_y = layout.welcome_sub.origin.y + layout.welcome_sub.size.y + FOCUSED_COMPOSER_GAP;
+    let dy = target_y - layout.composer.origin.y;
+    let lift = |rect: &mut Rect| {
+        if rect.size.x > 0.0 || rect.size.y > 0.0 {
+            rect.origin.y += dy;
+        }
+    };
+    for rect in [
+        &mut layout.composer,
+        &mut layout.label_row,
+        &mut layout.segment,
+        &mut layout.input_box,
+        &mut layout.tools_row,
+        &mut layout.screenshot,
+        &mut layout.reference_link,
+        &mut layout.figma,
+        &mut layout.submit_row,
+        &mut layout.model_chip,
+        &mut layout.send,
+        &mut layout.replace_strip,
+        &mut layout.replace_keep,
+        &mut layout.replace_use,
+        &mut layout.connect_card,
+    ] {
+        lift(rect);
+    }
+    layout.segment_options.iter_mut().for_each(lift);
+    layout.connect_rows.iter_mut().for_each(lift);
+
+    layout.tabs_row = Rect::ZERO;
+    layout.tabs = [Rect::ZERO; 7];
+    layout.new_canvas = Rect::ZERO;
+    layout.explore_heading = Rect::ZERO;
+    layout.preview = Rect::ZERO;
+    layout.preview_heading = Rect::ZERO;
+    layout.preview_art = Rect::ZERO;
+    layout.preview_footer = Rect::ZERO;
+    layout.use_example = Rect::ZERO;
+    layout.bottom_nav = Rect::ZERO;
+    layout.nav_items = [Rect::ZERO; 3];
+}

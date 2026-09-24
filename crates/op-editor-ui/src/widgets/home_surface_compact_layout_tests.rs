@@ -257,3 +257,40 @@ fn assert_close(actual: f32, expected: f32, tolerance: f32) {
         "{actual} != {expected}"
     );
 }
+
+#[test]
+fn a_focused_composer_folds_the_page_around_the_input() {
+    // Mobile spec: 聚焦输入时收起用途宫格、精选示例和主导航. The compact page
+    // never read the focus flag, so the software keyboard covered Send while
+    // the grid and the bottom nav kept their space.
+    let resting = compact_layout(&compact_state());
+    let mut state = compact_state();
+    state.editor_ui.home.composer_focused = true;
+    let focused = compact_layout(&state);
+
+    assert_eq!(focused.tabs_row, Rect::ZERO, "the task grid folds away");
+    assert!(focused.tabs.iter().all(|tab| *tab == Rect::ZERO));
+    assert_eq!(focused.preview, Rect::ZERO, "the example folds away");
+    assert_eq!(focused.bottom_nav, Rect::ZERO, "the bottom nav folds away");
+    assert!(
+        focused.composer.origin.y < resting.composer.origin.y,
+        "the composer lifts toward the top"
+    );
+    assert!(focused.composer.origin.y >= resting.welcome_sub.origin.y + resting.welcome_sub.size.y);
+    assert_eq!(
+        focused.input_box.size, resting.input_box.size,
+        "same composer, just higher"
+    );
+
+    let home = HomeSurface::for_editor(&state).expect("home visible");
+    assert_eq!(
+        home.hit_test(W, H, center(focused.send)),
+        Some(HomeHit::Send),
+        "Send hit-tests where it is painted"
+    );
+    assert_ne!(
+        home.hit_test(W, H, center(resting.tabs[0])),
+        Some(HomeHit::Tab(HomeFamily::AppUi)),
+        "a folded tile can no longer be pressed"
+    );
+}

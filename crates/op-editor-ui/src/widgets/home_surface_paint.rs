@@ -168,7 +168,7 @@ pub(super) fn paint_home(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: 
     cx.backend.restore();
 
     // ── the pinned top bar ────────────────────────────────────────────
-    paint_top_bar(surface, cx, &layout, palette);
+    paint_top_bar(surface, cx, &layout, rect.size.x, palette);
 
     if surface.state.connect_card_open {
         super::connect::paint_connect_card(surface, cx, &layout, palette);
@@ -179,16 +179,17 @@ fn paint_top_bar(
     surface: &HomeSurface<'_>,
     cx: &mut PaintCx<'_>,
     layout: &HomeLayout,
+    width: f32,
     palette: StudioPalette,
 ) {
     let locale = surface.ui.locale;
-    cx.backend.fill_rect(
-        Rect::xywh(0.0, 0.0, layout.tabs_row.size.x, HOME_TOPBAR_H),
-        palette.topbar,
-    );
+    // The bar and its hairline span the window, not the content column —
+    // sized to the column they stopped short under the right-hand actions.
+    cx.backend
+        .fill_rect(Rect::xywh(0.0, 0.0, width, HOME_TOPBAR_H), palette.topbar);
     cx.backend.stroke_line(
         Point2D::new(0.0, HOME_TOPBAR_H),
-        Point2D::new(layout.tabs_row.size.x, HOME_TOPBAR_H),
+        Point2D::new(width, HOME_TOPBAR_H),
         palette.topbar_line,
         1.0,
     );

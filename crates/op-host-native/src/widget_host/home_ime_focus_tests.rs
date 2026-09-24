@@ -132,11 +132,9 @@ fn keyboard_occlusion_scrolls_the_composer_clear_of_the_band() {
     let visible_bottom = H - KEYBOARD_H;
     // The whole composer clears, not just the box being typed in: a
     // visible caret with 开始设计 still buried is a dead end on a phone.
+    // The focused composer folds the page and lifts (mobile spec), so it can
+    // clear the band without scrolling at all — the contract is the clearance.
     let composer_bottom = layout.send.origin.y + layout.send.size.y;
-    assert!(
-        host.editor_state().editor_ui.home.scroll_y > 0.0,
-        "the covered composer must scroll"
-    );
     assert!(
         composer_bottom + 0.01 <= visible_bottom,
         "the composer's send button must clear the keyboard band:          {composer_bottom} > {visible_bottom}"
@@ -181,10 +179,6 @@ fn focusing_after_the_keyboard_raised_scrolls_the_composer_into_view() {
     let input = center(home_layout(&host, W, H).input_box);
     assert!(tap_in(&mut host, input.x, input.y, W, H));
     assert!(host.text_input_focus_active());
-    assert!(
-        host.editor_state().editor_ui.home.scroll_y > 0.0,
-        "the Sheet press itself must do the reveal"
-    );
 
     let layout = home_layout(&host, W, H);
     let visible_bottom = H - KEYBOARD_H;

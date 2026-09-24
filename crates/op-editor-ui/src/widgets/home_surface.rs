@@ -198,14 +198,21 @@ impl<'a> HomeSurface<'a> {
             chip_w,
             compact,
         );
-        layout::layout_for_scrolled_mode(
+        let focused = compact && self.state.composer_focused;
+        let mut layout = layout::layout_for_scrolled_mode(
             viewport_width,
             viewport_height,
             self.state.task,
+            // The scroll still applies while focused: on a short phone the
+            // lifted composer can need the keyboard reveal to bring Send up.
             self.state.scroll_y.clamp(0.0, max_scroll),
             chip_w,
             compact,
-        )
+        );
+        if focused {
+            layout::compact::collapse_for_focused_composer(&mut layout);
+        }
+        layout
     }
 
     /// The active task's example prompt — what 使用这个示例 fills.
