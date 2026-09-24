@@ -338,6 +338,20 @@ fn scenarios() -> Vec<Scenario> {
         ("home-app-desktop-zh", 1440.0, 900.0, || {
             home_host(Locale::ZhCn, HomeFamily::AppUi, HomeDevice::Desktop)
         }),
+        ("home-app-mobile-ru", 1440.0, 900.0, || {
+            home_host(Locale::Ru, HomeFamily::AppUi, HomeDevice::Mobile)
+        }),
+        // A narrower window squeezes the explore cards' copy column —
+        // the long-text locales must wrap left of the art.
+        ("home-explore-1180-en", 1180.0, 900.0, || {
+            home_host(Locale::EnUs, HomeFamily::AppUi, HomeDevice::Mobile)
+        }),
+        ("home-explore-1180-de", 1180.0, 900.0, || {
+            home_host(Locale::De, HomeFamily::AppUi, HomeDevice::Mobile)
+        }),
+        ("home-explore-1180-ru", 1180.0, 900.0, || {
+            home_host(Locale::Ru, HomeFamily::AppUi, HomeDevice::Mobile)
+        }),
         ("ws-wide-1280-en", 1280.0, 800.0, || {
             workspace_host(
                 Locale::EnUs,

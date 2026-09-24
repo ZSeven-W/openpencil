@@ -596,6 +596,8 @@ pub(super) mod art_screens;
 pub(super) mod cards;
 #[path = "home_surface_paint_compact.rs"]
 mod compact;
+#[path = "home_surface_paint_explore_copy.rs"]
+pub(super) mod explore_copy;
 #[path = "home_surface_paint_panels.rs"]
 pub(super) mod panels;
 #[path = "home_surface_paint_sections.rs"]

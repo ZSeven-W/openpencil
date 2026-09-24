@@ -8,10 +8,12 @@ use super::super::copy::{self, SANS};
 use super::super::fade;
 use super::super::paint::art::draw_coffee_photo;
 use super::super::{HomeSurface, StudioPalette};
+use super::explore_copy::fit_lines;
 use super::hover_lift_dy;
 use crate::widgets::canvas_viewport_image::{
     has_cached_image_bytes, note_pending_decode, required_raster_edge, store_remote_image_bytes,
 };
+use crate::widgets::file_menu::truncate_to_width_measured;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, ImageAdjustments, ImageDrawMode, Point2D, Rect};
@@ -417,21 +419,36 @@ pub(super) fn paint_explore_card(
         palette.tile_ink,
         1.6,
     );
+    // The copy column ends where the art begins; nothing painted in it
+    // may run past that edge (long-text locales used to run under it).
+    let column_right = paint_rect.origin.x + copy_w + 2.0;
+    let name_x = tile_rect.origin.x + 36.0;
+    let name = truncate_to_width_measured(copy.name, column_right - name_x, |s| {
+        cx.backend.measure_text_family(s, 14.0, SANS)
+    });
     text_weighted(
         cx,
-        copy.name,
+        &name,
         Point2D::new(
-            tile_rect.origin.x + 36.0,
+            name_x,
             jian_widgets::centered_text_baseline_y(tile_rect, 14.0),
         ),
         14.0,
         palette.ink,
         650,
     );
-    // Two-line description.
+    // The description, wrapped to the copy column: as many 19 px lines
+    // as fit above the 查看示例 pill (two on the regular card, at most
+    // three), ellipsized past that.
     let desc = copy::home_str(locale, desc_key);
     let mut line_y = paint_rect.origin.y + pad + 44.0;
-    for line in desc.split("，").take(2) {
+    let pill_top = paint_rect.origin.y + paint_rect.size.y - 14.0 - 28.0;
+    let max_lines = (((pill_top - 6.0 - line_y) / 19.0).floor() as usize + 1).clamp(1, 3);
+    let desc_x = paint_rect.origin.x + pad;
+    let lines = fit_lines(desc, column_right - desc_x, max_lines, |s| {
+        cx.backend.measure_text_family(s, 12.0, SANS)
+    });
+    for line in &lines {
         text(
             cx,
             line,
@@ -443,7 +460,10 @@ pub(super) fn paint_explore_card(
     }
     // 查看示例 pill pinned to the card's bottom-left.
     let view = copy::home_str(locale, "home.explore.view");
-    let view_w = cx.backend.measure_text_family(view, 12.0, SANS) + 13.0 * 2.0;
+    // 13 px lead, the label, a 5 px gap, the 13 px arrow, 8 px trail —
+    // the arrow sits AFTER the label (it used to be drawn over its last
+    // glyph, which long labels such as "Смотреть пример" made obvious).
+    let view_w = cx.backend.measure_text_family(view, 12.0, SANS) + 13.0 + 5.0 + 13.0 + 8.0;
     let pill = Rect::xywh(
         paint_rect.origin.x + pad,
         paint_rect.origin.y + paint_rect.size.y - 14.0 - 28.0,
@@ -467,7 +487,10 @@ pub(super) fn paint_explore_card(
     draw_icon(
         cx.backend,
         Icon::ArrowUpRight,
-        Point2D::new(pill.origin.x + pill.size.x - 16.0, pill.origin.y + 7.0),
+        Point2D::new(
+            pill.origin.x + pill.size.x - 8.0 - 13.0,
+            pill.origin.y + 7.0,
+        ),
         13.0,
         palette.link,
         1.5,
