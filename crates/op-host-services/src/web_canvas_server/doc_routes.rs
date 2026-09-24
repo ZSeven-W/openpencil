@@ -82,6 +82,26 @@ pub(super) fn open_recent_file(body: &str, state: &mut WebCanvasState) -> WebRep
     }
 }
 
+/// `POST /api/file/unbind`: the browser replaced its document with one the
+/// bound file does not hold (Studio Home's fresh page, File > New, a file
+/// picked in the browser), so Save must stop writing to that path. After
+/// this `POST /api/file/save` answers "no file path is bound" and the
+/// browser falls back to a download, and `fileBound` reads `false`.
+///
+/// Touches neither the document nor the filesystem, so it needs no
+/// collaboration gate and is idempotent: an unbound daemon (or an online
+/// tenant, which never has a path) answers the same way.
+pub(super) fn unbind_current_file(state: &mut WebCanvasState) -> WebReply {
+    let unbound = state.current_path.take().is_some();
+    if unbound {
+        state.editor.editor_ui.file_name_display = None;
+    }
+    WebReply {
+        status: "200 OK",
+        body: serde_json::json!({ "ok": true, "unbound": unbound }).to_string(),
+    }
+}
+
 pub(super) fn preserve_web_canvas_preferences(previous: &EditorState, next: &mut EditorState) {
     let previous_selected_model = previous.chat.selected_model_entry().cloned();
     next.editor_ui.theme_mode = previous.editor_ui.theme_mode;

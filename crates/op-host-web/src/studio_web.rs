@@ -3,10 +3,12 @@
 // `widget_host/studio_*_tests.rs`.
 //! Studio (Home + generation workspace) glue for the browser host.
 //!
-//! The widget host owns every Studio decision; this module supplies the three
+//! The widget host owns every Studio decision; this module supplies the
 //! things only the page can:
 //!
 //! * the entry-surface choice at mount ([`apply_entry_surface`]);
+//! * unbinding the daemon's file when the document is swapped for one it
+//!   does not hold ([`unbind_daemon_file`]);
 //! * the discard confirm a Home send parks when it would replace a document
 //!   with unsaved changes ([`drain_home_replace_confirm`]) — see
 //!   `widget_host/studio_home_send.rs` for why the browser asks rather than
@@ -42,6 +44,8 @@ pub(crate) fn apply_entry_surface(state: &mut EditorState) {
 /// after their press / key borrow is released (`window.confirm` blocks, so
 /// no borrow may be held across it).
 pub(crate) fn drain_home_replace_confirm<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
+    // A swap that needed no confirm already happened during the press / key.
+    drain_daemon_file_unbind(inner);
     let (intent, message) = {
         let Ok(mut b) = inner.try_borrow_mut() else {
             return;
@@ -71,6 +75,41 @@ pub(crate) fn drain_home_replace_confirm<C: RepaintContext + 'static>(inner: &Rc
     if b.host_mut().confirm_home_replace(intent) {
         b.host_mut().mark_editor_state_dirty();
         crate::repaint_coalescer::request();
+    }
+    drop(b);
+    drain_daemon_file_unbind(inner);
+}
+
+/// A Home swap replaced the document with a fresh page: tell the daemon to
+/// stop treating its bound file as this document's Save target.
+fn drain_daemon_file_unbind<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
+    let embed = {
+        let Ok(mut b) = inner.try_borrow_mut() else {
+            return;
+        };
+        if !b.host_mut().take_daemon_file_unbind() {
+            return;
+        }
+        b.host().editor_state().editor_ui.embed
+    };
+    unbind_daemon_file(embed);
+}
+
+/// `POST /api/file/unbind`: the browser's document is no longer the file the
+/// daemon was started with (or last opened), so File > Save must fall back
+/// to a download instead of overwriting it. Called for Home swaps, File >
+/// New and a document opened from the browser's own file picker.
+///
+/// Fire-and-forget: the route is idempotent and has no failure the user
+/// could act on. The VS Code embed is skipped — its extension owns the
+/// document's file and saves through its own bridge.
+pub(crate) fn unbind_daemon_file(embed: EmbedHost) {
+    if embed == EmbedHost::VsCode {
+        return;
+    }
+    let url = crate::daemon_base::daemon_url("/api/file/unbind");
+    if !crate::live_sync::post_json(&url, "{}", None) {
+        web_sys::console::warn_1(&"[file] daemon unbind could not start".into());
     }
 }
 

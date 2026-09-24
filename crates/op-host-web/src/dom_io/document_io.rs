@@ -199,6 +199,8 @@ pub(super) fn new_document<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let (w, h) = b.viewport_size();
     b.host_mut().fit_content_to_viewport(w, h);
     let _ = b.repaint();
+    // The new page is untitled: Save must not overwrite the daemon's file.
+    crate::studio_web::unbind_daemon_file(b.host().editor_state().editor_ui.embed);
 }
 
 /// File → Save / Save As. Pick the destination before serializing so the
@@ -566,6 +568,9 @@ fn apply_opened_document<C: RepaintContext + 'static>(
             let (w, h) = b.viewport_size();
             b.host_mut().fit_content_to_viewport(w, h);
             let _ = b.repaint();
+            // A file read in the browser is not the daemon's bound file; its
+            // Save downloads rather than overwriting that file.
+            crate::studio_web::unbind_daemon_file(b.host().editor_state().editor_ui.embed);
         }
         Err(e) => console_error(&format!("[open] {file_name}: {e}")),
     }

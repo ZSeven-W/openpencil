@@ -585,6 +585,31 @@ fn post_file_save_requires_a_known_daemon_path() {
 }
 
 #[test]
+fn unbinding_stops_save_from_writing_the_launch_file() {
+    let original = r#"{"version":"1.0.0","children":[]}"#;
+    let path = write_temp_op("unbind-target", original);
+    let mut s = WebCanvasState::new_with_path(EditorState::new(), 3100, Some(path.clone()));
+
+    let r = handle_web_canvas_request("POST", "/api/file/unbind", "", &mut s);
+    assert!(r.status.starts_with("200"), "{}", r.body);
+    assert!(r.body.contains(r#""unbound":true"#), "{}", r.body);
+    assert!(s.current_path.is_none());
+
+    // Save now refuses (the browser downloads instead) and the file is intact.
+    let saved = handle_web_canvas_request("POST", "/api/file/save", SYNC_BODY, &mut s);
+    assert!(saved.status.starts_with("400"), "{}", saved.body);
+    assert!(saved.body.contains("No file path"), "{}", saved.body);
+    assert_eq!(std::fs::read_to_string(&path).expect("file"), original);
+
+    // Idempotent: a second unbind (or an unbound daemon) is a harmless no-op.
+    let again = handle_web_canvas_request("POST", "/api/file/unbind", "", &mut s);
+    assert!(again.status.starts_with("200"), "{}", again.body);
+    assert!(again.body.contains(r#""unbound":false"#), "{}", again.body);
+    assert_eq!(s.version, 0, "the document is untouched");
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
 fn post_file_save_writes_current_path_and_embedded_editor_meta() {
     use op_editor_core::PenNodeExt;
 

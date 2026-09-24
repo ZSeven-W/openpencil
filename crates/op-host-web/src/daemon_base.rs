@@ -250,6 +250,7 @@ mod daemon_url_tests {
         "/api/export/raster",
         "/api/file/save",
         "/api/file/open-recent",
+        "/api/file/unbind",
     ];
 
     #[test]

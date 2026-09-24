@@ -473,6 +473,9 @@ pub struct WidgetHost {
     /// A Studio Home send parked until the user agrees to discard the
     /// unsaved document it would replace (`studio_home_send.rs`).
     pub(in crate::widget_host) home_replace_confirm: Option<HomeReplaceIntent>,
+    /// Studio Home swapped the document for a fresh page, so the daemon's
+    /// bound file must stop receiving Save (`studio_web` drains it).
+    pub(in crate::widget_host) daemon_file_unbind_pending: bool,
     /// Live drag of the Studio workspace's conversation-dock edge.
     pub(in crate::widget_host) workspace_dock_drag: Option<studio_workspace::WorkspaceDockDrag>,
     /// When the workspace run's turn went idle — the start of the settle

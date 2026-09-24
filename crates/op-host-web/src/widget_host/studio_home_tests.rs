@@ -102,6 +102,10 @@ fn enter_on_a_typed_brief_opens_the_workspace_and_queues_a_pinned_run() {
         LaunchRoute::Orchestrator
     );
     assert!(host.workspace_run_generating());
+    assert!(
+        !host.take_daemon_file_unbind(),
+        "the untouched starter is reused, so the daemon's binding is left alone"
+    );
 }
 
 #[test]
@@ -156,8 +160,10 @@ fn a_send_over_unsaved_work_waits_for_the_discard_confirm() {
     let intent = host.take_home_replace_confirm().expect("parked");
     assert_eq!(intent, HomeReplaceIntent::Brief);
 
+    assert!(!host.take_daemon_file_unbind(), "nothing swapped yet");
     // Confirmed: the work is replaced by a fresh starter and the run starts.
     assert!(host.confirm_home_replace(intent));
+    assert!(host.take_daemon_file_unbind(), "the fresh page is untitled");
     assert!(op_editor_core::blank_starter::active_page_is_blank_starter(
         &host.editor_state
     ));
@@ -175,6 +181,7 @@ fn cancelling_the_confirm_leaves_home_and_the_document_alone() {
     // The DOM layer took the intent and the user said no: nothing else runs.
     assert!(host.take_home_replace_confirm().is_some());
     assert!(host.take_home_replace_confirm().is_none());
+    assert!(!host.take_daemon_file_unbind(), "the document stays bound");
     assert!(host.home_visible());
     assert_eq!(host.editor_state.editor_ui.home.draft, "event poster");
     assert!(!op_editor_core::blank_starter::active_page_is_blank_starter(&host.editor_state));
@@ -197,6 +204,9 @@ fn saved_work_is_swapped_for_a_fresh_page_without_asking() {
         "transcript restarted"
     );
     assert!(host.editor_state.chat.pending_send.is_some());
+    // Save must now download the fresh page, not overwrite the bound file.
+    assert!(host.take_daemon_file_unbind());
+    assert!(!host.take_daemon_file_unbind(), "taken once");
 }
 
 #[test]

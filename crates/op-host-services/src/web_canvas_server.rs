@@ -639,6 +639,7 @@ pub fn handle_web_canvas_request(
             },
         },
         ("POST", "/api/file/open-recent") => open_recent_file(body, state),
+        ("POST", "/api/file/unbind") => unbind_current_file(state),
         ("POST", "/api/export/pdf") => export_pdf_download(body, state),
         ("POST", "/api/export/raster") => export_raster_download(body, state),
         ("GET", "/api/ai/models") => WebReply {

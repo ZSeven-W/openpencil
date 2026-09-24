@@ -25,6 +25,11 @@
 //!
 //! A Retry from a stopped run replaces only that run's partial boards, which
 //! is what the user asked for, so it swaps without asking.
+//!
+//! Every swap also unbinds the daemon's file (`--file` / a recent open):
+//! the fresh page is a new, untitled deliverable, so File > Save must
+//! download it instead of overwriting the file the daemon was bound to. A
+//! send on the untouched starter swaps nothing and unbinds nothing.
 
 use super::WidgetHost;
 use op_editor_core::scene_template_append::template_boards;
@@ -173,7 +178,15 @@ impl WidgetHost {
         let attachments = std::mem::take(&mut self.editor_state.chat.pending_attachments);
         self.editor_state.chat.new_chat();
         self.editor_state.chat.pending_attachments = attachments;
+        // The fresh page is not the file the daemon may be bound to: Save
+        // must download it rather than overwrite that file.
+        self.daemon_file_unbind_pending = true;
         self.mark_dirty();
+    }
+
+    /// Take the pending daemon-file unbind a Home swap raised (DOM drain).
+    pub fn take_daemon_file_unbind(&mut self) -> bool {
+        std::mem::take(&mut self.daemon_file_unbind_pending)
     }
 
     /// Start from the active task's example. The example is written into the
