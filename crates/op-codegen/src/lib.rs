@@ -1,10 +1,9 @@
-//! Code generation — Rust ports of `packages/pen-codegen/src/`.
-//! v1 ships the simplest of the 9 TS generators: `css-variables`,
-//! which emits the design's variable table as CSS custom properties.
-//! Future generators (React + Tailwind, HTML, Vue, Svelte, Flutter,
-//! SwiftUI, Compose, React Native) live behind the same `Codegen`
-//! trait so a single dispatcher (eventually a `op codegen <target>`
-//! CLI) can fan out by target enum.
+//! Code generation — deterministic generators from a `PenDocument`:
+//! `css-variables` (the variable table as CSS custom properties), the
+//! markup targets (HTML, Vue, Svelte, inline-style React, Flutter,
+//! SwiftUI, Compose, React Native) and `react-tailwind` (React +
+//! Tailwind CSS + shadcn/ui with theme files), all behind the same
+//! `Codegen` trait so a dispatcher can fan out by target.
 //!
 //! All generators consume the canonical `jian_ops_schema::PenDocument`
 //! and walk `PenNode` via `op_editor_core::PenNodeExt`. The spine here
@@ -19,10 +18,14 @@
 #[cfg(feature = "ai")]
 pub mod ai;
 
+mod codegen_tailwind;
 mod codegen_targets;
+#[cfg(test)]
+mod tailwind_tests;
 #[cfg(test)]
 mod tests;
 
+pub use crate::codegen_tailwind::{referenced_components, ReactTailwind, TailwindFiles};
 pub use crate::codegen_targets::{
     Compose, Flutter, Html, React, ReactNative, Svelte, SwiftUi, Vue,
 };

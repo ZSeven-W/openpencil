@@ -400,7 +400,11 @@ pub fn start_codegen<C: RepaintContext + 'static>(inner: Rc<RefCell<C>>, base: S
         // Model id: the selected chat model's wire value, else "default" (the
         // proxy then picks the configured provider).
         let selected = state.chat.selected_model_entry();
-        if selected.is_some_and(|entry| entry.builtin_provider_id.is_none()) {
+        // Deterministic targets never reach the provider (the pipeline
+        // finishes on its first step), so any model selection is fine.
+        if !state.codegen.framework.is_deterministic()
+            && selected.is_some_and(|entry| entry.builtin_provider_id.is_none())
+        {
             drop(b);
             let mut bm = inner.borrow_mut();
             let cg = &mut bm.host_mut().editor_state_mut().codegen;

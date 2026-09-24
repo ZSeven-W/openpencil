@@ -1,0 +1,49 @@
+{
+  "version": "1.0.0",
+  "themes": { "Mode": ["Dark", "Light"], "Density": ["Comfortable", "Compact"] },
+  "variables": {
+    "background": { "type": "color", "value": [
+      { "value": "#0B0B0F", "theme": { "Mode": "Dark" } },
+      { "value": "#FFFFFF", "theme": { "Mode": "Light" } }
+    ] },
+    "foreground": { "type": "color", "value": [
+      { "value": "#F4F4F5", "theme": { "Mode": "Dark" } },
+      { "value": "#18181B", "theme": { "Mode": "Light" } }
+    ] },
+    "--space-section": { "type": "number", "value": [
+      { "value": 32, "theme": { "Density": "Comfortable" } },
+      { "value": 20, "theme": { "Density": "Compact" } }
+    ] },
+    "--font-heading": { "type": "string", "value": "Space Grotesk" }
+  },
+  "children": [
+    {
+      "type": "frame",
+      "id": "hero",
+      "name": "hero",
+      "width": 1440,
+      "height": 720,
+      "layout": "vertical",
+      "justifyContent": "center",
+      "alignItems": "center",
+      "gap": "$--space-section",
+      "padding": [96, 120],
+      "clipContent": true,
+      "fill": [{ "type": "solid", "color": "$background" }],
+      "children": [
+        { "type": "text", "id": "headline", "content": "Ship designs as code", "fontFamily": "$--font-heading", "fontSize": 72, "fontWeight": 800, "lineHeight": 1, "textAlign": "center", "fill": [{ "type": "solid", "color": "$foreground" }] },
+        { "type": "text", "id": "sub", "content": "Themes follow the document.\nDark first.", "fontSize": 20, "lineHeight": 1.625, "textAlign": "center", "fill": [{ "type": "solid", "color": "$--muted-foreground" }] },
+        {
+          "type": "frame",
+          "id": "glow",
+          "width": 640,
+          "height": 8,
+          "cornerRadius": [4, 4, 0, 0],
+          "opacity": 0.6,
+          "fill": [{ "type": "solid", "color": "$--accent" }],
+          "effects": [{ "type": "blur", "radius": 12 }]
+        }
+      ]
+    }
+  ]
+}

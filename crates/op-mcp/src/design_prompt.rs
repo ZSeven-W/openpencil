@@ -37,6 +37,7 @@ const PROMPT_SECTIONS: &[&str] = &[
     "codegen-swiftui",
     "codegen-compose",
     "codegen-react-native",
+    "codegen-react-tailwind",
 ];
 
 const INTRO: &str = r#"You are working with OpenPencil, a vector design tool.
@@ -188,6 +189,7 @@ fn section_content(section: &str) -> Option<String> {
         "codegen-swiftui" => Some(skill_content("codegen-swiftui")),
         "codegen-compose" => Some(skill_content("codegen-compose")),
         "codegen-react-native" => Some(skill_content("codegen-react-native")),
+        "codegen-react-tailwind" => Some(skill_content("codegen-react-tailwind")),
         _ => None,
     }
 }

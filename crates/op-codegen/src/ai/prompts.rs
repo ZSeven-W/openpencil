@@ -466,6 +466,8 @@ mod tests {
             nodes_json: "[{\"type\":\"frame\",\"children\":[]}]".into(),
             framework: Framework::React,
             variables_json: None,
+            themes_json: None,
+            components_json: None,
             max_output_tokens: 3000,
             thinking: ThinkingMode::Adaptive,
             effort: EffortLevel::Low,

@@ -40,6 +40,8 @@ fn test_input() -> CodegenInput {
         nodes_json: "[{\"type\":\"frame\",\"id\":\"n1\",\"children\":[]}]".to_string(),
         framework: Framework::React,
         variables_json: None,
+        themes_json: None,
+        components_json: None,
         max_output_tokens: 4096,
         thinking: ThinkingMode::Adaptive,
         effort: EffortLevel::Low,

@@ -186,13 +186,6 @@ impl MobileCodegenHost {
             set_inline_error(host, "Select nodes to generate code");
             return true;
         };
-        let provider = match MobileBuiltinProvider::from_selected_model(host.editor_state()) {
-            Ok(provider) => provider,
-            Err(error) => {
-                set_inline_error(host, error.to_string());
-                return true;
-            }
-        };
         let framework = host.editor_state().codegen.framework;
         let selection_snapshot = host
             .editor_state()
@@ -201,7 +194,20 @@ impl MobileCodegenHost {
             .iter()
             .map(|id| id.as_str().to_string())
             .collect();
-        let session = match CodegenSession::try_start(Box::new(provider), input, framework) {
+        // Deterministic targets need no model, so no provider either.
+        let started = if framework.is_deterministic() {
+            Ok(CodegenSession::start_deterministic(input, framework))
+        } else {
+            let provider = match MobileBuiltinProvider::from_selected_model(host.editor_state()) {
+                Ok(provider) => provider,
+                Err(error) => {
+                    set_inline_error(host, error.to_string());
+                    return true;
+                }
+            };
+            CodegenSession::try_start(Box::new(provider), input, framework)
+        };
+        let session = match started {
             Ok(session) => session
                 .with_document_identity(identity)
                 .with_selection_snapshot(selection_snapshot),

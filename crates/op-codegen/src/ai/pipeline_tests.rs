@@ -8,10 +8,30 @@ fn input() -> CodegenInput {
         nodes_json: "[{\"type\":\"frame\",\"id\":\"n1\",\"children\":[]}]".into(),
         framework: Framework::React,
         variables_json: None,
+        themes_json: None,
+        components_json: None,
         max_output_tokens: 3000,
         thinking: ThinkingMode::Adaptive,
         effort: EffortLevel::Low,
     }
+}
+
+#[test]
+fn deterministic_target_finishes_on_the_first_step_without_a_model() {
+    let mut p = CodegenPipeline::new(CodegenInput {
+        framework: Framework::ReactTailwind,
+        ..input()
+    });
+    let step = p.step();
+    let PipelineStep::Done { code, degraded, .. } = &step else {
+        panic!("expected Done, got {step:?}");
+    };
+    assert!(!degraded, "a deterministic target is the real output");
+    assert!(code.contains("export default function"), "{code}");
+    assert_eq!(p.step(), step, "terminal step is sticky");
+    let progress = p.progress();
+    assert_eq!(progress.planning_done, Some(true));
+    assert_eq!(progress.assembly_done, Some(true));
 }
 
 #[test]

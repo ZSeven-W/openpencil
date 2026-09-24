@@ -60,6 +60,7 @@ fn empty_page_and_unresolvable_selection_are_none() {
 fn framework_ext_maps_every_framework() {
     assert_eq!(framework_ext(Framework::React), "tsx");
     assert_eq!(framework_ext(Framework::ReactNative), "tsx");
+    assert_eq!(framework_ext(Framework::ReactTailwind), "tsx");
     assert_eq!(framework_ext(Framework::Vue), "vue");
     assert_eq!(framework_ext(Framework::Svelte), "svelte");
     assert_eq!(framework_ext(Framework::Html), "html");

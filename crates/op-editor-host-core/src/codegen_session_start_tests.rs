@@ -19,6 +19,8 @@ fn input() -> CodegenInput {
         nodes_json: "[]".into(),
         framework: Framework::React,
         variables_json: None,
+        themes_json: None,
+        components_json: None,
         max_output_tokens: 4096,
         thinking: ThinkingMode::Adaptive,
         effort: EffortLevel::Low,
@@ -40,4 +42,39 @@ fn injected_thread_spawn_failure_is_returned_as_a_typed_error() {
     };
     assert_eq!(source.kind(), std::io::ErrorKind::Other);
     assert_eq!(source.to_string(), "injected spawn failure");
+}
+
+#[test]
+fn deterministic_target_queues_its_result_without_a_provider() {
+    let session = CodegenSession::start_deterministic(
+        CodegenInput {
+            nodes_json: r#"[{"type":"frame","id":"root","name":"Card","width":320}]"#.into(),
+            framework: Framework::ReactTailwind,
+            ..input()
+        },
+        Framework::ReactTailwind,
+    );
+    assert!(matches!(
+        session.rx.try_recv(),
+        Ok(CodegenDelta::Progress(_))
+    ));
+    let Ok(CodegenDelta::Done { code, degraded, .. }) = session.rx.try_recv() else {
+        panic!("deterministic session must queue Done");
+    };
+    assert!(!degraded);
+    assert!(code.contains("export default function Card()"), "{code}");
+    assert!(code.contains("w-80"), "{code}");
+}
+
+#[test]
+fn model_backed_target_is_refused_by_the_deterministic_entry() {
+    let session = CodegenSession::start_deterministic(input(), Framework::React);
+    let _progress = session.rx.try_recv();
+    let Ok(CodegenDelta::Failed(message)) = session.rx.try_recv() else {
+        panic!("a model-backed target must not pretend to be deterministic");
+    };
+    assert!(
+        message.contains("not a deterministic code target"),
+        "{message}"
+    );
 }

@@ -46,6 +46,8 @@ fn strip_metrics(touch_controls: bool) -> FrameworkStripMetrics {
 fn framework_tab_label(fw: Framework) -> &'static str {
     match fw {
         Framework::React => "React",
+        // Brand names stay untranslated, like every other chip.
+        Framework::ReactTailwind => "Tailwind",
         Framework::Vue => "Vue",
         Framework::Svelte => "Svelte",
         Framework::Html => "HTML",

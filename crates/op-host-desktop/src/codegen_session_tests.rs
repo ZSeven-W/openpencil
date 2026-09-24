@@ -30,6 +30,7 @@ impl ChatProvider for ScriptedProvider {
 fn framework_ext_maps_every_framework() {
     assert_eq!(framework_ext(Framework::React), "tsx");
     assert_eq!(framework_ext(Framework::ReactNative), "tsx");
+    assert_eq!(framework_ext(Framework::ReactTailwind), "tsx");
     assert_eq!(framework_ext(Framework::Vue), "vue");
     assert_eq!(framework_ext(Framework::Svelte), "svelte");
     assert_eq!(framework_ext(Framework::Html), "html");
@@ -478,6 +479,8 @@ fn test_input() -> CodegenInput {
         nodes_json: "[{\"type\":\"frame\",\"id\":\"n1\",\"children\":[]}]".to_string(),
         framework: Framework::React,
         variables_json: None,
+        themes_json: None,
+        components_json: None,
         max_output_tokens: 4096,
         thinking: op_ai::chat_provider::ThinkingMode::Adaptive,
         effort: op_ai::chat_provider::EffortLevel::Low,
@@ -505,6 +508,8 @@ fn run_pipeline_drives_three_phases_to_done() {
         nodes_json: "[{\"type\":\"frame\",\"id\":\"n1\",\"children\":[]}]".to_string(),
         framework: Framework::React,
         variables_json: None,
+        themes_json: None,
+        components_json: None,
         max_output_tokens: 4096,
         thinking: op_ai::chat_provider::ThinkingMode::Adaptive,
         effort: op_ai::chat_provider::EffortLevel::Low,

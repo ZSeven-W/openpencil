@@ -32,7 +32,7 @@ pub fn build_codegen_input(state: &EditorState) -> Option<(CodegenInput, String)
     Some(input_from_nodes(
         &selected,
         state.codegen.framework,
-        state.doc.variables.as_ref(),
+        &state.doc,
     ))
 }
 
@@ -128,19 +128,32 @@ impl Write for LimitedJsonWriter {
 fn input_from_nodes(
     nodes: &[&PenNode],
     framework: op_editor_core::codegen::Framework,
-    variables: Option<
-        &std::collections::BTreeMap<String, jian_ops_schema::variable::VariableDefinition>,
-    >,
+    doc: &jian_ops_schema::PenDocument,
 ) -> (CodegenInput, String) {
     let nodes_json = serde_json::to_string(nodes).unwrap_or_else(|_| "[]".to_string());
-    let variables_json = variables
+    let variables_json = doc
+        .variables
+        .as_ref()
         .filter(|vars| !vars.is_empty())
         .map(|vars| serde_json::to_string(vars).unwrap_or_else(|_| "{}".to_string()));
+    let themes_json = doc
+        .themes
+        .as_ref()
+        .filter(|themes| !themes.is_empty())
+        .and_then(|themes| serde_json::to_string(themes).ok());
+    // Masters of instances in the selection that were not themselves
+    // selected, so instance-aware generators can resolve them.
+    let components = op_codegen::referenced_components(nodes, doc);
+    let components_json = (!components.is_empty())
+        .then(|| serde_json::to_string(&components).ok())
+        .flatten();
 
     let input = CodegenInput {
         nodes_json: nodes_json.clone(),
         framework,
         variables_json,
+        themes_json,
+        components_json,
         max_output_tokens: DEFAULT_MAX_OUTPUT_TOKENS,
         thinking: ThinkingMode::Adaptive,
         effort: EffortLevel::Low,
@@ -152,7 +165,7 @@ fn input_from_nodes(
 pub fn framework_ext(fw: op_editor_core::codegen::Framework) -> &'static str {
     use op_editor_core::codegen::Framework;
     match fw {
-        Framework::React | Framework::ReactNative => "tsx",
+        Framework::React | Framework::ReactTailwind | Framework::ReactNative => "tsx",
         Framework::Vue => "vue",
         Framework::Svelte => "svelte",
         Framework::Html => "html",

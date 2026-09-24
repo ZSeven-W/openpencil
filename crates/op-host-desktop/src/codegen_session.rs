@@ -103,6 +103,16 @@ pub fn launch_codegen_if_pending(
     };
     // Capture the target framework BEFORE `input` is moved into the worker.
     let framework = host.editor_state().codegen.framework;
+    if framework.is_deterministic() {
+        // No model turn: no provider checks, no worker thread.
+        let selection_snapshot = selection_snapshot(host);
+        let session = CodegenSession::start_deterministic(input, framework)
+            .with_document_identity(live_document_identity)
+            .with_selection_snapshot(selection_snapshot);
+        begin_generating(host);
+        *current = Some(session);
+        return true;
+    }
     if let Some(error) = fixed_provider_launch_error(host) {
         let cg = &mut host.editor_state_mut().codegen;
         cg.error = Some(error);
@@ -119,13 +129,7 @@ pub fn launch_codegen_if_pending(
     // Keep this run's targets on the session until Done. A failed
     // regeneration can keep displaying the previous successful code, so
     // overwriting its snapshot at launch would create a mixed cache entry.
-    let selection_snapshot: Vec<String> = host
-        .editor_state()
-        .selection
-        .set
-        .iter()
-        .map(|id| id.as_str().to_string())
-        .collect();
+    let selection_snapshot = selection_snapshot(host);
     let session = match CodegenSession::try_start_with_model(provider, input, framework, model) {
         Ok(session) => session
             .with_document_identity(live_document_identity)
@@ -137,12 +141,27 @@ pub fn launch_codegen_if_pending(
             return true;
         }
     };
+    begin_generating(host);
+    *current = Some(session);
+    true
+}
+
+/// Node ids this run targets, committed to the cache only on `Done`.
+fn selection_snapshot(host: &WidgetHostNative) -> Vec<String> {
+    host.editor_state()
+        .selection
+        .set
+        .iter()
+        .map(|id| id.as_str().to_string())
+        .collect()
+}
+
+/// Reset the panel into the Generating phase for a freshly launched run.
+fn begin_generating(host: &mut WidgetHostNative) {
     let cg = &mut host.editor_state_mut().codegen;
     cg.progress = Default::default();
     cg.error = None;
     cg.phase = op_editor_core::codegen::CodegenPhase::Generating;
-    *current = Some(session);
-    true
 }
 
 /// Built-in and ACP selections carry their own ready-state and are validated

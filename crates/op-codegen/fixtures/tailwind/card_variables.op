@@ -1,0 +1,72 @@
+{
+  "version": "1.0.0",
+  "themes": { "Mode": ["Light", "Dark"] },
+  "variables": {
+    "--background": { "type": "color", "value": [
+      { "value": "#FFFFFF", "theme": { "Mode": "Light" } },
+      { "value": "#09090B", "theme": { "Mode": "Dark" } }
+    ] },
+    "--foreground": { "type": "color", "value": [
+      { "value": "#09090B", "theme": { "Mode": "Light" } },
+      { "value": "#FAFAFA", "theme": { "Mode": "Dark" } }
+    ] },
+    "--card": { "type": "color", "value": [
+      { "value": "#FFFFFF", "theme": { "Mode": "Light" } },
+      { "value": "#18181B", "theme": { "Mode": "Dark" } }
+    ] },
+    "--card-foreground": { "type": "color", "value": [
+      { "value": "#09090B", "theme": { "Mode": "Light" } },
+      { "value": "#FAFAFA", "theme": { "Mode": "Dark" } }
+    ] },
+    "--muted-foreground": { "type": "color", "value": [
+      { "value": "#71717A", "theme": { "Mode": "Light" } },
+      { "value": "#A1A1AA", "theme": { "Mode": "Dark" } }
+    ] },
+    "--border": { "type": "color", "value": [
+      { "value": "#E4E4E7", "theme": { "Mode": "Light" } },
+      { "value": "#27272A", "theme": { "Mode": "Dark" } }
+    ] },
+    "--primary": { "type": "color", "value": "#2563EB" },
+    "--primary-foreground": { "type": "color", "value": "#FFFFFF" },
+    "--radius": { "type": "number", "value": 10 }
+  },
+  "children": [
+    {
+      "type": "frame",
+      "id": "card",
+      "name": "Pricing Card",
+      "x": 120,
+      "y": 80,
+      "width": 360,
+      "height": "fit_content",
+      "layout": "vertical",
+      "gap": 12,
+      "padding": 24,
+      "cornerRadius": 10,
+      "fill": [{ "type": "solid", "color": "$--card" }],
+      "stroke": { "thickness": 1, "fill": [{ "type": "solid", "color": "$--border" }] },
+      "effects": [{ "type": "shadow", "offsetX": 0, "offsetY": 1, "blur": 3, "spread": 0, "color": "rgba(0, 0, 0, 0.08)" }],
+      "children": [
+        { "type": "text", "id": "eyebrow", "content": "Pro plan", "fontSize": 12, "fontWeight": 500, "letterSpacing": 0.5, "fill": [{ "type": "solid", "color": "$--primary" }] },
+        { "type": "text", "id": "title", "content": "$29 / month", "fontSize": 30, "fontWeight": 700, "lineHeight": 1.25, "fill": [{ "type": "solid", "color": "$--card-foreground" }] },
+        { "type": "text", "id": "desc", "content": "Everything in Starter, plus {unlimited} projects & <priority> support.", "fontSize": 14, "lineHeight": 1.5, "width": "fill_container", "textGrowth": "fixed-width", "fill": [{ "type": "solid", "color": "$--muted-foreground" }] },
+        {
+          "type": "frame",
+          "id": "cta",
+          "name": "CTA",
+          "width": "fill_container",
+          "height": 40,
+          "layout": "horizontal",
+          "justifyContent": "center",
+          "alignItems": "center",
+          "padding": [0, 16],
+          "cornerRadius": 8,
+          "fill": [{ "type": "solid", "color": "$--primary", "opacity": 0.9 }],
+          "children": [
+            { "type": "text", "id": "cta-label", "content": "Upgrade", "fontSize": 14, "fontWeight": 600, "fill": [{ "type": "solid", "color": "$--primary-foreground" }] }
+          ]
+        }
+      ]
+    }
+  ]
+}

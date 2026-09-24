@@ -1,0 +1,114 @@
+{
+  "version": "1.0.0",
+  "pages": [
+    {
+      "id": "p-screen",
+      "name": "Screen",
+      "children": [
+        {
+          "type": "frame",
+          "id": "settings",
+          "name": "Settings screen",
+          "width": 480,
+          "height": "fit_content",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": 24,
+          "fill": [{ "type": "solid", "color": "$--background" }],
+          "children": [
+            { "type": "ref", "id": "crumbs", "ref": "shadcn-breadcrumb" },
+            { "type": "ref", "id": "team-card", "ref": "comp-card", "descendants": { "comp-card-title": { "content": "Team" }, "comp-card-desc": { "content": "Invite members and manage roles." } } },
+            { "type": "ref", "id": "revenue", "ref": "shadcn-card-stats" },
+            { "type": "ref", "id": "plan", "ref": "plan-tile" },
+            { "type": "ref", "id": "tabs", "ref": "shadcn-tab-bar" },
+            { "type": "text_input", "id": "email", "placeholder": "you@example.com", "width": "fill_container", "height": 36 },
+            {
+              "type": "select",
+              "id": "role",
+              "placeholder": "Pick a role",
+              "value": "editor",
+              "width": 200,
+              "options": [{ "value": "viewer", "label": "Viewer" }, { "value": "editor", "label": "Editor" }]
+            },
+            { "type": "checkbox", "id": "terms", "label": "Accept terms", "checked": true },
+            { "type": "switch", "id": "notify", "checked": true },
+            { "type": "progress", "id": "quota", "value": 40, "max": 80, "width": 240 },
+            {
+              "type": "frame",
+              "id": "actions",
+              "layout": "horizontal",
+              "gap": 8,
+              "justifyContent": "end",
+              "width": "fill_container",
+              "children": [
+                { "type": "ref", "id": "cancel", "ref": "shadcn-btn-outline", "descendants": { "shadcn-btn-outline-label": { "content": "Cancel" } } },
+                {
+                  "type": "frame",
+                  "id": "save",
+                  "name": "Primary Button",
+                  "width": 120,
+                  "height": 40,
+                  "layout": "horizontal",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "cornerRadius": 8,
+                  "fill": [{ "type": "solid", "color": "#18181B" }],
+                  "children": [{ "type": "text", "id": "save-label", "content": "Save", "fontSize": 14, "fontWeight": 600, "fill": [{ "type": "solid", "color": "#FAFAFA" }] }]
+                },
+                { "type": "ref", "id": "new-badge", "ref": "shadcn-badge", "descendants": { "shadcn-badge-label": { "content": "New" } } }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "photo-badge",
+              "name": "Badge",
+              "width": 48,
+              "height": 48,
+              "children": [{ "type": "image", "id": "photo", "src": "./assets/photo.png", "width": 48, "height": 48 }]
+            },
+            { "type": "ref", "id": "members", "ref": "shadcn-table" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "p-components",
+      "name": "Components",
+      "children": [
+        {
+          "type": "frame",
+          "id": "comp-card",
+          "name": "Basic Card",
+          "reusable": true,
+          "width": 280,
+          "layout": "vertical",
+          "gap": 8,
+          "padding": 20,
+          "cornerRadius": 12,
+          "fill": [{ "type": "solid", "color": "$--card" }],
+          "children": [
+            { "type": "text", "id": "comp-card-title", "content": "Card Title", "fontSize": 18, "fontWeight": 600 },
+            { "type": "text", "id": "comp-card-desc", "content": "Card description.", "fontSize": 14 }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "plan-tile",
+          "name": "Plan Tile",
+          "reusable": true,
+          "width": 320,
+          "layout": "horizontal",
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "padding": 16,
+          "cornerRadius": 12,
+          "stroke": { "thickness": 1, "fill": [{ "type": "solid", "color": "$--border" }] },
+          "children": [
+            { "type": "text", "id": "plan-name", "content": "Starter", "fontSize": 16, "fontWeight": 600, "fill": [{ "type": "solid", "color": "$--foreground" }] },
+            { "type": "ref", "id": "plan-cta", "ref": "shadcn-btn-primary", "descendants": { "shadcn-btn-primary-label": { "content": "Choose" } } }
+          ]
+        }
+      ]
+    }
+  ]
+}

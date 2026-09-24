@@ -56,7 +56,7 @@ fn plausible_code(framework: Framework, code: &str) -> bool {
         "<svg",
     ]);
     match framework {
-        Framework::React => {
+        Framework::React | Framework::ReactTailwind => {
             markup
                 || has_any(&["export default", "from 'react'", "from \"react\"", "React."])
                 || function_block

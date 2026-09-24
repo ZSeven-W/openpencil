@@ -304,7 +304,7 @@ fn generating_running_step_rotates_loader_icon_from_host_clock() {
 #[test]
 fn code_action_rects_idle_has_generate_and_bundle() {
     let s = CodegenState::default(); // Idle, React
-                                     // Wide width so all 8 chips fit the single row (no scroll clipping).
+                                     // Wide width so all 9 chips fit the single row (no scroll clipping).
     let rects = code_action_rects(0.0, 0.0, 2000.0, &s);
     assert!(rects
         .iter()
@@ -312,12 +312,12 @@ fn code_action_rects_idle_has_generate_and_bundle() {
     assert!(rects
         .iter()
         .any(|(a, _)| matches!(a, CodegenAction::ExportBundle)));
-    // all 8 framework chips present
+    // all 9 framework chips present
     let chips = rects
         .iter()
         .filter(|(a, _)| matches!(a, CodegenAction::SelectFramework(_)))
         .count();
-    assert_eq!(chips, 8);
+    assert_eq!(chips, 9);
     // No overflow at 2000px → no scroll chevrons.
     assert_eq!(framework_row_overflow(2000.0), 0.0);
     assert!(!rects
@@ -755,13 +755,13 @@ fn code_action_rects_generate_center_round_trips() {
     assert_eq!(hits, vec![CodegenAction::Generate]);
 }
 
-/// The 8 framework chips lay out in a SINGLE row (one shared y), each with
+/// The 9 framework chips lay out in a SINGLE row (one shared y), each with
 /// a positive-size rect; the strip overflows the 280px panel (so it
 /// scrolls), and a positive scroll shifts every chip left by that amount.
 #[test]
 fn framework_chips_single_row_and_scroll() {
     let chips = framework_chip_rects(0.0, 0.0, 2000.0, 0.0);
-    assert_eq!(chips.len(), 8);
+    assert_eq!(chips.len(), 9);
     for (_, r) in &chips {
         assert!(r.size.x > 0.0 && r.size.y > 0.0);
     }

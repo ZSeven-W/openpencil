@@ -148,6 +148,13 @@ pub struct CodegenInput {
     pub framework: Framework,
     /// Design variables as JSON (None if the doc has none).
     pub variables_json: Option<String>,
+    /// Document theme axes as JSON (`{"Mode":["Light","Dark"]}`), for
+    /// targets that emit per-theme files. None when the doc has none.
+    pub themes_json: Option<String>,
+    /// Component definitions (JSON node array) that `ref` instances in
+    /// the selection point at but that live outside it. None when the
+    /// selection has no such instances.
+    pub components_json: Option<String>,
     /// Per-request token cap.
     pub max_output_tokens: u32,
     pub thinking: ThinkingMode,

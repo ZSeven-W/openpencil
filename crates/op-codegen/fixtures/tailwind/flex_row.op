@@ -1,0 +1,37 @@
+{
+  "version": "1.0.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "toolbar",
+      "name": "toolbar row",
+      "width": 1200,
+      "height": 64,
+      "layout": "horizontal",
+      "justifyContent": "space_between",
+      "alignItems": "center",
+      "gap": 13,
+      "padding": [10, 16, 10, 20],
+      "fill": [{ "type": "solid", "color": "#F8FAFC" }],
+      "stroke": { "thickness": [0, 0, 1, 0], "fill": [{ "type": "solid", "color": "#E2E8F0" }] },
+      "children": [
+        { "type": "icon_font", "id": "search", "iconFontName": "search", "width": 16, "height": 16, "fill": [{ "type": "solid", "color": "#64748B" }] },
+        { "type": "text", "id": "label", "content": "Search the docs", "fontSize": 15, "fontFamily": "Inter", "fill": [{ "type": "solid", "color": "#0F172A" }] },
+        { "type": "frame", "id": "spacer", "width": "fill_container", "height": 1 },
+        { "type": "ellipse", "id": "dot", "width": 40, "height": 40, "fill": [{ "type": "solid", "color": "#22C55E" }] },
+        { "type": "image", "id": "avatar", "name": "Avatar photo", "src": "./assets/avatar.png", "width": 32, "height": 32, "cornerRadius": 9999, "objectFit": "crop" },
+        {
+          "type": "frame",
+          "id": "badge-stack",
+          "width": 72,
+          "height": 28,
+          "layout": "none",
+          "children": [
+            { "type": "rectangle", "id": "badge-bg", "width": 72, "height": 28, "cornerRadius": 6, "fill": [{ "type": "linear_gradient", "angle": 90, "stops": [{ "offset": 0, "color": "#6366F1" }, { "offset": 1, "color": "#EC4899" }] }] },
+            { "type": "text", "id": "badge-count", "x": 26, "y": 6, "content": "12", "fontSize": 12, "fontWeight": "bold", "fill": [{ "type": "solid", "color": "#FFFFFF" }] }
+          ]
+        }
+      ]
+    }
+  ]
+}

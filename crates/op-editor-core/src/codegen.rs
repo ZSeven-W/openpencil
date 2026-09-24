@@ -12,6 +12,9 @@ use jian_core::text_input::prev_char_boundary;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Framework {
     React,
+    /// React + Tailwind CSS + shadcn/ui, generated deterministically
+    /// (no model turn) by `op_codegen::ReactTailwind`.
+    ReactTailwind,
     Vue,
     Svelte,
     Html,
@@ -22,8 +25,9 @@ pub enum Framework {
 }
 
 impl Framework {
-    pub const ALL: [Framework; 8] = [
+    pub const ALL: [Framework; 9] = [
         Framework::React,
+        Framework::ReactTailwind,
         Framework::Vue,
         Framework::Svelte,
         Framework::Html,
@@ -36,6 +40,7 @@ impl Framework {
     pub fn as_wire(self) -> &'static str {
         match self {
             Framework::React => "react",
+            Framework::ReactTailwind => "react-tailwind",
             Framework::Vue => "vue",
             Framework::Svelte => "svelte",
             Framework::Html => "html",
@@ -54,6 +59,7 @@ impl Framework {
     pub fn display_name(self) -> &'static str {
         match self {
             Framework::React => "React",
+            Framework::ReactTailwind => "React + Tailwind",
             Framework::Vue => "Vue",
             Framework::Svelte => "Svelte",
             Framework::Html => "HTML",
@@ -68,6 +74,7 @@ impl Framework {
     pub fn skill_name(self) -> &'static str {
         match self {
             Framework::React => "codegen-react",
+            Framework::ReactTailwind => "codegen-react-tailwind",
             Framework::Vue => "codegen-vue",
             Framework::Svelte => "codegen-svelte",
             Framework::Html => "codegen-html",
@@ -76,6 +83,13 @@ impl Framework {
             Framework::Compose => "codegen-compose",
             Framework::ReactNative => "codegen-react-native",
         }
+    }
+
+    /// True for targets produced by a pure generator with no model turn:
+    /// hosts run them without an AI provider and the pipeline finishes on
+    /// its first step with reproducible output.
+    pub fn is_deterministic(self) -> bool {
+        matches!(self, Framework::ReactTailwind)
     }
 }
 
@@ -405,6 +419,13 @@ mod tests {
         assert_eq!(Framework::React.display_name(), "React");
         assert_eq!(Framework::ReactNative.display_name(), "React Native");
         assert_eq!(Framework::SwiftUi.display_name(), "SwiftUI");
+        assert_eq!(
+            Framework::from_wire("react-tailwind"),
+            Some(Framework::ReactTailwind)
+        );
+        assert_eq!(Framework::ReactTailwind.display_name(), "React + Tailwind");
+        assert!(Framework::ReactTailwind.is_deterministic());
+        assert!(!Framework::React.is_deterministic());
     }
 
     #[test]
