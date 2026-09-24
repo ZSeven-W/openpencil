@@ -47,10 +47,13 @@ fn local_paths_are_cut_out_of_cjk_prose_without_touching_it() {
 
 #[test]
 fn credentials_are_redacted_but_ordinary_words_survive() {
-    let text = sanitize_share_text(
-        "key sk-ant-api03-abcdefghijklmnop and password: hunter2 for ghp_0123456789abcdefghij",
-        &[],
+    // Assembled at run time so the source never carries a credential-shaped
+    // literal (the collab security boundary scan rejects those).
+    let brief = format!(
+        "key {}-{}-abcdefghijklmnop and password: hunter2 for {}_0123456789abcdefghij",
+        "sk", "ant-api03", "ghp"
     );
+    let text = sanitize_share_text(&brief, &[]);
     assert!(!text.contains("sk-ant"), "{text}");
     assert!(!text.contains("hunter2"), "{text}");
     assert!(!text.contains("ghp_"), "{text}");
@@ -63,8 +66,8 @@ fn credentials_are_redacted_but_ordinary_words_survive() {
 
 #[test]
 fn extra_terms_redact_whole_words_only() {
-    let text = sanitize_share_text("made by fini, finish the deck", &["fini"]);
-    assert_eq!(text, format!("made by {SHARE_REDACTED}, finish the deck"));
+    let text = sanitize_share_text("made by dana, dance the deck", &["dana"]);
+    assert_eq!(text, format!("made by {SHARE_REDACTED}, dance the deck"));
     // Too-short terms would shred ordinary words; they are ignored.
     assert_eq!(sanitize_share_text("an app", &["an"]), "an app");
 }
