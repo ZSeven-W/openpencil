@@ -117,7 +117,8 @@ pub(super) fn register_keyboard_listeners(
                 "ArrowLeft" if is_mod => consumed = b.host.apply_text_edit_line_edge(false),
                 "ArrowRight" if is_mod => consumed = b.host.apply_text_edit_line_edge(true),
                 "ArrowLeft" if !is_mod => {
-                    consumed = b.host.apply_prompt_center_caret(false, shift)
+                    consumed = b.host.apply_home_caret(false, shift)
+                        || b.host.apply_prompt_center_caret(false, shift)
                         || b.host.apply_image_panel_caret(false, shift)
                         || b.host.apply_settings_caret(false)
                         || b.host.apply_chat_model_picker_caret(false)
@@ -125,10 +126,12 @@ pub(super) fn register_keyboard_listeners(
                         || b.host.apply_rename_caret(false)
                         || b.host.apply_text_edit_caret(false)
                         || b.host.apply_property_caret(false)
+                        || b.host.apply_workspace_step_board(false)
                         || b.host.apply_nudge(-nudge, 0.0);
                 }
                 "ArrowRight" if !is_mod => {
-                    consumed = b.host.apply_prompt_center_caret(true, shift)
+                    consumed = b.host.apply_home_caret(true, shift)
+                        || b.host.apply_prompt_center_caret(true, shift)
                         || b.host.apply_image_panel_caret(true, shift)
                         || b.host.apply_settings_caret(true)
                         || b.host.apply_chat_model_picker_caret(true)
@@ -136,6 +139,7 @@ pub(super) fn register_keyboard_listeners(
                         || b.host.apply_rename_caret(true)
                         || b.host.apply_text_edit_caret(true)
                         || b.host.apply_property_caret(true)
+                        || b.host.apply_workspace_step_board(true)
                         || b.host.apply_nudge(nudge, 0.0);
                 }
                 "[" if !is_mod && !b.host.input_active() => {
@@ -257,9 +261,11 @@ pub(super) fn register_keyboard_listeners(
             // send (apply_send → pending_send) or an image-panel search
             // (apply_image_panel_send → search_epoch); the drains launch them.
             drop(b);
+            crate::studio_web::drain_home_replace_confirm(&inner);
             crate::web_chat::drain_chat_flags(&inner);
             crate::web_image_panel::drain_image_jobs(&inner);
             crate::web_builtin_model_discovery::drain_pending_builtin_model_discovery(&inner);
+            crate::studio_web::ensure_workspace_pump(&inner);
         })?;
     }
 

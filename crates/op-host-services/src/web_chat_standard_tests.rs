@@ -236,6 +236,7 @@ fn stream_chat_route_passes_history_and_attachments_to_provider() {
         history: history.clone(),
         attachments: attachments.clone(),
         transient_builtin: None,
+        launch_route: op_editor_core::LaunchRoute::Auto,
     };
     let seen = Arc::new(Mutex::new(None));
     let provider = CaptureProvider { seen: seen.clone() };

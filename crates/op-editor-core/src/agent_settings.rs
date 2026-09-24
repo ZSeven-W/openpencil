@@ -366,6 +366,11 @@ pub struct AgentSettings {
     /// Latest browser→daemon credential-sync failure worth showing (web
     /// host only; transient, never persisted). `None` = last sync ok.
     pub web_credential_sync_error: Option<String>,
+    /// The serving daemon's model catalog lists at least one model it
+    /// answers with its own server-held key (web host only; transient,
+    /// never persisted). Those models are usable although no provider is
+    /// configured in this browser.
+    pub web_served_models: bool,
 }
 
 impl Default for AgentSettings {
@@ -435,6 +440,7 @@ impl Default for AgentSettings {
             hover_acp_preset: None,
             hover_nav: None,
             web_credential_sync_error: None,
+            web_served_models: false,
         }
     }
 }

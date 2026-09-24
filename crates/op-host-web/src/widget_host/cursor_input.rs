@@ -24,6 +24,16 @@ impl WidgetHost {
         // below (layer context menu, layer drag, align toolbar) reads
         // current geometry, never a stale snapshot.
         self.refresh_layout_scene();
+        // Studio Home owns the cursor while it is up; the overlays it opens
+        // hover first.
+        if let Some(consumed) = self.cursor_move_home_overlays(x, y) {
+            return consumed;
+        }
+        if let Some(consumed) =
+            self.cursor_move_home(x, y, self.last_viewport_w, self.last_viewport_h)
+        {
+            return consumed;
+        }
         // Route canvas moves to preview when preview mode is active
         #[cfg(feature = "canvaskit")]
         if self.editor_state.editor_ui.preview.mode && self.preview.is_some() {
@@ -38,6 +48,12 @@ impl WidgetHost {
         // They run FIRST — a modal that does not claim the cursor lets the
         // hover washes underneath it light up through its own scrim.
         if let Some(consumed) = self.cursor_move_modal_tiers(x, y) {
+            return consumed;
+        }
+        // The workspace chrome's hover — after the modal tiers (it sits
+        // under the modals it opens), before the chat / canvas tiers.
+        // Non-consuming over the canvas and dock.
+        if let Some(consumed) = self.cursor_move_workspace(x, y) {
             return consumed;
         }
         let picker_open = self.editor_state.editor_ui.chat_model_picker.open;

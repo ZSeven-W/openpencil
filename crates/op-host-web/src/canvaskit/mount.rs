@@ -61,6 +61,10 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     let search = window.location().search().unwrap_or_default();
     host.editor_state_mut().editor_ui.embed = op_editor_core::EmbedHost::from_query(&search);
     let credential_load = crate::web_settings::load_into(host.editor_state_mut());
+    // Open on Studio Home like the desktop app does when started without a
+    // file, per the persisted entry-surface preference. An embedding host
+    // (the VS Code plugin) always opens its document on the canvas.
+    crate::studio_web::apply_entry_surface(host.editor_state_mut());
     // Theme is device-level, so it is resolved from its own unpartitioned key
     // rather than from the partition blob just loaded. On a browser that has
     // never run the split build this adopts the blob's theme and writes the
@@ -397,7 +401,9 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 // press queued a remote search. Both drains re-borrow `inner`
                 // (mirrors the skia mount's post-press drain points).
                 drop(b);
+                crate::studio_web::drain_home_replace_confirm(&inner);
                 crate::web_chat::drain_chat_flags(&inner);
+                crate::studio_web::ensure_workspace_pump(&inner);
                 crate::web_image_panel::drain_image_jobs(&inner);
                 crate::web_builtin_model_discovery::drain_pending_builtin_model_discovery(&inner);
                 crate::iconify_web::drain_iconify_request(&inner);
@@ -511,8 +517,24 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                     scroll_delta_y,
                     canvas_delta_y,
                 } => {
-                    b.host
-                        .apply_wheel_with_canvas_delta(x, y, scroll_delta_y, canvas_delta_y, w, h)
+                    // A Studio LongPage workspace pans the page on a plain
+                    // wheel; a modified wheel still zooms.
+                    let zoom_modifier = evt.ctrl_key() || evt.meta_key() || evt.alt_key();
+                    b.host.apply_workspace_long_page_wheel(
+                        x,
+                        y,
+                        scroll_delta_y,
+                        zoom_modifier,
+                        w,
+                        h,
+                    ) || b.host.apply_wheel_with_canvas_delta(
+                        x,
+                        y,
+                        scroll_delta_y,
+                        canvas_delta_y,
+                        w,
+                        h,
+                    )
                 }
                 WheelIntent::Pan { dx, dy } => b.host.apply_pan_gesture(x, y, dx, dy, w, h),
             };

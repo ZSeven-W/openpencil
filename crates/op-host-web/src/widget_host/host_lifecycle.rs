@@ -82,6 +82,9 @@ impl WidgetHost {
             slideshow_cursor: None,
             slideshow_press_screen: None,
             bundled_fonts_pending: false,
+            home_replace_confirm: None,
+            workspace_dock_drag: None,
+            workspace_idle_since_ms: None,
         }
     }
 

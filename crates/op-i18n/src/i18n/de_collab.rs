@@ -364,6 +364,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.current" => "Aktuelles Werk",
         "works.empty" => "Noch keine Werke. Erzeuge etwas oder zeichne auf einer leeren Leinwand – es erscheint dann hier.",
         "works.boards" => "{{count}} Zeichenflächen",
+        "home.replaceUnsavedConfirm" => "Neues Design beginnen? Das aktuelle Dokument hat ungespeicherte Änderungen, die dabei verloren gehen. Um sie zu behalten, brich ab und speichere es zuerst (Datei > Speichern).",
         _ => return None,
     })
 }

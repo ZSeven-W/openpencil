@@ -44,6 +44,13 @@ mod reference;
 mod model_selection;
 use model_selection::selected_model_id;
 
+#[path = "web_chat_standard_route.rs"]
+mod route;
+use route::{
+    clear_fresh_starter_frame_for_design, clear_live_starter_frame_for_design, parse_launch_route,
+    pinned_intent, resolve_standard_route,
+};
+
 const STANDARD_MODIFY_STEP: &str =
     r#"<step title="Checking guidelines">Analyzing modification request...</step>"#;
 
@@ -57,6 +64,9 @@ pub struct WebStandardTurnRequest {
     history: Vec<(ChatHistoryRole, String)>,
     attachments: Vec<ChatAttachment>,
     transient_builtin: Option<BuiltinAgentConfig>,
+    /// The route the browser pinned on the turn (Studio Home / draft
+    /// refine); `Auto` classifies as before.
+    launch_route: op_editor_core::LaunchRoute,
 }
 
 pub fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
@@ -94,8 +104,10 @@ pub fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
         None | Some(Value::Null) => None,
         Some(value) => Some(crate::web_credentials::parse_transient_builtin(value)?),
     };
+    let launch_route = parse_launch_route(obj);
     Some(WebStandardTurnRequest {
         ai,
+        launch_route,
         document_json,
         editor_meta,
         selected_ids,
@@ -216,10 +228,12 @@ pub fn stream_standard_turn<W: Write>(
     };
 
     let model = selected_model_id(&req.ai, &snapshot);
-    if matches!(
-        op_orchestrator::classify_intent(&req.ai.user),
-        op_orchestrator::Intent::Design
-    ) && clear_fresh_starter_frame_for_design(&mut snapshot)
+    if (req.launch_route.implies_design_intent()
+        || matches!(
+            op_orchestrator::classify_intent(&req.ai.user),
+            op_orchestrator::Intent::Design
+        ))
+        && clear_fresh_starter_frame_for_design(&mut snapshot)
     {
         let tick = {
             let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
@@ -277,14 +291,18 @@ pub fn stream_standard_turn<W: Write>(
         Ok(providers) => providers,
         Err(error) => return write_error_event(out, &error.to_string()),
     };
-    let classified = crate::chat_intent::classify_intent_for_standard_route(
-        classify_provider.as_ref(),
-        &snapshot,
-        &req.ai.user,
-        model.clone(),
-    );
     let modify_plan = crate::chat_intent::build_modify_plan(&snapshot, &req.ai.user);
     let page_children_empty = snapshot.active_children().is_empty();
+    // A pinned route decides the intent itself; only an unpinned turn pays
+    // for the classifier call.
+    let classified = pinned_intent(req.launch_route, modify_plan.is_some()).unwrap_or_else(|| {
+        crate::chat_intent::classify_intent_for_standard_route(
+            classify_provider.as_ref(),
+            &snapshot,
+            &req.ai.user,
+            model.clone(),
+        )
+    });
     let intent = resolve_standard_route(classified, page_children_empty, modify_plan.is_some());
     match intent {
         crate::chat_intent::DesignIntent::Chat => {
@@ -414,43 +432,6 @@ fn inject_transient_builtin(state: &mut EditorState, transient: Option<&BuiltinA
     agents.retain(|agent| agent.id != transient.id);
     agents.insert(0, transient.clone());
     state.rebuild_chat_models();
-}
-
-fn clear_fresh_starter_frame_for_design(state: &mut EditorState) -> bool {
-    if state.doc != EditorState::starter().doc {
-        return false;
-    }
-    state.active_children_mut().clear();
-    state.clear_selection();
-    // Raw `active_children_mut()` bypasses the command/history path, so it
-    // must advance the content revision explicitly. Save acknowledgements
-    // use that revision to avoid marking newer edits as saved.
-    state.mark_document_changed();
-    true
-}
-
-fn clear_live_starter_frame_for_design(state: &mut WebCanvasState) -> Option<u64> {
-    if !clear_fresh_starter_frame_for_design(&mut state.editor) {
-        return None;
-    }
-    state.version += 1;
-    Some(state.version)
-}
-
-fn resolve_standard_route(
-    classified: crate::chat_intent::DesignIntent,
-    page_children_empty: bool,
-    has_modify_plan: bool,
-) -> crate::chat_intent::DesignIntent {
-    match classified {
-        crate::chat_intent::DesignIntent::Modify if page_children_empty => {
-            crate::chat_intent::DesignIntent::New
-        }
-        crate::chat_intent::DesignIntent::Modify if !has_modify_plan => {
-            crate::chat_intent::DesignIntent::New
-        }
-        other => other,
-    }
 }
 
 fn stream_chat_route<W: Write>(

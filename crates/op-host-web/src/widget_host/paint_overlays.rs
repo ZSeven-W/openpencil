@@ -14,6 +14,63 @@ use op_editor_ui::widgets::{
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
 impl WidgetHost {
+    /// The sign-in modal: full-viewport scrim + centred card. Shared by the
+    /// editor pass and the Studio Home takeover, which paints it above Home.
+    pub(in crate::widget_host) fn paint_login_modal_overlay(
+        &self,
+        backend: &mut dyn RenderBackend,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) {
+        let ui = &self.editor_state.editor_ui;
+        if !(ui.account_ui_available && ui.login_modal_open) {
+            return;
+        }
+        use op_editor_ui::widgets::login_modal::LoginModal;
+        backend.fill_rect(
+            Rect::xywh(0.0, 0.0, viewport_width, viewport_height),
+            op_editor_ui::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.45,
+            },
+        );
+        let modal = LoginModal::for_editor(&self.editor_state);
+        let modal_rect = modal.rect(viewport_width, viewport_height);
+        let mut cx = PaintCx { backend };
+        modal.paint(&mut cx, modal_rect);
+    }
+
+    /// The agent-settings modal (Cmd+,) with its dim scrim. Shared by the
+    /// editor pass and the Studio Home takeover.
+    pub(in crate::widget_host) fn paint_agent_settings_overlay(
+        &self,
+        backend: &mut dyn RenderBackend,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) {
+        if !self.editor_state.editor_ui.agent_settings_open {
+            return;
+        }
+        use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
+        let panel = AgentSettingsPanel::for_web_editor_at(&self.editor_state, self.now_ms);
+        let panel_rect = panel.rect(viewport_width, viewport_height);
+        // Dim scrim behind the modal so the underlying canvas reads as
+        // "blocked." Matches the native shell's chrome.
+        backend.fill_rect(
+            Rect::xywh(0.0, 0.0, viewport_width, viewport_height),
+            op_editor_ui::Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.5,
+            },
+        );
+        let mut cx = PaintCx { backend };
+        panel.paint(&mut cx, panel_rect);
+    }
+
     /// Menus, modals, floating panels and the top-most notices.
     ///
     /// Pure code motion out of [`Self::paint_editor`] at the repo's
@@ -97,27 +154,7 @@ impl WidgetHost {
         }
 
         // Sign-in modal — full-viewport scrim + centred card (native §10e).
-        if ui.account_ui_available && ui.login_modal_open {
-            use op_editor_ui::widgets::login_modal::LoginModal;
-            backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(0.0, 0.0),
-                    size: Point2D::new(viewport_width, viewport_height),
-                },
-                op_editor_ui::Color {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 0.45,
-                },
-            );
-            let modal = LoginModal::for_editor(&self.editor_state);
-            let modal_rect = modal.rect(viewport_width, viewport_height);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            modal.paint(&mut cx, modal_rect);
-        }
+        self.paint_login_modal_overlay(&mut *backend, viewport_width, viewport_height);
 
         // Signed-in account dropdown — anchored under the TopBar avatar
         // button, no scrim (native §10f).
@@ -143,29 +180,7 @@ impl WidgetHost {
         // Settings modal — Cmd+, overlay. Painted before the colour
         // picker / context menu / floating panels, mirroring native
         // §10a z-order.
-        if ui.agent_settings_open {
-            use op_editor_ui::widgets::agent_settings_panel::AgentSettingsPanel;
-            let panel = AgentSettingsPanel::for_web_editor_at(&self.editor_state, self.now_ms);
-            let panel_rect = panel.rect(viewport_width, viewport_height);
-            // Dim scrim behind the modal so the underlying canvas
-            // reads as "blocked." Matches the native shell's chrome.
-            backend.fill_rect(
-                Rect {
-                    origin: Point2D::new(0.0, 0.0),
-                    size: Point2D::new(viewport_width, viewport_height),
-                },
-                op_editor_ui::Color {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 0.5,
-                },
-            );
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            panel.paint(&mut cx, panel_rect);
-        }
+        self.paint_agent_settings_overlay(&mut *backend, viewport_width, viewport_height);
 
         // Colour picker — floating overlay near the right rail
         // (native §10b').

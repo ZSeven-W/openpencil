@@ -204,6 +204,17 @@ mod shape_create;
 mod shape_create_tests;
 mod shape_picker_press;
 mod slides_panel;
+mod studio_home;
+mod studio_home_input;
+mod studio_home_send;
+pub use studio_home_send::HomeReplaceIntent;
+#[cfg(test)]
+mod studio_home_tests;
+mod studio_workspace;
+mod studio_workspace_paint;
+mod studio_workspace_run;
+#[cfg(test)]
+mod studio_workspace_tests;
 mod text_drag;
 mod text_edit_caret;
 #[cfg(test)]
@@ -459,6 +470,14 @@ pub struct WidgetHost {
     /// -font detection is a one-shot modal, so completing it while these are in
     /// flight would accuse every bundled family of being missing.
     pub(in crate::widget_host) bundled_fonts_pending: bool,
+    /// A Studio Home send parked until the user agrees to discard the
+    /// unsaved document it would replace (`studio_home_send.rs`).
+    pub(in crate::widget_host) home_replace_confirm: Option<HomeReplaceIntent>,
+    /// Live drag of the Studio workspace's conversation-dock edge.
+    pub(in crate::widget_host) workspace_dock_drag: Option<studio_workspace::WorkspaceDockDrag>,
+    /// When the workspace run's turn went idle — the start of the settle
+    /// grace window (`studio_workspace_run.rs`).
+    pub(in crate::widget_host) workspace_idle_since_ms: Option<u64>,
 }
 
 impl WidgetHost {

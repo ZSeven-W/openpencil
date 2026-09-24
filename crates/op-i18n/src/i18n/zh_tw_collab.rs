@@ -364,6 +364,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.current" => "目前作品",
         "works.empty" => "還沒有作品。完成一次生成，或在空白畫布上畫點東西，它就會出現在這裡。",
         "works.boards" => "{{count}} 個畫板",
+        "home.replaceUnsavedConfirm" => "要開始新的設計嗎？目前文件有未儲存的變更，繼續將會遺失。如需保留，請先取消並儲存（檔案 > 儲存）。",
         _ => return None,
     })
 }

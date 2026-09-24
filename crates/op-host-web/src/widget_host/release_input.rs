@@ -50,6 +50,10 @@ impl WidgetHost {
             return consumed;
         }
         let pressed_released = self.release_pressed_feedback();
+        // The workspace dock-width drag ends here.
+        if self.release_workspace_drag() {
+            return true;
+        }
         // The rail's slides tab — a row click frames its board, a row
         // drag reorders the deck. Both resolve on release so a press that
         // turned out to be a drag is not also a navigation.
@@ -131,6 +135,10 @@ impl WidgetHost {
     #[allow(dead_code)]
     pub fn apply_release(&mut self) -> bool {
         let pressed_released = self.release_pressed_feedback();
+        // The workspace dock-width drag ends here.
+        if self.release_workspace_drag() {
+            return true;
+        }
         // The cached viewport is what every other viewport-less path
         // here uses; leaving the gesture open would strand a row
         // mid-drag.
@@ -211,7 +219,9 @@ impl WidgetHost {
 
         self.commit_deferred_pressed_button(pressed_button);
 
-        let released = button_released || icon_picker_released;
+        // Studio Home / workspace pressed washes end with the pointer.
+        let home_released = self.editor_state.editor_ui.home.pressed.take().is_some();
+        let released = button_released || icon_picker_released || home_released;
         if released {
             self.mark_dirty();
         }

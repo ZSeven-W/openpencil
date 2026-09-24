@@ -101,7 +101,7 @@ impl WidgetHost {
     /// their visual stacking order. Returning `true` for any point inside the
     /// modal also prevents a horizontal-only trackpad gesture from panning the
     /// canvas through the opaque settings surface.
-    fn try_scroll_agent_settings(
+    pub(in crate::widget_host) fn try_scroll_agent_settings(
         &mut self,
         x: f32,
         y: f32,
@@ -176,6 +176,10 @@ impl WidgetHost {
         viewport_height: f32,
     ) -> bool {
         self.last_viewport_w = viewport_width;
+        // Studio Home is a takeover: its overlays and page own every wheel.
+        if let Some(scrolled) = self.wheel_home(x, y, delta_y, viewport_width, viewport_height) {
+            return scrolled;
+        }
         // Preview owns the wheel while it is presenting: in a device frame
         // the gesture scrolls the framed content (the design's own scroll
         // surface), NOT the editor's canvas pan/zoom underneath it.
@@ -262,6 +266,9 @@ impl WidgetHost {
         viewport_width: f32,
         viewport_height: f32,
     ) -> bool {
+        if let Some(scrolled) = self.wheel_home(x, y, dy, viewport_width, viewport_height) {
+            return scrolled;
+        }
         if self.try_scroll_missing_fonts_picker(x, y, dy, viewport_width, viewport_height) {
             return true;
         }

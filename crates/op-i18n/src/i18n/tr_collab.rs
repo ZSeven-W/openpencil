@@ -364,6 +364,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.current" => "Mevcut çalışma",
         "works.empty" => "Henüz çalışma yok. Bir şey oluşturun ya da boş tuvale çizin; burada görünecek.",
         "works.boards" => "{{count}} çalışma yüzeyi",
+        "home.replaceUnsavedConfirm" => "Yeni bir tasarıma başlansın mı? Geçerli belgede kaydedilmemiş değişiklikler var ve bunlar kaybolacak. Korumak için iptal edip önce kaydedin (Dosya > Kaydet).",
         _ => return None,
     })
 }

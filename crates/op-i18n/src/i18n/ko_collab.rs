@@ -380,6 +380,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.current" => "현재 작품",
         "works.empty" => "아직 작품이 없습니다. 생성하거나 빈 캔버스에 그리면 여기에 표시됩니다.",
         "works.boards" => "보드 {{count}}개",
+        "home.replaceUnsavedConfirm" => "새 디자인을 시작할까요? 현재 문서에 저장되지 않은 변경 사항이 있으며, 계속하면 사라집니다. 보존하려면 취소한 뒤 먼저 저장하세요(파일 > 저장).",
         _ => return None,
     })
 }

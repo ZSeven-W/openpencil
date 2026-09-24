@@ -364,6 +364,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.current" => "Karya saat ini",
         "works.empty" => "Belum ada karya. Buat sesuatu atau gambar di kanvas kosong, dan karya akan muncul di sini.",
         "works.boards" => "{{count}} papan",
+        "home.replaceUnsavedConfirm" => "Mulai desain baru? Dokumen saat ini memiliki perubahan yang belum disimpan, dan perubahan itu akan hilang. Untuk menyimpannya, batalkan lalu simpan dulu (File > Simpan).",
         _ => return None,
     })
 }

@@ -73,6 +73,11 @@ fn abort_active_turn() {
     }
 }
 
+/// Whether a chat turn's stream is still open for this page.
+pub(crate) fn turn_in_flight() -> bool {
+    ACTIVE_TURN.with(|slot| slot.borrow().is_some())
+}
+
 /// The tab index the in-flight turn is currently bound to.
 fn running_tab() -> Option<usize> {
     RUNNING_TAB.with(|t| t.get())
@@ -96,6 +101,13 @@ pub(crate) fn drain_chat_flags<C: RepaintContext + 'static>(inner: &Rc<RefCell<C
     };
     if new_chat || stop {
         abort_active_turn();
+    }
+    if stop {
+        // A generating Studio workspace is now Stopped: the idle edge that
+        // follows must not flip it to Done or Failed.
+        if let Ok(mut b) = inner.try_borrow_mut() {
+            b.host_mut().stop_workspace_run();
+        }
     }
     // A pending close-tab (MT.3): abort the run if it's bound to the closed
     // tab, shift the binding otherwise, then remove the tab. Done before the
@@ -180,6 +192,7 @@ fn launch_turn<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>, prepared: Pr
                 *slot.borrow_mut() = Some(ActiveTurn { handle, generation });
             });
             start_pump(inner.clone(), queue, generation);
+            crate::studio_web::on_turn_launched(inner, generation);
         }
         Err(_e) => {
             // Transport refused to even start (XHR open/send failed) —
@@ -294,6 +307,13 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
         return None;
     }
     let user_text = state.chat.pending_send.take()?;
+    // A pinned route (Studio Home brief / draft refine) travels with the
+    // turn and is consumed by it, like the desktop launcher's drain.
+    let launch_route = match std::mem::take(&mut state.chat.launch_route) {
+        op_editor_core::LaunchRoute::Auto => None,
+        op_editor_core::LaunchRoute::Orchestrator => Some("orchestrator"),
+        op_editor_core::LaunchRoute::Refine => Some("refine"),
+    };
     let (model, credential, builtin_provider_id) =
         crate::web_ai_credentials::selected_target(state);
     let provider = selected.as_ref().and_then(|entry| {
@@ -358,6 +378,7 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
         "editorMeta": op_pen_loader::EditorMeta::from_state(state),
         "selectedIds": selected_ids,
         "activePageId": active_page_id,
+        "launchRoute": launch_route,
     });
     Some(PreparedTurn {
         endpoint: "/api/ai/standard",

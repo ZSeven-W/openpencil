@@ -364,6 +364,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.current" => "Création en cours",
         "works.empty" => "Aucune création pour l'instant. Lancez une génération ou dessinez sur un canevas vierge pour la voir ici.",
         "works.boards" => "{{count}} plans de travail",
+        "home.replaceUnsavedConfirm" => "Commencer un nouveau design ? Le document actuel contient des modifications non enregistrées, qui seront perdues. Pour les conserver, annulez et enregistrez-le d'abord (Fichier > Enregistrer).",
         _ => return None,
     })
 }

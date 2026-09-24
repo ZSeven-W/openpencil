@@ -82,6 +82,7 @@ fn new_design_request(user: &str, attachments: Vec<ChatAttachment>) -> WebStanda
         history: Vec::new(),
         attachments,
         transient_builtin: None,
+        launch_route: op_editor_core::LaunchRoute::Auto,
     }
 }
 

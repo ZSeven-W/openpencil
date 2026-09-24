@@ -364,6 +364,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.current" => "Trabalho atual",
         "works.empty" => "Ainda não há trabalhos. Gere algo ou desenhe em uma tela em branco e ele aparecerá aqui.",
         "works.boards" => "{{count}} pranchetas",
+        "home.replaceUnsavedConfirm" => "Começar um novo design? O documento atual tem alterações não salvas, que serão perdidas. Para mantê-las, cancele e salve-o primeiro (Arquivo > Salvar).",
         _ => return None,
     })
 }

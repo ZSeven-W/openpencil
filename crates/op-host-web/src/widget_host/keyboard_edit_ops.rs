@@ -194,6 +194,9 @@ impl WidgetHost {
         if self.editor_state.editor_ui.font_picker.open {
             return true;
         }
+        if self.home_select_all() {
+            return true;
+        }
         if self.apply_input_select_all() {
             return true;
         }

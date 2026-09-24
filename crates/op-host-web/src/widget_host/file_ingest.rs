@@ -35,7 +35,21 @@ impl WidgetHost {
         // them with `EditorState::from_document` defaults.
         state.chat = preserved_chat;
         self.replace_editor_state(state);
+        self.leave_studio_for_opened_document();
         self.arm_missing_fonts_detection();
+    }
+
+    /// An opened / imported document lands on the canvas: hide Studio Home
+    /// and drop a generation workspace that belonged to the replaced
+    /// document (native `install_open_document` resets it the same way).
+    pub(crate) fn leave_studio_for_opened_document(&mut self) {
+        self.editor_state.editor_ui.home.hide();
+        self.editor_state
+            .editor_ui
+            .workspace
+            .reset_for_new_document();
+        self.workspace_idle_since_ms = None;
+        self.mark_dirty();
     }
 
     /// Install a Figma/HTML import as a new unsaved document. Ordinary Open

@@ -404,6 +404,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.current" => "Current work",
         "works.empty" => "No works yet. Generate something or draw on a blank canvas, and it will show up here.",
         "works.boards" => "{{count}} boards",
+        "home.replaceUnsavedConfirm" => "Start a new design? The current document has unsaved changes, and they will be lost. To keep them, cancel and save it first (File > Save).",
         _ => return None,
     })
 }

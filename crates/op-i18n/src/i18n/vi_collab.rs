@@ -376,6 +376,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.current" => "Tác phẩm hiện tại",
         "works.empty" => "Chưa có tác phẩm nào. Hãy tạo hoặc vẽ trên canvas trống, tác phẩm sẽ hiện ở đây.",
         "works.boards" => "{{count}} bảng vẽ",
+        "home.replaceUnsavedConfirm" => "Bắt đầu thiết kế mới? Tài liệu hiện tại có thay đổi chưa lưu và chúng sẽ bị mất. Để giữ lại, hãy hủy và lưu trước (Tệp > Lưu).",
         _ => return None,
     })
 }

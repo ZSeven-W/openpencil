@@ -240,6 +240,11 @@ pub(crate) fn reconcile_models(state: &mut EditorState) {
             ));
         }
     }
+    // Daemon rows that survive the filter answer with server-held keys, so
+    // Studio Home may start a run without a browser-side provider.
+    state.editor_ui.agent_settings.web_served_models = available_models
+        .iter()
+        .any(|entry| daemon_builtin_id(entry).is_some());
     if state.chat.available_models == available_models {
         return;
     }

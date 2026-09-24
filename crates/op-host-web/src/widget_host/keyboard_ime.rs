@@ -36,6 +36,9 @@ impl WidgetHost {
     /// and chat expose exact geometry; older fields fall back to the last
     /// pointer position so browser candidates never anchor at viewport (0, 0).
     pub(crate) fn ime_anchor_rect(&self) -> Option<Rect> {
+        if self.home_visible() && !self.editor_state.editor_ui.agent_settings_open {
+            return self.home_ime_anchor_rect();
+        }
         let configured = self
             .editor_state
             .editor_ui

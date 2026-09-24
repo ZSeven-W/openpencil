@@ -8,7 +8,9 @@ impl WidgetHost {
     /// duplicates / nudges / reorders nodes.
     pub(crate) fn input_active(&self) -> bool {
         let ui = &self.editor_state.ui;
-        self.editor_state.editor_ui.collab_join_input_active()
+        // Studio Home's composer owns the keyboard while Home is up.
+        self.editor_state.editor_ui.home.visible
+            || self.editor_state.editor_ui.collab_join_input_active()
             || ui.layer_rename.is_some()
             || ui.text_editing.is_some()
             || ui.property_focus.is_some()
