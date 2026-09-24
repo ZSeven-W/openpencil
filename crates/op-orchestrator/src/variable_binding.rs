@@ -250,17 +250,40 @@ fn bind_color_string(color: &mut String, refs: &ColorRefs, slot: ColorSlot) {
 
 /// Closest slot-compatible variable within [`NEAR_COLOR_MAX_DISTANCE`].
 ///
-/// An exact match scores distance 0 and therefore always wins, and ties keep
-/// the first candidate in variable-name order — the same resolution the
-/// previous exact-map-then-nearest lookup produced.
+/// An exact match scores distance 0 and therefore always wins. Palettes share
+/// values all the time (`--card-foreground` = `--foreground`, a chart colour
+/// = `--primary`), so a tie goes to the most general token — the one with
+/// the fewest name segments — and only then to variable-name order. Name
+/// order alone bound every body text to `--card-foreground` and every brand
+/// fill to `--chart-1`: correct today, wrong the moment the card or chart
+/// colour is changed on its own.
 fn nearest_ref(key: ColorKey, refs: &ColorRefs, slot: ColorSlot) -> Option<&String> {
     refs.candidates
         .iter()
         .filter(|candidate| slot_accepts(slot, candidate.family))
-        .map(|candidate| (color_distance(key, candidate.key), &candidate.reference))
-        .filter(|(distance, _)| *distance <= NEAR_COLOR_MAX_DISTANCE)
-        .min_by(|(a, _), (b, _)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .map(|(_, reference)| reference)
+        .map(|candidate| {
+            (
+                color_distance(key, candidate.key),
+                token_specificity(&candidate.reference),
+                &candidate.reference,
+            )
+        })
+        .filter(|(distance, _, _)| *distance <= NEAR_COLOR_MAX_DISTANCE)
+        .min_by(|(a, a_rank, _), (b, b_rank, _)| {
+            a.partial_cmp(b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a_rank.cmp(b_rank))
+        })
+        .map(|(_, _, reference)| reference)
+}
+
+/// How specialised a token is: its name segments once the `$`, the leading
+/// dashes and a `color-` namespace are stripped (`--foreground` = 1,
+/// `--card-foreground` = 2, `--color-chart-1` = 2).
+fn token_specificity(reference: &str) -> usize {
+    let name = reference.trim_start_matches('$').trim_start_matches('-');
+    let name = name.strip_prefix("color-").unwrap_or(name);
+    name.split('-').filter(|part| !part.is_empty()).count()
 }
 
 fn color_distance(a: ColorKey, b: ColorKey) -> f64 {

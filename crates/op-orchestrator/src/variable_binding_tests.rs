@@ -130,3 +130,49 @@ fn family_of_reads_the_naming_convention() {
     assert_eq!(family_of("--primary"), ColorFamily::Semantic);
     assert_eq!(family_of("--chart-1"), ColorFamily::Semantic);
 }
+
+#[test]
+fn a_shared_value_binds_to_the_most_general_token() {
+    // Palettes repeat values: here the card text equals the page text and the
+    // first chart colour equals the brand colour. Name order alone would
+    // pick `--card-foreground` and `--chart-1`, which break as soon as the
+    // card or chart colour is changed on its own.
+    let doc: jian_ops_schema::PenDocument = serde_json::from_value(json!({
+        "version": "1.0",
+        "variables": {
+            "--card-foreground": {"type":"color","value":"#1F2430"},
+            "--foreground": {"type":"color","value":"#1F2430"},
+            "--chart-1": {"type":"color","value":"#C2410C"},
+            "--primary": {"type":"color","value":"#C2410C"}
+        },
+        "children": []
+    }))
+    .expect("valid doc");
+    let state = EditorState::from_document(doc);
+    let mut nodes: Vec<PenNode> = vec![
+        serde_json::from_value(json!({
+            "type":"text","id":"t","content":"Body",
+            "fill":[{"type":"solid","color":"#1F2430"}]
+        }))
+        .unwrap(),
+        serde_json::from_value(json!({
+            "type":"frame","id":"cta","layout":"horizontal",
+            "fill":[{"type":"solid","color":"#C2410C"}],
+            "children":[]
+        }))
+        .unwrap(),
+    ];
+    bind_generated_color_variables(&mut nodes, &state);
+    let text = serde_json::to_value(&nodes[0]).unwrap();
+    let cta = serde_json::to_value(&nodes[1]).unwrap();
+    assert_eq!(text["fill"][0]["color"], "$--foreground");
+    assert_eq!(cta["fill"][0]["color"], "$--primary");
+}
+
+#[test]
+fn token_specificity_counts_name_segments() {
+    assert_eq!(token_specificity("$--foreground"), 1);
+    assert_eq!(token_specificity("$--card-foreground"), 2);
+    assert_eq!(token_specificity("$--color-chart-1"), 2);
+    assert_eq!(token_specificity("$color-primary"), 1);
+}
