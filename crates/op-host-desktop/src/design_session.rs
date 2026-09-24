@@ -25,6 +25,9 @@ use op_host_services::design_session::fit_design_viewport_to_content;
 #[path = "design_session_workers.rs"]
 mod workers;
 
+#[path = "design_session_quality.rs"]
+mod quality;
+
 /// Drain every pending apply request from the in-flight design
 /// session and execute it against the real `EditorState`. Each
 /// request gets an ack containing a fresh state snapshot so the
@@ -148,6 +151,7 @@ pub fn pump_progress(
     let poll = session.poll_progress();
     let mut changed = false;
     if !poll.progress.is_empty() {
+        changed |= quality::fold_quality_progress(host.editor_state_mut(), &poll.progress);
         let chat = host.editor_state_mut().chat.run_tab_mut(running_tab);
         changed |=
             workers::apply_progress_to_transcript(&mut chat.messages, &poll.progress, locale);
@@ -161,7 +165,16 @@ pub fn pump_progress(
     if let Some(summary) = &poll.summary {
         let chat = host.editor_state_mut().chat.run_tab_mut(running_tab);
         changed |= match summary {
-            Ok(summary) => workers::finish_design_success(&mut chat.messages, summary, locale),
+            Ok(summary) => {
+                let finished = workers::finish_design_success(&mut chat.messages, summary, locale);
+                finished
+                    | quality::finish_quality_report(
+                        host.editor_state_mut(),
+                        summary,
+                        running_tab,
+                        locale,
+                    )
+            }
             Err(error) => {
                 workers::finish_design_error(&mut chat.messages, &error.to_string(), locale)
             }
@@ -520,6 +533,7 @@ fn apply_progress(msg: &mut ChatMessage, progress: &[Progress], locale: Locale) 
                 repairs,
                 records,
                 notes,
+                ..
             } => {
                 let quality = op_ai::chat_provider::QualitySummary {
                     checks: checks.clone(),
@@ -768,26 +782,5 @@ fn friendly_quota_error(raw: &str) -> Option<String> {
 }
 
 #[cfg(test)]
-mod quota_error_tests {
-    use super::friendly_quota_error;
-
-    #[test]
-    fn ark_quota_json_renders_one_friendly_sentence_with_reset_time() {
-        let raw = r#"orchestration failed: openai-compatible http 429 Too Many Requests: {"error":{"code":"AccountQuotaExceeded","message":"You have exceeded the 5-hour usage quota. It will reset at 2026-07-10 16:59:53 +0800 CST. We recommend upgrading your plan for more quota, or waiting for the reset. Request id: 0217","param":"","type":"TooManyRequests"}}"#;
-        let friendly = friendly_quota_error(raw).expect("quota-shaped error");
-        assert!(
-            friendly.contains("2026-07-10 16:59:53 +0800 CST"),
-            "{friendly}"
-        );
-        assert!(
-            !friendly.contains('{'),
-            "no raw JSON in the friendly line: {friendly}"
-        );
-    }
-
-    #[test]
-    fn non_quota_errors_pass_through() {
-        assert!(friendly_quota_error("orchestration failed: http 500 internal").is_none());
-        assert!(friendly_quota_error("parse error in subtask").is_none());
-    }
-}
+#[path = "design_session_quota_tests.rs"]
+mod quota_error_tests;

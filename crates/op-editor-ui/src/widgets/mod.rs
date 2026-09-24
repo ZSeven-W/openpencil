@@ -51,6 +51,8 @@ mod layer_panel_walkers;
 pub mod path_anchor_context_menu;
 pub mod prompt_center_panel;
 pub use home_surface::{home_enter, HomeEnterBlock, HomeLayout, HomeSurface, HOME_TOPBAR_H};
+pub mod workspace_quality;
+pub use workspace_quality::{QualityPanelLayout, QualityRow, QualityRowKind};
 pub mod workspace_surface;
 pub use workspace_surface::{
     family_has_strip, family_views, layout_for as workspace_layout_for, workspace_enter,

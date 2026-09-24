@@ -257,6 +257,9 @@ fn paint_header(
         palette.muted,
     );
 
+    // 质检 chip (finished runs with an audited report only).
+    super::quality_paint::paint_quality_chip(surface, cx, layout, palette);
+
     // 导出 / 专业编辑 outline buttons.
     for (button, hit, label, icon) in [
         (

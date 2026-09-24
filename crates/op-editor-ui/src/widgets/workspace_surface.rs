@@ -17,6 +17,7 @@ use op_editor_core::{
 };
 
 pub use super::home_surface::StudioPalette;
+use super::workspace_quality::{quality_chip_rect, quality_panel_layout, QualityPanelLayout};
 
 /// Back circle button (36 px) inset.
 /// Left inset of the header's back circle. The desktop window is
@@ -133,6 +134,9 @@ pub struct WorkspaceLayout {
     /// Failed-phase banner actions, centered near the canvas top.
     pub retry: Option<Rect>,
     pub return_edit: Option<Rect>,
+    /// The viewport height the layout was built for (the quality panel
+    /// clamps its height against it).
+    pub viewport_h: f32,
 }
 
 /// Pure layout: shared by paint, hit-test and the host. `board_count`
@@ -316,6 +320,7 @@ pub fn layout_for(
         canvas,
         retry,
         return_edit,
+        viewport_h: vh,
     }
 }
 
@@ -389,6 +394,35 @@ impl<'a> WorkspaceSurface<'a> {
         self.state.phase == op_editor_core::WorkspacePhase::Done && !self.boards.is_empty()
     }
 
+    /// The 质检 chip's label, when the finished run carries an audited
+    /// quality report.
+    pub fn quality_label(&self) -> Option<String> {
+        self.state
+            .finished_quality()
+            .map(|report| report.chip_text(self.ui.locale))
+    }
+
+    /// The 质检 chip's rect (left of 导出), when there is a report to show.
+    pub fn quality_chip(&self, layout: &WorkspaceLayout) -> Option<Rect> {
+        self.quality_label()
+            .map(|label| quality_chip_rect(layout.export, &label))
+    }
+
+    /// The expanded report panel, when the chip is open.
+    pub fn quality_panel(&self, layout: &WorkspaceLayout) -> Option<QualityPanelLayout> {
+        if !self.state.quality_open {
+            return None;
+        }
+        let chip = self.quality_chip(layout)?;
+        let report = self.state.finished_quality()?;
+        Some(quality_panel_layout(
+            chip,
+            layout.header.size.x,
+            layout.viewport_h,
+            report,
+        ))
+    }
+
     /// Retry / back-to-edit actions for a run that did not finish: a failed
     /// run, or one the user stopped (stopping used to leave no way to try
     /// again short of retyping the brief on Home).
@@ -429,6 +463,13 @@ impl<'a> WorkspaceSurface<'a> {
         layout: &WorkspaceLayout,
         point: Point2D,
     ) -> Option<WorkspaceHit> {
+        // The open report panel floats over the toolbar and canvas: it is
+        // the topmost chrome, so it answers first.
+        if let Some(panel) = self.quality_panel(layout) {
+            if let Some(hit) = panel.hit_test(point) {
+                return Some(hit);
+            }
+        }
         if let Some((retry, return_edit)) = self.banner_buttons(layout) {
             if retry.contains(point) {
                 return Some(WorkspaceHit::Retry);
@@ -499,6 +540,12 @@ impl<'a> WorkspaceSurface<'a> {
             return None;
         }
         if layout.header.contains(point) {
+            if self
+                .quality_chip(layout)
+                .is_some_and(|chip| chip.contains(point))
+            {
+                return Some(WorkspaceHit::QualityChip);
+            }
             if layout.professional.contains(point) {
                 return Some(WorkspaceHit::Professional);
             }
@@ -544,9 +591,22 @@ impl Widget for WorkspaceSurface<'_> {
 #[path = "workspace_surface_paint.rs"]
 mod paint;
 
+#[path = "workspace_quality_paint.rs"]
+mod quality_paint;
+
 impl WorkspaceSurface<'_> {
     fn paint_workspace(&self, cx: &mut PaintCx<'_>, rect: Rect) {
         paint::paint_workspace(self, cx, rect);
+    }
+
+    /// Paint the expanded quality-report panel. The host calls this after
+    /// the canvas and the docked chat so the panel floats over both; a
+    /// closed chip paints nothing here.
+    pub fn paint_quality_overlay(&self, cx: &mut PaintCx<'_>, rect: Rect) {
+        let layout = self.layout(rect.size.x, rect.size.y);
+        let (_, alpha) = workspace_enter(self.state.shown_at_ms, self.now_ms);
+        let palette = StudioPalette::for_mode(self.ui.effective_theme_mode()).faded(alpha);
+        quality_paint::paint_quality_panel(self, cx, &layout, palette);
     }
 }
 

@@ -52,7 +52,23 @@ impl WidgetHostNative {
         }
         let surface = WorkspaceSurface::for_editor_at(&self.editor_state, self.now_ms)?;
         let layout = surface.layout(viewport_width, viewport_height);
-        let hit = surface.hit_test_layout(&layout, Point2D::new(x, y))?;
+        let hit = surface.hit_test_layout(&layout, Point2D::new(x, y));
+        // An open report panel closes on any press outside it (the press
+        // itself still reaches whatever is underneath).
+        if self.editor_state.editor_ui.workspace.quality_open
+            && !matches!(
+                hit,
+                Some(
+                    WorkspaceHit::QualityChip
+                        | WorkspaceHit::QualityPanel
+                        | WorkspaceHit::QualityItem { .. }
+                )
+            )
+        {
+            self.editor_state.editor_ui.workspace.quality_open = false;
+            self.mark_dirty();
+        }
+        let hit = hit?;
         self.editor_state.editor_ui.workspace.pressed = Some(hit);
         self.run_workspace_action(hit, &layout, x);
         self.mark_dirty();
@@ -158,7 +174,48 @@ impl WidgetHostNative {
             WorkspaceHit::Retry => {
                 self.retry_workspace_brief();
             }
+            WorkspaceHit::QualityChip => {
+                let workspace = &mut self.editor_state.editor_ui.workspace;
+                workspace.quality_open = !workspace.quality_open;
+            }
+            WorkspaceHit::QualityPanel => {}
+            WorkspaceHit::QualityItem { topic, item } => {
+                self.focus_quality_item(topic, item, viewport_w, viewport_h);
+            }
         }
+    }
+
+    /// A remaining-issue row was clicked: select the node it names and
+    /// frame it. Rows without a node (document-level findings) and nodes
+    /// that no longer exist do nothing.
+    fn focus_quality_item(&mut self, topic: usize, item: usize, viewport_w: f32, viewport_h: f32) {
+        let Some(node_id) = self
+            .editor_state
+            .editor_ui
+            .workspace
+            .quality
+            .as_ref()
+            .and_then(|report| report.remaining_item(topic, item))
+            .and_then(|entry| entry.node_id.clone())
+        else {
+            return;
+        };
+        let selected = self
+            .editor_state
+            .apply(op_editor_core::EditorCommand::SetSelection {
+                node_id: op_editor_core::NodeId::new(node_id.clone()),
+            });
+        if !selected {
+            return;
+        }
+        self.refresh_layout_scene();
+        zoom_to_fit_node(
+            &mut self.editor_state,
+            &self.layout_scene,
+            &node_id,
+            viewport_w,
+            viewport_h,
+        );
     }
 
     /// Re-send the stored brief through the orchestrator route — the
@@ -498,3 +555,7 @@ impl WidgetHostNative {
 #[cfg(test)]
 #[path = "workspace_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "workspace_quality_tests.rs"]
+mod quality_tests;

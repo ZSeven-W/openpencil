@@ -451,6 +451,7 @@ impl WidgetHostNative {
         //      the canvas but below the floating pickers / modals.
         if workspace_visible {
             self.paint_workspace_strip(frame, viewport_width, viewport_height);
+            self.paint_workspace_quality_overlay(frame, viewport_width, viewport_height);
         }
 
         // 8.4. Floating align/distribute toolbar — visible whenever

@@ -43,6 +43,26 @@ impl WidgetHostNative {
         surface.paint(&mut cx, Rect::xywh(0.0, 0.0, viewport_w, viewport_h));
     }
 
+    /// Paint the expanded quality-report panel over the canvas and the
+    /// docked chat. No-op while the chip is closed.
+    pub(in crate::widget_host) fn paint_workspace_quality_overlay(
+        &mut self,
+        frame: &mut NativeFrameBackend<'_>,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) {
+        if !self.editor_state.editor_ui.workspace.quality_open {
+            return;
+        }
+        let Some(surface) = WorkspaceSurface::for_editor_at(&self.editor_state, self.now_ms) else {
+            return;
+        };
+        let mut cx = op_editor_ui::widgets::PaintCx {
+            backend: &mut *frame,
+        };
+        surface.paint_quality_overlay(&mut cx, Rect::xywh(0.0, 0.0, viewport_w, viewport_h));
+    }
+
     /// Blit the deck strip's real board rasters over the placeholder
     /// plates and top the shared `SlideThumbCache` up within the frame
     /// budget (the same retain/tick/render pump the retired result view

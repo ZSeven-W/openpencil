@@ -14,6 +14,7 @@
 
 use super::home::{HomeFamily, TaskDraft};
 use super::{EditorUiState, LeftPanelTab};
+use crate::quality_report::QualityReport;
 use crate::tool::Tool;
 
 /// Workspace header height (back button, doc tile, title, actions).
@@ -98,6 +99,17 @@ pub enum WorkspaceHit {
     Retry,
     /// The failed-phase banner's 返回修改 button.
     ReturnEdit,
+    /// The header's 质检 chip (toggles the quality-report panel).
+    QualityChip,
+    /// Anywhere on the open quality-report panel that is not an item —
+    /// swallowed so the canvas underneath never sees the press.
+    QualityPanel,
+    /// A remaining-issue row of the quality-report panel: indices into
+    /// `QualityReport::topics` and that topic's `remaining` list.
+    QualityItem {
+        topic: usize,
+        item: usize,
+    },
 }
 
 /// Transient state for the generation workspace. Never persisted.
@@ -140,6 +152,12 @@ pub struct WorkspaceState {
     /// content without adding a board, and the stale fit then left the
     /// deck off-centre and clipped (measured 2026-09-13).
     pub fitted_bounds: Option<(f32, f32, f32, f32)>,
+    /// The run's quality report: folded from the run's progress while it
+    /// streams, audited on the final document when it ends. `None` until
+    /// the run reports its first quality check.
+    pub quality: Option<QualityReport>,
+    /// The header chip's report panel is expanded.
+    pub quality_open: bool,
 }
 
 impl Default for WorkspaceState {
@@ -160,6 +178,8 @@ impl Default for WorkspaceState {
             shown_at_ms: 0,
             fitted_board_count: 0,
             fitted_bounds: None,
+            quality: None,
+            quality_open: false,
         }
     }
 }
@@ -192,6 +212,7 @@ impl WorkspaceState {
         self.shown_at_ms = now_ms.max(1);
         self.fitted_board_count = 0;
         self.fitted_bounds = None;
+        self.clear_quality();
     }
 
     /// 专业编辑: drop the chrome (rails come back, the previous tool is
@@ -259,6 +280,27 @@ impl WorkspaceState {
         }
         self.phase = WorkspacePhase::Generating;
         self.run_epoch = run_epoch;
+        self.clear_quality();
+    }
+
+    /// Drop the previous run's quality report — a new run is judged on its
+    /// own facts, never on a finished run's leftovers.
+    pub fn clear_quality(&mut self) {
+        self.quality = None;
+        self.quality_open = false;
+    }
+
+    /// The finished run's audited report, when there is one to show: the
+    /// run is Done and the end-of-run audit ran over something that was
+    /// actually checked. A stopped / failed / still-running workspace shows
+    /// no chip rather than a half-built verdict.
+    pub fn finished_quality(&self) -> Option<&QualityReport> {
+        if self.phase != WorkspacePhase::Done {
+            return None;
+        }
+        self.quality
+            .as_ref()
+            .filter(|report| report.audited && !report.is_empty())
     }
 
     /// Step the deck selection, clamped into `board_count`. Returns
@@ -310,6 +352,7 @@ impl WorkspaceState {
         self.fitted_board_count = 0;
         self.fitted_bounds = None;
         self.selected = 0;
+        self.clear_quality();
     }
 
     /// The next frame instant the entrance motion still needs, or
