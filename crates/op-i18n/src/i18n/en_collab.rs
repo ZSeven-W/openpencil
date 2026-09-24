@@ -497,6 +497,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.art.accepted" => "Received",
         "home.art.ready" => "Ready",
         "home.art.done" => "Done",
+        "home.tools.brandHint" => "Use a link or screenshot in the brief as the brand",
+        "home.brand.needSource" => "Paste a website link into the brief or add a screenshot first",
+        "home.brand.extracting" => "Reading brand · {{name}}",
+        "home.brand.chip" => "Brand · {{name}}",
+        "home.brand.failed" => "Couldn't read a brand from that source",
         _ => return None,
     })
 }

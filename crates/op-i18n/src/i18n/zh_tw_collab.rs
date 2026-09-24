@@ -457,6 +457,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.art.accepted" => "已接單",
         "home.art.ready" => "待取餐",
         "home.art.done" => "完成",
+        "home.tools.brandHint" => "把需求中的連結或截圖用作品牌",
+        "home.brand.needSource" => "請先在需求中貼上網站連結，或加入一張截圖",
+        "home.brand.extracting" => "正在讀取品牌 · {{name}}",
+        "home.brand.chip" => "品牌 · {{name}}",
+        "home.brand.failed" => "無法從該來源讀取品牌",
         _ => return None,
     })
 }

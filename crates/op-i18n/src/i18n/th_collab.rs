@@ -459,6 +459,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.art.accepted" => "รับแล้ว",
         "home.art.ready" => "พร้อมรับ",
         "home.art.done" => "เสร็จ",
+        "home.tools.brandHint" => "ใช้ลิงก์หรือภาพหน้าจอในโจทย์เป็นแบรนด์",
+        "home.brand.needSource" => "วางลิงก์เว็บไซต์ในโจทย์หรือเพิ่มภาพหน้าจอก่อน",
+        "home.brand.extracting" => "กำลังอ่านแบรนด์ · {{name}}",
+        "home.brand.chip" => "แบรนด์ · {{name}}",
+        "home.brand.failed" => "อ่านแบรนด์จากแหล่งนี้ไม่ได้",
         _ => return None,
     })
 }

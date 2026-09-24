@@ -487,6 +487,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.art.accepted" => "Принят",
         "home.art.ready" => "Готов",
         "home.art.done" => "Выдан",
+        "home.tools.brandHint" => "Использовать ссылку или скриншот из запроса как бренд",
+        "home.brand.needSource" => "Сначала вставьте в запрос ссылку на сайт или добавьте скриншот",
+        "home.brand.extracting" => "Считываем бренд · {{name}}",
+        "home.brand.chip" => "Бренд · {{name}}",
+        "home.brand.failed" => "Не удалось считать бренд из этого источника",
         _ => return None,
     })
 }

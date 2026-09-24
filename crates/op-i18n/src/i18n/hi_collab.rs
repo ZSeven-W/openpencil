@@ -461,6 +461,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.art.accepted" => "मिला",
         "home.art.ready" => "तैयार",
         "home.art.done" => "पूरा",
+        "home.tools.brandHint" => "ब्रीफ़ के लिंक या स्क्रीनशॉट को ब्रांड के रूप में इस्तेमाल करें",
+        "home.brand.needSource" => "पहले ब्रीफ़ में वेबसाइट लिंक चिपकाएँ या स्क्रीनशॉट जोड़ें",
+        "home.brand.extracting" => "ब्रांड पढ़ा जा रहा है · {{name}}",
+        "home.brand.chip" => "ब्रांड · {{name}}",
+        "home.brand.failed" => "इस स्रोत से ब्रांड नहीं पढ़ा जा सका",
         _ => return None,
     })
 }

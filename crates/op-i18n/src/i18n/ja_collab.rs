@@ -473,6 +473,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.art.accepted" => "受付済み",
         "home.art.ready" => "受取可",
         "home.art.done" => "完了",
+        "home.tools.brandHint" => "依頼文のリンクやスクリーンショットをブランドとして使う",
+        "home.brand.needSource" => "先に依頼文へサイトのリンクを貼るか、スクリーンショットを追加してください",
+        "home.brand.extracting" => "ブランドを読み取り中 · {{name}}",
+        "home.brand.chip" => "ブランド · {{name}}",
+        "home.brand.failed" => "このソースからブランドを読み取れませんでした",
         _ => return None,
     })
 }

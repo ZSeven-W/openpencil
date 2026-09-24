@@ -473,6 +473,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.art.accepted" => "접수",
         "home.art.ready" => "픽업 가능",
         "home.art.done" => "완료",
+        "home.tools.brandHint" => "요청의 링크나 스크린샷을 브랜드로 사용",
+        "home.brand.needSource" => "먼저 요청에 웹사이트 링크를 붙여넣거나 스크린샷을 추가하세요",
+        "home.brand.extracting" => "브랜드 읽는 중 · {{name}}",
+        "home.brand.chip" => "브랜드 · {{name}}",
+        "home.brand.failed" => "이 소스에서 브랜드를 읽지 못했습니다",
         _ => return None,
     })
 }

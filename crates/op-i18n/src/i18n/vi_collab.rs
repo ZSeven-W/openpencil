@@ -469,6 +469,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.art.accepted" => "Đã nhận",
         "home.art.ready" => "Sẵn sàng",
         "home.art.done" => "Xong",
+        "home.tools.brandHint" => "Dùng liên kết hoặc ảnh chụp trong yêu cầu làm thương hiệu",
+        "home.brand.needSource" => "Hãy dán liên kết trang web vào yêu cầu hoặc thêm ảnh chụp trước",
+        "home.brand.extracting" => "Đang đọc thương hiệu · {{name}}",
+        "home.brand.chip" => "Thương hiệu · {{name}}",
+        "home.brand.failed" => "Không đọc được thương hiệu từ nguồn này",
         _ => return None,
     })
 }

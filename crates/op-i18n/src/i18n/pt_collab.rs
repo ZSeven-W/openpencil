@@ -457,6 +457,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.art.accepted" => "Recebido",
         "home.art.ready" => "Pronto",
         "home.art.done" => "Concluído",
+        "home.tools.brandHint" => "Usar o link ou a captura do pedido como marca",
+        "home.brand.needSource" => "Cole primeiro um link de site no pedido ou adicione uma captura",
+        "home.brand.extracting" => "Lendo a marca · {{name}}",
+        "home.brand.chip" => "Marca · {{name}}",
+        "home.brand.failed" => "Não foi possível ler uma marca dessa fonte",
         _ => return None,
     })
 }

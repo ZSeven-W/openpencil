@@ -457,6 +457,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.art.accepted" => "Diterima",
         "home.art.ready" => "Siap",
         "home.art.done" => "Selesai",
+        "home.tools.brandHint" => "Pakai tautan atau tangkapan layar di brief sebagai merek",
+        "home.brand.needSource" => "Tempel tautan situs ke brief atau tambahkan tangkapan layar dulu",
+        "home.brand.extracting" => "Membaca merek · {{name}}",
+        "home.brand.chip" => "Merek · {{name}}",
+        "home.brand.failed" => "Tidak dapat membaca merek dari sumber itu",
         _ => return None,
     })
 }

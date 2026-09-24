@@ -457,6 +457,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.art.accepted" => "Erhalten",
         "home.art.ready" => "Bereit",
         "home.art.done" => "Fertig",
+        "home.tools.brandHint" => "Link oder Screenshot aus dem Briefing als Marke verwenden",
+        "home.brand.needSource" => "Füge zuerst einen Website-Link ins Briefing ein oder hänge einen Screenshot an",
+        "home.brand.extracting" => "Marke wird gelesen · {{name}}",
+        "home.brand.chip" => "Marke · {{name}}",
+        "home.brand.failed" => "Aus dieser Quelle ließ sich keine Marke lesen",
         _ => return None,
     })
 }

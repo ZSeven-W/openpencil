@@ -457,6 +457,11 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.art.accepted" => "Alındı",
         "home.art.ready" => "Hazır",
         "home.art.done" => "Bitti",
+        "home.tools.brandHint" => "Açıklamadaki bağlantıyı veya ekran görüntüsünü marka olarak kullan",
+        "home.brand.needSource" => "Önce açıklamaya bir web sitesi bağlantısı yapıştırın veya ekran görüntüsü ekleyin",
+        "home.brand.extracting" => "Marka okunuyor · {{name}}",
+        "home.brand.chip" => "Marka · {{name}}",
+        "home.brand.failed" => "Bu kaynaktan marka okunamadı",
         _ => return None,
     })
 }
