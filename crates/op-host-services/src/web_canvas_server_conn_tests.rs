@@ -249,6 +249,40 @@ fn serve_one_post_mcp_debug_screenshot_uses_web_canvas_renderer() {
     );
 }
 
+fn listed_tool_names(response: &str) -> Vec<String> {
+    let body = response.split_once("\r\n\r\n").expect("http body").1;
+    let value: serde_json::Value = serde_json::from_str(body).expect("json-rpc body");
+    value["result"]["tools"]
+        .as_array()
+        .expect("tools")
+        .iter()
+        .map(|tool| tool["name"].as_str().expect("name").to_string())
+        .collect()
+}
+
+#[test]
+fn serve_one_lean_mcp_path_lists_the_six_tool_catalog() {
+    let list = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
+    let lean = serve("POST", "/mcp/lean", list);
+    assert!(lean.contains("200 OK"), "{lean}");
+    assert_eq!(
+        listed_tool_names(&lean),
+        crate::mcp_serve::tool_catalog::LEAN_TOOLS,
+        "{lean}"
+    );
+    let full = serve("POST", "/mcp", list);
+    assert!(listed_tool_names(&full).len() > 100, "{full}");
+}
+
+#[test]
+fn serve_one_lean_mcp_path_refuses_tools_outside_the_profile() {
+    let call = r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_pages","arguments":{}}}"#;
+    let refused = serve("POST", "/mcp/lean", call);
+    assert!(refused.contains("tool-not-in-profile"), "{refused}");
+    let get = serve("GET", "/mcp/lean", "");
+    assert!(get.contains("405 Method Not Allowed"), "{get}");
+}
+
 #[test]
 fn serve_one_get_mcp_is_405_not_a_tool_call() {
     let r = serve("GET", "/mcp", "");

@@ -395,20 +395,24 @@ pub(super) fn dispatch<S: Read + Write>(
         )?;
         return Ok(false);
     }
-    // JSON-RPC tool dispatch is served ONLY as a POST to `/` or `/mcp`. An
-    // unknown path is 404; a known path with the wrong method (e.g. `GET /mcp`)
-    // is 405 — never silently dispatched as a tool call.
+    // JSON-RPC tool dispatch is served ONLY as a POST to `/`, `/mcp`, or
+    // `/mcp/lean` (the six-tool lean catalog the terminal-integration writer
+    // installs when asked to — the same path the desktop live server and
+    // `--mcp-http` answer). An unknown path is 404; a known path with the
+    // wrong method (e.g. `GET /mcp`) is 405 — never silently dispatched as a
+    // tool call.
     //
     // The public deployment keeps exactly one spelling: `/` is the site root
     // there, and making a site root a JSON-RPC endpoint is a trap, so the
     // alias answers 405 alongside every other wrong-method request to it.
-    let is_jsonrpc_path =
-        req.path == "/mcp" || (req.path == "/" && ctx.mode.allows_root_jsonrpc_alias());
+    let is_jsonrpc_path = req.path == "/mcp"
+        || req.path == crate::mcp_serve::tool_catalog::LEAN_MCP_PATH
+        || (req.path == "/" && ctx.mode.allows_root_jsonrpc_alias());
     if !is_jsonrpc_path && req.path != "/" {
         crate::mcp_serve::write_mcp_http_response_with_origin(
             stream,
             "404 Not Found",
-            r#"{"ok":false,"error":"Not found. Use /, /pkg/*, /api/mcp/document, /api/mcp/sync-reset, /api/mcp/server, /api/mcp/events, /api/file/save, /api/export/raster, /api/export/pdf, or /mcp."}"#,
+            r#"{"ok":false,"error":"Not found. Use /, /pkg/*, /api/mcp/document, /api/mcp/sync-reset, /api/mcp/server, /api/mcp/events, /api/file/save, /api/export/raster, /api/export/pdf, /mcp, or /mcp/lean."}"#,
             cors_origin,
         )?;
         return Ok(false);
@@ -458,18 +462,28 @@ pub(super) fn dispatch<S: Read + Write>(
     // the same raster export path desktop live MCP uses. Keep this ahead of the
     // generic dispatch, whose headless debug tool can only report no live
     // canvas.
+    // The lean path narrows whatever profile this deployment already grants;
+    // it can never widen it.
+    let mcp_profile = ctx.mcp_profile.with_catalog(
+        crate::mcp_serve::tool_catalog::McpToolCatalog::for_http_path(&req.path)
+            .unwrap_or(crate::mcp_serve::tool_catalog::McpToolCatalog::Full),
+    );
     #[cfg(feature = "mcp-debug-tools")]
-    if let Some(response) = {
-        let guard = state.lock().unwrap_or_else(|p| p.into_inner());
-        crate::mcp_live::screenshot::maybe_serve(
-            &req.body,
-            op_mcp::debug_tools_enabled(),
-            |shot_req| {
-                let spec = crate::mcp_live::screenshot::capture_spec(&shot_req);
-                crate::export::screenshot::capture(&guard.editor, &spec)
-            },
-        )
-    } {
+    if let Some(response) = (mcp_profile.catalog
+        == crate::mcp_serve::tool_catalog::McpToolCatalog::Full)
+        .then(|| {
+            let guard = state.lock().unwrap_or_else(|p| p.into_inner());
+            crate::mcp_live::screenshot::maybe_serve(
+                &req.body,
+                op_mcp::debug_tools_enabled(),
+                |shot_req| {
+                    let spec = crate::mcp_live::screenshot::capture_spec(&shot_req);
+                    crate::export::screenshot::capture(&guard.editor, &spec)
+                },
+            )
+        })
+        .flatten()
+    {
         crate::mcp_serve::write_mcp_http_response_with_origin(
             stream,
             "200 OK",
@@ -533,7 +547,7 @@ pub(super) fn dispatch<S: Read + Write>(
         let response = crate::mcp_serve::process_message_with_applier_profiled(
             &mut guard.editor,
             &req.body,
-            ctx.mcp_profile,
+            mcp_profile,
             |_tool_name, editor, cmd| {
                 if let Err(reason) =
                     policy.check_command(cmd, op_editor_core::CollabEditSource::Mcp)
