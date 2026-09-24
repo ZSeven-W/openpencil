@@ -68,6 +68,9 @@ impl WorkspaceSurface<'_> {
             order.push((WorkspaceHit::Retry, retry));
             order.push((WorkspaceHit::ReturnEdit, return_edit));
         }
+        for item in self.variant_bar(layout) {
+            order.push((WorkspaceHit::UseVariant(item.index), item.button));
+        }
         if layout.strip.is_some() {
             order.push((WorkspaceHit::Overview, layout.overview));
             for (slot, rect) in layout.thumbs.iter().enumerate() {

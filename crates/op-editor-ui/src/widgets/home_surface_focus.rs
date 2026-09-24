@@ -35,6 +35,7 @@ impl HomeSurface<'_> {
             HomeHit::Sheet => layout.input_box,
             HomeHit::Segment(index) => *layout.segment_options.get(index as usize)?,
             HomeHit::Attachment => layout.screenshot,
+            HomeHit::Variants => layout.variants,
             HomeHit::ModelChip => layout.model_chip,
             HomeHit::Send => layout.send,
             HomeHit::Tab(family) => {
@@ -82,7 +83,12 @@ impl HomeSurface<'_> {
         }
         order.push(HomeHit::Sheet);
         order.extend((0..3).map(HomeHit::Segment));
-        order.extend([HomeHit::Attachment, HomeHit::ModelChip, HomeHit::Send]);
+        order.extend([
+            HomeHit::Attachment,
+            HomeHit::Variants,
+            HomeHit::ModelChip,
+            HomeHit::Send,
+        ]);
         order.extend(HomeFamily::ALL.iter().copied().map(HomeHit::Tab));
         order.push(HomeHit::More);
         if self.state.more_open {

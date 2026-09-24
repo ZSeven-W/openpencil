@@ -93,6 +93,8 @@ impl WidgetHost {
             WorkspaceHit::Export => self.editor_state.editor_ui.open_export_dialog(),
             // Web never runs several directions, so no pick bar is shown.
             WorkspaceHit::UseVariant(_) => {}
+            // Web never enters drawer mode (the chat dock stays docked).
+            WorkspaceHit::DrawerScrim => {}
             WorkspaceHit::Professional => {
                 let workspace = &mut self.editor_state.editor_ui.workspace;
                 let restore = workspace.previous_tool;

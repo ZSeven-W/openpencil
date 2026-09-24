@@ -30,10 +30,10 @@ pub use model::{
 #[path = "home_surface_connect.rs"]
 mod connect;
 
-#[path = "home_surface_variants.rs"]
-mod variants_toggle;
 #[path = "home_surface_focus.rs"]
 mod focus;
+#[path = "home_surface_variants.rs"]
+mod variants_toggle;
 
 #[path = "home_surface_layout.rs"]
 pub(crate) mod layout;

@@ -177,3 +177,29 @@ fn use_this_keeps_one_direction_and_parks_the_others() {
     );
     assert!(state.editor_ui.workspace.variants.is_empty());
 }
+
+#[test]
+fn tab_reaches_the_directions_toggle_and_every_use_this_button() {
+    let mut home = WidgetHostNative::new();
+    home.editor_state_mut().editor_ui.home.visible = true;
+    let order = HomeSurface::for_editor(home.editor_state())
+        .expect("home")
+        .focus_order(W, H);
+    assert!(order.contains(&HomeHit::Variants), "{order:?}");
+
+    let mut host = settled_variants_host();
+    host.editor_state_mut().editor_ui.workspace.phase = WorkspacePhase::Done;
+    let surface = WorkspaceSurface::for_editor(host.editor_state()).expect("workspace");
+    let layout = surface.layout(W, H);
+    let order: Vec<WorkspaceHit> = surface
+        .focus_order(&layout)
+        .into_iter()
+        .map(|(hit, _)| hit)
+        .collect();
+    for index in 0..3 {
+        assert!(
+            order.contains(&WorkspaceHit::UseVariant(index)),
+            "{index}: {order:?}"
+        );
+    }
+}

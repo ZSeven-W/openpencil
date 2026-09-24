@@ -721,5 +721,7 @@ mod quality_tests;
 #[cfg(test)]
 #[path = "workspace_variants_tests.rs"]
 mod variants_tests;
+
+#[cfg(test)]
 #[path = "workspace_drawer_tests.rs"]
 mod drawer_tests;
