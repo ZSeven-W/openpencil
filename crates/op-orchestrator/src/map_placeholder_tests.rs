@@ -405,3 +405,42 @@ fn decorations_inside_a_hand_drawn_map_and_small_map_shapes_are_left_alone() {
         "only the wide leaf is a map slot; got {ids:?}"
     );
 }
+
+/// "Mapo tofu" and "maple" start with "map" but are food. Measured 0923-0924:
+/// every 麻婆豆腐 dish photo and a Sichuan store hero became fake street maps.
+#[test]
+fn food_words_that_start_with_map_are_not_maps() {
+    for (name, query, prompt) in [
+        (
+            "dish-photo-2",
+            "mapo tofu",
+            "overhead food photography of mapo tofu in a clay bowl",
+        ),
+        (
+            "store-hero-image",
+            "sichuan restaurant",
+            "warm restaurant table with mapo tofu and chili oil",
+        ),
+        (
+            "pancake-photo",
+            "maple syrup pancakes",
+            "stack of pancakes with maple syrup",
+        ),
+    ] {
+        let node: PenNode = serde_json::from_value(json!({
+            "type": "image", "id": name, "name": name, "src": "", "width": 88, "height": 88,
+            "imageSearchQuery": query, "imagePrompt": prompt
+        }))
+        .expect("valid image");
+        assert!(
+            !is_map_placeholder_candidate(&node),
+            "{name} is food, not a map"
+        );
+    }
+    let real: PenNode = serde_json::from_value(json!({
+        "type": "image", "id": "store-map", "name": "store-location-map", "src": "",
+        "width": 327, "height": 160, "imageSearchQuery": "city map"
+    }))
+    .expect("valid image");
+    assert!(is_map_placeholder_candidate(&real));
+}

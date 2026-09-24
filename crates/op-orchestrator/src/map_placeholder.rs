@@ -149,7 +149,7 @@ fn has_map_word(value: &str) -> bool {
         || lower.contains("route map")
         || lower
             .split(|character: char| !character.is_ascii_alphanumeric())
-            .any(|word| word == "navigation" || word.starts_with("map"))
+            .any(|word| word == "navigation" || is_map_token(word))
 }
 
 fn has_map_name_word(value: &str) -> bool {
@@ -159,7 +159,15 @@ fn has_map_name_word(value: &str) -> bool {
         || lower.contains("route map")
         || lower
             .split(|character: char| !character.is_ascii_alphanumeric())
-            .any(|word| word.starts_with("map"))
+            .any(is_map_token)
+}
+
+/// A whole word that names a map. Matching on the `map` PREFIX turned every
+/// "mapo tofu" dish photo — and a Sichuan store hero whose prompt mentioned
+/// it — into a fake street map on GLM-5.3-Flash and Opus 5.5 delivery pages
+/// (0923-0924); "maple" and "mapping" read the same way.
+fn is_map_token(word: &str) -> bool {
+    matches!(word, "map" | "maps" | "mapview" | "mapbox" | "minimap")
 }
 
 fn dimensions(node: &PenNode, rects: &HashMap<String, ResolvedRect>) -> (f64, f64) {
