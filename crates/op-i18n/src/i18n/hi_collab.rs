@@ -369,6 +369,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.empty" => "अभी कोई काम नहीं है। कुछ जनरेट करें या खाली कैनवास पर बनाएँ, वह यहाँ दिखेगा।",
         "works.boards" => "{{count}} बोर्ड",
         "home.replaceUnsavedConfirm" => "नया डिज़ाइन शुरू करें? मौजूदा दस्तावेज़ में बिना सहेजे बदलाव हैं, जो खो जाएँगे। उन्हें रखने के लिए रद्द करें और पहले सहेजें (फ़ाइल > सहेजें)।",
+        "home.tools.variants" => "3 दिशाएँ",
+        "workspace.variants.name" => "दिशा {{letter}}",
+        "workspace.variants.use" => "इसे इस्तेमाल करें",
+        "workspace.variants.otherPage" => "अन्य दिशाएँ",
+        "workspace.variants.ready" => "{{name}} तैयार है ({{style}})",
+        "workspace.variants.failed" => "{{name}} नहीं बन सका: {{error}}",
         _ => return None,
     })
 }

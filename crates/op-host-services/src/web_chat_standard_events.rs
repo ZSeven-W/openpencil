@@ -187,6 +187,8 @@ pub(super) fn progress_label(p: &Progress) -> String {
         }
         Progress::VisualRefFallback { reason } => format!("• Visual-ref fallback: {reason}"),
         Progress::ReferenceUnavailable { reason } => format!("• {reason}"),
+        Progress::VariantReady(variant) => format!("• {} ready", variant.label()),
+        Progress::VariantFailed { name, error, .. } => format!("• {name} failed: {error}"),
         Progress::UnfilledScreens { names } => {
             format!(
                 "• {} screen(s) left unfilled: {}",

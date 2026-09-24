@@ -377,6 +377,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.empty" => "Chưa có tác phẩm nào. Hãy tạo hoặc vẽ trên canvas trống, tác phẩm sẽ hiện ở đây.",
         "works.boards" => "{{count}} bảng vẽ",
         "home.replaceUnsavedConfirm" => "Bắt đầu thiết kế mới? Tài liệu hiện tại có thay đổi chưa lưu và chúng sẽ bị mất. Để giữ lại, hãy hủy và lưu trước (Tệp > Lưu).",
+        "home.tools.variants" => "3 hướng",
+        "workspace.variants.name" => "Hướng {{letter}}",
+        "workspace.variants.use" => "Dùng bản này",
+        "workspace.variants.otherPage" => "Các hướng khác",
+        "workspace.variants.ready" => "{{name}} đã xong ({{style}})",
+        "workspace.variants.failed" => "Không tạo được {{name}}: {{error}}",
         _ => return None,
     })
 }

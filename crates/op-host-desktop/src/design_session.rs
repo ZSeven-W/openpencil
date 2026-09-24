@@ -28,6 +28,9 @@ mod workers;
 #[path = "design_session_quality.rs"]
 mod quality;
 
+#[path = "design_session_variants.rs"]
+mod variants;
+
 /// Drain every pending apply request from the in-flight design
 /// session and execute it against the real `EditorState`. Each
 /// request gets an ack containing a fresh state snapshot so the
@@ -152,6 +155,7 @@ pub fn pump_progress(
     let mut changed = false;
     if !poll.progress.is_empty() {
         changed |= quality::fold_quality_progress(host.editor_state_mut(), &poll.progress);
+        changed |= variants::fold_variant_progress(host.editor_state_mut(), &poll.progress);
         let chat = host.editor_state_mut().chat.run_tab_mut(running_tab);
         changed |=
             workers::apply_progress_to_transcript(&mut chat.messages, &poll.progress, locale);
@@ -509,6 +513,9 @@ fn apply_progress(msg: &mut ChatMessage, progress: &[Progress], locale: Locale) 
             ),
             Progress::ReferenceUnavailable { reason } => {
                 append_narration(msg, &format!("• {reason}"))
+            }
+            Progress::VariantReady(_) | Progress::VariantFailed { .. } => {
+                variants::narrate_variant(msg, event, locale)
             }
             // "承诺-交付" honest report — not translated, same diagnostic
             // confirmation-line treatment as GeometryEcho above. The canvas

@@ -365,6 +365,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.empty" => "Henüz çalışma yok. Bir şey oluşturun ya da boş tuvale çizin; burada görünecek.",
         "works.boards" => "{{count}} çalışma yüzeyi",
         "home.replaceUnsavedConfirm" => "Yeni bir tasarıma başlansın mı? Geçerli belgede kaydedilmemiş değişiklikler var ve bunlar kaybolacak. Korumak için iptal edip önce kaydedin (Dosya > Kaydet).",
+        "home.tools.variants" => "3 yön",
+        "workspace.variants.name" => "Yön {{letter}}",
+        "workspace.variants.use" => "Bunu kullan",
+        "workspace.variants.otherPage" => "Diğer yönler",
+        "workspace.variants.ready" => "{{name}} hazır ({{style}})",
+        "workspace.variants.failed" => "{{name}} oluşturulamadı: {{error}}",
         _ => return None,
     })
 }

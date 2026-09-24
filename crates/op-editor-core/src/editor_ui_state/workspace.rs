@@ -16,11 +16,17 @@ use super::home::{HomeFamily, TaskDraft};
 
 #[path = "workspace_reader.rs"]
 mod reader;
+#[path = "workspace_variants.rs"]
+mod variants;
 use super::{EditorUiState, LeftPanelTab};
 use crate::quality_report::QualityReport;
 use crate::tool::Tool;
 pub use reader::{
     infer_reading_family, reader_is_paged, reads_as_long_page, PageEditTarget, ReaderHit,
+};
+pub use variants::{
+    clamp_variant_count, pick_workspace_variant, variant_letter, variant_pick_commands,
+    WorkspaceVariant, DEFAULT_VARIANT_COUNT, MAX_VARIANT_COUNT,
 };
 
 /// Workspace header height (back button, doc tile, title, actions).
@@ -183,6 +189,10 @@ pub struct WorkspaceState {
     pub page_edit_running: Option<PageEditTarget>,
     /// Pressed feedback for the phone reader's chrome.
     pub reader_pressed: Option<ReaderHit>,
+    /// Directions a variants run asked for; `0` = an ordinary run.
+    pub variant_count: u8,
+    /// The directions that have landed so far, in slot order.
+    pub variants: Vec<WorkspaceVariant>,
 }
 
 impl Default for WorkspaceState {
@@ -210,6 +220,8 @@ impl Default for WorkspaceState {
             page_edit: None,
             page_edit_running: None,
             reader_pressed: None,
+            variant_count: 0,
+            variants: Vec::new(),
         }
     }
 }
@@ -248,6 +260,7 @@ impl WorkspaceState {
         self.page_edit = None;
         self.page_edit_running = None;
         self.reader_pressed = None;
+        self.clear_variants();
     }
 
     /// Record that this workspace's boards are the instant draft loaded
@@ -433,6 +446,7 @@ impl WorkspaceState {
         self.page_edit = None;
         self.page_edit_running = None;
         self.reader_pressed = None;
+        self.clear_variants();
     }
 
     /// The next frame instant the entrance motion still needs, or

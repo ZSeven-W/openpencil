@@ -395,6 +395,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.empty" => "Работ пока нет. Сгенерируйте что-нибудь или нарисуйте на пустом холсте — работа появится здесь.",
         "works.boards" => "Артбордов: {{count}}",
         "home.replaceUnsavedConfirm" => "Начать новый дизайн? В текущем документе есть несохранённые изменения, и они будут потеряны. Чтобы сохранить их, отмените и сначала сохраните документ (Файл > Сохранить).",
+        "home.tools.variants" => "3 варианта",
+        "workspace.variants.name" => "Вариант {{letter}}",
+        "workspace.variants.use" => "Выбрать этот",
+        "workspace.variants.otherPage" => "Другие варианты",
+        "workspace.variants.ready" => "{{name}} готов ({{style}})",
+        "workspace.variants.failed" => "Не удалось создать {{name}}: {{error}}",
         _ => return None,
     })
 }

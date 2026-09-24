@@ -365,6 +365,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.empty" => "Ainda não há trabalhos. Gere algo ou desenhe em uma tela em branco e ele aparecerá aqui.",
         "works.boards" => "{{count}} pranchetas",
         "home.replaceUnsavedConfirm" => "Começar um novo design? O documento atual tem alterações não salvas, que serão perdidas. Para mantê-las, cancele e salve-o primeiro (Arquivo > Salvar).",
+        "home.tools.variants" => "3 direções",
+        "workspace.variants.name" => "Direção {{letter}}",
+        "workspace.variants.use" => "Usar esta",
+        "workspace.variants.otherPage" => "Outras direções",
+        "workspace.variants.ready" => "{{name}} está pronta ({{style}})",
+        "workspace.variants.failed" => "Não foi possível gerar {{name}}: {{error}}",
         _ => return None,
     })
 }

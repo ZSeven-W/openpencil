@@ -405,6 +405,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.empty" => "No works yet. Generate something or draw on a blank canvas, and it will show up here.",
         "works.boards" => "{{count}} boards",
         "home.replaceUnsavedConfirm" => "Start a new design? The current document has unsaved changes, and they will be lost. To keep them, cancel and save it first (File > Save).",
+        "home.tools.variants" => "3 directions",
+        "workspace.variants.name" => "Direction {{letter}}",
+        "workspace.variants.use" => "Use this",
+        "workspace.variants.otherPage" => "Other directions",
+        "workspace.variants.ready" => "{{name}} is ready ({{style}})",
+        "workspace.variants.failed" => "{{name}} could not be generated: {{error}}",
         _ => return None,
     })
 }

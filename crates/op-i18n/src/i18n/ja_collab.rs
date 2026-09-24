@@ -381,6 +381,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.empty" => "まだ作品がありません。生成するか空白のキャンバスに描くと、ここに表示されます。",
         "works.boards" => "{{count}} 個のボード",
         "home.replaceUnsavedConfirm" => "新しいデザインを始めますか？現在のドキュメントには保存されていない変更があり、続行すると失われます。残す場合はキャンセルして先に保存してください（ファイル > 保存）。",
+        "home.tools.variants" => "3 つの方向性",
+        "workspace.variants.name" => "案 {{letter}}",
+        "workspace.variants.use" => "これを使う",
+        "workspace.variants.otherPage" => "ほかの案",
+        "workspace.variants.ready" => "{{name}} が完成しました（{{style}}）",
+        "workspace.variants.failed" => "{{name}} を生成できませんでした：{{error}}",
         _ => return None,
     })
 }

@@ -365,6 +365,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.empty" => "Aucune création pour l'instant. Lancez une génération ou dessinez sur un canevas vierge pour la voir ici.",
         "works.boards" => "{{count}} plans de travail",
         "home.replaceUnsavedConfirm" => "Commencer un nouveau design ? Le document actuel contient des modifications non enregistrées, qui seront perdues. Pour les conserver, annulez et enregistrez-le d'abord (Fichier > Enregistrer).",
+        "home.tools.variants" => "3 directions",
+        "workspace.variants.name" => "Direction {{letter}}",
+        "workspace.variants.use" => "Utiliser celle-ci",
+        "workspace.variants.otherPage" => "Autres directions",
+        "workspace.variants.ready" => "{{name}} est prête ({{style}})",
+        "workspace.variants.failed" => "Impossible de générer {{name}} : {{error}}",
         _ => return None,
     })
 }

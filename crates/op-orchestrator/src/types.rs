@@ -537,6 +537,20 @@ pub enum Progress {
         /// Human-readable reason shown by the host's progress surface.
         reason: String,
     },
+    // ── Variants: side-by-side design directions ───────────────────────────
+    /// One direction of a variants run (`crate::variants_run`) landed on the
+    /// page: its boards, its style guide and the palette it was built with.
+    VariantReady(op_editor_core::WorkspaceVariant),
+    /// One direction of a variants run produced nothing. The other
+    /// directions keep running; only an all-directions failure fails the run.
+    VariantFailed {
+        /// Slot of the direction (`0` = A).
+        index: usize,
+        /// The direction's display name.
+        name: String,
+        /// Why it failed.
+        error: String,
+    },
 }
 
 /// Stable context attached to one screen group's progress events.

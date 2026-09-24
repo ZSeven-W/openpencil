@@ -354,9 +354,11 @@ pub use editor_ui_state::home_example_draft::{
     example_draft_template, refine_prompt, HomeSendMode,
 };
 pub use editor_ui_state::workspace::{
-    infer_reading_family, reader_is_paged, reads_as_long_page, PageEditTarget, ReaderHit,
-    WorkspaceHit, WorkspacePhase, WorkspaceState, WorkspaceView, WORKSPACE_DECK_STRIP_H,
-    WORKSPACE_ENTER_MS, WORKSPACE_HEADER_H, WORKSPACE_TOOLBAR_H,
+    clamp_variant_count, infer_reading_family, pick_workspace_variant, reader_is_paged,
+    reads_as_long_page, variant_letter, variant_pick_commands, PageEditTarget, ReaderHit,
+    WorkspaceHit, WorkspacePhase, WorkspaceState, WorkspaceVariant, WorkspaceView,
+    DEFAULT_VARIANT_COUNT, MAX_VARIANT_COUNT, WORKSPACE_DECK_STRIP_H, WORKSPACE_ENTER_MS,
+    WORKSPACE_HEADER_H, WORKSPACE_TOOLBAR_H,
 };
 pub use editor_ui_state::{
     AssetCenterTab, BooleanOp, CloneField, CloneFormState, CommitDiffPatch, CommitDiffSummary,

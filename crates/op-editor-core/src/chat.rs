@@ -132,13 +132,30 @@ pub enum LaunchRoute {
     /// NEW design — which would draw a second deck beside the draft instead
     /// of editing it. The route decides the intent, not the wording.
     Refine,
+    /// Generate this many distinct design directions side by side.
+    ///
+    /// Studio Home's 3-directions toggle pins this: the orchestrator
+    /// pipeline runs once per direction, concurrently, each pinned to a
+    /// different style guide, and the results land next to each other.
+    /// Like [`Self::Orchestrator`] it is a whole-design request by
+    /// construction.
+    Variants(u8),
 }
 
 impl LaunchRoute {
     /// True when this route must skip the design-agent loop even when
     /// the loop gate would otherwise say yes.
     pub fn bypasses_design_agent_loop(self) -> bool {
-        matches!(self, Self::Orchestrator)
+        matches!(self, Self::Orchestrator | Self::Variants(_))
+    }
+
+    /// The direction count a variants route asks for (clamped), `None`
+    /// for every other route.
+    pub fn variant_count(self) -> Option<u8> {
+        match self {
+            Self::Variants(count) => Some(crate::clamp_variant_count(count)),
+            _ => None,
+        }
     }
 
     /// True when the route itself establishes that the turn is a design
@@ -154,7 +171,7 @@ impl LaunchRoute {
     /// 2026-09-13: a 5-page PPT brief produced one empty starter frame and
     /// a collapsed thinking block).
     pub fn implies_design_intent(self) -> bool {
-        matches!(self, Self::Orchestrator)
+        matches!(self, Self::Orchestrator | Self::Variants(_))
     }
 
     /// True when the turn must edit the selected boards in place and

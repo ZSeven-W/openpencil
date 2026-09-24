@@ -365,6 +365,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.empty" => "Aún no hay trabajos. Genera algo o dibuja en un lienzo en blanco y aparecerá aquí.",
         "works.boards" => "{{count}} mesas de trabajo",
         "home.replaceUnsavedConfirm" => "¿Empezar un diseño nuevo? El documento actual tiene cambios sin guardar y se perderán. Para conservarlos, cancela y guárdalo primero (Archivo > Guardar).",
+        "home.tools.variants" => "3 direcciones",
+        "workspace.variants.name" => "Dirección {{letter}}",
+        "workspace.variants.use" => "Usar esta",
+        "workspace.variants.otherPage" => "Otras direcciones",
+        "workspace.variants.ready" => "{{name}} está lista ({{style}})",
+        "workspace.variants.failed" => "No se pudo generar {{name}}: {{error}}",
         _ => return None,
     })
 }

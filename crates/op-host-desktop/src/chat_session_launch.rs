@@ -52,6 +52,9 @@ use launch_design::{launch_design_loop_turn, stamp_design_turn_scenario};
 // The pinned in-place refine of a Home template draft, split out at the cap.
 #[path = "chat_session_launch_refine.rs"]
 mod launch_refine;
+// Studio's side-by-side design directions, split out at the cap.
+#[path = "chat_session_launch_variants.rs"]
+pub(crate) mod launch_variants;
 
 /// Drain `chat.pending_send` (raised by `ChatState::begin_send`) and
 /// route it.
@@ -125,6 +128,14 @@ fn launch_if_pending_inner(
             current_chat,
             current_design,
         );
+    }
+    // Side-by-side directions are whole designs by construction, for every
+    // provider kind: no classifier vote, no design-agent loop.
+    if let Some(count) = launch_route.variant_count() {
+        let text = &effective_user_text;
+        if launch_variants::launch_variants_turn(host, text, count, current_chat, current_design) {
+            return true;
+        }
     }
     // TS parity (ai-chat-handlers.ts:560-679): builtin / ACP entries
     // take their own early-return paths; ONLY external CLI providers

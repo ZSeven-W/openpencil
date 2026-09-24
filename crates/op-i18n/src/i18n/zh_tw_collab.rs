@@ -365,6 +365,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.empty" => "還沒有作品。完成一次生成，或在空白畫布上畫點東西，它就會出現在這裡。",
         "works.boards" => "{{count}} 個畫板",
         "home.replaceUnsavedConfirm" => "要開始新的設計嗎？目前文件有未儲存的變更，繼續將會遺失。如需保留，請先取消並儲存（檔案 > 儲存）。",
+        "home.tools.variants" => "3 個方向",
+        "workspace.variants.name" => "方案 {{letter}}",
+        "workspace.variants.use" => "用這個",
+        "workspace.variants.otherPage" => "其他方案",
+        "workspace.variants.ready" => "{{name}} 已完成（{{style}}）",
+        "workspace.variants.failed" => "{{name}} 沒有生成出來：{{error}}",
         _ => return None,
     })
 }

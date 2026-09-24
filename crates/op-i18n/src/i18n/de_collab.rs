@@ -365,6 +365,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.empty" => "Noch keine Werke. Erzeuge etwas oder zeichne auf einer leeren Leinwand – es erscheint dann hier.",
         "works.boards" => "{{count}} Zeichenflächen",
         "home.replaceUnsavedConfirm" => "Neues Design beginnen? Das aktuelle Dokument hat ungespeicherte Änderungen, die dabei verloren gehen. Um sie zu behalten, brich ab und speichere es zuerst (Datei > Speichern).",
+        "home.tools.variants" => "3 Richtungen",
+        "workspace.variants.name" => "Richtung {{letter}}",
+        "workspace.variants.use" => "Diese verwenden",
+        "workspace.variants.otherPage" => "Weitere Richtungen",
+        "workspace.variants.ready" => "{{name}} ist fertig ({{style}})",
+        "workspace.variants.failed" => "{{name}} konnte nicht erstellt werden: {{error}}",
         _ => return None,
     })
 }

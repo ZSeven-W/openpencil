@@ -70,6 +70,7 @@ mod design_md_evidence_roles;
 pub mod design_md_llm;
 pub mod design_md_llm_error;
 pub mod design_session;
+pub mod design_variants;
 pub mod doc_io;
 pub mod export;
 pub mod export_batch;

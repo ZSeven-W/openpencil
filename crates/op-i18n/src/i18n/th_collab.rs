@@ -367,6 +367,12 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "works.empty" => "ยังไม่มีผลงาน สร้างงานหรือวาดบนผืนผ้าใบเปล่า แล้วผลงานจะแสดงที่นี่",
         "works.boards" => "{{count}} บอร์ด",
         "home.replaceUnsavedConfirm" => "เริ่มงานออกแบบใหม่ไหม? เอกสารปัจจุบันมีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก ซึ่งจะสูญหาย หากต้องการเก็บไว้ ให้ยกเลิกแล้วบันทึกก่อน (ไฟล์ > บันทึก)",
+        "home.tools.variants" => "3 แนวทาง",
+        "workspace.variants.name" => "แนวทาง {{letter}}",
+        "workspace.variants.use" => "ใช้แบบนี้",
+        "workspace.variants.otherPage" => "แนวทางอื่น",
+        "workspace.variants.ready" => "{{name}} เสร็จแล้ว ({{style}})",
+        "workspace.variants.failed" => "สร้าง {{name}} ไม่สำเร็จ: {{error}}",
         _ => return None,
     })
 }
