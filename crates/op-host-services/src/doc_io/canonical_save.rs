@@ -92,6 +92,19 @@ pub fn write_canonical_document<W: Write>(
     )
 }
 
+/// Serialize a canonical document with explicit editor metadata into
+/// memory — the `.op` bytes a share page embeds. Same writer (and so the
+/// same wire shape, image table included) as a save to disk.
+pub fn canonical_document_bytes(
+    document: &PenDocument,
+    meta: EditorMeta,
+) -> Result<Vec<u8>, DocIoError> {
+    let thumbnails = jian_ops_schema::image_thumbs::capture_snapshot();
+    let mut bytes = Vec::new();
+    write_canonical_document_with_thumbnails(&mut bytes, document, meta, &thumbnails)?;
+    Ok(bytes)
+}
+
 pub(super) fn write_canonical_document_with_thumbnails<W: Write>(
     writer: &mut W,
     document: &PenDocument,

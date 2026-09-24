@@ -49,6 +49,10 @@ impl WorkspaceSurface<'_> {
                 }
             }
         }
+        order.extend(
+            self.share_button(layout)
+                .map(|rect| (WorkspaceHit::Share, rect)),
+        );
         order.push((WorkspaceHit::Export, layout.export));
         order.push((WorkspaceHit::Professional, layout.professional));
         order.push((WorkspaceHit::ToggleDock, Self::toggle_rect(layout)));
@@ -63,6 +67,9 @@ impl WorkspaceSurface<'_> {
         order.push((WorkspaceHit::ZoomIn, layout.zoom_in));
         if let Some(button) = self.draft_banner_button(layout) {
             order.push((WorkspaceHit::DraftAction, button));
+        }
+        if let Some(button) = self.make_same_button(layout) {
+            order.push((WorkspaceHit::MakeSame, button));
         }
         if let Some((retry, return_edit)) = self.banner_buttons(layout) {
             order.push((WorkspaceHit::Retry, retry));

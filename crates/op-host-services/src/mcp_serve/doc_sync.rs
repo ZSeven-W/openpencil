@@ -47,11 +47,12 @@ impl DocumentSyncRequest<'_> {
             preserve_authored_geometry: self
                 .preserve_authored_geometry
                 .unwrap_or(embedded.preserve_authored_geometry),
-            // No wrapper override exists for the scenario tag or the
-            // pinned style guide, so the document's own values always
-            // survive the merge.
+            // No wrapper override exists for the scenario tag, the pinned
+            // style guide or the share recipe, so the document's own values
+            // always survive the merge.
             scenario: embedded.scenario,
             pinned_style_guide: embedded.pinned_style_guide,
+            share_recipe: embedded.share_recipe,
         }
     }
 }

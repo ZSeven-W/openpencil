@@ -100,6 +100,11 @@ pub enum FileAction {
     /// writes the deck as an editable `.pptx` (see the host's
     /// `export_pptx` module for the package + DrawingML emission).
     ExportPptx,
+    /// File ▸ "Share…" / the workspace's 分享 — host picks one output file
+    /// and writes a self-contained share page: every board, read-only,
+    /// plus the `.op` itself carrying its sanitized share recipe (see the
+    /// host's `export_share` module).
+    Share,
     ImportFigma,
     /// Complete or cancel a prepared multi-page Figma import. Native
     /// desktop owns the prepared tree; web safely ignores this action.

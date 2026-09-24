@@ -337,6 +337,7 @@ fn pump_flags_document_replaced_only_for_replace_document_requests() {
                 preserve_authored_geometry: true,
                 scenario: None,
                 pinned_style_guide: None,
+                share_recipe: None,
             },
             ack: ack_tx,
         })
@@ -360,6 +361,7 @@ fn pump_flags_document_replaced_only_for_replace_document_requests() {
                 preserve_authored_geometry: false,
                 scenario: None,
                 pinned_style_guide: None,
+                share_recipe: None,
             },
             ack: ack_tx,
         })

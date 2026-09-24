@@ -373,6 +373,7 @@ fn document_sync_metadata_overrides_nested_fields_independently() {
         preserve_authored_geometry: true,
         scenario: None,
         pinned_style_guide: None,
+        share_recipe: None,
     };
 
     let page_override = parse_document_sync_request(
@@ -386,6 +387,7 @@ fn document_sync_metadata_overrides_nested_fields_independently() {
             preserve_authored_geometry: true,
             scenario: None,
             pinned_style_guide: None,
+            share_recipe: None,
         }
     );
 
@@ -400,6 +402,7 @@ fn document_sync_metadata_overrides_nested_fields_independently() {
             preserve_authored_geometry: false,
             scenario: None,
             pinned_style_guide: None,
+            share_recipe: None,
         }
     );
 
@@ -423,6 +426,7 @@ fn document_sync_metadata_overrides_nested_fields_independently() {
             preserve_authored_geometry: true,
             scenario: None,
             pinned_style_guide: None,
+            share_recipe: None,
         }
     );
 }

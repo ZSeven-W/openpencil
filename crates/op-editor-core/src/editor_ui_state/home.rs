@@ -11,6 +11,9 @@ use jian_core::text_input::TextInputState;
 
 #[path = "home_brand.rs"]
 pub mod brand;
+#[path = "share_recipe.rs"]
+pub mod share_recipe;
+use share_recipe::{MakeSameStage, ShareRecipe};
 
 /// The persisted first-launch entry preference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -369,6 +372,12 @@ pub struct HomeState {
     /// The 加链接 tool's brand kit: request, status, and the staged kit
     /// the next send applies.
     pub brand: brand::HomeBrandState,
+    /// How the open document was made (its `editorMeta.shareRecipe`), when
+    /// the file carries one. Drives Make-one-like-this; see
+    /// `share_recipe.rs`. Document-scoped: every open replaces it.
+    pub recipe: Option<ShareRecipe>,
+    /// A Make-one-like-this press staged for the next send.
+    pub make_same: Option<MakeSameStage>,
 }
 
 impl Default for HomeState {
@@ -395,6 +404,8 @@ impl Default for HomeState {
             variants_on: false,
             variants_unavailable: false,
             brand: brand::HomeBrandState::default(),
+            recipe: None,
+            make_same: None,
         }
     }
 }

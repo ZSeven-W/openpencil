@@ -292,6 +292,7 @@ mod window_control_tests;
 mod works_reader;
 mod workspace;
 mod workspace_paint;
+mod workspace_share;
 
 /// Cursor affordance the host suggests for a given screen point — re-exported
 /// from `jian-core` so widgets (via `cursor_at`) and hosts share one vocabulary.

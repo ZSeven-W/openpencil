@@ -377,6 +377,9 @@ impl WidgetHostNative {
         // replaced document's scenario would leave the editor presenting an
         // import as though it were the deck the user had open before.
         preserved.scenario = state.editor_ui.scenario;
+        // The share recipe says how the DOCUMENT was made; an import is
+        // not the replaced document's recipe.
+        preserved.home.recipe = state.editor_ui.home.recipe.take();
         // Dirty/saved state belongs to the incoming document. The rest of the
         // live shell UI is intentionally retained, but inheriting this flag
         // from the replaced editor would make a saved import appear dirty (or

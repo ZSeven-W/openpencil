@@ -369,6 +369,9 @@ pub use editor_ui_state::workspace::{
     WORKSPACE_HEADER_H, WORKSPACE_TOOLBAR_H,
 };
 pub use editor_ui_state::{
+    sanitize_share_text, MakeSameStage, ShareRecipe, SHARE_BRIEF_MAX_CHARS, SHARE_REDACTED,
+};
+pub use editor_ui_state::{
     AssetCenterTab, BooleanOp, CloneField, CloneFormState, CommitDiffPatch, CommitDiffSummary,
     CommitDiffView, CompositingPickerTarget, CustomPrompt, DesignMdPanelState, DesignMdRequest,
     EditorUiState, EmbedHost, EntrySurface, ExportFormat, FileAction, FillType, FlexLayout,

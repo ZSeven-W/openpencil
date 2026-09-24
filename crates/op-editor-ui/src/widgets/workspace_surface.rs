@@ -71,6 +71,10 @@ const BANNER_BUTTON_W: f32 = 96.0;
 const BANNER_BUTTON_H: f32 = 34.0;
 /// The template draft banner's single action (接入模型 / 让 AI 细化).
 const DRAFT_BUTTON_W: f32 = 132.0;
+/// The shared-document banner's Make-one-like-this action.
+const MAKE_SAME_BUTTON_W: f32 = 184.0;
+/// Gap between the header's outline buttons.
+const HEADER_BUTTON_GAP: f32 = 8.0;
 
 /// ease-out-cubic — the settle curve the entrance choreography uses.
 fn ease_out_cubic(t: f32) -> f32 {
@@ -330,6 +334,18 @@ pub fn layout_for(
     }
 }
 
+/// Width of a header outline button holding a 15 px icon and `label`
+/// at 13 px. Estimated per char (wide scripts at a full em) so layout,
+/// hit-test and paint agree without a text measurer; never narrower
+/// than the 导出 button beside it.
+pub fn header_button_width(label: &str) -> f32 {
+    let label_w: f32 = label
+        .chars()
+        .map(|c| if (c as u32) >= 0x1100 { 13.0 } else { 7.4 })
+        .sum();
+    (label_w + 15.0 + 8.0 + 18.0).max(EXPORT_BUTTON_W)
+}
+
 /// The work's display title: the file name, else the brief's first 16
 /// chars, else the localized untitled fallback. Shared by the desktop
 /// header and the phone reader so the two never name one work twice.
@@ -431,10 +447,44 @@ impl<'a> WorkspaceSurface<'a> {
             .map(|report| report.chip_text(self.ui.locale))
     }
 
-    /// The 质检 chip's rect (left of 导出), when there is a report to show.
+    /// The 质检 chip's rect (left of the leftmost header button), when
+    /// there is a report to show.
     pub fn quality_chip(&self, layout: &WorkspaceLayout) -> Option<Rect> {
+        let anchor = self.share_button(layout).unwrap_or(layout.export);
         self.quality_label()
-            .map(|label| quality_chip_rect(layout.export, &label))
+            .map(|label| quality_chip_rect(anchor, &label))
+    }
+
+    /// The header's 分享 button, left of 导出. Offered only by hosts that
+    /// can write the self-contained share page (the same capability the
+    /// slideshow export needs: a save picker and the offscreen painter).
+    pub fn share_button(&self, layout: &WorkspaceLayout) -> Option<Rect> {
+        if !self.ui.deck_html_export_supported {
+            return None;
+        }
+        let width = header_button_width(op_i18n::translate(self.ui.locale, "share.button"));
+        Some(Rect::xywh(
+            layout.export.origin.x - HEADER_BUTTON_GAP - width,
+            layout.export.origin.y,
+            width,
+            layout.export.size.y,
+        ))
+    }
+
+    /// The shared-document banner's Make-one-like-this action, centred
+    /// near the canvas top like the other canvas banners.
+    pub fn make_same_button(&self, layout: &WorkspaceLayout) -> Option<Rect> {
+        if !self.state.make_same_banner_visible() {
+            return None;
+        }
+        let cy = layout.canvas.origin.y + 28.0;
+        let cx = layout.canvas.origin.x + layout.canvas.size.x / 2.0;
+        Some(Rect::xywh(
+            cx - MAKE_SAME_BUTTON_W / 2.0,
+            cy,
+            MAKE_SAME_BUTTON_W,
+            BANNER_BUTTON_H,
+        ))
     }
 
     /// The expanded report panel, when the chip is open.
@@ -534,6 +584,11 @@ impl<'a> WorkspaceSurface<'a> {
                 return Some(WorkspaceHit::DraftAction);
             }
         }
+        if let Some(button) = self.make_same_button(layout) {
+            if button.contains(point) {
+                return Some(WorkspaceHit::MakeSame);
+            }
+        }
         if let Some((retry, return_edit)) = self.banner_buttons(layout) {
             if retry.contains(point) {
                 return Some(WorkspaceHit::Retry);
@@ -616,6 +671,12 @@ impl<'a> WorkspaceSurface<'a> {
             if layout.export.contains(point) {
                 return Some(WorkspaceHit::Export);
             }
+            if self
+                .share_button(layout)
+                .is_some_and(|share| share.contains(point))
+            {
+                return Some(WorkspaceHit::Share);
+            }
             if layout.back.contains(point) {
                 return Some(WorkspaceHit::Back);
             }
@@ -687,3 +748,7 @@ impl WorkspaceSurface<'_> {
 #[cfg(test)]
 #[path = "workspace_surface_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "workspace_surface_share_tests.rs"]
+mod share_tests;

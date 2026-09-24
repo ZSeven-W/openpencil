@@ -261,8 +261,17 @@ fn paint_header(
     // 质检 chip (finished runs with an audited report only).
     super::quality_paint::paint_quality_chip(surface, cx, layout, palette);
 
-    // 导出 / 专业编辑 outline buttons.
-    for (button, hit, label, icon) in [
+    // 分享 / 导出 / 专业编辑 outline buttons (分享 only where the host can
+    // write the share page).
+    let share = surface.share_button(layout).map(|rect| {
+        (
+            rect,
+            WorkspaceHit::Share,
+            tr(locale, "share.button"),
+            Icon::Share,
+        )
+    });
+    for (button, hit, label, icon) in share.into_iter().chain([
         (
             layout.export,
             WorkspaceHit::Export,
@@ -275,7 +284,7 @@ fn paint_header(
             tr(locale, "workspace.professional"),
             Icon::ArrowUpRight,
         ),
-    ] {
+    ]) {
         let hovered = surface.state.hover == Some(hit);
         let pressed = surface.state.pressed == Some(hit);
         cx.backend.fill_round_rect(

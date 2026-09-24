@@ -125,6 +125,9 @@ pub(crate) fn fit_loaded_document(
 ) {
     let (vw, vh) = viewport_size_for_window(window);
     host.fit_content_to_viewport(vw, vh);
+    // A shared document (one carrying a share recipe) opens in the Studio
+    // workspace with its Make-one-like-this banner; any other stays put.
+    host.adopt_shared_recipe_view(vw, vh);
     host.mark_editor_state_dirty();
 }
 
@@ -488,6 +491,14 @@ pub fn run_action(
                 .image_panel
                 .close_popovers();
             crate::persistence_export_pptx::handle_export_pptx(host);
+            ActionOutcome::Noop
+        }
+        FileAction::Share => {
+            host.editor_state_mut()
+                .editor_ui
+                .image_panel
+                .close_popovers();
+            crate::persistence_share::handle_share(host, current_path.as_deref());
             ActionOutcome::Noop
         }
         FileAction::OpenRecent(i) => {

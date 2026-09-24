@@ -57,6 +57,7 @@ impl WidgetHost {
                     FileMenuChoice::ExportAllFrames => FileAction::ExportAllFrames,
                     FileMenuChoice::ExportSlideshowHtml => FileAction::ExportSlideshowHtml,
                     FileMenuChoice::ExportPptx => FileAction::ExportPptx,
+                    FileMenuChoice::Share => FileAction::Share,
                     FileMenuChoice::OpenRecent(i) => FileAction::OpenRecent(i),
                     FileMenuChoice::ClearRecent => FileAction::ClearRecent,
                     // Handled above — it opens a panel, not a file action.

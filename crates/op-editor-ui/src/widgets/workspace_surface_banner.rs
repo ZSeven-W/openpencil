@@ -1,6 +1,7 @@
 //! The banners that sit over the top of the workspace canvas: the
-//! failed / stopped run's Retry + 返回修改, and the one-click template
-//! draft's connect-or-refine action.
+//! failed / stopped run's Retry + 返回修改, the one-click template
+//! draft's connect-or-refine action, and a shared document's
+//! Make-one-like-this.
 //!
 //! They paint AFTER the real canvas (the host calls
 //! [`WorkspaceSurface::paint_canvas_banners`] once the canvas and the
@@ -25,6 +26,7 @@ impl WorkspaceSurface<'_> {
         );
         paint_failed_banner(self, cx, &layout, palette);
         paint_draft_banner(self, cx, &layout, palette);
+        paint_make_same_banner(self, cx, &layout, palette);
         super::variants_bar::paint_variant_bar(self, cx, &layout, palette);
     }
 }
@@ -159,6 +161,37 @@ fn paint_draft_banner(
         button,
         WorkspaceHit::DraftAction,
         tr(locale, label),
+        true,
+        palette,
+    );
+}
+
+/// The shared-document banner: say what the document is and offer to
+/// make one like it (the recipe's task, options and style, the brief as
+/// an editable start).
+fn paint_make_same_banner(
+    surface: &WorkspaceSurface<'_>,
+    cx: &mut PaintCx<'_>,
+    layout: &WorkspaceLayout,
+    palette: StudioPalette,
+) {
+    let Some(button) = surface.make_same_button(layout) else {
+        return;
+    };
+    let locale = surface.ui.locale;
+    paint_banner_strip(
+        cx,
+        layout,
+        button,
+        tr(locale, "makeSame.bannerNote"),
+        palette,
+    );
+    paint_banner_button(
+        surface,
+        cx,
+        button,
+        WorkspaceHit::MakeSame,
+        tr(locale, "makeSame.action"),
         true,
         palette,
     );

@@ -204,8 +204,9 @@ fn template_save_composes_with_batch_and_deck_rows() {
         Some(FileMenuChoice::ExportSlideshowHtml)
     );
     assert_eq!(menu.choice_for_row(10), Some(FileMenuChoice::ExportPptx));
-    assert_eq!(menu.choice_for_row(11), Some(FileMenuChoice::OpenRecent(0)));
-    assert_eq!(menu.choice_for_row(13), Some(FileMenuChoice::ClearRecent));
+    assert_eq!(menu.choice_for_row(11), Some(FileMenuChoice::Share));
+    assert_eq!(menu.choice_for_row(12), Some(FileMenuChoice::OpenRecent(0)));
+    assert_eq!(menu.choice_for_row(14), Some(FileMenuChoice::ClearRecent));
 
     let without_template = desktop_ui(Some(TemplateScene::Slides));
     let without = FileMenu::for_editor_ui(&without_template, two_recents());
@@ -279,8 +280,9 @@ fn the_deck_rows_paint_under_the_batch_row_and_shift_the_recents() {
         Some(FileMenuChoice::ExportSlideshowHtml)
     );
     assert_eq!(menu.choice_for_row(9), Some(FileMenuChoice::ExportPptx));
-    assert_eq!(menu.choice_for_row(10), Some(FileMenuChoice::OpenRecent(0)));
-    assert_eq!(menu.choice_for_row(12), Some(FileMenuChoice::ClearRecent));
+    assert_eq!(menu.choice_for_row(10), Some(FileMenuChoice::Share));
+    assert_eq!(menu.choice_for_row(11), Some(FileMenuChoice::OpenRecent(0)));
+    assert_eq!(menu.choice_for_row(13), Some(FileMenuChoice::ClearRecent));
 
     // Hit-test agrees with the paint walk.
     assert_eq!(
@@ -303,7 +305,8 @@ fn the_deck_rows_paint_under_the_batch_row_and_shift_the_recents() {
         ..Default::default()
     };
     let without = FileMenu::for_editor_ui(&batch_only_ui, two_recents());
-    assert_eq!(menu.height(), without.height() + ROW_HEIGHT * 2.0);
+    // Two deck rows plus Share, which rides on the same host flag.
+    assert_eq!(menu.height(), without.height() + ROW_HEIGHT * 3.0);
 }
 
 #[test]
@@ -313,25 +316,37 @@ fn only_a_deck_document_is_offered_the_deck_exports() {
         let menu = FileMenu::for_editor_ui(&ui, two_recents());
         let panel = menu_panel(&menu);
 
-        // Rows 8 and 9 are the recent files again, not deck-export rows.
+        // Share (any document) follows the batch row; rows 9 and 10
+        // are the recent files again, not deck-export rows.
         assert_eq!(
             menu.choice_for_row(8),
-            Some(FileMenuChoice::OpenRecent(0)),
+            Some(FileMenuChoice::Share),
             "scenario={scenario:?}"
         );
         assert_eq!(
             menu.choice_for_row(9),
+            Some(FileMenuChoice::OpenRecent(0)),
+            "scenario={scenario:?}"
+        );
+        assert_eq!(
+            menu.choice_for_row(10),
             Some(FileMenuChoice::OpenRecent(1)),
             "scenario={scenario:?}"
         );
-        // The first place a deck row could paint is the divider gutter
-        // under the batch row.
+        // Where the slideshow row would paint is the Share row instead.
         assert_eq!(
             menu.hit(
                 panel,
                 Point2D::new(panel.origin.x + 20.0, deck_html_row_y(panel))
             ),
-            MenuHit::Inside,
+            MenuHit::Row(8),
+            "scenario={scenario:?}"
+        );
+        assert!(
+            (0..16).all(|row| !matches!(
+                menu.choice_for_row(row),
+                Some(FileMenuChoice::ExportSlideshowHtml | FileMenuChoice::ExportPptx)
+            )),
             "scenario={scenario:?}"
         );
     }
@@ -369,7 +384,8 @@ fn the_deck_rows_sit_directly_under_export_image_when_batch_export_is_absent() {
         Some(FileMenuChoice::ExportSlideshowHtml)
     );
     assert_eq!(menu.choice_for_row(8), Some(FileMenuChoice::ExportPptx));
-    assert_eq!(menu.choice_for_row(9), Some(FileMenuChoice::OpenRecent(0)));
+    assert_eq!(menu.choice_for_row(9), Some(FileMenuChoice::Share));
+    assert_eq!(menu.choice_for_row(10), Some(FileMenuChoice::OpenRecent(0)));
     assert_eq!(
         menu.hit(
             panel,
@@ -384,6 +400,35 @@ fn the_deck_rows_sit_directly_under_export_image_when_batch_export_is_absent() {
         ),
         MenuHit::Row(8)
     );
+}
+
+#[test]
+fn share_closes_the_export_section_and_paints_where_it_hits() {
+    let ui = EditorUiState {
+        deck_html_export_supported: true,
+        locale: op_i18n::Locale::EnUs,
+        ..Default::default()
+    };
+    let menu = FileMenu::for_editor_ui(&ui, two_recents());
+    let panel = menu_panel(&menu);
+    // Export image, then Share — no deck rows on a non-deck document.
+    assert_eq!(menu.choice_for_row(6), Some(FileMenuChoice::ExportImage));
+    assert_eq!(menu.choice_for_row(7), Some(FileMenuChoice::Share));
+    assert_eq!(menu.choice_for_row(8), Some(FileMenuChoice::OpenRecent(0)));
+    assert_eq!(
+        menu.hit(
+            panel,
+            Point2D::new(panel.origin.x + 20.0, export_all_row_y(panel))
+        ),
+        MenuHit::Row(7)
+    );
+    // The label drops the Mac-convention ellipsis like every other row.
+    assert_eq!(t(&ui, "share"), "Share");
+
+    let web_ui = EditorUiState::default();
+    let web = FileMenu::for_editor_ui(&web_ui, two_recents());
+    assert!((0..12).all(|row| web.choice_for_row(row) != Some(FileMenuChoice::Share)));
+    assert_eq!(menu.height(), web.height() + ROW_HEIGHT);
 }
 
 #[test]

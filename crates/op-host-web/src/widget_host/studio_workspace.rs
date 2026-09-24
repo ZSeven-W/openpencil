@@ -93,6 +93,15 @@ impl WidgetHost {
             WorkspaceHit::Export => self.editor_state.editor_ui.open_export_dialog(),
             // Web never runs several directions, so no pick bar is shown.
             WorkspaceHit::UseVariant(_) => {}
+            // The share page needs a save picker plus the offscreen
+            // rasteriser, so the header button is gated on
+            // `deck_html_export_supported`, which web leaves `false`.
+            WorkspaceHit::Share => {}
+            // Web never opens a document into the shared view, but the
+            // prefill itself is host-free, so the press still works.
+            WorkspaceHit::MakeSame => {
+                self.editor_state.editor_ui.begin_make_same(self.now_ms);
+            }
             // Web never enters drawer mode (the chat dock stays docked).
             WorkspaceHit::DrawerScrim => {}
             WorkspaceHit::Professional => {

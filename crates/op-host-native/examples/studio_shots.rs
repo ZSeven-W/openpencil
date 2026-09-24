@@ -221,6 +221,64 @@ fn refine_failed() -> WidgetHostNative {
     host
 }
 
+/// A finished deck workspace on a host that can write the share page, so
+/// the header carries 分享 beside 导出.
+fn workspace_share(locale: Locale) -> WidgetHostNative {
+    let mut host = workspace_host(
+        locale,
+        "ppt-demo.op",
+        HomeFamily::Presentation,
+        1280.0,
+        800.0,
+    );
+    host.editor_state_mut().editor_ui.deck_html_export_supported = true;
+    host
+}
+
+/// The sample deck opened as a SHARED document: its file carries a share
+/// recipe, so it lands in the workspace with the Make-one-like-this
+/// banner.
+fn shared_view(locale: Locale) -> WidgetHostNative {
+    let (w, h) = (1280.0, 800.0);
+    let src = std::fs::read_to_string(resource("ppt-demo.op")).expect("read sample document");
+    let loaded = op_pen_loader::load_canonical(&src).expect("parse sample document");
+    let meta = op_pen_loader::EditorMeta {
+        share_recipe: Some(op_editor_core::ShareRecipe {
+            brief: "A 6-slide product intro deck for OpenPencil".into(),
+            family: HomeFamily::Presentation,
+            device: HomeDevice::Mobile,
+            ratio: op_editor_core::SlideRatio::Wide169,
+            info_kind: op_editor_core::InfoKind::Data,
+            style_guide: Some("editorial-dark".into()),
+        }),
+        ..op_pen_loader::EditorMeta::default()
+    };
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.locale = locale;
+    host.editor_state_mut().editor_ui.theme_mode = op_editor_core::ThemeMode::Light;
+    host.editor_state_mut().editor_ui.deck_html_export_supported = true;
+    host.set_now_ms(1_000);
+    host.install_open_document(loaded.value, Some(meta), Some("ppt-demo.op".into()))
+        .expect("install shared document");
+    host.fit_content_to_viewport(w, h);
+    assert!(host.adopt_shared_recipe_view(w, h));
+    // The sample's CJK face is not installed on every shot machine; its
+    // one-shot prompt is not what these shots are about.
+    let ui = &mut host.editor_state_mut().editor_ui;
+    ui.missing_fonts_modal_open = false;
+    ui.missing_fonts_pending_open_modal = false;
+    host
+}
+
+/// Home right after the shared view's Make-one-like-this: the recipe's
+/// task and options selected, the brief pre-filled and editable.
+fn make_same_home(locale: Locale) -> WidgetHostNative {
+    let mut host = shared_view(locale);
+    assert!(host.editor_state_mut().editor_ui.begin_make_same(1_000));
+    host.editor_state_mut().editor_ui.agent_settings.connected[0] = true;
+    host
+}
+
 /// Paint a few frames (letting lazy image decodes land in between) and
 /// write the last one.
 fn shoot(host: &mut WidgetHostNative, w: f32, h: f32, out_dir: &str, name: &str) {
@@ -307,6 +365,27 @@ fn scenarios() -> Vec<Scenario> {
             workspace_quality(Locale::Ja)
         }),
         ("ws-refine-failed-en", 1280.0, 800.0, refine_failed),
+        ("ws-share-header-en", 1280.0, 800.0, || {
+            workspace_share(Locale::EnUs)
+        }),
+        ("ws-share-header-ru", 1280.0, 800.0, || {
+            workspace_share(Locale::Ru)
+        }),
+        ("ws-shared-view-en", 1280.0, 800.0, || {
+            shared_view(Locale::EnUs)
+        }),
+        ("ws-shared-view-zh", 1280.0, 800.0, || {
+            shared_view(Locale::ZhCn)
+        }),
+        ("ws-shared-view-ja", 1280.0, 800.0, || {
+            shared_view(Locale::Ja)
+        }),
+        ("home-make-same-zh", 1440.0, 900.0, || {
+            make_same_home(Locale::ZhCn)
+        }),
+        ("home-make-same-en", 1440.0, 900.0, || {
+            make_same_home(Locale::EnUs)
+        }),
         ("ws-narrow-820-open-en", 820.0, 760.0, || {
             open_drawer(workspace_host(
                 Locale::EnUs,

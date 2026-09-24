@@ -15,6 +15,9 @@ pub use super::groups::{
     PromptCenterState, PromptFilter, SaveNameDialogState, SceneFilter, SceneTemplateCenterState,
     SceneTemplateFocus, SizeToggleState, StyleImportState,
 };
+pub use super::home::share_recipe::{
+    sanitize_share_text, MakeSameStage, ShareRecipe, SHARE_BRIEF_MAX_CHARS, SHARE_REDACTED,
+};
 pub use super::home::{
     EntrySurface, HomeDevice, HomeFamily, HomeHit, HomeState, InfoKind, SlideRatio, TaskDraft,
 };

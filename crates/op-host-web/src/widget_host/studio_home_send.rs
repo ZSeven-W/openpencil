@@ -130,6 +130,9 @@ impl WidgetHost {
             return false;
         }
         self.start_fresh_document_for_home();
+        // The swap dropped every document-scoped pin; a Make-one-like-this
+        // send gets its recipe's style guide back.
+        self.editor_state.editor_ui.restore_make_same_pin();
         true
     }
 

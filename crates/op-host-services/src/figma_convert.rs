@@ -62,6 +62,7 @@ pub(crate) fn convert_fig_json(body: &str) -> Result<String> {
             // establishes it as a deck or a card set, nor pins a style.
             scenario: None,
             pinned_style_guide: None,
+            share_recipe: None,
         },
     )
     .map_err(|error| FigmaConvertError::Encode {

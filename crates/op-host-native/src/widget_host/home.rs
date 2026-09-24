@@ -396,6 +396,9 @@ impl WidgetHostNative {
         }
         // A staged brand kit lands on the document the run will draw on.
         self.apply_staged_home_brand();
+        // The swap dropped every document-scoped pin; a Make-one-like-this
+        // send gets its recipe's style guide back (a no-op otherwise).
+        self.editor_state.editor_ui.restore_make_same_pin();
         // Open the generation workspace on the SAME document: the chat
         // pins into the dock and the canvas renders the boards the run
         // produces. Family, brief, and the task's options are captured

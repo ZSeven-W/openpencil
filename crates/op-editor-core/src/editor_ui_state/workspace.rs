@@ -132,6 +132,10 @@ pub enum WorkspaceHit {
     /// Anywhere below the header outside the open chat drawer (narrow
     /// windows): the press closes the drawer and goes no further.
     DrawerScrim,
+    /// The header's 分享 button: export the self-contained share page.
+    Share,
+    /// The shared-document banner's Make-one-like-this action.
+    MakeSame,
 }
 
 /// Transient state for the generation workspace. Never persisted.
@@ -212,6 +216,9 @@ pub struct WorkspaceState {
     /// The chrome target the keyboard (Tab / Shift+Tab) moved to; Enter /
     /// Space activate it. Any pointer press drops it.
     pub key_focus: Option<WorkspaceHit>,
+    /// The workspace presents an opened document that carries a share
+    /// recipe (no run of its own): the Make-one-like-this banner is up.
+    pub shared_view: bool,
 }
 
 impl Default for WorkspaceState {
@@ -245,6 +252,7 @@ impl Default for WorkspaceState {
             drawer_open: false,
             drawer_moved_at_ms: 0,
             key_focus: None,
+            shared_view: false,
         }
     }
 }
@@ -288,6 +296,7 @@ impl WorkspaceState {
         // conversation is one toggle away.
         self.drawer_open = false;
         self.drawer_moved_at_ms = 0;
+        self.shared_view = false;
     }
 
     /// Record that this workspace's boards are the instant draft loaded
@@ -312,6 +321,12 @@ impl WorkspaceState {
             && self.draft_template.is_some()
             && self.draft_awaiting_refine
             && self.phase == WorkspacePhase::Done
+    }
+
+    /// Whether the Make-one-like-this banner is up: a shared document on
+    /// show, and no run of the viewer's own in flight.
+    pub fn make_same_banner_visible(&self) -> bool {
+        self.active && self.shared_view && self.phase == WorkspacePhase::Done
     }
 
     /// A refine turn of the template draft is being queued: the banner
@@ -478,6 +493,7 @@ impl WorkspaceState {
         self.drawer_open = false;
         self.drawer_moved_at_ms = 0;
         self.key_focus = None;
+        self.shared_view = false;
     }
 
     /// The next frame instant the entrance motion still needs, or

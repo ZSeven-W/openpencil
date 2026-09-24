@@ -90,6 +90,7 @@ mod persistence_export_html;
 mod persistence_export_pptx;
 mod persistence_image;
 mod persistence_replace_guard;
+mod persistence_share;
 mod prompt_center_store;
 mod provider_probe_host;
 mod reduced_motion;

@@ -11,7 +11,8 @@
 //! deck-export family — the slideshow page and the editable PowerPoint
 //! deck have the same host requirements, a save picker plus the
 //! offscreen rasteriser, so one flag answers for both). Everything after
-//! the export section shifts with however many of them are present.
+//! the export section shifts with however many of them are present. The
+//! export section ends with Share…, on the same host flag.
 
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
@@ -38,6 +39,7 @@ fn t(ui: &EditorUiState, key: &str) -> &'static str {
         "exportAllFrames" => "fileMenu.exportAllFrames",
         "exportSlideshowHtml" => "fileMenu.exportSlideshowHtml",
         "exportPptx" => "fileMenu.exportPptx",
+        "share" => "share.fileMenu",
         "recentFiles" => "fileMenu.recentFiles",
         "noRecentFiles" => "fileMenu.noRecentFiles",
         "clearHistory" => "fileMenu.clearHistory",
@@ -101,6 +103,11 @@ pub enum FileMenuChoice {
     /// authored, the `.pptx` is for handing the deck to someone who will
     /// keep working on it.
     ExportPptx,
+    /// Write the self-contained share page (every board + the `.op` with
+    /// its share recipe). Offered whenever the host sets
+    /// `EditorUiState::deck_html_export_supported` — any document, not
+    /// only decks — as the last row of the export section.
+    Share,
     OpenRecent(usize),
     ClearRecent,
 }
@@ -177,10 +184,23 @@ impl<'a> FileMenu<'a> {
         export_menu_rows::deck_export_available(self.ui)
     }
 
+    /// Whether the Share row is offered: the host can write the page.
+    fn has_share_row(&self) -> bool {
+        self.ui.deck_html_export_supported
+    }
+
     /// Rows in the export section (Export image, plus the optional
-    /// Export-all-frames row and the two deck-export rows below it).
+    /// Export-all-frames row, the two deck-export rows and Share).
     fn export_rows(&self) -> usize {
-        1 + usize::from(self.has_export_all_row()) + 2 * usize::from(self.has_deck_export_rows())
+        1 + usize::from(self.has_export_all_row())
+            + 2 * usize::from(self.has_deck_export_rows())
+            + usize::from(self.has_share_row())
+    }
+
+    /// Row index of the Share row — the last row of the export section.
+    /// Only meaningful when [`FileMenu::has_share_row`] holds.
+    fn share_row(&self) -> usize {
+        6 + usize::from(self.has_save_as_template_row()) + self.export_rows() - 1
     }
 
     /// Row index of the deck-slideshow row — directly under whichever
@@ -275,6 +295,7 @@ impl<'a> FileMenu<'a> {
             row if self.has_deck_export_rows() && row == self.deck_pptx_row() => {
                 Some(FileMenuChoice::ExportPptx)
             }
+            row if self.has_share_row() && row == self.share_row() => Some(FileMenuChoice::Share),
             row if row >= recent_start && row < recent_start + self.recent.len() => {
                 Some(FileMenuChoice::OpenRecent(row - recent_start))
             }

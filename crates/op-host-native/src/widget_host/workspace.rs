@@ -226,6 +226,15 @@ impl WidgetHostNative {
             WorkspaceHit::UseVariant(index) => {
                 self.use_workspace_variant(index, viewport_w, viewport_h);
             }
+            WorkspaceHit::Share => {
+                // The desktop runner owns the save picker; the export runs
+                // on its next file-action drain, like File ▸ Share….
+                self.editor_state.editor_ui.pending_file_action =
+                    Some(op_editor_core::FileAction::Share);
+            }
+            WorkspaceHit::MakeSame => {
+                self.editor_state.editor_ui.begin_make_same(self.now_ms);
+            }
         }
     }
 

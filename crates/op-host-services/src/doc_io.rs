@@ -48,7 +48,9 @@ mod load_report;
 mod load_report_tests;
 
 use atomic_file::{create_sibling_temp, replace_file};
-pub use canonical_save::{write_canonical_document, CanonicalSaveSnapshot, StreamingSaveStats};
+pub use canonical_save::{
+    canonical_document_bytes, write_canonical_document, CanonicalSaveSnapshot, StreamingSaveStats,
+};
 pub use clean_copy::{
     copy_clean_document_with_editor_meta_to_path, copy_document_to_current_schema_path,
 };

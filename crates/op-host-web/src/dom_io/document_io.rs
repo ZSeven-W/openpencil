@@ -102,6 +102,11 @@ pub(crate) fn drain_pending_file_action<C: RepaintContext + 'static>(inner: &Inn
             // explicit no-op branch so the shared action stays
             // exhaustive.
         }
+        FileAction::Share => {
+            // Gated like the deck rows: web leaves
+            // `deck_html_export_supported` at `false`, so neither the File
+            // menu row nor the workspace button that raise this is shown.
+        }
         FileAction::ImportFigma => import_figma(inner),
         FileAction::FinishFigmaImport(_) => {
             // Desktop alone holds a PreparedFig between modal steps.
