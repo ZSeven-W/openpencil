@@ -212,6 +212,9 @@ impl<'a> HomeSurface<'a> {
         if focused {
             layout::compact::collapse_for_focused_composer(&mut layout);
         }
+        if self.ui.touch_chrome() {
+            connect::drop_cli_row_for_touch(&mut layout);
+        }
         layout
     }
 

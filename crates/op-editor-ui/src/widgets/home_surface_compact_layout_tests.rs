@@ -294,3 +294,26 @@ fn a_focused_composer_folds_the_page_around_the_input() {
         "a folded tile can no longer be pressed"
     );
 }
+
+#[test]
+fn the_phone_connect_card_fits_the_screen_and_offers_no_local_cli() {
+    let layout = compact_layout(&compact_state());
+    let card = layout.connect_card;
+    assert!(
+        card.origin.x >= 0.0 && card.origin.x + card.size.x <= W,
+        "the card must fit a {W} pt screen: {card:?}"
+    );
+    assert_eq!(
+        layout.connect_rows[2],
+        Rect::ZERO,
+        "a phone cannot run a local CLI agent"
+    );
+    let mut state = compact_state();
+    state.editor_ui.home.connect_card_open = true;
+    let home = HomeSurface::for_editor(&state).expect("home visible");
+    assert_eq!(
+        home.hit_test(W, H, center(layout.connect_rows[1])),
+        Some(HomeHit::ConnectApiKey),
+        "the remaining rows still answer"
+    );
+}

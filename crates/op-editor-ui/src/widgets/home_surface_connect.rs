@@ -20,22 +20,35 @@ const CONNECT_ROW_INSET_X: f32 = 16.0;
 const CONNECT_TITLE_H: f32 = 64.0;
 
 /// The card rect centred over `composer` plus its three action rows.
+/// The card is never wider than the composer it covers: at a fixed 440 it
+/// ran off both edges of a 390 pt phone.
 pub(super) fn connect_card_rects(composer: Rect) -> (Rect, [Rect; 3]) {
+    let width = CONNECT_CARD_W.min(composer.size.x);
     let card = Rect::xywh(
-        composer.origin.x + (composer.size.x - CONNECT_CARD_W) / 2.0,
+        composer.origin.x + (composer.size.x - width) / 2.0,
         composer.origin.y + (composer.size.y - CONNECT_CARD_H) / 2.0,
-        CONNECT_CARD_W,
+        width,
         CONNECT_CARD_H,
     );
     let rows = [0, 1, 2].map(|index| {
         Rect::xywh(
             card.origin.x + CONNECT_ROW_INSET_X,
             card.origin.y + CONNECT_TITLE_H + index as f32 * (CONNECT_ROW_H + CONNECT_ROW_GAP),
-            CONNECT_CARD_W - CONNECT_ROW_INSET_X * 2.0,
+            width - CONNECT_ROW_INSET_X * 2.0,
             CONNECT_ROW_H,
         )
     });
     (card, rows)
+}
+
+/// A touch device cannot run a local CLI agent, so its connect card drops
+/// that row (mobile spec: only list services the phone can actually use).
+pub(super) fn drop_cli_row_for_touch(layout: &mut HomeLayout) {
+    if layout.connect_rows[2] == Rect::ZERO {
+        return;
+    }
+    layout.connect_rows[2] = Rect::ZERO;
+    layout.connect_card.size.y -= CONNECT_ROW_H + CONNECT_ROW_GAP;
 }
 
 /// Map a point to a connect-card hit. `None` outside the card; the
@@ -114,6 +127,9 @@ pub(super) fn paint_connect_card(
     );
     for (index, (hit, title_key, note_key, primary)) in specs.into_iter().enumerate() {
         let row = rows[index];
+        if row == Rect::ZERO {
+            continue;
+        }
         let hovered = surface.state.hover == Some(hit);
         let pressed = surface.state.pressed == Some(hit);
         let (fill, title_color, note_color, border) = if primary {
