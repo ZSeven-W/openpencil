@@ -121,6 +121,7 @@ pub mod loop_finalize;
 pub mod nav_issues;
 pub mod output_language;
 pub mod prompt;
+pub mod quality_audit;
 pub mod radial_repair;
 pub mod repair_record;
 pub mod repair_scope;

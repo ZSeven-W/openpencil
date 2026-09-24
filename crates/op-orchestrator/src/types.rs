@@ -470,6 +470,10 @@ pub enum Progress {
         /// (`crate::repair_tier`). Never counted as repairs; rendered ahead
         /// of them, because "this was not run" outranks "this was".
         notes: Vec<String>,
+        /// The same edits as `records`, structured (pass, family, node id,
+        /// node name, detail) so hosts can build the user-facing quality
+        /// report — and point at the node — without re-parsing the lines.
+        items: Vec<op_editor_core::QualityRepairRecord>,
     },
     // ── S3c: Vision-validation progress variants ─────────────────────────────
     /// 视觉校验阶段开始(pre-validation 将在此之后立即运行)。
@@ -561,57 +565,9 @@ impl Progress {
     }
 }
 
-/// A one-line summary of an included skill, surfaced to the chat UI via
-/// `Progress::SubtaskSkills`. Mirrors `op_ai_skills::SkillLoadEntry` minus
-/// the `category` field (the UI line doesn't display it).
-#[derive(Debug, Clone)]
-pub struct SkillBrief {
-    pub name: String,
-    pub token_count: u32,
-    pub truncated: bool,
-}
-
-impl SkillBrief {
-    /// Build a brief from an `op-ai-skills` report entry (name + token_count +
-    /// truncated; category is dropped — the UI line doesn't show it).
-    pub fn from_entry(e: &op_ai_skills::SkillLoadEntry) -> SkillBrief {
-        SkillBrief {
-            name: e.name.clone(),
-            token_count: e.token_count,
-            truncated: e.truncated,
-        }
-    }
-}
-
-/// Short, user-facing word for a `DropReason` (used in the `▸ dropped:` line).
-fn drop_reason_display(reason: &op_ai_skills::DropReason) -> &'static str {
-    use op_ai_skills::DropReason::*;
-    match reason {
-        IntentMiss => "intent",
-        BudgetExhausted => "budget",
-        TierFiltered => "tier",
-        MinimalMode => "minimal",
-        ReducedComplexity => "reduced",
-        Deduped => "dedup",
-        ContentMismatch => "mismatch",
-        ModelFamilyMiss => "family",
-    }
-}
-
-/// Decompose a merged `SkillLoadReport` into the four payload parts of
-/// `Progress::SubtaskSkills` (included briefs, `(name, reason)` drops,
-/// budget_used, budget_max).
-pub fn report_to_progress_parts(
-    report: &op_ai_skills::SkillLoadReport,
-) -> (Vec<SkillBrief>, Vec<(String, String)>, u32, u32) {
-    let included = report.included.iter().map(SkillBrief::from_entry).collect();
-    let dropped = report
-        .dropped
-        .iter()
-        .map(|d| (d.name.clone(), drop_reason_display(&d.reason).to_string()))
-        .collect();
-    (included, dropped, report.budget_used, report.budget_max)
-}
+#[path = "types_skill_brief.rs"]
+mod skill_brief;
+pub use skill_brief::{report_to_progress_parts, SkillBrief};
 
 /// 单个 subtask 的执行结果。`error` 带值但 `node_count > 0` 表示
 /// "部分产出"(软错误);`node_count == 0` 表示零节点失败。

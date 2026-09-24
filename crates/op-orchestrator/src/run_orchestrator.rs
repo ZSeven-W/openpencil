@@ -698,6 +698,11 @@ impl Orchestrator {
                     .map(crate::RepairRecord::line)
                     .collect(),
                 notes: quality.notes().to_vec(),
+                items: quality
+                    .records()
+                    .iter()
+                    .map(crate::RepairRecord::quality_item)
+                    .collect(),
             });
         }
         sink.end_undo_batch();

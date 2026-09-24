@@ -138,6 +138,7 @@ pub(super) fn progress_label(p: &Progress) -> String {
             repairs,
             records,
             notes,
+            ..
         } => {
             // `_with_records`: this label is the web host's ONLY channel to
             // the user, and it lands in the thinking stream where `▸`

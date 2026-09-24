@@ -74,6 +74,7 @@ pub mod document_install;
 pub mod drag_mutators;
 pub mod edit_transaction;
 pub mod editor_toast;
+pub mod quality_report;
 pub mod size_class;
 // Runtime-fetched product assets for the browser bundle (native embeds them).
 pub mod editor_ui_state;
@@ -406,6 +407,10 @@ pub use node_defaults::{
 };
 pub use node_id::NodeId;
 pub use pen_node_ext::PenNodeExt;
+pub use quality_report::{
+    QualityBoardSummary, QualityItem, QualityRepairRecord, QualityReport, QualityTopic,
+    QualityTopicReport,
+};
 pub use render_backend::*;
 pub use selection::SelectionState;
 pub use state::EditorState;

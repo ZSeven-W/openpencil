@@ -27,6 +27,7 @@ fn quality_records_land_on_the_polish_row_as_expandable_detail() {
                 "palette · light-mobile-nav-surface · Tab Bar [n9] · fill #F8FAFC → #FFFFFF".into(),
             ],
             notes: Vec::new(),
+            items: Vec::new(),
         },
     ];
 
@@ -78,6 +79,7 @@ fn a_long_repair_list_is_capped_on_the_row_with_a_localized_remainder_notice() {
             repairs: vec![("layout".into(), 45)],
             records,
             notes: Vec::new(),
+            items: Vec::new(),
         },
     ];
 
@@ -126,6 +128,7 @@ fn a_skipped_tier_note_heads_the_polish_row_detail() {
             repairs: vec![("layout".into(), 1)],
             records: vec!["layout · table-gap · Pricing Row [n42] · gap 0 → 16".into()],
             notes: vec![TIER_SKIP_NOTE.to_string()],
+            items: Vec::new(),
         },
     ];
 
@@ -166,6 +169,7 @@ fn a_template_run_that_repaired_nothing_still_shows_why() {
             repairs: Vec::new(),
             records: Vec::new(),
             notes: vec![TIER_SKIP_NOTE.to_string()],
+            items: Vec::new(),
         },
     ];
 
@@ -196,6 +200,7 @@ fn a_run_with_neither_notes_nor_records_leaves_the_row_bare() {
             repairs: Vec::new(),
             records: Vec::new(),
             notes: Vec::new(),
+            items: Vec::new(),
         },
     ];
 

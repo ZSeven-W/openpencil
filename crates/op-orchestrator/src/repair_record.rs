@@ -104,6 +104,17 @@ impl RepairRecord {
         out
     }
 
+    /// The structured form hosts fold into `op_editor_core::QualityReport`.
+    pub fn quality_item(&self) -> op_editor_core::QualityRepairRecord {
+        op_editor_core::QualityRepairRecord {
+            pass: self.pass.clone(),
+            family: self.category.key().to_string(),
+            node_id: self.node_id.clone(),
+            node_name: self.node_name.clone(),
+            detail: self.detail.clone(),
+        }
+    }
+
     /// `Name [id]`, `[id]`, or empty — whichever the node actually has.
     fn node_label(&self) -> String {
         let name = self
