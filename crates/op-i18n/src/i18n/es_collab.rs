@@ -357,6 +357,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.visualReview" => "Revisión visual",
         "settings.mcp.leanProfile" => "Perfil de herramientas ligero",
         "settings.mcp.leanProfileDesc" => "Las CLI conectadas reciben 6 herramientas en vez del catálogo completo",
+        "reader.continueChat" => "Continuar la conversación",
+        "reader.editPage" => "Editar esta página",
+        "reader.editingPage" => "Editando la página {{page}}",
+        "reader.emptyStage" => "Tu trabajo aparecerá aquí a medida que se crea",
+        "works.current" => "Trabajo actual",
+        "works.empty" => "Aún no hay trabajos. Genera algo o dibuja en un lienzo en blanco y aparecerá aquí.",
+        "works.boards" => "{{count}} mesas de trabajo",
         _ => return None,
     })
 }

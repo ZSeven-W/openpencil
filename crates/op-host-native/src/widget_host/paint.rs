@@ -313,6 +313,9 @@ impl WidgetHostNative {
             }
         }
 
+        // The phone reader's chrome frames the canvas it just painted
+        // into the stage; the chat sheet and its scrim paint above it.
+        self.paint_works_reader(frame, viewport_width, viewport_height);
         if !presenting {
             self.paint_mobile_sheet_scrim(frame, viewport_width, viewport_height);
         }

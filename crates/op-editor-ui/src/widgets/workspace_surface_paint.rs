@@ -79,7 +79,7 @@ fn options_label(
     }
 }
 
-fn phase_key(phase: WorkspacePhase) -> &'static str {
+pub(crate) fn phase_key(phase: WorkspacePhase) -> &'static str {
     match phase {
         WorkspacePhase::Generating => "workspace.phase.generating",
         WorkspacePhase::Done => "workspace.phase.done",
@@ -89,7 +89,7 @@ fn phase_key(phase: WorkspacePhase) -> &'static str {
 }
 
 /// One family's short name through the shared `home.task.*` keys.
-fn family_label(locale: op_i18n::Locale, family: HomeFamily) -> &'static str {
+pub(crate) fn family_label(locale: op_i18n::Locale, family: HomeFamily) -> &'static str {
     let key: &'static str = match family {
         HomeFamily::AppUi => "home.task.app.name",
         HomeFamily::Web => "home.task.web.name",

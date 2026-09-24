@@ -357,6 +357,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.visualReview" => "Visuelle Prüfung",
         "settings.mcp.leanProfile" => "Schlankes Tool-Profil",
         "settings.mcp.leanProfileDesc" => "Verbundene CLIs erhalten 6 Tools statt des vollen Katalogs",
+        "reader.continueChat" => "Unterhaltung fortsetzen",
+        "reader.editPage" => "Diese Seite bearbeiten",
+        "reader.editingPage" => "Seite {{page}} wird bearbeitet",
+        "reader.emptyStage" => "Dein Werk erscheint hier, während es entsteht",
+        "works.current" => "Aktuelles Werk",
+        "works.empty" => "Noch keine Werke. Erzeuge etwas oder zeichne auf einer leeren Leinwand – es erscheint dann hier.",
+        "works.boards" => "{{count}} Zeichenflächen",
         _ => return None,
     })
 }

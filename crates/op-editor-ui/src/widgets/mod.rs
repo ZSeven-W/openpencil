@@ -58,6 +58,8 @@ pub use workspace_surface::{
     family_has_strip, family_views, layout_for as workspace_layout_for, workspace_enter,
     WorkspaceLayout, WorkspaceSurface,
 };
+pub mod works_reader;
+pub use works_reader::{ReaderLayout, WorksReader};
 pub(crate) mod prompt_center_previews;
 pub mod scene_template_panel;
 pub use scene_template_panel::{

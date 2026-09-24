@@ -280,6 +280,10 @@ pub fn pinned_chat(state: &EditorState, viewport_w: f32, viewport_h: f32) -> Opt
 /// which is the LEFT PANEL's edge (`layer_panel_width`, 0 when the
 /// panel is closed) — below the workspace header + toolbar.
 pub fn canvas_origin(state: &EditorState) -> (f32, f32) {
+    if state.editor_ui.works_reader_visible() {
+        // The phone reader's stage: full width, under its header.
+        return (0.0, crate::widgets::works_reader::READER_HEADER_H);
+    }
     if workspace_docked(state) {
         let dock_x = if state.editor_ui.sidebar_open {
             state.editor_ui.layer_panel_width
@@ -320,6 +324,14 @@ pub fn canvas_region(
     viewport_w: f32,
     viewport_h: f32,
 ) -> (f32, f32, f32, f32) {
+    if state.editor_ui.works_reader_visible() {
+        let stage = crate::widgets::works_reader::reader_stage_rect(
+            viewport_w,
+            viewport_h,
+            crate::widgets::works_reader::reader_paged_for(state),
+        );
+        return (stage.origin.x, stage.origin.y, stage.size.x, stage.size.y);
+    }
     let (canvas_left, canvas_top) = canvas_origin(state);
     if workspace_docked(state) {
         let workspace = &state.editor_ui.workspace;

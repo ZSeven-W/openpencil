@@ -373,6 +373,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.visualReview" => "ビジュアル確認",
         "settings.mcp.leanProfile" => "軽量ツールプロファイル",
         "settings.mcp.leanProfileDesc" => "接続中の CLI には全ツールではなく 6 個だけを公開",
+        "reader.continueChat" => "会話を続ける",
+        "reader.editPage" => "このページを修正",
+        "reader.editingPage" => "{{page}} ページ目を修正中",
+        "reader.emptyStage" => "作品はここに少しずつ表示されます",
+        "works.current" => "現在の作品",
+        "works.empty" => "まだ作品がありません。生成するか空白のキャンバスに描くと、ここに表示されます。",
+        "works.boards" => "{{count}} 個のボード",
         _ => return None,
     })
 }

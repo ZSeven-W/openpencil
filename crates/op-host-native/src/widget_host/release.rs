@@ -44,6 +44,9 @@ impl WidgetHostNative {
             return consumed || pressed_released;
         }
         let pressed_released = self.release_pressed_feedback();
+        if self.release_works_reader(viewport_w, viewport_h) {
+            return true;
+        }
         if self.screen_switcher_release() {
             return true;
         }
@@ -359,6 +362,9 @@ impl WidgetHostNative {
         }
         // Chat drag without viewport — drop it (best effort).
         if self.chat_drag.take().is_some() {
+            return true;
+        }
+        if self.release_works_reader(self.last_viewport_w, self.last_viewport_h) {
             return true;
         }
         if self.release_workspace_drag() {

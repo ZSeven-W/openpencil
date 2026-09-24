@@ -369,6 +369,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.visualReview" => "Rà soát hình ảnh",
         "settings.mcp.leanProfile" => "Hồ sơ công cụ tinh gọn",
         "settings.mcp.leanProfileDesc" => "CLI đã kết nối chỉ nhận 6 công cụ thay vì toàn bộ danh mục",
+        "reader.continueChat" => "Tiếp tục trò chuyện",
+        "reader.editPage" => "Sửa trang này",
+        "reader.editingPage" => "Đang sửa trang {{page}}",
+        "reader.emptyStage" => "Tác phẩm sẽ dần hiện ra ở đây",
+        "works.current" => "Tác phẩm hiện tại",
+        "works.empty" => "Chưa có tác phẩm nào. Hãy tạo hoặc vẽ trên canvas trống, tác phẩm sẽ hiện ở đây.",
+        "works.boards" => "{{count}} bảng vẽ",
         _ => return None,
     })
 }

@@ -58,6 +58,7 @@ use crate::editor_chat_design::{
 };
 use crate::editor_chat_design_tools::{attach_tool_result_to_transcript, mobile_design_tool_defs};
 use crate::editor_chat_turn::{run_builtin_turn, BuiltinChatTurn};
+use crate::editor_chat_workspace as run_ws;
 use crate::lifecycle::Session;
 
 /// Engine-thread repoll cadence while a turn streams (~30 fps), matching
@@ -77,6 +78,8 @@ struct ChatTurnJob {
     /// The agent-indicator epoch a design turn opened (frame glows +
     /// entrance reveals). `None` for plain chat turns.
     indicator_epoch: Option<u64>,
+    /// 改这一页: the board this turn's writes are fenced to.
+    page_edit_fence: Option<String>,
     /// At least one design tool changed the live document. Kept separately
     /// from `viewport_fitted`: variable/style writes may precede the first
     /// sized root, but final completion must still fit any resulting content.
@@ -126,8 +129,16 @@ impl MobileChatHost {
         viewport_size: (f32, f32),
     ) -> Option<u64> {
         let mut changed = self.drain_new_chat_and_stop(host);
-        changed |= self.launch_if_pending(host);
+        let launched = self.launch_if_pending(host);
+        changed |= launched;
+        if launched && self.turn.is_none() {
+            // The send could not start a turn: its run ends here.
+            changed |= run_ws::settle_finished_run(host, viewport_size);
+        }
         changed |= self.poll_into(host, viewport_size);
+        // The reader's camera follows the boards as they land.
+        let generating = self.turn.is_some() || host.editor_state().chat.pending_send.is_some();
+        changed |= run_ws::pump_generation(host, generating, viewport_size);
         if changed {
             host.mark_editor_state_dirty();
         }
@@ -144,6 +155,9 @@ impl MobileChatHost {
         let stop = std::mem::take(&mut state.chat.pending_stop_chat);
         if new_chat || stop {
             self.retire_turn(host);
+        }
+        if stop {
+            run_ws::mark_run_stopped(host);
         }
         new_chat || stop
     }
@@ -168,9 +182,11 @@ impl MobileChatHost {
                 job.session.loop_finalized()
             );
             if !job.session.loop_finalized() && allow_ai_bulk_write(host) {
-                let state = host.editor_state_mut();
-                op_orchestrator::apply_loop_finalize(state);
-                op_orchestrator::unfilled_screens::finalize_and_mark_unfilled_screens(state);
+                let fence = job.page_edit_fence.as_deref();
+                run_ws::fenced(host.editor_state_mut(), fence, |state| {
+                    op_orchestrator::apply_loop_finalize(state);
+                    op_orchestrator::unfilled_screens::finalize_and_mark_unfilled_screens(state);
+                });
                 changed = true;
             }
             if let Some(epoch) = job.indicator_epoch {
@@ -199,14 +215,22 @@ impl MobileChatHost {
         // parity) — the old worker drains harmlessly once its receiver
         // drops.
         self.retire_turn(host);
-        match prepare_builtin_turn(host.editor_state(), &user_text) {
+        // Home / Studio pin the orchestrator route for whole-design briefs
+        // whose wording the keyword gate does not recognise (5 of the 7
+        // task families); on a phone that route IS the design loop.
+        let route = std::mem::take(&mut host.editor_state_mut().chat.launch_route);
+        // 改这一页 scopes this send to one board (prompt + write fence).
+        let scope = run_ws::scope_launch(host, &user_text);
+        match prepare_builtin_turn(host.editor_state(), &scope.prompt) {
             Some(mut turn) => {
                 // Design requests run the REAL desktop agent tool loop
                 // (`op_chat_agent::chat_agent_loop` — corrective budgets,
                 // retry ladder, loop finalize) with the shared design-agent
                 // system prompt and the shared design toolset, script-mode
                 // batch_design included.
-                let design = design_intent(&user_text);
+                let design = scope.fence.is_some()
+                    || route.implies_design_intent()
+                    || design_intent(&user_text);
                 let launched = if design {
                     let state = host.editor_state_mut();
                     // Clear the starter BEFORE building the prompt so the
@@ -222,7 +246,11 @@ impl MobileChatHost {
                     start_turn(turn, running_tab)
                 };
                 match launched {
-                    Ok(job) => self.turn = Some(job),
+                    Ok(mut job) => {
+                        run_ws::stamp_run_epoch(host, job.indicator_epoch);
+                        job.page_edit_fence = scope.fence;
+                        self.turn = Some(job);
+                    }
                     Err(message) => {
                         if design {
                             let state = host.editor_state_mut();
@@ -285,8 +313,14 @@ impl MobileChatHost {
                 changed = true;
             }
         }
-        let tool_execution =
-            execute_tool_requests(host, &mut job.session, tool_requests, running_tab);
+        let fence = job.page_edit_fence.clone();
+        let tool_execution = execute_tool_requests(
+            host,
+            &mut job.session,
+            tool_requests,
+            running_tab,
+            fence.as_deref(),
+        );
         changed |= tool_execution.state_changed;
         job.document_mutated |= tool_execution.document_mutated;
         if is_design && tool_execution.document_mutated && !job.session.viewport_fitted() {
@@ -322,6 +356,8 @@ impl MobileChatHost {
                 host.fit_content_to_viewport(viewport_size.0, viewport_size.1);
                 changed |= host.editor_state().viewport != before;
             }
+            // After the final fit: a settled reader frames its own view.
+            changed |= run_ws::settle_finished_run(host, viewport_size);
         }
         changed
     }
@@ -361,6 +397,7 @@ fn execute_tool_requests(
     session: &mut ChatSession,
     requests: Vec<ChatToolRequest>,
     running_tab: usize,
+    fence: Option<&str>,
 ) -> ToolExecutionOutcome {
     let mut outcome = ToolExecutionOutcome::default();
     for req in requests {
@@ -385,9 +422,10 @@ fn execute_tool_requests(
                     .map(|hit| hit.name)
                     .collect::<Vec<_>>()
             } else {
-                quality = op_orchestrator::apply_loop_finalize_counted(state);
-                let names =
-                    op_orchestrator::unfilled_screens::finalize_and_mark_unfilled_screens(state);
+                let (names, _) = run_ws::fenced(state, fence, |state| {
+                    quality = op_orchestrator::apply_loop_finalize_counted(state);
+                    op_orchestrator::unfilled_screens::finalize_and_mark_unfilled_screens(state)
+                });
                 session.mark_loop_finalized();
                 outcome.state_changed = true;
                 names
@@ -477,8 +515,12 @@ fn execute_tool_requests(
             continue;
         }
         let state = host.editor_state_mut();
-        let (result, mutated) =
-            op_chat_agent::design_agent_tools::execute_agent_tool(state, &req.name, &req.args_json);
+        let ((mut result, mutated), reverted) = run_ws::fenced(state, fence, |state| {
+            op_chat_agent::design_agent_tools::execute_agent_tool(state, &req.name, &req.args_json)
+        });
+        if let (true, Some(board)) = (reverted, fence) {
+            result = run_ws::note_reverted(result, board);
+        }
         // Same diagnosability rationale as the turn-start line: one line per
         // executed design tool names the call, its outcome, and whether the
         // document changed.
@@ -524,6 +566,7 @@ fn start_turn(turn: BuiltinChatTurn, running_tab: usize) -> Result<ChatTurnJob, 
         running_tab,
         abort: Some(task.abort_handle()),
         indicator_epoch: None,
+        page_edit_fence: None,
         document_mutated: false,
     })
 }
@@ -622,6 +665,7 @@ fn start_design_turn(
         running_tab,
         abort: Some(task.abort_handle()),
         indicator_epoch: Some(epoch),
+        page_edit_fence: None,
         document_mutated: false,
     })
 }

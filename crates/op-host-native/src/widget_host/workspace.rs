@@ -237,7 +237,7 @@ impl WidgetHostNative {
     /// Re-send the stored brief through the orchestrator route — the
     /// same three-call pattern Home's send uses, without leaving the
     /// workspace.
-    fn retry_workspace_brief(&mut self) {
+    pub(in crate::widget_host) fn retry_workspace_brief(&mut self) {
         let workspace = &self.editor_state.editor_ui.workspace;
         let family = workspace.family;
         let brief = workspace.brief.trim().to_string();
@@ -285,6 +285,12 @@ impl WidgetHostNative {
 
     /// Apply the camera fit for the workspace's current view mode.
     pub fn apply_workspace_fit(&mut self, viewport_w: f32, viewport_h: f32) {
+        // The phone reader frames one board (or a long page's width) in
+        // its stage whatever the desktop view mode says.
+        if self.editor_state.editor_ui.works_reader_visible() {
+            self.frame_reader_board(viewport_w, viewport_h);
+            return;
+        }
         self.refresh_layout_scene();
         let view = self.editor_state.editor_ui.workspace.view;
         let boards = active_page_boards(self.editor_state());
@@ -516,6 +522,10 @@ impl WidgetHostNative {
             return false;
         }
         self.editor_state.editor_ui.workspace.selected = selected;
+        if refit_due && self.editor_state.editor_ui.works_reader_visible() {
+            self.pump_reader_generation(count, bounds, viewport_w, viewport_h);
+            return true;
+        }
         if refit_due {
             self.editor_state.editor_ui.workspace.fitted_board_count = count;
             self.editor_state.editor_ui.workspace.fitted_bounds = bounds;
@@ -531,6 +541,31 @@ impl WidgetHostNative {
             );
         }
         true
+    }
+
+    /// The phone reader's camera during a run. A 390 px stage cannot show
+    /// every board at once, so a NEW board takes the stage as it lands
+    /// (the pager counts up with it); a board that only grew keeps the
+    /// user's page and reframes it. A page edit in flight never moves
+    /// the reader off the page being edited.
+    fn pump_reader_generation(
+        &mut self,
+        count: usize,
+        bounds: Option<(f32, f32, f32, f32)>,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) {
+        let workspace = &mut self.editor_state.editor_ui.workspace;
+        let new_board = count > workspace.fitted_board_count;
+        workspace.fitted_board_count = count;
+        workspace.fitted_bounds = bounds;
+        if workspace.page_edit_running.is_none()
+            && new_board
+            && !op_editor_core::reads_as_long_page(workspace.family)
+        {
+            workspace.select_board(count - 1, count);
+        }
+        self.frame_reader_board(viewport_w, viewport_h);
     }
 
     /// Resolve the workspace phase from real chat/orchestrator state.

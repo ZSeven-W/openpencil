@@ -357,6 +357,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.visualReview" => "Tinjauan visual",
         "settings.mcp.leanProfile" => "Profil alat ringkas",
         "settings.mcp.leanProfileDesc" => "CLI yang terhubung mendapat 6 alat, bukan katalog lengkap",
+        "reader.continueChat" => "Lanjutkan obrolan",
+        "reader.editPage" => "Edit halaman ini",
+        "reader.editingPage" => "Mengedit halaman {{page}}",
+        "reader.emptyStage" => "Karya Anda akan muncul di sini selagi dibuat",
+        "works.current" => "Karya saat ini",
+        "works.empty" => "Belum ada karya. Buat sesuatu atau gambar di kanvas kosong, dan karya akan muncul di sini.",
+        "works.boards" => "{{count}} papan",
         _ => return None,
     })
 }

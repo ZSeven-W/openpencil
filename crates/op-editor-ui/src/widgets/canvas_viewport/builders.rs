@@ -41,18 +41,34 @@ impl<'a> CanvasViewport<'a> {
             pan_y: state.viewport.pan_y,
             zoom: state.viewport.zoom,
         };
+        // The phone reader shows the work, not the editor: the selection
+        // is kept (it is the professional canvas's context and the scope
+        // of 改这一页) but its outline, handles and size label stay off.
+        let reading = state.editor_ui.works_reader_visible();
         Self {
             id: WidgetId::new(4000),
             viewport,
             scene,
-            selected: state.selection.anchor.as_str().to_string(),
-            selected_set: state
-                .selection
-                .set
-                .iter()
-                .map(|id| id.as_str().to_string())
-                .collect(),
-            selection_label: selection_size_label(state, scene),
+            selected: if reading {
+                String::new()
+            } else {
+                state.selection.anchor.as_str().to_string()
+            },
+            selected_set: if reading {
+                Default::default()
+            } else {
+                state
+                    .selection
+                    .set
+                    .iter()
+                    .map(|id| id.as_str().to_string())
+                    .collect()
+            },
+            selection_label: if reading {
+                None
+            } else {
+                selection_size_label(state, scene)
+            },
             tool: state.tool,
             pen_in_progress: state
                 .ui

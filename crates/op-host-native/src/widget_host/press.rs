@@ -350,6 +350,14 @@ impl WidgetHostNative {
                 return consumed;
             }
         }
+        // Tier 3c′ — the phone works reader is a takeover: every press
+        // inside it is its own unless an open sheet (tier 3b above, the
+        // chat tiers below) owns the point.
+        if !presenting {
+            if let Some(consumed) = self.press_works_reader(x, y, viewport_width, viewport_height) {
+                return consumed;
+            }
+        }
         // Tier 3c — the generation workspace's chrome (header, toolbar,
         // deck strip, dock handle) claims presses ahead of the top bar
         // and rails, after Home and the modal tiers. Presses on the

@@ -597,6 +597,10 @@ impl WidgetHostNative {
         {
             return consumed;
         }
+        // A drag on the phone reader's stage scrolls / swipes the work.
+        if let Some(consumed) = self.cursor_move_works_reader(x, y) {
+            return consumed;
+        }
         // Session-switch owner rotation before the cursor_probe resolve below
         // stores the canonical build (mirrors the paint entry).
         self.rotate_chat_owner_if_session_changed();

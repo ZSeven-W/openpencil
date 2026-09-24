@@ -187,6 +187,7 @@ pub mod variables_resolve;
 pub mod viewport;
 pub mod walkers;
 pub mod web_sync;
+pub mod workspace_page_edit;
 pub mod workspace_run;
 
 #[cfg(test)]
@@ -353,6 +354,7 @@ pub use editor_ui_state::home_example_draft::{
     example_draft_template, refine_prompt, HomeSendMode,
 };
 pub use editor_ui_state::workspace::{
+    infer_reading_family, reader_is_paged, reads_as_long_page, PageEditTarget, ReaderHit,
     WorkspaceHit, WorkspacePhase, WorkspaceState, WorkspaceView, WORKSPACE_DECK_STRIP_H,
     WORKSPACE_ENTER_MS, WORKSPACE_HEADER_H, WORKSPACE_TOOLBAR_H,
 };

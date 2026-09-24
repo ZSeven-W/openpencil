@@ -397,6 +397,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.visualReview" => "Visual review",
         "settings.mcp.leanProfile" => "Lean tool profile",
         "settings.mcp.leanProfileDesc" => "Connected CLIs get 6 tools instead of the full catalog",
+        "reader.continueChat" => "Continue chat",
+        "reader.editPage" => "Edit this page",
+        "reader.editingPage" => "Editing page {{page}}",
+        "reader.emptyStage" => "Your work will appear here as it's made",
+        "works.current" => "Current work",
+        "works.empty" => "No works yet. Generate something or draw on a blank canvas, and it will show up here.",
+        "works.boards" => "{{count}} boards",
         _ => return None,
     })
 }

@@ -361,6 +361,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.visualReview" => "दृश्य समीक्षा",
         "settings.mcp.leanProfile" => "हल्का टूल प्रोफ़ाइल",
         "settings.mcp.leanProfileDesc" => "कनेक्टेड CLI को पूरे कैटलॉग के बजाय 6 टूल मिलते हैं",
+        "reader.continueChat" => "बातचीत जारी रखें",
+        "reader.editPage" => "यह पेज बदलें",
+        "reader.editingPage" => "पेज {{page}} बदला जा रहा है",
+        "reader.emptyStage" => "आपका काम बनते-बनते यहाँ दिखेगा",
+        "works.current" => "मौजूदा काम",
+        "works.empty" => "अभी कोई काम नहीं है। कुछ जनरेट करें या खाली कैनवास पर बनाएँ, वह यहाँ दिखेगा।",
+        "works.boards" => "{{count}} बोर्ड",
         _ => return None,
     })
 }

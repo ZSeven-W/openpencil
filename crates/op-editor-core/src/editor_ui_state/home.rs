@@ -284,6 +284,10 @@ pub enum HomeHit {
     NavProjects,
     /// The compact bottom nav's 设置 tab (and the top bar's gear).
     NavSettings,
+    /// The 作品 page's current (in-memory) work card.
+    WorksCurrent,
+    /// One recent-file row on the 作品 page (index into `recent_files`).
+    WorksRecent(usize),
     /// The 接入卡's free-tier row.
     ConnectFreeTier,
     /// The 接入卡's own-API-key row.
@@ -339,6 +343,9 @@ pub struct HomeState {
     /// The explore card the cursor most recently LEFT, so only that card
     /// plays the descent half of the lift; every other rest card stays put.
     pub card_hover_leaving: Option<HomeFamily>,
+    /// The compact bottom nav's 作品 page is on show instead of the
+    /// 创作 page. Phone-only; every hide returns to 创作.
+    pub works_open: bool,
 }
 
 impl Default for HomeState {
@@ -360,6 +367,7 @@ impl Default for HomeState {
             art_switched_at_ms: 0,
             card_hover_since_ms: 0,
             card_hover_leaving: None,
+            works_open: false,
         }
     }
 }
@@ -378,6 +386,7 @@ impl HomeState {
         self.replace_pending = false;
         self.card_hover_since_ms = 0;
         self.card_hover_leaving = None;
+        self.works_open = false;
     }
 
     /// The next frame instant the entrance choreography still needs, or

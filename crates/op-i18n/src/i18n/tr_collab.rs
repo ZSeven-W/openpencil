@@ -357,6 +357,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.visualReview" => "Görsel inceleme",
         "settings.mcp.leanProfile" => "Hafif araç profili",
         "settings.mcp.leanProfileDesc" => "Bağlı CLI'lar tam katalog yerine 6 araç alır",
+        "reader.continueChat" => "Sohbete devam et",
+        "reader.editPage" => "Bu sayfayı düzenle",
+        "reader.editingPage" => "{{page}}. sayfa düzenleniyor",
+        "reader.emptyStage" => "Çalışmanız oluştukça burada görünecek",
+        "works.current" => "Mevcut çalışma",
+        "works.empty" => "Henüz çalışma yok. Bir şey oluşturun ya da boş tuvale çizin; burada görünecek.",
+        "works.boards" => "{{count}} çalışma yüzeyi",
         _ => return None,
     })
 }

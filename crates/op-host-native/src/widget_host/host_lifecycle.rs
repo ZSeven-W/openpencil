@@ -99,6 +99,8 @@ impl WidgetHostNative {
             slide_thumbs: Default::default(),
             last_chat_session_index,
             workspace_dock_drag: None,
+            reader_drag: None,
+            reader_on_next_open_ms: None,
             auth_login_handle: None,
             auth_pending_browser_url: None,
             auth_browser_opened: false,

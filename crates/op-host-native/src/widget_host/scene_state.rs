@@ -259,6 +259,7 @@ impl WidgetHostNative {
         self.scene_cache.invalidate();
         self.editor_state_dirty = true;
         self.drop_pan_cache();
+        self.take_reader_on_open();
         true
     }
 
@@ -300,6 +301,7 @@ impl WidgetHostNative {
         self.editor_state_dirty = true;
         self.drop_pan_cache();
         self.arm_missing_fonts_detection();
+        self.take_reader_on_open();
         Ok(())
     }
 

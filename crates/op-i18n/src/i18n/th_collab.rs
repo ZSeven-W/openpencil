@@ -359,6 +359,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.visualReview" => "ตรวจทานภาพ",
         "settings.mcp.leanProfile" => "โปรไฟล์เครื่องมือแบบย่อ",
         "settings.mcp.leanProfileDesc" => "CLI ที่เชื่อมต่อจะได้ 6 เครื่องมือแทนแคตตาล็อกทั้งหมด",
+        "reader.continueChat" => "คุยต่อ",
+        "reader.editPage" => "แก้หน้านี้",
+        "reader.editingPage" => "กำลังแก้หน้า {{page}}",
+        "reader.emptyStage" => "ผลงานจะค่อย ๆ ปรากฏที่นี่",
+        "works.current" => "ผลงานปัจจุบัน",
+        "works.empty" => "ยังไม่มีผลงาน สร้างงานหรือวาดบนผืนผ้าใบเปล่า แล้วผลงานจะแสดงที่นี่",
+        "works.boards" => "{{count}} บอร์ด",
         _ => return None,
     })
 }

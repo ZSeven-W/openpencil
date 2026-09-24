@@ -167,6 +167,11 @@ impl WidgetHostNative {
                 // (state, view, and phase were all kept).
                 self.editor_state.editor_ui.home.hide();
                 self.editor_state.editor_ui.workspace.reenter(self.now_ms);
+                // On a phone the workspace is the reader: land framed on
+                // the board it was showing, whatever the canvas did since.
+                if self.works_reader_visible() {
+                    self.frame_reader_board(viewport_width, viewport_height);
+                }
             }
             HomeHit::ReplaceKeep => {
                 self.editor_state.editor_ui.home.keep_draft();
@@ -191,6 +196,14 @@ impl WidgetHostNative {
             HomeHit::Professional => {
                 self.editor_state.editor_ui.home.hide();
                 self.editor_state.editor_ui.entry_surface = EntrySurface::Canvas;
+                // A phone reader left under Home would come straight back:
+                // 专业 means the full mobile canvas, same document.
+                if self.editor_state.editor_ui.works_reader_visible() {
+                    let workspace = &mut self.editor_state.editor_ui.workspace;
+                    let restore = workspace.previous_tool;
+                    workspace.enter_professional();
+                    self.editor_state.tool = restore.unwrap_or(op_editor_core::Tool::Select);
+                }
             }
             HomeHit::ModeNormal => {
                 // Home IS the normal mode: the 普通 half of the compact
@@ -198,13 +211,30 @@ impl WidgetHostNative {
                 // selected. No surface change, no document change.
             }
             HomeHit::NavCreate => {
-                // 创作 is the page the compact Home already shows; the
-                // tap resets the reading position instead.
-                self.editor_state.editor_ui.home.scroll_y = 0.0;
+                // Back to the 创作 page (from 作品), or — already there —
+                // reset the reading position.
+                let home = &mut self.editor_state.editor_ui.home;
+                home.works_open = false;
+                home.scroll_y = 0.0;
             }
             HomeHit::NavProjects => {
-                // The 作品 (works) list is the phase-2 work-reading
-                // surface; the tab paints as unavailable until it lands.
+                // The 作品 page: the live work and the recent documents.
+                let home = &mut self.editor_state.editor_ui.home;
+                home.works_open = true;
+                home.composer_focused = false;
+                home.more_open = false;
+            }
+            HomeHit::WorksCurrent => {
+                self.open_current_work_in_reader(viewport_width, viewport_height);
+            }
+            HomeHit::WorksRecent(index) => {
+                // The shell performs the load (it owns the file system);
+                // the reader opens once the document is installed.
+                if index < self.editor_state.editor_ui.recent_files.len() {
+                    self.editor_state.editor_ui.pending_file_action =
+                        Some(op_editor_core::FileAction::OpenRecent(index));
+                    self.arm_reader_on_next_open();
+                }
             }
             HomeHit::NavSettings => {
                 // The settings destination the compact nav and the top

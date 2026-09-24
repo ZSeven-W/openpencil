@@ -287,6 +287,7 @@ mod variables_preset_press;
 mod viewport_fit;
 #[cfg(test)]
 mod window_control_tests;
+mod works_reader;
 mod workspace;
 mod workspace_paint;
 
@@ -628,6 +629,11 @@ pub struct WidgetHostNative {
     /// Live workspace dock-width drag (press on the dock handle →
     /// cursor moves → release). `None` outside the gesture.
     pub(in crate::widget_host) workspace_dock_drag: Option<workspace::WorkspaceDockDrag>,
+    /// Live one-finger drag on the phone works reader's stage.
+    pub(in crate::widget_host) reader_drag: Option<works_reader::ReaderStageDrag>,
+    /// A 作品-list tap asked for the next loaded document to open in the
+    /// reader; the tap's clock stamp bounds how long that intent lives.
+    pub(in crate::widget_host) reader_on_next_open_ms: Option<u64>,
 }
 
 // Transient pointer-drag records that carry no platform types are

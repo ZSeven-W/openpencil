@@ -13,9 +13,15 @@
 //! apart in the first place.
 
 use super::home::{HomeFamily, TaskDraft};
+
+#[path = "workspace_reader.rs"]
+mod reader;
 use super::{EditorUiState, LeftPanelTab};
 use crate::quality_report::QualityReport;
 use crate::tool::Tool;
+pub use reader::{
+    infer_reading_family, reader_is_paged, reads_as_long_page, PageEditTarget, ReaderHit,
+};
 
 /// Workspace header height (back button, doc tile, title, actions).
 pub const WORKSPACE_HEADER_H: f32 = 64.0;
@@ -170,6 +176,13 @@ pub struct WorkspaceState {
     /// model was connected when it loaded. The draft banner offers the
     /// connect (or, once connected, the refine) action while this holds.
     pub draft_awaiting_refine: bool,
+    /// The board a phone 改这一页 staged for the NEXT send, if any.
+    pub page_edit: Option<PageEditTarget>,
+    /// The board the running follow-up turn is bound to. Set when the
+    /// staged edit launches; cleared when that run settles.
+    pub page_edit_running: Option<PageEditTarget>,
+    /// Pressed feedback for the phone reader's chrome.
+    pub reader_pressed: Option<ReaderHit>,
 }
 
 impl Default for WorkspaceState {
@@ -194,6 +207,9 @@ impl Default for WorkspaceState {
             quality_open: false,
             draft_template: None,
             draft_awaiting_refine: false,
+            page_edit: None,
+            page_edit_running: None,
+            reader_pressed: None,
         }
     }
 }
@@ -229,6 +245,9 @@ impl WorkspaceState {
         self.clear_quality();
         self.draft_template = None;
         self.draft_awaiting_refine = false;
+        self.page_edit = None;
+        self.page_edit_running = None;
+        self.reader_pressed = None;
     }
 
     /// Record that this workspace's boards are the instant draft loaded
@@ -304,6 +323,7 @@ impl WorkspaceState {
             return false;
         }
         self.phase = WorkspacePhase::Done;
+        self.page_edit_running = None;
         true
     }
 
@@ -314,6 +334,7 @@ impl WorkspaceState {
             return false;
         }
         self.phase = WorkspacePhase::Stopped;
+        self.page_edit_running = None;
         true
     }
 
@@ -323,6 +344,7 @@ impl WorkspaceState {
             return false;
         }
         self.phase = WorkspacePhase::Failed;
+        self.page_edit_running = None;
         true
     }
 
@@ -408,6 +430,9 @@ impl WorkspaceState {
         self.clear_quality();
         self.draft_template = None;
         self.draft_awaiting_refine = false;
+        self.page_edit = None;
+        self.page_edit_running = None;
+        self.reader_pressed = None;
     }
 
     /// The next frame instant the entrance motion still needs, or
@@ -479,6 +504,11 @@ impl EditorUiState {
             now_ms,
             previous_tool,
         );
+        // The phone reader pages through the boards instead of fitting
+        // them all into a 390 px stage.
+        if self.compact_layout() {
+            self.workspace.view = WorkspaceView::default_for_reader(family);
+        }
         self.sidebar_open = true;
         self.enter_chat_tab();
     }

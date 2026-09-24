@@ -32,9 +32,13 @@ mod connect;
 
 #[path = "home_surface_layout.rs"]
 pub(crate) mod layout;
+
+#[path = "home_works_list.rs"]
+pub(crate) mod works;
 pub use layout::compact::BOTTOM_NAV_H as HOME_BOTTOM_NAV_H;
 pub use layout::max_scroll_for_mode;
 pub use layout::{HomeLayout, EXPLORE_FAMILIES};
+pub use works::{works_list_layout, CurrentWork, WorksListLayout, WORKS_RECENT_CAP};
 
 /// Top bar height; the page content scrolls under it.
 pub const HOME_TOPBAR_H: f32 = 56.0;
@@ -112,6 +116,28 @@ pub struct HomeSurface<'a> {
     /// Recent `.op` files (basename only), capped to the row's five
     /// chips.
     pub recent_files: Vec<String>,
+    /// The 作品 page's recent rows (basename only), in `recent_files`
+    /// order so a row index is a `recent_files` index.
+    pub works_recent: Vec<String>,
+    /// The live document as the 作品 page's current-work card.
+    pub current_work: Option<CurrentWork>,
+}
+
+/// The first `cap` recent files, basename only.
+fn recent_basenames(state: &EditorState, cap: usize) -> Vec<String> {
+    state
+        .editor_ui
+        .recent_files
+        .iter()
+        .take(cap)
+        .map(|file| {
+            file.path
+                .rsplit(['/', '\\'])
+                .next()
+                .unwrap_or(&file.path)
+                .to_string()
+        })
+        .collect()
 }
 
 impl<'a> HomeSurface<'a> {
@@ -134,19 +160,9 @@ impl<'a> HomeSurface<'a> {
                 .iter()
                 .map(|attachment| attachment.name.clone())
                 .collect(),
-            recent_files: state
-                .editor_ui
-                .recent_files
-                .iter()
-                .take(5)
-                .map(|file| {
-                    file.path
-                        .rsplit(['/', '\\'])
-                        .next()
-                        .unwrap_or(&file.path)
-                        .to_string()
-                })
-                .collect(),
+            recent_files: recent_basenames(state, 5),
+            works_recent: recent_basenames(state, WORKS_RECENT_CAP),
+            current_work: CurrentWork::for_editor(state),
         })
     }
 
@@ -218,6 +234,12 @@ impl<'a> HomeSurface<'a> {
         layout
     }
 
+    /// Whether the phone's 作品 page is on show (compact only; a wide
+    /// Home has no bottom nav to reach it from).
+    pub fn works_page(&self) -> bool {
+        self.state.works_open && self.ui.compact_layout()
+    }
+
     /// The active task's example prompt — what 使用这个示例 fills.
     pub fn example_prompt(&self) -> &'static str {
         copy::task_copy(self.ui.locale, self.state.task, self.state.task_draft()).example
@@ -287,6 +309,11 @@ impl<'a> HomeSurface<'a> {
                     _ => HomeHit::NavSettings,
                 });
             }
+        }
+        // The 作品 page replaces the whole 创作 column under the chrome.
+        if self.works_page() {
+            let works = self.works_layout(viewport_width, viewport_height);
+            return self.works_hit(&works, point);
         }
         if self.state.more_open && layout.more_popover.contains(point) {
             for (index, rect) in layout.more_rows.iter().enumerate() {

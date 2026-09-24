@@ -28,6 +28,22 @@ pub(super) fn paint_home_compact(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>
     let shown_at = surface.ui.motion_stamp(surface.state.shown_at_ms);
     let enter = |block| enter_phase(block, shown_at, surface.now_ms);
 
+    // The 作品 page swaps the page column; the pinned chrome stays.
+    if surface.works_page() {
+        cx.backend.save();
+        cx.backend.clip_rect(Rect::xywh(
+            0.0,
+            HOME_TOPBAR_H,
+            rect.size.x,
+            (rect.size.y - HOME_TOPBAR_H - BOTTOM_NAV_H).max(0.0),
+        ));
+        super::super::works::paint_works_page(surface, cx, rect, palette);
+        cx.backend.restore();
+        paint_bottom_nav(surface, cx, &layout, palette);
+        paint_top_bar(surface, cx, &layout, rect.size.x, palette);
+        return;
+    }
+
     // A focused composer folds the grid, the example and the bottom nav
     // away (`collapse_for_focused_composer`); their rects are empty.
     let focused = surface.state.composer_focused;

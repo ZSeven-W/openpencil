@@ -387,6 +387,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.visualReview" => "Визуальная проверка",
         "settings.mcp.leanProfile" => "Облегчённый набор инструментов",
         "settings.mcp.leanProfileDesc" => "Подключённые CLI получают 6 инструментов вместо полного каталога",
+        "reader.continueChat" => "Продолжить диалог",
+        "reader.editPage" => "Изменить эту страницу",
+        "reader.editingPage" => "Изменяется страница {{page}}",
+        "reader.emptyStage" => "Работа появится здесь по мере создания",
+        "works.current" => "Текущая работа",
+        "works.empty" => "Работ пока нет. Сгенерируйте что-нибудь или нарисуйте на пустом холсте — работа появится здесь.",
+        "works.boards" => "Артбордов: {{count}}",
         _ => return None,
     })
 }

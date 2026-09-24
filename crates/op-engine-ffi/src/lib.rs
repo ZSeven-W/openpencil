@@ -49,6 +49,8 @@ mod editor_chat_design_tools;
 #[cfg(feature = "editor")]
 mod editor_chat_turn;
 #[cfg(feature = "editor")]
+mod editor_chat_workspace;
+#[cfg(feature = "editor")]
 mod editor_codegen;
 #[cfg(feature = "editor")]
 mod editor_collab;

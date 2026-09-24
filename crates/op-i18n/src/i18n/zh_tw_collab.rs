@@ -357,6 +357,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.visualReview" => "視覺複核",
         "settings.mcp.leanProfile" => "精簡工具集",
         "settings.mcp.leanProfileDesc" => "已連線的 CLI 只取得 6 個工具,而非完整目錄",
+        "reader.continueChat" => "繼續對話",
+        "reader.editPage" => "改這一頁",
+        "reader.editingPage" => "正在修改第 {{page}} 頁",
+        "reader.emptyStage" => "作品會在這裡逐步展開",
+        "works.current" => "目前作品",
+        "works.empty" => "還沒有作品。完成一次生成，或在空白畫布上畫點東西，它就會出現在這裡。",
+        "works.boards" => "{{count}} 個畫板",
         _ => return None,
     })
 }

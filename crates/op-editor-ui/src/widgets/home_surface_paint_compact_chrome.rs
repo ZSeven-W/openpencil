@@ -52,10 +52,10 @@ pub(super) fn paint_bottom_nav(
             1 => HomeHit::NavProjects,
             _ => HomeHit::NavSettings,
         };
-        // 创作 is the page the user is on; 作品 waits for its phase-2
-        // surface and paints as unavailable.
-        let active = index == 0;
-        let enabled = index != 1;
+        // The page on show is the active tab: 创作 unless the 作品
+        // page replaced it.
+        let active = index == usize::from(surface.works_page());
+        let enabled = true;
         let pressed = surface.state.pressed == Some(hit) && enabled;
         let color = if pressed || active {
             palette.blue

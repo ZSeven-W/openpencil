@@ -373,6 +373,13 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.visualReview" => "시각 검토",
         "settings.mcp.leanProfile" => "경량 도구 프로필",
         "settings.mcp.leanProfileDesc" => "연결된 CLI에 전체 목록 대신 6개 도구만 제공",
+        "reader.continueChat" => "대화 계속하기",
+        "reader.editPage" => "이 페이지 수정",
+        "reader.editingPage" => "{{page}}페이지 수정 중",
+        "reader.emptyStage" => "작품이 여기에 차례로 나타납니다",
+        "works.current" => "현재 작품",
+        "works.empty" => "아직 작품이 없습니다. 생성하거나 빈 캔버스에 그리면 여기에 표시됩니다.",
+        "works.boards" => "보드 {{count}}개",
         _ => return None,
     })
 }

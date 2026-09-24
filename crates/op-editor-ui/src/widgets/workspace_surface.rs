@@ -326,6 +326,25 @@ pub fn layout_for(
     }
 }
 
+/// The work's display title: the file name, else the brief's first 16
+/// chars, else the localized untitled fallback. Shared by the desktop
+/// header and the phone reader so the two never name one work twice.
+pub fn workspace_title(state: &EditorState) -> String {
+    state
+        .editor_ui
+        .file_name_display
+        .clone()
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| {
+            let brief = state.editor_ui.workspace.brief.trim();
+            if brief.is_empty() {
+                op_i18n::translate(state.editor_ui.locale, "common.untitled").to_string()
+            } else {
+                brief.chars().take(16).collect()
+            }
+        })
+}
+
 pub struct WorkspaceSurface<'a> {
     pub id: WidgetId,
     pub theme: Theme,
@@ -352,19 +371,7 @@ impl<'a> WorkspaceSurface<'a> {
         if !workspace.visible {
             return None;
         }
-        let title = state
-            .editor_ui
-            .file_name_display
-            .clone()
-            .filter(|name| !name.is_empty())
-            .unwrap_or_else(|| {
-                let brief = workspace.brief.trim();
-                if brief.is_empty() {
-                    op_i18n::translate(state.editor_ui.locale, "common.untitled").to_string()
-                } else {
-                    brief.chars().take(16).collect()
-                }
-            });
+        let title = workspace_title(state);
         Some(Self {
             id: WidgetId::new(7700),
             theme: theme_for(&state.editor_ui),
@@ -618,6 +625,7 @@ impl Widget for WorkspaceSurface<'_> {
 
 #[path = "workspace_surface_paint.rs"]
 mod paint;
+pub(crate) use paint::{family_label, phase_key};
 
 #[path = "workspace_surface_banner.rs"]
 mod banner;

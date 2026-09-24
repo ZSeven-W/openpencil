@@ -22,6 +22,11 @@ impl WidgetHostNative {
         if self.preview_slideshow_active() {
             return;
         }
+        // The works reader carries its own header and bottom bar; the
+        // editing app bar, dock and pills belong to the professional view.
+        if self.works_reader_visible() {
+            return;
+        }
         // Native touch chrome replaces the desktop top bar at every tablet
         // size class. Geometry branches inside the shared widgets.
         if self.editor_state.editor_ui.touch_chrome() {
@@ -150,17 +155,17 @@ impl WidgetHostNative {
         {
             return;
         }
+        // Over the reader the whole screen dims (its header is not the
+        // editing app bar that stays live above an editor sheet).
+        let top = if self.works_reader_visible() {
+            0.0
+        } else {
+            canvas_geometry::touch_app_bar_height(&self.editor_state)
+        };
         frame.fill_rect(
             Rect {
-                origin: Point2D::new(
-                    0.0,
-                    canvas_geometry::touch_app_bar_height(&self.editor_state),
-                ),
-                size: Point2D::new(
-                    viewport_width,
-                    (viewport_height - canvas_geometry::touch_app_bar_height(&self.editor_state))
-                        .max(0.0),
-                ),
+                origin: Point2D::new(0.0, top),
+                size: Point2D::new(viewport_width, (viewport_height - top).max(0.0)),
             },
             op_editor_ui::widgets::mobile_more_panel::more_scrim_color(),
         );

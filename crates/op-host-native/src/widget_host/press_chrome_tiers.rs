@@ -301,9 +301,21 @@ impl WidgetHostNative {
                 // under the Home takeover — no document swap, so page
                 // selection and undo history ride through unchanged
                 // (the mirror of `HomeHit::Professional`).
-                let ui = &mut self.editor_state.editor_ui;
-                ui.entry_surface = op_editor_core::EntrySurface::Home;
-                ui.home.visible = true;
+                // A phone work with a workspace returns to ITS normal view
+                // (the reader) rather than the Home page: 普通 ⇄ 专业 is a
+                // view switch on one work, not a navigation away from it.
+                if self.editor_state.editor_ui.workspace.active
+                    && self.editor_state.editor_ui.compact_layout()
+                {
+                    self.editor_state.editor_ui.workspace.previous_tool =
+                        Some(self.editor_state.tool);
+                    self.editor_state.editor_ui.workspace.reenter(self.now_ms);
+                    self.frame_reader_board(ctx.viewport_width, ctx.viewport_height);
+                } else {
+                    let ui = &mut self.editor_state.editor_ui;
+                    ui.entry_surface = op_editor_core::EntrySurface::Home;
+                    ui.home.visible = true;
+                }
             }
             op_editor_ui::widgets::MobileAppBarHit::Layers => {
                 if self.editor_state.editor_ui.expanded_touch_layout() {
