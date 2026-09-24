@@ -142,10 +142,17 @@ fn send_on_an_empty_box_opens_the_example_as_an_instant_draft() {
         "the template's boards are on the page"
     );
     assert_eq!(host.editor_state.chat.launch_route, LaunchRoute::Refine);
-    assert!(
-        host.editor_state.chat.pending_send.is_some(),
-        "refine queued"
-    );
+    let chat = &host.editor_state.chat;
+    let sent = chat.pending_send.as_deref().expect("refine queued");
+    // The bubble shows the user's brief, not the engineered model prompt.
+    let brief = host.editor_state.editor_ui.workspace.brief.trim();
+    let user = chat
+        .messages
+        .iter()
+        .find(|message| message.role == op_editor_core::ChatRole::User)
+        .expect("a user bubble");
+    assert_eq!(user.content, brief);
+    assert_ne!(user.content, sent);
 }
 
 #[test]

@@ -311,6 +311,11 @@ impl WidgetHost {
         chat.set_input_text(op_editor_core::refine_prompt(family, &brief));
         chat.launch_route = LaunchRoute::Refine;
         let sent = self.begin_chat_send();
+        // The provider gets the engineered refine prompt; the bubble shows
+        // the brief the user asked for, in their own words.
+        if sent {
+            self.editor_state.chat.show_last_user_message_as(&brief);
+        }
         self.editor_state.chat.focused = false;
         self.mark_dirty();
         sent

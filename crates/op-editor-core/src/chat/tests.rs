@@ -615,3 +615,22 @@ fn builtin_model_id_strips_the_exact_structured_provider_prefix() {
     );
     assert_eq!(malformed.builtin_model_id(), None);
 }
+
+#[test]
+fn begin_send_showing_keeps_the_prompt_but_shows_the_users_words() {
+    let mut chat = ChatState::default();
+    chat.set_input_text("ENGINEERED PROMPT\n\nuser need: a pitch deck");
+    assert!(chat.begin_send_showing("  a pitch deck  "));
+    assert_eq!(chat.messages[0].role, ChatRole::User);
+    assert_eq!(chat.messages[0].content, "a pitch deck");
+    assert_eq!(
+        chat.pending_send.as_deref(),
+        Some("ENGINEERED PROMPT\n\nuser need: a pitch deck")
+    );
+
+    // An empty display text keeps the prompt as the bubble.
+    let mut chat = ChatState::default();
+    chat.set_input_text("plain prompt");
+    assert!(chat.begin_send_showing("   "));
+    assert_eq!(chat.messages[0].content, "plain prompt");
+}

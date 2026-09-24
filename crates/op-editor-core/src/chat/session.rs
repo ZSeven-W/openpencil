@@ -123,6 +123,39 @@ impl ChatState {
         true
     }
 
+    /// [`Self::begin_send`], but the transcript shows `shown` instead of
+    /// the queued prompt. Engineered turns (the Studio draft refine wraps
+    /// the user's brief in model instructions) keep the exact prompt in
+    /// `pending_send` for the provider, while the user bubble carries the
+    /// user's own words — in whatever language they typed them — rather
+    /// than instructions written for the model. An empty `shown` falls
+    /// back to the prompt.
+    pub fn begin_send_showing(&mut self, shown: &str) -> bool {
+        let sent = self.begin_send();
+        if sent {
+            self.show_last_user_message_as(shown);
+        }
+        sent
+    }
+
+    /// Rewrite the newest user bubble to `shown` (trimmed; empty is a
+    /// no-op). Only the transcript changes — a queued `pending_send`
+    /// keeps the prompt the provider receives.
+    pub fn show_last_user_message_as(&mut self, shown: &str) {
+        let shown = shown.trim();
+        if shown.is_empty() {
+            return;
+        }
+        if let Some(user) = self
+            .messages
+            .iter_mut()
+            .rev()
+            .find(|message| message.role == ChatRole::User)
+        {
+            user.content = shown.to_string();
+        }
+    }
+
     pub fn has_streaming_turn(&self) -> bool {
         self.pending_send.is_some() || self.messages.iter().any(|msg| msg.streaming)
     }

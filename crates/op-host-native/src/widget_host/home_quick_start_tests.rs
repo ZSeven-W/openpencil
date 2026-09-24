@@ -137,7 +137,10 @@ fn an_empty_send_with_a_model_loads_the_draft_and_queues_an_in_place_refine() {
         sent.ends_with(example.trim()),
         "the example is the user's need"
     );
-    assert_eq!(state.chat.messages[0].content, sent);
+    // The bubble shows the user's brief, not the engineered (Chinese)
+    // model prompt — the transcript follows the user's language.
+    assert_eq!(state.chat.messages[0].content, example.trim());
+    assert!(!state.chat.messages[0].content.contains("不要重新开始"));
     // The modify route edits exactly the selected frames: every board.
     let selected: Vec<String> = state
         .selection

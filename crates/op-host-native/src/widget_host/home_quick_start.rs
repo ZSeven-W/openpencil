@@ -159,7 +159,9 @@ impl WidgetHostNative {
         chat.focus_input_at_end(self.now_ms);
         chat.set_input_text(op_editor_core::refine_prompt(family, &brief));
         chat.launch_route = LaunchRoute::Refine;
-        let sent = chat.begin_send();
+        // The provider gets the engineered refine prompt; the bubble shows
+        // the brief the user asked for, in their own words.
+        let sent = chat.begin_send_showing(&brief);
         chat.focused = false;
         self.mark_dirty();
         sent
