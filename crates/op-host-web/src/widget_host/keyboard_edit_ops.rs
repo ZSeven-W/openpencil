@@ -331,7 +331,10 @@ impl WidgetHost {
             }
             return true;
         }
-        if self.editor_state.chat.focused && !self.non_chat_input_owns_keyboard() {
+        if self.editor_state.chat.focused
+            && !self.non_chat_input_owns_keyboard()
+            && !self.home_composer_owns_keyboard()
+        {
             if let Some(text) = self
                 .editor_state
                 .chat
@@ -401,7 +404,10 @@ impl WidgetHost {
             return true;
         }
         // Chat input cut — its own selection model.
-        if self.editor_state.chat.focused && !self.non_chat_input_owns_keyboard() {
+        if self.editor_state.chat.focused
+            && !self.non_chat_input_owns_keyboard()
+            && !self.home_composer_owns_keyboard()
+        {
             if let Some(text) = self
                 .editor_state
                 .chat

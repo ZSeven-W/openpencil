@@ -149,6 +149,12 @@ impl WidgetHost {
         }
         let ui = &self.editor_state.ui;
         let eui = &self.editor_state.editor_ui;
+        // Studio Home's composer is a takeover: while it owns the keyboard
+        // its highlighted brief is what Cmd/Ctrl+C / X act on (desktop
+        // `input_copy_text` resolves the same field first).
+        if self.home_composer_owns_keyboard() {
+            return slice(&eui.home.input);
+        }
         // The painted image popover is topmost. Resolve it before any stale
         // focus bit left on an obscured settings/Git/property field so copy
         // and cut cannot split from typing and IME routing.

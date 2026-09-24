@@ -27,6 +27,19 @@ impl WidgetHost {
         ui.agent_settings_open || (ui.account_ui_available && ui.login_modal_open)
     }
 
+    /// Whether the Home composer itself owns the keyboard: Home is up and
+    /// none of the overlays it opens (settings, sign-in, model picker) is
+    /// taking keys. Copy / cut follow the same owner typing does, so the
+    /// chord never reaches a chat input or canvas selection hidden under
+    /// Home.
+    pub(in crate::widget_host) fn home_composer_owns_keyboard(&self) -> bool {
+        let ui = &self.editor_state.editor_ui;
+        self.home_visible()
+            && !ui.agent_settings_open
+            && !ui.login_modal_open
+            && !ui.chat_model_picker.open
+    }
+
     /// Typed character while Home is up. `None` lets the ordinary ladder run
     /// (the settings modal over Home types into its own fields).
     pub(in crate::widget_host) fn home_text(&mut self, c: char) -> Option<bool> {

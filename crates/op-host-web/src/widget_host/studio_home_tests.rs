@@ -309,6 +309,37 @@ fn a_daemon_holding_an_opened_file_opens_on_the_canvas() {
 }
 
 #[test]
+fn copy_and_cut_act_on_the_highlighted_brief_not_the_chat_under_home() {
+    let mut host = home_host();
+    type_brief(&mut host, "coffee app");
+    // A chat input left focused under Home must not own the chord.
+    host.editor_state.chat.focused = true;
+    host.editor_state
+        .chat
+        .set_input_text("chat text".to_string());
+    assert!(host.home_composer_owns_keyboard());
+    assert_eq!(
+        host.focused_input_selected_text(),
+        None,
+        "no highlight, nothing to copy (desktop copies the selection only)"
+    );
+    assert!(host.home_select_all());
+    assert_eq!(
+        host.focused_input_selected_text().as_deref(),
+        Some("coffee app")
+    );
+    // Cut's delete step: the highlighted brief goes, the chat keeps its text.
+    assert!(host.apply_backspace());
+    assert_eq!(host.editor_state.editor_ui.home.draft, "");
+    assert_eq!(host.editor_state.chat.input.text(), "chat text");
+
+    // An overlay Home opened keeps its own field.
+    type_brief(&mut host, "brief");
+    host.editor_state.editor_ui.agent_settings_open = true;
+    assert!(!host.home_composer_owns_keyboard());
+}
+
+#[test]
 fn a_daemon_catalog_marks_served_models_and_an_empty_one_clears_it() {
     let mut state = op_editor_core::EditorState::new();
     crate::web_model_catalog::apply_models(&mut state, &["gpt-5".to_string()]);
