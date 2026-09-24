@@ -40,8 +40,9 @@ use std::path::Path;
 use crate::export::ExportError;
 use crate::export_html::board_name;
 use crate::export_html_structured::board_slide_markup;
+use crate::export_share_chrome::{style_display_name, ShareChrome};
 use crate::export_share_sanitize::{host_redact_terms, sanitize_document_value};
-use crate::export_share_template::{render_share_page, ShareLabels, ShareSlide};
+use crate::export_share_template::{render_share_page, ShareSlide};
 
 /// What one share export produced.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -61,7 +62,8 @@ pub struct ShareOptions {
     pub redact_terms: Vec<String>,
     /// Directory relative asset references resolve against.
     pub document_dir: Option<std::path::PathBuf>,
-    /// Locale of the page chrome — the author's.
+    /// The author's locale: the page chrome's fallback when the
+    /// recipient's browser language matches no UI locale.
     pub locale: Locale,
 }
 
@@ -106,8 +108,12 @@ pub fn render_share_html(
         .map(|recipe| recipe.sanitized(&terms));
     let document_json = share_document_json(state, recipe.clone(), options)?;
     let title = op_editor_core::sanitize_share_text(&share_title(state, &slides), &terms);
-    let labels = ShareLabels::for_locale(options.locale, recipe.as_ref());
-    let html = render_share_page(&title, &slides, &document_json, &labels);
+    let style_name = recipe
+        .as_ref()
+        .and_then(|recipe| recipe.style_guide.as_deref())
+        .map(|id| op_editor_core::sanitize_share_text(&style_display_name(id), &terms));
+    let chrome = ShareChrome::new(options.locale, recipe.as_ref(), style_name.as_deref());
+    let html = render_share_page(&title, &slides, &document_json, &chrome);
     package.bytes = html.len();
     Ok((html, package))
 }

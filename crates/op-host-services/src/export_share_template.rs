@@ -6,13 +6,14 @@
 //! the slideshow it is a VIEWER, not a projector: a light surround, a
 //! header saying what the work is and how it was made, one board at a
 //! time with arrows (a deck reads as slides), and a primary "Make one
-//! like this" action that downloads the embedded `.op`.
+//! like this" action that downloads the embedded `.op`. Its chrome text
+//! follows the recipient's browser language (`export_share_chrome`).
 
-use op_editor_core::{HomeFamily, Locale, ShareRecipe};
 use op_util::xml_escape::escape_html;
 use std::fmt::Write as _;
 
 use crate::export_html_structured::css_num;
+use crate::export_share_chrome::{ShareChrome, CHROME_ELEMENT_ID, CHROME_JS};
 
 /// One board on the page.
 pub struct ShareSlide {
@@ -27,56 +28,6 @@ pub struct ShareSlide {
     pub body: String,
 }
 
-/// Every piece of page chrome text, resolved in the author's locale.
-pub struct ShareLabels {
-    pub make_same: String,
-    pub make_same_hint: String,
-    pub made_with: String,
-    pub prev: String,
-    pub next: String,
-    /// `任务 · 风格` summary under the title; empty without a recipe.
-    pub recipe_line: String,
-    pub html_lang: &'static str,
-}
-
-impl ShareLabels {
-    pub fn for_locale(locale: Locale, recipe: Option<&ShareRecipe>) -> Self {
-        let t = |key: &'static str| op_i18n::translate(locale, key).to_string();
-        let recipe_line = recipe
-            .map(|recipe| {
-                let task = op_i18n::translate(locale, task_name_key(recipe.family));
-                let style = recipe
-                    .style_guide
-                    .clone()
-                    .unwrap_or_else(|| t("share.page.autoStyle"));
-                format!("{task} · {} {style}", t("share.page.style"))
-            })
-            .unwrap_or_default();
-        Self {
-            make_same: t("share.page.makeSame"),
-            make_same_hint: t("share.page.makeSameHint"),
-            made_with: t("share.page.madeWith"),
-            prev: t("share.page.prev"),
-            next: t("share.page.next"),
-            recipe_line,
-            html_lang: locale.code(),
-        }
-    }
-}
-
-/// The i18n key of a Home task's display name.
-fn task_name_key(family: HomeFamily) -> &'static str {
-    match family {
-        HomeFamily::AppUi => "home.task.app.name",
-        HomeFamily::Web => "home.task.web.name",
-        HomeFamily::Presentation => "home.task.presentation.name",
-        HomeFamily::KnowledgeCards => "home.task.knowledge.name",
-        HomeFamily::ScreenshotTutorial => "home.task.tutorial.name",
-        HomeFamily::Infographic => "home.task.infographic.name",
-        HomeFamily::EventPoster => "home.task.poster.name",
-    }
-}
-
 /// Element id of the embedded document. The download handler and the
 /// tests both read it by this name.
 pub const DOCUMENT_ELEMENT_ID: &str = "op-document";
@@ -86,8 +37,9 @@ pub fn render_share_page(
     title: &str,
     slides: &[ShareSlide],
     document_json: &str,
-    labels: &ShareLabels,
+    chrome: &ShareChrome,
 ) -> String {
+    let labels = &chrome.author;
     let mut boards = String::new();
     for (i, slide) in slides.iter().enumerate() {
         let current = if i == 0 { " is-current" } else { "" };
@@ -133,8 +85,10 @@ pub fn render_share_page(
          <nav id=\"nav\"><button id=\"prev\" type=\"button\" aria-label=\"{prev}\">&#8249;</button>\
          <span id=\"counter\">1 / {count}</span>\
          <button id=\"next\" type=\"button\" aria-label=\"{next}\">&#8250;</button></nav>\n\
-         <footer id=\"foot\"><span>{made}</span><span class=\"hint\">{hint}</span></footer>\n\
+         <footer id=\"foot\"><span class=\"made\">{made}</span><span class=\"hint\">{hint}</span></footer>\n\
          <script type=\"application/json\" id=\"{DOCUMENT_ELEMENT_ID}\">{doc}</script>\n\
+         <script type=\"application/json\" id=\"{CHROME_ELEMENT_ID}\">{chrome}</script>\n\
+         <script>{CHROME_JS}</script>\n\
          <script>{SHARE_JS}</script>\n\
          </body>\n\
          </html>\n",
@@ -148,6 +102,7 @@ pub fn render_share_page(
         made = escape_html(&labels.made_with),
         count = slides.len(),
         doc = script_safe_json(document_json),
+        chrome = script_safe_json(&chrome.table_json),
     )
 }
 

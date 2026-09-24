@@ -177,7 +177,8 @@ fn script_breaking_text_cannot_escape_the_document_block() {
         ]}"##,
     );
     let (html, _) = render_share_html(&state, &options()).expect("share renders");
-    assert_eq!(html.matches("</script>").count(), 2, "{html}");
+    // The document block, the chrome table, the chrome swap and the viewer.
+    assert_eq!(html.matches("</script>").count(), 4, "{html}");
     assert!(!html.contains("<script>alert"), "{html}");
     let doc = embedded_document(&html);
     assert_eq!(
@@ -227,4 +228,73 @@ fn the_sample_deck_shares_as_a_small_file() {
         std::fs::copy(&target, keep).expect("keep the sample page");
     }
     let _ = std::fs::remove_file(&target);
+}
+
+/// The embedded chrome table, parsed.
+fn embedded_chrome(html: &str) -> serde_json::Value {
+    let open = format!("id=\"{}\">", crate::export_share_chrome::CHROME_ELEMENT_ID);
+    let start = html.find(&open).expect("chrome block") + open.len();
+    let end = start + html[start..].find("</script>").expect("block end");
+    serde_json::from_str(&html[start..end]).expect("chrome table is JSON")
+}
+
+#[test]
+fn the_chrome_follows_the_recipients_language_with_the_author_as_fallback() {
+    let state = with_live_run(two_boards(), "five-slide coffee brand deck");
+    let mut options = options();
+    options.locale = Locale::De;
+    let (html, _) = render_share_html(&state, &options).expect("share renders");
+
+    // Server-rendered in the author's locale: the no-script fallback.
+    assert!(html.contains("<html lang=\"de\">"), "{html}");
+    let chrome = embedded_chrome(&html);
+    assert_eq!(chrome["author"], "de");
+    let locales = chrome["locales"].as_object().expect("locale map");
+    assert_eq!(locales.len(), Locale::ALL.len());
+    for locale in Locale::ALL {
+        let entry = &locales[locale.code()];
+        for field in ["make", "hint", "made", "prev", "next", "recipe"] {
+            assert!(
+                !entry[field].as_str().unwrap_or_default().is_empty(),
+                "{} {field}",
+                locale.code()
+            );
+        }
+    }
+    assert_eq!(locales["en-US"]["make"], "Make one like this");
+    assert_ne!(locales["zh-CN"]["make"], locales["en-US"]["make"]);
+    assert_ne!(locales["ja"]["recipe"], locales["en-US"]["recipe"]);
+    // The swap runs from the recipient's browser languages.
+    assert!(html.contains("navigator.languages"));
+    assert!(html.contains("class=\"made\""));
+}
+
+#[test]
+fn the_recipe_line_names_the_style_the_way_a_person_reads_it() {
+    let state = with_live_run(two_boards(), "five-slide coffee brand deck");
+    let (html, _) = render_share_html(&state, &options()).expect("share renders");
+    let line_start = html.find("<div class=\"recipe\">").expect("recipe line");
+    let line_end = line_start + html[line_start..].find("</div>").expect("line end");
+    let line = &html[line_start..line_end];
+    assert!(line.contains("Editorial Dark"), "{line}");
+    assert!(!line.contains("editorial-dark"), "{line}");
+    let chrome = embedded_chrome(&html);
+    assert!(chrome["locales"]["zh-CN"]["recipe"]
+        .as_str()
+        .expect("zh-CN recipe")
+        .contains("Editorial Dark"));
+    // The recipe itself keeps the id the recipient's editor pins.
+    assert_eq!(
+        embedded_document(&html)["editorMeta"]["shareRecipe"]["styleGuide"],
+        "editorial-dark"
+    );
+}
+
+#[test]
+fn style_display_names_humanize_corpus_ids() {
+    use crate::export_share_chrome::style_display_name;
+    assert_eq!(
+        style_display_name("agency-editorial-light"),
+        "Agency Editorial Light"
+    );
 }

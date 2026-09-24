@@ -82,6 +82,7 @@ pub mod export_hyperframes;
 pub mod export_pdf;
 pub mod export_pptx;
 pub mod export_share;
+mod export_share_chrome;
 mod export_share_sanitize;
 mod export_share_template;
 mod figma_convert;
