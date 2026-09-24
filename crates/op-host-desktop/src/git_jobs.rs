@@ -419,9 +419,10 @@ pub(crate) fn format_compact_time(ts_secs: i64, now_secs: i64) -> String {
 }
 
 /// Gregorian `(year, month, day)` from a day count relative to the Unix
-/// epoch — Howard Hinnant's `civil_from_days`. Used only for commits
-/// older than a week, where the relative label falls back to a date.
-fn civil_from_days(days: i64) -> (i64, u32, u32) {
+/// epoch — Howard Hinnant's `civil_from_days`. Used for commits older than
+/// a week (the relative label falls back to a date) and for dated rescue
+/// copies of designs a Studio Home brief replaced.
+pub(crate) fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let z = days + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
     let doe = z - era * 146_097;

@@ -323,6 +323,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.settings" => "Ayarlar",
         "collab.chat.imageGenName" => "AI görsel üretimi",
         "collab.chat.imageGenConfigure" => "Görsel üretim modeli kur",
+        "dialog.replaceBody" => "\"{{name}}\" kaydedilmemiş değişiklikler içeriyor. Başka bir belge açmak bu değişiklikleri siler.\n\nEvet = Önce kaydet, Hayır = Değişiklikleri at, İptal = Düzenlemeye devam et.",
         _ => return None,
     })
 }

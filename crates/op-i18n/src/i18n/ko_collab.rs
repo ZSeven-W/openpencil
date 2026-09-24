@@ -339,6 +339,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.settings" => "설정",
         "collab.chat.imageGenName" => "AI 이미지 생성",
         "collab.chat.imageGenConfigure" => "이미지 생성 모델 설정하기",
+        "dialog.replaceBody" => "\"{{name}}\"에 저장하지 않은 변경 사항이 있습니다. 다른 문서를 열면 변경 사항이 사라집니다.\n\n예 = 먼저 저장, 아니요 = 변경 사항 버리기, 취소 = 계속 편집",
         _ => return None,
     })
 }

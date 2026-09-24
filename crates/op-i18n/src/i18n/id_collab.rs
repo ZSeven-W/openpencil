@@ -323,6 +323,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.settings" => "Pengaturan",
         "collab.chat.imageGenName" => "Generasi gambar AI",
         "collab.chat.imageGenConfigure" => "Siapkan model generasi gambar",
+        "dialog.replaceBody" => "\"{{name}}\" memiliki perubahan yang belum disimpan. Membuka dokumen lain akan membuang perubahan ini.\n\nYa = Simpan dulu, Tidak = Buang perubahan, Batal = Lanjut mengedit.",
         _ => return None,
     })
 }

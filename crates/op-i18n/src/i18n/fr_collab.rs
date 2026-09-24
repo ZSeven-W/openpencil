@@ -323,6 +323,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.settings" => "Réglages",
         "collab.chat.imageGenName" => "Génération d'images IA",
         "collab.chat.imageGenConfigure" => "Configurer un modèle de génération d'images",
+        "dialog.replaceBody" => "« {{name}} » contient des modifications non enregistrées. Ouvrir un autre document les supprimera.\n\nOui = Enregistrer d’abord, Non = Ignorer les modifications, Annuler = Continuer l’édition.",
         _ => return None,
     })
 }

@@ -235,6 +235,9 @@ pub fn handle_open(
     current_path: &mut Option<PathBuf>,
     window: Option<&winit::window::Window>,
 ) -> bool {
+    if !crate::persistence_replace_guard::confirm_replace(host, current_path, window) {
+        return false;
+    }
     let path = match rfd::FileDialog::new()
         .set_title(op_i18n::translate(
             host.editor_state().editor_ui.locale,
@@ -378,6 +381,9 @@ pub fn run_action(
     use op_editor_core::editor_ui_state::FileAction;
     match action {
         FileAction::New => {
+            if !crate::persistence_replace_guard::confirm_replace(host, current_path, window) {
+                return ActionOutcome::Noop;
+            }
             if !host.gate_collaboration_action(
                 op_editor_core::CollabGateAction::ReplaceDocument,
                 op_editor_core::CollabEditSource::User,
@@ -488,6 +494,9 @@ pub fn run_action(
             let Some(entry) = host.editor_state().editor_ui.recent_files.get(i).cloned() else {
                 return ActionOutcome::Noop;
             };
+            if !crate::persistence_replace_guard::confirm_replace(host, current_path, window) {
+                return ActionOutcome::Noop;
+            }
             let path = std::path::PathBuf::from(&entry.path);
             match load_into_host(host, &path) {
                 Ok(Some(bound_path)) => {

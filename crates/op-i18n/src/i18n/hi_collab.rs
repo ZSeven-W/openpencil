@@ -327,6 +327,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.settings" => "सेटिंग्स",
         "collab.chat.imageGenName" => "AI इमेज जनरेशन",
         "collab.chat.imageGenConfigure" => "इमेज जनरेशन मॉडल सेट करें",
+        "dialog.replaceBody" => "\"{{name}}\" में बिना सहेजे बदलाव हैं। दूसरा दस्तावेज़ खोलने पर ये बदलाव हट जाएंगे।\n\nहाँ = पहले सहेजें, नहीं = बदलाव छोड़ें, रद्द करें = संपादन जारी रखें।",
         _ => return None,
     })
 }

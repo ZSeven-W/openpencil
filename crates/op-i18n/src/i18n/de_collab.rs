@@ -323,6 +323,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.settings" => "Einstellungen",
         "collab.chat.imageGenName" => "KI-Bildgenerierung",
         "collab.chat.imageGenConfigure" => "Bildgenerierungsmodell einrichten",
+        "dialog.replaceBody" => "„{{name}}“ enthält ungespeicherte Änderungen. Beim Öffnen eines anderen Dokuments gehen sie verloren.\n\nJa = Zuerst speichern, Nein = Änderungen verwerfen, Abbrechen = Weiter bearbeiten.",
         _ => return None,
     })
 }

@@ -312,15 +312,25 @@ impl WidgetHostNative {
     /// second, hand-rolled swap seam would reproduce. The transcript is
     /// reset too, because the new document's run must not read the last
     /// design's conversation as its own history.
+    ///
+    /// The replaced document is parked for the shell (see
+    /// `home_document_swap`): its unsaved work must survive and its file
+    /// path must not receive the new design. Staged attachments belong to
+    /// the brief being sent, so they cross the swap instead of being
+    /// cleared with the old transcript.
     pub fn start_fresh_document_for_home(&mut self) -> bool {
+        self.park_document_replaced_by_home();
         let starter = op_editor_core::EditorState::starter();
         if self
             .install_open_document(starter.doc.clone(), None, None)
             .is_err()
         {
+            self.replaced_home_document = None;
             return false;
         }
+        let attachments = std::mem::take(&mut self.editor_state.chat.pending_attachments);
         self.editor_state.chat.new_chat();
+        self.editor_state.chat.pending_attachments = attachments;
         true
     }
 

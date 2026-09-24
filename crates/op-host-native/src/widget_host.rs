@@ -121,6 +121,8 @@ mod git_press;
 mod helpers;
 mod history_guard;
 mod home;
+mod home_document_swap;
+pub use home_document_swap::ReplacedHomeDocument;
 mod home_overlays;
 mod home_scroll;
 mod host_lifecycle;
@@ -380,6 +382,8 @@ pub struct WidgetHostNative {
     pub(in crate::widget_host) component_browser_drag: Option<ComponentBrowserDragState>,
     /// Active Icon-picker panel drag.
     pub(in crate::widget_host) icon_picker_drag: Option<IconPickerDragState>,
+    /// What the last Studio Home brief replaced, until the shell drains it.
+    pub(in crate::widget_host) replaced_home_document: Option<ReplacedHomeDocument>,
     /// Active image-fill adjustment slider drag in the floating
     /// property popover.
     pub(in crate::widget_host) image_adjustment_drag: Option<op_editor_core::ImageAdjustmentField>,

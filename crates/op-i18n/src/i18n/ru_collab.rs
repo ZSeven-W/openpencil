@@ -353,6 +353,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.settings" => "Настройки",
         "collab.chat.imageGenName" => "Генерация изображений ИИ",
         "collab.chat.imageGenConfigure" => "Настроить модель генерации изображений",
+        "dialog.replaceBody" => "В «{{name}}» есть несохранённые изменения. При открытии другого документа они будут потеряны.\n\nДа = Сначала сохранить, Нет = Отменить изменения, Отмена = Продолжить редактирование.",
         _ => return None,
     })
 }

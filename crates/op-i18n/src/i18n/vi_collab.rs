@@ -335,6 +335,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.settings" => "Cài đặt",
         "collab.chat.imageGenName" => "Tạo hình ảnh bằng AI",
         "collab.chat.imageGenConfigure" => "Thiết lập mô hình tạo hình ảnh",
+        "dialog.replaceBody" => "\"{{name}}\" có thay đổi chưa lưu. Mở tài liệu khác sẽ bỏ các thay đổi này.\n\nCó = Lưu trước, Không = Bỏ thay đổi, Hủy = Tiếp tục chỉnh sửa.",
         _ => return None,
     })
 }

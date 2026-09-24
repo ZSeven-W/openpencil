@@ -325,6 +325,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.settings" => "การตั้งค่า",
         "collab.chat.imageGenName" => "การสร้างภาพด้วย AI",
         "collab.chat.imageGenConfigure" => "ตั้งค่าโมเดลสร้างภาพ",
+        "dialog.replaceBody" => "\"{{name}}\" มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก การเปิดเอกสารอื่นจะทิ้งการเปลี่ยนแปลงเหล่านี้\n\nใช่ = บันทึกก่อน, ไม่ = ทิ้งการเปลี่ยนแปลง, ยกเลิก = แก้ไขต่อ",
         _ => return None,
     })
 }

@@ -19,7 +19,7 @@ LOCALE_FILE = I18N_DIR.parent / "locale.rs"
 # intentional catalog size"). The two live apart, so adding keys means
 # bumping BOTH — the Studio entry surface bumped the Rust one and left
 # this at 1717, which only the WASM bundle job noticed.
-EXPECTED_KEY_COUNT = 1859
+EXPECTED_KEY_COUNT = 1860
 TABLE_SUFFIXES = ("", "_git", "_panel", "_collab")
 
 # Module stem, Locale variant, and the exact value returned by Locale::code().

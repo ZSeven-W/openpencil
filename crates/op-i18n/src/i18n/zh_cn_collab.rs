@@ -323,6 +323,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.settings" => "设置",
         "collab.chat.imageGenName" => "AI 生图",
         "collab.chat.imageGenConfigure" => "去配置生图模型",
+        "dialog.replaceBody" => "“{{name}}”有未保存的更改。打开其他文档会丢弃这些更改。\n\n是 = 先保存,否 = 放弃更改,取消 = 返回继续编辑。",
         _ => return None,
     })
 }

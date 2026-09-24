@@ -440,6 +440,11 @@ impl DesktopApp {
         if self.drain_image_gen_test() {
             self.redraw_dirty = true;
         }
+        // Drain the document a Studio Home brief replaced: the new design
+        // starts untitled and unsaved work is kept as a rescue copy.
+        if self.drain_replaced_home_document() {
+            self.redraw_dirty = true;
+        }
         if self.drain_acp_agent_connect() {
             self.redraw_dirty = true;
         }

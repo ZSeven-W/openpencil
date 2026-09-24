@@ -323,6 +323,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.settings" => "設定",
         "collab.chat.imageGenName" => "AI 生圖",
         "collab.chat.imageGenConfigure" => "前往設定生圖模型",
+        "dialog.replaceBody" => "「{{name}}」有未儲存的變更。開啟其他文件會捨棄這些變更。\n\n是 = 先儲存,否 = 捨棄變更,取消 = 返回繼續編輯。",
         _ => return None,
     })
 }

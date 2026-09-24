@@ -363,6 +363,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.settings" => "Settings",
         "collab.chat.imageGenName" => "AI image generation",
         "collab.chat.imageGenConfigure" => "Set up an image generation model",
+        "dialog.replaceBody" => "\"{{name}}\" has unsaved changes. Opening another document discards them.\n\nYes = Save first, No = Discard changes, Cancel = Keep editing.",
         _ => return None,
     })
 }

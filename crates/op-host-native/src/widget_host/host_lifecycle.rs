@@ -42,6 +42,7 @@ impl WidgetHostNative {
             design_md_drag: None,
             component_browser_drag: None,
             icon_picker_drag: None,
+            replaced_home_document: None,
             image_adjustment_drag: None,
             image_crop_drag: None,
             effect_radius_drag: None,

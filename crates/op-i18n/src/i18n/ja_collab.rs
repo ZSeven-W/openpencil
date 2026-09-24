@@ -339,6 +339,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "home.nav.settings" => "設定",
         "collab.chat.imageGenName" => "AI画像生成",
         "collab.chat.imageGenConfigure" => "画像生成モデルを設定する",
+        "dialog.replaceBody" => "「{{name}}」には未保存の変更があります。別のドキュメントを開くと変更は破棄されます。\n\nはい = 先に保存 / いいえ = 変更を破棄 / キャンセル = 編集を続ける",
         _ => return None,
     })
 }
