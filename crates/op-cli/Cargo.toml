@@ -14,6 +14,8 @@ path = "src/main.rs"
 [dependencies]
 base64 = "0.22"
 op-ai-skills = { path = "../op-ai-skills" }
+# Offline `brand:extract --out` (pure: no network, no filesystem of its own).
+op-brand = { path = "../op-brand" }
 op-config-store = { path = "../op-config-store" }
 # Shared MCP defaults (port + local endpoint URL helpers). Already in the
 # build graph transitively via op-pen-loader, so this adds no new crates.

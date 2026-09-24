@@ -71,6 +71,7 @@ COMMON COMMANDS:
   op layout [--parent P] [--depth N]      snapshot layout tree
   op find-space [--direction D] [--width W] [--height H]
   op import:svg <file.svg> [--x N] [--y N] [--parent P] [--page PAGE]
+  op brand:extract <url|screenshot.png|page.html> [--apply] [--out kit.optheme] [--file doc.op]
   op import:html <file.html|url> [--x N] [--y N] [--parent P] [--page PAGE] [--viewport-height N] [--out out.op]
   op import:snapshot <snapshot.json> [--x N] [--y N] [--parent P] [--page PAGE] [--out out.op]
   op import:figma <file.fig> [--out output.op]

@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 mod app_control_cli;
+mod brand_cli;
 mod cli_conversion;
 mod cli_error;
 mod codegen_cli;
@@ -110,6 +111,10 @@ fn run(args: &[String]) -> Result<String, CliError> {
             json_path,
             out_path,
         } => html_cli::run_import_snapshot(&json_path, &out_path)?,
+        Command::BrandExtract {
+            source_path,
+            out_path,
+        } => brand_cli::run_brand_extract(&source_path, &out_path)?,
         Command::ToolCall { tool, args } => post(
             target_port,
             &target_token,
@@ -243,6 +248,11 @@ enum Command {
     },
     ImportSnapshot {
         json_path: String,
+        out_path: String,
+    },
+    /// `op brand:extract <image|page.html> --out kit.optheme` (offline).
+    BrandExtract {
+        source_path: String,
         out_path: String,
     },
     ToolCall {
@@ -477,6 +487,7 @@ fn command_from_positionals(positionals: &[String], flags: &Flags) -> Result<Com
         "import:html" => html_cli::map_import_html(positionals, flags),
         "import:snapshot" => html_cli::map_import_snapshot(positionals, flags),
         "import:figma" => figma_cli::map_import_figma(positionals, flags),
+        "brand:extract" => brand_cli::map_brand_extract(positionals, flags),
         "codegen:plan" | "codegen:submit" | "codegen:assemble" | "codegen:clean"
         | "codegen:export" => codegen_cli::map_codegen(positionals, flags),
         tool => generic_tool_call(tool, &positionals[1..], flags),
