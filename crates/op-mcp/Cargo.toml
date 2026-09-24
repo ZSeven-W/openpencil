@@ -21,6 +21,8 @@ script = ["dep:rquickjs", "dep:tracing"]
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 jian-scene = { path = "../../vendor/jian/crates/jian-scene" }
 op-ai-skills = { path = "../op-ai-skills" }
+# Deterministic generators behind `codegen_export` (no `ai` feature).
+op-codegen = { path = "../op-codegen" }
 # `~/.openpencil` resolution for the debug-tools log reader (single source
 # of truth for the config-dir path; tiny serde-only crate).
 op-config-store = { path = "../op-config-store" }

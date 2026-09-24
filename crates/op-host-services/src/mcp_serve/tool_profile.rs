@@ -388,6 +388,7 @@ pub const TOOL_PROFILES: &[ToolProfile] = &[
         ToolAccess::Read,
         ToolSurface::ProcessGlobal,
     ),
+    ToolProfile::new("codegen_export", ToolAccess::Read, ToolSurface::InMemory),
     ToolProfile::new("codegen_plan", ToolAccess::Read, ToolSurface::ProcessGlobal),
     ToolProfile::new(
         "codegen_submit_chunk",

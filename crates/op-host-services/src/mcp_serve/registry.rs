@@ -94,6 +94,7 @@ pub(super) fn rebuild_registry(
     register_tool!("codegen_submit_chunk", codegen_submit_chunk_snapshot());
     register_tool!("codegen_assemble", codegen_assemble_snapshot());
     register_tool!("codegen_clean", codegen_clean_snapshot());
+    register_tool!("codegen_export", codegen_export_snapshot(doc));
     register_tool!(
         "search_all_unique_properties",
         search_all_unique_properties_snapshot(doc)

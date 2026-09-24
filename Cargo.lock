@@ -4834,6 +4834,7 @@ dependencies = [
  "jian-ops-schema",
  "jian-scene",
  "op-ai-skills",
+ "op-codegen",
  "op-config-store",
  "op-design-lint",
  "op-editor-core",

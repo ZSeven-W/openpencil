@@ -176,3 +176,52 @@ fn codegen_plan_validation_failure_uses_ts_error_envelope() {
         "Error: codegen_plan failed: Chunk a: node ghost not found in document"
     );
 }
+
+#[test]
+fn codegen_export_round_trips_over_the_tools_call_wire() {
+    let mut state = codegen_state();
+    let line = r#"{"jsonrpc":"2.0","id":71,"method":"tools/call","params":{"name":"codegen_export","arguments":{"framework":"react-tailwind","nodeIds":"n2"}}}"#;
+    let response = dispatch(&mut state, line);
+    assert!(response.contains(r#""id":71"#), "{response}");
+    let out: serde_json::Value =
+        serde_json::from_str(&crate::mcp_serve::tool_text(&response)).expect("export json");
+    assert_eq!(out["framework"], "react-tailwind");
+    let component = out["files"]["component.tsx"].as_str().expect("component");
+    assert!(
+        component.contains("export default function Button()"),
+        "{component}"
+    );
+    assert!(component.contains("bg-[#3b82f6]"), "{component}");
+    assert!(out["files"]["app/globals.css"].is_string());
+}
+
+#[test]
+fn codegen_schemas_list_every_selectable_target() {
+    let enum_of = |tool: &str| -> Vec<String> {
+        let raw = TOOL_SCHEMAS
+            .iter()
+            .find(|schema| schema.contains(&format!(r#""name":"{tool}""#)))
+            .unwrap_or_else(|| panic!("{tool} schema"));
+        let schema: serde_json::Value = serde_json::from_str(raw).expect("schema json");
+        let mut values: Vec<String> = schema["inputSchema"]["properties"]["framework"]["enum"]
+            .as_array()
+            .expect("framework enum")
+            .iter()
+            .map(|v| v.as_str().expect("string").to_string())
+            .collect();
+        values.sort();
+        values
+    };
+    let mut export: Vec<String> = op_mcp::codegen_export_targets()
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+    export.sort();
+    assert_eq!(enum_of("codegen_export"), export);
+    let mut frameworks: Vec<String> = op_editor_core::codegen::Framework::ALL
+        .iter()
+        .map(|f| f.as_wire().to_string())
+        .collect();
+    frameworks.sort();
+    assert_eq!(enum_of("codegen_assemble"), frameworks);
+}

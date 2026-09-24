@@ -78,6 +78,12 @@ COMMON COMMANDS:
   op codegen:submit <planId> <chunk-result|@file|->
   op codegen:assemble <planId> [--framework react]
   op codegen:clean <planId>
+  op codegen:export [--framework react-tailwind] [--nodes ID,ID] [--page P] [--out DIR]
+                                          deterministic code export (no model);
+                                          react-tailwind also writes globals.css +
+                                          tailwind.config.ts; frameworks: react,
+                                          react-tailwind, vue, svelte, html, flutter,
+                                          swiftui, compose, react-native, css-variables
 
 GLOBAL FLAGS:
   --port <n>      MCP HTTP port (default: 3100). When omitted, server-bound

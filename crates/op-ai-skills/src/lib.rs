@@ -115,6 +115,13 @@ const GUIDELINE_TOPICS: &[(&str, &[&str], &[&str])] = &[
     // the contract, not the model).
     ("card", &["cards", "card-item"], &["cards"]),
     ("icons", &["icon", "icon-font", "lucide"], &["icon-catalog"]),
+    // Design → code conventions of the deterministic `react-tailwind`
+    // export, for agents that hand-write or review code from a design.
+    (
+        "code",
+        &["codegen", "tailwind", "react-tailwind"],
+        &["codegen-react-tailwind"],
+    ),
 ];
 
 /// Compose the named skills (in order) into one coherent guideline doc,
@@ -155,6 +162,8 @@ fn compose_skills(names: &[&str]) -> Option<String> {
 ///   pins, paint-only `translateX/Y` moves
 /// - `"card"` (`cards`, `card-item`) — card-board contract
 /// - `"icons"` (`icon`, `icon-font`, `lucide`) — icon_font/lucide icon catalog
+/// - `"code"` (`codegen`, `tailwind`, `react-tailwind`) — React + Tailwind +
+///   shadcn/ui export conventions
 ///
 /// Returns `None` for any unrecognised topic so callers can produce a typed
 /// "unknown topic" error without special-casing the string themselves.

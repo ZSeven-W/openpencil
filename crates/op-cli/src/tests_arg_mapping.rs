@@ -323,6 +323,46 @@ fn parse_args_maps_codegen_assemble_and_clean_to_mcp_tools() {
 }
 
 #[test]
+fn parse_args_maps_codegen_export_to_the_deterministic_tool() {
+    let args: Vec<String> = [
+        "codegen:export",
+        "--framework",
+        "react-tailwind",
+        "--nodes",
+        "card,cta",
+        "--out",
+        "web/src",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
+    let parsed = parse_args(&args).expect("codegen export");
+    let Command::CodegenExport { args_json, out_dir } = parsed.command else {
+        panic!("expected CodegenExport, got {:?}", parsed.command);
+    };
+    let value: serde_json::Value = serde_json::from_str(&args_json).expect("args json");
+    assert_eq!(value["framework"], "react-tailwind");
+    assert_eq!(value["nodeIds"], "card,cta");
+    assert_eq!(out_dir.as_deref(), Some("web/src"));
+}
+
+#[test]
+fn codegen_export_writes_every_file_and_refuses_escaping_paths() {
+    let dir = std::env::temp_dir().join(format!("op-codegen-export-{}", std::process::id()));
+    let response = r#"{"framework":"react-tailwind","files":{"component.tsx":"export default function A(){}","app/globals.css":"@import \"tailwindcss\";\n"}}"#;
+    let summary = super::codegen_cli::write_codegen_export(response, dir.to_str().unwrap())
+        .expect("write files");
+    assert!(summary.contains("globals.css"), "{summary}");
+    assert_eq!(
+        std::fs::read_to_string(dir.join("app/globals.css")).unwrap(),
+        "@import \"tailwindcss\";\n"
+    );
+    let escaping = r#"{"files":{"../evil.tsx":"x"}}"#;
+    assert!(super::codegen_cli::write_codegen_export(escaping, dir.to_str().unwrap()).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn parse_args_maps_ts_insert_json_alias_to_rust_tool() {
     let args = vec![
         "insert".to_string(),

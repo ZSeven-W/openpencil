@@ -24,7 +24,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        135,
+        136,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -113,6 +113,7 @@ fn tools_list_response_includes_all_registered_tools() {
         "codegen_submit_chunk",
         "codegen_assemble",
         "codegen_clean",
+        "codegen_export",
         "search_all_unique_properties",
         "replace_all_matching_properties",
         "snapshot_layout",
@@ -334,6 +335,10 @@ fn tools_list_schemas_advertise_ts_file_path_args() {
         ),
         ("set_variables", vec!["filePath", "variables", "replace"]),
         ("get_design_prompt", vec!["section", "filePath"]),
+        (
+            "codegen_export",
+            vec!["filePath", "framework", "nodeIds", "pageId"],
+        ),
         ("get_design_md", vec!["filePath"]),
         ("set_design_md", vec!["filePath", "markdown", "autoExtract"]),
         ("export_design_md", vec!["filePath"]),
