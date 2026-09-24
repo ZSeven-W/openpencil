@@ -365,7 +365,11 @@ pub(super) fn paint_explore_card(
     // were never hovered must not dip when the stamp refreshes.
     let leaving = surface.state.card_hover_leaving == Some(family);
     let lift = if hovered || leaving {
-        hover_lift_dy(hovered, surface.state.card_hover_since_ms, surface.now_ms)
+        hover_lift_dy(
+            hovered,
+            surface.ui.motion_stamp(surface.state.card_hover_since_ms),
+            surface.now_ms,
+        )
     } else {
         0.0
     };

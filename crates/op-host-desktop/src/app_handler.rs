@@ -509,7 +509,10 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                 ..
             } => self.on_left_release(),
             WindowEvent::Focused(false) => self.on_focus_lost(),
-            WindowEvent::Focused(true) | WindowEvent::Occluded(false) => self.on_window_shown(),
+            WindowEvent::Focused(true) | WindowEvent::Occluded(false) => {
+                self.refresh_reduced_motion();
+                self.on_window_shown();
+            }
             WindowEvent::MouseWheel { delta, .. } => self.on_mouse_wheel(delta),
             WindowEvent::PinchGesture { delta, .. } => self.on_pinch_gesture(delta),
             // CJK composition: preedit updates paint through the

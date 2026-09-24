@@ -511,7 +511,10 @@ pub(super) fn paint_preview(
     // motion inside `paint_app_art`; the template paths share the
     // wrapper below.
     let art = shift(layout.preview_art, rise);
-    let phase = art_phase(surface.state.art_switched_at_ms, surface.now_ms);
+    let phase = art_phase(
+        surface.ui.motion_stamp(surface.state.art_switched_at_ms),
+        surface.now_ms,
+    );
     let draft = surface.state.task_draft();
     match surface.state.task {
         HomeFamily::AppUi => paint_app_art(cx, art, palette, draft.device, phase),

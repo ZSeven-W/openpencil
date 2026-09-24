@@ -660,6 +660,18 @@ impl EditorUiState {
 
     /// Native touch chrome is shared by phone and tablet players. Layout
     /// geometry still branches on the three size classes.
+    /// An animation start stamp as the chrome should see it: under reduced
+    /// motion every stamp reads as 0, which each chrome animation already
+    /// treats as "settled" — entrances, art switches and hover lifts then
+    /// appear in their final state instead of moving.
+    pub fn motion_stamp(&self, at_ms: u64) -> u64 {
+        if self.reduced_motion {
+            0
+        } else {
+            at_ms
+        }
+    }
+
     pub fn touch_chrome(&self) -> bool {
         self.touch
     }

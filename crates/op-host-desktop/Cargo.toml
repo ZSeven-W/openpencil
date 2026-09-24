@@ -316,6 +316,10 @@ objc2-app-kit = { version = "0.2", default-features = false, features = [
   "NSResponder",
   "NSView",
   "NSWindow",
+  # `NSWorkspace::accessibilityDisplayShouldReduceMotion` — the system
+  # Reduce Motion setting the Studio chrome honours (`src/reduced_motion.rs`).
+  "NSAccessibility",
+  "NSWorkspace",
 ] }
 objc2-foundation = { version = "0.2", default-features = false, features = [
   "std",

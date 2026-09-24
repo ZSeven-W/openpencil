@@ -36,6 +36,8 @@ impl DesktopApp {
         let fit_blank_frame = initial_file.is_none();
         // Best-effort prefs restore onto the host's `EditorState`.
         op_host_services::settings_io::load(host.editor_state_mut());
+        host.editor_state_mut().editor_ui.reduced_motion =
+            crate::reduced_motion::system_reduced_motion();
         let entry_surface = host.editor_state().editor_ui.entry_surface;
         // Keep unit-test fixtures deterministic and canvas-first; production
         // startup alone applies the persisted Home preference, while the

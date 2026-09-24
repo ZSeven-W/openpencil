@@ -25,7 +25,7 @@ pub(super) fn paint_home_compact(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>
     let layout = surface.layout(rect.size.x, rect.size.y);
     let palette = StudioPalette::for_mode(surface.ui.effective_theme_mode());
     cx.backend.fill_rect(rect, palette.page);
-    let shown_at = surface.state.shown_at_ms;
+    let shown_at = surface.ui.motion_stamp(surface.state.shown_at_ms);
     let enter = |block| enter_phase(block, shown_at, surface.now_ms);
 
     // A focused composer folds the grid, the example and the bottom nav
@@ -609,7 +609,10 @@ fn paint_example(
 
     // Right art area with the shared art-in switch motion.
     let art = shift(layout.preview_art, dy);
-    let phase = art_phase(surface.state.art_switched_at_ms, surface.now_ms);
+    let phase = art_phase(
+        surface.ui.motion_stamp(surface.state.art_switched_at_ms),
+        surface.now_ms,
+    );
     let draft = surface.state.task_draft();
     let art = shift(art, (1.0 - phase) * 6.0);
     cx.backend.save();

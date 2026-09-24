@@ -91,6 +91,7 @@ mod persistence_image;
 mod persistence_replace_guard;
 mod prompt_center_store;
 mod provider_probe_host;
+mod reduced_motion;
 mod remote_image_host;
 mod render_cli;
 mod render_cli_error;

@@ -125,7 +125,7 @@ pub(super) fn paint_home(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: 
     let layout = surface.layout(rect.size.x, rect.size.y);
     let palette = StudioPalette::for_mode(surface.ui.effective_theme_mode());
     cx.backend.fill_rect(rect, palette.page);
-    let shown_at = surface.state.shown_at_ms;
+    let shown_at = surface.ui.motion_stamp(surface.state.shown_at_ms);
     let enter = |block| enter_phase(block, shown_at, surface.now_ms);
 
     // ── the scrolling page column ─────────────────────────────────────

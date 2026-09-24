@@ -153,6 +153,10 @@ pub struct EditorUiState {
     /// Derived from `EditorState::revision != saved_revision`; painted
     /// by the TopBar only, never serialized.
     pub document_dirty: bool,
+    /// The platform asks for reduced motion (macOS Reduce Motion, the
+    /// browser's `prefers-reduced-motion`, or `OPENPENCIL_REDUCED_MOTION=1`).
+    /// Hosts refresh it; chrome animations read it through `motion_stamp`.
+    pub reduced_motion: bool,
 
     // --- Modals -----------------------------------------------------
     /// Raster export scale (1.0 / 2.0 / 3.0). Default 2.0.

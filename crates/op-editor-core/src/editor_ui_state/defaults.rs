@@ -49,6 +49,7 @@ impl Default for EditorUiState {
             recent_files: Vec::new(),
             file_name_display: None,
             document_dirty: false,
+            reduced_motion: false,
             export_scale: 2.0,
             export_dialog_open: false,
             export_dialog_hover: None,

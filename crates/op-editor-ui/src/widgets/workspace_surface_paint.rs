@@ -120,7 +120,10 @@ fn view_label(locale: op_i18n::Locale, family: HomeFamily, view: WorkspaceView) 
 pub(super) fn paint_workspace(surface: &WorkspaceSurface<'_>, cx: &mut PaintCx<'_>, rect: Rect) {
     let layout = surface.layout(rect.size.x, rect.size.y);
     let locale = surface.ui.locale;
-    let (_, alpha) = workspace_enter(surface.state.shown_at_ms, surface.now_ms);
+    let (_, alpha) = workspace_enter(
+        surface.ui.motion_stamp(surface.state.shown_at_ms),
+        surface.now_ms,
+    );
     let palette = fade_all(
         StudioPalette::for_mode(surface.ui.effective_theme_mode()),
         alpha,
