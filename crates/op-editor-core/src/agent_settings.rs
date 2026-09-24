@@ -308,6 +308,9 @@ pub struct AgentSettings {
     pub scroll_y: jian_core::scroll::ScrollState,
     pub mcp_server: McpServer,
     pub mcp_cli_enabled: [bool; 13],
+    /// Install the lean six-tool MCP profile (`/mcp/lean`) into terminal
+    /// integrations instead of the full catalog. Persisted.
+    pub mcp_lean_profile: bool,
     pub mcp_client_config_copied_at_ms: Option<u64>,
     pub hover_agent_settings_close: bool,
     pub hover_mcp_server_button: bool,
@@ -396,6 +399,7 @@ impl Default for AgentSettings {
             scroll_y: Default::default(),
             mcp_server: McpServer::default(),
             mcp_cli_enabled: [false; 13],
+            mcp_lean_profile: false,
             mcp_client_config_copied_at_ms: None,
             hover_agent_settings_close: false,
             hover_mcp_server_button: false,

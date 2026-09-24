@@ -59,6 +59,7 @@ pub struct Fingerprint {
     locale: Locale,
     port: u16,
     cli: [bool; 13],
+    mcp_lean_profile: bool,
     images_adv: bool,
     openverse_client_id: String,
     openverse_client_secret: String,
@@ -84,6 +85,7 @@ pub fn fingerprint(state: &EditorState) -> Fingerprint {
         locale: eui.locale,
         port: eui.agent_settings.mcp_server.port,
         cli: eui.agent_settings.mcp_cli_enabled,
+        mcp_lean_profile: eui.agent_settings.mcp_lean_profile,
         images_adv: eui.agent_settings.images_advanced_open,
         openverse_client_id: eui.agent_settings.openverse_client_id.clone(),
         openverse_client_secret: eui.agent_settings.openverse_client_secret.clone(),
@@ -168,6 +170,8 @@ struct SettingsPayload {
     mcp_port: Option<u16>,
     #[serde(default)]
     mcp_cli_enabled: Option<Vec<bool>>,
+    #[serde(default)]
+    mcp_lean_profile: Option<bool>,
     #[serde(default)]
     images_advanced_open: Option<bool>,
     #[serde(default)]
@@ -265,6 +269,7 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
         locale: Some(eui.locale.code().into()),
         mcp_port: Some(eui.agent_settings.mcp_server.port),
         mcp_cli_enabled: Some(eui.agent_settings.mcp_cli_enabled.to_vec()),
+        mcp_lean_profile: Some(eui.agent_settings.mcp_lean_profile),
         images_advanced_open: Some(eui.agent_settings.images_advanced_open),
         openverse_oauth: openverse_oauth_to_payload(&eui.agent_settings),
         openverse_credential_owner: eui.agent_settings.openverse_credential_owner.clone(),
@@ -340,6 +345,9 @@ fn apply_payload_with_options(
     }
     if let Some(flags) = payload.mcp_cli_enabled {
         eui.agent_settings.mcp_cli_enabled = migrate_mcp_cli_flags(flags);
+    }
+    if let Some(lean) = payload.mcp_lean_profile {
+        eui.agent_settings.mcp_lean_profile = lean;
     }
     if let Some(b) = payload.images_advanced_open {
         eui.agent_settings.images_advanced_open = b;

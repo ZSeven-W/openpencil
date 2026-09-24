@@ -456,7 +456,11 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
             WindowEvent::CursorMoved { .. } => None,
             _ => {
                 let settings = &self.host.editor_state().editor_ui.agent_settings;
-                Some((settings.mcp_cli_enabled, settings.mcp_server.port))
+                Some((
+                    settings.mcp_cli_enabled,
+                    settings.mcp_server.port,
+                    settings.mcp_lean_profile,
+                ))
             }
         };
         match event {

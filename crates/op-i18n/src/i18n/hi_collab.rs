@@ -352,6 +352,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.accessibility" => "सुलभता",
         "workspace.quality.topic.completeness" => "पूर्णता",
         "workspace.quality.topic.visualReview" => "दृश्य समीक्षा",
+        "settings.mcp.leanProfile" => "हल्का टूल प्रोफ़ाइल",
+        "settings.mcp.leanProfileDesc" => "कनेक्टेड CLI को पूरे कैटलॉग के बजाय 6 टूल मिलते हैं",
         _ => return None,
     })
 }

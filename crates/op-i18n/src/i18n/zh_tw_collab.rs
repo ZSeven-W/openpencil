@@ -348,6 +348,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.accessibility" => "無障礙",
         "workspace.quality.topic.completeness" => "內容完整性",
         "workspace.quality.topic.visualReview" => "視覺複核",
+        "settings.mcp.leanProfile" => "精簡工具集",
+        "settings.mcp.leanProfileDesc" => "已連線的 CLI 只取得 6 個工具,而非完整目錄",
         _ => return None,
     })
 }

@@ -348,6 +348,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.accessibility" => "Erişilebilirlik",
         "workspace.quality.topic.completeness" => "Tamlık",
         "workspace.quality.topic.visualReview" => "Görsel inceleme",
+        "settings.mcp.leanProfile" => "Hafif araç profili",
+        "settings.mcp.leanProfileDesc" => "Bağlı CLI'lar tam katalog yerine 6 araç alır",
         _ => return None,
     })
 }

@@ -16,7 +16,9 @@
 use crate::widgets::agent_settings_panel::{
     content_viewport, mcp_copy_config_button, AgentSettingsHit, AgentSettingsPanel,
 };
-use crate::widgets::agent_settings_rows::{FOOTNOTE_H, ROW_HEIGHT, SECTION_GAP, SECTION_HEADER_H};
+use crate::widgets::agent_settings_rows::{
+    row_height, RowLines, FOOTNOTE_H, ROW_HEIGHT, SECTION_GAP, SECTION_HEADER_H,
+};
 use crate::widgets::test_capture_backend::CaptureBackend;
 use crate::widgets::{PaintCx, Widget};
 use crate::{Point2D, Rect};
@@ -359,6 +361,40 @@ fn desktop_mcp_tab_still_offers_every_cli_toggle() {
 }
 
 #[test]
+fn the_lean_profile_switch_lives_with_the_terminal_integrations() {
+    let mut desktop = mcp_state(true);
+    let hits = reachable_hits(&mut desktop);
+    assert!(
+        hits.contains(&AgentSettingsHit::ToggleMcpLeanProfile),
+        "desktop offers the lean-profile switch: {hits:?}"
+    );
+    let texts = painted_texts(&mut desktop);
+    assert!(
+        texts.iter().any(|text| text.contains("Lean tool profile")),
+        "the switch is labelled: {texts:?}"
+    );
+    for expected in [true, false] {
+        crate::widgets::agent_settings_press_flow::apply_agent_settings_hit(
+            &mut desktop,
+            AgentSettingsHit::ToggleMcpLeanProfile,
+            op_editor_core::host_settings_commit::SettingsCommitScope::Operator,
+            0,
+        );
+        assert_eq!(
+            desktop.editor_ui.agent_settings.mcp_lean_profile, expected,
+            "each press flips the persisted lean choice"
+        );
+    }
+
+    let mut mobile = mcp_state(false);
+    let hits = reachable_hits(&mut mobile);
+    assert!(
+        !hits.contains(&AgentSettingsHit::ToggleMcpLeanProfile),
+        "no terminal integrations, no lean switch: {hits:?}"
+    );
+}
+
+#[test]
 fn hiding_external_clis_removes_every_mcp_cli_toggle_but_keeps_the_server_card() {
     let mut state = mcp_state(false);
     let hits = reachable_hits(&mut state);
@@ -408,10 +444,14 @@ fn hidden_mcp_toggles_shift_the_custom_config_section_up_by_exactly_their_height
     assert_eq!(copy_with.origin.x, copy_without.origin.x);
     assert_eq!(copy_with.size, copy_without.size);
 
-    // Section header + one row per displayed CLI + the footnote, plus the
-    // gap that separated the block from what follows it.
-    let hidden_block =
-        SECTION_GAP + SECTION_HEADER_H + McpCli::DISPLAY.len() as f32 * ROW_HEIGHT + FOOTNOTE_H;
+    // Section header + one row per displayed CLI + the two-line lean-profile
+    // row + the footnote, plus the gap that separated the block from what
+    // follows it.
+    let hidden_block = SECTION_GAP
+        + SECTION_HEADER_H
+        + McpCli::DISPLAY.len() as f32 * ROW_HEIGHT
+        + row_height(RowLines::Two)
+        + FOOTNOTE_H;
     assert!(
         (copy_with.origin.y - copy_without.origin.y - hidden_block).abs() < 0.01,
         "content below the hidden toggle grid must shift up by exactly {hidden_block}, \

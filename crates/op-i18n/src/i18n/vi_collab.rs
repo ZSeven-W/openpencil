@@ -360,6 +360,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.accessibility" => "Trợ năng",
         "workspace.quality.topic.completeness" => "Độ đầy đủ",
         "workspace.quality.topic.visualReview" => "Rà soát hình ảnh",
+        "settings.mcp.leanProfile" => "Hồ sơ công cụ tinh gọn",
+        "settings.mcp.leanProfileDesc" => "CLI đã kết nối chỉ nhận 6 công cụ thay vì toàn bộ danh mục",
         _ => return None,
     })
 }

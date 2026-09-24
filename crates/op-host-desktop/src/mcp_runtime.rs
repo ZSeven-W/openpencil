@@ -35,7 +35,15 @@ impl DesktopApp {
         }
         changed |= self.reconcile_mcp_server_from_settings();
         if any_cli_enabled {
-            changed |= self.reconcile_mcp_cli_integrations(Some(([false; 13], port)));
+            // `before` = nothing enabled forces a rewrite of every enabled
+            // CLI with the current endpoint (full or lean profile).
+            let lean = self
+                .host
+                .editor_state()
+                .editor_ui
+                .agent_settings
+                .mcp_lean_profile;
+            changed |= self.reconcile_mcp_cli_integrations(Some(([false; 13], port, lean)));
         }
         if self.mcp_server_active() {
             changed |= self.request_redraw(false);
@@ -234,17 +242,22 @@ impl DesktopApp {
         }
     }
 
+    /// `before` is `(enabled flags, port, lean profile)` as they were before
+    /// the event. A flipped flag writes or removes that CLI; a changed port or
+    /// lean choice rewrites the endpoint of every enabled CLI.
     pub(crate) fn reconcile_mcp_cli_integrations(
         &mut self,
-        before: Option<([bool; 13], u16)>,
+        before: Option<([bool; 13], u16, bool)>,
     ) -> bool {
-        let Some((before_flags, before_port)) = before else {
+        let Some((before_flags, before_port, before_lean)) = before else {
             return false;
         };
         let settings = &self.host.editor_state().editor_ui.agent_settings;
         let after_flags = settings.mcp_cli_enabled;
         let port = settings.mcp_server.port;
-        if before_flags == after_flags && before_port == port {
+        let lean = settings.mcp_lean_profile;
+        let endpoint_changed = before_port != port || before_lean != lean;
+        if before_flags == after_flags && !endpoint_changed {
             return false;
         }
 
@@ -256,17 +269,21 @@ impl DesktopApp {
             .enumerate()
         {
             let flag_changed = before_flags[idx] != after_flags[idx];
-            let enabled_port_changed = before_port != port && after_flags[idx];
-            if !flag_changed && !enabled_port_changed {
+            let enabled_endpoint_changed = endpoint_changed && after_flags[idx];
+            if !flag_changed && !enabled_endpoint_changed {
                 continue;
             }
             // Test override targets a temp home (env-free); production reads
             // the real home (+ `CODEX_HOME`).
             let result = match &home_override {
-                Some(home) => {
-                    mcp_integrations::set_cli_enabled_at_home(cli, after_flags[idx], port, home)
-                }
-                None => mcp_integrations::set_cli_enabled(cli, after_flags[idx], port),
+                Some(home) => mcp_integrations::set_cli_profile_at_home(
+                    cli,
+                    after_flags[idx],
+                    port,
+                    lean,
+                    home,
+                ),
+                None => mcp_integrations::set_cli_enabled(cli, after_flags[idx], port, lean),
             };
             if let Err(err) = result {
                 eprintln!(
@@ -346,6 +363,49 @@ mod tests {
                 .mcp_cli_enabled[index]
         );
         assert!(!app.mcp_server_active());
+        let _ = std::fs::remove_dir_all(home);
+    }
+
+    #[test]
+    fn flipping_the_lean_profile_rewrites_every_enabled_integration() {
+        let home = std::env::temp_dir().join(format!(
+            "openpencil-mcp-lean-reconcile-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&home);
+        std::fs::create_dir_all(&home).unwrap();
+        let mut app = DesktopApp::new(None);
+        app.mcp_integrations_home = Some(home.clone());
+        let claude = McpCli::ClaudeCode.index();
+        let config = home.join(".claude.json");
+
+        // Enable Claude Code on the full catalog.
+        let before = {
+            let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
+            let before = (settings.mcp_cli_enabled, settings.mcp_server.port, false);
+            settings.mcp_cli_enabled[claude] = true;
+            before
+        };
+        assert!(!app.reconcile_mcp_cli_integrations(Some(before)));
+        let text = std::fs::read_to_string(&config).unwrap();
+        assert!(
+            text.contains("/mcp\"") && !text.contains("/mcp/lean"),
+            "{text}"
+        );
+
+        // Flip to lean: the already-enabled CLI is rewritten in place.
+        let before = {
+            let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
+            let before = (settings.mcp_cli_enabled, settings.mcp_server.port, false);
+            settings.mcp_lean_profile = true;
+            before
+        };
+        assert!(!app.reconcile_mcp_cli_integrations(Some(before)));
+        let text = std::fs::read_to_string(&config).unwrap();
+        assert!(text.contains("/mcp/lean\""), "{text}");
+
+        // A CLI that is off is never written just because the profile moved.
+        assert!(!home.join(".cursor").join("mcp.json").exists());
         let _ = std::fs::remove_dir_all(home);
     }
 }

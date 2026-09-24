@@ -174,6 +174,13 @@ pub fn apply_agent_settings_hit(
             }
             SettingsPressOutcome::handled()
         }
+        AgentSettingsHit::ToggleMcpLeanProfile => {
+            // The desktop runtime notices the flip and rewrites every
+            // enabled integration's endpoint (`reconcile_mcp_cli_integrations`).
+            commit(state);
+            state.editor_ui.agent_settings.mcp_lean_profile ^= true;
+            SettingsPressOutcome::handled()
+        }
         AgentSettingsHit::CopyMcpClientConfig => {
             commit(state);
             state

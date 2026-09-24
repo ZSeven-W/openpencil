@@ -364,6 +364,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.accessibility" => "접근성",
         "workspace.quality.topic.completeness" => "콘텐츠 완성도",
         "workspace.quality.topic.visualReview" => "시각 검토",
+        "settings.mcp.leanProfile" => "경량 도구 프로필",
+        "settings.mcp.leanProfileDesc" => "연결된 CLI에 전체 목록 대신 6개 도구만 제공",
         _ => return None,
     })
 }

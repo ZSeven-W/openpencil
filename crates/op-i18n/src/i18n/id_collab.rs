@@ -348,6 +348,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.accessibility" => "Aksesibilitas",
         "workspace.quality.topic.completeness" => "Kelengkapan",
         "workspace.quality.topic.visualReview" => "Tinjauan visual",
+        "settings.mcp.leanProfile" => "Profil alat ringkas",
+        "settings.mcp.leanProfileDesc" => "CLI yang terhubung mendapat 6 alat, bukan katalog lengkap",
         _ => return None,
     })
 }

@@ -291,8 +291,8 @@ pub use agent_settings_builtin_presets::{
 };
 pub use agent_settings_button_state::AgentSettingsButton;
 pub use agent_settings_connection::{
-    local_daemon_origin, local_mcp_url, missing_models_connect_error, DEFAULT_LOCAL_DAEMON_ORIGIN,
-    DEFAULT_MCP_PORT,
+    local_daemon_origin, local_lean_mcp_url, local_mcp_url, missing_models_connect_error,
+    DEFAULT_LOCAL_DAEMON_ORIGIN, DEFAULT_MCP_PORT,
 };
 pub use align::AlignAction;
 pub use button_press_state::ButtonPressTarget;

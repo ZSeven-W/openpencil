@@ -307,6 +307,8 @@ pub enum AgentSettingsHit {
     ToggleAcpConnected(usize),
     ToggleMcpServer,
     ToggleMcpCli(McpCli),
+    /// Point every terminal integration at the lean six-tool profile.
+    ToggleMcpLeanProfile,
     CopyMcpClientConfig,
     ToggleImagesAdvanced,
     FocusSearchField(ImageSearchField),

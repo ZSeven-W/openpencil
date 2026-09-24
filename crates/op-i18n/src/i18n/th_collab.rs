@@ -350,6 +350,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.accessibility" => "การเข้าถึง",
         "workspace.quality.topic.completeness" => "ความครบถ้วน",
         "workspace.quality.topic.visualReview" => "ตรวจทานภาพ",
+        "settings.mcp.leanProfile" => "โปรไฟล์เครื่องมือแบบย่อ",
+        "settings.mcp.leanProfileDesc" => "CLI ที่เชื่อมต่อจะได้ 6 เครื่องมือแทนแคตตาล็อกทั้งหมด",
         _ => return None,
     })
 }

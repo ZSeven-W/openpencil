@@ -221,6 +221,7 @@ impl AgentSettingsPanel<'_> {
                 ) {
                     McpHit::ToggleServer => return AgentSettingsHit::ToggleMcpServer,
                     McpHit::ToggleCli(cli) => return AgentSettingsHit::ToggleMcpCli(cli),
+                    McpHit::ToggleLeanProfile => return AgentSettingsHit::ToggleMcpLeanProfile,
                     McpHit::CopyClientConfig => return AgentSettingsHit::CopyMcpClientConfig,
                     McpHit::FocusPort => return AgentSettingsHit::FocusMcpPort,
                     McpHit::None => {}

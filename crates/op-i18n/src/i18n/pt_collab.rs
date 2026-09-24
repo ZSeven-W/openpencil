@@ -348,6 +348,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.accessibility" => "Acessibilidade",
         "workspace.quality.topic.completeness" => "Completude",
         "workspace.quality.topic.visualReview" => "Revisão visual",
+        "settings.mcp.leanProfile" => "Perfil de ferramentas enxuto",
+        "settings.mcp.leanProfileDesc" => "As CLIs conectadas recebem 6 ferramentas em vez do catálogo completo",
         _ => return None,
     })
 }

@@ -31,8 +31,9 @@ pub const MCP_PROFILE_ENV: &str = "OPENPENCIL_MCP_PROFILE";
 pub const MCP_PROFILE_FLAG: &str = "--mcp-profile";
 
 /// Streamable-HTTP path that serves the lean catalog on the live server.
-/// `/mcp` (and `/`) keep serving the full catalog.
-pub const LEAN_MCP_PATH: &str = "/mcp/lean";
+/// `/mcp` (and `/`) keep serving the full catalog. Defined next to
+/// `local_mcp_url` so the integration writer and this router share it.
+pub const LEAN_MCP_PATH: &str = op_editor_core::agent_settings_connection::LEAN_MCP_PATH;
 
 /// The lean catalog, in workflow order: read → learn → write → verify →
 /// finish. `tools/list` advertises them in this order.

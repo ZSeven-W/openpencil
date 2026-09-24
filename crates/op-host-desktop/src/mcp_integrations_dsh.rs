@@ -26,19 +26,12 @@ pub(crate) const DSH_PATCH_BEGIN: &str =
 /// Managed-block end marker (a YAML comment line).
 pub(crate) const DSH_PATCH_END: &str = "# openpencil-mcp-end";
 
-/// The endpoint the settings panel's live server exposes over
-/// streamable HTTP. Same shape as `mcp_integrations::endpoint`; duplicated
-/// here so this module stays self-contained.
-fn endpoint(port: u16) -> String {
-    format!("http://127.0.0.1:{port}/mcp")
-}
-
 /// The exact nine-line managed block, markers included. In the
-/// top-level-array context this is valid YAML on its own.
-fn dsh_patch_block(port: u16) -> String {
+/// top-level-array context this is valid YAML on its own. `url` is the
+/// live server endpoint (`mcp_integrations::endpoint_url`).
+fn dsh_patch_block(url: &str) -> String {
     format!(
-        "{DSH_PATCH_BEGIN}\n- insert:\n    - id: mcp-openpencil\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: openpencil\n        transport: streamable-http\n        url: {}\n{DSH_PATCH_END}\n",
-        endpoint(port)
+        "{DSH_PATCH_BEGIN}\n- insert:\n    - id: mcp-openpencil\n      name: '@deepseek-ai/dsh-mcp-client'\n      config:\n        serverName: openpencil\n        transport: streamable-http\n        url: {url}\n{DSH_PATCH_END}\n"
     )
 }
 
@@ -105,7 +98,7 @@ pub(crate) fn dsh_config_has_openpencil(path: &Path) -> bool {
 pub(crate) fn update_dsh_patch_config(
     path: &Path,
     enabled: bool,
-    port: u16,
+    url: &str,
 ) -> Result<(), McpConfigError> {
     if !enabled && !path.exists() {
         return Ok(());
@@ -160,7 +153,7 @@ pub(crate) fn update_dsh_patch_config(
                     if i < begin || i > end {
                         out.push_str(line);
                     } else if i == begin {
-                        out.push_str(&dsh_patch_block(port));
+                        out.push_str(&dsh_patch_block(url));
                     }
                 }
                 out
@@ -171,7 +164,7 @@ pub(crate) fn update_dsh_patch_config(
                         path: path.to_path_buf(),
                     });
                 }
-                let block = dsh_patch_block(port);
+                let block = dsh_patch_block(url);
                 if !path.exists() {
                     block
                 } else if let Some(empty) = empty_array_line(&lines) {

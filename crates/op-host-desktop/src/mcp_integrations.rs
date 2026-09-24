@@ -19,17 +19,22 @@ use crate::mcp_integrations_dsh::{dsh_config_has_openpencil, update_dsh_patch_co
 const SERVER_NAME: &str = "openpencil";
 const ANTIGRAVITY_MCP_PERMISSION: &str = "mcp(openpencil/*)";
 
+/// Point `cli` at (or remove it from) the live server on `port`. `lean`
+/// installs the six-tool lean profile endpoint (`/mcp/lean`) instead of the
+/// full catalog (`/mcp`).
 pub(crate) fn set_cli_enabled(
     cli: McpCli,
     enabled: bool,
     port: u16,
+    lean: bool,
 ) -> Result<PathBuf, McpConfigError> {
     let home = dirs::home_dir().ok_or(McpConfigError::HomeDirUnavailable)?;
+    let url = endpoint_url(port, lean);
     if cli == McpCli::Antigravity {
-        return set_antigravity_enabled_at_home(enabled, port, &home);
+        return set_antigravity_enabled_at_home(enabled, &url, &home);
     }
     let path = config_path(cli, &home, true);
-    set_cli_enabled_at_path(cli, enabled, port, path)
+    set_cli_enabled_at_path(cli, enabled, &url, path)
 }
 
 pub(crate) fn detect_enabled_clis() -> [bool; 13] {
@@ -42,17 +47,31 @@ pub(crate) fn detect_enabled_clis() -> [bool; 13] {
 /// Like [`set_cli_enabled`] but against an explicit home dir and without
 /// reading `CODEX_HOME` (`use_env = false`). Used by tests to redirect CLI
 /// config writes to a temp dir WITHOUT mutating process-global env.
+#[cfg(test)]
 pub(crate) fn set_cli_enabled_at_home(
     cli: McpCli,
     enabled: bool,
     port: u16,
     home: &Path,
 ) -> Result<PathBuf, McpConfigError> {
+    set_cli_profile_at_home(cli, enabled, port, false, home)
+}
+
+/// [`set_cli_enabled_at_home`] with the lean-profile choice (see
+/// [`set_cli_enabled`]).
+pub(crate) fn set_cli_profile_at_home(
+    cli: McpCli,
+    enabled: bool,
+    port: u16,
+    lean: bool,
+    home: &Path,
+) -> Result<PathBuf, McpConfigError> {
+    let url = endpoint_url(port, lean);
     if cli == McpCli::Antigravity {
-        return set_antigravity_enabled_at_home(enabled, port, home);
+        return set_antigravity_enabled_at_home(enabled, &url, home);
     }
     let path = config_path(cli, home, false);
-    set_cli_enabled_at_path(cli, enabled, port, path)
+    set_cli_enabled_at_path(cli, enabled, &url, path)
 }
 
 /// Like [`detect_enabled_clis`] but against an explicit home dir (no env).
@@ -77,21 +96,21 @@ fn detect_enabled_clis_for_home(home: &Path, use_env: bool) -> [bool; 13] {
 fn set_cli_enabled_at_path(
     cli: McpCli,
     enabled: bool,
-    port: u16,
+    url: &str,
     path: PathBuf,
 ) -> Result<PathBuf, McpConfigError> {
     match cli {
-        McpCli::Codex => update_codex_config(&path, enabled, port)?,
-        McpCli::GrokBuild => update_grok_config(&path, enabled, &endpoint(port))?,
+        McpCli::Codex => update_codex_config(&path, enabled, url)?,
+        McpCli::GrokBuild => update_grok_config(&path, enabled, url)?,
         McpCli::Antigravity => return Err(McpConfigError::AntigravityNeedsHome),
-        McpCli::OpenCode => update_opencode_config(&path, enabled, port)?,
-        McpCli::QwenCode => update_mcp_servers_json(&path, enabled, qwen_server(port))?,
-        McpCli::Kiro => update_mcp_servers_json(&path, enabled, kiro_server(port))?,
-        McpCli::Kimi => update_mcp_servers_json(&path, enabled, kimi_server(port))?,
-        McpCli::ZCode => update_zcode_config(&path, enabled, port)?,
-        McpCli::Dsh => update_dsh_patch_config(&path, enabled, port)?,
+        McpCli::OpenCode => update_opencode_config(&path, enabled, url)?,
+        McpCli::QwenCode => update_mcp_servers_json(&path, enabled, qwen_server(url))?,
+        McpCli::Kiro => update_mcp_servers_json(&path, enabled, kiro_server(url))?,
+        McpCli::Kimi => update_mcp_servers_json(&path, enabled, kimi_server(url))?,
+        McpCli::ZCode => update_zcode_config(&path, enabled, url)?,
+        McpCli::Dsh => update_dsh_patch_config(&path, enabled, url)?,
         McpCli::ClaudeCode | McpCli::GithubCopilot | McpCli::GeminiCli | McpCli::Cursor => {
-            update_json_config(&path, enabled, port)?
+            update_json_config(&path, enabled, url)?
         }
     }
     Ok(path)
@@ -193,7 +212,7 @@ fn config_path(cli: McpCli, home: &Path, use_env: bool) -> PathBuf {
 
 fn set_antigravity_enabled_at_home(
     enabled: bool,
-    port: u16,
+    url: &str,
     home: &Path,
 ) -> Result<PathBuf, McpConfigError> {
     let config = config_path(McpCli::Antigravity, home, false);
@@ -201,7 +220,7 @@ fn set_antigravity_enabled_at_home(
     let config_snapshot = FileSnapshot::capture(&config)?;
     let permissions_snapshot = FileSnapshot::capture(&permissions)?;
 
-    update_antigravity_config(&config, enabled, port)?;
+    update_antigravity_config(&config, enabled, url)?;
     if let Err(error) = update_antigravity_permissions(&permissions, enabled) {
         let mut rollback_errors = Vec::new();
         if let Err(rollback_error) = config_snapshot.restore(&config) {
@@ -351,21 +370,21 @@ fn antigravity_config_has_openpencil(path: &Path) -> bool {
 /// against what `gemini mcp add --transport http` writes, against Cursor's
 /// own config reader (which keys off `url` and ignores the extra `type`), and
 /// against ZCode's settings form, which documents exactly this pair.
-fn streamable_http_server(port: u16) -> Value {
+fn streamable_http_server(url: &str) -> Value {
     serde_json::json!({
         "type": "http",
-        "url": endpoint(port),
+        "url": url,
     })
 }
 
-fn update_json_config(path: &Path, enabled: bool, port: u16) -> Result<(), McpConfigError> {
-    update_mcp_servers_json(path, enabled, streamable_http_server(port))
+fn update_json_config(path: &Path, enabled: bool, url: &str) -> Result<(), McpConfigError> {
+    update_mcp_servers_json(path, enabled, streamable_http_server(url))
 }
 
 /// OpenCode stores remote servers directly under `mcp` and uses `remote` as
 /// the transport discriminator. This is deliberately separate from the
 /// `mcpServers` layout used by most other clients.
-fn update_opencode_config(path: &Path, enabled: bool, port: u16) -> Result<(), McpConfigError> {
+fn update_opencode_config(path: &Path, enabled: bool, url: &str) -> Result<(), McpConfigError> {
     let mut root = read_json_object(path)?;
     if enabled {
         let mcp = root
@@ -381,7 +400,7 @@ fn update_opencode_config(path: &Path, enabled: bool, port: u16) -> Result<(), M
             SERVER_NAME.into(),
             serde_json::json!({
                 "type": "remote",
-                "url": endpoint(port),
+                "url": url,
                 "enabled": true,
             }),
         );
@@ -397,9 +416,9 @@ fn update_opencode_config(path: &Path, enabled: bool, port: u16) -> Result<(), M
 /// Kiro infers a remote transport from `url`; `type: "http"` is not part of
 /// its native remote-server shape. Writing `disabled: false` makes re-enabling
 /// an entry explicit.
-fn kiro_server(port: u16) -> Value {
+fn kiro_server(url: &str) -> Value {
     serde_json::json!({
-        "url": endpoint(port),
+        "url": url,
         "disabled": false,
     })
 }
@@ -407,17 +426,17 @@ fn kiro_server(port: u16) -> Value {
 /// Qwen Code reads a plain `url` as SSE — `qwen mcp list` reports the
 /// transport as `(sse)` — and only treats `httpUrl` as streamable HTTP, which
 /// is what `qwen mcp add --transport http` itself writes.
-fn qwen_server(port: u16) -> Value {
-    serde_json::json!({ "httpUrl": endpoint(port) })
+fn qwen_server(url: &str) -> Value {
+    serde_json::json!({ "httpUrl": url })
 }
 
 /// Kimi spells the discriminator `transport`, not `type`: kimi-code's config
 /// schema is a union discriminated on that field, and only falls back to
 /// inferring the transport from `command` vs `url` when it is absent. Stating
 /// it keeps the entry unambiguous; the legacy `kimi-cli` writes the same pair.
-fn kimi_server(port: u16) -> Value {
+fn kimi_server(url: &str) -> Value {
     serde_json::json!({
-        "url": endpoint(port),
+        "url": url,
         "transport": "http",
     })
 }
@@ -426,7 +445,7 @@ fn kimi_server(port: u16) -> Value {
 /// `mcpServers`, so it needs its own reader/writer pair. The entry value is
 /// the same `type` + `url` shape the other HTTP clients take. A server is
 /// enabled unless it carries `enabled: false`, so enabling writes no flag.
-fn update_zcode_config(path: &Path, enabled: bool, port: u16) -> Result<(), McpConfigError> {
+fn update_zcode_config(path: &Path, enabled: bool, url: &str) -> Result<(), McpConfigError> {
     let mut root = read_json_object(path)?;
     if enabled {
         let mcp = root
@@ -447,7 +466,7 @@ fn update_zcode_config(path: &Path, enabled: bool, port: u16) -> Result<(), McpC
         let Some(servers) = servers.as_object_mut() else {
             return Err(McpConfigError::McpServersNotAnObject);
         };
-        servers.insert(SERVER_NAME.into(), streamable_http_server(port));
+        servers.insert(SERVER_NAME.into(), streamable_http_server(url));
     } else if let Some(mcp) = root.get_mut("mcp").and_then(Value::as_object_mut) {
         // Only prune containers this integration created — sibling keys under
         // `mcp` belong to ZCode's own settings.
@@ -506,7 +525,7 @@ fn update_mcp_servers_json(
     write_json_object(path, &root)
 }
 
-fn update_antigravity_config(path: &Path, enabled: bool, port: u16) -> Result<(), McpConfigError> {
+fn update_antigravity_config(path: &Path, enabled: bool, url: &str) -> Result<(), McpConfigError> {
     if !enabled && !path.exists() {
         return Ok(());
     }
@@ -522,7 +541,7 @@ fn update_antigravity_config(path: &Path, enabled: bool, port: u16) -> Result<()
             .as_object_mut()
             .ok_or(McpConfigError::McpServersNotAnObject)?;
         let mut server = Map::new();
-        server.insert("serverUrl".into(), Value::String(endpoint(port)));
+        server.insert("serverUrl".into(), Value::String(url.to_string()));
         servers.insert(SERVER_NAME.into(), Value::Object(server));
     } else if let Some(servers) = root.get_mut("mcpServers").and_then(Value::as_object_mut) {
         servers.remove(SERVER_NAME);
@@ -569,7 +588,7 @@ fn write_json_object(path: &Path, root: &Map<String, Value>) -> Result<(), McpCo
     atomic_write(path, format!("{text}\n").as_bytes())
 }
 
-fn update_codex_config(path: &Path, enabled: bool, port: u16) -> Result<(), McpConfigError> {
+fn update_codex_config(path: &Path, enabled: bool, url: &str) -> Result<(), McpConfigError> {
     let existing = match fs::read_to_string(path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
@@ -588,10 +607,7 @@ fn update_codex_config(path: &Path, enabled: bool, port: u16) -> Result<(), McpC
             text.push_str("\n\n");
         }
         text.push_str("[mcp_servers.openpencil]\n");
-        text.push_str(&format!(
-            "url = \"{}\"\n",
-            toml_basic_string_escape(&endpoint(port))
-        ));
+        text.push_str(&format!("url = \"{}\"\n", toml_basic_string_escape(url)));
     }
     atomic_write(path, text.as_bytes())
 }
@@ -628,8 +644,14 @@ fn is_codex_openpencil_table(line: &str) -> bool {
     )
 }
 
-fn endpoint(port: u16) -> String {
-    format!("http://127.0.0.1:{port}/mcp")
+/// The live-server endpoint a terminal client is pointed at: the full
+/// catalog on `/mcp`, or the six-tool lean profile on `/mcp/lean`.
+pub(crate) fn endpoint_url(port: u16, lean: bool) -> String {
+    if lean {
+        op_editor_core::local_lean_mcp_url(port)
+    } else {
+        op_editor_core::local_mcp_url(port)
+    }
 }
 
 fn toml_basic_string_escape(s: &str) -> String {
@@ -647,3 +669,7 @@ mod opencode_kiro_tests;
 #[cfg(test)]
 #[path = "mcp_integrations_dsh_tests.rs"]
 mod dsh_tests;
+
+#[cfg(test)]
+#[path = "mcp_integrations_lean_tests.rs"]
+mod lean_tests;

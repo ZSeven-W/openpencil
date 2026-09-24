@@ -364,6 +364,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.topic.accessibility" => "アクセシビリティ",
         "workspace.quality.topic.completeness" => "内容の完全性",
         "workspace.quality.topic.visualReview" => "ビジュアル確認",
+        "settings.mcp.leanProfile" => "軽量ツールプロファイル",
+        "settings.mcp.leanProfileDesc" => "接続中の CLI には全ツールではなく 6 個だけを公開",
         _ => return None,
     })
 }

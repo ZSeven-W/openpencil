@@ -103,6 +103,17 @@ pub fn local_mcp_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}/mcp")
 }
 
+/// Path the live MCP server serves its lean six-tool profile on; `/mcp`
+/// keeps serving the full catalog. Single source for the server router and
+/// the terminal-integration writer.
+pub const LEAN_MCP_PATH: &str = "/mcp/lean";
+
+/// Local lean-profile MCP endpoint for `port`
+/// (`http://127.0.0.1:<port>/mcp/lean`).
+pub fn local_lean_mcp_url(port: u16) -> String {
+    format!("http://127.0.0.1:{port}{LEAN_MCP_PATH}")
+}
+
 /// Canonical "connected but returned no models" error for a provider,
 /// localized via the `providerProbe.*` catalog. Single source for the
 /// web host (real UI locale) and the services probe pump (pinned EnUs).
@@ -169,12 +180,26 @@ impl AgentSettings {
         authority.rsplit_once(':').map(|(_, port)| port)
     }
 
+    /// The local endpoint terminal clients should use: the lean-profile
+    /// path when the lean toggle is on, the full catalog otherwise.
+    pub fn local_mcp_endpoint(&self) -> String {
+        if self.mcp_lean_profile {
+            local_lean_mcp_url(self.mcp_server.port)
+        } else {
+            local_mcp_url(self.mcp_server.port)
+        }
+    }
+
     /// The client-config card's one-line display text. Prefers the
     /// embedding host's real endpoint (`embed_mcp_url`, set via the
     /// bridge init) over the daemon-internal `mcp_server` port.
     pub fn mcp_client_config_display_text(&self) -> String {
         match &self.embed_mcp_url {
             Some(url) => format!(r#"{{ "type": "http", "url": "{url}" }}"#),
+            None if self.mcp_lean_profile => format!(
+                r#"{{ "type": "http", "url": "{}" }}"#,
+                self.local_mcp_endpoint()
+            ),
             None => self.mcp_server.client_config_display_text(),
         }
     }
@@ -184,6 +209,10 @@ impl AgentSettings {
     pub fn mcp_client_config_clipboard_text(&self) -> String {
         match &self.embed_mcp_url {
             Some(url) => format!("{{\n  \"type\": \"http\",\n  \"url\": \"{url}\"\n}}"),
+            None if self.mcp_lean_profile => format!(
+                "{{\n  \"type\": \"http\",\n  \"url\": \"{}\"\n}}",
+                self.local_mcp_endpoint()
+            ),
             None => self.mcp_server.client_config_clipboard_text(),
         }
     }
@@ -402,6 +431,27 @@ mod embed_mcp_url_tests {
         assert!(settings
             .mcp_client_config_clipboard_text()
             .contains("\"url\": \"http://127.0.0.1:63655/mcp\""));
+    }
+
+    #[test]
+    fn the_lean_toggle_points_the_client_config_at_the_lean_path() {
+        let mut settings = AgentSettings {
+            mcp_lean_profile: true,
+            ..AgentSettings::default()
+        };
+        assert_eq!(
+            settings.mcp_client_config_display_text(),
+            r#"{ "type": "http", "url": "http://127.0.0.1:3100/mcp/lean" }"#
+        );
+        assert!(settings
+            .mcp_client_config_clipboard_text()
+            .contains("\"url\": \"http://127.0.0.1:3100/mcp/lean\""));
+        assert_eq!(settings.local_mcp_endpoint(), local_lean_mcp_url(3100));
+        // An embedding host's endpoint still wins: it owns the transport.
+        settings.embed_mcp_url = Some("http://127.0.0.1:63655/mcp".into());
+        assert!(settings
+            .mcp_client_config_display_text()
+            .contains("63655/mcp\""));
     }
 }
 

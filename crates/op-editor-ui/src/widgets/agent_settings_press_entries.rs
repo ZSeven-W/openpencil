@@ -509,6 +509,7 @@ pub(crate) fn apply_entry_hit(
         | AgentSettingsHit::Connect(_)
         | AgentSettingsHit::ToggleMcpServer
         | AgentSettingsHit::ToggleMcpCli(_)
+        | AgentSettingsHit::ToggleMcpLeanProfile
         | AgentSettingsHit::CopyMcpClientConfig
         | AgentSettingsHit::Fonts(_)
         | AgentSettingsHit::ToggleImagesAdvanced

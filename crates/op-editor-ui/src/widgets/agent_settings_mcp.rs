@@ -71,8 +71,25 @@ pub(super) fn cli_row_rect(content: Rect, index: usize) -> Rect {
     row_rect(content, integrations_top(content) + SECTION_HEADER_H, index)
 }
 
+/// The lean-profile switch closes the integrations list: it changes which
+/// endpoint every toggled CLI above is pointed at, so it reads as that
+/// list's modifier. Two-line box — the label needs its explanation.
+const LEAN_ROW_LINES: RowLines = RowLines::Two;
+
+pub(super) fn lean_profile_row_rect(content: Rect) -> Rect {
+    let top =
+        integrations_top(content) + SECTION_HEADER_H + McpCli::DISPLAY.len() as f32 * ROW_HEIGHT;
+    Rect {
+        origin: Point2D::new(content.origin.x, top),
+        size: Point2D::new(content.size.x, row_height(LEAN_ROW_LINES)),
+    }
+}
+
 fn integrations_block_h() -> f32 {
-    SECTION_HEADER_H + McpCli::DISPLAY.len() as f32 * ROW_HEIGHT + FOOTNOTE_H
+    SECTION_HEADER_H
+        + McpCli::DISPLAY.len() as f32 * ROW_HEIGHT
+        + row_height(LEAN_ROW_LINES)
+        + FOOTNOTE_H
 }
 
 /// Row boxes for this tab, paired with their line count — walked by the
@@ -82,6 +99,7 @@ pub(super) fn row_boxes(content: Rect, external_cli_available: bool) -> Vec<(Rec
     let mut boxes = vec![(server_row_rect(content), SERVER_ROW_LINES)];
     if cli_integrations_visible(external_cli_available) {
         boxes.extend((0..McpCli::DISPLAY.len()).map(|i| (cli_row_rect(content, i), RowLines::One)));
+        boxes.push((lean_profile_row_rect(content), LEAN_ROW_LINES));
     }
     boxes
 }
@@ -119,6 +137,7 @@ pub(super) fn content_height(settings: &AgentSettings, external_cli_available: b
 pub enum McpHit {
     ToggleServer,
     ToggleCli(McpCli),
+    ToggleLeanProfile,
     CopyClientConfig,
     FocusPort,
     None,
@@ -207,6 +226,9 @@ pub fn hit_test(
                 return McpHit::ToggleCli(*cli);
             }
         }
+        if lean_profile_row_rect(content).contains(scrolled) {
+            return McpHit::ToggleLeanProfile;
+        }
     }
     McpHit::None
 }
@@ -239,7 +261,6 @@ pub(super) fn paint_mcp_tab(
             Icon::Terminal,
             t_settings(ui, "settings.mcp.terminalIntegrations"),
         );
-        let last = McpCli::DISPLAY.len() - 1;
         for (i, cli) in McpCli::DISPLAY.iter().enumerate() {
             let row = cli_row_rect(content, i);
             paint_row_label(cx, theme, row, cli.label(), None, SETTINGS_SWITCH_W + 16.0);
@@ -251,15 +272,29 @@ pub(super) fn paint_mcp_tab(
                 // `McpCli::ALL` order; the displayed row is `DISPLAY` order.
                 settings.mcp_cli_enabled[cli.index()],
             );
-            if i != last {
-                paint_row_hairline(cx, theme, row);
-            }
+            // Every CLI row gets its hairline: the lean-profile row follows.
+            paint_row_hairline(cx, theme, row);
         }
+        let lean_row = lean_profile_row_rect(content);
+        paint_row_label(
+            cx,
+            theme,
+            lean_row,
+            t_settings(ui, "settings.mcp.leanProfile"),
+            Some(t_settings(ui, "settings.mcp.leanProfileDesc")),
+            SETTINGS_SWITCH_W + 16.0,
+        );
+        paint_settings_switch(
+            cx,
+            theme,
+            row_control_rect(lean_row, SETTINGS_SWITCH_W, SETTINGS_SWITCH_H),
+            settings.mcp_lean_profile,
+        );
         paint_footnote(
             cx,
             theme,
             content,
-            cli_row_rect(content, last).origin.y + ROW_HEIGHT,
+            lean_row.origin.y + lean_row.size.y,
             t_settings(ui, "settings.mcp.terminalFootnote"),
         );
     }
