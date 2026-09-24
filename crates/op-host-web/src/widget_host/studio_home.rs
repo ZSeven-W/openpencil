@@ -191,6 +191,8 @@ impl WidgetHost {
             HomeHit::ReferenceLink | HomeHit::Figma => {
                 // Visible but disabled in M1; the tooltip explains why.
             }
+            // Never laid out on web (`variants_unavailable`).
+            HomeHit::Variants => {}
         }
     }
 

@@ -234,6 +234,9 @@ impl<'a> HomeSurface<'a> {
         if self.ui.touch_chrome() {
             connect::drop_cli_row_for_touch(&mut layout);
         }
+        if self.state.variants_unavailable {
+            layout.variants = Rect::ZERO;
+        }
         layout
     }
 

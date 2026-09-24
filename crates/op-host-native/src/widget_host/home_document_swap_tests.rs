@@ -148,7 +148,10 @@ fn retrying_a_stopped_run_starts_on_a_fresh_page_and_keeps_the_partial_one() {
     // Swapping the page resets the workspace; the retry must bring it back,
     // or the run goes on behind a workspace that has vanished.
     let workspace = &host.editor_state().editor_ui.workspace;
-    assert!(workspace.active && workspace.visible, "the workspace stays up");
+    assert!(
+        workspace.active && workspace.visible,
+        "the workspace stays up"
+    );
     assert_eq!(workspace.brief, brief);
     assert_eq!(workspace.phase, op_editor_core::WorkspacePhase::Generating);
 }

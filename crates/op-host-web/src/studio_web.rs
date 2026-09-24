@@ -33,6 +33,9 @@ pub(crate) fn apply_entry_surface(state: &mut EditorState) {
     let show = state.editor_ui.embed != EmbedHost::VsCode
         && state.editor_ui.entry_surface == EntrySurface::Home;
     state.editor_ui.home.visible = show;
+    // The daemon runs one design per turn; several directions side by
+    // side are desktop-only for now.
+    state.editor_ui.home.variants_unavailable = true;
 }
 
 /// Ask before a Home send discards unsaved work. Runs from the DOM listeners

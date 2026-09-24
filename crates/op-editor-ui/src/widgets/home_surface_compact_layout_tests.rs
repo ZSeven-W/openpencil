@@ -319,3 +319,18 @@ fn the_phone_connect_card_fits_the_screen_and_offers_no_local_cli() {
         "the remaining rows still answer"
     );
 }
+
+#[test]
+fn a_host_without_a_variants_runner_offers_no_toggle() {
+    let mut state = EditorState::new();
+    state.editor_ui.home.visible = true;
+    let wide = HomeSurface::for_editor(&state)
+        .expect("home visible")
+        .layout(1440.0, 900.0);
+    assert!(wide.variants.size.x > 0.0, "desktop offers the toggle");
+    state.editor_ui.home.variants_unavailable = true;
+    let web = HomeSurface::for_editor(&state)
+        .expect("home visible")
+        .layout(1440.0, 900.0);
+    assert_eq!(web.variants, Rect::ZERO);
+}

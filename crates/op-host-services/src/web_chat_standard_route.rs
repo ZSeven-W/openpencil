@@ -30,7 +30,7 @@ pub(super) fn parse_launch_route(obj: &serde_json::Map<String, Value>) -> Launch
 pub(super) fn pinned_intent(route: LaunchRoute, has_modify_plan: bool) -> Option<DesignIntent> {
     match route {
         LaunchRoute::Auto => None,
-        LaunchRoute::Orchestrator => Some(DesignIntent::New),
+        LaunchRoute::Orchestrator | LaunchRoute::Variants(_) => Some(DesignIntent::New),
         LaunchRoute::Refine if has_modify_plan => Some(DesignIntent::Modify),
         LaunchRoute::Refine => None,
     }

@@ -311,7 +311,11 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
     // turn and is consumed by it, like the desktop launcher's drain.
     let launch_route = match std::mem::take(&mut state.chat.launch_route) {
         op_editor_core::LaunchRoute::Auto => None,
-        op_editor_core::LaunchRoute::Orchestrator => Some("orchestrator"),
+        // The toggle is hidden on web; a stray variants route still runs
+        // as one orchestrated design rather than being dropped.
+        op_editor_core::LaunchRoute::Orchestrator | op_editor_core::LaunchRoute::Variants(_) => {
+            Some("orchestrator")
+        }
         op_editor_core::LaunchRoute::Refine => Some("refine"),
     };
     let (model, credential, builtin_provider_id) =

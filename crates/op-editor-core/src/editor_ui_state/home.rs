@@ -353,6 +353,9 @@ pub struct HomeState {
     /// several distinct directions side by side instead of one design.
     /// Session state shared by every task, like the model chip.
     pub variants_on: bool,
+    /// Host capability: this host cannot run several directions (web has
+    /// no variants runner yet), so the toggle is not offered at all.
+    pub variants_unavailable: bool,
 }
 
 impl Default for HomeState {
@@ -376,6 +379,7 @@ impl Default for HomeState {
             card_hover_leaving: None,
             works_open: false,
             variants_on: false,
+            variants_unavailable: false,
         }
     }
 }

@@ -91,6 +91,8 @@ impl WidgetHost {
                 self.editor_state.editor_ui.entry_surface = EntrySurface::Home;
             }
             WorkspaceHit::Export => self.editor_state.editor_ui.open_export_dialog(),
+            // Web never runs several directions, so no pick bar is shown.
+            WorkspaceHit::UseVariant(_) => {}
             WorkspaceHit::Professional => {
                 let workspace = &mut self.editor_state.editor_ui.workspace;
                 let restore = workspace.previous_tool;
