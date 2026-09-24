@@ -9,6 +9,9 @@
 
 use jian_core::text_input::TextInputState;
 
+#[path = "home_brand.rs"]
+pub mod brand;
+
 /// The persisted first-launch entry preference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum EntrySurface {
@@ -243,8 +246,11 @@ pub enum HomeHit {
     Segment(u8),
     /// The 添加截图 tool.
     Attachment,
-    /// The 参考链接 tool (disabled M1).
+    /// The 加链接 tool: read a brand from the brief's link or staged
+    /// screenshot (disabled on hosts without an extraction runner).
     ReferenceLink,
+    /// The staged brand chip's remove (×) button.
+    BrandClear,
     /// The Figma tool (disabled M1).
     Figma,
     /// The 3-directions toggle: the next send generates
@@ -360,6 +366,9 @@ pub struct HomeState {
     /// Host capability: this host cannot run several directions (web has
     /// no variants runner yet), so the toggle is not offered at all.
     pub variants_unavailable: bool,
+    /// The 加链接 tool's brand kit: request, status, and the staged kit
+    /// the next send applies.
+    pub brand: brand::HomeBrandState,
 }
 
 impl Default for HomeState {
@@ -385,6 +394,7 @@ impl Default for HomeState {
             works_open: false,
             variants_on: false,
             variants_unavailable: false,
+            brand: brand::HomeBrandState::default(),
         }
     }
 }

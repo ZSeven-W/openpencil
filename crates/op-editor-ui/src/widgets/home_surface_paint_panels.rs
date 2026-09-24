@@ -199,6 +199,7 @@ pub(super) fn paint_composer(
             chip_x += chip_w + 6.0;
         }
     }
+    super::super::brand_chip::paint_brand_chip(surface, cx, input_box, palette);
 
     // The inline replace-confirm strip rides above the input's bottom.
     if surface.state.replace_pending {
@@ -283,6 +284,12 @@ pub(super) fn paint_composer(
     ] {
         paint_tool_button(surface, cx, shift(rect, rise), hit, label, icon, palette);
     }
+    super::super::brand_chip::paint_link_hint(
+        surface,
+        cx,
+        shift(layout.reference_link, rise),
+        palette,
+    );
     let figma = shift(layout.figma, rise);
     let figma_hover = surface.state.hover == Some(HomeHit::Figma);
     let figma_color = if figma_hover {
@@ -425,7 +432,10 @@ fn paint_tool_button(
     palette: StudioPalette,
 ) {
     let hovered = surface.state.hover == Some(hit);
-    let disabled = matches!(hit, HomeHit::ReferenceLink | HomeHit::Figma);
+    // 加链接 is live where the host can run a brand extraction (desktop);
+    // elsewhere it stays the "coming soon" tool, like Figma.
+    let disabled =
+        hit == HomeHit::Figma || (hit == HomeHit::ReferenceLink && !surface.state.brand.available);
     let color = if disabled && hovered {
         fade(palette.ink, 0.5)
     } else if hovered {

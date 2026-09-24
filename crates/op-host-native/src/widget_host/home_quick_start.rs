@@ -94,6 +94,9 @@ impl WidgetHostNative {
         if self.install_home_template_draft_state(next, true).is_err() {
             return false;
         }
+        // A staged brand kit re-skins the template draft through its
+        // variables before the refine turn reads the document.
+        self.apply_staged_home_brand();
 
         let home = &self.editor_state.editor_ui.home;
         let family = home.task;

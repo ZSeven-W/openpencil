@@ -255,6 +255,12 @@ impl WidgetHostNative {
         if self.pan_cache_restore.is_some() {
             next = bookkeeping::earliest(next, self.now_ms.saturating_add(16));
         }
+        // Home's 加链接 hint erases itself: wake once when it expires.
+        if let Some(at) = self.editor_state.editor_ui.home.brand.hint_deadline_ms() {
+            if at > self.now_ms && self.editor_state.editor_ui.home.visible {
+                next = bookkeeping::earliest(next, at);
+            }
+        }
         // Slides-tab thumbnails: the rail renders a bounded batch per
         // frame and waits out an edit before re-rendering, so it asks
         // for the next wake here rather than dirtying the whole host.

@@ -45,6 +45,9 @@ impl DesktopApp {
         host.editor_state_mut().editor_ui.home.visible =
             !cfg!(test) && should_show_home(initial_file.is_some(), entry_surface);
         prompt_center_store::install_user_prompts(&mut host);
+        // Desktop runs brand extraction (network + image decode) off the UI
+        // thread, so Home's 加链接 tool is live here.
+        host.editor_state_mut().editor_ui.home.brand.available = true;
         // Zode is a desktop-local integration. Keep it out of the shared
         // settings loader so `--serve-web` never exposes machine-local Zode
         // providers that the browser settings UI cannot manage.
@@ -182,6 +185,7 @@ impl DesktopApp {
             builtin_model_refresh: Default::default(),
             image_search: image_search_session::ImageSearchSession::new(),
             image_panel: image_panel_host::ImagePanelJobs::new(),
+            brand_jobs: crate::brand_extract_host::BrandJobs::new(),
             remote_images: remote_image_host::RemoteImageSession::new(),
             collab_avatars: collab_avatar_host::CollabAvatarHost::new(),
             image_decodes: image_decode_host::ImageDecodeHost::new(),

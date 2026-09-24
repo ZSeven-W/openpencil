@@ -214,6 +214,9 @@ impl WidgetHost {
             HomeHit::ReferenceLink | HomeHit::Figma => {
                 // Visible but disabled in M1; the tooltip explains why.
             }
+            // No brand runner on web yet, so no chip is ever staged; clearing
+            // is still the honest answer if one ever is.
+            HomeHit::BrandClear => self.editor_state.editor_ui.home.brand.clear(),
             // Never laid out on web (`variants_unavailable`).
             HomeHit::Variants => {}
         }

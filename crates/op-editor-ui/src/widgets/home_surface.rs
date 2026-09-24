@@ -35,6 +35,9 @@ mod focus;
 #[path = "home_surface_variants.rs"]
 mod variants_toggle;
 
+#[path = "home_surface_brand.rs"]
+mod brand_chip;
+
 #[path = "home_surface_layout.rs"]
 pub(crate) mod layout;
 
@@ -287,6 +290,17 @@ impl<'a> HomeSurface<'a> {
             && self.send_mode() == op_editor_core::HomeSendMode::UseExample
     }
 
+    /// The brand chip and its remove button, when a brand is being read or
+    /// is staged (`None` otherwise).
+    pub fn brand_chip_rects(
+        &self,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> Option<(Rect, Rect)> {
+        let layout = self.layout(viewport_width, viewport_height);
+        brand_chip::chip_rects(self, layout.input_box)
+    }
+
     pub fn hit_test(
         &self,
         viewport_width: f32,
@@ -401,6 +415,11 @@ impl<'a> HomeSurface<'a> {
         }
         if layout.variants.size.x > 0.0 && layout.variants.contains(point) {
             return Some(HomeHit::Variants);
+        }
+        if let Some((_, close)) = brand_chip::chip_rects(self, layout.input_box) {
+            if close.contains(point) {
+                return Some(HomeHit::BrandClear);
+            }
         }
         if layout.input_box.contains(point) {
             return Some(HomeHit::Sheet);

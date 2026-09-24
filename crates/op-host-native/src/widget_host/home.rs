@@ -317,7 +317,9 @@ impl WidgetHostNative {
                 let home = &mut self.editor_state.editor_ui.home;
                 home.variants_on = !home.variants_on;
             }
-            HomeHit::ReferenceLink | HomeHit::Figma => {
+            HomeHit::ReferenceLink => self.home_brand_press(),
+            HomeHit::BrandClear => self.editor_state.editor_ui.home.brand.clear(),
+            HomeHit::Figma => {
                 // Visible but disabled in M1; the tooltip explains why.
             }
         }
@@ -392,6 +394,8 @@ impl WidgetHostNative {
         if !op_editor_core::blank_starter::active_page_is_blank_starter(&self.editor_state) {
             self.start_fresh_document_for_home();
         }
+        // A staged brand kit lands on the document the run will draw on.
+        self.apply_staged_home_brand();
         // Open the generation workspace on the SAME document: the chat
         // pins into the dock and the canvas renders the boards the run
         // produces. Family, brief, and the task's options are captured

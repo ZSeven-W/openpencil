@@ -17,6 +17,7 @@ mod app_handler;
 mod app_poll;
 mod app_state;
 mod asset_fetch_error;
+mod brand_extract_host;
 mod builtin_model_refresh_host;
 mod bundled_fonts;
 mod chat_acp;
@@ -327,6 +328,8 @@ struct DesktopApp {
     /// Property-panel image-section workers: Search / Generate
     /// popover requests + the local-asset existence check.
     image_panel: image_panel_host::ImagePanelJobs,
+    /// Studio Home 加链接 brand extractions running off the UI thread.
+    brand_jobs: brand_extract_host::BrandJobs,
     /// Background fetches for remote `http(s)` image sources the
     /// canvas painter recorded as cache misses — fetched bytes land in
     /// the painter's shared byte cache so the next frame draws them.

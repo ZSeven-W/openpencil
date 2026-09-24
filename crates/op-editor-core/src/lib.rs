@@ -351,6 +351,9 @@ pub use document_install::{DocumentInstallError, DocumentInstallReport, Prepared
 pub use edit_transaction::{
     CompletedLocalEdit, EditOrigin, LocalEditCapture, LocalEditError, LocalEditOutcome,
 };
+pub use editor_ui_state::home::brand::{
+    first_url, BrandSourceRequest, HomeBrandState, HomeBrandStatus, BRAND_HINT_MS,
+};
 pub use editor_ui_state::home::{HOME_ART_SWITCH_MS, HOME_ENTER_FRAME_MS, HOME_ENTER_WINDOW_MS};
 pub use editor_ui_state::home_example_draft::{
     example_draft_template, refine_prompt, HomeSendMode,

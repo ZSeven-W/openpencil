@@ -121,6 +121,7 @@ mod git_press;
 mod helpers;
 mod history_guard;
 mod home;
+mod home_brand;
 mod home_document_swap;
 pub use home_document_swap::ReplacedHomeDocument;
 mod home_overlays;
