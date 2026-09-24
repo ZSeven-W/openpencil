@@ -42,12 +42,12 @@ pub(crate) fn drain_pending_file_action<C: RepaintContext + 'static>(inner: &Inn
     };
     match action {
         FileAction::Home => {
-            let mut b = inner.borrow_mut();
-            let ui = &mut b.host_mut().editor_state_mut().editor_ui;
-            ui.entry_surface = op_editor_core::EntrySurface::Home;
-            ui.home.visible = true;
-            b.host_mut().mark_editor_state_dirty();
-            let _ = b.repaint();
+            // The web host has no Studio Home surface yet. Raising
+            // `home.visible` here painted nothing while the invisible Home
+            // still claimed the keyboard (`text_input_focus_active`), so the
+            // canvas stopped taking shortcuts. Stay on the canvas until the
+            // Studio surfaces are ported to web.
+            web_sys::console::info_1(&"Studio Home is desktop-only for now".into());
         }
         FileAction::New => new_document(inner),
         FileAction::Open => open_document(inner),
