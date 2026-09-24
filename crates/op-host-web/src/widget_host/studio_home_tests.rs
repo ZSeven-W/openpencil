@@ -272,6 +272,43 @@ fn the_pinned_route_travels_with_the_turn_and_is_consumed_by_it() {
 }
 
 #[test]
+fn a_daemon_holding_an_opened_file_opens_on_the_canvas() {
+    use super::entry_shows_home;
+    use op_editor_core::EmbedHost;
+    assert!(entry_shows_home(EmbedHost::None, EntrySurface::Home, false));
+    assert!(
+        !entry_shows_home(EmbedHost::None, EntrySurface::Home, true),
+        "`--file` opens on its canvas whatever the preference (desktop parity)"
+    );
+    assert!(!entry_shows_home(
+        EmbedHost::None,
+        EntrySurface::Canvas,
+        false
+    ));
+    assert!(!entry_shows_home(
+        EmbedHost::VsCode,
+        EntrySurface::Home,
+        false
+    ));
+
+    // The answer arrived after the first paint: Home steps aside…
+    let mut host = home_host();
+    host.editor_state.editor_ui.entry_surface = EntrySurface::Home;
+    assert!(host.open_bound_file_on_canvas());
+    assert!(!host.home_visible());
+    assert_eq!(
+        host.editor_state.editor_ui.entry_surface,
+        EntrySurface::Home,
+        "the preference itself is untouched"
+    );
+    // …unless the user already started a brief on it.
+    let mut host = home_host();
+    type_brief(&mut host, "poster");
+    assert!(!host.open_bound_file_on_canvas());
+    assert!(host.home_visible());
+}
+
+#[test]
 fn a_daemon_catalog_marks_served_models_and_an_empty_one_clears_it() {
     let mut state = op_editor_core::EditorState::new();
     crate::web_model_catalog::apply_models(&mut state, &["gpt-5".to_string()]);

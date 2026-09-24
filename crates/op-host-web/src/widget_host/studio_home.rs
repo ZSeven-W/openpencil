@@ -8,13 +8,36 @@
 //! reveal — fall back to their desktop readings.
 
 use super::WidgetHost;
-use op_editor_core::{EntrySurface, HomeDevice, HomeFamily, HomeHit, InfoKind, SlideRatio};
+use op_editor_core::{
+    EmbedHost, EntrySurface, HomeDevice, HomeFamily, HomeHit, InfoKind, SlideRatio,
+};
 use op_editor_ui::widgets::HomeSurface;
 use op_editor_ui::Point2D;
+
+/// Whether the page opens on Studio Home: the persisted preference asks for
+/// it, no embedding host handed over a document (the VS Code plugin opens
+/// on its canvas), and the daemon holds no opened file — desktop's
+/// `should_show_home` likewise opens a `--file` launch onto its canvas.
+pub fn entry_shows_home(embed: EmbedHost, entry_surface: EntrySurface, file_bound: bool) -> bool {
+    embed != EmbedHost::VsCode && entry_surface == EntrySurface::Home && !file_bound
+}
 
 impl WidgetHost {
     pub(crate) fn home_visible(&self) -> bool {
         self.editor_state.editor_ui.home.visible
+    }
+
+    /// The daemon's answer that a file backs its document arrived after the
+    /// first paint: leave Home for that file's canvas. A user who already
+    /// started on Home (typed a brief, launched a run) keeps it.
+    pub fn open_bound_file_on_canvas(&mut self) -> bool {
+        let ui = &self.editor_state.editor_ui;
+        if !ui.home.visible || !ui.home.draft.trim().is_empty() || ui.workspace.active {
+            return false;
+        }
+        self.editor_state.editor_ui.home.hide();
+        self.mark_dirty();
+        true
     }
 
     /// The Home takeover tier. `None` while Home is hidden so the ordinary

@@ -61,10 +61,9 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     let search = window.location().search().unwrap_or_default();
     host.editor_state_mut().editor_ui.embed = op_editor_core::EmbedHost::from_query(&search);
     let credential_load = crate::web_settings::load_into(host.editor_state_mut());
-    // Open on Studio Home like the desktop app does when started without a
-    // file, per the persisted entry-surface preference. An embedding host
-    // (the VS Code plugin) always opens its document on the canvas.
-    crate::studio_web::apply_entry_surface(host.editor_state_mut());
+    // Whether the daemon holds an opened file decides Home vs canvas below;
+    // ask now so the answer overlaps the CanvasKit download.
+    crate::studio_web::probe_bound_file(host.editor_state().editor_ui.embed);
     // Theme is device-level, so it is resolved from its own unpartitioned key
     // rather than from the partition blob just loaded. On a browser that has
     // never run the split build this adopts the blob's theme and writes the
@@ -92,6 +91,11 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     let initial_locale = host.editor_state().editor_ui.effective_locale();
     let initial_catalog = crate::web_asset_fetch::prefetch_initial_catalog(initial_locale);
     let backend = init_backend(&canvas_id, dpr, logical_w, logical_h).await?;
+    // Open on Studio Home like the desktop app does when started without a
+    // file, per the persisted entry-surface preference. An embedding host
+    // (the VS Code plugin) and a daemon serving an opened file (`--file`)
+    // open on the canvas. Still ahead of the first paint.
+    crate::studio_web::apply_entry_surface(host.editor_state_mut());
     if let Some(catalog) = initial_catalog {
         // The XHR itself owns the three-second timeout. Success installs the
         // target catalog; failure leaves the stored locale in place so its first
@@ -133,6 +137,9 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     // pure state reset (no daemon request), so it is safe ahead of the bridge
     // init gate; the daemon-facing policy fetch (`start`) still waits for it.
     crate::web_credential_sync::reset();
+    // A `fileBound` answer slower than the CanvasKit download is applied
+    // when it lands.
+    crate::studio_web::adopt_bound_file_answer(&inner);
     {
         let mut b = inner.borrow_mut();
         let _ = b.resize_to_window(&window)?;

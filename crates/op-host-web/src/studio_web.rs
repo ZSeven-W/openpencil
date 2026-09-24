@@ -6,7 +6,8 @@
 //! The widget host owns every Studio decision; this module supplies the
 //! things only the page can:
 //!
-//! * the entry-surface choice at mount ([`apply_entry_surface`]);
+//! * the entry-surface choice at mount ([`apply_entry_surface`]), which asks
+//!   the daemon whether a file is open first ([`probe_bound_file`]);
 //! * unbinding the daemon's file when the document is swapped for one it
 //!   does not hold ([`unbind_daemon_file`]);
 //! * the discard confirm a Home send parks when it would replace a document
@@ -19,25 +20,95 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use op_editor_core::{EditorState, EmbedHost, EntrySurface};
+use op_editor_core::{EditorState, EmbedHost};
 
 use crate::repaint_ctx::RepaintContext;
+
+/// Applies a late `fileBound` answer to the mounted shell.
+type FileBoundHook = Box<dyn Fn(bool)>;
 
 thread_local! {
     /// One phase pump per page; the rAF closure owns itself and this is only
     /// a duplicate-start guard.
     static PUMP_RUNNING: Cell<bool> = const { Cell::new(false) };
+    /// The daemon's `fileBound` answer, once it arrived.
+    static FILE_BOUND: Cell<Option<bool>> = const { Cell::new(None) };
+    /// Applies a `fileBound` answer that lands after the first paint.
+    static FILE_BOUND_HOOK: RefCell<Option<FileBoundHook>> = const { RefCell::new(None) };
+}
+
+/// Ask the daemon whether a file backs its document (`--file`, or a file
+/// it opened). Started before the CanvasKit download so the answer is
+/// normally in hand by the first paint; a later answer goes through
+/// [`adopt_bound_file_answer`]'s hook. The VS Code embed never shows Home,
+/// so it does not ask.
+pub(crate) fn probe_bound_file(embed: EmbedHost) {
+    if embed == EmbedHost::VsCode {
+        return;
+    }
+    let url = crate::daemon_base::daemon_url("/api/mcp/server");
+    crate::live_sync::get(
+        &url,
+        Rc::new(|body: String| {
+            let Some(bound) = parse_file_bound(&body) else {
+                return;
+            };
+            FILE_BOUND.with(|slot| slot.set(Some(bound)));
+            FILE_BOUND_HOOK.with(|hook| {
+                if let Some(apply) = hook.borrow_mut().take() {
+                    apply(bound);
+                }
+            });
+        }),
+    );
+}
+
+/// `fileBound` out of `GET /api/mcp/server`. `None` for an older daemon
+/// that does not report it (the preference then decides alone).
+fn parse_file_bound(body: &str) -> Option<bool> {
+    let parsed: serde_json::Value = serde_json::from_str(body).ok()?;
+    parsed.get("fileBound")?.as_bool()
 }
 
 /// Show Studio Home on first paint when the persisted preference asks for
-/// it. Embedded hosts open straight onto the document they were handed.
+/// it. Embedded hosts and a daemon holding an opened file open straight
+/// onto the canvas (desktop `should_show_home`). An answer still in flight
+/// counts as "no file" here; [`adopt_bound_file_answer`] corrects it.
 pub(crate) fn apply_entry_surface(state: &mut EditorState) {
-    let show = state.editor_ui.embed != EmbedHost::VsCode
-        && state.editor_ui.entry_surface == EntrySurface::Home;
+    let file_bound = FILE_BOUND.with(Cell::get).unwrap_or(false);
+    let show = crate::widget_host::entry_shows_home(
+        state.editor_ui.embed,
+        state.editor_ui.entry_surface,
+        file_bound,
+    );
     state.editor_ui.home.visible = show;
     // The daemon runs one design per turn; several directions side by
     // side are desktop-only for now.
     state.editor_ui.home.variants_unavailable = true;
+}
+
+/// The mounted shell takes over a `fileBound` answer that had not arrived
+/// by the first paint: when it says a file is open, Home steps aside for
+/// the canvas (unless the user already started typing a brief on it).
+pub(crate) fn adopt_bound_file_answer<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
+    if FILE_BOUND.with(Cell::get).is_some() {
+        return;
+    }
+    let inner = inner.clone();
+    FILE_BOUND_HOOK.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(move |bound| {
+            if !bound {
+                return;
+            }
+            let Ok(mut b) = inner.try_borrow_mut() else {
+                return;
+            };
+            if b.host_mut().open_bound_file_on_canvas() {
+                b.host_mut().mark_editor_state_dirty();
+                crate::repaint_coalescer::request();
+            }
+        }));
+    });
 }
 
 /// Ask before a Home send discards unsaved work. Runs from the DOM listeners
@@ -161,4 +232,21 @@ pub(crate) fn ensure_workspace_pump<C: RepaintContext + 'static>(inner: &Rc<RefC
         }
         tick.keep_pumping
     }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_file_bound;
+
+    #[test]
+    fn file_bound_is_read_from_the_server_probe() {
+        assert_eq!(
+            parse_file_bound(r#"{"running":true,"serveMode":"local","fileBound":true}"#),
+            Some(true)
+        );
+        assert_eq!(parse_file_bound(r#"{"fileBound":false}"#), Some(false));
+        // An older daemon says nothing; the preference decides alone.
+        assert_eq!(parse_file_bound(r#"{"running":true}"#), None);
+        assert_eq!(parse_file_bound("not json"), None);
+    }
 }

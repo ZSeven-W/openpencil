@@ -205,6 +205,7 @@ mod shape_create_tests;
 mod shape_picker_press;
 mod slides_panel;
 mod studio_home;
+pub use studio_home::entry_shows_home;
 mod studio_home_input;
 mod studio_home_send;
 pub use studio_home_send::HomeReplaceIntent;

@@ -589,11 +589,23 @@ fn unbinding_stops_save_from_writing_the_launch_file() {
     let original = r#"{"version":"1.0.0","children":[]}"#;
     let path = write_temp_op("unbind-target", original);
     let mut s = WebCanvasState::new_with_path(EditorState::new(), 3100, Some(path.clone()));
+    let server = handle_web_canvas_request("GET", "/api/mcp/server", "", &mut s);
+    assert!(
+        server.body.contains(r#""fileBound":true"#),
+        "{}",
+        server.body
+    );
 
     let r = handle_web_canvas_request("POST", "/api/file/unbind", "", &mut s);
     assert!(r.status.starts_with("200"), "{}", r.body);
     assert!(r.body.contains(r#""unbound":true"#), "{}", r.body);
     assert!(s.current_path.is_none());
+    let server = handle_web_canvas_request("GET", "/api/mcp/server", "", &mut s);
+    assert!(
+        server.body.contains(r#""fileBound":false"#),
+        "{}",
+        server.body
+    );
 
     // Save now refuses (the browser downloads instead) and the file is intact.
     let saved = handle_web_canvas_request("POST", "/api/file/save", SYNC_BODY, &mut s);

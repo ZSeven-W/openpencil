@@ -474,10 +474,13 @@ pub fn handle_web_canvas_request(
             // merely a peer holding the operator's file (local/managed). That
             // decides whether a sync conflict may be auto-resolved — see
             // `op-host-web/src/live_sync_glue.rs::auto_resolve_is_safe`.
+            // `fileBound`: a file backs this document (`--file` or a recent
+            // open), so the browser opens onto its canvas rather than Home.
             body: format!(
-                r#"{{"running":true,"port":{},"localIp":"127.0.0.1","server":"openpencil-mcp","mode":"web-canvas","serveMode":"{}"}}"#,
+                r#"{{"running":true,"port":{},"localIp":"127.0.0.1","server":"openpencil-mcp","mode":"web-canvas","serveMode":"{}","fileBound":{}}}"#,
                 state.port,
-                state.mode.wire_name()
+                state.mode.wire_name(),
+                state.current_path.is_some()
             ),
         },
         ("POST", "/api/mcp/server") => update_mcp_server_settings(body, state),
