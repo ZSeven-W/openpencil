@@ -173,6 +173,7 @@ pub(super) fn paint_home(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: 
     if surface.state.connect_card_open {
         super::connect::paint_connect_card(surface, cx, &layout, palette);
     }
+    super::focus::paint_home_focus_ring(surface, cx, &layout, palette);
 }
 
 fn paint_top_bar(

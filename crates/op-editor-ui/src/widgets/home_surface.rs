@@ -32,6 +32,8 @@ mod connect;
 
 #[path = "home_surface_variants.rs"]
 mod variants_toggle;
+#[path = "home_surface_focus.rs"]
+mod focus;
 
 #[path = "home_surface_layout.rs"]
 pub(crate) mod layout;
@@ -204,6 +206,18 @@ impl<'a> HomeSurface<'a> {
     }
 
     pub fn layout(&self, viewport_width: f32, viewport_height: f32) -> HomeLayout {
+        self.layout_at_scroll(viewport_width, viewport_height, self.state.scroll_y)
+    }
+
+    /// [`Self::layout`] as if the page were scrolled to `scroll_y` (clamped
+    /// into range the same way) — the keyboard focus order reads the page
+    /// at the top so a target scrolled under the top bar still counts.
+    pub fn layout_at_scroll(
+        &self,
+        viewport_width: f32,
+        viewport_height: f32,
+        scroll_y: f32,
+    ) -> HomeLayout {
         let chip_w = model::model_chip_width(&self.chip_label);
         let compact = self.ui.compact_layout();
         // The page lays out against the full viewport — a software
@@ -224,7 +238,7 @@ impl<'a> HomeSurface<'a> {
             self.state.task,
             // The scroll still applies while focused: on a short phone the
             // lifted composer can need the keyboard reveal to bring Send up.
-            self.state.scroll_y.clamp(0.0, max_scroll),
+            scroll_y.clamp(0.0, max_scroll),
             chip_w,
             compact,
         );
@@ -280,12 +294,22 @@ impl<'a> HomeSurface<'a> {
         point: Point2D,
     ) -> Option<HomeHit> {
         let layout = self.layout(viewport_width, viewport_height);
+        self.hit_test_layout(viewport_width, viewport_height, &layout, point)
+    }
+
+    /// Hit-test against a prebuilt `layout` (the focus order validates
+    /// its targets against the unscrolled page).
+    pub fn hit_test_layout(
+        &self,
+        viewport_width: f32,
+        viewport_height: f32,
+        layout: &HomeLayout,
+        point: Point2D,
+    ) -> Option<HomeHit> {
         // The 接入卡 is modal over the whole surface: presses inside its
         // rows act, presses anywhere else (even on Home chrome) close it.
         if self.state.connect_card_open {
-            return Some(
-                connect::connect_card_hit(&layout, point).unwrap_or(HomeHit::ConnectClose),
-            );
+            return Some(connect::connect_card_hit(layout, point).unwrap_or(HomeHit::ConnectClose));
         }
         if layout.professional.contains(point) {
             return Some(HomeHit::Professional);

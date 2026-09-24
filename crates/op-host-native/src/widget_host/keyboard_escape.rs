@@ -355,6 +355,10 @@ impl WidgetHostNative {
         {
             return true;
         }
+        // The Studio keyboard focus ring steps down next.
+        if self.escape_studio_key_focus() {
+            return true;
+        }
         if escape::escape_chat_focus(&mut self.editor_state, self.now_ms) {
             self.mark_dirty();
             return true;

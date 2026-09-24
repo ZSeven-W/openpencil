@@ -98,6 +98,25 @@ impl WidgetHostNative {
         frame.restore();
     }
 
+    /// Paint the keyboard focus ring over everything the workspace paints.
+    pub(in crate::widget_host) fn paint_workspace_focus_ring(
+        &mut self,
+        frame: &mut NativeFrameBackend<'_>,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) {
+        if self.editor_state.editor_ui.workspace.key_focus.is_none() {
+            return;
+        }
+        let Some(surface) = WorkspaceSurface::for_editor_at(&self.editor_state, self.now_ms) else {
+            return;
+        };
+        let mut cx = op_editor_ui::widgets::PaintCx {
+            backend: &mut *frame,
+        };
+        surface.paint_focus_ring(&mut cx, Rect::xywh(0.0, 0.0, viewport_w, viewport_h));
+    }
+
     /// Paint the expanded quality-report panel over the canvas and the
     /// docked chat. No-op while the chip is closed.
     pub(in crate::widget_host) fn paint_workspace_quality_overlay(

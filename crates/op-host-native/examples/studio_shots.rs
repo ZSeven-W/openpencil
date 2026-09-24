@@ -87,6 +87,140 @@ fn open_drawer(mut host: WidgetHostNative) -> WidgetHostNative {
     host
 }
 
+/// Home with the keyboard focus ring on the 网站设计 (Websites) chip.
+fn home_focused() -> WidgetHostNative {
+    let mut host = home_host(Locale::EnUs, HomeFamily::AppUi, HomeDevice::Mobile);
+    host.editor_state_mut().editor_ui.home.key_focus =
+        Some(op_editor_core::HomeHit::Tab(HomeFamily::Web));
+    host
+}
+
+/// A finished deck workspace with the focus ring on the strip's Play tile.
+fn workspace_focused() -> WidgetHostNative {
+    let mut host = workspace_host(
+        Locale::EnUs,
+        "ppt-demo.op",
+        HomeFamily::Presentation,
+        1280.0,
+        800.0,
+    );
+    host.editor_state_mut().editor_ui.workspace.key_focus =
+        Some(op_editor_core::WorkspaceHit::Play);
+    host
+}
+
+/// A finished deck workspace with its quality report open: two itemized
+/// fixes, a prose fix, and two remaining findings.
+fn workspace_quality(locale: Locale) -> WidgetHostNative {
+    use op_editor_core::{QualityItem, QualityRepairRecord, QualityReport, QualityTopic};
+    let mut host = workspace_host(
+        locale,
+        "ppt-demo.op",
+        HomeFamily::Presentation,
+        1280.0,
+        800.0,
+    );
+    let mut report = QualityReport::default();
+    let record = |pass: &str, family: &str, name: &str, detail: &str| QualityRepairRecord {
+        pass: pass.into(),
+        family: family.into(),
+        node_id: String::new(),
+        node_name: Some(name.into()),
+        detail: detail.into(),
+    };
+    report.ingest_repairs(
+        &["layout".into(), "overflow".into()],
+        &[
+            record("unify-section-margins", "layout", "Agenda", "gap 24 → 16"),
+            record(
+                "text-fit",
+                "overflow",
+                "Cover title",
+                "fontSize 72 → 64, height (unset) → 180",
+            ),
+            record(
+                "chrome-dedupe",
+                "structure",
+                "Footer",
+                "removed frame (+3 descendant(s))",
+            ),
+        ],
+        &[],
+    );
+    let remaining = |topic, source: &str, name: &str, reason: &str| QualityItem {
+        topic,
+        source: source.into(),
+        node_id: None,
+        node_name: Some(name.into()),
+        board_id: None,
+        detail: reason.into(),
+    };
+    report.ingest_audit(
+        &[QualityTopic::Contrast, QualityTopic::Charts],
+        vec![
+            remaining(
+                QualityTopic::Contrast,
+                "text-bg-contrast",
+                "Subtitle",
+                "contrast 2.1:1 < 3:1 against #f5f7ff",
+            ),
+            remaining(
+                QualityTopic::Charts,
+                "no-baseline-bars",
+                "Growth chart",
+                "bars have no shared baseline",
+            ),
+        ],
+    );
+    let workspace = &mut host.editor_state_mut().editor_ui.workspace;
+    workspace.quality = Some(report);
+    workspace.quality_open = true;
+    host
+}
+
+/// The one-click example draft whose AI refine then failed: Home's empty
+/// Send on 演示文稿 loads the deck template and queues the refine; the
+/// provider ends the turn as `error: …`; the idle edge settles it through
+/// the same verdicts the desktop runner uses.
+fn refine_failed() -> WidgetHostNative {
+    let (w, h) = (1280.0, 800.0);
+    let mut host = home_host(Locale::EnUs, HomeFamily::Presentation, HomeDevice::Mobile);
+    let send = op_editor_ui::widgets::HomeSurface::for_editor(host.editor_state())
+        .expect("home")
+        .layout(w, h)
+        .send;
+    host.apply_press(
+        send.origin.x + send.size.x / 2.0,
+        send.origin.y + send.size.y / 2.0,
+        w,
+        h,
+    );
+    host.apply_release_with_viewport(w, h);
+    {
+        let state = host.editor_state_mut();
+        state.chat.pending_send = None;
+        // The launcher clears the hand-off selection, and the transport
+        // ends the queued bubble the way it ends every dead turn.
+        state.clear_selection();
+        if let Some(reply) = state
+            .chat
+            .messages
+            .iter_mut()
+            .rev()
+            .find(|message| message.role == op_editor_core::ChatRole::Assistant)
+        {
+            reply.content = "error: 401 invalid api key".into();
+            reply.streaming = false;
+        }
+    }
+    let state = host.editor_state();
+    let failed = op_editor_core::workspace_run::last_assistant_failed(state);
+    let boards = op_editor_core::workspace_run::produced_board_count(state);
+    let epoch = state.editor_ui.workspace.run_epoch;
+    host.settle_workspace_idle_edge(epoch, boards, failed, w, h);
+    host
+}
+
 /// Paint a few frames (letting lazy image decodes land in between) and
 /// write the last one.
 fn shoot(host: &mut WidgetHostNative, w: f32, h: f32, out_dir: &str, name: &str) {
@@ -164,6 +298,15 @@ fn scenarios() -> Vec<Scenario> {
                 760.0,
             )
         }),
+        ("home-focus-ring-en", 1440.0, 900.0, home_focused),
+        ("ws-focus-ring-en", 1280.0, 800.0, workspace_focused),
+        ("ws-quality-en", 1280.0, 800.0, || {
+            workspace_quality(Locale::EnUs)
+        }),
+        ("ws-quality-ja", 1280.0, 800.0, || {
+            workspace_quality(Locale::Ja)
+        }),
+        ("ws-refine-failed-en", 1280.0, 800.0, refine_failed),
         ("ws-narrow-820-open-en", 820.0, 760.0, || {
             open_drawer(workspace_host(
                 Locale::EnUs,

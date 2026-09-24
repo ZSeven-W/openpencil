@@ -83,6 +83,9 @@ impl WidgetHostNative {
             return None;
         }
         let point = Point2D::new(x, y);
+        // A pointer press ends keyboard navigation (keyboard activation
+        // restores the focus after its synthetic press).
+        self.editor_state.editor_ui.home.key_focus = None;
         let home = HomeSurface::for_editor_at(&self.editor_state, self.now_ms)?;
         let hit = home.hit_test(viewport_width, viewport_height, point);
         drop(home);

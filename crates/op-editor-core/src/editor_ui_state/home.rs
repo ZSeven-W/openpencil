@@ -318,6 +318,10 @@ pub struct HomeState {
     /// software keyboard off this bit, so it must follow the last pressed
     /// target instead of staying latched to the surface.
     pub composer_focused: bool,
+    /// The target the keyboard (Tab / Shift+Tab) moved to, drawn with a
+    /// focus ring and activated by Enter / Space. Any pointer press drops
+    /// it — the ring is focus-VISIBLE, keyboard users only.
+    pub key_focus: Option<HomeHit>,
     /// Scroll offset for a home stack that is taller than the viewport.
     /// The top bar stays pinned while the page content scrolls under it.
     pub scroll_y: f32,
@@ -368,6 +372,7 @@ impl Default for HomeState {
             hover: None,
             pressed: None,
             composer_focused: false,
+            key_focus: None,
             scroll_y: 0.0,
             shown_at_ms: 0,
             input: TextInputState::default(),
@@ -392,6 +397,7 @@ impl HomeState {
         self.hover = None;
         self.pressed = None;
         self.composer_focused = false;
+        self.key_focus = None;
         self.shown_at_ms = 0;
         self.connect_card_open = false;
         self.more_open = false;

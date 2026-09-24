@@ -663,6 +663,8 @@ mod variants_bar;
 pub use variants_bar::{variant_bar_layout, VariantBarItem};
 #[path = "workspace_surface_drawer.rs"]
 mod drawer;
+#[path = "workspace_surface_focus.rs"]
+mod focus;
 #[path = "workspace_quality_paint.rs"]
 mod quality_paint;
 

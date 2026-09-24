@@ -209,6 +209,9 @@ pub struct WorkspaceState {
     /// Wall-clock instant of the last open/shut, for the slide; `0` means
     /// settled.
     pub drawer_moved_at_ms: u64,
+    /// The chrome target the keyboard (Tab / Shift+Tab) moved to; Enter /
+    /// Space activate it. Any pointer press drops it.
+    pub key_focus: Option<WorkspaceHit>,
 }
 
 impl Default for WorkspaceState {
@@ -241,6 +244,7 @@ impl Default for WorkspaceState {
             drawer_mode: false,
             drawer_open: false,
             drawer_moved_at_ms: 0,
+            key_focus: None,
         }
     }
 }
@@ -330,6 +334,7 @@ impl WorkspaceState {
         self.visible = false;
         self.hover = None;
         self.pressed = None;
+        self.key_focus = None;
     }
 
     /// 回到工作区: take the chrome back after Home or the professional
@@ -472,6 +477,7 @@ impl WorkspaceState {
         self.clear_variants();
         self.drawer_open = false;
         self.drawer_moved_at_ms = 0;
+        self.key_focus = None;
     }
 
     /// The next frame instant the entrance motion still needs, or

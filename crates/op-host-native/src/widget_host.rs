@@ -257,6 +257,7 @@ mod shortcut_surface_tests;
 mod shortcuts;
 mod slides_panel;
 mod slides_panel_thumbs;
+mod studio_focus;
 mod text_edit_press;
 // Windows CI DirectWrite/Skia text layout aborts inside these text-edit
 // fixtures before Rust can report an assertion. macOS + Linux keep coverage.

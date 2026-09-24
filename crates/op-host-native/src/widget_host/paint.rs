@@ -460,6 +460,7 @@ impl WidgetHostNative {
             self.paint_workspace_drawer(frame, viewport_width, viewport_height);
             // The report panel floats above everything the workspace paints.
             self.paint_workspace_quality_overlay(frame, viewport_width, viewport_height);
+            self.paint_workspace_focus_ring(frame, viewport_width, viewport_height);
         }
 
         // 8.4. Floating align/distribute toolbar — visible whenever

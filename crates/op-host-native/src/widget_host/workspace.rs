@@ -51,6 +51,9 @@ impl WidgetHostNative {
             return None;
         }
         self.sync_workspace_drawer(viewport_width);
+        // A pointer press ends keyboard navigation (keyboard activation
+        // restores the focus after its synthetic press).
+        self.editor_state.editor_ui.workspace.key_focus = None;
         let surface = WorkspaceSurface::for_editor_at(&self.editor_state, self.now_ms)?;
         let layout = surface.layout(viewport_width, viewport_height);
         let hit = surface.hit_test_layout(&layout, Point2D::new(x, y));

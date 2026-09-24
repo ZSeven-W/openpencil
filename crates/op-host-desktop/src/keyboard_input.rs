@@ -40,6 +40,22 @@ impl DesktopApp {
         let prompt_center_open = self.host.editor_state().editor_ui.prompt_center.open;
         let home_visible = self.host.home_visible();
         match logical_key {
+            // Studio (Home / workspace) keyboard navigation: Tab moves the
+            // focus ring, Enter / Space activate the focused control. Ahead
+            // of every other arm so Enter does not also send.
+            Key::Named(NamedKey::Tab)
+                if !self.zoom_modifier && self.host.studio_focus_available() =>
+            {
+                consumed = self.host.apply_studio_focus_step(self.shift_modifier);
+            }
+            Key::Named(NamedKey::Enter | NamedKey::Space)
+                if !self.zoom_modifier && self.host.studio_key_focus_activatable() =>
+            {
+                consumed = self.host.activate_studio_key_focus();
+                if self.launch_chat_if_pending() {
+                    self.request_redraw(true);
+                }
+            }
             // Named-key shortcuts fire only when no Cmd/Ctrl is held.
             Key::Named(NamedKey::Backspace) if !self.zoom_modifier => {
                 consumed = self.host.apply_backspace();
