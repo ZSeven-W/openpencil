@@ -101,6 +101,9 @@ pub mod element_tools;
 pub mod extra_read_tools;
 #[cfg(test)]
 mod extra_read_tools_tests;
+#[cfg(feature = "script")]
+pub mod generator_runtime;
+pub mod generator_tools;
 pub mod guidelines_tools;
 pub mod import_common;
 pub mod import_html_tool;

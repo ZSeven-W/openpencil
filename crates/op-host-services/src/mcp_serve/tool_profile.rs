@@ -376,6 +376,14 @@ pub const TOOL_PROFILES: &[ToolProfile] = &[
         ToolSurface::InMemory,
     ),
     ToolProfile::new("batch_design", ToolAccess::Write, ToolSurface::InMemory),
+    ToolProfile::new("create_generator", ToolAccess::Write, ToolSurface::InMemory),
+    ToolProfile::new(
+        "update_generator_params",
+        ToolAccess::Write,
+        ToolSurface::InMemory,
+    ),
+    ToolProfile::new("get_generator", ToolAccess::Read, ToolSurface::InMemory),
+    ToolProfile::new("detach_generator", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new("batch_get", ToolAccess::Read, ToolSurface::InMemory),
     ToolProfile::new(
         "brand_extract",

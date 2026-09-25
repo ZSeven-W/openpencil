@@ -272,9 +272,28 @@ fn escape_raw_newlines_in_quoted_strings(src: &str) -> Option<String> {
 /// turn an incomplete JavaScript transaction into a misleading success.
 /// Syntax-level truncation recovery remains in `eval_after_initial_failure`.
 fn eval_to_program(script: &str) -> Result<String, ScriptError> {
+    eval_recorded(script, None, EVAL_BUDGET).map(|recorded| recorded.program)
+}
+
+/// What one sandboxed eval recorded. `capped` is true when the line or
+/// byte cap dropped operations — callers that must not accept a silently
+/// truncated program (generators) refuse on it.
+pub(crate) struct Recorded {
+    pub(crate) program: String,
+    pub(crate) capped: bool,
+}
+
+/// [`eval_to_program`] with an optional `preamble` evaluated after the
+/// shared prelude (it may rebind `I` / `U` or add globals) and an explicit
+/// wall-clock `budget`.
+pub(crate) fn eval_recorded(
+    script: &str,
+    preamble: Option<&str>,
+    budget: Duration,
+) -> Result<Recorded, ScriptError> {
     let rt = Runtime::new().map_err(|e| ScriptError::RuntimeInit(e.to_string()))?;
     rt.set_memory_limit(MEMORY_LIMIT_BYTES);
-    let deadline = Instant::now() + EVAL_BUDGET;
+    let deadline = Instant::now() + budget;
     rt.set_interrupt_handler(Some(Box::new(move || Instant::now() > deadline)));
 
     let ctx = Context::full(&rt).map_err(|e| ScriptError::ContextInit(e.to_string()))?;
@@ -347,10 +366,15 @@ fn eval_to_program(script: &str) -> Result<String, ScriptError> {
             })?;
         ctx.eval::<(), _>(PRELUDE)
             .map_err(|e| ScriptError::Prelude(e.to_string()))?;
+        if let Some(preamble) = preamble {
+            ctx.eval::<(), _>(preamble)
+                .map_err(|e| ScriptError::Prelude(e.to_string()))?;
+        }
         ctx.eval::<(), _>(script)
             .map_err(|e| describe_js_error(&ctx, e))
     });
     let program = lines.borrow().join("\n");
+    let capped = bytes_used.get() >= MAX_RECORDED_BYTES || counter.get() > MAX_RECORDED_LINES;
     if bytes_used.get() >= MAX_RECORDED_BYTES && !program.trim().is_empty() {
         tracing::warn!(
             recorded_bytes = bytes_used.get(),
@@ -359,7 +383,7 @@ fn eval_to_program(script: &str) -> Result<String, ScriptError> {
         );
     }
     match outcome {
-        Ok(()) => Ok(program),
+        Ok(()) => Ok(Recorded { program, capped }),
         // Matched on the rendered message (not the variant) so the guard
         // keeps the exact reach the `String` version had: the sentinel is
         // raised by the prelude's `__unsupported` thrower, so it can only

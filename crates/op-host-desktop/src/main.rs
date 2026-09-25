@@ -619,6 +619,10 @@ fn main() {
     // simple-icons instead of the unknown-glyph fallback dot. Set-once /
     // idempotent.
     op_editor_ui::set_brand_catalog(op_host_services::web_static::ICONIFY_BRANDS_JSON);
+    // Canvas generators: this binary can run their programs (QuickJS), so the
+    // Generator panel and the toolbar starters are live here. The browser
+    // bundle installs no runtime and shows generators as read-only frames.
+    op_mcp::generator_runtime::install();
     // Same rationale for bundled design fonts (Inter / Space Grotesk /
     // …): register before any native render or measure pass so designs
     // referencing them resolve the right glyphs + metrics without a
