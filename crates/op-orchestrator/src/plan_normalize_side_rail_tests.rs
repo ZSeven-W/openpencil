@@ -173,3 +173,21 @@ fn goal_rings_and_horizontal_card_rails_are_never_folded() {
     assert_eq!(fold_side_progress_rail(&mut plan), 0);
     assert_eq!(plan, before);
 }
+
+#[test]
+fn the_nav_inherits_what_the_folded_rail_covered() {
+    let mut rail = subtask("progress", "右侧阅读进度条", "竖向进度指示器");
+    rail.covers = Some(vec!["阅读进度".into()]);
+    let mut plan = plan(vec![
+        subtask("nav", "Navigation Bar", "logo, links"),
+        subtask("hero", "Hero", "headline"),
+        rail,
+    ]);
+
+    assert_eq!(fold_side_progress_rail(&mut plan), 1);
+    assert_eq!(
+        plan.subtasks[0].covers.as_deref(),
+        Some(&["阅读进度".to_string(), "右侧阅读进度条".to_string()][..]),
+        "a section the rail covered stays covered by the nav that now draws it"
+    );
+}

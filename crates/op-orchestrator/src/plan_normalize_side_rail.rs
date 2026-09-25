@@ -123,6 +123,34 @@ pub(crate) fn fold_side_progress_rail(plan: &mut OrchestratorPlan) -> usize {
         nav_elements.push_str(PROGRESS_BAR_ELEMENTS);
     }
 
+    // The nav now draws the folded rail, so it inherits what the rail
+    // claimed to cover — otherwise the coverage gate reports a brief
+    // section as dropped although its content lives on in the nav.
+    let inherited: Vec<String> = plan
+        .subtasks
+        .iter()
+        .enumerate()
+        .filter(|(index, st)| {
+            *index != 0 && *index != navigation_index && is_side_progress_candidate(st)
+        })
+        .flat_map(|(_, st)| {
+            st.covers
+                .iter()
+                .flatten()
+                .cloned()
+                .chain(std::iter::once(st.label.clone()))
+        })
+        .filter(|entry| !entry.trim().is_empty())
+        .collect();
+    let nav_covers = plan.subtasks[navigation_index]
+        .covers
+        .get_or_insert_with(Vec::new);
+    for entry in inherited {
+        if !nav_covers.contains(&entry) {
+            nav_covers.push(entry);
+        }
+    }
+
     let subtasks = std::mem::take(&mut plan.subtasks);
     plan.subtasks = subtasks
         .into_iter()
