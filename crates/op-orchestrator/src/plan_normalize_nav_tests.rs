@@ -223,3 +223,36 @@ fn explicit_no_nav_request_removes_planned_bottom_navigation() {
         "an explicit no-nav instruction must override the model plan"
     );
 }
+
+#[test]
+fn a_chinese_bottom_nav_is_recognised_and_not_doubled() {
+    // Measured (GLM-5.3-Flash, coffee-shop mini program): the plan carried
+    // `bottom-nav(底部导航栏)` and normalize still appended an English
+    // "Bottom Navigation", so the screen drew two tab bars.
+    let mut plan = mobile_plan(
+        "咖啡店首页",
+        &[
+            ("store-header", "门店信息头部"),
+            ("today-recommend", "今日推荐饮品卡片"),
+            ("points-progress", "积分进度卡片"),
+            ("bottom-nav", "底部导航栏"),
+        ],
+    );
+
+    normalize(
+        &mut plan,
+        &request("设计一个咖啡店小程序首页：顶部门店信息、今日推荐饮品卡片、积分进度、底部导航"),
+    );
+
+    let ids: Vec<&str> = plan.subtasks.iter().map(|s| s.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        [
+            "store-header",
+            "today-recommend",
+            "points-progress",
+            "bottom-nav"
+        ],
+        "the planned Chinese tab bar is the only one"
+    );
+}

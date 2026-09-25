@@ -36,7 +36,15 @@ pub(super) fn is_bottom_nav_subtask(st: &Subtask) -> bool {
         st.label.to_lowercase(),
         st.elements.as_deref().unwrap_or_default().to_lowercase()
     );
+    // Chinese labels and the `bottom-nav` id are what a Chinese brief gets
+    // planned as; missing them appended a second, English "Bottom
+    // Navigation" subtask under a plan that already had `bottom-nav
+    // (底部导航栏)`, and the screen drew two tab bars.
     hay.contains("bottom nav")
+        || hay.contains("bottom-nav")
+        || hay.contains("底部导航")
+        || hay.contains("底部标签")
+        || hay.contains("底栏")
         || hay.contains("bottom-navigation")
         || hay.contains("bottom navigation")
         || hay.contains("bottom tab")
