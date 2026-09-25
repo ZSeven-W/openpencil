@@ -480,6 +480,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.item.blankVsExampleContrast.summary" => "Hiçbir tarafı kayırmayan arduvaz ve kehribar karşılaştırma: “boştan başla” ve “örnekten başla” tanım kartları, dört satırlık tablo (başlangıç, düzenleme, özgürlük, uygun durum) ve hangisinin kime uyduğu; verimlilik rakamı yok.",
         "sceneTemplate.item.cityMusicFestPoster.title" => "Şehir Müzik Festivali Afişi · 2 format",
         "sceneTemplate.item.cityMusicFestPoster.summary" => "Siyah ve neon yeşil bir etkinlik seti: 3:4 ana afiş (dev başlık, ses dalgası çubukları, tarih ve mekân, sanatçı kadrosu ve bilet şeridi) ile neon yeşil tarih bantlı 1:1 sosyal medya karesi; müzik festivalleri, konserler ve şehir etkinlikleri için.",
+        "generator.title" => "Oluşturucu",
+        "generator.ownership" => "Alt öğeler program tarafından oluşturulur. Yeniden oluşturmak elle yapılan düzenlemelerin yerini alır.",
+        "generator.edited" => "Alt öğeler elle düzenlendi; yeniden oluşturmak bunların yerini alacak.",
+        "generator.readOnly" => "Bu uygulama oluşturucuları çalıştıramaz; kaydedilmiş alt öğeler olduğu gibi gösteriliyor.",
+        "generator.regenerate" => "Yeniden oluştur",
+        "generator.detach" => "Ayır",
+        "generator.failed" => "Başarısız: {error}",
+        "generator.starterCardGrid" => "Kart ızgarası oluşturucu",
+        "generator.starterCalendar" => "Takvim oluşturucu",
         _ => return None,
     })
 }

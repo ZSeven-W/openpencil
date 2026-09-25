@@ -480,6 +480,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.item.blankVsExampleContrast.summary" => "石板灰与琥珀两侧同权的对比长图：「从空白开始」与「从示例开始」两张定义卡，起点、修改方式、自由度、适用场景四行对照表，最后写清各自适合谁，不含任何效率数据。",
         "sceneTemplate.item.cityMusicFestPoster.title" => "城市音乐节海报 · 两种版式",
         "sceneTemplate.item.cityMusicFestPoster.summary" => "黑底荧光绿的一套活动视觉：3:4 主海报（超大标题、声浪柱、日期地点、演出阵容与购票条）加 1:1 社交方图（荧光绿日期条），适合音乐节、演出与城市活动。",
+        "generator.title" => "生成器",
+        "generator.ownership" => "子元素由程序生成，重新生成会覆盖手动修改。",
+        "generator.edited" => "子元素被手动改过，重新生成将覆盖这些修改。",
+        "generator.readOnly" => "当前应用无法运行生成器，按已保存的子元素显示。",
+        "generator.regenerate" => "重新生成",
+        "generator.detach" => "分离",
+        "generator.failed" => "失败：{error}",
+        "generator.starterCardGrid" => "卡片网格生成器",
+        "generator.starterCalendar" => "月历生成器",
         _ => return None,
     })
 }

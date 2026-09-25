@@ -64,7 +64,10 @@ pub fn collab_gate_action(action: &PropertyPanelAction) -> op_editor_core::Colla
         | A::ToggleVideoLoop
         | A::ToggleVideoMuted
         | A::ToggleVideoHoldLastFrame
-        | A::ToggleVideoClickToReplay => G::Document(D::Unsupported(U::UnsupportedNodeProperty)),
+        | A::ToggleVideoClickToReplay
+        | A::ToggleGeneratorParam(_)
+        | A::RegenerateGenerator
+        | A::DetachGenerator => G::Document(D::Unsupported(U::UnsupportedNodeProperty)),
         A::ClearPageBackground => G::Document(D::Unsupported(U::PageBackground)),
         A::SetTextAlign(_)
         | A::SetTextVerticalAlign(_)

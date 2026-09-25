@@ -182,6 +182,12 @@ pub fn editable_input_rects(
         crate::widgets::property_panel_video::push_video_input_rects(&mut rects, x0, y, w);
         y += crate::widgets::property_panel_video::video_section_height();
     }
+    if let Some(rows) = visible.generator {
+        crate::widgets::property_panel_generator::push_generator_input_rects(
+            &mut rects, rows, x0, y, w,
+        );
+        y += crate::widgets::property_panel_generator::generator_section_height(rows);
+    }
     if visible.opacity {
         y += SECTION_HEADER_HEIGHT;
         rects.push((

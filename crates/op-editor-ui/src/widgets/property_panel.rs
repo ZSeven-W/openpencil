@@ -355,6 +355,7 @@ impl PropertyPanel {
             widget_checked: self.snapshot.widget.as_ref().is_some_and(|w| w.checked),
             image: caps.image && self.snapshot.is_image_node,
             video: caps.image && self.snapshot.video.is_some(),
+            generator: self.snapshot.generator.as_ref().map(|g| g.rows()),
             image_warning: caps.image
                 && self
                     .image_panel_view

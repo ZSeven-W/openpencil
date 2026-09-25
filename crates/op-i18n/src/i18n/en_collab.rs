@@ -520,6 +520,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.item.blankVsExampleContrast.summary" => "A slate-and-amber comparison that favours neither side: definition cards for starting blank and starting from an example, a four-row table (starting point, editing, freedom, best for) and who each suits, with no efficiency claims.",
         "sceneTemplate.item.cityMusicFestPoster.title" => "City Music Festival Poster · 2 Formats",
         "sceneTemplate.item.cityMusicFestPoster.summary" => "A black and neon-green event set: a 3:4 main poster (giant title, sound-wave bars, date and venue, line-up and ticket bar) plus a 1:1 social square with a neon date band, for music festivals, gigs and city events.",
+        "generator.title" => "Generator",
+        "generator.ownership" => "Children are generated. Regenerate replaces manual edits.",
+        "generator.edited" => "Children were edited by hand; Regenerate will replace them.",
+        "generator.readOnly" => "This app can't run generators; saved children are shown as-is.",
+        "generator.regenerate" => "Regenerate",
+        "generator.detach" => "Detach",
+        "generator.failed" => "Failed: {error}",
+        "generator.starterCardGrid" => "Card grid generator",
+        "generator.starterCalendar" => "Calendar generator",
         _ => return None,
     })
 }

@@ -480,6 +480,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.item.blankVsExampleContrast.summary" => "Perbandingan nuansa batu tulis dan amber yang tidak memihak: kartu definisi “mulai dari kosong” dan “mulai dari contoh”, tabel empat baris (titik awal, cara mengedit, kebebasan, cocok untuk) dan cocok bagi siapa, tanpa klaim efisiensi.",
         "sceneTemplate.item.cityMusicFestPoster.title" => "Poster Festival Musik Kota · 2 format",
         "sceneTemplate.item.cityMusicFestPoster.summary" => "Satu set visual acara hitam dan hijau neon: poster utama 3:4 (judul raksasa, batang gelombang suara, tanggal dan lokasi, daftar penampil, dan strip tiket) plus kotak 1:1 untuk media sosial dengan pita tanggal hijau neon, untuk festival musik, konser, dan acara kota.",
+        "generator.title" => "Generator",
+        "generator.ownership" => "Elemen anak dibuat oleh program. Buat ulang akan menggantikan suntingan manual.",
+        "generator.edited" => "Elemen anak telah disunting manual; Buat ulang akan menggantikannya.",
+        "generator.readOnly" => "Aplikasi ini tidak dapat menjalankan generator; elemen anak yang tersimpan ditampilkan apa adanya.",
+        "generator.regenerate" => "Buat ulang",
+        "generator.detach" => "Lepaskan",
+        "generator.failed" => "Gagal: {error}",
+        "generator.starterCardGrid" => "Generator kisi kartu",
+        "generator.starterCalendar" => "Generator kalender",
         _ => return None,
     })
 }

@@ -119,6 +119,9 @@ pub fn property_focus_initial(focus: PropertyFocus, panel: &PropertyPanel) -> St
         F::WidgetLeadingIcon => widget_text(panel, |w| &w.leading_icon),
         F::WidgetTrailingIcon => widget_text(panel, |w| &w.trailing_icon),
         F::WidgetBindKey => widget_text(panel, |w| &w.bind_key),
+        F::GeneratorParam(index) => {
+            crate::widgets::property_panel_generator::param_initial(&panel.snapshot, index)
+        }
         F::VideoSrc => panel
             .snapshot
             .video
@@ -389,6 +392,9 @@ pub fn commit_property_focus(state: &mut EditorState) -> bool {
         }
         PropertyFocus::VideoSrc => {
             let _ = state.set_selected_video_src(draft.trim());
+        }
+        PropertyFocus::GeneratorParam(index) => {
+            crate::widgets::property_panel_generator::commit_param(state, index, &draft);
         }
         _ => {
             if let Ok(value) = draft.trim().parse::<f32>() {

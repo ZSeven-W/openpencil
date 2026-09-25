@@ -480,6 +480,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.item.blankVsExampleContrast.summary" => "Un comparatif ardoise et ambre qui ne favorise aucun camp : fiches « partir de zéro » et « partir d’un exemple », tableau en quatre lignes (point de départ, retouches, liberté, cas d’usage) et à qui chacun convient, sans chiffres d’efficacité.",
         "sceneTemplate.item.cityMusicFestPoster.title" => "Affiche de festival urbain · 2 formats",
         "sceneTemplate.item.cityMusicFestPoster.summary" => "Un kit événementiel noir et vert fluo : une affiche principale 3:4 (titre géant, barres d’onde sonore, date et lieu, programmation et bandeau billetterie) et un carré 1:1 pour les réseaux avec un bandeau de date vert fluo, pour festivals de musique, concerts et événements urbains.",
+        "generator.title" => "Générateur",
+        "generator.ownership" => "Les enfants sont générés. Régénérer remplace les modifications manuelles.",
+        "generator.edited" => "Les enfants ont été modifiés à la main ; Régénérer les remplacera.",
+        "generator.readOnly" => "Cette application ne peut pas exécuter de générateurs ; les enfants enregistrés sont affichés tels quels.",
+        "generator.regenerate" => "Régénérer",
+        "generator.detach" => "Détacher",
+        "generator.failed" => "Échec : {error}",
+        "generator.starterCardGrid" => "Générateur de grille de cartes",
+        "generator.starterCalendar" => "Générateur de calendrier",
         _ => return None,
     })
 }

@@ -480,6 +480,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.item.blankVsExampleContrast.summary" => "石板灰與琥珀兩側同權的對比長圖：「從空白開始」與「從範例開始」兩張定義卡，起點、修改方式、自由度、適用情境四列對照表，最後寫清各自適合誰，不含任何效率數據。",
         "sceneTemplate.item.cityMusicFestPoster.title" => "城市音樂節海報 · 兩種版式",
         "sceneTemplate.item.cityMusicFestPoster.summary" => "黑底螢光綠的一套活動視覺：3:4 主海報（超大標題、聲浪柱、日期地點、演出陣容與購票條）加 1:1 社群方圖（螢光綠日期條），適合音樂節、演出與城市活動。",
+        "generator.title" => "產生器",
+        "generator.ownership" => "子元素由程式產生，重新產生會覆蓋手動修改。",
+        "generator.edited" => "子元素已被手動修改，重新產生將覆蓋這些修改。",
+        "generator.readOnly" => "目前應用程式無法執行產生器，依已儲存的子元素顯示。",
+        "generator.regenerate" => "重新產生",
+        "generator.detach" => "分離",
+        "generator.failed" => "失敗：{error}",
+        "generator.starterCardGrid" => "卡片網格產生器",
+        "generator.starterCalendar" => "月曆產生器",
         _ => return None,
     })
 }

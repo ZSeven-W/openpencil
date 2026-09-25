@@ -448,6 +448,10 @@ pub fn apply_property_action(
                 Some(op_editor_core::editor_ui_state::FileAction::RelinkImage);
             Handled
         }
+        A::ToggleGeneratorParam(_) | A::RegenerateGenerator | A::DetachGenerator => {
+            crate::widgets::property_panel_generator::apply_generator_action(state, action);
+            Handled
+        }
         A::AddVideo => {
             let _ = state.add_selected_video();
             Handled

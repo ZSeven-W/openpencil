@@ -480,6 +480,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.item.blankVsExampleContrast.summary" => "Una comparativa en pizarra y ámbar que no favorece a ninguno: tarjetas de «empezar en blanco» y «empezar con un ejemplo», una tabla de cuatro filas (punto de partida, edición, libertad, cuándo usarlo) y a quién conviene cada uno, sin datos de eficiencia.",
         "sceneTemplate.item.cityMusicFestPoster.title" => "Cartel de festival de música urbano · 2 formatos",
         "sceneTemplate.item.cityMusicFestPoster.summary" => "Un kit visual en negro y verde neón: un cartel principal 3:4 (título gigante, barras de onda sonora, fecha y lugar, cartel de artistas y franja de entradas) y un cuadrado 1:1 para redes con una franja de fecha en verde neón, para festivales, conciertos y eventos urbanos.",
+        "generator.title" => "Generador",
+        "generator.ownership" => "Los hijos se generan. Regenerar reemplaza las ediciones manuales.",
+        "generator.edited" => "Los hijos se editaron a mano; Regenerar los reemplazará.",
+        "generator.readOnly" => "Esta app no puede ejecutar generadores; se muestran los hijos guardados tal cual.",
+        "generator.regenerate" => "Regenerar",
+        "generator.detach" => "Separar",
+        "generator.failed" => "Error: {error}",
+        "generator.starterCardGrid" => "Generador de cuadrícula de tarjetas",
+        "generator.starterCalendar" => "Generador de calendario",
         _ => return None,
     })
 }

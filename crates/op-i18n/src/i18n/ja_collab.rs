@@ -496,6 +496,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.item.blankVsExampleContrast.summary" => "スレートグレーと琥珀色で両者を対等に並べた比較図。「白紙から」と「サンプルから」の定義カード、起点・修正の仕方・自由度・向く場面の4行対照表、それぞれ向く人まで。効率の数字は載せません。",
         "sceneTemplate.item.cityMusicFestPoster.title" => "シティミュージックフェス ポスター · 2 形式",
         "sceneTemplate.item.cityMusicFestPoster.summary" => "黒地にネオングリーンのイベントビジュアル一式：3:4 のメインポスター（特大タイトル、サウンドウェーブのバー、日付と会場、出演ラインナップ、チケット帯）と、ネオングリーンの日付帯を配した 1:1 の SNS 用スクエア。音楽フェス、ライブ、街のイベントに。",
+        "generator.title" => "ジェネレーター",
+        "generator.ownership" => "子要素はプログラムで生成されます。再生成すると手動の編集は置き換わります。",
+        "generator.edited" => "子要素が手動で編集されています。再生成すると置き換わります。",
+        "generator.readOnly" => "このアプリではジェネレーターを実行できません。保存済みの子要素を表示しています。",
+        "generator.regenerate" => "再生成",
+        "generator.detach" => "切り離す",
+        "generator.failed" => "失敗: {error}",
+        "generator.starterCardGrid" => "カードグリッド ジェネレーター",
+        "generator.starterCalendar" => "カレンダー ジェネレーター",
         _ => return None,
     })
 }

@@ -480,6 +480,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.item.blankVsExampleContrast.summary" => "Uma comparação em ardósia e âmbar que não favorece nenhum lado: cartões de «começar do zero» e «começar por um exemplo», tabela de quatro linhas (ponto de partida, edição, liberdade, quando usar) e para quem cada um serve, sem dados de eficiência.",
         "sceneTemplate.item.cityMusicFestPoster.title" => "Cartaz de festival de música urbano · 2 formatos",
         "sceneTemplate.item.cityMusicFestPoster.summary" => "Um kit visual em preto e verde neon: um cartaz principal 3:4 (título gigante, barras de onda sonora, data e local, line-up e faixa de ingressos) e um quadrado 1:1 para redes sociais com faixa de data em verde neon, para festivais, shows e eventos urbanos.",
+        "generator.title" => "Gerador",
+        "generator.ownership" => "Os filhos são gerados. Regenerar substitui as edições manuais.",
+        "generator.edited" => "Os filhos foram editados à mão; Regenerar vai substituí-los.",
+        "generator.readOnly" => "Este app não consegue executar geradores; os filhos salvos são mostrados como estão.",
+        "generator.regenerate" => "Regenerar",
+        "generator.detach" => "Desanexar",
+        "generator.failed" => "Falhou: {error}",
+        "generator.starterCardGrid" => "Gerador de grade de cartões",
+        "generator.starterCalendar" => "Gerador de calendário",
         _ => return None,
     })
 }

@@ -324,6 +324,13 @@ pub fn press_shape_picker(
                 state.editor_ui.open_icon_picker(false);
                 ShapePickerPress::Close
             }
+            Some(ShapeChoice::InsertGenerator(index)) => {
+                if let Some(starter) = op_editor_core::generator::GENERATOR_STARTERS.get(index) {
+                    let runner = op_editor_core::generator::installed_generator_runner();
+                    let _ = state.insert_generator_starter(starter, runner);
+                }
+                ShapePickerPress::Close
+            }
             Some(ShapeChoice::ImportImageOrSvg) => {
                 // Neither host owns a file-picker service here — both
                 // raise the same pending flag for their host loop.

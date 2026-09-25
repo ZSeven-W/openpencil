@@ -392,6 +392,12 @@ pub fn action_button_rects_with_fill_picker(
         crate::widgets::property_panel_video::push_video_action_rects(&mut out, x0, y, w);
         y += crate::widgets::property_panel_video::video_section_height();
     }
+    if let Some(rows) = visible.generator {
+        crate::widgets::property_panel_generator::push_generator_action_rects(
+            &mut out, rows, x0, y, w,
+        );
+        y += crate::widgets::property_panel_generator::generator_section_height(rows);
+    }
 
     if visible.opacity {
         if visible.compositing {

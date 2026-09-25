@@ -122,6 +122,9 @@ pub struct NodeSnapshot {
     pub is_image_node: bool,
     /// Optional video playback metadata carried by an Image node.
     pub video: Option<VideoSummary>,
+    /// Program parameters when the selection is a generator frame. Set by
+    /// the panel builder (it needs editor state), `None` from `from_node`.
+    pub generator: Option<crate::widgets::property_panel_generator::GeneratorSummary>,
     pub icon: Option<IconSummary>,
     pub text: Option<TextSummary>,
     /// Form-widget props, `Some` only when the selection is one of the

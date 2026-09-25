@@ -98,6 +98,7 @@ mod property_panel_fill_picker;
 #[cfg(test)]
 mod property_panel_fill_tests;
 pub mod property_panel_flex;
+pub mod property_panel_generator;
 pub mod property_panel_icon;
 #[cfg(test)]
 mod property_panel_icon_tests;
@@ -191,6 +192,7 @@ mod canvas_frame_labels;
 mod canvas_generation_scan;
 #[cfg(test)]
 mod canvas_generation_scan_tests;
+mod canvas_generator_badge;
 pub mod canvas_layout_transition;
 pub mod canvas_overlay_transform;
 mod canvas_path_overlay;

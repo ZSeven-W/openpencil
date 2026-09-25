@@ -496,6 +496,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.item.blankVsExampleContrast.summary" => "슬레이트와 호박색으로 양쪽을 대등하게 둔 비교 이미지: ‘빈 캔버스에서’와 ‘예시에서’ 정의 카드, 시작점·수정 방식·자유도·적합한 상황 4행 대조표, 각각 어울리는 사람까지. 효율 수치는 넣지 않았습니다.",
         "sceneTemplate.item.cityMusicFestPoster.title" => "시티 뮤직 페스티벌 포스터 · 2가지 형식",
         "sceneTemplate.item.cityMusicFestPoster.summary" => "검정 바탕에 네온 그린을 쓴 이벤트 비주얼 세트: 3:4 메인 포스터(초대형 제목, 사운드 웨이브 막대, 날짜와 장소, 출연 라인업, 티켓 띠)와 네온 그린 날짜 띠가 들어간 1:1 소셜 정사각 이미지. 음악 페스티벌, 공연, 도시 행사에 적합합니다.",
+        "generator.title" => "생성기",
+        "generator.ownership" => "하위 요소는 프로그램으로 생성됩니다. 다시 생성하면 수동 편집이 대체됩니다.",
+        "generator.edited" => "하위 요소가 수동으로 편집되었습니다. 다시 생성하면 대체됩니다.",
+        "generator.readOnly" => "이 앱에서는 생성기를 실행할 수 없어 저장된 하위 요소를 그대로 표시합니다.",
+        "generator.regenerate" => "다시 생성",
+        "generator.detach" => "분리",
+        "generator.failed" => "실패: {error}",
+        "generator.starterCardGrid" => "카드 그리드 생성기",
+        "generator.starterCalendar" => "달력 생성기",
         _ => return None,
     })
 }

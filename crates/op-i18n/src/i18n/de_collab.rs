@@ -480,6 +480,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.item.blankVsExampleContrast.summary" => "Ein Vergleich in Schiefer und Bernstein, der keine Seite bevorzugt: Karten für „leer beginnen“ und „mit Beispiel beginnen“, eine Tabelle mit vier Zeilen (Start, Bearbeitung, Freiheit, geeignet für) und für wen sich was eignet – ohne Effizienzzahlen.",
         "sceneTemplate.item.cityMusicFestPoster.title" => "Stadt-Musikfestival-Plakat · 2 Formate",
         "sceneTemplate.item.cityMusicFestPoster.summary" => "Ein Event-Set in Schwarz und Neongrün: ein 3:4-Hauptplakat (riesiger Titel, Klangwellen-Balken, Datum und Ort, Line-up und Ticketleiste) plus ein 1:1-Social-Quadrat mit neongrünem Datumsband, für Musikfestivals, Konzerte und Stadtevents.",
+        "generator.title" => "Generator",
+        "generator.ownership" => "Untergeordnete Elemente werden generiert. Neu generieren ersetzt manuelle Änderungen.",
+        "generator.edited" => "Untergeordnete Elemente wurden von Hand geändert; Neu generieren ersetzt sie.",
+        "generator.readOnly" => "Diese App kann keine Generatoren ausführen; gespeicherte Elemente werden unverändert angezeigt.",
+        "generator.regenerate" => "Neu generieren",
+        "generator.detach" => "Lösen",
+        "generator.failed" => "Fehlgeschlagen: {error}",
+        "generator.starterCardGrid" => "Kartenraster-Generator",
+        "generator.starterCalendar" => "Kalender-Generator",
         _ => return None,
     })
 }

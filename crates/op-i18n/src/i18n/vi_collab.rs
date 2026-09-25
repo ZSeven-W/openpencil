@@ -492,6 +492,15 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "sceneTemplate.item.blankVsExampleContrast.summary" => "Ảnh so sánh tông xám đá và hổ phách, không thiên vị bên nào: thẻ định nghĩa “bắt đầu từ trang trắng” và “bắt đầu từ mẫu”, bảng bốn hàng (điểm bắt đầu, cách chỉnh sửa, mức tự do, khi nào dùng) và hợp với ai, không có số liệu hiệu suất.",
         "sceneTemplate.item.cityMusicFestPoster.title" => "Poster lễ hội âm nhạc thành phố · 2 định dạng",
         "sceneTemplate.item.cityMusicFestPoster.summary" => "Bộ nhận diện sự kiện đen và xanh neon: poster chính 3:4 (tiêu đề cỡ lớn, cột sóng âm, ngày và địa điểm, danh sách nghệ sĩ và dải mua vé) cùng ảnh vuông 1:1 cho mạng xã hội với dải ngày màu xanh neon, dành cho lễ hội âm nhạc, buổi diễn và sự kiện thành phố.",
+        "generator.title" => "Trình tạo",
+        "generator.ownership" => "Các phần tử con được tạo bằng chương trình. Tạo lại sẽ thay thế chỉnh sửa thủ công.",
+        "generator.edited" => "Các phần tử con đã bị sửa thủ công; Tạo lại sẽ thay thế chúng.",
+        "generator.readOnly" => "Ứng dụng này không chạy được trình tạo; các phần tử con đã lưu được hiển thị nguyên trạng.",
+        "generator.regenerate" => "Tạo lại",
+        "generator.detach" => "Tách ra",
+        "generator.failed" => "Thất bại: {error}",
+        "generator.starterCardGrid" => "Trình tạo lưới thẻ",
+        "generator.starterCalendar" => "Trình tạo lịch",
         _ => return None,
     })
 }

@@ -130,6 +130,9 @@ pub struct CanvasViewport<'a> {
     /// carries no node names); painted screen-space above each root
     /// frame (TS `drawFrameLabelColored`).
     pub(super) frame_labels: Vec<FrameLabel>,
+    /// Ids of generator frames on the active page — each gets a small
+    /// screen-space badge (see `canvas_generator_badge`).
+    pub(super) generator_badges: Vec<String>,
     /// Bounded collaboration cursor/selection projection. It is painted
     /// below the local selection overlay, so local edit affordances remain
     /// visually authoritative.
@@ -384,6 +387,15 @@ impl<'a> Widget for CanvasViewport<'a> {
                 } else {
                     &self.selected_set
                 },
+                viewport_origin,
+                viewport,
+                rect,
+            );
+            super::canvas_generator_badge::paint_generator_badges(
+                cx,
+                &page.children,
+                &self.generator_badges,
+                &self.theme,
                 viewport_origin,
                 viewport,
                 rect,

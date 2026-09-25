@@ -89,6 +89,8 @@ pub mod figma_import_state;
 pub mod fill_order;
 pub mod fills;
 pub mod font_catalog;
+pub mod generator;
+mod generator_error;
 pub mod geometry;
 pub mod git_button_state;
 pub mod grouping;

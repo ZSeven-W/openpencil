@@ -251,6 +251,8 @@ pub struct VisibleSections {
     pub image: bool,
     /// Whether the selected image carries optional video metadata.
     pub video: bool,
+    /// Generator section rows, when the selection is a generator frame.
+    pub generator: Option<crate::widgets::property_panel_generator::GeneratorRows>,
     /// Whether the image section paints the local-asset warning row
     /// (host asset check flagged the selected node's src).
     pub image_warning: bool,
@@ -304,6 +306,7 @@ impl VisibleSections {
         widget_checked: false,
         image: false,
         video: false,
+        generator: None,
         image_warning: false,
         opacity: true,
         compositing: true,

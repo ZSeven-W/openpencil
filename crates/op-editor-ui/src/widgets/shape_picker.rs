@@ -26,7 +26,9 @@ pub const SHAPE_PICKER_WIDTH: f32 = 220.0;
 const ROW_HEIGHT: f32 = 36.0;
 const ROW_PAD_X: f32 = 12.0;
 const ICON_SIZE: f32 = 16.0;
-const ROW_COUNT: usize = 7;
+/// Rows every host shows; generator starter rows follow them only when
+/// this process can run generator programs (see [`generator_rows_shown`]).
+const BASE_ROW_COUNT: usize = 7;
 /// Top + bottom padding inside the panel, so the first / last rows don't sit
 /// flush against the rounded panel edge. Hit-testing accounts for it (see
 /// `hit_popup`), so paint + hit stay aligned.
@@ -45,6 +47,23 @@ pub enum ShapeChoice {
     OpenIconPicker,
     /// Open a file dialog to import an image / SVG.
     ImportImageOrSvg,
+    /// Insert the built-in generator starter at this index of
+    /// `op_editor_core::generator::GENERATOR_STARTERS`.
+    InsertGenerator(usize),
+}
+
+/// Starter rows need a generator runtime to produce their first output;
+/// hosts without one (the browser bundle) do not offer them.
+fn generator_rows_shown() -> bool {
+    op_editor_core::generator::installed_generator_runner().is_some()
+}
+
+fn row_count() -> usize {
+    if generator_rows_shown() {
+        BASE_ROW_COUNT + op_editor_core::generator::GENERATOR_STARTERS.len()
+    } else {
+        BASE_ROW_COUNT
+    }
 }
 
 /// Localised row strings — looked up once at panel construction.
@@ -97,7 +116,7 @@ pub struct ShapePicker {
 impl ShapePicker {
     pub fn for_editor_ui(ui: &EditorUiState) -> Self {
         let labels = PickerLabels::for_editor_ui(ui);
-        let rows = vec![
+        let mut rows = vec![
             PickerRow {
                 icon: Icon::Square,
                 label: labels.rectangle,
@@ -134,6 +153,18 @@ impl ShapePicker {
                 choice: ShapeChoice::Tool(Tool::Pen),
             },
         ];
+        if generator_rows_shown() {
+            let starters = op_editor_core::generator::GENERATOR_STARTERS.iter();
+            rows.extend(starters.enumerate().map(|(index, starter)| PickerRow {
+                icon: if starter.id == "month-calendar" {
+                    Icon::Calendar
+                } else {
+                    Icon::LayoutGrid
+                },
+                label: translate(ui, starter.label_key).to_string(),
+                choice: ShapeChoice::InsertGenerator(index),
+            }));
+        }
         Self {
             id: WidgetId::new(5200),
             theme: theme_for(ui),
@@ -145,7 +176,7 @@ impl ShapePicker {
 
     /// Total panel height: top + bottom padding plus the row slots.
     pub fn panel_height() -> f32 {
-        PANEL_PAD_Y * 2.0 + ROW_HEIGHT * ROW_COUNT as f32
+        PANEL_PAD_Y * 2.0 + ROW_HEIGHT * row_count() as f32
     }
 
     /// Map a point to a row, accounting for the panel's top/bottom padding so
@@ -312,10 +343,10 @@ mod tests {
     }
 
     #[test]
-    fn panel_height_covers_seven_rows() {
+    fn panel_height_covers_every_row() {
         assert_eq!(
             ShapePicker::panel_height(),
-            PANEL_PAD_Y * 2.0 + ROW_HEIGHT * ROW_COUNT as f32
+            PANEL_PAD_Y * 2.0 + ROW_HEIGHT * row_count() as f32
         );
     }
 
@@ -353,7 +384,7 @@ mod tests {
     }
 
     #[test]
-    fn last_row_resolves_to_pen() {
+    fn last_base_row_resolves_to_pen() {
         let mut ui = op_editor_core::editor_ui_state::EditorUiState::new();
         ui.shape_picker.open = true;
         let picker = ShapePicker::for_editor_ui(&ui);
@@ -361,7 +392,7 @@ mod tests {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(SHAPE_PICKER_WIDTH, ShapePicker::panel_height()),
         };
-        let last_y = (ROW_COUNT as f32 - 0.5) * ROW_HEIGHT;
+        let last_y = PANEL_PAD_Y + (BASE_ROW_COUNT as f32 - 0.5) * ROW_HEIGHT;
         let hit = picker.hit_test(panel_rect, Point2D::new(50.0, last_y));
         assert_eq!(hit, Some(ShapeChoice::Tool(Tool::Pen)));
     }

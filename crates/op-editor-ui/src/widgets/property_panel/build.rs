@@ -185,6 +185,10 @@ impl PropertyPanel {
                 snapshot.widget = None;
             }
             snapshot.is_instance = is_instance;
+            if !is_instance {
+                snapshot.generator =
+                    crate::widgets::property_panel_generator::summary_for(state, node);
+            }
             if !is_instance
                 && state
                     .components
