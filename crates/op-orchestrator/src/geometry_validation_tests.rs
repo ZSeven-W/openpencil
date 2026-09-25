@@ -152,6 +152,8 @@ fn is_numbered_corpus_op(name: &str) -> bool {
 // Cluster test modules — this file keeps the shared fixtures/helpers; each
 // child mounts with `use super::*` so it sees both them and the module under
 // test.
+#[path = "geometry_clipped_label_tests.rs"]
+mod clipped_label_tests;
 #[path = "geometry_collapse_card_tests.rs"]
 mod collapse_card_tests;
 #[path = "geometry_design_form_tests.rs"]

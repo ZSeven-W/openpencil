@@ -16,11 +16,15 @@ pub(super) fn collect_grow_to_fit_fixes(
     rects: &HashMap<String, Rect>,
     cmds: &mut Vec<EditorCommand>,
 ) {
+    let clips = v.get("clipContent").and_then(Value::as_bool) == Some(true);
+    if clips {
+        collect_clipped_label_grow_fix(v, rects, cmds);
+    }
     if let Some(declared) = match v.get("height") {
         Some(Value::Number(n)) => n.as_f64(),
         _ => None,
     } {
-        if v.get("clipContent").and_then(Value::as_bool) != Some(true) && declared > 0.0 {
+        if !clips && declared > 0.0 {
             if let Some(pr) = v
                 .get("id")
                 .and_then(Value::as_str)
@@ -55,6 +59,71 @@ pub(super) fn collect_grow_to_fit_fixes(
     }
     for c in children(v) {
         collect_grow_to_fit_fixes(c, rects, cmds);
+    }
+}
+
+/// Slack before a text's bottom counts as cut by the clip edge.
+const CLIPPED_LABEL_EPS: f64 = 1.0;
+
+/// A fixed-height, `clipContent` FLEX frame whose own text child is sliced by
+/// the clip edge (its top is inside the frame, its bottom is past it). The
+/// clip is authored intent for what overflows — a cover image cropped to its
+/// slot — but a glyph line cut in half is never intended (measured, arena-m01:
+/// a 72px category tile with `[8, 4]` padding stacked a 48px dish photo, a 5px
+/// gap and a 13px label, and the tile's own clip hid the label's lower half).
+/// The general grow-to-fit rule above skips every clipped frame, so this is
+/// the contract repair for exactly the provable case: grow the frame until the
+/// cut text plus the frame's own bottom padding fit, within the same small-
+/// overshoot bound. Images and decoration running past the edge are left
+/// cropped.
+fn collect_clipped_label_grow_fix(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    if !matches!(layout_str(v), Some("vertical" | "horizontal")) {
+        return;
+    }
+    let Some(declared) = v.get("height").and_then(Value::as_f64).filter(|h| *h > 0.0) else {
+        return;
+    };
+    let Some(id) = v.get("id").and_then(Value::as_str) else {
+        return;
+    };
+    let Some(frame) = rects.get(id) else {
+        return;
+    };
+    let frame_bottom = frame.y + declared;
+    let cut_text_bottom = children(v)
+        .iter()
+        .filter(|c| c.get("type").and_then(Value::as_str) == Some("text"))
+        .filter_map(|c| {
+            c.get("id")
+                .and_then(Value::as_str)
+                .and_then(|id| rects.get(id))
+        })
+        .filter(|r| r.y < frame_bottom && r.y + r.h > frame_bottom + CLIPPED_LABEL_EPS)
+        .map(|r| r.y + r.h)
+        .fold(f64::MIN, f64::max);
+    if cut_text_bottom == f64::MIN {
+        return;
+    }
+    let padding_bottom = numeric_padding_sides(v)
+        .map(|[_, _, bottom, _]| bottom.max(0.0))
+        .unwrap_or(0.0);
+    let required = cut_text_bottom + padding_bottom - frame.y;
+    let overshoot = required - declared;
+    if overshoot > 0.0 && overshoot <= declared * GROW_TO_FIT_MAX_FRACTION {
+        cmds.push(EditorCommand::UpdateNode {
+            node_id: NodeId::new(id.to_string()),
+            x: None,
+            y: None,
+            width: None,
+            height: Some(required.ceil() as i32),
+            name: None,
+            fill_hex: None,
+            page_id: None,
+        });
     }
 }
 
