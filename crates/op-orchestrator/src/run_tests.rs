@@ -199,3 +199,5 @@ mod dashboard_tests;
 mod geometry_salvage_tests;
 #[path = "run_tests_planning_retry.rs"]
 mod planning_retry_tests;
+#[path = "run_tests_right_rail.rs"]
+mod right_rail_tests;

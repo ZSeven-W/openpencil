@@ -144,6 +144,7 @@ pub(crate) mod root_section_gap;
 pub mod run;
 mod run_salvage_feedback;
 pub mod scaffold;
+pub(crate) mod scaffold_right_rail;
 pub mod screen_groups;
 pub(crate) mod section_headline;
 pub(crate) mod section_shell_fill_repair;

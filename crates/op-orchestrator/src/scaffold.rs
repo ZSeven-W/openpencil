@@ -420,6 +420,7 @@ fn build_scaffold_root_node_at(
             rf.height,
             &fill_hex,
             resolve_section_gap(rf.gap),
+            crate::scaffold_right_rail::plan_right_rail_width(plan),
         );
     }
 
@@ -689,7 +690,8 @@ pub(crate) fn plan_is_sidebar_dashboard(plan: &OrchestratorPlan, is_mobile: bool
 
 /// Build the pre-built two-column app-shell root: `horizontal [Sidebar(260,
 /// vertical, clipped) | Main Content(fill, vertical)]`, both columns empty
-/// (subtasks fill them). The sidebar `height: fill_container` stretches it to
+/// (subtasks fill them), plus a third `Right Panel` column when the plan
+/// names a right-side region (`scaffold_right_rail`). The sidebar `height: fill_container` stretches it to
 /// the row (cross-axis) height; `clipContent` keeps a sub-agent's full-width
 /// content from bleeding past the 260 column.
 #[allow(clippy::too_many_arguments)]
@@ -702,6 +704,7 @@ fn build_two_column_root_node(
     height: f64,
     fill_hex: &str,
     gap: f64,
+    right_rail_width: Option<f64>,
 ) -> Result<PenNode, ScaffoldError> {
     let sidebar = serde_json::json!({
         "type": "frame",
@@ -735,7 +738,7 @@ fn build_two_column_root_node(
         "padding": [32, 40],
         "children": [],
     });
-    let frame = serde_json::json!({
+    let mut frame = serde_json::json!({
         "type": "frame",
         "id": root_id,
         "name": name,
@@ -749,6 +752,14 @@ fn build_two_column_root_node(
         "fill": [{ "type": "solid", "color": fill_hex }],
         "children": [sidebar, content],
     });
+    if let (Some(width), Some(columns)) = (
+        right_rail_width,
+        frame.get_mut("children").and_then(|c| c.as_array_mut()),
+    ) {
+        columns.push(crate::scaffold_right_rail::right_rail_column_json(
+            root_id, width, fill_hex, gap,
+        ));
+    }
     serde_json::from_value(frame).map_err(|e| ScaffoldError::TwoColumnRoot {
         root_id: root_id.to_string(),
         detail: e.to_string(),

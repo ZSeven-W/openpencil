@@ -307,8 +307,24 @@ impl Orchestrator {
                             sb.zip(ct)
                         })
                         .flatten();
-                for subtask in &mut plan.subtasks {
+                // A right-side region planned beside the content gets the
+                // shell's third column when the scaffold built one.
+                let right_rail = two_col.as_ref().and_then(|_| {
+                    find_child_id_by_name(
+                        sink.state(),
+                        &rid,
+                        crate::scaffold_right_rail::RIGHT_RAIL_COLUMN_NAME,
+                    )
+                });
+                for (index, subtask) in plan.subtasks.iter_mut().enumerate() {
                     let parent = match &two_col {
+                        Some(_)
+                            if index > 0
+                                && right_rail.is_some()
+                                && crate::scaffold_right_rail::is_right_rail_subtask(subtask) =>
+                        {
+                            right_rail.clone().unwrap_or_else(|| rid.clone())
+                        }
                         Some((sidebar_id, content_id)) => {
                             if crate::dashboard_columns::is_sidebar_subtask(subtask) {
                                 sidebar_id.clone()
