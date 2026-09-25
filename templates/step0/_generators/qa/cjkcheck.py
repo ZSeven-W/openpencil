@@ -5,8 +5,11 @@
 usage: cjkcheck.py <file.op>
 """
 import json
+import pathlib
+import shutil
 import subprocess
 import sys
+import tempfile
 
 BIN = "/Users/fini/workspace/openpencil/target/release/openpencil-desktop"
 # 行首禁则：这些字符不允许出现在行首
@@ -21,8 +24,12 @@ def snapshot(path):
                     "arguments": {"depth": 40}}},
     ]
     payload = "\n".join(json.dumps(r) for r in req) + "\n"
-    out = subprocess.run([BIN, "--mcp", path], input=payload,
-                         capture_output=True, text=True).stdout
+    # `--mcp <file>` finalizes and WRITES BACK to the file; run it on a copy.
+    with tempfile.TemporaryDirectory() as tmp:
+        copy = pathlib.Path(tmp) / pathlib.Path(path).name
+        shutil.copy(path, copy)
+        out = subprocess.run([BIN, "--mcp", str(copy)], input=payload,
+                             capture_output=True, text=True).stdout
     last = [ln for ln in out.strip().splitlines() if ln.startswith("{")][-1]
     body = json.loads(last)["result"]["content"][0]["text"]
     return json.loads(body)

@@ -98,10 +98,13 @@ PY
   # 多帧模板再导一张整页总览（export_item 把所有顶层 frame 合成一张画布）
   n=$(python3 -c "import json;d=json.load(open('$op'));print(len(d.get('children') or d['pages'][0]['children']))")
   if [ "$n" -gt 1 ]; then
+    # `--mcp <file>` finalizes and WRITES BACK to the file; export from a copy.
+    scratch_op=$(mktemp -d)/$t.op
+    cp "$op" "$scratch_op"
     printf '%s\n' \
       '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
       '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"export_item","arguments":{"itemId":"page-1","format":"png","scale":1}}}' \
-    | "$BIN" --mcp "$op" 2>/dev/null | tail -1 \
+    | "$BIN" --mcp "$scratch_op" 2>/dev/null | tail -1 \
     | python3 -c "
 import sys, json, base64
 t = json.loads(json.load(sys.stdin)['result']['content'][0]['text'])
