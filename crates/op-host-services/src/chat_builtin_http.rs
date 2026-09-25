@@ -472,6 +472,7 @@ async fn run_openai_chat(
     // The policy lives in `op_orchestrator::reasoning_wire_control`; the JSON
     // mutation is shared with the agent loop so the two paths stay identical.
     apply_reasoning_wire_control(&mut body, &provider.model, disable_thinking);
+    op_chat_agent::backoff::apply_openrouter_reasoning(&mut body, &url, disable_thinking);
     let client = provider.dial_client(&url).await?;
     let resp = send_with_backoff(
         "openai-compatible",

@@ -144,6 +144,7 @@ pub(super) async fn run_openai_agent_loop_inner(
             &cfg.model,
             cfg.disable_thinking,
         );
+        crate::backoff::apply_openrouter_reasoning(&mut body, &cfg.url, cfg.disable_thinking);
         // Through the shared throttle/backoff: this tool-loop path used
         // to post raw, so a provider rate limit killed the design run with
         // no retries and a raw JSON error (measured: glm-5.2, 429

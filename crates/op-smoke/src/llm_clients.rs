@@ -239,6 +239,11 @@ impl LlmClient for DirectOpenAiClient {
             // `reasoning_effort:"low"` it demands instead (sending `thinking`
             // to K3 is a 400).
             apply_reasoning_wire_control(&mut body, &model, reduce_reasoning_for_smoke(&model));
+            op_chat_agent::backoff::apply_openrouter_reasoning(
+                &mut body,
+                &url,
+                reduce_reasoning_for_smoke(&model),
+            );
             // Connect + read-idle deadlines so a hung provider endpoint surfaces
             // as an error instead of pinning the headless harness forever
             // (mirrors the desktop's builtin_http_client). Per-read, not

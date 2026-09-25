@@ -302,6 +302,37 @@ pub fn apply_reasoning_wire_control(body: &mut Value, model: &str, reduce_reason
     }
 }
 
+/// Whether `url` is an OpenRouter endpoint.
+pub fn is_openrouter_url(url: &str) -> bool {
+    url.to_ascii_lowercase().contains("openrouter.ai")
+}
+
+/// OpenRouter's unified reasoning control for models no family rule covers.
+///
+/// [`apply_reasoning_wire_control`] only knows families by model id, so a
+/// reasoning model reached through OpenRouter under any other id (stealth
+/// models, new vendors) ran at its default effort and spent the WHOLE output
+/// budget reasoning: measured on `stealth/space-bunny-alpha`, a design turn
+/// came back `finish_reason: length` with 16000 completion tokens and zero
+/// characters of content, and 7 of one run's subtasks failed "empty content".
+/// With `reasoning: {effort: "low"}` the same turn returned 44k characters
+/// in half the time. OpenRouter accepts this field for every model and
+/// ignores it where it does not apply; "disabled" is not an option — some
+/// endpoints reject it ("Reasoning is mandatory"). A body that already
+/// carries a family control is left alone.
+pub fn apply_openrouter_reasoning(body: &mut Value, url: &str, reduce_reasoning: bool) {
+    if !reduce_reasoning || !is_openrouter_url(url) {
+        return;
+    }
+    let Some(obj) = body.as_object_mut() else {
+        return;
+    };
+    if obj.contains_key("thinking") || obj.contains_key("reasoning_effort") {
+        return;
+    }
+    obj.insert("reasoning".into(), serde_json::json!({ "effort": "low" }));
+}
+
 /// Anthropic-wire twin of [`apply_reasoning_wire_control`].
 ///
 /// The empty-canvas postmortem: the OpenAI-compat agent loop applied the
@@ -349,5 +380,44 @@ mod http_error_dump_tests {
             std::env::remove_var("OPENPENCIL_DEBUG_HTTP_ERROR_BODY");
         }
         assert!(std::env::var("OPENPENCIL_DEBUG_HTTP_ERROR_BODY").is_err());
+    }
+}
+
+#[cfg(test)]
+mod openrouter_reasoning_tests {
+    use super::*;
+
+    const OPENROUTER: &str = "https://openrouter.ai/api/v1/chat/completions";
+
+    #[test]
+    fn an_openrouter_design_turn_asks_for_low_reasoning() {
+        let mut body = serde_json::json!({ "model": "stealth/space-bunny-alpha" });
+        apply_openrouter_reasoning(&mut body, OPENROUTER, true);
+        assert_eq!(body["reasoning"], serde_json::json!({ "effort": "low" }));
+    }
+
+    #[test]
+    fn other_endpoints_and_plain_chat_are_untouched() {
+        let mut body = serde_json::json!({ "model": "some-model" });
+        apply_openrouter_reasoning(
+            &mut body,
+            "https://api.example.com/v1/chat/completions",
+            true,
+        );
+        assert!(body.get("reasoning").is_none());
+        apply_openrouter_reasoning(&mut body, OPENROUTER, false);
+        assert!(body.get("reasoning").is_none());
+    }
+
+    #[test]
+    fn a_family_control_already_in_the_body_wins() {
+        let mut body = serde_json::json!({ "model": "deepseek/deepseek-v4-pro" });
+        apply_reasoning_wire_control(&mut body, "deepseek/deepseek-v4-pro", true);
+        apply_openrouter_reasoning(&mut body, OPENROUTER, true);
+        assert!(body.get("thinking").is_some());
+        assert!(
+            body.get("reasoning").is_none(),
+            "never both controls: {body}"
+        );
     }
 }
