@@ -120,6 +120,7 @@ pub mod concurrent;
 pub mod geometry_validation;
 pub(crate) mod hero_bleed;
 pub mod loop_finalize;
+mod loop_finalize_palette;
 pub mod nav_issues;
 pub mod output_language;
 pub mod prompt;

@@ -553,6 +553,8 @@ pub fn apply_loop_finalize_counted(state: &mut EditorState) -> RepairSummary {
         run_loop_finalize_cleanup(&mut sink, canvas_width, &mut summary);
     }
     run_loop_finalize_text_fill(state);
+    // Last: the passes above may paint palette tokens this loop never seeded.
+    crate::loop_finalize_palette::seed_referenced_palette_tokens(state);
 
     summary
 }

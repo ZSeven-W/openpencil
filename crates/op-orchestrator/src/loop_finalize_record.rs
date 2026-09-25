@@ -165,6 +165,12 @@ pub fn record_loop_finalize_counted(
             "text fill",
             false,
         )?);
+
+        if let Some(command) =
+            crate::loop_finalize_palette::seed_referenced_palette_tokens(&mut state)
+        {
+            commands.push(command);
+        }
     }
 
     let mut replay = input.clone();
