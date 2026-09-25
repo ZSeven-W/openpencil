@@ -2,6 +2,7 @@
 //! of `canvas_viewport.rs` to keep that file under the 800-line
 //! ceiling.
 
+use super::canvas_text_kinsoku::carry_for_line_start;
 use crate::layout_scene::{SceneGradient, SceneNode, SceneShader, SceneStrokeAlign};
 use crate::theme::Theme;
 use crate::widgets::PaintCx;
@@ -515,7 +516,9 @@ fn wrap_segment(
             if measure_text_with_letter_spacing(backend, &probe, font) > max_w
                 && !current.is_empty()
             {
+                let carried = carry_for_line_start(&mut current, ch);
                 out.push(std::mem::take(&mut current));
+                current = carried;
                 current.push(ch);
             } else {
                 std::mem::swap(&mut current, &mut probe);
@@ -541,7 +544,13 @@ fn wrap_segment(
             if measure_text_with_letter_spacing(backend, &probe, font) > max_w
                 && !current.is_empty()
             {
+                let carried = word
+                    .chars()
+                    .next()
+                    .map(|first| carry_for_line_start(&mut current, first))
+                    .unwrap_or_default();
                 out.push(std::mem::take(&mut current));
+                current = carried;
                 current.push_str(&word);
             } else {
                 std::mem::swap(&mut current, &mut probe);
@@ -640,6 +649,13 @@ mod wrap_tests {
         // "world " (60), "world foo" (90) fits.
         let lines = wrap_text(&mut b, "hello world foo", 13.0, 100.0, 400, 0.0);
         assert_eq!(lines, vec!["hello ", "world foo"]);
+    }
+
+    #[test]
+    fn a_trailing_full_stop_never_starts_a_line() {
+        let mut b = UniformBackend;
+        let lines = wrap_text(&mut b, "一二三四五。", 13.0, 50.0, 400, 0.0);
+        assert_eq!(lines, vec!["一二三四", "五。"]);
     }
 
     #[test]

@@ -198,6 +198,7 @@ pub mod canvas_overlay_transform;
 mod canvas_path_overlay;
 mod canvas_selection_overlay;
 pub mod canvas_text_edit;
+mod canvas_text_kinsoku;
 pub mod canvas_viewport;
 mod canvas_viewport_background;
 mod canvas_viewport_fill_layers;
