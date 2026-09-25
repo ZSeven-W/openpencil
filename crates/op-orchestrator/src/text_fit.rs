@@ -211,6 +211,22 @@ pub(crate) fn repair_text_fit(sink: &mut dyn DocSink, root_id: &str) -> usize {
         };
         let mut cmds = Vec::new();
         collect_text_fit_fixes(&v, &rects, &mut cmds);
+        // Amount tokens the estimate did not already resize are measured.
+        let fixed: Vec<String> = cmds
+            .iter()
+            .filter_map(|cmd| match cmd {
+                EditorCommand::SetNodeFontSize { node_id, .. } => {
+                    Some(node_id.as_str().to_string())
+                }
+                _ => None,
+            })
+            .collect();
+        cmds.extend(amount::collect_measured_amount_fixes(
+            sink.state(),
+            &v,
+            &rects,
+            &fixed,
+        ));
         cmds
     };
     let mut applied = 0;
@@ -221,6 +237,9 @@ pub(crate) fn repair_text_fit(sink: &mut dyn DocSink, root_id: &str) -> usize {
     }
     applied
 }
+
+#[path = "text_fit_amount.rs"]
+mod amount;
 
 #[cfg(test)]
 #[path = "text_fit_tests.rs"]

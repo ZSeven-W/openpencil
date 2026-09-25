@@ -262,3 +262,82 @@ fn status_bar_subtree_is_untouched() {
 
     assert!(collect(card, rects).is_empty());
 }
+
+/// arena-m03 minimized: a 48px fixed-width "¥ 268,540.32" hero amount in a
+/// 327px card with 14px padding. The layout wrapped it after the currency
+/// symbol ("¥" / "268,540.32"); the measured amount path must shrink it back
+/// onto one line inside the 299px it was given.
+#[test]
+fn wrapped_currency_amount_is_measured_back_onto_one_line() {
+    let tree = json!({
+        "type": "frame", "id": "root", "width": 375, "height": 400,
+        "layout": "vertical", "padding": [0, 24],
+        "children": [{
+            "type": "frame", "id": "card", "width": "fill_container",
+            "height": "fit_content", "layout": "vertical", "gap": 8, "padding": 14,
+            "children": [{
+                "type": "text", "id": "amount", "content": "¥ 268,540.32",
+                "fontFamily": "DM Mono", "fontSize": 48, "fontWeight": 700,
+                "letterSpacing": -0.96, "lineHeight": 1.15,
+                "width": "fill_container", "height": "fit_content",
+                "textGrowth": "fixed-width"
+            }]
+        }]
+    });
+    let node: PenNode = serde_json::from_value(tree).expect("fixture parses");
+    let mut sink = VecDocSink::new();
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![node],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let before = resolved_rects(sink.state());
+    assert!(
+        before["amount"].h > 48.0 * 1.15 * 1.5,
+        "fixture must reproduce the wrap, got h={}",
+        before["amount"].h
+    );
+
+    assert_eq!(repair_text_fit(&mut sink, "root"), 1);
+
+    let after = resolved_rects(sink.state());
+    let root = serde_json::to_value(&sink.state().active_children()[0]).expect("serialize");
+    let amount = &root["children"][0]["children"][0];
+    let size = amount["fontSize"].as_f64().expect("font size");
+    assert!((24.0..48.0).contains(&size), "shrunk, got {size}");
+    assert!(
+        after["amount"].h < size * 1.15 * 1.5,
+        "the amount sits on one line again, got h={} at {size}px",
+        after["amount"].h
+    );
+    assert_eq!(
+        amount["textGrowth"],
+        json!("fixed-width"),
+        "only the size changes — the authored width mode stays"
+    );
+}
+
+#[test]
+fn amount_token_recognizes_figures_but_not_prose() {
+    for yes in [
+        "¥ 268,540.32",
+        "+¥1,286.40",
+        "-0.86%",
+        "$52,480.16",
+        "1 234 567",
+        "€12.5",
+    ] {
+        assert!(amount::is_amount_token(yes), "{yes} is an amount");
+    }
+    for no in [
+        "近1月",
+        "Q3 2025",
+        "12 34",
+        "¥",
+        "268,540.32 元",
+        "Total 12",
+        "06/30",
+    ] {
+        assert!(!amount::is_amount_token(no), "{no} is not an amount");
+    }
+}
