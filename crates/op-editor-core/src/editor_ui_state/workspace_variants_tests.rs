@@ -201,3 +201,80 @@ fn a_new_run_forgets_the_directions() {
     state.editor_ui.workspace.reset_for_new_document();
     assert!(state.editor_ui.workspace.variants.is_empty());
 }
+
+#[test]
+fn a_landed_direction_is_adopted_only_by_an_open_workspace() {
+    let mut workspace = WorkspaceState::default();
+    assert!(!workspace.adopt_landed_variant(variant(0, vec!["a".into()], "#000000")));
+    assert!(workspace.variants.is_empty());
+
+    workspace.open_for_generation(HomeFamily::AppUi, "brief", TaskDraft::default(), 0, 1, None);
+    // Not begun as a variants run: the report still records under the
+    // default count so the pick bar can show it.
+    assert!(workspace.adopt_landed_variant(variant(1, vec!["b".into()], "#111111")));
+    assert_eq!(workspace.variant_count, DEFAULT_VARIANT_COUNT);
+    assert!(workspace.adopt_landed_variant(variant(0, vec!["a".into()], "#000000")));
+    let slots: Vec<usize> = workspace.variants.iter().map(|v| v.index).collect();
+    assert_eq!(slots, vec![0, 1]);
+}
+
+#[test]
+fn a_home_brief_pins_directions_only_when_the_toggle_is_on_and_offered() {
+    let mut state = EditorState::new();
+    state.editor_ui.workspace.open_for_generation(
+        HomeFamily::AppUi,
+        "brief",
+        TaskDraft::default(),
+        0,
+        1,
+        None,
+    );
+    pin_home_brief_route(&mut state);
+    assert_eq!(state.chat.launch_route, LaunchRoute::Orchestrator);
+    assert!(!state.editor_ui.workspace.is_variants_run());
+
+    state.editor_ui.home.variants_on = true;
+    state.editor_ui.home.variants_unavailable = true;
+    pin_home_brief_route(&mut state);
+    assert_eq!(state.chat.launch_route, LaunchRoute::Orchestrator);
+    assert!(!state.editor_ui.workspace.is_variants_run());
+
+    state.editor_ui.home.variants_unavailable = false;
+    pin_home_brief_route(&mut state);
+    assert_eq!(
+        state.chat.launch_route,
+        LaunchRoute::Variants(DEFAULT_VARIANT_COUNT)
+    );
+    assert_eq!(
+        state.editor_ui.workspace.variant_count,
+        DEFAULT_VARIANT_COUNT
+    );
+}
+
+#[test]
+fn a_retry_keeps_the_run_direction_count() {
+    let mut state = three_directions();
+    state.editor_ui.workspace.variant_count = 4;
+    pin_workspace_retry_route(&mut state);
+    assert_eq!(state.chat.launch_route, LaunchRoute::Variants(4));
+    assert!(state.editor_ui.workspace.variants.is_empty());
+
+    state.editor_ui.workspace.clear_variants();
+    pin_workspace_retry_route(&mut state);
+    assert_eq!(state.chat.launch_route, LaunchRoute::Orchestrator);
+}
+
+#[test]
+fn use_this_is_refused_while_generating_and_resets_the_camera_after() {
+    let mut state = three_directions();
+    state.editor_ui.workspace.phase = WorkspacePhase::Generating;
+    assert_eq!(use_workspace_variant(&mut state, 1), None);
+
+    state.editor_ui.workspace.phase = WorkspacePhase::Done;
+    state.editor_ui.workspace.selected = 2;
+    assert_eq!(use_workspace_variant(&mut state, 1), Some(true));
+    let workspace = &state.editor_ui.workspace;
+    assert_eq!(workspace.selected, 0);
+    assert_eq!(workspace.fitted_board_count, 0);
+    assert!(workspace.variants.is_empty());
+}

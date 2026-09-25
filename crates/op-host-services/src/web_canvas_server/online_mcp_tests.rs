@@ -438,4 +438,5 @@ fn a_public_deployment_neither_offers_nor_serves_website_import() {
         Request::new("GET", "/api/mcp/server").with_bearer("tokA"),
     );
     assert_eq!(body_of(&server)["siteImport"], false, "{server}");
+    assert_eq!(body_of(&server)["variants"], false, "{server}");
 }

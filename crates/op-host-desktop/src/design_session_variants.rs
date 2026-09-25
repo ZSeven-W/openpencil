@@ -13,17 +13,12 @@ pub(super) fn fold_variant_progress(state: &mut EditorState, progress: &[Progres
     let mut changed = false;
     for event in progress {
         if let Progress::VariantReady(variant) = event {
-            let workspace = &mut state.editor_ui.workspace;
-            if !workspace.active {
-                continue;
-            }
-            if !workspace.is_variants_run() {
-                // A variants run launched from outside the workspace flow
-                // still records its directions under the count it reports.
-                workspace.variant_count = op_editor_core::DEFAULT_VARIANT_COUNT;
-            }
-            workspace.record_variant(variant.clone());
-            changed = true;
+            // The fold itself is shared with the web host, which receives
+            // the same report over SSE (`op_editor_core::variant_wire`).
+            changed |= state
+                .editor_ui
+                .workspace
+                .adopt_landed_variant(variant.clone());
         }
     }
     changed

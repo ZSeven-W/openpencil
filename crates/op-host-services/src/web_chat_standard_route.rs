@@ -14,13 +14,37 @@ use crate::web_canvas_server::WebCanvasState;
 /// The route the browser pinned on the turn (`"launchRoute"`), mirroring the
 /// desktop launcher's `chat.launch_route`: Studio Home briefs are whole
 /// designs (`"orchestrator"`), and the one-click draft's refine edits the
-/// selected boards in place (`"refine"`). Anything else is the ordinary
-/// classified route.
+/// selected boards in place (`"refine"`), and the directions toggle asks
+/// for side-by-side directions (`"variants"` + `"variantCount"`, clamped to
+/// the desktop's range; absent means the default count). Anything else is
+/// the ordinary classified route.
 pub(super) fn parse_launch_route(obj: &serde_json::Map<String, Value>) -> LaunchRoute {
     match obj.get("launchRoute").and_then(Value::as_str) {
         Some("orchestrator") => LaunchRoute::Orchestrator,
         Some("refine") => LaunchRoute::Refine,
+        Some("variants") => {
+            let count = obj
+                .get("variantCount")
+                .and_then(Value::as_u64)
+                .map_or(op_editor_core::DEFAULT_VARIANT_COUNT, |n| {
+                    n.min(u64::from(u8::MAX)) as u8
+                });
+            LaunchRoute::Variants(op_editor_core::clamp_variant_count(count))
+        }
         _ => LaunchRoute::Auto,
+    }
+}
+
+/// The route this deployment actually runs: a mode that does not offer
+/// side-by-side directions (see `ServeMode::allows_design_variants`) runs
+/// the brief as one orchestrated design instead of refusing it.
+pub(super) fn route_for_mode(
+    route: LaunchRoute,
+    mode: crate::web_canvas_server::ServeMode,
+) -> LaunchRoute {
+    match route {
+        LaunchRoute::Variants(_) if !mode.allows_design_variants() => LaunchRoute::Orchestrator,
+        other => other,
     }
 }
 
@@ -100,6 +124,51 @@ mod tests {
             LaunchRoute::Auto
         );
         assert_eq!(parse_launch_route(&body("{}")), LaunchRoute::Auto);
+    }
+
+    #[test]
+    fn a_variants_route_carries_a_clamped_direction_count() {
+        assert_eq!(
+            parse_launch_route(&body(r#"{"launchRoute":"variants","variantCount":4}"#)),
+            LaunchRoute::Variants(4)
+        );
+        // Missing → the default; out of range → clamped like desktop.
+        assert_eq!(
+            parse_launch_route(&body(r#"{"launchRoute":"variants"}"#)),
+            LaunchRoute::Variants(op_editor_core::DEFAULT_VARIANT_COUNT)
+        );
+        assert_eq!(
+            parse_launch_route(&body(r#"{"launchRoute":"variants","variantCount":1}"#)),
+            LaunchRoute::Variants(2)
+        );
+        assert_eq!(
+            parse_launch_route(&body(r#"{"launchRoute":"variants","variantCount":9000}"#)),
+            LaunchRoute::Variants(op_editor_core::MAX_VARIANT_COUNT)
+        );
+        // Still a whole-design request: the classifier gets no vote.
+        assert_eq!(
+            pinned_intent(LaunchRoute::Variants(3), false),
+            Some(DesignIntent::New)
+        );
+    }
+
+    #[test]
+    fn only_a_mode_that_offers_directions_keeps_the_variants_route() {
+        use crate::web_canvas_server::ServeMode;
+        let variants = LaunchRoute::Variants(3);
+        assert_eq!(route_for_mode(variants, ServeMode::Local), variants);
+        assert_eq!(route_for_mode(variants, ServeMode::Managed), variants);
+        assert_eq!(
+            route_for_mode(variants, ServeMode::Online),
+            LaunchRoute::Orchestrator
+        );
+        assert_eq!(
+            route_for_mode(LaunchRoute::Refine, ServeMode::Online),
+            LaunchRoute::Refine
+        );
+        // The route decides which runner the new-design branch takes.
+        assert_eq!(variants.variant_count(), Some(3));
+        assert_eq!(LaunchRoute::Orchestrator.variant_count(), None);
     }
 
     #[test]

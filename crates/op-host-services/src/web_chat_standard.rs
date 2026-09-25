@@ -14,9 +14,13 @@ use base64::Engine as _;
 use op_ai::chat_provider::StopReason;
 use op_ai::chat_provider::{ChatAttachment, ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest};
 use op_editor_core::chat::MAX_ATTACHMENT_BYTES;
-use op_editor_core::{BuiltinAgentConfig, EditorCommand, EditorState, NodeId};
+#[cfg(test)]
+use op_editor_core::EditorCommand;
+use op_editor_core::{BuiltinAgentConfig, EditorState, NodeId};
+#[cfg(test)]
+use op_orchestrator::DocSink;
 use op_orchestrator::{
-    AbortFlag, DesignRequest, DocSink, Orchestrator, Progress, SkippedScreenshotProvider,
+    AbortFlag, DesignRequest, Orchestrator, Progress, SkippedScreenshotProvider,
     SkippedVisionLlmClient, ValidationProviders,
 };
 use serde_json::Value;
@@ -51,8 +55,15 @@ use model_selection::selected_model_id;
 mod route;
 use route::{
     clear_fresh_starter_frame_for_design, clear_live_starter_frame_for_design, parse_launch_route,
-    pinned_intent, resolve_standard_route,
+    pinned_intent, resolve_standard_route, route_for_mode,
 };
+
+#[path = "web_chat_standard_sink.rs"]
+mod sink;
+use sink::WebDesignDocSink;
+
+#[path = "web_chat_standard_variants.rs"]
+mod variants;
 
 const STANDARD_MODIFY_STEP: &str =
     r#"<step title="Checking guidelines">Analyzing modification request...</step>"#;
@@ -70,6 +81,9 @@ pub struct WebStandardTurnRequest {
     /// The route the browser pinned on the turn (Studio Home / draft
     /// refine); `Auto` classifies as before.
     launch_route: op_editor_core::LaunchRoute,
+    /// The browser's UI locale (`"locale"`, BCP-47): a variants run stamps
+    /// localized direction names (`方案 A`) on the boards it lands.
+    locale: Option<op_editor_core::Locale>,
 }
 
 pub fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
@@ -108,9 +122,14 @@ pub fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
         Some(value) => Some(crate::web_credentials::parse_transient_builtin(value)?),
     };
     let launch_route = parse_launch_route(obj);
+    let locale = obj
+        .get("locale")
+        .and_then(Value::as_str)
+        .and_then(op_editor_core::Locale::from_tag);
     Some(WebStandardTurnRequest {
         ai,
         launch_route,
+        locale,
         document_json,
         editor_meta,
         selected_ids,
@@ -220,6 +239,10 @@ pub fn stream_standard_turn<W: Write>(
     write_barrier: Option<&crate::web_canvas_server::WriteBarrier>,
     cors_origin: Option<&str>,
 ) -> std::io::Result<()> {
+    let mut req = req;
+    // A deployment that does not offer directions runs the brief as one.
+    let mode = state.lock().unwrap_or_else(|p| p.into_inner()).mode;
+    req.launch_route = route_for_mode(req.launch_route, mode);
     crate::ai_proxy::write_sse_headers(out, cors_origin)?;
     let mut snapshot = match apply_request_snapshot(&req, state, hub, write_barrier) {
         Ok(snapshot) => snapshot,
@@ -322,18 +345,50 @@ pub fn stream_standard_turn<W: Write>(
                 write_barrier,
             )
         }
-        crate::chat_intent::DesignIntent::New => stream_new_design_route(
-            out,
-            req,
-            snapshot,
-            design_provider,
-            model,
-            CanvasWriteTarget {
+        crate::chat_intent::DesignIntent::New => {
+            let target = CanvasWriteTarget {
                 state,
                 hub,
                 write_barrier,
-            },
-        ),
+            };
+            match req.launch_route.variant_count() {
+                Some(count) => {
+                    let request = design_request_for(&req, &snapshot, model);
+                    let locale = req.locale.unwrap_or(snapshot.editor_ui.locale);
+                    let run = variants::WebVariantsRun {
+                        request,
+                        count,
+                        locale,
+                    };
+                    variants::stream_variants_route(out, run, snapshot, design_provider, target)
+                }
+                None => stream_new_design_route(out, req, snapshot, design_provider, model, target),
+            }
+        }
+    }
+}
+
+/// The whole-design request a new-design turn runs with.
+fn design_request_for(
+    req: &WebStandardTurnRequest,
+    snapshot: &EditorState,
+    model: Option<String>,
+) -> DesignRequest {
+    DesignRequest {
+        prompt: req.ai.user.clone(),
+        model,
+        provider: None,
+        design_md: snapshot.doc.design_md.clone(),
+        continuation_context: None,
+        append_context: crate::chat_intent::detect_append_intent(snapshot, &req.ai.user),
+        concurrency: req
+            .agent_team_size
+            .unwrap_or(snapshot.chat.agent_team_size)
+            .clamp(1, 6),
+        validation_enabled: true,
+        visual_ref_enabled: false,
+        pinned_style_guide: snapshot.editor_ui.pinned_style_guide.clone(),
+        reference_skeleton: None,
     }
 }
 
@@ -570,24 +625,8 @@ fn stream_new_design_route<W: Write>(
     model: Option<String>,
     target: CanvasWriteTarget<'_>,
 ) -> std::io::Result<()> {
-    let append_context = crate::chat_intent::detect_append_intent(&snapshot, &req.ai.user);
     let prompt = req.ai.user.clone();
-    let mut request = DesignRequest {
-        prompt: req.ai.user,
-        model: model.clone(),
-        provider: None,
-        design_md: snapshot.doc.design_md.clone(),
-        continuation_context: None,
-        append_context,
-        concurrency: req
-            .agent_team_size
-            .unwrap_or(snapshot.chat.agent_team_size)
-            .clamp(1, 6),
-        validation_enabled: true,
-        visual_ref_enabled: false,
-        pinned_style_guide: snapshot.editor_ui.pinned_style_guide.clone(),
-        reference_skeleton: None,
-    };
+    let mut request = design_request_for(&req, &snapshot, model.clone());
     let provider_arc: Arc<dyn ChatProvider> = Arc::from(provider);
     let llm = ChatProviderLlmClient::new(provider_arc.clone()).with_model(model.clone());
     let mut sink = WebDesignDocSink::new(target.state, target.hub, target.write_barrier, snapshot);
@@ -716,68 +755,6 @@ fn stream_new_design_route<W: Write>(
         }
         Err(e) => write_error_event(out, &e.to_string()),
     }
-}
-
-struct WebDesignDocSink<'a> {
-    state: &'a Mutex<WebCanvasState>,
-    hub: &'a SseHub,
-    write_barrier: Option<&'a crate::web_canvas_server::WriteBarrier>,
-    mirror: EditorState,
-}
-
-impl<'a> WebDesignDocSink<'a> {
-    fn new(
-        state: &'a Mutex<WebCanvasState>,
-        hub: &'a SseHub,
-        write_barrier: Option<&'a crate::web_canvas_server::WriteBarrier>,
-        mirror: EditorState,
-    ) -> Self {
-        Self {
-            state,
-            hub,
-            write_barrier,
-            mirror,
-        }
-    }
-}
-
-impl DocSink for WebDesignDocSink<'_> {
-    fn state(&self) -> &EditorState {
-        &self.mirror
-    }
-
-    fn apply(&mut self, cmd: EditorCommand) -> bool {
-        let Ok(_write_pass) = admit_document_write(self.write_barrier) else {
-            return false;
-        };
-        let (applied, tick, snapshot) = {
-            let mut guard = self.state.lock().unwrap_or_else(|p| p.into_inner());
-            let applied = guard
-                .apply_gated(cmd, op_editor_core::CollabEditSource::Ai)
-                .unwrap_or(false);
-            let tick = if applied {
-                crate::design_session::fit_design_viewport_to_content(
-                    &mut guard.editor,
-                    1440.0,
-                    900.0,
-                );
-                guard.version += 1;
-                Some(guard.sse_tick())
-            } else {
-                None
-            };
-            (applied, tick, guard.editor.clone())
-        };
-        self.mirror = snapshot;
-        if let Some(tick) = tick {
-            self.hub.broadcast(tick);
-        }
-        applied
-    }
-
-    fn begin_undo_batch(&mut self) {}
-
-    fn end_undo_batch(&mut self) {}
 }
 
 #[cfg(test)]

@@ -16,8 +16,8 @@ use op_editor_core::EditorState;
 use op_editor_host_core::design::{DesignCmdReq, DesignDelta, DesignSession, RemoteDocSink};
 use op_orchestrator::variants::VariantPlan;
 use op_orchestrator::{
-    AbortFlag, DesignRequest, LlmClient, Progress, SkippedScreenshotProvider,
-    SkippedVisionLlmClient, ValidationProviders,
+    AbortFlag, DesignRequest, DocSink, LlmClient, OrchestratorError, Progress, RunSummary,
+    SkippedScreenshotProvider, SkippedVisionLlmClient, ValidationProviders,
 };
 
 use crate::chat_runtime::block_on_anywhere;
@@ -88,6 +88,72 @@ fn run_variants_worker<L: LlmClient + Send>(
     vision_provider: Option<Arc<dyn ChatProvider>>,
 ) {
     let mut sink = RemoteDocSink::new(cmd_tx, initial_state.clone());
+    let summary = {
+        let mut on_progress = |event: Progress| {
+            let _ = delta_tx.send(DesignDelta::Progress(event));
+        };
+        drive_design_variants(
+            VariantsRun {
+                request: &request,
+                plans: &plans,
+                base_state: &initial_state,
+                abort: &abort,
+                indicator_epoch: Some(indicator_epoch),
+                vision_provider,
+            },
+            &llm,
+            &mut sink,
+            &mut on_progress,
+        )
+    };
+    let _ = delta_tx.send(DesignDelta::Done(summary));
+}
+
+/// Localize the plans' display names (`方案 A`, `Direction A`, …). The
+/// name is also stamped on every board a direction lands, so each host
+/// localizes with the locale of the user who asked for the run.
+pub fn localize_variant_plans(plans: &mut [VariantPlan], locale: op_editor_core::Locale) {
+    for plan in plans {
+        let letter = op_editor_core::variant_letter(plan.index).to_string();
+        plan.name =
+            op_i18n::translate_with(locale, "workspace.variants.name", &[("letter", &letter)]);
+    }
+}
+
+/// Everything one variants run is about, apart from where its boards and
+/// progress go.
+pub struct VariantsRun<'a> {
+    pub request: &'a DesignRequest,
+    pub plans: &'a [VariantPlan],
+    /// The document the directions start from (each gets a private copy
+    /// with the active page emptied).
+    pub base_state: &'a EditorState,
+    pub abort: &'a AbortFlag,
+    /// The host's agent-indicator epoch, adopted by every direction.
+    pub indicator_epoch: Option<u64>,
+    /// Same meaning as in [`start_variants`]: the Class-C vision loop runs
+    /// per direction only when supplied AND `OPENPENCIL_VISION_VALIDATION=1`.
+    pub vision_provider: Option<Arc<dyn ChatProvider>>,
+}
+
+/// Run every direction to completion on the calling thread, landing each
+/// one through `sink` as it finishes. The desktop worker above lands
+/// through its `RemoteDocSink`; the serve-web daemon lands straight into
+/// the document it serves.
+pub fn drive_design_variants(
+    run: VariantsRun<'_>,
+    llm: &dyn LlmClient,
+    sink: &mut dyn DocSink,
+    on_progress: &mut dyn FnMut(Progress),
+) -> Result<RunSummary, OrchestratorError> {
+    let VariantsRun {
+        request,
+        plans,
+        base_state,
+        abort,
+        indicator_epoch,
+        vision_provider,
+    } = run;
     let pre_validator = LintPreValidator;
     let real = vision_provider
         .filter(|_| vision_validation_enabled())
@@ -114,21 +180,15 @@ fn run_variants_worker<L: LlmClient + Send>(
         vision,
         system_prompt,
     };
-    let summary = {
-        let mut on_progress = |event: Progress| {
-            let _ = delta_tx.send(DesignDelta::Progress(event));
-        };
-        block_on_anywhere(op_orchestrator::variants_run::run_design_variants(
-            &request,
-            &plans,
-            &initial_state,
-            &llm,
-            &mut sink,
-            &mut on_progress,
-            &abort,
-            &providers,
-            Some(indicator_epoch),
-        ))
-    };
-    let _ = delta_tx.send(DesignDelta::Done(summary));
+    block_on_anywhere(op_orchestrator::variants_run::run_design_variants(
+        request,
+        plans,
+        base_state,
+        llm,
+        sink,
+        on_progress,
+        abort,
+        &providers,
+        indicator_epoch,
+    ))
 }

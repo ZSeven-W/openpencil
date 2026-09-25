@@ -27,8 +27,9 @@ pub use reader::{
     infer_reading_family, reader_is_paged, reads_as_long_page, PageEditTarget, ReaderHit,
 };
 pub use variants::{
-    clamp_variant_count, pick_workspace_variant, variant_letter, variant_pick_commands,
-    WorkspaceVariant, DEFAULT_VARIANT_COUNT, MAX_VARIANT_COUNT,
+    clamp_variant_count, pick_workspace_variant, pin_home_brief_route, pin_workspace_retry_route,
+    use_workspace_variant, variant_letter, variant_pick_commands, WorkspaceVariant,
+    DEFAULT_VARIANT_COUNT, MAX_VARIANT_COUNT,
 };
 
 /// Workspace header height (back button, doc tile, title, actions).

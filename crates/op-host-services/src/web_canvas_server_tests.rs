@@ -595,9 +595,9 @@ fn unbinding_stops_save_from_writing_the_launch_file() {
         "{}",
         server.body
     );
-    // A local daemon serves `/api/ai/site-import`, so Home offers it.
+    // A local daemon serves site import and directions; Home offers both.
     assert!(
-        server.body.contains(r#""siteImport":true"#),
+        server.body.contains(r#""siteImport":true,"variants":true"#),
         "{}",
         server.body
     );

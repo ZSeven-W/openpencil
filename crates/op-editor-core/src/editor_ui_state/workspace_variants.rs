@@ -115,6 +115,68 @@ impl WorkspaceState {
     pub fn variant_pick_enabled(&self) -> bool {
         self.active && !self.variants.is_empty() && self.phase != super::WorkspacePhase::Generating
     }
+
+    /// Record a direction a variants run reports as landed. Returns whether
+    /// the workspace changed (nothing is recorded without an open
+    /// workspace). Every host folds the run's landing reports through this,
+    /// whichever transport carried them.
+    pub fn adopt_landed_variant(&mut self, variant: WorkspaceVariant) -> bool {
+        if !self.active {
+            return false;
+        }
+        if !self.is_variants_run() {
+            // A variants run launched from outside the workspace flow
+            // still records its directions under the count it reports.
+            self.variant_count = DEFAULT_VARIANT_COUNT;
+        }
+        self.record_variant(variant);
+        true
+    }
+}
+
+/// Pin a Studio Home brief's launch route. Home briefs are whole-design
+/// requests (the orchestrator pipeline); with the directions toggle on
+/// and offered, the brief becomes [`DEFAULT_VARIANT_COUNT`] side-by-side
+/// directions and the workspace is told to expect them.
+pub fn pin_home_brief_route(state: &mut EditorState) {
+    state.chat.launch_route = crate::LaunchRoute::Orchestrator;
+    let home = &state.editor_ui.home;
+    if home.variants_on && !home.variants_unavailable {
+        let count = DEFAULT_VARIANT_COUNT;
+        state.editor_ui.workspace.begin_variants(count);
+        state.chat.launch_route = crate::LaunchRoute::Variants(count);
+    }
+}
+
+/// Pin a workspace retry's launch route: the orchestrator again, and a
+/// side-by-side run retries as one — the same number of directions.
+pub fn pin_workspace_retry_route(state: &mut EditorState) {
+    state.chat.launch_route = crate::LaunchRoute::Orchestrator;
+    let workspace = &mut state.editor_ui.workspace;
+    if workspace.is_variants_run() {
+        let count = workspace.variant_count;
+        workspace.begin_variants(count);
+        state.chat.launch_route = crate::LaunchRoute::Variants(count);
+    }
+}
+
+/// The host-free half of a direction's "use this" press: keep direction
+/// `index` (see [`pick_workspace_variant`]) and reset the workspace camera
+/// bookkeeping so the host refits the direction that stayed. `None` when
+/// the pick is not offered right now; otherwise whether the document
+/// changed.
+pub fn use_workspace_variant(state: &mut EditorState, index: usize) -> Option<bool> {
+    if !state.editor_ui.workspace.variant_pick_enabled() {
+        return None;
+    }
+    let other_page = op_i18n::translate(state.editor_ui.locale, "workspace.variants.otherPage");
+    let changed = pick_workspace_variant(state, index, other_page);
+    let workspace = &mut state.editor_ui.workspace;
+    workspace.view = super::WorkspaceView::default_for(workspace.family);
+    workspace.selected = 0;
+    workspace.fitted_board_count = 0;
+    workspace.fitted_bounds = None;
+    Some(changed)
 }
 
 /// Keep direction `index` as the working design.

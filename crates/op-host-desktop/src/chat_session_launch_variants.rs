@@ -11,10 +11,11 @@
 use std::sync::Arc;
 
 use op_ai::chat_provider::ChatProvider;
-use op_editor_core::{variant_letter, LaunchRoute};
+use op_editor_core::LaunchRoute;
 use op_host_native::WidgetHostNative;
 use op_host_services::chat_provider_llm::ChatProviderLlmClient;
-use op_orchestrator::variants::{choose_variant_style_guides, VariantPlan};
+use op_host_services::design_variants::localize_variant_plans;
+use op_orchestrator::variants::choose_variant_style_guides;
 
 use super::launch_design::stamp_design_turn_scenario;
 use super::{
@@ -23,15 +24,6 @@ use super::{
 };
 use crate::chat_session::ChatSession;
 use op_editor_host_core::design::DesignSession;
-
-/// Localize the plans' display names (`方案 A`, `Direction A`, …).
-pub(crate) fn localize_variant_plans(plans: &mut [VariantPlan], locale: op_editor_core::Locale) {
-    for plan in plans {
-        let letter = variant_letter(plan.index).to_string();
-        plan.name =
-            op_i18n::translate_with(locale, "workspace.variants.name", &[("letter", &letter)]);
-    }
-}
 
 /// Launch a variants turn for `count` directions. Returns `false` (and
 /// launches nothing) when the selected agent has no provider bridge — the

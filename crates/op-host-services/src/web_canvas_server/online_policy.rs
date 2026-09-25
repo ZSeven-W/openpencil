@@ -66,6 +66,15 @@ impl ServeMode {
         !self.is_online()
     }
 
+    /// Side-by-side design directions on `/api/ai/standard`
+    /// (`launchRoute:"variants"`). One such turn is N complete orchestrator
+    /// runs in flight at once; a shared deployment keeps that off until it
+    /// has per-account concurrency accounting, and runs the brief as one
+    /// design instead.
+    pub const fn allows_design_variants(self) -> bool {
+        !self.is_online()
+    }
+
     /// Whether a settings mutation may be written to the process-wide
     /// settings file. There is one such file for the whole process, so a
     /// shared deployment would let any account overwrite every other
