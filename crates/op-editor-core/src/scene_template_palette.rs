@@ -81,18 +81,22 @@ fn memo() -> &'static RwLock<Memo> {
     &MEMO
 }
 
-/// How many documents have been parsed since the process started.
+/// How many documents THIS thread has parsed.
 ///
 /// The memo is the whole reason this module exists, and a memo that silently
 /// stops working costs a JSON parse per card per frame while every assertion
 /// about the *colours* still passes. This counter is what lets a test see the
-/// difference.
+/// difference. It is per thread because lookups parse synchronously on the
+/// caller's thread: a process-wide count let another test parsing a
+/// different template in parallel fail the memo test at random.
 #[cfg(test)]
 pub(crate) fn palette_parse_count() -> u64 {
-    PARSE_COUNT.load(std::sync::atomic::Ordering::Relaxed)
+    PARSE_COUNT.with(std::cell::Cell::get)
 }
 
-static PARSE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+thread_local! {
+    static PARSE_COUNT: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
 
 /// Read a palette out of one document's JSON.
 ///
@@ -100,7 +104,7 @@ static PARSE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64:
 /// only through the memo, which would let a fixture leak into a shipped id's
 /// cached answer.
 pub(crate) fn extract_palette(document: &str) -> Vec<String> {
-    PARSE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    PARSE_COUNT.with(|count| count.set(count.get() + 1));
     let Ok(parsed) = serde_json::from_str::<PaletteDocument>(document) else {
         return Vec::new();
     };
