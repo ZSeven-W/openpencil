@@ -5,13 +5,18 @@
 usage: cjkcheck.py <file.op>
 """
 import json
+import os
 import pathlib
 import shutil
 import subprocess
 import sys
 import tempfile
 
-BIN = "/Users/fini/workspace/openpencil/target/release/openpencil-desktop"
+# OP_BIN_DIR points at another profile / worktree (e.g. target/debug).
+BIN = str(pathlib.Path(os.environ.get(
+    "OP_BIN_DIR",
+    pathlib.Path(__file__).resolve().parents[4] / "target" / "release"))
+    / "openpencil-desktop")
 # 行首禁则：这些字符不允许出现在行首
 NO_LINE_START = "，。、；：？！）」』】》〉·…—"
 

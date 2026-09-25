@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -44,7 +45,8 @@ import tempfile
 # qa/ 比 _generators/ 深一级，所以是 parents[4] 而不是 scene_preview_cards.py
 # 用的 parents[3]。算错一级不会报错，只会让 glob 落空、审计静默地零套通过。
 REPO = pathlib.Path(__file__).resolve().parents[4]
-BIN = REPO / "target" / "release" / "openpencil-desktop"
+# OP_BIN_DIR points at another profile (e.g. target/debug).
+BIN = pathlib.Path(os.environ.get("OP_BIN_DIR", REPO / "target" / "release")) / "openpencil-desktop"
 DOCS = REPO / "crates" / "op-editor-core" / "assets" / "scene_templates"
 PREVIEWS = REPO / "templates" / "step0" / "previews"
 CARDS_DIR = REPO / "crates" / "op-editor-ui" / "assets" / "scene_template_previews"

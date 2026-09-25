@@ -2,8 +2,9 @@
 """把 cjkcheck 的报告与 snapshot_layout 的实测行数交叉：
 真实行数 == 硬换行数 => 根本没发生自动折行 => 该报告是保守模拟的误报。
 只留真正折了行的节点。"""
-import json, re, shutil, subprocess, sys, pathlib, tempfile
-BIN="/Users/fini/workspace/openpencil/target/release/openpencil-desktop"
+import json, os, re, shutil, subprocess, sys, pathlib, tempfile
+# OP_BIN_DIR points at another profile / worktree (e.g. target/debug).
+BIN=str(pathlib.Path(os.environ.get("OP_BIN_DIR",pathlib.Path(__file__).resolve().parents[4]/"target"/"release"))/"openpencil-desktop")
 TOOL=str(pathlib.Path(__file__).resolve().parent / "cjkcheck.py")
 def snap(path):
     req=[{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}},
