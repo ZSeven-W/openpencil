@@ -266,11 +266,13 @@ fn status_bar_subtree_is_untouched() {
 /// arena-m03 minimized: a 48px fixed-width "¥ 268,540.32" hero amount in a
 /// 327px card with 14px padding. The layout wrapped it after the currency
 /// symbol ("¥" / "268,540.32"); the measured amount path must shrink it back
-/// onto one line inside the 299px it was given.
+/// onto one line inside the width it was given. The fixture narrows the
+/// screen to 300px so the wrap reproduces even where "DM Mono" is missing
+/// and a narrower fallback face measures the amount (CI runners).
 #[test]
 fn wrapped_currency_amount_is_measured_back_onto_one_line() {
     let tree = json!({
-        "type": "frame", "id": "root", "width": 375, "height": 400,
+        "type": "frame", "id": "root", "width": 300, "height": 400,
         "layout": "vertical", "padding": [0, 24],
         "children": [{
             "type": "frame", "id": "card", "width": "fill_container",

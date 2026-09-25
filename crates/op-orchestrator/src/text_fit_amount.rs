@@ -108,7 +108,7 @@ pub(super) fn collect_measured_amount_fixes(
         }
     }
     let natural = resolved_rects(&scratch);
-    let mut cmds = Vec::new();
+    let mut fits: Vec<(String, f64, f64, f64)> = Vec::new();
     for (text, available) in candidates {
         let Some(id) = text.get("id").and_then(Value::as_str) else {
             continue;
@@ -127,11 +127,47 @@ pub(super) fn collect_measured_amount_fixes(
             continue;
         }
         if let Some(size) = fitted_font_size(font_size, available, width) {
-            cmds.push(EditorCommand::SetNodeFontSize {
-                node_id: NodeId::new(id.to_string()),
-                font_size: size as f32,
-            });
+            fits.push((id.to_string(), size, available, font_size));
         }
     }
-    cmds
+    verify_fitted_sizes(&mut scratch, &mut fits);
+    fits.into_iter()
+        .map(|(id, size, _, _)| EditorCommand::SetNodeFontSize {
+            node_id: NodeId::new(id),
+            font_size: size as f32,
+        })
+        .collect()
+}
+
+/// The proportional estimate assumes width scales with the font size, but
+/// letter spacing is a fixed per-glyph offset and hinting / fallback faces
+/// do not scale linearly either — a size that "fits" by the ratio can still
+/// wrap. Re-measure the chosen sizes on the scratch copy and step each
+/// still-overflowing token down a pixel at a time (bounded, never below the
+/// estimate's floor).
+fn verify_fitted_sizes(scratch: &mut EditorState, fits: &mut [(String, f64, f64, f64)]) {
+    const MAX_STEPS: usize = 6;
+    for _ in 0..MAX_STEPS {
+        for (id, size, _, _) in fits.iter() {
+            scratch.apply(EditorCommand::SetNodeFontSize {
+                node_id: NodeId::new(id.clone()),
+                font_size: *size as f32,
+            });
+        }
+        let measured = resolved_rects(scratch);
+        let mut stepped = false;
+        for (id, size, available, original) in fits.iter_mut() {
+            let minimum = if *original >= 32.0 { 24.0 } else { 12.0 };
+            let over = measured
+                .get(id.as_str())
+                .is_some_and(|r| r.w.is_finite() && r.w > *available + TEXT_FIT_EPS);
+            if over && *size - 1.0 >= minimum {
+                *size -= 1.0;
+                stepped = true;
+            }
+        }
+        if !stepped {
+            break;
+        }
+    }
 }
