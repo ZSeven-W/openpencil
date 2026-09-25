@@ -245,17 +245,21 @@ pub(super) fn normalize_category_icon_tile(item: &mut Value, active: bool) {
     tile["layout"] = json!("horizontal");
     tile["justifyContent"] = json!("center");
     tile["alignItems"] = json!("center");
+    // Theme tokens, never literals: this pass runs on every mobile design,
+    // and hard-coded warm peach / brown (a food-app palette) painted the same
+    // tiles into blue, green and dark directions alike — and a literal white
+    // tile glared on dark themes.
     if active {
-        tile["fill"] = solid_fill("#FFF0E3");
+        tile["fill"] = solid_fill("$--accent");
         if let Some(obj) = tile.as_object_mut() {
             obj.remove("stroke");
             obj.remove("effects");
         }
         set_subtree_foreground(tile, "$--primary");
     } else {
-        tile["fill"] = solid_fill("#FFFFFF");
-        tile["stroke"] = neutral_stroke("#EAD8C8");
-        set_subtree_foreground(tile, "#8A5F49");
+        tile["fill"] = solid_fill("$--card");
+        tile["stroke"] = neutral_stroke("$--border");
+        set_subtree_foreground(tile, "$--muted-foreground");
     }
 }
 

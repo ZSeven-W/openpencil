@@ -361,8 +361,8 @@ fn category_icon_tiles_inside_food_rows_are_compact_and_light() {
     assert_eq!(active_tile["cornerRadius"], json!(8));
     assert_eq!(
         active_tile["fill"],
-        json!([{"type":"solid","color":"#FFF0E3"}]),
-        "the selected category gets only a subtle warm tint"
+        json!([{"type":"solid","color":"$--accent"}]),
+        "the selected category gets the theme's soft accent, not a fixed tint"
     );
     assert!(
         active_tile.get("stroke").is_none(),
@@ -379,15 +379,15 @@ fn category_icon_tiles_inside_food_rows_are_compact_and_light() {
     assert_eq!(inactive_tile["cornerRadius"], json!(8));
     assert_eq!(
         inactive_tile["fill"],
-        json!([{"type":"solid","color":"#FFFFFF"}])
+        json!([{"type":"solid","color":"$--card"}])
     );
     assert_eq!(
         inactive_tile["stroke"],
-        json!({"thickness":1,"fill":[{"type":"solid","color":"#EAD8C8"}]})
+        json!({"thickness":1,"fill":[{"type":"solid","color":"$--border"}]})
     );
     assert_eq!(
         inactive_tile["children"][0]["fill"],
-        json!([{"type":"solid","color":"#8A5F49"}])
+        json!([{"type":"solid","color":"$--muted-foreground"}])
     );
 }
 
