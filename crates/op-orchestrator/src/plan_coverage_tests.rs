@@ -522,3 +522,24 @@ fn coverage_check_reports_the_source_per_section() {
     );
     assert_eq!(check.covered_by_line(), "hero(covers) pricing(text)");
 }
+
+/// arena-m01 (GLM-5.3-Flash): a three-page delivery brief planned every
+/// section under its page's `screen`, yet the gate listed 商家详情页 as
+/// missing and re-planned, and the re-plan came back missing two pages.
+#[test]
+fn a_page_named_by_the_brief_is_covered_by_its_screen() {
+    let on = |id: &str, label: &str, screen: &str| {
+        let mut st = subtask(id, label, None);
+        st.screen = Some(screen.into());
+        st
+    };
+    let plan = plan(vec![
+        on("home-header", "顶部地址与搜索", "首页"),
+        on("store-hero", "商家头图与评分行", "商家详情"),
+        on("dish-list", "菜品列表", "商家详情"),
+        on("fee-summary", "费用明细", "订单确认页"),
+    ]);
+    let required = vec!["商家详情页".to_string(), "订单确认页".to_string()];
+    let check = check_coverage(&required, &plan);
+    assert!(check.missing.is_empty(), "{:?}", check.missing);
+}

@@ -161,9 +161,49 @@ pub(crate) fn label_names_section(section: &str, label: &str) -> bool {
     label_chars.len() * 10 >= total * 6
 }
 
+/// Whether a required `section` is really a page the plan put its subtasks
+/// on. A multi-screen brief names its pages (`商家详情页`, `订单确认页`) and
+/// the planner files the sections of each page under a `screen` — the page
+/// itself is never a subtask of its own, so matching labels and elements
+/// alone reported every page after the first as missing and re-planned.
+pub(crate) fn screen_names_section(section: &str, screen: &str) -> bool {
+    let strip = |text: &str| -> String {
+        let mut text: String = text
+            .chars()
+            .filter(|ch| !ch.is_whitespace())
+            .flat_map(char::to_lowercase)
+            .collect();
+        for suffix in ["页面", "页", "screen", "page"] {
+            if let Some(head) = text.strip_suffix(suffix) {
+                text = head.to_string();
+                break;
+            }
+        }
+        text
+    };
+    let (section, screen) = (strip(section), strip(screen));
+    let han = section
+        .chars()
+        .filter(|ch| crate::plan_coverage::is_han(*ch))
+        .count();
+    !section.is_empty()
+        && (section == screen
+            || (han >= 2 && screen.contains(&section))
+            || label_names_section(&section, &screen))
+}
+
 #[cfg(test)]
 mod label_names_section_tests {
     use super::label_names_section;
+
+    #[test]
+    fn a_page_name_matches_the_screen_its_sections_sit_on() {
+        use super::screen_names_section;
+        assert!(screen_names_section("商家详情页", "商家详情"));
+        assert!(screen_names_section("订单确认页", "订单确认页"));
+        assert!(screen_names_section("首页", "首页"));
+        assert!(!screen_names_section("商家详情页", "订单确认"));
+    }
 
     #[test]
     fn position_words_may_sit_on_either_side() {
