@@ -82,6 +82,12 @@ pub(super) fn apply_intent_root_transform(
     apply_root_transform(sink, root_id, transform)
 }
 
+/// Whether an intent-tier `pass` may run on this document — `false` on
+/// authored input (a template or an imported site) the tier defers to.
+pub(super) fn intent_allows(sink: &mut dyn DocSink, pass: TieredPass) -> bool {
+    RepairTierPolicy::for_document(sink.state()).runs_pass(pass)
+}
+
 /// [`apply_intent_root_transform`] for the wrapper-double-inset stripper, the
 /// intent-tier pass the driver runs twice (before and after the mobile chrome /
 /// content-rail passes). Named here rather than spelled out at both call sites

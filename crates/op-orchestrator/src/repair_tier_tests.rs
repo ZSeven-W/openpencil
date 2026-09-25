@@ -35,6 +35,9 @@ fn intent_passes_defer_to_authored_input() {
         TieredPass::SurfaceColorDiscipline,
         TieredPass::VariableBinding,
         TieredPass::TreeHeuristics,
+        TieredPass::HeroBleed,
+        TieredPass::MotionRecipes,
+        TieredPass::OverboldTextHierarchy,
     ] {
         assert_eq!(pass.tier(), RepairTier::Intent, "{pass:?}");
         assert!(!policy.runs_pass(pass), "{pass:?}");

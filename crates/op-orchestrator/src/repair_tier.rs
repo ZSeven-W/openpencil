@@ -87,6 +87,17 @@ pub enum TieredPass {
     /// decoration heuristics (redundant section fill strip, nested-card
     /// decoration strip, invisible-band fill).
     TreeHeuristics,
+    /// `hero_bleed::enforce` — pulls a hero's media to the page edges. An
+    /// authored inset hero is a composition choice, not a defect.
+    HeroBleed,
+    /// `motion_recipes::apply` — adds entrance animations to sections and
+    /// cards. It staggers identical cards apart, and authored work ships the
+    /// motion it was designed with.
+    MotionRecipes,
+    /// `cleanup_typography::repair_overbold_text_hierarchy` — lowers heading
+    /// weights to rebuild a hierarchy. An imported site's 700-weight type is
+    /// its brand, not an accident.
+    OverboldTextHierarchy,
 
     // ── Contract ────────────────────────────────────────────────────────
     /// `geometry_validation::geometry_validate_and_fix` — runs the real layout
@@ -111,7 +122,10 @@ impl TieredPass {
             | TieredPass::StructuralWrapperTransparency
             | TieredPass::SurfaceColorDiscipline
             | TieredPass::VariableBinding
-            | TieredPass::TreeHeuristics => RepairTier::Intent,
+            | TieredPass::TreeHeuristics
+            | TieredPass::HeroBleed
+            | TieredPass::MotionRecipes
+            | TieredPass::OverboldTextHierarchy => RepairTier::Intent,
             TieredPass::GeometryValidation
             | TieredPass::TextCollision
             | TieredPass::TextContrast

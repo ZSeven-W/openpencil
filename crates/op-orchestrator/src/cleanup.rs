@@ -73,6 +73,7 @@ pub(crate) use sibling_style_drift::structural_signature;
 #[path = "finalize_enforce_status_bar.rs"]
 mod finalize_enforce_status_bar;
 
+use crate::repair_tier::TieredPass;
 use category_grid_density::repair_category_grid_density;
 use cleanup_bottom_nav_repairs::*;
 use cleanup_clip_row_stroke::*;
@@ -501,13 +502,17 @@ fn run_cleanup_passes_with_summary_and_policy(
         // detectors, so it only ever fired for a user running
         // `lint_document` by hand.
         crate::text_contrast_repair::repair_text_contrast(sink, &rid);
-        crate::hero_bleed::enforce(sink, plan, &rid);
+        if intent_allows(sink, TieredPass::HeroBleed) {
+            crate::hero_bleed::enforce(sink, plan, &rid);
+        }
         counter.checkpoint(summary, CheckCategory::Structure, "hero-bleed");
         repair_category_grid_density(sink, &rid);
         counter.checkpoint(summary, CheckCategory::Structure, "category-grid-density");
         cleanup_empty_content_bar::remove_empty_content_bars(sink, &rid);
         counter.checkpoint(summary, CheckCategory::Structure, "empty-content-bar");
-        motion_recipes::apply(sink, &rid);
+        if intent_allows(sink, TieredPass::MotionRecipes) {
+            motion_recipes::apply(sink, &rid);
+        }
         counter.checkpoint(summary, CheckCategory::Structure, "motion-recipes");
         // Section-margin ownership (DS P1.5) runs BEFORE the wrapper-double-inset
         // stripper below: unifying first hands the stripper the group already
@@ -590,7 +595,9 @@ fn run_cleanup_passes_with_summary_and_policy(
         cleanup_mobile_dense::repair_dense_mobile_rows(sink, rid);
         cleanup_desktop_dashboard::repair_sparse_desktop_dashboard_rows(sink, plan, rid);
         counter.checkpoint(summary, CheckCategory::Layout, "mobile-chrome+content-rail");
-        repair_overbold_text_hierarchy(sink, rid);
+        if intent_allows(sink, TieredPass::OverboldTextHierarchy) {
+            repair_overbold_text_hierarchy(sink, rid);
+        }
         strip_decorative_filled_strokes(sink, rid);
         counter.checkpoint(summary, CheckCategory::Hierarchy, "text-hierarchy+strokes");
         crate::radial_repair::repair_radial_stacks(sink, rid);
