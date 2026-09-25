@@ -470,6 +470,13 @@ fn run_cleanup_passes_with_summary_and_policy(
         // [bell icon, 8px square] flow pairs → round the dot and pin it on
         // the icon's top-right corner.
         rid = apply_root_transform(sink, &rid, crate::chip_repair::adopt_notification_dots);
+        // A radio group squeezed into a single-row box paints its options on
+        // top of each other → re-type it as the segmented control it is sized as.
+        rid = apply_root_transform(
+            sink,
+            &rid,
+            crate::radio_segment_repair::segment_single_row_radio_groups,
+        );
         // A progress ring's track + progress arc authored as FLEX SIBLINGS of a
         // general container (a padded card, a section with its own heading) →
         // extract them into a dedicated concentric `layout:none` wrapper.

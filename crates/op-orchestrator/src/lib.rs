@@ -129,6 +129,7 @@ pub mod output_language;
 pub mod prompt;
 pub mod quality_audit;
 pub mod radial_repair;
+pub(crate) mod radio_segment_repair;
 pub mod repair_record;
 pub mod repair_scope;
 pub mod repair_summary;
