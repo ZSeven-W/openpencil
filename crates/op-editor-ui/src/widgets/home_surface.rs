@@ -292,6 +292,30 @@ impl<'a> HomeSurface<'a> {
             && self.send_mode() == op_editor_core::HomeSendMode::UseExample
     }
 
+    /// The i18n key of the tooltip floating over the Send button, if any:
+    /// a website import's timed failure, the import explanation while a
+    /// link-only draft's button is hovered, else the example hint.
+    pub fn send_hint_key(&self) -> Option<&'static str> {
+        let import = &self.state.site_import;
+        if import.hint_visible(self.now_ms) {
+            return Some("home.siteImport.failed");
+        }
+        let hovered = self.state.hover == Some(HomeHit::Send);
+        if hovered
+            && !import.is_importing()
+            && self.send_mode() == op_editor_core::HomeSendMode::ImportSite
+        {
+            return Some("home.siteImport.hint");
+        }
+        self.send_example_hint_visible()
+            .then_some("home.submit.exampleHint")
+    }
+
+    /// The Send label's i18n key for the current mode.
+    pub fn send_label_key(&self) -> &'static str {
+        copy::send_label_key(self.send_mode(), self.state.site_import.is_importing())
+    }
+
     /// The brand chip and its remove button, when a brand is being read or
     /// is staged (`None` otherwise).
     pub fn brand_chip_rects(

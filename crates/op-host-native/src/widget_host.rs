@@ -123,6 +123,7 @@ mod history_guard;
 mod home;
 mod home_brand;
 mod home_document_swap;
+mod home_site_import;
 pub use home_document_swap::ReplacedHomeDocument;
 mod home_overlays;
 mod home_quick_start;

@@ -209,11 +209,15 @@ pub(crate) fn task_icon(family: HomeFamily) -> crate::widgets::icons::Icon {
 /// The Send button's label for what the press will actually do — the
 /// wide and compact composers both read it so the two faces of one button
 /// cannot drift.
-pub(crate) fn send_label_key(mode: op_editor_core::HomeSendMode) -> &'static str {
+/// `importing` is a website import already running (the button then
+/// says so instead of offering a second one).
+pub(crate) fn send_label_key(mode: op_editor_core::HomeSendMode, importing: bool) -> &'static str {
     match mode {
         op_editor_core::HomeSendMode::Start => "home.submit.start",
         op_editor_core::HomeSendMode::UseExample => "home.submit.example",
         op_editor_core::HomeSendMode::Connect => "home.submit.connect",
+        op_editor_core::HomeSendMode::ImportSite if importing => "home.siteImport.running",
+        op_editor_core::HomeSendMode::ImportSite => "home.siteImport.action",
     }
 }
 

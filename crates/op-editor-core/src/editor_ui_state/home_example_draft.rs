@@ -29,6 +29,10 @@ pub enum HomeSendMode {
     UseExample,
     /// Nothing can run: open the connect card (接入模型).
     Connect,
+    /// The box holds only a link and this host can import websites:
+    /// import the page as an editable design (导入这个网站). Needs no
+    /// model, so it outranks Connect.
+    ImportSite,
 }
 
 /// The scene template the example brief of `family` (with the task's
@@ -123,6 +127,11 @@ impl HomeState {
     /// instead of a dead end. An example with no template still needs a
     /// model to generate it, so that case keeps today's connect card.
     pub fn send_mode(&self, example: &str, usable_agent: bool) -> HomeSendMode {
+        if self.site_import.available
+            && super::home::site_import::site_import_url(&self.draft).is_some()
+        {
+            return HomeSendMode::ImportSite;
+        }
         if self.draft_uses_example(example) {
             if self.example_draft_template().is_some() || usable_agent {
                 return HomeSendMode::UseExample;

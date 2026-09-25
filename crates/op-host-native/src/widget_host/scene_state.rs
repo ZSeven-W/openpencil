@@ -321,12 +321,20 @@ impl WidgetHostNative {
     /// the brief being sent, so they cross the swap instead of being
     /// cleared with the old transcript.
     pub fn start_fresh_document_for_home(&mut self) -> bool {
-        self.park_document_replaced_by_home();
         let starter = op_editor_core::EditorState::starter();
-        if self
-            .install_open_document(starter.doc.clone(), None, None)
-            .is_err()
-        {
+        self.swap_in_document_for_home(starter.doc.clone())
+    }
+
+    /// The one Home document swap: park the open document for the shell,
+    /// install `document`, and start a fresh transcript.
+    /// `start_fresh_document_for_home` swaps in the starter; a website
+    /// import swaps in the imported site.
+    pub(in crate::widget_host) fn swap_in_document_for_home(
+        &mut self,
+        document: jian_ops_schema::PenDocument,
+    ) -> bool {
+        self.park_document_replaced_by_home();
+        if self.install_open_document(document, None, None).is_err() {
             self.replaced_home_document = None;
             return false;
         }

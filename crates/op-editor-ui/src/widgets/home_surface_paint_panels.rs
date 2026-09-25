@@ -355,7 +355,7 @@ pub(super) fn paint_composer(
             fade(palette.blue, 0.16),
         );
     }
-    let send_label = copy::home_str(locale, copy::send_label_key(mode));
+    let send_label = copy::home_str(locale, surface.send_label_key());
     // "Start with example" and its translations run longer than 开始设计;
     // the label shrinks to fit the fixed slab rather than overflow it.
     let label_size =
@@ -384,21 +384,23 @@ pub(super) fn paint_composer(
         send_ink,
         2.0,
     );
-    if surface.send_example_hint_visible() {
-        paint_send_example_hint(surface, cx, send_rect, palette);
+    if let Some(key) = surface.send_hint_key() {
+        paint_send_example_hint(surface, cx, send_rect, palette, key);
     }
 }
 
-/// The hover hint over an empty-box Send: say that the example brief is
-/// what will run, so the one-click start is discoverable rather than a
-/// surprise. Right-aligned to the button so it never leaves the composer.
+/// The hint over Send (`key`, see `HomeSurface::send_hint_key`): e.g. on
+/// an empty box, that the example brief is what will run, so the one-click
+/// start is discoverable rather than a surprise. Right-aligned to the
+/// button so it never leaves the composer.
 pub(in crate::widgets) fn paint_send_example_hint(
     surface: &HomeSurface<'_>,
     cx: &mut PaintCx<'_>,
     anchor: Rect,
     palette: StudioPalette,
+    key: &'static str,
 ) {
-    let label = copy::home_str(surface.ui.locale, "home.submit.exampleHint");
+    let label = copy::home_str(surface.ui.locale, key);
     let w = cx.backend.measure_text_family(label, 11.0, SANS) + 20.0;
     let tooltip = Rect::xywh(
         anchor.origin.x + anchor.size.x - w,

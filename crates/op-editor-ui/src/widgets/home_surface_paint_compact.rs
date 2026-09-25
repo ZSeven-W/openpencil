@@ -485,7 +485,7 @@ fn paint_composer(
     };
     cx.backend.fill_round_rect(send, 10.0, fill);
     let send_ink = Color::WHITE;
-    let send_label = copy::home_str(locale, copy::send_label_key(mode));
+    let send_label = copy::home_str(locale, surface.send_label_key());
     let label_size = copy::fit_label_size(cx.backend, send_label, 13.0, send.size.x - 12.0 - 24.0);
     let label_w = cx.backend.measure_text_family(send_label, label_size, SANS);
     text_weighted(
@@ -510,8 +510,8 @@ fn paint_composer(
         send_ink,
         2.0,
     );
-    if surface.send_example_hint_visible() {
-        super::panels::paint_send_example_hint(surface, cx, send, palette);
+    if let Some(key) = surface.send_hint_key() {
+        super::panels::paint_send_example_hint(surface, cx, send, palette, key);
     }
 }
 

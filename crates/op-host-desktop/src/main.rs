@@ -102,6 +102,7 @@ mod scene_template_generate;
 mod scene_template_open;
 mod settings_io;
 mod single_instance;
+mod site_import_host;
 mod style_import_host;
 mod sub_agent_session;
 mod sub_agent_spawn_error;
@@ -331,6 +332,8 @@ struct DesktopApp {
     image_panel: image_panel_host::ImagePanelJobs,
     /// Studio Home 加链接 brand extractions running off the UI thread.
     brand_jobs: brand_extract_host::BrandJobs,
+    /// Studio Home one-click website imports running off the UI thread.
+    site_imports: site_import_host::SiteImportJobs,
     /// Background fetches for remote `http(s)` image sources the
     /// canvas painter recorded as cache misses — fetched bytes land in
     /// the painter's shared byte cache so the next frame draws them.

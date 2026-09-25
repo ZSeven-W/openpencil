@@ -256,8 +256,16 @@ impl WidgetHostNative {
             next = bookkeeping::earliest(next, self.now_ms.saturating_add(16));
         }
         // Home's 加链接 hint erases itself: wake once when it expires.
-        if let Some(at) = self.editor_state.editor_ui.home.brand.hint_deadline_ms() {
-            if at > self.now_ms && self.editor_state.editor_ui.home.visible {
+        // So does a failed website import's hint over Send.
+        let home = &self.editor_state.editor_ui.home;
+        for at in [
+            home.brand.hint_deadline_ms(),
+            home.site_import.hint_deadline_ms(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if at > self.now_ms && home.visible {
                 next = bookkeeping::earliest(next, at);
             }
         }

@@ -65,6 +65,11 @@ impl WidgetHost {
             }
             HomeSendMode::Start => self.queue_home_send(),
             HomeSendMode::UseExample => self.start_home_from_example(&example),
+            // The browser never advertises website import
+            // (`site_import.available` stays false: the daemon has no
+            // import route yet), so this mode is unreachable here; a link
+            // is then an ordinary brief.
+            HomeSendMode::ImportSite => self.queue_home_send(),
         }
     }
 

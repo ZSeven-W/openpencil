@@ -220,6 +220,8 @@ impl DesktopApp {
         should_paint |= crate::style_import_host::drain_pending_style_import(self);
         // Home's 加链接: start a queued brand extraction, land finished ones.
         should_paint |= self.brand_jobs.drain(&mut self.host);
+        // Home's link-only draft: start a queued website import, land it.
+        should_paint |= self.site_imports.drain(&mut self.host);
         // The Templates tab's saved-template delete: the disk half of removing
         // a template the panel has already taken out of the runtime registry.
         should_paint |=

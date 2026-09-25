@@ -130,6 +130,10 @@ const PASS_TOPICS: &[(&str, QualityTopic)] = &[
     ("mobile-chrome+content-rail", QualityTopic::Sizing),
     ("text-hierarchy+strokes", QualityTopic::Hierarchy),
     ("duplicate-root-dedupe", QualityTopic::Structure),
+    // Website import: repeated parts turned into one component + instances,
+    // and brand colours bound to the kit's variables.
+    ("site-import:components", QualityTopic::Consistency),
+    ("site-import:brand-binding", QualityTopic::Palette),
     ("app-shell+table-regroup", QualityTopic::Structure),
     ("chip+ring-extract", QualityTopic::Structure),
     ("hero-bleed", QualityTopic::Structure),

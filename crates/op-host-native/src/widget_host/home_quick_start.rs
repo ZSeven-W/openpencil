@@ -38,6 +38,7 @@ impl WidgetHostNative {
             }
             HomeSendMode::Start => self.queue_home_send(),
             HomeSendMode::UseExample => self.start_home_from_example(&example),
+            HomeSendMode::ImportSite => self.home_site_import_press(),
         }
     }
 
