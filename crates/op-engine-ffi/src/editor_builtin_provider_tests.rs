@@ -101,7 +101,7 @@ fn default_low_effort_does_not_override_reasoning_or_anthropic_system_shape() {
     };
     assert!(!reduce_reasoning(&request));
 
-    let openai = openai_request_body(&request, "deepseek-v4");
+    let openai = openai_request_body(&request, "deepseek-v4", DEEPSEEK_URL);
     assert_eq!(openai.pointer("/messages/0/role"), Some(&json!("system")));
     assert!(openai.get("thinking").is_none());
     assert!(openai.get("reasoning_effort").is_none());
@@ -117,6 +117,36 @@ fn default_low_effort_does_not_override_reasoning_or_anthropic_system_shape() {
         .all(|message| message.get("role") != Some(&json!("system"))));
 }
 
+const DEEPSEEK_URL: &str = "https://api.deepseek.com/chat/completions";
+const OPENROUTER_URL: &str = "https://openrouter.ai/api/v1/chat/completions";
+
+/// Design turns (thinking disabled) sent to OpenRouter carry the unified
+/// `reasoning: {effort: "low"}` control, exactly like `chat_builtin_http`.
+#[test]
+fn openrouter_design_turns_ask_for_low_reasoning_effort() {
+    let design_turn = ChatRequest {
+        thinking: ThinkingMode::Disabled,
+        ..ChatRequest::default()
+    };
+    let body = openai_request_body(&design_turn, "stealth/space-bunny-alpha", OPENROUTER_URL);
+    assert_eq!(body.pointer("/reasoning/effort"), Some(&json!("low")));
+
+    // A family control already set wins; OpenRouter's field is not stacked.
+    let family = openai_request_body(&design_turn, "deepseek-v4", OPENROUTER_URL);
+    assert_eq!(family.pointer("/thinking/type"), Some(&json!("disabled")));
+    assert!(family.get("reasoning").is_none());
+
+    // Other hosts, and turns that keep reasoning, are untouched.
+    let direct = openai_request_body(&design_turn, "stealth/space-bunny-alpha", DEEPSEEK_URL);
+    assert!(direct.get("reasoning").is_none());
+    let adaptive = ChatRequest {
+        thinking: ThinkingMode::Adaptive,
+        ..ChatRequest::default()
+    };
+    let chat_turn = openai_request_body(&adaptive, "stealth/space-bunny-alpha", OPENROUTER_URL);
+    assert!(chat_turn.get("reasoning").is_none());
+}
+
 #[test]
 fn explicit_disabled_thinking_uses_each_supported_wire_control() {
     let request = ChatRequest {
@@ -125,7 +155,7 @@ fn explicit_disabled_thinking_uses_each_supported_wire_control() {
     };
     assert!(reduce_reasoning(&request));
     assert_eq!(
-        openai_request_body(&request, "deepseek-v4").pointer("/thinking/type"),
+        openai_request_body(&request, "deepseek-v4", DEEPSEEK_URL).pointer("/thinking/type"),
         Some(&json!("disabled"))
     );
     assert_eq!(
