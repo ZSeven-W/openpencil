@@ -309,6 +309,49 @@ fn cleanup_keeps_an_overlay_root_at_its_tallest_layer_not_the_sum() {
 }
 
 #[test]
+fn cleanup_measures_a_layoutless_frame_as_the_row_jian_renders() {
+    // arena-w01 (omitted-layout variant): a kanban board frame authored with
+    // NO `layout` key. jian resolves an absent layout as a Row, so the three
+    // columns render side by side — but the content-height estimator summed
+    // them like a vertical stack and the root-height repair grew the page to
+    // the stacked height (3134 vs a 1806 rendered bottom), a tall blank tail.
+    let mut sink = VecDocSink::new();
+    let column = |id: &str| {
+        json!({"type": "frame", "id": id, "name": id, "width": "fill_container",
+               "height": 400, "layout": "vertical", "children": []})
+    };
+    let tree: PenNode = serde_json::from_value(json!({
+        "type": "frame",
+        "id": "root",
+        "name": "Workspace",
+        "width": 1440,
+        "height": 900,
+        "layout": "vertical",
+        "children": [{
+            "type": "frame", "id": "board", "name": "看板三列", "width": "fill_container",
+            "height": "fit_content", "gap": 16,
+            "children": [column("todo"), column("doing"), column("done")]
+        }]
+    }))
+    .expect("board root json");
+    sink.state.apply(EditorCommand::InsertSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    let root_id = sink.state.active_children()[0].id_str().to_string();
+
+    run_cleanup_passes(&mut sink, &plan(), &[&root_id]);
+
+    let root = &sink.state.active_children()[0];
+    assert_eq!(
+        root.height_px(),
+        Some(900.0),
+        "a 400px row of columns fits the 900px root; it must not grow to the stacked sum"
+    );
+}
+
+#[test]
 fn cleanup_grows_390x844_poster_despite_mobile_geometry_and_status_bar() {
     let mut sink = VecDocSink::new();
     let tree: PenNode = serde_json::from_value(json!({
