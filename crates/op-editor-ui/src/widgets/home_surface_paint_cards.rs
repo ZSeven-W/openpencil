@@ -318,26 +318,23 @@ fn paint_paper_card(
 /// The preview a task's art area shows, with the crop aspect to paint it
 /// at (`None` = the baked card's own 16:10).
 ///
-/// App and 4:3 presentations show the very template their example opens
-/// as the instant draft ([`HomeState::example_draft_template`]), so the
-/// picture on Home is exactly what 开始设计 puts on the canvas. The 16:9
-/// deck keeps its dedicated showcase preview cropped to the slide shape.
+/// Every task shows the very template its example opens as the instant
+/// draft ([`HomeState::example_draft_template`]), so the picture on Home is
+/// exactly what 开始设计 puts on the canvas — the web, 16:9 deck and
+/// comparison previews used to show a different template than the draft
+/// they opened. A 16:9 deck is still cropped to the slide shape.
 ///
 /// [`HomeState::example_draft_template`]: op_editor_core::HomeState::example_draft_template
 pub(super) fn task_art(surface: &HomeSurface<'_>) -> (&'static str, Option<f32>) {
     let draft = surface.state.task_draft();
-    let instant = surface.state.example_draft_template();
-    match (surface.state.task, draft.ratio) {
-        (HomeFamily::AppUi, _) | (HomeFamily::Presentation, SlideRatio::Classic43) => (
-            instant.unwrap_or_else(|| preview_template_for(surface.state.task, draft.info_kind)),
-            None,
-        ),
-        (HomeFamily::Presentation, SlideRatio::Wide169) => (
-            preview_template_for(HomeFamily::Presentation, draft.info_kind),
-            Some(16.0 / 9.0),
-        ),
-        (family, _) => (preview_template_for(family, draft.info_kind), None),
-    }
+    let template = surface
+        .state
+        .example_draft_template()
+        .unwrap_or_else(|| preview_template_for(surface.state.task, draft.info_kind));
+    let crop = (surface.state.task == HomeFamily::Presentation
+        && draft.ratio == SlideRatio::Wide169)
+        .then_some(16.0 / 9.0);
+    (template, crop)
 }
 
 /// The template id a task's preview panel shows.
