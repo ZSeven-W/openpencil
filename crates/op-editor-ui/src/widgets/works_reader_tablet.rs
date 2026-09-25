@@ -62,7 +62,7 @@ const SHEET_MARGIN: f32 = 12.0;
 const SHEET_MIN_H: f32 = 280.0;
 /// Share of the area under the header the portrait stage keeps while
 /// the chat sheet is open.
-const CHAT_STAGE_SHARE: f32 = 0.42;
+const CHAT_STAGE_SHARE: f32 = 0.56;
 
 /// The board plate inside a strip tile (the tile minus its label band).
 /// The host blits the board raster into exactly this rect.

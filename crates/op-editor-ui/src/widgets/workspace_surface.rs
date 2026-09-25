@@ -363,7 +363,10 @@ pub fn workspace_title(state: &EditorState) -> String {
             if brief.is_empty() {
                 op_i18n::translate(state.editor_ui.locale, "common.untitled").to_string()
             } else {
-                brief.chars().take(16).collect()
+                // The brief's first line; painters ellipsize it to their
+                // own width (a fixed 16-char cut left "为 OpenPencil 做一份"
+                // with no ellipsis next to a wide empty header).
+                brief.lines().next().unwrap_or(brief).trim().to_string()
             }
         })
 }

@@ -1,5 +1,12 @@
 pub(crate) const DEFAULT_CHAT_TITLE: &str = "New Chat";
 
+/// Whether `title` is still the untitled placeholder. The stored value is a
+/// fixed English sentinel (session logic compares against it); UIs show a
+/// localized label instead.
+pub fn is_default_chat_title(title: &str) -> bool {
+    title == DEFAULT_CHAT_TITLE
+}
+
 pub(crate) fn suggest_chat_title(prompt: &str) -> Option<String> {
     let normalized = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
     let first_clause = normalized

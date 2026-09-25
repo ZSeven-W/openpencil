@@ -211,7 +211,13 @@ impl<'a> AIChatPlaceholder<'a> {
             .tabs()
             .iter()
             .map(|tab| ChatTabInfo {
-                title: tab.title.clone(),
+                // The untitled sentinel is stored in English; show it in
+                // the UI locale ("New Chat" sat in every Chinese UI).
+                title: if op_editor_core::is_default_chat_title(&tab.title) {
+                    op_i18n::translate(ui.effective_locale(), "ai.newChat").to_string()
+                } else {
+                    tab.title.clone()
+                },
             })
             .collect();
         let active_tab_index = state.chat.active_index();

@@ -233,9 +233,12 @@ fn paint_header(
     );
 
     // Title + subtitle.
+    let title = crate::util::ellipsize_to_width(&surface.title, layout.title.size.x, |s| {
+        cx.backend.measure_text_family(s, 15.0, SANS)
+    });
     text_weighted(
         cx,
-        &surface.title,
+        &title,
         Point2D::new(layout.title.origin.x, layout.title.origin.y + 17.0),
         15.0,
         palette.ink,
