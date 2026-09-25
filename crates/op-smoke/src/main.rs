@@ -53,6 +53,7 @@ mod loop_mode;
 mod loop_seed;
 mod modify_mode;
 mod smoke_support;
+mod variants_mode;
 
 use agent::provider::anthropic::AnthropicProvider;
 use agent::provider::openai_compat::{OpenAiCompatConfig, OpenAiCompatProvider};
@@ -212,11 +213,13 @@ async fn run_loop_mode(prompt: String) -> std::process::ExitCode {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> std::process::ExitCode {
-    let prompt = match std::env::args().nth(1) {
-        Some(p) if !p.is_empty() => p,
-        _ => {
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let (variants, prompt) = match variants_mode::parse_smoke_args(&argv) {
+        Ok(parsed) => (parsed.variants, parsed.prompt),
+        Err(reason) => {
             eprintln!(
-                "usage: op-smoke <prompt>\n\n\
+                "error: {reason}\n\
+                 usage: op-smoke [--variants N] <prompt>\n\n\
                  providers:\n\
                    anthropic (default): OPENPENCIL_ANTHROPIC_API_KEY=...\n\
                    openai-compat: OPENPENCIL_LLM_BASE_URL=... OPENPENCIL_LLM_API_KEY=...\n\
@@ -560,7 +563,8 @@ async fn main() -> std::process::ExitCode {
     // geometry-scored, best one saved. The plain single-run path below
     // stays byte-identical when the knob is unset.
     let best_of_n = best_of::parse_best_of_count();
-    if best_of_n > 1 {
+    // Best-of-N picks one design; it does not compose with `--variants`.
+    if best_of_n > 1 && variants.is_none() {
         return best_of::run_best_of(
             best_of_n,
             &request,
@@ -577,16 +581,34 @@ async fn main() -> std::process::ExitCode {
     };
 
     let started = std::time::Instant::now();
-    let result = Orchestrator::new()
-        .run(
-            request,
-            &mut sink,
-            llm.as_ref(),
-            &mut on_progress,
-            &abort,
-            &providers,
-        )
-        .await;
+    // `--variants N`: the same side-by-side directions runner the desktop's
+    // `LaunchRoute::Variants` turn drives, landing every direction here.
+    let result = match variants {
+        Some(count) => {
+            variants_mode::run_variants(
+                count,
+                &request,
+                &mut sink,
+                llm.as_ref(),
+                &abort,
+                &providers,
+                &mut on_progress,
+            )
+            .await
+        }
+        None => {
+            Orchestrator::new()
+                .run(
+                    request,
+                    &mut sink,
+                    llm.as_ref(),
+                    &mut on_progress,
+                    &abort,
+                    &providers,
+                )
+                .await
+        }
+    };
     let elapsed = started.elapsed();
 
     // Image-fill post step (OPENPENCIL_SMOKE_FILL_IMAGES=1), the same one the
