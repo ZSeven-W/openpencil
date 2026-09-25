@@ -92,15 +92,27 @@ fn bench_many_top_level_one_changed() {
     doc.children = (0..N).map(small_frame).collect();
 
     // Fresh capture (all Arcs allocated + all subtrees cloned).
-    let t0 = Instant::now();
-    let snap1 = SharedDoc::capture(&doc, None);
-    let fresh = t0.elapsed();
+    // Best of several runs each: two ~3 ms wall-clock timings on a shared CI
+    // runner flip on scheduler noise (measured: reshare 3.1 ms vs fresh
+    // 2.8 ms on macOS CI); the minimum is the stable estimate of the cost.
+    const RUNS: usize = 5;
+    let mut fresh = std::time::Duration::MAX;
+    let mut snap1 = SharedDoc::capture(&doc, None);
+    for _ in 0..RUNS {
+        let t0 = Instant::now();
+        snap1 = SharedDoc::capture(&doc, None);
+        fresh = fresh.min(t0.elapsed());
+    }
 
     // Re-capture with ZERO changes: only equality walks + Arc bumps, no
     // deep clones. Must reuse every Arc and beat the fresh capture.
-    let t1 = Instant::now();
-    let snap_same = SharedDoc::capture(&doc, Some(&snap1));
-    let reshare = t1.elapsed();
+    let mut reshare = std::time::Duration::MAX;
+    let mut snap_same = SharedDoc::capture(&doc, Some(&snap1));
+    for _ in 0..RUNS {
+        let t1 = Instant::now();
+        snap_same = SharedDoc::capture(&doc, Some(&snap1));
+        reshare = reshare.min(t1.elapsed());
+    }
     let shared_all = (0..N)
         .filter(|&i| Arc::ptr_eq(&snap1.root_children()[i], &snap_same.root_children()[i]))
         .count();
