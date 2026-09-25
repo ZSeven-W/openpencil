@@ -321,8 +321,73 @@ fn shoot(host: &mut WidgetHostNative, w: f32, h: f32, out_dir: &str, name: &str)
 
 type Scenario = (&'static str, f32, f32, fn() -> WidgetHostNative);
 
+/// A Home host on one task option (device / slide ratio / infographic
+/// kind), for the per-task example-card shots.
+fn option_host(
+    locale: Locale,
+    task: HomeFamily,
+    device: HomeDevice,
+    ratio: op_editor_core::SlideRatio,
+    kind: op_editor_core::InfoKind,
+) -> WidgetHostNative {
+    let mut host = home_host(locale, task, device);
+    let home = &mut host.editor_state_mut().editor_ui.home;
+    home.set_ratio(ratio);
+    home.set_info_kind(kind);
+    host
+}
+
+/// Every task option's example card in one locale (`ex-<task>-<suffix>`):
+/// the card's title, description and pages line must describe the very
+/// template it previews and opens.
+macro_rules! example_cards {
+    ($locale:expr, $suffix:literal) => {{
+        use op_editor_core::{InfoKind as K, SlideRatio as R};
+        use HomeDevice::{Desktop, Mobile};
+        use HomeFamily as F;
+        let shots: Vec<Scenario> = vec![
+            (concat!("ex-app-mobile-", $suffix), 1440.0, 900.0, || {
+                option_host($locale, F::AppUi, Mobile, R::Wide169, K::Data)
+            }),
+            (concat!("ex-app-desktop-", $suffix), 1440.0, 900.0, || {
+                option_host($locale, F::AppUi, Desktop, R::Wide169, K::Data)
+            }),
+            (concat!("ex-web-", $suffix), 1440.0, 900.0, || {
+                option_host($locale, F::Web, Mobile, R::Wide169, K::Data)
+            }),
+            (concat!("ex-deck-169-", $suffix), 1440.0, 900.0, || {
+                option_host($locale, F::Presentation, Mobile, R::Wide169, K::Data)
+            }),
+            (concat!("ex-deck-43-", $suffix), 1440.0, 900.0, || {
+                option_host($locale, F::Presentation, Mobile, R::Classic43, K::Data)
+            }),
+            (concat!("ex-knowledge-", $suffix), 1440.0, 900.0, || {
+                option_host($locale, F::KnowledgeCards, Mobile, R::Wide169, K::Data)
+            }),
+            (concat!("ex-tutorial-", $suffix), 1440.0, 900.0, || {
+                option_host($locale, F::ScreenshotTutorial, Mobile, R::Wide169, K::Data)
+            }),
+            (concat!("ex-info-data-", $suffix), 1440.0, 900.0, || {
+                option_host($locale, F::Infographic, Mobile, R::Wide169, K::Data)
+            }),
+            (concat!("ex-info-flow-", $suffix), 1440.0, 900.0, || {
+                option_host($locale, F::Infographic, Mobile, R::Wide169, K::Flow)
+            }),
+            (concat!("ex-info-compare-", $suffix), 1440.0, 900.0, || {
+                option_host($locale, F::Infographic, Mobile, R::Wide169, K::Comparison)
+            }),
+            (concat!("ex-poster-", $suffix), 1440.0, 900.0, || {
+                option_host($locale, F::EventPoster, Mobile, R::Wide169, K::Data)
+            }),
+        ];
+        shots
+    }};
+}
+
 fn scenarios() -> Vec<Scenario> {
-    vec![
+    let mut shots = example_cards!(Locale::ZhCn, "zh");
+    shots.extend(example_cards!(Locale::EnUs, "en"));
+    let rest: Vec<Scenario> = vec![
         ("home-app-mobile-en", 1440.0, 900.0, || {
             home_host(Locale::EnUs, HomeFamily::AppUi, HomeDevice::Mobile)
         }),
@@ -426,7 +491,9 @@ fn scenarios() -> Vec<Scenario> {
                 760.0,
             ))
         }),
-    ]
+    ];
+    shots.extend(rest);
+    shots
 }
 
 /// Every scene: the desktop ones above plus the tablet set.

@@ -35,37 +35,37 @@ fn every_task_option_maps_to_its_documented_template() {
         (
             HomeFamily::Web,
             default_draft(),
-            Some("saas-landing-orange"),
+            Some("daybreak-coffee-site"),
         ),
         (
             HomeFamily::Presentation,
             draft(HomeDevice::Mobile, SlideRatio::Wide169, InfoKind::Data),
-            Some("slide-deck"),
+            Some("openpencil-intro-deck"),
         ),
         (
             HomeFamily::Presentation,
             draft(HomeDevice::Mobile, SlideRatio::Classic43, InfoKind::Data),
-            Some("onboarding-training-deck"),
+            Some("openpencil-intro-deck-43"),
         ),
         (
             HomeFamily::KnowledgeCards,
             default_draft(),
-            Some("knowledge-carousel"),
+            Some("coffee-world-carousel"),
         ),
         (
             HomeFamily::ScreenshotTutorial,
             default_draft(),
-            Some("screenshot-tutorial"),
+            Some("focus-mode-tutorial"),
         ),
         (
             HomeFamily::Infographic,
             draft(HomeDevice::Mobile, SlideRatio::Wide169, InfoKind::Data),
-            Some("data-report-infographic"),
+            Some("weekly-review-infographic"),
         ),
         (
             HomeFamily::Infographic,
             draft(HomeDevice::Mobile, SlideRatio::Wide169, InfoKind::Flow),
-            Some("steps-flow-infographic"),
+            Some("idea-to-publish-flow"),
         ),
         (
             HomeFamily::Infographic,
@@ -74,12 +74,12 @@ fn every_task_option_maps_to_its_documented_template() {
                 SlideRatio::Wide169,
                 InfoKind::Comparison,
             ),
-            Some("concept-contrast-infographic"),
+            Some("blank-vs-example-contrast"),
         ),
         (
             HomeFamily::EventPoster,
             default_draft(),
-            Some("music-fest-poster-card"),
+            Some("city-music-fest-poster"),
         ),
     ];
     for (family, options, expected) in table {
@@ -272,4 +272,58 @@ fn a_new_brief_or_document_forgets_the_draft() {
     workspace.reset_for_new_document();
     assert_eq!(workspace.draft_template, None);
     assert!(!workspace.begin_draft_refine(), "nothing left to refine");
+}
+
+/// A paged example promises its pages on the card ("封面 / 价值 / …"), and
+/// the draft must deliver one board per promised page — the 16:9 deck once
+/// opened a six-slide deck under a five-page promise. The desktop App
+/// example lists three PANES of one console window, and the web and
+/// infographic examples are single scrolling boards, so they are not paged.
+#[test]
+fn every_paged_example_opens_one_board_per_promised_page() {
+    let cases: [(HomeFamily, TaskDraft, &str); 6] = [
+        (
+            HomeFamily::AppUi,
+            draft(HomeDevice::Mobile, SlideRatio::Wide169, InfoKind::Data),
+            "home.task.app.examplePages",
+        ),
+        (
+            HomeFamily::Presentation,
+            draft(HomeDevice::Mobile, SlideRatio::Wide169, InfoKind::Data),
+            "home.task.presentation.examplePages",
+        ),
+        (
+            HomeFamily::Presentation,
+            draft(HomeDevice::Mobile, SlideRatio::Classic43, InfoKind::Data),
+            "home.task.presentation.examplePages",
+        ),
+        (
+            HomeFamily::KnowledgeCards,
+            default_draft(),
+            "home.task.knowledge.examplePages",
+        ),
+        (
+            HomeFamily::ScreenshotTutorial,
+            default_draft(),
+            "home.task.tutorial.examplePages",
+        ),
+        (
+            HomeFamily::EventPoster,
+            default_draft(),
+            "home.task.poster.examplePages",
+        ),
+    ];
+    for (family, options, pages_key) in cases {
+        let id = example_draft_template(family, &options).expect("mapped");
+        let template = scene_template_by_id(id).expect("ships");
+        for locale in [op_i18n::Locale::ZhCn, op_i18n::Locale::EnUs] {
+            let pages = op_i18n::translate(locale, pages_key);
+            let promised = pages.split(" / ").count();
+            assert_eq!(
+                usize::from(template.frames),
+                promised,
+                "{id}: the {locale:?} card promises {pages:?}"
+            );
+        }
+    }
 }

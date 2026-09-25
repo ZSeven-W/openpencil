@@ -2,8 +2,9 @@
 # 渲染场景模板的预览图：每帧一张（scale 2）+ 整页拼合总览（scale 1）
 # 卡片缩略图由 scene_preview_cards.py 从这些渲染产物再烤一层。
 set -euo pipefail
-R=/Users/fini/workspace/openpencil
-BIN=$R/target/release/openpencil-desktop
+R="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# OP_BIN_DIR points at another profile (e.g. target/debug).
+BIN="${OP_BIN_DIR:-$R/target/release}/openpencil-desktop"
 OUT=$R/templates/step0/previews
 TMP=$(mktemp -d)
 mkdir -p "$OUT"
@@ -65,7 +66,10 @@ DEFAULT_TEMPLATES=(screenshot-tutorial knowledge-carousel before-after slide-dec
          compound-effect-card analytics-metric-card \
          coffee-order-app budget-ledger-app habit-fitness-app \
          coffee-counter-desktop sales-dashboard-web \
-         onboarding-training-deck research-findings-deck)
+         onboarding-training-deck research-findings-deck \
+         daybreak-coffee-site openpencil-intro-deck openpencil-intro-deck-43 \
+         coffee-world-carousel focus-mode-tutorial weekly-review-infographic \
+         idea-to-publish-flow blank-vs-example-contrast city-music-fest-poster)
 
 if [ "$#" -gt 0 ]; then
   templates=("$@")

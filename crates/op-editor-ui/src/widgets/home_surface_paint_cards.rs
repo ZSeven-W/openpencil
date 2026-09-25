@@ -337,19 +337,22 @@ pub(super) fn task_art(surface: &HomeSurface<'_>) -> (&'static str, Option<f32>)
     (template, crop)
 }
 
-/// The template id a task's preview panel shows.
+/// The template id a task's preview panel shows when its example has no
+/// instant draft. Every task maps one today, so this mirrors
+/// [`op_editor_core::HomeState::example_draft_template`] and only keeps
+/// the art painted if a future task ships without a draft.
 pub(super) fn preview_template_for(family: HomeFamily, info_kind: InfoKind) -> &'static str {
     match family {
-        HomeFamily::Web => "product-landing-light",
-        HomeFamily::Presentation => "pitch-deck-dark",
-        HomeFamily::KnowledgeCards => "knowledge-carousel",
-        HomeFamily::ScreenshotTutorial => "screenshot-tutorial",
+        HomeFamily::Web => "daybreak-coffee-site",
+        HomeFamily::Presentation => "openpencil-intro-deck",
+        HomeFamily::KnowledgeCards => "coffee-world-carousel",
+        HomeFamily::ScreenshotTutorial => "focus-mode-tutorial",
         HomeFamily::Infographic => match info_kind {
-            InfoKind::Data => "data-report-infographic",
-            InfoKind::Flow => "steps-flow-infographic",
-            InfoKind::Comparison => "do-dont-comparison",
+            InfoKind::Data => "weekly-review-infographic",
+            InfoKind::Flow => "idea-to-publish-flow",
+            InfoKind::Comparison => "blank-vs-example-contrast",
         },
-        _ => "music-fest-poster-card",
+        _ => "city-music-fest-poster",
     }
 }
 
@@ -554,12 +557,12 @@ fn paint_explore_art(cx: &mut PaintCx<'_>, area: Rect, family: HomeFamily, palet
                 -3.0,
                 1.0,
             );
-            paint_paper_card(cx, second, "knowledge-carousel", palette, None, 6.0, 1.0);
+            paint_paper_card(cx, second, "coffee-world-carousel", palette, None, 6.0, 1.0);
         }
         HomeFamily::ScreenshotTutorial => {
             let sheet_w = (area.size.x * 0.62).max(50.0);
             let sheet = Rect::xywh(area.origin.x, area.origin.y, sheet_w, area.size.y);
-            paint_paper_card(cx, sheet, "screenshot-tutorial", palette, None, 0.0, 1.0);
+            paint_paper_card(cx, sheet, "focus-mode-tutorial", palette, None, 0.0, 1.0);
             let phone_w = (area.size.x * 0.30).clamp(34.0, 64.0);
             let phone_h = (phone_w / 0.475).min(area.size.y * 0.86);
             let phone = Rect::xywh(

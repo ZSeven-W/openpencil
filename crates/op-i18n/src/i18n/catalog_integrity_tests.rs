@@ -251,7 +251,7 @@ fn placeholders(value: &str) -> BTreeSet<String> {
 fn every_locale_has_exactly_the_english_key_set() {
     let all_tables = tables();
     let expected = table_keys(all_tables[0].0, all_tables[0].1, all_tables[0].2);
-    assert_eq!(expected.len(), 1998, "update the intentional catalog size");
+    assert_eq!(expected.len(), 2016, "update the intentional catalog size");
 
     for (name, main, git, lookup) in all_tables {
         let actual = table_keys(name, main, git);
@@ -347,6 +347,24 @@ fn scene_template_catalog_is_complete_in_all_fifteen_locales() {
         "sceneTemplate.item.onboardingTrainingDeck.summary",
         "sceneTemplate.item.researchFindingsDeck.title",
         "sceneTemplate.item.researchFindingsDeck.summary",
+        "sceneTemplate.item.daybreakCoffeeSite.title",
+        "sceneTemplate.item.daybreakCoffeeSite.summary",
+        "sceneTemplate.item.openpencilIntroDeck.title",
+        "sceneTemplate.item.openpencilIntroDeck.summary",
+        "sceneTemplate.item.openpencilIntroDeck43.title",
+        "sceneTemplate.item.openpencilIntroDeck43.summary",
+        "sceneTemplate.item.coffeeWorldCarousel.title",
+        "sceneTemplate.item.coffeeWorldCarousel.summary",
+        "sceneTemplate.item.focusModeTutorial.title",
+        "sceneTemplate.item.focusModeTutorial.summary",
+        "sceneTemplate.item.weeklyReviewInfographic.title",
+        "sceneTemplate.item.weeklyReviewInfographic.summary",
+        "sceneTemplate.item.ideaToPublishFlow.title",
+        "sceneTemplate.item.ideaToPublishFlow.summary",
+        "sceneTemplate.item.blankVsExampleContrast.title",
+        "sceneTemplate.item.blankVsExampleContrast.summary",
+        "sceneTemplate.item.cityMusicFestPoster.title",
+        "sceneTemplate.item.cityMusicFestPoster.summary",
         "fileMenu.newFromTemplate",
     ] {
         for (name, _, _, lookup) in tables() {

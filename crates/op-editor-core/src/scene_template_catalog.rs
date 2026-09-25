@@ -21,7 +21,8 @@ use crate::catalog_toml::{
 const SCENE_TEMPLATES_TOML: &str = concat!(
     include_str!("../assets/scene_templates_prefix.toml"),
     include_str!("../assets/scene_templates.toml"),
-    include_str!("../assets/scene_templates_app.toml")
+    include_str!("../assets/scene_templates_app.toml"),
+    include_str!("../assets/scene_templates_examples.toml")
 );
 
 #[path = "scene_template_documents.rs"]

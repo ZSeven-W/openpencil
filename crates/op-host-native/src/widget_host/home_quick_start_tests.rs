@@ -85,7 +85,7 @@ fn an_empty_send_without_a_model_opens_the_template_draft_and_the_connect_banner
     );
     let workspace = &state.editor_ui.workspace;
     assert!(workspace.active && workspace.visible);
-    assert_eq!(workspace.draft_template, Some("saas-landing-orange"));
+    assert_eq!(workspace.draft_template, Some("daybreak-coffee-site"));
     assert_eq!(
         workspace.phase,
         WorkspacePhase::Done,
@@ -119,11 +119,15 @@ fn an_empty_send_with_a_model_loads_the_draft_and_queues_an_in_place_refine() {
 
     let state = host.editor_state();
     let workspace = &state.editor_ui.workspace;
-    assert_eq!(workspace.draft_template, Some("slide-deck"));
+    assert_eq!(workspace.draft_template, Some("openpencil-intro-deck"));
     assert_eq!(workspace.phase, WorkspacePhase::Generating);
     assert!(!workspace.draft_banner_visible());
     let boards = active_page_boards(state);
-    assert_eq!(boards.len(), 6, "the six-slide deck is on the page at once");
+    assert_eq!(
+        boards.len(),
+        5,
+        "the five-slide deck is on the page at once"
+    );
     assert_eq!(first_board_width(&host), Some(1920.0));
 
     let state = host.editor_state();
@@ -161,7 +165,7 @@ fn choosing_the_example_then_send_takes_the_same_instant_path() {
     press_send(&mut host);
     assert_eq!(
         host.editor_state().editor_ui.workspace.draft_template,
-        Some("data-report-infographic")
+        Some("weekly-review-infographic")
     );
     assert_eq!(host.editor_state().chat.launch_route, LaunchRoute::Refine);
 }
@@ -229,9 +233,9 @@ fn a_four_by_three_deck_request_gets_four_by_three_boards() {
     let state = host.editor_state();
     assert_eq!(
         state.editor_ui.workspace.draft_template,
-        Some("onboarding-training-deck")
+        Some("openpencil-intro-deck-43")
     );
-    assert_eq!(active_page_boards(state).len(), 6);
+    assert_eq!(active_page_boards(state).len(), 5);
     assert_eq!(first_board_width(&host), Some(1024.0));
 }
 
@@ -259,7 +263,7 @@ fn a_page_with_real_work_is_parked_before_the_draft_replaces_it() {
         .any(|node| op_editor_core::PenNodeExt::id_str(node) == "mine"));
     assert_eq!(
         host.editor_state().editor_ui.workspace.draft_template,
-        Some("music-fest-poster-card")
+        Some("city-music-fest-poster")
     );
     assert!(host
         .editor_state()

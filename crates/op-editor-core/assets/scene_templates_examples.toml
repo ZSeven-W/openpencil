@@ -1,0 +1,122 @@
+# Scene template catalogue — the Studio Home example templates.
+#
+# The catalogue parser concatenates scene_templates_prefix.toml,
+# scene_templates.toml, scene_templates_app.toml and this file, so each
+# checked-in source stays below the repository's 800-line limit. Same schema.
+#
+# Each entry here is the instant draft of one Home task's example brief
+# (`home_example_draft.rs::example_draft_template`): its content, page count,
+# sections and palette are that example's own, so the example card's title,
+# description and pages line describe exactly what the click delivers.
+# `city-music-fest-poster` has two boards (3:4 poster + 1:1 square); the
+# size fields carry the lead board, like every multi-board entry.
+
+[[template]]
+id = "daybreak-coffee-site"
+scene = "web"
+title_key = "sceneTemplate.item.daybreakCoffeeSite.title"
+title_fallback = "咖啡品牌官网 · 森林绿"
+summary_key = "sceneTemplate.item.daybreakCoffeeSite.summary"
+summary_fallback = "暖白配森林绿的咖啡品牌长页：带实拍主视觉与三组数字的首屏、四张招牌饮品卡、深绿品牌故事带、三家门店的地址与营业时间，适合餐饮与生活方式品牌官网。"
+tags = ["官网", "品牌", "咖啡", "餐饮", "门店", "长页", "森林绿", "web", "website", "brand", "coffee", "cafe", "landing"]
+frames = 1
+frame_width = 1200
+frame_height = 3161
+style_guide = "wellness-organic-light"
+
+[[template]]
+id = "openpencil-intro-deck"
+scene = "slides"
+title_key = "sceneTemplate.item.openpencilIntroDeck.title"
+title_fallback = "产品介绍 · 蓝配荧光黄"
+summary_key = "sceneTemplate.item.openpencilIntroDeck.summary"
+summary_fallback = "钴蓝配荧光黄的 16:9 五页产品介绍：整页蓝底封面配产品界面示意、左标题右清单的三条价值、四步流程卡、四种成品场景、带「开始设计」输入卡的结束页，适合产品发布与创作工具介绍。"
+tags = ["PPT", "演示", "产品介绍", "发布会", "蓝色", "荧光黄", "slides", "deck", "product", "launch", "blue"]
+frames = 5
+frame_width = 1920
+frame_height = 1080
+style_guide = "corporate-blue-light"
+
+[[template]]
+id = "openpencil-intro-deck-43"
+scene = "slides"
+title_key = "sceneTemplate.item.openpencilIntroDeck43.title"
+title_fallback = "产品介绍 · 4:3"
+summary_key = "sceneTemplate.item.openpencilIntroDeck43.summary"
+summary_fallback = "钴蓝配荧光黄的 4:3 五页产品介绍：上下构图的蓝底封面配产品界面条、纵排三条价值、2×2 流程卡、2×2 成品场景、带「开始设计」输入卡的结束页，适合会议室投影与打印讲义。"
+tags = ["PPT", "4:3", "演示", "产品介绍", "蓝色", "荧光黄", "slides", "deck", "product", "blue"]
+frames = 5
+frame_width = 1024
+frame_height = 768
+
+[[template]]
+id = "coffee-world-carousel"
+scene = "carousel"
+title_key = "sceneTemplate.item.coffeeWorldCarousel.title"
+title_fallback = "咖啡的世界 · 知识轮播"
+summary_key = "sceneTemplate.item.coffeeWorldCarousel.summary"
+summary_fallback = "暖杏色杂志排版的五页知识卡：封面主图与目录、阿拉比卡与罗布斯塔对照、咖啡带三大产区、三档烘焙色块、风味四维度与风味词，适合科普与品类知识分享。"
+tags = ["轮播", "知识卡片", "咖啡", "杂志", "科普", "暖杏色", "carousel", "coffee", "magazine", "knowledge"]
+frames = 5
+frame_width = 1080
+frame_height = 1440
+
+[[template]]
+id = "focus-mode-tutorial"
+scene = "tutorial"
+title_key = "sceneTemplate.item.focusModeTutorial.title"
+title_fallback = "专注模式三步教程"
+summary_key = "sceneTemplate.item.focusModeTutorial.summary"
+summary_fallback = "蓝色标注重点的三张截图教程：一步一张，顶栏系列标签、STEP 序号与动作标题、可拖入真截图替换的示意界面、蓝圈加「轻点」标出要点的那一处、提示条与下一步引导，适合手机与软件操作教学。"
+tags = ["教程", "截图", "步骤", "手机", "设置", "蓝色", "tutorial", "screenshot", "steps", "how-to"]
+frames = 3
+frame_width = 1080
+frame_height = 1440
+
+[[template]]
+id = "weekly-review-infographic"
+scene = "infographic"
+title_key = "sceneTemplate.item.weeklyReviewInfographic.title"
+title_fallback = "一周创作复盘长图"
+summary_key = "sceneTemplate.item.weeklyReviewInfographic.summary"
+summary_fallback = "靛蓝深色页头的一周数据长图：发布、阅读、关注三个大数，本周对上周的成对对比条，七天阅读柱图与三条结论，全图标明示例数据。"
+tags = ["信息图", "长图", "数据", "复盘", "周报", "对比", "infographic", "data", "weekly", "review"]
+frames = 1
+frame_width = 1080
+frame_height = 3539
+
+[[template]]
+id = "idea-to-publish-flow"
+scene = "infographic"
+title_key = "sceneTemplate.item.ideaToPublishFlow.title"
+title_fallback = "从灵感到发布流程长图"
+summary_key = "sceneTemplate.item.ideaToPublishFlow.summary"
+summary_fallback = "松绿色的五步流程长图：记录想法、整理结构、完成初稿、打磨视觉、检查发布，编号圆用连线串起，每步一句做法和一项产出，适合教程与工作方法分享。"
+tags = ["信息图", "长图", "流程", "步骤", "创作", "教程", "infographic", "flow", "steps", "workflow"]
+frames = 1
+frame_width = 1080
+frame_height = 2551
+
+[[template]]
+id = "blank-vs-example-contrast"
+scene = "infographic"
+title_key = "sceneTemplate.item.blankVsExampleContrast.title"
+title_fallback = "创作起点对比长图"
+summary_key = "sceneTemplate.item.blankVsExampleContrast.summary"
+summary_fallback = "石板灰与琥珀两侧同权的对比长图：「从空白开始」与「从示例开始」两张定义卡，起点、修改方式、自由度、适用场景四行对照表，最后写清各自适合谁，不含任何效率数据。"
+tags = ["信息图", "长图", "对比", "对照表", "选择", "创作", "infographic", "comparison", "table", "choice"]
+frames = 1
+frame_width = 1080
+frame_height = 3370
+
+[[template]]
+id = "city-music-fest-poster"
+scene = "card"
+title_key = "sceneTemplate.item.cityMusicFestPoster.title"
+title_fallback = "城市音乐节海报 · 两种版式"
+summary_key = "sceneTemplate.item.cityMusicFestPoster.summary"
+summary_fallback = "黑底荧光绿的一套活动视觉：3:4 主海报（超大标题、声浪柱、日期地点、演出阵容与购票条）加 1:1 社交方图（荧光绿日期条），适合音乐节、演出与城市活动。"
+tags = ["卡片", "海报", "音乐节", "活动", "演出", "社交", "荧光绿", "深色", "card", "poster", "music", "festival", "event", "social", "neon", "dark"]
+frames = 2
+frame_width = 1080
+frame_height = 1440

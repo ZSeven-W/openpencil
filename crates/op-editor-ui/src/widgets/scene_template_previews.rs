@@ -166,6 +166,15 @@ pub(crate) fn scene_template_preview(template_id: &str) -> Option<TemplatePrevie
         "sales-dashboard-web" => preview!(85, "sales-dashboard-web"),
         "onboarding-training-deck" => preview!(86, "onboarding-training-deck"),
         "research-findings-deck" => preview!(87, "research-findings-deck"),
+        "daybreak-coffee-site" => preview!(88, "daybreak-coffee-site"),
+        "openpencil-intro-deck" => preview!(89, "openpencil-intro-deck"),
+        "openpencil-intro-deck-43" => preview!(90, "openpencil-intro-deck-43"),
+        "coffee-world-carousel" => preview!(91, "coffee-world-carousel"),
+        "focus-mode-tutorial" => preview!(92, "focus-mode-tutorial"),
+        "weekly-review-infographic" => preview!(93, "weekly-review-infographic"),
+        "idea-to-publish-flow" => preview!(94, "idea-to-publish-flow"),
+        "blank-vs-example-contrast" => preview!(95, "blank-vs-example-contrast"),
+        "city-music-fest-poster" => preview!(96, "city-music-fest-poster"),
         _ => None,
     }
 }

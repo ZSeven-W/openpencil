@@ -22,6 +22,8 @@ App，包含订单列表、订单详情和营业概览。信息清楚，操作�
 
 ### 负约束
 
+  - 店名用首页示例标题里的虚构品牌「晨光咖啡」（英文示例叫 Daybreak，与
+    网站示例同一个品牌），顶栏标题就是示例标题「晨光咖啡 · 门店工作台」。
   - 不出现任何真实咖啡品牌、收银系统、外卖平台的名称与 logo。
   - 顾客信息只到姓氏与手机尾号；金额、单号、时间均为示意数据。
 """
@@ -120,7 +122,7 @@ def header():
     live = k.row("营业状态", [
         {"type": "ellipse", "id": ids("e"), "name": "营业中圆点",
          "width": 8, "height": 8, "fill": solid("$--color-success")},
-        k.label("营业中 · 07:30 – 21:00", 13, 500, "$muted-foreground"),
+        k.label("静安店 · 营业中 · 07:30 – 21:00", 13, 500, "$muted-foreground"),
         k.label("周五 9 月 25 日", 13, 400, "$muted-foreground"),
     ], gap=8, width="fit_content")
     search = k.row("搜索框", [
@@ -129,7 +131,7 @@ def header():
     ], gap=8, width=260, height=40, padding=[0, 12], fill=solid("$card"),
         cornerRadius=10, stroke=stroke("$border", 1))
     return k.row("顶栏", [
-        k.col("门店标题", [k.label("静安店 · 订单台", 24, 700, lh=1.25), live],
+        k.col("门店标题", [k.label("晨光咖啡 · 门店工作台", 24, 700, lh=1.25), live],
               gap=6),
         search,
         button("打印日结", "printer"),

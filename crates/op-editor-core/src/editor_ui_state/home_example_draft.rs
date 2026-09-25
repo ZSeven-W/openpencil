@@ -42,41 +42,44 @@ pub enum HomeSendMode {
 /// worse than a slow draft of the right one.
 ///
 /// The table is deliberate and deterministic (one template per task and
-/// option), chosen so the template's structure already matches the
-/// example brief the task shows:
+/// option). Each template was authored FOR its task's example: its title,
+/// copy, page count, sections and palette are the example brief's own, and
+/// the example card's title / description / pages line (`home.task.*`)
+/// describe it. Change a row and its example copy together, or the card
+/// promises one design and the click delivers another.
 ///
-/// | Task / option            | Template                        | Why                                                   |
+/// | Task / option            | Template                        | The example it realises                               |
 /// |--------------------------|---------------------------------|-------------------------------------------------------|
-/// | App 界面 · 手机          | `coffee-order-app`              | 3 × 375×812 screens: home, menu, order — the coffee example's own pages |
-/// | App 界面 · 桌面          | `coffee-counter-desktop`        | 1440×900 store console: overview, order list, order detail |
-/// | 网页设计                 | `saas-landing-orange`           | 1200-wide scrolling site: nav, hero, feature cards, story, footer |
-/// | 演示文稿 · 16:9          | `slide-deck`                    | 1920×1080 deck: cover, agenda, points, data, close    |
-/// | 演示文稿 · 4:3           | `onboarding-training-deck`      | 6 × 1024×768 slides: cover, agenda, three columns, timeline, grid, close |
-/// | 图文卡片                 | `knowledge-carousel`            | 5 × 1080×1440 (3:4) carousel, cover → points → summary |
-/// | 截图教程                 | `screenshot-tutorial`           | 5 × 3:4 cards: cover, three steps, closing call      |
-/// | 信息图 · 数据            | `data-report-infographic`       | 1080-wide long image: three big numbers, bars, conclusions |
-/// | 信息图 · 流程            | `steps-flow-infographic`        | 1080-wide long image: five numbered steps in a flow  |
-/// | 信息图 · 对比            | `concept-contrast-infographic`  | 1080-wide long image: two definitions, a two-column table, a verdict |
-/// | 活动海报                 | `music-fest-poster-card`        | 3:4 festival poster: title, date/venue, line-up, tickets |
+/// | App 界面 · 手机          | `coffee-order-app`              | 3 × 375×812 coffee-ordering screens: home, menu, order |
+/// | App 界面 · 桌面          | `coffee-counter-desktop`        | 1440×900 晨光咖啡 store console: overview, order list, order detail |
+/// | 网页设计                 | `daybreak-coffee-site`          | 1200-wide Daybreak Coffee site: hero, signature drinks, story, stores (warm white + forest green) |
+/// | 演示文稿 · 16:9          | `openpencil-intro-deck`         | 5 × 1920×1080 OpenPencil intro: cover, value, flow, cases, close (blue + neon yellow) |
+/// | 演示文稿 · 4:3           | `openpencil-intro-deck-43`      | the same five slides recomposed at 1024×768            |
+/// | 图文卡片                 | `coffee-world-carousel`         | 5 × 1080×1440 “咖啡的世界”: cover, varieties, origins, roast, flavour (warm apricot) |
+/// | 截图教程                 | `focus-mode-tutorial`           | 3 × 3:4 cards, one per Focus-mode step (blue callouts) |
+/// | 信息图 · 数据            | `weekly-review-infographic`     | 1080-wide weekly review: 12 posts / 24k reads / 320 follows, bars, three takeaways |
+/// | 信息图 · 流程            | `idea-to-publish-flow`          | 1080-wide five linked steps from idea to publish       |
+/// | 信息图 · 对比            | `blank-vs-example-contrast`     | 1080-wide blank-canvas vs example start: four-row table, who each suits |
+/// | 活动海报                 | `city-music-fest-poster`        | 城市音乐节 9.26 滨江公园 set: 3:4 main poster + 1:1 social square (neon green + black) |
 pub fn example_draft_template(family: HomeFamily, draft: &TaskDraft) -> Option<&'static str> {
     match family {
         HomeFamily::AppUi => Some(match draft.device {
             HomeDevice::Mobile => "coffee-order-app",
             HomeDevice::Desktop => "coffee-counter-desktop",
         }),
-        HomeFamily::Web => Some("saas-landing-orange"),
+        HomeFamily::Web => Some("daybreak-coffee-site"),
         HomeFamily::Presentation => Some(match draft.ratio {
-            SlideRatio::Wide169 => "slide-deck",
-            SlideRatio::Classic43 => "onboarding-training-deck",
+            SlideRatio::Wide169 => "openpencil-intro-deck",
+            SlideRatio::Classic43 => "openpencil-intro-deck-43",
         }),
-        HomeFamily::KnowledgeCards => Some("knowledge-carousel"),
-        HomeFamily::ScreenshotTutorial => Some("screenshot-tutorial"),
+        HomeFamily::KnowledgeCards => Some("coffee-world-carousel"),
+        HomeFamily::ScreenshotTutorial => Some("focus-mode-tutorial"),
         HomeFamily::Infographic => Some(match draft.info_kind {
-            InfoKind::Data => "data-report-infographic",
-            InfoKind::Flow => "steps-flow-infographic",
-            InfoKind::Comparison => "concept-contrast-infographic",
+            InfoKind::Data => "weekly-review-infographic",
+            InfoKind::Flow => "idea-to-publish-flow",
+            InfoKind::Comparison => "blank-vs-example-contrast",
         }),
-        HomeFamily::EventPoster => Some("music-fest-poster-card"),
+        HomeFamily::EventPoster => Some("city-music-fest-poster"),
     }
 }
 

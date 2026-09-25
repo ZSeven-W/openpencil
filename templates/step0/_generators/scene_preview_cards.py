@@ -191,6 +191,24 @@ CARDS = [
      [f"onboarding-training-deck-{i:02d}.png" for i in range(1, 7)]),
     ("research-findings-deck",
      [f"research-findings-deck-{i:02d}.png" for i in range(1, 7)]),
+    # The Studio Home example templates (scene_templates_examples.toml).
+    ("daybreak-coffee-site", Top("daybreak-coffee-site.png")),
+    # Five slides tile 3+2 with a hole the cover's blue fills; four tile a
+    # clean 2x2 (the Home card crops a 16:9 deck to 16:9), and blue cover /
+    # blue close on the diagonal read as one deck.
+    ("openpencil-intro-deck",
+     [f"openpencil-intro-deck-{i:02d}.png" for i in (1, 3, 4, 5)]),
+    ("openpencil-intro-deck-43",
+     [f"openpencil-intro-deck-43-{i:02d}.png" for i in (1, 3, 4, 5)]),
+    ("coffee-world-carousel",
+     [f"coffee-world-carousel-{i:02d}.png" for i in range(1, 6)]),
+    ("focus-mode-tutorial",
+     [f"focus-mode-tutorial-{i:02d}.png" for i in range(1, 4)]),
+    ("weekly-review-infographic", Top("weekly-review-infographic.png")),
+    ("idea-to-publish-flow", Top("idea-to-publish-flow.png")),
+    ("blank-vs-example-contrast", Top("blank-vs-example-contrast.png")),
+    ("city-music-fest-poster",
+     [f"city-music-fest-poster-{i:02d}.png" for i in range(1, 3)]),
 ]
 
 # Gap between tiles, in source pixels — scaled down with everything else.

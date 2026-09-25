@@ -141,6 +141,15 @@ pub fn scene_template_document_route(template_id: &str) -> Option<&'static str> 
         "sales-dashboard-web" => route!("sales-dashboard-web"),
         "onboarding-training-deck" => route!("onboarding-training-deck"),
         "research-findings-deck" => route!("research-findings-deck"),
+        "daybreak-coffee-site" => route!("daybreak-coffee-site"),
+        "openpencil-intro-deck" => route!("openpencil-intro-deck"),
+        "openpencil-intro-deck-43" => route!("openpencil-intro-deck-43"),
+        "coffee-world-carousel" => route!("coffee-world-carousel"),
+        "focus-mode-tutorial" => route!("focus-mode-tutorial"),
+        "weekly-review-infographic" => route!("weekly-review-infographic"),
+        "idea-to-publish-flow" => route!("idea-to-publish-flow"),
+        "blank-vs-example-contrast" => route!("blank-vs-example-contrast"),
+        "city-music-fest-poster" => route!("city-music-fest-poster"),
         _ => None,
     }
 }
@@ -244,6 +253,15 @@ pub fn scene_template_document(template_id: &str) -> Option<&'static str> {
         "sales-dashboard-web" => template_document!("sales-dashboard-web"),
         "onboarding-training-deck" => template_document!("onboarding-training-deck"),
         "research-findings-deck" => template_document!("research-findings-deck"),
+        "daybreak-coffee-site" => template_document!("daybreak-coffee-site"),
+        "openpencil-intro-deck" => template_document!("openpencil-intro-deck"),
+        "openpencil-intro-deck-43" => template_document!("openpencil-intro-deck-43"),
+        "coffee-world-carousel" => template_document!("coffee-world-carousel"),
+        "focus-mode-tutorial" => template_document!("focus-mode-tutorial"),
+        "weekly-review-infographic" => template_document!("weekly-review-infographic"),
+        "idea-to-publish-flow" => template_document!("idea-to-publish-flow"),
+        "blank-vs-example-contrast" => template_document!("blank-vs-example-contrast"),
+        "city-music-fest-poster" => template_document!("city-music-fest-poster"),
         _ => None,
     }
 }

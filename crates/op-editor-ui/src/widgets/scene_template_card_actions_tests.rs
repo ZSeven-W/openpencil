@@ -88,8 +88,8 @@ fn only_templates_the_pipeline_can_build_offer_generation() {
         }
     }
     assert_eq!(
-        offered, 14,
-        "the twelve deck templates plus the two web pages carry a style guide"
+        offered, 16,
+        "the thirteen 16:9 deck templates plus the three web pages carry a style guide"
     );
 }
 
