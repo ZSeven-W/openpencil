@@ -97,3 +97,17 @@ fn all_runs_everything() {
     assert!(policy.runs(RepairTier::Intent));
     assert!(policy.runs(RepairTier::Contract));
 }
+
+#[test]
+fn an_imported_website_defers_the_intent_tier() {
+    let mut state = EditorState::starter();
+    state.editor_ui.home.imported_from = Some("https://acme.example/pricing".to_string());
+    let policy = RepairTierPolicy::for_document(&state);
+    assert!(policy.runs(RepairTier::Contract));
+    assert!(!policy.runs(RepairTier::Intent));
+    let note = policy.intent_skip_note().expect("the skip is recorded");
+    assert!(
+        note.contains("acme.example/pricing via imported-site"),
+        "{note}"
+    );
+}

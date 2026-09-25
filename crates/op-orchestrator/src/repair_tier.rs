@@ -25,6 +25,8 @@
 //! Intent-tier passes are skipped for a document with template provenance
 //! (see [`crate::template_provenance`]): the template's visual system is
 //! human-authored and audited, so it is the specification, not the defect.
+//! A document imported from a live website counts as the same kind of
+//! authored input (`TemplateEvidence::ImportedSite`).
 //! Contract-tier passes still run — a model filling text into an audited
 //! template overflows a box exactly as readily as it does anywhere else.
 //!

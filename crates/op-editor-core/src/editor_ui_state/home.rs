@@ -380,6 +380,12 @@ pub struct HomeState {
     /// the file carries one. Drives Make-one-like-this; see
     /// `share_recipe.rs`. Document-scoped: every open replaces it.
     pub recipe: Option<ShareRecipe>,
+    /// The website the open document was imported from (its
+    /// `editorMeta.importedFrom`), already reduced to scheme + host + path
+    /// by [`site_import::sanitize_import_origin`]. The repair policy reads
+    /// it to keep a later AI edit from restyling the imported design.
+    /// Document-scoped like [`Self::recipe`]: every open replaces it.
+    pub imported_from: Option<String>,
     /// A Make-one-like-this press staged for the next send.
     pub make_same: Option<MakeSameStage>,
 }
@@ -410,6 +416,7 @@ impl Default for HomeState {
             brand: brand::HomeBrandState::default(),
             site_import: site_import::HomeSiteImportState::default(),
             recipe: None,
+            imported_from: None,
             make_same: None,
         }
     }

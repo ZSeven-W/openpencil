@@ -30,13 +30,28 @@
 //! [`crate::design_type::classify_root_form`] reads the artboard rather than
 //! the plan: the agentic loop has no plan to read.
 //!
+//! ## The third door: an imported website
+//!
+//! Studio Home's "import this website" produces a document that is authored
+//! input in exactly the same sense — somebody designed and shipped that page —
+//! and `finalize_authored_import` already runs only the contract tier over it.
+//! What made a LATER AI edit restyle it anyway (heading weights, entrance
+//! motion, hero spacing) was that nothing on the document remembered where it
+//! came from. The import now records its sanitized origin on
+//! `editor_ui.home.imported_from`, persisted as `editorMeta.importedFrom`, and
+//! [`TemplateEvidence::ImportedSite`] reads it back. The "template id" of that
+//! provenance is the origin URL: there is no catalogue entry to resolve, and
+//! the origin is what a user reading the ledger recognises.
+//!
 //! ## Exact, never heuristic
 //!
 //! Every evidence branch below resolves against
 //! [`scene_template_catalogue`](op_editor_core::scene_template_catalog::scene_template_catalogue).
 //! A variable named `my--thing` or a style pinned by hand from the style menu
 //! is NOT template provenance. A "looks like a template" name match would be
-//! the eighth inline judgement call this crate does not need.
+//! the eighth inline judgement call this crate does not need. The imported-site
+//! branch is exact in the same way: it is the recorded origin or nothing — a
+//! document that merely looks like a website is ordinary generated output.
 
 use op_editor_core::scene_template_catalog::{scene_template_by_id, scene_template_catalogue};
 use op_editor_core::EditorState;
@@ -57,6 +72,9 @@ pub enum TemplateEvidence {
     /// The Asset Center's generate row is working from this template: its
     /// style guide is pinned and the generation is asked to reproduce it.
     GenerateBasis,
+    /// The document was imported from a live website (Studio Home's "import
+    /// this website"); the provenance id is the sanitized origin URL.
+    ImportedSite,
 }
 
 impl TemplateEvidence {
@@ -65,6 +83,7 @@ impl TemplateEvidence {
         match self {
             TemplateEvidence::NamespacedVariables => "namespaced-variables",
             TemplateEvidence::GenerateBasis => "generate-basis",
+            TemplateEvidence::ImportedSite => "imported-site",
         }
     }
 }
@@ -87,7 +106,10 @@ impl TemplateProvenance {
 ///
 /// The generate basis is checked first: when both hold, the basis is the more
 /// specific fact (this turn is *about* that template), and it is the one a
-/// user reading the ledger would recognise.
+/// user reading the ledger would recognise. A shipped template's boards on the
+/// page come next, then the website the document was imported from — every
+/// branch defers the same intent tier, so the order only picks the ledger
+/// line.
 pub fn template_provenance(state: &EditorState) -> Option<TemplateProvenance> {
     if let Some(id) = generate_basis_template_id(state) {
         return Some(TemplateProvenance {
@@ -95,10 +117,28 @@ pub fn template_provenance(state: &EditorState) -> Option<TemplateProvenance> {
             evidence: TemplateEvidence::GenerateBasis,
         });
     }
-    namespaced_variable_template_id(state).map(|id| TemplateProvenance {
-        template_id: id,
-        evidence: TemplateEvidence::NamespacedVariables,
+    if let Some(id) = namespaced_variable_template_id(state) {
+        return Some(TemplateProvenance {
+            template_id: id,
+            evidence: TemplateEvidence::NamespacedVariables,
+        });
+    }
+    imported_site_origin(state).map(|origin| TemplateProvenance {
+        template_id: origin,
+        evidence: TemplateEvidence::ImportedSite,
     })
+}
+
+/// The website the open document was imported from, re-sanitized so a value
+/// that reached the state by any path other than the loader (a host setting it
+/// directly, a test) is held to the same scheme + host + path contract.
+fn imported_site_origin(state: &EditorState) -> Option<String> {
+    state
+        .editor_ui
+        .home
+        .imported_from
+        .as_deref()
+        .and_then(op_editor_core::sanitize_import_origin)
 }
 
 /// The template the generate row is working from, when it resolves in the

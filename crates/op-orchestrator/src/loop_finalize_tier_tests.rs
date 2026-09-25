@@ -127,3 +127,19 @@ fn contract_work_still_runs_under_template_provenance() {
         "role inference is not an intent-tier pass and must still run"
     );
 }
+
+/// A document imported from a live website is authored input too: a later AI
+/// edit's loop finalize must keep the site's own surfaces, exactly as it does
+/// for a template (the paired no-provenance run above is the red check).
+#[test]
+fn an_imported_site_surface_survives_a_later_loop_finalize() {
+    let mut state = state_with_forest(forest_with_white_section(), false);
+    state.editor_ui.home.imported_from = Some("https://acme.example/".to_string());
+    apply_loop_finalize(&mut state);
+
+    assert_eq!(
+        fill_of(&state, "Inner Section"),
+        Some(json!([{"type": "solid", "color": "#FFFFFF"}])),
+        "an imported site's own section surface is the author's, not a stray fill"
+    );
+}

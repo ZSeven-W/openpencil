@@ -23,6 +23,7 @@ mod adapter;
 mod authored_geometry;
 mod editor_meta;
 mod editor_meta_error;
+mod editor_meta_import;
 mod editor_meta_share;
 mod editor_scene;
 mod effects;

@@ -85,3 +85,37 @@ fn the_transcript_states_what_was_done() {
     assert!(text.contains("12"), "{text}");
     assert!(!text.contains("{{"), "{text}");
 }
+
+#[test]
+fn the_import_origin_keeps_scheme_host_and_path_only() {
+    assert_eq!(
+        sanitize_import_origin("https://acme.example/pricing?utm=x&token=abc#plans").as_deref(),
+        Some("https://acme.example/pricing")
+    );
+    // Credentials and the port go; the host is lowercased.
+    assert_eq!(
+        sanitize_import_origin("HTTPS://user:pw@Acme.Example:8443/a/b").as_deref(),
+        Some("https://acme.example/a/b")
+    );
+    assert_eq!(
+        sanitize_import_origin("http://acme.example?session=1").as_deref(),
+        Some("http://acme.example")
+    );
+    assert_eq!(
+        sanitize_import_origin("https://[::1]:3000/x").as_deref(),
+        Some("https://[::1]/x")
+    );
+    // Not a web origin at all.
+    assert_eq!(
+        sanitize_import_origin("file:///Users/eve/secret.html"),
+        None
+    );
+    assert_eq!(sanitize_import_origin("javascript:alert(1)"), None);
+    assert_eq!(sanitize_import_origin("https://"), None);
+    assert_eq!(sanitize_import_origin("https://bad host/x"), None);
+    let long = format!("https://acme.example/{}", "a".repeat(2_000));
+    assert_eq!(
+        sanitize_import_origin(&long).map(|origin| origin.chars().count()),
+        Some(IMPORT_ORIGIN_MAX_CHARS)
+    );
+}

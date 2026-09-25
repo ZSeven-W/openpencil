@@ -182,6 +182,7 @@ fn parse_standard_turn_body_reads_canvas_snapshot_fields() {
             scenario: None,
             pinned_style_guide: None,
             share_recipe: None,
+            imported_from: None,
         })
     );
     assert_eq!(req.selected_ids, vec!["n1".to_string(), "n2".to_string()]);

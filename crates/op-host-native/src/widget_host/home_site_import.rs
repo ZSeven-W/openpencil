@@ -93,6 +93,11 @@ impl WidgetHostNative {
         // Never saved anywhere: the import is unsaved work, so a later Home
         // brief parks it instead of dropping it.
         self.editor_state.mark_document_changed();
+        // Remember where it came from (saved as `editorMeta.importedFrom`):
+        // the repair policy reads it so a later AI edit keeps the site's
+        // authored weights, motion and spacing instead of restyling them.
+        self.editor_state.editor_ui.home.imported_from =
+            op_editor_core::sanitize_import_origin(&summary.source_url);
 
         let previous_tool = Some(self.editor_state.tool);
         let options = self

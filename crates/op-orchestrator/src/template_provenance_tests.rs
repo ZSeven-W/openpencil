@@ -113,3 +113,36 @@ fn the_basis_wins_when_both_facts_hold() {
     assert_eq!(provenance.template_id, "minimal-keynote");
     assert_eq!(provenance.evidence, TemplateEvidence::GenerateBasis);
 }
+
+#[test]
+fn an_imported_website_is_provenance_by_its_sanitized_origin() {
+    let mut state = EditorState::new();
+    state.editor_ui.home.imported_from = Some("https://acme.example/pricing?utm=1".into());
+    let provenance = template_provenance(&state).expect("an imported site is authored input");
+    assert_eq!(provenance.evidence, TemplateEvidence::ImportedSite);
+    assert_eq!(provenance.template_id, "https://acme.example/pricing");
+    assert_eq!(
+        provenance.describe(),
+        "https://acme.example/pricing via imported-site"
+    );
+}
+
+#[test]
+fn an_import_origin_that_is_not_a_web_origin_is_not_provenance() {
+    let mut state = EditorState::new();
+    state.editor_ui.home.imported_from = Some("file:///Users/eve/page.html".into());
+    assert_eq!(template_provenance(&state), None);
+}
+
+#[test]
+fn template_evidence_outranks_the_import_origin_in_the_ledger() {
+    let deck = op_editor_core::scene_template_catalog::scene_template_by_id("slide-deck")
+        .expect("the deck template ships");
+    let boards = op_editor_core::scene_template_append::template_boards(deck.document(), &deck.id)
+        .expect("the shipped template parses");
+    let names: Vec<&str> = boards.variables.keys().map(String::as_str).collect();
+    let mut state = state_with_variables(&names);
+    state.editor_ui.home.imported_from = Some("https://acme.example".into());
+    let provenance = template_provenance(&state).expect("provenance");
+    assert_eq!(provenance.evidence, TemplateEvidence::NamespacedVariables);
+}

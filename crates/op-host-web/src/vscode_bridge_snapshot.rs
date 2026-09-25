@@ -91,6 +91,7 @@ mod tests {
                 scenario: None,
                 pinned_style_guide: None,
                 share_recipe: None,
+                imported_from: None,
             })
         );
     }

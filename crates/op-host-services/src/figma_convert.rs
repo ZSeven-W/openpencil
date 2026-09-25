@@ -63,6 +63,7 @@ pub(crate) fn convert_fig_json(body: &str) -> Result<String> {
             scenario: None,
             pinned_style_guide: None,
             share_recipe: None,
+            imported_from: None,
         },
     )
     .map_err(|error| FigmaConvertError::Encode {

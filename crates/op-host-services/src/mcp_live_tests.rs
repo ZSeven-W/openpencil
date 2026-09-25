@@ -338,6 +338,7 @@ fn pump_flags_document_replaced_only_for_replace_document_requests() {
                 scenario: None,
                 pinned_style_guide: None,
                 share_recipe: None,
+                imported_from: None,
             },
             ack: ack_tx,
         })
@@ -362,6 +363,7 @@ fn pump_flags_document_replaced_only_for_replace_document_requests() {
                 scenario: None,
                 pinned_style_guide: None,
                 share_recipe: None,
+                imported_from: None,
             },
             ack: ack_tx,
         })

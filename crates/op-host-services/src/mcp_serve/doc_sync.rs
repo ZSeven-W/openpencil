@@ -53,6 +53,7 @@ impl DocumentSyncRequest<'_> {
             scenario: embedded.scenario,
             pinned_style_guide: embedded.pinned_style_guide,
             share_recipe: embedded.share_recipe,
+            imported_from: embedded.imported_from,
         }
     }
 }

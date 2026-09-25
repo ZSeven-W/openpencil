@@ -388,6 +388,8 @@ impl WidgetHostNative {
         // The share recipe says how the DOCUMENT was made; an import is
         // not the replaced document's recipe.
         preserved.home.recipe = state.editor_ui.home.recipe.take();
+        // Likewise the import origin: it belongs to the incoming document.
+        preserved.home.imported_from = state.editor_ui.home.imported_from.take();
         // Dirty/saved state belongs to the incoming document. The rest of the
         // live shell UI is intentionally retained, but inheriting this flag
         // from the replaced editor would make a saved import appear dirty (or

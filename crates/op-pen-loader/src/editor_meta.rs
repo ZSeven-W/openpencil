@@ -53,6 +53,15 @@ pub struct EditorMeta {
         skip_serializing_if = "Option::is_none"
     )]
     pub share_recipe: Option<ShareRecipe>,
+    /// The website the document was imported from — see
+    /// `HomeState::imported_from`. Scheme + host + path only, sanitized on
+    /// write and again on read; anything else reads back as `None`.
+    #[serde(
+        default,
+        with = "crate::editor_meta_import",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub imported_from: Option<String>,
 }
 
 impl EditorMeta {
@@ -73,6 +82,10 @@ impl EditorMeta {
             // publish the brief nor reopen the author's own work as a
             // shared one.
             share_recipe: state.editor_ui.home.recipe.clone(),
+            // Provenance, not a preference: an imported site stays an
+            // imported site through every save, so a later AI edit keeps
+            // deferring to its authored design.
+            imported_from: state.editor_ui.home.imported_from.clone(),
         }
     }
 }
@@ -154,6 +167,8 @@ struct WireEditorMeta {
     pinned_style_guide: Option<String>,
     #[serde(default, with = "crate::editor_meta_share")]
     share_recipe: Option<ShareRecipe>,
+    #[serde(default, with = "crate::editor_meta_import")]
+    imported_from: Option<String>,
 }
 
 /// Parsed metadata plus compatibility inference used for migration decisions.
@@ -194,6 +209,7 @@ pub fn extract_editor_meta_with_report(src: &str) -> Option<EditorMetaExtraction
             scenario: wire.scenario,
             pinned_style_guide: wire.pinned_style_guide,
             share_recipe: wire.share_recipe,
+            imported_from: wire.imported_from,
         },
         inferred_preserve_authored_geometry,
     })
@@ -336,6 +352,7 @@ pub fn apply_editor_meta(state: &mut op_editor_core::EditorState, meta: EditorMe
     state.editor_ui.scenario = meta.scenario;
     state.editor_ui.pinned_style_guide = meta.pinned_style_guide;
     state.editor_ui.home.recipe = meta.share_recipe;
+    state.editor_ui.home.imported_from = meta.imported_from;
 }
 
 /// Apply saved metadata, or use the legacy reopen policy when it is absent.
@@ -358,6 +375,7 @@ pub fn apply_editor_meta_or_legacy_fallback(
     state.editor_ui.scenario = None;
     state.editor_ui.pinned_style_guide = None;
     state.editor_ui.home.recipe = None;
+    state.editor_ui.home.imported_from = None;
     state.ui.active_page_index = state
         .doc
         .pages

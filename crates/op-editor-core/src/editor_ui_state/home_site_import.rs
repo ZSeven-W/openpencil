@@ -209,6 +209,52 @@ pub fn host_label(url: &str) -> String {
     host.strip_prefix("www.").unwrap_or(host).to_string()
 }
 
+/// Longest origin kept on a document. Real page URLs are far shorter; the
+/// cap only bounds what a hand-edited file can make the editor carry.
+pub const IMPORT_ORIGIN_MAX_CHARS: usize = 512;
+
+/// The import origin a document may carry (`editorMeta.importedFrom`):
+/// scheme + host + path of `url`, and nothing else.
+///
+/// Query strings, fragments, credentials (`user:pass@`) and ports are
+/// dropped — they are where session tokens and tracking ids live, and the
+/// origin is saved into a file that gets shared. Only `http(s)` URLs with a
+/// plausible host survive; anything else is `None`, never an error, because
+/// the origin is a repair-policy hint, not a reason to refuse a file.
+pub fn sanitize_import_origin(url: &str) -> Option<String> {
+    let text = url.trim();
+    let (scheme, rest) = text.split_once("://")?;
+    let scheme = scheme.to_ascii_lowercase();
+    if scheme != "http" && scheme != "https" {
+        return None;
+    }
+    let rest = rest.split(['?', '#']).next().unwrap_or("");
+    let (authority, path) = match rest.find('/') {
+        Some(index) => rest.split_at(index),
+        None => (rest, ""),
+    };
+    let host_port = authority.rsplit('@').next().unwrap_or(authority);
+    let host = match host_port.strip_prefix('[') {
+        // IPv6 literal: keep the brackets, drop the port.
+        Some(inner) => format!("[{}]", inner.split_once(']')?.0),
+        None => host_port.split(':').next().unwrap_or("").to_string(),
+    }
+    .to_ascii_lowercase();
+    let host_ok = host.len() > 2
+        && host
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '[' | ']' | ':'));
+    if !host_ok {
+        return None;
+    }
+    let path: String = path
+        .chars()
+        .take_while(|c| !c.is_whitespace() && !c.is_control())
+        .collect();
+    let origin = format!("{scheme}://{host}{path}");
+    Some(origin.chars().take(IMPORT_ORIGIN_MAX_CHARS).collect())
+}
+
 #[cfg(test)]
 #[path = "home_site_import_tests.rs"]
 mod tests;

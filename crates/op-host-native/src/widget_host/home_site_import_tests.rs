@@ -123,6 +123,28 @@ fn send_queues_one_import_and_the_result_opens_the_workspace() {
 }
 
 #[test]
+fn an_imported_site_remembers_its_origin_for_the_repair_policy() {
+    let mut host = home_with_link("acme.example");
+    assert!(host.home_send());
+    let (generation, _) = host.take_home_site_import_request().expect("queued");
+    let mut result = imported();
+    result.summary.source_url = "https://acme.example/?ref=ad#top".into();
+    assert!(host.finish_home_site_import(generation, Ok(result)));
+    let state = host.editor_state();
+    assert_eq!(
+        state.editor_ui.home.imported_from.as_deref(),
+        Some("https://acme.example/")
+    );
+    // Saved with the document, so a reopen still defers.
+    assert_eq!(
+        op_pen_loader::EditorMeta::from_state(state)
+            .imported_from
+            .as_deref(),
+        Some("https://acme.example/")
+    );
+}
+
+#[test]
 fn a_failed_import_keeps_the_document_and_shows_the_hint() {
     let mut host = home_with_link("https://acme.example");
     let before = serde_json::to_string(&host.editor_state().doc).unwrap();

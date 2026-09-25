@@ -389,6 +389,9 @@ fn apply_document_response<C: RepaintContext + 'static>(
                             host.editor_state().editor_ui.pinned_style_guide.clone();
                         // The share recipe is not on this wire either.
                         let share_recipe = host.editor_state().editor_ui.home.recipe.clone();
+                        // Nor is the import origin: keep the open document's.
+                        let imported_from =
+                            host.editor_state().editor_ui.home.imported_from.clone();
                         op_pen_loader::apply_editor_meta(
                             host.editor_state_mut(),
                             op_pen_loader::EditorMeta {
@@ -397,6 +400,7 @@ fn apply_document_response<C: RepaintContext + 'static>(
                                 scenario,
                                 pinned_style_guide,
                                 share_recipe,
+                                imported_from,
                             },
                         );
                         inner_ref.repaint().is_ok()
