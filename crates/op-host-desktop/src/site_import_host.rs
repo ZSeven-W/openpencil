@@ -86,10 +86,10 @@ mod tests {
         home.site_import.available = true;
         assert!(home.site_import.press("http://127.0.0.1:9/", 1));
         let mut jobs = SiteImportJobs::new();
-        assert!(!jobs.drain(&mut host), "started, nothing landed yet");
-        assert!(jobs.is_pending());
+        // The screen refuses the address at once, so the worker may already
+        // have answered by the first drain; only the outcome is asserted.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
-        while jobs.is_pending() && std::time::Instant::now() < deadline {
+        while std::time::Instant::now() < deadline {
             if jobs.drain(&mut host) {
                 break;
             }
