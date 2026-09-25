@@ -535,6 +535,25 @@ fn image_mesh_and_shader_backgrounds_are_skipped() {
     }
 }
 
+#[test]
+fn a_near_uniform_dark_mesh_is_checked_like_its_colour() {
+    // Measured (GLM-5.3-Flash variants run): a dark subscription panel
+    // painted as a subtle mesh kept near-black headline text, because the
+    // pass skipped every mesh as unprovable.
+    let dark_mesh = json!({
+        "type": "mesh_gradient", "rows": 2, "cols": 2,
+        "stops": [
+            {"row": 0, "col": 0, "color": "#111827"},
+            {"row": 0, "col": 1, "color": "#1F2937"},
+            {"row": 1, "col": 0, "color": "#0F172A"},
+            {"row": 1, "col": 1, "color": "#1E293B"}
+        ]
+    });
+    let (mut sink, root_id) = contrast_sink(Some(dark_mesh), None, json!("#0B1220"));
+    assert_eq!(repair_text_contrast(&mut sink, &root_id), 1);
+    assert_ne!(contrast_label_fill(&sink), "#0B1220");
+}
+
 // ── chip/badge contrast branch (DS P1-a, pass 2) ────────────────────────────
 
 /// The measured 0814 defect, rendered: a dark deck card carrying a light

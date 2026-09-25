@@ -206,6 +206,8 @@ enum FillKind {
     Solid(String),
     /// Gradient stop colours (unresolved — may still be `$ref`s).
     Gradient(GradientSource),
+    /// Mesh vertex colours (unresolved); provable only when near-uniform.
+    Mesh(Vec<String>),
 }
 
 enum ResolvedFill {
@@ -275,7 +277,7 @@ fn first_usable_fill_kind(fills: Option<&Vec<PenFill>>) -> FillKind {
                 if body.opacity == Some(0.0) {
                     continue;
                 }
-                return FillKind::Unprovable;
+                return FillKind::Mesh(body.stops.iter().map(|v| v.color.clone()).collect());
             }
             PenFill::Shader(body) => {
                 if body.opacity == Some(0.0) {
@@ -289,7 +291,8 @@ fn first_usable_fill_kind(fills: Option<&Vec<PenFill>>) -> FillKind {
 }
 
 /// Resolve the first visible fill into the evidence the contrast pass can
-/// prove. Images, meshes and shaders remain intentionally unprovable.
+/// prove. Images, shaders and meshes whose vertices disagree remain
+/// intentionally unprovable.
 fn resolve_fill_kind(
     fills: Option<&Vec<PenFill>>,
     variables: &op_design_lint::node_util::Variables,
@@ -312,6 +315,9 @@ fn resolve_fill_kind(
             }
         }
         FillKind::Gradient(source) => gradient::resolve_gradient(source, variables, theme)
+            .map(ResolvedFill::Gradient)
+            .unwrap_or(ResolvedFill::Unprovable),
+        FillKind::Mesh(colors) => gradient::uniform_mesh(&colors, variables, theme)
             .map(ResolvedFill::Gradient)
             .unwrap_or(ResolvedFill::Unprovable),
     }
