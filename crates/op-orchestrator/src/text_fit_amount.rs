@@ -130,7 +130,7 @@ pub(super) fn collect_measured_amount_fixes(
             fits.push((id.to_string(), size, available, font_size));
         }
     }
-    verify_fitted_sizes(&mut scratch, &mut fits);
+    verify_fitted_sizes(state, &mut scratch, &mut fits);
     fits.into_iter()
         .map(|(id, size, _, _)| EditorCommand::SetNodeFontSize {
             node_id: NodeId::new(id),
@@ -140,28 +140,40 @@ pub(super) fn collect_measured_amount_fixes(
 }
 
 /// The proportional estimate assumes width scales with the font size, but
-/// letter spacing is a fixed per-glyph offset and hinting / fallback faces
-/// do not scale linearly either — a size that "fits" by the ratio can still
-/// wrap. Re-measure the chosen sizes on the scratch copy and step each
-/// still-overflowing token down a pixel at a time (bounded, never below the
-/// estimate's floor).
-fn verify_fitted_sizes(scratch: &mut EditorState, fits: &mut [(String, f64, f64, f64)]) {
-    const MAX_STEPS: usize = 6;
+/// letter spacing is a fixed per-glyph offset, fallback faces do not scale
+/// linearly, and the platform line breaker may wrap a token whose natural
+/// width nominally fits. So check the real condition: at the chosen size the
+/// text, laid out in its AUTHORED fixed width, must be exactly as tall as the
+/// same text laid out on one line. Step each still-wrapping token down a
+/// pixel at a time (bounded, never below the estimate's floor).
+fn verify_fitted_sizes(
+    state: &EditorState,
+    single_line: &mut EditorState,
+    fits: &mut [(String, f64, f64, f64)],
+) {
+    const MAX_STEPS: usize = 16;
+    let mut authored = state.clone();
     for _ in 0..MAX_STEPS {
         for (id, size, _, _) in fits.iter() {
-            scratch.apply(EditorCommand::SetNodeFontSize {
-                node_id: NodeId::new(id.clone()),
-                font_size: *size as f32,
-            });
+            for doc in [&mut *single_line, &mut authored] {
+                doc.apply(EditorCommand::SetNodeFontSize {
+                    node_id: NodeId::new(id.clone()),
+                    font_size: *size as f32,
+                });
+            }
         }
-        let measured = resolved_rects(scratch);
+        let one_line = resolved_rects(single_line);
+        let laid_out = resolved_rects(&authored);
         let mut stepped = false;
         for (id, size, available, original) in fits.iter_mut() {
             let minimum = if *original >= 32.0 { 24.0 } else { 12.0 };
-            let over = measured
-                .get(id.as_str())
-                .is_some_and(|r| r.w.is_finite() && r.w > *available + TEXT_FIT_EPS);
-            if over && *size - 1.0 >= minimum {
+            let (Some(one), Some(real)) = (one_line.get(id.as_str()), laid_out.get(id.as_str()))
+            else {
+                continue;
+            };
+            let too_wide = one.w.is_finite() && one.w > *available + TEXT_FIT_EPS;
+            let wrapped = real.h.is_finite() && one.h.is_finite() && real.h > one.h + 0.5;
+            if (too_wide || wrapped) && *size - 1.0 >= minimum {
                 *size -= 1.0;
                 stepped = true;
             }
