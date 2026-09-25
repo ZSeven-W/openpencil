@@ -439,4 +439,5 @@ fn a_public_deployment_neither_offers_nor_serves_website_import() {
     );
     assert_eq!(body_of(&server)["siteImport"], false, "{server}");
     assert_eq!(body_of(&server)["variants"], false, "{server}");
+    assert_eq!(body_of(&server)["generators"], true, "{server}");
 }

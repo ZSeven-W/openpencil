@@ -478,13 +478,15 @@ pub fn handle_web_canvas_request(
             // open), so the browser opens onto its canvas rather than Home.
             // `siteImport`: `/api/ai/site-import` is served (Home offers it).
             // `variants`: `/api/ai/standard` runs side-by-side directions.
+            // `generators`: `/api/generator/run` is served (every mode).
             body: format!(
-                r#"{{"running":true,"port":{},"localIp":"127.0.0.1","server":"openpencil-mcp","mode":"web-canvas","serveMode":"{}","fileBound":{},"siteImport":{},"variants":{}}}"#,
+                r#"{{"running":true,"port":{},"localIp":"127.0.0.1","server":"openpencil-mcp","mode":"web-canvas","serveMode":"{}","fileBound":{},"siteImport":{},"variants":{},"generators":{}}}"#,
                 state.port,
                 state.mode.wire_name(),
                 state.current_path.is_some(),
                 state.mode.allows_site_import(),
-                state.mode.allows_design_variants()
+                state.mode.allows_design_variants(),
+                crate::generator_run_route::SERVED
             ),
         },
         ("POST", "/api/mcp/server") => update_mcp_server_settings(body, state),

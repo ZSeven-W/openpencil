@@ -58,6 +58,9 @@ impl CkInner {
         // the frame after the fetch lands. No-op on every other frame and on
         // native, where the document was already in the binary.
         self.host.retry_pending_scene_template();
+        // Generator runs the daemon answered land here (one undo step each),
+        // and runs the editor queued since the last frame are sent.
+        crate::web_generator_runner::pump(&mut self.host);
         crate::web_chat::reconcile_models(self.host.editor_state_mut());
         // Detect a credential edit and enqueue the daemon sync BEFORE mirroring
         // the sync status below: a corrective edit clears the stale error in

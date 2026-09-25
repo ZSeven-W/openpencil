@@ -314,6 +314,15 @@ pub(super) fn dispatch<S: Read + Write>(
     // pure (no network, no state) so — unlike the image routes above — it
     // runs on this connection's own thread without ever touching the state
     // lock; only large/slow parsing needs to stay off it.
+    // Canvas generator run for the browser shell (it has no QuickJS). Pure
+    // sandboxed compute over the request alone — no state, no IO — so like
+    // the convert below it runs on this connection's own thread, never under
+    // the state lock. Served in every mode; see `generator_run_route`.
+    if req.method == "POST" && req.path == crate::generator_run_route::GENERATOR_RUN_ROUTE {
+        let (status, body) = crate::generator_run_route::serve(&req.body);
+        crate::mcp_serve::write_mcp_http_response_with_origin(stream, status, &body, cors_origin)?;
+        return Ok(false);
+    }
     if req.method == "POST" && req.path == "/api/figma/convert" {
         let (status, body) = match crate::figma_convert::convert_fig_json(&req.body) {
             Ok(body) => ("200 OK", body),

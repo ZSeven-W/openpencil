@@ -15,7 +15,10 @@ pub(super) fn is_sensitive_browser_post(request: &crate::mcp_serve::HttpRequest)
             || request
                 .path
                 .starts_with(op_editor_core::collab_routes::API_PREFIX)
-            || request.path.starts_with("/api/figma/"))
+            || request.path.starts_with("/api/figma/")
+            // CPU-bound: a drive-by page must not be able to burn the
+            // daemon's generator slots.
+            || request.path == crate::generator_run_route::GENERATOR_RUN_ROUTE)
 }
 
 /// `application/json` (optionally with parameters, e.g. `; charset=utf-8`).

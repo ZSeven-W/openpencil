@@ -64,6 +64,7 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     // Whether the daemon holds an opened file decides Home vs canvas below;
     // ask now so the answer overlaps the CanvasKit download.
     crate::studio_web::probe_bound_file(host.editor_state().editor_ui.embed);
+    crate::web_generator_runner::probe_capability();
     // Theme is device-level, so it is resolved from its own unpartitioned key
     // rather than from the partition blob just loaded. On a browser that has
     // never run the split build this adopts the blob's theme and writes the
