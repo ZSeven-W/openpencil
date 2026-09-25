@@ -119,3 +119,57 @@ pub(crate) fn de_head(section: &str) -> Option<String> {
         .count();
     (han >= 3).then(|| head.to_string())
 }
+
+/// Whether a subtask `label` names the required `section` in fewer words.
+///
+/// Planners label a section tersely or reorder its words: the brief asks for
+/// `右侧任务详情抽屉打开状态` and the plan says `右侧任务详情抽屉`; the brief
+/// says `侧栏项目列表` and the plan says `项目侧栏`. Substring and synonym
+/// matching miss both, so the gate appended duplicates of sections the plan
+/// already had. A label counts when it is at least four Han characters, every
+/// one of them occurs in the section (as a multiset), and together they make
+/// up most of it.
+pub(crate) fn label_names_section(section: &str, label: &str) -> bool {
+    let han = |text: &str| -> Vec<char> {
+        text.chars()
+            .filter(|ch| crate::plan_coverage::is_han(*ch))
+            .collect()
+    };
+    let label_chars = han(label);
+    let mut section_chars = han(section);
+    if label_chars.len() < 4 || section_chars.is_empty() {
+        return false;
+    }
+    let total = section_chars.len();
+    for ch in &label_chars {
+        match section_chars.iter().position(|c| c == ch) {
+            Some(i) => {
+                section_chars.swap_remove(i);
+            }
+            None => return false,
+        }
+    }
+    label_chars.len() * 10 >= total * 6
+}
+
+#[cfg(test)]
+mod label_names_section_tests {
+    use super::label_names_section;
+
+    #[test]
+    fn a_terse_or_reordered_label_names_its_section() {
+        assert!(label_names_section(
+            "右侧任务详情抽屉打开状态",
+            "右侧任务详情抽屉"
+        ));
+        assert!(label_names_section("侧栏项目列表", "项目侧栏"));
+    }
+
+    #[test]
+    fn a_short_or_unrelated_label_does_not() {
+        assert!(!label_names_section("今日目标环形进度", "今日"));
+        assert!(!label_names_section("侧栏项目列表", "顶部标签切换"));
+        assert!(!label_names_section("横向滚动的课程卡片轨道", "课程推荐"));
+        assert!(!label_names_section("商家详情页面顶部横幅", "商家列表"));
+    }
+}
