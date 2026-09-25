@@ -8,7 +8,7 @@
 
 use super::super::copy;
 use super::super::HOME_TOPBAR_H;
-use super::{connect_card_rects, self_locale, HomeLayout, MODEL_CHIP_H};
+use super::{connect_card_rects, HomeLayout, MODEL_CHIP_H};
 use crate::Rect;
 use op_editor_core::HomeFamily;
 
@@ -87,6 +87,7 @@ pub(super) fn compact_layout_for_scrolled(
     task: HomeFamily,
     scroll_y: f32,
     model_chip_label_w: f32,
+    locale: op_editor_core::Locale,
 ) -> HomeLayout {
     let width = viewport_width.max(1.0);
     let height = viewport_height.max(1.0);
@@ -94,7 +95,6 @@ pub(super) fn compact_layout_for_scrolled(
     let content_x = PAGE_PAD_X;
     let content_w = (width - PAGE_PAD_X * 2.0).max(200.0);
     let translate = |y: f32, h: f32| Rect::xywh(content_x, y + scroll, content_w, h);
-    let locale = self_locale();
 
     // ── pinned top bar: brand | … | 普通/专业 | gear ─────────────────
     let gear = Rect::xywh(
@@ -188,7 +188,9 @@ pub(super) fn compact_layout_for_scrolled(
     let labels = copy::segment_labels(locale, task);
     let mut option_widths = [0.0f32; 3];
     for (index, label) in labels.iter().take(3).enumerate() {
-        option_widths[index] = copy::estimate_text_w(label, 11.0) + 18.0;
+        // Two-glyph CJK labels (手机 / 电脑) measure under the 44 pt
+        // touch floor; the copy width never shrinks a target below it.
+        option_widths[index] = (copy::estimate_text_w(label, 11.0) + 18.0).max(44.0);
     }
     let segment_w: f32 = option_widths.iter().take(labels.len()).sum::<f32>() + 4.0;
     let segment = if labels.is_empty() {

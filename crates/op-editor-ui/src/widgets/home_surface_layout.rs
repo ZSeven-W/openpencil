@@ -7,7 +7,7 @@ use super::copy;
 use super::model::MODEL_CHIP_H;
 use super::HOME_TOPBAR_H;
 use crate::Rect;
-use op_editor_core::HomeFamily;
+use op_editor_core::{HomeFamily, Locale};
 
 /// Page shell: max width incl. the 8 px side padding, so the content
 /// column is 1280 at 1440 (prototype `.page-shell`).
@@ -215,6 +215,7 @@ pub fn layout_for_scrolled(
         scroll_y,
         model_chip_label_w,
         false,
+        LAYOUT_DEFAULT_LOCALE,
     )
 }
 
@@ -229,6 +230,7 @@ pub(crate) fn layout_for_scrolled_mode(
     scroll_y: f32,
     model_chip_label_w: f32,
     compact: bool,
+    locale: Locale,
 ) -> HomeLayout {
     if compact {
         return compact::compact_layout_for_scrolled(
@@ -237,6 +239,7 @@ pub(crate) fn layout_for_scrolled_mode(
             task,
             scroll_y,
             model_chip_label_w,
+            locale,
         );
     }
     wide_layout_for_scrolled(
@@ -245,6 +248,7 @@ pub(crate) fn layout_for_scrolled_mode(
         task,
         scroll_y,
         model_chip_label_w,
+        locale,
     )
 }
 
@@ -255,6 +259,7 @@ fn wide_layout_for_scrolled(
     task: HomeFamily,
     scroll_y: f32,
     model_chip_label_w: f32,
+    locale: Locale,
 ) -> HomeLayout {
     let width = viewport_width.max(1.0);
     let viewport_height = viewport_height.max(1.0);
@@ -273,17 +278,15 @@ fn wide_layout_for_scrolled(
     };
 
     // ── top bar (pinned) ───────────────────────────────────────────
-    let professional_w = copy::estimate_text_w(
-        copy::home_str(self_locale(), "home.topbar.professional"),
-        15.0,
-    ) + 30.0
-        + 17.0
-        + 9.0;
-    let open_file_w =
-        copy::estimate_text_w(copy::home_str(self_locale(), "home.topbar.openFile"), 15.0)
+    let professional_w =
+        copy::estimate_text_w(copy::home_str(locale, "home.topbar.professional"), 15.0)
             + 30.0
             + 17.0
             + 9.0;
+    let open_file_w = copy::estimate_text_w(copy::home_str(locale, "home.topbar.openFile"), 15.0)
+        + 30.0
+        + 17.0
+        + 9.0;
     let professional = Rect::xywh(
         width - 30.0 - professional_w,
         (HOME_TOPBAR_H - 38.0) / 2.0,
@@ -419,7 +422,7 @@ fn wide_layout_for_scrolled(
         inner_w,
         LABEL_ROW_H,
     );
-    let labels = copy::segment_labels(self_locale(), task);
+    let labels = copy::segment_labels(locale, task);
     let mut option_widths = [0.0f32; 3];
     for (index, label) in labels.iter().take(3).enumerate() {
         option_widths[index] = copy::estimate_text_w(label, 12.0) + SEGMENT_OPTION_PAD_X * 2.0;
@@ -461,15 +464,13 @@ fn wide_layout_for_scrolled(
     let screenshot = Rect::xywh(
         tools_row.origin.x + 1.0,
         tools_row.origin.y + 13.0,
-        copy::estimate_text_w(copy::home_str(self_locale(), "home.tools.screenshot"), 14.0)
-            + 18.0
-            + 8.0,
+        copy::estimate_text_w(copy::home_str(locale, "home.tools.screenshot"), 14.0) + 18.0 + 8.0,
         28.0,
     );
     let reference_link = Rect::xywh(
         screenshot.origin.x + screenshot.size.x + 21.0,
         screenshot.origin.y,
-        copy::estimate_text_w(copy::home_str(self_locale(), "home.tools.link"), 14.0) + 18.0 + 8.0,
+        copy::estimate_text_w(copy::home_str(locale, "home.tools.link"), 14.0) + 18.0 + 8.0,
         28.0,
     );
     let figma = Rect::xywh(
@@ -481,7 +482,7 @@ fn wide_layout_for_scrolled(
     let variants = Rect::xywh(
         figma.origin.x + figma.size.x + 21.0,
         screenshot.origin.y,
-        copy::estimate_text_w(copy::home_str(self_locale(), "home.tools.variants"), 13.0)
+        copy::estimate_text_w(copy::home_str(locale, "home.tools.variants"), 13.0)
             + super::variants_toggle::VARIANTS_CHIP_PAD,
         28.0,
     );
@@ -550,7 +551,7 @@ fn wide_layout_for_scrolled(
         (preview_footer.origin.y - (preview_heading.origin.y + preview_heading.size.y)).max(60.0),
     );
     let use_example_w =
-        copy::estimate_text_w(copy::home_str(self_locale(), "home.preview.use"), 12.0) + 22.0;
+        copy::estimate_text_w(copy::home_str(locale, "home.preview.use"), 12.0) + 22.0;
     let use_example = Rect::xywh(
         preview_footer.origin.x + preview_footer.size.x - use_example_w,
         preview_footer.origin.y,
@@ -611,9 +612,7 @@ fn wide_layout_for_scrolled(
         RECENT_H,
     );
     let new_canvas_w =
-        copy::estimate_text_w(copy::home_str(self_locale(), "home.recent.newCanvas"), 12.0)
-            + 16.0
-            + 12.0;
+        copy::estimate_text_w(copy::home_str(locale, "home.recent.newCanvas"), 12.0) + 16.0 + 12.0;
     let new_canvas = Rect::xywh(
         recent.origin.x + recent.size.x - new_canvas_w,
         recent.origin.y + (RECENT_H - 32.0) / 2.0,
@@ -690,6 +689,7 @@ pub fn max_scroll_for(
         task,
         model_chip_label_w,
         false,
+        LAYOUT_DEFAULT_LOCALE,
     )
 }
 
@@ -702,6 +702,7 @@ pub fn max_scroll_for_mode(
     task: HomeFamily,
     model_chip_label_w: f32,
     compact: bool,
+    locale: Locale,
 ) -> f32 {
     if compact {
         let layout = compact::compact_layout_for_scrolled(
@@ -710,13 +711,21 @@ pub fn max_scroll_for_mode(
             task,
             0.0,
             model_chip_label_w,
+            locale,
         );
         let visible_bottom = viewport_height - compact::BOTTOM_NAV_H;
         return (layout.preview.origin.y + layout.preview.size.y + compact::PAGE_PAD_BOTTOM
             - visible_bottom)
             .max(0.0);
     }
-    let layout = layout_for(viewport_width, viewport_height, task, model_chip_label_w);
+    let layout = wide_layout_for_scrolled(
+        viewport_width,
+        viewport_height,
+        task,
+        0.0,
+        model_chip_label_w,
+        locale,
+    );
     (layout.recent.origin.y + layout.recent.size.y + 20.0 - viewport_height).max(0.0)
 }
 
@@ -733,12 +742,11 @@ pub const EXPLORE_FAMILIES: [HomeFamily; 3] = [
     HomeFamily::EventPoster,
 ];
 
-/// Layout-time locale for the label estimates. English keeps the rect
-/// estimates stable across locales; paint re-measures every label for
-/// real, so only hit-rect sizes depend on this approximation.
-fn self_locale() -> op_editor_core::Locale {
-    op_editor_core::Locale::EnUs
-}
+/// The locale the static entry points ([`layout_for`], [`max_scroll_for`])
+/// estimate label widths in. The live surface passes the UI locale: label
+/// widths also PLACE the next control, so an English estimate let long
+/// Russian / German labels run into their neighbours.
+const LAYOUT_DEFAULT_LOCALE: Locale = Locale::EnUs;
 
 /// The icon→copy gap inside a wide tab (13 px; viewports ≤1180 use the
 /// prototype's compact 10 px, where the tab padding also drops to 10).

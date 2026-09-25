@@ -249,6 +249,7 @@ fn compact_wheel_scroll_stops_at_the_featured_card_bottom() {
         host.editor_state().editor_ui.home.task,
         120.0,
         true,
+        host.editor_state().editor_ui.locale,
     );
     assert!(host.editor_state().editor_ui.home.scroll_y <= max);
     // Above the nav the wheel belongs to the pinned chrome, not the page.

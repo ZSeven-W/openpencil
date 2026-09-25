@@ -233,6 +233,7 @@ impl<'a> HomeSurface<'a> {
             self.state.task,
             chip_w,
             compact,
+            self.ui.locale,
         );
         let focused = compact && self.state.composer_focused;
         let mut layout = layout::layout_for_scrolled_mode(
@@ -244,6 +245,7 @@ impl<'a> HomeSurface<'a> {
             scroll_y.clamp(0.0, max_scroll),
             chip_w,
             compact,
+            self.ui.locale,
         );
         if focused {
             layout::compact::collapse_for_focused_composer(&mut layout);

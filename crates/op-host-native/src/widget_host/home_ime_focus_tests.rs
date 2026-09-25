@@ -201,6 +201,7 @@ fn an_already_visible_composer_is_left_where_the_reader_put_it() {
         host.editor_state().editor_ui.home.task,
         op_editor_ui::widgets::home_surface::model_chip_width(""),
         true,
+        host.editor_state().editor_ui.locale,
     );
     assert!(max_scroll > 0.0, "precondition: the compact page scrolls");
     let parked = max_scroll / 2.0;

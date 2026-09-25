@@ -108,8 +108,17 @@ fn paint_hero(
     let palette = fade_all(palette, alpha);
     let lead = copy::home_str(locale, "home.welcome.titleLead");
     let marked = copy::home_str(locale, "home.welcome.titleMarked");
-    let lead_w = cx.backend.measure_text_family(lead, 27.0, SANS);
-    let marked_w = cx.backend.measure_text_family(marked, 27.0, SANS);
+    // Measure at the weight the title is drawn with, and place the marked
+    // word by the whole line's advance: a regular-weight measure of the lead
+    // alone came up short (and may drop its trailing space), so in Russian
+    // the two words ran together.
+    let full_w =
+        cx.backend
+            .measure_text_family_styled(&format!("{lead}{marked}"), 27.0, SANS, 720, false);
+    let marked_w = cx
+        .backend
+        .measure_text_family_styled(marked, 27.0, SANS, 720, false);
+    let lead_w = (full_w - marked_w).max(0.0);
     let baseline = layout.welcome.origin.y + dy + 28.0;
     text_weighted(
         cx,

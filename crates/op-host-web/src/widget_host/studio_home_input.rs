@@ -197,9 +197,16 @@ impl WidgetHost {
             return Some(false);
         }
         let chip_w = model_chip_width(&model_chip_label(&self.editor_state));
+        let locale = self.editor_state.editor_ui.locale;
         let home = &self.editor_state.editor_ui.home;
-        let max_scroll =
-            max_scroll_for_mode(viewport_width, viewport_height, home.task, chip_w, false);
+        let max_scroll = max_scroll_for_mode(
+            viewport_width,
+            viewport_height,
+            home.task,
+            chip_w,
+            false,
+            locale,
+        );
         let next = (home.scroll_y - delta_y).clamp(0.0, max_scroll);
         if (next - home.scroll_y).abs() <= f32::EPSILON {
             return Some(false);

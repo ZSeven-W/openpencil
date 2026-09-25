@@ -60,6 +60,7 @@ impl WidgetHostNative {
             self.editor_state.editor_ui.home.task,
             chip_w,
             compact,
+            self.editor_state.editor_ui.locale,
         )
     }
 }

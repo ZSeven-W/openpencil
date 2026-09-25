@@ -233,17 +233,35 @@ pub(crate) fn fit_label_size(
     size
 }
 
-/// Backend-free width estimate for the fixed studio labels (CJK glyph =
-/// its point size, Latin/digit ≈ 0.55 em). Only used to size rects whose
-/// text is known at compile time; paint still measures for real.
+/// Backend-free width estimate for the studio labels: a full-width glyph
+/// (CJK, kana, hangul, fullwidth forms) is its point size, every other
+/// letter ≈ 0.55 em — Cyrillic, Greek and accented Latin included, which
+/// counting as full width spread the Russian tool row off the composer.
+/// Sizes rects in the layout; paint still measures for real.
 pub(crate) fn estimate_text_w(text: &str, size: f32) -> f32 {
     text.chars()
         .map(|character| {
-            if character.is_ascii() {
-                size * 0.55
-            } else {
+            if is_full_width(character) {
                 size
+            } else {
+                size * 0.55
             }
         })
         .sum()
+}
+
+fn is_full_width(character: char) -> bool {
+    matches!(
+        u32::from(character),
+        0x1100..=0x115F     // Hangul Jamo
+            | 0x2E80..=0x303F // CJK radicals, punctuation
+            | 0x3040..=0x33FF // kana, CJK compatibility
+            | 0x3400..=0x4DBF // CJK extension A
+            | 0x4E00..=0x9FFF // CJK unified ideographs
+            | 0xAC00..=0xD7AF // Hangul syllables
+            | 0xF900..=0xFAFF // CJK compatibility ideographs
+            | 0xFE30..=0xFE4F // CJK compatibility forms
+            | 0xFF00..=0xFF60 // fullwidth forms
+            | 0xFFE0..=0xFFE6
+    )
 }
