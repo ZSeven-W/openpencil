@@ -488,6 +488,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "generator.ownership" => "चाइल्ड तत्व प्रोग्राम से बनते हैं। दोबारा जनरेट करने पर मैन्युअल बदलाव बदल जाते हैं।",
         "generator.edited" => "चाइल्ड तत्व हाथ से बदले गए हैं; दोबारा जनरेट करने पर वे बदल जाएँगे।",
         "generator.readOnly" => "यह ऐप जनरेटर नहीं चला सकता; सहेजे गए चाइल्ड तत्व जैसे हैं वैसे दिखाए गए हैं।",
+        "generator.running" => "सर्वर पर चल रहा है… परिणाम आते ही लागू हो जाएगा।",
         "generator.regenerate" => "दोबारा जनरेट करें",
         "generator.detach" => "अलग करें",
         "generator.failed" => "विफल: {error}",

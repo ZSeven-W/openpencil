@@ -5,8 +5,8 @@
 //! a text field for number / text / color, a checkbox for boolean — plus
 //! Regenerate and Detach. A two-line note states the ownership rule
 //! (generated children are replaced on regenerate) and, when relevant, a
-//! status line reports the last failure, hand-edited children, or a host
-//! that cannot run programs.
+//! status line reports a run still waiting on the daemon (browser), the
+//! last failure, hand-edited children, or a host that cannot run programs.
 
 use op_editor_core::generator::{
     generator_spec_of, installed_generator_runner, GeneratorParamKind,
@@ -44,6 +44,8 @@ pub struct GeneratorParamRow {
 /// Status line under the ownership note, most urgent first.
 #[derive(Debug, Clone, PartialEq)]
 pub enum GeneratorStatus {
+    /// A run is waiting on a remote runtime (the browser's daemon).
+    Running,
     /// The last run failed — its message.
     Failed(String),
     /// Children differ from the last generated output.
@@ -138,7 +140,10 @@ pub fn summary_for(
         .map(|error| GeneratorStatus::Failed(error.message.clone()));
     let status = match parsed {
         Err(error) => Some(GeneratorStatus::Failed(error.to_string())),
-        Ok(_) => parked
+        Ok(_) => state
+            .generator_is_pending(&node_id)
+            .then_some(GeneratorStatus::Running)
+            .or(parked)
             .or_else(|| {
                 state
                     .generator_children_edited(&node_id)
@@ -253,6 +258,9 @@ pub fn paint_generator_section(
                 op_i18n::interpolate(t("generator.failed"), &[("error", message.as_str())]),
                 theme.destructive,
             ),
+            GeneratorStatus::Running => {
+                (t("generator.running").to_string(), theme.muted_foreground)
+            }
             GeneratorStatus::Edited => (t("generator.edited").to_string(), theme.primary),
             GeneratorStatus::ReadOnly => {
                 (t("generator.readOnly").to_string(), theme.muted_foreground)

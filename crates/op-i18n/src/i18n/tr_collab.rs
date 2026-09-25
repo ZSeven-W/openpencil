@@ -484,6 +484,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "generator.ownership" => "Alt öğeler program tarafından oluşturulur. Yeniden oluşturmak elle yapılan düzenlemelerin yerini alır.",
         "generator.edited" => "Alt öğeler elle düzenlendi; yeniden oluşturmak bunların yerini alacak.",
         "generator.readOnly" => "Bu uygulama oluşturucuları çalıştıramaz; kaydedilmiş alt öğeler olduğu gibi gösteriliyor.",
+        "generator.running" => "Sunucuda çalışıyor… sonuç geldiğinde uygulanır.",
         "generator.regenerate" => "Yeniden oluştur",
         "generator.detach" => "Ayır",
         "generator.failed" => "Başarısız: {error}",

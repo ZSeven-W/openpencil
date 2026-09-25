@@ -496,6 +496,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "generator.ownership" => "Các phần tử con được tạo bằng chương trình. Tạo lại sẽ thay thế chỉnh sửa thủ công.",
         "generator.edited" => "Các phần tử con đã bị sửa thủ công; Tạo lại sẽ thay thế chúng.",
         "generator.readOnly" => "Ứng dụng này không chạy được trình tạo; các phần tử con đã lưu được hiển thị nguyên trạng.",
+        "generator.running" => "Đang chạy trên máy chủ… kết quả sẽ được áp dụng khi nhận được.",
         "generator.regenerate" => "Tạo lại",
         "generator.detach" => "Tách ra",
         "generator.failed" => "Thất bại: {error}",

@@ -44,6 +44,8 @@ use crate::pen_node_ext::PenNodeExt;
 
 #[path = "generator_materialize.rs"]
 mod materialize;
+#[path = "generator_remote.rs"]
+mod remote;
 #[path = "generator_starters.rs"]
 pub mod starters;
 #[path = "generator_state.rs"]
@@ -51,6 +53,10 @@ mod state;
 
 pub use crate::generator_error::GeneratorError;
 pub use materialize::{materialize_children, output_hash};
+pub use remote::{
+    generator_run_reply_body, parse_generator_run_reply, GeneratorPending, GeneratorRunReply,
+    GeneratorRunWireRequest, GENERATOR_RUN_ROUTE,
+};
 pub use starters::{GeneratorStarter, GENERATOR_STARTERS};
 pub use state::GeneratorPanelError;
 
@@ -305,8 +311,11 @@ pub type GeneratorRunner = fn(&GeneratorRequest<'_>) -> Result<Vec<PenNode>, Gen
 static RUNNER: OnceLock<GeneratorRunner> = OnceLock::new();
 
 /// Install the process-wide runtime. Hosts that can run programs (desktop,
-/// headless services) call this once at startup; the browser bundle does
-/// not, so its editor treats generators as read-only materialized frames.
+/// headless services) call this once at startup. The browser bundle
+/// installs a daemon-backed runner (see `generator_remote.rs`) only once
+/// its daemon advertises the `generators` capability; until then — and
+/// for good when the daemon cannot run programs — its editor treats
+/// generators as read-only materialized frames.
 /// Returns `false` when a runtime was already installed.
 pub fn install_generator_runner(runner: GeneratorRunner) -> bool {
     RUNNER.set(runner).is_ok()

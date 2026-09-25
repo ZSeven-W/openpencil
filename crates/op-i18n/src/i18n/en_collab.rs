@@ -524,6 +524,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "generator.ownership" => "Children are generated. Regenerate replaces manual edits.",
         "generator.edited" => "Children were edited by hand; Regenerate will replace them.",
         "generator.readOnly" => "This app can't run generators; saved children are shown as-is.",
+        "generator.running" => "Running on the server… the result applies when it arrives.",
         "generator.regenerate" => "Regenerate",
         "generator.detach" => "Detach",
         "generator.failed" => "Failed: {error}",

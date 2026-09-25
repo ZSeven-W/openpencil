@@ -500,6 +500,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "generator.ownership" => "하위 요소는 프로그램으로 생성됩니다. 다시 생성하면 수동 편집이 대체됩니다.",
         "generator.edited" => "하위 요소가 수동으로 편집되었습니다. 다시 생성하면 대체됩니다.",
         "generator.readOnly" => "이 앱에서는 생성기를 실행할 수 없어 저장된 하위 요소를 그대로 표시합니다.",
+        "generator.running" => "서버에서 실행 중… 결과가 도착하면 자동으로 적용됩니다.",
         "generator.regenerate" => "다시 생성",
         "generator.detach" => "분리",
         "generator.failed" => "실패: {error}",

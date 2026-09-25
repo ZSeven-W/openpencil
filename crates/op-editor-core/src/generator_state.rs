@@ -41,7 +41,7 @@ pub struct GeneratorPanelError {
 impl EditorState {
     /// The node `id` wherever it lives, plus the page id commands must
     /// target (`None` for a page-less legacy document).
-    fn locate_generator_node(&self, id: &NodeId) -> Option<(Option<String>, &PenNode)> {
+    pub(super) fn locate_generator_node(&self, id: &NodeId) -> Option<(Option<String>, &PenNode)> {
         match self.doc.pages.as_ref() {
             Some(pages) if !pages.is_empty() => pages.iter().find_map(|page| {
                 walkers::find_node(&page.children, id).map(|node| (Some(page.id.clone()), node))
@@ -168,7 +168,7 @@ impl EditorState {
         parent_id: &NodeId,
         page_id: Option<&str>,
         frame: PenNode,
-        mut spec: GeneratorSpec,
+        spec: GeneratorSpec,
         runner: Option<GeneratorRunner>,
     ) -> Result<(EditorCommand, NodeId), GeneratorError> {
         let PenNode::Frame(_) = &frame else {
@@ -176,11 +176,39 @@ impl EditorState {
                 id: frame.id_str().to_string(),
             });
         };
-        let mut frame = frame;
+        let id = self.allocate_generator_id()?;
+        let command =
+            self.generator_create_command_with_id(&id, parent_id, page_id, frame, spec, runner)?;
+        Ok((command, id))
+    }
+
+    /// The fresh editor id a new generator frame would take right now.
+    /// Deterministic for an unchanged document, which is what lets a
+    /// remotely computed starter land under the id it was computed for.
+    pub(super) fn allocate_generator_id(&self) -> Result<NodeId, GeneratorError> {
         let mut taken = self.collect_node_ids();
-        let id = DocumentIdAllocator::sequential_for_document(&self.doc)
+        DocumentIdAllocator::sequential_for_document(&self.doc)
             .and_then(|mut allocator| allocator.allocate(&mut taken))
-            .map_err(|_| GeneratorError::ApplyRejected)?;
+            .map_err(|_| GeneratorError::ApplyRejected)
+    }
+
+    /// [`generator_create_command`](Self::generator_create_command) with
+    /// the new frame's id already chosen.
+    pub(super) fn generator_create_command_with_id(
+        &self,
+        id: &NodeId,
+        parent_id: &NodeId,
+        page_id: Option<&str>,
+        frame: PenNode,
+        mut spec: GeneratorSpec,
+        runner: Option<GeneratorRunner>,
+    ) -> Result<EditorCommand, GeneratorError> {
+        let PenNode::Frame(_) = &frame else {
+            return Err(GeneratorError::NotAFrame {
+                id: frame.id_str().to_string(),
+            });
+        };
+        let mut frame = frame;
         let base = frame.base_mut();
         base.id = id.as_str().to_string();
         let human_explain = base
@@ -195,14 +223,11 @@ impl EditorState {
         if let Some(slot) = frame.children_mut() {
             *slot = children;
         }
-        Ok((
-            EditorCommand::InsertAuthoredSubtreePreservingRoots {
-                nodes: vec![frame],
-                parent_id: parent_id.clone(),
-                page_id: page_id.map(str::to_string),
-            },
-            id,
-        ))
+        Ok(EditorCommand::InsertAuthoredSubtreePreservingRoots {
+            nodes: vec![frame],
+            parent_id: parent_id.clone(),
+            page_id: page_id.map(str::to_string),
+        })
     }
 
     /// Build the command that detaches generator `id`: the program and
@@ -244,7 +269,7 @@ impl EditorState {
     /// Apply `command` (if any) and park the outcome for the panel. With
     /// `record_history`, exactly one undo step is recorded: the command's
     /// own push when it makes one, else ours.
-    fn record_generator_result(
+    pub(super) fn record_generator_result(
         &mut self,
         id: &NodeId,
         result: Result<Option<EditorCommand>, GeneratorError>,
@@ -265,12 +290,13 @@ impl EditorState {
             Ok(true)
         });
         self.ui.generator_error = match &outcome {
-            Ok(_) => None,
+            Ok(_) | Err(GeneratorError::Pending) => None,
             Err(error) => Some(GeneratorPanelError {
                 node_id: id.clone(),
                 message: error.to_string(),
             }),
         };
+        self.note_generator_pending(id, &outcome, None);
         outcome
     }
 
@@ -354,6 +380,27 @@ impl EditorState {
         starter: &GeneratorStarter,
         runner: Option<GeneratorRunner>,
     ) -> Result<NodeId, GeneratorError> {
+        let zoom = if self.viewport.zoom > 0.0 {
+            self.viewport.zoom
+        } else {
+            1.0
+        };
+        let x = f64::from(((80.0 - self.viewport.pan_x) / zoom).round());
+        let y = f64::from(((80.0 - self.viewport.pan_y) / zoom).round());
+        self.insert_generator_frame(starter.frame(x, y), starter.spec(), runner)
+    }
+
+    /// Insert a new generator `frame` at the page root, select it, and
+    /// record one undo step. A remote runtime answering
+    /// [`GeneratorError::Pending`] parks the inputs so
+    /// [`apply_remote_generator_result`](Self::apply_remote_generator_result)
+    /// can finish the insert when the result lands.
+    pub(super) fn insert_generator_frame(
+        &mut self,
+        frame: PenNode,
+        spec: GeneratorSpec,
+        runner: Option<GeneratorRunner>,
+    ) -> Result<NodeId, GeneratorError> {
         // Generators write whole subtrees the collaboration protocol cannot
         // carry yet; a live session refuses them like other unsupported
         // node properties.
@@ -371,22 +418,24 @@ impl EditorState {
         {
             return Err(GeneratorError::CollaborationUnsupported);
         }
-        let zoom = if self.viewport.zoom > 0.0 {
-            self.viewport.zoom
-        } else {
-            1.0
-        };
-        let x = f64::from(((80.0 - self.viewport.pan_x) / zoom).round());
-        let y = f64::from(((80.0 - self.viewport.pan_y) / zoom).round());
         let before = self.snapshot_for_history();
         let pushes_before = self.history_push_count;
-        let (command, id) = self.generator_create_command(
+        let id = self.allocate_generator_id()?;
+        let built = self.generator_create_command_with_id(
+            &id,
             &NodeId::NONE,
             None,
-            starter.frame(x, y),
-            starter.spec(),
+            frame.clone(),
+            spec.clone(),
             runner,
-        )?;
+        );
+        let command = match built {
+            Ok(command) => command,
+            Err(error) => {
+                self.note_generator_pending::<()>(&id, &Err(error.clone()), Some((frame, spec)));
+                return Err(error);
+            }
+        };
         if !self.apply(command) {
             return Err(GeneratorError::ApplyRejected);
         }
@@ -397,6 +446,7 @@ impl EditorState {
             self.history_push_past(before);
         }
         self.ui.generator_error = None;
+        self.note_generator_pending::<()>(&id, &Ok(()), None);
         Ok(id)
     }
 }

@@ -409,6 +409,9 @@ pub struct UiDraftState {
     pub variables: VariableUiState,
     /// Last generator failure, painted inline by the Generator section.
     pub generator_error: Option<crate::generator::GeneratorPanelError>,
+    /// A generator run waiting on a remote runtime (browser only; native
+    /// runtimes answer synchronously and leave this `None`).
+    pub generator_pending: Option<crate::generator::GeneratorPending>,
 }
 
 impl UiDraftState {

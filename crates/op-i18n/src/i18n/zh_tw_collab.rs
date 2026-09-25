@@ -484,6 +484,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "generator.ownership" => "子元素由程式產生，重新產生會覆蓋手動修改。",
         "generator.edited" => "子元素已被手動修改，重新產生將覆蓋這些修改。",
         "generator.readOnly" => "目前應用程式無法執行產生器，依已儲存的子元素顯示。",
+        "generator.running" => "正在伺服器上執行……結果傳回後自動套用。",
         "generator.regenerate" => "重新產生",
         "generator.detach" => "分離",
         "generator.failed" => "失敗：{error}",

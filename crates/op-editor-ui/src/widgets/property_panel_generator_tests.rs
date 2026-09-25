@@ -107,3 +107,31 @@ fn detach_needs_no_runtime_and_removes_the_section() {
     let panel = PropertyPanel::for_selection(&state).expect("panel");
     assert!(panel.snapshot.generator.is_some());
 }
+
+fn pending_runner(_: &GeneratorRequest<'_>) -> Result<Vec<PenNode>, GeneratorError> {
+    Err(GeneratorError::Pending)
+}
+
+#[test]
+fn a_run_waiting_on_the_daemon_shows_running_not_failed() {
+    let (mut state, id) = state_with_starter();
+    assert_eq!(
+        state.regenerate_generator(&id, Some(pending_runner)),
+        Err(GeneratorError::Pending)
+    );
+    let panel = PropertyPanel::for_selection(&state).expect("panel");
+    let summary = panel.snapshot.generator.as_ref().unwrap();
+    assert_eq!(summary.status, Some(GeneratorStatus::Running));
+    assert!(state.ui.generator_error.is_none());
+}
+
+#[test]
+fn without_a_runtime_the_status_is_read_only() {
+    // Test processes never install a runner: this is the browser before
+    // (or without) the daemon's `generators` capability.
+    assert!(op_editor_core::generator::installed_generator_runner().is_none());
+    let (state, _) = state_with_starter();
+    let panel = PropertyPanel::for_selection(&state).expect("panel");
+    let summary = panel.snapshot.generator.as_ref().unwrap();
+    assert_eq!(summary.status, Some(GeneratorStatus::ReadOnly));
+}

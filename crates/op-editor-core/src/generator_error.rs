@@ -46,6 +46,12 @@ pub enum GeneratorError {
     ApplyRejected,
     /// A live collaboration session cannot carry generator writes yet.
     CollaborationUnsupported,
+    /// The run was handed to a remote runtime (the browser asks its daemon)
+    /// and its result is not back yet. Not a failure: the document is
+    /// unchanged and the result applies when it arrives.
+    Pending,
+    /// A remote runtime refused or failed the run; its message, verbatim.
+    Remote(String),
 }
 
 impl fmt::Display for GeneratorError {
@@ -99,6 +105,10 @@ impl fmt::Display for GeneratorError {
             GeneratorError::CollaborationUnsupported => {
                 f.write_str("generators cannot be edited during a live collaboration session")
             }
+            GeneratorError::Pending => {
+                f.write_str("generator program is running; its result applies when it arrives")
+            }
+            GeneratorError::Remote(message) => f.write_str(message),
         }
     }
 }

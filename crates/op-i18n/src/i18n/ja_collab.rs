@@ -500,6 +500,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "generator.ownership" => "子要素はプログラムで生成されます。再生成すると手動の編集は置き換わります。",
         "generator.edited" => "子要素が手動で編集されています。再生成すると置き換わります。",
         "generator.readOnly" => "このアプリではジェネレーターを実行できません。保存済みの子要素を表示しています。",
+        "generator.running" => "サーバーで実行中… 結果が届くと自動的に適用されます。",
         "generator.regenerate" => "再生成",
         "generator.detach" => "切り離す",
         "generator.failed" => "失敗: {error}",

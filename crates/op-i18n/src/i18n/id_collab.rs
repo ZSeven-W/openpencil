@@ -484,6 +484,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "generator.ownership" => "Elemen anak dibuat oleh program. Buat ulang akan menggantikan suntingan manual.",
         "generator.edited" => "Elemen anak telah disunting manual; Buat ulang akan menggantikannya.",
         "generator.readOnly" => "Aplikasi ini tidak dapat menjalankan generator; elemen anak yang tersimpan ditampilkan apa adanya.",
+        "generator.running" => "Sedang berjalan di server… hasilnya diterapkan begitu tiba.",
         "generator.regenerate" => "Buat ulang",
         "generator.detach" => "Lepaskan",
         "generator.failed" => "Gagal: {error}",

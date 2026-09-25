@@ -484,6 +484,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "generator.ownership" => "Untergeordnete Elemente werden generiert. Neu generieren ersetzt manuelle Änderungen.",
         "generator.edited" => "Untergeordnete Elemente wurden von Hand geändert; Neu generieren ersetzt sie.",
         "generator.readOnly" => "Diese App kann keine Generatoren ausführen; gespeicherte Elemente werden unverändert angezeigt.",
+        "generator.running" => "Läuft auf dem Server … das Ergebnis wird beim Eintreffen übernommen.",
         "generator.regenerate" => "Neu generieren",
         "generator.detach" => "Lösen",
         "generator.failed" => "Fehlgeschlagen: {error}",
