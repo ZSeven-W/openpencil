@@ -129,8 +129,17 @@ pub(crate) fn de_head(section: &str) -> Option<String> {
 /// already had. A label counts when it is at least four Han characters, every
 /// one of them occurs in the section (as a multiset), and together they make
 /// up most of it.
+///
+/// Where on the screen a section sits is said either way round — the brief
+/// asks for `顶部门店信息`, the plan says `门店信息头部` — so the position
+/// words are set aside on both sides before comparing.
 pub(crate) fn label_names_section(section: &str, label: &str) -> bool {
+    const POSITION_WORDS: [&str; 5] = ["顶部", "头部", "顶端", "上方", "上部"];
     let han = |text: &str| -> Vec<char> {
+        let mut text = text.to_string();
+        for word in POSITION_WORDS {
+            text = text.replace(word, "");
+        }
         text.chars()
             .filter(|ch| crate::plan_coverage::is_han(*ch))
             .collect()
@@ -155,6 +164,14 @@ pub(crate) fn label_names_section(section: &str, label: &str) -> bool {
 #[cfg(test)]
 mod label_names_section_tests {
     use super::label_names_section;
+
+    #[test]
+    fn position_words_may_sit_on_either_side() {
+        // Measured (GLM-5.3-Flash): `store-header(门店信息头部)` was planned,
+        // yet the gate reported `顶部门店信息` missing and re-planned.
+        assert!(label_names_section("顶部门店信息", "门店信息头部"));
+        assert!(!label_names_section("顶部门店信息", "顶部导航头部"));
+    }
 
     #[test]
     fn a_terse_or_reordered_label_names_its_section() {

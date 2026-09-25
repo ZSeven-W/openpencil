@@ -302,8 +302,17 @@ async fn replan_once_for_coverage(
         }
         return Ok(plan);
     }
+    // The full planned list, not just the covering subtasks: a section the
+    // planner DID plan under a label the gate cannot read (another script,
+    // a paraphrase) looks identical to a truly dropped one otherwise.
+    let planned = plan
+        .subtasks
+        .iter()
+        .map(|st| format!("{}({})", st.id, st.label))
+        .collect::<Vec<_>>()
+        .join(" ");
     eprintln!(
-        "[PLAN] coverage: missing {} (covered-by: {})",
+        "[PLAN] coverage: missing {} (covered-by: {}) planned: {planned}",
         check.missing.join(", "),
         check.covered_by_line()
     );
