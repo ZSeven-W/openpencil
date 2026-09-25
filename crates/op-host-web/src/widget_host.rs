@@ -212,6 +212,8 @@ pub use studio_home_send::HomeReplaceIntent;
 mod studio_home_site_import;
 #[cfg(test)]
 mod studio_home_tests;
+#[cfg(test)]
+mod studio_variants_tests;
 mod studio_workspace;
 mod studio_workspace_paint;
 mod studio_workspace_run;

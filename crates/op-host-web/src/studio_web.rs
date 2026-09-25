@@ -35,6 +35,8 @@ thread_local! {
     static FILE_BOUND: Cell<Option<bool>> = const { Cell::new(None) };
     /// The daemon's `siteImport` answer: it serves `/api/ai/site-import`.
     static SITE_IMPORT: Cell<bool> = const { Cell::new(false) };
+    /// The daemon's `variants` answer: it runs side-by-side directions.
+    static VARIANTS: Cell<bool> = const { Cell::new(false) };
     /// Applies a `fileBound` answer that lands after the first paint.
     static FILE_BOUND_HOOK: RefCell<Option<FileBoundHook>> = const { RefCell::new(None) };
 }
@@ -53,6 +55,7 @@ pub(crate) fn probe_bound_file(embed: EmbedHost) {
         &url,
         Rc::new(|body: String| {
             SITE_IMPORT.with(|slot| slot.set(parse_site_import(&body)));
+            VARIANTS.with(|slot| slot.set(parse_variants(&body)));
             let Some(bound) = parse_file_bound(&body) else {
                 return;
             };
@@ -82,6 +85,15 @@ fn parse_site_import(body: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// `variants` out of `GET /api/mcp/server`. An older daemon (no field)
+/// runs one design per turn, so Home must not offer the directions toggle.
+fn parse_variants(body: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|parsed| parsed.get("variants")?.as_bool())
+        .unwrap_or(false)
+}
+
 /// Show Studio Home on first paint when the persisted preference asks for
 /// it. Embedded hosts and a daemon holding an opened file open straight
 /// onto the canvas (desktop `should_show_home`). An answer still in flight
@@ -94,9 +106,9 @@ pub(crate) fn apply_entry_surface(state: &mut EditorState) {
         file_bound,
     );
     state.editor_ui.home.visible = show;
-    // The daemon runs one design per turn; several directions side by
-    // side are desktop-only for now.
-    state.editor_ui.home.variants_unavailable = true;
+    // Side-by-side directions run on the daemon; only one that says it
+    // runs them gets the toggle.
+    state.editor_ui.home.variants_unavailable = !VARIANTS.with(Cell::get);
     state.editor_ui.home.site_import.available = SITE_IMPORT.with(Cell::get);
 }
 
@@ -120,6 +132,11 @@ pub(crate) fn adopt_bound_file_answer<C: RepaintContext + 'static>(inner: &Rc<Re
                 .home
                 .site_import
                 .available = SITE_IMPORT.with(Cell::get);
+            b.host_mut()
+                .editor_state_mut()
+                .editor_ui
+                .home
+                .variants_unavailable = !VARIANTS.with(Cell::get);
             if !bound {
                 return;
             }
@@ -271,5 +288,22 @@ mod tests {
         // An older daemon says nothing; the preference decides alone.
         assert_eq!(parse_file_bound(r#"{"running":true}"#), None);
         assert_eq!(parse_file_bound("not json"), None);
+    }
+
+    #[test]
+    fn the_directions_toggle_follows_the_daemon_variants_capability() {
+        use super::{apply_entry_surface, parse_variants, VARIANTS};
+        assert!(parse_variants(r#"{"siteImport":true,"variants":true}"#));
+        assert!(!parse_variants(r#"{"variants":false}"#));
+        // An older daemon says nothing: no toggle.
+        assert!(!parse_variants(r#"{"running":true}"#));
+
+        let mut state = op_editor_core::EditorState::new();
+        VARIANTS.with(|slot| slot.set(false));
+        apply_entry_surface(&mut state);
+        assert!(state.editor_ui.home.variants_unavailable);
+        VARIANTS.with(|slot| slot.set(true));
+        apply_entry_surface(&mut state);
+        assert!(!state.editor_ui.home.variants_unavailable);
     }
 }

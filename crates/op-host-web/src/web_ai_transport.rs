@@ -21,7 +21,7 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 
 /// One streamed event from the AI proxy.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AiEvent {
     /// User-facing identity chosen for an orchestrated design run. The chat
     /// transcript applies this before the daemon exposes the same persona
@@ -36,6 +36,10 @@ pub enum AiEvent {
     /// (`{"qualityReport":…}`), sent once ahead of `done` when the run
     /// reported quality checks. The Studio workspace shows it as its chip.
     QualityReport(Box<op_editor_core::QualityReport>),
+    /// One direction of a side-by-side variants run settled
+    /// (`{"variant":…}`, [`op_editor_core::variant_wire`]). The Studio
+    /// workspace records a landed direction for its "use this" bar.
+    Variant(Box<op_editor_core::variant_wire::VariantEventWire>),
     /// The stream finished successfully.
     Done,
     /// The proxy reported an error for this turn.
@@ -267,6 +271,12 @@ pub(crate) fn parse_event(payload: &str) -> Option<AiEvent> {
             .ok()
             .map(|report| AiEvent::QualityReport(Box::new(report)));
     }
+    if let Some(variant) = obj.get("variant") {
+        // A malformed or other-version frame is dropped, never re-read as
+        // some other event.
+        return op_editor_core::variant_wire::VariantEventWire::decode(variant)
+            .map(|event| AiEvent::Variant(Box::new(event)));
+    }
     if let Some(delta) = nonempty_str(obj, "delta") {
         return Some(AiEvent::Delta(delta));
     }
@@ -343,6 +353,39 @@ mod tests {
         );
         // A malformed report is dropped rather than read as some other frame.
         assert_eq!(parse_event(r#"{"qualityReport":42}"#), None);
+    }
+
+    #[test]
+    fn parse_event_reads_the_variant_frame_the_daemon_writes() {
+        use op_editor_core::variant_wire::VariantEventWire;
+        let landed = op_editor_core::WorkspaceVariant {
+            index: 0,
+            name: "Direction A".into(),
+            style_guide: "zen-paper-light".into(),
+            style_label: "Zen Paper Light".into(),
+            name_prefix: "Direction A · Zen Paper Light · ".into(),
+            root_ids: vec!["r0".into()],
+            variables: None,
+            themes: None,
+        };
+        let wire = VariantEventWire::ready(&landed);
+        // Byte shape of the daemon's `write_variant_event`.
+        let block = format!("data: {}\n\n", serde_json::json!({ "variant": wire }));
+        let (events, _) = drain_sse_buffer(&block, 0);
+        assert_eq!(events, vec![AiEvent::Variant(Box::new(wire))]);
+
+        let failed = VariantEventWire::failed(1, "Direction B", "boom");
+        let payload = serde_json::json!({ "variant": failed }).to_string();
+        assert_eq!(
+            parse_event(&payload),
+            Some(AiEvent::Variant(Box::new(failed)))
+        );
+        // Other versions and malformed frames are dropped.
+        assert_eq!(
+            parse_event(r#"{"variant":{"v":9,"index":0,"name":"A","phase":"failed","error":"x"}}"#),
+            None
+        );
+        assert_eq!(parse_event(r#"{"variant":42}"#), None);
     }
 
     #[test]

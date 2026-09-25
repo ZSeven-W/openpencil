@@ -91,8 +91,9 @@ impl WidgetHost {
                 self.editor_state.editor_ui.entry_surface = EntrySurface::Home;
             }
             WorkspaceHit::Export => self.editor_state.editor_ui.open_export_dialog(),
-            // Web never runs several directions, so no pick bar is shown.
-            WorkspaceHit::UseVariant(_) => {}
+            WorkspaceHit::UseVariant(index) => {
+                self.use_workspace_variant(index, viewport_w, viewport_h);
+            }
             // The share page needs a save picker plus the offscreen
             // rasteriser, so the header button is gated on
             // `deck_html_export_supported`, which web leaves `false`.
@@ -270,12 +271,32 @@ impl WidgetHost {
         self.editor_state.editor_ui.workspace.resume_generating(0);
         self.editor_state.chat.focus_input_at_end(self.now_ms);
         self.editor_state.chat.set_input_text(prompt);
-        self.editor_state.chat.launch_route = op_editor_core::LaunchRoute::Orchestrator;
+        // A side-by-side run retries as one: the same number of directions.
+        op_editor_core::pin_workspace_retry_route(&mut self.editor_state);
         let sent = self.begin_chat_send();
         self.editor_state.chat.focused = false;
         if sent {
             self.mark_dirty();
         }
+    }
+
+    /// Keep direction `index` of a side-by-side run as the working design
+    /// (`op_editor_core::use_workspace_variant`: the others move to their
+    /// own page) and refit the camera on the one that stayed. The edit
+    /// reaches the daemon like any other local edit, through live sync.
+    pub(in crate::widget_host) fn use_workspace_variant(
+        &mut self,
+        index: usize,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> bool {
+        let Some(changed) = op_editor_core::use_workspace_variant(&mut self.editor_state, index)
+        else {
+            return false;
+        };
+        self.apply_workspace_fit(viewport_w, viewport_h);
+        self.mark_dirty();
+        changed
     }
 
     /// Frame the deck's selected board (thumb clicks, pager, arrows).

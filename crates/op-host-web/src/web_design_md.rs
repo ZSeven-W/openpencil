@@ -176,7 +176,7 @@ fn start_generation_pump<C: RepaintContext + 'static>(
             match evt {
                 AiEvent::AgentIdentity { .. } => {}
                 AiEvent::Delta(text) => markdown.borrow_mut().push_str(&text),
-                AiEvent::Thinking(_) | AiEvent::QualityReport(_) => {}
+                AiEvent::Thinking(_) | AiEvent::QualityReport(_) | AiEvent::Variant(_) => {}
                 AiEvent::Done => {
                     terminal = Some(Ok(()));
                     break;

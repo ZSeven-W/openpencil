@@ -112,7 +112,8 @@ impl WidgetHost {
         self.editor_state.chat.set_input_text(prompt);
         // Home briefs are whole-design requests: the daemon's standard route
         // honours the pinned route instead of re-classifying the wording.
-        self.editor_state.chat.launch_route = LaunchRoute::Orchestrator;
+        // With the directions toggle on, the daemon runs N directions.
+        op_editor_core::pin_home_brief_route(&mut self.editor_state);
         let sent = self.begin_chat_send();
         self.editor_state.chat.focused = false;
         self.mark_dirty();

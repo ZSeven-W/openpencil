@@ -16,6 +16,7 @@
 
 use super::WidgetHost;
 use op_editor_core::preview_slideshow::active_page_boards;
+use op_editor_core::variant_wire::{VariantEventWire, VariantOutcomeWire};
 use op_editor_core::workspace_run::{
     assistant_streaming, awaiting_launch, last_assistant_failed, produced_board_count,
 };
@@ -99,6 +100,55 @@ impl WidgetHost {
             workspace.quality = Some(report);
             workspace.quality_open = false;
             changed = true;
+        }
+        if changed {
+            self.mark_dirty();
+        }
+        changed
+    }
+
+    /// One direction of the variants turn launched as `epoch` settled on
+    /// the daemon (the SSE `variant` frame). The turn's streaming reply
+    /// narrates it as desktop's pump does; a landed direction is recorded on
+    /// the workspace only while that turn is still its run, so the "use
+    /// this" bar never offers boards from an older run.
+    pub fn apply_run_variant(
+        &mut self,
+        epoch: u64,
+        running_tab: Option<usize>,
+        event: VariantEventWire,
+    ) -> bool {
+        let locale = self.editor_state.editor_ui.effective_locale();
+        let line = match &event.outcome {
+            VariantOutcomeWire::Ready(ready) => op_i18n::translate_with(
+                locale,
+                "workspace.variants.ready",
+                &[("name", &event.name), ("style", &ready.style_label)],
+            ),
+            VariantOutcomeWire::Failed(failed) => op_i18n::translate_with(
+                locale,
+                "workspace.variants.failed",
+                &[("name", &event.name), ("error", &failed.error)],
+            ),
+        };
+        let landed = event.to_workspace_variant();
+        let mut changed = false;
+        let chat = self.editor_state.chat.run_tab_mut(running_tab);
+        if let Some(reply) = chat.messages.iter_mut().rev().find(|m| m.streaming) {
+            let line = format!("• {line}");
+            if !reply.content.contains(&line) {
+                if !reply.content.trim().is_empty() {
+                    reply.content.push_str("\n\n");
+                }
+                reply.content.push_str(&line);
+                changed = true;
+            }
+        }
+        let workspace = &mut self.editor_state.editor_ui.workspace;
+        if let Some(variant) = landed {
+            if workspace.run_epoch == epoch {
+                changed |= workspace.adopt_landed_variant(variant);
+            }
         }
         if changed {
             self.mark_dirty();

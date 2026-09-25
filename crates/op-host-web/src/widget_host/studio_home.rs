@@ -217,8 +217,14 @@ impl WidgetHost {
             // No brand runner on web yet, so no chip is ever staged; clearing
             // is still the honest answer if one ever is.
             HomeHit::BrandClear => self.editor_state.editor_ui.home.brand.clear(),
-            // Never laid out on web (`variants_unavailable`).
-            HomeHit::Variants => {}
+            // Laid out only when the daemon runs directions
+            // (`variants_unavailable` follows its `variants` capability).
+            HomeHit::Variants => {
+                let home = &mut self.editor_state.editor_ui.home;
+                if !home.variants_unavailable {
+                    home.variants_on = !home.variants_on;
+                }
+            }
         }
     }
 

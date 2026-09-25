@@ -251,6 +251,13 @@ fn start_pump<C: RepaintContext + 'static>(
                     .apply_run_quality(generation, running_tab(), *report);
                 continue;
             }
+            // So does a variants run's per-direction report.
+            if let AiEvent::Variant(event) = evt {
+                changed |= b
+                    .host_mut()
+                    .apply_run_variant(generation, running_tab(), *event);
+                continue;
+            }
             // Write into the tab this run is bound to (MT.3 session-per-tab),
             // not whichever tab is active now.
             let target = b
@@ -317,15 +324,16 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
     let user_text = state.chat.pending_send.take()?;
     // A pinned route (Studio Home brief / draft refine) travels with the
     // turn and is consumed by it, like the desktop launcher's drain.
-    let launch_route = match std::mem::take(&mut state.chat.launch_route) {
+    let route = std::mem::take(&mut state.chat.launch_route);
+    let launch_route = match route {
         op_editor_core::LaunchRoute::Auto => None,
-        // The toggle is hidden on web; a stray variants route still runs
-        // as one orchestrated design rather than being dropped.
-        op_editor_core::LaunchRoute::Orchestrator | op_editor_core::LaunchRoute::Variants(_) => {
-            Some("orchestrator")
-        }
+        op_editor_core::LaunchRoute::Orchestrator => Some("orchestrator"),
+        // N side-by-side directions; a daemon that does not run them
+        // answers with one orchestrated design.
+        op_editor_core::LaunchRoute::Variants(_) => Some("variants"),
         op_editor_core::LaunchRoute::Refine => Some("refine"),
     };
+    let variant_count = route.variant_count();
     let (model, credential, builtin_provider_id) =
         crate::web_ai_credentials::selected_target(state);
     let provider = selected.as_ref().and_then(|entry| {
@@ -391,6 +399,9 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
         "selectedIds": selected_ids,
         "activePageId": active_page_id,
         "launchRoute": launch_route,
+        "variantCount": variant_count,
+        // Direction names the daemon stamps on boards follow the UI.
+        "locale": state.editor_ui.effective_locale().code(),
     });
     Some(PreparedTurn {
         endpoint: "/api/ai/standard",
@@ -422,7 +433,7 @@ pub(crate) fn apply_event_to_chat(chat: &mut ChatState, evt: &AiEvent) -> bool {
         }
         AiEvent::Done => msg.streaming = false,
         // Routed to the workspace by the pump before it reaches here.
-        AiEvent::QualityReport(_) => {}
+        AiEvent::QualityReport(_) | AiEvent::Variant(_) => {}
     }
     terminal
 }
