@@ -597,10 +597,6 @@ fn paint_more_popover(
 
 #[path = "home_surface_paint_art.rs"]
 pub(super) mod art;
-#[path = "home_surface_paint_art_copy.rs"]
-pub(super) mod art_copy;
-#[path = "home_surface_paint_art_screens.rs"]
-pub(super) mod art_screens;
 #[path = "home_surface_paint_cards.rs"]
 pub(super) mod cards;
 #[path = "home_surface_paint_compact.rs"]

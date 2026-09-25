@@ -1,8 +1,8 @@
 //! Artwork for the Studio Home surface: the headline's yellow marker,
 //! the 示例 sticker, the template previews with their paper edge +
 //! tape, and the explore cards (two-piece art in
-//! `paint_explore_art`). The App task's phone/desktop mock-ups live in
-//! `home_surface_paint_art.rs`.
+//! `paint_explore_art`). Every task's art, App included, is a baked
+//! scene-template preview; see [`task_art`].
 
 use super::super::copy::{self, SANS};
 use super::super::fade;
@@ -17,7 +17,7 @@ use crate::widgets::file_menu::truncate_to_width_measured;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Color, ImageAdjustments, ImageDrawMode, Point2D, Rect};
-use op_editor_core::{HomeFamily, HomeHit, InfoKind};
+use op_editor_core::{HomeFamily, HomeHit, InfoKind, SlideRatio};
 
 /// The scene-template card previews are uniformly 1024×640 (the card
 /// baker's fixed canvas), which is what the contain-fit math below
@@ -313,6 +313,31 @@ fn paint_paper_card(
         cx.backend.fill_rect(image, palette.preview);
     }
     cx.backend.restore();
+}
+
+/// The preview a task's art area shows, with the crop aspect to paint it
+/// at (`None` = the baked card's own 16:10).
+///
+/// App and 4:3 presentations show the very template their example opens
+/// as the instant draft ([`HomeState::example_draft_template`]), so the
+/// picture on Home is exactly what 开始设计 puts on the canvas. The 16:9
+/// deck keeps its dedicated showcase preview cropped to the slide shape.
+///
+/// [`HomeState::example_draft_template`]: op_editor_core::HomeState::example_draft_template
+pub(super) fn task_art(surface: &HomeSurface<'_>) -> (&'static str, Option<f32>) {
+    let draft = surface.state.task_draft();
+    let instant = surface.state.example_draft_template();
+    match (surface.state.task, draft.ratio) {
+        (HomeFamily::AppUi, _) | (HomeFamily::Presentation, SlideRatio::Classic43) => (
+            instant.unwrap_or_else(|| preview_template_for(surface.state.task, draft.info_kind)),
+            None,
+        ),
+        (HomeFamily::Presentation, SlideRatio::Wide169) => (
+            preview_template_for(HomeFamily::Presentation, draft.info_kind),
+            Some(16.0 / 9.0),
+        ),
+        (family, _) => (preview_template_for(family, draft.info_kind), None),
+    }
 }
 
 /// The template id a task's preview panel shows.

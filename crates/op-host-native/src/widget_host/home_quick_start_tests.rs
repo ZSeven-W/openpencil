@@ -186,30 +186,53 @@ fn an_edited_example_is_the_users_own_brief_and_generates_as_before() {
 }
 
 #[test]
-fn a_task_without_a_template_falls_back_to_generating_the_example() {
-    // App 界面 ships no app-screen template: a fast draft of the wrong
-    // type would be worse than today's generation.
-    let mut host = home_on(HomeFamily::AppUi);
-    connect_model(&mut host);
-    let example = example(&host);
+fn the_app_task_opens_its_own_screen_set_for_either_device() {
+    // Phone: the coffee example's three screens (home / menu / order).
+    let mut phone = home_on(HomeFamily::AppUi);
+    press_send(&mut phone);
+    let state = phone.editor_state();
+    assert_eq!(
+        state.editor_ui.workspace.draft_template,
+        Some("coffee-order-app")
+    );
+    assert_eq!(active_page_boards(state).len(), 3, "three phone screens");
+    assert_eq!(first_board_width(&phone), Some(375.0));
+    assert!(state.chat.pending_send.is_none(), "offline: nothing queued");
+    assert!(!state.editor_ui.home.connect_card_open);
+
+    // Desktop: one store-console window, refined in place with a model.
+    let mut desktop = home_on(HomeFamily::AppUi);
+    desktop
+        .editor_state_mut()
+        .editor_ui
+        .home
+        .set_device(op_editor_core::HomeDevice::Desktop);
+    connect_model(&mut desktop);
+    press_send(&mut desktop);
+    let state = desktop.editor_state();
+    assert_eq!(
+        state.editor_ui.workspace.draft_template,
+        Some("coffee-counter-desktop")
+    );
+    assert_eq!(first_board_width(&desktop), Some(1440.0));
+    assert_eq!(state.chat.launch_route, LaunchRoute::Refine);
+}
+
+#[test]
+fn a_four_by_three_deck_request_gets_four_by_three_boards() {
+    let mut host = home_on(HomeFamily::Presentation);
+    host.editor_state_mut()
+        .editor_ui
+        .home
+        .set_ratio(op_editor_core::SlideRatio::Classic43);
     press_send(&mut host);
     let state = host.editor_state();
-    assert_eq!(state.editor_ui.workspace.draft_template, None);
-    assert_eq!(state.chat.launch_route, LaunchRoute::Orchestrator);
-    let expected = HomeFamily::AppUi
-        .generation_prompt(&op_editor_core::TaskDraft {
-            text: example,
-            ..Default::default()
-        })
-        .expect("wrapped");
-    assert_eq!(state.chat.pending_send.as_deref(), Some(expected.as_str()));
-
-    // No model and no template: today's connect card, nothing queued.
-    let mut offline = home_on(HomeFamily::AppUi);
-    press_send(&mut offline);
-    assert!(offline.editor_state().editor_ui.home.connect_card_open);
-    assert!(offline.editor_state().chat.pending_send.is_none());
-    assert!(!offline.editor_state().editor_ui.workspace.active);
+    assert_eq!(
+        state.editor_ui.workspace.draft_template,
+        Some("onboarding-training-deck")
+    );
+    assert_eq!(active_page_boards(state).len(), 6);
+    assert_eq!(first_board_width(&host), Some(1024.0));
 }
 
 #[test]

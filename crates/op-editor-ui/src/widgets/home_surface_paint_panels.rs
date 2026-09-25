@@ -2,10 +2,9 @@
 
 use super::super::copy::{self, SANS};
 use super::super::fade;
-use super::super::paint::art::paint_app_art;
 use super::super::paint::art_phase;
 use super::super::paint::cards::{
-    paint_sticker, paint_template_paper, preview_template_for, text, text_weighted,
+    paint_sticker, paint_template_paper, task_art, text, text_weighted,
 };
 use super::super::{HomeLayout, HomeSurface, StudioPalette};
 use crate::widgets::brand_icons::paint_figma_logo;
@@ -14,7 +13,7 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, RenderBackend};
 use jian_widgets::components::text_area::TextArea;
 use jian_widgets::Tokens;
-use op_editor_core::{HomeFamily, HomeHit, InfoKind, SlideRatio};
+use op_editor_core::HomeHit;
 
 /// Input text metrics (prototype 14 px / 1.75 line-height; jian's text
 /// area uses 1.35 — the composer honors the component's own advance).
@@ -546,40 +545,14 @@ pub(super) fn paint_preview(
     );
 
     // Art area with the 300 ms art-in on task switch (prototype:
-    // opacity .2→1, rise 8 px, scale .985→1). The App path owns its
-    // motion inside `paint_app_art`; the template paths share the
-    // wrapper below.
+    // opacity .2→1, rise 8 px, scale .985→1), shared by every task.
     let art = shift(layout.preview_art, rise);
     let phase = art_phase(
         surface.ui.motion_stamp(surface.state.art_switched_at_ms),
         surface.now_ms,
     );
-    let draft = surface.state.task_draft();
-    match surface.state.task {
-        HomeFamily::AppUi => paint_app_art(cx, art, palette, draft.device, phase, locale),
-        HomeFamily::Presentation => {
-            let aspect = match draft.ratio {
-                SlideRatio::Wide169 => Some(16.0 / 9.0),
-                SlideRatio::Classic43 => Some(4.0 / 3.0),
-            };
-            paint_template_switched(
-                cx,
-                art,
-                preview_template_for(HomeFamily::Presentation, InfoKind::Data),
-                palette,
-                aspect,
-                phase,
-            );
-        }
-        family => paint_template_switched(
-            cx,
-            art,
-            preview_template_for(family, draft.info_kind),
-            palette,
-            None,
-            phase,
-        ),
-    }
+    let (template, aspect) = task_art(surface);
+    paint_template_switched(cx, art, template, palette, aspect, phase);
 
     // Footer: pages text left, 使用这个示例 / 回到工作区 link right.
     let footer = shift(layout.preview_footer, rise);

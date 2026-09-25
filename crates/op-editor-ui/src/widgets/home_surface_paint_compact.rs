@@ -16,7 +16,7 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
 use jian_widgets::components::text_area::TextArea;
 use jian_widgets::{Painter, Tokens};
-use op_editor_core::{HomeFamily, HomeHit, InfoKind, SlideRatio};
+use op_editor_core::{HomeFamily, HomeHit};
 
 const SANS: &str = "system-ui";
 const INPUT_FONT: f32 = 14.0;
@@ -627,39 +627,11 @@ fn paint_example(
         surface.ui.motion_stamp(surface.state.art_switched_at_ms),
         surface.now_ms,
     );
-    let draft = surface.state.task_draft();
     let art = shift(art, (1.0 - phase) * 6.0);
     cx.backend.save();
     cx.backend.clip_round_rect(art, 8.0);
-    match surface.state.task {
-        HomeFamily::AppUi => {
-            super::art::paint_app_art(cx, art, palette, draft.device, phase, surface.ui.locale);
-        }
-        HomeFamily::Presentation => {
-            let aspect = match draft.ratio {
-                SlideRatio::Wide169 => Some(16.0 / 9.0),
-                SlideRatio::Classic43 => Some(4.0 / 3.0),
-            };
-            super::cards::paint_template_paper(
-                cx,
-                art,
-                super::cards::preview_template_for(HomeFamily::Presentation, InfoKind::Data),
-                palette,
-                aspect,
-                0.2 + 0.8 * phase,
-            );
-        }
-        family => {
-            super::cards::paint_template_paper(
-                cx,
-                art,
-                super::cards::preview_template_for(family, draft.info_kind),
-                palette,
-                None,
-                0.2 + 0.8 * phase,
-            );
-        }
-    }
+    let (template, aspect) = super::cards::task_art(surface);
+    super::cards::paint_template_paper(cx, art, template, palette, aspect, 0.2 + 0.8 * phase);
     cx.backend.restore();
 }
 

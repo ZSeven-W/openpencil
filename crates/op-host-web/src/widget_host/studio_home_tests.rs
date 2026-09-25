@@ -109,8 +109,11 @@ fn enter_on_a_typed_brief_opens_the_workspace_and_queues_a_pinned_run() {
 }
 
 #[test]
-fn send_on_an_empty_box_without_any_model_opens_the_connect_card() {
+fn send_on_a_brief_without_any_model_opens_the_connect_card() {
+    // An own brief needs a model. (An empty box no longer does: every
+    // task's example, App included, opens as an instant template draft.)
     let mut host = home_host();
+    host.editor_state.editor_ui.home.set_draft("取餐预约");
     let send = center(home_layout(&host).send);
     assert!(host.apply_press(send.x, send.y, W, H));
     assert!(host.editor_state.editor_ui.home.connect_card_open);

@@ -1,0 +1,100 @@
+# Scene template catalogue — app screens and 4:3 decks.
+#
+# The catalogue parser concatenates scene_templates_prefix.toml,
+# scene_templates.toml and this file, so each checked-in source stays below
+# the repository's 800-line limit. Same schema as the other two files.
+#
+# The five `app` entries carry the style guide their palette and type embody,
+# but the `app` scene offers no "generate from this" action, so the guide is
+# provenance only. The two 4:3 decks carry none on purpose: the slides
+# generate path builds 1920×1080 boards, and a 4:3 card offering it would hand
+# back a 16:9 deck.
+
+[[template]]
+id = "coffee-order-app"
+scene = "app"
+title_key = "sceneTemplate.item.coffeeOrderApp.title"
+title_fallback = "咖啡点单 App"
+summary_key = "sceneTemplate.item.coffeeOrderApp.summary"
+summary_fallback = "暖象牙底的三屏点单流程：主推新品大图与分类、左栏分类加购物车条的菜单、取餐码与制作进度的订单页，适合餐饮与零售小程序。"
+tags = ["App", "手机", "咖啡", "点单", "菜单", "订单", "餐饮", "app", "mobile", "coffee", "order"]
+frames = 3
+frame_width = 375
+frame_height = 812
+style_guide = "warm-food-mobile-light"
+
+[[template]]
+id = "budget-ledger-app"
+scene = "app"
+title_key = "sceneTemplate.item.budgetLedgerApp.title"
+title_fallback = "记账 App"
+summary_key = "sceneTemplate.item.budgetLedgerApp.summary"
+summary_fallback = "冷白底信任青的三屏记账：本月结余与预算进度、近六个月支出柱图与分类占比、分类网格加数字键盘的记一笔页，适合个人理财类产品。"
+tags = ["App", "手机", "记账", "理财", "预算", "图表", "app", "mobile", "finance", "budget"]
+frames = 3
+frame_width = 375
+frame_height = 812
+style_guide = "finance-clean-mobile-light"
+
+[[template]]
+id = "habit-fitness-app"
+scene = "app"
+title_key = "sceneTemplate.item.habitFitnessApp.title"
+title_fallback = "习惯健身 App"
+summary_key = "sceneTemplate.item.habitFitnessApp.summary"
+summary_fallback = "深炭底活力绿的三屏：今日步数、连续打卡与习惯清单，带封面图位的课程详情，本周运动柱图与睡眠心率，适合健康与习惯养成产品。"
+tags = ["App", "手机", "健身", "习惯", "打卡", "深色", "app", "mobile", "fitness", "habit", "dark"]
+frames = 3
+frame_width = 375
+frame_height = 812
+style_guide = "health-minimal-mobile-dark"
+
+[[template]]
+id = "coffee-counter-desktop"
+scene = "app"
+title_key = "sceneTemplate.item.coffeeCounterDesktop.title"
+title_fallback = "门店订单台 · 桌面"
+summary_key = "sceneTemplate.item.coffeeCounterDesktop.summary"
+summary_fallback = "1440×900 门店桌面端：营业概览四数、按状态分栏的订单列表、带备注与操作键的订单详情，蓝色只标待处理，适合收银与后厨系统。"
+tags = ["App", "桌面", "订单", "门店", "后台", "咖啡", "app", "desktop", "orders", "pos"]
+frames = 1
+frame_width = 1440
+frame_height = 900
+style_guide = "corporate-blue-light"
+
+[[template]]
+id = "sales-dashboard-web"
+scene = "app"
+title_key = "sceneTemplate.item.salesDashboardWeb.title"
+title_fallback = "经营数据看板 · 桌面"
+summary_key = "sceneTemplate.item.salesDashboardWeb.summary"
+summary_fallback = "1440×900 后台概览：侧栏导航、四张指标卡、两年对比收入柱图、渠道占比与最近订单表，适合电商与 SaaS 管理后台。"
+tags = ["App", "桌面", "看板", "后台", "数据", "表格", "app", "desktop", "dashboard", "admin"]
+frames = 1
+frame_width = 1440
+frame_height = 900
+style_guide = "saas-clean-light"
+
+[[template]]
+id = "onboarding-training-deck"
+scene = "slides"
+title_key = "sceneTemplate.item.onboardingTrainingDeck.title"
+title_fallback = "入职培训档 · 4:3"
+summary_key = "sceneTemplate.item.onboardingTrainingDeck.summary"
+summary_fallback = "暖白纸感配陶土色的 4:3 六页课件：封面、四件事议程、三条做事原则、第一周时间轴、找谁帮忙四宫格、深色结尾清单，适合培训与打印讲义。"
+tags = ["PPT", "4:3", "培训", "入职", "课件", "讲义", "slides", "training", "onboarding"]
+frames = 6
+frame_width = 1024
+frame_height = 768
+
+[[template]]
+id = "research-findings-deck"
+scene = "slides"
+title_key = "sceneTemplate.item.researchFindingsDeck.title"
+title_fallback = "研究报告档 · 4:3"
+summary_key = "sceneTemplate.item.researchFindingsDeck.summary"
+summary_fallback = "深靛底薄荷色的 4:3 六页研究汇报：方法三数字、三个关键发现、痛点横条排行、五阶段情绪曲线、分级产品建议，适合用户研究与调研汇报。"
+tags = ["PPT", "4:3", "研究", "调研", "报告", "深色", "slides", "research", "report", "dark"]
+frames = 6
+frame_width = 1024
+frame_height = 768

@@ -251,7 +251,7 @@ fn placeholders(value: &str) -> BTreeSet<String> {
 fn every_locale_has_exactly_the_english_key_set() {
     let all_tables = tables();
     let expected = table_keys(all_tables[0].0, all_tables[0].1, all_tables[0].2);
-    assert_eq!(expected.len(), 2012, "update the intentional catalog size");
+    assert_eq!(expected.len(), 1982, "update the intentional catalog size");
 
     for (name, main, git, lookup) in all_tables {
         let actual = table_keys(name, main, git);
@@ -332,6 +332,21 @@ fn scene_template_catalog_is_complete_in_all_fifteen_locales() {
         "sceneTemplate.item.compoundEffectCard.summary",
         "sceneTemplate.item.analyticsMetricCard.title",
         "sceneTemplate.item.analyticsMetricCard.summary",
+        "sceneTemplate.scene.app",
+        "sceneTemplate.item.coffeeOrderApp.title",
+        "sceneTemplate.item.coffeeOrderApp.summary",
+        "sceneTemplate.item.budgetLedgerApp.title",
+        "sceneTemplate.item.budgetLedgerApp.summary",
+        "sceneTemplate.item.habitFitnessApp.title",
+        "sceneTemplate.item.habitFitnessApp.summary",
+        "sceneTemplate.item.coffeeCounterDesktop.title",
+        "sceneTemplate.item.coffeeCounterDesktop.summary",
+        "sceneTemplate.item.salesDashboardWeb.title",
+        "sceneTemplate.item.salesDashboardWeb.summary",
+        "sceneTemplate.item.onboardingTrainingDeck.title",
+        "sceneTemplate.item.onboardingTrainingDeck.summary",
+        "sceneTemplate.item.researchFindingsDeck.title",
+        "sceneTemplate.item.researchFindingsDeck.summary",
         "fileMenu.newFromTemplate",
     ] {
         for (name, _, _, lookup) in tables() {

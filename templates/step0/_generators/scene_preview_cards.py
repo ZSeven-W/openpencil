@@ -177,6 +177,20 @@ CARDS = [
      [f"quicksort-lecture-deck-{i:02d}.png" for i in range(1, 8)]),
     ("compound-effect-card", "compound-effect-card.png"),
     ("analytics-metric-card", "analytics-metric-card.png"),
+    # App 界面：手机三屏并排（375×812 × 3 正好铺满 16:10 的卡），桌面单屏。
+    ("coffee-order-app",
+     [f"coffee-order-app-{i:02d}.png" for i in range(1, 4)]),
+    ("budget-ledger-app",
+     [f"budget-ledger-app-{i:02d}.png" for i in range(1, 4)]),
+    ("habit-fitness-app",
+     [f"habit-fitness-app-{i:02d}.png" for i in range(1, 4)]),
+    ("coffee-counter-desktop", "coffee-counter-desktop.png"),
+    ("sales-dashboard-web", "sales-dashboard-web.png"),
+    # 4:3 deck：六页 3×2 铺。
+    ("onboarding-training-deck",
+     [f"onboarding-training-deck-{i:02d}.png" for i in range(1, 7)]),
+    ("research-findings-deck",
+     [f"research-findings-deck-{i:02d}.png" for i in range(1, 7)]),
 ]
 
 # Gap between tiles, in source pixels — scaled down with everything else.

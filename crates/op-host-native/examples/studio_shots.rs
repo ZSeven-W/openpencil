@@ -352,6 +352,14 @@ fn scenarios() -> Vec<Scenario> {
         ("home-explore-1180-ru", 1180.0, 900.0, || {
             home_host(Locale::Ru, HomeFamily::AppUi, HomeDevice::Mobile)
         }),
+        ("home-deck-43-zh", 1440.0, 900.0, || {
+            let mut host = home_host(Locale::ZhCn, HomeFamily::Presentation, HomeDevice::Mobile);
+            host.editor_state_mut()
+                .editor_ui
+                .home
+                .set_ratio(op_editor_core::SlideRatio::Classic43);
+            host
+        }),
         ("ws-wide-1280-en", 1280.0, 800.0, || {
             workspace_host(
                 Locale::EnUs,

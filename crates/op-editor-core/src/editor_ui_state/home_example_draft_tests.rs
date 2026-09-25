@@ -25,12 +25,12 @@ fn every_task_option_maps_to_its_documented_template() {
         (
             HomeFamily::AppUi,
             draft(HomeDevice::Mobile, SlideRatio::Wide169, InfoKind::Data),
-            None,
+            Some("coffee-order-app"),
         ),
         (
             HomeFamily::AppUi,
             draft(HomeDevice::Desktop, SlideRatio::Wide169, InfoKind::Data),
-            None,
+            Some("coffee-counter-desktop"),
         ),
         (
             HomeFamily::Web,
@@ -45,7 +45,7 @@ fn every_task_option_maps_to_its_documented_template() {
         (
             HomeFamily::Presentation,
             draft(HomeDevice::Mobile, SlideRatio::Classic43, InfoKind::Data),
-            None,
+            Some("onboarding-training-deck"),
         ),
         (
             HomeFamily::KnowledgeCards,
@@ -97,7 +97,25 @@ fn every_task_option_maps_to_its_documented_template() {
 /// template of the wrong shape fails here instead of reaching a user.
 #[test]
 fn every_mapped_template_is_the_right_kind_of_deliverable() {
-    let cases: [(HomeFamily, TaskDraft, TemplateScene, (u32, u32)); 9] = [
+    let cases: [(HomeFamily, TaskDraft, TemplateScene, (u32, u32)); 12] = [
+        (
+            HomeFamily::AppUi,
+            draft(HomeDevice::Mobile, SlideRatio::Wide169, InfoKind::Data),
+            TemplateScene::App,
+            (375, 812),
+        ),
+        (
+            HomeFamily::AppUi,
+            draft(HomeDevice::Desktop, SlideRatio::Wide169, InfoKind::Data),
+            TemplateScene::App,
+            (1440, 900),
+        ),
+        (
+            HomeFamily::Presentation,
+            draft(HomeDevice::Mobile, SlideRatio::Classic43, InfoKind::Data),
+            TemplateScene::Slides,
+            (1024, 768),
+        ),
         (
             HomeFamily::Web,
             default_draft(),
@@ -202,10 +220,10 @@ fn send_mode_offers_the_example_even_without_a_model_when_a_template_exists() {
     let web = home_with(HomeFamily::Web, "");
     assert_eq!(web.send_mode(example, false), HomeSendMode::UseExample);
     assert_eq!(web.send_mode(example, true), HomeSendMode::UseExample);
-    // No template (App): the example needs a model to be generated.
+    // App now ships its own screen set, so it too starts without a model.
     let app = home_with(HomeFamily::AppUi, "");
     assert_eq!(app.send_mode(example, true), HomeSendMode::UseExample);
-    assert_eq!(app.send_mode(example, false), HomeSendMode::Connect);
+    assert_eq!(app.send_mode(example, false), HomeSendMode::UseExample);
     // A brief of the user's own keeps today's behaviour.
     let own = home_with(HomeFamily::Web, "我的面包店官网");
     assert_eq!(own.send_mode(example, true), HomeSendMode::Start);

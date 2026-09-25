@@ -159,6 +159,13 @@ pub(crate) fn scene_template_preview(template_id: &str) -> Option<TemplatePrevie
         "quicksort-lecture-deck" => preview!(78, "quicksort-lecture-deck"),
         "compound-effect-card" => preview!(79, "compound-effect-card"),
         "analytics-metric-card" => preview!(80, "analytics-metric-card"),
+        "coffee-order-app" => preview!(81, "coffee-order-app"),
+        "budget-ledger-app" => preview!(82, "budget-ledger-app"),
+        "habit-fitness-app" => preview!(83, "habit-fitness-app"),
+        "coffee-counter-desktop" => preview!(84, "coffee-counter-desktop"),
+        "sales-dashboard-web" => preview!(85, "sales-dashboard-web"),
+        "onboarding-training-deck" => preview!(86, "onboarding-training-deck"),
+        "research-findings-deck" => preview!(87, "research-findings-deck"),
         _ => None,
     }
 }

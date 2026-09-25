@@ -623,7 +623,7 @@ mod tests {
     }
 
     #[test]
-    fn send_with_an_empty_draft_is_a_noop() {
+    fn send_with_an_empty_draft_and_no_agent_opens_the_example_draft() {
         let mut host = WidgetHostNative::new();
         host.editor_state_mut().editor_ui.home.visible = true;
         let home = HomeSurface::for_editor(host.editor_state()).expect("home");
@@ -631,11 +631,15 @@ mod tests {
         assert!(host.apply_press(send.x, send.y, W, H));
         assert!(
             host.editor_state().chat.pending_send.is_none(),
-            "an empty draft queues nothing"
+            "an empty draft queues nothing without an agent"
         );
         assert!(
-            host.editor_state().editor_ui.home.connect_card_open,
-            "with no usable agent the connect card opens instead"
+            !host.editor_state().editor_ui.home.connect_card_open,
+            "the App example has a template, so no connect card"
+        );
+        assert_eq!(
+            host.editor_state().editor_ui.workspace.draft_template,
+            Some("coffee-order-app")
         );
     }
 

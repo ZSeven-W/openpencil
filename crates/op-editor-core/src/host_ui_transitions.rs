@@ -101,6 +101,7 @@ pub fn scenario_default_export_format(scenario: Option<TemplateScene>) -> Option
         | Some(TemplateScene::Card)
         | Some(TemplateScene::Web)
         | Some(TemplateScene::Infographic)
+        | Some(TemplateScene::App)
         | None => None,
     }
 }

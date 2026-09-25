@@ -107,8 +107,10 @@ fn connect_card_rows_open_their_modals_and_escape_closes_the_card() {
 
     // Re-open via Send this time, then Escape peels the card off. The
     // settings modal must be closed first — while it is open it owns
-    // every press above Home.
+    // every press above Home. The brief is the user's own: an empty box
+    // would open the example's template draft instead of the card.
     host.editor_state_mut().editor_ui.agent_settings_open = false;
+    host.editor_state_mut().editor_ui.home.set_draft("取餐预约");
     let send = center(layout.send);
     assert!(host.apply_press(send.x, send.y, W, H));
     assert!(host.editor_state().editor_ui.home.connect_card_open);

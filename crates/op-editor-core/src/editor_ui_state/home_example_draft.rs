@@ -14,7 +14,7 @@
 //! current draft, and the refine prompt. Loading the template and
 //! launching the refine turn are host work.
 
-use super::home::{HomeFamily, HomeState, InfoKind, SlideRatio, TaskDraft};
+use super::home::{HomeDevice, HomeFamily, HomeState, InfoKind, SlideRatio, TaskDraft};
 
 /// What the Home Send button does for the current draft. Paint (label,
 /// fill, tooltip) and the press handler both read this one answer so the
@@ -43,10 +43,11 @@ pub enum HomeSendMode {
 ///
 /// | Task / option            | Template                        | Why                                                   |
 /// |--------------------------|---------------------------------|-------------------------------------------------------|
-/// | App 界面 · 手机 / 桌面    | —                               | no app-screen template ships; the onboarding triptych is a tutorial card |
+/// | App 界面 · 手机          | `coffee-order-app`              | 3 × 375×812 screens: home, menu, order — the coffee example's own pages |
+/// | App 界面 · 桌面          | `coffee-counter-desktop`        | 1440×900 store console: overview, order list, order detail |
 /// | 网页设计                 | `saas-landing-orange`           | 1200-wide scrolling site: nav, hero, feature cards, story, footer |
 /// | 演示文稿 · 16:9          | `slide-deck`                    | 1920×1080 deck: cover, agenda, points, data, close    |
-/// | 演示文稿 · 4:3           | —                               | every shipped deck is 16:9; a 4:3 request must not get 16:9 boards |
+/// | 演示文稿 · 4:3           | `onboarding-training-deck`      | 6 × 1024×768 slides: cover, agenda, three columns, timeline, grid, close |
 /// | 图文卡片                 | `knowledge-carousel`            | 5 × 1080×1440 (3:4) carousel, cover → points → summary |
 /// | 截图教程                 | `screenshot-tutorial`           | 5 × 3:4 cards: cover, three steps, closing call      |
 /// | 信息图 · 数据            | `data-report-infographic`       | 1080-wide long image: three big numbers, bars, conclusions |
@@ -55,13 +56,15 @@ pub enum HomeSendMode {
 /// | 活动海报                 | `music-fest-poster-card`        | 3:4 festival poster: title, date/venue, line-up, tickets |
 pub fn example_draft_template(family: HomeFamily, draft: &TaskDraft) -> Option<&'static str> {
     match family {
-        // Both devices: no shipped template is an app screen set.
-        HomeFamily::AppUi => None,
+        HomeFamily::AppUi => Some(match draft.device {
+            HomeDevice::Mobile => "coffee-order-app",
+            HomeDevice::Desktop => "coffee-counter-desktop",
+        }),
         HomeFamily::Web => Some("saas-landing-orange"),
-        HomeFamily::Presentation => match draft.ratio {
-            SlideRatio::Wide169 => Some("slide-deck"),
-            SlideRatio::Classic43 => None,
-        },
+        HomeFamily::Presentation => Some(match draft.ratio {
+            SlideRatio::Wide169 => "slide-deck",
+            SlideRatio::Classic43 => "onboarding-training-deck",
+        }),
         HomeFamily::KnowledgeCards => Some("knowledge-carousel"),
         HomeFamily::ScreenshotTutorial => Some("screenshot-tutorial"),
         HomeFamily::Infographic => Some(match draft.info_kind {
