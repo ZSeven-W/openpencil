@@ -63,6 +63,16 @@ impl VariantPlan {
     }
 }
 
+/// Style-guide tags that describe product UI rather than a marketing page.
+const PRODUCT_UI_TAGS: [&str; 6] = [
+    "dashboard",
+    "data-focused",
+    "sidebar",
+    "terminal",
+    "developer",
+    "code-inspired",
+];
+
 /// The style-guide shelf a brief draws from — the same platform routing
 /// the planning prompt's catalogue uses, plus the deck shelf.
 pub fn variant_platform(prompt: &str) -> Platform {
@@ -161,15 +171,34 @@ pub fn choose_variant_style_guides(
         ));
     }
 
+    // A landing page never borrows a product-UI guide (dashboard, terminal,
+    // developer) unless the brief itself is about that kind of product: the
+    // light/dark diversity bonus once handed a coffee-bean shop the data
+    // dashboard look.
+    let landing = detect_design_type(prompt).type_ == DesignType::LandingPage;
+    let suits_brief = |guide: &&'static ParsedStyleGuide| {
+        let mut product_tags = guide
+            .tags
+            .iter()
+            .filter(|tag| PRODUCT_UI_TAGS.contains(&tag.as_str()))
+            .peekable();
+        // Not a landing page, not a product-UI guide, or the brief is about
+        // that very kind of product (it shares one of the guide's tags).
+        !landing
+            || product_tags.peek().is_none()
+            || product_tags.any(|tag| tags.iter().any(|t| t == tag))
+    };
     let shelf: Vec<&'static ParsedStyleGuide> = ranked
         .iter()
         .copied()
         .filter(|guide| guide.platform == platform)
+        .filter(suits_brief)
         .collect();
     let fallback: Vec<&'static ParsedStyleGuide> = ranked
         .iter()
         .copied()
         .filter(|guide| guide.platform != platform && guide.platform == Platform::Webapp)
+        .filter(suits_brief)
         .collect();
 
     while chosen.len() < count {

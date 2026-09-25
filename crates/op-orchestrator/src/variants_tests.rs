@@ -351,3 +351,33 @@ fn merged_mesh_vertices_carry_their_own_palette() {
     assert!(!json.contains("$--primary"), "{json}");
     assert!(json.contains("#c4f82a"), "{json}");
 }
+
+#[test]
+fn a_consumer_landing_page_never_gets_a_product_ui_direction() {
+    // Measured with GLM-5.3-Flash: the new-mode bonus handed a coffee-bean
+    // shop's landing page the data-dashboard guide.
+    let plans = choose_variant_style_guides("做一个精品咖啡豆电商网站的落地页", None, 4);
+    assert_eq!(plans.len(), 4);
+    for plan in &plans {
+        for banned in ["dashboard", "terminal", "developer"] {
+            assert!(
+                !plan.style_guide.contains(banned),
+                "{} on a coffee landing page",
+                plan.style_guide
+            );
+        }
+    }
+}
+
+#[test]
+fn a_developer_tool_landing_page_may_still_look_like_a_terminal() {
+    let brief = "a landing page for a developer CLI tool, terminal aesthetic";
+    let plans = choose_variant_style_guides(brief, None, 3);
+    let ids: Vec<&str> = plans.iter().map(|p| p.style_guide.as_str()).collect();
+    let tags = crate::style_guide_context::infer_tags_from_prompt(brief);
+    assert!(
+        ids.iter()
+            .any(|id| id.contains("terminal") || id.contains("developer")),
+        "{ids:?} tags {tags:?}"
+    );
+}
