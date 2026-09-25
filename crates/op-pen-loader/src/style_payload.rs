@@ -116,6 +116,13 @@ pub(crate) fn apply_container_style(
     };
 }
 
+/// What an image paints before (or instead of) its bitmap: an empty slot,
+/// bytes still loading, or a src that fails to decode. A translucent slate
+/// tints whatever sits underneath — a light card reads light grey, a dark
+/// one dark grey — where the old opaque light grey glared as a pale block
+/// in every dark design.
+pub(crate) const IMAGE_PLACEHOLDER_FILL: [f32; 4] = [0.45, 0.48, 0.53, 0.22];
+
 pub(crate) fn assign_first_fill(p: &mut NodePayload, fills: Option<&[PenFill]>) {
     // Preserve the complete canonical stack for renderers that understand
     // layered fills. Keep populating the historical primary-fill projection
@@ -444,7 +451,7 @@ pub(crate) fn fill_fallback_color(fill: &PenFill) -> Option<[f32; 4]> {
             return Some(apply_alpha(rgba, body.opacity));
         }
         PenFill::Image(_) => {
-            return Some([0.85, 0.86, 0.88, 1.0]);
+            return Some(IMAGE_PLACEHOLDER_FILL);
         }
     }
     None

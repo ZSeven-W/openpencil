@@ -304,14 +304,14 @@ pub(super) fn image_to_payload(n: &ImageNode) -> NodePayload {
         p.corner_radius = corners[0] as f32;
     }
     // Carry the image source so the canvas painter can decode +
-    // draw the bitmap. `fill` stays at a neutral grey so the
-    // placeholder reads correctly when the bytes fail to decode
-    // (corrupt url / unsupported codec).
+    // draw the bitmap. `fill` is the translucent placeholder shown for an
+    // empty slot or bytes that fail to decode (corrupt url / unsupported
+    // codec); see `IMAGE_PLACEHOLDER_FILL`.
     p.image_src = Some(n.src.clone());
     p.video = n.video.clone();
     p.image_fit = n.object_fit.as_ref().map(image_node_fit_to_payload);
     p.image_adjustments = image_node_adjustments(n);
-    p.fill = Some([0.85, 0.86, 0.88, 1.0]);
+    p.fill = Some(crate::style_payload::IMAGE_PLACEHOLDER_FILL);
     p.name = if n.base.name.as_deref().unwrap_or("").is_empty() {
         format!("Image ({})", short_src(&n.src))
     } else {
