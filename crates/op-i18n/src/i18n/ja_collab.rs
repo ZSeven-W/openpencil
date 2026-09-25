@@ -475,6 +475,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.siteImport.warnings" => "ページの {{count}} 箇所は正確に取り込めませんでした。",
         "workspace.siteImport.instances" => "{{count}} 個のインスタンス",
         "workspace.siteImport.bound" => "{{bound}} 箇所の色を変数に紐付け",
+        "reader.pageOf" => "{{count}} ページ中 {{page}} ページ目",
+        "reader.latestReply" => "最新の返信",
+        "reader.panelHint" => "ページを選んで、AI に変えたい内容を伝えましょう。",
         _ => return None,
     })
 }

@@ -13,13 +13,20 @@ fn compact_ui() -> EditorUiState {
 }
 
 #[test]
-fn reader_shows_only_on_a_compact_touch_host() {
+fn reader_shows_on_every_touch_host_and_never_on_desktop() {
     let mut ui = EditorUiState::new();
     ui.workspace.visible = true;
     assert!(!ui.works_reader_visible(), "desktop keeps its workspace");
+    ui.size_class = EditorSizeClass::Expanded;
+    assert!(!ui.works_reader_visible(), "a wide desktop window too");
     ui.touch = true;
-    ui.size_class = EditorSizeClass::Medium;
-    assert!(!ui.works_reader_visible(), "tablets keep their composition");
+    for class in [EditorSizeClass::Medium, EditorSizeClass::Expanded] {
+        ui.size_class = class;
+        assert!(
+            ui.works_reader_visible(),
+            "tablets read the work: {class:?}"
+        );
+    }
     ui.size_class = EditorSizeClass::Compact;
     assert!(ui.works_reader_visible());
     ui.workspace.visible = false;

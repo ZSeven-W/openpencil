@@ -164,7 +164,11 @@ pub(super) fn paint_home(surface: &HomeSurface<'_>, cx: &mut PaintCx<'_>, rect: 
         enter(HomeEnterBlock::Explore),
         palette,
     );
-    sections::paint_recent(surface, cx, &layout, enter(HomeEnterBlock::Recent), palette);
+    if super::tablet::is_touch_tablet(surface.ui) {
+        works_grid::paint_works_grid(surface, cx, &layout, enter(HomeEnterBlock::Recent), palette);
+    } else {
+        sections::paint_recent(surface, cx, &layout, enter(HomeEnterBlock::Recent), palette);
+    }
     cx.backend.restore();
 
     // ── the pinned top bar ────────────────────────────────────────────
@@ -607,3 +611,5 @@ pub(super) mod explore_copy;
 pub(super) mod panels;
 #[path = "home_surface_paint_sections.rs"]
 pub(super) mod sections;
+#[path = "home_surface_paint_works_grid.rs"]
+mod works_grid;

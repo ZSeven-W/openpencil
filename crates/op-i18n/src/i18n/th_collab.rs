@@ -461,6 +461,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.siteImport.warnings" => "มี {{count}} ส่วนของหน้าที่นำเข้าได้ไม่ตรงทั้งหมด",
         "workspace.siteImport.instances" => "{{count}} อินสแตนซ์",
         "workspace.siteImport.bound" => "สี {{bound}} จุดผูกกับตัวแปร",
+        "reader.pageOf" => "หน้า {{page}} จาก {{count}}",
+        "reader.latestReply" => "คำตอบล่าสุด",
+        "reader.panelHint" => "เลือกหน้า แล้วบอก AI ว่าต้องการเปลี่ยนอะไร",
         _ => return None,
     })
 }

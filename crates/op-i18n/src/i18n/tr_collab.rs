@@ -459,6 +459,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.siteImport.warnings" => "Sayfanın {{count}} bölümü tam olarak içe aktarılamadı.",
         "workspace.siteImport.instances" => "{{count}} örnek",
         "workspace.siteImport.bound" => "{{bound}} renk değişkenlere bağlandı",
+        "reader.pageOf" => "Sayfa {{page}} / {{count}}",
+        "reader.latestReply" => "Son yanıt",
+        "reader.panelHint" => "Bir sayfa seçin, sonra yapay zekâya neyi değiştireceğini söyleyin.",
         _ => return None,
     })
 }

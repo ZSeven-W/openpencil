@@ -1,11 +1,13 @@
-//! The phone works reader: the normal-mode view of a generated work on a
-//! compact touch host.
+//! The works reader: the normal-mode view of a generated work on a touch
+//! host (phone or tablet).
 //!
 //! A full-screen composition over the SAME `WorkspaceState` and document
 //! the desktop workspace reads: a header (← Home, title, 普通 / 专业), the
 //! stage where the host paints the real canvas framed on one board, a
 //! pager for multi-board families, a one-line status with Stop / Retry,
-//! and a fixed bottom bar (继续对话 / 改这一页).
+//! and a fixed bottom bar (继续对话 / 改这一页). Tablets arrange the same
+//! targets in their own forms (`works_reader_tablet.rs`): a thumbnail
+//! strip instead of the pager, and — in landscape — a side panel.
 //!
 //! Geometry and hit-testing live here and are the ONE answer both the
 //! paint pass (`works_reader_paint.rs`) and the host press tier use. The
@@ -18,6 +20,50 @@ use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Point2D, Rect};
 use op_editor_core::{reader_is_paged, EditorState, ReaderHit, WorkspacePhase, WorkspaceState};
+
+#[path = "works_reader_tablet.rs"]
+pub mod tablet;
+pub use tablet::{
+    side_panel_w, tablet_chat_rect, thumb_plate, thumb_w_for, READER_STRIP_H,
+    READER_TABLET_HEADER_H, THUMB_LABEL_H,
+};
+
+/// Which composition the reader takes. Phones keep the compact stack;
+/// a tablet picks by orientation (an iPad Pro is Expanded in both, so
+/// the size class alone cannot tell portrait from landscape).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReaderForm {
+    Phone,
+    TabletPortrait,
+    TabletLandscape,
+}
+
+impl ReaderForm {
+    pub fn for_ui(ui: &op_editor_core::EditorUiState, viewport_w: f32, viewport_h: f32) -> Self {
+        if !ui.touch_chrome() || ui.compact_layout() {
+            Self::Phone
+        } else if viewport_w > viewport_h {
+            Self::TabletLandscape
+        } else {
+            Self::TabletPortrait
+        }
+    }
+
+    pub fn is_tablet(self) -> bool {
+        self != Self::Phone
+    }
+}
+
+/// The reader's header height — what the canvas origin answers while
+/// the reader is up. It depends only on the size class, never on the
+/// orientation, so `canvas_origin` needs no viewport.
+pub fn reader_header_h(ui: &op_editor_core::EditorUiState) -> f32 {
+    if ui.compact_layout() {
+        READER_HEADER_H
+    } else {
+        READER_TABLET_HEADER_H
+    }
+}
 
 /// Header height: the 44 pt back / mode targets with 6 px breathing.
 pub const READER_HEADER_H: f32 = 56.0;
@@ -55,6 +101,7 @@ pub fn estimate_label_w(text: &str, size: f32) -> f32 {
 /// need.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReaderLayout {
+    pub form: ReaderForm,
     pub header: Rect,
     pub back: Rect,
     /// Title + subtitle column between the back button and the switch.
@@ -69,6 +116,16 @@ pub struct ReaderLayout {
     pub prev: Option<Rect>,
     pub next: Option<Rect>,
     pub page_label: Option<Rect>,
+    /// Tablet thumbnail strip row (replaces the pager), when paged.
+    pub strip: Option<Rect>,
+    /// The strip's tiles on show: `(board slot, tile rect)`.
+    pub thumbs: Vec<(usize, Rect)>,
+    /// Landscape tablet side panel (status, page, reply, actions).
+    pub side_panel: Option<Rect>,
+    /// Landscape: the "page N of M" block under the status.
+    pub page_info: Option<Rect>,
+    /// Landscape: the latest-reply card, when the panel has room.
+    pub reply: Option<Rect>,
     pub status: Rect,
     /// The status row's Stop / Retry target, when the phase offers one.
     pub status_action: Option<Rect>,
@@ -91,6 +148,25 @@ pub fn reader_stage_rect(viewport_w: f32, viewport_h: f32, paged: bool) -> Rect 
         vw,
         (vh - READER_HEADER_H - bottom).max(0.0),
     )
+}
+
+/// The stage for any reader form (`chat_open`: the tablet chat is up).
+pub fn reader_stage_rect_for(
+    form: ReaderForm,
+    viewport_w: f32,
+    viewport_h: f32,
+    paged: bool,
+    chat_open: bool,
+) -> Rect {
+    match form {
+        ReaderForm::Phone => reader_stage_rect(viewport_w, viewport_h, paged),
+        _ => tablet::tablet_stage_rect(form, viewport_w, viewport_h, paged, chat_open),
+    }
+}
+
+/// Whether the chat is open over the reader.
+pub fn reader_chat_open(ui: &op_editor_core::EditorUiState) -> bool {
+    ui.mobile_sheet == Some(op_editor_core::size_class::MobileSheetKind::Ai)
 }
 
 /// Whether the reader over `state` reserves its pager row — counted
@@ -174,6 +250,7 @@ pub fn reader_layout(
     );
 
     ReaderLayout {
+        form: ReaderForm::Phone,
         header,
         back,
         title,
@@ -185,6 +262,11 @@ pub fn reader_layout(
         prev,
         next,
         page_label,
+        strip: None,
+        thumbs: Vec::new(),
+        side_panel: None,
+        page_info: None,
+        reply: None,
         status,
         status_action,
         bottom_bar,
@@ -193,7 +275,7 @@ pub fn reader_layout(
     }
 }
 
-/// The phone reader widget, built per frame from the editor state.
+/// The reader widget, built per frame from the editor state.
 pub struct WorksReader<'a> {
     pub id: WidgetId,
     pub theme: Theme,
@@ -207,6 +289,12 @@ pub struct WorksReader<'a> {
     /// When set, the stage outside it is masked so the reader shows one
     /// page — not the neighbours the canvas also painted.
     pub board_screen: Option<Rect>,
+    /// Width / height of the first board — sizes the tablet strip tiles.
+    pub board_aspect: f32,
+    /// The board on show's name (the tablet side panel's page line).
+    pub current_name: Option<String>,
+    /// The latest finished AI reply (the tablet side panel's card).
+    pub last_reply: Option<String>,
 }
 
 impl<'a> WorksReader<'a> {
@@ -219,15 +307,25 @@ impl<'a> WorksReader<'a> {
         if !state.editor_ui.works_reader_visible() {
             return None;
         }
+        let boards = op_editor_core::preview_slideshow::active_page_boards(state);
+        let selected = state
+            .editor_ui
+            .workspace
+            .selected
+            .min(boards.len().saturating_sub(1));
+        let (board_aspect, current_name) = extras::board_facts(state, &boards, selected);
         Some(Self {
             id: WidgetId::new(7720),
             theme: theme_for(&state.editor_ui),
             state: &state.editor_ui.workspace,
             ui: &state.editor_ui,
             title: super::workspace_surface::workspace_title(state),
-            boards: op_editor_core::preview_slideshow::active_page_boards(state),
+            boards,
             now_ms,
             board_screen: None,
+            board_aspect,
+            current_name,
+            last_reply: extras::last_reply(state),
         })
     }
 
@@ -281,7 +379,30 @@ impl<'a> WorksReader<'a> {
         self.state.phase != WorkspacePhase::Generating && !self.boards.is_empty()
     }
 
+    /// The composition for a `viewport_w × viewport_h` screen.
+    pub fn form(&self, viewport_w: f32, viewport_h: f32) -> ReaderForm {
+        ReaderForm::for_ui(self.ui, viewport_w, viewport_h)
+    }
+
     pub fn layout(&self, viewport_w: f32, viewport_h: f32) -> ReaderLayout {
+        let form = self.form(viewport_w, viewport_h);
+        if form.is_tablet() {
+            return tablet::tablet_reader_layout(
+                form,
+                viewport_w,
+                viewport_h,
+                &tablet::TabletInputs {
+                    paged: self.paged(),
+                    chat_open: reader_chat_open(self.ui),
+                    normal_label: self.tr("home.mode.normal"),
+                    professional_label: self.tr("home.mode.professional"),
+                    action_label: self.status_action_label(),
+                    board_count: self.boards.len(),
+                    current: self.current_index(),
+                    thumb_w: thumb_w_for(self.board_aspect),
+                },
+            );
+        }
         reader_layout(
             viewport_w,
             viewport_h,
@@ -314,33 +435,31 @@ impl<'a> WorksReader<'a> {
             }
             return None;
         }
-        if layout.bottom_bar.contains(point) {
-            if layout.continue_chat.contains(point) {
-                return Some(ReaderHit::ContinueChat);
-            }
-            if layout.edit_page.contains(point) && self.edit_enabled() {
-                return Some(ReaderHit::EditPage);
-            }
-            return None;
+        // The targets never overlap each other or the stage, so the
+        // order below only decides what a DEAD spot (bar padding, a
+        // disabled button) resolves to: nothing.
+        if layout.continue_chat.contains(point) {
+            return Some(ReaderHit::ContinueChat);
         }
-        if layout.status.contains(point) {
-            return layout
-                .status_action
-                .filter(|rect| rect.contains(point))
-                .and_then(|_| self.status_action());
+        if layout.edit_page.contains(point) {
+            return self.edit_enabled().then_some(ReaderHit::EditPage);
         }
-        if let Some(pager) = layout.pager {
-            if pager.contains(point) {
-                let count = self.boards.len();
-                let current = self.current_index();
-                if layout.prev.is_some_and(|rect| rect.contains(point)) && current > 0 {
-                    return Some(ReaderHit::Prev);
-                }
-                if layout.next.is_some_and(|rect| rect.contains(point)) && current + 1 < count {
-                    return Some(ReaderHit::Next);
-                }
-                return None;
-            }
+        if layout
+            .status_action
+            .is_some_and(|rect| rect.contains(point))
+        {
+            return self.status_action();
+        }
+        if let Some((index, _)) = layout.thumbs.iter().find(|(_, rect)| rect.contains(point)) {
+            return Some(ReaderHit::Page(*index));
+        }
+        let count = self.boards.len();
+        let current = self.current_index();
+        if layout.prev.is_some_and(|rect| rect.contains(point)) {
+            return (current > 0).then_some(ReaderHit::Prev);
+        }
+        if layout.next.is_some_and(|rect| rect.contains(point)) {
+            return (current + 1 < count).then_some(ReaderHit::Next);
         }
         layout.stage.contains(point).then_some(ReaderHit::Stage)
     }
@@ -370,6 +489,9 @@ impl Widget for WorksReader<'_> {
 
 #[path = "works_reader_paint.rs"]
 mod paint;
+
+#[path = "works_reader_extras.rs"]
+mod extras;
 
 #[cfg(test)]
 #[path = "works_reader_tests.rs"]

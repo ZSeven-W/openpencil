@@ -79,6 +79,12 @@ impl WidgetHostNative {
                 return None;
             }
             let visible_bottom = self.touch_ai_visible_bottom(viewport_h);
+            // Over a tablet reader the chat opens INTO the reader: its
+            // landscape side panel, or a floating portrait sheet.
+            if let Some(rect) = self.reader_tablet_chat_rect(viewport_w, viewport_h, visible_bottom)
+            {
+                return Some(rect);
+            }
             if self.editor_state.editor_ui.compact_layout() {
                 let max_h = (visible_bottom
                     - op_editor_ui::widgets::host_canvas_geometry::touch_app_bar_height(

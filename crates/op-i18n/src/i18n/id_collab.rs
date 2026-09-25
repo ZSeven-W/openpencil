@@ -459,6 +459,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.siteImport.warnings" => "{{count}} bagian halaman tidak dapat diimpor secara persis.",
         "workspace.siteImport.instances" => "{{count}} instans",
         "workspace.siteImport.bound" => "{{bound}} warna terikat ke variabel",
+        "reader.pageOf" => "Halaman {{page}} dari {{count}}",
+        "reader.latestReply" => "Balasan terbaru",
+        "reader.panelHint" => "Pilih satu halaman, lalu beri tahu AI apa yang perlu diubah.",
         _ => return None,
     })
 }

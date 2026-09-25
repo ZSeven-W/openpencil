@@ -471,6 +471,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.siteImport.warnings" => "Có {{count}} phần của trang không nhập được chính xác.",
         "workspace.siteImport.instances" => "{{count}} phiên bản",
         "workspace.siteImport.bound" => "{{bound}} màu gắn với biến",
+        "reader.pageOf" => "Trang {{page}} / {{count}}",
+        "reader.latestReply" => "Phản hồi mới nhất",
+        "reader.panelHint" => "Chọn một trang rồi nói với AI bạn muốn đổi gì.",
         _ => return None,
     })
 }

@@ -53,7 +53,7 @@ impl WidgetHostNative {
     /// or the workspace header.
     pub(in crate::widget_host) fn layers_panel_visible(&self) -> bool {
         let ui = &self.editor_state.editor_ui;
-        if !self.left_rail_visible() {
+        if !self.left_rail_visible() || self.works_reader_visible() {
             return false;
         }
         if op_editor_ui::widgets::slides_panel_flow::chat_tab_active(&self.editor_state) {

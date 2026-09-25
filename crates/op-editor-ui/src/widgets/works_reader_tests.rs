@@ -174,10 +174,12 @@ fn a_briefless_reading_offers_no_retry_it_could_not_honour() {
 }
 
 #[test]
-fn the_reader_is_phone_only() {
+fn the_reader_is_touch_only_and_takes_the_tablet_forms() {
     let mut state = reading(HomeFamily::AppUi, 1, WorkspacePhase::Done);
     state.editor_ui.size_class = EditorSizeClass::Medium;
-    assert!(WorksReader::for_editor(&state).is_none());
+    let reader = WorksReader::for_editor(&state).expect("tablets read the work too");
+    assert_eq!(reader.form(820.0, 1180.0), ReaderForm::TabletPortrait);
+    assert_eq!(reader.form(1180.0, 820.0), ReaderForm::TabletLandscape);
     state.editor_ui.touch = false;
     assert!(WorksReader::for_editor(&state).is_none());
 }

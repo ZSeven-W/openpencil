@@ -186,7 +186,10 @@ impl WidgetHostNative {
         // 3. The left rail — painted BEFORE the canvas on the desktop
         //    (it pushes the canvas) and AFTER it in mobile layout (it
         //    overlays the canvas).
+        // The works reader is a takeover: a tablet's persistent layer
+        // rail belongs to the professional view only.
         let persistent_layers = !workspace_visible
+            && !self.works_reader_visible()
             && (!self.editor_state.editor_ui.touch_chrome()
                 || (self.editor_state.editor_ui.expanded_touch_layout()
                     && self.editor_state.editor_ui.sidebar_open));

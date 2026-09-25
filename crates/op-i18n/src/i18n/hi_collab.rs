@@ -463,6 +463,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.siteImport.warnings" => "पेज के {{count}} हिस्से ठीक-ठीक इंपोर्ट नहीं हो सके।",
         "workspace.siteImport.instances" => "{{count}} इंस्टेंस",
         "workspace.siteImport.bound" => "{{bound}} रंग वेरिएबल से जुड़े",
+        "reader.pageOf" => "{{count}} में से पृष्ठ {{page}}",
+        "reader.latestReply" => "नवीनतम जवाब",
+        "reader.panelHint" => "एक पृष्ठ चुनें, फिर AI को बताएं कि क्या बदलना है।",
         _ => return None,
     })
 }

@@ -570,9 +570,9 @@ impl EditorUiState {
             now_ms,
             previous_tool,
         );
-        // The phone reader pages through the boards instead of fitting
-        // them all into a 390 px stage.
-        if self.compact_layout() {
+        // The touch reader (phone or tablet) pages through the boards
+        // instead of fitting them all into its stage.
+        if self.touch_chrome() {
             self.workspace.view = WorkspaceView::default_for_reader(family);
         }
         self.sidebar_open = true;

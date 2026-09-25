@@ -267,3 +267,46 @@ fn a_vanished_board_runs_the_turn_unscoped() {
         .page_edit_running
         .is_none());
 }
+
+#[test]
+fn a_tablet_run_through_the_chat_pump_settles_in_the_tablet_reader() {
+    const TABLET: (f32, f32) = (1366.0, 1024.0);
+    let (base_url, _requests) = spawn_server(std::iter::repeat_with(stop).take(8).collect());
+    let mut host = phone_deck(&base_url);
+    host.editor_state_mut().editor_ui.size_class = EditorSizeClass::Expanded;
+    host.editor_state_mut().editor_ui.workspace.phase = WorkspacePhase::Generating;
+    send(&mut host, "做一份 3 页 PPT");
+    let mut chat = MobileChatHost::default();
+    let started = Instant::now();
+    let mut now_ms = 10;
+    while chat.pump(&mut host, now_ms, TABLET).is_some() {
+        assert!(started.elapsed() < Duration::from_secs(60), "turn hung");
+        std::thread::sleep(Duration::from_millis(5));
+        now_ms += 33;
+    }
+    assert_eq!(
+        host.editor_state().editor_ui.workspace.phase,
+        WorkspacePhase::Done
+    );
+    assert!(host.works_reader_visible(), "the tablet reads the result");
+    let reader = op_editor_ui::widgets::WorksReader::for_editor(host.editor_state()).unwrap();
+    let layout = reader.layout(TABLET.0, TABLET.1);
+    assert_eq!(
+        layout.form,
+        op_editor_ui::widgets::works_reader::ReaderForm::TabletLandscape
+    );
+    let (x, y, w, h) = op_editor_ui::widgets::host_canvas_geometry::canvas_region(
+        host.editor_state(),
+        TABLET.0,
+        TABLET.1,
+    );
+    assert_eq!(
+        (x, y, w, h),
+        (
+            layout.stage.origin.x,
+            layout.stage.origin.y,
+            layout.stage.size.x,
+            layout.stage.size.y
+        )
+    );
+}

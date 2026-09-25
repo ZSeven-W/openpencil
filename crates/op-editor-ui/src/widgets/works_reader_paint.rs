@@ -1,7 +1,8 @@
-//! Immediate-mode paint pass for the phone works reader's chrome: the
-//! header (← Home, title + subtitle, 普通 / 专业), the pager, the status
-//! line and the fixed bottom bar. The real canvas inside the stage is
-//! painted by the host before this pass, and the chat sheet after it.
+//! Immediate-mode paint pass for the works reader's chrome: the header
+//! (← Home, title + subtitle, 普通 / 专业), the pager, the status line and
+//! the fixed bottom bar. The real canvas inside the stage is painted by
+//! the host before this pass, and the chat sheet after it. The tablet
+//! forms' strip and side panel are in `works_reader_paint_tablet.rs`.
 
 use super::{ReaderLayout, WorksReader};
 use crate::widgets::home_surface::StudioPalette;
@@ -11,9 +12,12 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
 use op_editor_core::{ReaderHit, WorkspacePhase};
 
-const SANS: &str = "system-ui";
+pub(super) const SANS: &str = "system-ui";
 
-fn text_weighted(
+#[path = "works_reader_paint_tablet.rs"]
+mod tablet;
+
+pub(super) fn text_weighted(
     cx: &mut PaintCx<'_>,
     content: &str,
     origin: Point2D,
@@ -26,7 +30,7 @@ fn text_weighted(
     cx.backend.draw_text(&layout, origin);
 }
 
-fn fade(color: Color, factor: f32) -> Color {
+pub(super) fn fade(color: Color, factor: f32) -> Color {
     Color {
         a: color.a * factor,
         ..color
@@ -34,7 +38,7 @@ fn fade(color: Color, factor: f32) -> Color {
 }
 
 /// Cut `content` (by whole chars, with an ellipsis) until it fits `max_w`.
-fn fit_text(cx: &mut PaintCx<'_>, content: &str, size: f32, max_w: f32) -> String {
+pub(super) fn fit_text(cx: &mut PaintCx<'_>, content: &str, size: f32, max_w: f32) -> String {
     if cx.backend.measure_text_family(content, size, SANS) <= max_w {
         return content.to_string();
     }
@@ -50,7 +54,7 @@ fn fit_text(cx: &mut PaintCx<'_>, content: &str, size: f32, max_w: f32) -> Strin
 }
 
 /// A label centred in `rect` on its baseline.
-fn centered_label(
+pub(super) fn centered_label(
     cx: &mut PaintCx<'_>,
     label: &str,
     rect: Rect,
@@ -82,9 +86,15 @@ pub(super) fn paint_reader(reader: &WorksReader<'_>, cx: &mut PaintCx<'_>, rect:
     if reader.boards.is_empty() {
         paint_empty_stage(reader, cx, &layout, palette);
     }
+    if layout.form.is_tablet() {
+        tablet::paint_tablet_chrome(reader, cx, &layout, palette);
+        return;
+    }
     paint_pager(reader, cx, &layout, palette);
-    paint_status(reader, cx, &layout, palette);
-    paint_bottom_bar(reader, cx, &layout, palette);
+    cx.backend.fill_rect(layout.status, palette.page);
+    paint_status_line(reader, cx, &layout, 16.0, palette);
+    paint_bar_background(cx, layout.bottom_bar, palette);
+    paint_actions(reader, cx, &layout, palette);
 }
 
 fn paint_header(
@@ -223,7 +233,7 @@ fn paint_stage_mask(cx: &mut PaintCx<'_>, stage: Rect, board: Rect, palette: Stu
     }
 }
 
-fn inset(rect: Rect, by: f32) -> Rect {
+pub(super) fn inset(rect: Rect, by: f32) -> Rect {
     Rect::xywh(
         rect.origin.x + by,
         rect.origin.y + by,
@@ -277,6 +287,18 @@ fn paint_pager(
     if let Some(label_rect) = layout.page_label {
         centered_label(cx, &label, label_rect, 13.0, fade(palette.ink, 0.75), 500);
     }
+    paint_arrows(reader, cx, layout, palette);
+}
+
+/// The prev / next chevrons (the phone pager's, the tablet strip's).
+pub(super) fn paint_arrows(
+    reader: &WorksReader<'_>,
+    cx: &mut PaintCx<'_>,
+    layout: &ReaderLayout,
+    palette: StudioPalette,
+) {
+    let count = reader.boards.len();
+    let current = reader.current_index();
     for (rect, icon, enabled, hit) in [
         (layout.prev, Icon::ChevronLeft, current > 0, ReaderHit::Prev),
         (
@@ -311,15 +333,17 @@ fn paint_pager(
     }
 }
 
-fn paint_status(
+/// The status line's icon + phase text from `content_x`, and its Stop /
+/// Retry pill. The caller paints the row's background.
+pub(super) fn paint_status_line(
     reader: &WorksReader<'_>,
     cx: &mut PaintCx<'_>,
     layout: &ReaderLayout,
+    content_x: f32,
     palette: StudioPalette,
 ) {
     let locale = reader.ui.locale;
     let status = layout.status;
-    cx.backend.fill_rect(status, palette.page);
     let phase = reader.state.phase;
     let (icon, color) = match phase {
         WorkspacePhase::Generating => (Icon::Loader, palette.blue),
@@ -330,7 +354,7 @@ fn paint_status(
     draw_icon(
         cx.backend,
         icon,
-        Point2D::new(16.0, status.origin.y + (status.size.y - 16.0) / 2.0),
+        Point2D::new(content_x, status.origin.y + (status.size.y - 16.0) / 2.0),
         16.0,
         color,
         1.8,
@@ -344,14 +368,17 @@ fn paint_status(
         }
         _ => op_i18n::translate(locale, phase_key(phase)).to_string(),
     };
+    let text_x = content_x + 24.0;
     let right = layout
         .status_action
-        .map_or(status.size.x - 16.0, |rect| rect.origin.x - 8.0);
-    let line = fit_text(cx, &line, 13.0, (right - 40.0).max(0.0));
+        .map_or(status.origin.x + status.size.x - 16.0, |rect| {
+            rect.origin.x - 8.0
+        });
+    let line = fit_text(cx, &line, 13.0, (right - text_x).max(0.0));
     text_weighted(
         cx,
         &line,
-        Point2D::new(40.0, jian_widgets::centered_text_baseline_y(status, 13.0)),
+        Point2D::new(text_x, jian_widgets::centered_text_baseline_y(status, 13.0)),
         13.0,
         fade(palette.ink, 0.8),
         500,
@@ -361,7 +388,12 @@ fn paint_status(
         reader.status_action_label(),
         reader.status_action(),
     ) {
-        let pill = Rect::xywh(rect.origin.x, rect.origin.y + 6.0, rect.size.x, 32.0);
+        let pill = Rect::xywh(
+            rect.origin.x,
+            rect.origin.y + (rect.size.y - 32.0) / 2.0,
+            rect.size.x,
+            32.0,
+        );
         let pressed = reader.state.reader_pressed == Some(hit);
         cx.backend.fill_round_rect(
             pill,
@@ -378,21 +410,26 @@ fn paint_status(
     }
 }
 
-fn paint_bottom_bar(
+/// The bottom bar's surface and top hairline (phone, tablet portrait).
+pub(super) fn paint_bar_background(cx: &mut PaintCx<'_>, bar: Rect, palette: StudioPalette) {
+    cx.backend.fill_rect(bar, palette.topbar);
+    cx.backend.stroke_line(
+        Point2D::new(bar.origin.x, bar.origin.y),
+        Point2D::new(bar.origin.x + bar.size.x, bar.origin.y),
+        palette.topbar_line,
+        1.0,
+    );
+}
+
+/// 继续对话 and 改这一页 at their layout rects (whatever surface they
+/// sit on).
+pub(super) fn paint_actions(
     reader: &WorksReader<'_>,
     cx: &mut PaintCx<'_>,
     layout: &ReaderLayout,
     palette: StudioPalette,
 ) {
     let locale = reader.ui.locale;
-    let bar = layout.bottom_bar;
-    cx.backend.fill_rect(bar, palette.topbar);
-    cx.backend.stroke_line(
-        Point2D::new(0.0, bar.origin.y),
-        Point2D::new(bar.size.x, bar.origin.y),
-        palette.topbar_line,
-        1.0,
-    );
     let pressed = reader.state.reader_pressed;
 
     // 继续对话 — the secondary, outlined button with the sparkle mark.

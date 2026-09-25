@@ -295,8 +295,12 @@ pub fn pinned_chat(state: &EditorState, viewport_w: f32, viewport_h: f32) -> Opt
 /// panel is closed) — below the workspace header + toolbar.
 pub fn canvas_origin(state: &EditorState) -> (f32, f32) {
     if state.editor_ui.works_reader_visible() {
-        // The phone reader's stage: full width, under its header.
-        return (0.0, crate::widgets::works_reader::READER_HEADER_H);
+        // The reader's stage: left-anchored under its header in every
+        // form (phone, tablet portrait, tablet landscape).
+        return (
+            0.0,
+            crate::widgets::works_reader::reader_header_h(&state.editor_ui),
+        );
     }
     if workspace_docked(state) {
         // A drawer overlays the canvas instead of pushing it.
@@ -340,10 +344,15 @@ pub fn canvas_region(
     viewport_h: f32,
 ) -> (f32, f32, f32, f32) {
     if state.editor_ui.works_reader_visible() {
-        let stage = crate::widgets::works_reader::reader_stage_rect(
+        use crate::widgets::works_reader::{
+            reader_chat_open, reader_paged_for, reader_stage_rect_for, ReaderForm,
+        };
+        let stage = reader_stage_rect_for(
+            ReaderForm::for_ui(&state.editor_ui, viewport_w, viewport_h),
             viewport_w,
             viewport_h,
-            crate::widgets::works_reader::reader_paged_for(state),
+            reader_paged_for(state),
+            reader_chat_open(&state.editor_ui),
         );
         return (stage.origin.x, stage.origin.y, stage.size.x, stage.size.y);
     }

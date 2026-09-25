@@ -489,6 +489,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.siteImport.warnings" => "{{count}} частей страницы не удалось импортировать точно.",
         "workspace.siteImport.instances" => "Экземпляров: {{count}}",
         "workspace.siteImport.bound" => "Цветов привязано к переменным: {{bound}}",
+        "reader.pageOf" => "Страница {{page}} из {{count}}",
+        "reader.latestReply" => "Последний ответ",
+        "reader.panelHint" => "Выберите страницу и скажите ИИ, что изменить.",
         _ => return None,
     })
 }

@@ -34,9 +34,10 @@ impl WidgetHostNative {
         if self.preview_slideshow_active() {
             return None;
         }
-        // The Home takeover replaces the canvas chrome on screen; its ghost
-        // app-bar rect must not claim taps aimed at the Home top bar.
-        if self.editor_state.editor_ui.home.visible {
+        // The Home and works-reader takeovers replace the canvas chrome on
+        // screen; the ghost app-bar rect must not claim taps aimed at their
+        // top bars (the reader's 普通 / 专业 switch sits right there).
+        if self.editor_state.editor_ui.home.visible || self.works_reader_visible() {
             return None;
         }
         let point = Point2D::new(x, y);

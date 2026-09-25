@@ -1,5 +1,6 @@
-//! The phone works reader on the native widget host: its press tier, the
-//! stage's one-finger scroll / swipe, the board framing, and the paint arm.
+//! The works reader on the native widget host (phone and tablet): its
+//! press tier, the stage's one-finger scroll / swipe, the board framing,
+//! and the paint arm (plus the tablet strip's board rasters).
 //!
 //! The reader is a takeover over the SAME document the professional
 //! canvas edits: its stage IS the canvas (`canvas_region` answers the
@@ -38,6 +39,8 @@ pub(in crate::widget_host) struct ReaderStageDrag {
 const SWIPE_MIN: f32 = 64.0;
 /// Breathing room between the framed board and the stage edges.
 const READER_FIT_PADDING: f32 = 16.0;
+/// Room kept above a framed board on a tablet for its name label.
+const READER_LABEL_BAND: f32 = 24.0;
 /// Most a small board (a poster, a card) is magnified to fill the stage.
 const READER_MAX_ZOOM: f32 = 2.0;
 /// How long a works-list tap on a recent file keeps its "open in the
@@ -45,15 +48,17 @@ const READER_MAX_ZOOM: f32 = 2.0;
 const READER_ON_OPEN_WINDOW_MS: u64 = 30_000;
 
 impl WidgetHostNative {
-    /// Whether the phone works reader owns the screen (and Home is not
-    /// painted over it).
+    /// Whether the works reader owns the screen (and Home is not painted
+    /// over it).
     pub fn works_reader_visible(&self) -> bool {
         self.editor_state.editor_ui.works_reader_visible() && !self.home_visible()
     }
 
     /// The reader's press tier: every press inside the reader is its own
-    /// (it is a takeover), except while a mobile sheet is open — the
-    /// sheet's own tiers own those presses.
+    /// (it is a takeover), except where an open sheet owns it. A modal
+    /// sheet (the phone's) owns every press; the tablet's non-modal chat
+    /// (side panel / floating sheet) owns only its own rect, so the board
+    /// stays pageable while the user talks about it.
     pub(in crate::widget_host) fn press_works_reader(
         &mut self,
         x: f32,
@@ -61,7 +66,13 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) -> Option<bool> {
-        if !self.works_reader_visible() || self.editor_state.editor_ui.mobile_sheet.is_some() {
+        if !self.works_reader_visible() {
+            return None;
+        }
+        if self.editor_state.editor_ui.mobile_sheet.is_some()
+            && (self.mobile_sheet_is_modal()
+                || self.mobile_sheet_owns_point(Point2D::new(x, y), viewport_w, viewport_h))
+        {
             return None;
         }
         let hit = {
@@ -105,7 +116,14 @@ impl WidgetHostNative {
                     .workspace
                     .step_selected(delta, board_count)
                 {
-                    self.frame_reader_board(vw, vh);
+                    self.reader_page_changed(vw, vh);
+                }
+            }
+            ReaderHit::Page(index) => {
+                let workspace = &mut self.editor_state.editor_ui.workspace;
+                if index != workspace.selected {
+                    workspace.select_board(index, board_count);
+                    self.reader_page_changed(vw, vh);
                 }
             }
             ReaderHit::Stop => self.reader_stop(),
@@ -178,6 +196,27 @@ impl WidgetHostNative {
         self.open_reader_chat_sheet();
     }
 
+    /// The reader moved to another board: frame it, and — when 改这一页
+    /// is staged but not sent yet (the tablet's chat stays open beside
+    /// the board) — move the binding to the page now on show, so the
+    /// instruction lands on the page the user is looking at.
+    fn reader_page_changed(&mut self, vw: f32, vh: f32) {
+        self.frame_reader_board(vw, vh);
+        if self.editor_state.editor_ui.workspace.page_edit.is_none() {
+            return;
+        }
+        let Some(board) = self.reader_current_board() else {
+            return;
+        };
+        let index = self.reader_current_index();
+        self.editor_state
+            .set_single_selection(NodeId::new(board.as_str()));
+        self.editor_state
+            .editor_ui
+            .workspace
+            .stage_page_edit(board, index);
+    }
+
     fn open_reader_chat_sheet(&mut self) {
         if self.editor_state.editor_ui.mobile_sheet != Some(MobileSheetKind::Ai) {
             self.toggle_mobile_sheet(MobileSheetKind::Ai);
@@ -202,6 +241,9 @@ impl WidgetHostNative {
     /// Frame the reader's current board in the stage: one board fitted
     /// whole, or a long page fitted to width and aligned to its top.
     pub fn frame_reader_board(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
+        // Recorded even when there is nothing to frame yet, so the
+        // per-frame stage sync does not retry every frame.
+        self.reader_framed_stage = Some(self.canvas_region(viewport_w, viewport_h));
         let Some(board) = self.reader_current_board() else {
             return false;
         };
@@ -219,6 +261,7 @@ impl WidgetHostNative {
         }
         let (_, _, cw, ch) = self.canvas_region(viewport_w, viewport_h);
         let long = reads_as_long_page(self.editor_state.editor_ui.workspace.family);
+        let tablet = !self.editor_state.editor_ui.compact_layout();
         let before = self.editor_state.viewport;
         let viewport = &mut self.editor_state.viewport;
         if long {
@@ -226,10 +269,35 @@ impl WidgetHostNative {
                 .clamp(Viewport::MIN_ZOOM, READER_MAX_ZOOM);
             viewport.pan_x = cw / 2.0 - (bounds.origin.x + bounds.size.x / 2.0) * viewport.zoom;
             viewport.pan_y = READER_FIT_PADDING - bounds.origin.y * viewport.zoom;
+        } else if tablet {
+            // A tablet stage is tall enough to keep the board's name band
+            // (painted above the board) clear of the header.
+            viewport.fit_to_with_max_zoom(
+                bounds,
+                cw,
+                (ch - READER_LABEL_BAND).max(1.0),
+                READER_FIT_PADDING,
+                READER_MAX_ZOOM,
+            );
+            viewport.pan_y += READER_LABEL_BAND;
         } else {
             viewport.fit_to_with_max_zoom(bounds, cw, ch, READER_FIT_PADDING, READER_MAX_ZOOM);
         }
         self.editor_state.viewport != before
+    }
+
+    /// Keep the camera framed on the board on show when the reader's
+    /// stage changes under it: a rotated tablet or resized split view, or
+    /// the portrait tablet's chat sheet opening / closing (the stage
+    /// shrinks above the sheet). Called once per frame before paint.
+    pub(in crate::widget_host) fn sync_reader_stage(&mut self, viewport_w: f32, viewport_h: f32) {
+        if !self.works_reader_visible() {
+            self.reader_framed_stage = None;
+            return;
+        }
+        if self.reader_framed_stage != Some(self.canvas_region(viewport_w, viewport_h)) {
+            self.frame_reader_board(viewport_w, viewport_h);
+        }
     }
 
     /// The zoom `frame_reader_board` would pick for the current board —
@@ -318,14 +386,16 @@ impl WidgetHostNative {
         let zoomed_in = self
             .reader_fit_zoom(vw, vh)
             .is_some_and(|fit| self.editor_state.viewport.zoom > fit * 1.01);
-        if swiped && !zoomed_in {
+        let turned = swiped && !zoomed_in && {
             let delta = if dx < 0.0 { 1 } else { -1 };
             self.editor_state
                 .editor_ui
                 .workspace
-                .step_selected(delta, count);
-        }
-        if !zoomed_in {
+                .step_selected(delta, count)
+        };
+        if turned {
+            self.reader_page_changed(vw, vh);
+        } else if !zoomed_in {
             self.frame_reader_board(vw, vh);
         }
         self.mark_dirty();
@@ -372,7 +442,7 @@ impl WidgetHostNative {
         if self.now_ms.saturating_sub(armed) > READER_ON_OPEN_WINDOW_MS {
             return;
         }
-        if !self.editor_state.editor_ui.compact_layout() {
+        if !self.editor_state.editor_ui.touch_chrome() {
             return;
         }
         let (vw, vh) = (self.last_viewport_w, self.last_viewport_h);
@@ -418,9 +488,20 @@ impl WidgetHostNative {
             backend: &mut *frame,
         };
         reader.paint(&mut cx, Rect::xywh(0.0, 0.0, viewport_w, viewport_h));
+        let layout = reader.layout(viewport_w, viewport_h);
+        let boards = reader.boards.clone();
+        drop(reader);
+        self.paint_reader_thumbs(frame, &layout, &boards);
     }
 }
+
+#[path = "works_reader_tablet.rs"]
+mod tablet;
 
 #[cfg(test)]
 #[path = "works_reader_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "works_reader_tablet_tests.rs"]
+mod tablet_tests;

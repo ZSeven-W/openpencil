@@ -638,6 +638,9 @@ pub struct WidgetHostNative {
     /// A 作品-list tap asked for the next loaded document to open in the
     /// reader; the tap's clock stamp bounds how long that intent lives.
     pub(in crate::widget_host) reader_on_next_open_ms: Option<u64>,
+    /// The reader stage the camera was last framed for (rotation, split
+    /// view and the tablet chat resize it; the board is reframed then).
+    pub(in crate::widget_host) reader_framed_stage: Option<(f32, f32, f32, f32)>,
 }
 
 // Transient pointer-drag records that carry no platform types are

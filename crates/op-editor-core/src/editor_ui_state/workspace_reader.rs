@@ -1,4 +1,4 @@
-//! The phone (compact touch) reading surface over the generation
+//! The touch (phone and tablet) reading surface over the generation
 //! workspace: which boards read as pages vs. one long page, the board a
 //! 改这一页 follow-up is bound to, and opening a finished document for
 //! reading without a Home brief.
@@ -11,7 +11,7 @@
 use super::super::home::HomeFamily;
 use super::{EditorUiState, WorkspacePhase, WorkspaceState, WorkspaceView};
 
-/// Interactive targets of the compact works reader. Hit-test and paint
+/// Interactive targets of the touch works reader. Hit-test and paint
 /// share one geometry function (`op_editor_ui::widgets::works_reader`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReaderHit {
@@ -36,6 +36,8 @@ pub enum ReaderHit {
     EditPage,
     /// The rendered board area (scroll / swipe, never a click).
     Stage,
+    /// A tablet thumbnail-strip tile: jump straight to that board slot.
+    Page(usize),
 }
 
 /// The board a 改这一页 follow-up is bound to: its node id (the scope
@@ -146,11 +148,12 @@ impl WorkspaceState {
 }
 
 impl EditorUiState {
-    /// Whether the phone works reader owns the screen: the workspace's
-    /// normal view is up on a compact touch host. Tablets and desktop
-    /// windows keep their own compositions.
+    /// Whether the works reader owns the screen: the workspace's normal
+    /// view is up on a touch host. Phones and tablets both read a work
+    /// through it (in their own compositions); desktop windows keep the
+    /// docked workspace, which touch chrome never shows.
     pub fn works_reader_visible(&self) -> bool {
-        self.workspace.visible && self.compact_layout()
+        self.workspace.visible && self.touch_chrome()
     }
 }
 

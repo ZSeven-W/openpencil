@@ -459,6 +459,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.siteImport.warnings" => "頁面中有 {{count}} 處未能精確匯入。",
         "workspace.siteImport.instances" => "{{count}} 個實例",
         "workspace.siteImport.bound" => "{{bound}} 處顏色綁定到變數",
+        "reader.pageOf" => "第 {{page}} 頁，共 {{count}} 頁",
+        "reader.latestReply" => "最近回覆",
+        "reader.panelHint" => "選中一頁，告訴 AI 想怎麼改。",
         _ => return None,
     })
 }

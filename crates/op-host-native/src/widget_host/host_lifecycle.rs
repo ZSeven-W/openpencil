@@ -101,6 +101,7 @@ impl WidgetHostNative {
             workspace_dock_drag: None,
             reader_drag: None,
             reader_on_next_open_ms: None,
+            reader_framed_stage: None,
             auth_login_handle: None,
             auth_pending_browser_url: None,
             auth_browser_opened: false,
@@ -202,6 +203,7 @@ impl WidgetHostNative {
         if changed {
             self.reveal_property_keyboard_owner();
         }
+        self.sync_reader_stage(viewport_w, viewport_h);
         self.ensure_focused_agent_settings_visible(viewport_w, viewport_h);
     }
 

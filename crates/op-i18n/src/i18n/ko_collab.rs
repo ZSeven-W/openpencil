@@ -475,6 +475,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.siteImport.warnings" => "페이지의 {{count}}곳을 정확히 가져오지 못했습니다.",
         "workspace.siteImport.instances" => "인스턴스 {{count}}개",
         "workspace.siteImport.bound" => "색상 {{bound}}곳을 변수에 연결",
+        "reader.pageOf" => "{{count}}페이지 중 {{page}}페이지",
+        "reader.latestReply" => "최근 답변",
+        "reader.panelHint" => "페이지를 고르고 AI에게 바꿀 내용을 알려 주세요.",
         _ => return None,
     })
 }

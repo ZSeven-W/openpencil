@@ -41,6 +41,8 @@ mod brand_chip;
 #[path = "home_surface_layout.rs"]
 pub(crate) mod layout;
 
+#[path = "home_surface_tablet.rs"]
+pub mod tablet;
 #[path = "home_works_list.rs"]
 pub(crate) mod works;
 pub use layout::compact::BOTTOM_NAV_H as HOME_BOTTOM_NAV_H;
@@ -223,6 +225,15 @@ impl<'a> HomeSurface<'a> {
     ) -> HomeLayout {
         let chip_w = model::model_chip_width(&self.chip_label);
         let compact = self.ui.compact_layout();
+        if tablet::is_touch_tablet(self.ui) {
+            let visible_h = (viewport_height - self.ui.keyboard_occlusion.max(0.0)).max(0.0);
+            let max_scroll = self.tablet_max_scroll(viewport_width, visible_h);
+            return self.tablet_layout(
+                viewport_width,
+                viewport_height,
+                scroll_y.clamp(0.0, max_scroll),
+            );
+        }
         // The page lays out against the full viewport — a software
         // keyboard covers the bottom, it does not resize the window — but
         // the band it covers has to come out of the SCROLL RANGE or the
@@ -257,6 +268,56 @@ impl<'a> HomeSurface<'a> {
             layout.variants = Rect::ZERO;
         }
         layout
+    }
+
+    /// The touch-tablet page: the wide composition with tablet margins
+    /// and the 作品 grid in place of the recent chip row.
+    fn tablet_layout(
+        &self,
+        viewport_width: f32,
+        viewport_height: f32,
+        scroll_y: f32,
+    ) -> HomeLayout {
+        let mut layout = layout::wide_layout_for_scrolled(
+            viewport_width,
+            viewport_height,
+            self.state.task,
+            scroll_y,
+            model::model_chip_width(&self.chip_label),
+            self.ui.locale,
+            tablet::TABLET_PAD_X,
+        );
+        tablet::adapt_layout(
+            &mut layout,
+            self.current_work.is_some(),
+            self.works_recent.len(),
+        );
+        connect::drop_cli_row_for_touch(&mut layout);
+        if self.state.variants_unavailable {
+            layout.variants = Rect::ZERO;
+        }
+        layout
+    }
+
+    /// The tablet page's furthest scroll for a `visible_h`-tall view
+    /// (the viewport minus any software keyboard).
+    pub fn tablet_max_scroll(&self, viewport_width: f32, visible_h: f32) -> f32 {
+        let layout = self.tablet_layout(viewport_width, visible_h, 0.0);
+        (layout.recent.origin.y + layout.recent.size.y + tablet::PAGE_PAD_BOTTOM - visible_h)
+            .max(0.0)
+    }
+
+    /// The tablet 作品 grid for `layout` (`None` off tablets).
+    pub fn works_grid(&self, layout: &HomeLayout) -> Option<tablet::WorksGrid> {
+        tablet::is_touch_tablet(self.ui).then(|| {
+            tablet::works_grid(
+                layout.recent.origin.x,
+                layout.recent.origin.y,
+                layout.recent.size.x,
+                self.current_work.is_some(),
+                self.works_recent.len(),
+            )
+        })
     }
 
     /// Whether the phone's 作品 page is on show (compact only; a wide
@@ -351,7 +412,10 @@ impl<'a> HomeSurface<'a> {
         if self.state.connect_card_open {
             return Some(connect::connect_card_hit(layout, point).unwrap_or(HomeHit::ConnectClose));
         }
-        if layout.professional.contains(point) {
+        // A touch tablet grows the desktop-sized targets to 44 pt.
+        let tablet = tablet::is_touch_tablet(self.ui);
+        let hits = |rect: Rect| tablet::hits(tablet, rect, point);
+        if hits(layout.professional) {
             return Some(HomeHit::Professional);
         }
         if layout.mode_normal.size.y > 0.0 && layout.mode_normal.contains(point) {
@@ -362,10 +426,10 @@ impl<'a> HomeSurface<'a> {
         if layout.settings.size.y > 0.0 && layout.settings.contains(point) {
             return Some(HomeHit::NavSettings);
         }
-        if layout.open_file.contains(point) {
+        if hits(layout.open_file) {
             return Some(HomeHit::OpenFile);
         }
-        if self.ui.account_ui_available && layout.account.contains(point) {
+        if self.ui.account_ui_available && hits(layout.account) {
             return Some(HomeHit::Account);
         }
         // The compact bottom nav (创作 / 作品 / 设置) is pinned chrome
@@ -394,7 +458,7 @@ impl<'a> HomeSurface<'a> {
             }
             return Some(HomeHit::More);
         }
-        if layout.more_button.contains(point) {
+        if hits(layout.more_button) {
             return Some(HomeHit::More);
         }
         for (index, rect) in layout.tabs.into_iter().enumerate() {
@@ -403,7 +467,7 @@ impl<'a> HomeSurface<'a> {
             }
         }
         for (index, rect) in layout.segment_options.into_iter().enumerate() {
-            if rect.size.x > 0.0 && rect.contains(point) {
+            if rect.size.x > 0.0 && hits(rect) {
                 return Some(HomeHit::Segment(index as u8));
             }
         }
@@ -415,7 +479,7 @@ impl<'a> HomeSurface<'a> {
                 return Some(HomeHit::ReplaceKeep);
             }
         }
-        if layout.use_example.contains(point) {
+        if hits(layout.use_example) {
             // While a workspace is active on this document the footer
             // link returns to it instead of offering the example.
             return Some(if self.ui.workspace.active {
@@ -427,19 +491,19 @@ impl<'a> HomeSurface<'a> {
         if layout.send.contains(point) {
             return Some(HomeHit::Send);
         }
-        if layout.model_chip.contains(point) {
+        if hits(layout.model_chip) {
             return Some(HomeHit::ModelChip);
         }
-        if layout.screenshot.contains(point) {
+        if hits(layout.screenshot) {
             return Some(HomeHit::Attachment);
         }
-        if layout.reference_link.contains(point) {
+        if hits(layout.reference_link) {
             return Some(HomeHit::ReferenceLink);
         }
-        if layout.figma.contains(point) {
+        if hits(layout.figma) {
             return Some(HomeHit::Figma);
         }
-        if layout.variants.size.x > 0.0 && layout.variants.contains(point) {
+        if layout.variants.size.x > 0.0 && hits(layout.variants) {
             return Some(HomeHit::Variants);
         }
         if let Some((_, close)) = brand_chip::chip_rects(self, layout.input_box) {
@@ -458,8 +522,15 @@ impl<'a> HomeSurface<'a> {
                     .map(HomeHit::ExploreCard);
             }
         }
-        if layout.new_canvas.contains(point) {
+        if hits(layout.new_canvas) {
             return Some(HomeHit::NewCanvas);
+        }
+        if let Some(grid) = self.works_grid(layout) {
+            return grid
+                .cards
+                .iter()
+                .find(|(_, rect)| rect.contains(point))
+                .map(|(hit, _)| *hit);
         }
         if layout.recent.size.y > 0.0 {
             for (index, rect) in layout.recent_chips.iter().enumerate() {

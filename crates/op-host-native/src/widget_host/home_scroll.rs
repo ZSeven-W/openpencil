@@ -54,6 +54,22 @@ impl WidgetHostNative {
         chip_w: f32,
         compact: bool,
     ) -> f32 {
+        // A touch tablet's page ends at its 作品 grid, whose height
+        // depends on the works the surface lists.
+        if op_editor_ui::widgets::home_surface::tablet::is_touch_tablet(
+            &self.editor_state.editor_ui,
+        ) {
+            return op_editor_ui::widgets::HomeSurface::for_editor_at(
+                &self.editor_state,
+                self.now_ms,
+            )
+            .map_or(0.0, |home| {
+                home.tablet_max_scroll(
+                    viewport_width,
+                    self.keyboard_visible_bottom(viewport_height),
+                )
+            });
+        }
         max_scroll_for_mode(
             viewport_width,
             self.keyboard_visible_bottom(viewport_height),

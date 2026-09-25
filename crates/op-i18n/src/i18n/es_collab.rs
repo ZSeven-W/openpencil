@@ -459,6 +459,9 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.siteImport.warnings" => "{{count}} partes de la página no se pudieron importar con exactitud.",
         "workspace.siteImport.instances" => "{{count}} instancias",
         "workspace.siteImport.bound" => "{{bound}} colores vinculados a variables",
+        "reader.pageOf" => "Página {{page}} de {{count}}",
+        "reader.latestReply" => "Última respuesta",
+        "reader.panelHint" => "Elige una página y dile a la IA qué cambiar.",
         _ => return None,
     })
 }

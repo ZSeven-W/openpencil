@@ -684,8 +684,12 @@ impl EditorUiState {
         self.touch && self.size_class.is_medium()
     }
 
+    /// Tablet landscape (and large tablet) editing layout: persistent
+    /// rails and the docked inspector. False while the works reader owns
+    /// the screen — it is a takeover, and a selection it keeps (the scope
+    /// of 改这一页) must not raise an inspector rail beside it.
     pub fn expanded_touch_layout(&self) -> bool {
-        self.touch && self.size_class.is_expanded()
+        self.touch && self.size_class.is_expanded() && !self.works_reader_visible()
     }
 
     /// The generated-code inspector needs more horizontal room than the

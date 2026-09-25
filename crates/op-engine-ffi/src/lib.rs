@@ -111,6 +111,8 @@ mod editor_pointer_release;
 mod editor_presence_tests;
 #[cfg(all(feature = "editor", test))]
 mod editor_settings_input_tests;
+#[cfg(all(feature = "editor", test))]
+mod editor_tablet_reader_tests;
 #[cfg(feature = "editor")]
 mod editor_template;
 #[cfg(feature = "editor")]

@@ -14,6 +14,9 @@ use op_host_native::backend::{NativeBackend, NativeFrameBackend};
 use op_host_native::widget_host::WidgetHostNative;
 use op_i18n::Locale;
 
+#[path = "studio_shots_parts/tablet.rs"]
+mod tablet;
+
 /// A host at `locale` on the given desktop Home task, with a usable
 /// model selected (the state the approved prototype captures show).
 fn home_host(locale: Locale, task: HomeFamily, device: HomeDevice) -> WidgetHostNative {
@@ -426,13 +429,20 @@ fn scenarios() -> Vec<Scenario> {
     ]
 }
 
+/// Every scene: the desktop ones above plus the tablet set.
+fn all_scenarios() -> Vec<Scenario> {
+    let mut all = scenarios();
+    all.extend(tablet::scenarios());
+    all
+}
+
 fn main() {
     let out_dir = std::env::args()
         .nth(1)
         .unwrap_or_else(|| "/tmp/studio-shots".into());
     let filter = std::env::args().nth(2).unwrap_or_default();
     std::fs::create_dir_all(&out_dir).expect("create out dir");
-    for (name, w, h, build) in scenarios() {
+    for (name, w, h, build) in all_scenarios() {
         if !name.contains(filter.as_str()) {
             continue;
         }

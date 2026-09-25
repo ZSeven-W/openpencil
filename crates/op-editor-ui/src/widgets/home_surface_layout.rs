@@ -249,17 +249,21 @@ pub(crate) fn layout_for_scrolled_mode(
         scroll_y,
         model_chip_label_w,
         locale,
+        SHELL_PAD_X,
     )
 }
 
+/// The wide page with `pad_x` side padding inside its shell (the desktop
+/// keeps `SHELL_PAD_X`; a touch tablet passes its wider margin).
 #[allow(clippy::too_many_lines)]
-fn wide_layout_for_scrolled(
+pub(crate) fn wide_layout_for_scrolled(
     viewport_width: f32,
     viewport_height: f32,
     task: HomeFamily,
     scroll_y: f32,
     model_chip_label_w: f32,
     locale: Locale,
+    pad_x: f32,
 ) -> HomeLayout {
     let width = viewport_width.max(1.0);
     let viewport_height = viewport_height.max(1.0);
@@ -270,8 +274,8 @@ fn wide_layout_for_scrolled(
     // 22 px explore gap, 167 px cards, 18 px recent gap.
     let short_window = !stacked && viewport_height <= SHORT_WINDOW_MAX_H;
     let shell_w = width.min(SHELL_MAX_W);
-    let content_x = (width - shell_w) / 2.0 + SHELL_PAD_X;
-    let content_w = (shell_w - SHELL_PAD_X * 2.0).max(240.0);
+    let content_x = (width - shell_w) / 2.0 + pad_x;
+    let content_w = (shell_w - pad_x * 2.0).max(240.0);
     let translate = |mut y: f32, h: f32| {
         y += scroll;
         Rect::xywh(content_x, y, content_w, h)
@@ -560,10 +564,11 @@ fn wide_layout_for_scrolled(
     );
 
     // ── explore + recent ───────────────────────────────────────────
-    // Everything below derives from the already scroll-translated
-    // panel rects, so these ys stay absolute.
+    // The panel rects are already scroll-translated; the rows below add
+    // the scroll themselves, so the bottom is taken back to page space
+    // (adding it twice slid explore + recent up over the panels).
     let panels_bottom =
-        (preview.origin.y + preview.size.y).max(composer.origin.y + composer.size.y);
+        (preview.origin.y + preview.size.y).max(composer.origin.y + composer.size.y) - scroll;
     let explore_card_h = if stacked {
         EXPLORE_CARD_H_STACKED
     } else if width <= EXPLORE_NARROW_MAX_W {
@@ -725,6 +730,7 @@ pub fn max_scroll_for_mode(
         0.0,
         model_chip_label_w,
         locale,
+        SHELL_PAD_X,
     );
     (layout.recent.origin.y + layout.recent.size.y + 20.0 - viewport_height).max(0.0)
 }
