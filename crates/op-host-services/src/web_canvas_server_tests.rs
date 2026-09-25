@@ -595,6 +595,12 @@ fn unbinding_stops_save_from_writing_the_launch_file() {
         "{}",
         server.body
     );
+    // A local daemon serves `/api/ai/site-import`, so Home offers it.
+    assert!(
+        server.body.contains(r#""siteImport":true"#),
+        "{}",
+        server.body
+    );
 
     let r = handle_web_canvas_request("POST", "/api/file/unbind", "", &mut s);
     assert!(r.status.starts_with("200"), "{}", r.body);

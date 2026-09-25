@@ -209,6 +209,7 @@ pub use studio_home::entry_shows_home;
 mod studio_home_input;
 mod studio_home_send;
 pub use studio_home_send::HomeReplaceIntent;
+mod studio_home_site_import;
 #[cfg(test)]
 mod studio_home_tests;
 mod studio_workspace;

@@ -178,6 +178,29 @@ pub(super) fn serve_ai_route<S: Read + Write>(
             .map_err(|e| WebCanvasError::Transport(format!("ai standard: {e}")))
             .map(|()| Some(false))
         }
+        // Studio Home "import this website" (desktop `site_import_host`
+        // parity): fetch + the whole post-import pipeline, so it runs here on
+        // the connection thread and never under the state lock. The reply is
+        // the finished document; the browser installs it and its live-sync
+        // push publishes it. Off for a shared public deployment.
+        crate::site_import_route::SITE_IMPORT_ROUTE => {
+            let (status, body) = if ctx.mode.allows_site_import() {
+                crate::site_import_route::serve_screened(&req.body)
+            } else {
+                (
+                    "403 Forbidden",
+                    r#"{"ok":false,"error":"website import is not available on this server"}"#
+                        .to_string(),
+                )
+            };
+            crate::mcp_serve::write_mcp_http_response_with_origin(
+                stream,
+                status,
+                &body,
+                cors_origin,
+            )?;
+            Ok(Some(false))
+        }
         // Image panel Search popover (desktop `image_panel_host` parity). Long
         // blocking network (8 s timeout × ladder), so it runs on this
         // connection's own thread AFTER the brief parse-under-lock — the REST

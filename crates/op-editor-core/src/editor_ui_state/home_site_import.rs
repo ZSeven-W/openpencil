@@ -17,8 +17,10 @@ use crate::quality_report::QualityReport;
 pub const SITE_IMPORT_HINT_MS: u64 = 4_000;
 
 /// What the pipeline did, as facts — the host turns it into the chat
-/// transcript line and the quality panel rows.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// transcript line and the quality panel rows. Serde because the browser
+/// receives it from the daemon's `/api/ai/site-import` route.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct SiteImportSummary {
     /// The page's final URL (after redirects).
     pub source_url: String,
@@ -87,6 +89,43 @@ pub struct SiteImportResult {
     pub summary: SiteImportSummary,
     /// The workspace quality panel's report for this import.
     pub report: QualityReport,
+}
+
+/// Decode the daemon's `/api/ai/site-import` reply (`status`, `body`) into
+/// a finished import, or the detail the Home hint reports. Platform-free so
+/// the browser arm stays a thin XHR callback.
+pub fn parse_site_import_reply(status: u16, body: &str) -> Result<SiteImportResult, String> {
+    #[derive(serde::Deserialize)]
+    struct Reply {
+        #[serde(default)]
+        ok: bool,
+        #[serde(default)]
+        error: Option<String>,
+        document: Option<Box<PenDocument>>,
+        summary: Option<SiteImportSummary>,
+        #[serde(default)]
+        report: Option<QualityReport>,
+    }
+    let reply: Reply = serde_json::from_str(body).map_err(|_| {
+        if status == 0 {
+            "the server could not be reached".to_string()
+        } else {
+            format!("unexpected reply (HTTP {status})")
+        }
+    })?;
+    if !reply.ok || !(200..300).contains(&status) {
+        return Err(reply
+            .error
+            .unwrap_or_else(|| format!("import failed (HTTP {status})")));
+    }
+    match (reply.document, reply.summary) {
+        (Some(document), Some(summary)) => Ok(SiteImportResult {
+            document,
+            summary,
+            report: reply.report.unwrap_or_default(),
+        }),
+        _ => Err("the reply carried no document".to_string()),
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

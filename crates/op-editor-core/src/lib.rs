@@ -359,9 +359,9 @@ pub use editor_ui_state::home::brand::{
     first_url, BrandSourceRequest, HomeBrandState, HomeBrandStatus, BRAND_HINT_MS,
 };
 pub use editor_ui_state::home::site_import::{
-    host_label, sanitize_import_origin, site_import_url, HomeSiteImportState,
-    HomeSiteImportStatus, SiteImportResult, SiteImportSummary, IMPORT_ORIGIN_MAX_CHARS,
-    SITE_IMPORT_HINT_MS,
+    host_label, parse_site_import_reply, sanitize_import_origin, site_import_url,
+    HomeSiteImportState, HomeSiteImportStatus, SiteImportResult, SiteImportSummary,
+    IMPORT_ORIGIN_MAX_CHARS, SITE_IMPORT_HINT_MS,
 };
 pub use editor_ui_state::home::{HOME_ART_SWITCH_MS, HOME_ENTER_FRAME_MS, HOME_ENTER_WINDOW_MS};
 pub use editor_ui_state::home_example_draft::{

@@ -111,6 +111,7 @@ pub mod reference_context_error;
 pub mod run_quality;
 pub mod site_import;
 pub mod site_import_error;
+pub mod site_import_route;
 #[cfg(test)]
 pub(crate) mod test_support;
 // Settings persistence moved to op-editor-host-core (feature `settings-io`)

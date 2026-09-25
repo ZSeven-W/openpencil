@@ -119,6 +119,8 @@ mod collab_avatar_fetch;
 #[cfg(feature = "canvaskit")]
 mod studio_web;
 #[cfg(feature = "canvaskit")]
+mod studio_web_site_import;
+#[cfg(feature = "canvaskit")]
 mod web_chat;
 #[cfg(feature = "canvaskit")]
 mod web_credential_sync;

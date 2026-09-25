@@ -58,6 +58,14 @@ impl ServeMode {
         !self.is_online()
     }
 
+    /// `/api/ai/site-import` — Studio Home's "import this website". The
+    /// fetch is SSRF-screened, but it is still the daemon host dialling an
+    /// address a caller chose; a shared public deployment keeps that off
+    /// until it has per-account egress accounting.
+    pub const fn allows_site_import(self) -> bool {
+        !self.is_online()
+    }
+
     /// Whether a settings mutation may be written to the process-wide
     /// settings file. There is one such file for the whole process, so a
     /// shared deployment would let any account overwrite every other

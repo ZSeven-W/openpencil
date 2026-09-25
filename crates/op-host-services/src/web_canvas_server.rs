@@ -476,11 +476,13 @@ pub fn handle_web_canvas_request(
             // `op-host-web/src/live_sync_glue.rs::auto_resolve_is_safe`.
             // `fileBound`: a file backs this document (`--file` or a recent
             // open), so the browser opens onto its canvas rather than Home.
+            // `siteImport`: `/api/ai/site-import` is served (Home offers it).
             body: format!(
-                r#"{{"running":true,"port":{},"localIp":"127.0.0.1","server":"openpencil-mcp","mode":"web-canvas","serveMode":"{}","fileBound":{}}}"#,
+                r#"{{"running":true,"port":{},"localIp":"127.0.0.1","server":"openpencil-mcp","mode":"web-canvas","serveMode":"{}","fileBound":{},"siteImport":{}}}"#,
                 state.port,
                 state.mode.wire_name(),
-                state.current_path.is_some()
+                state.current_path.is_some(),
+                state.mode.allows_site_import()
             ),
         },
         ("POST", "/api/mcp/server") => update_mcp_server_settings(body, state),

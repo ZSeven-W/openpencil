@@ -409,3 +409,33 @@ fn a_read_scope_token_may_still_subscribe_to_the_event_stream() {
 fn body_of(response: &str) -> serde_json::Value {
     body(response)
 }
+
+#[test]
+fn a_public_deployment_neither_offers_nor_serves_website_import() {
+    // The fetch is SSRF-screened, but a shared server must not dial
+    // caller-chosen addresses on every account's behalf. The refusal comes
+    // before any fetch, so nothing here touches the network.
+    let registry = registry();
+    let verifier = scoped_verifier();
+    let response = serve(
+        &registry,
+        &verifier,
+        Request::json(
+            "POST",
+            crate::site_import_route::SITE_IMPORT_ROUTE,
+            r#"{"url":"https://acme.example"}"#,
+        )
+        .with_bearer("tokA"),
+    );
+    assert_eq!(
+        status_line(&response),
+        "HTTP/1.1 403 Forbidden",
+        "{response}"
+    );
+    let server = serve(
+        &registry,
+        &verifier,
+        Request::new("GET", "/api/mcp/server").with_bearer("tokA"),
+    );
+    assert_eq!(body_of(&server)["siteImport"], false, "{server}");
+}

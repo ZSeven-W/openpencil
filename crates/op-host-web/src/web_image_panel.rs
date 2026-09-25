@@ -368,7 +368,7 @@ fn settle_generate<C: RepaintContext + 'static>(
 /// `live_sync::post_json_with_status` with a caller-chosen timeout — the
 /// shared helper's 15 s cap is tuned for doc-sync writes and would abort a
 /// legitimate search ladder / Replicate poll.
-fn post_json_with_timeout(
+pub(crate) fn post_json_with_timeout(
     url: &str,
     body: &str,
     timeout_ms: u32,

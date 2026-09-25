@@ -46,6 +46,8 @@ pub enum HomeReplaceIntent {
     Brief,
     /// The one-click example draft built from this scene template.
     TemplateDraft(&'static str),
+    /// "Import this website": the imported page replaces the document.
+    ImportSite,
 }
 
 impl WidgetHost {
@@ -65,11 +67,9 @@ impl WidgetHost {
             }
             HomeSendMode::Start => self.queue_home_send(),
             HomeSendMode::UseExample => self.start_home_from_example(&example),
-            // The browser never advertises website import
-            // (`site_import.available` stays false: the daemon has no
-            // import route yet), so this mode is unreachable here; a link
-            // is then an ordinary brief.
-            HomeSendMode::ImportSite => self.queue_home_send(),
+            // Offered only when the daemon reports `siteImport` (see
+            // `studio_web::probe_bound_file`); the fetch runs there.
+            HomeSendMode::ImportSite => self.home_site_import_press(false),
         }
     }
 
@@ -156,6 +156,7 @@ impl WidgetHost {
             HomeReplaceIntent::TemplateDraft(template) => {
                 self.open_home_template_draft(template, true)
             }
+            HomeReplaceIntent::ImportSite => self.home_site_import_press(true),
         }
     }
 
@@ -165,10 +166,22 @@ impl WidgetHost {
     /// conversation as its own history; staged attachments belong to the
     /// brief being sent, so they cross the swap.
     pub(in crate::widget_host) fn start_fresh_document_for_home(&mut self) {
+        let starter = op_editor_core::EditorState::starter();
+        self.install_home_document(starter.doc, true);
+    }
+
+    /// Install `doc` as a new Home deliverable (the swap behind
+    /// [`Self::start_fresh_document_for_home`] and a website import).
+    /// `saved` marks it clean — a blank starter has nothing to lose, while an
+    /// imported site is unsaved work.
+    pub(in crate::widget_host) fn install_home_document(
+        &mut self,
+        doc: op_editor_core::PenDocument,
+        saved: bool,
+    ) {
         // A live preview was built from the document being replaced.
         self.finish_exit_teardown();
-        let starter = op_editor_core::EditorState::starter();
-        self.editor_state.replace_document(starter.doc);
+        self.editor_state.replace_document(doc);
         self.editor_state
             .editor_ui
             .workspace
@@ -178,7 +191,14 @@ impl WidgetHost {
         ui.pending_file_action = None;
         ui.scenario = None;
         ui.pinned_style_guide = None;
-        self.editor_state.mark_saved_revision();
+        // A new deliverable is not the replaced one's import; an import
+        // stamps its own origin right after this swap.
+        ui.home.imported_from = None;
+        if saved {
+            self.editor_state.mark_saved_revision();
+        } else {
+            self.editor_state.mark_document_changed();
+        }
         self.document_epoch = self.document_epoch.wrapping_add(1).max(1);
         self.force_rotate_layer_panel_owner();
         self.layout_transition = None;

@@ -33,6 +33,8 @@ thread_local! {
     static PUMP_RUNNING: Cell<bool> = const { Cell::new(false) };
     /// The daemon's `fileBound` answer, once it arrived.
     static FILE_BOUND: Cell<Option<bool>> = const { Cell::new(None) };
+    /// The daemon's `siteImport` answer: it serves `/api/ai/site-import`.
+    static SITE_IMPORT: Cell<bool> = const { Cell::new(false) };
     /// Applies a `fileBound` answer that lands after the first paint.
     static FILE_BOUND_HOOK: RefCell<Option<FileBoundHook>> = const { RefCell::new(None) };
 }
@@ -50,6 +52,7 @@ pub(crate) fn probe_bound_file(embed: EmbedHost) {
     crate::live_sync::get(
         &url,
         Rc::new(|body: String| {
+            SITE_IMPORT.with(|slot| slot.set(parse_site_import(&body)));
             let Some(bound) = parse_file_bound(&body) else {
                 return;
             };
@@ -70,6 +73,15 @@ fn parse_file_bound(body: &str) -> Option<bool> {
     parsed.get("fileBound")?.as_bool()
 }
 
+/// `siteImport` out of `GET /api/mcp/server`. An older daemon (no field)
+/// has no import route, so Home must not offer the import.
+fn parse_site_import(body: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|parsed| parsed.get("siteImport")?.as_bool())
+        .unwrap_or(false)
+}
+
 /// Show Studio Home on first paint when the persisted preference asks for
 /// it. Embedded hosts and a daemon holding an opened file open straight
 /// onto the canvas (desktop `should_show_home`). An answer still in flight
@@ -85,6 +97,7 @@ pub(crate) fn apply_entry_surface(state: &mut EditorState) {
     // The daemon runs one design per turn; several directions side by
     // side are desktop-only for now.
     state.editor_ui.home.variants_unavailable = true;
+    state.editor_ui.home.site_import.available = SITE_IMPORT.with(Cell::get);
 }
 
 /// The mounted shell takes over a `fileBound` answer that had not arrived
@@ -97,12 +110,19 @@ pub(crate) fn adopt_bound_file_answer<C: RepaintContext + 'static>(inner: &Rc<Re
     let inner = inner.clone();
     FILE_BOUND_HOOK.with(|hook| {
         *hook.borrow_mut() = Some(Box::new(move |bound| {
-            if !bound {
-                return;
-            }
             let Ok(mut b) = inner.try_borrow_mut() else {
                 return;
             };
+            // The same late answer says whether the daemon can import sites.
+            b.host_mut()
+                .editor_state_mut()
+                .editor_ui
+                .home
+                .site_import
+                .available = SITE_IMPORT.with(Cell::get);
+            if !bound {
+                return;
+            }
             if b.host_mut().open_bound_file_on_canvas() {
                 b.host_mut().mark_editor_state_dirty();
                 crate::repaint_coalescer::request();
@@ -117,6 +137,8 @@ pub(crate) fn adopt_bound_file_answer<C: RepaintContext + 'static>(inner: &Rc<Re
 pub(crate) fn drain_home_replace_confirm<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>) {
     // A swap that needed no confirm already happened during the press / key.
     drain_daemon_file_unbind(inner);
+    // So did a website import that needed none.
+    crate::studio_web_site_import::drain_home_site_import(inner);
     let (intent, message) = {
         let Ok(mut b) = inner.try_borrow_mut() else {
             return;
@@ -149,6 +171,7 @@ pub(crate) fn drain_home_replace_confirm<C: RepaintContext + 'static>(inner: &Rc
     }
     drop(b);
     drain_daemon_file_unbind(inner);
+    crate::studio_web_site_import::drain_home_site_import(inner);
 }
 
 /// A Home swap replaced the document with a fresh page: tell the daemon to

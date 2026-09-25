@@ -238,6 +238,7 @@ mod daemon_url_tests {
         "/api/ai/models",
         "/api/ai/image/search",
         "/api/ai/image/generate",
+        "/api/ai/site-import",
         "/api/collab/state",
         "/api/collab/action",
         "/api/collab/presence",
