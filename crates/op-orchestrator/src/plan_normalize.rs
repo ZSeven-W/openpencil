@@ -20,6 +20,8 @@ mod plan_normalize_side_rail;
 
 #[path = "plan_normalize_dimensions.rs"]
 mod plan_normalize_dimensions;
+#[path = "plan_normalize_root_name.rs"]
+mod plan_normalize_root_name;
 
 #[path = "plan_normalize_items.rs"]
 mod plan_normalize_items;
@@ -227,6 +229,9 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
     // runs last so the merged subtask inherits normalized fields.
     plan_normalize_items::bundle_repeated_item_families(plan, req.model.as_deref().unwrap_or(""));
     plan_normalize_hero::mark_bleed_hero_subtasks(plan);
+    // Last, so the name heuristics above (home-screen detection reads the
+    // root name) see the planner's own words.
+    plan_normalize_root_name::localize_root_name(plan, req);
 
     NormInfo {
         is_mobile,

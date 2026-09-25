@@ -7,7 +7,7 @@ pub fn is_default_chat_title(title: &str) -> bool {
     title == DEFAULT_CHAT_TITLE
 }
 
-pub(crate) fn suggest_chat_title(prompt: &str) -> Option<String> {
+pub fn suggest_chat_title(prompt: &str) -> Option<String> {
     let normalized = prompt.split_whitespace().collect::<Vec<_>>().join(" ");
     let first_clause = normalized
         .split([

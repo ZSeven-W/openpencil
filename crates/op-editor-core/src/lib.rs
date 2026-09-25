@@ -35,7 +35,7 @@ mod chat_design_apply;
 mod chat_model_mutators;
 pub mod chat_sessions;
 mod chat_title;
-pub use chat_title::is_default_chat_title;
+pub use chat_title::{is_default_chat_title, suggest_chat_title};
 pub mod clipboard;
 pub mod codegen;
 pub mod collab_admission_ui;
