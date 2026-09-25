@@ -38,6 +38,12 @@ pub struct TextEditLayout {
     pub align_width: f32,
     /// Node bounds origin (doc space) — the first line's top-left.
     pub origin: Point2D,
+    /// Family every measure runs in — the family the painter draws
+    /// with (`system-ui` when unauthored), so wraps, alignment and caret
+    /// geometry agree with the painted glyph advances.
+    pub family: String,
+    /// Node-level italic, measured alongside the family.
+    pub italic: bool,
     pub text_align: SceneTextAlign,
 }
 
@@ -77,14 +83,19 @@ pub fn text_edit_layout(backend: &mut dyn RenderBackend, node: &SceneNode) -> Te
     } else {
         0.0
     };
+    let family = painted_family(node);
     let lines: Vec<String> = if let Some(doc_wrap_width) = wrap_width_doc {
-        super::canvas_viewport_overlay::wrap_text(
+        super::canvas_viewport_overlay::wrap_text_in_family(
             backend,
             text,
-            font_size,
+            &super::canvas_viewport_overlay::WrapFont {
+                font_size,
+                weight,
+                letter_spacing,
+                family,
+                italic: node.italic,
+            },
             doc_wrap_width,
-            weight,
-            letter_spacing,
         )
     } else {
         text.split('\n').map(str::to_string).collect()
@@ -99,7 +110,16 @@ pub fn text_edit_layout(backend: &mut dyn RenderBackend, node: &SceneNode) -> Te
     if !node.text_wrap && box_w > 0.0 {
         let widest = lines
             .iter()
-            .map(|l| measure_line_width(backend, l, font_size, weight, letter_spacing))
+            .map(|l| {
+                measure_line_width(
+                    backend,
+                    l,
+                    font_size,
+                    weight,
+                    letter_spacing,
+                    (family, node.italic),
+                )
+            })
             .fold(0.0_f32, f32::max);
         if widest > box_w {
             // Floor the scale so the text never becomes unreadable.
@@ -118,7 +138,19 @@ pub fn text_edit_layout(backend: &mut dyn RenderBackend, node: &SceneNode) -> Te
         align_width: wrap_width_doc.unwrap_or(node.bounds.size.x),
         origin: node.bounds.origin,
         text_align: node.text_align,
+        family: family.to_string(),
+        italic: node.italic,
         lines,
+    }
+}
+
+/// The family the canvas painter draws `node` in (`paint_text_node`
+/// falls back to `system-ui` for an unauthored family).
+fn painted_family(node: &SceneNode) -> &str {
+    if node.font_family.trim().is_empty() {
+        "system-ui"
+    } else {
+        node.font_family.as_str()
     }
 }
 
@@ -129,14 +161,16 @@ const MIN_SHRINK_SCALE: f32 = 0.35;
 
 /// Measure a painted line's full width — substring advance plus
 /// letter-spacing BETWEEN glyphs (mirrors the painter).
+/// Measured in the painted `(family, italic)` — see [`TextEditLayout::family`].
 pub fn measure_line_width(
     backend: &mut dyn RenderBackend,
     line: &str,
     font_size: f32,
     weight: u16,
     letter_spacing: f32,
+    (family, italic): (&str, bool),
 ) -> f32 {
-    let base = backend.measure_text_weighted(line, font_size, weight);
+    let base = backend.measure_text_family_styled(line, font_size, family, weight, italic);
     let extra = line.chars().count().saturating_sub(1) as f32 * letter_spacing;
     base + extra
 }
@@ -179,6 +213,7 @@ impl TextEditLayout {
                     self.font_size,
                     self.weight,
                     self.letter_spacing,
+                    (&self.family, self.italic),
                 );
                 self.origin.x + (self.align_width - line_w).max(0.0) / 2.0
             }
@@ -189,6 +224,7 @@ impl TextEditLayout {
                     self.font_size,
                     self.weight,
                     self.letter_spacing,
+                    (&self.family, self.italic),
                 );
                 self.origin.x + (self.align_width - line_w).max(0.0)
             }
@@ -207,15 +243,23 @@ impl TextEditLayout {
         }
         let prefix = &line[..offset];
         if self.letter_spacing.abs() < f32::EPSILON {
-            backend.measure_text_weighted(prefix, self.font_size, self.weight)
+            backend.measure_text_family_styled(
+                prefix,
+                self.font_size,
+                &self.family,
+                self.weight,
+                self.italic,
+            )
         } else {
             let mut w = 0.0;
             for ch in prefix.chars() {
                 let mut buf = [0u8; 4];
-                w += backend.measure_text_weighted(
+                w += backend.measure_text_family_styled(
                     ch.encode_utf8(&mut buf),
                     self.font_size,
+                    &self.family,
                     self.weight,
+                    self.italic,
                 ) + self.letter_spacing;
             }
             // Tracking belongs between glyphs. Internal caret boundaries
@@ -446,6 +490,64 @@ mod tests {
         let layout = text_edit_layout(&mut b, &node);
         assert_eq!(layout.lines, vec!["hello ", "world"]);
         assert_eq!(layout.line_ranges(), vec![(0, 6), (6, 11)]);
+    }
+
+    /// Blind measure 10 px/char; the painted "DM Mono" face 14 px/char —
+    /// the shape of a monospace display figure against the default face.
+    struct MonoGapBackend;
+    impl RenderBackend for MonoGapBackend {
+        fn begin_frame(&mut self) {}
+        fn end_frame(&mut self) {}
+        fn fill_rect(&mut self, _: Rect, _: Color) {}
+        fn stroke_rect(&mut self, _: Rect, _: Color, _: f32) {}
+        fn draw_text(&mut self, _: &TextLayout, _: Point2D) {}
+        fn clip_rect(&mut self, _: Rect) {}
+        fn save(&mut self) {}
+        fn restore(&mut self) {}
+        fn translate(&mut self, _: Point2D) {}
+        fn stroke_line(&mut self, _: Point2D, _: Point2D, _: Color, _: f32) {}
+        fn fill_round_rect(&mut self, _: Rect, _: f32, _: Color) {}
+        fn stroke_round_rect(&mut self, _: Rect, _: f32, _: Color, _: f32) {}
+        fn stroke_svg_path(&mut self, _: &str, _: Point2D, _: f32, _: Color, _: f32) {}
+        fn resize(&mut self, _: u32, _: u32) {}
+        fn dpi_scale(&self) -> f32 {
+            1.0
+        }
+        fn measure_text_weighted(&mut self, text: &str, _: f32, _: u16) -> f32 {
+            text.chars().count() as f32 * 10.0
+        }
+        fn measure_text_family_styled(
+            &mut self,
+            text: &str,
+            _: f32,
+            family: &str,
+            _: u16,
+            _: bool,
+        ) -> f32 {
+            let per_char = if family == "DM Mono" { 14.0 } else { 10.0 };
+            text.chars().count() as f32 * per_char
+        }
+    }
+
+    #[test]
+    fn wrap_is_decided_in_the_painted_family() {
+        // arena-m03: a 48px "DM Mono" hero amount in a 299px column. The
+        // jian layout (family-aware) reserved two lines; the painter wrapped
+        // with the family-blind default face, decided it fit on one line and
+        // drew it in the wider mono face — past the card's right edge.
+        let mut b = MonoGapBackend;
+        let mut node = text_node("¥ 268,540.32", 150.0);
+        node.text_wrap = true;
+        node.font_family = "DM Mono".to_string();
+        // Wrap width 150 + tolerance 8 = 158: blind 120 fits, painted 168 not.
+        let layout = text_edit_layout(&mut b, &node);
+        assert_eq!(layout.lines, vec!["¥ ", "268,540.32"]);
+        // Caret geometry measures in the same face as the glyphs.
+        let (end_x, _) = layout.caret_position(&mut b, "¥ 268,540.32".len());
+        assert!(
+            (end_x - (100.0 + 140.0)).abs() < 0.01,
+            "caret at the end of the painted line, got {end_x}"
+        );
     }
 
     #[test]
