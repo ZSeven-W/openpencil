@@ -156,7 +156,19 @@ fn replace_in_fill(
                 replace_color(&mut stop.color, token, new, vars, theme);
             }
         }
-        _ => {}
+        PenFill::MeshGradient(body) => {
+            for stop in &mut body.stops {
+                replace_color(&mut stop.color, token, new, vars, theme);
+            }
+        }
+        PenFill::Shader(body) => {
+            for value in body.uniforms.iter_mut().flat_map(|u| u.values_mut()) {
+                if let jian_ops_schema::style::ShaderUniformValue::Color(color) = value {
+                    replace_color(color, token, new, vars, theme);
+                }
+            }
+        }
+        PenFill::Image(_) => {}
     }
 }
 

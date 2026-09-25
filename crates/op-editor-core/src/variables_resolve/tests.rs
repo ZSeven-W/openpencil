@@ -268,3 +268,69 @@ fn legacy_color_refs_resolve_via_compat_fallback() {
     assert_eq!(resolve_numeric_ref("$radius-md", None, &light), Some(8.0));
     assert!(has_palette_fallback("color-surface"));
 }
+
+const MESH_AND_SHADER_DOC: &str = r##"{"version":"1.0.0","variables":{"brand":{"type":"color","value":"#ff8800"}},
+    "children":[
+      {"type":"rectangle","id":"m1","name":"m1","x":0,"y":0,"width":10,"height":10,
+       "fill":[{"type":"mesh_gradient","rows":2,"cols":2,"stops":[
+         {"row":0,"col":0,"color":"$brand"},{"row":0,"col":1,"color":"#0000ff"},
+         {"row":1,"col":0,"color":"#0000ff"},{"row":1,"col":1,"color":"$brand"}]}]},
+      {"type":"rectangle","id":"s1","name":"s1","x":0,"y":0,"width":10,"height":10,
+       "fill":[{"type":"shader","sksl":"half4 main(float2 p){return half4(1);}",
+                "uniforms":{"tint":"$brand","glow":0.5}}]}]}"##;
+
+fn mesh_colors(node: &PenNode) -> Vec<String> {
+    match crate::fills::node_fills(node).and_then(|f| f.first()) {
+        Some(PenFill::MeshGradient(body)) => body.stops.iter().map(|s| s.color.clone()).collect(),
+        other => panic!("expected mesh fill, got {other:?}"),
+    }
+}
+
+fn shader_tint(node: &PenNode) -> ShaderUniformValue {
+    match crate::fills::node_fills(node).and_then(|f| f.first()) {
+        Some(PenFill::Shader(body)) => body.uniforms.as_ref().expect("uniforms")["tint"].clone(),
+        other => panic!("expected shader fill, got {other:?}"),
+    }
+}
+
+/// The orchestrator binds mesh vertices and shader colour uniforms to
+/// `$variables`; the canvas pass must resolve them too, or the painter
+/// drops them and a variants merge leaks them into the shared palette.
+#[test]
+fn mesh_vertices_and_shader_colour_uniforms_resolve() {
+    let doc = doc_from(MESH_AND_SHADER_DOC);
+    assert!(
+        roots_have_tokens(&doc.children),
+        "mesh / shader refs count as tokens"
+    );
+    let doc = resolve_document_for_canvas(&doc, &Theme::new());
+    assert_eq!(
+        mesh_colors(&doc.children[0]),
+        ["#ff8800", "#0000ff", "#0000ff", "#ff8800"]
+    );
+    assert_eq!(
+        shader_tint(&doc.children[1]),
+        ShaderUniformValue::Color("#ff8800".into())
+    );
+    assert!(!roots_have_tokens(&doc.children));
+}
+
+#[test]
+fn replace_refs_renames_mesh_and_shader_tokens() {
+    let mut doc = doc_from(MESH_AND_SHADER_DOC);
+    replace_variable_refs_in_tree(
+        &mut doc.children,
+        "brand",
+        Some("accent"),
+        None,
+        &Theme::new(),
+    );
+    assert_eq!(
+        mesh_colors(&doc.children[0]),
+        ["$accent", "#0000ff", "#0000ff", "$accent"]
+    );
+    assert_eq!(
+        shader_tint(&doc.children[1]),
+        ShaderUniformValue::Color("$accent".into())
+    );
+}

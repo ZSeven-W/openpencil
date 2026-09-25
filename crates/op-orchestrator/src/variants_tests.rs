@@ -311,3 +311,43 @@ fn merged_roots_carry_their_own_palette() {
         "a $variable must be resolved before the board leaves its own document"
     );
 }
+
+/// Measured on GLM-5.3-Flash: the binding pass rewrote a direction's
+/// mesh-gradient hero vertex to `$--primary`, and the merge let it leave
+/// the direction unresolved — on the shared page it would take direction
+/// A's palette.
+#[test]
+fn merged_mesh_vertices_carry_their_own_palette() {
+    let mut state = EditorState::new();
+    state.active_children_mut().clear();
+    let mut vars = std::collections::BTreeMap::new();
+    vars.insert(
+        "--primary".to_string(),
+        serde_json::from_value(json!({"type": "color", "value": "#c4f82a"})).unwrap(),
+    );
+    assert!(state.apply(EditorCommand::SetVariables {
+        variables: vars,
+        replace: true,
+    }));
+    let root: PenNode = serde_json::from_value(json!({
+        "type": "frame", "id": "r", "name": "Screen", "x": 0, "y": 0,
+        "width": 375, "height": 812,
+        "fill": [{"type": "mesh_gradient", "rows": 2, "cols": 2, "stops": [
+            {"row": 0, "col": 0, "color": "#e4ff6a"},
+            {"row": 0, "col": 1, "color": "$--primary"},
+            {"row": 1, "col": 0, "color": "#0a0a0a"},
+            {"row": 1, "col": 1, "color": "#0a0a0a"}
+        ]}],
+        "children": []
+    }))
+    .unwrap();
+    assert!(state.apply(EditorCommand::InsertSubtree {
+        nodes: vec![root],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    }));
+    let merged = variant_roots_for_merge(&state);
+    let json = serde_json::to_string(&merged[0]).unwrap();
+    assert!(!json.contains("$--primary"), "{json}");
+    assert!(json.contains("#c4f82a"), "{json}");
+}
