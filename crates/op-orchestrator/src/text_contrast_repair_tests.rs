@@ -397,7 +397,7 @@ fn readable_icon_on_its_solid_marker_is_left_untouched() {
     assert_eq!(repair_text_contrast(&mut sink, "board"), 0);
 }
 
-fn contrast_sink(
+pub(super) fn contrast_sink(
     root_fill: Option<serde_json::Value>,
     panel_fill: Option<serde_json::Value>,
     text_fill: serde_json::Value,
@@ -437,7 +437,7 @@ fn contrast_sink(
     (sink, "board".to_string())
 }
 
-fn contrast_label_fill(sink: &VecDocSink) -> String {
+pub(super) fn contrast_label_fill(sink: &VecDocSink) -> String {
     serde_json::to_value(&sink.state.active_children()[0]).expect("serialize")["children"][0]
         ["children"][0]["fill"][0]["color"]
         .as_str()
@@ -533,25 +533,6 @@ fn image_mesh_and_shader_backgrounds_are_skipped() {
         assert_eq!(repair_text_contrast(&mut sink, &root_id), 0);
         assert_eq!(contrast_label_fill(&sink), "$--card");
     }
-}
-
-#[test]
-fn a_near_uniform_dark_mesh_is_checked_like_its_colour() {
-    // Measured (GLM-5.3-Flash variants run): a dark subscription panel
-    // painted as a subtle mesh kept near-black headline text, because the
-    // pass skipped every mesh as unprovable.
-    let dark_mesh = json!({
-        "type": "mesh_gradient", "rows": 2, "cols": 2,
-        "stops": [
-            {"row": 0, "col": 0, "color": "#111827"},
-            {"row": 0, "col": 1, "color": "#1F2937"},
-            {"row": 1, "col": 0, "color": "#0F172A"},
-            {"row": 1, "col": 1, "color": "#1E293B"}
-        ]
-    });
-    let (mut sink, root_id) = contrast_sink(Some(dark_mesh), None, json!("#0B1220"));
-    assert_eq!(repair_text_contrast(&mut sink, &root_id), 1);
-    assert_ne!(contrast_label_fill(&sink), "#0B1220");
 }
 
 // ── chip/badge contrast branch (DS P1-a, pass 2) ────────────────────────────

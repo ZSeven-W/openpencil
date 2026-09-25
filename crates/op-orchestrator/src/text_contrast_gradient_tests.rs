@@ -127,3 +127,26 @@ fn missing_resolved_rects_use_the_best_stop_fallback() {
             .is_none()
     );
 }
+
+#[test]
+fn a_near_uniform_dark_mesh_is_checked_like_its_colour() {
+    // Measured (GLM-5.3-Flash variants run): a dark subscription panel
+    // painted as a subtle mesh kept near-black headline text, because the
+    // pass skipped every mesh as unprovable.
+    let dark_mesh = json!({
+        "type": "mesh_gradient", "rows": 2, "cols": 2,
+        "stops": [
+            {"row": 0, "col": 0, "color": "#111827"},
+            {"row": 0, "col": 1, "color": "#1F2937"},
+            {"row": 1, "col": 0, "color": "#0F172A"},
+            {"row": 1, "col": 1, "color": "#1E293B"}
+        ]
+    });
+    let (mut sink, root_id) =
+        super::text_contrast_repair_tests::contrast_sink(Some(dark_mesh), None, json!("#0B1220"));
+    assert_eq!(repair_text_contrast(&mut sink, &root_id), 1);
+    assert_ne!(
+        super::text_contrast_repair_tests::contrast_label_fill(&sink),
+        "#0B1220"
+    );
+}
