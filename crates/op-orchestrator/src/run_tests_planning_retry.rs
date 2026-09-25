@@ -608,3 +608,76 @@ fn web11_covering_plan_with_covers_skips_the_coverage_retry() {
         "covers backfill must suppress the PlanCoverageRetry"
     );
 }
+
+// ── arena-m02 (0925): the re-plan still drops sections → append them ────────
+
+const ARENA_M02_BRIEF: &str = "健身 App 首页（375×812）：顶部问候与头像、今日目标环形进度、**横向滚动的课程卡片轨道**（六张，超出屏幕裁剪）、本周活动条形图七天、底部导航四标签。";
+
+/// The three-subtask plan the arena-m02 run shipped, returned for BOTH the
+/// first plan and the coverage re-plan (the model ignored the feedback).
+const ARENA_M02_PLAN_JSON: &str = r##"{
+  "rootFrame": { "id": "root", "name": "健身首页", "width": 375, "height": 812,
+                 "layout": "vertical", "gap": 0 },
+  "subtasks": [
+    { "id": "greeting", "label": "顶部问候与头像", "region": { "width": 375, "height": 96 },
+      "elements": "greeting, supporting line, circular profile avatar" },
+    { "id": "weekly-activity", "label": "本周活动条形图", "region": { "width": 375, "height": 220 },
+      "elements": "weekly activity bar chart with one vertical bar per day" },
+    { "id": "bottom-navigation", "label": "底部导航", "region": { "width": 375, "height": 78 },
+      "elements": "icon-and-label bottom navigation tabs: 训练, 课程, 社区, 我的" }
+  ]
+}"##;
+
+/// Replay of the arena-m02 planning exchange: one coverage re-plan fires, the
+/// re-plan drops the same two sections, and the run still plans (and
+/// generates) the goal ring and the course rail, in brief order.
+#[test]
+fn arena_m02_sections_the_replan_still_drops_are_appended_as_subtasks() {
+    let mut script = vec![
+        ScriptResponse::Text(ARENA_M02_PLAN_JSON.into()),
+        ScriptResponse::Text(ARENA_M02_PLAN_JSON.into()),
+    ];
+    script.extend((0..5).map(|_| ScriptResponse::Text(node_json("页面内容"))));
+    let llm = ScriptedLlm::new(script);
+    let mut sink = VecDocSink::new();
+    let mut events = Vec::new();
+    let mut on_progress = |p: Progress| events.push(p);
+    futures::executor::block_on(Orchestrator::new().run(
+        motion50_req(ARENA_M02_BRIEF),
+        &mut sink,
+        &llm,
+        &mut on_progress,
+        &AbortFlag::new(),
+        &stub_providers(),
+    ))
+    .expect("arena-m02 replay run succeeds");
+
+    assert_eq!(planning_prompt_count(&llm, ARENA_M02_BRIEF), 2);
+    let planned = events
+        .iter()
+        .find_map(|event| match event {
+            Progress::Planned { subtasks } => Some(subtasks.clone()),
+            _ => None,
+        })
+        .expect("a Planned event");
+    let labels: Vec<&str> = planned.iter().map(|(_, label)| label.as_str()).collect();
+    assert_eq!(
+        labels,
+        vec![
+            "顶部问候与头像",
+            "今日目标环形进度",
+            "横向滚动的课程卡片轨道",
+            "本周活动条形图",
+            "底部导航",
+        ]
+    );
+    for id in ["brief-section-1", "brief-section-2"] {
+        assert!(
+            events.iter().any(|event| matches!(
+                event,
+                Progress::SubtaskStarted { id: started, .. } if started == id
+            )),
+            "appended subtask {id} must actually run"
+        );
+    }
+}

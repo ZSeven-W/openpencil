@@ -187,7 +187,7 @@ async fn planning_loop(
                     apply_plan_pins(&mut plan, forced_style_guide_name, request);
                     plan =
                         maybe_replan_for_coverage(request, llm, abort, on_progress, plan).await?;
-                    let norm = normalize(&mut plan, request);
+                    let norm = normalize_logging_coverage_drops(&mut plan, request);
                     return Ok((plan, norm));
                 }
                 let preview = raw.trim().chars().take(150).collect::<String>();
@@ -245,8 +245,26 @@ fn apply_plan_pins(
     crate::style_guide_context::enforce_pinned_style_guide(plan, request);
 }
 
+/// `normalize`, plus a diagnostic when a normalize pass removed the only
+/// subtask covering a brief-required section (e.g. a fold pass).
+fn normalize_logging_coverage_drops(
+    plan: &mut OrchestratorPlan,
+    request: &DesignRequest,
+) -> NormInfo {
+    let required = crate::plan_coverage::required_sections(&request.prompt);
+    let before = crate::plan_coverage::check_coverage(&required, plan);
+    let norm = normalize(plan, request);
+    let dropped = crate::plan_coverage_append::dropped_by_normalize(&before, &required, plan);
+    if !dropped.is_empty() {
+        eprintln!("[PLAN] coverage: normalize dropped {}", dropped.join(", "));
+    }
+    norm
+}
+
 /// After a successful parse, re-request the plan once when the brief named
-/// sections the plan does not cover. Fallback plans never enter this path.
+/// sections the plan does not cover; sections the re-plan (or a failed
+/// re-plan) still leaves unplanned are appended as subtasks. Fallback plans
+/// never enter this path.
 async fn maybe_replan_for_coverage(
     request: &DesignRequest,
     llm: &dyn LlmClient,
@@ -255,7 +273,24 @@ async fn maybe_replan_for_coverage(
     plan: OrchestratorPlan,
 ) -> Result<OrchestratorPlan, OrchestratorError> {
     let required = crate::plan_coverage::required_sections(&request.prompt);
-    let check = crate::plan_coverage::check_coverage(&required, &plan);
+    let mut plan =
+        replan_once_for_coverage(request, llm, abort, on_progress, plan, &required).await?;
+    let outcome = crate::plan_coverage_append::append_missing_sections(&mut plan, &required);
+    if let Some(line) = crate::plan_coverage_append::outcome_log_line(&outcome) {
+        eprintln!("{line}");
+    }
+    Ok(plan)
+}
+
+async fn replan_once_for_coverage(
+    request: &DesignRequest,
+    llm: &dyn LlmClient,
+    abort: &AbortFlag,
+    on_progress: &mut dyn FnMut(Progress),
+    plan: OrchestratorPlan,
+    required: &[String],
+) -> Result<OrchestratorPlan, OrchestratorError> {
+    let check = crate::plan_coverage::check_coverage(required, &plan);
     if check.missing.is_empty() {
         // Only log the passing gate when the planner backfilled covers —
         // legacy plans keep their silent pass, byte for byte.
@@ -287,7 +322,7 @@ async fn maybe_replan_for_coverage(
             }
             if let Some((mut retry_plan, _)) = parse_orchestrator_response(&raw, request) {
                 apply_plan_pins(&mut retry_plan, forced_style_guide_name, request);
-                let retry_check = crate::plan_coverage::check_coverage(&required, &retry_plan);
+                let retry_check = crate::plan_coverage::check_coverage(required, &retry_plan);
                 if !retry_check.missing.is_empty() {
                     eprintln!(
                         "[PLAN] coverage: still missing {} after retry (covered-by: {})",

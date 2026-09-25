@@ -284,12 +284,22 @@ fn motion_direction_clauses_are_never_sections() {
     }
 }
 
-/// motion50 app-01: splitting "完成屏(时长与连续天数统计)" on 与 leaves two
-/// unbalanced-paren fragments — neither is a section.
+/// motion50 app-01: splitting "完成屏(时长与连续天数统计)" on 与 used to leave
+/// two unbalanced-paren fragments. Parenthetical notes are now stripped
+/// before splitting, so neither fragment appears and the genuine 完成屏 screen
+/// survives (it used to be dropped along with its fragments).
 #[test]
 fn unbalanced_paren_fragments_are_never_sections() {
     let sections = required_sections(MOTION50_APP01_BRIEF);
-    assert_eq!(sections, vec!["首页", "呼吸练习屏"], "got {sections:?}");
+    assert_eq!(
+        sections,
+        vec!["首页", "呼吸练习屏", "完成屏"],
+        "got {sections:?}"
+    );
+    // A genuinely unbalanced fragment (paren crossing the list boundary) is
+    // still screened out.
+    let fragments = required_sections("首页：完成屏(时长、连续天数统计");
+    assert!(!fragments.iter().any(|s| s.contains('(')), "{fragments:?}");
 }
 
 /// motion50 lane0/other-03: "每张含标题" is a per-item descriptor clause (a

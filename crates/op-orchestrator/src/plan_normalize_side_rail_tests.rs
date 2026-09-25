@@ -146,3 +146,30 @@ fn a_rail_in_a_multi_screen_plan_is_left_alone() {
     assert_eq!(fold_side_progress_rail(&mut plan), 0);
     assert_eq!(plan.subtasks.len(), before);
 }
+
+/// arena-m02 (0925): a goal ring ("calories left") and a horizontal course
+/// rail with per-card progress both carry progress + side cues, but neither
+/// is a page-edge scroll rail — folding them deleted two brief sections.
+#[test]
+fn goal_rings_and_horizontal_card_rails_are_never_folded() {
+    let mut plan = plan(vec![
+        subtask("greeting", "顶部问候与头像", "greeting, avatar"),
+        subtask(
+            "today-goal",
+            "今日目标环形进度",
+            "circular goal progress ring, 320 kcal left, vertical stat stack",
+        ),
+        subtask(
+            "course-rail",
+            "横向滚动的课程卡片轨道",
+            "horizontal rail of six course cards, each with a progress bar on the left",
+        ),
+        subtask("bottom-nav", "底部导航四标签", "four tabs"),
+    ]);
+    plan.root_frame.width = 375.0;
+    plan.root_frame.height = 812.0;
+    let before = plan.clone();
+
+    assert_eq!(fold_side_progress_rail(&mut plan), 0);
+    assert_eq!(plan, before);
+}

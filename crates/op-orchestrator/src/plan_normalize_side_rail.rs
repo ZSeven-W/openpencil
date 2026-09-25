@@ -11,6 +11,30 @@ const SIDE_CUES: &[&str] = &[
     "side", "vertical", "right", "left", "rail", "竖向", "纵向", "右侧", "左侧", "侧边",
 ];
 
+/// Cues that mark a progress subtask as something other than a page-edge
+/// scroll rail: a horizontal card rail whose cards carry progress bars, or a
+/// goal/progress ring. arena-m02 (0925): `今日目标环形进度` ("circular goal ring
+/// … calories left") and a course-card rail ("horizontal rail … progress per
+/// card") both matched progress + side (`left` / `rail`) and would have been
+/// folded into the bottom nav as a 4px bar — silently deleting two sections
+/// the brief asked for.
+const NOT_SIDE_RAIL_CUES: &[&str] = &[
+    "horizontal",
+    "carousel",
+    "card",
+    "cards",
+    "ring",
+    "circular",
+    "goal",
+    "横向",
+    "水平",
+    "卡片",
+    "课程卡",
+    "环形",
+    "圆环",
+    "目标",
+];
+
 fn matches_cue(text: &str, cues: &[&str]) -> bool {
     let lower = text.to_lowercase();
     cues.iter().any(|cue| {
@@ -35,6 +59,14 @@ fn is_page_navigation_label(label: &str) -> bool {
 }
 
 fn is_side_progress_candidate(st: &Subtask) -> bool {
+    let not_a_side_rail = matches_cue(&st.label, NOT_SIDE_RAIL_CUES)
+        || st
+            .elements
+            .as_deref()
+            .is_some_and(|elements| matches_cue(elements, NOT_SIDE_RAIL_CUES));
+    if not_a_side_rail {
+        return false;
+    }
     matches_side_progress_field(&st.label)
         || st
             .elements

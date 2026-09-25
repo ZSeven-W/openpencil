@@ -5,6 +5,9 @@
 //! section was never planned at all.
 
 use crate::plan::{OrchestratorPlan, Subtask};
+use crate::plan_coverage_text::{
+    contains_term, de_head, is_motion_clause, strip_emphasis, strip_leading_article,
+};
 use regex::Regex;
 use std::sync::LazyLock;
 
@@ -21,6 +24,12 @@ const SYNONYM_GROUPS: &[&[&str]] = &[
     &["轮播", "banner", "carousel"],
     &["月历", "月视图", "month view", "month grid", "calendar"],
 ];
+
+/// Synonym terms too generic to vouch for a longer section on their own: a
+/// required `课程卡片轨道` is NOT covered by any subtask that mentions `cards`,
+/// and `今日日程列表` is not covered by any `list`. These terms only expand
+/// when the section IS the term.
+const GENERIC_SYNONYM_TERMS: &[&str] = &["列表", "list", "卡片", "cards", "头部", "顶部", "header"];
 
 const TYPE_SUFFIXES: &[&str] = &[
     "区域", "模块", "部分", "列表", "网格", "section", "area", "区",
@@ -79,41 +88,10 @@ static CJK_YOU_PARTS_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
         .expect("valid 有-parts skip")
 });
 
-/// Motion/interaction direction words (motion50 fix 3, lane1/web-07 et al.).
-/// A candidate clause carrying one of these is an animation/interaction
-/// instruction (`安装块 mount`, `课程卡 inView 上浮交错`, `代码区 sticky 随
-/// 滚动高亮不同行`, `9）:封面`-style residue aside), never a layout section —
-/// generating one phantom requirement used to burn a pointless
-/// `PlanCoverageRetry` on nearly every brief. Matched lowercase.
-const MOTION_WORDS: &[&str] = &[
-    "mount",
-    "inview",
-    "transition",
-    "ontap",
-    "pressed",
-    "hover",
-    "视差",
-    "parallax",
-    "sticky",
-    "交错",
-    "stagger",
-    "滚动",
-    "数字滚动",
-    "count-up",
-    "逐字",
-    "逐词",
-    "揭示",
-    "动效",
-    "动画",
-    "淡入",
-    "滑入",
-    "缩放",
-    "ms",
-    "easing",
-];
-
 /// Extract section nouns the brief EXPLICITLY enumerates. High-precision only.
 pub fn required_sections(brief: &str) -> Vec<String> {
+    let brief = strip_emphasis(brief);
+    let brief = brief.as_str();
     // (raw item, declared): declared items come from an explicit `N个部分：` list,
     // so even short generic nouns (头部、内容) are trustworthy sections.
     let mut raw_items: Vec<(String, bool)> = Vec::new();
@@ -402,6 +380,16 @@ fn section_covered(required: &str, haystack: &str) -> bool {
     {
         return true;
     }
+    // `横向滚动的课程卡片轨道` is covered by a plan naming its noun head
+    // `课程卡片轨道` — the modifier is layout direction, not identity.
+    if let Some(head) = de_head(required) {
+        if aliases_for(&head)
+            .iter()
+            .any(|alias| alias_matches(haystack, alias))
+        {
+            return true;
+        }
+    }
     // A required `商家列表` is also covered when the plan names just the
     // suffix-stripped head `商家` (substring or synonym on the head).
     let head = strip_type_suffix(required);
@@ -418,12 +406,12 @@ fn alias_matches(haystack: &str, alias: &str) -> bool {
     if needle.is_empty() {
         return false;
     }
-    haystack.contains(&needle) || all_tokens_present(haystack, &needle)
+    contains_term(haystack, &needle) || all_tokens_present(haystack, &needle)
 }
 
 fn all_tokens_present(haystack: &str, phrase: &str) -> bool {
     let tokens = tokens(phrase);
-    !tokens.is_empty() && tokens.iter().all(|token| haystack.contains(token))
+    !tokens.is_empty() && tokens.iter().all(|token| contains_term(haystack, token))
 }
 
 fn tokens(text: &str) -> Vec<String> {
@@ -449,7 +437,8 @@ fn aliases_for(section: &str) -> Vec<String> {
     for group in SYNONYM_GROUPS {
         let overlaps = group.iter().any(|term| {
             let term_lower = term.to_lowercase();
-            lower == term_lower || lower.contains(&term_lower)
+            lower == term_lower
+                || (!GENERIC_SYNONYM_TERMS.contains(term) && contains_term(&lower, &term_lower))
         });
         if !overlaps {
             continue;
@@ -478,10 +467,11 @@ fn normalize_section(raw: &str, declared: bool) -> Option<String> {
         .trim_matches(|ch| {
             matches!(
                 ch,
-                '"' | '\'' | '“' | '”' | '‘' | '’' | '。' | '.' | '；' | ';'
+                '"' | '\'' | '“' | '”' | '‘' | '’' | '。' | '.' | '；' | ';' | '*'
             )
         })
         .to_string();
+    text = strip_leading_article(&text);
     // Paren-balance gate BEFORE the strip: an item whose parentheses don't
     // pair up is the residue of a clause that item-splitting cut in half
     // (`完成屏(时长`, `连续天数统计)`, `9)：封面`) — never a section name
@@ -519,14 +509,6 @@ fn has_unbalanced_parens(text: &str) -> bool {
         }
     }
     full != 0 || half != 0
-}
-
-/// A clause carrying an animation/interaction direction word is not a section.
-/// Runs on the PAREN-STRIPPED text so a genuine section whose parenthetical
-/// note mentions motion (`英雄(… count-up)`) survives (motion50 fix 3).
-fn is_motion_clause(text: &str) -> bool {
-    let lower = text.to_lowercase();
-    MOTION_WORDS.iter().any(|needle| lower.contains(needle))
 }
 
 /// A `含`-carrying item (`每张含标题`) is a per-item descriptor clause — the
@@ -629,7 +611,7 @@ fn han_count(text: &str) -> usize {
     text.chars().filter(|ch| is_han(*ch)).count()
 }
 
-fn is_han(ch: char) -> bool {
+pub(crate) fn is_han(ch: char) -> bool {
     matches!(
         ch,
         '\u{4E00}'..='\u{9FFF}' | '\u{3400}'..='\u{4DBF}' | '\u{F900}'..='\u{FAFF}'
@@ -649,6 +631,11 @@ fn has_english_list_separator(text: &str) -> bool {
 }
 
 fn split_cjk_items(list: &str) -> Vec<String> {
+    // Balanced parentheticals are per-section notes (`（六张，超出屏幕裁剪）`);
+    // splitting inside them cut the section in half and the paren-balance
+    // screen then dropped BOTH halves (arena-m02 lost its course rail).
+    let list = PARENS.replace_all(list, "");
+    let list = list.as_ref();
     // Split on every separator, remembering the conjunction that followed each
     // piece: a `与/和` pair with a ≤2-char side is kept whole (they are the text
     // fields of one section, `歌名与歌手`), not split into bare nouns.
@@ -721,3 +708,7 @@ fn dedupe_normalized(items: impl Iterator<Item = String>) -> Vec<String> {
 #[cfg(test)]
 #[path = "plan_coverage_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "plan_coverage_brief_tests.rs"]
+mod brief_tests;
