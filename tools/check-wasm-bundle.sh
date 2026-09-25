@@ -29,7 +29,10 @@ CRATE_DIR="crates/op-host-web"
 PKG_DIR="${CRATE_DIR}/pkg"
 WASM_RAW="${PKG_DIR}/op_host_web_bg.wasm"
 WASM_OPT="${PKG_DIR}/op_host_web_bg.opt.wasm"
-TARGET_WASM="target/wasm32-unknown-unknown/release/op_host_web.wasm"
+# Honour CARGO_TARGET_DIR: a hardcoded `target/` measured a stale bundle
+# whenever the build went to another target directory, so the size gate
+# reported the previous build's numbers.
+TARGET_WASM="${CARGO_TARGET_DIR:-target}/wasm32-unknown-unknown/release/op_host_web.wasm"
 # The wasm feature flags rustc emits for wasm32-unknown-unknown that wasm-opt
 # must be told to accept. Kept as CANDIDATES because binaryen versions disagree
 # on their spelling: newer binaryen (dev machines, v117+) split bulk-memory into
