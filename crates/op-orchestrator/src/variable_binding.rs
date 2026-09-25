@@ -116,6 +116,11 @@ fn slot_accepts(slot: ColorSlot, family: ColorFamily) -> bool {
 
 struct ColorRefs {
     candidates: Vec<ColorCandidate>,
+    /// Largest colour distance a literal may be from a variable's value
+    /// and still bind to it.
+    max_distance: f64,
+    /// Literals rewritten to a reference so far.
+    bound: std::cell::Cell<usize>,
 }
 
 struct ColorCandidate {
@@ -125,7 +130,7 @@ struct ColorCandidate {
 }
 
 pub(crate) fn bind_generated_color_variables(nodes: &mut [PenNode], state: &EditorState) {
-    let refs = color_refs(state);
+    let refs = color_refs(state, NEAR_COLOR_MAX_DISTANCE);
     if refs.candidates.is_empty() {
         return;
     }
@@ -134,10 +139,32 @@ pub(crate) fn bind_generated_color_variables(nodes: &mut [PenNode], state: &Edit
     }
 }
 
-fn color_refs(state: &EditorState) -> ColorRefs {
+/// Bind only literals that EQUAL a colour variable's current value (same
+/// slot rules as [`bind_generated_color_variables`]). Used on authored
+/// input (a website import): the design renders exactly as before — each
+/// rewritten colour resolves to the value it already had — but now
+/// follows the variable when the palette changes. Returns how many
+/// literals were bound.
+pub fn bind_exact_color_variables(nodes: &mut [PenNode], state: &EditorState) -> usize {
+    let refs = color_refs(state, 0.0);
+    if refs.candidates.is_empty() {
+        return 0;
+    }
+    for node in nodes {
+        bind_node(node, &refs);
+    }
+    refs.bound.get()
+}
+
+fn color_refs(state: &EditorState, max_distance: f64) -> ColorRefs {
     let mut candidates = Vec::new();
+    let empty = |candidates| ColorRefs {
+        candidates,
+        max_distance,
+        bound: std::cell::Cell::new(0),
+    };
     let Some(variables) = state.doc.variables.as_ref() else {
-        return ColorRefs { candidates };
+        return empty(candidates);
     };
     for (name, def) in variables {
         if !matches!(def.kind, VariableKind::Color) {
@@ -155,7 +182,7 @@ fn color_refs(state: &EditorState) -> ColorRefs {
             reference: format!("${name}"),
         });
     }
-    ColorRefs { candidates }
+    empty(candidates)
 }
 
 /// Which slot a node's own `fill` occupies. Text and icon glyphs paint
@@ -245,6 +272,7 @@ fn bind_color_string(color: &mut String, refs: &ColorRefs, slot: ColorSlot) {
     };
     if let Some(reference) = nearest_ref(key, refs, slot) {
         *color = reference.clone();
+        refs.bound.set(refs.bound.get() + 1);
     }
 }
 
@@ -268,7 +296,7 @@ fn nearest_ref(key: ColorKey, refs: &ColorRefs, slot: ColorSlot) -> Option<&Stri
                 &candidate.reference,
             )
         })
-        .filter(|(distance, _, _)| *distance <= NEAR_COLOR_MAX_DISTANCE)
+        .filter(|(distance, _, _)| *distance <= refs.max_distance)
         .min_by(|(a, a_rank, _), (b, b_rank, _)| {
             a.partial_cmp(b)
                 .unwrap_or(std::cmp::Ordering::Equal)

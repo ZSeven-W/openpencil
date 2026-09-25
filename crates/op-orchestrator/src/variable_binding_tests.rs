@@ -176,3 +176,26 @@ fn token_specificity_counts_name_segments() {
     assert_eq!(token_specificity("$--color-chart-1"), 2);
     assert_eq!(token_specificity("$color-primary"), 1);
 }
+
+#[test]
+fn exact_binding_only_rewrites_equal_colours_and_counts_them() {
+    let state = state_with_dusk_palette();
+    let mut nodes: Vec<PenNode> = vec![serde_json::from_value(json!({
+        "type":"frame","id":"f","layout":"vertical",
+        "fill":[{"type":"solid","color":"#6b62f2"}],
+        "children":[
+            // Equal to --primary: bound.
+            {"type":"frame","id":"cta","fill":[{"type":"solid","color":"#6B62F2"}]},
+            // 5 units off --primary: near enough for generated output, but
+            // an authored colour keeps its literal under exact binding.
+            {"type":"frame","id":"near","fill":[{"type":"solid","color":"#6B62F7"}]}
+        ]
+    }))
+    .unwrap()];
+    let bound = bind_exact_color_variables(&mut nodes, &state);
+    assert_eq!(bound, 2);
+    let value = serde_json::to_value(&nodes[0]).unwrap();
+    assert_eq!(value["fill"][0]["color"], "$--primary");
+    assert_eq!(value["children"][0]["fill"][0]["color"], "$--primary");
+    assert_eq!(value["children"][1]["fill"][0]["color"], "#6B62F7");
+}

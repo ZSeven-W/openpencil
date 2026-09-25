@@ -231,3 +231,37 @@ fn the_ordinary_path_is_untouched() {
         summary.notes()
     );
 }
+
+#[test]
+fn an_authored_import_gets_contract_checks_only() {
+    // The appended half's transparent padded wrapper is exactly what the
+    // intent tier strips; an authored import must keep it.
+    let mut state = state();
+    let before = serde_json::to_value(
+        op_editor_core::walkers::find_node(
+            state.active_children(),
+            &op_editor_core::NodeId::new("appended"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let summary = crate::repair_scope::finalize_authored_import(&mut state, "acme.example");
+    assert!(summary
+        .notes()
+        .iter()
+        .any(|note| note.contains("authored import: acme.example")));
+    let after = serde_json::to_value(
+        op_editor_core::walkers::find_node(
+            state.active_children(),
+            &op_editor_core::NodeId::new("appended"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        before["children"][0]["padding"], after["children"][0]["padding"],
+        "intent-tier wrapper inset kept"
+    );
+    // The contract tier ran: its categories are on the ledger.
+    assert!(!summary.checked().is_empty());
+}

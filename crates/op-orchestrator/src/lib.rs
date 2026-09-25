@@ -55,6 +55,7 @@ pub mod validation_dump;
 pub mod validation_fixes;
 pub(crate) mod validation_fixes_b3;
 mod variable_binding;
+pub use variable_binding::bind_exact_color_variables;
 pub mod variables;
 
 pub(crate) mod abandoned_duplicate_roots;
@@ -226,6 +227,7 @@ pub use prompt::build_orchestrator_prompt;
 pub use reference_intent::{detect_reference_intent, has_reference_trigger, ReferenceIntent};
 pub use reference_skeleton::ReferenceSkeleton;
 pub use repair_record::RepairRecord;
+pub use repair_scope::finalize_authored_import;
 pub use repair_summary::{CheckCategory, RepairSummary};
 pub use repair_tier::{RepairTier, RepairTierPolicy, TieredPass};
 pub use run::Orchestrator;

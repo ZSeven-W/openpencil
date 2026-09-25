@@ -69,6 +69,38 @@ pub(crate) fn finalize_appended_design(
     }
 }
 
+/// Finalize a document imported from an AUTHORED source (a live website):
+/// the contract tier only, over every top-level root.
+///
+/// The loop finalizer's other passes are right for model output and wrong
+/// here: they re-weight headings, add entrance motion, widen hero gaps and
+/// restyle surfaces — a judgement on the author's behalf about a page the
+/// author already shipped, and one that also breaks the "identical copies"
+/// component recognition relies on. What a screenshot of the import proves
+/// broken (text on its own background colour, overflow, collapsed boxes) is
+/// still repaired. The skip is recorded as a note naming `source`.
+pub fn finalize_authored_import(
+    state: &mut op_editor_core::EditorState,
+    source: &str,
+) -> RepairSummary {
+    use op_editor_core::PenNodeExt;
+    let mut summary = RepairSummary::default();
+    let roots: Vec<String> = state
+        .active_children()
+        .iter()
+        .map(|node| node.id_str().to_string())
+        .collect();
+    let root_refs: Vec<&str> = roots.iter().map(String::as_str).collect();
+    let mut sink = crate::loop_finalize::StateDocSink { state };
+    if contract_sweep(&mut sink, &root_refs, &mut summary) {
+        summary.note(format!(
+            "intent-tier passes skipped (authored import: {source}) — the site's own \
+             spacing, type, surfaces and palette kept as designed; contract-tier checks ran"
+        ));
+    }
+    summary
+}
+
 /// The ledger line. A narrowed scope is a DECISION, and a reader comparing two
 /// runs' credentials must be able to tell it from a gap — especially the
 /// zero-inserted-roots case, whose only other trace is the absence of two
