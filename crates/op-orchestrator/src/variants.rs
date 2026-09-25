@@ -63,6 +63,10 @@ impl VariantPlan {
     }
 }
 
+/// Parallel sub-agents each direction keeps however small the shared
+/// worker budget is.
+pub const MIN_DIRECTION_WORKERS: u32 = 2;
+
 /// Style-guide tags that describe product UI rather than a marketing page.
 const PRODUCT_UI_TAGS: [&str; 6] = [
     "dashboard",
@@ -263,7 +267,11 @@ pub fn choose_variant_style_guides(
 /// (a user's written-down design system outranks any catalogue pick);
 /// the others drop it, or they would all come out in the same system.
 /// The worker budget is shared across the directions so N directions do
-/// not multiply the provider load by N.
+/// not multiply the provider load by N — but never below
+/// [`MIN_DIRECTION_WORKERS`] each: with the default single worker a
+/// GLM-5.3-Flash run of three directions took 21–43 minutes, one section
+/// at a time per direction. Rate limits are handled by the providers'
+/// 429 backoff, not by starving the run.
 pub fn variant_request(base: &DesignRequest, plan: &VariantPlan, count: usize) -> DesignRequest {
     let mut request = base.clone();
     request.append_context = None;
@@ -273,7 +281,11 @@ pub fn variant_request(base: &DesignRequest, plan: &VariantPlan, count: usize) -
         request.design_md = None;
     }
     let count = count.max(1) as u32;
-    request.concurrency = base.concurrency.max(1).div_ceil(count).max(1);
+    request.concurrency = base
+        .concurrency
+        .max(1)
+        .div_ceil(count)
+        .max(MIN_DIRECTION_WORKERS);
     request
 }
 

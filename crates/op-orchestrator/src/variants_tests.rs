@@ -381,3 +381,12 @@ fn a_developer_tool_landing_page_may_still_look_like_a_terminal() {
         "{ids:?} tags {tags:?}"
     );
 }
+
+#[test]
+fn a_single_worker_budget_still_gives_each_direction_two() {
+    let mut base = base_request("做一个记账 App 的首页");
+    base.concurrency = 1;
+    let plans = choose_variant_style_guides(&base.prompt, None, 3);
+    let request = variant_request(&base, &plans[0], 3);
+    assert_eq!(request.concurrency, MIN_DIRECTION_WORKERS);
+}
