@@ -556,3 +556,30 @@ fn a_detail_written_into_its_sections_elements_is_covered() {
     let check = check_coverage(&["counts".to_string()], &plan);
     assert!(check.missing.is_empty(), "{:?}", check.missing);
 }
+
+/// arena-d01 (GLM-5.3-Flash): "折线图+柱图并排" was reported missing next to a
+/// charts subtask that plans both charts side by side, so the gate appended
+/// a brief-section subtask and the dashboard drew its KPIs and charts twice.
+#[test]
+fn a_compound_section_is_covered_part_by_part() {
+    let plan = plan(vec![subtask(
+        "charts",
+        "图表区",
+        Some("并排两卡：左侧折线图（近30日营收趋势，含图例+悬浮提示），右侧柱状图（各渠道订单量对比，含图例）"),
+    )]);
+    let check = check_coverage(&["折线图+柱图并排".to_string()], &plan);
+    assert!(check.missing.is_empty(), "{:?}", check.missing);
+
+    // Only one of the two parts planned → still missing.
+    let half = plan_with_one_chart();
+    let check = check_coverage(&["折线图+柱图并排".to_string()], &half);
+    assert_eq!(check.missing, vec!["折线图+柱图并排".to_string()]);
+}
+
+fn plan_with_one_chart() -> OrchestratorPlan {
+    plan(vec![subtask(
+        "charts",
+        "图表区",
+        Some("左侧折线图（近30日营收趋势）"),
+    )])
+}

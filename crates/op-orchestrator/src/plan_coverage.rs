@@ -6,8 +6,8 @@
 
 use crate::plan::{OrchestratorPlan, Subtask};
 use crate::plan_coverage_text::{
-    contains_term, de_head, is_motion_clause, label_names_section, screen_names_section,
-    strip_emphasis, strip_leading_article,
+    compound_section_parts, contains_term, de_head, is_motion_clause, label_names_section,
+    screen_names_section, strip_emphasis, strip_leading_article,
 };
 use regex::Regex;
 use std::sync::LazyLock;
@@ -271,6 +271,20 @@ pub fn check_coverage(required: &[String], plan: &OrchestratorPlan) -> CoverageC
                 .covered_by
                 .push((section.clone(), id, CoverageSource::Text));
             continue;
+        }
+        if let Some(parts) = compound_section_parts(section) {
+            if parts.iter().all(|part| section_covered(part, &haystack)) {
+                let id = covering_subtask_id(plan, |st| {
+                    parts
+                        .iter()
+                        .all(|part| section_covered(part, &subtask_haystack(st)))
+                })
+                .unwrap_or_else(|| "plan".to_string());
+                check
+                    .covered_by
+                    .push((section.clone(), id, CoverageSource::Text));
+                continue;
+            }
         }
         if let Some(id) = covering_subtask_id(plan, |st| {
             st.screen

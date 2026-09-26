@@ -192,9 +192,57 @@ pub(crate) fn screen_names_section(section: &str, screen: &str) -> bool {
             || label_names_section(&section, &screen))
 }
 
+/// The parts of a compound brief section — `折线图+柱图并排` asks for a line
+/// chart AND a bar chart laid side by side, which a plan says as
+/// "并排两卡：左侧折线图…右侧柱状图". Split on `+`, drop the trailing layout
+/// word, and spell common chart short forms in full so each part can be
+/// matched on its own. `None` unless there are at least two parts.
+pub(crate) fn compound_section_parts(section: &str) -> Option<Vec<String>> {
+    const LAYOUT_WORDS: [&str; 6] = ["并排", "并列", "左右", "上下", "两列", "横排"];
+    const SHORT_FORMS: [(&str, &str); 4] = [
+        ("柱图", "柱状图"),
+        ("线图", "折线图"),
+        ("饼图", "饼状图"),
+        ("条图", "条形图"),
+    ];
+    if !section.contains(['+', '＋']) {
+        return None;
+    }
+    let parts: Vec<String> = section
+        .split(['+', '＋'])
+        .map(|part| {
+            let mut part = part.trim().to_string();
+            for word in LAYOUT_WORDS {
+                if let Some(head) = part.strip_suffix(word) {
+                    part = head.trim().to_string();
+                }
+            }
+            for (short, full) in SHORT_FORMS {
+                if part == short || (part.ends_with(short) && !part.ends_with(full)) {
+                    part = format!("{}{full}", &part[..part.len() - short.len()]);
+                }
+            }
+            part
+        })
+        .filter(|part| !part.is_empty())
+        .collect();
+    (parts.len() >= 2).then_some(parts)
+}
+
 #[cfg(test)]
 mod label_names_section_tests {
     use super::label_names_section;
+
+    #[test]
+    fn a_compound_section_splits_into_its_parts() {
+        use super::compound_section_parts;
+        assert_eq!(
+            compound_section_parts("折线图+柱图并排"),
+            Some(vec!["折线图".to_string(), "柱状图".to_string()])
+        );
+        assert_eq!(compound_section_parts("KPI 卡片"), None);
+        assert_eq!(compound_section_parts("+"), None);
+    }
 
     #[test]
     fn a_page_name_matches_the_screen_its_sections_sit_on() {
