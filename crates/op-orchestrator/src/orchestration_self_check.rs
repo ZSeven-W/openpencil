@@ -1,11 +1,36 @@
-use std::collections::BTreeMap;
-
 use jian_ops_schema::node::PenNode;
 use serde_json::Value;
 
+/// How a self-check finding bears on the subtask that produced it.
+///
+/// The split follows the repair-tier rule: would the screenshot show
+/// something the author cannot have meant (CONTRACT), or is the finding an
+/// opinion about how the author should have structured it (INTENT)?
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SelfCheckSeverity {
+    /// Contract-class: a geometry or request fact (`radial-stack-not-concentric`,
+    /// `mobile-product-row-overflow`, `mobile-category-row-loose-spacing`,
+    /// `mobile-featured-card-bad-split`, `missing-progress-ring` on a frame
+    /// NAMED as a ring, `unsolicited-card-image` against a text-only
+    /// request). Rejects on every attempt.
     Fatal,
+    /// Intent-class: an opinion about structure (`section-structure-drift`
+    /// today). Rejects while the retry ladder still has a rung left, so the
+    /// echoed reason nudges the model; on the ladder's FINAL attempt (and in
+    /// the salvage pass) it is advisory — the content lands and the finding
+    /// is only logged, because dropping a whole section is always worse than
+    /// shipping one with imperfect sibling structure.
+    Intent,
+}
+
+/// Whether [`SelfCheckSeverity::Intent`] findings reject the attempt
+/// ([`IntentCheckMode::Reject`], every attempt that can still be retried)
+/// or are demoted to logged advisories ([`IntentCheckMode::Advisory`], the
+/// retry ladder's last rung, the salvage pass and the manual Retry).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum IntentCheckMode {
+    Reject,
+    Advisory,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,30 +41,65 @@ pub(crate) struct SelfCheckIssue {
     pub severity: SelfCheckSeverity,
 }
 
+impl SelfCheckIssue {
+    fn rejects(&self, mode: IntentCheckMode) -> bool {
+        match self.severity {
+            SelfCheckSeverity::Fatal => true,
+            SelfCheckSeverity::Intent => mode == IntentCheckMode::Reject,
+        }
+    }
+
+    fn line(&self) -> String {
+        match self.node_id.as_deref() {
+            Some(id) if !id.is_empty() => format!("{} at {}: {}", self.code, id, self.message),
+            _ => format!("{}: {}", self.code, self.message),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct SelfCheckReport {
     pub issues: Vec<SelfCheckIssue>,
 }
 
 impl SelfCheckReport {
+    /// True when any finding rejects an attempt that can still be retried
+    /// (contract AND intent findings): [`Self::rejects`] in
+    /// [`IntentCheckMode::Reject`].
+    #[cfg(test)]
     pub(crate) fn has_fatal(&self) -> bool {
-        self.issues
-            .iter()
-            .any(|issue| issue.severity == SelfCheckSeverity::Fatal)
+        self.rejects(IntentCheckMode::Reject)
     }
 
+    /// True when any finding rejects the attempt under `mode`.
+    pub(crate) fn rejects(&self, mode: IntentCheckMode) -> bool {
+        self.issues.iter().any(|issue| issue.rejects(mode))
+    }
+
+    /// [`Self::failure_message_for`] in [`IntentCheckMode::Reject`].
+    #[cfg(test)]
     pub(crate) fn failure_message(&self) -> String {
+        self.failure_message_for(IntentCheckMode::Reject)
+    }
+
+    /// The `; `-joined lines of every finding that rejects under `mode`.
+    pub(crate) fn failure_message_for(&self, mode: IntentCheckMode) -> String {
         self.issues
             .iter()
-            .filter(|issue| issue.severity == SelfCheckSeverity::Fatal)
-            .map(|issue| match issue.node_id.as_deref() {
-                Some(id) if !id.is_empty() => {
-                    format!("{} at {}: {}", issue.code, id, issue.message)
-                }
-                _ => format!("{}: {}", issue.code, issue.message),
-            })
+            .filter(|issue| issue.rejects(mode))
+            .map(SelfCheckIssue::line)
             .collect::<Vec<_>>()
             .join("; ")
+    }
+
+    /// Lines of the findings `mode` demotes to advisories (intent findings
+    /// in [`IntentCheckMode::Advisory`]; none in `Reject`).
+    pub(crate) fn advisory_lines(&self, mode: IntentCheckMode) -> Vec<String> {
+        self.issues
+            .iter()
+            .filter(|issue| !issue.rejects(mode))
+            .map(SelfCheckIssue::line)
+            .collect()
     }
 }
 
@@ -139,7 +199,7 @@ fn check_node(node: &Value, canvas_width: f64, in_scroller: bool, report: &mut S
             code: "section-structure-drift",
             node_id: string_prop(node, "id").map(str::to_string),
             message,
-            severity: SelfCheckSeverity::Fatal,
+            severity: SelfCheckSeverity::Intent,
         });
     }
 
@@ -567,211 +627,6 @@ fn children(node: &Value) -> Option<&Vec<Value>> {
     node.get("children").and_then(Value::as_array)
 }
 
-// ── Structural drift echo (DS P1.5, intent-class — echo only) ─────────────────
-//
-// ≥3 sibling Frame sections under one parent that share a name stem (digits
-// stripped) or a role, whose subtree kind-sequences disagree — measured
-// 0815-08-15 on the v4-pro card where five "法则" items shipped five
-// different internal structures. Structure is INTENT, so this check never
-// auto-fixes: it is Fatal, so the existing self-check chain rejects the
-// subtask and the retry nudge tells the model to re-emit the family from
-// ONE template. A group where >= 2/3 of the members share one kind-sequence
-// is exempt — a deliberate hero first item is not drift (the same hero
-// exemption `cleanup_equalize_siblings` votes under).
-
-/// Minimum members for a drift group.
-const DRIFT_MIN_MEMBERS: usize = 3;
-/// Hero exemption: a modal structure held by >= 2/3 of the group.
-const DRIFT_MAJORITY_NUM: usize = 2;
-const DRIFT_MAJORITY_DEN: usize = 3;
-
-/// One section-structure-drift finding plus the ids of the drifting
-/// siblings — the payload `finalize_design`'s summary surfaces as an
-/// advisory (DS P2-a item ③, echo-only: report, never auto-fix).
-struct DriftHit {
-    node_ids: Vec<String>,
-    message: String,
-}
-
-/// The drift message for `node`'s children, or `None` when no group drifts.
-fn sibling_structure_drift(node: &Value) -> Option<String> {
-    sibling_structure_drift_hit(node).map(|hit| hit.message)
-}
-
-/// [`sibling_structure_drift`] with the drifting siblings' ids attached.
-fn sibling_structure_drift_hit(node: &Value) -> Option<DriftHit> {
-    let children = children(node)?;
-    let members: Vec<&Value> = children
-        .iter()
-        .filter(|child| string_prop(child, "type") == Some("frame"))
-        .filter(|child| child.get("visible").and_then(Value::as_bool) != Some(false))
-        .collect();
-    if members.len() < DRIFT_MIN_MEMBERS {
-        return None;
-    }
-
-    let mut groups: Vec<Vec<&Value>> = Vec::new();
-    // Name-stem groups: "法则 01" / "法则 02" — digits stripped.
-    let mut by_stem: BTreeMap<&str, Vec<&Value>> = BTreeMap::new();
-    for member in &members {
-        let stem = value_name_stem(string_prop(member, "name").unwrap_or(""));
-        if !stem.is_empty() {
-            by_stem.entry(stem).or_default().push(member);
-        }
-    }
-    groups.extend(
-        by_stem
-            .into_values()
-            .filter(|group| group.len() >= DRIFT_MIN_MEMBERS),
-    );
-    // Role groups: every member carries the same non-empty role.
-    let mut by_role: BTreeMap<&str, Vec<&Value>> = BTreeMap::new();
-    for member in &members {
-        if let Some(role) = string_prop(member, "role") {
-            if !role.is_empty() {
-                by_role.entry(role).or_default().push(member);
-            }
-        }
-    }
-    groups.extend(
-        by_role
-            .into_values()
-            .filter(|group| group.len() >= DRIFT_MIN_MEMBERS),
-    );
-
-    for group in groups {
-        let sequences: Vec<String> = group
-            .iter()
-            .map(|member| value_kind_sequence(member))
-            .collect();
-        let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
-        for sequence in &sequences {
-            *counts.entry(sequence.as_str()).or_default() += 1;
-        }
-        let distinct = counts.len();
-        if distinct <= 1 {
-            continue; // isomorphic group — nothing to say.
-        }
-        let modal = counts.values().copied().max().unwrap_or(0);
-        if modal * DRIFT_MAJORITY_DEN >= group.len() * DRIFT_MAJORITY_NUM {
-            continue; // hero exemption: the family norm holds, the odd one out is deliberate.
-        }
-        let node_ids: Vec<String> = group
-            .iter()
-            .filter_map(|member| string_prop(member, "id").map(str::to_string))
-            .collect();
-        let names: Vec<String> = group
-            .iter()
-            .map(|member| string_prop(member, "name").unwrap_or("?").to_string())
-            .collect();
-        return Some(DriftHit {
-            node_ids,
-            message: format!(
-                "the {} sibling frame sections {} share one family but carry {distinct} different \
-                 subtree structures; unify them on ONE structure template — same nesting, same \
-                 children, same name pattern, only the content differs",
-                group.len(),
-                names.join(", ")
-            ),
-        });
-    }
-    None
-}
-
-// ── Echo-only advisories for external finalize callers (DS P2-a item ③) ──────
-//
-// The pre-insertion self-check rejects a drifting subtask (Fatal). The
-// `finalize_design` MCP tool cannot reject — it runs AFTER the fact — so it
-// reuses this same detector over the final document and surfaces hits as
-// ADVISORIES in its summary JSON: reported, never repaired, never counted in
-// the repair tally, never applied to the document. The model-in-the-loop
-// fixes them through batch_design / update_node and finalizes again (the
-// dsh chain's self-repair interface surface; see the finalize_design schema
-// description).
-//
-// Visibility note: this module is `pub mod` (was `pub(crate)`) so
-// `op-host-services` — the crate that owns the MCP tool — can reach this
-// function. The dependency direction stays services → orchestrator, the
-// same direction `loop_finalize` / `cleanup` already use.
-
-/// One section-structure-drift advisory for the `finalize_design` summary:
-/// the drifting sibling ids plus the explanatory message.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SectionStructureDriftAdvisory {
-    pub code: &'static str,
-    pub node_ids: Vec<String>,
-    pub message: String,
-}
-
-/// Run the sibling-structure-drift detector over every parent node of the
-/// `nodes` forest (the document's active-page children) and collect the
-/// hits as advisories. Read-only: the document is never modified here.
-pub fn collect_section_structure_drift(nodes: &[PenNode]) -> Vec<SectionStructureDriftAdvisory> {
-    let value = serde_json::to_value(nodes).unwrap_or(Value::Null);
-    let mut advisories = Vec::new();
-    collect_structure_drift(&value, &mut advisories);
-    advisories
-}
-
-fn collect_structure_drift(value: &Value, advisories: &mut Vec<SectionStructureDriftAdvisory>) {
-    match value {
-        Value::Array(nodes) => {
-            for node in nodes {
-                visit_structure_drift(node, advisories);
-            }
-        }
-        Value::Object(_) => visit_structure_drift(value, advisories),
-        _ => {}
-    }
-}
-
-/// Check `node`'s children as one sibling family, then recurse — the same
-/// walk shape as `check_node` (the page root itself is not a family).
-fn visit_structure_drift(node: &Value, advisories: &mut Vec<SectionStructureDriftAdvisory>) {
-    if let Some(hit) = sibling_structure_drift_hit(node) {
-        advisories.push(SectionStructureDriftAdvisory {
-            code: "section-structure-drift",
-            node_ids: hit.node_ids,
-            message: hit.message,
-        });
-    }
-    if let Some(children) = children(node) {
-        for child in children {
-            visit_structure_drift(child, advisories);
-        }
-    }
-}
-
-/// The name with trailing digits (and the whitespace before them) stripped:
-/// "Item 01" → "Item", "Item02" → "Item". Mirrors the equalize pass's
-/// [`crate::cleanup::cleanup_equalize_siblings`] name-stem rule.
-fn value_name_stem(name: &str) -> &str {
-    let trimmed = name.trim_end();
-    trimmed
-        .trim_end_matches(|c: char| c.is_ascii_digit())
-        .trim_end()
-}
-/// DFS pre-order kind-sequence over the JSON tree ("frame text image").
-/// Two members with the same sequence share node types in the same
-/// traversal positions.
-fn value_kind_sequence(node: &Value) -> String {
-    let mut sequence = String::new();
-    push_value_kind_sequence(node, &mut sequence);
-    sequence
-}
-
-fn push_value_kind_sequence(node: &Value, sequence: &mut String) {
-    if !sequence.is_empty() {
-        sequence.push(' ');
-    }
-    sequence.push_str(string_prop(node, "type").unwrap_or("?"));
-    if let Some(children) = children(node) {
-        for child in children {
-            push_value_kind_sequence(child, sequence);
-        }
-    }
-}
-
 fn string_prop<'a>(node: &'a Value, key: &str) -> Option<&'a str> {
     node.get(key).and_then(Value::as_str)
 }
@@ -784,6 +639,11 @@ fn numeric_prop(node: &Value, key: &str) -> Option<f64> {
     })
 }
 
+#[path = "orchestration_self_check_drift.rs"]
+mod drift;
+use drift::sibling_structure_drift;
+pub use drift::{collect_section_structure_drift, SectionStructureDriftAdvisory};
+
 #[path = "orchestration_self_check_card_image.rs"]
 mod card_image;
 pub(crate) use card_image::check_generated_nodes_for_prompt;
@@ -795,3 +655,11 @@ mod tests;
 #[cfg(test)]
 #[path = "orchestration_self_check_scroller_tests.rs"]
 mod tests_scroller;
+
+#[cfg(test)]
+#[path = "orchestration_self_check_drift_tests.rs"]
+mod tests_drift;
+
+#[cfg(test)]
+#[path = "orchestration_self_check_ladder_tests.rs"]
+mod tests_ladder;

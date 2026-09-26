@@ -34,7 +34,9 @@ use crate::model_profile::ModelTier;
 use crate::plan::{OrchestratorPlan, Subtask};
 use crate::retry::{is_non_retryable, is_self_check_rejection};
 use crate::screen_groups::ScreenGroup;
-use crate::subagent::{reveal_now_millis, run_subtask_with_reveal_at_and_outcomes};
+use crate::subagent::{
+    reveal_now_millis, run_subtask_with_reveal_at_and_outcomes, IntentCheckMode,
+};
 use crate::types::{
     AbortFlag, DesignRequest, DocSink, GeometryEchoBudget, LlmClient, Progress, SubtaskOutcome,
 };
@@ -225,6 +227,7 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         reveal_now_millis(),
         Some(&mut *on_progress),
         prior_outcomes,
+        IntentCheckMode::Reject,
     )
     .await;
     let (completeness1, language1) = if abort.is_set() {
@@ -309,6 +312,7 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
                 reveal_now_millis(),
                 None,
                 prior_outcomes,
+                IntentCheckMode::Reject,
             )
             .await,
         )
@@ -391,6 +395,8 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
                 reveal_now_millis(),
                 None,
                 prior_outcomes,
+                // The last rung: an intent finding must not drop the section.
+                IntentCheckMode::Advisory,
             )
             .await,
         )

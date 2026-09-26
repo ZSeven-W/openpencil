@@ -157,6 +157,7 @@ pub(crate) mod square_ring_repair;
 pub(crate) mod stacked_text_repair;
 pub mod stub_repair;
 pub mod subagent;
+pub(crate) mod subagent_self_check;
 pub mod subtask_completeness;
 pub mod table_repair;
 pub mod template_provenance;

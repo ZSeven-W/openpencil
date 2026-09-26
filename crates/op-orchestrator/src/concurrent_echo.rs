@@ -108,6 +108,7 @@ pub(super) async fn maybe_geometry_echo_with_outcomes(
         reveal_now_millis(),
         None,
         prior_outcomes,
+        IntentCheckMode::Reject,
     )
     .await;
 

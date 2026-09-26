@@ -156,7 +156,12 @@ pub fn infer_role_from_name(node: &PenNode) -> Option<&'static str> {
     if !matches!(node, PenNode::Frame(_)) {
         return None;
     }
-    let name = node.base().name.as_deref()?;
+    infer_role_from_frame_name(node.base().name.as_deref()?)
+}
+
+/// [`infer_role_from_name`] over a bare frame NAME — for callers that hold
+/// the node as JSON (the pre-insertion self-check's drift grouping).
+pub(crate) fn infer_role_from_frame_name(name: &str) -> Option<&'static str> {
     let lowered = name.to_lowercase();
     let lower = lowered.trim();
 

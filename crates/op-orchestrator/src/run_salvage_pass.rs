@@ -76,6 +76,8 @@ pub(super) async fn run_salvage_pass(
             reveal_now_millis(),
             None,
             prior_outcomes,
+            // Nothing retries after salvage: intent findings only log here.
+            IntentCheckMode::Advisory,
         )
         .await;
         if outcome.node_count > 0 {
