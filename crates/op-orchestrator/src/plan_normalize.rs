@@ -18,6 +18,9 @@ use plan_normalize_nav::{ensure_requested_bottom_nav_subtask, is_bottom_nav_subt
 #[path = "plan_normalize_side_rail.rs"]
 mod plan_normalize_side_rail;
 
+#[path = "plan_normalize_umbrella.rs"]
+mod plan_normalize_umbrella;
+
 #[path = "plan_normalize_dimensions.rs"]
 mod plan_normalize_dimensions;
 #[path = "plan_normalize_root_name.rs"]
@@ -153,6 +156,14 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
     tracing::info!(
         count = folded_side_progress_rail,
         "plan normalization folded side progress rail subtasks"
+    );
+
+    // A subtask that only wraps its siblings would be generated as the whole
+    // main area, and then every sibling appends its section again.
+    let dropped_umbrellas = plan_normalize_umbrella::drop_umbrella_subtasks(plan);
+    tracing::info!(
+        count = dropped_umbrellas,
+        "plan normalization dropped umbrella subtasks"
     );
 
     let is_mobile = plan.root_frame.width <= MOBILE_MAX_WIDTH;
