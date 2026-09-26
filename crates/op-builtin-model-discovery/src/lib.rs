@@ -265,6 +265,7 @@ fn official_discovery_url(
             ("/step_plan/v1/models", None, ResponseShape::Generic)
         }
         BuiltinAgentPresetKey::Nvidia => ("/v1/models", None, ResponseShape::Generic),
+        BuiltinAgentPresetKey::Requesty => ("/v1/models/managed", None, ResponseShape::Generic),
         BuiltinAgentPresetKey::Custom => return Ok((append_models(url)?, ResponseShape::Generic)),
     };
     url.set_path(path);
@@ -539,6 +540,10 @@ mod tests {
             (
                 BuiltinAgentPresetKey::Nvidia,
                 "https://integrate.api.nvidia.com/v1/models",
+            ),
+            (
+                BuiltinAgentPresetKey::Requesty,
+                "https://router.requesty.ai/v1/models/managed",
             ),
         ];
         for (preset, expected) in cases {
