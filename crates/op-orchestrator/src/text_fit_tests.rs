@@ -428,23 +428,25 @@ fn node_font_size(sink: &VecDocSink, id: &str) -> Option<f64> {
 
 #[test]
 fn amount_spilling_past_its_row_share_shrinks_until_the_blocks_stop_overlapping() {
-    // 362px narrows the row to 266px so the spill reproduces under a
-    // fallback face as well as DM Mono.
-    let mut sink = stats_row_screen(362.0);
+    // The width at which the spill starts depends on the face that measures
+    // "+1,286.40" (DM Mono locally, a narrower or wider fallback on CI), so
+    // narrow the screen until THIS machine reproduces it: the first width
+    // that overlaps is barely over, and the fix stays within the font floor.
+    let spills = |sink: &VecDocSink| {
+        let r = resolved_rects(sink.state());
+        r["today-amount"].x + r["today-amount"].w > r["total"].x
+    };
+    let mut screen = 600.0;
+    let mut sink = stats_row_screen(screen);
+    while !spills(&sink) {
+        screen -= 4.0;
+        assert!(screen > 200.0, "no width reproduces the spill");
+        sink = stats_row_screen(screen);
+    }
     let before = resolved_rects(sink.state());
-    let (amount, block, next) = (
-        before["today-amount"],
-        before["today-value"],
-        before["total"],
-    );
     assert!(
-        amount.x + amount.w > next.x,
-        "fixture must reproduce the overlap: amount ends at {}, 累计收益 starts at {}",
-        amount.x + amount.w,
-        next.x
-    );
-    assert!(
-        amount.x + amount.w > block.x + block.w,
+        before["today-amount"].x + before["today-amount"].w
+            > before["today-value"].x + before["today-value"].w,
         "the text spills out of its own block"
     );
 
