@@ -71,6 +71,7 @@ mod avatar_repair_tests;
 pub mod board_trailing_void;
 #[cfg(test)]
 mod brand_kit_binding_tests;
+pub(crate) mod chip_label_adopt;
 pub(crate) mod chip_repair;
 pub mod cleanup;
 #[path = "cleanup_image_fallback.rs"]
