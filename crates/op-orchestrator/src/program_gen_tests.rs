@@ -7,7 +7,7 @@
 //! as the shared executor `script_gen` runs its recorded `I(...)` program
 //! through — these tests exercise it directly.
 
-use super::{format_program_warning, run_program_to_forest};
+use super::{format_program_repair, format_program_warning, run_program_to_forest};
 use op_editor_core::PenNodeExt;
 
 #[test]
@@ -116,5 +116,18 @@ fn dropped_line_warning_includes_the_bounded_envelope_preview() {
     assert_eq!(
         warning,
         "[program-gen] dropped line `I(row, {\"type\":\"text\",\"textAlign\":\"start\"})`: invalid PenNode payload"
+    );
+}
+
+#[test]
+fn repair_note_uses_the_program_gen_channel() {
+    let note = format_program_repair(&serde_json::json!({
+        "line": "b10=I(b8, {\"children\":[\"b99\"]})",
+        "warning": "children entry \"b99\" dropped: no earlier line bound that handle"
+    }))
+    .expect("note");
+    assert_eq!(
+        note,
+        "[program-gen] repaired line `b10=I(b8, {\"children\":[\"b99\"]})`: children entry \"b99\" dropped: no earlier line bound that handle"
     );
 }

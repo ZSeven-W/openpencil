@@ -73,7 +73,8 @@ use super::{EditorCommand, ToolOutcome};
 use super::batch_program_exec_ops::{
     execute_copy, execute_image, execute_kit_instantiate, execute_replace,
 };
-use super::batch_program_parse::{parse_json_arg, parse_node_json, regex};
+use super::batch_program_handle_refs::{attach_handle_children, resolve_containers};
+use super::batch_program_parse::{parse_insert_node_json, parse_json_arg, regex};
 use super::batch_program_resolve::{
     count_forest, find_node_by_path, line_preview, lookup_id, parent_node_id, resolve_page_index,
     resolve_parent_ref, resolve_path_expr, resolve_ref, strip_outer_quotes, with_page_id,
@@ -112,6 +113,7 @@ pub(crate) fn run_batch_design_program(
         explicitly_sized_append_lines: explicitly_sized_append_lines(&lines),
         replaceable_empty_root_ids: Vec::new(),
         id_high_water: 0,
+        warnings: Vec::new(),
     };
     // Pin the sim's active page to the requested page so sim READS
     // (path lookups, node counts) see the same children every emitted
@@ -144,10 +146,14 @@ pub(crate) fn run_batch_design_program(
     let transactional = args.get("_line_policy").map(String::as_str) != Some("best_effort");
 
     let mut errors: Vec<Value> = Vec::new();
+    let mut warnings: Vec<Value> = Vec::new();
     for (line_index, line) in lines.into_iter().enumerate() {
         ctx.current_line = line_index;
         if let Err(error) = execute_line(&line, &mut ctx) {
             errors.push(json!({ "line": line_preview(&line), "error": error.to_string() }));
+        }
+        for warning in ctx.warnings.drain(..) {
+            warnings.push(json!({ "line": line_preview(&line), "warning": warning }));
         }
     }
 
@@ -190,6 +196,9 @@ pub(crate) fn run_batch_design_program(
             )),
         );
         envelope.insert("errors".into(), Value::Array(errors));
+        if !warnings.is_empty() {
+            envelope.insert("warnings".into(), Value::Array(warnings));
+        }
         return ToolOutcome::OkJson(Value::Object(envelope).to_string());
     }
 
@@ -202,6 +211,12 @@ pub(crate) fn run_batch_design_program(
     }
     if !errors.is_empty() {
         envelope.insert("errors".into(), Value::Array(errors));
+    }
+    // Repairs that kept a line alive (a dropped `children` handle entry…):
+    // informational, never a failure — the transactional path does not roll
+    // back on them.
+    if !warnings.is_empty() {
+        envelope.insert("warnings".into(), Value::Array(warnings));
     }
     let json = Value::Object(envelope).to_string();
 
@@ -271,6 +286,9 @@ pub(crate) struct ProgramCtx {
     /// replaced it to `n16`, leaving one binding pointing at a node the
     /// caller believes is gone.
     pub(crate) id_high_water: u64,
+    /// Non-fatal notes for the line being executed; drained into the
+    /// envelope's `warnings[]` after each line.
+    pub(crate) warnings: Vec<String>,
 }
 
 impl ProgramCtx {
@@ -282,6 +300,10 @@ impl ProgramCtx {
         }
         self.commands.push(cmd);
         Ok(())
+    }
+
+    pub(crate) fn warn(&mut self, warning: String) {
+        self.warnings.push(warning);
     }
 
     pub(crate) fn bind(&mut self, binding: &str, node_id: &str) {
@@ -502,7 +524,8 @@ fn execute_insert(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<()>
         .ok_or_else(|| ProgramError::Syntax("Insert requires parent and node data".into()))?;
     let parent_raw = args[..comma].trim();
     let parent = resolve_parent_ref(parent_raw, &ctx.bindings);
-    let mut node = parse_node_json(&args[comma + 1..], ctx.post_process, parent.is_none())?;
+    let (mut node, handle_refs) =
+        parse_insert_node_json(&args[comma + 1..], ctx.post_process, parent.is_none())?;
     delete_superseded_draft(binding, parent.as_deref(), &node, ctx);
 
     // TS auto-replace: a root-level frame insert replaces the first EMPTY
@@ -545,6 +568,7 @@ fn execute_insert(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<()>
         .first()
         .map(|(_, new)| new.clone())
         .ok_or(ProgramError::ProducedNoNode("Insert"))?;
+    let handle_refs = resolve_containers(&nodes[0], handle_refs);
     for (cmd, failure) in pre_commands {
         ctx.emit(cmd, failure)?;
     }
@@ -581,6 +605,8 @@ fn execute_insert(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<()>
         let n = ctx.commands.len();
         ctx.commands.swap(n - 1, n - 2);
     }
+    // Children listed by handle move in only after their container landed.
+    attach_handle_children(handle_refs, ctx);
     ctx.bind(binding, &root_id);
     Ok(())
 }

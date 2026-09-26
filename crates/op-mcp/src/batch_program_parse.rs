@@ -11,6 +11,7 @@ use serde_json::Value;
 use super::batch_design::{ensure_node_ids, normalize_node_shape};
 use super::batch_program::Result;
 use super::batch_program_error::ProgramError;
+use super::batch_program_handle_refs::{extract_handle_children, HandleChildRef};
 
 // --- Node JSON --------------------------------------------------------
 
@@ -23,10 +24,33 @@ pub(crate) fn parse_node_json(
     post_process: bool,
     document_root: bool,
 ) -> Result<PenNode> {
-    let mut value = parse_json_arg(raw)?;
+    let value = parse_node_value(raw)?;
+    finish_node(value, post_process, document_root)
+}
+
+/// `parse_node_json` for an `I()` body: string entries in any `children`
+/// array are lifted out as handle references (see
+/// `batch_program_handle_refs`) instead of failing the whole node.
+pub(crate) fn parse_insert_node_json(
+    raw: &str,
+    post_process: bool,
+    document_root: bool,
+) -> Result<(PenNode, Vec<HandleChildRef>)> {
+    let mut value = parse_node_value(raw)?;
+    let refs = extract_handle_children(&mut value);
+    let node = finish_node(value, post_process, document_root)?;
+    Ok((node, refs))
+}
+
+fn parse_node_value(raw: &str) -> Result<Value> {
+    let value = parse_json_arg(raw)?;
     if !value.is_object() {
         return Err(ProgramError::Json("node data must be a JSON object".into()));
     }
+    Ok(value)
+}
+
+fn finish_node(mut value: Value, post_process: bool, document_root: bool) -> Result<PenNode> {
     normalize_node_shape(&mut value);
     let mut tmp = 1usize;
     ensure_node_ids(&mut value, &mut tmp);

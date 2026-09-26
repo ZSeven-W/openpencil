@@ -141,6 +141,29 @@ fn surface_program_warnings(envelope_json: &str) {
                 }
             }
         }
+        // Repairs that KEPT a line (a dropped `children` handle entry, a
+        // rewritten dialect type): same channel as the drops, so a run log
+        // shows every place the executor second-guessed the model.
+        if let Some(serde_json::Value::Array(warnings)) = map.get("warnings") {
+            for entry in warnings {
+                if let Some(note) = format_program_repair(entry) {
+                    eprintln!("{note}");
+                }
+            }
+        }
+    }
+}
+
+fn format_program_repair(entry: &serde_json::Value) -> Option<String> {
+    let message = entry.get("warning").and_then(|value| value.as_str())?;
+    match entry
+        .get("line")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+    {
+        Some(line) => Some(format!("[program-gen] repaired line `{line}`: {message}")),
+        None => Some(format!("[program-gen] repaired line: {message}")),
     }
 }
 
@@ -160,3 +183,7 @@ fn format_program_warning(error: &serde_json::Value) -> Option<String> {
 #[cfg(test)]
 #[path = "program_gen_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "program_gen_replay_tests.rs"]
+mod replay_tests;
