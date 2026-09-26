@@ -20,6 +20,14 @@
 //! than the text's own single-line width. Both widths are MEASURED with the
 //! real jian layout on a scratch document — no advance-width guesses.
 //!
+//! **Target.** The floor only decides WHETHER a column is starved. Once it
+//! is, the fix aims for the widest natural single-line width among the
+//! column's texts across the table's rows: stopping at the floor still split
+//! a four-glyph name 3+1 ("贵州茅/台"), which reads worse than the model's
+//! intent. What cannot be reached is not forced — the repair takes all the
+//! width the two steps below can give, which covers the floor whenever the
+//! floor is reachable at all.
+//!
 //! **Fix.** The deficit is recovered from the row's own spacing before any
 //! content is touched:
 //! 1. reduce `gap` (never below [`MIN_GAP`]) by just enough;
@@ -331,10 +339,21 @@ fn readable_floor(t: &Value, measured: &Measured) -> Option<f64> {
     Some(natural.min((READABLE_EMS * font_size(t)).max(word)))
 }
 
-/// Width this row's fill columns must gain, in total, so each starved text
-/// inside them reaches its floor. Free space splits evenly between the
-/// row's fill children, so a column's deficit costs that many times over.
-fn row_deficit(row: &Value, rects: &HashMap<String, Rect>, measured: &Measured) -> f64 {
+/// Natural single-line width of a text: the width at which it stops wrapping,
+/// and the repair's TARGET once its column is starved.
+fn natural_width(t: &Value, measured: &Measured) -> Option<f64> {
+    let id = t.get("id").and_then(Value::as_str)?;
+    measured.natural.get(id).copied()
+}
+
+/// Which width a text is measured against: the readable floor decides
+/// WHETHER a column is starved, the natural width sizes the fix.
+type Goal = fn(&Value, &Measured) -> Option<f64>;
+
+/// Width this row's fill columns must gain, in total, so every text inside
+/// them reaches `goal`. Free space splits evenly between the row's fill
+/// children, so a column's deficit costs that many times over.
+fn row_deficit(row: &Value, rects: &HashMap<String, Rect>, measured: &Measured, goal: Goal) -> f64 {
     if rect_of(row, rects).is_none_or(|r| r.w < MIN_ROW_W) {
         return 0.0;
     }
@@ -348,13 +367,23 @@ fn row_deficit(row: &Value, rects: &HashMap<String, Rect>, measured: &Measured) 
         .iter()
         .filter(|c| is_fill_text_column(c))
         .flat_map(|c| column_texts(c))
-        .filter_map(|t| {
-            let floor = readable_floor(t, measured)?;
-            let w = rect_of(t, rects)?.w;
-            Some(floor - w)
-        })
+        .filter_map(|t| Some(goal(t, measured)? - rect_of(t, rects)?.w))
         .fold(0.0_f64, f64::max);
     worst * fill_count
+}
+
+/// The worst row's deficit — every row of the group gets the same edits.
+fn group_deficit(
+    group: &RowGroup<'_>,
+    rects: &HashMap<String, Rect>,
+    measured: &Measured,
+    goal: Goal,
+) -> f64 {
+    group
+        .rows
+        .iter()
+        .map(|row| row_deficit(row, rects, measured, goal))
+        .fold(0.0_f64, f64::max)
 }
 
 fn fix_group(
@@ -363,11 +392,12 @@ fn fix_group(
     measured: &Measured,
     cmds: &mut Vec<EditorCommand>,
 ) {
-    let deficit = group
-        .rows
-        .iter()
-        .map(|row| row_deficit(row, rects, measured))
-        .fold(0.0_f64, f64::max);
+    // Trigger on the readable floor; once starved, aim for no wrap at all
+    // and take whatever part of that the two steps below can reach.
+    if group_deficit(group, rects, measured, readable_floor) <= DEFICIT_EPS {
+        return;
+    }
+    let deficit = group_deficit(group, rects, measured, natural_width);
     if deficit <= DEFICIT_EPS {
         return;
     }
