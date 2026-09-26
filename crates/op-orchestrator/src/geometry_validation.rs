@@ -77,6 +77,8 @@ pub(crate) use text_fit::repair_text_fit;
 pub(crate) use touch_target_floor::repair_touch_target_floor;
 #[path = "geometry_card_rail_fixes.rs"]
 mod geometry_card_rail_fixes;
+#[path = "geometry_clipped_rows.rs"]
+mod geometry_clipped_rows;
 #[path = "geometry_diagnostics_collect.rs"]
 mod geometry_diagnostics_collect;
 #[path = "geometry_grow_fit_fixes.rs"]
@@ -305,6 +307,9 @@ pub fn geometry_validate_and_fix_for_form(
             collect_oversized_image_fixes(&v, &mut cmds);
             collect_absolute_fill_image_fixes(&v, &rects, &mut cmds);
             collect_grow_to_fit_fixes(&v, &rects, &mut cmds);
+            // A clipped card truncating a table body / list hugs its rows —
+            // past the small-overshoot bound the rule above keeps to.
+            geometry_clipped_rows::collect_clipped_rows_grow_fixes(&v, &rects, &mut cmds);
             collect_row_gap_fixes(&v, &rects, &mut cmds);
             collect_card_row_height_fixes(&v, &rects, &mut cmds, false);
             // BEFORE the inside-out overfull repair: a rigid row starved by
