@@ -12,10 +12,15 @@
 //!   - `fill` attribute — `#rgb` / `#rrggbb` + a small named-colour
 //!     table; `none` leaves the node unfilled.
 //!
-//! Out of scope for v1 (skipped, not an error): `<g>` grouping,
-//! `transform` attributes, CSS `<style>`, `<defs>` / gradients,
-//! `stroke` styling. Elements are scanned flat, so a shape nested in a
-//! `<g>` still imports — just without the group's transform.
+//!   - `<g>` → Group, with `transform` attributes composed down the
+//!     tree (`transform.rs`): a translate + uniform scale keeps a
+//!     shape a shape, anything else traces it as a path.
+//!   - `<style>` blocks: `.class` / `#id` / tag rules for the
+//!     presentation properties above (`stylesheet.rs`).
+//!
+//! Still out of scope (skipped, not an error): `<defs>` / gradients /
+//! patterns (a `url(…)` paint falls back to black), masks, clips,
+//! `<use>`, `<text>`.
 //!
 //! The parser is hand-rolled (no XML / SVG crate) so `op-editor-core`
 //! stays dependency-light + wasm32-clean, matching the hand-rolled
@@ -42,6 +47,8 @@ mod nodes;
 mod path_data;
 mod scale;
 mod style;
+mod stylesheet;
+mod transform;
 mod xml;
 
 use lexer::*;
@@ -49,6 +56,8 @@ use nodes::*;
 use path_data::*;
 use scale::*;
 use style::*;
+use stylesheet::*;
+use transform::*;
 use xml::*;
 
 use crate::command_node::build_leaf_node;
@@ -215,15 +224,20 @@ impl EditorState {
             None => return Ok(0),
         };
         let (scale, root_ctx) = compute_root_scale(&root_attrs);
-        let tree = parse_svg_tree(body);
+        let mut tree = parse_svg_tree(body);
         if tree.is_empty() {
             return Ok(0);
         }
+        // `<style>` rules land on the elements as attributes before the
+        // builder reads them; the walker skips the `<style>` tag itself.
+        Stylesheet::from_svg_body(body).apply(&mut tree);
+        // Canvas offset, then the viewBox scale; each element composes
+        // its own `transform` onto this as the tree is walked.
+        let root_mat = Mat::translate(offset.0, offset.1).then(Mat::scale(scale, scale));
         let mut taken = self.collect_node_ids();
         let mut built: Vec<PenNode> = Vec::new();
         for el in &tree {
-            if let Some(node) =
-                element_to_node_ctx(el, &root_ctx, scale, offset, allocator, &mut taken)?
+            if let Some(node) = element_to_node_ctx(el, &root_ctx, root_mat, allocator, &mut taken)?
             {
                 built.push(node);
             }
