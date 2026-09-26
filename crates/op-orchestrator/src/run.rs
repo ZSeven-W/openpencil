@@ -314,7 +314,9 @@ async fn maybe_replan_for_coverage(
     let required = crate::plan_coverage::required_sections(&request.prompt);
     let mut plan =
         replan_once_for_coverage(request, llm, abort, on_progress, plan, &required).await?;
-    let outcome = crate::plan_coverage_append::append_missing_sections(&mut plan, &required);
+    let details = crate::plan_coverage::required_section_details(&request.prompt);
+    let outcome =
+        crate::plan_coverage_append::append_missing_sections(&mut plan, &required, &details);
     if let Some(line) = crate::plan_coverage_append::outcome_log_line(&outcome) {
         eprintln!("{line}");
     }

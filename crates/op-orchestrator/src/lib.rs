@@ -34,6 +34,8 @@ pub mod parse;
 pub mod plan;
 pub mod plan_coverage;
 mod plan_coverage_append;
+mod plan_coverage_core;
+mod plan_coverage_extract;
 mod plan_coverage_text;
 mod plan_fallback_brief;
 mod plan_fallback_card;

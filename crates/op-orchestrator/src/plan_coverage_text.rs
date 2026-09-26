@@ -132,15 +132,12 @@ pub(crate) fn de_head(section: &str) -> Option<String> {
 ///
 /// Where on the screen a section sits is said either way round — the brief
 /// asks for `顶部门店信息`, the plan says `门店信息头部` — so the position
-/// words are set aside on both sides before comparing.
+/// words are set aside on both sides before comparing (see
+/// [`strip_position_words`]).
 pub(crate) fn label_names_section(section: &str, label: &str) -> bool {
-    const POSITION_WORDS: [&str; 5] = ["顶部", "头部", "顶端", "上方", "上部"];
     let han = |text: &str| -> Vec<char> {
-        let mut text = text.to_string();
-        for word in POSITION_WORDS {
-            text = text.replace(word, "");
-        }
-        text.chars()
+        strip_position_words(text)
+            .chars()
             .filter(|ch| crate::plan_coverage::is_han(*ch))
             .collect()
     };
@@ -159,6 +156,44 @@ pub(crate) fn label_names_section(section: &str, label: &str) -> bool {
         }
     }
     label_chars.len() * 10 >= total * 6
+}
+
+/// Words that say where a section sits, not what it is.
+const POSITION_WORDS: &[&str] = &[
+    "顶部", "头部", "顶端", "上方", "上部", "底部", "下方", "下部", "左侧", "右侧", "左边", "右边",
+    "中部", "中间", "中央",
+];
+
+/// Remove the position words from a section name (`右侧告警列表` →
+/// `告警列表`, `下方数据表` → `数据表`, `门店信息头部` → `门店信息`).
+///
+/// A position word stays when it is part of the section's identity: when
+/// less than three Han characters would remain (`底部导航`, `左侧栏`), or
+/// when what remains is a navigation or a bar (`底部导航栏`, `顶部工具栏`,
+/// `底部购物车栏`) — a top bar and a bottom bar are different sections, and
+/// stripping their edge would let one vouch for the other.
+pub(crate) fn strip_position_words(text: &str) -> String {
+    let mut text = text.trim().to_string();
+    'strip: loop {
+        for word in POSITION_WORDS {
+            let Some(at) = text.find(word) else {
+                continue;
+            };
+            let rest = format!("{}{}", &text[..at], &text[at + word.len()..]);
+            let rest = rest.trim();
+            let han = rest
+                .chars()
+                .filter(|ch| crate::plan_coverage::is_han(*ch))
+                .count();
+            let edge_bound =
+                rest.starts_with("导航") || rest.ends_with('栏') || rest.ends_with('条');
+            if han >= 3 && !edge_bound {
+                text = rest.to_string();
+                continue 'strip;
+            }
+        }
+        return text;
+    }
 }
 
 /// Whether a required `section` is really a page the plan put its subtasks
@@ -268,6 +303,27 @@ mod label_names_section_tests {
             "右侧任务详情抽屉"
         ));
         assert!(label_names_section("侧栏项目列表", "项目侧栏"));
+    }
+
+    #[test]
+    fn position_words_on_every_edge_are_set_aside() {
+        use super::strip_position_words;
+        // Measured (0927a arena-d03 / arena-d01 / arena-w01).
+        assert_eq!(strip_position_words("右侧告警列表"), "告警列表");
+        assert_eq!(strip_position_words("下方数据表"), "数据表");
+        assert_eq!(strip_position_words("右侧任务详情抽屉"), "任务详情抽屉");
+        assert_eq!(strip_position_words("门店信息头部"), "门店信息");
+    }
+
+    #[test]
+    fn a_position_that_names_the_section_is_kept() {
+        use super::strip_position_words;
+        assert_eq!(strip_position_words("底部导航"), "底部导航");
+        assert_eq!(strip_position_words("底部导航栏"), "底部导航栏");
+        assert_eq!(strip_position_words("顶部工具栏"), "顶部工具栏");
+        assert_eq!(strip_position_words("底部购物车栏"), "底部购物车栏");
+        assert_eq!(strip_position_words("左侧栏"), "左侧栏");
+        assert!(!label_names_section("底部导航栏", "顶部导航栏"));
     }
 
     #[test]

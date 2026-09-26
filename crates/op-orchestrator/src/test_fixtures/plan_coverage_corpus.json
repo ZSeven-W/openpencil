@@ -1,0 +1,5053 @@
+{
+ "briefs": {
+  "arena-d01": "运营数据看板（1440×900，桌面）：左侧栏（品牌+六个导航项+底部用户）、顶部工具栏、四个 KPI 卡、折线图+柱图并排、下方数据表 8 行 6 列带分页。",
+  "arena-d02": "Admin console (1440×900): sidebar with grouped nav, header with search and avatar, filter bar with three selects, a users table of 10 rows × 6 columns (status pills, row actions), pagination footer.",
+  "arena-d03": "IoT 设备监控台（1440×900）：侧栏、顶部状态摘要三卡、设备网格 12 个（图标+名称+在线状态+数值）、右侧告警列表五条带时间与等级色标。",
+  "arena-l01": "高端护肤品牌落地页（1440，浅色留白）：全屏 hero 图+大字标题、三款产品卡带图、品牌故事双栏（图+文）、用户评价三条、订阅区、页脚。要求视觉精致，字距层级清晰。",
+  "arena-m02": "健身 App 首页（375×812）：顶部问候与头像、今日目标环形进度、**横向滚动的课程卡片轨道**（六张，超出屏幕裁剪）、本周活动条形图七天、底部导航四标签。",
+  "arena-w02": "Email client (1440×900): three-pane layout — folder sidebar with counts, message list of 12 rows with sender/subject/preview/time and unread bold, reading pane with header, body paragraphs and a reply box.",
+  "arena-l02": "SaaS landing page (1440, dark): hero with product screenshot card, logo row, three feature sections alternating image/text, pricing three tiers with a highlighted middle, FAQ six items, footer with four columns.",
+  "arena-m04": "Three screens (375×812 each): welcome with illustration placeholder and two buttons; sign-up form (name, email, password, terms checkbox, submit); home feed after sign-up with a greeting, three cards and a bottom tab bar.",
+  "arena-w01": "项目管理 Web 应用主界面（1440×900）：侧栏项目列表、顶部标签切换（看板/列表/日历）、看板三列各四张任务卡（标题+标签+头像+截止日）、右侧任务详情抽屉打开状态。"
+ },
+ "cases": [
+  {
+   "run": "0926/arena-d01/run-1",
+   "phase": "initial",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Left Sidebar"
+    },
+    {
+     "id": "toolbar",
+     "label": "Top Toolbar",
+     "covers": [
+      "顶部工具栏"
+     ]
+    },
+    {
+     "id": "kpis",
+     "label": "KPI Cards",
+     "covers": [
+      "四个 KPI 卡"
+     ]
+    },
+    {
+     "id": "charts",
+     "label": "Charts Row",
+     "covers": [
+      "折线图+柱图并排"
+     ]
+    },
+    {
+     "id": "table",
+     "label": "Data Table"
+    }
+   ],
+   "rows": [
+    {
+     "section": "左侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926/arena-d01/run-1",
+   "phase": "retry",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧导航栏",
+     "elements": "brand block (logo + 产品名「星潮运营台」), 6 stacked nav items with icons (数据总览-active, 流量分析, 用户管理, 订单管理, 内容运营, 报表中心), bottom user profile (avatar + 姓名 + 角色 + 退出入口)",
+     "covers": [
+      "左侧栏"
+     ]
+    },
+    {
+     "id": "toolbar",
+     "label": "顶部工具栏",
+     "elements": "页面标题「运营数据概览」+ 更新时间, 日期范围选择器, 渠道筛选下拉, 搜索框, 导出报表按钮, 刷新按钮",
+     "covers": [
+      "顶部工具栏"
+     ]
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 指标卡",
+     "elements": "4 个 KPI 卡各含图标 + 指标名 + 数值 + 环比涨跌标签: 今日 GMV ¥286.4万 (+12.6%), 活跃用户 42.8万 (+8.2%), 支付订单 12,640 (+5.4%), 转化率 3.86% (-0.4%)",
+     "covers": [
+      "四个 KPI 卡"
+     ]
+    },
+    {
+     "id": "charts",
+     "label": "趋势图表区",
+     "elements": "左侧折线图卡「近30日 GMV 与订单趋势」含图例 + 网格 + 双序列, 右侧柱状图卡「各渠道订单量对比」含 6 组柱 + 数值标签, 两图并排",
+     "covers": [
+      "折线图+柱图并排"
+     ]
+    },
+    {
+     "id": "table",
+     "label": "订单明细数据表",
+     "elements": "表格标题「最新订单明细」, 8 行 × 6 列表格 (订单编号, 渠道, 商品, 金额, 状态标签, 下单时间), 底部分页栏 (共 128 条, 上一页/下一页, 页码 1-4)"
+    }
+   ],
+   "rows": [
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [
+    "下方数据表 8 行 6 列"
+   ]
+  },
+  {
+   "run": "0926/arena-d01/run-2",
+   "phase": "initial",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧边导航栏"
+    },
+    {
+     "id": "toolbar",
+     "label": "顶部工具栏"
+    },
+    {
+     "id": "kpi",
+     "label": "KPI 指标卡"
+    },
+    {
+     "id": "charts",
+     "label": "趋势图表区"
+    },
+    {
+     "id": "table",
+     "label": "渠道数据明细表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "左侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "四个 KPI 卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "折线图+柱图并排",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926/arena-d02/run-1",
+   "phase": "initial",
+   "brief": "arena-d02",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Sidebar Navigation"
+    },
+    {
+     "id": "header",
+     "label": "Top Header"
+    },
+    {
+     "id": "filter-bar",
+     "label": "Filter Bar",
+     "covers": [
+      "filter bar with three selects"
+     ]
+    },
+    {
+     "id": "users-table",
+     "label": "Users Table"
+    },
+    {
+     "id": "pagination",
+     "label": "Pagination Footer",
+     "covers": [
+      "pagination footer"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "grouped nav",
+     "truth": "covered",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926/arena-d02/run-2",
+   "phase": "initial",
+   "brief": "arena-d02",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Sidebar with Grouped Navigation"
+    },
+    {
+     "id": "header",
+     "label": "Top Header Bar"
+    },
+    {
+     "id": "filterbar",
+     "label": "Filter Bar"
+    },
+    {
+     "id": "table",
+     "label": "Users Table"
+    },
+    {
+     "id": "pagination",
+     "label": "Pagination Footer"
+    }
+   ],
+   "rows": [
+    {
+     "section": "filter bar with three selects",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926/arena-d03/run-2",
+   "phase": "initial",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Sidebar Navigation",
+     "covers": [
+      "侧栏"
+     ]
+    },
+    {
+     "id": "status-summary",
+     "label": "Top Status Summary Cards"
+    },
+    {
+     "id": "device-grid",
+     "label": "Device Grid"
+    },
+    {
+     "id": "alert-list",
+     "label": "Alert List"
+    }
+   ],
+   "rows": [
+    {
+     "section": "顶部状态摘要",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "右侧告警列表五条",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "等级色标",
+     "truth": "detail",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926/arena-l01/run-1",
+   "phase": "initial",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Full-Screen Hero",
+     "covers": [
+      "全屏 hero 图+大字标题"
+     ]
+    },
+    {
+     "id": "products",
+     "label": "Product Collection Cards"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-Column"
+    },
+    {
+     "id": "testimonials",
+     "label": "Customer Testimonials"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "covers": [
+      "订阅区"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "covers": [
+      "页脚"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "品牌故事双栏",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "用户评价",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926/arena-l01/run-2",
+   "phase": "initial",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Full-Screen Hero",
+     "covers": [
+      "全屏 hero 图+大字标题"
+     ]
+    },
+    {
+     "id": "products",
+     "label": "Product Collection"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-Column"
+    },
+    {
+     "id": "testimonials",
+     "label": "Testimonials"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "covers": [
+      "订阅区"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "covers": [
+      "页脚"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "品牌故事双栏",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "用户评价",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926/arena-l01/run-2",
+   "phase": "retry",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar",
+     "elements": "brand wordmark logo, nav links (首页, 产品系列, 品牌故事, 门店), search icon, cart icon, 预约体验 CTA button, hairline bottom border"
+    },
+    {
+     "id": "hero",
+     "label": "Hero Section",
+     "elements": "full-bleed hero photograph, oversized serif headline, short subtitle line, primary CTA button, scroll cue",
+     "covers": [
+      "全屏 hero 图+大字标题"
+     ]
+    },
+    {
+     "id": "products",
+     "label": "Product Cards",
+     "elements": "section eyebrow + title, 3 product cards in a row each with product image, product name, short description, price, 加入购物袋 link"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-Column",
+     "elements": "two-column layout: large editorial image on left, right column with eyebrow label, serif headline, two body paragraphs, 了解品牌之路 text link"
+    },
+    {
+     "id": "testimonials",
+     "label": "Testimonials",
+     "elements": "section title, 3 testimonial cards each with star rating, quote text, avatar, reviewer name + city"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "elements": "centered headline, supporting line, email input field with subscribe button, privacy note",
+     "covers": [
+      "订阅区"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "elements": "brand wordmark, 3 link columns (产品, 品牌, 支持), social media icons, language/currency selector, copyright line",
+     "covers": [
+      "页脚"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "品牌故事双栏",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "用户评价",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": []
+  },
+  {
+   "run": "0926/arena-m02/run-1",
+   "phase": "initial",
+   "brief": "arena-m02",
+   "plan": [
+    {
+     "id": "header",
+     "label": "Header Greeting",
+     "covers": [
+      "顶部问候与头像"
+     ]
+    },
+    {
+     "id": "goal-ring",
+     "label": "Today's Goal Ring",
+     "covers": [
+      "今日目标环形进度"
+     ]
+    },
+    {
+     "id": "course-track",
+     "label": "Course Card Track"
+    },
+    {
+     "id": "weekly-chart",
+     "label": "Weekly Activity Chart"
+    },
+    {
+     "id": "bottom-nav",
+     "label": "Bottom Navigation Bar"
+    }
+   ],
+   "rows": [
+    {
+     "section": "横向滚动的课程卡片轨道",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "本周活动条形图",
+     "truth": "covered",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926/arena-w02/run-1",
+   "phase": "initial",
+   "brief": "arena-w02",
+   "plan": [
+    {
+     "id": "folder-sidebar",
+     "label": "Folder Sidebar"
+    },
+    {
+     "id": "message-list",
+     "label": "Message List"
+    },
+    {
+     "id": "reading-pane",
+     "label": "Reading Pane"
+    }
+   ],
+   "rows": [
+    {
+     "section": "counts",
+     "truth": "detail",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926/arena-w02/run-2",
+   "phase": "initial",
+   "brief": "arena-w02",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Folder Sidebar"
+    },
+    {
+     "id": "list",
+     "label": "Message List"
+    },
+    {
+     "id": "reading",
+     "label": "Reading Pane"
+    }
+   ],
+   "rows": [
+    {
+     "section": "counts",
+     "truth": "detail",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926b/arena-d01/run-1",
+   "phase": "initial",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧导航栏"
+    },
+    {
+     "id": "toolbar",
+     "label": "顶部工具栏"
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 指标卡"
+    },
+    {
+     "id": "charts",
+     "label": "趋势图表区"
+    },
+    {
+     "id": "table",
+     "label": "数据明细表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "左侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "四个 KPI 卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "折线图+柱图并排",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926b/arena-d01/run-1",
+   "phase": "retry",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧栏",
+     "elements": "品牌 logo + 名称，六个垂直导航项（数据概览、流量分析、用户管理、订单管理、内容运营、系统设置）带图标和激活态，底部用户卡片（头像+姓名+角色）",
+     "covers": [
+      "左侧栏"
+     ]
+    },
+    {
+     "id": "topbar",
+     "label": "顶部工具栏",
+     "elements": "页面标题、搜索框、日期范围选择器、刷新按钮、通知铃铛图标、导出报表按钮"
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 卡片区",
+     "elements": "四个 KPI 卡并排：总销售额（数值+环比涨幅）、活跃用户数（数值+环比）、订单量（数值+环比）、转化率（数值+环比），每卡含趋势小图标",
+     "covers": [
+      "四个 KPI 卡"
+     ]
+    },
+    {
+     "id": "charts",
+     "label": "图表区",
+     "elements": "折线图（近30天销售额趋势，带网格线和图例）与柱状图（渠道订单量对比，带坐标轴和图例）左右并排，各占一半宽度",
+     "covers": [
+      "折线图+柱图并排"
+     ]
+    },
+    {
+     "id": "table",
+     "label": "数据表",
+     "elements": "数据表标题+筛选标签，8行×6列表格（订单编号、渠道、商品、金额、状态、日期），带分页控件（上一页/页码/下一页）"
+    }
+   ],
+   "rows": [
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [
+    "下方数据表 8 行 6 列"
+   ]
+  },
+  {
+   "run": "0926b/arena-d01/run-2",
+   "phase": "initial",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧栏"
+    },
+    {
+     "id": "main-col",
+     "label": "主内容区"
+    },
+    {
+     "id": "toolbar",
+     "label": "顶部工具栏"
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 卡片"
+    },
+    {
+     "id": "charts",
+     "label": "图表区"
+    },
+    {
+     "id": "table",
+     "label": "数据表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "折线图+柱图并排",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926b/arena-d01/run-2",
+   "phase": "retry",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧边栏",
+     "elements": "品牌 logo 区、六个导航项（数据总览、运营分析、用户管理、订单管理、报表中心、系统设置，首项高亮）、底部用户头像+姓名+角色"
+    },
+    {
+     "id": "main",
+     "label": "主内容区"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部工具栏",
+     "elements": "页面标题「运营数据看板」、日期范围选择器、筛选下拉、搜索框、刷新按钮、导出按钮、通知图标",
+     "covers": [
+      "顶部工具栏"
+     ]
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 卡片组",
+     "elements": "四个 KPI 卡并排：GMF 总营收（数值+环比涨幅）、活跃用户数（数值+环比涨幅）、订单量（数值+环比涨幅）、转化率（数值+环比涨幅），每卡含图标与趋势箭头",
+     "covers": [
+      "四个 KPI 卡"
+     ]
+    },
+    {
+     "id": "charts",
+     "label": "图表区",
+     "elements": "左右并排两个图表卡：左侧折线图（近30天营收趋势，带图例与时间轴）、右侧柱状图（各渠道订单量对比，带图例与坐标轴）",
+     "covers": [
+      "折线图+柱图并排"
+     ]
+    },
+    {
+     "id": "table",
+     "label": "数据表",
+     "elements": "数据表格卡片：表头6列（日期、订单量、销售额、客单价、新增用户、转化率）、8行数据、行悬停态、分页控件（上一页/页码/下一页+每页条数）"
+    }
+   ],
+   "rows": [
+    {
+     "section": "左侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [
+    "左侧栏",
+    "下方数据表 8 行 6 列"
+   ]
+  },
+  {
+   "run": "0926b/arena-d03/run-1",
+   "phase": "initial",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧栏导航"
+    },
+    {
+     "id": "content",
+     "label": "内容区"
+    }
+   ],
+   "rows": [
+    {
+     "section": "右侧告警列表五条",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "等级色标",
+     "truth": "detail",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926b/arena-d03/run-1",
+   "phase": "retry",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧边栏",
+     "elements": "品牌 logo 区、垂直导航项（总览、设备管理、告警中心、数据分析、系统设置）、底部管理员资料块"
+    },
+    {
+     "id": "header",
+     "label": "顶部状态摘要三卡",
+     "elements": "页面标题、搜索框、三张状态摘要卡各含数值+标签+趋势小图（在线设备数、活跃告警数、平均负载）"
+    },
+    {
+     "id": "device-grid",
+     "label": "设备网格",
+     "elements": "区域标题与筛选器、12 个设备卡片网格，每卡含设备图标+设备名称+在线状态点+实时数值（温度/湿度/电量等）"
+    },
+    {
+     "id": "alert-panel",
+     "label": "右侧告警列表",
+     "elements": "告警面板标题、五条告警项，每条含等级色标（严重红/警告橙/提示蓝）、告警描述、设备名、时间戳"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [],
+   "multi_screen": true
+  },
+  {
+   "run": "0926b/arena-d03/run-2",
+   "phase": "initial",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧边导航栏"
+    },
+    {
+     "id": "topbar-cards",
+     "label": "顶部状态摘要卡"
+    },
+    {
+     "id": "device-grid",
+     "label": "设备网格"
+    },
+    {
+     "id": "alerts-panel",
+     "label": "告警列表面板"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "右侧告警列表五条",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926b/arena-l01/run-1",
+   "phase": "initial",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Full-screen Hero",
+     "covers": [
+      "全屏 hero 图+大字标题"
+     ]
+    },
+    {
+     "id": "products",
+     "label": "Product Cards"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story"
+    },
+    {
+     "id": "reviews",
+     "label": "User Testimonials"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "covers": [
+      "订阅区"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "covers": [
+      "页脚"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "品牌故事双栏",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "用户评价",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926b/arena-l01/run-1",
+   "phase": "retry",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar",
+     "elements": "brand logo wordmark (wide letter-spacing), nav links (护肤系列, 品牌故事, 用户评价, 门店), search icon, shopping bag icon"
+    },
+    {
+     "id": "hero",
+     "label": "Full-Screen Hero",
+     "elements": "full-bleed hero image, oversized serif headline with generous letter-spacing, subtitle line, primary CTA button (探索系列)"
+    },
+    {
+     "id": "products",
+     "label": "Product Cards",
+     "elements": "section title + eyebrow label, 3 product cards each with product image, product name, short description, price, add-to-bag button",
+     "covers": [
+      "产品卡"
+     ]
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Split",
+     "elements": "two-column split: left brand imagery photo, right text column with section title, 2 paragraphs of brand story, signature line, '了解更多' text link",
+     "covers": [
+      "品牌故事双栏"
+     ]
+    },
+    {
+     "id": "testimonials",
+     "label": "User Testimonials",
+     "elements": "section title, 3 testimonial cards each with quote text, star rating, avatar, user name, product used",
+     "covers": [
+      "用户评价"
+     ]
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "elements": "centered headline, description line, email input + subscribe button in one form, privacy note"
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "elements": "brand logo, 3 link columns (产品系列, 客户服务, 关于品牌), social icons, copyright line"
+    }
+   ],
+   "rows": [
+    {
+     "section": "全屏 hero 图+大字标题",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "订阅区",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "页脚",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": []
+  },
+  {
+   "run": "0926b/arena-l01/run-2",
+   "phase": "initial",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Full-Screen Hero",
+     "covers": [
+      "全屏 hero 图+大字标题"
+     ]
+    },
+    {
+     "id": "products",
+     "label": "Product Cards"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-Column",
+     "covers": [
+      "品牌故事双栏"
+     ]
+    },
+    {
+     "id": "testimonials",
+     "label": "Customer Testimonials"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "covers": [
+      "订阅区"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "covers": [
+      "页脚"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "用户评价",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926b/arena-l02/run-1",
+   "phase": "initial",
+   "brief": "arena-l02",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Hero Section with Product Screenshot"
+    },
+    {
+     "id": "logos",
+     "label": "Logo Row",
+     "covers": [
+      "logo row"
+     ]
+    },
+    {
+     "id": "feature-1",
+     "label": "Feature Section 1 (Image Left)"
+    },
+    {
+     "id": "feature-2",
+     "label": "Feature Section 2 (Image Right)"
+    },
+    {
+     "id": "feature-3",
+     "label": "Feature Section 3 (Image Left)"
+    },
+    {
+     "id": "pricing",
+     "label": "Pricing Three Tiers"
+    },
+    {
+     "id": "faq",
+     "label": "FAQ Section"
+    },
+    {
+     "id": "cta-footer",
+     "label": "Footer with Four Columns",
+     "covers": [
+      "footer with four columns"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "three feature sections alternating image/text",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "FAQ six items",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926b/arena-l02/run-2",
+   "phase": "initial",
+   "brief": "arena-l02",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Hero with Product Screenshot"
+    },
+    {
+     "id": "logos",
+     "label": "Logo Row"
+    },
+    {
+     "id": "feature-1",
+     "label": "Feature Section 1 (Image Left)"
+    },
+    {
+     "id": "feature-2",
+     "label": "Feature Section 2 (Image Right)"
+    },
+    {
+     "id": "feature-3",
+     "label": "Feature Section 3 (Image Left)"
+    },
+    {
+     "id": "pricing",
+     "label": "Pricing Three Tiers"
+    },
+    {
+     "id": "faq",
+     "label": "FAQ Six Items"
+    },
+    {
+     "id": "footer",
+     "label": "Footer Four Columns"
+    }
+   ],
+   "rows": [
+    {
+     "section": "three feature sections alternating image/text",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926b/arena-l02/run-2",
+   "phase": "retry",
+   "brief": "arena-l02",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar",
+     "elements": "logo, nav links (Product, Features, Pricing, FAQ), sign-in link, get-started CTA button"
+    },
+    {
+     "id": "hero",
+     "label": "Hero Section",
+     "elements": "headline, subtitle, primary CTA button, secondary CTA link, floating product screenshot card with browser chrome and glow accent"
+    },
+    {
+     "id": "logos",
+     "label": "Logo Row",
+     "elements": "trusted-by caption, row of 6 grayscale customer logos"
+    },
+    {
+     "id": "feature-1",
+     "label": "Feature Section 1 (Image Left)",
+     "elements": "section image/illustration card on the left, feature title, description text, bullet list of 3 benefits on the right"
+    },
+    {
+     "id": "feature-2",
+     "label": "Feature Section 2 (Image Right)",
+     "elements": "feature title, description text, bullet list of 3 benefits on the left, section image/illustration card on the right"
+    },
+    {
+     "id": "feature-3",
+     "label": "Feature Section 3 (Image Left)",
+     "elements": "section image/illustration card on the left, feature title, description text, bullet list of 3 benefits on the right"
+    },
+    {
+     "id": "pricing",
+     "label": "Pricing Three Tiers",
+     "elements": "section title, monthly/yearly toggle, three pricing cards (Starter, Pro highlighted with accent border + badge, Enterprise), each with price, feature list, CTA "
+    },
+    {
+     "id": "faq",
+     "label": "FAQ",
+     "elements": "section title, six accordion items each with question and expandable answer"
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "elements": "brand column with logo and tagline, four columns of footer links (Product, Company, Resources, Legal), social icons, copyright line"
+    }
+   ],
+   "rows": [
+    {
+     "section": "three feature sections alternating image/text",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [
+    "three feature sections alternating image/text"
+   ]
+  },
+  {
+   "run": "0926b/arena-m04/run-1",
+   "phase": "initial",
+   "brief": "arena-m04",
+   "plan": [
+    {
+     "id": "welcome-hero",
+     "label": "Welcome Hero"
+    },
+    {
+     "id": "welcome-actions",
+     "label": "Welcome Buttons"
+    },
+    {
+     "id": "signup-header",
+     "label": "Sign-Up Header"
+    },
+    {
+     "id": "signup-form",
+     "label": "Sign-Up Form"
+    },
+    {
+     "id": "home-header",
+     "label": "Home Greeting"
+    },
+    {
+     "id": "home-cards",
+     "label": "Feed Cards"
+    },
+    {
+     "id": "home-tabbar",
+     "label": "Bottom Tab Bar"
+    }
+   ],
+   "rows": [
+    {
+     "section": "two buttons",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "multi_screen": true
+  },
+  {
+   "run": "0926b/arena-m04/run-2",
+   "phase": "initial",
+   "brief": "arena-m04",
+   "plan": [
+    {
+     "id": "welcome-hero",
+     "label": "Welcome Illustration"
+    },
+    {
+     "id": "welcome-actions",
+     "label": "Welcome Title & Buttons"
+    },
+    {
+     "id": "signup-header",
+     "label": "Sign-up Header"
+    },
+    {
+     "id": "signup-form",
+     "label": "Sign-up Form"
+    },
+    {
+     "id": "home-header",
+     "label": "Greeting Header"
+    },
+    {
+     "id": "home-cards",
+     "label": "Home Feed Cards"
+    },
+    {
+     "id": "home-tabbar",
+     "label": "Bottom Navigation Bar"
+    }
+   ],
+   "rows": [
+    {
+     "section": "three cards",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "multi_screen": true
+  },
+  {
+   "run": "0926b/arena-m04/run-2",
+   "phase": "retry",
+   "brief": "arena-m04",
+   "plan": [
+    {
+     "id": "welcome-illustration",
+     "label": "Welcome Illustration",
+     "elements": "ARCHETYPE: image-led — protagonist illustration placeholder, first screen 45%, overlap-with-scrim, display 48px / body 16px, imagery: one hero illustration plac"
+    },
+    {
+     "id": "welcome-actions",
+     "label": "Welcome Actions",
+     "elements": "quiet section: tonal surfaces, no accent fills, one hairline max. Elements: headline 'Welcome', subtitle line, primary sign-up button, secondary log-in button"
+    },
+    {
+     "id": "signup-header",
+     "label": "Sign-up Header",
+     "elements": "quiet section: tonal surfaces, no accent fills, one hairline max. Elements: back chevron, title 'Create account', step indicator"
+    },
+    {
+     "id": "signup-form",
+     "label": "Sign-up Form",
+     "elements": "quiet section: tonal surfaces, no accent fills, one hairline max. Elements: name input field, email input field, password input field with visibility toggle, te"
+    },
+    {
+     "id": "home-header",
+     "label": "Greeting Header",
+     "elements": "quiet section: tonal surfaces, no accent fills, one hairline max. Elements: greeting title 'Good morning, Alex', date subtitle, avatar, notification bell"
+    },
+    {
+     "id": "home-cards",
+     "label": "Home Feed Cards",
+     "elements": "quiet section: tonal surfaces, no accent fills, one hairline max. Elements: section label 'Today', three stacked cards each with thumbnail placeholder + title +"
+    },
+    {
+     "id": "bottom-nav",
+     "label": "Bottom Navigation Bar",
+     "elements": "quiet section: tonal surfaces, no accent fills, one hairline max. Elements: tab bar with icon + label tabs (Home active, Explore, Saved, Profile)"
+    }
+   ],
+   "rows": [
+    {
+     "section": "two buttons",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [],
+   "multi_screen": true
+  },
+  {
+   "run": "0926b/arena-w01/run-1",
+   "phase": "initial",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Project List Sidebar"
+    },
+    {
+     "id": "main-area",
+     "label": "Main Board Area (left of drawer)"
+    },
+    {
+     "id": "drawer",
+     "label": "Task Detail Drawer"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏项目列表",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "顶部标签切换",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926b/arena-w01/run-1",
+   "phase": "retry",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Projects Sidebar",
+     "elements": "brand logo block, search input, project list (5 projects each with color dot + name + task count), active project highlighted, bottom user profile row"
+    },
+    {
+     "id": "main",
+     "label": "Kanban Board Area",
+     "elements": "top header bar with project title and 顶部标签切换 tab group (看板 / 列表 / 日历, 看板 active), member avatars, filter button, kanban board with three columns (待办 / 进行中 / 已完成"
+    },
+    {
+     "id": "drawer",
+     "label": "Task Detail Drawer",
+     "elements": "right slide-over drawer with close button, task title, status dropdown, description paragraph, tag chips, assignee avatar + name, due date picker, comment list,"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏项目列表",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": []
+  },
+  {
+   "run": "0926b/arena-w01/run-2",
+   "phase": "initial",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Sidebar Project List"
+    },
+    {
+     "id": "topbar",
+     "label": "Top Bar with View Tabs"
+    },
+    {
+     "id": "kanban",
+     "label": "Kanban Board Three Columns"
+    },
+    {
+     "id": "drawer",
+     "label": "Task Detail Drawer"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏项目列表",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "顶部标签切换",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926b/arena-w01/run-2",
+   "phase": "retry",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Sidebar Project List",
+     "elements": "brand logo, workspace switcher, new project button, project list (6 projects each with color dot + name + task count), storage usage footer"
+    },
+    {
+     "id": "topbar",
+     "label": "Top Bar with View Tabs",
+     "elements": "project title, tab switcher (看板 / 列表 / 日历 with 看板 active), search input, notification bell, user avatar, invite member button"
+    },
+    {
+     "id": "kanban",
+     "label": "Kanban Board Three Columns",
+     "elements": "three columns (待办 / 进行中 / 已完成) each with column header + count + add button, each column containing 4 task cards with title + colored tag + avatar + due date, o"
+    },
+    {
+     "id": "drawer",
+     "label": "Task Detail Drawer",
+     "elements": "overlay-scrimmed right drawer 400px wide, task title, status dropdown, description text, assignee avatars, tag chips, due date picker, comment thread, comment i"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏项目列表",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "顶部标签切换",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [],
+   "multi_screen": true
+  },
+  {
+   "run": "0926c/arena-d01/run-1",
+   "phase": "initial",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧边栏"
+    },
+    {
+     "id": "toolbar",
+     "label": "顶部工具栏"
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 指标卡"
+    },
+    {
+     "id": "charts",
+     "label": "图表区"
+    },
+    {
+     "id": "table",
+     "label": "数据明细表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "左侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "折线图+柱图并排",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926c/arena-d01/run-2",
+   "phase": "initial",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧边栏"
+    },
+    {
+     "id": "main",
+     "label": "主内容区"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部工具栏"
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 卡片行"
+    },
+    {
+     "id": "charts",
+     "label": "图表区"
+    },
+    {
+     "id": "table",
+     "label": "数据表格"
+    }
+   ],
+   "rows": [
+    {
+     "section": "左侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "四个 KPI 卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "折线图+柱图并排",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926c/arena-d01/run-2",
+   "phase": "retry",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧栏",
+     "elements": "品牌 Logo 区, 六个导航项(仪表盘、订单、用户、商品、营销、报表, 高亮当前项), 底部用户信息(头像+姓名+角色)",
+     "covers": [
+      "左侧栏"
+     ]
+    },
+    {
+     "id": "main",
+     "label": "主内容区"
+    }
+   ],
+   "rows": [
+    {
+     "section": "顶部工具栏",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "四个 KPI 卡",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "折线图+柱图并排",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "missing",
+     "gate": "missing"
+    }
+   ],
+   "logged_appended": []
+  },
+  {
+   "run": "0926c/arena-d03/run-1",
+   "phase": "initial",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧边导航栏"
+    },
+    {
+     "id": "summary",
+     "label": "顶部状态摘要三卡"
+    },
+    {
+     "id": "grid",
+     "label": "设备网格"
+    },
+    {
+     "id": "alerts",
+     "label": "右侧告警列表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926c/arena-d03/run-1",
+   "phase": "retry",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧栏导航",
+     "elements": "品牌 logo 区、堆叠导航项（总览、设备、告警、数据报表、设置，当前项高亮）、底部用户资料块（头像+名称+角色）, 4px scroll progress bar pinned under the nav row (width bound to $scroll.progress)",
+     "covers": [
+      "侧栏"
+     ]
+    },
+    {
+     "id": "device-grid",
+     "label": "设备网格",
+     "elements": "区块标题「设备列表」+ 4×3 网格共 12 个设备卡：每卡含设备类型图标、设备名称、在线状态点（在线绿/离线红/休眠灰）、实时数值（温度/湿度/电量等）"
+    },
+    {
+     "id": "alert-panel",
+     "label": "右侧告警列表",
+     "elements": "区块标题「实时告警」+ 5 条告警项：左侧等级色条（紧急红/警告橙/提示蓝）、告警内容文本、设备名、时间戳（如 2 分钟前）"
+    }
+   ],
+   "rows": [
+    {
+     "section": "等级色标",
+     "truth": "detail",
+     "gate": "missing"
+    }
+   ],
+   "logged_appended": [
+    "等级色标"
+   ]
+  },
+  {
+   "run": "0926c/arena-d03/run-2",
+   "phase": "initial",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧边导航栏"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部状态栏"
+    },
+    {
+     "id": "summary",
+     "label": "状态摘要三卡"
+    },
+    {
+     "id": "device-grid",
+     "label": "设备网格"
+    },
+    {
+     "id": "alert-list",
+     "label": "右侧告警列表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "顶部状态摘要",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926c/arena-d03/run-2",
+   "phase": "retry",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧边导航栏",
+     "elements": "品牌 Logo 块、堆叠导航项（总览、设备管理、告警中心、数据分析、系统设置）、底部用户资料区（头像+名称）"
+    },
+    {
+     "id": "main",
+     "label": "主内容区",
+     "elements": "顶栏（页面标题、搜索框、刷新时间、用户头像）+ 状态摘要三卡 + 设备网格 + 告警列表 三列布局"
+    },
+    {
+     "id": "summary",
+     "label": "顶部状态摘要三卡",
+     "elements": "三张 KPI 卡：在线设备数（数值+环比小趋势）、离线设备数（警示色数值）、今日告警数（数值+等级分布），每卡含图标+标题+数值"
+    },
+    {
+     "id": "device-grid",
+     "label": "设备网格",
+     "elements": "区块标题（设备状态 + 筛选下拉），4×3 网格共 12 个设备卡片：设备图标、设备名称、在线/离线状态点、实时数值（温度/湿度/电量等）"
+    },
+    {
+     "id": "alert-list",
+     "label": "右侧告警列表",
+     "elements": "区块标题（实时告警 + 查看全部链接），5 条告警项：等级色标（严重/警告/提示）、告警内容、设备来源、时间戳"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [
+    "侧栏"
+   ]
+  },
+  {
+   "run": "0926c/arena-l01/run-1",
+   "phase": "initial",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Full-Screen Hero",
+     "covers": [
+      "全屏 hero 图+大字标题"
+     ]
+    },
+    {
+     "id": "products",
+     "label": "Product Trio Cards"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-Column"
+    },
+    {
+     "id": "testimonials",
+     "label": "User Testimonials"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "covers": [
+      "订阅区"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "covers": [
+      "页脚"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "品牌故事双栏",
+     "truth": "covered",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926c/arena-l01/run-1",
+   "phase": "retry",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar",
+     "elements": "logo wordmark, center nav links (护肤系列, 品牌故事, 门店, 会员), search icon, cart icon, 立即选购 CTA button, scroll progress bar"
+    },
+    {
+     "id": "hero",
+     "label": "Full-screen Hero",
+     "elements": "full-bleed hero image, oversized serif headline with wide letter-spacing, subtitle, primary CTA button, subtle scroll cue"
+    },
+    {
+     "id": "products",
+     "label": "Product Cards",
+     "elements": "section eyebrow + title, 3 product cards each with product image, product name, ingredient note, price, quick-add button",
+     "covers": [
+      "产品卡"
+     ]
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-Column",
+     "elements": "two-column layout: left editorial image, right eyebrow + heading + two paragraphs + learn-more link, generous whitespace",
+     "covers": [
+      "品牌故事双栏"
+     ]
+    },
+    {
+     "id": "testimonials",
+     "label": "User Testimonials",
+     "elements": "section title, 3 testimonial cards each with star rating, quote text, user name and skin-type label"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "elements": "centered heading, subtext, email input field + subscribe button in one row, privacy note"
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "elements": "brand column with logo and tagline, product links column, support links column, social icons, copyright bar"
+    }
+   ],
+   "rows": [
+    {
+     "section": "全屏 hero 图+大字标题",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "用户评价",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "订阅区",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "页脚",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": []
+  },
+  {
+   "run": "0926c/arena-l01/run-2",
+   "phase": "initial",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Full-screen Hero"
+    },
+    {
+     "id": "products",
+     "label": "Product Cards"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Split"
+    },
+    {
+     "id": "testimonials",
+     "label": "Customer Reviews"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "covers": [
+      "订阅区"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "covers": [
+      "页脚"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "全屏 hero 图+大字标题",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "品牌故事双栏",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "用户评价",
+     "truth": "covered",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926c/arena-l02/run-1",
+   "phase": "initial",
+   "brief": "arena-l02",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Hero with Product Screenshot Card"
+    },
+    {
+     "id": "logos",
+     "label": "Logo Row"
+    },
+    {
+     "id": "feature-1",
+     "label": "Feature Section One (Text Left / Image Right)"
+    },
+    {
+     "id": "feature-2",
+     "label": "Feature Section Two (Image Left / Text Right)"
+    },
+    {
+     "id": "feature-3",
+     "label": "Feature Section Three (Text Left / Image Right)"
+    },
+    {
+     "id": "pricing",
+     "label": "Pricing Three Tiers"
+    },
+    {
+     "id": "faq",
+     "label": "FAQ",
+     "covers": [
+      "FAQ six items"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer Four Columns",
+     "covers": [
+      "footer with four columns"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "three feature sections alternating image/text",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926c/arena-l02/run-2",
+   "phase": "initial",
+   "brief": "arena-l02",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Hero Section"
+    },
+    {
+     "id": "logos",
+     "label": "Logo Row",
+     "covers": [
+      "logo row"
+     ]
+    },
+    {
+     "id": "feature-1",
+     "label": "Feature Section 1 (Image Left / Text Right)"
+    },
+    {
+     "id": "feature-2",
+     "label": "Feature Section 2 (Text Left / Image Right)"
+    },
+    {
+     "id": "feature-3",
+     "label": "Feature Section 3 (Image Left / Text Right)"
+    },
+    {
+     "id": "pricing",
+     "label": "Pricing Tiers"
+    },
+    {
+     "id": "faq",
+     "label": "FAQ",
+     "covers": [
+      "FAQ six items"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "covers": [
+      "footer with four columns"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "three feature sections alternating image/text",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926c/arena-m04/run-1",
+   "phase": "initial",
+   "brief": "arena-m04",
+   "plan": [
+    {
+     "id": "welcome-hero",
+     "label": "Welcome Illustration & Copy"
+    },
+    {
+     "id": "welcome-actions",
+     "label": "Welcome Action Buttons"
+    },
+    {
+     "id": "signup-header",
+     "label": "Sign-Up Header"
+    },
+    {
+     "id": "signup-form",
+     "label": "Sign-Up Form"
+    },
+    {
+     "id": "home-header",
+     "label": "Home Greeting Header"
+    },
+    {
+     "id": "home-cards",
+     "label": "Home Feed Cards"
+    },
+    {
+     "id": "home-tabbar",
+     "label": "Bottom Navigation Bar"
+    }
+   ],
+   "rows": [
+    {
+     "section": "three cards",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "multi_screen": true
+  },
+  {
+   "run": "0926c/arena-m04/run-2",
+   "phase": "initial",
+   "brief": "arena-m04",
+   "plan": [
+    {
+     "id": "welcome-hero",
+     "label": "Welcome Illustration Area"
+    },
+    {
+     "id": "welcome-actions",
+     "label": "Welcome Text & Buttons"
+    },
+    {
+     "id": "signup-header",
+     "label": "Sign-Up Header"
+    },
+    {
+     "id": "signup-form",
+     "label": "Sign-Up Form"
+    },
+    {
+     "id": "signup-footer",
+     "label": "Sign-Up Footer Link"
+    },
+    {
+     "id": "home-header",
+     "label": "Home Greeting Header"
+    },
+    {
+     "id": "home-cards",
+     "label": "Home Feed Cards"
+    },
+    {
+     "id": "home-tabbar",
+     "label": "Bottom Navigation Bar"
+    }
+   ],
+   "rows": [
+    {
+     "section": "two buttons",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "multi_screen": true
+  },
+  {
+   "run": "0926c/arena-w01/run-1",
+   "phase": "initial",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "项目侧栏"
+    },
+    {
+     "id": "main",
+     "label": "主内容区"
+    }
+   ],
+   "rows": [
+    {
+     "section": "顶部标签切换",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "missing",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926c/arena-w01/run-1",
+   "phase": "retry",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Sidebar Project List",
+     "elements": "logo block, new project button, project list (6 items with color dot + name + task count), active project highlighted, bottom user profile row with avatar, 4px "
+    },
+    {
+     "id": "main",
+     "label": "Main Content Area",
+     "elements": "vertical stack containing topbar and board"
+    },
+    {
+     "id": "topbar",
+     "label": "Top Bar with View Tabs",
+     "elements": "project title with breadcrumb, view toggle tabs (看板 / 列表 / 日历, 看板 active), search input, filter button, invite member avatars group, primary new-task button",
+     "covers": [
+      "顶部标签切换"
+     ]
+    },
+    {
+     "id": "board",
+     "label": "Kanban Board",
+     "elements": "3 columns (待办 / 进行中 / 已完成) each with column header + count badge + add button, 4 task cards per column — each card with title, 1-2 colored tags, avatar group, d",
+     "covers": [
+      "看板三列各四张任务卡"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏项目列表",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": []
+  },
+  {
+   "run": "0926c/arena-w01/run-2",
+   "phase": "initial",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "项目侧栏"
+    },
+    {
+     "id": "main",
+     "label": "主区域"
+    },
+    {
+     "id": "drawer",
+     "label": "任务详情抽屉"
+    }
+   ],
+   "rows": [
+    {
+     "section": "顶部标签切换",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926d/arena-d01/run-1",
+   "phase": "initial",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧栏"
+    },
+    {
+     "id": "main",
+     "label": "主内容区"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部工具栏"
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 卡片行"
+    },
+    {
+     "id": "charts",
+     "label": "图表并排区"
+    },
+    {
+     "id": "table",
+     "label": "数据表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "四个 KPI 卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "折线图+柱图并排",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926d/arena-d01/run-1",
+   "phase": "retry",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧栏",
+     "elements": "品牌 logo 区（图标+名称）、六个垂直导航项（数据概览、订单管理、用户分析、商品运营、渠道分析、报表中心，第一项为激活态）、底部用户卡片（头像+姓名+角色+设置图标）"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部工具栏",
+     "elements": "页面标题、日期范围选择器、搜索框、刷新按钮、导出按钮、通知铃铛图标+头像"
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 指标卡",
+     "elements": "四个 KPI 卡并排，每张含指标名称、大数值、环比涨跌幅（带涨跌箭头与红绿色）、迷你趋势图：今日 GMV、订单量、活跃用户、转化率"
+    },
+    {
+     "id": "charts",
+     "label": "折线图与柱状图",
+     "elements": "左右并排两块图表面板：左侧为销售趋势折线图（图例、时间轴、hover 提示）配面板标题，右侧为渠道对比柱状图（分组柱、Y 轴刻度）配面板标题"
+    },
+    {
+     "id": "table",
+     "label": "数据表格",
+     "elements": "面板标题「订单明细」、数据表 8 行 6 列（订单号、用户、商品、金额、状态标签、下单时间）、每行 hover 态、底部分页控件（上一页、页码 1-5、下一页、每页条数）"
+    }
+   ],
+   "rows": [
+    {
+     "section": "折线图+柱图并排",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [
+    "折线图+柱图并排",
+    "下方数据表 8 行 6 列"
+   ]
+  },
+  {
+   "run": "0926d/arena-d01/run-2",
+   "phase": "initial",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧边栏"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部工具栏"
+    },
+    {
+     "id": "kpiRow",
+     "label": "KPI 卡片区"
+    },
+    {
+     "id": "chartsRow",
+     "label": "图表区"
+    },
+    {
+     "id": "dataTable",
+     "label": "数据明细表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "左侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "折线图+柱图并排",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926d/arena-d01/run-2",
+   "phase": "retry",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧栏",
+     "elements": "品牌 logo 区, 六个垂直堆叠导航项(概览/数据报表/用户管理/订单管理/营销活动/系统设置, 概览为激活态), 底部用户信息块(头像+姓名+角色)"
+    },
+    {
+     "id": "main",
+     "label": "主内容区",
+     "elements": "垂直堆叠容器: 顶部工具栏、KPI 卡行、图表行、数据表"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部工具栏",
+     "elements": "页面标题\"运营概览\", 日期范围选择器, 搜索框, 刷新按钮, 导出按钮, 通知图标"
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 卡片",
+     "elements": "4 个 KPI 卡各含标题+数值+环比涨跌标识+迷你趋势: 今日活跃用户, 新增订单, GMV, 转化率"
+    },
+    {
+     "id": "charts",
+     "label": "折线图+柱图并排",
+     "elements": "左卡: 近30日运营趋势折线图(标题+图例+y轴+x轴日期标签); 右卡: 各渠道订单量柱状图(标题+图例+分类轴+数值标签)"
+    },
+    {
+     "id": "table",
+     "label": "数据表",
+     "elements": "\"运营明细\"表卡片: 6 列表头(日期/渠道/订单量/GMV/转化率/客单价), 8 行数据, 行 hover 态, 分页控件(每页条数+页码+上一页/下一页)"
+    }
+   ],
+   "rows": [
+    {
+     "section": "四个 KPI 卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [
+    "四个 KPI 卡",
+    "下方数据表 8 行 6 列"
+   ]
+  },
+  {
+   "run": "0926d/arena-d03/run-1",
+   "phase": "initial",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧边导航栏"
+    },
+    {
+     "id": "main",
+     "label": "主内容区"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "右侧告警列表五条",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "等级色标",
+     "truth": "detail",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926d/arena-d03/run-1",
+   "phase": "retry",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧栏",
+     "elements": "brand logo block, stacked nav items (总览、设备管理、告警中心、数据分析、系统设置), bottom user profile mini card",
+     "covers": [
+      "侧栏"
+     ]
+    },
+    {
+     "id": "main",
+     "label": "主内容列"
+    },
+    {
+     "id": "alerts",
+     "label": "右侧告警列表",
+     "elements": "panel header 实时告警 + 全部查看 link, 5 alert rows each with level color bar (紧急红/严重橙/警告黄/提示蓝), alert title, device source, timestamp, unread dot",
+     "covers": [
+      "右侧告警列表五条",
+      "等级色标"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "顶部状态摘要",
+     "truth": "missing",
+     "gate": "missing"
+    }
+   ],
+   "logged_appended": [],
+   "multi_screen": true
+  },
+  {
+   "run": "0926d/arena-d03/run-2",
+   "phase": "initial",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Sidebar"
+    },
+    {
+     "id": "statuscards",
+     "label": "Top Status Summary Cards"
+    },
+    {
+     "id": "devicegrid",
+     "label": "Device Grid"
+    },
+    {
+     "id": "alerts",
+     "label": "Alerts Panel"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "顶部状态摘要",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "设备网格",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "右侧告警列表五条",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "等级色标",
+     "truth": "detail",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926d/arena-d03/run-3",
+   "phase": "initial",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧边导航栏"
+    },
+    {
+     "id": "main",
+     "label": "主内容区"
+    },
+    {
+     "id": "status-cards",
+     "label": "顶部状态摘要三卡"
+    },
+    {
+     "id": "device-grid",
+     "label": "设备网格"
+    },
+    {
+     "id": "alert-panel",
+     "label": "右侧告警列表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926d/arena-l01/run-1",
+   "phase": "initial",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Fullscreen Hero"
+    },
+    {
+     "id": "products",
+     "label": "Product Cards"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-Column"
+    },
+    {
+     "id": "testimonials",
+     "label": "User Testimonials"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section"
+    },
+    {
+     "id": "footer",
+     "label": "Footer"
+    }
+   ],
+   "rows": [
+    {
+     "section": "全屏 hero 图+大字标题",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "品牌故事双栏",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "用户评价",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "订阅区",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "页脚",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926d/arena-l01/run-1",
+   "phase": "retry",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar",
+     "elements": "serif logo wordmark, centered nav links (系列, 品牌故事, 护肤哲学, 门店), search icon, cart icon, 购物袋 button, letter-spaced small caps"
+    },
+    {
+     "id": "hero",
+     "label": "Fullscreen Hero",
+     "elements": "edge-to-edge full-screen hero photography (soft-toned skincare texture), oversized serif headline with wide letter-spacing, short subtitle, outlined 立即选购 CTA bu",
+     "covers": [
+      "全屏 hero 图+大字标题"
+     ]
+    },
+    {
+     "id": "products",
+     "label": "Product Cards",
+     "elements": "section title + small-caps eyebrow, 3 product cards in a row each with product photography, product name, essence description, price, 加入购物袋 link"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-Column",
+     "elements": "two-column layout: left full-bleed brand imagery (botanical/lab detail), right column with eyebrow label, serif headline, two short paragraphs, signature line, ",
+     "covers": [
+      "品牌故事双栏"
+     ]
+    },
+    {
+     "id": "testimonials",
+     "label": "Testimonials",
+     "elements": "section title, 3 testimonial cards each with five-star rating, serif quote text, user name and city, generous whitespace",
+     "covers": [
+      "用户评价"
+     ]
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "elements": "centered serif headline, short invitation copy, email input with hairline border + 订阅 button, small privacy note",
+     "covers": [
+      "订阅区"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "elements": "4-column footer: brand column with logo and tagline, 产品系列 links, 品牌支持 links, 关注我们 social icons, bottom bar with copyright and legal links, hairline dividers",
+     "covers": [
+      "页脚"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    }
+   ],
+   "logged_appended": []
+  },
+  {
+   "run": "0926d/arena-l01/run-2",
+   "phase": "initial",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Full-screen Hero"
+    },
+    {
+     "id": "products",
+     "label": "Product Collection Cards"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-Column"
+    },
+    {
+     "id": "testimonials",
+     "label": "User Testimonials"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section"
+    },
+    {
+     "id": "footer",
+     "label": "Footer"
+    }
+   ],
+   "rows": [
+    {
+     "section": "全屏 hero 图+大字标题",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "品牌故事双栏",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "页脚",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926d/arena-l02/run-1",
+   "phase": "initial",
+   "brief": "arena-l02",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Hero with Product Screenshot Card"
+    },
+    {
+     "id": "logos",
+     "label": "Logo Row",
+     "covers": [
+      "logo row"
+     ]
+    },
+    {
+     "id": "feature-1",
+     "label": "Feature Section 1 (Image Left)"
+    },
+    {
+     "id": "feature-2",
+     "label": "Feature Section 2 (Image Right)"
+    },
+    {
+     "id": "feature-3",
+     "label": "Feature Section 3 (Image Left)"
+    },
+    {
+     "id": "pricing",
+     "label": "Pricing Three Tiers"
+    },
+    {
+     "id": "faq",
+     "label": "FAQ",
+     "covers": [
+      "FAQ six items"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "covers": [
+      "footer with four columns"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "three feature sections alternating image/text",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926d/arena-l02/run-2",
+   "phase": "initial",
+   "brief": "arena-l02",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Hero Section"
+    },
+    {
+     "id": "logos",
+     "label": "Logo Row",
+     "covers": [
+      "logo row"
+     ]
+    },
+    {
+     "id": "feature-1",
+     "label": "Feature Section 1"
+    },
+    {
+     "id": "feature-2",
+     "label": "Feature Section 2"
+    },
+    {
+     "id": "feature-3",
+     "label": "Feature Section 3"
+    },
+    {
+     "id": "pricing",
+     "label": "Pricing Section"
+    },
+    {
+     "id": "faq",
+     "label": "FAQ Section"
+    },
+    {
+     "id": "cta",
+     "label": "CTA Band"
+    },
+    {
+     "id": "footer",
+     "label": "Footer"
+    }
+   ],
+   "rows": [
+    {
+     "section": "three feature sections alternating image/text",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "FAQ six items",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926d/arena-m02/run-2",
+   "phase": "initial",
+   "brief": "arena-m02",
+   "plan": [
+    {
+     "id": "header",
+     "label": "Greeting Header"
+    },
+    {
+     "id": "goal",
+     "label": "Today's Goal Ring"
+    },
+    {
+     "id": "courses",
+     "label": "Course Card Track"
+    },
+    {
+     "id": "week",
+     "label": "Weekly Activity Bar Chart"
+    },
+    {
+     "id": "tabbar",
+     "label": "Bottom Navigation Bar"
+    }
+   ],
+   "rows": [
+    {
+     "section": "顶部问候与头像",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "今日目标环形进度",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "横向滚动的课程卡片轨道",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "本周活动条形图",
+     "truth": "covered",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926d/arena-m04/run-1",
+   "phase": "initial",
+   "brief": "arena-m04",
+   "plan": [
+    {
+     "id": "welcome-hero",
+     "label": "Welcome Screen"
+    },
+    {
+     "id": "signup-header",
+     "label": "Sign-up Header"
+    },
+    {
+     "id": "signup-form",
+     "label": "Sign-up Form"
+    },
+    {
+     "id": "home-header",
+     "label": "Home Greeting"
+    },
+    {
+     "id": "home-cards",
+     "label": "Home Feed Cards"
+    },
+    {
+     "id": "home-tabbar",
+     "label": "Bottom Navigation Bar"
+    }
+   ],
+   "rows": [
+    {
+     "section": "two buttons",
+     "truth": "detail",
+     "gate": "missing"
+    }
+   ],
+   "multi_screen": true
+  },
+  {
+   "run": "0926d/arena-m04/run-2",
+   "phase": "initial",
+   "brief": "arena-m04",
+   "plan": [
+    {
+     "id": "welcome-hero",
+     "label": "Welcome Hero"
+    },
+    {
+     "id": "welcome-actions",
+     "label": "Welcome Actions"
+    },
+    {
+     "id": "signup-header",
+     "label": "Sign-up Header"
+    },
+    {
+     "id": "signup-form",
+     "label": "Sign-up Form"
+    },
+    {
+     "id": "home-greeting",
+     "label": "Home Greeting"
+    },
+    {
+     "id": "home-cards",
+     "label": "Home Cards"
+    },
+    {
+     "id": "home-tabbar",
+     "label": "Bottom Navigation Bar"
+    }
+   ],
+   "rows": [
+    {
+     "section": "three cards",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "multi_screen": true
+  },
+  {
+   "run": "0926d/arena-w01/run-1",
+   "phase": "initial",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧栏项目列表"
+    },
+    {
+     "id": "mainarea",
+     "label": "主内容区"
+    }
+   ],
+   "rows": [
+    {
+     "section": "顶部标签切换",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "missing",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926d/arena-w01/run-1",
+   "phase": "retry",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Sidebar Project List",
+     "elements": "brand logo, '项目' section label, 5 sidebar project list items each with color dot + project name + task count, active state on first project, new project button,"
+    },
+    {
+     "id": "main",
+     "label": "Kanban Board Area",
+     "elements": "project title header with member avatars stack, top tab switcher (看板 active / 列表 / 日历) with counts, filter + search controls, three kanban columns (待办 / 进行中 / 已",
+     "covers": [
+      "顶部标签切换",
+      "看板三列各四张任务卡"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏项目列表",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": []
+  },
+  {
+   "run": "0926d/arena-w01/run-2",
+   "phase": "initial",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧边栏项目列表"
+    },
+    {
+     "id": "main-column",
+     "label": "主内容区"
+    },
+    {
+     "id": "drawer",
+     "label": "任务详情抽屉（打开状态）"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏项目列表",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "顶部标签切换",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "missing",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926d/arena-w01/run-2",
+   "phase": "retry",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧栏项目列表",
+     "elements": "品牌 logo 区、新建项目按钮、项目列表（6 个项目项，每项含彩色圆点 + 项目名 + 未完成任务数徽标，当前项高亮）、底部用户头像 + 用户名 + 设置图标"
+    },
+    {
+     "id": "main",
+     "label": "主内容区"
+    }
+   ],
+   "rows": [
+    {
+     "section": "顶部标签切换",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "missing",
+     "gate": "missing"
+    }
+   ],
+   "logged_appended": []
+  },
+  {
+   "run": "0926e/arena-d01/run-1",
+   "phase": "initial",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧边栏"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部工具栏",
+     "covers": [
+      "顶部工具栏"
+     ]
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 卡片组",
+     "covers": [
+      "四个 KPI 卡"
+     ]
+    },
+    {
+     "id": "charts",
+     "label": "图表区",
+     "covers": [
+      "折线图+柱图并排"
+     ]
+    },
+    {
+     "id": "table",
+     "label": "数据明细表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "左侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926e/arena-d01/run-1",
+   "phase": "retry",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧栏",
+     "elements": "品牌区（logo+名称）、六个垂直导航项（数据概览、用户分析、订单管理、内容运营、渠道投放、系统设置，当前项高亮）、底部用户卡片（头像+用户名+角色）、退出按钮",
+     "covers": [
+      "左侧栏"
+     ]
+    },
+    {
+     "id": "main",
+     "label": "主内容区",
+     "elements": "垂直布局：顶部工具栏、KPI 卡行、图表行、数据表"
+    },
+    {
+     "id": "toolbar",
+     "label": "顶部工具栏",
+     "elements": "页面标题「运营数据总览」、日期范围选择器、时间维度切换（日/周/月）、搜索框、导出按钮、刷新按钮、通知铃铛",
+     "covers": [
+      "顶部工具栏"
+     ]
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 卡片行",
+     "elements": "四个 KPI 卡并排：今日活跃用户（数值+环比涨幅）、今日订单量（数值+环比涨幅）、今日营收（数值+环比降幅）、转化率（数值+环比涨幅），每卡含迷你趋势标识"
+    },
+    {
+     "id": "charts",
+     "label": "图表区",
+     "elements": "并排两卡：左侧折线图（近30日营收趋势，含图例+悬浮提示），右侧柱状图（各渠道订单量对比，含图例）"
+    },
+    {
+     "id": "table",
+     "label": "数据表",
+     "elements": "数据表标题「渠道明细」、8行6列表格（渠道、访问量、订单量、营收、转化率、环比），行悬停态、状态标签、底部分页控件（每页条数、页码、上一页/下一页）",
+     "covers": [
+      "下方数据表 8 行 6 列"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "折线图+柱图并排",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [
+    "折线图+柱图并排"
+   ]
+  },
+  {
+   "run": "0926e/arena-d01/run-2",
+   "phase": "initial",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧栏"
+    },
+    {
+     "id": "main",
+     "label": "主内容区"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部工具栏"
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 卡片"
+    },
+    {
+     "id": "charts",
+     "label": "图表区"
+    },
+    {
+     "id": "table",
+     "label": "数据表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "四个 KPI 卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "折线图+柱图并排",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926e/arena-d03/run-1",
+   "phase": "initial",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧边导航栏"
+    },
+    {
+     "id": "main",
+     "label": "主内容区"
+    },
+    {
+     "id": "summary",
+     "label": "顶部状态摘要三卡"
+    },
+    {
+     "id": "devicegrid",
+     "label": "设备网格"
+    },
+    {
+     "id": "alerts",
+     "label": "告警列表面板",
+     "covers": [
+      "右侧告警列表五条"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926e/arena-d03/run-2",
+   "phase": "initial",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Sidebar"
+    },
+    {
+     "id": "main",
+     "label": "Main Column"
+    },
+    {
+     "id": "summary",
+     "label": "Status Summary Cards"
+    },
+    {
+     "id": "device-grid",
+     "label": "Device Grid"
+    },
+    {
+     "id": "alerts",
+     "label": "Alert List Panel"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "顶部状态摘要",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "右侧告警列表五条",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "等级色标",
+     "truth": "detail",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0926e/arena-l01/run-1",
+   "phase": "initial",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Full-Screen Hero"
+    },
+    {
+     "id": "products",
+     "label": "Product Cards"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-Column"
+    },
+    {
+     "id": "testimonials",
+     "label": "Customer Testimonials"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section"
+    },
+    {
+     "id": "footer",
+     "label": "Footer"
+    }
+   ],
+   "rows": [
+    {
+     "section": "全屏 hero 图+大字标题",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "品牌故事双栏",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "用户评价",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "订阅区",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "页脚",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926e/arena-l01/run-2",
+   "phase": "initial",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Full-screen Hero"
+    },
+    {
+     "id": "products",
+     "label": "Product Cards"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-column",
+     "covers": [
+      "品牌故事双栏"
+     ]
+    },
+    {
+     "id": "testimonials",
+     "label": "User Testimonials"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "covers": [
+      "订阅区"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "covers": [
+      "页脚"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "全屏 hero 图+大字标题",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "用户评价",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926e/arena-l01/run-2",
+   "phase": "retry",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar",
+     "elements": "serif logo wordmark, centered nav links (系列, 品牌故事, 期刊, 门店), 搜索 icon, 购物袋 icon, hairline bottom border"
+    },
+    {
+     "id": "hero",
+     "label": "Full-screen Hero",
+     "elements": "全屏 hero 图 (edge-to-edge skincare editorial photo), 大字标题 with generous letter-spacing, short subtitle line, CTA button 探索系列, scroll hint",
+     "covers": [
+      "全屏 hero 图+大字标题"
+     ]
+    },
+    {
+     "id": "products",
+     "label": "Product Cards",
+     "elements": "section title 核心系列 with letter-spaced eyebrow, 3 产品卡 each with product image, product name, short description, price, 加入购物袋 link",
+     "covers": [
+      "产品卡"
+     ]
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-Column",
+     "elements": "two-column layout: left image (botanical/lab photo), right text column with eyebrow label, serif heading, two paragraphs, 了解品牌故事 text link"
+    },
+    {
+     "id": "testimonials",
+     "label": "User Testimonials",
+     "elements": "section title 用户评价, 3 testimonial quotes each with quote text, star rating, user name and skin type label",
+     "covers": [
+      "用户评价"
+     ]
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "elements": "centered heading 订阅品牌期刊, short description, email input + 订阅 button inline form, privacy note"
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "elements": "logo wordmark, 4 link columns (产品, 品牌, 客户服务, 关注我们), payment/contact info, copyright line, hairline top border",
+     "covers": [
+      "页脚"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "品牌故事双栏",
+     "truth": "covered",
+     "gate": "missing"
+    }
+   ],
+   "logged_appended": []
+  },
+  {
+   "run": "0926e/arena-l02/run-1",
+   "phase": "initial",
+   "brief": "arena-l02",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Hero with Product Screenshot Card"
+    },
+    {
+     "id": "logos",
+     "label": "Logo Row",
+     "covers": [
+      "logo row"
+     ]
+    },
+    {
+     "id": "feature-1",
+     "label": "Feature Section: Image Left / Text Right"
+    },
+    {
+     "id": "feature-2",
+     "label": "Feature Section: Text Left / Image Right"
+    },
+    {
+     "id": "feature-3",
+     "label": "Feature Section: Image Left / Text Right"
+    },
+    {
+     "id": "pricing",
+     "label": "Pricing Three Tiers"
+    },
+    {
+     "id": "faq",
+     "label": "FAQ Six Items",
+     "covers": [
+      "FAQ six items"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer Four Columns",
+     "covers": [
+      "footer with four columns"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "three feature sections alternating image/text",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926e/arena-l02/run-2",
+   "phase": "initial",
+   "brief": "arena-l02",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Hero with Product Screenshot"
+    },
+    {
+     "id": "logos",
+     "label": "Logo Row",
+     "covers": [
+      "logo row"
+     ]
+    },
+    {
+     "id": "feature-1",
+     "label": "Feature Section 1 — Image Left"
+    },
+    {
+     "id": "feature-2",
+     "label": "Feature Section 2 — Image Right"
+    },
+    {
+     "id": "feature-3",
+     "label": "Feature Section 3 — Image Left"
+    },
+    {
+     "id": "pricing",
+     "label": "Pricing — Three Tiers"
+    },
+    {
+     "id": "faq",
+     "label": "FAQ — Six Items",
+     "covers": [
+      "FAQ six items"
+     ]
+    },
+    {
+     "id": "footer",
+     "label": "Footer — Four Columns",
+     "covers": [
+      "footer with four columns"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "three feature sections alternating image/text",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926e/arena-l02/run-2",
+   "phase": "retry",
+   "brief": "arena-l02",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar",
+     "elements": "logo, nav links (Product, Features, Pricing, FAQ), sign-in link, get-started CTA button"
+    },
+    {
+     "id": "hero",
+     "label": "Hero Section",
+     "elements": "headline, subtitle, primary CTA button, secondary link, product screenshot card with floating UI chrome"
+    },
+    {
+     "id": "logos",
+     "label": "Logo Row",
+     "elements": "trusted-by caption, row of 6 grayscale customer logos"
+    },
+    {
+     "id": "feature-1",
+     "label": "Feature Section 1",
+     "elements": "feature image mockup left, text block right with eyebrow, title, description, 3 checklist bullets, learn-more link"
+    },
+    {
+     "id": "feature-2",
+     "label": "Feature Section 2",
+     "elements": "text block left with eyebrow, title, description, stat callout, image mockup right"
+    },
+    {
+     "id": "feature-3",
+     "label": "Feature Section 3",
+     "elements": "feature image mockup left, text block right with eyebrow, title, description, 3 checklist bullets, learn-more link"
+    },
+    {
+     "id": "pricing",
+     "label": "Pricing Section",
+     "elements": "section title, subtitle, billing toggle, three pricing tier cards (Starter, Pro highlighted with accent border and popular badge, Enterprise) each with price, f"
+    },
+    {
+     "id": "faq",
+     "label": "FAQ Section",
+     "elements": "section title, accordion list of 6 FAQ items each with question and expandable answer"
+    },
+    {
+     "id": "cta",
+     "label": "Final CTA",
+     "elements": "headline, subtext, get-started button, no credit card note"
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "elements": "brand block with logo and tagline, four link columns (Product, Company, Resources, Legal), social icons, copyright row"
+    }
+   ],
+   "rows": [
+    {
+     "section": "three feature sections alternating image/text",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "FAQ six items",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [
+    "three feature sections alternating image/text",
+    "FAQ six items"
+   ]
+  },
+  {
+   "run": "0926e/arena-m04/run-1",
+   "phase": "initial",
+   "brief": "arena-m04",
+   "plan": [
+    {
+     "id": "welcome-illustration",
+     "label": "Welcome Illustration"
+    },
+    {
+     "id": "welcome-actions",
+     "label": "Welcome Title & Buttons"
+    },
+    {
+     "id": "signup-header",
+     "label": "Sign-up Header"
+    },
+    {
+     "id": "signup-form",
+     "label": "Sign-up Form"
+    },
+    {
+     "id": "home-header",
+     "label": "Greeting Header"
+    },
+    {
+     "id": "home-cards",
+     "label": "Feed Cards"
+    },
+    {
+     "id": "home-tabbar",
+     "label": "Bottom Navigation Bar"
+    }
+   ],
+   "rows": [
+    {
+     "section": "three cards",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "multi_screen": true
+  },
+  {
+   "run": "0926e/arena-m04/run-1",
+   "phase": "retry",
+   "brief": "arena-m04",
+   "plan": [
+    {
+     "id": "welcome-hero",
+     "label": "Welcome Illustration",
+     "elements": "ARCHETYPE: image-led — protagonist illustration placeholder with playful shapes, first screen 45%, overlap-with-scrim, display 48px / body 16px, imagery single "
+    },
+    {
+     "id": "welcome-actions",
+     "label": "Welcome Copy and Buttons",
+     "elements": "quiet section: tonal surfaces, no accent fills, one hairline max; app logo mark, welcome headline, short subtitle, primary 'Get Started' button (48px), secondar"
+    },
+    {
+     "id": "signup-header",
+     "label": "Sign-up Header",
+     "elements": "quiet section: tonal surfaces, no accent fills, one hairline max; back arrow, title 'Create account', one-line subtitle"
+    },
+    {
+     "id": "signup-form",
+     "label": "Sign-up Form",
+     "elements": "quiet section: tonal surfaces, no accent fills, one hairline max; name input (52px), email input (52px), password input with show/hide toggle (52px), terms chec"
+    },
+    {
+     "id": "home-greeting",
+     "label": "Home Greeting",
+     "elements": "quiet section: tonal surfaces, no accent fills, one hairline max; ARCHETYPE: content-stream — hero card leads then tiled rhythm, first screen 35%, stack, displa"
+    },
+    {
+     "id": "home-cards",
+     "label": "Home Feed Cards",
+     "elements": "quiet section: tonal surfaces, no accent fills, one hairline max; three stacked feed cards, each with image thumbnail, title, one-line description, timestamp ta"
+    },
+    {
+     "id": "home-tabbar",
+     "label": "Bottom Navigation Bar",
+     "elements": "bottom tab bar with 4 icon+label tabs (Home active, Search, Saved, Profile), active state on Home"
+    }
+   ],
+   "rows": [
+    {
+     "section": "two buttons",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [],
+   "multi_screen": true
+  },
+  {
+   "run": "0926e/arena-m04/run-2",
+   "phase": "initial",
+   "brief": "arena-m04",
+   "plan": [
+    {
+     "id": "welcome-hero",
+     "label": "Welcome Hero"
+    },
+    {
+     "id": "welcome-actions",
+     "label": "Welcome Actions"
+    },
+    {
+     "id": "signup-header",
+     "label": "Sign-up Header"
+    },
+    {
+     "id": "signup-form",
+     "label": "Sign-up Form"
+    },
+    {
+     "id": "home-header",
+     "label": "Home Greeting"
+    },
+    {
+     "id": "home-cards",
+     "label": "Home Feed Cards"
+    },
+    {
+     "id": "home-tabbar",
+     "label": "Bottom Navigation Bar"
+    }
+   ],
+   "rows": [
+    {
+     "section": "two buttons",
+     "truth": "covered",
+     "gate": "missing"
+    }
+   ],
+   "multi_screen": true
+  },
+  {
+   "run": "0926e/arena-w01/run-1",
+   "phase": "initial",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "项目侧栏"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部工具栏与视图切换"
+    },
+    {
+     "id": "board",
+     "label": "看板三列"
+    },
+    {
+     "id": "drawer",
+     "label": "任务详情抽屉"
+    }
+   ],
+   "rows": [
+    {
+     "section": "顶部标签切换",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926e/arena-w01/run-1",
+   "phase": "retry",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧栏项目列表",
+     "elements": "品牌 logo 区，项目列表（4-5 个项目项，含彩色圆点 + 项目名 + 未完成任务数），底部用户头像 + 姓名 + 设置入口，新建项目按钮"
+    },
+    {
+     "id": "main-area",
+     "label": "看板主区",
+     "elements": "顶部标签切换（看板 / 列表 / 日历，看板为激活态），项目标题与成员头像组，看板三列（待办 / 进行中 / 已完成）各四张任务卡，每张卡片含标题 + 彩色标签 + 成员头像 + 截止日期，列头部含数量徽标与加号按钮"
+    },
+    {
+     "id": "detail-drawer",
+     "label": "任务详情抽屉",
+     "elements": "抽屉头部（任务标题 + 关闭按钮），状态与优先级字段，负责人头像行，描述段落，标签 chips，截止日期字段，子任务清单（勾选列表），底部评论输入框与评论列表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [
+    "看板三列各四张任务卡",
+    "右侧任务详情抽屉打开状态"
+   ]
+  },
+  {
+   "run": "0926e/arena-w01/run-2",
+   "phase": "initial",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "项目列表侧栏"
+    },
+    {
+     "id": "main",
+     "label": "主内容区"
+    },
+    {
+     "id": "drawer",
+     "label": "任务详情抽屉"
+    }
+   ],
+   "rows": [
+    {
+     "section": "顶部标签切换",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0926e/arena-w01/run-2",
+   "phase": "retry",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Project Sidebar",
+     "elements": "brand logo block, project list with 6 projects (name + colored dot + progress count), active project highlighted, sidebar footer with user avatar + name, 4px sc"
+    },
+    {
+     "id": "topbar",
+     "label": "Top Bar with View Tabs",
+     "elements": "project title + member avatars group, segmented tab switcher (看板 active / 列表 / 日历), search icon, notification bell, invite member button"
+    },
+    {
+     "id": "board",
+     "label": "Kanban Board Columns",
+     "elements": "three columns (待办 / 进行中 / 已完成) each with column header + count + add button, each column containing exactly 4 task cards with task title, colored label tags, me"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏项目列表",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "顶部标签切换",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [],
+   "multi_screen": true
+  },
+  {
+   "run": "0927a/arena-d01/run-2",
+   "phase": "initial",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧栏"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部工具栏"
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 卡片组"
+    },
+    {
+     "id": "charts",
+     "label": "图表区"
+    },
+    {
+     "id": "table",
+     "label": "数据表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0927a/arena-d01/run-2",
+   "phase": "retry",
+   "brief": "arena-d01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "左侧栏",
+     "elements": "品牌 logo 区, 六个导航项（概览/数据报表/用户管理/订单管理/渠道分析/系统设置）, 底部用户头像+姓名+角色"
+    },
+    {
+     "id": "main",
+     "label": "主内容区",
+     "elements": "(container)"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部工具栏",
+     "elements": "页面标题, 搜索框, 时间范围选择器, 通知铃铛, 导出按钮"
+    },
+    {
+     "id": "kpis",
+     "label": "KPI 卡片行",
+     "elements": "四个 KPI 卡（GMV、活跃用户、订单量、转化率），每卡含数值+环比涨跌+迷你趋势"
+    },
+    {
+     "id": "charts",
+     "label": "图表区",
+     "elements": "左侧折线图（GMV 趋势，带图例与时间轴），右侧柱状图（渠道订单对比，带数值标注），两图并排"
+    },
+    {
+     "id": "table",
+     "label": "数据表",
+     "elements": "8 行 × 6 列数据表（日期、渠道、订单量、GMV、转化率、客单价），表头排序箭头，行悬停态，底部分页器（上一页/页码 1-5/下一页，共 N 条记录）"
+    }
+   ],
+   "rows": [
+    {
+     "section": "下方数据表 8 行 6 列",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [],
+   "multi_screen": true
+  },
+  {
+   "run": "0927a/arena-d03/run-1",
+   "phase": "initial",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Sidebar"
+    },
+    {
+     "id": "main",
+     "label": "Main Column"
+    },
+    {
+     "id": "kpis",
+     "label": "顶部状态摘要三卡"
+    },
+    {
+     "id": "devices",
+     "label": "设备网格",
+     "covers": [
+      "设备网格"
+     ]
+    },
+    {
+     "id": "alarms",
+     "label": "告警列表面板"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "右侧告警列表五条",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "等级色标",
+     "truth": "detail",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0927a/arena-d03/run-1",
+   "phase": "retry",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧边导航栏",
+     "elements": "品牌标识、堆叠导航项（总览、设备、告警、数据、设置）、底部用户头像与退出，当前项高亮"
+    },
+    {
+     "id": "main",
+     "label": "监控主区"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部状态摘要三卡",
+     "elements": "页面标题与搜索框、三张状态摘要卡（设备总数、在线数、活跃告警，各含数值+环比标签）"
+    },
+    {
+     "id": "devicegrid",
+     "label": "设备网格",
+     "elements": "分区标题与筛选 chips、12 个设备卡片网格（4×3），每卡含设备图标+名称+在线状态点+实时数值"
+    },
+    {
+     "id": "alerts",
+     "label": "右侧告警列表",
+     "elements": "面板标题与'查看全部'链接、5 条告警项，每条含等级色标（严重红/警告黄/信息蓝）、告警标题、设备名、时间戳",
+     "covers": [
+      "右侧告警列表五条",
+      "等级色标"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [],
+   "multi_screen": true
+  },
+  {
+   "run": "0927a/arena-d03/run-2",
+   "phase": "initial",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧边导航栏"
+    },
+    {
+     "id": "main",
+     "label": "主内容区"
+    },
+    {
+     "id": "status",
+     "label": "顶部状态摘要三卡"
+    },
+    {
+     "id": "devices",
+     "label": "设备网格"
+    },
+    {
+     "id": "alerts",
+     "label": "右侧告警列表"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0927a/arena-d03/run-2",
+   "phase": "retry",
+   "brief": "arena-d03",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧栏",
+     "elements": "brand block (logo + 平台名称), stacked nav items (总览、设备管理、告警中心、数据分析、系统设置) with icons and active state on 总览, bottom user profile block (avatar + name + role)",
+     "covers": [
+      "侧栏"
+     ]
+    },
+    {
+     "id": "summary",
+     "label": "顶部状态摘要三卡",
+     "elements": "page title + search, 3 stat cards each with icon + label + large value + trend badge: 在线设备 128/140, 活跃告警 5, 平均温度 42.6°C"
+    },
+    {
+     "id": "devicegrid",
+     "label": "设备网格",
+     "elements": "section header 设备列表 (12 个) + filter chips (全部/在线/离线/告警), grid of 12 device cards each with device type icon + device name + online status dot (在线/离线/告警) + live "
+    },
+    {
+     "id": "alerts",
+     "label": "告警列表面板",
+     "elements": "panel header 实时告警 + 查看全部 link, 5 alert rows each with severity color bar (红/橙/黄) + alert title + device name + timestamp + level tag (严重/警告/提示)"
+    }
+   ],
+   "rows": [
+    {
+     "section": "右侧告警列表五条",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "等级色标",
+     "truth": "detail",
+     "gate": "missing"
+    }
+   ],
+   "logged_appended": [
+    "右侧告警列表五条",
+    "等级色标"
+   ]
+  },
+  {
+   "run": "0927a/arena-l01/run-1",
+   "phase": "initial",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Fullscreen Hero"
+    },
+    {
+     "id": "products",
+     "label": "Product Showcase"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-Column"
+    },
+    {
+     "id": "testimonials",
+     "label": "User Testimonials"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section"
+    },
+    {
+     "id": "footer",
+     "label": "Footer"
+    }
+   ],
+   "rows": [
+    {
+     "section": "全屏 hero 图+大字标题",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "品牌故事双栏",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "页脚",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0927a/arena-l01/run-1",
+   "phase": "retry",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar",
+     "elements": "serif logotype centered-left, nav links (护肤系列, 品牌故事, 用户评价), search icon, cart icon, 预约试用 CTA button, generous letter-spacing on links"
+    },
+    {
+     "id": "hero",
+     "label": "Full-Screen Hero",
+     "elements": "full-bleed hero image (skincare texture/model), oversized display headline with wide letter-spacing, short subtitle, scroll indicator, minimal primary CTA butto",
+     "covers": [
+      "全屏 hero 图+大字标题"
+     ]
+    },
+    {
+     "id": "products",
+     "label": "Product Cards",
+     "elements": "section eyebrow label, section title with tracked-out type, 3 product cards each with product photo, product name, ingredient note, price, add-to-cart link",
+     "covers": [
+      "产品卡"
+     ]
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two-Column",
+     "elements": "two-column layout: left editorial brand image, right text column with eyebrow label, serif heading, two paragraphs, signature line, learn-more text link",
+     "covers": [
+      "品牌故事双栏"
+     ]
+    },
+    {
+     "id": "testimonials",
+     "label": "User Testimonials",
+     "elements": "section title, 3 testimonial cards each with 5-star rating, quote text, user name, verified-buyer tag, subtle divider styling"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "elements": "centered eyebrow label, serif headline, short description, email input with inline subscribe button, privacy note"
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "elements": "brand logotype, 3 link columns (产品, 品牌, 支持), social icons, newsletter note, copyright line, hairline top divider",
+     "covers": [
+      "页脚"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "订阅区",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": []
+  },
+  {
+   "run": "0927a/arena-l01/run-2",
+   "phase": "initial",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "顶部导航栏"
+    },
+    {
+     "id": "hero",
+     "label": "全屏 Hero"
+    },
+    {
+     "id": "products",
+     "label": "三款产品卡"
+    },
+    {
+     "id": "story",
+     "label": "品牌故事双栏"
+    },
+    {
+     "id": "testimonials",
+     "label": "用户评价"
+    },
+    {
+     "id": "subscribe",
+     "label": "订阅区"
+    },
+    {
+     "id": "footer",
+     "label": "页脚"
+    }
+   ],
+   "rows": [
+    {
+     "section": "全屏 hero 图+大字标题",
+     "truth": "covered",
+     "gate": "missing"
+    }
+   ]
+  },
+  {
+   "run": "0927a/arena-l01/run-2",
+   "phase": "retry",
+   "brief": "arena-l01",
+   "plan": [
+    {
+     "id": "hero",
+     "label": "Full-screen Hero",
+     "elements": "full-bleed hero image (skincare texture/model), oversized display headline with wide letter-spacing, subtle subtitle, scroll hint, minimal transparent top overl"
+    },
+    {
+     "id": "products",
+     "label": "Three Product Cards",
+     "elements": "section eyebrow + title, 3 product cards each with product photo, product name, one-line description, price, shop CTA link"
+    },
+    {
+     "id": "story",
+     "label": "Brand Story Two Columns",
+     "elements": "two-column layout: left editorial brand image, right story block with eyebrow, serif heading, 2 paragraphs, signature line, discover-more link"
+    },
+    {
+     "id": "testimonials",
+     "label": "User Testimonials",
+     "elements": "section title, 3 testimonial cards each with star rating, quote text, avatar, user name + skin type label"
+    },
+    {
+     "id": "subscribe",
+     "label": "Subscription Section",
+     "elements": "centered eyebrow + heading, one-line description, email input + subscribe button, privacy note"
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "elements": "brand logo, 3 link columns (产品系列 / 关于品牌 / 客户服务), social icons, copyright + 备案 line"
+    }
+   ],
+   "rows": [
+    {
+     "section": "全屏 hero 图+大字标题",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "产品卡",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "品牌故事双栏",
+     "truth": "covered",
+     "gate": "missing"
+    },
+    {
+     "section": "用户评价",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "订阅区",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "页脚",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": []
+  },
+  {
+   "run": "0927a/arena-l02/run-1",
+   "phase": "initial",
+   "brief": "arena-l02",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Hero Section"
+    },
+    {
+     "id": "logos",
+     "label": "Logo Row"
+    },
+    {
+     "id": "feature-1",
+     "label": "Feature Section: Workflow Automation"
+    },
+    {
+     "id": "feature-2",
+     "label": "Feature Section: Real-time Analytics"
+    },
+    {
+     "id": "feature-3",
+     "label": "Feature Section: Team Collaboration"
+    },
+    {
+     "id": "pricing",
+     "label": "Pricing Three Tiers"
+    },
+    {
+     "id": "faq",
+     "label": "FAQ Section"
+    },
+    {
+     "id": "footer",
+     "label": "Footer"
+    }
+   ],
+   "rows": [
+    {
+     "section": "three feature sections alternating image/text",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "FAQ six items",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "footer with four columns",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0927a/arena-l02/run-1",
+   "phase": "retry",
+   "brief": "arena-l02",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar",
+     "elements": "logo wordmark, nav links (Product, Features, Pricing, FAQ), sign-in link, get-started CTA button, sticky with subtle blur background"
+    },
+    {
+     "id": "hero",
+     "label": "Hero Section",
+     "elements": "headline, subtitle, primary CTA button, secondary ghost button, product screenshot card (browser-style frame with dashboard UI) as the focal visual"
+    },
+    {
+     "id": "logos",
+     "label": "Logo Row",
+     "elements": "trusted-by label, 6 grayscale customer logos in a horizontal row",
+     "covers": [
+      "logo row"
+     ]
+    },
+    {
+     "id": "feature-1",
+     "label": "Feature Section 1 (Image Left)",
+     "elements": "section eyebrow, feature title, description paragraph, 3 bullet points, product UI screenshot panel on left, text column on right"
+    },
+    {
+     "id": "feature-2",
+     "label": "Feature Section 2 (Image Right)",
+     "elements": "section eyebrow, feature title, description paragraph, 3 bullet points, text column on left, product UI screenshot panel on right"
+    },
+    {
+     "id": "feature-3",
+     "label": "Feature Section 3 (Image Left)",
+     "elements": "section eyebrow, feature title, description paragraph, 3 bullet points, product UI screenshot panel on left, text column on right"
+    },
+    {
+     "id": "pricing",
+     "label": "Pricing Three Tiers",
+     "elements": "section title, subtitle, 3 pricing cards (Starter, Pro highlighted middle with accent border + badge + CTA, Enterprise), each with price, feature list, CTA butt"
+    },
+    {
+     "id": "faq",
+     "label": "FAQ Six Items",
+     "elements": "section title, 6 accordion rows each with question, chevron toggle, expandable answer text",
+     "covers": [
+      "FAQ six items"
+     ]
+    },
+    {
+     "id": "cta",
+     "label": "Closing CTA",
+     "elements": "headline, subtitle, primary CTA button, secondary link, subtle gradient glow background"
+    },
+    {
+     "id": "footer",
+     "label": "Footer Four Columns",
+     "elements": "brand block with logo + short description + social icons, 4 link columns (Product, Company, Resources, Legal), bottom bar with copyright and language selector",
+     "covers": [
+      "footer with four columns"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "three feature sections alternating image/text",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [
+    "three feature sections alternating image/text"
+   ]
+  },
+  {
+   "run": "0927a/arena-l02/run-2",
+   "phase": "initial",
+   "brief": "arena-l02",
+   "plan": [
+    {
+     "id": "nav",
+     "label": "Navigation Bar"
+    },
+    {
+     "id": "hero",
+     "label": "Hero Section",
+     "covers": [
+      "product screenshot card"
+     ]
+    },
+    {
+     "id": "logos",
+     "label": "Logo Row",
+     "covers": [
+      "logo row"
+     ]
+    },
+    {
+     "id": "feature-1",
+     "label": "Feature Section — Analytics"
+    },
+    {
+     "id": "feature-2",
+     "label": "Feature Section — Automation"
+    },
+    {
+     "id": "feature-3",
+     "label": "Feature Section — Collaboration"
+    },
+    {
+     "id": "pricing",
+     "label": "Pricing Section"
+    },
+    {
+     "id": "faq",
+     "label": "FAQ Section",
+     "covers": [
+      "FAQ six items"
+     ]
+    },
+    {
+     "id": "cta",
+     "label": "Final CTA"
+    },
+    {
+     "id": "footer",
+     "label": "Footer",
+     "covers": [
+      "footer with four columns"
+     ]
+    }
+   ],
+   "rows": [
+    {
+     "section": "three feature sections alternating image/text",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0927a/arena-m04/run-2",
+   "phase": "initial",
+   "brief": "arena-m04",
+   "plan": [
+    {
+     "id": "welcome-hero",
+     "label": "Welcome Illustration"
+    },
+    {
+     "id": "welcome-actions",
+     "label": "Welcome Buttons"
+    },
+    {
+     "id": "signup-header",
+     "label": "Sign-up Header"
+    },
+    {
+     "id": "signup-form",
+     "label": "Sign-up Form"
+    },
+    {
+     "id": "home-header",
+     "label": "Home Greeting"
+    },
+    {
+     "id": "home-cards",
+     "label": "Home Cards"
+    },
+    {
+     "id": "home-tabbar",
+     "label": "Bottom Tab Bar"
+    }
+   ],
+   "rows": [
+    {
+     "section": "two buttons",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "multi_screen": true
+  },
+  {
+   "run": "0927a/arena-w01/run-1",
+   "phase": "initial",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧栏项目列表"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部标签与工具栏"
+    },
+    {
+     "id": "kanban",
+     "label": "看板三列任务区"
+    },
+    {
+     "id": "drawer",
+     "label": "任务详情抽屉"
+    }
+   ],
+   "rows": [
+    {
+     "section": "顶部标签切换",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0927a/arena-w01/run-1",
+   "phase": "retry",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "侧栏项目列表",
+     "elements": "品牌 logo 区、项目列表（含选中态项目、每项带项目名+进度点+任务数徽标）、底部新建项目按钮、用户头像与账号名"
+    },
+    {
+     "id": "topbar",
+     "label": "顶部标签切换",
+     "elements": "页面标题、看板/列表/日历三个分段标签（看板激活态）、搜索框、通知铃铛、成员头像组、主操作按钮"
+    },
+    {
+     "id": "board",
+     "label": "看板三列任务卡",
+     "elements": "三列看板（待办/进行中/已完成），每列带列标题+计数徽标，每列 4 张任务卡：任务标题、彩色标签 chips、成员头像、截止日期、勾选/优先级指示"
+    },
+    {
+     "id": "drawer",
+     "label": "任务详情抽屉",
+     "elements": "右侧打开的任务详情抽屉：关闭按钮、任务标题、描述段落、状态选择器、负责人头像、截止日期、标签列表、附件区、评论输入框与提交按钮"
+    }
+   ],
+   "rows": [
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [
+    "右侧任务详情抽屉打开状态"
+   ]
+  },
+  {
+   "run": "0927a/arena-w01/run-2",
+   "phase": "initial",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "项目侧栏"
+    },
+    {
+     "id": "main-canvas",
+     "label": "主工作区"
+    },
+    {
+     "id": "detail-drawer",
+     "label": "任务详情抽屉"
+    }
+   ],
+   "rows": [
+    {
+     "section": "顶部标签切换",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "missing",
+     "gate": "missing"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ]
+  },
+  {
+   "run": "0927a/arena-w01/run-2",
+   "phase": "retry",
+   "brief": "arena-w01",
+   "plan": [
+    {
+     "id": "sidebar",
+     "label": "Sidebar Project List",
+     "elements": "brand logo block, project switcher, stacked project list items with colored dot + name + task count, add-project button, bottom user profile"
+    },
+    {
+     "id": "main-content",
+     "label": "Topbar Tabs + Kanban Board",
+     "elements": "topbar with view tabs (看板 active, 列表, 日历) + search + add-task button, kanban board with 3 columns (待办 / 进行中 / 已完成) each with column header + count and exactly 4"
+    },
+    {
+     "id": "task-drawer",
+     "label": "Task Detail Drawer",
+     "elements": "right-side open drawer panel with close button, task title, description, status select, assignee avatar + name, due date, tag chips, subtask checklist with chec"
+    }
+   ],
+   "rows": [
+    {
+     "section": "侧栏项目列表",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "顶部标签切换",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "看板三列各四张任务卡",
+     "truth": "covered",
+     "gate": "covered"
+    },
+    {
+     "section": "右侧任务详情抽屉打开状态",
+     "truth": "covered",
+     "gate": "covered"
+    }
+   ],
+   "logged_appended": [],
+   "multi_screen": true
+  }
+ ]
+}

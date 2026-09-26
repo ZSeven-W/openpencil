@@ -79,7 +79,7 @@ fn arena_m02_dropped_sections_are_appended_in_brief_order() {
     let required = required_sections(ARENA_M02_BRIEF);
     let mut plan = arena_m02_shipped_plan();
 
-    let outcome = append_missing_sections(&mut plan, &required);
+    let outcome = append_missing_sections(&mut plan, &required, &[]);
 
     assert_eq!(
         outcome.appended,
@@ -109,7 +109,7 @@ fn arena_m02_dropped_sections_are_appended_in_brief_order() {
         .is_some_and(|e| e.contains("横向滚动的课程卡片轨道")));
     // The gate is now satisfied, and a second pass is a no-op.
     assert!(check_coverage(&required, &plan).missing.is_empty());
-    let again = append_missing_sections(&mut plan, &required);
+    let again = append_missing_sections(&mut plan, &required, &[]);
     assert!(again.appended.is_empty());
     assert_eq!(plan.subtasks.len(), 5);
 }
@@ -123,7 +123,7 @@ fn english_brief_dropped_sections_are_appended_before_the_tab_bar() {
         subtask("tabs", "Bottom Tab Bar", "four tabs"),
     ]);
 
-    let outcome = append_missing_sections(&mut plan, &required);
+    let outcome = append_missing_sections(&mut plan, &required, &[]);
 
     assert_eq!(
         outcome.appended,
@@ -157,7 +157,7 @@ fn a_fully_covering_plan_is_left_unchanged() {
     ]);
     let before = covering.clone();
 
-    let outcome = append_missing_sections(&mut covering, &required);
+    let outcome = append_missing_sections(&mut covering, &required, &[]);
 
     assert_eq!(outcome, AppendOutcome::default());
     assert_eq!(covering, before);
@@ -178,7 +178,7 @@ fn translated_labels_are_not_mistaken_for_dropped_sections() {
     ]);
     let before = english.clone();
 
-    let outcome = append_missing_sections(&mut english, &required);
+    let outcome = append_missing_sections(&mut english, &required, &[]);
 
     assert!(outcome.appended.is_empty());
     assert!(outcome
@@ -203,7 +203,7 @@ fn a_cjk_section_against_ascii_only_labels_is_skipped() {
         subtask("footer", "Site Bottom", "links"),
     ]);
 
-    let outcome = append_missing_sections(&mut english, &required);
+    let outcome = append_missing_sections(&mut english, &required, &[]);
 
     assert!(outcome.appended.is_empty());
     assert_eq!(
@@ -224,7 +224,7 @@ fn status_bars_and_multi_screen_plans_are_never_appended_to() {
         subtask("greeting", "顶部问候", "greeting"),
         subtask("weekly", "本周图表", "bars"),
     ]);
-    let outcome = append_missing_sections(&mut single, &required);
+    let outcome = append_missing_sections(&mut single, &required, &[]);
     assert_eq!(
         outcome.skipped,
         vec![("状态栏".to_string(), SkipReason::StatusBar)]
@@ -243,7 +243,7 @@ fn status_bars_and_multi_screen_plans_are_never_appended_to() {
     for st in &mut screens.subtasks {
         st.screen = Some("首页".into());
     }
-    let outcome = append_missing_sections(&mut screens, &required);
+    let outcome = append_missing_sections(&mut screens, &required, &[]);
     assert_eq!(
         outcome.skipped,
         vec![("排行榜".to_string(), SkipReason::MultiScreen)]

@@ -10,7 +10,7 @@
 //! plan really has (see [`append_missing_sections`]).
 
 use crate::plan::{OrchestratorPlan, Region, Subtask};
-use crate::plan_coverage::{check_coverage, is_han, CoverageCheck};
+use crate::plan_coverage::{check_coverage, is_han, CoverageCheck, RequiredItem};
 
 /// Region height for an appended section on a phone-width root.
 const MOBILE_SECTION_HEIGHT: f64 = 200.0;
@@ -34,6 +34,11 @@ pub(crate) enum SkipReason {
     ScriptMismatch,
     /// Status bars are injected by the scaffold, never planned.
     StatusBar,
+    /// The brief named it as a detail of a sibling section
+    /// (`右侧告警列表五条带时间与等级色标` → `等级色标`). Appended on its own
+    /// it became a stray band that drew the detail apart from its section;
+    /// the re-plan asks for it inside that section instead.
+    Detail,
 }
 
 impl SkipReason {
@@ -43,6 +48,7 @@ impl SkipReason {
             SkipReason::MatcherUnreliable => "matcher-unreliable",
             SkipReason::ScriptMismatch => "script-mismatch",
             SkipReason::StatusBar => "status-bar",
+            SkipReason::Detail => "detail",
         }
     }
 }
@@ -61,7 +67,8 @@ pub(crate) struct AppendOutcome {
 /// - when fewer sections are covered than missing, the verdict is treated as
 ///   a matcher failure and nothing is appended;
 /// - a CJK section is only appended when some subtask label carries CJK;
-/// - status-bar sections are never appended.
+/// - status-bar sections and details of a sibling section (`details`, from
+///   [`crate::plan_coverage::required_section_details`]) are never appended.
 ///
 /// Each appended subtask is inserted before the subtask covering the next
 /// required section in brief order, else before a trailing bottom nav /
@@ -69,6 +76,7 @@ pub(crate) struct AppendOutcome {
 pub(crate) fn append_missing_sections(
     plan: &mut OrchestratorPlan,
     required: &[String],
+    details: &[RequiredItem],
 ) -> AppendOutcome {
     let check = check_coverage(required, plan);
     let mut outcome = AppendOutcome::default();
@@ -98,6 +106,10 @@ pub(crate) fn append_missing_sections(
                 .push((section.clone(), SkipReason::StatusBar));
             continue;
         }
+        if details.iter().any(|detail| &detail.name == section) {
+            outcome.skipped.push((section.clone(), SkipReason::Detail));
+            continue;
+        }
         if section.chars().any(is_han) && !labels_have_han {
             outcome
                 .skipped
@@ -105,7 +117,7 @@ pub(crate) fn append_missing_sections(
             continue;
         }
         let index = insertion_index(plan, required, &check, section);
-        let subtask = section_subtask(plan, section);
+        let subtask = section_subtask(plan, section, details);
         plan.subtasks.insert(index, subtask);
         outcome.appended.push(section.clone());
     }
@@ -186,7 +198,7 @@ fn is_trailing_chrome(st: &Subtask) -> bool {
     .any(|cue| hay.contains(cue))
 }
 
-fn section_subtask(plan: &OrchestratorPlan, section: &str) -> Subtask {
+fn section_subtask(plan: &OrchestratorPlan, section: &str, details: &[RequiredItem]) -> Subtask {
     let mut n = 1;
     let id = loop {
         let candidate = format!("brief-section-{n}");
@@ -201,6 +213,18 @@ fn section_subtask(plan: &OrchestratorPlan, section: &str) -> Subtask {
     } else {
         WIDE_SECTION_HEIGHT
     };
+    // The details the brief hung on this section travel with it, since they
+    // are never appended on their own.
+    let carried: Vec<&str> = details
+        .iter()
+        .filter(|detail| detail.detail_of.as_deref() == Some(section))
+        .map(|detail| detail.name.as_str())
+        .collect();
+    let carried = if carried.is_empty() {
+        String::new()
+    } else {
+        format!(", including {}", carried.join(", "))
+    };
     Subtask {
         id: id.clone(),
         label: section.to_string(),
@@ -210,7 +234,7 @@ fn section_subtask(plan: &OrchestratorPlan, section: &str) -> Subtask {
         parent_frame_id: None,
         insert_after_sibling_id: None,
         elements: Some(format!(
-            "the brief explicitly requires this section: {section} — build exactly what it names, with every item and count the brief gives for it"
+            "the brief explicitly requires this section: {section}{carried} — build exactly what it names, with every item and count the brief gives for it"
         )),
         screen: None,
         generated_root_id: None,

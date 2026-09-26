@@ -433,8 +433,8 @@ fn web11_plan_with_covers_backfill_passes_the_gate() {
 }
 
 /// The same plan with every covers stripped: no subtask backfills, so the
-/// legacy substring verdict must hold unchanged — this is the old-model /
-/// old-prompt fallback path, identical to pre-fix behavior.
+/// legacy text verdict holds — except `页脚`, whose English name `Footer` the
+/// section synonym table now bridges.
 #[test]
 fn web11_plan_without_covers_keeps_the_legacy_verdict() {
     let required = required_sections(WEB11_BRIEF);
@@ -447,9 +447,8 @@ fn web11_plan_without_covers_keeps_the_legacy_verdict() {
             "设计原则",
             "色板与字阶展示",
             "快速开始代码块",
-            "页脚",
         ],
-        "without covers the English-labeled plan must still report every section missing"
+        "without covers the English-labeled plan must still report every section it cannot read"
     );
 }
 
