@@ -543,3 +543,16 @@ fn a_page_named_by_the_brief_is_covered_by_its_screen() {
     let check = check_coverage(&required, &plan);
     assert!(check.missing.is_empty(), "{:?}", check.missing);
 }
+
+/// arena-w02: "folder sidebar with counts" — once the planner writes the
+/// badges into the sidebar's elements, the gate must see them.
+#[test]
+fn a_detail_written_into_its_sections_elements_is_covered() {
+    let plan = plan(vec![subtask(
+        "sidebar",
+        "Folder Sidebar",
+        Some("vertical folder nav: Inbox, Starred, Sent with an unread count badge on each row"),
+    )]);
+    let check = check_coverage(&["counts".to_string()], &plan);
+    assert!(check.missing.is_empty(), "{:?}", check.missing);
+}

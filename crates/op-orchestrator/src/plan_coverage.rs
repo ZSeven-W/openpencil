@@ -294,9 +294,16 @@ pub fn check_coverage(required: &[String], plan: &OrchestratorPlan) -> CoverageC
 }
 
 /// Prompt-side paragraph appended to a one-shot re-plan request.
+///
+/// A missing item is often a detail OF a planned section rather than a
+/// section of its own ("folder sidebar with counts" → the counts). Asked to
+/// add a subtask per item, a planner split the sidebar's unread badges into
+/// their own subtask, which the scaffold then laid out as a full-width band
+/// in the main column and the three-pane mail layout collapsed. So a detail
+/// goes into the subtask it belongs to; only a standalone section gets one.
 pub fn coverage_feedback(missing: &[String]) -> String {
     format!(
-        "The brief explicitly asks for these sections, which the plan does not cover: {}. Add one subtask per missing section (keep the existing ones).",
+        "The brief explicitly asks for these, which the plan does not cover: {}. For each one: if it is a detail of a section you already planned (e.g. counts inside a sidebar, a button inside a hero), add it to that subtask's elements; only if it is a standalone section, add one subtask for it. Keep the existing subtasks.",
         missing.join(", ")
     )
 }
@@ -428,7 +435,27 @@ fn alias_matches(haystack: &str, alias: &str) -> bool {
 
 fn all_tokens_present(haystack: &str, phrase: &str) -> bool {
     let tokens = tokens(phrase);
-    !tokens.is_empty() && tokens.iter().all(|token| contains_term(haystack, token))
+    !tokens.is_empty() && tokens.iter().all(|token| contains_word(haystack, token))
+}
+
+/// `contains_term`, also accepting the singular of an English plural: the
+/// brief asks for "counts" and the plan writes "an unread count badge".
+fn contains_word(haystack: &str, token: &str) -> bool {
+    contains_term(haystack, token)
+        || english_singular(token).is_some_and(|singular| contains_term(haystack, &singular))
+}
+
+fn english_singular(token: &str) -> Option<String> {
+    if !token.is_ascii() || token.len() <= 3 || token.ends_with("ss") {
+        return None;
+    }
+    if let Some(stem) = token.strip_suffix("ies") {
+        return Some(format!("{stem}y"));
+    }
+    if token.ends_with("ches") || token.ends_with("shes") {
+        return Some(token[..token.len() - 2].to_string());
+    }
+    token.strip_suffix('s').map(str::to_string)
 }
 
 fn tokens(text: &str) -> Vec<String> {
