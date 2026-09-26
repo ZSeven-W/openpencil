@@ -349,3 +349,200 @@ fn an_opaque_card_over_an_unscrimmed_photo_is_a_composition() {
     collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
     assert!(cmds.is_empty(), "{cmds:?}");
 }
+
+/// Arena `space-bunny-alpha/arena-m05` `山脊纪实照片`: a fill-less hero photo
+/// at `children[0]` (topmost) over its own bottom scrim and caption.
+fn ridge_photo_stack(photo_extra: Value) -> (Value, HashMap<String, Rect>) {
+    let mut photo = json!({"type":"image","id":"photo","x":0,"y":0,"width":375,"height":320,
+        "src":"op-image:x","imagePrompt":"two friends on a ridge"});
+    if let (Some(p), Some(extra)) = (photo.as_object_mut(), photo_extra.as_object()) {
+        for (k, val) in extra {
+            p.insert(k.clone(), val.clone());
+        }
+    }
+    let stack = json!({
+        "type":"frame","id":"stack","layout":"none","width":"fill_container","height":320,
+        "children":[
+            photo,
+            {"type":"rectangle","id":"scrim","x":0,"y":168,"width":"fill_container","height":152,
+             "fill":[{"type":"linear_gradient","angle":90.0,"stops":[
+                 {"offset":0.0,"color":"#1E1B2E00"},{"offset":1.0,"color":"#1E1B2EB3"}]}]},
+            {"type":"frame","id":"caption","x":0,"y":200,"width":"fill_container","height":120,
+             "children":[{"type":"text","id":"capt","content":"山脊远眺"},
+                         {"type":"icon_font","id":"pin","iconFontName":"map-pin"}]}
+        ]
+    });
+    let rects = HashMap::from([
+        ("stack".to_string(), rect(0.0, 0.0, 375.0, 320.0)),
+        ("photo".to_string(), rect(0.0, 0.0, 375.0, 320.0)),
+        ("scrim".to_string(), rect(0.0, 168.0, 375.0, 152.0)),
+        ("caption".to_string(), rect(0.0, 200.0, 375.0, 120.0)),
+    ]);
+    (stack, rects)
+}
+
+fn single_move(cmds: &[EditorCommand]) -> (String, Option<usize>) {
+    assert_eq!(cmds.len(), 1, "{cmds:?}");
+    match &cmds[0] {
+        EditorCommand::MoveNode {
+            node_id,
+            target_parent,
+            index,
+            ..
+        } => {
+            assert_eq!(target_parent.as_str(), "stack");
+            (node_id.as_str().to_string(), *index)
+        }
+        other => panic!("unexpected {other:?}"),
+    }
+}
+
+#[test]
+fn a_topmost_hero_photo_sinks_behind_its_scrim_and_caption() {
+    let (stack, rects) = ridge_photo_stack(json!({}));
+    let mut cmds = Vec::new();
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    // Index 2 after detaching = behind the caption: [scrim, caption, photo].
+    assert_eq!(single_move(&cmds), ("photo".to_string(), Some(2)));
+}
+
+#[test]
+fn a_photo_listed_above_the_controls_it_hid_sinks_to_the_back() {
+    // Arena `glm-5-3-flash/arena-m01` `merchant-hero-stack`: the info rail is
+    // already above the photo; the scrim and the top controls are under it.
+    let stack = json!({
+        "type":"frame","id":"stack","layout":"none","width":"fill_container","height":300,
+        "children":[
+            {"type":"frame","id":"rail","x":0,"y":196,"width":"fill_container",
+             "children":[{"type":"text","id":"title","content":"陶记·手工酸菜鱼"}]},
+            {"type":"image","id":"photo","x":0,"y":0,"width":375,"height":300,
+             "imageSearchQuery":"sour fish hotpot"},
+            {"type":"rectangle","id":"scrim","x":0,"y":110,"width":"fill_container","height":190,
+             "fill":[{"type":"linear_gradient","angle":90.0,"stops":[
+                 {"offset":0.0,"color":"#00000000"},{"offset":1.0,"color":"#000000B3"}]}]},
+            {"type":"frame","id":"controls","x":0,"y":14,"width":"fill_container","height":40,
+             "children":[{"type":"icon_font","id":"back","iconFontName":"chevron-left"}]}
+        ]
+    });
+    let rects = HashMap::from([
+        ("stack".to_string(), rect(0.0, 0.0, 375.0, 300.0)),
+        ("rail".to_string(), rect(0.0, 196.0, 375.0, 80.0)),
+        ("photo".to_string(), rect(0.0, 0.0, 375.0, 300.0)),
+        ("scrim".to_string(), rect(0.0, 110.0, 375.0, 190.0)),
+        ("controls".to_string(), rect(0.0, 14.0, 375.0, 40.0)),
+    ]);
+    let mut cmds = Vec::new();
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    // The rail at 0 stays on top; the photo lands last, behind the controls.
+    assert_eq!(single_move(&cmds), ("photo".to_string(), Some(3)));
+}
+
+#[test]
+fn a_photo_already_at_the_back_is_left_alone() {
+    let (mut stack, rects) = ridge_photo_stack(json!({}));
+    let kids = stack["children"].as_array_mut().unwrap();
+    let photo = kids.remove(0);
+    kids.push(photo);
+    let mut cmds = Vec::new();
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    assert!(cmds.is_empty(), "{cmds:?}");
+}
+
+#[test]
+fn a_translucent_grain_on_top_is_left_alone() {
+    // A see-through wash at `children[0]` over caption and photo is the
+    // composition working as intended.
+    let (mut stack, mut rects) = ridge_photo_stack(json!({}));
+    let kids = stack["children"].as_array_mut().unwrap();
+    let photo = kids.remove(0);
+    kids.push(photo);
+    kids.insert(
+        0,
+        json!({"type":"rectangle","id":"grain","x":0,"y":0,"width":375,"height":320,
+               "fill":[{"type":"solid","color":"#FFFFFF14"}]}),
+    );
+    rects.insert("grain".to_string(), rect(0.0, 0.0, 375.0, 320.0));
+    let mut cmds = Vec::new();
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    assert!(cmds.is_empty(), "{cmds:?}");
+}
+
+#[test]
+fn a_fading_gradient_scrim_on_top_does_not_bury_the_caption() {
+    // A gradient with a see-through stop is a scrim, not a cover: text under
+    // it still reads, so nothing moves.
+    let hero = json!({
+        "type":"frame","id":"hero","layout":"none","width":300,"height":200,
+        "children":[
+            {"type":"rectangle","id":"scrim","x":0,"y":0,"width":300,"height":200,
+             "fill":[{"type":"linear_gradient","stops":[
+                 {"offset":0.0,"color":"#00000000"},{"offset":1.0,"color":"#000000FF"}]}]},
+            {"type":"frame","id":"caption","x":16,"y":150,"width":100,"height":30,
+             "children":[{"type":"text","id":"capt","content":"Caption"}]}
+        ]
+    });
+    let rects = HashMap::from([
+        ("hero".to_string(), rect(0.0, 0.0, 300.0, 200.0)),
+        ("scrim".to_string(), rect(0.0, 0.0, 300.0, 200.0)),
+        ("caption".to_string(), rect(16.0, 150.0, 100.0, 30.0)),
+    ]);
+    let mut cmds = Vec::new();
+    collect_buried_overlay_fixes(&hero, &rects, &mut cmds);
+    assert!(cmds.is_empty(), "{cmds:?}");
+}
+
+#[test]
+fn a_partial_cover_photo_does_not_sink() {
+    // A half-height photo is an inset, not the stack's backdrop, and the
+    // caption below it is not under it.
+    let (stack, mut rects) = ridge_photo_stack(json!({"height":160}));
+    rects.insert("photo".to_string(), rect(0.0, 0.0, 375.0, 160.0));
+    let mut cmds = Vec::new();
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    assert!(cmds.is_empty(), "{cmds:?}");
+}
+
+#[test]
+fn a_faded_or_blended_photo_is_not_an_opaque_cover() {
+    for extra in [json!({"opacity":0.4}), json!({"blendMode":"multiply"})] {
+        let (stack, rects) = ridge_photo_stack(extra);
+        let mut cmds = Vec::new();
+        collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+        assert!(cmds.is_empty(), "{cmds:?}");
+    }
+}
+
+#[test]
+fn a_photo_does_not_sink_under_an_opaque_plate() {
+    // Sinking past an opaque plate would trade the hidden caption for a hidden
+    // photo: that is a composition call, not a contract repair.
+    let (mut stack, mut rects) = ridge_photo_stack(json!({}));
+    stack["children"].as_array_mut().unwrap().insert(
+        1,
+        json!({"type":"rectangle","id":"plate","x":0,"y":0,"width":375,"height":320,
+               "fill":[{"type":"solid","color":"$--muted"}]}),
+    );
+    rects.insert("plate".to_string(), rect(0.0, 0.0, 375.0, 320.0));
+    let mut cmds = Vec::new();
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    assert!(
+        !cmds.iter().any(|c| matches!(
+            c,
+            EditorCommand::MoveNode { node_id, .. } if node_id.as_str() == "photo"
+        )),
+        "{cmds:?}"
+    );
+}
+
+#[test]
+fn a_later_opaque_fill_entry_makes_the_cover_opaque() {
+    // First fill a translucent wash, second a solid token: the node is solid.
+    let (mut stack, rects) = starfield();
+    stack["children"][0]["fill"] = json!([
+        {"type":"solid","color":"#00000022"},
+        {"type":"solid","color":"$--card"}
+    ]);
+    let mut cmds = Vec::new();
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    assert_eq!(moved_ids(&cmds), vec!["gyro", "compass"]);
+}

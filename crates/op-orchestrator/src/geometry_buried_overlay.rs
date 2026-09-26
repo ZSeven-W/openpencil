@@ -62,35 +62,104 @@ const MIN_BURIED_FRACTION: f64 = 0.6;
 /// Comparable size means peers in a stack, and their order is a composition.
 const OVERLAY_MAX_AREA_RATIO: f64 = 0.5;
 
-/// Does this node paint an opaque surface — something that can actually hide
-/// what is behind it? A fill array with any entry counts; a translucent hex
-/// (8-digit with a low alpha) does not.
-fn paints_opaque(v: &Value) -> bool {
-    let Some(first) = v
-        .get("fill")
+/// Is this colour see-through? Only an 8-digit `#RRGGBBAA` under ~0.8 alpha
+/// is; a token (`$--card`) or a 6-digit hex paints solid.
+fn color_see_through(color: &Value) -> bool {
+    color.as_str().is_some_and(|hex| {
+        let hex = hex.trim();
+        hex.len() == 9
+            && hex.starts_with('#')
+            && u8::from_str_radix(&hex[7..9], 16).is_ok_and(|a| a < 0xCC)
+    })
+}
+
+fn fill_entries(v: &Value) -> &[Value] {
+    v.get("fill")
         .and_then(Value::as_array)
-        .and_then(|a| a.first())
-    else {
-        return false;
-    };
-    match first.get("type").and_then(Value::as_str) {
-        Some("linear_gradient" | "radial_gradient" | "mesh_gradient" | "image") => true,
-        Some("solid") => first
-            .get("color")
-            .and_then(Value::as_str)
-            .map(|color| {
-                // `#RRGGBBAA` — treat anything under ~0.8 alpha as see-through.
-                let hex = color.trim();
-                if hex.len() != 9 || !hex.starts_with('#') {
-                    return true; // token or 6-digit hex: opaque
-                }
-                u8::from_str_radix(&hex[7..9], 16)
-                    .map(|a| a >= 0xCC)
-                    .unwrap_or(true)
-            })
-            .unwrap_or(false),
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+}
+
+fn gradient_stops(fill: &Value) -> &[Value] {
+    fill.get("stops")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+}
+
+/// Does one fill entry paint every pixel solid? A gradient only does when no
+/// stop fades out: a bottom scrim running `#00000000 → #000000B3` shows the
+/// top of whatever sits behind it.
+fn fill_entry_opaque(fill: &Value) -> bool {
+    match fill.get("type").and_then(Value::as_str) {
+        Some("mesh_gradient" | "image") => true,
+        Some("linear_gradient" | "radial_gradient") => {
+            let stops = gradient_stops(fill);
+            !stops.is_empty()
+                && stops
+                    .iter()
+                    .all(|stop| !stop.get("color").is_some_and(color_see_through))
+        }
+        Some("solid") => fill.get("color").is_some_and(|c| !color_see_through(c)),
         _ => false,
     }
+}
+
+/// Is the node composited as authored — full node opacity, normal blending?
+/// A 40% node or a `multiply` layer lets what is behind it through however
+/// solid its own paint is.
+fn composites_opaque(v: &Value) -> bool {
+    let opacity_ok = match v.get("opacity") {
+        None | Some(Value::Null) => true,
+        Some(o) => o.as_f64().is_some_and(|o| o >= 0.99),
+    };
+    let blend_ok = match v.get("blendMode") {
+        None | Some(Value::Null) => true,
+        Some(mode) => mode.as_str() == Some("normal"),
+    };
+    opacity_ok && blend_ok
+}
+
+/// A photo slot: an `image` node that will paint a picture — a `src` already,
+/// or a prompt / query the enrichment pass turns into one. It needs no `fill`
+/// to be opaque; the bitmap covers its whole box.
+fn is_photo(v: &Value) -> bool {
+    v.get("type").and_then(Value::as_str) == Some("image")
+        && ["src", "imagePrompt", "imageSearchQuery"]
+            .iter()
+            .any(|key| {
+                v.get(*key)
+                    .and_then(Value::as_str)
+                    .is_some_and(|s| !s.trim().is_empty())
+            })
+}
+
+/// Does this node paint an opaque surface — something that can actually hide
+/// what is behind it? Any solid fill entry counts (one opaque layer hides the
+/// node's backdrop whichever order its fills stack in), and so does a photo,
+/// which paints its bitmap with no `fill` at all. A translucent hex, a fading
+/// gradient, a sub-opaque node, or a non-normal blend does not.
+///
+/// Measured on the arena corpus: seven `layout:none` stacks shipped with a
+/// fill-less hero `image` at a low index over its own scrim and caption. The
+/// old first-fill-only check read the photo as transparent, so the caption
+/// stayed buried in the render.
+fn paints_opaque(v: &Value) -> bool {
+    composites_opaque(v) && (is_photo(v) || fill_entries(v).iter().any(fill_entry_opaque))
+}
+
+/// Does this node carry a see-through layer — a scrim, a grain, a glow wash —
+/// whose only purpose is to be seen OVER what sits behind it?
+fn paints_see_through(v: &Value) -> bool {
+    fill_entries(v)
+        .iter()
+        .any(|fill| match fill.get("type").and_then(Value::as_str) {
+            Some("solid") => fill.get("color").is_some_and(color_see_through),
+            Some("linear_gradient" | "radial_gradient") => gradient_stops(fill)
+                .iter()
+                .any(|stop| stop.get("color").is_some_and(color_see_through)),
+            _ => false,
+        })
 }
 
 /// Does this subtree carry something a reader is meant to SEE — a glyph, an
@@ -161,14 +230,7 @@ fn is_translucent_scrim(v: &Value) -> bool {
     else {
         return false;
     };
-    let see_through = |color: &Value| {
-        color.as_str().is_some_and(|hex| {
-            let hex = hex.trim();
-            hex.len() == 9
-                && hex.starts_with('#')
-                && u8::from_str_radix(&hex[7..9], 16).is_ok_and(|a| a < 0xCC)
-        })
-    };
+    let see_through = color_see_through;
     match first.get("type").and_then(Value::as_str) {
         Some("solid") => first.get("color").is_some_and(see_through),
         Some("linear_gradient" | "radial_gradient") => first
@@ -233,10 +295,69 @@ fn collect_scrimmed_image_cover_fixes(
     }
 }
 
+/// A full-bleed photo must span at least this fraction of the stack on each
+/// axis to count as the stack's backdrop.
+const BACKDROP_MIN_SPAN: f64 = 0.95;
+
+/// A full-bleed hero photo authored ABOVE the layers it was meant to sit under.
+///
+/// Measured on the arena corpus (seven stacks across GLM-5.3-Flash,
+/// DeepSeek-v4-pro and space-bunny-alpha): `[photo, bottom-scrim, caption]`.
+/// The photo is `children[0]`, i.e. topmost, so it paints over its own scrim
+/// and the caption. The small-overlay rule alone would lift the caption to the
+/// top and leave the scrim buried, which puts white text straight on the
+/// photo. So the photo is sunk instead: it moves to sit just behind the
+/// last sibling it hides, and the scrim and caption keep their order above it.
+///
+/// Returns `(photo index, target index)`. It stays provable: a sibling only
+/// counts as hidden when it carries content or a see-through layer (a scrim
+/// or grain exists only to be seen over what is behind it), and the move is
+/// refused when an opaque sibling in between would then cover the photo. That
+/// is a composition question, not a contract breach.
+fn backdrop_photo_sink(
+    stack: &Value,
+    kids: &[Value],
+    rects: &HashMap<String, Rect>,
+) -> Option<(usize, usize)> {
+    let stack_rect = rect_of(stack, rects)?;
+    kids.iter().enumerate().find_map(|(photo_index, photo)| {
+        if !(is_photo(photo) && paints_opaque(photo)) {
+            return None;
+        }
+        let photo_rect = rect_of(photo, rects)?;
+        let full_bleed = photo_rect.w >= stack_rect.w * BACKDROP_MIN_SPAN
+            && photo_rect.h >= stack_rect.h * BACKDROP_MIN_SPAN
+            && covered_fraction(stack_rect, photo_rect) >= BACKDROP_MIN_SPAN * BACKDROP_MIN_SPAN;
+        if !full_bleed {
+            return None;
+        }
+        let hidden_under = |node: &Value| {
+            rect_of(node, rects)
+                .is_some_and(|r| covered_fraction(r, photo_rect) >= MIN_BURIED_FRACTION)
+        };
+        let last_hidden = kids
+            .iter()
+            .enumerate()
+            .skip(photo_index + 1)
+            .rev()
+            .find(|(_, sib)| (bears_content(sib) || paints_see_through(sib)) && hidden_under(sib))
+            .map(|(index, _)| index)?;
+        let blocked = kids[photo_index + 1..=last_hidden].iter().any(|sib| {
+            paints_opaque(sib)
+                && rect_of(sib, rects)
+                    .is_some_and(|r| covered_fraction(photo_rect, r) >= MIN_BURIED_FRACTION)
+        });
+        // `MoveNode` inserts after detaching, so index `last_hidden` lands the
+        // photo directly behind that sibling.
+        (!blocked).then_some((photo_index, last_hidden))
+    })
+}
+
 /// Emit a `MoveNode` for every content-bearing overlay buried under an opaque
-/// earlier sibling of the same `layout:none` stack: small overlays go to index
-/// 0, an image hidden by an empty plate goes just ahead of that plate (so any
-/// badge already above both stays on top).
+/// earlier sibling of the same `layout:none` stack: a full-bleed photo sinks
+/// behind the layers it hides, small overlays go to index 0, an image hidden
+/// by an empty plate goes just ahead of that plate (so any badge already above
+/// both stays on top).
 pub(super) fn collect_buried_overlay_fixes(
     v: &Value,
     rects: &HashMap<String, Rect>,
@@ -244,6 +365,26 @@ pub(super) fn collect_buried_overlay_fixes(
 ) {
     if layout_str(v) == Some("none") {
         let kids = children(v);
+        let stack_id = v.get("id").and_then(Value::as_str);
+        if let (Some((photo_index, target)), Some(stack_id)) =
+            (backdrop_photo_sink(v, kids, rects), stack_id)
+        {
+            if let Some(photo_id) = kids[photo_index].get("id").and_then(Value::as_str) {
+                cmds.push(EditorCommand::MoveNode {
+                    node_id: NodeId::new(photo_id.to_string()),
+                    target_parent: NodeId::new(stack_id.to_string()),
+                    page_id: None,
+                    index: Some(target),
+                });
+                // Every other rule below reads this stack's order, which the
+                // sink is about to change: they re-run on the next geometry
+                // round against the settled order.
+                for c in kids {
+                    collect_buried_overlay_fixes(c, rects, cmds);
+                }
+                return;
+            }
+        }
         collect_scrimmed_image_cover_fixes(kids, rects, cmds);
         // Later index = painted EARLIER = further back. Walk from the back
         // forward so the rescued overlays keep their relative order once each
