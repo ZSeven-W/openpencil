@@ -122,8 +122,17 @@ fn m03_name_column_widens_toward_no_wrap_and_rows_stay_aligned() {
     let gap = |id: &str| num(find(&root, id).expect(id), "gap");
     assert_eq!(gap("head"), gap("r1row"), "header and data gaps match");
     assert_eq!(gap("r1row"), gap("r2row"), "data gaps match");
-    // The 7-glyph name needs more than the gaps can give, so they bottom out.
-    assert_eq!(gap("head"), MIN_GAP);
+    // Either the 7-glyph name reached its natural width, or the gaps bottomed
+    // out trying. Which one depends on the platform's CJK face (CI runners
+    // without one measure the glyphs far narrower), so accept both.
+    let seven = find(&root, "r1nt").unwrap();
+    let seven_natural = measure_texts(&state, &[seven]).natural["r1nt"];
+    assert!(
+        gap("head") == MIN_GAP || after["r1nt"].w + 0.5 >= seven_natural,
+        "neither fits nor bottomed out: gap {} name {} < {seven_natural}",
+        gap("head"),
+        after["r1nt"].w
+    );
     for (h, r1, r2) in [
         ("h1", "r1a", "r2a"),
         ("h2", "r1b", "r2b"),
@@ -188,14 +197,17 @@ fn at_the_gap_floor_numeric_text_columns_shrink_but_never_below_natural() {
 
 #[test]
 fn an_unreachable_natural_width_still_lands_the_reachable_maximum() {
-    // 32 glyphs @14px can never fit a 343px row beside 280px of columns:
+    // A long Latin fund name @14px can never fit a 343px row beside 280px of columns:
     // the gap drops to 8, both text columns fall to their natural width,
     // and the name column takes exactly what that frees.
     let mut state = state_of(
         json!({"type":"frame","id":"root","width":375,"layout":"vertical",
       "children":[{"type":"frame","id":"row","layout":"horizontal","width":"fill_container",
         "gap":24,"padding":[0,16],"children":[
-            wrapping("t0", "易方达蓝筹精选混合型证券投资基金易方达蓝筹精选混合型证券投资基金"),
+            // Latin, not CJK: every runner has a Latin face, while one
+            // without a CJK face measures Han glyphs far narrower and makes
+            // a CJK name "reachable" after all.
+            wrapping("t0", "Vanguard Total International Stock Market Index Fund Admiral Shares Institutional Plus"),
             mono("t1", "12.5", 140.0),
             mono("t2", "7", 140.0)]}]}),
     );
