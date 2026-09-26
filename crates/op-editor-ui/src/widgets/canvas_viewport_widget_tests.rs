@@ -774,6 +774,8 @@ fn number_input_renders_numeric_value() {
 
 #[path = "canvas_viewport_widget_tests/contract_closure.rs"]
 mod contract_closure;
+#[path = "canvas_viewport_widget_tests/label_foreground.rs"]
+mod label_foreground;
 #[path = "canvas_viewport_widget_tests/stroke_roles.rs"]
 mod stroke_roles;
 #[path = "canvas_viewport_widget_tests/tabs.rs"]

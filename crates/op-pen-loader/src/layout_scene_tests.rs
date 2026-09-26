@@ -23,6 +23,8 @@ mod shader_preset;
 mod text;
 #[path = "layout_scene_tests/tokens_refs.rs"]
 mod tokens_refs;
+#[path = "layout_scene_tests/widget_label.rs"]
+mod widget_label;
 #[path = "layout_scene_tests/widget_stroke.rs"]
 mod widget_stroke;
 

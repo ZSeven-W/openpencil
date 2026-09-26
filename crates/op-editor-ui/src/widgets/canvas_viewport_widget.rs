@@ -19,11 +19,11 @@
 use crate::layout_scene::{SceneNode, SceneWidget};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
-use jian_core::render::widget_style::{
-    resolve_authored_widget_visual, with_visual_opacity, AuthoredWidgetVisual,
-};
 use jian_core::render::widget_metrics::{
     labelled_checkbox_indicator_side, CHECKBOX_LABEL_GAP, WIDGET_LABEL_FONT_SIZE,
+};
+use jian_core::render::widget_style::{
+    resolve_authored_widget_visual_on_page, with_visual_opacity, AuthoredWidgetVisual,
 };
 use std::borrow::Cow;
 
@@ -63,7 +63,7 @@ pub(crate) fn paint_widget_visual(
     if world_rect.size.x <= 0.0 || world_rect.size.y <= 0.0 {
         return false;
     }
-    let visual = authored_widget_visual(node);
+    let visual = authored_widget_visual(node, w);
     match w.kind.as_str() {
         "switch" => paint_switch(cx, node, w, &visual, world_rect, zoom),
         "checkbox" => paint_checkbox(cx, node, w, &visual, world_rect, zoom),
@@ -80,10 +80,11 @@ pub(crate) fn paint_widget_visual(
     true
 }
 
-fn authored_widget_visual(node: &SceneNode) -> AuthoredWidgetVisual {
-    let mut visual = resolve_authored_widget_visual(
+fn authored_widget_visual(node: &SceneNode, widget: &SceneWidget) -> AuthoredWidgetVisual {
+    let mut visual = resolve_authored_widget_visual_on_page(
         node.fill.map(Color::to_jian),
         node.stroke.map(|stroke| stroke.color.to_jian()),
+        widget.label_foreground.map(Color::to_jian),
     );
     // Scene fill/stroke alpha already contains direct-paint node opacity. Only
     // contrast-derived internal colours need it folded in here; applying it to
@@ -104,6 +105,8 @@ fn authored_widget_visual(node: &SceneNode) -> AuthoredWidgetVisual {
     visual.label_foreground = with_visual_opacity(visual.label_foreground, node.opacity);
     visual.muted_label_foreground =
         with_visual_opacity(visual.muted_label_foreground, node.opacity);
+    visual.muted_track_foreground =
+        with_visual_opacity(visual.muted_track_foreground, node.opacity);
     visual
 }
 
@@ -559,7 +562,7 @@ fn paint_tabs(
         let color = if on {
             ui_color(visual.active_foreground)
         } else {
-            ui_color(visual.muted_label_foreground)
+            ui_color(visual.muted_track_foreground)
         };
         let label_w = cx.backend.measure_text_weighted(label, fs, 400);
         draw_label(
