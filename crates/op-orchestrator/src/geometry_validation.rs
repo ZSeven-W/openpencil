@@ -89,6 +89,8 @@ mod geometry_row_fixes;
 mod geometry_scale_ops;
 #[path = "geometry_spill_diagnostics.rs"]
 mod geometry_spill_diagnostics;
+#[path = "geometry_starved_column.rs"]
+mod geometry_starved_column;
 #[path = "geometry_starved_row.rs"]
 mod geometry_starved_row;
 #[path = "geometry_value_readers.rs"]
@@ -309,6 +311,15 @@ pub fn geometry_validate_and_fix_for_form(
             // its own flex siblings must be widened at the ROW, not squeezed
             // through its columns (which have nothing to give).
             geometry_starved_row::collect_starved_rigid_row_fixes(&v, &rects, &mut cmds);
+            // The opposite starvation: a flexible TEXT column squeezed into a
+            // one-glyph tower by its rigid siblings — reclaimed from the
+            // row's gaps and its numeric text columns' slack.
+            geometry_starved_column::collect_starved_text_column_fixes(
+                sink.state(),
+                &v,
+                &rects,
+                &mut cmds,
+            );
             geometry_buried_overlay::collect_buried_overlay_fixes(&v, &rects, &mut cmds);
             collect_row_overfull_fixes(&v, &rects, &mut cmds, false);
             collect_rail_width_collapse_fixes(&v, &rects, &mut cmds);
