@@ -446,8 +446,12 @@ fn try_reparent_orphans(parent: &mut Value) -> bool {
 // `regroup_flat_table_rows` in `run_cleanup_passes` (so a freshly-regrouped
 // table is spaced too).
 
-/// Default column gap injected into gap-less table rows.
+/// Default column gap injected into gap-less table rows — lowered only when
+/// the row's provable width would starve a text fill column.
 const TABLE_COLUMN_GAP: f64 = 24.0;
+
+#[path = "table_repair_gap_budget.rs"]
+mod gap_budget;
 
 /// Give gap-less rows of a table-named container a column gap. Returns `true`
 /// iff it changed a row. Same round-trip as the sibling passes.
@@ -455,7 +459,8 @@ pub(crate) fn ensure_table_column_gap(root: &mut PenNode) -> bool {
     let Ok(mut v) = serde_json::to_value(&*root) else {
         return false;
     };
-    if !ensure_gap_in_value(&mut v) {
+    let width = gap_budget::child_width(&v, None, false);
+    if !ensure_gap_in_value(&mut v, width) {
         return false;
     }
     match serde_json::from_value::<PenNode>(v) {
@@ -467,9 +472,16 @@ pub(crate) fn ensure_table_column_gap(root: &mut PenNode) -> bool {
     }
 }
 
-fn ensure_gap_in_value(v: &mut Value) -> bool {
+/// `width` is `v`'s own width when the tree proves it (numeric, or
+/// `fill_container` under a column of known width) — it lets the injected
+/// gap stay within the row's budget (see `table_repair_gap_budget`).
+fn ensure_gap_in_value(v: &mut Value, width: Option<f64>) -> bool {
     let mut changed = false;
+    let inner = gap_budget::inner_width(v, width);
+    let is_row = layout_str(v) == Some("horizontal");
     if is_table_container(v) {
+        // One gap per table, sized by its tightest row, so columns align.
+        let gap = table_gap_budget(v, inner).unwrap_or(TABLE_COLUMN_GAP);
         if let Some(rows) = v.get_mut("children").and_then(Value::as_array_mut) {
             for row in rows.iter_mut() {
                 // Rows may sit one level deeper, under an UNNAMED structural
@@ -478,39 +490,77 @@ fn ensure_gap_in_value(v: &mut Value) -> bool {
                 // rows all lived in such a wrapper and rendered columns
                 // touching). The table NAME gate stays on the outer node; an
                 // unnamed vertical wrapper inherits it.
-                changed |= give_row_gap_through_wrappers(row);
+                changed |= give_row_gap_through_wrappers(row, gap);
             }
         }
     }
     if let Some(kids) = v.get_mut("children").and_then(Value::as_array_mut) {
         for c in kids.iter_mut() {
-            changed |= ensure_gap_in_value(c);
+            let w = gap_budget::child_width(c, inner, is_row);
+            changed |= ensure_gap_in_value(c, w);
         }
     }
     changed
 }
 
+/// The smallest per-row budget among the gap-less rows of a table whose
+/// content box is `inner`, reached through the same unnamed wrappers
+/// [`give_row_gap_through_wrappers`] descends. `None` when no row can prove
+/// a budget.
+fn table_gap_budget(table: &Value, inner: Option<f64>) -> Option<f64> {
+    fn walk(node: &Value, parent_inner: Option<f64>, out: &mut Option<f64>) {
+        let width = gap_budget::child_width(node, parent_inner, false);
+        if is_unnamed_vertical_wrapper(node) {
+            let inner = gap_budget::inner_width(node, width);
+            for c in node
+                .get("children")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                walk(c, inner, out);
+            }
+            return;
+        }
+        if layout_str(node) == Some("horizontal") && row_needs_gap(node) {
+            if let Some(g) = gap_budget::row_gap_budget(node, width, TABLE_COLUMN_GAP) {
+                *out = Some(out.map_or(g, |cur: f64| cur.min(g)));
+            }
+        }
+    }
+    let mut out = None;
+    for c in table
+        .get("children")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        walk(c, inner, &mut out);
+    }
+    out
+}
+
 /// Apply [`give_row_gap`] to `node`, descending through any CHAIN of unnamed
 /// structural wrappers first (a model buries its rows arbitrarily deep in
 /// nameless verticals — measured: two levels below the table frame).
-fn give_row_gap_through_wrappers(node: &mut Value) -> bool {
+fn give_row_gap_through_wrappers(node: &mut Value, gap: f64) -> bool {
     if is_unnamed_vertical_wrapper(node) {
         let mut changed = false;
         if let Some(inner) = node.get_mut("children").and_then(Value::as_array_mut) {
             for r in inner.iter_mut() {
-                changed |= give_row_gap_through_wrappers(r);
+                changed |= give_row_gap_through_wrappers(r, gap);
             }
         }
         return changed;
     }
-    give_row_gap(node)
+    give_row_gap(node, gap)
 }
 
-/// Insert the default column gap when `row` is a gap-less ≥3-column row.
-fn give_row_gap(row: &mut Value) -> bool {
+/// Insert the column gap when `row` is a gap-less ≥3-column row.
+fn give_row_gap(row: &mut Value, gap: f64) -> bool {
     if layout_str(row) == Some("horizontal") && row_needs_gap(row) {
         if let Some(obj) = row.as_object_mut() {
-            obj.insert("gap".into(), json!(TABLE_COLUMN_GAP));
+            obj.insert("gap".into(), json!(gap));
             return true;
         }
     }
