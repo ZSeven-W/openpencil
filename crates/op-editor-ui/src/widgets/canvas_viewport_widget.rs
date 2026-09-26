@@ -22,6 +22,9 @@ use crate::{Color, Point2D, Rect, TextLayout};
 use jian_core::render::widget_style::{
     resolve_authored_widget_visual, with_visual_opacity, AuthoredWidgetVisual,
 };
+use jian_core::render::widget_metrics::{
+    labelled_checkbox_indicator_side, CHECKBOX_LABEL_GAP, WIDGET_LABEL_FONT_SIZE,
+};
 use std::borrow::Cow;
 
 /// Base horizontal text padding inside an input (doc px, pre-zoom).
@@ -178,7 +181,7 @@ fn paint_checkbox(
     // not the box alone. Keep legacy label-less documents unchanged, while a
     // labelled control gets a square box and an in-bounds label region.
     let box_rect = if label.is_some() {
-        let side = ww.min(h);
+        let side = labelled_checkbox_indicator_side(ww, h);
         Rect::xywh(x, y + (h - side) / 2.0, side, side)
     } else {
         r
@@ -204,8 +207,8 @@ fn paint_checkbox(
         cx.backend.stroke_line(p1, p2, check, cw);
     }
     if let Some(label) = label {
-        let fs = 14.0 * zoom;
-        let label_x = box_x + box_w + 8.0 * zoom;
+        let fs = WIDGET_LABEL_FONT_SIZE * zoom;
+        let label_x = box_x + box_w + CHECKBOX_LABEL_GAP * zoom;
         let label_width = (x + ww - label_x).max(0.0);
         if label_width > 0.0 {
             cx.backend.save();
