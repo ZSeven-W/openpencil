@@ -14,7 +14,8 @@ use super::batch_design::{find_top_level_char, normalize_node_shape};
 use super::batch_direct_ops::split_top_level_args;
 use super::batch_program::{ProgramCtx, Result};
 use super::batch_program_error::ProgramError;
-use super::batch_program_parse::{parse_json_arg, parse_node_json, parse_string_arg};
+use super::batch_program_node_parse::parse_node_body;
+use super::batch_program_parse::{parse_json_arg, parse_string_arg};
 use super::batch_program_resolve::{
     find_node_by_path, lookup_id, parent_node_id, resolve_kit_component_id, resolve_parent_ref,
     resolve_path_expr, resolve_ref,
@@ -176,7 +177,12 @@ pub(crate) fn execute_replace(binding: &str, args: &str, ctx: &mut ProgramCtx) -
         .active_children()
         .iter()
         .any(|root| root.id_str() == old_id);
-    let mut node = parse_node_json(&args[comma + 1..], ctx.post_process, replaces_document_root)?;
+    let parsed = parse_node_body(
+        &args[comma + 1..],
+        ctx.node_parse_options(replaces_document_root),
+    )?;
+    ctx.warnings.extend(parsed.notes);
+    let mut node = parsed.node;
     // Drain node-level `state` BEFORE the probe clone; hold the merge
     // and emit it only after the replace below succeeds (emit applies
     // immediately — emitting the merge first would leak an orphan

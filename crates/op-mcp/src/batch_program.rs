@@ -74,7 +74,8 @@ use super::batch_program_exec_ops::{
     execute_copy, execute_image, execute_kit_instantiate, execute_replace,
 };
 use super::batch_program_handle_refs::{attach_handle_children, resolve_containers};
-use super::batch_program_parse::{parse_insert_node_json, parse_json_arg, regex};
+use super::batch_program_node_parse::{parse_node_body, NodeParseOptions};
+use super::batch_program_parse::{parse_json_arg, regex};
 use super::batch_program_resolve::{
     count_forest, find_node_by_path, line_preview, lookup_id, parent_node_id, resolve_page_index,
     resolve_parent_ref, resolve_path_expr, resolve_ref, strip_outer_quotes, with_page_id,
@@ -92,6 +93,9 @@ pub(crate) fn run_batch_design_program(
     args: &BTreeMap<String, String>,
 ) -> ToolOutcome {
     let page_id = optional_page_id(args);
+    // Internal knob for the orchestrator's script-gen path (see module
+    // doc); absent → transactional, the agent-facing contract.
+    let transactional = args.get("_line_policy").map(String::as_str) != Some("best_effort");
     // TS batch_design `postProcess` defaults to false (unlike
     // design_content's default-true).
     let post_process = args
@@ -114,6 +118,7 @@ pub(crate) fn run_batch_design_program(
         replaceable_empty_root_ids: Vec::new(),
         id_high_water: 0,
         warnings: Vec::new(),
+        best_effort: !transactional,
     };
     // Pin the sim's active page to the requested page so sim READS
     // (path lookups, node counts) see the same children every emitted
@@ -141,9 +146,6 @@ pub(crate) fn run_batch_design_program(
     // Live-doc node count BEFORE any line runs — the honest `nodeCount`
     // for a rolled-back transaction (nothing will have been applied).
     let baseline_count = count_forest(ctx.sim.active_children());
-    // Internal knob for the orchestrator's script-gen path (see module
-    // doc); absent → transactional, the agent-facing contract.
-    let transactional = args.get("_line_policy").map(String::as_str) != Some("best_effort");
 
     let mut errors: Vec<Value> = Vec::new();
     let mut warnings: Vec<Value> = Vec::new();
@@ -289,6 +291,9 @@ pub(crate) struct ProgramCtx {
     /// Non-fatal notes for the line being executed; drained into the
     /// envelope's `warnings[]` after each line.
     pub(crate) warnings: Vec<String>,
+    /// The orchestrator's best-effort policy: node bodies may additionally
+    /// be salvaged by dropping one field the schema rejects.
+    pub(crate) best_effort: bool,
 }
 
 impl ProgramCtx {
@@ -304,6 +309,16 @@ impl ProgramCtx {
 
     pub(crate) fn warn(&mut self, warning: String) {
         self.warnings.push(warning);
+    }
+
+    /// Parse options for a node body under this program's policy.
+    pub(crate) fn node_parse_options(&self, document_root: bool) -> NodeParseOptions {
+        NodeParseOptions {
+            post_process: self.post_process,
+            document_root,
+            handle_refs: false,
+            salvage_fields: self.best_effort,
+        }
     }
 
     pub(crate) fn bind(&mut self, binding: &str, node_id: &str) {
@@ -524,8 +539,15 @@ fn execute_insert(binding: &str, args: &str, ctx: &mut ProgramCtx) -> Result<()>
         .ok_or_else(|| ProgramError::Syntax("Insert requires parent and node data".into()))?;
     let parent_raw = args[..comma].trim();
     let parent = resolve_parent_ref(parent_raw, &ctx.bindings);
-    let (mut node, handle_refs) =
-        parse_insert_node_json(&args[comma + 1..], ctx.post_process, parent.is_none())?;
+    let parsed = parse_node_body(
+        &args[comma + 1..],
+        NodeParseOptions {
+            handle_refs: true,
+            ..ctx.node_parse_options(parent.is_none())
+        },
+    )?;
+    ctx.warnings.extend(parsed.notes);
+    let (mut node, handle_refs) = (parsed.node, parsed.handle_refs);
     delete_superseded_draft(binding, parent.as_deref(), &node, ctx);
 
     // TS auto-replace: a root-level frame insert replaces the first EMPTY
@@ -618,6 +640,11 @@ fn execute_update(args: &str, ctx: &mut ProgramCtx) -> Result<()> {
         .ok_or_else(|| ProgramError::Syntax("Update requires path and update data".into()))?;
     let path = resolve_path_expr(args[..comma].trim(), &ctx.bindings);
     let mut value = parse_json_arg(&args[comma + 1..])?;
+    if let Value::Object(patch) = &mut value {
+        let mut notes = Vec::new();
+        super::batch_program_dialect::repair_field_dialect(patch, &mut notes);
+        ctx.warnings.extend(notes);
+    }
     normalize_node_shape(&mut value);
     let Some(target) = find_node_by_path(ctx.sim.active_children(), &path, &ctx.alias) else {
         return Err(ProgramError::NotFound(format!(

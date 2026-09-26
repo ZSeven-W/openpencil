@@ -48,11 +48,18 @@ mod batch_layered_guidelines;
 mod batch_layered_tests;
 mod batch_page;
 mod batch_program;
+mod batch_program_dialect;
+#[cfg(test)]
+mod batch_program_dialect_corpus;
+mod batch_program_dialect_fields;
+#[cfg(test)]
+mod batch_program_dialect_tests;
 mod batch_program_error;
 mod batch_program_exec_ops;
 mod batch_program_handle_refs;
 #[cfg(test)]
 mod batch_program_handle_refs_tests;
+mod batch_program_node_parse;
 pub mod batch_program_objects;
 mod batch_program_parse;
 #[cfg(test)]

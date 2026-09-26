@@ -38,7 +38,7 @@ use jian_ops_schema::node::PenNode;
 use op_editor_core::generator::{GeneratorError, GeneratorRequest, MAX_GENERATED_NODES};
 use op_editor_core::PenNodeExt;
 
-use crate::batch_program_parse::parse_node_json;
+use crate::batch_program_node_parse::parse_node_json;
 use crate::script_runner::{eval_recorded, ScriptError, MAX_RECORDED_LINES};
 
 /// Wall-clock budget for one generator run.
