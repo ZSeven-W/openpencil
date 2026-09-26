@@ -201,6 +201,20 @@ const MODEL_PROFILES: &[Entry] = &[
     // ignored; since 2026-09-03 the API rejects it outright (HTTP 400,
     // code 1210 "该模型始终思考，不支持关闭思考"), which failed every
     // subtask before the first token — so the field must not be sent.
+    // GLM-5.3-Flash — BEFORE the glm-5.3 row, whose `Sub` would otherwise
+    // claim it. Unlike glm-5.3 the Flash variant ACCEPTS `thinking:disabled`
+    // (measured 2026-09-26 on the Coding Plan endpoint: 200, finish=stop,
+    // 27 s), while left thinking it spent all 16 384 output tokens on
+    // reasoning and returned empty content after ~290 s — the "empty
+    // content from provider" retries on 10 of 24 arena samples, and a
+    // whole kanban section lost after four of them.
+    Entry {
+        matcher: Match::Sub("glm-5.3-flash"),
+        tier: ModelTier::Full,
+        thinking_disabled: true,
+        timeout_multiplier: 2.0,
+        label: "GLM-5.3-Flash",
+    },
     Entry {
         matcher: Match::Sub("glm-5.3"),
         tier: ModelTier::Full,

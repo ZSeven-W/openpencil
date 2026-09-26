@@ -278,6 +278,12 @@ fn glm_version_lane_entries() {
     // (HTTP 400 code 1210 since 2026-09-03), so the field is never sent.
     assert!(!five_three.thinking_disabled);
     assert_eq!(five_three.timeout_multiplier, 3.0);
+    // The Flash variant is NOT always-thinking: it accepts the field, and
+    // left thinking it spends the whole output budget on reasoning.
+    let flash = resolve_model_profile("glm-5.3-flash");
+    assert!(flash.thinking_disabled);
+    assert_eq!(flash.tier, ModelTier::Full);
+    assert_eq!(flash.timeout_multiplier, 2.0);
     // Vendor prefix (ark/) hits the same rows.
     assert_eq!(resolve_model_profile("ark/glm-5.3").tier, ModelTier::Full);
     assert_eq!(resolve_model_profile("ark/glm-5.3").timeout_multiplier, 3.0);
