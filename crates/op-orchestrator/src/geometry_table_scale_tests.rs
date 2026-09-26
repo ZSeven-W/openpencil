@@ -246,8 +246,14 @@ fn collect_scale_ops_scales_every_row_and_gap() {
             },
         );
     }
+    let sink = crate::test_support::VecDocSink::new();
     let mut ops = Vec::new();
-    collect_scale_ops(&table, &rects, &mut ops);
+    collect_scale_ops(
+        crate::types::DocSink::state(&sink),
+        &table,
+        &rects,
+        &mut ops,
+    );
     // 3 rows × 5 fixed cells = 15 UpdateNode(width) ops + 3 SetNodeLayoutProp(gap).
     let width_ops = ops
         .iter()

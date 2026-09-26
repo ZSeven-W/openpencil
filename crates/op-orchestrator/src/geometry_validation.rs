@@ -234,7 +234,7 @@ pub fn fix_table_column_overflow(sink: &mut dyn DocSink, root_id: &str) -> bool 
             return false;
         };
         let mut ops = Vec::new();
-        collect_scale_ops(&v, &rects, &mut ops);
+        collect_scale_ops(sink.state(), &v, &rects, &mut ops);
         ops
     };
     if ops.is_empty() {
@@ -300,7 +300,7 @@ pub fn geometry_validate_and_fix_for_form(
                 break;
             };
             let mut cmds = Vec::new();
-            collect_scale_ops(&v, &rects, &mut cmds);
+            collect_scale_ops(sink.state(), &v, &rects, &mut cmds);
             collect_collapse_fixes(&v, &rects, &mut cmds);
             collect_text_overflow_fixes(&v, &rects, &mut cmds);
             collect_frame_overflow_fixes(&v, &rects, &mut cmds);

@@ -46,7 +46,7 @@
 use super::*;
 
 /// Gaps are never reduced below this — tighter columns read as one run.
-const MIN_GAP: f64 = 8.0;
+pub(super) const MIN_GAP: f64 = 8.0;
 /// Glyphs per line a text column must hold (CJK wraps per glyph).
 const READABLE_EMS: f64 = 3.5;
 /// A row this narrow is a chip / control row; its columns are not prose.
@@ -76,7 +76,7 @@ pub(super) fn collect_starved_text_column_fixes(
     cmds: &mut Vec<EditorCommand>,
 ) {
     let mut groups = Vec::new();
-    collect_candidate_groups(v, rects, &mut groups);
+    collect_candidate_groups(state, v, rects, &mut groups);
     if groups.is_empty() {
         return;
     }
@@ -122,13 +122,18 @@ fn is_fill_text_column(c: &Value) -> bool {
 }
 
 fn collect_candidate_groups<'a>(
+    state: &EditorState,
     v: &'a Value,
     rects: &HashMap<String, Rect>,
     out: &mut Vec<RowGroup<'a>>,
 ) {
-    // The table column scaler owns rows whose FIXED columns overflow; two
-    // passes editing the same gaps in one round would fight.
-    if table_overflow_scale(v, rects).is_none() && !crate::cleanup::is_status_bar_from_json(v) {
+    // The table column scaler owns rows whose FIXED columns overflow while it
+    // still has slack to take; two passes editing the same gaps in one round
+    // would fight. Once its cells sit on their content floors it stops, and
+    // a still-starved name column is this pass's to reclaim.
+    let scaler_owns = table_overflow_scale(v, rects).is_some()
+        && !super::geometry_scale_ops::table_scale_plan(state, v, rects).is_empty();
+    if !scaler_owns && !crate::cleanup::is_status_bar_from_json(v) {
         let mut groups: Vec<(Vec<String>, RowGroup<'a>)> = Vec::new();
         for c in children(v).iter().filter(|c| is_row(c)) {
             let key = width_pattern(c);
@@ -149,7 +154,7 @@ fn collect_candidate_groups<'a>(
         }
     }
     for c in children(v) {
-        collect_candidate_groups(c, rects, out);
+        collect_candidate_groups(state, c, rects, out);
     }
 }
 
@@ -260,15 +265,15 @@ fn measured_texts<'a>(groups: &[RowGroup<'a>]) -> Vec<&'a Value> {
 
 /// Natural single-line width (`n`) and longest-word width (`w`) per text id.
 #[derive(Default)]
-struct Measured {
-    natural: HashMap<String, f64>,
+pub(super) struct Measured {
+    pub(super) natural: HashMap<String, f64>,
     word: HashMap<String, f64>,
 }
 
 /// Lay copies of `texts` out as hugging single-line text in an unconstrained
 /// scratch document (same variables / themes) and read their widths back
 /// from the real jian layout.
-fn measure_texts(state: &EditorState, texts: &[&Value]) -> Measured {
+pub(super) fn measure_texts(state: &EditorState, texts: &[&Value]) -> Measured {
     let mut kids = Vec::new();
     for t in texts {
         let Some(id) = t.get("id").and_then(Value::as_str) else {

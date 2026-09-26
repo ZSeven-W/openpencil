@@ -123,7 +123,7 @@ fn geometry_validate_and_fix_without_card_rows(sink: &mut dyn DocSink, root_id: 
                 break;
             };
             let mut cmds = Vec::new();
-            collect_scale_ops(&v, &rects, &mut cmds);
+            collect_scale_ops(sink.state(), &v, &rects, &mut cmds);
             collect_collapse_fixes(&v, &rects, &mut cmds);
             collect_text_overflow_fixes(&v, &rects, &mut cmds);
             collect_frame_overflow_fixes(&v, &rects, &mut cmds);
@@ -166,5 +166,7 @@ mod echo_spill_tests;
 mod jam_gap_tests;
 #[path = "geometry_layout_fix_tests.rs"]
 mod layout_fix_tests;
+#[path = "geometry_table_scale_floor_tests.rs"]
+mod table_scale_floor_tests;
 #[path = "geometry_table_scale_tests.rs"]
 mod table_scale_tests;
