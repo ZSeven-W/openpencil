@@ -467,7 +467,9 @@ fn amount_spilling_past_its_row_share_shrinks_until_the_blocks_stop_overlapping(
         "the blocks no longer overlap: {today:?} vs {next:?}"
     );
     assert!(
-        amount.x + amount.w <= after["today-value"].x + after["today-value"].w + 0.5,
+        // The pass's own tolerance: it stops shrinking within TEXT_FIT_EPS of
+        // the row's inner edge, and a CI fallback face can land in that band.
+        amount.x + amount.w <= after["today-value"].x + after["today-value"].w + TEXT_FIT_EPS,
         "the text ends inside its own row"
     );
 }
