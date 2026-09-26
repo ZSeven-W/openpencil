@@ -46,14 +46,26 @@ pub(super) fn is_amount_token(content: &str) -> bool {
         && rest.split([' ', '\u{2009}']).skip(1).all(|g| g.len() >= 3)
 }
 
+/// A fixed-width amount token queued for the measured fit.
+struct Candidate<'a> {
+    text: &'a Value,
+    /// The width the author actually gave the token (see
+    /// [`allotted::allotted_width`]).
+    available: f64,
+    /// The immediate parent the token must end inside after the fit, with
+    /// that parent's right padding.
+    parent: Option<(String, f64)>,
+}
+
 /// Collect fixed-width amount tokens (not in a status bar / scroller) with
-/// their resolved width — the width the author gave them.
+/// the width the author gave them.
 fn collect_candidates<'a>(
     v: &'a Value,
     rects: &HashMap<String, Rect>,
     skip_ids: &[String],
     in_excluded: bool,
-    out: &mut Vec<(&'a Value, f64)>,
+    ancestors: &mut Vec<&'a Value>,
+    out: &mut Vec<Candidate<'a>>,
 ) {
     let excluded = in_excluded
         || crate::cleanup::is_status_bar_from_json(v)
@@ -70,20 +82,35 @@ fn collect_candidates<'a>(
             .and_then(Value::as_str)
             .is_some_and(is_amount_token);
         if let (true, true, Some(id)) = (fixed_width, amount, id) {
-            if !skip_ids.iter().any(|s| s == id) {
-                if let Some(r) = rects.get(id).filter(|r| r.w.is_finite() && r.w > 1.0) {
-                    out.push((v, r.w));
+            let resolved = rects.get(id).is_some_and(|r| r.w.is_finite() && r.w > 1.0);
+            if resolved && !skip_ids.iter().any(|s| s == id) {
+                ancestors.push(v);
+                let available = allotted::allotted_width(ancestors, rects);
+                ancestors.pop();
+                let parent = ancestors.last().and_then(|p| {
+                    let pid = p.get("id").and_then(Value::as_str)?;
+                    let right = numeric_padding_sides(p).map_or(0.0, |[_, r, _, _]| r);
+                    Some((pid.to_string(), right))
+                });
+                if let Some(available) = available.filter(|w| *w > 1.0) {
+                    out.push(Candidate {
+                        text: v,
+                        available,
+                        parent,
+                    });
                 }
             }
         }
     }
+    ancestors.push(v);
     for c in children(v) {
-        collect_candidates(c, rects, skip_ids, excluded, out);
+        collect_candidates(c, rects, skip_ids, excluded, ancestors, out);
     }
+    ancestors.pop();
 }
 
 /// Font-size commands that put each wrapped / overflowing amount token back
-/// on one line inside its authored width.
+/// on one line inside the width the author gave it.
 pub(super) fn collect_measured_amount_fixes(
     state: &EditorState,
     root: &Value,
@@ -91,14 +118,21 @@ pub(super) fn collect_measured_amount_fixes(
     already_fixed: &[String],
 ) -> Vec<EditorCommand> {
     let mut candidates = Vec::new();
-    collect_candidates(root, rects, already_fixed, false, &mut candidates);
+    collect_candidates(
+        root,
+        rects,
+        already_fixed,
+        false,
+        &mut Vec::new(),
+        &mut candidates,
+    );
     if candidates.is_empty() {
         return Vec::new();
     }
     // Re-lay the candidates as single-line hugging text on a scratch copy
     // to read their natural width from the real layout.
     let mut scratch = state.clone();
-    for (text, _) in &candidates {
+    for Candidate { text, .. } in &candidates {
         if let Some(id) = text.get("id").and_then(Value::as_str) {
             scratch.apply(EditorCommand::PatchNodeData {
                 node_id: NodeId::new(id.to_string()),
@@ -108,8 +142,13 @@ pub(super) fn collect_measured_amount_fixes(
         }
     }
     let natural = resolved_rects(&scratch);
-    let mut fits: Vec<(String, f64, f64, f64)> = Vec::new();
-    for (text, available) in candidates {
+    let mut fits: Vec<Fit> = Vec::new();
+    for Candidate {
+        text,
+        available,
+        parent,
+    } in candidates
+    {
         let Some(id) = text.get("id").and_then(Value::as_str) else {
             continue;
         };
@@ -127,16 +166,31 @@ pub(super) fn collect_measured_amount_fixes(
             continue;
         }
         if let Some(size) = fitted_font_size(font_size, available, width) {
-            fits.push((id.to_string(), size, available, font_size));
+            fits.push(Fit {
+                id: id.to_string(),
+                size,
+                available,
+                original: font_size,
+                parent,
+            });
         }
     }
     verify_fitted_sizes(state, &mut scratch, &mut fits);
     fits.into_iter()
-        .map(|(id, size, _, _)| EditorCommand::SetNodeFontSize {
-            node_id: NodeId::new(id),
-            font_size: size as f32,
+        .map(|fit| EditorCommand::SetNodeFontSize {
+            node_id: NodeId::new(fit.id),
+            font_size: fit.size as f32,
         })
         .collect()
+}
+
+/// A font-size fit under verification.
+struct Fit {
+    id: String,
+    size: f64,
+    available: f64,
+    original: f64,
+    parent: Option<(String, f64)>,
 }
 
 /// The proportional estimate assumes width scales with the font size, but
@@ -144,37 +198,39 @@ pub(super) fn collect_measured_amount_fixes(
 /// linearly, and the platform line breaker may wrap a token whose natural
 /// width nominally fits. So check the real condition: at the chosen size the
 /// text, laid out in its AUTHORED fixed width, must be exactly as tall as the
-/// same text laid out on one line. Step each still-wrapping token down a
-/// pixel at a time (bounded, never below the estimate's floor).
-fn verify_fitted_sizes(
-    state: &EditorState,
-    single_line: &mut EditorState,
-    fits: &mut [(String, f64, f64, f64)],
-) {
+/// same text laid out on one line, and must end inside its parent's inner box
+/// (a text that spills past it paints over the parent's next sibling). Step
+/// each still-failing token down a pixel at a time (bounded, never below the
+/// estimate's floor).
+fn verify_fitted_sizes(state: &EditorState, single_line: &mut EditorState, fits: &mut [Fit]) {
     const MAX_STEPS: usize = 16;
     let mut authored = state.clone();
     for _ in 0..MAX_STEPS {
-        for (id, size, _, _) in fits.iter() {
+        for fit in fits.iter() {
             for doc in [&mut *single_line, &mut authored] {
                 doc.apply(EditorCommand::SetNodeFontSize {
-                    node_id: NodeId::new(id.clone()),
-                    font_size: *size as f32,
+                    node_id: NodeId::new(fit.id.clone()),
+                    font_size: fit.size as f32,
                 });
             }
         }
         let one_line = resolved_rects(single_line);
         let laid_out = resolved_rects(&authored);
         let mut stepped = false;
-        for (id, size, available, original) in fits.iter_mut() {
-            let minimum = if *original >= 32.0 { 24.0 } else { 12.0 };
-            let (Some(one), Some(real)) = (one_line.get(id.as_str()), laid_out.get(id.as_str()))
-            else {
+        for fit in fits.iter_mut() {
+            let minimum = if fit.original >= 32.0 { 24.0 } else { 12.0 };
+            let (Some(one), Some(real)) = (one_line.get(&fit.id), laid_out.get(&fit.id)) else {
                 continue;
             };
-            let too_wide = one.w.is_finite() && one.w > *available + TEXT_FIT_EPS;
+            let too_wide = one.w.is_finite() && one.w > fit.available + TEXT_FIT_EPS;
             let wrapped = real.h.is_finite() && one.h.is_finite() && real.h > one.h + 0.5;
-            if (too_wide || wrapped) && *size - 1.0 >= minimum {
-                *size -= 1.0;
+            let spills = fit.parent.as_ref().is_some_and(|(parent_id, right_pad)| {
+                laid_out.get(parent_id).is_some_and(|parent| {
+                    real.x + real.w > parent.x + parent.w - right_pad + TEXT_FIT_EPS
+                })
+            });
+            if (too_wide || wrapped || spills) && fit.size - 1.0 >= minimum {
+                fit.size -= 1.0;
                 stepped = true;
             }
         }
@@ -183,3 +239,6 @@ fn verify_fitted_sizes(
         }
     }
 }
+
+#[path = "text_fit_allotted.rs"]
+mod allotted;

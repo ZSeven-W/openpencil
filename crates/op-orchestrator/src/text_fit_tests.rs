@@ -343,3 +343,143 @@ fn amount_token_recognizes_figures_but_not_prose() {
         assert!(!amount::is_amount_token(no), "{no} is not an amount");
     }
 }
+
+/// arena-m03's hero-card stats row: two `fill_container` blocks and a hug
+/// chip. The 今日收益 amount is a `fill_container` fixed-width text next to
+/// a 14px icon; taffy keeps the text leaf at its min-content width, so it
+/// spills out of its block over the 累计收益 block while its own rect equals
+/// its natural width. `root_width` narrows the row.
+fn stats_row_screen(root_width: f64) -> VecDocSink {
+    let tree = json!({
+        "type": "frame", "id": "root", "width": root_width, "height": 300,
+        "layout": "vertical", "padding": [0, 24],
+        "children": [{
+            "type": "frame", "id": "card", "width": "fill_container",
+            "height": "fit_content", "layout": "vertical", "padding": 24,
+            "children": [{
+                "type": "frame", "id": "stats-row", "width": "fill_container",
+                "layout": "horizontal", "gap": 8, "alignItems": "end",
+                "children": [
+                    {
+                        "type": "frame", "id": "today", "width": "fill_container",
+                        "height": "fit_content", "layout": "vertical", "gap": 4,
+                        "children": [
+                            {"type": "text", "id": "today-label", "content": "今日收益",
+                             "fontFamily": "DM Sans", "fontSize": 12, "lineHeight": 1.5},
+                            {
+                                "type": "frame", "id": "today-value", "width": "fill_container",
+                                "layout": "horizontal", "gap": 4, "alignItems": "center",
+                                "children": [
+                                    {"type": "icon_font", "id": "trend", "iconFontName": "trending-up",
+                                     "iconFontFamily": "lucide", "width": 14, "height": 14},
+                                    {"type": "text", "id": "today-amount", "content": "+1,286.40",
+                                     "fontFamily": "DM Mono", "fontSize": 16, "fontWeight": 500,
+                                     "letterSpacing": 0.5, "lineHeight": 1.5,
+                                     "width": "fill_container", "height": "fit_content",
+                                     "textGrowth": "fixed-width"}
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "type": "frame", "id": "total", "width": "fill_container",
+                        "height": "fit_content", "layout": "vertical", "gap": 4,
+                        "children": [
+                            {"type": "text", "id": "total-label", "content": "累计收益",
+                             "fontFamily": "DM Sans", "fontSize": 12, "lineHeight": 1.5},
+                            {"type": "text", "id": "total-amount", "content": "+38,640.18",
+                             "fontFamily": "DM Mono", "fontSize": 14, "fontWeight": 500,
+                             "letterSpacing": 0.5, "lineHeight": 1.5}
+                        ]
+                    },
+                    {
+                        "type": "frame", "id": "chip", "width": "fit_content",
+                        "height": "fit_content", "layout": "horizontal", "padding": [6, 12],
+                        "children": [{"type": "text", "id": "chip-text", "content": "持仓 6 只",
+                                      "fontFamily": "DM Sans", "fontSize": 12}]
+                    }
+                ]
+            }]
+        }]
+    });
+    let node: PenNode = serde_json::from_value(tree).expect("fixture parses");
+    let mut sink = VecDocSink::new();
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![node],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+    sink
+}
+
+fn node_font_size(sink: &VecDocSink, id: &str) -> Option<f64> {
+    fn find<'a>(v: &'a Value, id: &str) -> Option<&'a Value> {
+        if v.get("id").and_then(Value::as_str) == Some(id) {
+            return Some(v);
+        }
+        v.get("children")
+            .and_then(Value::as_array)?
+            .iter()
+            .find_map(|c| find(c, id))
+    }
+    let root = serde_json::to_value(&sink.state().active_children()[0]).ok()?;
+    find(&root, id)?.get("fontSize")?.as_f64()
+}
+
+#[test]
+fn amount_spilling_past_its_row_share_shrinks_until_the_blocks_stop_overlapping() {
+    // 362px narrows the row to 266px so the spill reproduces under a
+    // fallback face as well as DM Mono.
+    let mut sink = stats_row_screen(362.0);
+    let before = resolved_rects(sink.state());
+    let (amount, block, next) = (
+        before["today-amount"],
+        before["today-value"],
+        before["total"],
+    );
+    assert!(
+        amount.x + amount.w > next.x,
+        "fixture must reproduce the overlap: amount ends at {}, 累计收益 starts at {}",
+        amount.x + amount.w,
+        next.x
+    );
+    assert!(
+        amount.x + amount.w > block.x + block.w,
+        "the text spills out of its own block"
+    );
+
+    assert_eq!(repair_text_fit(&mut sink, "root"), 1);
+
+    let size = node_font_size(&sink, "today-amount").expect("font size");
+    assert!((12.0..16.0).contains(&size), "shrunk, got {size}");
+    let after = resolved_rects(sink.state());
+    let (amount, today, next) = (after["today-amount"], after["today"], after["total"]);
+    assert!(
+        amount.x + amount.w <= next.x,
+        "the amount ends at {} before 累计收益 starts at {}",
+        amount.x + amount.w,
+        next.x
+    );
+    assert!(
+        today.x + today.w <= next.x,
+        "the blocks no longer overlap: {today:?} vs {next:?}"
+    );
+    assert!(
+        amount.x + amount.w <= after["today-value"].x + after["today-value"].w + 0.5,
+        "the text ends inside its own row"
+    );
+}
+
+#[test]
+fn amount_that_fits_its_row_share_is_untouched() {
+    let mut sink = stats_row_screen(600.0);
+    let before = resolved_rects(sink.state());
+    assert!(
+        before["today-amount"].x + before["today-amount"].w
+            <= before["today-value"].x + before["today-value"].w,
+        "fixture fits its share"
+    );
+
+    assert_eq!(repair_text_fit(&mut sink, "root"), 0);
+    assert_eq!(node_font_size(&sink, "today-amount"), Some(16.0));
+}
