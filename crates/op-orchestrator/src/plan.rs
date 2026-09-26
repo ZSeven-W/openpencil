@@ -214,6 +214,10 @@ fn extract_json_object(text: &str) -> Option<&str> {
 /// 启发式兜底 plan —— 规划 LLM 不可用 / 解析失败时用,保证编排器
 /// 仍能跑出点东西。对齐 TS `buildFallbackPlanFromPrompt`:固定宽度
 /// 根 frame + 按 prompt 规模切 1-3 个等高区块。
+///
+/// A brief that enumerates its own sections (`plan_coverage::required_sections`)
+/// gets one subtask per section instead, on both the generic and the mobile
+/// branch (`plan_fallback_brief`).
 pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
     const WIDTH: f64 = 1200.0;
     const SECTION_HEIGHT: f64 = 360.0;
@@ -281,16 +285,26 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
         return crate::plan_fallback_card::build_fallback_card_plan(req, preset);
     }
     if preset.type_ == DesignType::MobileScreen {
-        let (width, height) = explicit_mobile_size(&req.prompt)
-            .unwrap_or((preset.width, preset.root_height.max(preset.height)));
-        let top_h = (height * 0.24).round().clamp(140.0, 220.0);
-        let main_h = (height - top_h).max(320.0);
+        return crate::plan_fallback_mobile::build_fallback_mobile_plan(req, preset);
+    }
+
+    // The brief's own section list beats a length-sliced skeleton.
+    let requested = crate::request_dimensions::requested_root_dimensions(&req.prompt);
+    let root_width = requested.map_or(WIDTH, |dims| dims.width);
+    let requested_height = requested.and_then(|dims| dims.height);
+    if let Some((subtasks, stacked_height)) = crate::plan_fallback_brief::brief_section_subtasks(
+        &req.prompt,
+        root_width,
+        requested_height,
+        true,
+        None,
+    ) {
         return OrchestratorPlan {
             root_frame: RootFrameSpec {
-                id: "page".into(),
-                name: "Page".into(),
-                width,
-                height,
+                id: "root".into(),
+                name: "Design".into(),
+                width: root_width,
+                height: requested_height.unwrap_or(stacked_height),
                 layout: Some("vertical".into()),
                 gap: Some(0.0),
                 padding: Some(0.0),
@@ -299,52 +313,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                     color: "#FFFFFF".into(),
                 }]),
             },
-            subtasks: vec![
-                Subtask {
-                    id: "top-summary".into(),
-                    label: "Top Summary".into(),
-                    region: Region {
-                        width,
-                        height: top_h,
-                    },
-                    bleed_hero: false,
-                    id_prefix: "top-summary".into(),
-                    parent_frame_id: Some("page".into()),
-                    insert_after_sibling_id: None,
-                    elements: Some(
-                        "the screen's header / context for this product (title or greeting, \
-                         and the key top-level action[s] this app needs); no status bar. \
-                         Choose what fits the prompt — not a fixed delivery-app header."
-                            .into(),
-                    ),
-                    screen: None,
-                    generated_root_id: None,
-                    existing_section_labels: None, covers: None,
-                    retry_feedback: None,
-                },
-                Subtask {
-                    id: "main-content".into(),
-                    label: "Main Content".into(),
-                    region: Region {
-                        width,
-                        height: main_h,
-                    },
-                    bleed_hero: false,
-                    id_prefix: "main-content".into(),
-                    parent_frame_id: Some("page".into()),
-                    insert_after_sibling_id: None,
-                    elements: Some(
-                        "this screen's primary content for the product — the main job-to-be-done \
-                         and whatever modules genuinely fit it; do not repeat the top summary. \
-                         Vary the composition per prompt, not a fixed search + banner + card stack."
-                            .into(),
-                    ),
-                    screen: None,
-                    generated_root_id: None,
-                    existing_section_labels: None, covers: None,
-                    retry_feedback: None,
-                },
-            ],
+            subtasks,
             style_guide_name: None,
         };
     }
@@ -550,7 +519,7 @@ fn explicit_slide_count(prompt: &str) -> Option<usize> {
     None
 }
 
-fn explicit_mobile_size(prompt: &str) -> Option<(f64, f64)> {
+pub(crate) fn explicit_mobile_size(prompt: &str) -> Option<(f64, f64)> {
     let normalized = prompt.replace('×', "x").to_lowercase();
     let bytes = normalized.as_bytes();
     for (i, b) in bytes.iter().enumerate() {

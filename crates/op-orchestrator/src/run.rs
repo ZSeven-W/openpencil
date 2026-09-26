@@ -197,6 +197,7 @@ async fn planning_loop(
                     preview = %preview,
                     "planning parse failure"
                 );
+                debug_plan_attempt_failed(attempt, "parse failure", &raw);
             }
             // abort 在流中发生 → 立即返回
             Err(error) if error.aborted => return Err(OrchestratorError::Aborted),
@@ -215,6 +216,7 @@ async fn planning_loop(
                     .take(STREAM_ERROR_LOG_CHARS)
                     .collect::<String>();
                 tracing::warn!(attempt, error = %reason, "planning stream error");
+                debug_plan_attempt_failed(attempt, "stream error", &error.message);
             }
         }
         if abort.is_set() {
@@ -222,6 +224,9 @@ async fn planning_loop(
         }
     }
     tracing::warn!("planning failed twice; using fallback plan");
+    if debug_plan_enabled() {
+        eprintln!("[PLAN] fallback plan in use");
+    }
 
     // 规划失败 → fallback plan(规划不可出错)
     let mut fallback = build_fallback_plan(request);
@@ -231,6 +236,39 @@ async fn planning_loop(
     crate::style_guide_context::enforce_pinned_style_guide(&mut fallback, request);
     let norm = normalize(&mut fallback, request);
     Ok((fallback, norm))
+}
+
+/// Longest model-output / error preview echoed by the debug-plan lines.
+const DEBUG_PLAN_PREVIEW_CHARS: usize = 300;
+
+/// `OPENPENCIL_DEBUG_PLAN` — the same switch `run_orchestrator` reads for its
+/// `[PLAN]` summary. Headless runs (op-smoke, the arena) print no `tracing`
+/// output, so without these lines a fallback plan looked like a planner that
+/// chose to build one anonymous section.
+fn debug_plan_enabled() -> bool {
+    std::env::var_os("OPENPENCIL_DEBUG_PLAN").is_some()
+}
+
+/// Echo one failed planning attempt to stderr when plan debugging is on. The
+/// preview is the model's own output (or the transport's already-redacted
+/// error text), never request credentials.
+fn debug_plan_attempt_failed(attempt: u8, kind: &str, detail: &str) {
+    if !debug_plan_enabled() {
+        return;
+    }
+    eprintln!(
+        "[PLAN] planning attempt {attempt} failed: {kind}: {}",
+        debug_plan_preview(detail)
+    );
+}
+
+fn debug_plan_preview(detail: &str) -> String {
+    detail
+        .trim()
+        .chars()
+        .take(DEBUG_PLAN_PREVIEW_CHARS)
+        .map(|ch| if ch == '\n' || ch == '\r' { ' ' } else { ch })
+        .collect()
 }
 
 fn apply_plan_pins(

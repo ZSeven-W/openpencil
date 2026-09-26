@@ -201,3 +201,12 @@ mod geometry_salvage_tests;
 mod planning_retry_tests;
 #[path = "run_tests_right_rail.rs"]
 mod right_rail_tests;
+
+#[test]
+fn debug_plan_preview_is_one_line_and_capped() {
+    let raw = format!("  line one\nline two\r\n{}", "x".repeat(400));
+    let preview = debug_plan_preview(&raw);
+    assert!(!preview.contains('\n') && !preview.contains('\r'));
+    assert_eq!(preview.chars().count(), DEBUG_PLAN_PREVIEW_CHARS);
+    assert!(preview.starts_with("line one line two"));
+}
