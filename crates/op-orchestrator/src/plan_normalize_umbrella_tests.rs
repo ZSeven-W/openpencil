@@ -374,3 +374,34 @@ fn framing_phrases_need_only_layout_words_around_a_wrapper() {
         assert!(!is_framing_phrase(&normalize_name(content)), "{content}");
     }
 }
+
+#[test]
+fn drops_an_umbrella_whose_list_ends_in_a_framing_tail() {
+    // arena-d03 0927c run-1: the last item carried "三块的布局容器", so
+    // "告警列表" never matched its sibling and the dashboard drew twice.
+    let mut p = plan(vec![
+        st(
+            "sidebar",
+            "侧边导航栏",
+            "品牌 Logo 区块、垂直导航项、底部用户资料块",
+        ),
+        st(
+            "main",
+            "主内容区",
+            "垂直容器，包含状态摘要、设备网格、告警列表三块的布局容器",
+        ),
+        st("summary", "顶部状态摘要三卡", "三张摘要卡"),
+        st("device-grid", "设备网格", "12 个设备卡片网格"),
+        st("alerts", "右侧告警列表", "5 条告警项"),
+    ]);
+    assert_eq!(drop_umbrella_subtasks(&mut p), 1);
+    assert_eq!(ids(&p), vec!["sidebar", "summary", "device-grid", "alerts"]);
+}
+
+#[test]
+fn framing_tails_are_stripped_only_when_a_name_remains() {
+    assert_eq!(strip_framing_tail("告警列表三块的布局容器"), "告警列表");
+    assert_eq!(strip_framing_tail("卡片区的容器"), "卡片区");
+    assert_eq!(strip_framing_tail("容器"), "容器");
+    assert_eq!(strip_framing_tail("商品网格"), "商品网格");
+}

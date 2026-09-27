@@ -20,6 +20,8 @@ use crate::design_type::contains_word;
 use crate::plan::{OrchestratorPlan, Subtask};
 use crate::plan_coverage::is_han;
 use crate::plan_coverage_text::{contains_term, strip_leading_article};
+use regex::Regex;
+use std::sync::LazyLock;
 
 /// Words that, standing alone, describe structure rather than content.
 const FRAMING_WORDS: &[&str] = &[
@@ -319,6 +321,12 @@ fn clean_item(raw: &str) -> Option<String> {
             item = head.trim().to_string();
         }
     }
+    // A whole-item framing phrase ("垂直容器") must be recognised before its
+    // tail is stripped, or it would survive as a bare modifier ("垂直").
+    if is_framing_phrase(&normalize_name(item.trim())) {
+        return None;
+    }
+    item = strip_framing_tail(item.trim()).to_string();
     item = strip_leading_article(item.trim());
     let normalized = normalize_name(&item);
     if normalized.is_empty()
@@ -394,6 +402,31 @@ fn is_framing_phrase(normalized: &str) -> bool {
         return false;
     }
     true
+}
+
+/// Strip a trailing "what this list is" tail from the last item: the planner
+/// closes the list with it ("…、告警列表三块的布局容器"), so without this the
+/// last sibling name never matches and the umbrella survives (arena d03).
+fn strip_framing_tail(item: &str) -> &str {
+    static TAIL: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?:[0-9零一二两三四五六七八九十]+\s*(?:块|个|部分|大块|区块|模块))?\s*的?\s*(?:整体|外层|主)?\s*(?:布局容器|容器|布局)$",
+        )
+        .expect("valid framing-tail pattern")
+    });
+    let Some(found) = TAIL.find(item) else {
+        return item;
+    };
+    let head = item[..found.start()].trim_end();
+    // A lone "容器" item is handled as a framing word; keep the tail when
+    // stripping it would leave too little to name a sibling.
+    if head.chars().filter(|ch| is_han(*ch)).count() < 2 && !head.is_ascii() {
+        return item;
+    }
+    if head.is_empty() {
+        return item;
+    }
+    head
 }
 
 fn strip_wrapping_brackets(mut text: &str) -> &str {
