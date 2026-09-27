@@ -44,11 +44,26 @@ pub(super) struct ResolvedGradient {
 struct ResolvedStop {
     offset: f64,
     color: String,
+    rgba: [u8; 4],
 }
 
 impl ResolvedGradient {
     pub(super) fn colors(&self) -> Vec<String> {
         self.stops.iter().map(|stop| stop.color.clone()).collect()
+    }
+
+    /// Composite translucent stops over the opaque paint beneath them, the
+    /// way a semi-transparent solid already is. A hero glow of `#A78BFA26`
+    /// over `#0A0F1C` renders near-black, not lavender; reading the stop as
+    /// opaque let `$--card` (#18181B) headline text pass at ~7:1 while it
+    /// actually rendered at ~1.1:1 (arena l02, 2026-09-27).
+    pub(super) fn flatten_over(&mut self, under: [u8; 4]) {
+        for stop in &mut self.stops {
+            if stop.rgba[3] < u8::MAX {
+                stop.color = super::composite_over(stop.rgba, under);
+                stop.rgba = super::parse_color_rgba(&stop.color).unwrap_or(stop.rgba);
+            }
+        }
     }
 }
 
@@ -67,6 +82,7 @@ pub(super) fn resolve_gradient(
             Some(ResolvedStop {
                 offset,
                 color: super::rgb_hex(rgba),
+                rgba,
             })
         })
         .collect();

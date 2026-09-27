@@ -150,3 +150,41 @@ fn a_near_uniform_dark_mesh_is_checked_like_its_colour() {
         "#0B1220"
     );
 }
+
+fn glow(alpha: &str) -> serde_json::Value {
+    json!({
+        "type": "radial_gradient", "cx": 0.5, "cy": 0.2, "radius": 0.7,
+        "stops": [
+            {"offset": 0.0, "color": format!("#A78BFA{alpha}")},
+            {"offset": 0.55, "color": format!("#34D399{alpha}")},
+            {"offset": 1.0, "color": format!("#E9D5FF{alpha}")}
+        ]
+    })
+}
+
+#[test]
+fn a_translucent_glow_is_composited_over_the_dark_page_beneath_it() {
+    // arena l02 0927b: a hero headline filled `#18181B` sat in a
+    // `#A78BFA26` radial glow over a `#0A0F1C` page. Read as opaque lavender
+    // the stop passed at ~7:1; rendered, the headline was invisible.
+    let (mut sink, root_id) = super::text_contrast_repair_tests::contrast_sink(
+        Some(json!({"type": "solid", "color": "#0A0F1C"})),
+        Some(glow("26")),
+        json!("#18181B"),
+    );
+    assert_eq!(repair_text_contrast(&mut sink, &root_id), 1);
+    assert_ne!(
+        super::text_contrast_repair_tests::contrast_label_fill(&sink),
+        "#18181B"
+    );
+}
+
+#[test]
+fn an_opaque_light_glow_still_carries_dark_text() {
+    let (mut sink, root_id) = super::text_contrast_repair_tests::contrast_sink(
+        Some(json!({"type": "solid", "color": "#0A0F1C"})),
+        Some(glow("FF")),
+        json!("#18181B"),
+    );
+    assert_eq!(repair_text_contrast(&mut sink, &root_id), 0);
+}

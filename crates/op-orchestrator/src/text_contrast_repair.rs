@@ -339,7 +339,10 @@ fn nearest_background(
         match resolve_fill_kind(node_fills(ancestor), variables, theme) {
             ResolvedFill::Transparent => continue,
             ResolvedFill::Unprovable => return None,
-            ResolvedFill::Gradient(colors) => {
+            ResolvedFill::Gradient(mut colors) => {
+                let under = nearest_opaque_solid_color(index, ancestors, variables, theme)
+                    .unwrap_or([u8::MAX; 4]);
+                colors.flatten_over(under);
                 return Some(LocatedBackground {
                     colors: colors.colors(),
                     gradient: Some(colors),
