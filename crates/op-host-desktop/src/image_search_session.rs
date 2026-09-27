@@ -681,15 +681,18 @@ fn spawn_job(
                 &judge_intent,
             )
         } else {
-            // No configured judge deliberately uses the old one-result path;
-            // this is the NoJudge behavior and keeps default output bytes
-            // unchanged.
-            fetch_first_image_url_blocking(
+            // No configured judge: the unjudged ladder, still fenced for
+            // relevance. The slot's image prompt is passed as intent so a
+            // product-photo slot also rejects artwork hits (a tattoo shot and
+            // a graffiti mural once filled skincare product cards).
+            op_image_enrich::net::resolve::fetch_first_image_resolved_blocking(
                 &target.query,
+                &judge_intent,
                 aspect_ratio,
                 credentials.as_ref().map(OpenverseCredentials::as_web),
                 &used_urls,
             )
+            .map(|resolved| resolved.src)
         };
         publish_search_result(&search_memo, key, request_id, url);
     });
@@ -782,8 +785,8 @@ fn spawn_unavailable_gen_job(target: ImageSearchTarget) -> ImageSearchJob {
 mod fetch;
 mod intent;
 
+use fetch::fetch_first_image_url_blocking_with_judge;
 pub(crate) use fetch::fetch_image_data_url;
-use fetch::{fetch_first_image_url_blocking, fetch_first_image_url_blocking_with_judge};
 pub(crate) use intent::{current_intent_fingerprints, intent_fingerprint, search_intent_key};
 
 // `apply_result` + the slot predicates + the target/mode/aspect types live in
