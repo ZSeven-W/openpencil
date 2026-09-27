@@ -87,10 +87,18 @@ const CHART_WORDS: &[&str] = &["图表", "chart"];
 pub(crate) fn core_covering_subtask(section: &str, plan: &OrchestratorPlan) -> Option<String> {
     if han_count(section) > 0 {
         let core = cjk_core(section)?;
+        let anchor = count_anchor(section, &core);
         return plan
             .subtasks
             .iter()
-            .find(|st| cjk_core_covered(&core, st))
+            .find(|st| {
+                cjk_core_covered(&core, st)
+                    || anchor.as_deref().is_some_and(|anchor| {
+                        st.elements
+                            .as_deref()
+                            .is_some_and(|elements| compact_han(elements).contains(anchor))
+                    })
+            })
             .map(|st| st.id.clone());
     }
     let core = english_core(section)?;
@@ -144,6 +152,33 @@ pub(crate) fn cjk_core(section: &str) -> Option<String> {
     };
     let core = strip_state_suffix(&strip_position_words(&text));
     (!core.is_empty() && core != section.trim()).then_some(core)
+}
+
+/// The core together with the first count the brief attaches to it
+/// (`看板三列各四张任务卡` → `看板三列`). A short core is too ambiguous to trust
+/// in elements on its own — `看板 / 列表 / 日历` is a tab row — but the same
+/// core followed by the brief's own count (`看板三列（待办/进行中/已完成）`) is
+/// the section itself, even when the subtask is labelled `Main Column`
+/// (arena w01, 2026-09-27).
+fn count_anchor(section: &str, core: &str) -> Option<String> {
+    static FIRST_COUNT: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"^[0-9零一二两三四五六七八九十百]+[个条张项页行位款篇栏卡列组块]")
+            .expect("valid first-count pattern")
+    });
+    let text = compact_han(section);
+    let core = compact_han(core);
+    let start = text.find(&core)?;
+    let rest = &text[start + core.len()..];
+    let count = FIRST_COUNT.find(rest)?;
+    Some(format!("{core}{}", count.as_str()))
+}
+
+/// Lowercase with all whitespace removed, so `看板 三列` and `看板三列` agree.
+fn compact_han(text: &str) -> String {
+    text.chars()
+        .filter(|ch| !ch.is_whitespace())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 fn cjk_core_covered(core: &str, st: &Subtask) -> bool {

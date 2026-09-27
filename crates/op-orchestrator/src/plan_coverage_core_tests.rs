@@ -300,3 +300,30 @@ fn an_english_and_after_a_with_clause_is_a_detail() {
     assert_eq!(details[0].name, "avatar");
     assert_eq!(details[0].detail_of.as_deref(), Some("header with search"));
 }
+
+#[test]
+fn a_short_core_with_the_briefs_own_count_is_trusted_in_elements() {
+    // 0927c arena-w01 run-2: the board sat inside `main (Main Column)` as
+    // "看板三列（待办/进行中/已完成）…每列四张任务卡", and a second board
+    // was appended because `看板` alone was only trusted in a label.
+    let board_in_main = plan(vec![
+        subtask("sidebar", "Project List Sidebar", None),
+        subtask(
+            "main",
+            "Main Column",
+            Some("顶部栏、标签切换（看板/列表/日历三个tab）、看板三列（待办/进行中/已完成），每列四张任务卡"),
+        ),
+        subtask("drawer", "Task Detail Drawer", None),
+    ]);
+    assert!(!missing("看板三列各四张任务卡", &board_in_main));
+    assert_eq!(
+        count_anchor("看板三列各四张任务卡", "看板").as_deref(),
+        Some("看板三列")
+    );
+    // A different count is a different board.
+    let two_columns = plan(vec![
+        subtask("sidebar", "Project List Sidebar", None),
+        subtask("main", "Main Column", Some("看板两列，每列四张任务卡")),
+    ]);
+    assert!(missing("看板三列各四张任务卡", &two_columns));
+}
