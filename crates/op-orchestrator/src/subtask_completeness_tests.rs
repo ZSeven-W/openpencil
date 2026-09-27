@@ -389,3 +389,38 @@ fn orchestrator_summary_counts_a_final_incomplete_subtask() {
         .iter()
         .any(|event| matches!(event, Progress::SubtaskDone { id, .. } if id == "merchants")));
 }
+
+#[test]
+fn quoted_display_copy_is_not_an_item_promise() {
+    // arena-m05 0927a: a comments header whose title reads "8 条评论" was
+    // retried twice for "8 items" and then failed outright.
+    let header = subtask(
+        "Comments Header",
+        Some("back button, title '8 条评论', hairline divider"),
+    );
+    assert_eq!(expected_item_count(&header), None);
+    for elements in [
+        "title “12 条回复”",
+        "badge 「3 张券」",
+        "caption \"5 items left\"",
+    ] {
+        assert_eq!(
+            expected_item_count(&subtask("Header", Some(elements))),
+            None,
+            "{elements}"
+        );
+    }
+}
+
+#[test]
+fn counts_outside_quotes_still_promise_items() {
+    let list = subtask(
+        "Comment List",
+        Some("8 rows of comments, each with avatar, nickname, reply chip 'Reply'"),
+    );
+    assert_eq!(expected_item_count(&list), Some(8));
+    let apostrophe = subtask("Feed", Some("the user's 6 posts, newest first"));
+    assert_eq!(expected_item_count(&apostrophe), Some(6));
+    let unclosed = subtask("Grid", Some("title '热门 and 6 张卡片"));
+    assert_eq!(expected_item_count(&unclosed), Some(6));
+}

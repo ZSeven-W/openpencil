@@ -28,6 +28,9 @@ pub fn expected_item_count(subtask: &Subtask) -> Option<usize> {
         text.push('\n');
         text.push_str(elements);
     }
+    // Quoted text is literal copy the section displays ("title '8 条评论'"),
+    // not a promise of that many sibling items.
+    let text = mask_quoted_copy(&text);
 
     let mut counts = Vec::new();
     let mut ranged_spans: Vec<Range<usize>> = Vec::new();
@@ -248,6 +251,62 @@ fn is_item_node(node: &PenNode) -> bool {
         node,
         PenNode::Frame(_) | PenNode::Rectangle(_) | PenNode::Image(_)
     )
+}
+
+/// Longest quoted run (in chars) treated as display copy; anything longer
+/// is more likely a stray apostrophe pairing across real content.
+const QUOTED_COPY_MAX_CHARS: usize = 40;
+
+/// Blank out the inside of quoted copy, keeping byte offsets stable so the
+/// span bookkeeping below still lines up with `text`.
+fn mask_quoted_copy(text: &str) -> String {
+    const PAIRS: &[(char, char)] = &[
+        ('\'', '\''),
+        ('"', '"'),
+        ('“', '”'),
+        ('‘', '’'),
+        ('「', '」'),
+        ('『', '』'),
+    ];
+    let chars: Vec<(usize, char)> = text.char_indices().collect();
+    let mut masked = text.to_string().into_bytes();
+    let mut i = 0;
+    while i < chars.len() {
+        let (_, open) = chars[i];
+        let Some(&(_, close)) = PAIRS.iter().find(|(o, _)| *o == open) else {
+            i += 1;
+            continue;
+        };
+        // An ASCII apostrophe only opens a quote at a word start ("title 'x'"),
+        // never inside a word ("user's").
+        if open == '\'' && i > 0 && chars[i - 1].1.is_alphanumeric() {
+            i += 1;
+            continue;
+        }
+        let end = chars[i + 1..]
+            .iter()
+            .take(QUOTED_COPY_MAX_CHARS + 1)
+            .position(|&(_, ch)| ch == close || ch == '\n')
+            .map(|offset| i + 1 + offset)
+            .filter(|&j| chars[j].1 == close);
+        let Some(end) = end else {
+            i += 1;
+            continue;
+        };
+        if close == '\''
+            && chars
+                .get(end + 1)
+                .is_some_and(|&(_, ch)| ch.is_alphanumeric())
+        {
+            i += 1;
+            continue;
+        }
+        let from = chars[i + 1].0;
+        let to = chars[end].0;
+        masked[from..to].fill(b' ');
+        i = end + 1;
+    }
+    String::from_utf8(masked).unwrap_or_else(|_| text.to_string())
 }
 
 fn parse_count(raw: &str) -> Option<usize> {
