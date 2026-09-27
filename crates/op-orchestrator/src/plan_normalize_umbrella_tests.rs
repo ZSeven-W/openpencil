@@ -332,3 +332,45 @@ fn tolerant_names_set_generic_suffixes_aside() {
     assert!(!names_match("图行", "图区"), "one Han char is not a name");
     assert!(!names_match("list", "playlist"));
 }
+
+#[test]
+fn drops_a_layout_phrase_marker() {
+    // arena-d02 0927b run-1: `main (Main Column) elements="vertical container"`
+    // was kept, then retried for being blank and drew the users table twice.
+    let mut p = plan(vec![
+        st("sidebar", "Sidebar", "brand block, grouped vertical nav"),
+        st("main", "Main Column", "vertical container"),
+        st(
+            "header",
+            "Header",
+            "page title 'Users', search input, avatar",
+        ),
+        st("filterbar", "Filter Bar", "three select dropdowns"),
+        st("table", "Users Table", "10 data rows with status pills"),
+    ]);
+    assert_eq!(drop_umbrella_subtasks(&mut p), 1);
+    assert_eq!(ids(&p), vec!["sidebar", "header", "filterbar", "table"]);
+}
+
+#[test]
+fn framing_phrases_need_only_layout_words_around_a_wrapper() {
+    for framing in [
+        "vertical container",
+        "main content wrapper",
+        "full-width vertical stack",
+        "垂直堆叠容器",
+        "主内容容器",
+        "纵向布局",
+    ] {
+        assert!(is_framing_phrase(&normalize_name(framing)), "{framing}");
+    }
+    for content in [
+        "card container",
+        "hero content",
+        "main content",
+        "卡片容器",
+        "商品列表布局",
+    ] {
+        assert!(!is_framing_phrase(&normalize_name(content)), "{content}");
+    }
+}

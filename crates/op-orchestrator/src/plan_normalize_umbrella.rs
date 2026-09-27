@@ -321,10 +321,79 @@ fn clean_item(raw: &str) -> Option<String> {
     }
     item = strip_leading_article(item.trim());
     let normalized = normalize_name(&item);
-    if normalized.is_empty() || FRAMING_WORDS.contains(&normalized.as_str()) {
+    if normalized.is_empty()
+        || FRAMING_WORDS.contains(&normalized.as_str())
+        || is_framing_phrase(&normalized)
+    {
         return None;
     }
     Some(item)
+}
+
+/// Modifiers that only say how a wrapper is laid out, never what it holds.
+const FRAMING_MODIFIERS_ASCII: &[&str] = &[
+    "vertical",
+    "horizontal",
+    "main",
+    "content",
+    "flex",
+    "flexbox",
+    "column",
+    "columns",
+    "row",
+    "full",
+    "width",
+    "full-width",
+    "outer",
+    "inner",
+    "page",
+    "scrollable",
+    "scroll",
+];
+/// Nouns that make a phrase framing: the wrapper itself.
+const FRAMING_CORES_ASCII: &[&str] = &["container", "wrapper", "stack", "layout"];
+const FRAMING_MODIFIERS_CJK: &[&str] = &[
+    "垂直", "水平", "纵向", "横向", "竖向", "主", "内容", "堆叠", "弹性", "滚动", "外层", "整体",
+];
+const FRAMING_CORES_CJK: &[&str] = &["容器", "布局", "排列"];
+
+/// A phrase built only from layout modifiers around a wrapper noun
+/// ("vertical container", "main content wrapper", "垂直堆叠容器") names
+/// structure, not content — the combinations are too many to list whole.
+fn is_framing_phrase(normalized: &str) -> bool {
+    let tokens: Vec<&str> = normalized
+        .split(|ch: char| ch.is_whitespace() || ch == '-' || ch == '_')
+        .filter(|token| !token.is_empty())
+        .collect();
+    if !tokens.is_empty() && tokens.iter().all(|token| token.is_ascii()) {
+        return tokens
+            .iter()
+            .any(|token| FRAMING_CORES_ASCII.contains(token))
+            && tokens.iter().all(|token| {
+                FRAMING_CORES_ASCII.contains(token) || FRAMING_MODIFIERS_ASCII.contains(token)
+            });
+    }
+    let compacted: String = normalized
+        .chars()
+        .filter(|ch| !ch.is_whitespace())
+        .collect();
+    let Some(core) = FRAMING_CORES_CJK
+        .iter()
+        .find(|core| compacted.ends_with(**core))
+    else {
+        return false;
+    };
+    let mut rest = &compacted[..compacted.len() - core.len()];
+    'strip: while !rest.is_empty() {
+        for modifier in FRAMING_MODIFIERS_CJK.iter().chain(FRAMING_CORES_CJK) {
+            if let Some(shorter) = rest.strip_prefix(modifier) {
+                rest = shorter;
+                continue 'strip;
+            }
+        }
+        return false;
+    }
+    true
 }
 
 fn strip_wrapping_brackets(mut text: &str) -> &str {
