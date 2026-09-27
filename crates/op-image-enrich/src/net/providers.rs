@@ -15,6 +15,7 @@
 //! `op-host-web-server`. The 4 MiB per-image cap still bounds what can be
 //! embedded.
 
+mod brand_fence;
 mod catalog;
 mod download;
 pub(crate) mod pacing;

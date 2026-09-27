@@ -463,6 +463,12 @@ fn metadata_is_explicitly_non_photo(metadata: &str) -> bool {
 }
 
 fn metadata_is_off_subject(metadata: &str, query: &str) -> bool {
+    // Brand names are matched on raw lexical words: canonicalisation would
+    // turn "starbucks" into "starbuck" and miss the list.
+    if super::brand_fence::names_unrequested_brand(&lexical_words(metadata), &lexical_words(query))
+    {
+        return true;
+    }
     let metadata = normalized_words(metadata);
     let query = normalized_words(query);
     OFF_SUBJECT_RESULT_GROUPS.iter().any(|group| {
