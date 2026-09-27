@@ -22,9 +22,7 @@ pub(crate) mod pacing;
 mod relevance;
 
 pub(crate) use catalog::wikimedia_info_is_image;
-pub(crate) use catalog::{
-    fetch_openverse_json, fetch_openverse_list, fetch_openverse_list_with_aspect,
-};
+pub(crate) use catalog::{fetch_openverse_list, fetch_openverse_list_with_aspect};
 pub use catalog::{
     fetch_openverse_token, parse_openverse_results, parse_wikimedia_results, RawHit,
 };
@@ -37,10 +35,11 @@ pub use relevance::simplify_search_query;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+pub(crate) use catalog::fetch_relevant_wikimedia_list_for_intent;
 use catalog::{fetch_relevant_wikimedia_list, materialize_first_thumb, materialize_thumbs};
 use relevance::retain_relevant_hits;
 pub(crate) use relevance::{
-    retain_relevant_hits as retain_relevant_hits_for_fetch, rewrite_queries, two_keyword_retry,
+    fence_rejection, retain_relevant_hits_for_intent, rewrite_queries, two_keyword_retry,
 };
 
 #[cfg(test)]

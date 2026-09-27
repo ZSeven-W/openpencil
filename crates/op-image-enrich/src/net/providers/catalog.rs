@@ -2,12 +2,14 @@
 //! Wikimedia list) plus thumbnail materialization. Carved out of the
 //! `providers.rs` spine to keep it under the 800-line cap; pure code motion.
 
+use crate::net::search_trace::trace_hits;
+
 use super::{
     pacing::{
         cache_token, cached_token, drop_cached_token, record_response, retry_after_seconds,
         retry_delay, token_lock, wait_for_request,
     },
-    read_capped, retain_relevant_hits, two_keyword_retry, WebImageSearchHit,
+    read_capped, retain_relevant_hits_for_intent, two_keyword_retry, WebImageSearchHit,
     WebOpenverseCredentials, MAX_EMBEDDED_IMAGE_BYTES, SEARCH_CANDIDATE_COUNT, SEARCH_RESULT_COUNT,
 };
 
@@ -263,15 +265,38 @@ pub(super) async fn fetch_relevant_wikimedia_list(
     client: &reqwest::Client,
     query: &str,
 ) -> Vec<RawHit> {
-    fetch_relevant_wikimedia_list_with(query, |candidate| {
+    fetch_relevant_wikimedia_list_for_intent(client, query, "").await
+}
+
+/// Relevance-fenced Wikimedia list whose photo contract also follows the
+/// slot's authored `intent` (see `retain_relevant_hits_for_intent`).
+pub(crate) async fn fetch_relevant_wikimedia_list_for_intent(
+    client: &reqwest::Client,
+    query: &str,
+    intent: &str,
+) -> Vec<RawHit> {
+    fetch_relevant_wikimedia_list_with_intent(query, intent, |candidate| {
         let client = client.clone();
         async move { fetch_wikimedia_list(&client, &candidate).await }
     })
     .await
 }
 
+#[cfg(test)]
 pub(super) async fn fetch_relevant_wikimedia_list_with<F, Fut>(
     query: &str,
+    fetch_list: F,
+) -> Vec<RawHit>
+where
+    F: FnMut(String) -> Fut,
+    Fut: std::future::Future<Output = Vec<RawHit>>,
+{
+    fetch_relevant_wikimedia_list_with_intent(query, "", fetch_list).await
+}
+
+pub(super) async fn fetch_relevant_wikimedia_list_with_intent<F, Fut>(
+    query: &str,
+    intent: &str,
     mut fetch_list: F,
 ) -> Vec<RawHit>
 where
@@ -279,7 +304,8 @@ where
     Fut: std::future::Future<Output = Vec<RawHit>>,
 {
     let hits = fetch_list(query.to_string()).await;
-    let relevant = retain_relevant_hits(hits, query);
+    trace_hits("wikimedia", query, (query, intent), &hits);
+    let relevant = retain_relevant_hits_for_intent(hits, query, intent);
     if !relevant.is_empty() {
         return relevant;
     }
@@ -287,9 +313,10 @@ where
     let Some(retry_query) = two_keyword_retry(query) else {
         return relevant;
     };
-    let retry = fetch_list(retry_query).await;
+    let retry = fetch_list(retry_query.clone()).await;
+    trace_hits("wikimedia-retry", &retry_query, (query, intent), &retry);
     // Keep the original photo/studio/isolated contract for concrete retries.
-    retain_relevant_hits(retry, query)
+    retain_relevant_hits_for_intent(retry, query, intent)
 }
 
 pub fn parse_wikimedia_results(json: &serde_json::Value) -> Vec<RawHit> {

@@ -99,16 +99,17 @@ pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool
             );
         }
 
-        let url = match &judge {
+        // Same intent rule as the desktop session: the authored image prompt
+        // wins, the search query is the fallback. Both ladders read the
+        // photo contract from it.
+        let intent = target
+            .prompt
+            .as_deref()
+            .filter(|prompt| !prompt.trim().is_empty())
+            .unwrap_or(target.query.as_str());
+        let hit = match &judge {
             Some(judge) => {
-                // Same intent rule as the desktop session: the authored image
-                // prompt wins, the search query is the fallback.
-                let intent = target
-                    .prompt
-                    .as_deref()
-                    .filter(|prompt| !prompt.trim().is_empty())
-                    .unwrap_or(target.query.as_str());
-                op_image_enrich::net::fetch::fetch_first_image_url_blocking_with_judge(
+                op_image_enrich::net::fetch::fetch_first_image_resolved_blocking_with_judge(
                     &target.query,
                     target.aspect_ratio,
                     None,
@@ -117,16 +118,21 @@ pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool
                     intent,
                 )
             }
-            // No configured judge deliberately uses the old one-result path;
-            // this is the NoJudge behavior and keeps default output bytes
-            // unchanged.
-            None => op_image_enrich::net::fetch::fetch_first_image_url_blocking(
+            None => op_image_enrich::net::fetch::fetch_first_image_resolved_blocking(
                 &target.query,
+                intent,
                 target.aspect_ratio,
                 None,
                 &used_urls,
             ),
         };
+        // Shipped nodes keep only `op-image:<hash>`; this line is the only
+        // record of which catalogue hit filled the slot.
+        eprintln!(
+            "{}",
+            image_provenance_line(target.node_id.as_str(), &target.query, hit.as_ref())
+        );
+        let url = hit.map(|hit| hit.src);
         let resolved = url
             .as_deref()
             .unwrap_or(op_image_enrich::SEARCH_FAILED_PLACEHOLDER_SRC);
@@ -165,6 +171,20 @@ pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool
     );
 }
 
+/// One-line, URL-free record of the hit that filled an image slot:
+/// `[IMAGE] <node id> query="…" -> <provider> "<hit title>" (via "…")`.
+fn image_provenance_line(
+    node_id: &str,
+    query: &str,
+    hit: Option<&op_image_enrich::net::fetch::ResolvedImage>,
+) -> String {
+    let query = op_image_enrich::net::search_trace::short_title(query, 60);
+    match hit {
+        Some(hit) => format!("[IMAGE] {node_id} query=\"{query}\" -> {}", hit.describe()),
+        None => format!("[IMAGE] {node_id} query=\"{query}\" -> none (fallback tile)"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,6 +217,24 @@ mod tests {
             op_editor_core::walkers::find_node(state.active_children(), &NodeId::new("smoke-slot"))
                 .expect("fallback survives");
         assert!(op_image_enrich::is_image_fallback(node));
+    }
+
+    #[test]
+    fn provenance_line_names_provider_and_hit_title_without_urls() {
+        let hit = op_image_enrich::net::fetch::ResolvedImage {
+            src: "data:image/jpeg;base64,AAAA".to_string(),
+            provider: "openverse",
+            provider_query: "serum oil bottle".to_string(),
+            title: "Dropper bottle, blank retro label".to_string(),
+        };
+        assert_eq!(
+            image_provenance_line("n246", "serum oil bottle", Some(&hit)),
+            "[IMAGE] n246 query=\"serum oil bottle\" -> openverse \"Dropper bottle, blank retro label\" (via \"serum oil bottle\")"
+        );
+        assert_eq!(
+            image_provenance_line("n257", "cleanser tube white", None),
+            "[IMAGE] n257 query=\"cleanser tube white\" -> none (fallback tile)"
+        );
     }
 
     #[test]

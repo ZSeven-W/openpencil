@@ -151,6 +151,13 @@ const NON_PHOTO_RESULT_WORDS: &[&str] = &[
     "poster",
     "catalog",
     "catalogue",
+    // Painted/drawn media that Openverse files as ordinary photo uploads: a
+    // street mural of a "snake oil serum" bottle is artwork, not a product
+    // photo.
+    "graffiti",
+    "mural",
+    "cartoon",
+    "clipart",
 ];
 
 /// Result themes that are usually adjacent catalogue noise rather than the
@@ -349,7 +356,23 @@ fn canonicalize_word(word: &str) -> String {
 /// all-descriptor prompt), preserve the provider response rather than making
 /// an unprovable relevance decision.
 pub(crate) fn retain_relevant_hits(hits: Vec<RawHit>, query: &str) -> Vec<RawHit> {
-    let strict = retain_relevant_hits_enforcing(hits.clone(), query, true);
+    retain_relevant_hits_for_intent(hits, query, "")
+}
+
+/// [`retain_relevant_hits`] with the slot's authored intent (its image
+/// prompt). Search queries are terse ("cleanser tube white") while the
+/// photographic contract usually lives only in the prompt ("minimal product
+/// photography of …"); without it the photo fence never engaged and an
+/// Instagram tattoo shot that merely mentions "cleanser" in its caption
+/// passed as a product photo. The intent only ever tightens the photo
+/// contract — subject words still come from the query.
+pub(crate) fn retain_relevant_hits_for_intent(
+    hits: Vec<RawHit>,
+    query: &str,
+    intent: &str,
+) -> Vec<RawHit> {
+    let contract = RelevanceContract::new(query, intent);
+    let strict = retain_relevant_hits_enforcing(hits.clone(), &contract, true);
     if !strict.is_empty() {
         return strict;
     }
@@ -358,89 +381,133 @@ pub(crate) fn retain_relevant_hits(hits: Vec<RawHit>, query: &str) -> Vec<RawHit
     // set for perfectly good product queries — the slot then publishes as a
     // gray placeholder. When the strict pass keeps nothing, degrade the
     // isolation requirement to a preference and keep the subject fence.
-    retain_relevant_hits_enforcing(hits, query, false)
+    retain_relevant_hits_enforcing(hits, &contract, false)
+}
+
+/// Why the fence would drop `hit` for `query`/`intent`, or `None` when it
+/// survives the lenient (isolation-as-preference) pass. Diagnostics only —
+/// the search trace prints it next to every provider hit.
+pub(crate) fn fence_rejection(hit: &RawHit, query: &str, intent: &str) -> Option<&'static str> {
+    fence_verdict(hit, &RelevanceContract::new(query, intent), false).err()
+}
+
+/// The query/intent-derived facts every hit is fenced against.
+struct RelevanceContract<'a> {
+    query: &'a str,
+    core: Vec<String>,
+    requires_photo: bool,
+    requires_isolation: bool,
+    minimum_overlap: usize,
+}
+
+impl<'a> RelevanceContract<'a> {
+    fn new(query: &'a str, intent: &str) -> Self {
+        let core = core_query_words(query);
+        // Multi-word product subjects need more than one token of evidence.
+        // A single generic overlap such as "lamp" previously accepted
+        // "Photography lamp setup" for "ceramic table lamp studio photo",
+        // which is technically an image but visibly the wrong product.
+        // Single-word subjects still use one match so common queries such as
+        // "armchair" keep their useful recall.
+        let minimum_overlap = if core.len() >= 2 { 2 } else { 1 };
+        Self {
+            query,
+            requires_photo: query_requests_photo(query) || query_requests_photo(intent),
+            requires_isolation: query_requests_isolation(query),
+            core,
+            minimum_overlap,
+        }
+    }
+}
+
+/// Ranking key of a hit that passed the fence: (title overlap, title subject
+/// tokens, title extra tokens, total overlap).
+type RankKey = (usize, usize, usize, usize);
+
+fn fence_verdict(
+    hit: &RawHit,
+    contract: &RelevanceContract<'_>,
+    enforce_isolation: bool,
+) -> Result<RankKey, &'static str> {
+    let metadata = &hit.relevance_metadata;
+    let query = contract.query;
+    if metadata_is_off_subject(metadata, query) {
+        return Err("off-subject theme or unrequested brand");
+    }
+    if contract.requires_photo && metadata_is_explicitly_non_photo(metadata) {
+        return Err("photo requested but metadata names a non-photo medium");
+    }
+    if enforce_isolation
+        && contract.requires_isolation
+        && !metadata_has_isolation_evidence(metadata)
+    {
+        return Err("isolation requested but no isolation evidence");
+    }
+    if contract.core.is_empty() {
+        return Ok((0, 0, 0, 0));
+    }
+    if contract.requires_photo && metadata_is_scene_heavy(metadata) && !query_requests_scene(query)
+    {
+        return Err("photo requested but metadata describes a staged room");
+    }
+    let core = &contract.core;
+    let title = normalized_words(&hit.title);
+    let metadata = normalized_words(metadata);
+    let title_overlap = overlap_count(core, &title);
+    if contract.requires_photo && title_overlap == 0 {
+        return Err("photo requested but no subject word in the title");
+    }
+    let total_overlap = overlap_count(core, &metadata);
+    if total_overlap < contract.minimum_overlap {
+        return Err("too few subject words in title/tags");
+    }
+    let title_extra_tokens = title
+        .iter()
+        .filter(|word| {
+            !core.contains(word)
+                && !IMAGE_SEARCH_STOP_WORDS.contains(&word.as_str())
+                && !IMAGE_SEARCH_DESCRIPTORS.contains(&word.as_str())
+        })
+        .count();
+    let title_subject_tokens = title_overlap + title_extra_tokens;
+    Ok((
+        title_overlap,
+        title_subject_tokens,
+        title_extra_tokens,
+        total_overlap,
+    ))
 }
 
 fn retain_relevant_hits_enforcing(
     hits: Vec<RawHit>,
-    query: &str,
+    contract: &RelevanceContract<'_>,
     enforce_isolation: bool,
 ) -> Vec<RawHit> {
-    let core = core_query_words(query);
-    let requires_photo = query_requests_photo(query);
-    let requires_isolation = enforce_isolation && query_requests_isolation(query);
-    if core.is_empty() {
-        return hits
-            .into_iter()
-            .filter(|hit| {
-                !metadata_is_off_subject(&hit.relevance_metadata, query)
-                    && (!requires_photo
-                        || !metadata_is_explicitly_non_photo(&hit.relevance_metadata))
-                    && (!requires_isolation
-                        || metadata_has_isolation_evidence(&hit.relevance_metadata))
-            })
-            .collect();
-    }
-    // Multi-word product subjects need more than one token of evidence. A
-    // single generic overlap such as "lamp" previously accepted
-    // "Photography lamp setup" for "ceramic table lamp studio photo", which
-    // is technically an image but visibly the wrong product. Single-word
-    // subjects still use one match so common queries such as "armchair" keep
-    // their useful recall.
-    let minimum_overlap = if core.len() >= 2 { 2 } else { 1 };
-    let mut ranked: Vec<(usize, usize, usize, usize, RawHit)> = hits
+    let mut ranked: Vec<(RankKey, RawHit)> = hits
         .into_iter()
         .filter_map(|hit| {
-            if metadata_is_off_subject(&hit.relevance_metadata, query)
-                || (requires_photo && metadata_is_explicitly_non_photo(&hit.relevance_metadata))
-                || (requires_isolation && !metadata_has_isolation_evidence(&hit.relevance_metadata))
-                || (requires_photo
-                    && metadata_is_scene_heavy(&hit.relevance_metadata)
-                    && !query_requests_scene(query))
-            {
-                return None;
-            }
-            let title = normalized_words(&hit.title);
-            let metadata = normalized_words(&hit.relevance_metadata);
-            let title_overlap = overlap_count(&core, &title);
-            if requires_photo && title_overlap == 0 {
-                return None;
-            }
-            let total_overlap = overlap_count(&core, &metadata);
-            if total_overlap < minimum_overlap {
-                return None;
-            }
-            let title_extra_tokens = title
-                .iter()
-                .filter(|word| {
-                    !core.contains(word)
-                        && !IMAGE_SEARCH_STOP_WORDS.contains(&word.as_str())
-                        && !IMAGE_SEARCH_DESCRIPTORS.contains(&word.as_str())
-                })
-                .count();
-            let title_subject_tokens = title_overlap + title_extra_tokens;
-            Some((
-                title_overlap,
-                title_subject_tokens,
-                title_extra_tokens,
-                total_overlap,
-                hit,
-            ))
+            fence_verdict(&hit, contract, enforce_isolation)
+                .ok()
+                .map(|key| (key, hit))
         })
         .collect();
+    if contract.core.is_empty() {
+        // No concrete subject: keep provider order among the survivors.
+        return ranked.into_iter().map(|(_, hit)| hit).collect();
+    }
     // Prefer a subject-dense title before raw overlap: a concise "Ceramic
     // vase" is a safer product match than a long archaeological title that
     // happens to contain both words. Then prefer title evidence, concision,
     // and finally title + tag evidence. `sort_by` is stable, so exact ties
     // retain provider order.
-    ranked.sort_by(|left, right| {
+    ranked.sort_by(|(left, _), (right, _)| {
         let density = (right.0 * left.1).cmp(&(left.0 * right.1));
         density
             .then_with(|| right.0.cmp(&left.0))
             .then_with(|| left.2.cmp(&right.2))
             .then_with(|| right.3.cmp(&left.3))
     });
-    ranked.into_iter().map(|(_, _, _, _, hit)| hit).collect()
+    ranked.into_iter().map(|(_, hit)| hit).collect()
 }
 
 fn overlap_count(core: &[String], candidate: &[String]) -> usize {
