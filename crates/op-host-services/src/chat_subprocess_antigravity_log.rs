@@ -42,11 +42,28 @@ const MAX_CHARS: usize = 300;
 /// read it must never replace the failure the caller is already reporting.
 pub(crate) fn antigravity_log_error(path: &Path) -> Option<String> {
     let text = read_tail(path)?;
+    // A model call the CLI keeps retrying is logged at INFO, not ERROR:
+    //   run.go:395] Run: attempt 5 failed (RESOURCE_EXHAUSTED (code 429):
+    //   Individual quota reached. ... Resets in 2h11m18s.), retrying in 19s
+    // The turn then ends on the print timeout with EMPTY output, so this
+    // line is the only account of why (measured 2026-09-29: an arena run
+    // burned 70 "returned no output" retries on an exhausted quota). The
+    // latest such cause wins over any ERROR line.
+    if let Some(cause) = text.lines().rev().find_map(retried_attempt_cause) {
+        let redacted = op_util::cli_output::redact_secrets(&cause);
+        return Some(truncate_chars(&redacted, MAX_CHARS));
+    }
     let mut seen: Vec<String> = Vec::new();
     for line in text.lines() {
         let Some(message) = error_message(line) else {
             continue;
         };
+        // Analytics upload noise ("error recording trajectory segment
+        // analytics: ... context canceled") is logged when the turn is torn
+        // down and says nothing about why it failed.
+        if message.contains("recording trajectory") || message.contains("Analytics") {
+            continue;
+        }
         // The CLI logs the same cause twice (executor wrapper + inner call);
         // quoting it twice would read as two separate problems.
         if !seen
@@ -91,6 +108,29 @@ pub(crate) fn with_log_evidence(
         Some(logged) => format!("{message} — CLI log: {logged}"),
         None => message,
     }
+}
+
+/// The "returned no output" failure, with the CLI log's account of why.
+///
+/// Antigravity ends a turn it could not serve (quota, region) on the print
+/// timeout with EMPTY output and a clean exit, so this branch never reached
+/// [`with_log_evidence`] and the cause was lost.
+pub(crate) fn no_output_message(
+    label: &str,
+    turn: Option<&crate::chat_subprocess_safety::IsolatedTurn>,
+) -> String {
+    with_log_evidence(format!("{label} returned no output."), turn)
+}
+
+/// The cause inside a `Run: attempt N failed (<cause>), retrying in …` line.
+fn retried_attempt_cause(line: &str) -> Option<String> {
+    let start = line.find("Run: attempt ")?;
+    let rest = &line[start..];
+    let open = rest.find(" failed (")? + " failed (".len();
+    let body = &rest[open..];
+    let end = body.rfind("), retrying").or_else(|| body.rfind(')'))?;
+    let cause = body[..end].trim();
+    (!cause.is_empty()).then(|| cause.to_string())
 }
 
 /// The message part of one glog-formatted ERROR line, or `None` for any line

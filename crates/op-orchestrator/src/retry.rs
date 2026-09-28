@@ -14,6 +14,12 @@ const PROVIDER_LIMIT_SUBSTRINGS: &[&str] = &[
     "session limit",
     "hit your session limit", // subsumed by "session limit"; kept greppable
     "usage limit",
+    // Antigravity (Gemini) account quota, surfaced from the CLI log:
+    // "RESOURCE_EXHAUSTED (code 429): Individual quota reached. ... Resets
+    // in 2h12m". Retrying inside one run cannot outlast that reset.
+    "resource_exhausted",
+    "quota reached",
+    "quota exceeded",
 ];
 
 /// True when the error reports the provider's account/session quota is
@@ -86,6 +92,18 @@ mod tests {
     use super::*;
 
     // ── is_non_retryable — true cases ───────────────────────────────────────
+
+    #[test]
+    fn antigravity_quota_exhaustion_is_a_provider_limit() {
+        // What the Antigravity transport now reports once it reads the CLI
+        // log (arena 2026-09-29: 70 retries were burned on this).
+        let msg = "Antigravity returned no output. — CLI log: RESOURCE_EXHAUSTED (code 429): \
+                   Individual quota reached. Please upgrade your subscription to increase \
+                   your limits. Resets in 2h11m18s.";
+        assert!(is_provider_limit(msg));
+        assert!(is_non_retryable(msg));
+        assert!(!is_provider_limit("Antigravity returned no output."));
+    }
 
     #[test]
     fn http_400_is_non_retryable() {

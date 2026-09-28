@@ -103,3 +103,37 @@ fn the_quote_is_length_capped() {
         found.chars().count()
     );
 }
+
+/// Shape of the tail on 2026-09-29 when the account quota ran out: the
+/// model call is retried at INFO level, the turn ends on the print timeout
+/// with empty output, and the only ERROR line is analytics teardown noise.
+const QUOTA_TAIL: &str = concat!(
+    "I0929 02:54:03.292914     253 quota_manager.go:45] doRefreshQuota: starting reload (force=true)\n",
+    "I0929 02:54:06.755348     521 run.go:395] Run: attempt 1 failed (RESOURCE_EXHAUSTED (code 429): Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 2h12m13s.), retrying in 4s\n",
+    "I0929 02:55:01.691366     521 run.go:395] Run: attempt 5 failed (RESOURCE_EXHAUSTED (code 429): Individual quota reached. Please upgrade your subscription to increase your limits. Resets in 2h11m18s.), retrying in 19.585461878s\n",
+    "E0929 02:55:05.411847    1051 telemetry.go:82] error recording trajectory segment analytics: Post \"https://example.invalid/v1internal:recordTrajectoryAnalytics\": context canceled\n",
+);
+
+#[test]
+fn a_retried_quota_failure_is_the_reported_cause() {
+    let path = write_log("quota", QUOTA_TAIL);
+    let found = antigravity_log_error(&path).expect("the retried cause is present");
+    assert!(found.contains("RESOURCE_EXHAUSTED"), "{found}");
+    assert!(
+        found.contains("Resets in 2h11m18s"),
+        "latest attempt wins: {found}"
+    );
+    assert!(
+        !found.contains("trajectory"),
+        "analytics noise is not the cause: {found}"
+    );
+}
+
+#[test]
+fn analytics_teardown_noise_alone_is_not_a_cause() {
+    let path = write_log(
+        "noise",
+        "E0929 02:55:05.411847    1051 telemetry.go:82] error recording trajectory segment analytics: context canceled\n",
+    );
+    assert_eq!(antigravity_log_error(&path), None);
+}
