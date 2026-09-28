@@ -177,6 +177,13 @@ fn is_umbrella(plan: &OrchestratorPlan, index: usize) -> bool {
     if siblings.len() < 2 {
         return false;
     }
+    // The planner saying outright that the subtask holds nothing of its own
+    // ("无独立内容，仅作为顶部栏与看板的纵向容器") is the plainest proof there is;
+    // arena w01 still drew the whole main column from it, then appended the
+    // bar and board again beside it and starved the board to 50px.
+    if declares_no_content(elements) {
+        return covers_have_home(st, &[], &siblings);
+    }
     let items = content_items(elements);
     if !items.is_empty() && is_chrome(st) {
         return false;
@@ -407,6 +414,26 @@ fn is_framing_phrase(normalized: &str) -> bool {
 /// Strip a trailing "what this list is" tail from the last item: the planner
 /// closes the list with it ("…、告警列表三块的布局容器"), so without this the
 /// last sibling name never matches and the umbrella survives (arena d03).
+/// Explicit "this subtask has no content of its own" declarations.
+const NO_CONTENT_CUES: &[&str] = &[
+    "无独立内容",
+    "没有独立内容",
+    "无自身内容",
+    "无实际内容",
+    "不含内容",
+    "不包含内容",
+    "no content of its own",
+    "no own content",
+    "has no content",
+    "holds no content",
+    "contains no content",
+];
+
+fn declares_no_content(elements: &str) -> bool {
+    let lower = elements.to_lowercase();
+    NO_CONTENT_CUES.iter().any(|cue| lower.contains(cue))
+}
+
 fn strip_framing_tail(item: &str) -> &str {
     static TAIL: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(

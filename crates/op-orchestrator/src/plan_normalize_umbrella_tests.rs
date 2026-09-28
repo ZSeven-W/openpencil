@@ -405,3 +405,36 @@ fn framing_tails_are_stripped_only_when_a_name_remains() {
     assert_eq!(strip_framing_tail("容器"), "容器");
     assert_eq!(strip_framing_tail("商品网格"), "商品网格");
 }
+
+#[test]
+fn drops_an_umbrella_that_declares_it_has_no_content() {
+    // arena-w01 0928a run-2.
+    let mut p = plan(vec![
+        st(
+            "sidebar",
+            "侧栏项目列表",
+            "产品 logo 区、项目搜索框、项目列表项",
+        ),
+        st(
+            "main-column",
+            "主区域容器",
+            "无独立内容，仅作为顶部栏与看板的纵向容器",
+        ),
+        st("topbar", "顶部标签切换", "项目标题、视图标签切换"),
+        st("board", "看板三列", "三列看板，每列 4 张任务卡"),
+        st("drawer", "任务详情抽屉", "抽屉头部、描述段落"),
+    ]);
+    assert_eq!(drop_umbrella_subtasks(&mut p), 1);
+    assert_eq!(ids(&p), vec!["sidebar", "topbar", "board", "drawer"]);
+
+    let mut english = plan(vec![
+        st(
+            "main",
+            "Main Column",
+            "wrapper only, has no content of its own",
+        ),
+        st("header", "Header", "title, search"),
+        st("table", "Users Table", "10 rows"),
+    ]);
+    assert_eq!(drop_umbrella_subtasks(&mut english), 1);
+}
