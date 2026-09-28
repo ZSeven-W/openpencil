@@ -83,6 +83,66 @@ fn generated_nodes_reject_missing_progress_ring_without_auto_drawing() {
         "{report:?}"
     );
 }
+
+fn ring_card_without_a_ring() -> Vec<PenNode> {
+    // arena-m02 0927c run-2: "今日目标环形进度" lost its whole hero card
+    // after every attempt hit missing-progress-ring.
+    serde_json::from_value(json!([{
+        "type": "frame", "id": "goal-card", "name": "Goal Card",
+        "width": "fill_container", "layout": "vertical", "children": [{
+            "type": "frame", "id": "calorie-ring", "name": "Calorie Ring",
+            "width": 160, "height": 160, "layout": "vertical",
+            "alignItems": "center", "justifyContent": "center", "children": [
+                {"type": "text", "id": "value", "content": "480"},
+                {"type": "text", "id": "label", "content": "/ 720 kcal progress"}
+            ]
+        }]
+    }]))
+    .expect("parse nodes")
+}
+
+#[test]
+fn the_final_attempt_paints_the_missing_ring_instead_of_dropping_the_section() {
+    let mut nodes = ring_card_without_a_ring();
+    assert!(check_generated_nodes(&nodes, 390.0).has_fatal());
+
+    assert!(paint_missing_progress_rings(&mut nodes));
+    let report = check_generated_nodes(&nodes, 390.0);
+    assert!(
+        !report.failure_message().contains("missing-progress-ring"),
+        "{report:?}"
+    );
+    let ring = &serde_json::to_value(&nodes).expect("serialize")[0]["children"][0];
+    assert_eq!(ring["cornerRadius"], json!(80.0));
+    assert_eq!(ring["stroke"]["fill"][0]["color"], json!("$--primary"));
+}
+
+#[test]
+fn only_the_last_rung_paints_a_missing_ring() {
+    let mut early = ring_card_without_a_ring();
+    let rejected = crate::subagent_self_check::gate_generated_nodes(
+        &mut early,
+        390.0,
+        "fitness app home",
+        "goal-ring",
+        IntentCheckMode::Reject,
+    );
+    assert!(
+        rejected.is_err(),
+        "an early attempt still asks for a real arc"
+    );
+
+    let mut last = ring_card_without_a_ring();
+    let accepted = crate::subagent_self_check::gate_generated_nodes(
+        &mut last,
+        390.0,
+        "fitness app home",
+        "goal-ring",
+        IntentCheckMode::Advisory,
+    );
+    assert_eq!(accepted, Ok(()));
+}
+
 #[test]
 fn flags_mobile_product_row_that_will_clip_cards() {
     let nodes = json!([

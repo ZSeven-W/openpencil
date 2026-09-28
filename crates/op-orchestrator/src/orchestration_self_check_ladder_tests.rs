@@ -192,12 +192,12 @@ fn five_structure_rule_family_is_rejected_on_the_first_attempt() {
     );
 }
 
-/// Contract-class findings keep failing the subtask on the final attempt:
-/// only intent findings became advisory.
+/// A frame NAMED as a ring that renders none is still rejected on every
+/// rung that can retry (the model may yet draw a real progress arc), but
+/// the final attempt paints the ring instead of dropping the section
+/// (arena m02 0927c lost its whole hero card to this finding).
 #[test]
-fn contract_finding_still_fails_the_final_attempt() {
-    // A frame NAMED as a steps ring that renders no ring: a fact about the
-    // screenshot, not a structure opinion.
+fn missing_ring_is_painted_on_the_final_attempt() {
     let script = r#"const sec=I(null,{"type":"frame","name":"Activity","layout":"vertical"});I(sec,{"type":"frame","name":"Steps Ring","width":124,"height":124,"layout":"vertical","alignItems":"center","justifyContent":"center","children":[{"type":"text","content":"8,432"},{"type":"text","content":"steps"}]});"#.to_string();
     let (outcome, events) = run_ladder(1280.0, vec![script; 4]);
 
@@ -210,12 +210,12 @@ fn contract_finding_still_fails_the_final_attempt() {
         vec![2, 3],
         "{retries:?}"
     );
-    assert_eq!(outcome.node_count, 0, "{outcome:?}");
     assert!(
-        outcome
-            .error
-            .as_deref()
-            .is_some_and(|error| error.contains("missing-progress-ring")),
-        "{outcome:?}"
+        retries
+            .iter()
+            .all(|(_, reason)| reason.contains("missing-progress-ring")),
+        "{retries:?}"
     );
+    assert!(outcome.node_count > 0, "{outcome:?}");
+    assert!(outcome.error.is_none(), "{outcome:?}");
 }

@@ -3,7 +3,8 @@
 //! 800-line cap.
 
 use crate::orchestration_self_check::{
-    auto_fix_fixable_issues, check_generated_nodes_for_prompt, IntentCheckMode, SelfCheckReport,
+    auto_fix_fixable_issues, check_generated_nodes_for_prompt, paint_missing_progress_rings,
+    IntentCheckMode, SelfCheckReport,
 };
 use jian_ops_schema::node::PenNode;
 use serde_json::Value;
@@ -29,7 +30,12 @@ pub(crate) fn gate_generated_nodes(
 ) -> Result<(), String> {
     let mut report = check_generated_nodes_for_prompt(nodes, canvas_width, prompt);
     if report.rejects(mode) {
-        let fixed = auto_fix_fixable_issues(nodes, canvas_width);
+        let mut fixed = auto_fix_fixable_issues(nodes, canvas_width);
+        // On the last rung a wrapper named as a ring but drawn without one
+        // is given its ring rather than costing the whole section.
+        if mode == IntentCheckMode::Advisory {
+            fixed |= paint_missing_progress_rings(nodes);
+        }
         report = check_generated_nodes_for_prompt(nodes, canvas_width, prompt);
         if report.rejects(mode) {
             let message = report.failure_message_for(mode);

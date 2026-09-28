@@ -134,6 +134,31 @@ pub(crate) fn check_value_forest(value: &Value, canvas_width: f64) -> SelfCheckR
     report
 }
 
+/// Last-resort repair for `missing-progress-ring`: make each flagged
+/// wrapper the ring itself (see [`ring_paint`]). Only the final attempt
+/// uses it — earlier attempts are rejected so the model can still draw a
+/// real progress arc, which a painted full ring cannot express.
+pub(crate) fn paint_missing_progress_rings(nodes: &mut [PenNode]) -> bool {
+    let missing: Vec<String> = op_design_lint::detect_missing_progress_rings(nodes)
+        .into_iter()
+        .map(|missing| missing.node_id)
+        .collect();
+    let mut value = serde_json::to_value(&*nodes).unwrap_or(Value::Null);
+    if !ring_paint::paint_missing_rings(&mut value, &missing) {
+        return false;
+    }
+    let Ok(fixed_nodes) = serde_json::from_value::<Vec<PenNode>>(value) else {
+        return false;
+    };
+    if fixed_nodes.len() != nodes.len() {
+        return false;
+    }
+    for (node, fixed_node) in nodes.iter_mut().zip(fixed_nodes) {
+        *node = fixed_node;
+    }
+    true
+}
+
 pub fn auto_fix_fixable_issues(nodes: &mut [PenNode], canvas_width: f64) -> bool {
     let mut value = serde_json::to_value(&*nodes).unwrap_or(Value::Null);
     let radial_changed = crate::radial_repair::repair_authored_radial_stacks(&mut value);
@@ -646,6 +671,9 @@ pub use drift::{collect_section_structure_drift, SectionStructureDriftAdvisory};
 
 #[path = "orchestration_self_check_card_image.rs"]
 mod card_image;
+
+#[path = "orchestration_self_check_ring_paint.rs"]
+mod ring_paint;
 pub(crate) use card_image::check_generated_nodes_for_prompt;
 
 #[cfg(test)]
