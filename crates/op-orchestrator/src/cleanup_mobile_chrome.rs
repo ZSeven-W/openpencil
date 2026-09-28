@@ -607,12 +607,15 @@ fn is_bottom_nav_surface(node: &PenNode, allow_structural: bool) -> bool {
             "bottom-tab",
             "底部导航",
             "底部导航栏",
-            "导航栏",
             "底栏",
-            "标签栏",
             "底部标签栏",
         ],
     ) {
+        // Plain `导航栏` / `标签栏` are the CJK "navbar" / "tab bar": just as
+        // ambiguous, and a top header named `返回导航栏` (back + hot/latest
+        // tabs) was moved to the bottom of a comments page by the nav-last
+        // anchor (arena m05, 2026-09-29). Unnamed bottom navs are still
+        // caught by the position-gated structural fallback below.
         return true;
     }
     // Structural fallback: a horizontal row of 3-5 labeled nav tabs

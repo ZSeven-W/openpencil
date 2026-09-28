@@ -626,3 +626,45 @@ fn cleanup_structural_nav_only_matches_bottom_row_inside_single_wrapper() {
     );
     assert_eq!(nav_json["justifyContent"], json!("space_between"));
 }
+
+#[test]
+fn a_top_header_named_nav_bar_is_not_anchored_to_the_bottom() {
+    // arena-m05 0929 (Gemini 3.8 Flash): `返回导航栏` (back button, title,
+    // hot/latest tabs) planned first on a comments page ended up below the
+    // input bar.
+    let mut sink = VecDocSink::new();
+    let tree: PenNode = serde_json::from_value(json!({
+        "type": "frame", "id": "root", "name": "评论列表", "width": 375, "height": 812,
+        "layout": "vertical",
+        "children": [
+            {"type": "frame", "id": "header", "name": "返回导航栏", "width": "fill_container",
+             "height": 72, "layout": "horizontal", "children": [
+                {"type": "frame", "id": "back", "name": "返回按钮"},
+                {"type": "text", "id": "title", "content": "全部评论 (8)"},
+                {"type": "frame", "id": "tabs", "name": "排序标签"}
+             ]},
+            {"type": "frame", "id": "list", "name": "评论列表", "width": "fill_container", "height": 600},
+            {"type": "frame", "id": "input", "name": "底部输入栏", "width": "fill_container", "height": 64}
+        ]
+    }))
+    .expect("comments fixture");
+    sink.state.apply(EditorCommand::InsertAuthoredSubtree {
+        nodes: vec![tree],
+        parent_id: NodeId::NONE,
+        page_id: None,
+    });
+
+    crate::cleanup::repair_mobile_structural_chrome_for_all_roots(&mut sink);
+    crate::cleanup::anchor_bottom_nav_last_for_all_roots(&mut sink);
+
+    let root = sink.state.active_children().first().expect("root");
+    let order: Vec<&str> = root
+        .children()
+        .expect("children")
+        .iter()
+        .map(|child| child.id_str())
+        .collect();
+    assert_eq!(order, vec!["header", "list", "input"]);
+    let header = find_node(root, "header").expect("header");
+    assert_ne!(header.base().role.as_deref(), Some("bottom-tab-bar"));
+}
