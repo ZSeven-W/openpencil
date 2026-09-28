@@ -190,7 +190,14 @@ const SCENE_QUERY_OPT_IN_WORDS: &[&str] = &[
 const ISOLATION_RESULT_WORDS: &[&str] = &["isolated", "isolate", "isolation", "cutout"];
 
 pub(crate) fn two_keyword_retry(query: &str) -> Option<String> {
-    let core = concrete_query_words(query);
+    // Camera/style words ("closeup", "shot") go before any subject word:
+    // keeping the tail of "skincare cream texture closeup" used to drop the
+    // domain word and search "cream texture closeup", which ranked a child
+    // eating vanilla ice cream as a skincare hero (arena l01, 2026-09-28).
+    let core: Vec<String> = concrete_query_words(query)
+        .into_iter()
+        .filter(|word| !INTENT_STYLE_WORDS.contains(&canonicalize_word(word).as_str()))
+        .collect();
     // Product prompts commonly put the searchable subject noun near the end
     // (for example "... table lamp terracotta"). Keeping the concrete tail
     // avoids truncating that noun while preserving the existing behavior for

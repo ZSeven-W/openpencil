@@ -45,6 +45,11 @@ fn zero_result_retry_keeps_the_core_product_phrase() {
         "the retry must keep the garment subject instead of wasting a slot on staging prose"
     );
     assert_eq!(
+        two_keyword_retry("skincare cream texture closeup"),
+        Some("skincare cream texture".to_string()),
+        "camera words go before the domain word that disambiguates the subject"
+    );
+    assert_eq!(
         two_keyword_retry("sculptural arc table lamp terracotta"),
         Some("table lamp terracotta".to_string()),
         "the retry must keep a trailing product subject instead of truncating it"

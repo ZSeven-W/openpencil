@@ -26,7 +26,6 @@ const BRAND_WORDS: &[&str] = &[
     "pinterest",
     "linkedin",
     "tumblr",
-    "google",
     "iphone",
     "ipad",
     "macbook",
@@ -64,12 +63,22 @@ const BRAND_WORDS: &[&str] = &[
     "autodesk",
 ];
 
-/// True when `metadata_words` names a brand that `query_words` does not.
+/// Words that mark a hit as a logo or trademark artwork. A generic
+/// "brand illustration" query ranked "Carbon360 logo" first (arena m04,
+/// 2026-09-28): a placeholder must never ship someone's mark.
+const LOGO_WORDS: &[&str] = &["logo", "logos", "logotype", "wordmark", "trademark"];
+
+/// True when `metadata_words` names a brand, or marks a logo, that
+/// `query_words` does not ask for.
 /// Both sides are expected to be lower-cased word lists.
 pub(super) fn names_unrequested_brand(metadata_words: &[String], query_words: &[String]) -> bool {
-    metadata_words
+    let asks_for_logo = query_words
         .iter()
-        .any(|word| BRAND_WORDS.contains(&word.as_str()) && !query_words.iter().any(|q| q == word))
+        .any(|word| LOGO_WORDS.contains(&word.as_str()));
+    metadata_words.iter().any(|word| {
+        (BRAND_WORDS.contains(&word.as_str()) && !query_words.iter().any(|q| q == word))
+            || (!asks_for_logo && LOGO_WORDS.contains(&word.as_str()))
+    })
 }
 
 #[cfg(test)]
@@ -102,6 +111,13 @@ mod tests {
     }
 
     #[test]
+    fn a_logo_is_fenced_unless_the_query_asks_for_one() {
+        let hit = words("carbon360 logo");
+        assert!(names_unrequested_brand(&hit, &words("brand illustration")));
+        assert!(!names_unrequested_brand(&hit, &words("logo design sample")));
+    }
+
+    #[test]
     fn ordinary_words_that_double_as_brands_are_not_fenced() {
         let query = words("lamp");
         for metadata in [
@@ -109,6 +125,7 @@ mod tests {
             "apple on a table",
             "adobe house",
             "messenger bag",
+            "the starry night google art project",
         ] {
             assert!(
                 !names_unrequested_brand(&words(metadata), &query),
