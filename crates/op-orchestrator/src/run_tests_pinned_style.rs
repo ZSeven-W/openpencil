@@ -172,3 +172,33 @@ fn no_pin_changes_nothing() {
         Some("developer-terminal-dark")
     );
 }
+
+/// An exhausted provider quota ends the run at planning with the provider's
+/// own words, instead of a fallback plan whose every subtask hits the same
+/// quota.
+#[test]
+fn an_exhausted_quota_stops_at_planning_instead_of_falling_back() {
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Fail(crate::types::LlmError {
+        message: "CLI exited with status 3: error: Individual quota reached. Please upgrade \
+                  your subscription to increase your limits. Resets in 1h31m28s. | \
+                  RESOURCE_EXHAUSTED (code 429)"
+            .into(),
+        aborted: false,
+    })]);
+    let mut on_progress = |_p: Progress| {};
+    let result = futures::executor::block_on(planning_loop(
+        &pinned_req(None),
+        &llm,
+        &AbortFlag::default(),
+        &mut on_progress,
+    ));
+    match result {
+        Err(OrchestratorError::AllFailed(message)) => {
+            assert!(message.contains("quota reached"), "{message}")
+        }
+        other => panic!(
+            "expected a quota failure, got {:?}",
+            other.map(|(p, _)| p.subtasks.len())
+        ),
+    }
+}

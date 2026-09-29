@@ -216,6 +216,13 @@ async fn planning_loop(
                     .take(STREAM_ERROR_LOG_CHARS)
                     .collect::<String>();
                 tracing::warn!(attempt, error = %reason, "planning stream error");
+                // An exhausted account quota does not recover before its reset
+                // (hours, not seconds). Falling back to a heuristic plan only
+                // runs every subtask into the same wall and ships an empty
+                // shell (arena, Gemini via agy, 2026-09-29: 11 runs did).
+                if crate::retry::is_provider_limit(&error.message) {
+                    return Err(OrchestratorError::AllFailed(reason));
+                }
                 debug_plan_attempt_failed(attempt, "stream error", &error.message);
             }
         }
