@@ -201,7 +201,10 @@ fn keeps_a_main_subtask_with_its_own_content() {
 
 #[test]
 fn keeps_a_subtask_without_elements() {
+    // Old models leave a real section's elements blank; only a label that
+    // names the wrapper itself turns a blank subtask into an umbrella.
     let mut plan = sample_bare_container();
+    plan.subtasks[1].label = "KPI 概览".into();
     plan.subtasks[1].elements = None;
     assert_eq!(drop_umbrella_subtasks(&mut plan), 0);
     plan.subtasks[1].elements = Some("   ".into());
@@ -463,6 +466,30 @@ fn a_generic_top_bar_item_does_not_name_an_unrelated_sibling() {
         st("main", "主内容区", "垂直排列: 顶部栏与看板"),
         st("hero", "英雄区", "大标题"),
         st("kanban", "看板三列", "三列布局"),
+    ]);
+    assert_eq!(drop_umbrella_subtasks(&mut p), 0);
+}
+
+#[test]
+fn drops_an_empty_subtask_labelled_as_the_main_wrapper() {
+    // arena-d03 0929a run-1.
+    let mut p = plan(vec![
+        st("sidebar", "侧边导航栏", "品牌标识块、垂直导航项"),
+        subtask("main", "主内容区", Some("")),
+        st("summary", "顶部状态摘要三卡", "三张状态卡片"),
+        st("device-grid", "设备网格", "12 张设备卡片"),
+        st("alerts", "右侧告警列表", "5 条告警项"),
+    ]);
+    assert_eq!(drop_umbrella_subtasks(&mut p), 1);
+    assert_eq!(ids(&p), vec!["sidebar", "summary", "device-grid", "alerts"]);
+}
+
+#[test]
+fn an_empty_subtask_with_a_content_label_is_kept() {
+    let mut p = plan(vec![
+        subtask("hero", "Hero", None),
+        subtask("features", "Features", Some("")),
+        st("footer", "Footer", "links"),
     ]);
     assert_eq!(drop_umbrella_subtasks(&mut p), 0);
 }

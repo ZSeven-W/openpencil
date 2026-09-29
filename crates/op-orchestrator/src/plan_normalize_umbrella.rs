@@ -169,14 +169,17 @@ fn siblings(plan: &OrchestratorPlan, index: usize) -> Vec<&Subtask> {
 
 fn is_umbrella(plan: &OrchestratorPlan, index: usize) -> bool {
     let st = &plan.subtasks[index];
-    // An absent / blank `elements` is how old models leave a real section.
-    let Some(elements) = st.elements.as_deref().filter(|e| !e.trim().is_empty()) else {
-        return false;
-    };
     let siblings = siblings(plan, index);
     if siblings.len() < 2 {
         return false;
     }
+    // An absent / blank `elements` is how old models leave a real section —
+    // unless the label itself only names the wrapper ("主内容区", "Main
+    // Content"): arena d03 0929a planned `main (主内容区) elements=""` beside
+    // the summary, grid and alert subtasks and drew the dashboard twice.
+    let Some(elements) = st.elements.as_deref().filter(|e| !e.trim().is_empty()) else {
+        return is_generic_container_label(&st.label) && covers_have_home(st, &[], &siblings);
+    };
     // The planner saying outright that the subtask holds nothing of its own
     // ("无独立内容，仅作为顶部栏与看板的纵向容器") is the plainest proof there is;
     // arena w01 still drew the whole main column from it, then appended the
@@ -416,6 +419,29 @@ fn is_framing_phrase(normalized: &str) -> bool {
 /// Strip a trailing "what this list is" tail from the last item: the planner
 /// closes the list with it ("…、告警列表三块的布局容器"), so without this the
 /// last sibling name never matches and the umbrella survives (arena d03).
+/// Labels that name the page's content wrapper rather than any content.
+const GENERIC_CONTAINER_LABELS: &[&str] = &[
+    "主内容区",
+    "主内容",
+    "主区域",
+    "主区域容器",
+    "内容区",
+    "主体区域",
+    "main",
+    "main content",
+    "main column",
+    "main area",
+    "main content area",
+    "main content column",
+    "content area",
+    "content column",
+];
+
+fn is_generic_container_label(label: &str) -> bool {
+    let normalized = normalize_name(label);
+    GENERIC_CONTAINER_LABELS.contains(&normalized.as_str())
+}
+
 /// Explicit "this subtask has no content of its own" declarations.
 const NO_CONTENT_CUES: &[&str] = &[
     "无独立内容",
