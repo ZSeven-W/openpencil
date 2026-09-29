@@ -88,3 +88,29 @@ fn narrow_artboard_or_rail_only_plans_keep_two_columns() {
     ];
     assert_eq!(plan_right_rail_width(&plan(1440.0, no_rail)), None);
 }
+
+#[test]
+fn a_three_pane_reading_pane_gets_the_widest_rail() {
+    // arena-w02 0929a: "three-pane layout" planned as sidebar / Message List
+    // / Reading Pane, and the pane stacked under the list.
+    let p = plan(
+        1440.0,
+        vec![
+            subtask("sidebar", "Folder Sidebar", 260.0),
+            subtask("list", "Message List", 1180.0),
+            subtask("reading", "Reading Pane", 1180.0),
+        ],
+    );
+    assert!(is_right_rail_subtask(&p.subtasks[2]));
+    assert_eq!(plan_right_rail_width(&p), Some(MAX_RAIL_WIDTH));
+    assert!(is_right_rail_subtask(&subtask(
+        "preview",
+        "邮件阅读窗格",
+        400.0
+    )));
+    assert!(!is_right_rail_subtask(&subtask(
+        "list",
+        "Message List",
+        400.0
+    )));
+}

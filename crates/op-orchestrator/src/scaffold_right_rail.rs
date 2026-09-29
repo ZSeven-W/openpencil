@@ -35,10 +35,29 @@ const ASCII_PHRASES: &[&str] = &[
     "right column",
     "detail panel",
     "details panel",
+    // Three-pane readers (mail, chat, docs): the reading pane is the third
+    // column beside the list, not a section under it. arena-w02 planned
+    // `reading (Reading Pane)` for a brief that literally says "three-pane
+    // layout" and got the pane stacked below the message list.
+    "reading pane",
+    "reader pane",
+    "preview pane",
+    "detail pane",
+    "details pane",
 ];
 /// Single ASCII words that name a docked side surface on their own.
 const ASCII_WORDS: &[&str] = &["drawer", "inspector"];
-const CJK_CUES: &[&str] = &["右侧", "右栏", "抽屉", "详情面板", "检查器"];
+const CJK_CUES: &[&str] = &[
+    "右侧",
+    "右栏",
+    "抽屉",
+    "详情面板",
+    "检查器",
+    "阅读窗格",
+    "阅读区",
+    "预览窗格",
+    "详情窗格",
+];
 
 /// True when the subtask's id/label names a right-hand docked surface.
 pub(crate) fn is_right_rail_subtask(st: &Subtask) -> bool {
@@ -48,6 +67,13 @@ pub(crate) fn is_right_rail_subtask(st: &Subtask) -> bool {
     ASCII_PHRASES.iter().any(|p| identity.contains(p))
         || ASCII_WORDS.iter().any(|w| contains_word(&identity, w))
         || CJK_CUES.iter().any(|c| identity.contains(c))
+}
+
+fn is_reading_pane(st: &Subtask) -> bool {
+    let identity = format!("{} {}", st.id, st.label).to_lowercase();
+    ["reading", "reader", "阅读"]
+        .iter()
+        .any(|cue| identity.contains(cue))
 }
 
 /// Width of the rail column for a sidebar-dashboard plan, or `None` when the
@@ -69,6 +95,11 @@ pub(crate) fn plan_right_rail_width(plan: &OrchestratorPlan) -> Option<f64> {
     let rail = rail?;
     if main_sections == 0 {
         return None;
+    }
+    // A reading pane holds the message body: give it the widest rail rather
+    // than a drawer's width.
+    if is_reading_pane(rail) {
+        return Some(MAX_RAIL_WIDTH);
     }
     let width = rail.region.width;
     Some(if (MIN_RAIL_WIDTH..=MAX_RAIL_WIDTH).contains(&width) {
