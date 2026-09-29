@@ -128,6 +128,14 @@ const AUTOMATION_GUARD: &str = "OPENPENCIL AUTOMATION SAFETY:\n\
 Use the OpenPencil MCP server only (`mcp__openpencil__*` / `openpencil/*`) to inspect or modify the canvas. \
 Do not run terminal commands, write local files, browse the web, spawn subagents, or call any other MCP server. \
 Never request interactive approval. If the OpenPencil MCP tools are unavailable or denied, report that failure and stop.";
+/// Prefix for Antigravity GENERATION turns. The reply is parsed directly as
+/// the design program, and every tool is denied in the isolated turn — yet
+/// Gemini 3.8 Flash sometimes reaches for one ("write the script to a
+/// file"), agy auto-denies it in headless mode and the turn ends with no
+/// output at all (3 of 12 arena tasks, 2026-09-29).
+const ANTIGRAVITY_GENERATION_GUARD: &str =
+    "Reply with text only. Do not call any tool, run commands, or write files: \
+your reply itself is parsed as the answer.";
 const GROK_COMPAT_SETTINGS: &[u8] = br#"{"permissions":{"defaultMode":"dontAsk"}}"#;
 
 pub struct IsolatedTurn {
@@ -200,6 +208,8 @@ impl IsolatedTurn {
         let result = (|| {
             let mut prepared_prompt = if purpose.uses_canvas_mcp() {
                 format!("{AUTOMATION_GUARD}\n\n{prompt}")
+            } else if cli == CliName::Antigravity {
+                format!("{ANTIGRAVITY_GENERATION_GUARD}\n\n{prompt}")
             } else {
                 prompt.to_owned()
             };

@@ -184,7 +184,11 @@ fn generation_turn_uses_empty_mcp_policy_without_host_config() {
         settings["permissions"]["deny"],
         serde_json::json!(ANTIGRAVITY_DENY_RULES)
     );
-    assert_eq!(turn.prompt(), "return only JavaScript");
+    assert!(turn
+        .prompt()
+        .starts_with("Reply with text only. Do not call any tool"));
+    assert!(turn.prompt().ends_with("\n\nreturn only JavaScript"));
+    assert!(!turn.prompt().contains("OPENPENCIL AUTOMATION SAFETY"));
 }
 
 /// End-to-end wiring: a turn whose CLI wrote its real cause only to its own
