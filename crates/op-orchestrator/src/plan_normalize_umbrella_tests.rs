@@ -438,3 +438,31 @@ fn drops_an_umbrella_that_declares_it_has_no_content() {
     ]);
     assert_eq!(drop_umbrella_subtasks(&mut english), 1);
 }
+
+#[test]
+fn drops_an_umbrella_listing_a_generic_top_bar_joined_by_yu() {
+    // arena-w01 0929a run-2.
+    let mut p = plan(vec![
+        st("sidebar", "侧栏项目列表", "品牌 logo 区, 搜索框, 项目列表"),
+        st("main", "主内容区", "垂直排列: 顶部栏与看板"),
+        st(
+            "topbar",
+            "顶部标签切换",
+            "页面标题, 视图标签组, 新建任务主按钮",
+        ),
+        st("kanban", "看板三列", "三列布局, 每列4张任务卡"),
+        st("drawer", "任务详情抽屉", "抽屉面板"),
+    ]);
+    assert_eq!(drop_umbrella_subtasks(&mut p), 1);
+    assert_eq!(ids(&p), vec!["sidebar", "topbar", "kanban", "drawer"]);
+}
+
+#[test]
+fn a_generic_top_bar_item_does_not_name_an_unrelated_sibling() {
+    let mut p = plan(vec![
+        st("main", "主内容区", "垂直排列: 顶部栏与看板"),
+        st("hero", "英雄区", "大标题"),
+        st("kanban", "看板三列", "三列布局"),
+    ]);
+    assert_eq!(drop_umbrella_subtasks(&mut p), 0);
+}

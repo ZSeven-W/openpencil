@@ -298,7 +298,9 @@ fn split_items(text: &str) -> Vec<String> {
         spaced = spaced.replace(joiner, ",");
     }
     spaced
-        .split(['、', '，', ',', '；', ';', '/', '+', '＋', '&', '和'])
+        .split([
+            '、', '，', ',', '；', ';', '/', '+', '＋', '&', '和', '与', '及',
+        ])
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect()
@@ -543,8 +545,32 @@ fn names_match(a: &str, b: &str) -> bool {
     (is_substantial(&a) && contains_term(&b, &a)) || (is_substantial(&b) && contains_term(&a, &b))
 }
 
+/// Generic names for the page's top bar. A list item that is only one of
+/// these ("顶部栏") names whichever sibling is the top bar, whatever the
+/// planner labelled it: arena w01 planned `topbar (顶部标签切换)` beside an
+/// umbrella "垂直排列: 顶部栏与看板".
+const TOP_BAR_ALIASES: &[&str] = &[
+    "顶部栏",
+    "顶栏",
+    "顶部导航",
+    "顶部导航栏",
+    "顶部工具栏",
+    "top bar",
+    "topbar",
+    "header",
+    "toolbar",
+];
+
 fn names_subtask(item: &str, st: &Subtask) -> bool {
-    names_match(item, &st.label) || names_match(item, &st.id.replace(['-', '_'], " "))
+    let id = st.id.replace(['-', '_'], " ");
+    if names_match(item, &st.label) || names_match(item, &id) {
+        return true;
+    }
+    let item = normalize_name(item);
+    TOP_BAR_ALIASES.contains(&item.as_str()) && {
+        let identity = format!("{} {}", id, st.label).to_lowercase();
+        TOP_BAR_ALIASES.iter().any(|alias| identity.contains(alias))
+    }
 }
 
 #[cfg(test)]
