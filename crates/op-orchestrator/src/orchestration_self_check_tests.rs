@@ -316,6 +316,31 @@ fn allows_mobile_category_row_with_space_between() {
 }
 
 #[test]
+fn a_featured_comment_card_with_an_avatar_is_not_a_food_card() {
+    // arena-m05 0929 (GLM + Gemini): comment rows named like featured cards
+    // failed every rung on mobile-featured-card-bad-split.
+    let nodes = json!([{
+        "type": "frame", "id": "hot-comment", "name": "热门评论 Card", "role": "card",
+        "width": "fill_container", "layout": "horizontal", "gap": 12,
+        "children": [
+            {"type": "image", "id": "avatar", "width": 40, "height": 40, "cornerRadius": 20,
+             "imageSearchQuery": "portrait"},
+            {"type": "frame", "id": "body", "width": 260, "layout": "vertical", "children": [
+                {"type": "text", "id": "nick", "content": "晚风吹过橘子海"},
+                {"type": "text", "id": "text", "content": "这张的光太好了"}
+            ]}
+        ]
+    }]);
+    let report = check_value_forest(&nodes, 390.0);
+    assert!(
+        !report
+            .failure_message()
+            .contains("mobile-featured-card-bad-split"),
+        "{report:?}"
+    );
+}
+
+#[test]
 fn flags_mobile_category_row_that_overflows_or_is_too_tall() {
     // Genuinely broken spacing is still fatal: an over-tall row.
     let nodes = json!([

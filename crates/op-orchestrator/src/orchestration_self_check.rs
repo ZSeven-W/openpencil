@@ -427,6 +427,13 @@ fn is_mobile_featured_card_split_badly(node: &Value, canvas_width: f64) -> bool 
     if children.len() < 2 || !has_descendant_type(node, "image") || !has_text_descendant(node) {
         return false;
     }
+    // A card whose only pictures are avatars is a person row (comment,
+    // review, contact), not a featured dish: its image is small by design.
+    // Comment lists named "热门评论" / "Featured comments" were rejected on
+    // every rung and dropped from social screens (arena m05, 2026-09-29).
+    if all_images_are_avatars(node) {
+        return false;
+    }
 
     let Some(card_width) = effective_node_width(node, canvas_width) else {
         return false;
@@ -589,6 +596,26 @@ fn has_text_descendant(node: &Value) -> bool {
         || children(node)
             .map(|children| children.iter().any(has_text_descendant))
             .unwrap_or(false)
+}
+
+/// Largest side an avatar image may have.
+const AVATAR_MAX_SIDE: f64 = 64.0;
+
+/// True when every image under `node` is an avatar: named one, or small and
+/// round (corner radius at least half its short side).
+fn all_images_are_avatars(node: &Value) -> bool {
+    if string_prop(node, "type") == Some("image") {
+        let label = semantic_label(node);
+        if contains_any(&label, &["avatar", "头像", "profile pic"]) {
+            return true;
+        }
+        let (Some(w), Some(h)) = (numeric_prop(node, "width"), numeric_prop(node, "height")) else {
+            return false;
+        };
+        let radius = numeric_prop(node, "cornerRadius").unwrap_or(0.0);
+        return w.max(h) <= AVATAR_MAX_SIDE && radius >= w.min(h) / 2.0 - 0.5;
+    }
+    children(node).is_none_or(|kids| kids.iter().all(all_images_are_avatars))
 }
 
 fn largest_descendant_image_width(node: &Value) -> f64 {
