@@ -767,7 +767,7 @@ impl SubprocessProvider {
                 {
                     // TS `runCodexExec`: empty final text + no errors
                     // = explicit failure, not a silent empty bubble.
-                    let msg = crate::chat_subprocess_antigravity_log::no_output_message(&label, _isolation.as_ref());
+                    let msg = crate::chat_subprocess_antigravity_log::no_output_message(&label, &stderr_tail, _isolation.as_ref());
                     let _ = tx.send(ChatDelta::Error(msg)).await;
                     let _ = tx
                         .send(ChatDelta::Done {

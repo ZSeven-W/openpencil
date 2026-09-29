@@ -378,7 +378,7 @@ fn terminal_reap_obeys_receiver_cancellation() {
 fn antigravity_and_grok_use_documented_one_shot_flags() {
     let antigravity = SubprocessProvider::for_cli(CliName::Antigravity).unwrap();
     assert!(antigravity.binary.ends_with("agy"));
-    assert_eq!(antigravity.args, ["--sandbox", "--print-timeout", "90s"]);
+    assert_eq!(antigravity.args, ["--sandbox", "--print-timeout", "280s"]);
     assert_eq!(antigravity.prompt_mode, PromptMode::FlagArg("-p"));
     assert_eq!(antigravity.model_flag, Some("--model"));
 
@@ -426,7 +426,7 @@ fn generation_mode_disables_canvas_mcp_but_keeps_cli_containment() {
     assert_eq!(antigravity.turn_purpose, safety::TurnPurpose::Generation);
     assert_eq!(
         antigravity.args,
-        ["--sandbox", "--print-timeout", "90s", "--mode", "plan"]
+        ["--sandbox", "--print-timeout", "280s", "--mode", "plan"]
     );
 }
 

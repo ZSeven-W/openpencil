@@ -11,7 +11,13 @@ use op_ai::chat_provider::CliName;
 
 static TURN_SEQ: AtomicU64 = AtomicU64::new(0);
 
-pub const ANTIGRAVITY_TIMEOUT: Duration = Duration::from_secs(2 * 60);
+/// Wall clock for one Antigravity turn. Gemini 3.8 Flash (high) took 155s to
+/// write one 12-card kanban section (measured 2026-09-29); the old 2-minute
+/// budget ended most generation turns in an empty print timeout.
+pub const ANTIGRAVITY_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+/// `--print-timeout` handed to agy: inside [`ANTIGRAVITY_TIMEOUT`] so the CLI
+/// returns what it has before the wall clock kills it.
+pub const ANTIGRAVITY_PRINT_TIMEOUT: &str = "280s";
 pub const GROK_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 pub const EXIT_GRACE: Duration = Duration::from_secs(2);
 
@@ -50,7 +56,11 @@ pub fn antigravity_args(purpose: TurnPurpose) -> Vec<String> {
     // child. Keep the remaining containment layers (private cwd, filtered
     // environment, sandbox, and wall-clock timeout) even though argv privacy
     // cannot be provided for this CLI.
-    let mut args = vec!["--sandbox".into(), "--print-timeout".into(), "90s".into()];
+    let mut args = vec![
+        "--sandbox".into(),
+        "--print-timeout".into(),
+        ANTIGRAVITY_PRINT_TIMEOUT.into(),
+    ];
     if purpose == TurnPurpose::Generation {
         args.extend(["--mode".into(), "plan".into()]);
     }

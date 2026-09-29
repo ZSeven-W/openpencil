@@ -137,3 +137,33 @@ fn analytics_teardown_noise_alone_is_not_a_cause() {
     );
     assert_eq!(antigravity_log_error(&path), None);
 }
+
+#[test]
+fn an_empty_turn_quotes_the_clis_own_stderr_reason() {
+    // agy 2026-09-29: a generation turn where the model reached for a tool.
+    let mut tail = op_util::cli_output::BoundedTail::new(4096, 20);
+    tail.push_line(
+        "jetski: no output produced — a tool required the \"command\" permission that headless mode cannot prompt for, so it was auto-denied.",
+    );
+    let msg = no_output_message("Antigravity", &std::sync::Mutex::new(tail), None);
+    assert!(
+        msg.starts_with("Antigravity returned no output: jetski"),
+        "{msg}"
+    );
+    assert!(msg.contains("auto-denied"), "{msg}");
+
+    let empty = op_util::cli_output::BoundedTail::new(4096, 20);
+    assert_eq!(
+        no_output_message("Antigravity", &std::sync::Mutex::new(empty), None),
+        "Antigravity returned no output."
+    );
+}
+
+#[test]
+fn the_missing_conversations_directory_is_not_a_cause() {
+    let path = write_log(
+        "convdir",
+        "E0929 14:40:01.000000     12 store.go:88] Failed to read conversations directory /tmp/x/home/.gemini/antigravity/conversations: open /tmp/x: no such file or directory\n",
+    );
+    assert_eq!(antigravity_log_error(&path), None);
+}

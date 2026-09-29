@@ -61,7 +61,12 @@ pub(crate) fn antigravity_log_error(path: &Path) -> Option<String> {
         // Analytics upload noise ("error recording trajectory segment
         // analytics: ... context canceled") is logged when the turn is torn
         // down and says nothing about why it failed.
-        if message.contains("recording trajectory") || message.contains("Analytics") {
+        if message.contains("recording trajectory")
+            || message.contains("Analytics")
+            // Logged on every isolated turn (its private HOME has no
+            // conversation history yet); never the reason a turn failed.
+            || message.contains("Failed to read conversations directory")
+        {
             continue;
         }
         // The CLI logs the same cause twice (executor wrapper + inner call);
@@ -117,9 +122,23 @@ pub(crate) fn with_log_evidence(
 /// [`with_log_evidence`] and the cause was lost.
 pub(crate) fn no_output_message(
     label: &str,
+    stderr_tail: &std::sync::Mutex<op_util::cli_output::BoundedTail>,
     turn: Option<&crate::chat_subprocess_safety::IsolatedTurn>,
 ) -> String {
-    with_log_evidence(format!("{label} returned no output."), turn)
+    let stderr = stderr_tail.lock().map(|b| b.text()).unwrap_or_default();
+    // agy states the most common reasons on stderr, not in its log: a tool
+    // auto-denied in headless mode ("jetski: no output produced — a tool
+    // required the \"command\" permission …") or the print timeout.
+    let said = op_util::cli_output::redact_secrets(stderr.trim());
+    let base = if said.is_empty() {
+        format!("{label} returned no output.")
+    } else {
+        format!(
+            "{label} returned no output: {}",
+            truncate_chars(&said, MAX_CHARS)
+        )
+    };
+    with_log_evidence(base, turn)
 }
 
 /// The cause inside a `Run: attempt N failed (<cause>), retrying in …` line.
