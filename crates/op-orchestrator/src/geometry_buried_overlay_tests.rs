@@ -439,9 +439,12 @@ fn a_photo_listed_above_the_controls_it_hid_sinks_to_the_back() {
 
 #[test]
 fn a_photo_already_at_the_back_is_left_alone() {
+    // The settled order: caption over scrim over photo. (`[scrim, caption,
+    // photo]` is not settled — the scrim would still hide the caption.)
     let (mut stack, rects) = ridge_photo_stack(json!({}));
     let kids = stack["children"].as_array_mut().unwrap();
     let photo = kids.remove(0);
+    kids.swap(0, 1);
     kids.push(photo);
     let mut cmds = Vec::new();
     collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
@@ -455,6 +458,7 @@ fn a_translucent_grain_on_top_is_left_alone() {
     let (mut stack, mut rects) = ridge_photo_stack(json!({}));
     let kids = stack["children"].as_array_mut().unwrap();
     let photo = kids.remove(0);
+    kids.swap(0, 1);
     kids.push(photo);
     kids.insert(
         0,

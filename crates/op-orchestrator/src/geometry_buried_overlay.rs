@@ -385,6 +385,22 @@ pub(super) fn collect_buried_overlay_fixes(
                 return;
             }
         }
+        if let (Some((scrim_index, target)), Some(stack_id)) =
+            (scrim::scrim_over_content(kids, rects), stack_id)
+        {
+            if let Some(scrim_id) = kids[scrim_index].get("id").and_then(Value::as_str) {
+                cmds.push(EditorCommand::MoveNode {
+                    node_id: NodeId::new(scrim_id.to_string()),
+                    target_parent: NodeId::new(stack_id.to_string()),
+                    page_id: None,
+                    index: Some(target),
+                });
+                for c in kids {
+                    collect_buried_overlay_fixes(c, rects, cmds);
+                }
+                return;
+            }
+        }
         collect_scrimmed_image_cover_fixes(kids, rects, cmds);
         // Later index = painted EARLIER = further back. Walk from the back
         // forward so the rescued overlays keep their relative order once each
@@ -429,6 +445,9 @@ pub(super) fn collect_buried_overlay_fixes(
         collect_buried_overlay_fixes(c, rects, cmds);
     }
 }
+
+#[path = "geometry_buried_overlay_scrim.rs"]
+mod scrim;
 
 #[cfg(test)]
 #[path = "geometry_buried_overlay_tests.rs"]
