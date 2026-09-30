@@ -135,6 +135,13 @@ const IMAGE_SEARCH_DESCRIPTORS: &[&str] = &[
     "photography",
     "isolated",
     "studio",
+    // Camera / editorial framing, not the subject: "cheeseburger close-up"
+    // made "close-up" a second required subject word that Openverse tags
+    // spell "closeup" or "close", and burger photos failed the 2-word bar.
+    "editorial",
+    "closeup",
+    "close-up",
+    "macro",
 ];
 
 /// Metadata markers that make a catalogue hit an explicitly non-photographic
@@ -205,6 +212,10 @@ pub(crate) fn two_keyword_retry(query: &str) -> Option<String> {
     let core_tail = &core[core.len().saturating_sub(3)..];
     let retry = core_tail.join(" ");
     let primary = lexical_words(query).join(" ");
+    // No shorter retry for a three-word subject: dropping its leading word
+    // loses the domain ("rose serum bottle" → a 1960s medical serum,
+    // "camellia cream jar" → cake in a jar; measured 2026-09-30). An empty
+    // slot is better than a wrong picture.
     (!retry.is_empty() && retry != primary).then_some(retry)
 }
 
@@ -402,7 +413,15 @@ pub(crate) fn fence_rejection(hit: &RawHit, query: &str, intent: &str) -> Option
 struct RelevanceContract<'a> {
     query: &'a str,
     core: Vec<String>,
+    /// The QUERY itself asks for a photo ("… studio photo"): the title must
+    /// name the subject and staged rooms are off.
     requires_photo: bool,
+    /// Only the slot's image PROMPT asks for a photo ("minimal product
+    /// photography of …"): artwork media are rejected, nothing more. Holding
+    /// these slots to the title rule too turned 1 in 9 skincare / food slots
+    /// into grey tiles — Openverse titles photos "[139/365]" or "Day 330" and
+    /// names the subject only in tags.
+    photo_medium_only: bool,
     requires_isolation: bool,
     minimum_overlap: usize,
 }
@@ -419,7 +438,8 @@ impl<'a> RelevanceContract<'a> {
         let minimum_overlap = if core.len() >= 2 { 2 } else { 1 };
         Self {
             query,
-            requires_photo: query_requests_photo(query) || query_requests_photo(intent),
+            requires_photo: query_requests_photo(query),
+            photo_medium_only: !query_requests_photo(query) && query_requests_photo(intent),
             requires_isolation: query_requests_isolation(query),
             core,
             minimum_overlap,
@@ -441,7 +461,9 @@ fn fence_verdict(
     if metadata_is_off_subject(metadata, query) {
         return Err("off-subject theme or unrequested brand");
     }
-    if contract.requires_photo && metadata_is_explicitly_non_photo(metadata) {
+    if (contract.requires_photo || contract.photo_medium_only)
+        && metadata_is_explicitly_non_photo(metadata)
+    {
         return Err("photo requested but metadata names a non-photo medium");
     }
     if enforce_isolation
@@ -458,8 +480,12 @@ fn fence_verdict(
         return Err("photo requested but metadata describes a staged room");
     }
     let core = &contract.core;
-    let title = normalized_words(&hit.title);
-    let metadata = normalized_words(metadata);
+    // Hashtag soup in a title ("… #beauty #skincare #model") is the uploader's
+    // reach bait, not a description: an event crowd shot titled that way
+    // passed as a "skincare model" photo (2026-09-30). Only prose words and
+    // the provider's own tags count as subject evidence.
+    let title = normalized_words(&without_hashtags(&hit.title));
+    let metadata = normalized_words(&without_hashtags(metadata));
     let title_overlap = overlap_count(core, &title);
     if contract.requires_photo && title_overlap == 0 {
         return Err("photo requested but no subject word in the title");
@@ -483,6 +509,13 @@ fn fence_verdict(
         title_extra_tokens,
         total_overlap,
     ))
+}
+
+fn without_hashtags(text: &str) -> String {
+    text.split_whitespace()
+        .filter(|word| !word.starts_with('#'))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn retain_relevant_hits_enforcing(

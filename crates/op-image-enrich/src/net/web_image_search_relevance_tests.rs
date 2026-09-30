@@ -302,3 +302,65 @@ fn hyphenated_compound_survives_the_two_keyword_rewrite() {
     let rewrites = rewrite_queries("fresh - salad bowl", "");
     assert_eq!(rewrites[0], "salad bowl");
 }
+
+fn raw(id: &str, title: &str, tags: &str) -> RawHit {
+    RawHit {
+        id: id.to_string(),
+        thumb_url: format!("https://x/{id}.jpg"),
+        attribution: String::new(),
+        title: title.to_string(),
+        relevance_metadata: format!("{title} {tags}"),
+    }
+}
+
+const BURGER_INTENT: &str = "minimal product photography of cheeseburger close-up";
+
+/// 2026-09-30: a photo contract that comes only from the slot's prompt keeps
+/// artwork out but no longer demands the subject in the title — Openverse
+/// titles food photos "[139/365]" and names the burger in its tags.
+#[test]
+fn a_prompt_only_photo_contract_accepts_a_tagged_photo_with_a_bare_title() {
+    let kept = retain_relevant_hits_for_intent(
+        vec![raw("n", "[139/365]", "cheeseburger close food lunch")],
+        "cheeseburger close-up",
+        BURGER_INTENT,
+    );
+    assert_eq!(kept.len(), 1);
+    let fenced = retain_relevant_hits_for_intent(
+        vec![raw(
+            "art",
+            "Burger poster",
+            "cheeseburger illustration painting",
+        )],
+        "cheeseburger close-up",
+        BURGER_INTENT,
+    );
+    assert!(fenced.is_empty(), "artwork is still not a product photo");
+}
+
+#[test]
+fn a_query_that_asks_for_a_photo_still_needs_the_subject_in_the_title() {
+    let kept = retain_relevant_hits_for_intent(
+        vec![raw("n", "[139/365]", "cheeseburger close food lunch")],
+        "cheeseburger studio photo",
+        "",
+    );
+    assert!(kept.is_empty());
+}
+
+#[test]
+fn hashtag_soup_in_a_title_is_not_subject_evidence() {
+    let kept = retain_relevant_hits_for_intent(
+        vec![raw(
+            "event",
+            "Magnifique Skin launch #event #beauty #skincare #model",
+            "building city concert exhibition fashion festival",
+        )],
+        "skincare model",
+        "",
+    );
+    assert!(
+        kept.is_empty(),
+        "an event crowd shot is not a skincare model"
+    );
+}
