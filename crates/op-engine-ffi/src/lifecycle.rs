@@ -153,6 +153,8 @@ impl Session {
             }
             ui.size_class = op_editor_core::size_class::size_class(options.width, options.height);
             ui.sidebar_open = ui.size_class.is_rail_layout();
+            ui.home.visible =
+                crate::lifecycle_initial_document::opens_on_home(&src, ui.entry_surface);
             Some(host)
         } else {
             None

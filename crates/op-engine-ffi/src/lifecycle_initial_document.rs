@@ -19,3 +19,16 @@ pub(crate) fn load_initial_state(source: &str) -> FfiResult<EditorState> {
     op_pen_loader::apply_editor_meta_or_legacy_fallback(&mut state, meta);
     Ok(state)
 }
+
+/// Whether a freshly created editor session opens on Studio Home: a cold
+/// start with no document and the default Home entry preference, like
+/// desktop's `should_show_home`. Measured on the Android emulator
+/// (2026-10-01): the phone opened on a blank professional canvas instead.
+/// Host-side tests configure no storage root and keep their canvas-first
+/// fixture.
+#[cfg(feature = "editor")]
+pub(crate) fn opens_on_home(src: &str, entry_surface: op_editor_core::EntrySurface) -> bool {
+    crate::lifecycle::settings_persistence_active()
+        && src.is_empty()
+        && entry_surface == op_editor_core::EntrySurface::Home
+}
