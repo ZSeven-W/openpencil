@@ -54,7 +54,9 @@ object ChatAttachmentImage {
             .trim()
         val dot = stem.lastIndexOf('.')
         if (dot > 0) stem = stem.substring(0, dot)
-        if (stem.isEmpty()) stem = "photo"
+        // The Photo Picker names items by their opaque media id
+        // ("1000000021.png"); that reads as noise on the chip.
+        if (stem.isEmpty() || stem.all { it.isDigit() }) stem = "photo"
         val extension = when (mediaType) {
             "image/jpeg" -> "jpg"
             "image/gif" -> "gif"

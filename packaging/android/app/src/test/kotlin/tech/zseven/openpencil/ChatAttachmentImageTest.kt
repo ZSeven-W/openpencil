@@ -43,6 +43,7 @@ class ChatAttachmentImageTest {
         assertEquals("abc.webp", ChatAttachmentImage.fileName("a/b\\c\n.webp", "image/webp"))
         assertEquals("photo.gif", ChatAttachmentImage.fileName("  ", "image/gif"))
         assertEquals("photo.png", ChatAttachmentImage.fileName(null, "image/png"))
+        assertEquals("photo.png", ChatAttachmentImage.fileName("1000000021.png", "image/png"))
         assertEquals(".hidden.jpg", ChatAttachmentImage.fileName(".hidden", "image/jpeg"))
         assertEquals(104, ChatAttachmentImage.fileName("x".repeat(300), "image/png").length)
     }
