@@ -648,7 +648,7 @@ pub(super) fn paint_attachment_chips(
     );
     let mut chip_x = chips_area.origin.x;
     for name in names.iter().take(3) {
-        let label: String = name.chars().take(8).collect();
+        let label = chip_label(name);
         let chip_w = cx.backend.measure_text_family(&label, 11.0, SANS) + 26.0 + 34.0;
         let chip = Rect::xywh(chip_x, chips_area.origin.y + 6.0, chip_w, 26.0);
         cx.backend.fill_round_rect(chip, 6.0, palette.chip_bg);
@@ -671,4 +671,20 @@ pub(super) fn paint_attachment_chips(
         );
         chip_x += chip_w + 6.0;
     }
+}
+
+/// A chip's label: the file stem, cut to ten characters with an ellipsis
+/// (a bare eight-character cut read "photo.pn").
+fn chip_label(name: &str) -> String {
+    const MAX: usize = 10;
+    let stem = match name.rfind('.') {
+        Some(dot) if dot > 0 => &name[..dot],
+        _ => name,
+    };
+    if stem.chars().count() <= MAX {
+        return stem.to_string();
+    }
+    let mut cut: String = stem.chars().take(MAX - 1).collect();
+    cut.push('…');
+    cut
 }

@@ -357,11 +357,36 @@ fn a_picked_photo_shows_as_a_chip_in_the_phone_composer() {
     let chip = backend
         .texts
         .iter()
-        .find(|(text, _)| text == "shot.png")
+        .find(|(text, _)| text == "shot")
         .expect("the staged photo's chip is painted");
     assert!(
         input_box.contains(chip.1),
         "the chip sits inside the input box: {:?} vs {input_box:?}",
         chip.1
+    );
+}
+
+#[test]
+fn a_long_photo_name_is_cut_with_an_ellipsis_not_mid_extension() {
+    let mut state = compact_state();
+    state
+        .chat
+        .add_attachment(op_editor_core::chat::ChatAttachment {
+            name: "screenshot-checkout.png".into(),
+            media_type: "image/png".into(),
+            data: vec![1],
+        });
+    let home = HomeSurface::for_editor(&state).expect("home visible");
+    let mut backend = crate::widgets::test_capture_backend::CaptureBackend::default();
+    {
+        let mut cx = crate::widgets::PaintCx {
+            backend: &mut backend,
+        };
+        crate::widgets::Widget::paint(&home, &mut cx, Rect::xywh(0.0, 0.0, W, H));
+    }
+    assert!(
+        backend.texts.iter().any(|(text, _)| text == "screensho…"),
+        "chip label is the cut stem: {:?}",
+        backend.texts
     );
 }
