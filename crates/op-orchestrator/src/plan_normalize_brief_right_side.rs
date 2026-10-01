@@ -66,8 +66,8 @@ pub(super) fn mark_brief_right_side_subtasks(plan: &mut OrchestratorPlan, prompt
     if plan.root_frame.width < MIN_ROOT_WIDTH || plan.subtasks.iter().any(is_right_rail_subtask) {
         return 0;
     }
-    let mut tagged = 0;
-    for region in brief_right_side_regions(prompt) {
+    let regions = brief_right_side_regions(prompt);
+    for region in &regions {
         let candidates: Vec<usize> = plan
             .subtasks
             .iter()
@@ -90,13 +90,13 @@ pub(super) fn mark_brief_right_side_subtasks(plan: &mut OrchestratorPlan, prompt
         let by_name: Vec<usize> = candidates
             .iter()
             .copied()
-            .filter(|&index| names(index).contains(&region))
+            .filter(|&index| names(index).contains(region.as_str()))
             .collect();
         let matches = if by_name.is_empty() {
             candidates
                 .iter()
                 .copied()
-                .filter(|&index| elements(index).contains(&region))
+                .filter(|&index| elements(index).contains(region.as_str()))
                 .collect()
         } else {
             by_name
@@ -105,12 +105,49 @@ pub(super) fn mark_brief_right_side_subtasks(plan: &mut OrchestratorPlan, prompt
         let [index] = matches[..] else {
             continue;
         };
-        let st = &mut plan.subtasks[index];
-        st.label = format!("{} {RIGHT_PANEL_TAG}", st.label);
-        tagged += 1;
-        break;
+        tag(plan, index);
+        return 1;
     }
-    tagged
+    // The brief's noun did not survive translation (`告警列表` planned as
+    // `Alert List` with `实时告警` elements, arena-d03 Opus 5.5 2026-10-01) but the
+    // planner still wrote the placement into the elements ("right panel
+    // header …"). One subtask saying so is the region the brief meant.
+    if !regions.is_empty() {
+        let placed: Vec<usize> = plan
+            .subtasks
+            .iter()
+            .enumerate()
+            .filter(|(index, st)| *index > 0 && !is_sidebar_subtask(st))
+            .filter(|(_, st)| {
+                let elements = st.elements.as_deref().unwrap_or("").to_lowercase();
+                ELEMENT_PLACEMENT_CUES
+                    .iter()
+                    .any(|cue| elements.contains(cue))
+            })
+            .map(|(index, _)| index)
+            .collect();
+        if let [index] = placed[..] {
+            tag(plan, index);
+            return 1;
+        }
+    }
+    0
+}
+
+/// Placement phrases a planner writes into a subtask's elements.
+const ELEMENT_PLACEMENT_CUES: &[&str] = &[
+    "right panel",
+    "right rail",
+    "right column",
+    "right side",
+    "right-side",
+    "右侧",
+    "右栏",
+];
+
+fn tag(plan: &mut OrchestratorPlan, index: usize) {
+    let st = &mut plan.subtasks[index];
+    st.label = format!("{} {RIGHT_PANEL_TAG}", st.label);
 }
 
 #[cfg(test)]

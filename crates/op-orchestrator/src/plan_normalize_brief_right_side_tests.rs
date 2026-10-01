@@ -100,3 +100,28 @@ fn a_brief_without_a_right_side_region_changes_nothing() {
     let brief = "IoT 设备监控台：侧栏、状态摘要三卡、设备网格、告警列表五条。";
     assert_eq!(mark_brief_right_side_subtasks(&mut plan, brief), 0);
 }
+
+/// arena-d03, Opus 5.5 2026-10-01 run-1 after its coverage re-plan: neither
+/// the label nor the elements carry 告警列表, but the elements open with
+/// "right panel header".
+#[test]
+fn a_planner_placement_in_the_elements_stands_in_for_a_lost_noun() {
+    let mut subtasks = d03_subtasks();
+    subtasks[1].elements = Some("page title row; 3 status cards (今日告警); device grid 12".into());
+    subtasks[2].elements = Some(
+        "right panel header (实时告警 + 查看全部 link), severity legend chips, 5 alert rows".into(),
+    );
+    let mut plan = plan(1440.0, subtasks);
+
+    assert_eq!(mark_brief_right_side_subtasks(&mut plan, D03_BRIEF), 1);
+    assert_eq!(plan.subtasks[2].label, "Alert List (right panel)");
+}
+
+#[test]
+fn a_placement_cue_alone_needs_the_brief_to_ask_for_the_right() {
+    let mut subtasks = d03_subtasks();
+    subtasks[2].elements = Some("right panel header, 5 alert rows".into());
+    let mut plan = plan(1440.0, subtasks);
+    let brief = "IoT 设备监控台：侧栏、状态摘要三卡、设备网格、告警列表五条。";
+    assert_eq!(mark_brief_right_side_subtasks(&mut plan, brief), 0);
+}
