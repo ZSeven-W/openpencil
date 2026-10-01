@@ -22,6 +22,7 @@ final class OpEngineHost: NSObject {
     private lazy var documentExportCoordinator = DocumentExportCoordinator(host: self)
     private lazy var documentSaveCoordinator = DocumentSaveCoordinator(host: self)
     private lazy var imageImportCoordinator = ImageImportCoordinator(host: self)
+    private lazy var chatAttachmentCoordinator = ChatAttachmentCoordinator(host: self)
     // Internal (not private) so OpEngineHost+Pointer.swift's `editor*At` wrappers can observe engine work.
     lazy var generationBackgroundCoordinator = GenerationBackgroundCoordinator(host: self)
     /// Editor mode (full desktop chrome) vs bare viewer.
@@ -112,6 +113,7 @@ final class OpEngineHost: NSObject {
         documentExportCoordinator.cancelForTeardown()
         documentSaveCoordinator.cancelForTeardown()
         imageImportCoordinator.cancelForTeardown()
+        chatAttachmentCoordinator.cancelForTeardown()
         generationBackgroundCoordinator.teardown()
 
         if let engine {
@@ -443,9 +445,7 @@ final class OpEngineHost: NSObject {
             }
             guard action != Int32(OpShellAction_None.rawValue) else { return }
             if action == Int32(OpShellAction_OpenDocument.rawValue) {
-                DispatchQueue.main.async { [weak self] in
-                    self?.view?.showDocumentPicker()
-                }
+                DispatchQueue.main.async { [weak self] in self?.view?.showDocumentPicker() }
             } else if action == Int32(OpShellAction_OpenLoginWebView.rawValue) {
                 guard let url = copyLoginURL(engine: engine) else {
                     cancelLoginFlow()
@@ -481,6 +481,8 @@ final class OpEngineHost: NSObject {
                 }
             } else if action == Int32(OpShellAction_ImportImageOrSvg.rawValue) {
                 DispatchQueue.main.async { [weak self] in self?.imageImportCoordinator.beginImport() }
+            } else if action == Int32(OpShellAction_PickChatAttachment.rawValue) {
+                DispatchQueue.main.async { [weak self] in self?.chatAttachmentCoordinator.beginPick() }
             }
         }
     }

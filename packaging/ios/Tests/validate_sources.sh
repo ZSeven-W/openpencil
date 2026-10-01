@@ -21,6 +21,8 @@ required=(
   "$player_dir/Sources/OpPlayerView.swift"
   "$player_dir/Sources/OpEngineHost.swift"
   "$player_dir/Sources/ImageImportCoordinator.swift"
+  "$player_dir/Sources/ChatAttachmentCoordinator.swift"
+  "$player_dir/Sources/ChatAttachmentImage.swift"
   "$player_dir/Sources/GenerationBackgroundCoordinator.swift"
   "$player_dir/Sources/GenerationBackgroundRegistration.swift"
   "$player_dir/Sources/GenerationBackgroundState.swift"
@@ -42,6 +44,7 @@ required=(
   "$player_dir/Sources/UniversalLink.swift"
   "$player_dir/Tests/GenerationBackgroundRegistrationTests.swift"
   "$player_dir/Tests/GenerationBackgroundStateTests.swift"
+  "$player_dir/Tests/ChatAttachmentImageTests.swift"
 )
 
 for path in "${required[@]}"; do
@@ -109,6 +112,14 @@ grep -Fq '"imageImport.error.title"' "$player_dir/Resources/en.lproj/Localizable
 grep -Fq '"imageImport.error.title"' "$player_dir/Resources/zh-Hans.lproj/Localizable.strings"
 grep -Fq '"imageImport.error.body"' "$player_dir/Resources/en.lproj/Localizable.strings"
 grep -Fq '"imageImport.error.body"' "$player_dir/Resources/zh-Hans.lproj/Localizable.strings"
+
+# Studio Home "Add screenshot" and the chat attach button raise action 13;
+# the photo picker result must come back through the attachment ABI.
+grep -Fq 'OpShellAction_PickChatAttachment = 13,' "$header_dir/op_engine.h"
+grep -Fq 'OpShellAction_PickChatAttachment.rawValue' "$player_dir/Sources/OpEngineHost.swift"
+grep -Fq 'op_editor_attach_chat_image' "$player_dir/Sources/ChatAttachmentCoordinator.swift"
+grep -Fq 'PHPickerViewController' "$player_dir/Sources/ChatAttachmentCoordinator.swift"
+grep -Fq 'ChatAttachmentImage.prepare' "$player_dir/Sources/ChatAttachmentCoordinator.swift"
 
 while IFS= read -r source; do
   lines="$(wc -l < "$source" | tr -d ' ')"
@@ -518,6 +529,38 @@ raise "image-import teardown must detach and dismiss the picker" unless teardown
 raise "collaboration rejection must rely on the engine notice" unless coordinator.include?("status != OpStatus_Busy")
 RUBY
 
+ruby - "$player_dir/Sources/OpEngineHost.swift" \
+  "$player_dir/Sources/ChatAttachmentCoordinator.swift" <<'RUBY'
+host = File.read(ARGV.fetch(0))
+coordinator = File.read(ARGV.fetch(1))
+
+drain = host[/func drainShellActions\b.*?(?=\n    \/\/\/ Polls the engine)/m]
+raise "iOS chat-attachment shell-action branch missing" unless drain
+action = drain.index("OpShellAction_PickChatAttachment.rawValue")
+defer_to_uikit = drain.index("DispatchQueue.main.async", action || 0)
+begin_pick = drain.index("chatAttachmentCoordinator.beginPick()", action || 0)
+unless action && defer_to_uikit && begin_pick && action < defer_to_uikit && defer_to_uikit < begin_pick
+  raise "photo picker presentation must leave the editor ABI stack"
+end
+raise "chat-attachment teardown missing" unless host.include?("chatAttachmentCoordinator.cancelForTeardown()")
+
+begin_method = coordinator[/func beginPick\(\).*?(?=\n    \/\/\/ Teardown)/m]
+raise "chat-attachment picker missing" unless begin_method
+raise "photo picker must offer images only" unless begin_method.include?("configuration.filter = .images")
+raise "photo picker must return one image" unless begin_method.include?("configuration.selectionLimit = 1")
+
+prepare = coordinator.index("ChatAttachmentImage.prepare")
+return_bytes = coordinator.index("op_editor_attach_chat_image(")
+raise "normalisation must finish before bytes cross the ABI" unless prepare && return_bytes && prepare < return_bytes
+raise "photo normalisation must run off the main thread" unless coordinator.include?("loadQueue.async")
+finish = coordinator[/func picker\(_ picker: PHPickerViewController.*?\n    \}/m]
+raise "picker dismissal must retire UIKit ownership" unless finish&.include?("finishPicker()")
+raise "an empty picker result must be a silent cancel" unless finish.include?("guard let provider = results.first?.itemProvider else { return }")
+teardown = coordinator[/func cancelForTeardown\(\).*?(?=\n    private func finishPicker)/m]
+raise "chat-attachment teardown must invalidate worker completion" unless teardown&.include?("activeLoadToken = nil")
+raise "chat-attachment teardown must detach and dismiss the picker" unless teardown.include?("picker.delegate = nil") && teardown.include?("picker.dismiss(animated: false)")
+RUBY
+
 sdk="$(xcrun --sdk iphonesimulator --show-sdk-path)"
 target="arm64-apple-ios15.0-simulator"
 module_cache="${TMPDIR:-/tmp}/op-ios-module-cache"
@@ -619,6 +662,15 @@ xcrun swiftc \
   "$player_dir/Tests/DocumentSaveBindingTests.swift" \
   -o "$save_binding_test"
 "$save_binding_test"
+
+chat_attachment_test="$reader_test_dir/chat-attachment-image-runner"
+xcrun swiftc \
+  -warnings-as-errors \
+  -parse-as-library \
+  "$player_dir/Sources/ChatAttachmentImage.swift" \
+  "$player_dir/Tests/ChatAttachmentImageTests.swift" \
+  -o "$chat_attachment_test"
+"$chat_attachment_test"
 
 universal_link_test="$reader_test_dir/universal-link-runner"
 xcrun swiftc \
