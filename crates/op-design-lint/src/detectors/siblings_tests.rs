@@ -41,6 +41,25 @@ mod sibling_inconsistency_tests {
         assert_eq!(issues[0].current_value, json!(140));
     }
 
+    /// arena-w02 (Opus 5.5, 2026-10-01): the reading pane's scrolling body
+    /// fills the pane above the pinned reply box; the hugging header,
+    /// attachment and reply siblings are not a majority it should copy.
+    #[test]
+    fn a_fill_container_grower_among_hugging_siblings_is_not_an_outlier() {
+        let root = node(json!({
+            "type": "frame", "id": "pane", "layout": "vertical",
+            "children": [
+                {"type": "frame", "id": "header", "height": "fit_content"},
+                {"type": "frame", "id": "body", "height": "fill_container"},
+                {"type": "frame", "id": "attachment", "height": "fit_content"},
+                {"type": "frame", "id": "reply", "height": "fit_content"}
+            ]
+        }));
+        assert!(detect_sibling_inconsistencies(&root)
+            .iter()
+            .all(|issue| issue.node_id != "body"));
+    }
+
     #[test]
     fn flags_strict_corner_radius_outlier() {
         let root = node(json!({

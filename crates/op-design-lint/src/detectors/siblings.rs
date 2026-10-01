@@ -231,6 +231,15 @@ fn check_consistency(
         if is_corner && (group_is_pill || majority_is_pill) {
             continue;
         }
+        // One `fill_container` child among `fit_content` siblings is the flex
+        // grower that takes the stack's remaining height — a scrolling body
+        // above a pinned composer, a list above a footer — not a style
+        // mismatch. arena-w02 (Opus 5.5, 2026-10-01): this pass reset the
+        // reading pane's scrolling body to `fit_content` and pushed the reply
+        // box back under the pane's clip edge.
+        if property == "height" && group.value.as_str() == Some("fill_container") {
+            continue;
+        }
         for node_id_str in &group.nodes {
             issues.push(Issue {
                 node_id: node_id_str.clone(),
