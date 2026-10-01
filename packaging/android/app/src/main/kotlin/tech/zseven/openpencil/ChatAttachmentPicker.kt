@@ -44,6 +44,7 @@ internal class ChatAttachmentPicker(
         ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
         if (uri == null) {
+            Log.i(TAG, "chat attachment picker dismissed")
             inProgress = false
         } else {
             readAndAttach(uri)
@@ -85,7 +86,9 @@ internal class ChatAttachmentPicker(
                     return@runOnUiThread
                 }
                 val status = view.attachChatImage(prepared.bytes, prepared.mediaType, prepared.fileName)
-                if (status != 0 && status != OpNative.STATUS_CLOSING) {
+                if (status == 0) {
+                    Log.i(TAG, "chat attachment staged: ${prepared.mediaType}, ${prepared.bytes.size} bytes")
+                } else if (status != OpNative.STATUS_CLOSING) {
                     // Busy = the turn already holds the maximum attachments;
                     // InvalidArg = the engine refused the bytes. Neither leaves
                     // partial state, so logging is the whole response.
