@@ -21,6 +21,7 @@ object OpNative {
     const val SHELL_ACTION_OPEN_LANGUAGE_PICKER = 7
     const val SHELL_ACTION_SAVE_DOCUMENT = 11
     const val SHELL_ACTION_IMPORT_IMAGE_OR_SVG = 12
+    const val SHELL_ACTION_PICK_CHAT_ATTACHMENT = 13
 
     init {
         System.loadLibrary("op_engine_jni")
@@ -119,6 +120,15 @@ object OpNative {
     external fun nativeEditorTakeShellAction(engine: Long): Int
     external fun nativeEditorOpenDocument(engine: Long, bytes: ByteArray, name: String): Int
     external fun nativeEditorImportImageOrSvg(engine: Long, bytes: ByteArray, name: String): Int
+    /** Stages one photo-picker image as a chat attachment (action 13). A null
+     *  [mediaType] / [name] lets the engine sniff the type / generate a name;
+     *  Busy (8) = the turn already holds the maximum attachments. */
+    external fun nativeEditorAttachChatImage(
+        engine: Long,
+        bytes: ByteArray,
+        mediaType: String?,
+        name: String?,
+    ): Int
     external fun nativeEditorExportFileName(engine: Long): String?
     external fun nativeEditorExportToPath(engine: Long, path: String): Int
     external fun nativeEditorCancelExport(engine: Long): Int

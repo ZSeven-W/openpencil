@@ -17,6 +17,7 @@ internal class OpSurfaceViewShellBridge(private val view: OpSurfaceView) {
 
     private var openDocumentHandler: (() -> Unit)? = null
     private var importImageOrSvgHandler: (() -> Unit)? = null
+    private var pickChatAttachmentHandler: (() -> Unit)? = null
     private var exportDocumentHandler: (() -> Unit)? = null
     private var saveDocumentHandler: (() -> Unit)? = null
     private var accountCenterHandler: (() -> Unit)? = null
@@ -35,6 +36,11 @@ internal class OpSurfaceViewShellBridge(private val view: OpSurfaceView) {
     /** Registers the Activity-owned image / SVG picker handler. */
     fun setImportImageOrSvgHandler(handler: () -> Unit) {
         importImageOrSvgHandler = handler
+    }
+
+    /** Registers the Activity-owned chat / Home attachment photo picker. */
+    fun setPickChatAttachmentHandler(handler: () -> Unit) {
+        pickChatAttachmentHandler = handler
     }
 
     /** Registers the Activity-owned save-UI handler for frozen exports. */
@@ -209,6 +215,9 @@ internal class OpSurfaceViewShellBridge(private val view: OpSurfaceView) {
             action == OpNative.SHELL_ACTION_IMPORT_IMAGE_OR_SVG -> view.post {
                 if (view.editorEngine() != 0L) importImageOrSvgHandler?.invoke()
             }
+            action == OpNative.SHELL_ACTION_PICK_CHAT_ATTACHMENT -> view.post {
+                if (view.editorEngine() != 0L) pickChatAttachmentHandler?.invoke()
+            }
             action == OpNative.SHELL_ACTION_EXPORT_DOCUMENT -> view.post {
                 if (view.editorEngine() != 0L) exportDocumentHandler?.invoke()
             }
@@ -263,10 +272,20 @@ internal class OpSurfaceViewShellBridge(private val view: OpSurfaceView) {
         return status
     }
 
+    /** Stages one photo-picker image as a chat attachment, then repaints the strip. */
+    fun attachChatImage(bytes: ByteArray, mediaType: String?, fileName: String?): Int {
+        val current = view.editorEngine()
+        if (!view.editorMode() || current == 0L) return OpNative.STATUS_CLOSING
+        val status = OpNative.nativeEditorAttachChatImage(current, bytes, mediaType, fileName)
+        view.requestFrame()
+        return status
+    }
+
     /** Nulls every Activity-owned handler at teardown. */
     fun releaseHandlers() {
         openDocumentHandler = null
         importImageOrSvgHandler = null
+        pickChatAttachmentHandler = null
         exportDocumentHandler = null
         saveDocumentHandler = null
         accountCenterHandler = null

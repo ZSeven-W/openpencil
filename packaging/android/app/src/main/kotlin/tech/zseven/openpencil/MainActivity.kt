@@ -53,6 +53,9 @@ class MainActivity : ComponentActivity() {
     private var exportStagingDir: File? = null
     private lateinit var documentSave: DocumentSaveCoordinator
     private var backgroundNotificationPermissionRequested = false
+    private val chatAttachmentPicker = ChatAttachmentPicker(this) {
+        if (::surfaceView.isInitialized) surfaceView else null
+    }
 
     private val backgroundNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -135,6 +138,7 @@ class MainActivity : ComponentActivity() {
             configure(doc, editorMode, fonts)
             setOpenDocumentHandler(::launchDocumentPicker)
             setImportImageOrSvgHandler(::launchImageOrSvgPicker)
+            setPickChatAttachmentHandler(chatAttachmentPicker::launch)
             setExportDocumentHandler(::beginDocumentExport)
             setSystemChromeAppearanceHandler { prefersLightIcons ->
                 updateSystemChromeAppearance(window, prefersLightIcons)

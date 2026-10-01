@@ -158,6 +158,9 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
     fun setImportImageOrSvgHandler(handler: () -> Unit) =
         shellBridge.setImportImageOrSvgHandler(handler)
 
+    fun setPickChatAttachmentHandler(handler: () -> Unit) =
+        shellBridge.setPickChatAttachmentHandler(handler)
+
     fun setExportDocumentHandler(handler: () -> Unit) =
         shellBridge.setExportDocumentHandler(handler)
 
@@ -704,6 +707,10 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
     /** Returns one platform-picked image/SVG to Rust, then repaints success or rejection. */
     fun importImageOrSvg(bytes: ByteArray, displayName: String): Int =
         shellBridge.importImageOrSvg(bytes, displayName)
+
+    /** Stages one photo-picker image as a chat / Home attachment. */
+    fun attachChatImage(bytes: ByteArray, mediaType: String?, fileName: String?): Int =
+        shellBridge.attachChatImage(bytes, mediaType, fileName)
 
     /** Editor-mode IME sync kept in sync with the engine's focus each frame. */
     fun syncIme() {
