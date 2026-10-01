@@ -106,7 +106,13 @@ impl<'a> CanvasViewport<'a> {
                 // from a previous tool must not paint.
                 .filter(|_| matches!(state.tool, op_editor_core::Tool::Select))
                 .map(|id| id.as_str().to_string()),
-            frame_labels: collect_frame_labels(state),
+            // The reader's header owns the page name; a canvas label
+            // above the board would sit half under it.
+            frame_labels: if reading {
+                Vec::new()
+            } else {
+                collect_frame_labels(state)
+            },
             generator_badges: if reading {
                 Vec::new()
             } else {

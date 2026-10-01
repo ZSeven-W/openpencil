@@ -190,3 +190,17 @@ fn hovered_root_frame_label_uses_primary_active_color() {
 
     assert_eq!(color, viewport.theme.primary.to_jian());
 }
+
+#[test]
+fn reader_mode_collects_no_root_frame_labels() {
+    let scene = sample_scene();
+    let mut state = EditorState::new();
+    state.doc.children = vec![named_frame_node("n1", "01 首页")];
+    state.editor_ui.touch = true;
+    state.editor_ui.workspace.visible = true;
+    assert!(state.editor_ui.works_reader_visible());
+
+    let viewport = CanvasViewport::from_editor(&state, &scene);
+
+    assert!(viewport.frame_labels.is_empty());
+}
