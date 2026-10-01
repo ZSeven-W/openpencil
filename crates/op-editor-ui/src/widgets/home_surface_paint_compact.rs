@@ -368,6 +368,7 @@ fn paint_composer(
     backend.clip_round_rect(input_box, 10.0);
     text_area.paint(&mut backend, text_rect, &studio_tokens(palette));
     backend.restore();
+    super::panels::paint_attachment_chips(cx, &surface.attachment_names, input_box, palette);
 
     // The inline replace-confirm strip rides above the input's bottom.
     if surface.state.replace_pending {

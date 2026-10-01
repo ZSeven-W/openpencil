@@ -162,42 +162,7 @@ pub(super) fn paint_composer(
     text_area.paint(&mut backend, text_rect, &studio_tokens(palette));
     backend.restore();
 
-    // Attachment chips (the chat composer's staged list is the truth).
-    let names = &surface.attachment_names;
-    if !names.is_empty() {
-        let chips_h = names.len().min(2) as f32 * 34.0 + 8.0;
-        let chips_area = Rect::xywh(
-            input_box.origin.x + 10.0,
-            input_box.origin.y + input_box.size.y - chips_h,
-            input_box.size.x - 20.0,
-            chips_h,
-        );
-        let mut chip_x = chips_area.origin.x;
-        for name in names.iter().take(3) {
-            let label: String = name.chars().take(8).collect();
-            let chip_w = cx.backend.measure_text_family(&label, 11.0, SANS) + 26.0 + 34.0;
-            let chip = Rect::xywh(chip_x, chips_area.origin.y + 6.0, chip_w, 26.0);
-            cx.backend.fill_round_rect(chip, 6.0, palette.chip_bg);
-            cx.backend
-                .stroke_round_rect(chip, 6.0, palette.chip_line, 1.0);
-            cx.backend.fill_round_rect(
-                Rect::xywh(chip.origin.x + 4.0, chip.origin.y + 3.0, 20.0, 20.0),
-                3.0,
-                fade(palette.blue, 0.25),
-            );
-            text(
-                cx,
-                &label,
-                Point2D::new(
-                    chip.origin.x + 30.0,
-                    jian_widgets::centered_text_baseline_y(chip, 11.0),
-                ),
-                11.0,
-                fade(palette.ink, 0.75),
-            );
-            chip_x += chip_w + 6.0;
-        }
-    }
+    paint_attachment_chips(cx, &surface.attachment_names, input_box, palette);
     super::super::brand_chip::paint_brand_chip(surface, cx, input_box, palette);
 
     // The inline replace-confirm strip rides above the input's bottom.
@@ -660,4 +625,50 @@ fn paint_template_switched(
 
 fn fade_palette(palette: StudioPalette, factor: f32) -> StudioPalette {
     palette.faded(factor)
+}
+
+/// The staged attachment chips along the input box's bottom edge (the
+/// chat composer's `pending_attachments` list is the truth). Shared by
+/// the wide and the phone composer so a picked photo shows on both.
+pub(super) fn paint_attachment_chips(
+    cx: &mut PaintCx<'_>,
+    names: &[String],
+    input_box: Rect,
+    palette: StudioPalette,
+) {
+    if names.is_empty() {
+        return;
+    }
+    let chips_h = names.len().min(2) as f32 * 34.0 + 8.0;
+    let chips_area = Rect::xywh(
+        input_box.origin.x + 10.0,
+        input_box.origin.y + input_box.size.y - chips_h,
+        input_box.size.x - 20.0,
+        chips_h,
+    );
+    let mut chip_x = chips_area.origin.x;
+    for name in names.iter().take(3) {
+        let label: String = name.chars().take(8).collect();
+        let chip_w = cx.backend.measure_text_family(&label, 11.0, SANS) + 26.0 + 34.0;
+        let chip = Rect::xywh(chip_x, chips_area.origin.y + 6.0, chip_w, 26.0);
+        cx.backend.fill_round_rect(chip, 6.0, palette.chip_bg);
+        cx.backend
+            .stroke_round_rect(chip, 6.0, palette.chip_line, 1.0);
+        cx.backend.fill_round_rect(
+            Rect::xywh(chip.origin.x + 4.0, chip.origin.y + 3.0, 20.0, 20.0),
+            3.0,
+            fade(palette.blue, 0.25),
+        );
+        text(
+            cx,
+            &label,
+            Point2D::new(
+                chip.origin.x + 30.0,
+                jian_widgets::centered_text_baseline_y(chip, 11.0),
+            ),
+            11.0,
+            fade(palette.ink, 0.75),
+        );
+        chip_x += chip_w + 6.0;
+    }
 }

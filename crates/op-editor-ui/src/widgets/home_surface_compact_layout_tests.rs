@@ -334,3 +334,34 @@ fn a_host_without_a_variants_runner_offers_no_toggle() {
         .layout(1440.0, 900.0);
     assert_eq!(web.variants, Rect::ZERO);
 }
+
+#[test]
+fn a_picked_photo_shows_as_a_chip_in_the_phone_composer() {
+    let mut state = compact_state();
+    state
+        .chat
+        .add_attachment(op_editor_core::chat::ChatAttachment {
+            name: "shot.png".into(),
+            media_type: "image/png".into(),
+            data: vec![1],
+        });
+    let home = HomeSurface::for_editor(&state).expect("home visible");
+    let mut backend = crate::widgets::test_capture_backend::CaptureBackend::default();
+    {
+        let mut cx = crate::widgets::PaintCx {
+            backend: &mut backend,
+        };
+        crate::widgets::Widget::paint(&home, &mut cx, Rect::xywh(0.0, 0.0, W, H));
+    }
+    let input_box = compact_layout(&state).input_box;
+    let chip = backend
+        .texts
+        .iter()
+        .find(|(text, _)| text == "shot.png")
+        .expect("the staged photo's chip is painted");
+    assert!(
+        input_box.contains(chip.1),
+        "the chip sits inside the input box: {:?} vs {input_box:?}",
+        chip.1
+    );
+}
