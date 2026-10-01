@@ -21,6 +21,9 @@ mod plan_normalize_side_rail;
 #[path = "plan_normalize_umbrella.rs"]
 mod plan_normalize_umbrella;
 
+#[path = "plan_normalize_brief_right_side.rs"]
+mod plan_normalize_brief_right_side;
+
 #[path = "plan_normalize_dimensions.rs"]
 mod plan_normalize_dimensions;
 #[path = "plan_normalize_root_name.rs"]
@@ -164,6 +167,13 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
     tracing::info!(
         count = dropped_umbrellas,
         "plan normalization dropped umbrella subtasks"
+    );
+
+    let brief_right_side =
+        plan_normalize_brief_right_side::mark_brief_right_side_subtasks(plan, &req.prompt);
+    tracing::info!(
+        count = brief_right_side,
+        "plan normalization restored brief right-side regions"
     );
 
     let is_mobile = plan.root_frame.width <= MOBILE_MAX_WIDTH;
