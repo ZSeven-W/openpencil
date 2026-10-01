@@ -94,7 +94,7 @@ raise "the OHOS payload must be installed by atomic rename" unless ohos_build.in
   'mv -f "$install_tmp" "$install_path"',
 )
 required_napi_markers = %w[
-  editorImportImageOrSvg hasBackgroundWork backgroundTick
+  editorImportImageOrSvg editorAttachChatImage hasBackgroundWork backgroundTick
   editorPressAt editorMoveAt editorReleaseAt editorCancelGestureAt
 ].freeze
 missing_build_markers = required_napi_markers.reject { |name| ohos_build.include?(name) }

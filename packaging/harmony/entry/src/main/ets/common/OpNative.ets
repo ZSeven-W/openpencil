@@ -58,6 +58,11 @@ export enum OpShellAction {
   SAVE_DOCUMENT = 11,
   /** Pick one PNG, JPEG, GIF, WebP, or SVG and return bounded bytes. */
   IMPORT_IMAGE_OR_SVG = 12,
+  /**
+   * Studio Home "Add screenshot" / the chat attach button: pick one photo and
+   * stage it with `editorAttachChatImage`. Raised once per press.
+   */
+  PICK_CHAT_ATTACHMENT = 13,
 }
 
 /** Pointer phases mirroring the C ABI `OpPointerPhase`. */

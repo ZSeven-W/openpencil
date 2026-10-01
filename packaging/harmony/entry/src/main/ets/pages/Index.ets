@@ -10,6 +10,7 @@ import { AuthRuntime } from '../common/AuthRuntime';
 import { BrowserLauncher } from '../common/BrowserLauncher';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { DeviceLoginRequest } from '../common/DeviceLoginRequest';
+import { ChatAttachmentShell } from '../common/ChatAttachmentShell';
 import { DocumentShell, ShellOutcome } from '../common/DocumentShell';
 import { DocumentSaveBridge } from '../common/DocumentSaveBridge';
 import { EngineHost, ShellActionSink, WindowControlKind } from '../common/EngineHost';
@@ -47,6 +48,7 @@ struct Index {
   private engineStarted: boolean = false;
   private documentOpenInProgress: boolean = false;
   private imageImportInProgress: boolean = false;
+  private chatAttachmentInProgress: boolean = false;
   private exportInProgress: boolean = false;
   private saveInProgress: boolean = false;
 
@@ -385,6 +387,7 @@ struct Index {
     return {
       onOpenDocument: (): void => this.openDocument(),
       onImportImageOrSvg: (): void => this.importImageOrSvg(),
+      onPickChatAttachment: (): void => this.pickChatAttachment(),
       onExportDocument: (): void => this.exportDocument(),
       onSaveDocument: (): void => this.saveDocument(),
       onOpenLoginUi: (url: string): void => this.presentLoginUi(url),
@@ -499,6 +502,24 @@ struct Index {
         this.imageImportInProgress = false;
         hilog.warn(DOMAIN, TAG, 'image import failed: %{public}s', JSON.stringify(error));
         this.presentNotice($r('app.string.image_import_failed'));
+      });
+  }
+
+  private pickChatAttachment(): void {
+    if (this.chatAttachmentInProgress) {
+      // The action is already consumed; never stack a second picker.
+      return;
+    }
+    this.chatAttachmentInProgress = true;
+    // Failures are logged only: the engine owns the attachment strip, and a
+    // dismissed picker (action 13 is one-shot) needs no engine cancel call.
+    ChatAttachmentShell.pickAndAttach(this.host)
+      .then((): void => {
+        this.chatAttachmentInProgress = false;
+      })
+      .catch((error: Object) => {
+        this.chatAttachmentInProgress = false;
+        hilog.warn(DOMAIN, TAG, 'chat attachment failed: %{public}s', JSON.stringify(error));
       });
   }
 

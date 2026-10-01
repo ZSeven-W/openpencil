@@ -150,6 +150,7 @@ action_codes = {
   "WINDOW_ZOOM" => ["OpShellAction_WindowZoom = 10", 10],
   "SAVE_DOCUMENT" => ["OpShellAction_SaveDocument = 11", 11],
   "IMPORT_IMAGE_OR_SVG" => ["OpShellAction_ImportImageOrSvg = 12", 12],
+  "PICK_CHAT_ATTACHMENT" => ["OpShellAction_PickChatAttachment = 13", 13],
 }.freeze
 
 action_codes.each do |name, (header_line, code)|
@@ -169,7 +170,7 @@ raise "an unknown action must be logged, not silently dropped" unless engine_hos
 
 # Every action reaches a main-thread sink handler.
 %w[
-  onOpenDocument onImportImageOrSvg onExportDocument onSaveDocument
+  onOpenDocument onImportImageOrSvg onPickChatAttachment onExportDocument onSaveDocument
   onOpenAccountCenter onRequestLogin onOpenLanguagePicker onOpenLoginUi
   onCloseLoginUi onWindowControl
 ].each do |handler|
@@ -235,6 +236,38 @@ raise "NAPI image import must call the canonical FFI" unless napi_editor.include
     '"name": "image_import_failed"',
   ) && strings.include?('"name": "image_import_type_unsupported"')
 end
+
+# Action 13: Studio Home "Add screenshot" / chat attach. One photo from the
+# system photo picker, normalised (HEIC / oversized -> JPEG under 5 MiB) and
+# staged through the attachment ABI; dismissal is terminal and silent.
+chat_attachment = read(ets_dir, "common/ChatAttachmentShell.ets")
+raise "chat attachment must use the photo picker" unless chat_attachment.include?(
+  "new photoAccessHelper.PhotoViewPicker()",
+)
+raise "chat attachment picker must offer images only" unless chat_attachment.include?(
+  "options.MIMEType = photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE",
+)
+raise "chat attachment picker must select exactly one photo" unless chat_attachment.include?(
+  "options.maxSelectNumber = 1",
+)
+raise "an empty photo picker result must cancel silently" unless chat_attachment.match?(
+  /photoUris\.length === 0\) \{\s*return ShellOutcome\.CANCELLED;/m,
+)
+raise "HEIC / oversized photos must be re-encoded as JPEG" unless chat_attachment.include?(
+  "format: 'image/jpeg'",
+) && chat_attachment.include?("const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024")
+raise "chat attachment must cross NAPI through EngineHost" unless chat_attachment.include?(
+  "host.attachChatImage(prepared.data, prepared.mediaType, prepared.fileName)",
+) && engine_host.include?("napi.editorAttachChatImage(this.engine, bytes, mediaType, fileName)")
+raise "chat attachment NAPI declaration missing" unless declaration.match?(
+  /editorAttachChatImage: \([\s\S]{0,180}?bytes: ArrayBuffer,[\s\S]{0,100}?mediaType: string \| null,[\s\S]{0,100}?fileName: string \| null/m,
+)
+raise "the page must prevent stacked photo pickers" unless index.match?(
+  /if \(this\.chatAttachmentInProgress\) \{[\s\S]{0,300}?return;/m,
+)
+raise "NAPI chat attachment must call the canonical FFI" unless read(
+  repo_dir, "crates/op-engine-napi/src/bindings_editor.rs",
+).include?("op_editor_attach_chat_image(")
 
 # Action 2 / 6: the login URL comes only from native, and refusing the flow
 # cancels it through the same call the Android shell uses on rejection.

@@ -12,6 +12,8 @@ export enum WindowControlKind {
 export interface ShellActionSink {
   onOpenDocument: () => void;
   onImportImageOrSvg: () => void;
+  /** The engine asked for the chat / Home attachment photo picker (action 13). */
+  onPickChatAttachment: () => void;
   onExportDocument: () => void;
   /** The engine asked for the Save / Save As file picker (action 11). */
   onSaveDocument: () => void;

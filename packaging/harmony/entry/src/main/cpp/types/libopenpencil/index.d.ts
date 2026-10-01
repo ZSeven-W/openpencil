@@ -236,6 +236,18 @@ export const editorImportImageOrSvg: (
   bytes: ArrayBuffer,
   fileName: string,
 ) => number;
+/**
+ * Stages one photo-picker image as a chat / Studio Home attachment (the answer
+ * to `OpShellAction.PICK_CHAT_ATTACHMENT`). PNG, JPEG, GIF, or WebP up to
+ * 5 MiB; convert HEIC first. `mediaType` / `fileName` may be null to let the
+ * engine sniff the type / generate a name. Busy = the turn holds 4 already.
+ */
+export const editorAttachChatImage: (
+  engine: number,
+  bytes: ArrayBuffer,
+  mediaType: string | null,
+  fileName: string | null,
+) => number;
 export const editorExportFileName: (engine: number) => string | null;
 export const editorExportToPath: (engine: number, path: string) => number;
 export const editorCancelExport: (engine: number) => number;

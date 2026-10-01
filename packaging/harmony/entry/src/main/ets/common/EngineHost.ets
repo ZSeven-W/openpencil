@@ -508,6 +508,11 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
           sink.onImportImageOrSvg();
         }
         break;
+      case OpShellAction.PICK_CHAT_ATTACHMENT:
+        if (sink !== null) {
+          sink.onPickChatAttachment();
+        }
+        break;
       case OpShellAction.OPEN_ACCOUNT_CENTER:
         if (sink !== null) {
           sink.onOpenAccountCenter();
@@ -668,6 +673,14 @@ export class EngineHost implements PointerRouterHost, ImeConduitHost {
       return OpStatus.CLOSING;
     }
     return napi.editorImportImageOrSvg(this.engine, bytes, displayName);
+  }
+
+  /** Stages one photo-picker image as a chat attachment; Busy = turn full. */
+  attachChatImage(bytes: ArrayBuffer, mediaType: string | null, fileName: string | null): number {
+    if (this.engine === 0 || !this.editorMode) {
+      return OpStatus.CLOSING;
+    }
+    return napi.editorAttachChatImage(this.engine, bytes, mediaType, fileName);
   }
 
   exportFileName(): string | null {
