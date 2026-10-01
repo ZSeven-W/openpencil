@@ -175,6 +175,11 @@ typedef enum OpShellAction {
     /* Present a bounded image picker and return one PNG, JPEG, GIF, WebP, or
      * SVG through op_editor_import_image_or_svg. Append-only ABI value. */
     OpShellAction_ImportImageOrSvg = 12,
+    /* Present the platform photo picker for a chat / Studio Home attachment
+     * and return the chosen image through op_editor_attach_chat_image. Raised
+     * once per press; a cancelled picker is a silent no-op. Append-only ABI
+     * value. */
+    OpShellAction_PickChatAttachment = 13,
 } OpShellAction;
 
 /* Regional SSO deployments for op_editor_configure_auth. Both map to pinned
@@ -396,6 +401,21 @@ OpStatus op_editor_take_shell_action(OpEngine *engine, int32_t *out);
 OpStatus op_editor_import_image_or_svg(OpEngine *engine,
                                        const uint8_t *data_ptr, size_t data_len,
                                        const uint8_t *file_name_ptr, size_t file_name_len);
+
+/* Stage one image picked for OpShellAction_PickChatAttachment (or pasted /
+ * shared) as a chat attachment on the next turn. data is 1 byte to 5 MiB;
+ * PNG, JPEG, GIF and WebP are sniffed from their magic bytes (convert HEIC
+ * and other formats before calling), SVG is accepted only when declared.
+ * media_type (e.g. "image/jpeg") and file_name (a display name without path
+ * separators) are optional UTF-8: pass NULL/0 to let the engine decide. A
+ * declared media type must be an "image/" type and must not contradict the
+ * sniffed bytes. Returns InvalidArg for an empty, oversized or unrecognised image
+ * or a bad name, and Busy when the turn already holds 4 attachments
+ * (nothing is staged). Nothing is retained past the call. */
+OpStatus op_editor_attach_chat_image(OpEngine *engine,
+                                     const uint8_t *data_ptr, size_t data_len,
+                                     const uint8_t *media_type_ptr, size_t media_type_len,
+                                     const uint8_t *file_name_ptr, size_t file_name_len);
 
 /* Peek/copy the UTF-8 file name of the frozen export. NULL/0 reports the
  * required length without consuming it. The payload is not NUL-terminated. */

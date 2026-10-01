@@ -178,7 +178,7 @@ fi
 # symbols. Refuse to replace the HAP payload unless the just-built module
 # contains the mobile import and render-free background entry points. This
 # catches an accidentally stale crate/build graph before it reaches hvigor.
-required_napi_exports=(editorImportImageOrSvg hasBackgroundWork backgroundTick editorPressAt editorMoveAt editorReleaseAt editorCancelGestureAt)
+required_napi_exports=(editorImportImageOrSvg editorAttachChatImage hasBackgroundWork backgroundTick editorPressAt editorMoveAt editorReleaseAt editorCancelGestureAt)
 for export_name in "${required_napi_exports[@]}"; do
   if ! LC_ALL=C grep -a -F -q "$export_name" "$artifact"; then
     echo "build-ohos.sh: $artifact is missing NAPI export marker '$export_name'" >&2

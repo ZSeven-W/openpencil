@@ -326,3 +326,37 @@ fn image_import_action_code_and_abi_entrypoint_are_stable() {
     );
     assert_eq!(unsafe { op_destroy(engine) }, OpStatus::Ok);
 }
+
+/// The hand-written C header is what the Swift / JNI / NAPI shells compile
+/// against; pin the chat-attachment action code and entry point to it so a
+/// Rust-side change cannot silently leave the shells on a stale contract.
+#[cfg(feature = "editor")]
+#[test]
+fn chat_attachment_action_and_entrypoint_are_declared_in_the_c_header() {
+    const HEADER: &str = include_str!("../include/op_engine.h");
+    assert_eq!(op_engine_ffi::SHELL_ACTION_PICK_CHAT_ATTACHMENT, 13);
+    assert!(HEADER.contains("OpShellAction_PickChatAttachment = 13,"));
+    let start = HEADER
+        .find("OpStatus op_editor_attach_chat_image(OpEngine *engine,")
+        .expect("op_editor_attach_chat_image declaration");
+    let end = start + HEADER[start..].find(';').expect("declaration end");
+    let declaration = &HEADER[start..end];
+    for parameter in [
+        "const uint8_t *data_ptr, size_t data_len",
+        "const uint8_t *media_type_ptr, size_t media_type_len",
+        "const uint8_t *file_name_ptr, size_t file_name_len",
+    ] {
+        assert!(declaration.contains(parameter), "missing `{parameter}`");
+    }
+    // The Rust symbol has exactly the arity the header declares.
+    type AttachChatImage = unsafe extern "C" fn(
+        *mut OpEngine,
+        *const u8,
+        usize,
+        *const u8,
+        usize,
+        *const u8,
+        usize,
+    ) -> OpStatus;
+    let _: AttachChatImage = op_engine_ffi::op_editor_attach_chat_image;
+}

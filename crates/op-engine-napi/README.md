@@ -166,6 +166,7 @@ only trust the fields when `status === 0`.
 | `editorTakeShellAction` | `engine: number` | `number` — an `OpShellAction`; negative = engine failure |
 | `editorOpenDocument` | `engine: number, bytes: ArrayBuffer, name: string` | `number` |
 | `editorImportImageOrSvg` | `engine: number, bytes: ArrayBuffer, fileName: string` | `number` — one shell-picked PNG/JPEG/GIF/WebP/SVG, bounded to 32 MiB |
+| `editorAttachChatImage` | `engine: number, bytes: ArrayBuffer, mediaType?: string \| null, fileName?: string \| null` | `number` — one photo-picker image staged as a chat attachment (action 13); PNG/JPEG/GIF/WebP up to 5 MiB, `Busy` when the turn already holds 4 |
 | `editorExportFileName` | `engine: number` | `string \| null` — does NOT consume the export |
 | `editorExportToPath` | `engine: number, path: string` | `number` — target must not exist |
 | `editorCancelExport` | `engine: number` | `number` |
@@ -192,7 +193,8 @@ Shell action codes (`editorTakeShellAction`), from `op_engine.h`:
 `0` None · `1` OpenDocument · `2` OpenLoginWebView · `3` CloseLoginWebView ·
 `4` ExportDocument · `5` OpenAccountCenter · `6` RequestLogin ·
 `7` OpenLanguagePicker · `8` WindowClose · `9` WindowMinimize ·
-`10` WindowZoom · `11` SaveDocument · `12` ImportImageOrSvg.
+`10` WindowZoom · `11` SaveDocument · `12` ImportImageOrSvg ·
+`13` PickChatAttachment.
 
 `8`/`9`/`10` come from the TopBar's painted traffic-light dots and only reach
 desktop-class shells that hid the platform title bar; touch chrome paints no

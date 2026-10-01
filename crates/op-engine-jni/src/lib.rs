@@ -1,16 +1,20 @@
 //! Android JNI marshalling layer for the OpenPencil engine player.
 //!
-//! `engine_thread` is the host-testable queue core and `registry` is the
-//! host-testable handle table; the JNI bindings, callback trampolines, and
+//! `engine_thread` is the host-testable queue core, `registry` is the
+//! host-testable handle table, and `ffi_bytes` is the shared optional-range
+//! marshalling rule; the JNI bindings, callback trampolines, and
 //! window ownership are Android-only modules.
 
 pub mod engine_thread;
+pub mod ffi_bytes;
 pub mod registry;
 
 #[cfg(target_os = "android")]
 pub mod alog;
 #[cfg(target_os = "android")]
 pub mod bindings;
+#[cfg(all(target_os = "android", feature = "editor"))]
+mod bindings_chat_attachment;
 #[cfg(all(target_os = "android", feature = "editor"))]
 mod bindings_editor;
 #[cfg(target_os = "android")]
@@ -131,6 +135,7 @@ mod binding_contract_tests {
     fn every_native_export_uses_the_canonical_android_package() {
         for source in [
             include_str!("bindings.rs"),
+            include_str!("bindings_chat_attachment.rs"),
             include_str!("bindings_editor.rs"),
             include_str!("bindings_media.rs"),
             include_str!("bindings_text.rs"),
@@ -262,6 +267,25 @@ mod binding_contract_tests {
         assert!(function.contains("jstring_bytes(&mut env, &file_name)"));
         assert!(function.contains("call_status(engine"));
         assert!(function.contains("op_engine_ffi::op_editor_import_image_or_svg("));
+    }
+
+    #[test]
+    fn chat_attachment_native_owns_nullable_java_arguments_before_dispatch() {
+        let source = include_str!("bindings_chat_attachment.rs");
+        let start = source
+            .find("Java_tech_zseven_openpencil_OpNative_nativeEditorAttachChatImage")
+            .expect("chat attachment JNI export");
+        let function = &source[start..];
+
+        assert!(function.contains("env.convert_byte_array(&data)"));
+        assert!(function.contains("optional_jstring_bytes(&mut env, &media_type)"));
+        assert!(function.contains("optional_jstring_bytes(&mut env, &file_name)"));
+        assert!(function.contains("optional_ptr_len(media_type.as_deref())"));
+        assert!(function.contains("optional_ptr_len(file_name.as_deref())"));
+        assert!(function.contains("call_status(engine"));
+        assert!(function.contains("op_engine_ffi::op_editor_attach_chat_image("));
+        // A null Java string is an absent argument, not a decode failure.
+        assert!(function.contains("if value.is_null()"));
     }
 
     #[test]

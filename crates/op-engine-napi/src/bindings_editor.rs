@@ -9,17 +9,18 @@
 use napi_derive_ohos::napi;
 use napi_ohos::bindgen_prelude::Buffer;
 use op_engine_ffi::{
-    op_editor_account_snapshot, op_editor_auth_sign_out, op_editor_begin_login,
-    op_editor_cancel_export, op_editor_cancel_login, op_editor_cancel_save, op_editor_commit_save,
-    op_editor_configure_auth, op_editor_configure_save_picker, op_editor_copy_export_file_name,
-    op_editor_copy_login_url, op_editor_copy_save_file_name, op_editor_copy_save_target,
-    op_editor_export_to_path, op_editor_import_image_or_svg, op_editor_locale_code,
-    op_editor_open_document, op_editor_set_locale, op_editor_stage_save_to_path,
-    op_editor_take_shell_action, OpStatus, SHELL_ACTION_NONE,
+    op_editor_account_snapshot, op_editor_attach_chat_image, op_editor_auth_sign_out,
+    op_editor_begin_login, op_editor_cancel_export, op_editor_cancel_login, op_editor_cancel_save,
+    op_editor_commit_save, op_editor_configure_auth, op_editor_configure_save_picker,
+    op_editor_copy_export_file_name, op_editor_copy_login_url, op_editor_copy_save_file_name,
+    op_editor_copy_save_target, op_editor_export_to_path, op_editor_import_image_or_svg,
+    op_editor_locale_code, op_editor_open_document, op_editor_set_locale,
+    op_editor_stage_save_to_path, op_editor_take_shell_action, OpStatus, SHELL_ACTION_NONE,
 };
 
 use crate::action::{auth_region_or_default, STATUS_CLOSING};
 use crate::bindings::{call_status, copy_out_string, with_engine};
+use op_engine_jni::ffi_bytes::{non_empty, optional_ptr_len};
 
 // ---- Canvas gestures -----------------------------------------------------
 
@@ -335,6 +336,39 @@ pub fn editor_import_image_or_svg(engine: i64, bytes: Buffer, file_name: String)
             file_name.as_ptr(),
             file_name.len(),
         )
+    })
+}
+
+/// `editorAttachChatImage` — stage one photo-picker image as a chat / Studio
+/// Home attachment (the answer to `OpShellAction.PICK_CHAT_ATTACHMENT`).
+/// `mediaType` and `fileName` are optional; `undefined`, `null`, or `''`
+/// reach the FFI as `NULL` / `0` so the engine sniffs the type or generates
+/// the name. The FFI enforces the 5 MiB cap and the per-turn limit (`Busy`).
+#[napi(js_name = "editorAttachChatImage")]
+pub fn editor_attach_chat_image(
+    engine: i64,
+    bytes: Buffer,
+    media_type: Option<String>,
+    file_name: Option<String>,
+) -> i32 {
+    let image = bytes.to_vec();
+    let media_type = non_empty(media_type.map(String::into_bytes));
+    let file_name = non_empty(file_name.map(String::into_bytes));
+    call_status(engine, move |e| {
+        let (media_type_ptr, media_type_len) = optional_ptr_len(media_type.as_deref());
+        let (file_name_ptr, file_name_len) = optional_ptr_len(file_name.as_deref());
+        // SAFETY: every owned byte range outlives the synchronous FFI call.
+        unsafe {
+            op_editor_attach_chat_image(
+                e,
+                image.as_ptr(),
+                image.len(),
+                media_type_ptr,
+                media_type_len,
+                file_name_ptr,
+                file_name_len,
+            )
+        }
     })
 }
 

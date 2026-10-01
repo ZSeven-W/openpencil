@@ -165,6 +165,7 @@ mod contract_tests {
         "editorTakeShellAction",
         "editorOpenDocument",
         "editorImportImageOrSvg",
+        "editorAttachChatImage",
         "editorExportFileName",
         "editorExportToPath",
         "editorCancelExport",
@@ -265,11 +266,11 @@ mod contract_tests {
     fn the_kotlin_derived_prefix_matches_opnative_order() {
         // The leading names are `OpNative.kt`'s own order; the additions
         // follow. A new OHOS-only export must be appended, never spliced in.
-        const KOTLIN_DERIVED: usize = 70;
+        const KOTLIN_DERIVED: usize = 71;
         assert_eq!(EXPORTED_NAMES[KOTLIN_DERIVED], "setXcomponentListener");
         assert_eq!(EXPORTED_NAMES[0], "create");
         assert_eq!(EXPORTED_NAMES[KOTLIN_DERIVED - 1], "editorLocaleCode");
-        assert_eq!(EXPORTED_NAMES.len(), 85);
+        assert_eq!(EXPORTED_NAMES.len(), 86);
     }
 
     #[test]
@@ -335,6 +336,18 @@ mod contract_tests {
         assert!(HEADER.contains("OpStatus op_editor_import_image_or_svg(OpEngine *engine,"));
     }
 
+    #[test]
+    fn chat_attachment_binding_forwards_optional_type_and_name() {
+        const EDITOR: &str = include_str!("bindings_editor.rs");
+        assert!(EDITOR.contains("js_name = \"editorAttachChatImage\""));
+        assert!(EDITOR.contains("media_type: Option<String>"));
+        assert!(EDITOR.contains("file_name: Option<String>"));
+        assert!(EDITOR.contains("optional_ptr_len(media_type.as_deref())"));
+        assert!(EDITOR.contains("optional_ptr_len(file_name.as_deref())"));
+        assert!(EDITOR.contains("op_editor_attach_chat_image("));
+        assert!(HEADER.contains("OpStatus op_editor_attach_chat_image(OpEngine *engine,"));
+    }
+
     /// The engine's own C header — the single source of truth for the codes
     /// the ArkTS shell switches on.
     const HEADER: &str = include_str!("../../op-engine-ffi/include/op_engine.h");
@@ -370,6 +383,10 @@ mod contract_tests {
             (
                 "OpShellAction_ImportImageOrSvg",
                 SHELL_ACTION_IMPORT_IMAGE_OR_SVG,
+            ),
+            (
+                "OpShellAction_PickChatAttachment",
+                SHELL_ACTION_PICK_CHAT_ATTACHMENT,
             ),
         ] {
             assert!(
