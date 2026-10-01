@@ -542,3 +542,53 @@ fn mobile_cancelled_composition_leaves_settings_backspace_healthy() {
     );
     assert_eq!(settings_input_text(&mut engine), "Provide");
 }
+
+unsafe extern "C" fn count_runtime_error(
+    user_data: *mut std::ffi::c_void,
+    _error: *const crate::desc::OpRuntimeError,
+) {
+    let count = unsafe { &*(user_data as *const std::cell::Cell<usize>) };
+    count.set(count.get() + 1);
+}
+
+/// The shells drain copy text after every frame; "nothing pending" is the
+/// normal answer and must not reach the runtime-error log (Android logged
+/// it at error level twice a second), while a real fault still does.
+#[test]
+fn an_empty_copy_text_drain_is_not_reported_as_a_runtime_error() {
+    let reported = std::cell::Cell::new(0_usize);
+    let mut engine = OpEngine::new(
+        Session::new(CreateOptions {
+            document: SAMPLE_DOC.to_owned(),
+            width: PHONE_W,
+            height: PHONE_H,
+            dpr: 1.0,
+            callbacks: Callbacks {
+                user_data: &reported as *const _ as *mut std::ffi::c_void,
+                runtime_error: Some(count_runtime_error),
+                ..Callbacks::default()
+            },
+            asset_base: None,
+            editor_mode: true,
+            documents_root: None,
+        })
+        .expect("editor session"),
+    );
+    let pointer = &mut engine as *mut OpEngine;
+    let before = reported.get();
+
+    let mut required = usize::MAX;
+    for _ in 0..3 {
+        assert_eq!(
+            unsafe { op_editor_take_copy_text(pointer, std::ptr::null_mut(), 0, &mut required) },
+            OpStatus::NotReady
+        );
+    }
+    assert_eq!(reported.get(), before, "an empty drain stays quiet");
+
+    assert_eq!(
+        unsafe { op_editor_take_copy_text(pointer, std::ptr::null_mut(), 0, std::ptr::null_mut()) },
+        OpStatus::InvalidArg
+    );
+    assert_eq!(reported.get(), before + 1, "a real fault is still reported");
+}

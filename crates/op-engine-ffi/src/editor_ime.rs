@@ -132,7 +132,7 @@ pub unsafe extern "C" fn op_editor_take_copy_text(
             let chat = &mut host.editor_state_mut().chat;
             let Some(text) = chat.pending_copy_text.as_deref() else {
                 required.write(0);
-                return Err(FfiError::new(OpStatus::NotReady, "no copy text is pending"));
+                return Err(FfiError::nothing_pending("no copy text is pending"));
             };
             let len = text.len();
             required.write(len);

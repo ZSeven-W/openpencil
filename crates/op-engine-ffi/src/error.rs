@@ -14,6 +14,9 @@ pub(crate) const DOCUMENT_CAP: usize = 256 * 1024 * 1024;
 pub(crate) struct FfiError {
     pub status: OpStatus,
     pub message: String,
+    /// An expected reply (a per-frame drain finding nothing) that still
+    /// sets the last error but is not reported through `on_runtime_error`.
+    pub quiet: bool,
 }
 
 impl FfiError {
@@ -21,6 +24,17 @@ impl FfiError {
         Self {
             status,
             message: message.into(),
+            quiet: false,
+        }
+    }
+
+    /// `NotReady` for a drain the shells poll every frame: nothing is
+    /// pending, which is the normal answer, not a fault to log.
+    #[cfg(feature = "editor")]
+    pub fn nothing_pending(message: impl Into<String>) -> Self {
+        Self {
+            quiet: true,
+            ..Self::new(OpStatus::NotReady, message)
         }
     }
 

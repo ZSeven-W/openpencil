@@ -93,7 +93,9 @@ pub(crate) unsafe fn call_session(
             op_editor_host_core::settings_io::save_if_changed(host.editor_state(), before);
         }
         if let Err(error) = &result {
-            session.emit_runtime_error(2, &error.message, "op-engine-ffi");
+            if !error.quiet {
+                session.emit_runtime_error(2, &error.message, "op-engine-ffi");
+            }
         }
         result
     }));
