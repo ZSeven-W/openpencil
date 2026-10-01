@@ -35,6 +35,19 @@ const NOT_SIDE_RAIL_CUES: &[&str] = &[
     "目标",
 ];
 
+/// Labels naming a docked surface rather than a page-edge rail.
+const DOCKED_SURFACE_CUES: &[&str] = &[
+    "drawer",
+    "inspector",
+    "panel",
+    "detail",
+    "details",
+    "抽屉",
+    "面板",
+    "详情",
+    "检查器",
+];
+
 fn matches_cue(text: &str, cues: &[&str]) -> bool {
     let lower = text.to_lowercase();
     cues.iter().any(|cue| {
@@ -59,6 +72,14 @@ fn is_page_navigation_label(label: &str) -> bool {
 }
 
 fn is_side_progress_candidate(st: &Subtask) -> bool {
+    // A docked side surface (drawer, inspector, detail panel) lives on the
+    // side and often lists a progress row, yet it is a whole region the brief
+    // asked for. arena-w01 (Opus 5.5, 2026-10-01, both runs): `右侧任务详情抽屉`
+    // with "vertical stack … subtask progress 2/5" was folded into the nav
+    // as a 4px scroll bar and the drawer vanished.
+    if matches_cue(&st.label, DOCKED_SURFACE_CUES) {
+        return false;
+    }
     let not_a_side_rail = matches_cue(&st.label, NOT_SIDE_RAIL_CUES)
         || st
             .elements
@@ -157,6 +178,10 @@ pub(crate) fn fold_side_progress_rail(plan: &mut OrchestratorPlan) -> usize {
         .enumerate()
         .filter_map(|(index, st)| {
             if index != 0 && index != navigation_index && is_side_progress_candidate(&st) {
+                eprintln!(
+                    "[PLAN] normalize: folded side progress rail {}({}) into the nav",
+                    st.id, st.label
+                );
                 None
             } else {
                 Some(st)

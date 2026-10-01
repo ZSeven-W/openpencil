@@ -191,3 +191,28 @@ fn the_nav_inherits_what_the_folded_rail_covered() {
         "a section the rail covered stays covered by the nav that now draws it"
     );
 }
+
+/// arena-w01 (Opus 5.5, 2026-10-01, both runs): `右侧任务详情抽屉` carries a
+/// side cue in its label and a subtask-progress row in its elements, so it
+/// was folded into the nav as a 4px scroll bar — the whole drawer the brief
+/// asked for vanished. A docked detail surface is never a page-edge rail.
+#[test]
+fn a_right_side_detail_drawer_with_a_progress_row_is_not_folded() {
+    let mut plan = plan(vec![
+        subtask("sidebar", "侧栏项目列表", "project list"),
+        subtask(
+            "board",
+            "看板主区",
+            "three kanban columns, four task cards each",
+        ),
+        subtask(
+            "drawer",
+            "右侧任务详情抽屉",
+            "480px right-side drawer, vertical stack: header with close button, \
+             task title, assignee, due date, subtask checklist with progress 2/5",
+        ),
+    ]);
+
+    assert_eq!(fold_side_progress_rail(&mut plan), 0);
+    assert_eq!(plan.subtasks.len(), 3);
+}
