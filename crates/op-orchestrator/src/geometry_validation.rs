@@ -85,6 +85,8 @@ mod geometry_diagnostics_collect;
 mod geometry_grow_fit_fixes;
 #[path = "geometry_overflow_fixes.rs"]
 mod geometry_overflow_fixes;
+#[path = "geometry_pinned_composer.rs"]
+mod geometry_pinned_composer;
 #[path = "geometry_row_fixes.rs"]
 mod geometry_row_fixes;
 #[path = "geometry_scale_ops.rs"]
@@ -310,6 +312,9 @@ pub fn geometry_validate_and_fix_for_form(
             // A clipped card truncating a table body / list hugs its rows —
             // past the small-overshoot bound the rule above keeps to.
             geometry_clipped_rows::collect_clipped_rows_grow_fixes(&v, &rects, &mut cmds);
+            // A clipped pane hiding its bottom composer (reply box, chat
+            // input) scrolls its body instead.
+            geometry_pinned_composer::collect_pinned_composer_fixes(&v, &rects, &mut cmds);
             collect_row_gap_fixes(&v, &rects, &mut cmds);
             collect_card_row_height_fixes(&v, &rects, &mut cmds, false);
             // BEFORE the inside-out overfull repair: a rigid row starved by
