@@ -362,16 +362,24 @@ fn repair_image_hero_stack(
         return false;
     }
 
-    let has_scrim = children
+    // `children[0]` paints topmost. A model's own scrim may sit anywhere in
+    // the stack (listed over the copy, it is moved down to the photo by
+    // `geometry_buried_overlay`), so any spanning see-through layer other
+    // than the media counts — scanning only below the photo missed every
+    // scrim a model actually drew and stacked a second, dark one under it.
+    let model_scrim_tones: Vec<ScrimTone> = children
         .iter()
         .enumerate()
-        .skip(media_index.saturating_add(1))
-        .any(|(_, child)| acts_as_hero_scrim(child, stack_width.as_ref(), variables, theme));
+        .filter(|(index, _)| *index != media_index)
+        .filter(|(_, child)| acts_as_hero_scrim(child, stack_width.as_ref(), variables, theme))
+        .map(|(_, child)| scrim_tone(child, variables, theme))
+        .collect();
     let mut changed = false;
-    if !has_scrim {
+    if model_scrim_tones.is_empty() {
         let scrim_id = unique_id(state, &format!("{stack_id}-scrim"));
+        // Directly above the photo: the slot a tint has to occupy to tint it.
         children.insert(
-            media_index + 1,
+            media_index,
             json!({
                 "type": "frame",
                 "id": scrim_id,
@@ -396,10 +404,56 @@ fn repair_image_hero_stack(
         changed = true;
     }
 
+    // A light wash (transparent → white / `$--background`) is the model
+    // lifting dark copy off the picture; turning that copy white erases it.
+    // Only a dark scrim — ours or the model's — calls for light copy.
+    if model_scrim_tones.contains(&ScrimTone::Light) {
+        return changed;
+    }
     for child in children.iter_mut() {
         changed |= recolor_hero_text(child, false, variables, theme);
     }
     changed
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ScrimTone {
+    Light,
+    Dark,
+}
+
+/// The tone of a scrim, read from its most opaque colour: a fade whose
+/// visible end is light reads as a light wash, anything else as dark.
+fn scrim_tone(
+    node: &Value,
+    variables: &op_design_lint::node_util::Variables,
+    theme: &op_design_lint::node_util::Theme,
+) -> ScrimTone {
+    let mut strongest: Option<(u8, [u8; 4])> = None;
+    let fills = node.get("fill").and_then(Value::as_array);
+    for fill in fills.into_iter().flatten() {
+        let solid = fill.get("color").and_then(Value::as_str);
+        let stops = fill
+            .get("stops")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|stop| stop.get("color").and_then(Value::as_str));
+        for raw in solid.into_iter().chain(stops) {
+            let Some(rgba) = op_design_lint::node_util::resolve_color_ref(raw, variables, theme)
+                .and_then(|resolved| crate::text_contrast_repair::parse_color_rgba(&resolved))
+            else {
+                continue;
+            };
+            if strongest.is_none_or(|(alpha, _)| rgba[3] > alpha) {
+                strongest = Some((rgba[3], rgba));
+            }
+        }
+    }
+    match strongest {
+        Some((alpha, rgba)) if alpha > 0 && relative_luminance(rgba) >= 0.5 => ScrimTone::Light,
+        _ => ScrimTone::Dark,
+    }
 }
 
 fn contains_non_status_text(node: &Value) -> bool {

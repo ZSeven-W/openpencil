@@ -300,22 +300,22 @@ fn app18_shaped_image_stack_gets_scrim_and_light_overlay_copy() {
         .iter()
         .position(|child| child["type"] == "image")
         .unwrap();
-    assert_eq!(children[image_index + 1]["name"], "Hero Image Header scrim");
+    assert_eq!(children[image_index - 1]["name"], "Hero Image Header scrim");
     assert_eq!(
-        children[image_index + 1]["fill"][0]["type"],
+        children[image_index - 1]["fill"][0]["type"],
         "linear_gradient"
     );
-    assert_eq!(children[image_index + 1]["fill"][0]["angle"], 90.0);
+    assert_eq!(children[image_index - 1]["fill"][0]["angle"], 90.0);
     assert_eq!(
-        children[image_index + 1]["fill"][0]["stops"][0]["color"],
+        children[image_index - 1]["fill"][0]["stops"][0]["color"],
         "#00000000"
     );
     assert_eq!(
-        children[image_index + 1]["fill"][0]["stops"][1]["color"],
+        children[image_index - 1]["fill"][0]["stops"][1]["color"],
         "#000000A6"
     );
     assert_eq!(
-        children[image_index + 1]["fill"][0]["explain"],
+        children[image_index - 1]["fill"][0]["explain"],
         "hero scrim"
     );
     assert_eq!(children[1]["children"][0]["fill"][0]["color"], "#FFFFFFCC");
@@ -440,4 +440,82 @@ fn whole_cleanup_driver_keeps_the_bleed_section_flush() {
         .records()
         .iter()
         .any(|record| record.pass == "hero-bleed"));
+}
+
+/// arena m04 (Opus 5.5, 2026-10-01, both runs): the model lifted DARK copy off
+/// an illustration with its own transparent → `$--background` wash, listed
+/// over the copy. The pass looked for a scrim only below the photo, found
+/// none, slid a dark scrim under the picture and turned the headline white —
+/// white on the model's white wash, unreadable.
+#[test]
+fn a_light_model_wash_keeps_its_dark_copy_and_gets_no_dark_scrim() {
+    let mut root = evidence_root();
+    root["children"][1] = json!({
+        "type": "frame", "id": "hero-section", "name": "Hero",
+        "width": "fill_container", "height": "fit_content", "layout": "vertical",
+        "children": [{
+            "type": "frame", "id": "hero-stack", "name": "Hero Illustration Stage",
+            "width": 375, "height": 470, "layout": "none", "children": [
+                {"type": "rectangle", "id": "wash", "name": "Illustration Scrim",
+                 "width": "fill_container", "height": 320,
+                 "fill": [{"type": "linear_gradient", "angle": 180, "stops": [
+                    {"offset": 0.0, "color": "#FFFFFF00"},
+                    {"offset": 0.45, "color": "#FFFFFFE6"},
+                    {"offset": 1.0, "color": "#FFFFFF"}
+                 ]}]},
+                {"type": "frame", "id": "copy", "name": "Welcome Copy", "children": [
+                    {"type": "text", "id": "headline", "content": "Read smarter", "fontSize": 48,
+                     "fill": [{"type": "solid", "color": "#0F172A"}]}
+                ]},
+                {"type": "image", "id": "illustration", "width": 375, "height": 470,
+                 "src": "welcome.png"}
+            ]
+        }]
+    });
+    let mut sink = sink_with(root);
+    assert_eq!(enforce(&mut sink, &plan(), "root"), 1);
+
+    let stack = &hero_value(&sink)["children"][0];
+    let children = stack["children"].as_array().expect("stack children");
+    assert!(
+        children
+            .iter()
+            .all(|child| child["fill"][0]["explain"] != "hero scrim"),
+        "the model's wash is the scrim: {children:#?}"
+    );
+    let copy = children.iter().find(|child| child["id"] == "copy").unwrap();
+    assert_eq!(copy["children"][0]["fill"][0]["color"], "#0F172A");
+}
+
+#[test]
+fn an_inserted_scrim_sits_directly_above_the_photo() {
+    let mut root = evidence_root();
+    root["children"][1] = json!({
+        "type": "frame", "id": "hero-section", "name": "Hero", "children": [{
+            "type": "frame", "id": "stack", "layout": "none", "width": 375, "height": 300,
+            "children": [
+                {"type": "text", "id": "title", "content": "Power Flow", "fontSize": 48,
+                 "fill": [{"type": "solid", "color": "#0F172A"}]},
+                {"type": "image", "id": "photo", "width": 375, "height": 300, "src": "hero.png"}
+            ]
+        }]
+    });
+    let mut sink = sink_with(root);
+    enforce(&mut sink, &plan(), "root");
+
+    let stack = &hero_value(&sink)["children"][0];
+    let ids: Vec<&str> = stack["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|child| child["id"].as_str().unwrap_or(""))
+        .collect();
+    assert_eq!(ids.len(), 3);
+    assert_eq!(ids[0], "title");
+    assert!(
+        ids[1].ends_with("-scrim"),
+        "scrim between copy and photo: {ids:?}"
+    );
+    assert_eq!(ids[2], "photo");
+    assert_eq!(stack["children"][0]["fill"][0]["color"], "#FFFFFF");
 }
