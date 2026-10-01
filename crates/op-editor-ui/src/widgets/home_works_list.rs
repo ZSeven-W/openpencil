@@ -333,15 +333,63 @@ fn paint_empty_note(
         return;
     };
     let note = op_i18n::translate(surface.ui.locale, "works.empty");
-    let note = fit(cx, note, 13.0, rect.size.x);
-    text_weighted(
-        cx,
-        &note,
-        Point2D::new(rect.origin.x, rect.origin.y + 22.0),
-        13.0,
-        palette.muted,
-        500,
-    );
+    // Wrapped, not cut: on a phone the one-line note read "…它就会…" and
+    // never said where the work would appear (Android emulator, 2026-10-01).
+    for (row, line) in wrap(cx, note, 13.0, rect.size.x, EMPTY_LINES)
+        .iter()
+        .enumerate()
+    {
+        text_weighted(
+            cx,
+            line,
+            Point2D::new(rect.origin.x, rect.origin.y + 22.0 + row as f32 * 20.0),
+            13.0,
+            palette.muted,
+            500,
+        );
+    }
+}
+
+const EMPTY_LINES: usize = 3;
+
+/// Greedy per-character wrap (CJK breaks anywhere; Latin words are kept
+/// whole when a space allows), the last kept line cut with an ellipsis.
+fn wrap(
+    cx: &mut PaintCx<'_>,
+    content: &str,
+    size: f32,
+    max_w: f32,
+    max_lines: usize,
+) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for (at, ch) in content.char_indices() {
+        let candidate = format!("{line}{ch}");
+        if line.is_empty()
+            || cx
+                .backend
+                .measure_text_family(&candidate, size, "system-ui")
+                <= max_w
+        {
+            line = candidate;
+            continue;
+        }
+        if lines.len() + 1 == max_lines {
+            let rest = format!("{line}{}", &content[at..]);
+            lines.push(fit(cx, &rest, size, max_w));
+            return lines;
+        }
+        let carry = match line.rfind(' ') {
+            Some(space) if ch.is_ascii_alphanumeric() => line.split_off(space + 1),
+            _ => String::new(),
+        };
+        lines.push(line.trim_end().to_string());
+        line = format!("{carry}{ch}").trim_start().to_string();
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
 }
 
 #[cfg(test)]
