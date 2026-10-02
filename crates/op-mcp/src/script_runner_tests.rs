@@ -3,6 +3,17 @@
 use super::*;
 
 #[test]
+fn modification_recording_preserves_authored_text_metrics_without_generation_defaults() {
+    let source =
+        r#"I(null,{id:"title",type:"text",content:"咖啡",height:56,fontSize:28,lineHeight:1.1});"#;
+    let program = run_modification_script_to_program(source).unwrap();
+    let nodes = crate::parse_program_objects(&program);
+    assert_eq!(nodes[0].1["height"], 56);
+    assert_eq!(nodes[0].1["lineHeight"], 1.1);
+    assert!(nodes[0].1.get("fontFamily").is_none());
+}
+
+#[test]
 fn loop_records_one_line_per_iteration() {
     let program = run_script_to_program(
         r#"const row = I(null, {type: "frame", name: "Row"});
@@ -571,7 +582,7 @@ fn balances_glm_missing_outer_brace() {
 
     assert!(repaired.ends_with(r##""#EAD8C8"}]}});"##));
     assert_eq!(repaired.matches('{').count(), repaired.matches('}').count());
-    let program = eval_to_program(&repaired).expect("balanced GLM script evals");
+    let program = eval_to_program(&repaired, None).expect("balanced GLM script evals");
     assert!(program.contains(r#""name":"Profile Button""#));
 }
 

@@ -44,6 +44,23 @@ const EVAL_BUDGET: Duration = Duration::from_secs(2);
 /// so a model-truncated script salvages its complete-statement prefix
 /// instead of losing the whole section to a trailing SyntaxError.
 pub fn run_script_to_program(text: &str) -> Result<String, ScriptError> {
+    run_script_to_program_with_preamble(text, None)
+}
+
+/// Existing-node edits must not receive generation defaults, contrast repairs,
+/// divider reparenting, or text-height rewrites. Keep the same sandbox limits
+/// and syntax-recovery ladder, but record the supplied I() node verbatim.
+pub fn run_modification_script_to_program(text: &str) -> Result<String, ScriptError> {
+    const PRESERVE_NODES: &str = r#"globalThis.I = function(parent, obj) {
+        return __record(parent == null ? "null" : String(parent), JSON.stringify(obj));
+    };"#;
+    run_script_to_program_with_preamble(text, Some(PRESERVE_NODES))
+}
+
+fn run_script_to_program_with_preamble(
+    text: &str,
+    preamble: Option<&str>,
+) -> Result<String, ScriptError> {
     let script = strip_fences(text);
     if script.trim().is_empty() {
         return Err(ScriptError::EmptySource);
@@ -54,9 +71,9 @@ pub fn run_script_to_program(text: &str) -> Result<String, ScriptError> {
             max: MAX_SCRIPT_BYTES,
         });
     }
-    let program = match eval_to_program(&script) {
+    let program = match eval_to_program(&script, preamble) {
         Ok(p) => p,
-        Err(first_err) => eval_after_initial_failure(&script, first_err)?,
+        Err(first_err) => eval_after_initial_failure(&script, first_err, preamble)?,
     };
     if program.trim().is_empty() {
         return Err(ScriptError::NoOperations);
@@ -90,7 +107,11 @@ fn truncate_duplicate_script(script: &str) -> Option<String> {
     Some(script[..after + second_rel].to_string())
 }
 
-fn eval_after_initial_failure(script: &str, first_err: ScriptError) -> Result<String, ScriptError> {
+fn eval_after_initial_failure(
+    script: &str,
+    first_err: ScriptError,
+    preamble: Option<&str>,
+) -> Result<String, ScriptError> {
     // gemini-3.6-flash writes schema property names with the separator it
     // reads in the docs — `justify.content:` instead of `justifyContent:`.
     // A bare dotted key is a SyntaxError at the first `.`, so QuickJS
@@ -98,7 +119,7 @@ fn eval_after_initial_failure(script: &str, first_err: ScriptError) -> Result<St
     // Normalize FIRST, then let the rest of the ladder work on the repaired
     // source: a script can be both mis-keyed and truncated.
     let script = match dotted_keys::repair_dotted_object_keys(script) {
-        Some(repaired) => match eval_to_program(&repaired) {
+        Some(repaired) => match eval_to_program(&repaired, preamble) {
             Ok(p) => {
                 tracing::warn!(
                     original_len = script.len(),
@@ -112,7 +133,7 @@ fn eval_after_initial_failure(script: &str, first_err: ScriptError) -> Result<St
         None => script.to_string(),
     };
     let script = match escape_raw_newlines_in_quoted_strings(&script) {
-        Some(repaired) => match eval_to_program(&repaired) {
+        Some(repaired) => match eval_to_program(&repaired, preamble) {
             Ok(p) => {
                 tracing::warn!(
                     original_len = script.len(),
@@ -131,7 +152,7 @@ fn eval_after_initial_failure(script: &str, first_err: ScriptError) -> Result<St
     // property of an I() object, so QuickJS reaches `)` with `{` still open.
     let balanced = balance_brackets(script);
     if balanced != script {
-        if let Ok(p) = eval_to_program(&balanced) {
+        if let Ok(p) = eval_to_program(&balanced, preamble) {
             tracing::warn!(
                 original_len = script.len(),
                 repaired_len = balanced.len(),
@@ -147,7 +168,7 @@ fn eval_after_initial_failure(script: &str, first_err: ScriptError) -> Result<St
     // redefinition of lexical identifier" and the whole section is lost.
     // Detect the first declaration recurring and run the first copy alone.
     if let Some(deduped) = truncate_duplicate_script(script) {
-        if let Ok(p) = eval_to_program(&deduped) {
+        if let Ok(p) = eval_to_program(&deduped, preamble) {
             tracing::warn!(
                 original_len = script.len(),
                 deduped_len = deduped.len(),
@@ -158,7 +179,7 @@ fn eval_after_initial_failure(script: &str, first_err: ScriptError) -> Result<St
     }
 
     match repair_truncated_script(script) {
-        Some(repaired) => match eval_to_program(&repaired) {
+        Some(repaired) => match eval_to_program(&repaired, preamble) {
             Ok(p) => {
                 tracing::warn!(
                     original_len = script.len(),
@@ -271,8 +292,8 @@ fn escape_raw_newlines_in_quoted_strings(src: &str) -> Option<String> {
 /// the returned program transactionally, so returning a prefix here would
 /// turn an incomplete JavaScript transaction into a misleading success.
 /// Syntax-level truncation recovery remains in `eval_after_initial_failure`.
-fn eval_to_program(script: &str) -> Result<String, ScriptError> {
-    eval_recorded(script, None, EVAL_BUDGET).map(|recorded| recorded.program)
+fn eval_to_program(script: &str, preamble: Option<&str>) -> Result<String, ScriptError> {
+    eval_recorded(script, preamble, EVAL_BUDGET).map(|recorded| recorded.program)
 }
 
 /// What one sandboxed eval recorded. `capped` is true when the line or

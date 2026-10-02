@@ -132,6 +132,32 @@ fn replace_node_accepts_ts_data_tree_as_subtree() {
 }
 
 #[test]
+fn replace_node_does_not_materialize_missing_text_bounds() {
+    let tool = replace_node_snapshot();
+    for data in [
+        r#"{"type":"text","id":"title","content":"Updated"}"#,
+        r#"{"type":"frame","id":"board","width":390,"height":844,"children":[{"type":"text","id":"title","content":"Updated"}]}"#,
+    ] {
+        let args = BTreeMap::from([
+            ("nodeId".into(), "target".into()),
+            ("data".into(), data.into()),
+        ]);
+        let ToolOutcome::OkWithCommand(_, EditorCommand::ReplaceSubtree { node, .. }) =
+            tool.call(&args)
+        else {
+            panic!("replacement");
+        };
+        let value = serde_json::to_value(node).unwrap();
+        let text = value
+            .get("children")
+            .map(|children| &children[0])
+            .unwrap_or(&value);
+        assert!(text.get("width").is_none());
+        assert!(text.get("height").is_none());
+    }
+}
+
+#[test]
 fn replace_node_data_hoists_node_state() {
     // A generated `data` replacement declaring node-level `state` must
     // hoist it to a doc-root MergeAppState (unplanned priority) and

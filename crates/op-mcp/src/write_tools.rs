@@ -15,7 +15,7 @@ use serde_json::Value;
 
 use super::{EditorCommand, McpTool, ToolErrorCode, ToolOutcome};
 use crate::insert_node_args::{insert_node_params, InsertNodeParams};
-use crate::insert_node_data::ts_data_node;
+use crate::insert_node_data::{ts_data_node, ts_replacement_data_node};
 use crate::update_node_data::ts_update_patch_json;
 
 pub use crate::write_tools_import_svg::{import_svg_snapshot, ImportSvg};
@@ -507,7 +507,7 @@ impl McpTool for ReplaceNode {
             Ok(v) => v,
             Err(e) => return e,
         };
-        match ts_data_tree_node(args) {
+        match ts_replacement_data_node(args) {
             Ok(Some(mut node)) => {
                 let drop_children = match parse_drop_children_arg(args) {
                     Ok(v) => v,

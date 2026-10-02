@@ -16,6 +16,21 @@ const FLAT_INSERT_NODE_KINDS: &[&str] = &[
 pub(super) fn ts_data_node(
     args: &BTreeMap<String, String>,
 ) -> Result<Option<PenNode>, ToolOutcome> {
+    ts_data_node_with_defaults(args, true)
+}
+
+#[allow(clippy::result_large_err)]
+pub(super) fn ts_replacement_data_node(
+    args: &BTreeMap<String, String>,
+) -> Result<Option<PenNode>, ToolOutcome> {
+    ts_data_node_with_defaults(args, false)
+}
+
+#[allow(clippy::result_large_err)]
+fn ts_data_node_with_defaults(
+    args: &BTreeMap<String, String>,
+    add_text_defaults: bool,
+) -> Result<Option<PenNode>, ToolOutcome> {
     let Some(raw) = args.get("data") else {
         return Ok(None);
     };
@@ -38,7 +53,11 @@ pub(super) fn ts_data_node(
         return Ok(None);
     }
 
-    normalize_node_shape(&mut value);
+    if add_text_defaults {
+        normalize_node_shape(&mut value);
+    } else {
+        super::batch_design_normalize::normalize_replacement_node_shape(&mut value);
+    }
     normalize_ts_data_node_type_aliases(&mut value);
     let mut next_id = 1usize;
     ensure_ts_data_node_ids(&mut value, &mut next_id);
