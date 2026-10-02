@@ -216,7 +216,7 @@ pub(super) fn paint_works_page(
             1.6,
         );
         let text_x = tile.origin.x + tile.size.x + 14.0;
-        let text_w = (rect.origin.x + rect.size.x - 36.0 - text_x).max(0.0);
+        let text_w = (rect.origin.x + rect.size.x - 40.0 - text_x).max(0.0);
         text_weighted(
             cx,
             op_i18n::translate(locale, "works.current"),
@@ -225,7 +225,10 @@ pub(super) fn paint_works_page(
             palette.eyebrow,
             600,
         );
-        let title = fit(cx, &work.title, 16.0, text_w);
+        let title = super::recent_names::fit_name(&work.title, text_w, |s| {
+            cx.backend
+                .measure_text_family_styled(s, 16.0, "system-ui", 650, false)
+        });
         text_weighted(
             cx,
             &title,
@@ -297,7 +300,10 @@ pub(super) fn paint_works_page(
             palette.link,
             1.6,
         );
-        let label = fit(cx, name, 14.0, (rect.size.x - 80.0).max(0.0));
+        let label = super::recent_names::fit_name(name, (rect.size.x - 88.0).max(0.0), |s| {
+            cx.backend
+                .measure_text_family_styled(s, 14.0, "system-ui", 500, false)
+        });
         text_weighted(
             cx,
             &label,
