@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use op_editor_core::scene_template_catalog::TemplateScene;
-use op_editor_core::{EditorState, ExportFormat};
+use op_editor_core::{EditorState, ExportFormat, HomeFamily};
 
 use crate::pdf::{render_deck_pdf_boards_bytes, render_deck_pdf_bytes, render_pdf_bytes};
 use crate::{
@@ -78,7 +78,10 @@ fn render_configured(state: &EditorState) -> Result<(&'static str, Vec<u8>), Exp
         return Err(ExportError::UnsupportedFormat { format: "WEBP" });
     }
     if format == ExportFormat::Pdf {
-        let bytes = if state.editor_ui.scenario == Some(TemplateScene::Slides) {
+        let app_pages = state.editor_ui.workspace.visible
+            && state.editor_ui.workspace.family == HomeFamily::AppUi
+            && !op_editor_core::preview_slideshow::active_page_boards(state).is_empty();
+        let bytes = if state.editor_ui.scenario == Some(TemplateScene::Slides) || app_pages {
             render_deck_pdf_bytes(state)?
         } else {
             let scene = op_pen_loader::editor_state_to_layout_scene(state);
@@ -131,6 +134,53 @@ fn render_raster(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn app_boards(normal: bool) -> EditorState {
+        let doc = jian_ops_schema::load_str(
+            r##"{"version":"1.0.0","children":[
+            {"type":"frame","id":"home","x":0,"y":0,"width":390,"height":844,"fill":[{"type":"solid","color":"#ffffff"}]},
+            {"type":"frame","id":"menu","x":450,"y":0,"width":390,"height":844,"fill":[{"type":"solid","color":"#eeeeee"}]},
+            {"type":"frame","id":"orders","x":900,"y":0,"width":390,"height":844,"fill":[{"type":"solid","color":"#dddddd"}]}
+        ]}"##,
+        )
+        .unwrap()
+        .value;
+        let mut state = EditorState::from_document(doc);
+        state.editor_ui.workspace.visible = normal;
+        state.editor_ui.workspace.family = HomeFamily::AppUi;
+        state.editor_ui.export_format = ExportFormat::Pdf;
+        state
+    }
+
+    #[test]
+    fn normal_app_pdf_exports_all_screens_as_board_sized_pages() {
+        let state = app_boards(true);
+        let before = state.doc.clone();
+        let pdf = export_editor_state(&state, &EditorExportScope::Configured).unwrap();
+        let structure = String::from_utf8_lossy(&pdf.bytes);
+        assert!(
+            structure.contains("/Count 3"),
+            "three app screens need three PDF pages"
+        );
+        assert_eq!(structure.matches("/MediaBox [0 0 390 844]").count(), 3);
+        assert_eq!(state.doc, before);
+    }
+
+    #[test]
+    fn professional_app_canvas_pdf_keeps_its_canvas_extent() {
+        let state = app_boards(false);
+        let pdf = export_editor_state(&state, &EditorExportScope::Configured).unwrap();
+        let structure = String::from_utf8_lossy(&pdf.bytes);
+        assert!(structure.contains("/Count 1"));
+        let bounds = structure.split("/MediaBox").nth(1).unwrap();
+        let bounds = bounds.split('[').nth(1).unwrap().split(']').next().unwrap();
+        let numbers: Vec<f32> = bounds
+            .split_whitespace()
+            .map(|v| v.parse().unwrap())
+            .collect();
+        assert!(numbers[2] - numbers[0] >= 1290.0);
+        assert!(numbers[3] - numbers[1] >= 844.0);
+    }
 
     fn state() -> EditorState {
         let doc = jian_ops_schema::load_str(
