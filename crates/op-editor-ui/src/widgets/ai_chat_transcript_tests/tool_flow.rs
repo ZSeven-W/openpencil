@@ -129,3 +129,79 @@ fn prose_sits_equally_far_above_and_below_a_tool_chip() {
         "a chip must belong to the story on BOTH sides equally: {above} above vs {below} below"
     );
 }
+
+#[test]
+fn interleaved_tools_and_activities_hide_structured_payloads_without_moving_prose() {
+    let first = "开始布局。\n<step title=\"Layout\" status=\"done\">Internal detail</step>\n";
+    let second =
+        "继续绘制。\n```json\n[{\"type\":\"frame\",\"id\":\"frame-1\"}]\n```\n<!-- APPLIED -->\n";
+    let content = format!("{first}{second}完成。");
+    let offsets = [first.len() as u32, (first.len() + second.len()) as u32];
+    for activities in [false, true] {
+        for streaming in [false, true] {
+            let mut msg = ChatMessage::assistant(&content);
+            msg.streaming = streaming;
+            if activities {
+                msg.activities = offsets
+                    .iter()
+                    .enumerate()
+                    .map(|(index, offset)| op_editor_core::ChatActivity {
+                        id: format!("activity-{index}"),
+                        title: format!("Activity {index}"),
+                        detail: None,
+                        status: op_editor_core::ChatActivityStatus::Done,
+                        content_offset: Some(*offset),
+                    })
+                    .collect();
+            } else {
+                msg.tool_calls = offsets
+                    .iter()
+                    .map(|offset| loop_call("batch_design", Some(*offset)))
+                    .collect();
+            }
+
+            let (item, _) = build_item(&msg, 0, 0.0, body(), op_editor_core::Locale::ZhCn);
+
+            let prose: Vec<_> = item
+                .flow_bubbles
+                .iter()
+                .map(|bubble| bubble.lines.join("\n"))
+                .collect();
+            assert_eq!(prose, ["开始布局。", "继续绘制。", "完成。"]);
+            assert_eq!(item.design_blocks.len(), usize::from(!streaming));
+            assert!(item.steps.iter().any(|step| step.label == "Layout"));
+            let card_y: Vec<_> = if activities {
+                item.steps
+                    .iter()
+                    .filter(|step| step.label.starts_with("Activity "))
+                    .map(|step| step.rect.origin.y)
+                    .collect()
+            } else {
+                item.flow_panels
+                    .iter()
+                    .map(|panel| panel.cards[0].rect.origin.y)
+                    .collect()
+            };
+            assert_eq!(card_y.len(), 2);
+            for (index, card_y) in card_y.into_iter().enumerate() {
+                assert!(item.flow_bubbles[index].rect.origin.y < card_y);
+                assert!(card_y < item.flow_bubbles[index + 1].rect.origin.y);
+            }
+        }
+    }
+}
+
+#[test]
+fn interleaved_narration_keeps_non_design_json() {
+    let mut msg =
+        ChatMessage::assistant("Before.\n```json\n{\"type\":\"audit\",\"ok\":true}\n```\nAfter.");
+    msg.tool_calls = vec![loop_call("get_node", Some(0))];
+
+    let (item, _) = build_item(&msg, 0, 0.0, body(), op_editor_core::Locale::EnUs);
+
+    let visible = item.flow_bubbles[0].lines.join("\n");
+    assert!(visible.contains("Before."));
+    assert!(visible.contains("\"type\":\"audit\""));
+    assert!(visible.contains("After."));
+    assert!(item.design_blocks.is_empty());
+}

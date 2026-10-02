@@ -18,8 +18,11 @@ use super::ai_chat_transcript::{
     action_step_height, streaming_caret_visible, ActionStep, TextBubble, TranscriptItem,
     ACTION_STEP_GAP, LINE_H,
 };
+use super::ai_chat_transcript_design::extract_design_json_blocks;
 use super::ai_chat_transcript_richtext::{layout_rich, paint_rich, rich_height, rich_line_width};
-use super::ai_chat_transcript_steps::{activity_step, step_state, strip_tool_call_xml};
+use super::ai_chat_transcript_steps::{
+    activity_step, extract_step_blocks, step_state, strip_tool_call_xml,
+};
 use super::ai_chat_transcript_text::wrap_units;
 use super::ai_chat_transcript_tools::{
     build_tool_panel, paint_tool_panel, ToolPanel, ToolPanelLayout, CARD_GAP,
@@ -76,6 +79,7 @@ pub(crate) fn build_activity_flow(
     for (offset, first_index, len) in groups {
         y = push_prose(
             &content[cursor..offset],
+            msg.streaming,
             x,
             &mut y,
             width,
@@ -127,7 +131,15 @@ pub(crate) fn build_activity_flow(
         y += (FLOW_GAP - ACTION_STEP_GAP).max(0.0);
     }
 
-    y = push_prose(&content[cursor..], x, &mut y, width, budget, &mut bubbles);
+    y = push_prose(
+        &content[cursor..],
+        msg.streaming,
+        x,
+        &mut y,
+        width,
+        budget,
+        &mut bubbles,
+    );
     (bubbles, steps, y)
 }
 
@@ -187,6 +199,7 @@ pub(crate) fn build_flow(
     for &(offset, first_index, len) in &groups {
         y = push_prose(
             &content[cursor..offset],
+            msg.streaming,
             x,
             &mut y,
             width,
@@ -222,19 +235,34 @@ pub(crate) fn build_flow(
         }
         y += FLOW_GAP;
     }
-    y = push_prose(&content[cursor..], x, &mut y, width, budget, &mut bubbles);
+    y = push_prose(
+        &content[cursor..],
+        msg.streaming,
+        x,
+        &mut y,
+        width,
+        budget,
+        &mut bubbles,
+    );
     (bubbles, panels, y)
 }
 
 fn push_prose(
     raw: &str,
+    streaming: bool,
     x: f32,
     y: &mut f32,
     width: f32,
     budget: u32,
     bubbles: &mut Vec<TextBubble>,
 ) -> f32 {
-    let visible = normalize_narration_markdown(&strip_tool_call_xml(raw));
+    // Keep byte offsets anchored to the original content, then apply the
+    // same presentation filtering as the non-interleaved transcript. The
+    // enclosing item already renders extracted steps and design cards.
+    let display = strip_tool_call_xml(raw);
+    let steps = extract_step_blocks(&display, streaming);
+    let design = extract_design_json_blocks(&steps.visible_text, streaming);
+    let visible = normalize_narration_markdown(&design.visible_text);
     let visible = visible.trim();
     if visible.is_empty() {
         return *y;
