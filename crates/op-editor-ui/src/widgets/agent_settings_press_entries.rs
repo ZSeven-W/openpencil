@@ -151,8 +151,11 @@ pub(crate) fn apply_entry_hit(
                     .agent_settings
                     .take_over_browser_builtin_agent(index);
             }
-            if let Some(agent) = state.editor_ui.agent_settings.builtin_agents.get_mut(index) {
-                agent.toggle_kind_for_preset();
+            if state
+                .editor_ui
+                .agent_settings
+                .edit_builtin_agent(index, |agent| agent.toggle_kind_for_preset())
+            {
                 state.rebuild_chat_models();
             }
             queue_builtin_discovery(state, index, now_ms);
@@ -228,9 +231,9 @@ pub(crate) fn apply_entry_hit(
                 let settings = &mut state.editor_ui.agent_settings;
                 match index {
                     Some(index) => {
-                        if let Some(agent) = settings.builtin_agents.get_mut(index) {
+                        settings.edit_builtin_agent(index, |agent| {
                             agent.toggle_model(&model_id);
-                        }
+                        });
                     }
                     None => {
                         if let Some(agent) = settings.builtin_agent_draft.as_mut() {
@@ -306,8 +309,11 @@ pub(crate) fn apply_entry_hit(
                     .agent_settings
                     .take_over_browser_builtin_agent(index);
             }
-            if let Some(agent) = state.editor_ui.agent_settings.builtin_agents.get_mut(index) {
-                agent.enabled = !agent.enabled;
+            if state
+                .editor_ui
+                .agent_settings
+                .edit_builtin_agent(index, |agent| agent.enabled = !agent.enabled)
+            {
                 state.rebuild_chat_models();
             }
             queue_builtin_discovery(state, index, now_ms);

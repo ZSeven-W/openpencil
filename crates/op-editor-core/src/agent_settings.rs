@@ -289,7 +289,8 @@ pub struct AgentSettings {
     /// NOT persisted. These agents are re-derived from their source file
     /// on every launch, so persisting them would silently duplicate the
     /// source's API keys into OpenPencil's own settings.json; the host's
-    /// save path skips any agent whose id is in this set.
+    /// save path skips any agent whose id is in this set. Explicit edits
+    /// remove the id so the customized card becomes locally persisted.
     pub imported_agent_ids: BTreeSet<String>,
     pub acp_agents: Vec<AcpAgentConfig>,
     pub acp_agent_draft: Option<AcpAgentConfig>,

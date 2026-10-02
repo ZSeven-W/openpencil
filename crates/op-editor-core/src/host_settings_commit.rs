@@ -83,8 +83,8 @@ pub fn commit_settings_focus(
                         BuiltinAgentField::BaseUrl => Some(agent.base_url.clone()),
                         _ => None,
                     });
-            if let Some(agent) = settings.builtin_agents.get_mut(index) {
-                write_builtin_field(agent, field, &draft);
+            settings.edit_builtin_agent(index, |agent| write_builtin_field(agent, field, &draft));
+            if let Some(agent) = settings.builtin_agents.get(index) {
                 let credential_changed =
                     previous_credential_field
                         .as_deref()

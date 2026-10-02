@@ -15,14 +15,14 @@
 //! that an imported agent deleted inside OpenPencil reappears next launch
 //! because Zode still lists it.
 //!
-//! Imported agents are recorded in `agent_settings.imported_agent_ids`
-//! and are NOT written to OpenPencil's own `settings.json`: Zode's config
-//! stays the single source of truth for those keys (they're re-imported
-//! every launch), so we never silently duplicate a Zode API key onto a
-//! second on-disk location.
+//! Unedited imports are recorded in `agent_settings.imported_agent_ids`
+//! and are not written to OpenPencil's own `settings.json`. An explicit
+//! provider edit transfers ownership to OpenPencil; subsequent imports
+//! respect that saved card rather than reinserting source models the user
+//! removed. Merely opening the imported provider does not transfer it.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use op_editor_core::{BuiltinAgentKind, EditorState};
 use serde::Deserialize;
@@ -63,7 +63,11 @@ pub fn import_zode_builtin_agents(state: &mut EditorState) {
     let Some(path) = zode_config_path() else {
         return;
     };
-    let Ok(bytes) = std::fs::read(&path) else {
+    import_zode_builtin_agents_from_path(state, &path);
+}
+
+fn import_zode_builtin_agents_from_path(state: &mut EditorState, path: &Path) {
+    let Ok(bytes) = std::fs::read(path) else {
         return;
     };
     let Ok(config) = serde_json::from_slice::<ZodeConfig>(&bytes) else {
@@ -116,22 +120,27 @@ fn import_from_config(state: &mut EditorState, config: &ZodeConfig) -> usize {
                     && agent.base_url.trim().trim_end_matches('/')
                         == base_url.trim().trim_end_matches('/')
             })
-            .map(|agent| (agent.preset, agent.enabled))
+            .map(|agent| {
+                (
+                    agent.preset,
+                    agent.enabled,
+                    settings.imported_agent_ids.contains(&agent.id),
+                )
+            })
             .collect::<Vec<_>>();
         if existing_candidates.len() > 1 {
             continue;
         }
-        // A disabled operator card is an explicit user choice. Importing
-        // must neither re-enable it nor create a same-backend duplicate that
-        // strict persistence would reject.
+        // A local card's model list and enabled state are explicit user
+        // choices. Imports must neither amend them nor create a duplicate.
         if existing_candidates
             .first()
-            .is_some_and(|(_, enabled)| !enabled)
+            .is_some_and(|(_, enabled, imported)| !enabled || !imported)
         {
             continue;
         }
         let before_len = settings.builtin_agents.len();
-        let id = if let Some((preset, _)) = existing_candidates.first().copied() {
+        let id = if let Some((preset, _, _)) = existing_candidates.first().copied() {
             settings.add_builtin_agent_configs_with_preset(
                 provider_name,
                 api_key,
@@ -158,6 +167,10 @@ fn import_from_config(state: &mut EditorState, config: &ZodeConfig) -> usize {
     }
     added
 }
+
+#[cfg(test)]
+#[path = "zode_import_persistence_tests.rs"]
+mod persistence_tests;
 
 #[cfg(test)]
 mod tests {
@@ -309,7 +322,7 @@ mod tests {
     }
 
     #[test]
-    fn models_merged_into_existing_agent_rebuild_the_chat_catalog() {
+    fn models_merged_into_an_unedited_import_rebuild_the_chat_catalog() {
         let mut state = EditorState::new();
         let id = state.editor_ui.agent_settings.add_builtin_agent_config(
             "Existing",
@@ -318,6 +331,11 @@ mod tests {
             BuiltinAgentKind::OpenAiCompat,
             "https://example.com/v1",
         );
+        state
+            .editor_ui
+            .agent_settings
+            .imported_agent_ids
+            .insert(id.clone());
         state.rebuild_chat_models();
         assert_eq!(
             state
@@ -351,7 +369,7 @@ mod tests {
             entry.builtin_provider_id.as_deref() == Some(id.as_str())
                 && entry.builtin_model_id() == Some("model-b")
         }));
-        assert!(!state
+        assert!(state
             .editor_ui
             .agent_settings
             .imported_agent_ids
@@ -359,7 +377,7 @@ mod tests {
     }
 
     #[test]
-    fn import_reuses_a_unique_custom_anthropic_preset_for_the_same_transport() {
+    fn import_preserves_a_saved_custom_anthropic_card_for_the_same_transport() {
         let mut state = EditorState::new();
         let settings = &mut state.editor_ui.agent_settings;
         settings.begin_builtin_agent_draft();
@@ -392,7 +410,7 @@ mod tests {
             agents[0].preset,
             op_editor_core::BuiltinAgentPresetKey::Custom
         );
-        assert_eq!(agents[0].models, ["model-a", "model-b"]);
+        assert_eq!(agents[0].models, ["model-a"]);
     }
 
     #[test]

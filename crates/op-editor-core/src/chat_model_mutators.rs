@@ -74,11 +74,27 @@ impl EditorState {
                 .map(|agent| crate::ModelEntry::acp(agent.id.clone(), agent.display_name.clone())),
         );
         if let Some(previous) = previous {
-            if let Some(index) = self.chat.available_models.iter().position(|entry| {
-                entry.provider == previous.provider
-                    && entry.value == previous.value
-                    && entry.builtin_provider_id == previous.builtin_provider_id
-            }) {
+            let index = self
+                .chat
+                .available_models
+                .iter()
+                .position(|entry| {
+                    entry.provider == previous.provider
+                        && entry.value == previous.value
+                        && entry.builtin_provider_id == previous.builtin_provider_id
+                })
+                .or_else(|| {
+                    // Editing the selected provider's saved models may remove
+                    // the old model. Keep that provider selected using its
+                    // first saved model instead of switching to an unrelated
+                    // provider at index zero.
+                    let id = previous.builtin_provider_id.as_deref()?;
+                    self.chat
+                        .available_models
+                        .iter()
+                        .position(|entry| entry.builtin_provider_id.as_deref() == Some(id))
+                });
+            if let Some(index) = index {
                 self.chat.selected_model = index;
             }
         }

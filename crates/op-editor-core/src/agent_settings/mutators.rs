@@ -20,6 +20,26 @@ use crate::agent_settings_builtin_presets::{
 const WEB_CREDENTIAL_BUILTIN_PREFIX: &str = "web-credential:builtin:";
 
 impl AgentSettings {
+    /// Apply an explicit provider edit. Imported providers remain derived
+    /// from their source until the user changes them here; changed cards
+    /// become local settings so the edit survives the next source import.
+    pub fn edit_builtin_agent(
+        &mut self,
+        index: usize,
+        edit: impl FnOnce(&mut BuiltinAgentConfig),
+    ) -> bool {
+        let Some(agent) = self.builtin_agents.get_mut(index) else {
+            return false;
+        };
+        let before = agent.clone();
+        edit(agent);
+        if *agent == before {
+            return false;
+        }
+        self.imported_agent_ids.remove(&agent.id);
+        true
+    }
+
     /// Turn a browser-snapshot built-in into a daemon/operator-owned entry
     /// before native settings mutate it. Browser snapshots identify ownership
     /// through the scoped id, so changing the id is the ownership transfer.
@@ -117,13 +137,13 @@ impl AgentSettings {
 
     pub fn set_builtin_agent_preset(&mut self, index: usize, preset: BuiltinAgentPresetKey) {
         let id = self.builtin_agents.get(index).map(|agent| agent.id.clone());
-        if let Some(agent) = self.builtin_agents.get_mut(index) {
+        self.edit_builtin_agent(index, |agent| {
             let api_key = agent.api_key.clone();
             let enabled = agent.enabled;
             agent.apply_preset(preset);
             agent.api_key = api_key;
             agent.enabled = enabled;
-        }
+        });
         if let Some(id) = id {
             self.invalidate_builtin_model_catalog_for_agent(&id);
         }

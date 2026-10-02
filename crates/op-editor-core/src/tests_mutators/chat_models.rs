@@ -139,6 +139,96 @@ fn rebuild_chat_models_retains_builtin_agent_display_name_as_group_label() {
     );
 }
 
+fn state_with_selected_builtin() -> (crate::EditorState, String, String) {
+    let mut state = sample();
+    let first = state.editor_ui.agent_settings.add_builtin_agent_config(
+        "Anthropic",
+        "sk-first",
+        "default",
+        crate::BuiltinAgentKind::Anthropic,
+        "https://api.anthropic.com",
+    );
+    let selected = state.editor_ui.agent_settings.add_builtin_agent_config(
+        "GLM Coding Plan",
+        "sk-selected",
+        "glm-5.2",
+        crate::BuiltinAgentKind::OpenAiCompat,
+        "https://example.test/v1",
+    );
+    state.rebuild_chat_models();
+    let index = state
+        .chat
+        .available_models
+        .iter()
+        .position(|entry| entry.builtin_provider_id.as_deref() == Some(selected.as_str()))
+        .expect("selected provider model");
+    state.select_chat_model(index);
+    (state, first, selected)
+}
+
+#[test]
+fn committing_active_builtin_model_edit_keeps_provider_selected() {
+    use crate::host_settings_commit::{commit_settings_focus, SettingsCommitScope};
+
+    for scope in [SettingsCommitScope::Operator, SettingsCommitScope::Browser] {
+        for external_cli_available in [true, false] {
+            let (mut state, _, selected) = state_with_selected_builtin();
+            state.editor_ui.external_cli_available = external_cli_available;
+            state.editor_ui.agent_settings.focus =
+                Some(crate::agent_settings::SettingsFocus::BuiltinAgent {
+                    index: 1,
+                    field: crate::agent_settings::BuiltinAgentField::Model,
+                });
+            state.editor_ui.settings_input.set_text("glm-5.3-flash");
+
+            assert!(commit_settings_focus(&mut state, scope, 0));
+            // Saving the form rebuilds once more after the input commit.
+            state.rebuild_chat_models();
+
+            let entry = state.chat.selected_model_entry().expect("selected model");
+            assert_eq!(
+                entry.builtin_provider_id.as_deref(),
+                Some(selected.as_str())
+            );
+            assert_eq!(entry.builtin_model_id(), Some("glm-5.3-flash"));
+            assert!(state.editor_ui.agent_settings.focus.is_none());
+        }
+    }
+}
+
+#[test]
+fn rebuilding_builtin_models_prefers_surviving_selection_over_provider_default() {
+    let (mut state, _, selected) = state_with_selected_builtin();
+    state.editor_ui.agent_settings.builtin_agents[1].set_models(["glm-5.3-flash", "glm-5.2"]);
+
+    state.rebuild_chat_models();
+
+    let entry = state.chat.selected_model_entry().expect("selected model");
+    assert_eq!(
+        entry.builtin_provider_id.as_deref(),
+        Some(selected.as_str())
+    );
+    assert_eq!(entry.builtin_model_id(), Some("glm-5.2"));
+}
+
+#[test]
+fn rebuilding_unavailable_builtin_falls_back_to_a_ready_model() {
+    for remove in [true, false] {
+        let (mut state, first, _) = state_with_selected_builtin();
+        if remove {
+            state.editor_ui.agent_settings.remove_builtin_agent(1);
+        } else {
+            state.editor_ui.agent_settings.builtin_agents[1].enabled = false;
+        }
+
+        state.rebuild_chat_models();
+
+        let entry = state.chat.selected_model_entry().expect("ready fallback");
+        assert_eq!(entry.builtin_provider_id.as_deref(), Some(first.as_str()));
+        assert_eq!(entry.builtin_model_id(), Some("default"));
+    }
+}
+
 #[test]
 fn rebuild_chat_models_flattens_saved_models_and_ignores_runtime_options() {
     let mut state = sample();
