@@ -53,6 +53,8 @@ pub(crate) mod cleanup_image_slots;
 mod cleanup_light_plate_on_dark;
 #[path = "cleanup_overflow_prepass.rs"]
 mod cleanup_overflow_prepass;
+#[path = "cleanup_path_stage_coords.rs"]
+mod cleanup_path_stage_coords;
 #[path = "cleanup_root_and_nav.rs"]
 mod cleanup_root_and_nav;
 #[path = "cleanup_root_transform.rs"]
@@ -524,6 +526,8 @@ fn run_cleanup_passes_with_summary_and_policy(
         counter.checkpoint(summary, CheckCategory::Structure, "empty-content-bar");
         cleanup_light_plate_on_dark::strip_light_plates_on_dark(sink, &rid);
         counter.checkpoint(summary, CheckCategory::Palette, "light-plate-on-dark");
+        cleanup_path_stage_coords::crop_stage_boxed_paths(sink, &rid);
+        counter.checkpoint(summary, CheckCategory::Layout, "path-stage-coords");
         if intent_allows(sink, TieredPass::MotionRecipes) {
             motion_recipes::apply(sink, &rid);
         }
