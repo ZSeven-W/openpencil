@@ -1,7 +1,7 @@
 //! Keep documents displaced by Home reachable from the mobile works list.
 
+use super::write_document_state;
 use super::{documents_dir, forget_current_document, sanitize_stem, unique_target_path};
-use super::{write_document_state, DocumentBinding};
 use crate::error::{FfiError, FfiResult};
 use crate::lifecycle::Session;
 use crate::OpStatus;
@@ -138,6 +138,7 @@ pub(crate) fn cache_staged_document(
         return Err(io_error(error));
     }
     touch_recent(session, &path);
+    super::binding::remember(&session.document_save, &path, handle, display_name)?;
     Ok(path)
 }
 
@@ -171,7 +172,7 @@ pub(super) fn open_recent(session: &mut Session, index: usize) -> FfiResult<()> 
         .file_name()
         .map(|name| name.to_string_lossy().into_owned());
     crate::editor::install_document_source(session, &source, name)?;
-    session.document_save.binding = DocumentBinding::Path(path.clone());
+    session.document_save.binding = super::binding::restore(&session.document_save, &path);
     if let Some(outgoing) = outgoing {
         session.document_save.rescued.push_back(outgoing);
     }

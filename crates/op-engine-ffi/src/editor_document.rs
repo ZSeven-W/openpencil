@@ -42,6 +42,8 @@ use crate::OpStatus;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+#[path = "editor_document_binding.rs"]
+mod binding;
 #[path = "editor_document_home.rs"]
 mod home;
 pub(crate) use home::{cache_staged_document, capture_replaced_home_document};

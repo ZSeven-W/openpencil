@@ -73,6 +73,7 @@ fn picker_save_indexes_exact_staged_bytes_and_resave_reuses_the_local_copy() {
     );
     drop(engine);
     let mut reopened = picker_engine();
+    reopened.session_mut_for_test().document_save.root = Some(saved.0.clone());
     op_editor_host_core::settings_io::load(
         reopened
             .session_mut_for_test()
@@ -90,6 +91,39 @@ fn picker_save_indexes_exact_staged_bytes_and_resave_reuses_the_local_copy() {
         .editor_state();
     assert_eq!(state.doc.name.as_deref(), Some("edit after staging"));
     assert!(!state.is_dirty());
+
+    touch(&mut reopened, "edit after reopening");
+    queue(&mut reopened, op_editor_core::FileAction::Save);
+    assert_eq!(drain(&mut reopened), SHELL_ACTION_SAVE_DOCUMENT);
+    assert_eq!(
+        copy_string(&mut reopened, op_editor_copy_save_target).as_deref(),
+        Some("content://docs/persisted"),
+        "reopening the private copy must preserve the acknowledged external destination",
+    );
+}
+
+#[test]
+fn legacy_picker_copy_prompts_instead_of_silently_saving_only_the_private_mirror() {
+    let root = Staging::new();
+    let mut engine = picker_engine();
+    engine.session_mut_for_test().document_save.root = Some(root.0.clone());
+    let path = root.0.join("Saved/legacy.op");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, SAMPLE_DOC).unwrap();
+    engine
+        .session_mut_for_test()
+        .editor_mut()
+        .unwrap()
+        .editor_state_mut()
+        .editor_ui
+        .touch_recent_file(path.to_string_lossy().into_owned(), 1);
+    queue(&mut engine, op_editor_core::FileAction::OpenRecent(0));
+    assert_eq!(drain(&mut engine), SHELL_ACTION_NONE);
+    touch(&mut engine, "changed legacy copy");
+    queue(&mut engine, op_editor_core::FileAction::Save);
+    assert_eq!(drain(&mut engine), SHELL_ACTION_SAVE_DOCUMENT);
+    assert_eq!(copy_string(&mut engine, op_editor_copy_save_target), None);
+    assert_eq!(std::fs::read_to_string(path).unwrap(), SAMPLE_DOC);
 }
 
 #[test]
