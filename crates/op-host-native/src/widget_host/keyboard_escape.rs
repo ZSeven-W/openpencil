@@ -363,6 +363,22 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // Touch Home has an explicit composer focus; drop it before root
+        // navigation so Android Back can dismiss the software keyboard.
+        let ui = &mut self.editor_state.editor_ui;
+        if ui.touch_chrome() && ui.home.visible && ui.home.composer_focused {
+            ui.home.composer_focused = false;
+            ui.home.input.reset_transient();
+            self.mark_dirty();
+            return true;
+        }
+        // A mobile sheet is a layer above the canvas selection. Reuse its
+        // close path to release input ownership and collapsed chat state.
+        if let Some(kind) = self.editor_state.editor_ui.mobile_sheet {
+            self.toggle_mobile_sheet(kind);
+            self.mark_dirty();
+            return true;
+        }
         if escape::escape_selection(&mut self.editor_state) {
             self.mark_dirty();
             return true;

@@ -233,6 +233,47 @@ fn professional_leaves_home_for_the_canvas_and_remembers_it() {
 }
 
 #[test]
+fn home_professional_after_example_and_workspace_back_restores_the_canvas() {
+    let mut host = home_host();
+    host.editor_state.tool = Tool::Rect;
+    // Exercise the same path a newcomer uses: open an instant example,
+    // return to Home, then choose Professional without leaving that work.
+    let send = center(home_layout(&host).send);
+    assert!(host.apply_press(send.x, send.y, W, H));
+    assert!(host.workspace_visible());
+    assert_eq!(host.editor_state.tool, Tool::Hand);
+    let before = host.editor_state.doc.clone();
+    let history_depth = host.editor_state.history.past.len();
+    let back = center(
+        op_editor_ui::widgets::WorkspaceSurface::for_editor_at(&host.editor_state, 0)
+            .expect("instant example workspace")
+            .layout(W, H)
+            .back,
+    );
+    assert!(host.apply_press(back.x, back.y, W, H));
+    assert!(host.home_visible());
+    assert!(host.editor_state.editor_ui.workspace.visible);
+
+    let professional = center(home_layout(&host).professional);
+    assert!(host.apply_press(professional.x, professional.y, W, H));
+
+    assert!(!host.home_visible());
+    assert!(!host.workspace_visible());
+    assert_eq!(
+        host.editor_state.editor_ui.entry_surface,
+        EntrySurface::Canvas
+    );
+    assert_eq!(host.editor_state.tool, Tool::Rect);
+    assert_eq!(host.editor_state.doc, before);
+    assert_eq!(host.editor_state.history.past.len(), history_depth);
+    assert!(host.editor_state.editor_ui.workspace.active);
+    assert_eq!(
+        host.editor_state.editor_ui.workspace.phase,
+        op_editor_core::WorkspacePhase::Done
+    );
+}
+
+#[test]
 fn home_swallows_presses_the_canvas_would_otherwise_take() {
     let mut host = home_host();
     // The bottom-right corner is blank Home page, not the canvas.
@@ -356,4 +397,42 @@ fn a_daemon_catalog_marks_served_models_and_an_empty_one_clears_it() {
     assert!(state.editor_ui.agent_settings.web_served_models);
     crate::web_model_catalog::apply_models(&mut state, &[]);
     assert!(!state.editor_ui.agent_settings.web_served_models);
+}
+
+#[test]
+fn app_page_picker_controls_the_actual_example_boards_and_keeps_filled_examples() {
+    use op_editor_core::AppPages;
+    for (index, expected) in [(0, 1), (1, 3)] {
+        let mut host = home_host();
+        let example = HomeSurface::for_editor(&host.editor_state)
+            .unwrap()
+            .example_prompt()
+            .to_string();
+        host.editor_state.editor_ui.home.use_example(&example);
+        let option = center(home_layout(&host).app_page_options[index]);
+        assert!(host.apply_press(option.x, option.y, W, H));
+        assert_eq!(
+            host.editor_state.editor_ui.home.task_draft().app_pages,
+            if index == 0 {
+                AppPages::Single
+            } else {
+                AppPages::Multiple
+            }
+        );
+        let current_example = HomeSurface::for_editor(&host.editor_state)
+            .unwrap()
+            .example_prompt()
+            .to_string();
+        assert_eq!(host.editor_state.editor_ui.home.draft, current_example);
+        let send = center(home_layout(&host).send);
+        assert!(host.apply_press(send.x, send.y, W, H));
+        assert_eq!(
+            op_editor_core::preview_slideshow::active_page_boards(&host.editor_state).len(),
+            expected
+        );
+        assert!(
+            host.editor_state.chat.pending_send.is_none(),
+            "offline example remains available"
+        );
+    }
 }

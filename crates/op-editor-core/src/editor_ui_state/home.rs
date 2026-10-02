@@ -116,11 +116,13 @@ impl HomeFamily {
         let prompt = match self {
             Self::AppUi if draft.device == HomeDevice::Mobile => format!(
                 "请设计一套可编辑的高保真手机 App 界面（mobile app，375×812）。\
-交付一组完整界面：统一的组件、变量与图层结构，屏幕之间用 onTap 串起导航。\n\n用户需求：{text}"
+{}统一的组件、变量与图层结构。\n\n用户需求：{text}",
+                draft.app_pages.delivery(text)
             ),
             Self::AppUi => format!(
                 "请设计一套可编辑的高保真桌面端应用界面（desktop app，1440 宽的 dashboard \
-工作台）。交付一组完整界面：统一的组件、变量与图层结构。\n\n用户需求：{text}"
+工作台）。{}统一的组件、变量与图层结构。\n\n用户需求：{text}",
+                draft.app_pages.delivery(text)
             ),
             Self::Web => format!(
                 "请设计一个完整的纵向滚动网站页面（landing page，1440 宽）。\
@@ -219,11 +221,76 @@ pub enum InfoKind {
     Comparison,
 }
 
+/// The App task starts with one screen; a flow is an explicit choice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum AppPages {
+    #[default]
+    Single,
+    Multiple,
+}
+
+impl AppPages {
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Single => "single",
+            Self::Multiple => "multiple",
+        }
+    }
+    pub fn from_id(value: &str) -> Option<Self> {
+        match value {
+            "single" => Some(Self::Single),
+            "multiple" => Some(Self::Multiple),
+            _ => None,
+        }
+    }
+    fn delivery(self, text: &str) -> String {
+        match self {
+            Self::Single => {
+                "交付 1 页界面：只设计用户最需要的一个页面，不要额外生成其他页面或画板。".into()
+            }
+            Self::Multiple => {
+                let count = explicit_app_page_count(text).unwrap_or(3);
+                format!("交付 {count} 页完整界面：用户指定页面名称时遵从需求，页面之间用 onTap 串起导航。")
+            }
+        }
+    }
+}
+
+fn explicit_app_page_count(text: &str) -> Option<u32> {
+    for (start, character) in text.char_indices() {
+        if !character.is_ascii_digit()
+            || text[..start]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_ascii_digit())
+        {
+            continue;
+        }
+        let tail = &text[start..];
+        let end = tail
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(tail.len());
+        let Ok(count) = tail[..end].parse::<u32>() else {
+            continue;
+        };
+        let unit = tail[end..].trim_start().to_lowercase();
+        if (1..=30).contains(&count)
+            && ["页", "个页面", "个界面", "个屏幕", "page", "screen"]
+                .iter()
+                .any(|u| unit.starts_with(u))
+        {
+            return Some(count);
+        }
+    }
+    None
+}
+
 /// One task's kept draft: the text plus the options its segmented
 /// control owns. Attachments deliberately live in the chat composer's
 /// `pending_attachments` — that list is the single source of truth.
 #[derive(Debug, Clone, Default)]
 pub struct TaskDraft {
+    pub app_pages: AppPages,
     pub text: String,
     pub device: HomeDevice,
     pub ratio: SlideRatio,
@@ -515,6 +582,10 @@ impl HomeState {
         true
     }
 
+    pub fn set_app_pages(&mut self, pages: AppPages) {
+        self.task_draft_mut().app_pages = pages;
+    }
+
     pub fn set_device(&mut self, device: HomeDevice) {
         self.task_draft_mut().device = device;
     }
@@ -620,6 +691,20 @@ impl HomeState {
 
     pub fn generation_prompt(&self) -> Option<String> {
         self.task.generation_prompt(self.task_draft())
+    }
+}
+
+impl super::EditorUiState {
+    /// Home may stay visible underneath its overlays. Only the exposed
+    /// composer owns text selection, clipboard, caret and IME events.
+    /// Touch keyboard visibility additionally follows `composer_focused`.
+    pub fn home_composer_owns_keyboard(&self) -> bool {
+        self.home.visible
+            && !self.agent_settings_open
+            && !self.save_name_dialog.open
+            && !self.login_modal_open
+            && !self.account_menu_open
+            && !self.chat_model_picker.open
     }
 }
 

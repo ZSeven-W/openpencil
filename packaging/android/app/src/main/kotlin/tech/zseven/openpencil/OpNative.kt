@@ -103,6 +103,7 @@ object OpNative {
     external fun nativeEditorPinch(engine: Long, x: Float, y: Float, deltaY: Float): Int
     external fun nativeEditorText(engine: Long, text: String): Int
     external fun nativeEditorKey(engine: Long, key: Int): Int
+    external fun nativeEditorBack(engine: Long): Boolean
     external fun nativeEditorImePreedit(engine: Long, text: String, selStart: Int, selEnd: Int): Int
     external fun nativeEditorImeCommit(engine: Long, text: String): Int
     external fun nativeEditorPasteText(engine: Long, text: String): Int

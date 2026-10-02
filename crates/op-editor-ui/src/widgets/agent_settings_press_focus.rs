@@ -159,3 +159,79 @@ pub(crate) fn focus_acp_agent_draft(state: &mut EditorState, field: AcpAgentFiel
     let text = acp_field_text(agent, field);
     focus_with_text(state, SettingsFocus::AcpAgentDraft(field), text, now_ms);
 }
+
+/// Open the usable built-in connection path directly from the novice entry.
+/// Existing providers are edited in place; a fresh setup begins by choosing
+/// the service so its protocol, model and URL can be populated together.
+pub fn open_builtin_setup(state: &mut EditorState, now_ms: u64) {
+    use op_editor_core::agent_settings::BuiltinAgentPresetMenuTarget;
+    let ui = &mut state.editor_ui;
+    ui.home.connect_card_open = false;
+    ui.agent_settings_open = true;
+    ui.agent_settings.tab = op_editor_core::AgentSettingsTab::Agents;
+    ui.agent_settings.scroll_y.offset = 0.0;
+    if !ui.agent_settings.builtin_agents.is_empty() {
+        let index = ui
+            .agent_settings
+            .builtin_agents
+            .iter()
+            .position(|a| a.enabled)
+            .unwrap_or(0);
+        focus_builtin_agent(state, index, BuiltinAgentField::DisplayName, now_ms);
+    } else {
+        ui.agent_settings.begin_builtin_agent_draft();
+        focus_builtin_agent_draft(state, BuiltinAgentField::DisplayName, now_ms);
+        state.editor_ui.agent_settings.builtin_preset_menu_open =
+            Some(BuiltinAgentPresetMenuTarget::Draft);
+        state
+            .editor_ui
+            .agent_settings
+            .builtin_preset_menu_scroll
+            .offset = 0.0;
+        state.editor_ui.agent_settings.focus = None;
+        state.editor_ui.settings_input.set_text("");
+    }
+}
+
+#[cfg(test)]
+mod novice_setup_tests {
+    use super::*;
+    #[test]
+    fn a_new_connection_begins_at_service_choice_and_never_saves_an_empty_key() {
+        let mut state = EditorState::new();
+        open_builtin_setup(&mut state, 1);
+        assert!(state.editor_ui.agent_settings_open);
+        assert!(state
+            .editor_ui
+            .agent_settings
+            .builtin_preset_menu_open
+            .is_some());
+        assert!(
+            state.editor_ui.agent_settings.focus.is_none(),
+            "no hidden input owns the software keyboard"
+        );
+        assert!(state.editor_ui.agent_settings.builtin_agents.is_empty());
+        assert!(state
+            .editor_ui
+            .agent_settings
+            .builtin_agent_draft
+            .as_ref()
+            .unwrap()
+            .api_key
+            .is_empty());
+    }
+    #[test]
+    fn an_existing_connection_is_opened_in_place_without_duplicate_or_credential_changes() {
+        let mut state = EditorState::new();
+        let id = state
+            .editor_ui
+            .agent_settings
+            .add_builtin_agent_with_defaults("GLM", "synthetic-test-key", "glm-5.3-flash");
+        open_builtin_setup(&mut state, 1);
+        let settings = &state.editor_ui.agent_settings;
+        assert_eq!(settings.builtin_agents.len(), 1);
+        assert_eq!(settings.builtin_agents[0].id, id);
+        assert_eq!(settings.builtin_agents[0].api_key, "synthetic-test-key");
+        assert!(settings.builtin_agent_draft.is_none());
+    }
+}

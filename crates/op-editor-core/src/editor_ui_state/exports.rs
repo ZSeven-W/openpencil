@@ -19,7 +19,8 @@ pub use super::home::share_recipe::{
     sanitize_share_text, MakeSameStage, ShareRecipe, SHARE_BRIEF_MAX_CHARS, SHARE_REDACTED,
 };
 pub use super::home::{
-    EntrySurface, HomeDevice, HomeFamily, HomeHit, HomeState, InfoKind, SlideRatio, TaskDraft,
+    AppPages, EntrySurface, HomeDevice, HomeFamily, HomeHit, HomeState, InfoKind, SlideRatio,
+    TaskDraft,
 };
 pub use super::pickers::{
     CanvasDropIndicator, CanvasOverlayLine, CanvasOverlayRect, CompositingPickerTarget,

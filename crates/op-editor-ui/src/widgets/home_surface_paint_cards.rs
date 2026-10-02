@@ -24,12 +24,18 @@ use op_editor_core::{HomeFamily, HomeHit, InfoKind, SlideRatio};
 /// relies on.
 const PREVIEW_ASPECT: f32 = 1024.0 / 640.0;
 
-pub(super) fn text(cx: &mut PaintCx<'_>, content: &str, origin: Point2D, size: f32, color: Color) {
+pub(in crate::widgets::home_surface) fn text(
+    cx: &mut PaintCx<'_>,
+    content: &str,
+    origin: Point2D,
+    size: f32,
+    color: Color,
+) {
     let layout = crate::TextLayout::single_run(content, SANS, size, color.to_jian(), Point2D::ZERO);
     cx.backend.draw_text(&layout, origin);
 }
 
-pub(super) fn text_weighted(
+pub(in crate::widgets::home_surface) fn text_weighted(
     cx: &mut PaintCx<'_>,
     content: &str,
     origin: Point2D,
@@ -327,6 +333,21 @@ fn paint_paper_card(
 /// [`HomeState::example_draft_template`]: op_editor_core::HomeState::example_draft_template
 pub(super) fn task_art(surface: &HomeSurface<'_>) -> (&'static str, Option<f32>) {
     let draft = surface.state.task_draft();
+    if surface.state.task == HomeFamily::AppUi
+        && draft.device == op_editor_core::HomeDevice::Desktop
+        && draft.app_pages == op_editor_core::AppPages::Multiple
+    {
+        return ("coffee-counter-desktop", None);
+    }
+    if surface.state.task == HomeFamily::AppUi
+        && draft.app_pages == op_editor_core::AppPages::Single
+    {
+        return if draft.device == op_editor_core::HomeDevice::Mobile {
+            ("coffee-order-app-single", Some(375.0 / 812.0))
+        } else {
+            ("coffee-counter-desktop-single", Some(1440.0 / 900.0))
+        };
+    }
     let template = surface
         .state
         .example_draft_template()

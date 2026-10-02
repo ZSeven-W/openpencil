@@ -14,6 +14,9 @@ use super::WidgetHostNative;
 pub struct ReplacedHomeDocument {
     /// The replaced editor state, narrowed to what a save needs.
     pub state: Box<op_editor_core::EditorState>,
+    /// The outgoing image registry must travel with the saved document;
+    /// opening the incoming document may activate an unrelated registry.
+    pub thumbnails: jian_ops_schema::image_thumbs::ImageThumbSnapshot,
     /// The replaced document had edits that were never saved.
     pub had_unsaved_changes: bool,
     /// The replaced run's conversation title — a name for the saved copy.
@@ -31,9 +34,11 @@ impl WidgetHostNative {
     pub(in crate::widget_host) fn park_document_replaced_by_home(&mut self) {
         let had_unsaved_changes = self.editor_state.is_dirty();
         let title = self.editor_state.chat.title.trim().to_string();
+        let thumbnails = jian_ops_schema::image_thumbs::capture_snapshot();
         let state = op_editor_core::request_snapshot::narrowed_snapshot(&mut self.editor_state);
         self.replaced_home_document = Some(ReplacedHomeDocument {
             state: Box::new(state),
+            thumbnails,
             had_unsaved_changes,
             title,
         });

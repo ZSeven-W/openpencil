@@ -38,14 +38,39 @@ pub(super) fn paint_builtin_agent_form(
     }
     .paint(cx.backend, card, &tokens_from_theme(theme));
     paint_identity(cx, theme, settings, ui, agent, index, card, touch);
-    agent_settings_builtin_parts::paint_kind_toggle(
-        cx,
-        theme,
-        agent,
-        card,
-        t_settings(ui, "builtin.apiFormat"),
-        touch,
-    );
+    if (ui.home.visible || ui.workspace.visible)
+        && agent.preset != op_editor_core::BuiltinAgentPresetKey::Custom
+    {
+        let r = agent_settings_builtin_parts::kind_rect(card, touch);
+        let hint = ellipsize(
+            cx,
+            t_settings(ui, "builtin.setupAutoConnection"),
+            if touch { card.size.x - 32.0 } else { r.size.x },
+            12.0,
+        );
+        draw_text(
+            cx,
+            &hint,
+            12.0,
+            theme.muted_foreground,
+            if touch {
+                card.origin.x + 16.0
+            } else {
+                r.origin.x
+            },
+            jian_widgets::centered_text_baseline_y(r, 12.0),
+        );
+    } else {
+        agent_settings_builtin_parts::paint_kind_toggle(
+            cx,
+            theme,
+            agent,
+            card,
+            t_settings(ui, "builtin.apiFormat"),
+            touch,
+        );
+    }
+
     agent_settings_builtin_parts::paint_provider_select(
         cx,
         theme,
@@ -150,7 +175,15 @@ fn paint_identity(
         origin: Point2D::new(card.origin.x, card.origin.y + if touch { 8.0 } else { 6.0 }),
         size: Point2D::new(card.size.x, 44.0),
     };
-    let status = if api_key.trim().is_empty() {
+    let status = if index.is_none() && api_key.trim().is_empty() {
+        if settings.builtin_preset_menu_open
+            == Some(op_editor_core::agent_settings::BuiltinAgentPresetMenuTarget::Draft)
+        {
+            t_settings(ui, "builtin.setupChooseService")
+        } else {
+            t_settings(ui, "builtin.setupAddKey")
+        }
+    } else if api_key.trim().is_empty() {
         t_settings(ui, "builtin.errorApiKeyEmpty")
     } else if model.trim().is_empty() {
         t_settings(ui, "builtin.model")

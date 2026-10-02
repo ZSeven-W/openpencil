@@ -424,6 +424,25 @@ impl<'a> WorkspaceSurface<'a> {
             drawer_mode || !self.ui.sidebar_open,
             self.boards.len(),
         );
+        // Keep translated labels inside their actual hit targets. Paint uses
+        // measured text for centering; this conservative estimate reserves space.
+        let views = family_views(self.state.family);
+        let mut x = layout.view_segments.first().map_or(0.0, |r| r.origin.x);
+        let available = (layout.prev.unwrap_or(layout.zoom_out).origin.x - 12.0 - x).max(0.0);
+        let widths: Vec<f32> = views
+            .iter()
+            .map(|view| {
+                (header_button_width(paint::view_label(self.ui.locale, self.state.family, *view))
+                    - 17.0)
+                    .max(SEGMENT_W)
+            })
+            .collect();
+        let scale = (available / widths.iter().sum::<f32>().max(1.0)).min(1.0);
+        for (segment, width) in layout.view_segments.iter_mut().zip(widths) {
+            segment.origin.x = x;
+            segment.size.x = width * scale;
+            x += segment.size.x;
+        }
         if drawer_mode && self.state.drawer_open {
             layout.drawer = Some(Rect::xywh(
                 0.0,

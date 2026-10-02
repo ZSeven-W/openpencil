@@ -261,9 +261,8 @@ impl<'a> HomeSurface<'a> {
         if focused {
             layout::compact::collapse_for_focused_composer(&mut layout);
         }
-        if self.ui.touch_chrome() {
-            connect::drop_cli_row_for_touch(&mut layout);
-        }
+        connect::adapt_connect_card(&mut layout, self.ui);
+        recent_names::adapt_layout(&mut layout, self.recent_files.len());
         if self.state.variants_unavailable {
             layout.variants = Rect::ZERO;
         }
@@ -292,7 +291,7 @@ impl<'a> HomeSurface<'a> {
             self.current_work.is_some(),
             self.works_recent.len(),
         );
-        connect::drop_cli_row_for_touch(&mut layout);
+        connect::adapt_connect_card(&mut layout, self.ui);
         if self.state.variants_unavailable {
             layout.variants = Rect::ZERO;
         }
@@ -466,6 +465,11 @@ impl<'a> HomeSurface<'a> {
                 return Some(HomeHit::Tab(HomeFamily::ALL[index]));
             }
         }
+        for (index, rect) in layout.app_page_options.into_iter().enumerate() {
+            if rect.size.x > 0.0 && rect.contains(point) {
+                return Some(HomeHit::Segment(index as u8 + 2));
+            }
+        }
         for (index, rect) in layout.segment_options.into_iter().enumerate() {
             if rect.size.x > 0.0 && hits(rect) {
                 return Some(HomeHit::Segment(index as u8));
@@ -593,6 +597,12 @@ impl Widget for HomeSurface<'_> {
         node
     }
 }
+
+#[path = "home_surface_recent.rs"]
+mod recent_names;
+
+#[path = "home_surface_app_pages.rs"]
+mod app_pages;
 
 #[path = "home_surface_paint.rs"]
 mod paint;

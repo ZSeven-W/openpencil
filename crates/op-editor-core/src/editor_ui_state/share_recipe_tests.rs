@@ -11,6 +11,7 @@ fn recipe(brief: &str) -> ShareRecipe {
         device: HomeDevice::Mobile,
         ratio: SlideRatio::Classic43,
         info_kind: InfoKind::Data,
+        app_pages: Default::default(),
         style_guide: Some("editorial-dark".to_string()),
     }
 }

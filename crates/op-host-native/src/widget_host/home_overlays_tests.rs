@@ -312,3 +312,66 @@ fn the_home_picker_footer_opens_agent_settings_on_the_agents_tab() {
     );
     assert!(!host.editor_state().editor_ui.chat_model_picker.open);
 }
+
+#[test]
+fn home_settings_hover_exposes_provider_edit_and_owns_the_following_press() {
+    use op_editor_core::agent_settings::{BuiltinAgentField, SettingsFocus};
+    use op_editor_ui::widgets::agent_settings_panel::{content_viewport, AgentSettingsPanel};
+
+    let mut host = host_with_usable_agent();
+    host.last_viewport_w = W;
+    host.last_viewport_h = H;
+    host.editor_state_mut().editor_ui.home.composer_focused = false;
+    host.editor_state_mut()
+        .editor_ui
+        .home
+        .set_draft("keep this brief");
+    // Cmd+, can open settings while a Home picker is still present.
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
+    assert!(host.apply_toggle_agent_settings());
+    let panel = AgentSettingsPanel::for_editor(host.editor_state());
+    let content = content_viewport(panel.rect(W, H));
+    let y = content.origin.y
+        + op_editor_ui::widgets::agent_settings_panel::AGENTS_HERO_HEIGHT
+        + 28.0
+        + 28.0
+        + 30.0;
+    let point = Point2D::new(content.origin.x + content.size.x - 52.0, y);
+
+    assert!(host.apply_cursor_move(point.x, point.y));
+    assert_eq!(
+        host.editor_state()
+            .editor_ui
+            .agent_settings
+            .hover_builtin_agent,
+        0
+    );
+    assert_eq!(host.editor_state().editor_ui.home.hover, None);
+    assert!(host.apply_press(point.x, point.y, W, H));
+    assert_eq!(
+        host.editor_state().editor_ui.agent_settings.focus,
+        Some(SettingsFocus::BuiltinAgent {
+            index: 0,
+            field: BuiltinAgentField::DisplayName,
+        })
+    );
+    assert!(!host.editor_state().editor_ui.home.composer_focused);
+    assert_eq!(host.editor_state().editor_ui.home.draft, "keep this brief");
+    assert_eq!(host.editor_state().editor_ui.home.pressed, None);
+}
+
+#[test]
+fn home_settings_scrim_keeps_hover_and_press_off_the_home_composer() {
+    let mut host = host_with_usable_agent();
+    host.last_viewport_w = W;
+    host.last_viewport_h = H;
+    host.editor_state_mut().editor_ui.home.composer_focused = false;
+    assert!(host.apply_toggle_agent_settings());
+    let blank = Point2D::new(8.0, H - 8.0);
+    host.apply_cursor_move(blank.x, blank.y);
+    assert_eq!(host.editor_state().editor_ui.home.hover, None);
+    assert!(host.apply_press(blank.x, blank.y, W, H));
+    assert!(host.home_visible());
+    assert!(!host.editor_state().editor_ui.home.composer_focused);
+    assert_eq!(host.editor_state().editor_ui.home.pressed, None);
+}

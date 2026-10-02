@@ -17,14 +17,9 @@ impl WidgetHostNative {
         viewport_height: f32,
     ) -> bool {
         let cancelled = self.cancel_native_touch_gestures();
-        if self
-            .wheel_home_model_picker(x, y, dy, viewport_width, viewport_height)
-            .is_some()
+        if let Some(scrolled) = self.scroll_home_surface(x, y, dy, viewport_width, viewport_height)
         {
-            return true;
-        }
-        if self.try_scroll_home(x, y, dy, viewport_width, viewport_height) {
-            return true;
+            return scrolled || cancelled;
         }
         if self.try_scroll_missing_fonts_picker(x, y, dy, viewport_width, viewport_height) {
             return true;

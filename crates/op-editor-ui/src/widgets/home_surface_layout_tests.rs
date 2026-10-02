@@ -42,7 +42,7 @@ fn layout_at_1440_matches_the_approved_composition() {
         184.57,
         0.5,
     );
-    // Both panels: same y, both 370 tall, 18 px column gap, ≈1.05:1.
+    // Both panels: same y, both 370 tall; the page-count row uses input space, 18 px column gap, ≈1.05:1.
     assert_eq!(layout.composer.origin.y, layout.preview.origin.y);
     assert_close(layout.composer.size.y, 370.0, 0.5);
     assert_close(layout.preview.size.y, 370.0, 0.5);
@@ -185,10 +185,10 @@ fn layout_at_1180_keeps_the_same_contracts_on_a_1164_column() {
 #[test]
 fn narrow_viewports_stack_the_panels() {
     let layout = layout(840.0, 900.0, HomeFamily::AppUi);
-    // Composer over preview, both full-width, 335 + 400 tall (the wide
+    // Composer over preview, both full-width, 383 + 400 tall (the wide
     // variant's stacked heights).
     assert!(layout.preview.origin.y > layout.composer.origin.y + layout.composer.size.y);
-    assert_close(layout.composer.size.y, 335.0, 0.5);
+    assert_close(layout.composer.size.y, 383.0, 0.5);
     assert_close(layout.preview.size.y, 400.0, 0.5);
     assert_close(layout.composer.origin.x, layout.preview.origin.x, 0.5);
     assert_close(layout.composer.size.x, layout.preview.size.x, 0.5);

@@ -102,7 +102,7 @@ pub fn content_height_for_ui(settings: &AgentSettings, touch: bool) -> f32 {
 }
 
 pub fn hit_test(content: Rect, settings: &AgentSettings, point: Point2D) -> BuiltinHit {
-    hit_test_with_touch(content, settings, point, false)
+    hit_test_with_touch(content, settings, point, false, false)
 }
 
 pub fn hit_test_for_ui(
@@ -111,7 +111,13 @@ pub fn hit_test_for_ui(
     ui: &EditorUiState,
     point: Point2D,
 ) -> BuiltinHit {
-    hit_test_with_touch(content, settings, point, ui.touch_chrome())
+    hit_test_with_touch(
+        content,
+        settings,
+        point,
+        ui.touch_chrome(),
+        ui.home.visible || ui.workspace.visible,
+    )
 }
 
 fn hit_test_with_touch(
@@ -119,6 +125,7 @@ fn hit_test_with_touch(
     settings: &AgentSettings,
     point: Point2D,
     touch: bool,
+    novice: bool,
 ) -> BuiltinHit {
     let y = agents_body_top(content);
     let empty = settings.builtin_agents.is_empty() && settings.builtin_agent_draft.is_none();
@@ -181,7 +188,9 @@ fn hit_test_with_touch(
                     }
                 }
             }
-            if agent_settings_builtin_parts::kind_toggle_target(agent, card, point, touch).is_some()
+            if !(novice && agent.preset != BuiltinAgentPresetKey::Custom)
+                && agent_settings_builtin_parts::kind_toggle_target(agent, card, point, touch)
+                    .is_some()
             {
                 return BuiltinHit::ToggleKind(index);
             }
@@ -272,7 +281,9 @@ fn hit_test_with_touch(
                 }
             }
         }
-        if agent_settings_builtin_parts::kind_toggle_target(agent, card, point, touch).is_some() {
+        if !(novice && agent.preset != BuiltinAgentPresetKey::Custom)
+            && agent_settings_builtin_parts::kind_toggle_target(agent, card, point, touch).is_some()
+        {
             return BuiltinHit::ToggleDraftKind;
         }
         for (row, field) in [

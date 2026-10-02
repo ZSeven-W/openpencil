@@ -45,9 +45,7 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use op_ai::chat_provider::{
-    ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest, ChatToolExecutor, StopReason,
-};
+use op_ai::chat_provider::{ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest};
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::EditorState;
 use op_orchestrator::{AbortFlag, AppendContext, DesignRequest};
@@ -66,7 +64,7 @@ use screen_sets::requests_listed_whole_screens;
 /// Internal host-op name the modify worker sends over the chat tool
 /// channel; intercepted by `chat_session::drain_tool_requests` (never
 /// advertised to any model).
-pub const APPLY_MODIFICATION_OP: &str = "__apply_design_modification";
+pub use op_chat_agent::chat_modify::APPLY_MODIFICATION_OP;
 
 /// TS `classifyIntent` abort budget (`ai-chat-intent-classifier.ts:26`).
 const CLASSIFY_TIMEOUT: Duration = Duration::from_secs(8);
@@ -261,11 +259,17 @@ fn classify_intent_for_standard_route_inner(
     if is_non_request_text(text) {
         return DesignIntent::Chat;
     }
-    // A whole-screen *draw* (creation verb + page noun, e.g. "重新画一个
-    // search 页面") is unambiguously a new screen — it must win over the
-    // modify classifier so it routes to the new-frame path, not edit-in-place.
-    // It already excludes existing-screen context ("把发现页改成深色" has no
-    // creation verb), so genuine edits still fall through to Modify below.
+    use op_chat_agent::workspace_edit::{resolve_workspace_edit_scope, WorkspaceEditScope};
+    if op_chat_agent::workspace_edit::is_workspace_question(state, text) {
+        return DesignIntent::Chat;
+    }
+    match resolve_workspace_edit_scope(state, text) {
+        WorkspaceEditScope::Target(_) => return DesignIntent::Modify,
+        WorkspaceEditScope::NeedsTarget => return DesignIntent::Chat,
+        WorkspaceEditScope::NotApplicable => {}
+    }
+    // Normal-workspace resolution strips replacement copy first: a requested
+    // title such as "Create a new page" is data, not a creation instruction.
     if requests_new_whole_screen(text) {
         return DesignIntent::New;
     }
@@ -696,6 +700,7 @@ mod context;
 mod turns;
 
 pub use context::*;
+pub use op_chat_agent::workspace_edit;
 pub use turns::*;
 
 #[cfg(test)]

@@ -199,6 +199,67 @@ fn pressing_back_shows_home_and_keeps_the_workspace_active() {
 }
 
 #[test]
+fn home_professional_after_workspace_back_restores_the_canvas_on_desktop_and_touch() {
+    for (touch, width, height) in [(false, W, H), (true, 390.0, 844.0)] {
+        let mut host = host_with_boards_preserving(HomeFamily::AppUi, 3, |state| {
+            state.editor_ui.touch = touch;
+            if touch {
+                state.editor_ui.size_class = op_editor_core::size_class::EditorSizeClass::Compact;
+            }
+        });
+        host.editor_state_mut().editor_ui.workspace.previous_tool = Some(Tool::Rect);
+        let before = host.editor_state().doc.clone();
+        let history_depth = host.editor_state().history.past.len();
+        let back = if touch {
+            op_editor_ui::widgets::WorksReader::for_editor(host.editor_state())
+                .expect("touch reader")
+                .layout(width, height)
+                .back
+        } else {
+            op_editor_ui::widgets::WorkspaceSurface::for_editor_at(host.editor_state(), 0)
+                .expect("desktop workspace")
+                .layout(width, height)
+                .back
+        };
+        assert!(host.apply_press(back.origin.x + 4.0, back.origin.y + 4.0, width, height));
+        host.apply_release_with_viewport(width, height);
+        assert!(host.home_visible());
+        assert!(host.editor_state().editor_ui.workspace.visible);
+        assert_eq!(host.editor_state().tool, Tool::Hand);
+
+        let professional = op_editor_ui::widgets::HomeSurface::for_editor(host.editor_state())
+            .expect("home after Back")
+            .layout(width, height)
+            .professional;
+        assert!(host.apply_press(
+            professional.origin.x + 4.0,
+            professional.origin.y + 4.0,
+            width,
+            height
+        ));
+        host.apply_release_with_viewport(width, height);
+
+        assert!(!host.home_visible());
+        assert!(!host.workspace_visible());
+        assert!(!host.works_reader_visible());
+        assert!(!host.editor_state().editor_ui.workspace.visible);
+        assert_eq!(
+            host.editor_state().editor_ui.entry_surface,
+            EntrySurface::Canvas
+        );
+        assert_eq!(host.editor_state().tool, Tool::Rect);
+        assert_eq!(host.editor_state().doc, before);
+        assert_eq!(host.editor_state().history.past.len(), history_depth);
+        assert!(host.editor_state().editor_ui.workspace.active);
+        assert_eq!(
+            host.editor_state().editor_ui.workspace.phase,
+            WorkspacePhase::Generating,
+            "entering professional mode does not stop the run"
+        );
+    }
+}
+
+#[test]
 fn home_footer_returns_to_the_live_workspace() {
     let mut host = host_with_boards(HomeFamily::AppUi, 3);
     host.editor_state_mut().editor_ui.workspace.phase = WorkspacePhase::Done;

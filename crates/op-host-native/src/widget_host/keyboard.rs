@@ -20,10 +20,15 @@ impl WidgetHostNative {
             // The overlays Home opens own the keyboard above the sheet:
             // the model picker's search box takes text, the sign-in
             // modal has no inputs so it just swallows the key.
+            if self.editor_state.editor_ui.login_modal_open
+                || self.editor_state.editor_ui.account_menu_open
+            {
+                return true;
+            }
             if self.editor_state.editor_ui.chat_model_picker.open {
                 return self.apply_chat_model_picker_text(c);
             }
-            if !self.editor_state.editor_ui.login_modal_open {
+            if self.editor_state.editor_ui.home_composer_owns_keyboard() {
                 return self.home_text(c);
             }
             return true;

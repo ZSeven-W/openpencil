@@ -34,8 +34,8 @@ const HERO_MARGIN_BOTTOM: f32 = 16.0;
 const GRID_COLS: usize = 4;
 const GRID_GAP: f32 = 5.0;
 const GRID_MARGIN_BOTTOM: f32 = 15.0;
-/// `.mobile-task{min-height:63px}` — icon 22, gap 6, label 11.
-const TILE_H: f32 = 63.0;
+/// Icon 22 + a real 6 px gap + two 14 px label lines, with outer padding.
+const TILE_H: f32 = 72.0;
 /// `.mobile-composer`: 10/13/12 padding, radius 17.
 const COMPOSER_PAD_X: f32 = 13.0;
 const COMPOSER_PAD_TOP: f32 = 10.0;
@@ -137,13 +137,19 @@ pub(super) fn compact_layout_for_scrolled(
 
     // ── hero ─────────────────────────────────────────────────────────
     let welcome = translate(HOME_TOPBAR_H + PAGE_PAD_TOP, HERO_H1_H);
+    let subtitle_height =
+        if copy::estimate_text_w(copy::home_str(locale, "home.welcome.sub"), 12.0) > content_w {
+            HERO_SUB_H * 2.0
+        } else {
+            HERO_SUB_H
+        };
     let welcome_sub = translate(
         welcome.origin.y - scroll + HERO_H1_H + HERO_SUB_GAP,
-        HERO_SUB_H,
+        subtitle_height,
     );
 
     // ── the 2×4 task grid (7 tasks + the weakened blank tile) ────────
-    let grid_y = welcome_sub.origin.y - scroll + HERO_SUB_H + HERO_MARGIN_BOTTOM;
+    let grid_y = welcome_sub.origin.y - scroll + subtitle_height + HERO_MARGIN_BOTTOM;
     let tile_w = (content_w - GRID_GAP * (GRID_COLS as f32 - 1.0)) / GRID_COLS as f32;
     let tabs_row = translate(grid_y, TILE_H * 2.0 + GRID_GAP);
     let mut tabs = [Rect::ZERO; 7];
@@ -166,9 +172,11 @@ pub(super) fn compact_layout_for_scrolled(
 
     // ── the compact composer card ────────────────────────────────────
     let composer_y = grid_y + TILE_H * 2.0 + GRID_GAP + GRID_MARGIN_BOTTOM;
+    let pages_h = super::super::app_pages::height(task);
     let composer_h = COMPOSER_PAD_TOP
         + LABEL_ROW_H
         + LABEL_ROW_GAP
+        + pages_h
         + INPUT_H
         + INPUT_TOOLS_GAP
         + TOOLS_H
@@ -216,9 +224,14 @@ pub(super) fn compact_layout_for_scrolled(
         );
         option_x += option_widths[index];
     }
+    let app_page_options = super::super::app_pages::options(
+        task,
+        Rect::xywh(inner_x, label_row.origin.y + LABEL_ROW_H, inner_w, pages_h),
+        locale,
+    );
     let input_box = Rect::xywh(
         inner_x,
-        label_row.origin.y + LABEL_ROW_H + LABEL_ROW_GAP,
+        label_row.origin.y + LABEL_ROW_H + LABEL_ROW_GAP + pages_h,
         inner_w,
         INPUT_H,
     );
@@ -335,6 +348,7 @@ pub(super) fn compact_layout_for_scrolled(
         label_row,
         segment,
         segment_options,
+        app_page_options,
         input_box,
         tools_row,
         screenshot,
@@ -400,6 +414,7 @@ pub(crate) fn collapse_for_focused_composer(layout: &mut HomeLayout) {
         lift(rect);
     }
     layout.segment_options.iter_mut().for_each(lift);
+    layout.app_page_options.iter_mut().for_each(lift);
     layout.connect_rows.iter_mut().for_each(lift);
 
     layout.tabs_row = Rect::ZERO;

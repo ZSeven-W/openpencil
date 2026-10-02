@@ -20,7 +20,7 @@ pub mod drawer;
 mod reader;
 #[path = "workspace_variants.rs"]
 mod variants;
-use super::{EditorUiState, LeftPanelTab};
+use super::{EditorUiState, EntrySurface, LeftPanelTab};
 use crate::quality_report::QualityReport;
 use crate::tool::Tool;
 pub use reader::{
@@ -509,6 +509,22 @@ impl WorkspaceState {
 }
 
 impl EditorUiState {
+    /// Open the professional canvas from Home on every host. Home may
+    /// cover a live desktop workspace or a touch reader, so both must
+    /// release the canvas. An already-professional tool stays selected;
+    /// only leaving a normal workspace restores its saved tool.
+    pub fn enter_professional_from_home(&mut self, current_tool: Tool) -> Tool {
+        self.home.hide();
+        self.entry_surface = EntrySurface::Canvas;
+        if self.workspace.visible {
+            let restore = self.workspace.previous_tool.unwrap_or(Tool::Select);
+            self.workspace.enter_professional();
+            restore
+        } else {
+            current_tool
+        }
+    }
+
     /// Whether the AI chat panel is pinned into a left column right
     /// now — the workspace's dock while the workspace is up, else the
     /// professional editor's Chat tab. THE one predicate answering "is

@@ -60,6 +60,8 @@ mod editor_auth;
 #[cfg(all(feature = "editor", test))]
 mod editor_auth_window_tests;
 #[cfg(feature = "editor")]
+mod editor_back;
+#[cfg(feature = "editor")]
 mod editor_builtin_provider;
 #[cfg(feature = "editor")]
 mod editor_chat;
@@ -151,6 +153,8 @@ pub use editor_auth::{
     SHELL_ACTION_OPEN_LANGUAGE_PICKER, SHELL_ACTION_OPEN_LOGIN_WEBVIEW, SHELL_ACTION_REQUEST_LOGIN,
     SHELL_ACTION_WINDOW_CLOSE, SHELL_ACTION_WINDOW_MINIMIZE, SHELL_ACTION_WINDOW_ZOOM,
 };
+#[cfg(feature = "editor")]
+pub use editor_back::op_editor_back;
 #[cfg(feature = "editor")]
 pub use editor_chat_attachment::{op_editor_attach_chat_image, SHELL_ACTION_PICK_CHAT_ATTACHMENT};
 #[cfg(feature = "editor")]

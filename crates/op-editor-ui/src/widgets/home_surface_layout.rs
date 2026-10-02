@@ -85,7 +85,7 @@ pub const MORE_POPOVER_W: f32 = 248.0;
 pub const MORE_ROW_H: f32 = 46.0;
 const MORE_CAPTION_H: f32 = 26.0;
 /// Fixed recent-project chip width (names ellipsize in paint).
-pub const RECENT_CHIP_W: f32 = 132.0;
+pub const RECENT_CHIP_W: f32 = 260.0;
 
 /// Every rect the surface paints, in viewport coordinates (already
 /// scroll-translated). Zero-sized rects mark absent targets.
@@ -122,6 +122,7 @@ pub struct HomeLayout {
     /// (zero-padded to 3).
     pub segment: Rect,
     pub segment_options: [Rect; 3],
+    pub app_page_options: [Rect; 2],
     pub input_box: Rect,
     pub tools_row: Rect,
     pub screenshot: Rect,
@@ -388,16 +389,17 @@ pub(crate) fn wide_layout_for_scrolled(
 
     // ── the two panels ─────────────────────────────────────────────
     let panels_y = tabs_y + TAB_H + TABS_ROW_PAD_BOTTOM + TABS_PANELS_GAP;
+    let pages_h = super::app_pages::height(task);
     let (composer, preview) = if stacked {
         let composer = Rect::xywh(
             content_x,
             panels_y + scroll,
             content_w,
-            PANEL_H_STACKED_COMPOSER,
+            PANEL_H_STACKED_COMPOSER + pages_h,
         );
         let preview = Rect::xywh(
             content_x,
-            panels_y + PANEL_H_STACKED_COMPOSER + PANEL_GAP + scroll,
+            panels_y + PANEL_H_STACKED_COMPOSER + pages_h + PANEL_GAP + scroll,
             content_w,
             PANEL_H_STACKED_PREVIEW,
         );
@@ -459,11 +461,16 @@ pub(crate) fn wide_layout_for_scrolled(
         inner_w,
         TOOLS_BAND_H,
     );
+    let app_page_options = super::app_pages::options(
+        task,
+        Rect::xywh(inner_x, label_row.origin.y + LABEL_ROW_H, inner_w, pages_h),
+        locale,
+    );
     let input_box = Rect::xywh(
         inner_x,
-        label_row.origin.y + LABEL_ROW_H,
+        label_row.origin.y + LABEL_ROW_H + pages_h,
         inner_w,
-        (tools_row.origin.y - (label_row.origin.y + LABEL_ROW_H)).max(INPUT_MIN_H),
+        (tools_row.origin.y - (label_row.origin.y + LABEL_ROW_H + pages_h)).max(INPUT_MIN_H),
     );
     let screenshot = Rect::xywh(
         tools_row.origin.x + 1.0,
@@ -633,7 +640,7 @@ pub(crate) fn wide_layout_for_scrolled(
 
     let (connect_card, connect_rows) = connect_card_rects(composer);
 
-    HomeLayout {
+    let mut layout = HomeLayout {
         open_file,
         account,
         professional,
@@ -649,6 +656,7 @@ pub(crate) fn wide_layout_for_scrolled(
         label_row,
         segment,
         segment_options,
+        app_page_options,
         input_box,
         tools_row,
         screenshot,
@@ -677,7 +685,9 @@ pub(crate) fn wide_layout_for_scrolled(
         settings: Rect::ZERO,
         bottom_nav: Rect::ZERO,
         nav_items: [Rect::ZERO; 3],
-    }
+    };
+    super::recent_names::adapt_layout(&mut layout, 5);
+    layout
 }
 
 /// The furthest `scroll_y` may go before the page's last row leaves the

@@ -223,7 +223,10 @@ fn step_tag_content_renders_as_progress_not_raw_bubble() {
     );
 
     assert_eq!(items[0].steps.len(), 1);
-    assert_eq!(items[0].steps[0].label, "Checking guidelines");
+    assert_eq!(
+        items[0].steps[0].label,
+        op_i18n::translate(op_i18n::Locale::EnUs, "ai.work.prepare")
+    );
     assert!(items[0].steps[0].active);
     assert!(
         items[0].bubble.is_none(),

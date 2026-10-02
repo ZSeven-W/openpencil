@@ -77,6 +77,8 @@ fn new_design_request(user: &str, attachments: Vec<ChatAttachment>) -> WebStanda
         document_json: None,
         editor_meta: None,
         selected_ids: Vec::new(),
+        workspace_visible: false,
+        workspace_selected: 0,
         active_page_id: None,
         agent_team_size: None,
         history: Vec::new(),

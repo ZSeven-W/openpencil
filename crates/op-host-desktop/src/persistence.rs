@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use op_editor_core::EditorState;
+use op_editor_core::{EditorState, PenNodeExt};
 use op_host_native::WidgetHostNative;
 #[cfg(test)]
 use op_host_services::doc_io::active_page_bbox;
@@ -124,7 +124,11 @@ pub(crate) fn fit_loaded_document(
     window: Option<&winit::window::Window>,
 ) {
     let (vw, vh) = viewport_size_for_window(window);
-    host.fit_content_to_viewport(vw, vh);
+    if host.workspace_visible() {
+        host.apply_workspace_fit(vw, vh);
+    } else {
+        host.fit_content_to_viewport(vw, vh);
+    }
     // A shared document (one carrying a share recipe) opens in the Studio
     // workspace with its Make-one-like-this banner; any other stays put.
     host.adopt_shared_recipe_view(vw, vh);
@@ -202,6 +206,10 @@ fn load_into_host(
     ) {
         return Ok(None);
     }
+    // Home, its recent list, and an ordinary workspace all open into the
+    // same simple view. A hidden workspace can belong to a professional
+    // editor, so its existence (or the startup preference) is not the mode.
+    let open_in_normal_mode = host.home_visible() || host.workspace_visible();
     let loaded_source_state = crate::figma_import_session::capture_output_state(path)?;
     let locale = host.editor_state().editor_ui.locale;
     let loaded = load_editor_state_with_report(path, locale);
@@ -225,11 +233,36 @@ fn load_into_host(
     if !host.replace_editor_state(state) {
         return Ok(None);
     }
+    if open_in_normal_mode {
+        open_loaded_normal_workspace(host);
+    }
     host.editor_state_mut().mark_saved_revision();
     host.force_rotate_layer_panel_owner();
     host.mark_editor_state_dirty();
     host.arm_missing_fonts_detection();
     Ok(Some(bound_path))
+}
+
+/// Reopen existing work without inventing a generation or carrying the
+/// previous document's brief, task family, selection, or running state.
+fn open_loaded_normal_workspace(host: &mut WidgetHostNative) {
+    let sizes: Vec<_> = host
+        .editor_state()
+        .active_children()
+        .iter()
+        .filter(|node| matches!(node, jian_ops_schema::node::PenNode::Frame(_)))
+        .filter_map(|node| Some((node.width_px()?, node.height_px()?)))
+        .collect();
+    let family = op_editor_core::infer_reading_family(&sizes);
+    let now_ms = host.now_ms();
+    let state = host.editor_state_mut();
+    let ui = &mut state.editor_ui;
+    ui.entry_surface = op_editor_core::EntrySurface::Home;
+    ui.workspace.open_for_reading(family, now_ms);
+    ui.workspace.view = op_editor_core::WorkspaceView::default_for(family);
+    ui.workspace.previous_tool = Some(state.tool);
+    ui.enter_chat_tab();
+    state.tool = op_editor_core::Tool::Hand;
 }
 
 /// Cmd+O — pop the Open dialog and replace the current document.
@@ -691,3 +724,7 @@ pub fn show_error_dialog_public(
 #[cfg(test)]
 #[path = "persistence_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "persistence_open_mode_tests.rs"]
+mod open_mode_tests;

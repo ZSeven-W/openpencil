@@ -1,7 +1,7 @@
 //! Home surface input routing for the native widget host.
 
 use super::WidgetHostNative;
-use op_editor_core::{EntrySurface, HomeDevice, HomeFamily, HomeHit, InfoKind, SlideRatio};
+use op_editor_core::{HomeDevice, HomeFamily, HomeHit, InfoKind, SlideRatio};
 use op_editor_ui::widgets::HomeSurface;
 use op_editor_ui::{Point2D, Rect};
 
@@ -133,8 +133,19 @@ impl WidgetHostNative {
                 self.editor_state.editor_ui.home.more_open = open;
             }
             HomeHit::Segment(index) => {
+                let old_example = HomeSurface::for_editor(&self.editor_state)
+                    .map(|s| s.example_prompt().to_string());
+                let replace_example = old_example.as_deref().is_some_and(|s| {
+                    !self.editor_state.editor_ui.home.draft.is_empty()
+                        && self.editor_state.editor_ui.home.draft == s
+                });
                 let home = &mut self.editor_state.editor_ui.home;
                 match home.task {
+                    HomeFamily::AppUi if index >= 2 => home.set_app_pages(if index == 3 {
+                        op_editor_core::AppPages::Multiple
+                    } else {
+                        op_editor_core::AppPages::Single
+                    }),
                     HomeFamily::AppUi => home.set_device(match index {
                         1 => HomeDevice::Desktop,
                         _ => HomeDevice::Mobile,
@@ -151,6 +162,13 @@ impl WidgetHostNative {
                     _ => {}
                 }
                 home.art_switched_at_ms = self.now_ms.max(1);
+                if replace_example {
+                    let new_example = HomeSurface::for_editor(&self.editor_state)
+                        .map(|s| s.example_prompt().to_string());
+                    if let Some(example) = new_example {
+                        self.editor_state.editor_ui.home.set_draft(example);
+                    }
+                }
             }
             HomeHit::Attachment => {
                 // The existing chat attachment picker is the one M1-supported
@@ -197,16 +215,10 @@ impl WidgetHostNative {
                 home.use_example(&example);
             }
             HomeHit::Professional => {
-                self.editor_state.editor_ui.home.hide();
-                self.editor_state.editor_ui.entry_surface = EntrySurface::Canvas;
-                // A phone reader left under Home would come straight back:
-                // 专业 means the full mobile canvas, same document.
-                if self.editor_state.editor_ui.works_reader_visible() {
-                    let workspace = &mut self.editor_state.editor_ui.workspace;
-                    let restore = workspace.previous_tool;
-                    workspace.enter_professional();
-                    self.editor_state.tool = restore.unwrap_or(op_editor_core::Tool::Select);
-                }
+                self.editor_state.tool = self
+                    .editor_state
+                    .editor_ui
+                    .enter_professional_from_home(self.editor_state.tool);
             }
             HomeHit::ModeNormal => {
                 // Home IS the normal mode: the 普通 half of the compact
@@ -276,7 +288,13 @@ impl WidgetHostNative {
                     self.editor_state.editor_ui.login_modal_hover = None;
                 }
             }
-            HomeHit::ConnectApiKey | HomeHit::ConnectCli => {
+            HomeHit::ConnectApiKey => {
+                op_editor_ui::widgets::agent_settings_press_focus::open_builtin_setup(
+                    &mut self.editor_state,
+                    self.now_ms,
+                );
+            }
+            HomeHit::ConnectCli => {
                 self.editor_state.editor_ui.home.connect_card_open = false;
                 self.editor_state.editor_ui.agent_settings_open = true;
                 self.editor_state.editor_ui.agent_settings.tab =
@@ -441,7 +459,7 @@ impl WidgetHostNative {
     }
 
     pub(in crate::widget_host) fn home_text(&mut self, c: char) -> bool {
-        if !self.home_visible() || c.is_control() {
+        if !self.editor_state.editor_ui.home_composer_owns_keyboard() || c.is_control() {
             return false;
         }
         let changed = self
@@ -456,7 +474,7 @@ impl WidgetHostNative {
     }
 
     pub(in crate::widget_host) fn home_backspace(&mut self) -> Option<bool> {
-        if !self.home_visible() {
+        if !self.editor_state.editor_ui.home_composer_owns_keyboard() {
             return None;
         }
         self.editor_state.editor_ui.home.backspace(self.now_ms);
@@ -465,8 +483,11 @@ impl WidgetHostNative {
     }
 
     pub(in crate::widget_host) fn home_delete(&mut self) -> Option<bool> {
-        if !self.home_visible() {
+        if !self.home_visible() || self.editor_state.editor_ui.agent_settings_open {
             return None;
+        }
+        if !self.editor_state.editor_ui.home_composer_owns_keyboard() {
+            return Some(true);
         }
         self.editor_state.editor_ui.home.delete_forward(self.now_ms);
         self.mark_dirty();
@@ -474,7 +495,7 @@ impl WidgetHostNative {
     }
 
     pub(in crate::widget_host) fn home_caret(&mut self, forward: bool, extend: bool) -> bool {
-        if !self.home_visible() {
+        if !self.editor_state.editor_ui.home_composer_owns_keyboard() {
             return false;
         }
         self.editor_state
@@ -486,7 +507,7 @@ impl WidgetHostNative {
     }
 
     pub(in crate::widget_host) fn home_select_all(&mut self) -> bool {
-        if !self.home_visible() {
+        if !self.editor_state.editor_ui.home_composer_owns_keyboard() {
             return false;
         }
         self.editor_state.editor_ui.home.select_all(self.now_ms);
@@ -499,7 +520,7 @@ impl WidgetHostNative {
         text: &str,
         cursor: Option<(usize, usize)>,
     ) -> bool {
-        if !self.home_visible() {
+        if !self.editor_state.editor_ui.home_composer_owns_keyboard() {
             return false;
         }
         let input = &mut self.editor_state.editor_ui.home.input;
@@ -514,7 +535,7 @@ impl WidgetHostNative {
     }
 
     pub(in crate::widget_host) fn home_ime_commit(&mut self, text: &str) -> bool {
-        if !self.home_visible() {
+        if !self.editor_state.editor_ui.home_composer_owns_keyboard() {
             return false;
         }
         if !text.is_empty() {
@@ -688,7 +709,7 @@ mod tests {
         assert!(!host.home_visible());
         assert_eq!(
             host.editor_state().editor_ui.entry_surface,
-            EntrySurface::Canvas
+            op_editor_core::EntrySurface::Canvas
         );
     }
 

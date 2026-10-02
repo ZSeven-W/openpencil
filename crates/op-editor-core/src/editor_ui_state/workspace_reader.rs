@@ -22,6 +22,8 @@ pub enum ReaderHit {
     ModeNormal,
     /// The 专业 half: the full mobile canvas over the same document.
     ModeProfessional,
+    /// Save, save a copy or export without leaving the normal view.
+    More,
     /// Previous board.
     Prev,
     /// Next board.

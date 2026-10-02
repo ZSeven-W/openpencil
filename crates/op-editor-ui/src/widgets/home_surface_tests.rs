@@ -249,11 +249,13 @@ fn model_chip_label_reuses_the_chat_selection_and_empties_without_an_agent() {
 
 #[test]
 fn connect_card_rows_stack_without_overlap_inside_the_card() {
-    let state = visible_home();
+    let mut state = visible_home();
+    state.editor_ui.account_ui_available = true;
+    state.editor_ui.agent_settings.web_served_models = true;
     let home = HomeSurface::for_editor(&state).expect("home");
     let layout = home.layout(1440.0, 900.0);
     let (card, rows) = (layout.connect_card, layout.connect_rows);
-    assert_eq!(card.size, Point2D::new(440.0, 280.0));
+    assert_eq!(card.size, Point2D::new(440.0, 308.0));
     // Centred over the composer panel.
     assert_close(
         card.origin.x + card.size.x / 2.0
@@ -276,6 +278,8 @@ fn connect_card_rows_stack_without_overlap_inside_the_card() {
 #[test]
 fn connect_card_open_hides_home_hits_behind_the_modal() {
     let mut state = visible_home();
+    state.editor_ui.account_ui_available = true;
+    state.editor_ui.agent_settings.web_served_models = true;
     state.editor_ui.home.connect_card_open = true;
     let home = HomeSurface::for_editor(&state).expect("home");
     let layout = home.layout(1440.0, 900.0);
@@ -345,4 +349,42 @@ fn overlaps(a: Rect, b: Rect) -> bool {
         && b.origin.x < a.origin.x + a.size.x
         && a.origin.y < b.origin.y + b.size.y
         && b.origin.y < a.origin.y + a.size.y
+}
+
+#[test]
+fn novice_connect_card_only_offers_supported_paths() {
+    let mut state = visible_home();
+    state.editor_ui.touch = true;
+    state.editor_ui.size_class = op_editor_core::size_class::EditorSizeClass::Compact;
+    state.editor_ui.external_cli_available = false;
+    state.editor_ui.home.connect_card_open = true;
+    let home = HomeSurface::for_editor(&state).unwrap();
+    let layout = home.layout(390.0, 844.0);
+    assert_eq!(
+        layout.connect_rows[0],
+        Rect::ZERO,
+        "no hosted quota promise without that capability"
+    );
+    assert_eq!(
+        layout.connect_rows[2],
+        Rect::ZERO,
+        "phones cannot launch a CLI"
+    );
+    assert!(layout.connect_rows[1].size.y >= 44.0);
+    assert_eq!(
+        home.hit_test(390.0, 844.0, center(layout.connect_rows[1])),
+        Some(HomeHit::ConnectApiKey)
+    );
+    let mut capture = crate::widgets::test_capture_backend::CaptureBackend::default();
+    crate::widgets::Widget::paint(
+        &home,
+        &mut crate::widgets::PaintCx {
+            backend: &mut capture,
+        },
+        Rect::xywh(0.0, 0.0, 390.0, 844.0),
+    );
+    assert!(!capture
+        .texts
+        .iter()
+        .any(|(s, _)| s.contains("20") || s.contains("CLI")));
 }

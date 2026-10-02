@@ -25,6 +25,11 @@ impl WidgetHostNative {
         // The works reader carries its own header and bottom bar; the
         // editing app bar, dock and pills belong to the professional view.
         if self.works_reader_visible() {
+            self.paint_mobile_more_panel(
+                &mut PaintCx { backend: frame },
+                viewport_width,
+                viewport_height,
+            );
             return;
         }
         // Native touch chrome replaces the desktop top bar at every tablet
@@ -51,22 +56,7 @@ impl WidgetHostNative {
                 dock.paint(&mut cx, dock_rect);
             }
 
-            if self.editor_state.editor_ui.mobile_sheet
-                == Some(op_editor_core::size_class::MobileSheetKind::More)
-            {
-                let panel = self.mobile_sheet_rect(
-                    viewport_width,
-                    viewport_height,
-                    op_editor_core::size_class::MobileSheetKind::More,
-                );
-                let theme = theme_for(&self.editor_state.editor_ui);
-                op_editor_ui::widgets::mobile_chrome::paint_more_panel(
-                    &mut cx,
-                    &self.editor_state,
-                    &theme,
-                    panel,
-                );
-            }
+            self.paint_mobile_more_panel(&mut cx, viewport_width, viewport_height);
             // Contextual Properties and Delete actions for the selection.
             if self.selection_actions_visible() {
                 let theme = theme_for(&self.editor_state.editor_ui);
@@ -110,6 +100,23 @@ impl WidgetHostNative {
                 );
             }
         }
+    }
+
+    /// The normal reader and the professional canvas share the same file
+    /// actions sheet; only the surrounding chrome and available entries vary.
+    fn paint_mobile_more_panel(&self, cx: &mut PaintCx<'_>, width: f32, height: f32) {
+        use op_editor_core::size_class::MobileSheetKind;
+        if self.editor_state.editor_ui.mobile_sheet != Some(MobileSheetKind::More) {
+            return;
+        }
+        let panel = self.mobile_sheet_rect(width, height, MobileSheetKind::More);
+        let theme = theme_for(&self.editor_state.editor_ui);
+        op_editor_ui::widgets::mobile_chrome::paint_more_panel(
+            cx,
+            &self.editor_state,
+            &theme,
+            panel,
+        );
     }
 
     /// Mobile save-name dialog — scrim + centred card, painted with the

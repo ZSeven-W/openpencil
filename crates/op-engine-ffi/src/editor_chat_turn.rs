@@ -98,7 +98,16 @@ impl std::error::Error for MobileChatTurnError {}
 /// bubble — a swallowed error is exactly the "stuck at Thinking…" bug this
 /// module exists to prevent.
 pub(crate) async fn run_builtin_turn(turn: BuiltinChatTurn, tx: Sender<ChatDelta>) {
-    let emitted_done = match run_streaming_request(&turn, &tx).await {
+    run_builtin_turn_with_thinking(turn, tx, false).await;
+}
+
+/// Structured edits use the same model-specific reasoning controls as desktop.
+pub(crate) async fn run_builtin_turn_with_thinking(
+    turn: BuiltinChatTurn,
+    tx: Sender<ChatDelta>,
+    disable_thinking: bool,
+) {
+    let emitted_done = match run_streaming_request(&turn, &tx, disable_thinking).await {
         Ok(done) => done,
         Err(error) => {
             let _ = tx.send(ChatDelta::Error(error.to_string()));
@@ -132,6 +141,7 @@ pub(crate) fn build_mobile_chat_client() -> Result<reqwest::Client, MobileChatTu
 async fn run_streaming_request(
     turn: &BuiltinChatTurn,
     tx: &Sender<ChatDelta>,
+    disable_thinking: bool,
 ) -> Result<bool, MobileChatTurnError> {
     let client = build_mobile_chat_client()?;
     let (label, request, parse): (_, _, fn(&str) -> Option<ChatDelta>) = match turn.kind {
@@ -145,12 +155,18 @@ async fn run_streaming_request(
                 messages.push(json!({ "role": role.as_str(), "content": text }));
             }
             messages.push(json!({ "role": "user", "content": turn.prompt }));
-            let body = json!({
+            let mut body = json!({
                 "model": turn.model,
                 "stream": true,
                 "max_tokens": turn.max_output_tokens,
                 "messages": messages,
             });
+            op_chat_agent::chat_builtin_http::apply_reasoning_wire_control(
+                &mut body,
+                &turn.model,
+                disable_thinking,
+            );
+            op_chat_agent::backoff::apply_openrouter_reasoning(&mut body, &url, disable_thinking);
             (
                 "openai-compatible",
                 client.post(&url).bearer_auth(&turn.api_key).json(&body),

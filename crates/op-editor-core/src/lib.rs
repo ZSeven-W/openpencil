@@ -366,7 +366,7 @@ pub use editor_ui_state::home::site_import::{
 };
 pub use editor_ui_state::home::{HOME_ART_SWITCH_MS, HOME_ENTER_FRAME_MS, HOME_ENTER_WINDOW_MS};
 pub use editor_ui_state::home_example_draft::{
-    example_draft_template, refine_prompt, HomeSendMode,
+    example_draft_template, prepare_home_example_boards, refine_prompt, HomeSendMode,
 };
 pub use editor_ui_state::workspace::drawer::{
     WORKSPACE_DRAWER_BREAKPOINT, WORKSPACE_DRAWER_MIN_GUTTER, WORKSPACE_DRAWER_SLIDE_MS,
@@ -382,12 +382,12 @@ pub use editor_ui_state::{
     sanitize_share_text, MakeSameStage, ShareRecipe, SHARE_BRIEF_MAX_CHARS, SHARE_REDACTED,
 };
 pub use editor_ui_state::{
-    AssetCenterTab, BooleanOp, CloneField, CloneFormState, CommitDiffPatch, CommitDiffSummary,
-    CommitDiffView, CompositingPickerTarget, CustomPrompt, DesignMdPanelState, DesignMdRequest,
-    EditorUiState, EmbedHost, EntrySurface, ExportFormat, FileAction, FillType, FlexLayout,
-    FontPickerPurpose, GitBranchPickerMode, GitCandidateFile, GitCommitSummary, GitDiffTarget,
-    GitDiffView, GitFileEntry, GitOverflowView, GitPanelAction, GitPanelState, HomeDevice,
-    HomeFamily, HomeHit, HomeState, ImageAdjustmentField, ImageFillMode, InfoKind,
+    AppPages, AssetCenterTab, BooleanOp, CloneField, CloneFormState, CommitDiffPatch,
+    CommitDiffSummary, CommitDiffView, CompositingPickerTarget, CustomPrompt, DesignMdPanelState,
+    DesignMdRequest, EditorUiState, EmbedHost, EntrySurface, ExportFormat, FileAction, FillType,
+    FlexLayout, FontPickerPurpose, GitBranchPickerMode, GitCandidateFile, GitCommitSummary,
+    GitDiffTarget, GitDiffView, GitFileEntry, GitOverflowView, GitPanelAction, GitPanelState,
+    HomeDevice, HomeFamily, HomeHit, HomeState, ImageAdjustmentField, ImageFillMode, InfoKind,
     LayerContextMenuState, LeftPanelTab, Locale, MergeConflictRow, MergeResolveFile,
     MergeResolveState, MissingFontSurface, PaddingEditMode, PageRenameState, PencilCursorStyle,
     PreviewDeviceKind, PromptCenterFocus, PromptCenterState, PromptFilter, PropertyTab, RecentFile,

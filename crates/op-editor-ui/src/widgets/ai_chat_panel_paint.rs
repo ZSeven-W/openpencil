@@ -6,7 +6,6 @@
 use super::ai_chat_panel::{ExampleCard, HEADER_HEIGHT, PAD};
 use crate::theme::Theme;
 use crate::widgets::button::paint_button_feedback_wash;
-use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::text_metrics;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
@@ -142,7 +141,7 @@ pub(crate) fn paint_examples(
     theme: &Theme,
     rect: Rect,
     hint_label: &str,
-    _tip_label: &str,
+    tip_label: &str,
     examples: &[ExampleCard; 4],
     disabled: bool,
     hover: Option<usize>,
@@ -248,85 +247,21 @@ pub(crate) fn paint_examples(
         .to_jian();
     let tip_font = 10.0;
 
-    // Tip line 1 baseline: below the last pill by TIP_TOP_GAP, then baseline shift.
-    // tip1_top = last_pill_bottom + TIP_TOP_GAP
-    // tip1_baseline = tip1_top + tip_font * 0.35  (draw_text is baseline-relative)
-    let tip1_top = last_pill_bottom + TIP_TOP_GAP;
-    let tip1_y = tip1_top + tip_font * 0.35;
-
-    // Tip line 2: one full TIP_LINE_H below tip1's TOP (not its baseline) so they
-    // stack cleanly without overlap.
-    let tip2_top = tip1_top + TIP_LINE_H;
-    let tip2_y = tip2_top + tip_font * 0.35;
-
-    // The tip lines are optional hints — when the shrunk sheet has no room
-    // for them below the pill stack they drop out entirely instead of
-    // overlapping the composer block.
-    if tip1_top + TIP_LINE_H > content_bottom {
+    // Guidance is supplied by the same context that supplies the actions.
+    // It stays localised and avoids terminal instructions in a work editor.
+    let tip_top = last_pill_bottom + TIP_TOP_GAP;
+    if tip_label.is_empty() || tip_top + TIP_LINE_H > content_bottom {
         return;
     }
-    let tip2_fits = tip2_top + TIP_LINE_H <= content_bottom;
-
-    // Both tips are fitted to the card before they are centred. They are
-    // long fixed English sentences and the chat card is user-resizable, so
-    // an unfitted line runs off both edges of a narrow panel — and the
-    // paperclip that trails tip 2 goes with it.
-    let tip_max_w = (rect.size.x - PAD * 2.0).max(0.0);
-
-    // Tip line 1: "Tip: Export design to code via Claude Code in terminal."
-    let tip1 = text_metrics::fit_chrome(
+    let tip = text_metrics::fit_chrome(
         cx.backend,
-        "Tip: Export design to code via Claude Code in terminal.",
-        tip_max_w,
+        tip_label,
+        (rect.size.x - PAD * 2.0).max(0.0),
         tip_font,
     );
-    let tip1_layout = TextLayout::single_run(
-        &tip1,
-        "system-ui",
-        tip_font,
-        tip_color,
-        Point2D::new(0.0, 0.0),
-    );
-    let tip1_w = text_metrics::measure_chrome(cx.backend, &tip1, tip_font);
     cx.backend.draw_text(
-        &tip1_layout,
-        Point2D::new(rect.origin.x + (rect.size.x - tip1_w) / 2.0, tip1_y),
-    );
-
-    // Tip line 2: "Drop image / text file to chat or via 📎"
-    // The trailing paperclip is part of the line, so its width comes out of
-    // the budget the text is fitted to.
-    if !tip2_fits {
-        return;
-    }
-    let clip_size = tip_font * 1.2;
-    let clip_gap = 4.0;
-    let tip2_text = text_metrics::fit_chrome(
-        cx.backend,
-        "Drop image / text file to chat or via",
-        (tip_max_w - clip_gap - clip_size).max(0.0),
-        tip_font,
-    );
-    let tip2_layout = TextLayout::single_run(
-        &tip2_text,
-        "system-ui",
-        tip_font,
-        tip_color,
-        Point2D::new(0.0, 0.0),
-    );
-    let tip2_w = text_metrics::measure_chrome(cx.backend, &tip2_text, tip_font);
-    let total_w = tip2_w + clip_gap + clip_size;
-    let tip2_x = rect.origin.x + (rect.size.x - total_w) / 2.0;
-    cx.backend
-        .draw_text(&tip2_layout, Point2D::new(tip2_x, tip2_y));
-    // Inline paperclip icon after the text.
-    draw_icon(
-        cx.backend,
-        Icon::Paperclip,
-        Point2D::new(tip2_x + tip2_w + clip_gap, tip2_y - clip_size * 0.8),
-        clip_size,
-        (theme.muted_foreground).with_alpha(0.55 * opacity),
-        1.2,
+        &TextLayout::single_run(&tip, "system-ui", tip_font, tip_color, Point2D::ZERO),
+        Point2D::new(rect.origin.x + PAD, tip_top + tip_font * 0.35),
     );
 }
 

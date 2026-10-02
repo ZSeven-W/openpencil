@@ -15,6 +15,11 @@ impl WidgetHost {
     /// the composer's own focus or it could never be dismissed.
     pub(crate) fn text_input_focus_active(&self) -> bool {
         if self.editor_state.editor_ui.home.visible {
+            if !self.editor_state.editor_ui.home_composer_owns_keyboard() {
+                return self.editor_state.active_text_input().is_some()
+                    || (self.editor_state.editor_ui.agent_settings_open
+                        && self.editor_state.editor_ui.font_picker.open);
+            }
             if !self.editor_state.editor_ui.touch_chrome() {
                 return true;
             }
@@ -36,7 +41,7 @@ impl WidgetHost {
     /// and chat expose exact geometry; older fields fall back to the last
     /// pointer position so browser candidates never anchor at viewport (0, 0).
     pub(crate) fn ime_anchor_rect(&self) -> Option<Rect> {
-        if self.home_visible() && !self.editor_state.editor_ui.agent_settings_open {
+        if self.home_composer_owns_keyboard() {
             return self.home_ime_anchor_rect();
         }
         let configured = self

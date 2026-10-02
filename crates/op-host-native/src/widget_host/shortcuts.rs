@@ -556,6 +556,8 @@ impl WidgetHostNative {
             // hidden field cannot keep receiving text / IME events.
             self.release_property_keyboard_owner();
             self.editor_state.editor_ui.agent_settings_open = true;
+            self.editor_state.editor_ui.home.composer_focused = false;
+            self.editor_state.editor_ui.home.input.clear_composition();
             // The settings modal is now topmost. Do not leave a property-panel
             // image input alive underneath it or text/IME would keep routing
             // to an invisible query field.

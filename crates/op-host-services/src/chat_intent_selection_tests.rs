@@ -146,3 +146,74 @@ fn ambiguous_current_interface_completion_is_not_a_new_screen() {
         );
     }
 }
+
+#[test]
+fn ordinary_homepage_followup_captures_and_enforces_only_its_real_board() {
+    let mut state = EditorState::new();
+    state.active_children_mut().clear();
+    for (id, name) in [
+        ("coffee-home", "01 咖啡首页"),
+        ("menu", "02 菜单"),
+        ("profile", "03 我的"),
+    ] {
+        state.active_children_mut().push(frame(
+            id,
+            name,
+            vec![serde_json::from_value(serde_json::json!({
+                "type": "text", "id": format!("{id}-title"), "content": "原标题",
+                "x": 20, "y": 40, "width": 320, "height": 40
+            }))
+            .unwrap()],
+        ));
+    }
+    state
+        .editor_ui
+        .workspace
+        .open_for_reading(op_editor_core::HomeFamily::AppUi, 1);
+    let prompt = "把首页标题改成“周末，来杯好咖啡”，保留其他页面和布局。";
+    assert_eq!(
+        classify_intent_for_standard_route(&Scripted, &state, prompt, None),
+        DesignIntent::Modify
+    );
+    let plan = build_modify_plan(&state, prompt).expect("named existing homepage");
+    assert_eq!(plan.target_frame_ids, ["coffee-home"]);
+    assert!(!plan.user_message.contains("menu-title"));
+    let before = state.active_children().to_vec();
+    let mut changed = serde_json::to_value(&before[0].children().unwrap()[0]).unwrap();
+    changed["content"] = serde_json::json!("周末，来杯好咖啡");
+    let mut unrelated = serde_json::to_value(&before[1].children().unwrap()[0]).unwrap();
+    unrelated["content"] = serde_json::json!("Must not change");
+    let (count, applied) = crate::chat_canvas_tools::apply_design_modification(
+        &mut state,
+        &[("null".into(), changed), ("null".into(), unrelated)],
+        &plan.target_frame_ids,
+    );
+    assert!(applied);
+    assert_eq!(count, 1);
+    assert_eq!(state.active_children()[1..], before[1..]);
+    assert_eq!(
+        serde_json::to_value(&state.active_children()[0].children().unwrap()[0]).unwrap()
+            ["content"],
+        "周末，来杯好咖啡"
+    );
+}
+
+#[test]
+fn normal_mode_replacement_copy_cannot_override_the_scoped_route() {
+    let mut state = state_with_selected_card();
+    state.clear_selection();
+    state
+        .editor_ui
+        .workspace
+        .open_for_reading(op_editor_core::HomeFamily::AppUi, 1);
+    for prompt in [
+        "把首页标题改成“如何做咖啡”",
+        "Change Home title to \"Create a new page\"",
+    ] {
+        assert_eq!(
+            classify_intent_for_standard_route(&Scripted, &state, prompt, None),
+            DesignIntent::Modify,
+            "{prompt}"
+        );
+    }
+}

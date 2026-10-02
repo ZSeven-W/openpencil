@@ -205,27 +205,27 @@ fn agent_message_index(
     messages: &[ChatMessage],
     agent_identity: Option<(&str, &str)>,
 ) -> Option<usize> {
-    let matching = |message: &&ChatMessage| {
-        message.role == ChatRole::Assistant
-            && match agent_identity {
-                Some((name, color)) => {
-                    message.agent_name.as_deref() == Some(name)
-                        && message.agent_color.as_deref() == Some(color)
-                }
-                None => message.agent_color.is_none(),
-            }
-    };
-    messages
+    let turn_start = messages
         .iter()
-        .enumerate()
-        .rev()
-        .find(|(_, message)| matching(message))
-        .map(|(index, _)| index)
-        .or_else(|| {
-            messages
-                .iter()
-                .rposition(|message| message.role == ChatRole::Assistant)
-        })
+        .rposition(|message| message.role == ChatRole::User)
+        .map_or(0, |index| index + 1);
+    let turn = &messages[turn_start..];
+    let index = match agent_identity {
+        Some((name, color)) => turn.iter().rposition(|message| {
+            message.role == ChatRole::Assistant
+                && message.agent_name.as_deref() == Some(name)
+                && message.agent_color.as_deref() == Some(color)
+        }),
+        None => {
+            // begin_send creates the primary bubble before any subagents.
+            // Its design persona can also have a color, so color is not an
+            // ownership marker. Never fall back into a previous user turn.
+            turn.iter().position(|message| {
+                message.role == ChatRole::Assistant && message.design_worker_group.is_none()
+            })
+        }
+    };
+    index.map(|index| turn_start + index)
 }
 
 fn allow_ai_bulk_write(host: &mut WidgetHostNative) -> bool {

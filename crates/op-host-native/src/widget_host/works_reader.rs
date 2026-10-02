@@ -108,6 +108,7 @@ impl WidgetHostNative {
                 // The reader IS the normal view; nothing to switch.
             }
             ReaderHit::ModeProfessional => self.reader_enter_professional(vw, vh),
+            ReaderHit::More => self.toggle_mobile_sheet(MobileSheetKind::More),
             ReaderHit::Prev | ReaderHit::Next => {
                 let delta = if hit == ReaderHit::Prev { -1 } else { 1 };
                 if self

@@ -17,6 +17,7 @@
 pub mod chat_agent_context;
 pub mod chat_agent_loop;
 pub mod chat_canvas_tools;
+pub mod chat_modify;
 pub mod chat_modify_sanitize;
 pub mod chat_tool_result;
 pub mod design_agent_diagnostics;
@@ -29,6 +30,7 @@ pub mod quality_credential;
 pub mod runtime;
 pub mod screen_sets;
 pub mod tool_schemas;
+pub mod workspace_edit;
 
 pub use design_agent_tools::{normalize_mobile_screens, MobileNormalizeReport};
 

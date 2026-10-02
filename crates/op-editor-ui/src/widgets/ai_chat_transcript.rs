@@ -12,6 +12,7 @@
 //! hit-test compute identical rects without sharing a backend.
 
 use crate::theme::Theme;
+use crate::widgets::ai_chat_workspace_copy::progress_label;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
@@ -315,7 +316,7 @@ pub(crate) fn build_item(
         let details: Vec<String> = step
             .details
             .iter()
-            .flat_map(|line| wrap_units(line, budget.saturating_sub(4)))
+            .flat_map(|line| wrap_units(&progress_label(locale, line), budget.saturating_sub(4)))
             .collect();
         // Active work and failures default open so a terminal error exposes
         // its concrete diagnostic. A user click still records an override.
@@ -340,7 +341,7 @@ pub(crate) fn build_item(
         steps.push(ActionStep {
             rect: Rect::xywh(x, y, bubble_w, step_h),
             source_index: i,
-            label: step.title.clone(),
+            label: progress_label(locale, &step.title),
             details,
             expanded,
             done,

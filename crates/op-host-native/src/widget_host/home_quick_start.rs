@@ -73,11 +73,13 @@ impl WidgetHostNative {
         &mut self,
         template_id: &'static str,
     ) -> bool {
-        let Some(boards) = scene_template_document(template_id)
+        let Some(mut boards) = scene_template_document(template_id)
             .and_then(|source| template_boards(source, template_id))
         else {
             return false;
         };
+        let home = &self.editor_state.editor_ui.home;
+        op_editor_core::prepare_home_example_boards(home.task, home.task_draft(), &mut boards);
         // A brief started from Home is a NEW deliverable: a page that holds
         // real work is parked for the shell (never silently dropped) and a
         // fresh starter takes its place — the same swap a typed brief makes.

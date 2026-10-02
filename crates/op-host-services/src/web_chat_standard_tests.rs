@@ -233,6 +233,8 @@ fn stream_chat_route_passes_history_and_attachments_to_provider() {
         document_json: None,
         editor_meta: None,
         selected_ids: Vec::new(),
+        workspace_visible: false,
+        workspace_selected: 0,
         active_page_id: None,
         agent_team_size: None,
         history: history.clone(),

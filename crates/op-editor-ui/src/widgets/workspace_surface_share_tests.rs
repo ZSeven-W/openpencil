@@ -16,6 +16,7 @@ fn shared_state(can_share: bool) -> EditorState {
         device: HomeDevice::Mobile,
         ratio: SlideRatio::Wide169,
         info_kind: InfoKind::Data,
+        app_pages: Default::default(),
         style_guide: None,
     });
     assert!(state.editor_ui.open_workspace_for_shared_recipe(1));

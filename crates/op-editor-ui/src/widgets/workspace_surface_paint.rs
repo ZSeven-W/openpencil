@@ -103,7 +103,11 @@ pub(crate) fn family_label(locale: op_i18n::Locale, family: HomeFamily) -> &'sta
 }
 
 /// One view mode's segment label.
-fn view_label(locale: op_i18n::Locale, family: HomeFamily, view: WorkspaceView) -> &'static str {
+pub(super) fn view_label(
+    locale: op_i18n::Locale,
+    family: HomeFamily,
+    view: WorkspaceView,
+) -> &'static str {
     match view {
         WorkspaceView::AllBoards => tr(locale, "workspace.view.all"),
         WorkspaceView::Single { .. } => {
@@ -407,13 +411,10 @@ fn paint_toolbar(
             },
         );
         let label = view_label(locale, surface.state.family, view);
-        text(
+        centered_label(
             cx,
             label,
-            Point2D::new(
-                segment.origin.x,
-                jian_widgets::centered_text_baseline_y(*segment, 12.0),
-            ),
+            *segment,
             12.0,
             if selected {
                 palette.link
@@ -490,15 +491,29 @@ fn paint_toolbar(
             fade(palette.panel, 1.0)
         },
     );
-    text(
+    centered_label(
         cx,
         tr(locale, "workspace.fit"),
-        Point2D::new(
-            layout.zoom_fit.origin.x,
-            jian_widgets::centered_text_baseline_y(layout.zoom_fit, 11.0),
-        ),
+        layout.zoom_fit,
         11.0,
         palette.sub,
+    );
+}
+
+fn centered_label(cx: &mut PaintCx<'_>, label: &str, rect: Rect, size: f32, color: Color) {
+    let label = crate::util::ellipsize_to_width(label, (rect.size.x - 12.0).max(0.0), |s| {
+        cx.backend.measure_text_family(s, size, SANS)
+    });
+    let width = cx.backend.measure_text_family(&label, size, SANS);
+    text(
+        cx,
+        &label,
+        Point2D::new(
+            rect.origin.x + (rect.size.x - width) / 2.0,
+            jian_widgets::centered_text_baseline_y(rect, size),
+        ),
+        size,
+        color,
     );
 }
 

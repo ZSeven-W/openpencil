@@ -20,6 +20,9 @@ use crate::OpStatus;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+#[path = "editor_document_shell_recent_tests.rs"]
+mod recent_tests;
+
 const SAMPLE_DOC: &str =
     include_str!("../../op-editor-core/assets/scene_templates/daily-sign-card.op");
 
@@ -167,6 +170,134 @@ fn touch(engine: &mut OpEngine, name: &str) {
         .editor_state_mut();
     state.doc.name = Some(name.into());
     state.mark_document_changed();
+}
+
+#[test]
+fn picker_acknowledgement_does_not_mark_newer_edits_saved() {
+    let staging = Staging::new();
+    let mut engine = picker_engine();
+    let pointer = &mut engine as *mut OpEngine;
+    touch(&mut engine, "staged revision");
+    queue(&mut engine, op_editor_core::FileAction::Save);
+    assert_eq!(drain(pointer), SHELL_ACTION_SAVE_DOCUMENT);
+    let name = copy_string(pointer, op_editor_copy_save_file_name).unwrap();
+    let path = staging.file(&name);
+    assert_eq!(stage(pointer, &path), OpStatus::Ok);
+    let staged_revision = engine
+        .session_mut_for_test()
+        .editor_mut()
+        .unwrap()
+        .editor_state()
+        .document_revision();
+    touch(&mut engine, "newer edit while copying");
+    assert_eq!(commit(pointer, "content://docs/first", &name), OpStatus::Ok);
+    assert!(
+        dirty(&mut engine),
+        "only the staged revision reached the destination"
+    );
+    assert_eq!(
+        engine
+            .session_mut_for_test()
+            .editor_mut()
+            .unwrap()
+            .editor_state()
+            .saved_revision(),
+        staged_revision
+    );
+    let bytes = std::fs::read_to_string(path).unwrap();
+    assert!(bytes.contains("staged revision"));
+    assert!(!bytes.contains("newer edit while copying"));
+
+    let next_staging = Staging::new();
+    queue(&mut engine, op_editor_core::FileAction::Save);
+    assert_eq!(drain(pointer), SHELL_ACTION_SAVE_DOCUMENT);
+    assert_eq!(
+        copy_string(pointer, op_editor_copy_save_target).as_deref(),
+        Some("content://docs/first")
+    );
+    assert_eq!(stage(pointer, &next_staging.file(&name)), OpStatus::Ok);
+    assert_eq!(commit(pointer, "content://docs/first", &name), OpStatus::Ok);
+    assert!(!dirty(&mut engine));
+}
+
+#[test]
+fn a_home_swap_rejects_an_old_picker_commit_and_drops_suspend_resave() {
+    let staging = Staging::new();
+    let recovery = Staging::new();
+    let mut engine = picker_engine();
+    engine.session_mut_for_test().document_save.root = Some(recovery.0.clone());
+    let pointer = &mut engine as *mut OpEngine;
+    touch(&mut engine, "outgoing picker document");
+    queue(&mut engine, op_editor_core::FileAction::Save);
+    assert_eq!(drain(pointer), SHELL_ACTION_SAVE_DOCUMENT);
+    let name = copy_string(pointer, op_editor_copy_save_file_name).unwrap();
+    assert_eq!(stage(pointer, &staging.file(&name)), OpStatus::Ok);
+    assert_eq!(
+        commit(pointer, "content://docs/original", &name),
+        OpStatus::Ok
+    );
+    queue(&mut engine, op_editor_core::FileAction::Save);
+    assert_eq!(drain(pointer), SHELL_ACTION_SAVE_DOCUMENT);
+    let second_staging = Staging::new();
+    assert_eq!(stage(pointer, &second_staging.file(&name)), OpStatus::Ok);
+    engine.session_mut_for_test().document_save.resave_pending = true;
+
+    // Deliberately skip a shell drain after the swap: the callback itself
+    // must reject the old document identity, even with a pending save.
+    assert!(engine
+        .session_mut_for_test()
+        .editor_mut()
+        .unwrap()
+        .start_fresh_document_for_home());
+    touch(&mut engine, "incoming draft");
+    assert_eq!(
+        commit(pointer, "content://docs/original", &name),
+        OpStatus::NotReady
+    );
+    assert!(dirty(&mut engine));
+    let save = &engine.session_mut_for_test().document_save;
+    assert!(save.pending.is_none());
+    assert!(save.shell_binding().is_none());
+    assert!(!save.resave_pending);
+    queue(&mut engine, op_editor_core::FileAction::Save);
+    assert_eq!(drain(pointer), SHELL_ACTION_SAVE_DOCUMENT);
+    assert_eq!(copy_string(pointer, op_editor_copy_save_target), None);
+    let recent = &engine
+        .session_mut_for_test()
+        .editor_mut()
+        .unwrap()
+        .editor_state()
+        .editor_ui
+        .recent_files;
+    assert_eq!(
+        recent.len(),
+        1,
+        "a clean shell-owned document is still reopenable locally"
+    );
+    assert!(std::fs::read_to_string(&recent[0].path)
+        .unwrap()
+        .contains("outgoing picker document"));
+}
+
+#[test]
+fn a_picker_started_before_home_cannot_stage_the_incoming_document() {
+    let staging = Staging::new();
+    let mut engine = picker_engine();
+    let pointer = &mut engine as *mut OpEngine;
+    queue(&mut engine, op_editor_core::FileAction::Save);
+    assert_eq!(drain(pointer), SHELL_ACTION_SAVE_DOCUMENT);
+    let name = copy_string(pointer, op_editor_copy_save_file_name).unwrap();
+    assert!(engine
+        .session_mut_for_test()
+        .editor_mut()
+        .unwrap()
+        .start_fresh_document_for_home());
+    let path = staging.file(&name);
+    assert_eq!(stage(pointer, &path), OpStatus::NotReady);
+    assert!(
+        !path.exists(),
+        "never copy the new draft into an old picker destination"
+    );
 }
 
 /// The full happy path: prompt, stage canonical bytes, commit.

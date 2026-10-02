@@ -464,3 +464,63 @@ fn model_field_chevron_toggles_and_catalog_rows_select() {
         }
     );
 }
+
+#[test]
+fn novice_setup_uses_positive_guidance_and_known_service_protocol_has_no_hidden_hit() {
+    let mut state = touch_draft_state(EditorSizeClass::Compact);
+    state.editor_ui.agent_settings_open = true;
+    state.editor_ui.locale = op_editor_core::Locale::ZhCn;
+    state
+        .editor_ui
+        .agent_settings
+        .set_builtin_agent_draft_preset(op_editor_core::BuiltinAgentPresetKey::GlmCoding);
+    state
+        .editor_ui
+        .agent_settings
+        .builtin_agent_draft
+        .as_mut()
+        .unwrap()
+        .api_key
+        .clear();
+    let content = Rect::xywh(0.0, 0.0, 390.0, 844.0);
+    let card = touch_draft_card(&state, content);
+    let kind = crate::widgets::agent_settings_builtin_parts::kind_rect(card, true);
+    let point = Point2D::new(kind.origin.x + kind.size.x / 4.0, rect_center(kind).y);
+    assert_eq!(
+        crate::widgets::agent_settings_builtin::hit_test_for_ui(
+            content,
+            &state.editor_ui.agent_settings,
+            &state.editor_ui,
+            point
+        ),
+        crate::widgets::agent_settings_builtin::BuiltinHit::ToggleDraftKind
+    );
+    state.editor_ui.home.visible = true;
+    assert_ne!(
+        crate::widgets::agent_settings_builtin::hit_test_for_ui(
+            content,
+            &state.editor_ui.agent_settings,
+            &state.editor_ui,
+            point
+        ),
+        crate::widgets::agent_settings_builtin::BuiltinHit::ToggleDraftKind
+    );
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(390.0, 844.0);
+    let mut backend = crate::widgets::test_capture_backend::CaptureBackend::default();
+    crate::widgets::Widget::paint(
+        &panel,
+        &mut crate::widgets::PaintCx {
+            backend: &mut backend,
+        },
+        rect,
+    );
+    assert!(backend
+        .texts
+        .iter()
+        .any(|(text, _)| text.contains("填入服务商密钥")));
+    assert!(!backend
+        .texts
+        .iter()
+        .any(|(text, _)| text.contains("API 密钥为空") || text == "API 格式"));
+}

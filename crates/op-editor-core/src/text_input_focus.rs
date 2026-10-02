@@ -10,8 +10,23 @@ use jian_core::text_input::TextInputState;
 
 impl EditorState {
     pub fn active_text_input(&self) -> Option<&TextInputState> {
+        if self.editor_ui.home.visible && self.editor_ui.agent_settings_open {
+            return self
+                .editor_ui
+                .agent_settings
+                .focus
+                .as_ref()
+                .map(|_| &self.editor_ui.settings_input);
+        }
         if self.editor_ui.home.visible {
-            return Some(&self.editor_ui.home.input);
+            if self.editor_ui.home_composer_owns_keyboard() {
+                return Some(&self.editor_ui.home.input);
+            }
+            return (!self.editor_ui.login_modal_open
+                && !self.editor_ui.account_menu_open
+                && !self.editor_ui.save_name_dialog.open
+                && self.editor_ui.chat_model_picker.open)
+                .then_some(&self.editor_ui.chat_model_picker_input);
         }
         // Image popovers paint above every editor surface. Resolve their
         // visible field first so stale focus underneath cannot split keyboard,
@@ -102,8 +117,23 @@ impl EditorState {
     }
 
     pub fn active_text_input_mut(&mut self) -> Option<&mut TextInputState> {
+        if self.editor_ui.home.visible && self.editor_ui.agent_settings_open {
+            return self
+                .editor_ui
+                .agent_settings
+                .focus
+                .is_some()
+                .then_some(&mut self.editor_ui.settings_input);
+        }
         if self.editor_ui.home.visible {
-            return Some(&mut self.editor_ui.home.input);
+            if self.editor_ui.home_composer_owns_keyboard() {
+                return Some(&mut self.editor_ui.home.input);
+            }
+            return (!self.editor_ui.login_modal_open
+                && !self.editor_ui.account_menu_open
+                && !self.editor_ui.save_name_dialog.open
+                && self.editor_ui.chat_model_picker.open)
+                .then_some(&mut self.editor_ui.chat_model_picker_input);
         }
         let generate_configured = self.editor_ui.agent_settings.image_generation_configured();
         if self.editor_ui.image_panel.search_open || self.editor_ui.image_panel.generate_open {
@@ -173,5 +203,44 @@ impl EditorState {
             };
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent_settings::{BuiltinAgentField, SettingsFocus};
+
+    #[test]
+    fn home_modal_keyboard_resolves_both_mutable_and_shared_input_to_settings() {
+        let mut state = EditorState::new();
+        let ui = &mut state.editor_ui;
+        ui.home.visible = true;
+        ui.home.composer_focused = true;
+        ui.home.set_draft("untouched brief");
+        ui.agent_settings_open = true;
+        ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::Model));
+        ui.settings_input.set_text("glm-5.2");
+        ui.chat_model_picker.open = true;
+
+        assert!(!state.editor_ui.home_composer_owns_keyboard());
+        assert_eq!(state.active_text_input().unwrap().text(), "glm-5.2");
+        state
+            .active_text_input_mut()
+            .unwrap()
+            .set_text("glm-5.3-flash");
+        assert_eq!(state.editor_ui.settings_input.text(), "glm-5.3-flash");
+        assert_eq!(state.editor_ui.home.draft, "untouched brief");
+
+        state.editor_ui.agent_settings.focus = None;
+        assert!(
+            state.active_text_input().is_none(),
+            "a modal with no focused field blocks Home"
+        );
+        assert!(state.active_text_input_mut().is_none());
+        state.editor_ui.agent_settings_open = false;
+        state.editor_ui.chat_model_picker.open = false;
+        assert!(state.editor_ui.home_composer_owns_keyboard());
+        assert_eq!(state.active_text_input().unwrap().text(), "untouched brief");
     }
 }

@@ -204,6 +204,7 @@ impl<'a> AIChatPlaceholder<'a> {
 
     pub fn from_editor_at(state: &'a EditorState, now_ms: u64) -> Self {
         let ui = &state.editor_ui;
+        let workspace_copy = crate::widgets::ai_chat_workspace_copy::for_editor(state);
         // Build a lightweight snapshot of all tabs so the tab-row painter
         // can iterate titles without holding a borrow on the ChatSessions.
         let tabs_snapshot: Vec<ChatTabInfo> = state
@@ -226,9 +227,18 @@ impl<'a> AIChatPlaceholder<'a> {
             theme: theme_for(ui),
             state: &state.chat,
             now_ms,
-            label_start_with_ai: translate(ui, "ai.tryExample").to_string(),
-            label_input_placeholder: translate(ui, "ai.designWithAgent").to_string(),
-            label_tip_select_elements: translate(ui, "ai.tipSelectElements").to_string(),
+            label_start_with_ai: workspace_copy
+                .as_ref()
+                .map(|c| c.hint.clone())
+                .unwrap_or_else(|| translate(ui, "ai.tryExample").to_string()),
+            label_input_placeholder: workspace_copy
+                .as_ref()
+                .map(|c| c.placeholder.clone())
+                .unwrap_or_else(|| translate(ui, "ai.designWithAgent").to_string()),
+            label_tip_select_elements: workspace_copy
+                .as_ref()
+                .map(|c| c.tip.clone())
+                .unwrap_or_else(|| translate(ui, "ai.tipSelectElements").to_string()),
             label_no_models: translate(ui, "ai.noModelsConnected").to_string(),
             selected_count: state.selection_count(),
             selected_label: selection_chip_label_for_state(state),
@@ -257,7 +267,9 @@ impl<'a> AIChatPlaceholder<'a> {
                 Some(op_editor_core::ButtonPressTarget::ChatFooter(button)) => Some(button),
                 _ => None,
             },
-            examples: example_cards(ui.effective_locale()),
+            examples: workspace_copy
+                .map(|c| c.examples)
+                .unwrap_or_else(|| example_cards(ui.effective_locale())),
             mcp_notice: mcp_notice_label(ui),
             locale: ui.effective_locale(),
             tabs_snapshot,

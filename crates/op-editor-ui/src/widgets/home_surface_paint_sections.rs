@@ -10,7 +10,7 @@ use super::super::palette::fade;
 use super::super::{HomeLayout, HomeSurface, StudioPalette, EXPLORE_FAMILIES};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
-use crate::{Color, Point2D, Rect};
+use crate::{Point2D, Rect};
 use op_editor_core::HomeHit;
 
 pub(super) fn paint_explore(
@@ -132,9 +132,22 @@ pub(super) fn paint_recent(
         for (index, name) in surface.recent_files.iter().take(5).enumerate() {
             let chip = layout.recent_chips[index];
             let chip = Rect::xywh(chip.origin.x, chip.origin.y + dy, chip.size.x, chip.size.y);
+            let hovered = surface.state.hover == Some(HomeHit::Recent(index));
+            cx.backend.fill_round_rect(
+                chip,
+                6.0,
+                if hovered {
+                    palette.button_hover
+                } else {
+                    palette.raised
+                },
+            );
             cx.backend
-                .fill_round_rect(chip, 6.0, Color::rgb_u8(0xEA, 0xF2, 0xFF));
-            let label: String = name.chars().take(9).collect();
+                .stroke_round_rect(chip, 6.0, palette.raised_line, 1.0);
+            let label =
+                super::super::recent_names::fit_name(name, (chip.size.x - 22.0).max(0.0), |s| {
+                    cx.backend.measure_text_family(s, 12.0, SANS)
+                });
             text(
                 cx,
                 &label,
@@ -143,7 +156,7 @@ pub(super) fn paint_recent(
                     jian_widgets::centered_text_baseline_y(chip, 12.0),
                 ),
                 12.0,
-                Color::rgb_u8(0x37, 0x61, 0x99),
+                palette.link,
             );
         }
     }
@@ -197,6 +210,7 @@ pub(super) fn paint_recent(
         12.0,
         palette.ink,
     );
+    super::super::recent_names::paint_hover_name(surface, cx, layout, dy, palette);
 }
 
 /// Every palette token at `factor` of its alpha (an entrance fade).

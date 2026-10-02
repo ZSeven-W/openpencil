@@ -168,6 +168,18 @@ class MainActivity : ComponentActivity() {
         surfaceView.setSaveDocumentHandler { documentSave.begin() }
 
         val regionStore = surfaceView.authRuntime.regionStore()
+        // Registered first so native login/account overlays retain priority.
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (surfaceView.handleSystemBack()) return
+                isEnabled = false
+                try {
+                    onBackPressedDispatcher.onBackPressed()
+                } finally {
+                    isEnabled = true
+                }
+            }
+        })
         loginBackCallback = object : OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {
                 if (accountCenter.isVisible) {

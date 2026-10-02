@@ -225,7 +225,8 @@ pub fn tablet_reader_layout(
     let normal_w = seg_w(inputs.normal_label);
     let professional_w = seg_w(inputs.professional_label);
     let switch_w = normal_w + MODE_SEG_GAP + professional_w;
-    let mode_switch = Rect::xywh(vw - MODE_RIGHT_PAD - switch_w, top, switch_w, TOUCH);
+    let more = Rect::xywh(vw - MODE_RIGHT_PAD - TOUCH, top, TOUCH, TOUCH);
+    let mode_switch = Rect::xywh(more.origin.x - 8.0 - switch_w, top, switch_w, TOUCH);
     let mode_normal = Rect::xywh(mode_switch.origin.x, top, normal_w, TOUCH);
     let mode_professional = Rect::xywh(
         mode_switch.origin.x + normal_w + MODE_SEG_GAP,
@@ -350,6 +351,7 @@ pub fn tablet_reader_layout(
         mode_switch,
         mode_normal,
         mode_professional,
+        more,
         stage,
         pager: None,
         prev: strip_parts.as_ref().map(|parts| parts.prev),

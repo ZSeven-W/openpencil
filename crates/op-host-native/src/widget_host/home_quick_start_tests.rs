@@ -193,6 +193,11 @@ fn an_edited_example_is_the_users_own_brief_and_generates_as_before() {
 fn the_app_task_opens_its_own_screen_set_for_either_device() {
     // Phone: the coffee example's three screens (home / menu / order).
     let mut phone = home_on(HomeFamily::AppUi);
+    phone
+        .editor_state_mut()
+        .editor_ui
+        .home
+        .set_app_pages(op_editor_core::AppPages::Multiple);
     press_send(&mut phone);
     let state = phone.editor_state();
     assert_eq!(
@@ -401,4 +406,45 @@ fn a_failed_refine_shows_the_retry_banner_and_keeps_the_draft() {
         "the failure banner offers Retry"
     );
     assert!(!state.editor_ui.workspace.draft_banner_visible());
+}
+
+#[test]
+fn app_example_default_is_one_board_and_multiple_is_an_explicit_choice() {
+    use op_editor_core::{AppPages, HomeDevice};
+    for device in [HomeDevice::Mobile, HomeDevice::Desktop] {
+        for (pages, expected) in [(AppPages::Single, 1), (AppPages::Multiple, 3)] {
+            let mut host = home_on(HomeFamily::AppUi);
+            host.editor_state_mut().editor_ui.home.set_device(device);
+            host.editor_state_mut().editor_ui.home.set_app_pages(pages);
+            if device == HomeDevice::Desktop && pages == AppPages::Multiple {
+                connect_model(&mut host);
+            }
+            press_send(&mut host);
+            if device == HomeDevice::Desktop && pages == AppPages::Multiple {
+                assert!(host
+                    .editor_state()
+                    .editor_ui
+                    .workspace
+                    .draft_template
+                    .is_none());
+                assert!(host
+                    .editor_state()
+                    .chat
+                    .pending_send
+                    .as_deref()
+                    .is_some_and(|s| s.contains("交付 3 页完整界面")));
+                continue;
+            }
+            assert_eq!(
+                active_page_boards(host.editor_state()).len(),
+                expected,
+                "{device:?} {pages:?}"
+            );
+            assert_eq!(
+                host.editor_state().editor_ui.workspace.options.app_pages,
+                pages
+            );
+            assert!(host.editor_state().chat.pending_send.is_none());
+        }
+    }
 }

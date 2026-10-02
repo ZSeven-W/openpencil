@@ -53,17 +53,25 @@ pub fn page_edit_prompt(
 /// deleted come back in their original order. Returns whether anything
 /// had to be reverted (the caller reports that to the model).
 pub fn restore_other_boards(state: &mut EditorState, before: &[PenNode], target_id: &str) -> bool {
+    restore_boards_outside_scope(state, before, &[target_id.to_string()])
+}
+
+/// The same write fence for an explicitly selected multi-board refinement.
+pub fn restore_boards_outside_scope(
+    state: &mut EditorState,
+    before: &[PenNode],
+    target_ids: &[String],
+) -> bool {
     let current = state.active_children();
-    let target_now = current
-        .iter()
-        .find(|node| node.id_str() == target_id)
-        .cloned();
     let restored: Vec<PenNode> = before
         .iter()
         .filter_map(|node| {
-            if node.id_str() == target_id {
+            if target_ids.iter().any(|id| id == node.id_str()) {
                 // A deleted target stays deleted: the scope allows it.
-                target_now.clone()
+                current
+                    .iter()
+                    .find(|now| now.id_str() == node.id_str())
+                    .cloned()
             } else {
                 Some(node.clone())
             }

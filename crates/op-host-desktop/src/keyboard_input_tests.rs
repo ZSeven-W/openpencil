@@ -620,3 +620,54 @@ fn delete_key_edits_focused_settings_input_and_keeps_nodes() {
     assert_eq!(app.host.editor_state().editor_ui.settings_input.text(), "");
     assert_eq!(app.host.editor_state().active_children().len(), node_count);
 }
+
+#[test]
+fn home_modal_keyboard_chords_edit_settings_without_selecting_the_hidden_brief() {
+    use op_editor_core::agent_settings::BuiltinAgentField;
+    let mut app = DesktopApp::new(None);
+    {
+        let home = &mut app.host.editor_state_mut().editor_ui.home;
+        home.visible = true;
+        home.composer_focused = true;
+        home.set_draft("keep this brief");
+    }
+    app.zoom_modifier = true;
+    app.handle_key_pressed(&Key::Character(",".into()), Some(","));
+    {
+        let ui = &mut app.host.editor_state_mut().editor_ui;
+        assert!(ui.agent_settings_open);
+        assert!(!ui.home.composer_focused);
+        ui.agent_settings.begin_builtin_agent_draft();
+        ui.agent_settings.focus = Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::Model));
+        ui.settings_input.set_text("glm-5.2");
+    }
+    app.handle_key_pressed(&Key::Character("a".into()), Some("a"));
+    assert_eq!(app.host.input_copy_text().as_deref(), Some("glm-5.2"));
+    assert!(app.handle_paste_payload(payload(
+        Some("glm-5.3-flash"),
+        Some(FIGMA_HTML),
+        Some(image(400, 200)),
+    )));
+    assert_eq!(
+        app.host.editor_state().editor_ui.settings_input.text(),
+        "glm-5.3-flash"
+    );
+    assert!(app.pending_figma_paste.is_none());
+    assert!(app.host.editor_state().chat.pending_attachments.is_empty());
+
+    app.handle_key_pressed(&Key::Character("a".into()), Some("a"));
+    app.zoom_modifier = false;
+    app.handle_key_pressed(&Key::Named(NamedKey::ArrowLeft), None);
+    assert_eq!(app.host.editor_state().editor_ui.settings_input.caret(), 0);
+    app.handle_key_pressed(&Key::Named(NamedKey::ArrowRight), None);
+    assert_eq!(app.host.editor_state().editor_ui.settings_input.caret(), 1);
+    app.zoom_modifier = true;
+    app.handle_key_pressed(&Key::Character("a".into()), Some("a"));
+    app.zoom_modifier = false;
+    app.handle_key_pressed(&Key::Named(NamedKey::Backspace), None);
+    let ui = &app.host.editor_state().editor_ui;
+    assert_eq!(ui.settings_input.text(), "");
+    assert_eq!(ui.home.draft, "keep this brief");
+    assert_eq!(ui.home.input.caret(), "keep this brief".len());
+    assert_eq!(ui.home.input.highlight_range(), None);
+}

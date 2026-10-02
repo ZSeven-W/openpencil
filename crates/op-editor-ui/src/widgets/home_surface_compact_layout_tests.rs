@@ -46,12 +46,12 @@ fn compact_grid_is_two_rows_of_four_with_a_weakened_blank_tile() {
     let layout = compact_layout(&compact_state());
     // Two rows × four columns inside the content column.
     assert_close(layout.tabs_row.size.x, W - 34.0, 0.5);
-    assert_close(layout.tabs_row.size.y, 63.0 * 2.0 + 5.0, 0.5);
+    assert_close(layout.tabs_row.size.y, 72.0 * 2.0 + 5.0, 0.5);
     for (index, rect) in layout.tabs.iter().enumerate() {
         let (row, col) = (index / 4, index % 4);
         assert_close(
             rect.origin.y,
-            layout.tabs_row.origin.y + row as f32 * 68.0,
+            layout.tabs_row.origin.y + row as f32 * 77.0,
             0.5,
         );
         assert_close(
@@ -60,7 +60,7 @@ fn compact_grid_is_two_rows_of_four_with_a_weakened_blank_tile() {
             0.5,
         );
         assert_min_touch(*rect, "task tile");
-        assert_close(rect.size.y, 63.0, 0.5);
+        assert_close(rect.size.y, 72.0, 0.5);
     }
     // The eighth slot (row 1, col 3) is the weakened blank tile.
     let blank = layout.new_canvas;
@@ -69,8 +69,8 @@ fn compact_grid_is_two_rows_of_four_with_a_weakened_blank_tile() {
         layout.tabs[4].origin.x + 3.0 * (85.25 + 5.0),
         0.5,
     );
-    assert_close(blank.origin.y, layout.tabs_row.origin.y + 68.0, 0.5);
-    assert_close(blank.size.y, 63.0, 0.5);
+    assert_close(blank.origin.y, layout.tabs_row.origin.y + 77.0, 0.5);
+    assert_close(blank.size.y, 72.0, 0.5);
     // No 更多 affordance on the phone: all seven tasks are in the grid.
     assert_eq!(layout.more_button, Rect::ZERO);
     assert_eq!(layout.more_popover, Rect::ZERO);
@@ -125,7 +125,7 @@ fn compact_composer_keeps_every_target_at_the_touch_floor() {
     // metrics: 10 + 44 + 5 + 85 + 6 + 44 + 44 + 12 = 250 tall.
     // The card spans the content column; its 13 px padding is inner.
     assert_close(layout.composer.size.x, W - 34.0, 0.5);
-    assert_close(layout.composer.size.y, 250.0, 0.5);
+    assert_close(layout.composer.size.y, 298.0, 0.5);
     assert_min_touch(layout.send, "开始设计");
     assert_min_touch(layout.model_chip, "model chip");
     assert_min_touch(layout.screenshot, "加图片");
@@ -215,13 +215,13 @@ fn compact_bottom_nav_is_three_pinned_items() {
 #[test]
 fn compact_page_reports_scroll_only_when_content_overflows() {
     let state = compact_state();
-    // 390×844: the page fits above the nav.
+    // A tall phone fits the additional page-count row above the nav.
     let home = HomeSurface::for_editor(&state).expect("home visible");
-    let fits = home.layout(W, H);
-    let visible_bottom = H - HOME_BOTTOM_NAV_H;
+    let fits = home.layout(W, 1_000.0);
+    let visible_bottom = 1_000.0 - HOME_BOTTOM_NAV_H;
     assert!(
         fits.preview.origin.y + fits.preview.size.y + 24.0 <= visible_bottom,
-        "the compact page fits a 844 pt phone"
+        "the compact page fits a tall phone"
     );
     // A short viewport scrolls, bounded by the featured card's bottom.
     let short = home.layout(430.0, 360.0);
@@ -389,4 +389,81 @@ fn a_long_photo_name_is_cut_with_an_ellipsis_not_mid_extension() {
         "chip label is the cut stem: {:?}",
         backend.texts
     );
+}
+
+#[test]
+fn compact_task_labels_clear_icons_and_stay_inside_their_touch_targets() {
+    use crate::widgets::{test_capture_backend::CaptureBackend, PaintCx, Widget};
+    use crate::RenderBackend;
+    for locale in op_i18n::Locale::ALL {
+        for width in [320.0, 390.0, 430.0] {
+            let mut state = compact_state();
+            state.editor_ui.locale = locale;
+            let home = HomeSurface::for_editor_at(&state, 10_000).unwrap();
+            let layout = home.layout(width, H);
+            let mut backend = CaptureBackend::default();
+            home.paint(
+                &mut PaintCx {
+                    backend: &mut backend,
+                },
+                Rect::xywh(0.0, 0.0, width, H),
+            );
+            for tile in layout.tabs.into_iter().chain([layout.new_canvas]) {
+                let icon_bottom = backend
+                    .svg_strokes
+                    .iter()
+                    .filter(|(_, origin, size, _, _)| *size == 22.0 && tile.contains(*origin))
+                    .map(|(_, origin, size, _, _)| origin.y + size)
+                    .next()
+                    .expect("task icon was painted");
+                let labels: Vec<_> = backend
+                    .texts
+                    .iter()
+                    .filter(|(_, origin)| tile.contains(*origin))
+                    .cloned()
+                    .collect();
+                assert!(
+                    !labels.is_empty() && labels.len() <= 2,
+                    "{locale:?} {width}: {labels:?}"
+                );
+                for (label, origin) in labels {
+                    // Conservatively reserve a full font-size above the baseline.
+                    assert!(
+                        origin.y - 11.0 >= icon_bottom + 5.0,
+                        "icon touches {label:?}"
+                    );
+                    assert!(origin.y + 3.0 <= tile.origin.y + tile.size.y - 4.0);
+                    let text_w = backend.measure_text_family(&label, 11.0, "system-ui");
+                    assert!(origin.x >= tile.origin.x + 5.9, "left overflow: {label}");
+                    assert!(
+                        origin.x + text_w <= tile.origin.x + tile.size.x - 5.9,
+                        "right overflow: {label}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn app_pages_have_separate_touch_targets_below_device_and_above_input() {
+    for locale in op_i18n::Locale::ALL {
+        let mut state = compact_state();
+        state.editor_ui.locale = locale;
+        let home = HomeSurface::for_editor(&state).unwrap();
+        let layout = home.layout(320.0, H);
+        for (index, rect) in layout.app_page_options.iter().enumerate() {
+            assert_min_touch(*rect, "page count");
+            assert!(rect.origin.y >= layout.label_row.origin.y + layout.label_row.size.y);
+            assert!(rect.origin.y + rect.size.y <= layout.input_box.origin.y);
+            assert_eq!(
+                home.hit_test(320.0, H, center(*rect)),
+                Some(HomeHit::Segment(index as u8 + 2))
+            );
+            assert_eq!(
+                home.focus_rect(&layout, HomeHit::Segment(index as u8 + 2)),
+                Some(*rect)
+            );
+        }
+    }
 }

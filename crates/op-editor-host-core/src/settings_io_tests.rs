@@ -186,6 +186,23 @@ fn locale_change_updates_settings_fingerprint() {
 }
 
 #[test]
+fn recent_file_changes_trigger_settings_persistence() {
+    let mut state = EditorState::new();
+    let empty = fingerprint(&state);
+    state.editor_ui.touch_recent_file("/tmp/saved.op".into(), 1);
+    let added = fingerprint(&state);
+    assert_ne!(empty, added);
+    state.editor_ui.touch_recent_file("/tmp/saved.op".into(), 2);
+    assert_ne!(
+        added,
+        fingerprint(&state),
+        "re-saving also updates its recent timestamp"
+    );
+    state.editor_ui.recent_files.clear();
+    assert_eq!(empty, fingerprint(&state));
+}
+
+#[test]
 fn imported_agents_are_excluded_from_persistence() {
     // A user-entered agent must persist; an auto-imported (e.g. Zode)
     // agent must NOT, so its API key never lands in settings.json.

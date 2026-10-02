@@ -323,3 +323,33 @@ fn the_hover_stamp_names_the_leaving_card_and_schedules_frames() {
     assert_eq!(home.card_hover_since_ms, 0);
     assert_eq!(home.card_hover_leaving, None);
 }
+
+#[test]
+fn app_page_choice_defaults_to_one_and_reaches_both_generation_contracts() {
+    use super::AppPages;
+    for device in [HomeDevice::Mobile, HomeDevice::Desktop] {
+        let mut draft = TaskDraft {
+            text: "咖啡点单".into(),
+            device,
+            ..Default::default()
+        };
+        assert_eq!(draft.app_pages, AppPages::Single);
+        let prompt = HomeFamily::AppUi.generation_prompt(&draft).unwrap();
+        assert!(prompt.contains("交付 1 页界面"));
+        assert!(!prompt.contains("默认 3 页"));
+        draft.app_pages = AppPages::Multiple;
+        let prompt = HomeFamily::AppUi.generation_prompt(&draft).unwrap();
+        assert!(prompt.contains("交付 3 页完整界面"));
+        assert!(prompt.contains("用户指定页面名称时遵从需求"));
+        draft.text = "设计包含 5 页的咖啡 App".into();
+        assert!(HomeFamily::AppUi
+            .generation_prompt(&draft)
+            .unwrap()
+            .contains("交付 5 页完整界面"));
+    }
+    let mut home = HomeState::default();
+    home.set_app_pages(AppPages::Multiple);
+    home.set_task(HomeFamily::Web, 1);
+    home.set_task(HomeFamily::AppUi, 2);
+    assert_eq!(home.task_draft().app_pages, AppPages::Multiple);
+}

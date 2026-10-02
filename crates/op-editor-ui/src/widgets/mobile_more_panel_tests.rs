@@ -9,6 +9,47 @@ fn touch_state(size_class: EditorSizeClass) -> EditorState {
     state
 }
 
+#[test]
+fn normal_reader_offers_a_short_file_action_menu_at_all_touch_sizes() {
+    for (width, height, size_class) in [
+        (320.0, 568.0, EditorSizeClass::Compact),
+        (390.0, 844.0, EditorSizeClass::Compact),
+        (844.0, 390.0, EditorSizeClass::Compact),
+        (834.0, 1194.0, EditorSizeClass::Medium),
+        (1366.0, 1024.0, EditorSizeClass::Expanded),
+    ] {
+        let mut state = touch_state(size_class);
+        state
+            .editor_ui
+            .workspace
+            .open_for_reading(op_editor_core::HomeFamily::Presentation, 1);
+        assert_eq!(
+            MobileMoreEntry::visible(&state),
+            vec![
+                MobileMoreEntry::SaveFile,
+                MobileMoreEntry::SaveAsFile,
+                MobileMoreEntry::Export
+            ]
+        );
+        let panel = more_panel_rect(&state, width, height);
+        assert!(panel.size.y < 180.0, "file actions leave the work visible");
+        assert_grid(
+            &state,
+            width,
+            height,
+            3,
+            if size_class == EditorSizeClass::Compact {
+                PHONE_BOTTOM_PADDING
+            } else {
+                TABLET_BOTTOM_PADDING
+            },
+        );
+        // Returning to the professional canvas restores its own menu.
+        state.editor_ui.workspace.enter_professional();
+        assert!(MobileMoreEntry::visible(&state).contains(&MobileMoreEntry::Variables));
+    }
+}
+
 fn assert_approx(actual: f32, expected: f32) {
     assert!(
         (actual - expected).abs() < 0.01,

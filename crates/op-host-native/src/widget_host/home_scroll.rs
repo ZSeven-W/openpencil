@@ -6,6 +6,46 @@ use op_editor_ui::widgets::home_surface::{
 };
 
 impl WidgetHostNative {
+    /// Shared wheel / trackpad owner while Home is up. Match its press,
+    /// hover and paint order: settings above account overlays above the
+    /// model picker above Home. `Some` also owns the modal scrim and the
+    /// pinned Home bars, so neither can scroll the canvas underneath.
+    pub(in crate::widget_host) fn scroll_home_surface(
+        &mut self,
+        x: f32,
+        y: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    ) -> Option<bool> {
+        if !self.home_visible() {
+            return None;
+        }
+        let ui = &self.editor_state.editor_ui;
+        if ui.agent_settings_open {
+            return Some(
+                self.try_scroll_settings_font_picker(
+                    x,
+                    y,
+                    delta_y,
+                    viewport_width,
+                    viewport_height,
+                ) || self.scroll_agent_settings_at(x, y, delta_y, viewport_width, viewport_height),
+            );
+        }
+        if ((ui.account_ui_available || ui.touch_chrome()) && ui.login_modal_open)
+            || (ui.account_ui_available && ui.account_menu_open)
+        {
+            return Some(false);
+        }
+        if let Some(scrolled) =
+            self.wheel_home_model_picker(x, y, delta_y, viewport_width, viewport_height)
+        {
+            return Some(scrolled);
+        }
+        Some(self.try_scroll_home(x, y, delta_y, viewport_width, viewport_height))
+    }
+
     pub(in crate::widget_host) fn try_scroll_home(
         &mut self,
         x: f32,
@@ -80,3 +120,7 @@ impl WidgetHostNative {
         )
     }
 }
+
+#[cfg(test)]
+#[path = "home_scroll_tests.rs"]
+mod tests;

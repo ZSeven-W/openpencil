@@ -102,6 +102,8 @@ pub(super) fn paint_composer(
         }
     }
 
+    super::super::app_pages::paint(surface, cx, layout.app_page_options, rise, palette);
+
     // ── the input box ─────────────────────────────────────────────────
     let input_box = shift(layout.input_box, rise);
     let engaged = !surface.state.draft.is_empty()

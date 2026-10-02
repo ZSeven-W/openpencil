@@ -112,19 +112,29 @@ fn paint_hero(
     // word by the whole line's advance: a regular-weight measure of the lead
     // alone came up short (and may drop its trailing space), so in Russian
     // the two words ran together.
-    let full_w =
-        cx.backend
-            .measure_text_family_styled(&format!("{lead}{marked}"), 27.0, SANS, 720, false);
+    let full_title = format!("{lead}{marked}");
+    let mut title_size = 27.0;
+    while title_size > 18.0
+        && cx
+            .backend
+            .measure_text_family_styled(&full_title, title_size, SANS, 720, false)
+            > layout.welcome.size.x - 40.0
+    {
+        title_size -= 0.5;
+    }
+    let full_w = cx
+        .backend
+        .measure_text_family_styled(&full_title, title_size, SANS, 720, false);
     let marked_w = cx
         .backend
-        .measure_text_family_styled(marked, 27.0, SANS, 720, false);
+        .measure_text_family_styled(marked, title_size, SANS, 720, false);
     let lead_w = (full_w - marked_w).max(0.0);
     let baseline = layout.welcome.origin.y + dy + 28.0;
     text_weighted(
         cx,
         lead,
         Point2D::new(layout.welcome.origin.x, baseline),
-        27.0,
+        title_size,
         palette.ink,
         720,
     );
@@ -134,20 +144,31 @@ fn paint_hero(
         cx,
         marked,
         Point2D::new(marked_x, baseline),
-        27.0,
+        title_size,
         palette.ink,
         720,
     );
-    text(
-        cx,
-        copy::home_str(locale, "home.welcome.sub"),
-        Point2D::new(
-            layout.welcome_sub.origin.x,
-            layout.welcome_sub.origin.y + dy + 13.0,
-        ),
-        12.0,
-        palette.sub,
-    );
+    let subtitle_text = copy::home_str(locale, "home.welcome.sub");
+    let subtitle =
+        if cx.backend.measure_text_family(subtitle_text, 12.0, SANS) <= layout.welcome_sub.size.x {
+            vec![subtitle_text.to_string()]
+        } else {
+            super::explore_copy::fit_lines(subtitle_text, layout.welcome_sub.size.x, 2, |s| {
+                cx.backend.measure_text_family(s, 12.0, SANS)
+            })
+        };
+    for (index, line) in subtitle.iter().enumerate() {
+        text(
+            cx,
+            line,
+            Point2D::new(
+                layout.welcome_sub.origin.x,
+                layout.welcome_sub.origin.y + dy + 13.0 + index as f32 * 17.0,
+            ),
+            12.0,
+            palette.sub,
+        );
+    }
 }
 
 // ── the 2×4 task grid ──────────────────────────────────────────────────
@@ -219,30 +240,44 @@ fn paint_tile(
     } else {
         fade(palette.ink, 0.75)
     };
-    // Icon 22 over label 11, stacked with the prototype's 6 px gap.
+    // Text origins are baselines, not top edges. Reserve a separate label
+    // box below the icon so CJK ascenders cannot consume the visual gap.
+    let icon_y = rect.origin.y + 10.0;
     draw_icon(
         cx.backend,
         icon,
-        Point2D::new(
-            rect.origin.x + (rect.size.x - 22.0) / 2.0,
-            rect.origin.y + 9.0,
-        ),
+        Point2D::new(rect.origin.x + (rect.size.x - 22.0) / 2.0, icon_y),
         22.0,
         color,
         1.6,
     );
-    let label_w = cx.backend.measure_text_family(label, 11.0, SANS);
-    text_weighted(
-        cx,
-        label,
-        Point2D::new(
-            rect.origin.x + (rect.size.x - label_w).max(0.0) / 2.0,
-            rect.origin.y + 40.0,
-        ),
-        11.0,
-        color,
-        if selected { 600 } else { 500 },
-    );
+    let weight = if selected { 600 } else { 500 };
+    let lines = super::explore_copy::fit_lines(label, (rect.size.x - 12.0).max(0.0), 2, |s| {
+        cx.backend
+            .measure_text_family_styled(s, 11.0, SANS, weight, false)
+    });
+    for (index, line) in lines.iter().enumerate() {
+        let label_rect = Rect::xywh(
+            rect.origin.x + 6.0,
+            icon_y + 22.0 + 6.0 + index as f32 * 14.0,
+            rect.size.x - 12.0,
+            14.0,
+        );
+        let width = cx
+            .backend
+            .measure_text_family_styled(line, 11.0, SANS, weight, false);
+        text_weighted(
+            cx,
+            line,
+            Point2D::new(
+                label_rect.origin.x + (label_rect.size.x - width) / 2.0,
+                jian_widgets::centered_text_baseline_y(label_rect, 11.0),
+            ),
+            11.0,
+            color,
+            weight,
+        );
+    }
 }
 
 // ── the compact composer ───────────────────────────────────────────────
@@ -285,17 +320,36 @@ fn paint_composer(
     // Label + segmented options on one 44 px row.
     let task_copy = copy::task_copy(locale, surface.state.task, surface.state.task_draft());
     let label_row = shift(layout.label_row, rise);
-    text_weighted(
-        cx,
-        task_copy.label,
-        Point2D::new(
+    let label_w = if layout.segment.size.x > 0.0 {
+        (layout.segment.origin.x - label_row.origin.x - 8.0).max(0.0)
+    } else {
+        label_row.size.x
+    };
+    let heading_lines = super::explore_copy::fit_lines(task_copy.label, label_w, 2, |s| {
+        cx.backend
+            .measure_text_family_styled(s, 13.0, SANS, 600, false)
+    });
+    let heading_y =
+        label_row.origin.y + (label_row.size.y - heading_lines.len() as f32 * 17.0) / 2.0;
+    for (index, line) in heading_lines.iter().enumerate() {
+        let line_rect = Rect::xywh(
             label_row.origin.x,
-            jian_widgets::centered_text_baseline_y(label_row, 13.0),
-        ),
-        13.0,
-        palette.ink,
-        600,
-    );
+            heading_y + index as f32 * 17.0,
+            label_w,
+            17.0,
+        );
+        text_weighted(
+            cx,
+            line,
+            Point2D::new(
+                line_rect.origin.x,
+                jian_widgets::centered_text_baseline_y(line_rect, 13.0),
+            ),
+            13.0,
+            palette.ink,
+            600,
+        );
+    }
     let labels = copy::segment_labels(locale, surface.state.task);
     let selected = copy::segment_index(surface.state.task, surface.state.task_draft());
     let segment = shift(layout.segment, rise);
@@ -325,6 +379,8 @@ fn paint_composer(
             );
         }
     }
+
+    super::super::app_pages::paint(surface, cx, layout.app_page_options, rise, palette);
 
     // The 85 px input box.
     let input_box = shift(layout.input_box, rise);

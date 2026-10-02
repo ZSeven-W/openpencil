@@ -17,6 +17,8 @@ pub mod bindings;
 mod bindings_chat_attachment;
 #[cfg(all(target_os = "android", feature = "editor"))]
 mod bindings_editor;
+#[cfg(all(target_os = "android", feature = "editor"))]
+mod bindings_editor_back;
 #[cfg(target_os = "android")]
 mod bindings_media;
 #[cfg(target_os = "android")]

@@ -576,3 +576,52 @@ fn the_pager_keeps_room_for_its_position_label() {
     assert!(gap >= 40.0, "gap {gap}");
     assert!(next.origin.x + next.size.x <= layout.zoom_out.origin.x);
 }
+
+#[test]
+fn toolbar_labels_are_centered_inside_their_painted_hit_targets() {
+    use crate::widgets::test_capture_backend::CaptureBackend;
+    use crate::RenderBackend;
+    for locale in op_i18n::Locale::ALL {
+        for family in HomeFamily::ALL {
+            let mut editor = editor_with_boards(3);
+            editor.editor_ui.locale = locale;
+            editor.editor_ui.workspace = op_editor_core::WorkspaceState {
+                visible: true,
+                active: true,
+                family,
+                ..op_editor_core::WorkspaceState::default()
+            };
+            let surface = WorkspaceSurface::for_editor_at(&editor, 10_000).unwrap();
+            let layout = surface.layout(1180.0, 820.0);
+            let mut backend = CaptureBackend::default();
+            surface.paint(
+                &mut PaintCx {
+                    backend: &mut backend,
+                },
+                Rect::xywh(0.0, 0.0, 1180.0, 820.0),
+            );
+            for rect in layout.view_segments.iter().chain([&layout.zoom_fit]) {
+                let (label, origin) = backend
+                    .texts
+                    .iter()
+                    .find(|(_, origin)| rect.contains(*origin))
+                    .cloned()
+                    .expect("button must contain a visible label");
+                let size = if *rect == layout.zoom_fit { 11.0 } else { 12.0 };
+                let text_w = backend.measure_text_family(&label, size, "system-ui");
+                let left = origin.x - rect.origin.x;
+                let right = rect.origin.x + rect.size.x - origin.x - text_w;
+                assert!(
+                    (left - right).abs() < 0.1,
+                    "{locale:?} {label:?}: unequal insets {left}/{right}"
+                );
+                assert!(left >= 5.9 && right >= 5.9);
+            }
+            let last = layout.view_segments.last().unwrap();
+            assert!(
+                last.origin.x + last.size.x + 11.9
+                    <= layout.prev.unwrap_or(layout.zoom_out).origin.x
+            );
+        }
+    }
+}

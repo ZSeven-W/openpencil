@@ -55,6 +55,7 @@ struct AcpAgentPayload {
 /// dispatch; if it differs after, save the file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fingerprint {
+    recent_files: Vec<RecentFile>,
     theme: ThemeMode,
     locale: Locale,
     port: u16,
@@ -81,6 +82,7 @@ pub struct Fingerprint {
 pub fn fingerprint(state: &EditorState) -> Fingerprint {
     let eui = &state.editor_ui;
     Fingerprint {
+        recent_files: eui.recent_files.clone(),
         theme: eui.theme_mode,
         locale: eui.locale,
         port: eui.agent_settings.mcp_server.port,

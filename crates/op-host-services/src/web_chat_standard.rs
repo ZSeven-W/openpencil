@@ -73,6 +73,8 @@ pub struct WebStandardTurnRequest {
     document_json: Option<String>,
     editor_meta: Option<op_pen_loader::EditorMeta>,
     selected_ids: Vec<String>,
+    workspace_visible: bool,
+    workspace_selected: usize,
     active_page_id: Option<String>,
     agent_team_size: Option<u32>,
     history: Vec<(ChatHistoryRole, String)>,
@@ -133,6 +135,14 @@ pub fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
         document_json,
         editor_meta,
         selected_ids,
+        workspace_visible: obj
+            .get("workspaceVisible")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        workspace_selected: obj
+            .get("workspaceSelected")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize,
         active_page_id,
         agent_team_size,
         history,
@@ -254,6 +264,18 @@ pub fn stream_standard_turn<W: Write>(
     };
 
     let model = selected_model_id(&req.ai, &snapshot);
+    use op_chat_agent::workspace_edit::{self, WorkspaceEditScope};
+    if req.launch_route == op_editor_core::LaunchRoute::Auto
+        && matches!(
+            workspace_edit::resolve_workspace_edit_scope(&snapshot, &req.ai.user),
+            WorkspaceEditScope::NeedsTarget
+        )
+    {
+        return write_error_event(
+            out,
+            workspace_edit::scope_unavailable_message(snapshot.editor_ui.locale),
+        );
+    }
     if (req.launch_route.implies_design_intent()
         || matches!(
             op_orchestrator::classify_intent(&req.ai.user),
@@ -317,7 +339,8 @@ pub fn stream_standard_turn<W: Write>(
         Ok(providers) => providers,
         Err(error) => return write_error_event(out, &error.to_string()),
     };
-    let modify_plan = crate::chat_intent::build_modify_plan(&snapshot, &req.ai.user);
+    let modify_plan =
+        crate::chat_intent::build_modify_plan_for_route(&snapshot, &req.ai.user, req.launch_route);
     let page_children_empty = snapshot.active_children().is_empty();
     // A pinned route decides the intent itself; only an unpinned turn pays
     // for the classifier call.
@@ -478,6 +501,10 @@ fn apply_request_snapshot(
     if let Some(tick) = broadcast_tick {
         hub.broadcast(tick);
     }
+    // Presentation context belongs to this request, not the daemon's persisted
+    // editor state. Professional callers omit it and keep selection-only edits.
+    snapshot.editor_ui.workspace.visible = req.workspace_visible;
+    snapshot.editor_ui.workspace.selected = req.workspace_selected;
     inject_transient_builtin(&mut snapshot, req.transient_builtin.as_ref());
     Ok(snapshot)
 }
@@ -766,3 +793,6 @@ mod reference_tests;
 #[cfg(test)]
 #[path = "web_chat_standard_tests.rs"]
 mod tests;
+#[cfg(test)]
+#[path = "web_chat_standard_workspace_tests.rs"]
+mod workspace_tests;

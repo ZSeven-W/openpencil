@@ -152,75 +152,80 @@ pub unsafe extern "C" fn op_editor_open_document(
                 )?)
             };
 
-            let editor_meta =
-                op_pen_loader::extract_editor_meta_with_report(&source).map(|value| value.meta);
-            let loaded = op_pen_loader::payload::load_canonical_with_compatibility(&source)
-                .map_err(|error| {
-                    FfiError::new(
-                        OpStatus::BadDocument,
-                        format!("document rejected by the canonical schema: {error}"),
-                    )
-                })?;
-            let document = loaded.loaded.value;
-            // A canonical load associates its pending `imageThumbs` table with
-            // the parsed document. Validate against a seed-free clone so
-            // `EditorState::from_document` cannot publish unaccepted bytes.
-            // The original seed remains pending until the live host accepts
-            // the replacement and `replace_document` activates it.
-            let validation_document = document.clone();
-            jian_ops_schema::image_thumbs::discard_for_document(&validation_document);
-            let mut next_state = op_editor_core::EditorState::from_document(validation_document);
-            op_pen_loader::apply_editor_meta_or_legacy_fallback(
-                &mut next_state,
-                editor_meta.clone(),
-            );
-            next_state.editor_ui.file_name_display = file_name.clone();
-            next_state.mark_saved_revision();
-            let next_scene = op_pen_loader::editor_state_to_active_page_layout_scene(&next_state);
-            if next_scene.active_page().is_none() {
-                jian_ops_schema::image_thumbs::discard_for_document(&document);
-                return Err(FfiError::new(
-                    OpStatus::LayoutError,
-                    "document has no renderable page",
-                ));
-            }
-
-            let host = match session.editor_mut() {
-                Ok(host) => host,
-                Err(error) => {
-                    jian_ops_schema::image_thumbs::discard_for_document(&document);
-                    return Err(error);
-                }
-            };
-            if let Err(rejected_document) =
-                host.install_open_document(document, editor_meta, file_name)
-            {
-                jian_ops_schema::image_thumbs::discard_for_document(&rejected_document);
-                return Err(FfiError::new(
-                    OpStatus::Busy,
-                    "document replacement is blocked by the collaboration session",
-                ));
-            }
-
-            // Keep the lightweight player state in exact lockstep with the
-            // full widget host: page APIs and the viewer scene still read it.
-            session.state = next_state;
-            session.scene = next_scene;
-            session.selected = None;
-            // Picker documents arrive as bytes without a writable path —
-            // the next Save prompts for a sandbox file name.
-            crate::editor_document::forget_current_document(session);
-            // Whole-document replacement: forget in-flight image-search jobs
-            // bound to the outgoing document's node ids (id aliasing — see
-            // MobileImageSearch::reset).
-            session.image_search.reset();
-            session.gesture.reset();
-            session.user_interacted = false;
-            session.fit_content_to_viewports();
-            session.request_redraw();
-            Ok(())
+            install_document_source(session, &source, file_name)
         })
     }
+}
+
+/// Install canonical document bytes through the same preflight for platform
+/// Open and engine-owned recent works.
+pub(crate) fn install_document_source(
+    session: &mut crate::lifecycle::Session,
+    source: &str,
+    file_name: Option<String>,
+) -> crate::error::FfiResult<()> {
+    let editor_meta =
+        op_pen_loader::extract_editor_meta_with_report(source).map(|value| value.meta);
+    let loaded =
+        op_pen_loader::payload::load_canonical_with_compatibility(source).map_err(|error| {
+            FfiError::new(
+                OpStatus::BadDocument,
+                format!("document rejected by the canonical schema: {error}"),
+            )
+        })?;
+    let document = loaded.loaded.value;
+    // A canonical load associates its pending `imageThumbs` table with
+    // the parsed document. Validate against a seed-free clone so
+    // `EditorState::from_document` cannot publish unaccepted bytes.
+    // The original seed remains pending until the live host accepts
+    // the replacement and `replace_document` activates it.
+    let validation_document = document.clone();
+    jian_ops_schema::image_thumbs::discard_for_document(&validation_document);
+    let mut next_state = op_editor_core::EditorState::from_document(validation_document);
+    op_pen_loader::apply_editor_meta_or_legacy_fallback(&mut next_state, editor_meta.clone());
+    next_state.editor_ui.file_name_display = file_name.clone();
+    next_state.mark_saved_revision();
+    let next_scene = op_pen_loader::editor_state_to_active_page_layout_scene(&next_state);
+    if next_scene.active_page().is_none() {
+        jian_ops_schema::image_thumbs::discard_for_document(&document);
+        return Err(FfiError::new(
+            OpStatus::LayoutError,
+            "document has no renderable page",
+        ));
+    }
+
+    let host = match session.editor_mut() {
+        Ok(host) => host,
+        Err(error) => {
+            jian_ops_schema::image_thumbs::discard_for_document(&document);
+            return Err(error);
+        }
+    };
+    if let Err(rejected_document) = host.install_open_document(document, editor_meta, file_name) {
+        jian_ops_schema::image_thumbs::discard_for_document(&rejected_document);
+        return Err(FfiError::new(
+            OpStatus::Busy,
+            "document replacement is blocked by the collaboration session",
+        ));
+    }
+
+    // Keep the lightweight player state in exact lockstep with the
+    // full widget host: page APIs and the viewer scene still read it.
+    session.state = next_state;
+    session.scene = next_scene;
+    session.selected = None;
+    // Picker documents arrive as bytes without a writable path —
+    // the next Save prompts for a sandbox file name.
+    crate::editor_document::forget_current_document(session);
+    // Whole-document replacement: forget in-flight image-search jobs
+    // bound to the outgoing document's node ids (id aliasing — see
+    // MobileImageSearch::reset).
+    session.image_search.reset();
+    session.gesture.reset();
+    session.user_interacted = false;
+    session.fit_content_to_viewports();
+    session.request_redraw();
+    Ok(())
 }
 
 /// Long-press → right-click (context menus, layer rows, canvas).

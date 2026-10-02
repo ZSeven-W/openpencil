@@ -15,6 +15,7 @@ fn recipe() -> ShareRecipe {
         device: HomeDevice::Desktop,
         ratio: SlideRatio::Classic43,
         info_kind: InfoKind::Flow,
+        app_pages: Default::default(),
         style_guide: Some("editorial-dark".to_string()),
     }
 }
@@ -120,4 +121,19 @@ fn an_ordinary_save_of_a_live_run_writes_no_recipe() {
     );
     assert!(state.editor_ui.share_recipe().is_some());
     assert_eq!(EditorMeta::from_state(&state).share_recipe, None);
+}
+
+#[test]
+fn app_page_choice_survives_the_shared_recipe_round_trip() {
+    for pages in [
+        op_editor_core::AppPages::Single,
+        op_editor_core::AppPages::Multiple,
+    ] {
+        let mut recipe = recipe();
+        recipe.family = HomeFamily::AppUi;
+        recipe.app_pages = pages;
+        let written = serde_json::to_string(&meta_with(Some(recipe.clone()))).unwrap();
+        let decoded: EditorMeta = serde_json::from_str(&written).unwrap();
+        assert_eq!(decoded.share_recipe.unwrap().app_pages, pages);
+    }
 }

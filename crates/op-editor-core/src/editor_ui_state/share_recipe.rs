@@ -34,6 +34,7 @@ pub struct ShareRecipe {
     pub brief: String,
     pub family: HomeFamily,
     pub device: HomeDevice,
+    pub app_pages: super::AppPages,
     pub ratio: SlideRatio,
     pub info_kind: InfoKind,
     /// Style-guide registry name, when the run was pinned to one.
@@ -53,6 +54,7 @@ impl ShareRecipe {
             brief: String::new(),
             family,
             device: options.device,
+            app_pages: options.app_pages,
             ratio: options.ratio,
             info_kind: options.info_kind,
             style_guide: style_guide.map(str::to_string),
@@ -86,6 +88,7 @@ impl ShareRecipe {
         TaskDraft {
             text: self.brief.clone(),
             device: self.device,
+            app_pages: self.app_pages,
             ratio: self.ratio,
             info_kind: self.info_kind,
         }
@@ -359,6 +362,7 @@ impl EditorUiState {
         let home = &mut self.home;
         home.set_task(recipe.family, now_ms);
         home.set_device(recipe.device);
+        home.set_app_pages(recipe.app_pages);
         home.set_ratio(recipe.ratio);
         home.set_info_kind(recipe.info_kind);
         home.set_draft(recipe.brief.clone());

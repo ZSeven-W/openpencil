@@ -55,6 +55,7 @@ fn every_reader_target_keeps_the_touch_floor() {
     let layout = reader.layout(W, H);
     let mut targets = vec![
         layout.back,
+        layout.more,
         layout.mode_normal,
         layout.mode_professional,
         layout.continue_chat,
@@ -119,6 +120,7 @@ fn hit_test_answers_every_painted_target() {
     let layout = reader.layout(W, H);
     let hit = |rect: Rect| reader.hit_test_layout(&layout, center(rect));
     assert_eq!(hit(layout.back), Some(ReaderHit::Back));
+    assert_eq!(hit(layout.more), Some(ReaderHit::More));
     assert_eq!(hit(layout.mode_normal), Some(ReaderHit::ModeNormal));
     assert_eq!(
         hit(layout.mode_professional),
@@ -130,6 +132,28 @@ fn hit_test_answers_every_painted_target() {
     assert_eq!(hit(layout.edit_page), Some(ReaderHit::EditPage));
     assert_eq!(hit(layout.stage), Some(ReaderHit::Stage));
     assert!(layout.status_action.is_none(), "a finished run offers none");
+}
+
+#[test]
+fn reader_file_menu_keeps_header_targets_separate_in_every_locale() {
+    for width in [320.0, 360.0, 390.0, 430.0] {
+        for locale in op_i18n::Locale::ALL {
+            let mut state = reading(HomeFamily::Presentation, 3, WorkspacePhase::Done);
+            state.editor_ui.locale = locale;
+            let reader = WorksReader::for_editor(&state).unwrap();
+            let layout = reader.layout(width, H);
+            let right = |r: Rect| r.origin.x + r.size.x;
+            assert!(right(layout.back) <= layout.title.origin.x);
+            assert!(layout.title.size.x >= 39.99, "{locale:?} at {width}");
+            assert!(right(layout.title) <= layout.mode_switch.origin.x);
+            assert!(right(layout.mode_switch) < layout.more.origin.x);
+            assert!(right(layout.more) <= width);
+            assert_eq!(
+                reader.hit_test_layout(&layout, center(layout.more)),
+                Some(ReaderHit::More)
+            );
+        }
+    }
 }
 
 #[test]

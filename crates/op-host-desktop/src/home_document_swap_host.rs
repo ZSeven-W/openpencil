@@ -61,8 +61,13 @@ fn save_rescue_copy(
 ) -> Result<PathBuf, String> {
     std::fs::create_dir_all(dir).map_err(|error| error.to_string())?;
     let path = dir.join(rescue_file_name(&replaced.title, unix_seconds));
-    op_host_services::doc_io::save_to_path(&replaced.state, &path)
-        .map_err(|error| error.to_string())?;
+    op_host_services::doc_io::save_document_with_thumbnails_to_path(
+        &replaced.state.doc,
+        op_pen_loader::EditorMeta::from_state(&replaced.state),
+        &replaced.thumbnails,
+        &path,
+    )
+    .map_err(|error| error.to_string())?;
     Ok(path)
 }
 
@@ -112,6 +117,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("op-home-rescue-{}", std::process::id()));
         let replaced = ReplacedHomeDocument {
             state: Box::new(op_editor_core::EditorState::starter()),
+            thumbnails: Default::default(),
             had_unsaved_changes: true,
             title: "咖啡点单 App".into(),
         };

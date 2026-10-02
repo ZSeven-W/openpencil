@@ -91,6 +91,63 @@ fn paint_once(host: &mut WidgetHostNative) {
 }
 
 #[test]
+fn reader_file_actions_save_or_export_without_leaving_normal_mode() {
+    use op_editor_ui::widgets::mobile_chrome::{more_entry_rect, MobileMoreEntry};
+    for (width, height, size_class) in [
+        (W, H, EditorSizeClass::Compact),
+        (834.0, 1194.0, EditorSizeClass::Medium),
+        (1366.0, 1024.0, EditorSizeClass::Expanded),
+    ] {
+        for entry in [
+            MobileMoreEntry::SaveFile,
+            MobileMoreEntry::SaveAsFile,
+            MobileMoreEntry::Export,
+        ] {
+            let mut host = reading_host(HomeFamily::Presentation, 3, 1920, 1080);
+            host.editor_state_mut().editor_ui.size_class = size_class;
+            host.editor_state_mut().editor_ui.workspace.selected = 1;
+            let target = WorksReader::for_editor(host.editor_state())
+                .unwrap()
+                .layout(width, height)
+                .more;
+            let point = center(target);
+            assert!(host.apply_press(point.x, point.y, width, height));
+            host.apply_release_with_viewport(width, height);
+            assert_eq!(
+                host.editor_state().editor_ui.mobile_sheet,
+                Some(MobileSheetKind::More)
+            );
+            assert!(host.works_reader_visible());
+            let panel = host.mobile_sheet_rect(width, height, MobileSheetKind::More);
+            let index = MobileMoreEntry::visible(host.editor_state())
+                .iter()
+                .position(|item| *item == entry)
+                .unwrap();
+            let point = center(more_entry_rect(host.editor_state(), panel, index));
+            assert!(host.apply_press(point.x, point.y, width, height));
+            host.apply_release_with_viewport(width, height);
+            let ui = &host.editor_state().editor_ui;
+            assert_eq!(ui.mobile_sheet, None);
+            assert_eq!(ui.workspace.selected, 1);
+            assert!(
+                host.works_reader_visible(),
+                "file actions retain the normal reader"
+            );
+            match entry {
+                MobileMoreEntry::SaveFile => {
+                    assert_eq!(ui.pending_file_action, Some(FileAction::Save))
+                }
+                MobileMoreEntry::SaveAsFile => {
+                    assert_eq!(ui.pending_file_action, Some(FileAction::SaveAs))
+                }
+                MobileMoreEntry::Export => assert!(ui.export_dialog_open),
+                _ => unreachable!(),
+            }
+        }
+    }
+}
+
+#[test]
 fn a_phone_home_send_opens_the_reader_not_the_professional_canvas() {
     let mut state = op_editor_core::EditorState::starter();
     state.editor_ui.touch = true;

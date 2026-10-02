@@ -24,7 +24,13 @@ pub(super) fn launch_draft_refine_turn(
     current_chat: &mut Option<ChatSession>,
     current_design: &mut Option<DesignSession>,
 ) -> bool {
-    if super::launch_direct_modify_turn(host, user_text, current_chat, current_design) {
+    if super::launch_direct_modify_turn(
+        host,
+        user_text,
+        op_editor_core::LaunchRoute::Refine,
+        current_chat,
+        current_design,
+    ) {
         // The modify plan has captured its target frames; the selection was
         // only the hand-off, so the draft stops wearing selection outlines.
         host.editor_state_mut().clear_selection();

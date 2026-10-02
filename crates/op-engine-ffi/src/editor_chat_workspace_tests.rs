@@ -44,9 +44,9 @@ fn phone_deck(base_url: &str) -> WidgetHostNative {
     let settings = &mut host.editor_state_mut().editor_ui.agent_settings;
     settings.builtin_agents.clear();
     settings.add_builtin_agent_config(
-        "DeepSeek",
+        "GLM",
         "sk-mobile-chat",
-        "deepseek-chat",
+        "glm-5.3-flash",
         BuiltinAgentKind::OpenAiCompat,
         base_url,
     );
@@ -126,24 +126,15 @@ fn stop() -> String {
     ])
 }
 
-/// One batch_design call that edits the bound board AND renames another
-/// board — the second write must not survive.
+/// A structured response tries to edit the scoped board and an unrelated one.
 fn out_of_scope_call() -> String {
-    let operations = concat!(
-        r##"U("b1",{"name":"暖色封面"})"##,
-        "\n",
-        r##"U("b0",{"name":"被误改"})"##,
+    let script = concat!(
+        r#"I(null,{"type":"frame","id":"b1","name":"暖色封面","x":2000,"y":0,"width":1920,"height":1080,"children":[]});"#,
+        r#"I(null,{"type":"frame","id":"b0","name":"被误改","x":0,"y":0,"width":1920,"height":1080,"children":[]});"#,
     );
-    let args = serde_json::json!({ "operations": operations }).to_string();
-    let call = serde_json::json!({
-        "choices": [{ "delta": { "tool_calls": [{
-            "index": 0, "id": "call_page_edit",
-            "function": { "name": "batch_design", "arguments": args },
-        }]}}],
-    });
     sse(&[
-        call.to_string(),
-        r#"{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}"#.to_string(),
+        serde_json::json!({"choices":[{"delta":{"content":script}}]}).to_string(),
+        r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#.to_string(),
         "[DONE]".to_string(),
     ])
 }
@@ -160,29 +151,35 @@ fn pump_to_completion(chat: &mut MobileChatHost, host: &mut WidgetHostNative) {
 
 #[test]
 fn edit_this_page_scopes_the_prompt_and_fences_writes_to_the_board() {
-    let mut responses = vec![out_of_scope_call()];
-    responses.extend(std::iter::repeat_with(stop).take(7));
-    let (base_url, requests) = spawn_server(responses);
+    let (base_url, requests) = spawn_server(vec![out_of_scope_call()]);
     let mut host = phone_deck(&base_url);
     host.editor_state_mut()
         .editor_ui
         .workspace
         .stage_page_edit("b1", 1);
+    let mut expected = host.editor_state().active_children().to_vec();
+    expected[1].base_mut().name = Some("暖色封面".into());
     send(&mut host, "换成暖色");
 
     let mut chat = MobileChatHost::default();
     pump_to_completion(&mut chat, &mut host);
 
     let requests = requests.lock().expect("log");
-    assert!(
-        requests[0].contains("PAGE EDIT SCOPE"),
-        "the prompt names its scope"
+    assert_eq!(
+        requests.len(),
+        1,
+        "a local edit makes one structured request"
     );
-    assert!(requests[0].contains("`b1`"));
-    assert!(
-        requests.iter().any(|r| r.contains("were reverted")),
-        "the model hears its stray write did not stick"
-    );
+    let body: serde_json::Value =
+        serde_json::from_str(requests[0].split_once("\r\n\r\n").unwrap().1).unwrap();
+    assert!(body.get("tools").is_none(), "no whole-design tool catalog");
+    assert_eq!(body["model"], "glm-5.3-flash");
+    assert_eq!(body["thinking"]["type"], "disabled");
+    let prompt = body["messages"].as_array().unwrap().last().unwrap()["content"]
+        .as_str()
+        .unwrap();
+    assert!(prompt.contains("CONTEXT NODES") && prompt.contains("b1"));
+    assert!(!prompt.contains("b0") && !prompt.contains("b2"));
     let state = host.editor_state();
     let ids: Vec<&str> = state.active_children().iter().map(|n| n.id_str()).collect();
     assert_eq!(ids, ["b0", "b1", "b2"], "no stray top-level board survives");
@@ -196,6 +193,11 @@ fn edit_this_page_scopes_the_prompt_and_fences_writes_to_the_board() {
         [Some("第 1 页"), Some("暖色封面"), Some("第 3 页")],
         "the bound board changed, the other page's write was reverted"
     );
+    assert_eq!(
+        state.active_children(),
+        expected.as_slice(),
+        "no loop-finalize repair may change authored geometry"
+    );
     let workspace = &state.editor_ui.workspace;
     assert_eq!(
         workspace.phase,
@@ -204,6 +206,40 @@ fn edit_this_page_scopes_the_prompt_and_fences_writes_to_the_board() {
     );
     assert!(workspace.page_edit_running.is_none());
     assert!(workspace.run_epoch != 0, "the launch stamped its epoch");
+}
+
+#[test]
+fn a_mobile_title_edit_changes_exactly_one_field_without_finalize() {
+    let title = serde_json::json!({
+        "type":"text", "id":"home-title", "name":"Hero title", "content":"原标题", "x":24, "y":80,
+        "width":340, "fontSize":28, "fontWeight":"700"
+    });
+    let mut edited = title.clone();
+    edited["content"] = serde_json::json!("weekend coffee");
+    let response = sse(&[
+        serde_json::json!({"choices":[{"delta":{"content":format!("I(null,{});", edited)}}]})
+            .to_string(),
+        r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#.to_string(),
+        "[DONE]".to_string(),
+    ]);
+    let (base_url, requests) = spawn_server(vec![response]);
+    let mut host = phone_deck(&base_url);
+    let state = host.editor_state_mut();
+    state.active_children_mut()[0]
+        .children_mut()
+        .unwrap()
+        .push(serde_json::from_value(title).unwrap());
+    let mut expected = state.doc.clone();
+    expected.children[0].children_mut().unwrap()[0] = serde_json::from_value(edited).unwrap();
+    state.editor_ui.workspace.stage_page_edit("b0", 0);
+    send(&mut host, "edit title to weekend coffee");
+    pump_to_completion(&mut MobileChatHost::default(), &mut host);
+    assert_eq!(requests.lock().unwrap().len(), 1);
+    assert_eq!(
+        host.editor_state().doc,
+        expected,
+        "only the requested title content changes"
+    );
 }
 
 #[test]
@@ -242,30 +278,75 @@ fn stop_settles_the_reader_stopped_and_scope_is_one_shot() {
         .editor_ui
         .workspace
         .stage_page_edit("b2", 2);
-    let scope = scope_launch(&mut host, "改标题");
-    assert_eq!(scope.fence.as_deref(), Some("b2"));
+    let scope = scope_launch(&mut host, "改标题", op_editor_core::LaunchRoute::Auto);
+    assert_eq!(scope.fence.as_deref().unwrap(), ["b2"]);
     assert!(scope.prompt.contains("page 3"));
-    let again = scope_launch(&mut host, "再改一次");
+    let again = scope_launch(&mut host, "再改一次", op_editor_core::LaunchRoute::Auto);
     assert!(again.fence.is_none(), "the binding covered one send only");
     assert_eq!(again.prompt, "再改一次");
 }
 
 #[test]
-fn a_vanished_board_runs_the_turn_unscoped() {
+fn a_vanished_board_cannot_run_an_unscoped_edit() {
     let mut host = phone_deck("http://127.0.0.1:9");
     host.editor_state_mut()
         .editor_ui
         .workspace
         .stage_page_edit("gone", 0);
-    let scope = scope_launch(&mut host, "改一下");
+    let scope = scope_launch(&mut host, "改一下", op_editor_core::LaunchRoute::Auto);
     assert!(scope.fence.is_none());
     assert_eq!(scope.prompt, "改一下");
+    assert!(scope.error.is_some());
     assert!(host
         .editor_state()
         .editor_ui
         .workspace
         .page_edit_running
         .is_none());
+}
+
+#[test]
+fn a_named_page_followup_uses_the_same_fence_without_a_reader_button() {
+    let mut host = phone_deck("http://127.0.0.1:9");
+    host.editor_state_mut().active_children_mut()[0]
+        .base_mut()
+        .name = Some("Coffee Home".into());
+    let scope = scope_launch(
+        &mut host,
+        "把首页标题改成“周末，来杯好咖啡”，保留其他页面和布局。",
+        op_editor_core::LaunchRoute::Auto,
+    );
+    assert_eq!(scope.fence.as_deref().unwrap(), ["b0"]);
+    assert!(scope.error.is_none());
+    assert!(scope.prompt.contains("node id `b0`"));
+}
+
+#[test]
+fn pinned_ppt_refine_fences_every_selected_draft_board_in_normal_mode() {
+    let mut host = phone_deck("http://127.0.0.1:9");
+    let state = host.editor_state_mut();
+    state.selection.set = vec![
+        op_editor_core::NodeId::new("b0"),
+        op_editor_core::NodeId::new("b1"),
+    ];
+    assert!(state.editor_ui.workspace.visible);
+    let prompt = op_editor_core::refine_prompt(
+        HomeFamily::Presentation,
+        "为 OpenPencil 做一份 5 页产品介绍 PPT，包含封面和结束页。",
+    );
+    let scope = scope_launch(&mut host, &prompt, op_editor_core::LaunchRoute::Refine);
+    assert!(scope.error.is_none());
+    assert_eq!(scope.fence.as_deref().unwrap(), ["b0", "b1"]);
+    let before = host.editor_state().active_children().to_vec();
+    let (_, reverted) = fenced(host.editor_state_mut(), scope.fence.as_deref(), |state| {
+        for board in state.active_children_mut() {
+            board.base_mut().name = Some("Edited".into());
+        }
+    });
+    assert!(reverted);
+    assert_ne!(host.editor_state().active_children()[0], before[0]);
+    assert_ne!(host.editor_state().active_children()[1], before[1]);
+    assert_eq!(host.editor_state().active_children()[2], before[2]);
 }
 
 #[test]

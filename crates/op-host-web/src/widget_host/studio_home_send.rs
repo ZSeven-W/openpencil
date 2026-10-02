@@ -260,11 +260,13 @@ impl WidgetHost {
         template_id: &'static str,
         discard_confirmed: bool,
     ) -> bool {
-        let Some(boards) = scene_template_document(template_id)
+        let Some(mut boards) = scene_template_document(template_id)
             .and_then(|source| template_boards(source, template_id))
         else {
             return false;
         };
+        let home = &self.editor_state.editor_ui.home;
+        op_editor_core::prepare_home_example_boards(home.task, home.task_draft(), &mut boards);
         if !self.make_room_for_home_run(
             HomeReplaceIntent::TemplateDraft(template_id),
             discard_confirmed,

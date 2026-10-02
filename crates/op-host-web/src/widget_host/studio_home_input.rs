@@ -33,11 +33,7 @@ impl WidgetHost {
     /// chord never reaches a chat input or canvas selection hidden under
     /// Home.
     pub(in crate::widget_host) fn home_composer_owns_keyboard(&self) -> bool {
-        let ui = &self.editor_state.editor_ui;
-        self.home_visible()
-            && !ui.agent_settings_open
-            && !ui.login_modal_open
-            && !ui.chat_model_picker.open
+        self.editor_state.editor_ui.home_composer_owns_keyboard()
     }
 
     /// Typed character while Home is up. `None` lets the ordinary ladder run
@@ -107,7 +103,7 @@ impl WidgetHost {
     }
 
     pub(in crate::widget_host) fn home_select_all(&mut self) -> bool {
-        if !self.home_visible() || self.home_modal_open() {
+        if !self.home_composer_owns_keyboard() {
             return false;
         }
         self.editor_state.editor_ui.home.select_all(self.now_ms);
@@ -280,6 +276,11 @@ impl WidgetHost {
         if !self.home_visible() {
             return None;
         }
+        // Settings paint last and take presses first, even if another
+        // Home overlay was left open by a keyboard shortcut.
+        if self.editor_state.editor_ui.agent_settings_open {
+            return Some(self.update_agent_settings_hover(x, y));
+        }
         if self.home_modal_open() || self.editor_state.editor_ui.account_menu_open {
             return Some(self.cursor_move_modal_tiers(x, y).unwrap_or(false));
         }
@@ -410,9 +411,6 @@ impl WidgetHost {
             };
             home.paint(&mut cx, viewport);
         }
-        self.paint_agent_settings_overlay(backend, viewport_width, viewport_height);
-        self.paint_login_modal_overlay(backend, viewport_width, viewport_height);
-        self.paint_home_account_menu(backend, viewport_width);
         if self.editor_state.editor_ui.chat_model_picker.open {
             if let Some(card) = self.home_model_picker_geometry(viewport_width, viewport_height) {
                 let ui = &self.editor_state.editor_ui;
@@ -432,6 +430,11 @@ impl WidgetHost {
                 );
             }
         }
+        // Reverse the press / hover priority so keyboard-opened settings
+        // also cover a model picker or account dropdown left underneath.
+        self.paint_home_account_menu(backend, viewport_width);
+        self.paint_login_modal_overlay(backend, viewport_width, viewport_height);
+        self.paint_agent_settings_overlay(backend, viewport_width, viewport_height);
         // The entrance choreography, the card hover lift and the example art
         // crossfade run on the clock with no input behind them. The caret
         // blink is deliberately not folded in: the web host has no blink
@@ -467,3 +470,7 @@ impl WidgetHost {
         menu.paint(&mut cx, menu_rect);
     }
 }
+
+#[cfg(test)]
+#[path = "studio_home_settings_tests.rs"]
+mod settings_tests;

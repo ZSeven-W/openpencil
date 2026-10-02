@@ -50,8 +50,13 @@ pub(super) mod launch_design;
 use launch_design::{launch_design_loop_turn, stamp_design_turn_scenario};
 
 // The pinned in-place refine of a Home template draft, split out at the cap.
+#[path = "chat_session_launch_modify.rs"]
+mod launch_modify;
 #[path = "chat_session_launch_refine.rs"]
 mod launch_refine;
+use launch_modify::launch_direct_modify_turn;
+#[path = "chat_session_launch_workspace.rs"]
+mod launch_workspace;
 // Studio's side-by-side design directions, split out at the cap.
 #[path = "chat_session_launch_variants.rs"]
 pub(crate) mod launch_variants;
@@ -137,6 +142,16 @@ fn launch_if_pending_inner(
             return true;
         }
     }
+    if launch_route == op_editor_core::LaunchRoute::Auto
+        && launch_workspace::launch_workspace_edit(
+            host,
+            &effective_user_text,
+            current_chat,
+            current_design,
+        )
+    {
+        return true;
+    }
     // TS parity (ai-chat-handlers.ts:560-679): builtin / ACP entries
     // take their own early-return paths; ONLY external CLI providers
     // run the standard-mode classify → modify/new/chat pipeline.
@@ -153,10 +168,20 @@ fn launch_if_pending_inner(
         // CLI transport construction failed — fall through to the
         // honest-error path below.
     } else if should_launch_direct_modify(host.editor_state(), &effective_user_text) {
-        if launch_direct_modify_turn(host, &effective_user_text, current_chat, current_design) {
+        if launch_direct_modify_turn(
+            host,
+            &effective_user_text,
+            op_editor_core::LaunchRoute::Auto,
+            current_chat,
+            current_design,
+        ) {
             return true;
         }
     } else if !op_host_services::chat_intent::is_non_request_text(&effective_user_text)
+        && !op_host_services::chat_intent::workspace_edit::is_workspace_question(
+            host.editor_state(),
+            &effective_user_text,
+        )
         && (launch_route.implies_design_intent()
             || matches!(classify_intent(&effective_user_text), Intent::Design))
     {
@@ -391,6 +416,9 @@ fn should_launch_direct_modify(state: &EditorState, user_text: &str) -> bool {
     if active_page_is_blank_starter_frame(state) {
         return false;
     }
+    if op_host_services::chat_intent::workspace_edit::is_workspace_question(state, user_text) {
+        return false;
+    }
     // A whole-screen draw request ("继续画一下 search 页面") must reach the
     // design pipeline's new-frame route, never get hijacked into editing the
     // existing frame in place — even when it also trips the modify classifier.
@@ -410,65 +438,6 @@ fn should_launch_direct_modify(state: &EditorState, user_text: &str) -> bool {
     (keyword_intent == op_host_services::chat_intent::DesignIntent::Modify
         || selected_target_instruction)
         && op_host_services::chat_intent::build_modify_plan(state, user_text).is_some()
-}
-
-fn launch_direct_modify_turn(
-    host: &mut WidgetHostNative,
-    user_text: &str,
-    current_chat: &mut Option<ChatSession>,
-    current_design: &mut Option<DesignSession>,
-) -> bool {
-    let Some(provider) = provider_for_selected_model(host) else {
-        return false;
-    };
-    let Some(plan) =
-        op_host_services::chat_intent::build_modify_plan(host.editor_state(), user_text)
-    else {
-        return false;
-    };
-    let target_frame_ids = plan.target_frame_ids;
-    let request = ChatRequest {
-        system_prompt: plan.system_prompt,
-        user_message: plan.user_message,
-        max_output_tokens: 8192,
-        model: selected_cli_model_id(host),
-        // Structured-JSON turn: reasoning models (MiniMax-M3, GLM-5.x)
-        // burn the whole output budget inside <think> and emit zero
-        // nodes (measured: an M3 modify turn died in analysis prose).
-        // Same policy as the orchestrator's design subtasks.
-        thinking: op_ai::chat_provider::ThinkingMode::Disabled,
-        ..Default::default()
-    };
-    let (chat_tx, chat_rx) = mpsc::channel::<ChatDelta>();
-    let (executor, tool_rx) = chat_tool_channel();
-    let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    *current_design = None;
-    super::finalize_design_session_if_needed(host, current_chat, "teardown-backstop");
-    *current_chat = Some(ChatSession::from_channels_with_cancel(
-        chat_rx,
-        Some(tool_rx),
-        Arc::clone(&cancel),
-    ));
-    let spawned = thread::Builder::new()
-        .name("op-chat-modify".into())
-        .spawn(move || {
-            op_host_services::chat_intent::run_modify_turn_cancellable(
-                provider.as_ref(),
-                request,
-                &chat_tx,
-                &executor,
-                target_frame_ids,
-                cancel,
-            );
-        });
-    if let Err(err) = spawned {
-        // Worker never started — un-park the session and fall through
-        // to the honest-error path instead of crashing the UI thread.
-        eprintln!("openpencil-desktop: spawn op-chat-modify thread failed: {err}");
-        *current_chat = None;
-        return false;
-    }
-    true
 }
 
 /// Launch a CLI standard-mode turn (GAP #33): pre-build every route's

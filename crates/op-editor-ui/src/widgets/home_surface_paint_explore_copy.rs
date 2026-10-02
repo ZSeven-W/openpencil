@@ -48,7 +48,9 @@ fn wrap_clause(
     measure: &mut impl FnMut(&str) -> f32,
     lines: &mut Vec<String>,
 ) {
-    let by_word = clause.contains(' ');
+    // A Latin/Cyrillic word with no spaces is still one word, not a CJK
+    // phrase: do not orphan its last letter onto another label line.
+    let by_word = clause.contains(' ') || clause.chars().all(|c| (c as u32) < 0x2e80);
     let pieces: Vec<&str> = if by_word {
         clause.split_inclusive(' ').collect()
     } else {

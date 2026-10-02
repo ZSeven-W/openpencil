@@ -13,17 +13,19 @@ impl WidgetHostNative {
     pub fn apply_backspace(&mut self) -> bool {
         // Home's overlays own Backspace above the sheet draft (the same
         // precedence `apply_text` gives them).
-        if self.editor_state.editor_ui.home.visible {
+        if self.editor_state.editor_ui.home.visible
+            && !self.editor_state.editor_ui.agent_settings_open
+        {
+            if self.editor_state.editor_ui.login_modal_open
+                || self.editor_state.editor_ui.account_menu_open
+            {
+                return true;
+            }
             if self.editor_state.editor_ui.chat_model_picker.open {
                 return self.apply_chat_model_picker_backspace();
             }
-            if self.editor_state.editor_ui.login_modal_open {
-                return true;
-            }
-            if !self.editor_state.editor_ui.agent_settings_open {
-                if let Some(changed) = self.home_backspace() {
-                    return changed;
-                }
+            if let Some(changed) = self.home_backspace() {
+                return changed;
             }
             // Settings modal over Home: fall through so its own input
             // arm in the ladder below takes the key.

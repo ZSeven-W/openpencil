@@ -397,6 +397,8 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
         "document": state.doc,
         "editorMeta": op_pen_loader::EditorMeta::from_state(state),
         "selectedIds": selected_ids,
+        "workspaceVisible": state.editor_ui.workspace.visible,
+        "workspaceSelected": state.editor_ui.workspace.selected,
         "activePageId": active_page_id,
         "launchRoute": launch_route,
         "variantCount": variant_count,

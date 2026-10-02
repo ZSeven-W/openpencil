@@ -96,8 +96,19 @@ impl WidgetHost {
                 self.editor_state.editor_ui.home.more_open = open;
             }
             HomeHit::Segment(index) => {
+                let old_example = HomeSurface::for_editor(&self.editor_state)
+                    .map(|s| s.example_prompt().to_string());
+                let replace_example = old_example.as_deref().is_some_and(|s| {
+                    !self.editor_state.editor_ui.home.draft.is_empty()
+                        && self.editor_state.editor_ui.home.draft == s
+                });
                 let home = &mut self.editor_state.editor_ui.home;
                 match home.task {
+                    HomeFamily::AppUi if index >= 2 => home.set_app_pages(if index == 3 {
+                        op_editor_core::AppPages::Multiple
+                    } else {
+                        op_editor_core::AppPages::Single
+                    }),
                     HomeFamily::AppUi => home.set_device(match index {
                         1 => HomeDevice::Desktop,
                         _ => HomeDevice::Mobile,
@@ -114,6 +125,13 @@ impl WidgetHost {
                     _ => {}
                 }
                 home.art_switched_at_ms = self.now_ms.max(1);
+                if replace_example {
+                    let new_example = HomeSurface::for_editor(&self.editor_state)
+                        .map(|s| s.example_prompt().to_string());
+                    if let Some(example) = new_example {
+                        self.editor_state.editor_ui.home.set_draft(example);
+                    }
+                }
             }
             HomeHit::Attachment => {
                 // The browser file picker behind the chat attachment button;
@@ -151,8 +169,10 @@ impl WidgetHost {
                 home.use_example(&example);
             }
             HomeHit::Professional => {
-                self.editor_state.editor_ui.home.hide();
-                self.editor_state.editor_ui.entry_surface = EntrySurface::Canvas;
+                self.editor_state.tool = self
+                    .editor_state
+                    .editor_ui
+                    .enter_professional_from_home(self.editor_state.tool);
             }
             HomeHit::ModeNormal => {
                 // Home IS the normal mode: the 普通 half of the switch only
@@ -177,7 +197,13 @@ impl WidgetHost {
                         Some(op_editor_core::FileAction::OpenRecent(index));
                 }
             }
-            HomeHit::NavSettings | HomeHit::ConnectApiKey | HomeHit::ConnectCli => {
+            HomeHit::ConnectApiKey => {
+                op_editor_ui::widgets::agent_settings_press_focus::open_builtin_setup(
+                    &mut self.editor_state,
+                    self.now_ms,
+                );
+            }
+            HomeHit::NavSettings | HomeHit::ConnectCli => {
                 // The web settings modal is the connect path for both rows:
                 // a browser has no local CLI, and the Agents tab carries the
                 // API-key form.

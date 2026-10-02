@@ -29,6 +29,8 @@ struct WireShareRecipe {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     device: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    app_pages: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     ratio: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     info_kind: Option<String>,
@@ -42,6 +44,7 @@ impl From<&ShareRecipe> for WireShareRecipe {
             brief: recipe.brief.clone(),
             family: recipe.family.id().to_string(),
             device: Some(recipe.device.id().to_string()),
+            app_pages: Some(recipe.app_pages.id().to_string()),
             ratio: Some(recipe.ratio.id().to_string()),
             info_kind: Some(recipe.info_kind.id().to_string()),
             style_guide: recipe.style_guide.clone(),
@@ -55,6 +58,11 @@ impl WireShareRecipe {
         let recipe = ShareRecipe {
             brief: String::new(),
             family,
+            app_pages: self
+                .app_pages
+                .as_deref()
+                .and_then(op_editor_core::AppPages::from_id)
+                .unwrap_or_default(),
             device: self
                 .device
                 .as_deref()

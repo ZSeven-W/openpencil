@@ -220,8 +220,7 @@ impl Session {
         // not disappear behind it. Idempotent and best-effort: a migration
         // failure never blocks the editor from opening.
         #[cfg(feature = "editor")]
-        if let Err(error) = crate::editor_document::migrate_legacy_documents(&session.document_save)
-        {
+        if let Err(error) = crate::editor_document::initialize_documents(&mut session) {
             session.emit_runtime_error(2, &error.message, "op-engine-ffi/save");
         }
         Ok(session)

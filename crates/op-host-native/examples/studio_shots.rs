@@ -17,6 +17,15 @@ use op_i18n::Locale;
 #[path = "studio_shots_parts/tablet.rs"]
 mod tablet;
 
+#[path = "studio_shots_parts/spacing.rs"]
+mod spacing;
+
+#[path = "studio_shots_parts/app_pages.rs"]
+mod app_pages;
+
+#[path = "studio_shots_parts/novice.rs"]
+mod novice;
+
 /// A host at `locale` on the given desktop Home task, with a usable
 /// model selected (the state the approved prototype captures show).
 fn home_host(locale: Locale, task: HomeFamily, device: HomeDevice) -> WidgetHostNative {
@@ -252,6 +261,7 @@ fn shared_view(locale: Locale) -> WidgetHostNative {
             device: HomeDevice::Mobile,
             ratio: op_editor_core::SlideRatio::Wide169,
             info_kind: op_editor_core::InfoKind::Data,
+            app_pages: Default::default(),
             style_guide: Some("editorial-dark".into()),
         }),
         ..op_pen_loader::EditorMeta::default()
@@ -509,6 +519,18 @@ fn main() {
         .unwrap_or_else(|| "/tmp/studio-shots".into());
     let filter = std::env::args().nth(2).unwrap_or_default();
     std::fs::create_dir_all(&out_dir).expect("create out dir");
+    if filter == "novice" {
+        novice::run(&out_dir);
+        return;
+    }
+    if filter == "app-pages" {
+        app_pages::run(&out_dir);
+        return;
+    }
+    if filter == "spacing" {
+        spacing::run(&out_dir);
+        return;
+    }
     for (name, w, h, build) in all_scenarios() {
         if !name.contains(filter.as_str()) {
             continue;

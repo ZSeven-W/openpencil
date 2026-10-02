@@ -33,6 +33,9 @@ impl HomeSurface<'_> {
     pub fn focus_rect(&self, layout: &HomeLayout, hit: HomeHit) -> Option<Rect> {
         let rect = match hit {
             HomeHit::Sheet => layout.input_box,
+            HomeHit::Segment(index) if self.state.task == HomeFamily::AppUi && index >= 2 => {
+                *layout.app_page_options.get((index - 2) as usize)?
+            }
             HomeHit::Segment(index) => *layout.segment_options.get(index as usize)?,
             HomeHit::Attachment => layout.screenshot,
             HomeHit::Variants => layout.variants,
@@ -82,7 +85,7 @@ impl HomeSurface<'_> {
             order.extend([HomeHit::ReplaceConfirm, HomeHit::ReplaceKeep]);
         }
         order.push(HomeHit::Sheet);
-        order.extend((0..3).map(HomeHit::Segment));
+        order.extend((0..4).map(HomeHit::Segment));
         order.extend([
             HomeHit::Attachment,
             HomeHit::Variants,

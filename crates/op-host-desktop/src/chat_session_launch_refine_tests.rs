@@ -71,6 +71,10 @@ fn a_pinned_refine_edits_the_selected_boards_instead_of_designing_anew() {
 
     let mut host = host_with_builtin_model();
     let boards = with_draft_boards(&mut host);
+    host.editor_state_mut()
+        .editor_ui
+        .workspace
+        .open_for_reading(op_editor_core::HomeFamily::Presentation, 1);
     host.editor_state_mut().selection = SelectionState {
         anchor: NodeId::new("slide-2"),
         set: boards.iter().map(NodeId::new).collect(),

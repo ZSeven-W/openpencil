@@ -61,6 +61,12 @@ use crate::editor_chat_turn::{run_builtin_turn, BuiltinChatTurn};
 use crate::editor_chat_workspace as run_ws;
 use crate::lifecycle::Session;
 
+#[path = "editor_chat_design_launch.rs"]
+mod design_launch;
+use design_launch::start_design_turn;
+#[path = "editor_chat_modify.rs"]
+mod modify;
+
 /// Engine-thread repoll cadence while a turn streams (~30 fps), matching
 /// the desktop winit loop's wake rate during a chat turn.
 const STREAM_POLL_INTERVAL_MS: u64 = 33;
@@ -70,6 +76,8 @@ const CHAT_MAX_OUTPUT_TOKENS: u32 = 4096;
 
 struct ChatTurnJob {
     session: ChatSession,
+    /// Document lifetime, independent of node ids or chat tabs retained on Open.
+    document_identity: (u64, u64),
     /// Tab this turn is bound to. Deltas keep landing there even after the
     /// user switches tabs mid-stream (desktop `running_tab` parity);
     /// `run_tab_mut` falls back to the active tab if the index went stale.
@@ -79,7 +87,7 @@ struct ChatTurnJob {
     /// entrance reveals). `None` for plain chat turns.
     indicator_epoch: Option<u64>,
     /// 改这一页: the board this turn's writes are fenced to.
-    page_edit_fence: Option<String>,
+    page_edit_fence: Option<Vec<String>>,
     /// At least one design tool changed the live document. Kept separately
     /// from `viewport_fitted`: variable/style writes may precede the first
     /// sized root, but final completion must still fit any resulting content.
@@ -116,7 +124,27 @@ impl MobileChatHost {
             if let Some(abort) = job.abort {
                 abort.abort();
             }
+            if let Some(epoch) = job.indicator_epoch {
+                op_editor_core::agent_indicators::end_if_epoch(epoch);
+            }
         }
+    }
+
+    fn drop_stale_turn(&mut self, host: &WidgetHostNative) -> bool {
+        let live = (
+            host.document_epoch(),
+            host.editor_state().document_generation(),
+        );
+        if self
+            .turn
+            .as_ref()
+            .is_some_and(|job| job.document_identity != live)
+        {
+            // No retire/finalize: those passes would touch the newly opened file.
+            self.drop_turn();
+            return true;
+        }
+        false
     }
 
     /// Drain widget-raised chat flags, launch a newly requested turn, and
@@ -128,6 +156,7 @@ impl MobileChatHost {
         now_ms: u64,
         viewport_size: (f32, f32),
     ) -> Option<u64> {
+        self.drop_stale_turn(host);
         let mut changed = self.drain_new_chat_and_stop(host);
         let launched = self.launch_if_pending(host);
         changed |= launched;
@@ -189,12 +218,12 @@ impl MobileChatHost {
                 });
                 changed = true;
             }
-            if let Some(epoch) = job.indicator_epoch {
-                op_editor_core::agent_indicators::end_if_epoch(epoch);
-            }
             let state = host.editor_state_mut();
             state.chat.agents_running = (0, 0);
             changed |= reconcile_starter_ghost(state, false);
+        }
+        if let Some(epoch) = job.indicator_epoch {
+            op_editor_core::agent_indicators::end_if_epoch(epoch);
         }
         changed
     }
@@ -219,8 +248,11 @@ impl MobileChatHost {
         // whose wording the keyword gate does not recognise (5 of the 7
         // task families); on a phone that route IS the design loop.
         let route = std::mem::take(&mut host.editor_state_mut().chat.launch_route);
-        // 改这一页 scopes this send to one board (prompt + write fence).
-        let scope = run_ws::scope_launch(host, &user_text);
+        let scope = run_ws::scope_launch(host, &user_text, route);
+        if let Some(message) = scope.error {
+            write_turn_error(host, running_tab, message.to_string());
+            return true;
+        }
         match prepare_builtin_turn(host.editor_state(), &scope.prompt) {
             Some(mut turn) => {
                 // Design requests run the REAL desktop agent tool loop
@@ -230,8 +262,16 @@ impl MobileChatHost {
                 // batch_design included.
                 let design = scope.fence.is_some()
                     || route.implies_design_intent()
-                    || design_intent(&user_text);
-                let launched = if design {
+                    || (design_intent(&user_text) && run_ws::permits_design(host, &user_text));
+                let launched = if let Some(targets) = scope.fence.as_ref() {
+                    modify::start_modify_turn(
+                        host.editor_state(),
+                        turn,
+                        &user_text,
+                        targets.clone(),
+                        running_tab,
+                    )
+                } else if design {
                     let state = host.editor_state_mut();
                     // Clear the starter BEFORE building the prompt so the
                     // consistency brief sees what the model will see.
@@ -247,6 +287,10 @@ impl MobileChatHost {
                 };
                 match launched {
                     Ok(mut job) => {
+                        job.document_identity = (
+                            host.document_epoch(),
+                            host.editor_state().document_generation(),
+                        );
                         run_ws::stamp_run_epoch(host, job.indicator_epoch);
                         job.page_edit_fence = scope.fence;
                         self.turn = Some(job);
@@ -287,6 +331,9 @@ impl MobileChatHost {
     /// Errors land as `error: …` content and `finished` clears the bubble's
     /// streaming flag — the two halves of "never stuck at Thinking…".
     fn poll_into(&mut self, host: &mut WidgetHostNative, viewport_size: (f32, f32)) -> bool {
+        if self.drop_stale_turn(host) {
+            return false;
+        }
         let Some(job) = self.turn.as_mut() else {
             return false;
         };
@@ -397,7 +444,7 @@ fn execute_tool_requests(
     session: &mut ChatSession,
     requests: Vec<ChatToolRequest>,
     running_tab: usize,
-    fence: Option<&str>,
+    fence: Option<&[String]>,
 ) -> ToolExecutionOutcome {
     let mut outcome = ToolExecutionOutcome::default();
     for req in requests {
@@ -515,6 +562,15 @@ fn execute_tool_requests(
             continue;
         }
         let state = host.editor_state_mut();
+        if req.name == op_chat_agent::chat_modify::APPLY_MODIFICATION_OP {
+            let ((result, mutated), _) = run_ws::fenced(state, fence, |state| {
+                modify::apply_modification(state, &req.args_json)
+            });
+            outcome.state_changed |= mutated;
+            outcome.document_mutated |= mutated;
+            let _ = req.ack.send(result);
+            continue;
+        }
         let ((mut result, mutated), reverted) = run_ws::fenced(state, fence, |state| {
             op_chat_agent::design_agent_tools::execute_agent_tool(state, &req.name, &req.args_json)
         });
@@ -563,108 +619,10 @@ fn start_turn(turn: BuiltinChatTurn, running_tab: usize) -> Result<ChatTurnJob, 
     let task = runtime.spawn(run_builtin_turn(turn, tx));
     Ok(ChatTurnJob {
         session: ChatSession::from_channels(rx, None),
+        document_identity: (0, 0),
         running_tab,
         abort: Some(task.abort_handle()),
         indicator_epoch: None,
-        page_edit_fence: None,
-        document_mutated: false,
-    })
-}
-
-/// Spawn the REAL desktop design agent loop
-/// (`op_chat_agent::chat_agent_loop`) for one prepared turn: the
-/// tool-request channel bridges the worker to the engine thread, whose pump
-/// executes each call against the live document (`execute_tool_requests`),
-/// including the loop's finalize / blocker probes.
-fn start_design_turn(
-    turn: BuiltinChatTurn,
-    running_tab: usize,
-    root_seed_hints: (bool, bool),
-) -> Result<ChatTurnJob, String> {
-    let runtime = chat_runtime().map_err(|error| format!("error: {error}"))?;
-    let (executor, tool_rx) = chat_tool_channel();
-    let (std_tx, std_rx) = mpsc::channel::<ChatDelta>();
-    let disable_thinking = design_turn_disable_thinking(Some(&turn.model));
-    let url = match turn.kind {
-        BuiltinAgentKind::Anthropic => provider_endpoint(&turn.base_url, "/v1/messages"),
-        BuiltinAgentKind::OpenAiCompat => provider_endpoint(&turn.base_url, "/chat/completions"),
-    };
-    let kind = turn.kind;
-    let cfg = AgentLoopConfig {
-        url,
-        api_key: turn.api_key,
-        model: turn.model,
-        system_prompt: turn.system_prompt,
-        history: turn.history,
-        user_prompt: turn.prompt,
-        max_output_tokens: turn.max_output_tokens,
-        tools: mobile_design_tool_defs(),
-        executor: Arc::new(executor),
-        max_turns: DESIGN_LOOP_MAX_TURNS,
-        finalize_on_exit: true,
-        disable_thinking,
-        // Operator-entered API-key settings — the same trust level as the
-        // desktop settings modal.
-        dial_policy: EndpointDialPolicy::Trusted,
-    };
-    // Low-frequency lifecycle line: release mobile builds emit no logs at
-    // all, which turned the first field failure of this path into an
-    // hours-long blind diagnosis. One line per design turn is cheap and
-    // makes "did the loop even start, on which wire" answerable from the
-    // device console.
-    eprintln!(
-        "openpencil-mobile: design turn start (model={}, wire={:?}, disable_thinking={})",
-        cfg.model, kind, disable_thinking
-    );
-    // Indicator epoch BEFORE the worker can apply its first batch (desktop
-    // parity): badges, frame glows, and entrance reveals adopt it.
-    let epoch = op_editor_core::agent_indicators::begin_with_root_seed_hint(
-        root_seed_hints.0,
-        root_seed_hints.1,
-    );
-    let task = runtime.spawn(async move {
-        // The shared loop streams into a tokio channel; forward into the
-        // std receiver `ChatSession` polls (std send never blocks).
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<ChatDelta>(64);
-        let forward = tokio::spawn(async move {
-            while let Some(delta) = rx.recv().await {
-                if std_tx.send(delta).is_err() {
-                    break;
-                }
-            }
-        });
-        let outcome = match kind {
-            BuiltinAgentKind::Anthropic => run_anthropic_agent_loop(cfg, &tx).await,
-            BuiltinAgentKind::OpenAiCompat => run_openai_agent_loop(cfg, &tx).await,
-        };
-        // Terminal-Done contract (desktop `send_inner` parity): every exit
-        // retires the bubble instead of leaving it on "Thinking…".
-        match outcome {
-            Ok(true) => {}
-            Ok(false) => {
-                let _ = tx
-                    .send(ChatDelta::Done {
-                        stop_reason: StopReason::EndTurn,
-                    })
-                    .await;
-            }
-            Err(error) => {
-                let _ = tx.send(ChatDelta::Error(error.to_string())).await;
-                let _ = tx
-                    .send(ChatDelta::Done {
-                        stop_reason: StopReason::Aborted,
-                    })
-                    .await;
-            }
-        }
-        drop(tx);
-        let _ = forward.await;
-    });
-    Ok(ChatTurnJob {
-        session: ChatSession::from_channels(std_rx, Some(tool_rx)).into_design_loop(),
-        running_tab,
-        abort: Some(task.abort_handle()),
-        indicator_epoch: Some(epoch),
         page_edit_fence: None,
         document_mutated: false,
     })

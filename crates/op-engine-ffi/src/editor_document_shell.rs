@@ -63,6 +63,11 @@ pub(crate) struct PendingShellSave {
     pub(crate) target: Option<String>,
     /// Where the canonical bytes were written, once staged.
     pub(crate) staged: Option<PathBuf>,
+    /// Identity of the document that requested the picker round trip.
+    document_epoch: u64,
+    document_generation: u64,
+    /// Revision actually written, rather than the later acknowledgement's.
+    staged_revision: Option<u64>,
 }
 
 /// Freeze a save and hand it to the shell.
@@ -81,10 +86,16 @@ pub(crate) fn begin_shell_save(
             "the previous save is still waiting for the platform file picker",
         ));
     }
+    let host = session.editor_mut()?;
+    let document_epoch = host.document_epoch();
+    let document_generation = host.editor_state().document_generation();
     session.document_save.pending = Some(PendingShellSave {
         file_name,
         target,
         staged: None,
+        document_epoch,
+        document_generation,
+        staged_revision: None,
     });
     Ok(SHELL_ACTION_SAVE_DOCUMENT)
 }
@@ -265,6 +276,7 @@ fn pending(state: &crate::editor_document::DocumentSaveShellState) -> FfiResult<
 }
 
 pub(crate) fn stage_pending_save(session: &mut Session, path: &Path) -> FfiResult<()> {
+    ensure_pending_document(session)?;
     let expected = {
         let pending = pending(&session.document_save)?;
         if pending.staged.is_some() {
@@ -287,8 +299,10 @@ pub(crate) fn stage_pending_save(session: &mut Session, path: &Path) -> FfiResul
         return Err(FfiError::invalid("save staging path already exists"));
     }
     crate::editor_document::write_current_document(session, path)?;
+    let revision = session.editor_mut()?.editor_state().document_revision();
     if let Some(pending) = session.document_save.pending.as_mut() {
         pending.staged = Some(path.to_path_buf());
+        pending.staged_revision = Some(revision);
     }
     Ok(())
 }
@@ -298,33 +312,75 @@ pub(crate) fn commit_pending_save(
     handle: String,
     display_name: String,
 ) -> FfiResult<()> {
-    {
+    ensure_pending_document(session)?;
+    let (generation, revision, staged) = {
         let pending = pending(&session.document_save)?;
-        if pending.staged.is_none() {
+        let Some(revision) = pending.staged_revision else {
             return Err(FfiError::new(
                 OpStatus::NotReady,
                 "the pending save was never staged",
             ));
-        }
-    }
+        };
+        (
+            pending.document_generation,
+            revision,
+            pending.staged.clone().expect("revision is staged"),
+        )
+    };
     if handle.trim().is_empty() {
         return Err(FfiError::invalid("save target handle is empty"));
     }
     let display_name = validated_display_name(&display_name)?;
+    let recent_copy = match crate::editor_document::cache_staged_document(
+        session,
+        &staged,
+        &handle,
+        &display_name,
+    ) {
+        Ok(path) => Some(path),
+        Err(error) => {
+            // The external destination already received the bytes. Keep that
+            // successful save, and report only the missing local Works copy.
+            session.emit_runtime_error(2, &error.message, "op-engine-ffi/save");
+            None
+        }
+    };
     session.document_save.pending = None;
     session.document_save.resave_pending = false;
     session.document_save.binding =
         crate::editor_document::DocumentBinding::Shell(crate::editor_document::ShellBinding {
             handle,
             display_name: display_name.clone(),
+            recent_copy,
         });
     if let Ok(host) = session.editor_mut() {
         let state = host.editor_state_mut();
         state.editor_ui.file_name_display = Some(display_name);
-        state.mark_saved_revision();
+        state.mark_saved_revision_at(generation, revision);
         host.mark_editor_state_dirty();
     }
     session.request_redraw();
+    Ok(())
+}
+
+/// A picker callback may arrive after Home/Open installed another document.
+/// Reject it before staging bytes or binding its old destination to new work.
+fn ensure_pending_document(session: &mut Session) -> FfiResult<()> {
+    let pending = pending(&session.document_save)?;
+    let identity = (pending.document_epoch, pending.document_generation);
+    let host = session.editor_mut()?;
+    if identity
+        != (
+            host.document_epoch(),
+            host.editor_state().document_generation(),
+        )
+    {
+        session.document_save.pending = None;
+        return Err(FfiError::new(
+            OpStatus::NotReady,
+            "the save belongs to a document that has been replaced",
+        ));
+    }
     Ok(())
 }
 

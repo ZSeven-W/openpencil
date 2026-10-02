@@ -22,23 +22,68 @@ use op_host_native::WidgetHostNative;
 /// instruction plus the board id every tool call of the turn is fenced to.
 pub(crate) struct LaunchScope {
     pub(crate) prompt: String,
-    pub(crate) fence: Option<String>,
+    pub(crate) fence: Option<Vec<String>>,
+    pub(crate) error: Option<&'static str>,
+}
+
+pub(crate) fn permits_design(host: &WidgetHostNative, text: &str) -> bool {
+    !op_chat_agent::workspace_edit::is_workspace_question(host.editor_state(), text)
 }
 
 /// Consume the staged page edit (one send, one binding) into the turn's
 /// prompt and fence.
-pub(crate) fn scope_launch(host: &mut WidgetHostNative, user_text: &str) -> LaunchScope {
+pub(crate) fn scope_launch(
+    host: &mut WidgetHostNative,
+    user_text: &str,
+    route: op_editor_core::LaunchRoute,
+) -> LaunchScope {
     let state = host.editor_state_mut();
-    let Some(target) = state.editor_ui.workspace.begin_page_edit_turn() else {
+    use op_chat_agent::workspace_edit::{self, WorkspaceEditScope};
+    if route.forces_in_place_refine() {
+        let boards = op_editor_core::preview_slideshow::active_page_boards(state);
+        let ids: Vec<String> = state
+            .selection
+            .set
+            .iter()
+            .map(|id| id.as_str().to_string())
+            .collect();
+        let valid = !ids.is_empty() && ids.iter().all(|id| boards.contains(id));
+        state.editor_ui.workspace.clear_staged_page_edit();
         return LaunchScope {
-            prompt: user_text.to_string(),
-            fence: None,
+            prompt: format!("TEMPLATE REFINE SCOPE — edit only these existing board ids in place: {}. Keep every other board unchanged.\n\n{user_text}", ids.join(", ")),
+            fence: valid.then_some(ids),
+            error: (!valid).then(|| workspace_edit::scope_unavailable_message(state.editor_ui.locale)),
         };
+    }
+    let target = match workspace_edit::resolve_workspace_edit_scope(state, user_text) {
+        WorkspaceEditScope::Target(target) => target,
+        WorkspaceEditScope::NotApplicable => {
+            state.editor_ui.workspace.clear_staged_page_edit();
+            return LaunchScope {
+                prompt: user_text.to_string(),
+                fence: None,
+                error: None,
+            };
+        }
+        WorkspaceEditScope::NeedsTarget => {
+            state.editor_ui.workspace.clear_staged_page_edit();
+            state.editor_ui.workspace.page_edit_running = None;
+            return LaunchScope {
+                prompt: user_text.to_string(),
+                fence: None,
+                error: Some(workspace_edit::scope_unavailable_message(
+                    state.editor_ui.locale,
+                )),
+            };
+        }
     };
+    state.editor_ui.workspace.clear_staged_page_edit();
+    state.editor_ui.workspace.page_edit_running = Some(target.clone());
     match workspace_page_edit::page_edit_prompt(state, &target, user_text) {
         Some(prompt) => LaunchScope {
             prompt,
-            fence: Some(target.board_id),
+            fence: Some(vec![target.board_id]),
+            error: None,
         },
         None => {
             // The bound board is gone: the turn runs unscoped, and the
@@ -48,6 +93,9 @@ pub(crate) fn scope_launch(host: &mut WidgetHostNative, user_text: &str) -> Laun
             LaunchScope {
                 prompt: user_text.to_string(),
                 fence: None,
+                error: Some(workspace_edit::scope_unavailable_message(
+                    state.editor_ui.locale,
+                )),
             }
         }
     }
@@ -107,21 +155,22 @@ pub(crate) fn pump_generation(
 /// the step's value and whether anything had to be reverted.
 pub(crate) fn fenced<R>(
     state: &mut EditorState,
-    fence: Option<&str>,
+    fence: Option<&[String]>,
     step: impl FnOnce(&mut EditorState) -> R,
 ) -> (R, bool) {
-    let Some(board) = fence else {
+    let Some(boards) = fence else {
         return (step(state), false);
     };
     let before = state.active_children().to_vec();
     let value = step(state);
-    let reverted = workspace_page_edit::restore_other_boards(state, &before, board);
+    let reverted = workspace_page_edit::restore_boards_outside_scope(state, &before, boards);
     (value, reverted)
 }
 
 /// Tell the model its out-of-scope writes did not stick, keeping the
 /// tool's own result for everything it did inside the board.
-pub(crate) fn note_reverted(result: ChatToolResult, board: &str) -> ChatToolResult {
+pub(crate) fn note_reverted(result: ChatToolResult, boards: &[String]) -> ChatToolResult {
+    let board = boards.join(", ");
     ChatToolResult {
         content: serde_json::json!({
             "success": !result.is_error,

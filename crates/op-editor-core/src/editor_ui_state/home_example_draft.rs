@@ -63,6 +63,12 @@ pub enum HomeSendMode {
 /// | 活动海报                 | `city-music-fest-poster`        | 城市音乐节 9.26 滨江公园 set: 3:4 main poster + 1:1 social square (neon green + black) |
 pub fn example_draft_template(family: HomeFamily, draft: &TaskDraft) -> Option<&'static str> {
     match family {
+        HomeFamily::AppUi
+            if draft.device == HomeDevice::Desktop
+                && draft.app_pages == super::home::AppPages::Multiple =>
+        {
+            None
+        }
         HomeFamily::AppUi => Some(match draft.device {
             HomeDevice::Mobile => "coffee-order-app",
             HomeDevice::Desktop => "coffee-counter-desktop",
@@ -80,6 +86,66 @@ pub fn example_draft_template(family: HomeFamily, draft: &TaskDraft) -> Option<&
             InfoKind::Comparison => "blank-vs-example-contrast",
         }),
         HomeFamily::EventPoster => Some("city-music-fest-poster"),
+    }
+}
+
+/// Keep the single-screen example and retire links to screens not delivered.
+pub fn prepare_home_example_boards(
+    family: HomeFamily,
+    draft: &TaskDraft,
+    boards: &mut crate::scene_template_append::TemplateBoards,
+) {
+    if family != HomeFamily::AppUi || draft.app_pages != super::home::AppPages::Single {
+        return;
+    }
+    boards.nodes.truncate(1);
+    let Some(first) = boards.nodes.first_mut() else {
+        return;
+    };
+    let Ok(mut value) = serde_json::to_value(&*first) else {
+        return;
+    };
+    let screen = value
+        .get("screen")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("/")
+        .to_string();
+    retire_missing_screen_links(&mut value, &screen);
+    if let Ok(next) = serde_json::from_value(value) {
+        *first = next;
+    }
+}
+
+fn retire_missing_screen_links(node: &mut serde_json::Value, screen: &str) {
+    if let Some(events) = node
+        .get_mut("events")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        for actions in events
+            .values_mut()
+            .filter_map(serde_json::Value::as_array_mut)
+        {
+            actions.retain(|action| {
+                !["push", "replace"].iter().any(|key| {
+                    action
+                        .get(*key)
+                        .and_then(serde_json::Value::as_str)
+                        .is_some_and(|target| target != screen)
+                })
+            });
+        }
+        events.retain(|_, value| !value.as_array().is_some_and(Vec::is_empty));
+        if events.is_empty() {
+            node.as_object_mut().unwrap().remove("events");
+        }
+    }
+    if let Some(children) = node
+        .get_mut("children")
+        .and_then(serde_json::Value::as_array_mut)
+    {
+        for child in children {
+            retire_missing_screen_links(child, screen);
+        }
     }
 }
 

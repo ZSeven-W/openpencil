@@ -9,6 +9,7 @@ use crate::scene_template_catalog::{scene_template_by_id, TemplateScene};
 fn draft(device: HomeDevice, ratio: SlideRatio, info_kind: InfoKind) -> TaskDraft {
     TaskDraft {
         text: String::new(),
+        app_pages: Default::default(),
         device,
         ratio,
         info_kind,
@@ -326,4 +327,48 @@ fn every_paged_example_opens_one_board_per_promised_page() {
             );
         }
     }
+}
+
+#[test]
+fn a_single_app_example_retires_navigation_to_undelivered_screens() {
+    let source =
+        crate::scene_template_catalog::scene_template_document("coffee-order-app").unwrap();
+    let mut boards =
+        crate::scene_template_append::template_boards(source, "coffee-order-app").unwrap();
+    let full = boards.clone();
+    prepare_home_example_boards(HomeFamily::AppUi, &TaskDraft::default(), &mut boards);
+    assert_eq!(boards.nodes.len(), 1);
+    let value = serde_json::to_value(&boards.nodes[0]).unwrap();
+    fn check(value: &serde_json::Value) {
+        if let Some(events) = value.get("events").and_then(serde_json::Value::as_object) {
+            for list in events.values().filter_map(serde_json::Value::as_array) {
+                for action in list {
+                    for key in ["replace", "push"] {
+                        if let Some(target) = action.get(key).and_then(serde_json::Value::as_str) {
+                            assert_eq!(target, "/");
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(children) = value.get("children").and_then(serde_json::Value::as_array) {
+            for child in children {
+                check(child);
+            }
+        }
+    }
+    check(&value);
+    let mut multiple = full.clone();
+    prepare_home_example_boards(
+        HomeFamily::AppUi,
+        &TaskDraft {
+            app_pages: crate::AppPages::Multiple,
+            ..Default::default()
+        },
+        &mut multiple,
+    );
+    assert_eq!(
+        multiple, full,
+        "the explicit full flow is retained unchanged"
+    );
 }

@@ -25,11 +25,17 @@ use super::WidgetHostNative;
 impl WidgetHostNative {
     /// True when a text input currently owns the keyboard — the flag the
     /// shells poll to raise / dismiss the software keyboard. Text routing
-    /// is a separate concern: `apply_text` / `apply_ime_*` still key off
-    /// `home.visible` so desktop Home keeps typing into the draft no
-    /// matter which target was pressed last.
+    /// follows the same overlay owner as clipboard and IME. An exposed
+    /// desktop Home composer accepts typing without a prior click; touch
+    /// Home follows its field's explicit focus.
     pub fn text_input_focus_active(&self) -> bool {
         if self.editor_state.editor_ui.home.visible {
+            if !self.editor_state.editor_ui.home_composer_owns_keyboard() {
+                return self.editor_state.active_text_input().is_some()
+                    || self.editor_state.editor_ui.save_name_dialog.open
+                    || (self.editor_state.editor_ui.agent_settings_open
+                        && self.editor_state.editor_ui.font_picker.open);
+            }
             // Desktop Home IS the composer: it always owns the keyboard.
             // Touch shells raise a software keyboard, so it must follow the
             // composer's own focus or it can never be dismissed.
@@ -62,8 +68,16 @@ impl WidgetHostNative {
     /// other inputs keep the legacy no-floating-overlay behavior.
     pub fn apply_ime_preedit(&mut self, text: &str, cursor: Option<(usize, usize)>) -> bool {
         let had = self.editor_state.editor_ui.ime_preedit.take().is_some();
-        if self.editor_state.editor_ui.home.visible {
+        if self.editor_state.editor_ui.home_composer_owns_keyboard() {
             return self.home_ime_preedit(text, cursor) || had;
+        }
+        if self.editor_state.editor_ui.home.visible {
+            // Home's overlays own composition too. Settings commits through
+            // its text payload path; no preedit belongs on the hidden brief.
+            if had {
+                self.mark_dirty();
+            }
+            return had;
         }
         // Save-name dialog: consume composition updates like the other
         // chrome inputs (text lands on `Ime::Commit`).
@@ -158,7 +172,7 @@ impl WidgetHostNative {
             }
             return consumed;
         }
-        if self.editor_state.editor_ui.home.visible {
+        if self.editor_state.editor_ui.home_composer_owns_keyboard() {
             return self.home_ime_commit(text);
         }
         if self.editor_state.editor_ui.prompt_center.open {
@@ -249,10 +263,16 @@ impl WidgetHostNative {
     /// Focused-input caret rect for candidate-window anchoring. Persistent
     /// image-popover inputs take priority over a stale chat-focus bit.
     pub fn ime_anchor_rect(&mut self, viewport_w: f32, viewport_h: f32) -> Option<Rect> {
-        if self.editor_state.editor_ui.home.visible {
+        if self.editor_state.editor_ui.home_composer_owns_keyboard() {
             let home =
                 op_editor_ui::widgets::HomeSurface::for_editor_at(&self.editor_state, self.now_ms)?;
             return Some(home.focused_input_caret_rect(viewport_w, viewport_h));
+        }
+        if self.editor_state.editor_ui.home.visible
+            && self.editor_state.editor_ui.agent_settings_open
+        {
+            let (panel, rect) = self.agent_settings_geometry(viewport_w, viewport_h);
+            return panel.focused_input_rect(rect);
         }
         let generate_configured = self
             .editor_state

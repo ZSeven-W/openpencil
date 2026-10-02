@@ -3,7 +3,7 @@
 //! and the tab icon mapping. One module so paint, hit-test, and the host
 //! read the same copy.
 
-use op_editor_core::{HomeDevice, HomeFamily, InfoKind, Locale, SlideRatio, TaskDraft};
+use op_editor_core::{AppPages, HomeDevice, HomeFamily, InfoKind, Locale, SlideRatio, TaskDraft};
 use op_i18n::translate;
 
 pub(crate) const SANS: &str = "system-ui";
@@ -34,14 +34,30 @@ pub(crate) fn task_copy(locale: Locale, family: HomeFamily, draft: &TaskDraft) -
             "home.task.app.summary",
             "home.task.app.label",
             if draft.device == HomeDevice::Desktop {
-                "home.task.app.desktopPlaceholder"
+                if draft.app_pages == AppPages::Single {
+                    "home.task.app.desktopSinglePlaceholder"
+                } else {
+                    "home.task.app.desktopPlaceholder"
+                }
             } else {
-                "home.task.app.placeholder"
+                if draft.app_pages == AppPages::Single {
+                    "home.task.app.singlePlaceholder"
+                } else {
+                    "home.task.app.placeholder"
+                }
             },
             if draft.device == HomeDevice::Desktop {
-                "home.task.app.desktopExample"
+                if draft.app_pages == AppPages::Single {
+                    "home.task.app.desktopSingleExample"
+                } else {
+                    "home.task.app.desktopExample"
+                }
             } else {
-                "home.task.app.example"
+                if draft.app_pages == AppPages::Single {
+                    "home.task.app.singleExample"
+                } else {
+                    "home.task.app.example"
+                }
             },
             if draft.device == HomeDevice::Desktop {
                 "home.task.app.desktopTitle"
@@ -49,14 +65,30 @@ pub(crate) fn task_copy(locale: Locale, family: HomeFamily, draft: &TaskDraft) -
                 "home.task.app.exampleTitle"
             },
             if draft.device == HomeDevice::Desktop {
-                "home.task.app.desktopDesc"
+                if draft.app_pages == AppPages::Single {
+                    "home.task.app.desktopSingleDesc"
+                } else {
+                    "home.task.app.desktopDesc"
+                }
             } else {
-                "home.task.app.exampleDesc"
+                if draft.app_pages == AppPages::Single {
+                    "home.task.app.singleDesc"
+                } else {
+                    "home.task.app.exampleDesc"
+                }
             },
             if draft.device == HomeDevice::Desktop {
-                "home.task.app.desktopPages"
+                if draft.app_pages == AppPages::Single {
+                    "home.task.app.desktopSinglePages"
+                } else {
+                    "home.task.app.desktopPages"
+                }
             } else {
-                "home.task.app.examplePages"
+                if draft.app_pages == AppPages::Single {
+                    "home.task.app.singlePages"
+                } else {
+                    "home.task.app.examplePages"
+                }
             },
         ],
         HomeFamily::Web => [

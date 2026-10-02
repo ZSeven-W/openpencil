@@ -112,6 +112,16 @@ fn main() {
     tap(&mut deck, next);
     shoot(&mut deck, &out_dir, "reader-deck-page2");
 
+    // Save / Save As / Export stay directly available in the normal reader.
+    let more = reader_layout(&deck).more;
+    tap(&mut deck, more);
+    shoot(&mut deck, &out_dir, "reader-deck-file-actions");
+    let panel = op_editor_ui::widgets::mobile_chrome::more_panel_rect(deck.editor_state(), W, H);
+    tap(
+        &mut deck,
+        op_editor_ui::widgets::mobile_chrome::sheet_close_rect(panel),
+    );
+
     // 改这一页 → the chat sheet opens over the reader, bound to page 2.
     let edit = reader_layout(&deck).edit_page;
     tap(&mut deck, edit);

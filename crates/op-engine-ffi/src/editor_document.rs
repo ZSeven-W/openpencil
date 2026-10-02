@@ -42,6 +42,20 @@ use crate::OpStatus;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+#[path = "editor_document_home.rs"]
+mod home;
+pub(crate) use home::{cache_staged_document, capture_replaced_home_document};
+#[path = "editor_document_relocate.rs"]
+mod relocate;
+pub(crate) use relocate::initialize_documents;
+
+#[cfg(test)]
+#[path = "editor_document_home_tests.rs"]
+mod home_tests;
+#[cfg(test)]
+#[path = "editor_document_name_tests.rs"]
+mod name_tests;
+
 /// Longest accepted file-name stem, in bytes (UTF-8, cut on a char
 /// boundary). Keeps names under every mobile filesystem's 255-byte cap
 /// with room for the ` NNN.op` dedup suffix.
@@ -78,6 +92,8 @@ pub(crate) struct ShellBinding {
     /// What the picker actually named the file, for the TopBar and for the
     /// next save's suggested name.
     pub(crate) display_name: String,
+    /// Engine-owned copy of the last acknowledged bytes, reopenable by Works.
+    pub(crate) recent_copy: Option<PathBuf>,
 }
 
 /// Save-flow state for one session: the current binding, the shell's
@@ -100,6 +116,10 @@ pub(crate) struct DocumentSaveShellState {
     /// the engine is resumed) re-emits a silent save so the user's picked
     /// destination catches up.
     pub(crate) resave_pending: bool,
+    /// Replaced work stays owned until its rescue file is durably written.
+    /// A failed save must not be displaced by the next Home draft.
+    rescued: std::collections::VecDeque<op_host_native::widget_host::ReplacedHomeDocument>,
+    recovery_error_reported: bool,
 }
 
 impl DocumentSaveShellState {
@@ -132,6 +152,19 @@ impl DocumentSaveShellState {
 /// `editor_auth::take_shell_action` after the auth / window / one-shot
 /// request drains.
 pub(crate) fn drain_document_actions(session: &mut Session) -> FfiResult<i32> {
+    capture_replaced_home_document(session);
+    // Resolve the tapped recent row before saving queued recoveries can add
+    // new rows at the front and change its index.
+    let pending = session
+        .editor_mut()?
+        .editor_state()
+        .editor_ui
+        .pending_file_action;
+    if let Some(op_editor_core::FileAction::OpenRecent(index)) = pending {
+        home::open_recent(session, index)?;
+        return Ok(crate::editor_auth::SHELL_ACTION_NONE);
+    }
+    home::drain_recovery(session);
     // A suspend flush could not reach a shell-owned destination; now that the
     // engine is drained again (so the app is foregrounded), ask the shell to
     // rewrite it silently. Runs before anything else so a user-initiated save
@@ -160,6 +193,13 @@ pub(crate) fn drain_document_actions(session: &mut Session) -> FfiResult<i32> {
             host.editor_state_mut().editor_ui.pending_file_action = None;
             host.mark_editor_state_dirty();
             Ok(crate::editor_auth::SHELL_ACTION_OPEN_DOCUMENT)
+        }
+        Some(op_editor_core::FileAction::ClearRecent) => {
+            let host = session.editor_mut()?;
+            host.editor_state_mut().editor_ui.pending_file_action = None;
+            host.editor_state_mut().editor_ui.recent_files.clear();
+            host.mark_editor_state_dirty();
+            Ok(crate::editor_auth::SHELL_ACTION_NONE)
         }
         Some(op_editor_core::FileAction::Save) => begin_save(session, false),
         Some(op_editor_core::FileAction::SaveAs) => begin_save(session, true),
@@ -326,6 +366,8 @@ pub(crate) fn drain_confirmed_save(session: &mut Session) -> FfiResult<bool> {
 /// * A document that was never saved is left alone — silently inventing a
 ///   file (and a name) for it would surprise more than it protects.
 pub(crate) fn flush_on_suspend(session: &mut Session) {
+    capture_replaced_home_document(session);
+    home::drain_recovery(session);
     let dirty = session
         .editor
         .as_ref()
@@ -402,6 +444,7 @@ fn finish_successful_save(session: &mut Session, path: PathBuf, close_dialog: bo
         state.mark_saved_revision();
         host.mark_editor_state_dirty();
     }
+    home::touch_recent(session, &path);
     session.document_save.binding = DocumentBinding::Path(path);
     session.request_redraw();
 }
@@ -412,9 +455,19 @@ fn finish_successful_save(session: &mut Session, path: PathBuf, close_dialog: bo
 pub(crate) fn write_current_document(session: &mut Session, path: &Path) -> FfiResult<()> {
     let host = session.editor_mut()?;
     let state = host.editor_state();
-    let meta = op_pen_loader::EditorMeta::from_state(state);
-    let thumbnails = jian_ops_schema::image_thumbs::capture_snapshot();
+    write_document_state(
+        state,
+        path,
+        &jian_ops_schema::image_thumbs::capture_snapshot(),
+    )
+}
 
+fn write_document_state(
+    state: &op_editor_core::EditorState,
+    path: &Path,
+    thumbnails: &jian_ops_schema::image_thumbs::ImageThumbSnapshot,
+) -> FfiResult<()> {
+    let meta = op_pen_loader::EditorMeta::from_state(state);
     let io_error = |stage: &str, error: std::io::Error| {
         FfiError::new(
             OpStatus::InvalidArg,
@@ -428,7 +481,7 @@ pub(crate) fn write_current_document(session: &mut Session, path: &Path) -> FfiR
         jian_ops_schema::image_table::write_document_with_extension(
             &mut writer,
             &state.doc,
-            &thumbnails,
+            thumbnails,
             "editorMeta",
             &meta,
         )
@@ -589,9 +642,8 @@ fn same_directory(left: &Path, right: &Path) -> bool {
     }
 }
 
-/// Seed for the name dialog: the display name minus the canonical
-/// extension, else the localized "Untitled" (未命名 for the default zh-CN
-/// locale).
+/// Keep an explicit filename, otherwise name the current ordinary-mode
+/// work from its brief/template/chat title, then use localized "Untitled".
 fn seed_name(state: &op_editor_core::EditorState) -> String {
     if let Some(name) = state
         .editor_ui
@@ -612,6 +664,35 @@ fn seed_name(state: &op_editor_core::EditorState) -> String {
         // locale default below.
         if cleaned != "untitled" || stem.trim().eq_ignore_ascii_case("untitled") {
             return cleaned;
+        }
+    }
+    let workspace = &state.editor_ui.workspace;
+    let work_title = workspace
+        .active
+        .then(|| {
+            op_editor_core::suggest_chat_title(&workspace.brief).or_else(|| {
+                workspace
+                    .draft_template
+                    .and_then(op_editor_core::scene_template_catalog::scene_template_by_id)
+                    .map(|template| {
+                        template
+                            .title_for_locale(state.editor_ui.effective_locale())
+                            .to_owned()
+                    })
+            })
+        })
+        .flatten()
+        .or_else(|| {
+            let title = state.chat.title.trim();
+            (!title.is_empty()
+                && !op_editor_core::is_default_chat_title(title)
+                && !op_editor_core::blank_starter::active_page_is_blank_starter(state))
+            .then(|| title.to_owned())
+        });
+    if let Some(title) = work_title {
+        let stem = sanitize_stem(&title);
+        if stem != "untitled" {
+            return stem;
         }
     }
     sanitize_stem(op_i18n::translate(

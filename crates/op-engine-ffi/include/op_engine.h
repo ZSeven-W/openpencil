@@ -369,6 +369,10 @@ OpStatus op_editor_text(OpEngine *engine, const uint8_t *text_ptr, size_t text_l
 /* Non-printable key (see KEY_* constants below). */
 OpStatus op_editor_key(OpEngine *engine, int32_t key);
 
+/* Dismiss one editor layer or return the reader to Works. consumed is false
+ * at the root so Android keeps its system exit/background behavior. */
+OpStatus op_editor_back(OpEngine *engine, bool *consumed);
+
 /* IME preedit into the focused input (byte offsets within the preedit). */
 OpStatus op_editor_ime_preedit(OpEngine *engine, const uint8_t *text_ptr, size_t text_len, size_t sel_start, size_t sel_end);
 

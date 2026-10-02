@@ -16,6 +16,10 @@ impl WidgetHost {
         use op_editor_ui::widgets::agent_settings_panel::{AgentSettingsHit, AgentSettingsPanel};
         let point = Point2D::new(x, y);
         let (
+            nav_hover,
+            provider_hover,
+            builtin_hover,
+            acp_hover,
             close_hover,
             server_hover,
             copy_hover,
@@ -40,6 +44,18 @@ impl WidgetHost {
                 self.editor_state.editor_ui.agent_settings.tab,
                 AgentSettingsTab::Agents
             );
+            let nav_hover = panel.nav_at(panel_rect, point);
+            let (provider_hover, builtin_hover, acp_hover) = if is_agents {
+                (
+                    panel.card_at(panel_rect, point).unwrap_or(usize::MAX),
+                    panel
+                        .builtin_card_at(panel_rect, point)
+                        .unwrap_or(usize::MAX),
+                    panel.acp_card_at(panel_rect, point).unwrap_or(usize::MAX),
+                )
+            } else {
+                (usize::MAX, usize::MAX, usize::MAX)
+            };
             let is_images = matches!(
                 self.editor_state.editor_ui.agent_settings.tab,
                 AgentSettingsTab::Images
@@ -109,6 +125,10 @@ impl WidgetHost {
                 _ => None,
             };
             (
+                nav_hover,
+                provider_hover,
+                builtin_hover,
+                acp_hover,
                 close_hover,
                 server_hover,
                 copy_hover,
@@ -128,6 +148,23 @@ impl WidgetHost {
             )
         };
         let mut changed = false;
+        let settings = &mut self.editor_state.editor_ui.agent_settings;
+        if settings.hover_nav != nav_hover {
+            settings.hover_nav = nav_hover;
+            changed = true;
+        }
+        if settings.hover_provider != provider_hover {
+            settings.hover_provider = provider_hover;
+            changed = true;
+        }
+        if settings.hover_builtin_agent != builtin_hover {
+            settings.hover_builtin_agent = builtin_hover;
+            changed = true;
+        }
+        if settings.hover_acp_agent != acp_hover {
+            settings.hover_acp_agent = acp_hover;
+            changed = true;
+        }
         if acp_preset_hover != self.editor_state.editor_ui.agent_settings.hover_acp_preset {
             self.editor_state.editor_ui.agent_settings.hover_acp_preset = acp_preset_hover;
             changed = true;

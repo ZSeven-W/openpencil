@@ -93,6 +93,7 @@ fn every_tablet_target_keeps_the_touch_floor() {
         let layout = WorksReader::for_editor(&state).unwrap().layout(w, h);
         let mut targets = vec![
             layout.back,
+            layout.more,
             layout.mode_normal,
             layout.mode_professional,
             layout.continue_chat,
@@ -201,6 +202,7 @@ fn tablet_hits_answer_tiles_arrows_and_actions() {
     assert_eq!(hit(layout.prev.unwrap()), Some(ReaderHit::Prev));
     assert_eq!(hit(layout.next.unwrap()), Some(ReaderHit::Next));
     assert_eq!(hit(layout.edit_page), Some(ReaderHit::EditPage));
+    assert_eq!(hit(layout.more), Some(ReaderHit::More));
     assert_eq!(hit(layout.continue_chat), Some(ReaderHit::ContinueChat));
     assert_eq!(hit(layout.stage), Some(ReaderHit::Stage));
     assert_eq!(

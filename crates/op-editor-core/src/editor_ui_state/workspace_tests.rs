@@ -173,6 +173,48 @@ fn professional_and_reenter_round_trip_keeps_the_facts() {
     assert_eq!(workspace.shown_at_ms, 20_000);
 }
 
+#[test]
+fn home_professional_restores_the_workspace_tool_on_pointer_and_touch_hosts() {
+    for touch in [false, true] {
+        for previous_tool in [None, Some(Tool::Rect)] {
+            let mut ui = crate::EditorUiState {
+                touch,
+                ..crate::EditorUiState::default()
+            };
+            ui.workspace = opened(HomeFamily::Presentation, 7);
+            ui.workspace.previous_tool = previous_tool;
+            ui.workspace.view = WorkspaceView::Single { index: 2 };
+            ui.home.visible = true;
+
+            let restored = ui.enter_professional_from_home(Tool::Hand);
+
+            assert_eq!(restored, previous_tool.unwrap_or(Tool::Select));
+            assert!(!ui.home.visible);
+            assert!(!ui.workspace.visible);
+            assert!(ui.workspace.active, "the work can still be reopened");
+            assert_eq!(ui.entry_surface, EntrySurface::Canvas);
+            assert_eq!(ui.workspace.view, WorkspaceView::Single { index: 2 });
+            assert_eq!(ui.workspace.phase, WorkspacePhase::Generating);
+            assert_eq!(ui.workspace.run_epoch, 7, "switching mode keeps the run");
+
+            // A later Home visit must preserve the tool chosen on the
+            // professional canvas instead of replaying an old saved tool.
+            ui.home.visible = true;
+            assert_eq!(ui.enter_professional_from_home(Tool::Text), Tool::Text);
+        }
+    }
+}
+
+#[test]
+fn home_professional_without_a_workspace_keeps_the_current_tool() {
+    let mut ui = crate::EditorUiState::default();
+    ui.home.visible = true;
+    assert_eq!(ui.enter_professional_from_home(Tool::Pen), Tool::Pen);
+    assert!(!ui.home.visible);
+    assert!(!ui.workspace.active);
+    assert_eq!(ui.entry_surface, EntrySurface::Canvas);
+}
+
 /// The workspace and the professional editor share ONE left column: a
 /// round trip across 专业编辑 / 回到工作区 keeps the panel open, the
 /// Chat tab active and the width — nothing jumps, the modes differ

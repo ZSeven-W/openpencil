@@ -162,9 +162,15 @@ fn paint_header(
         .stroke_round_rect(switch, 10.0, palette.segment_line, 1.0);
     let normal = inset(layout.mode_normal, 3.0);
     cx.backend.fill_round_rect(normal, 7.0, palette.panel);
-    centered_label(
+    let normal_label = fit_text(
         cx,
         op_i18n::translate(locale, "home.mode.normal"),
+        12.0,
+        layout.mode_normal.size.x - 12.0,
+    );
+    centered_label(
+        cx,
+        &normal_label,
         layout.mode_normal,
         12.0,
         palette.blue,
@@ -175,13 +181,33 @@ fn paint_header(
     } else {
         fade(palette.ink, 0.6)
     };
-    centered_label(
+    let professional_label = fit_text(
         cx,
         op_i18n::translate(locale, "home.mode.professional"),
+        12.0,
+        layout.mode_professional.size.x - 12.0,
+    );
+    centered_label(
+        cx,
+        &professional_label,
         layout.mode_professional,
         12.0,
         professional_color,
         500,
+    );
+    if pressed == Some(ReaderHit::More)
+        || reader.ui.mobile_sheet == Some(op_editor_core::size_class::MobileSheetKind::More)
+    {
+        cx.backend
+            .fill_round_rect(layout.more, 12.0, palette.button_hover);
+    }
+    draw_icon(
+        cx.backend,
+        Icon::MoreHorizontal,
+        Point2D::new(layout.more.origin.x + 12.0, layout.more.origin.y + 12.0),
+        20.0,
+        palette.ink,
+        1.8,
     );
 }
 

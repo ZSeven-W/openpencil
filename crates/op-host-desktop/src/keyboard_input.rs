@@ -39,6 +39,11 @@ impl DesktopApp {
         };
         let prompt_center_open = self.host.editor_state().editor_ui.prompt_center.open;
         let home_visible = self.host.home_visible();
+        let home_composer_owns_keyboard = self
+            .host
+            .editor_state()
+            .editor_ui
+            .home_composer_owns_keyboard();
         match logical_key {
             // Studio (Home / workspace) keyboard navigation: Tab moves the
             // focus ring, Enter / Space activate the focused control. Ahead
@@ -80,13 +85,17 @@ impl DesktopApp {
                     self.request_redraw(true);
                 }
             }
-            Key::Named(NamedKey::ArrowLeft) if home_visible && !self.zoom_modifier => {
+            Key::Named(NamedKey::ArrowLeft)
+                if home_composer_owns_keyboard && !self.zoom_modifier =>
+            {
                 consumed = self.host.apply_home_caret(false, self.shift_modifier);
             }
-            Key::Named(NamedKey::ArrowRight) if home_visible && !self.zoom_modifier => {
+            Key::Named(NamedKey::ArrowRight)
+                if home_composer_owns_keyboard && !self.zoom_modifier =>
+            {
                 consumed = self.host.apply_home_caret(true, self.shift_modifier);
             }
-            Key::Named(NamedKey::ArrowUp | NamedKey::ArrowDown) if home_visible => {
+            Key::Named(NamedKey::ArrowUp | NamedKey::ArrowDown) if home_composer_owns_keyboard => {
                 consumed = true;
             }
             Key::Named(NamedKey::Space) if !self.zoom_modifier && !self.host.input_active_pub() => {

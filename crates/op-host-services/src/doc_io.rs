@@ -147,7 +147,9 @@ pub fn save_snapshot_to_path(
     )
 }
 
-fn save_document_with_thumbnails_to_path(
+/// Save a captured document and its matching thumbnail registry. Callers
+/// retaining an outgoing document must not capture the incoming registry.
+pub fn save_document_with_thumbnails_to_path(
     document: &jian_ops_schema::PenDocument,
     meta: op_pen_loader::EditorMeta,
     thumbnails: &jian_ops_schema::image_thumbs::ImageThumbSnapshot,

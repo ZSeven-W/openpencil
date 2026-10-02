@@ -350,6 +350,7 @@ pub(crate) mod ai_chat_transcript_selection;
 pub(crate) mod ai_chat_transcript_steps;
 pub(crate) mod ai_chat_transcript_text;
 pub(crate) mod ai_chat_transcript_tools;
+mod ai_chat_workspace_copy;
 pub mod align_toolbar;
 pub mod color_picker;
 mod component_browser_kits;

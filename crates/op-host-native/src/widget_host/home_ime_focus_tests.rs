@@ -20,6 +20,73 @@ const WIDE_H: f32 = 900.0;
 /// scrolling, so the reveal has nothing to do there).
 const COVERED_H: f32 = 640.0;
 
+#[test]
+fn home_modal_keyboard_routes_selection_clipboard_and_ime_to_settings() {
+    use op_editor_core::agent_settings::{BuiltinAgentField, SettingsFocus};
+
+    for touch in [false, true] {
+        let mut host = if touch {
+            touch_compact_home()
+        } else {
+            desktop_home()
+        };
+        {
+            let home = &mut host.editor_state_mut().editor_ui.home;
+            home.set_draft("keep this brief");
+            home.composer_focused = true;
+        }
+        assert!(host.apply_toggle_agent_settings());
+        {
+            let ui = &mut host.editor_state_mut().editor_ui;
+            assert!(!ui.home.composer_focused);
+            ui.agent_settings.begin_builtin_agent_draft();
+            ui.agent_settings.focus =
+                Some(SettingsFocus::BuiltinAgentDraft(BuiltinAgentField::Model));
+            ui.settings_input.set_text("glm-5.2");
+            // A stale picker below settings must not steal Backspace either.
+            ui.chat_model_picker.open = true;
+            ui.chat_model_picker_input.set_text("keep picker search");
+        }
+        assert!(
+            host.text_input_focus_active(),
+            "the settings field raises the touch keyboard"
+        );
+        assert!(host.apply_select_all());
+        assert_eq!(host.input_copy_text().as_deref(), Some("glm-5.2"));
+        assert!(host.apply_input_paste("glm-5.3-flash\r\nsecond-model"));
+        assert_eq!(
+            host.editor_state().editor_ui.settings_input.text(),
+            "glm-5.3-flash\nsecond-model"
+        );
+
+        assert!(host.apply_select_all());
+        assert!(host.apply_backspace());
+        assert_eq!(host.editor_state().editor_ui.settings_input.text(), "");
+        assert!(host.apply_input_paste("old-model"));
+        assert!(host.apply_select_all());
+        host.apply_ime_preedit("glm", Some((0, 3)));
+        assert!(host
+            .editor_state()
+            .editor_ui
+            .home
+            .input
+            .composition()
+            .is_none());
+        assert!(host.apply_ime_commit("glm-5.3-flash"));
+        assert_eq!(
+            host.editor_state().editor_ui.settings_input.text(),
+            "glm-5.3-flash"
+        );
+        assert!(host.apply_select_all());
+        assert_eq!(host.input_cut_text().as_deref(), Some("glm-5.3-flash"));
+        let ui = &host.editor_state().editor_ui;
+        assert_eq!(ui.settings_input.text(), "");
+        assert_eq!(ui.home.draft, "keep this brief");
+        assert_eq!(ui.home.input.highlight_range(), None);
+        assert_eq!(ui.chat_model_picker_input.text(), "keep picker search");
+    }
+}
+
 /// A compact phone host with the Home takeover up (touch chrome on).
 fn touch_compact_home() -> WidgetHostNative {
     let mut state = op_editor_core::EditorState::starter();

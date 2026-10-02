@@ -481,16 +481,10 @@ impl WidgetHostNative {
         viewport_height: f32,
         zoom_intent: bool,
     ) -> bool {
-        // The Home-anchored model picker hovers above the takeover —
-        // its list scrolls before the Home stack does.
-        if self
-            .wheel_home_model_picker(x, y, delta_y, viewport_width, viewport_height)
-            .is_some()
+        if let Some(scrolled) =
+            self.scroll_home_surface(x, y, delta_y, viewport_width, viewport_height)
         {
-            return true;
-        }
-        if self.try_scroll_home(x, y, delta_y, viewport_width, viewport_height) {
-            return true;
+            return scrolled;
         }
         // Workspace LongPage view: the wheel pans the long page
         // vertically only — no zoom, no horizontal drift. A pinch /

@@ -115,17 +115,25 @@ pub(super) fn paint_top_bar(
         cx.backend
             .fill_round_rect(mark, 6.0, fade(palette.blue, 0.25));
     }
-    text_weighted(
-        cx,
-        "OpenPencil",
-        Point2D::new(
-            mark.origin.x + mark.size.x + 8.0,
-            jian_widgets::centered_text_baseline_y(mark, 17.0),
-        ),
-        17.0,
-        palette.ink,
-        700,
-    );
+    // Keep the compact wordmark out of the translated mode switch. The
+    // brand icon remains visible even when a narrow header cannot fit both.
+    let brand_x = mark.origin.x + mark.size.x + 8.0;
+    let brand_width = cx
+        .backend
+        .measure_text_family_styled("OpenPencil", 17.0, SANS, 700, false);
+    if brand_x + brand_width + 8.0 <= layout.mode_switch.origin.x {
+        text_weighted(
+            cx,
+            "OpenPencil",
+            Point2D::new(
+                mark.origin.x + mark.size.x + 8.0,
+                jian_widgets::centered_text_baseline_y(mark, 17.0),
+            ),
+            17.0,
+            palette.ink,
+            700,
+        );
+    }
 
     // The 普通 / 专业 segmented control (professional.css `.mode-switch`).
     let switch = layout.mode_switch;

@@ -109,6 +109,8 @@ pub struct ReaderLayout {
     pub mode_switch: Rect,
     pub mode_normal: Rect,
     pub mode_professional: Rect,
+    /// File actions stay available without entering the professional canvas.
+    pub more: Rect,
     /// Where the host paints the real canvas.
     pub stage: Rect,
     /// The pager row; `None` for a single long page.
@@ -196,10 +198,25 @@ pub fn reader_layout(
     let top = (READER_HEADER_H - TOUCH) / 2.0;
     let back = Rect::xywh(BACK_X, top, TOUCH, TOUCH);
 
-    let normal_w = (estimate_label_w(normal_label, 12.0) + 16.0).max(MODE_SEG_MIN_W);
-    let professional_w = (estimate_label_w(professional_label, 12.0) + 16.0).max(MODE_SEG_MIN_W);
+    let more = Rect::xywh(vw - MODE_RIGHT_PAD - TOUCH, top, TOUCH, TOUCH);
+    let title_x = back.origin.x + back.size.x + 4.0;
+    // Keep space for the work title on small phones, including locales with
+    // long mode labels. Paint fits each label to its allocated segment.
+    let segment_budget =
+        (more.origin.x - 8.0 - title_x - 40.0 - 8.0 - MODE_SEG_GAP).max(MODE_SEG_MIN_W * 2.0);
+    let desired_normal = (estimate_label_w(normal_label, 12.0) + 16.0).max(MODE_SEG_MIN_W);
+    let desired_professional =
+        (estimate_label_w(professional_label, 12.0) + 16.0).max(MODE_SEG_MIN_W);
+    let desired_extra = desired_normal + desired_professional - MODE_SEG_MIN_W * 2.0;
+    let scale = if desired_extra > 0.0 {
+        ((segment_budget - MODE_SEG_MIN_W * 2.0) / desired_extra).min(1.0)
+    } else {
+        1.0
+    };
+    let normal_w = MODE_SEG_MIN_W + (desired_normal - MODE_SEG_MIN_W) * scale;
+    let professional_w = MODE_SEG_MIN_W + (desired_professional - MODE_SEG_MIN_W) * scale;
     let switch_w = normal_w + MODE_SEG_GAP + professional_w;
-    let mode_switch = Rect::xywh(vw - MODE_RIGHT_PAD - switch_w, top, switch_w, TOUCH);
+    let mode_switch = Rect::xywh(more.origin.x - 8.0 - switch_w, top, switch_w, TOUCH);
     let mode_normal = Rect::xywh(mode_switch.origin.x, top, normal_w, TOUCH);
     let mode_professional = Rect::xywh(
         mode_switch.origin.x + normal_w + MODE_SEG_GAP,
@@ -207,7 +224,6 @@ pub fn reader_layout(
         professional_w,
         TOUCH,
     );
-    let title_x = back.origin.x + back.size.x + 4.0;
     let title = Rect::xywh(
         title_x,
         top,
@@ -257,6 +273,7 @@ pub fn reader_layout(
         mode_switch,
         mode_normal,
         mode_professional,
+        more,
         stage,
         pager,
         prev,
@@ -432,6 +449,9 @@ impl<'a> WorksReader<'a> {
             }
             if layout.mode_professional.contains(point) {
                 return Some(ReaderHit::ModeProfessional);
+            }
+            if layout.more.contains(point) {
+                return Some(ReaderHit::More);
             }
             return None;
         }

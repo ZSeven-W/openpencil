@@ -43,9 +43,13 @@ impl WidgetHostNative {
         // Same z-order as the normal path: the settings modal (tier 1),
         // then the sign-in modal (tier 2), then the model picker.
         if settings_open {
-            return self
-                .dispatch_agent_settings_press(x, y, viewport_width, viewport_height)
-                .then_some(true);
+            // Home returns before the ordinary modal ladder can arm this
+            // gesture. Reuse its delayed tap / one-finger scroll owner here.
+            if self.begin_agent_settings_touch_gesture(x, y, viewport_width, viewport_height) {
+                return Some(true);
+            }
+            self.dispatch_agent_settings_press(x, y, viewport_width, viewport_height);
+            return Some(true);
         }
         if login_open {
             self.dispatch_login_modal_press(x, y, viewport_width, viewport_height);
@@ -64,10 +68,8 @@ impl WidgetHostNative {
         None
     }
 
-    /// Paint the Home-opened overlays above the takeover: the agent-
-    /// settings modal, the sign-in modal, the signed-in account menu,
-    /// then the Home-anchored model picker with its trailing
-    /// connect-more row.
+    /// Paint bottom to top, reversing the press / hover order: model
+    /// picker, account menu, sign-in, then the settings modal.
     pub(in crate::widget_host) fn paint_home_overlays(
         &mut self,
         frame: &mut NativeFrameBackend<'_>,
@@ -77,10 +79,10 @@ impl WidgetHostNative {
         if !self.home_visible() {
             return;
         }
-        self.paint_agent_settings_modal_overlay(frame, viewport_width, viewport_height);
-        self.paint_login_modal_overlay(frame, viewport_width, viewport_height);
-        self.paint_account_menu_overlay(frame, viewport_width, viewport_height);
         self.paint_home_model_picker(frame, viewport_width, viewport_height);
+        self.paint_account_menu_overlay(frame, viewport_width, viewport_height);
+        self.paint_login_modal_overlay(frame, viewport_width, viewport_height);
+        self.paint_agent_settings_modal_overlay(frame, viewport_width, viewport_height);
     }
 
     /// The signed-in account dropdown. Home paints it for the same
@@ -292,8 +294,8 @@ impl WidgetHostNative {
         Some(true)
     }
 
-    /// Hover bookkeeping for the Home-anchored picker: rows highlight,
-    /// leaving the popover closes it (the chat picker's behavior).
+    /// Modals own every hover above Home, including their scrims. The
+    /// Home-anchored picker only runs when no higher overlay is open.
     pub(in crate::widget_host) fn cursor_move_home_overlays(
         &mut self,
         x: f32,
@@ -301,7 +303,19 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) -> Option<bool> {
-        if !self.home_visible() || !self.editor_state.editor_ui.chat_model_picker.open {
+        if !self.home_visible() {
+            return None;
+        }
+        let ui = &self.editor_state.editor_ui;
+        if ui.agent_settings_open {
+            return Some(self.update_agent_settings_hover(x, y));
+        }
+        if ((ui.account_ui_available || ui.touch_chrome()) && ui.login_modal_open)
+            || (ui.account_ui_available && ui.account_menu_open)
+        {
+            return Some(self.cursor_move_modal_tiers(x, y).unwrap_or(false));
+        }
+        if !ui.chat_model_picker.open {
             return None;
         }
         let point = Point2D::new(x, y);

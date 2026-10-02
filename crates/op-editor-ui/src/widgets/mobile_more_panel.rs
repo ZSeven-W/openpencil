@@ -98,6 +98,11 @@ impl MobileMoreEntry {
     /// preview mode — see `press_mobile_more_sheet_tier`, which no longer
     /// carries a Preview arm either.
     pub fn visible(state: &EditorState) -> Vec<MobileMoreEntry> {
+        if state.editor_ui.works_reader_visible() {
+            // The normal reader offers the work's delivery actions without
+            // exposing professional canvas tools or replacing its document.
+            return vec![Self::SaveFile, Self::SaveAsFile, Self::Export];
+        }
         let mut entries = vec![
             MobileMoreEntry::NewFile,
             MobileMoreEntry::OpenFile,
@@ -202,12 +207,13 @@ fn compact_column_count(item_count: usize, viewport_w: f32, viewport_h: f32) -> 
 
 fn uses_phone_portrait_layout(state: &EditorState, viewport_w: f32, viewport_h: f32) -> bool {
     state.editor_ui.compact_layout()
+        && !state.editor_ui.works_reader_visible()
         && viewport_w < viewport_h
         && PHONE_PORTRAIT_PANEL_HEIGHT <= (viewport_h - 8.0).max(0.0)
 }
 
 fn column_count(state: &EditorState, panel: Rect) -> usize {
-    if !state.editor_ui.compact_layout() {
+    if !state.editor_ui.compact_layout() || state.editor_ui.works_reader_visible() {
         return PORTRAIT_COLUMN_COUNT;
     }
     let viewport_h = panel.origin.y + panel.size.y;
@@ -239,7 +245,11 @@ pub fn more_panel_rect(state: &EditorState, viewport_w: f32, viewport_h: f32) ->
             };
         }
         let item_count = MobileMoreEntry::visible(state).len();
-        let columns = compact_column_count(item_count, viewport_w, viewport_h);
+        let columns = if state.editor_ui.works_reader_visible() {
+            PORTRAIT_COLUMN_COUNT
+        } else {
+            compact_column_count(item_count, viewport_w, viewport_h)
+        };
         let height = panel_height(item_count, columns, PHONE_BOTTOM_PADDING)
             .min((viewport_h - 8.0).max(0.0));
         return Rect {
