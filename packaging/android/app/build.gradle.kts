@@ -4,6 +4,16 @@ plugins {
 }
 
 val repositoryRoot = rootProject.layout.projectDirectory.dir("../..")
+val stagedDesignFonts = layout.buildDirectory.dir("generated/design-font-assets")
+val stageBundledDesignFonts = tasks.register<Copy>("stageBundledDesignFonts") {
+    // Both native shells share the exact font bytes; keep the existing
+    // player-font.ttf in src/main/assets alongside these design families.
+    from(repositoryRoot.file("crates/op-host-desktop/assets/fonts/Inter-VF.ttf")) {
+        into("fonts")
+    }
+    from(repositoryRoot.dir("packaging/shared/fonts")) { into("fonts") }
+    into(stagedDesignFonts)
+}
 val androidVersionOutput = providers.exec {
     workingDir(repositoryRoot.asFile)
     commandLine(
@@ -66,6 +76,7 @@ android {
     // Release in distinct source sets so an unsigned local auth build can
     // never be consumed by a shipping variant.
     sourceSets["main"].jniLibs.setSrcDirs(emptyList<String>())
+    sourceSets["main"].assets.srcDir(stagedDesignFonts)
     sourceSets["debug"].jniLibs.srcDirs("src/debug/jniLibs")
     sourceSets["release"].jniLibs.srcDirs("src/release/jniLibs")
 
@@ -74,6 +85,8 @@ android {
         checkReleaseBuilds = true
     }
 }
+
+tasks.named("preBuild").configure { dependsOn(stageBundledDesignFonts) }
 
 dependencies {
     implementation("androidx.activity:activity-ktx:1.7.0")

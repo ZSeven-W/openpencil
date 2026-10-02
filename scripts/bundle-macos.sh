@@ -195,6 +195,7 @@ bash "$WS_ROOT/tools/check-macos-bundle-plist.sh" "$PLIST"
 echo "==> copying icon into Resources/"
 mkdir -p "$APP/Contents/Resources"
 cp "$WS_ROOT/crates/op-host-desktop/assets/icon.icns" "$APP/Contents/Resources/icon.icns"
+bash "$WS_ROOT/scripts/stage-font-notices.sh" "$APP/Contents/Resources/font-notices"
 
 if [ -n "${OPENPENCIL_BINARY:-}" ]; then
   echo "==> installing prebuilt binary into Contents/MacOS/"

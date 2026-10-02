@@ -20,6 +20,11 @@ targets:
       - path: Sources
       - path: Resources
         buildPhase: resources
+      - path: ../../crates/op-host-desktop/assets/fonts/Inter-VF.ttf
+        buildPhase: resources
+      - path: ../shared/fonts
+        type: folder
+        buildPhase: resources
       - path: Assets.xcassets
     settings:
       base:

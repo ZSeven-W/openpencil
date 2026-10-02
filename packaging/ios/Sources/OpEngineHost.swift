@@ -233,16 +233,16 @@ final class OpEngineHost: NSObject {
         }
         syncSystemChromeStyle()
     }
-
-
-    /// Registers every bundled `fonts/*.ttf` into the engine's font
-    /// registry (mirrors the Android shell's asset staging).
+    /// Xcode copies individual resources to the bundle root while folder
+    /// references preserve `fonts/`. Register both packaging forms.
     private func registerBundledFonts(engine: OpaquePointer) {
-        guard let fontDir = Bundle.main.resourceURL?.appendingPathComponent("fonts") else { return }
-        let files = (try? FileManager.default.contentsOfDirectory(
-            at: fontDir,
-            includingPropertiesForKeys: nil
-        )) ?? []
+        guard let resources = Bundle.main.resourceURL else { return }
+        let files = [resources, resources.appendingPathComponent("fonts")].flatMap { directory in
+            (try? FileManager.default.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: nil
+            )) ?? []
+        }
         for file in files where file.pathExtension == "ttf" || file.pathExtension == "otf" {
             guard let data = try? Data(contentsOf: file) else { continue }
             let status = data.withUnsafeBytes { bytes in

@@ -1,0 +1,18 @@
+Shared design fonts
+
+NotoSansSC-VF.ttf
+Family: Noto Sans SC (variable weight)
+Source: https://github.com/google/fonts/tree/a85815a42757630ce188fdad368c2dfc444d4773/ofl/notosanssc
+Upstream Git blob SHA-1: fb0637bafbcd804fe32152370a1225990745b4bc
+License: OFL-NotoSansSC.txt (SIL Open Font License 1.1)
+
+Inter-VF.ttf is reused from crates/op-host-desktop/assets/fonts/Inter-VF.ttf.
+Family: Inter (variable weight)
+Source: https://github.com/rsms/inter
+License: OFL-Inter.txt (SIL Open Font License 1.1)
+
+iOS references the shared fonts folder and the existing Inter resource.
+Android stages both sources into generated/design-font-assets/fonts.
+Desktop embeds Noto Sans SC from this shared asset alongside its Inter font.
+Desktop distributions include these notices beside the binary or in resources.
+The existing platform player-font.ttf resources remain in place.

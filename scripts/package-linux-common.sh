@@ -59,6 +59,8 @@ EOF
 # macOS, whose BSD install(1) lacks -D.
 op_install_usr_tree() {
   local root="$1" desktop_bin="$2" cli_bin="$3" icon_png="$4"
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
   mkdir -p \
     "$root/usr/bin" \
@@ -79,6 +81,7 @@ op_install_usr_tree() {
   chmod 644 \
     "$root/usr/share/icons/hicolor/1024x1024/apps/openpencil.png" \
     "$root/usr/share/pixmaps/openpencil.png"
+  bash "$script_dir/stage-font-notices.sh" "$root/usr/share/doc/openpencil/font-notices"
 }
 
 # op_artifact_arch <amd64|arm64|x86_64|aarch64>

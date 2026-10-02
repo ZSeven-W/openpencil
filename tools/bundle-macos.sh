@@ -55,6 +55,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/openpencil-desktop"
 cp "$ICON" "$APP/Contents/Resources/icon.icns"
+bash "$ROOT/scripts/stage-font-notices.sh" "$APP/Contents/Resources/font-notices"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

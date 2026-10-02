@@ -15,6 +15,10 @@ required=(
   "$player_dir/Assets.xcassets/AppIcon.appiconset/Contents.json"
   "$player_dir/Resources/ppt-demo.op"
   "$player_dir/Resources/sample.op"
+  "$repo_dir/crates/op-host-desktop/assets/fonts/Inter-VF.ttf"
+  "$repo_dir/packaging/shared/fonts/NotoSansSC-VF.ttf"
+  "$repo_dir/packaging/shared/fonts/OFL-Inter.txt"
+  "$repo_dir/packaging/shared/fonts/OFL-NotoSansSC.txt"
   "$player_dir/Resources/en.lproj/InfoPlist.strings"
   "$player_dir/Resources/zh-Hans.lproj/InfoPlist.strings"
   "$player_dir/Sources/OpPlayerApp.swift"
@@ -133,6 +137,9 @@ ruby - "$player_dir/project.yml" <<'RUBY'
 require "yaml"
 project = YAML.safe_load(File.read(ARGV.fetch(0)), aliases: true)
 target = project.fetch("targets").fetch("OpenPencilPlayer")
+font_sources = target.fetch("sources")
+raise "Inter must reuse the canonical desktop asset" unless font_sources.any? { |source| source["path"] == "../../crates/op-host-desktop/assets/fonts/Inter-VF.ttf" && source["buildPhase"] == "resources" }
+raise "shared design fonts must preserve their fonts folder" unless font_sources.any? { |source| source["path"] == "../shared/fonts" && source["type"] == "folder" && source["buildPhase"] == "resources" }
 raise "OpenPencilPlayer must be an iOS application" unless target["platform"] == "iOS" && target["type"] == "application"
 raise "bundle-id prefix must be tech.zseven" unless project.fetch("options").fetch("bundleIdPrefix") == "tech.zseven"
 settings = target.fetch("settings").fetch("base")
@@ -426,7 +433,7 @@ RUBY
 
 ruby - "$player_dir/Sources/OpEngineHost.swift" <<'RUBY'
 source = File.read(ARGV.fetch(0))
-create = source[/private func createAndAttach\b.*?(?=\n    \/\/\/ Registers every bundled)/m]
+create = source[/private func createAndAttach\b.*?(?=\n    private func registerBundledFonts)/m]
 raise "iOS engine create path missing" unless create
 prepare = create.index("let storageURL = AuthStorage.prepare()")
 root = create.index("desc.storage_root_ptr")
@@ -436,6 +443,11 @@ documents_prepare = create.index("DocumentStorage.prepare()")
 documents_root = create.index("desc.documents_root_ptr")
 raise "the visible documents root must be prepared and bound before op_create" unless documents_prepare && documents_root && documents_prepare < documents_root && documents_root < call
 raise "auth must reuse the create-time storage root" unless create.include?("configureMobileAuth(engine: created, storageURL: storageURL)")
+font_register = create.index("registerBundledFonts(engine: created)")
+attach = create.index("op_attach_surface(created, &surfaceDesc)")
+raise "fonts must register before the first render" unless font_register && attach && font_register < attach
+font_loader = source[/private func registerBundledFonts\b.*?(?=\n    \/\/ MARK:)/m]
+raise "font loading must cover flat and folder Xcode resources" unless font_loader && font_loader.include?('[resources, resources.appendingPathComponent("fonts")]')
 RUBY
 
 ruby - "$player_dir/Sources/OpEngineHost.swift" \

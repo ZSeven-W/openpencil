@@ -91,6 +91,15 @@ pub unsafe extern "C" fn op_register_font(
             let bytes = read_media_bytes(bytes_ptr, bytes_len, "font bytes")?;
             jian_skia::register_imported_font(bytes)
                 .map_err(|e| FfiError::new(OpStatus::InvalidArg, e))?;
+            // The renderer registry and the editor's font-availability
+            // snapshot are separate. Mobile bundle imports must update both,
+            // just like desktop imports, or reopening a saved document reports
+            // fonts missing even though its glyphs can already be rendered.
+            #[cfg(feature = "editor")]
+            if let Some(host) = session.editor.as_mut() {
+                host.refresh_imported_fonts();
+                host.refresh_missing_fonts_prompt();
+            }
             // Font metrics changed: the layout scene must re-measure.
             session.rebuild_scene();
             session.request_redraw();
@@ -120,3 +129,7 @@ unsafe fn read_media_bytes(pointer: *const u8, length: usize, label: &str) -> Ff
     }
     Ok(unsafe { std::slice::from_raw_parts(pointer, length) }.to_vec())
 }
+
+#[cfg(all(test, feature = "editor"))]
+#[path = "media_font_tests.rs"]
+mod font_tests;

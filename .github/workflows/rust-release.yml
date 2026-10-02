@@ -309,13 +309,16 @@ jobs:
           OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
           OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
         run: scripts/build-rust-release-host.sh
+      - name: Stage bundled font notices
+        shell: bash
+        run: bash scripts/stage-font-notices.sh "target/${{ matrix.target }}/release/font-notices"
       - name: Package archives (unix)
         if: matrix.archive == 'tar.gz'
         shell: bash
         run: |
           cd target/${{ matrix.target }}/release
           if [ "$RUNNER_OS" != "macOS" ]; then
-            tar czf ../../../openpencil-desktop-${{ matrix.label }}.tar.gz openpencil-desktop
+            tar czf ../../../openpencil-desktop-${{ matrix.label }}.tar.gz openpencil-desktop font-notices
           fi
           tar czf ../../../op-cli-${{ matrix.label }}.tar.gz op
       - name: Package archives (windows)
@@ -323,7 +326,7 @@ jobs:
         shell: pwsh
         run: |
           Compress-Archive `
-            -Path target\${{ matrix.target }}\release\openpencil-desktop.exe `
+            -Path target\${{ matrix.target }}\release\openpencil-desktop.exe, target\${{ matrix.target }}\release\font-notices `
             -DestinationPath openpencil-desktop-${{ matrix.label }}.zip
           Compress-Archive `
             -Path target\${{ matrix.target }}\release\op.exe `

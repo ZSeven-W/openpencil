@@ -23,6 +23,9 @@ const BUNDLED: &[&[u8]] = &[
     // what the renderer can actually draw.
     include_bytes!("../../op-host-native/assets/Roboto-Regular.ttf"),
     include_bytes!("../assets/fonts/Inter-VF.ttf"),
+    // The featured bilingual templates use this family on desktop and mobile.
+    // Reuse the same OFL asset so reopen/measurement cannot diverge by host.
+    include_bytes!("../../../packaging/shared/fonts/NotoSansSC-VF.ttf"),
     include_bytes!("../assets/fonts/SpaceGrotesk-VF.ttf"),
     include_bytes!("../assets/fonts/Manrope-VF.ttf"),
     include_bytes!("../assets/fonts/Outfit-VF.ttf"),
@@ -41,3 +44,7 @@ const BUNDLED: &[&[u8]] = &[
 pub fn register() {
     jian_skia::register_bundled_fonts(BUNDLED.iter().map(|b| b.to_vec()).collect());
 }
+
+#[cfg(test)]
+#[path = "bundled_fonts_tests.rs"]
+mod tests;

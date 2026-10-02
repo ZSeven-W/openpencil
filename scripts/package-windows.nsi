@@ -285,6 +285,12 @@ Section "OpenPencil" SecMain
   File "${BIN_DIR}\${CLI_NAME}"
   File "/oname=openpencil.ico" "${ICON_FILE}"
 
+  SetOutPath "$INSTDIR\font-notices"
+  File "..\packaging\shared\fonts\NOTICE.txt"
+  File "..\packaging\shared\fonts\OFL-Inter.txt"
+  File "..\packaging\shared\fonts\OFL-NotoSansSC.txt"
+  SetOutPath "$INSTDIR"
+
   ; ANGLE fallback DLLs (libEGL.dll + libGLESv2.dll, optionally
   ; d3dcompiler_47.dll). Installed next to the exe so glutin's EGL path
   ; loads them when the native WGL OpenGL context can't drive Skia — the
@@ -341,6 +347,10 @@ Section "Uninstall"
   Delete "$INSTDIR\${CLI_NAME}"
   Delete "$INSTDIR\openpencil.ico"
   Delete "$INSTDIR\Uninstall.exe"
+  Delete "$INSTDIR\font-notices\NOTICE.txt"
+  Delete "$INSTDIR\font-notices\OFL-Inter.txt"
+  Delete "$INSTDIR\font-notices\OFL-NotoSansSC.txt"
+  RMDir "$INSTDIR\font-notices"
   RMDir "$INSTDIR"
 
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"
