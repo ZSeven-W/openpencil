@@ -536,7 +536,7 @@ fn dark_hero_fill_should_change(
     !raw.starts_with('$') || is_hero_semantic_token(raw)
 }
 
-fn relative_luminance(rgba: [u8; 4]) -> f64 {
+pub(crate) fn relative_luminance(rgba: [u8; 4]) -> f64 {
     let channel = |value: u8| {
         let value = f64::from(value) / 255.0;
         if value <= 0.03928 {

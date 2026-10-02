@@ -135,6 +135,41 @@ fn control_past_the_bottom_edge_is_shifted_up() {
     assert_eq!(update_node_xy(&cmds, "locate"), Some((None, Some(276))));
 }
 
+/// arena-m01 (Opus 5.5, 2026-10-01): the store hero's copy block hugs its
+/// height and was pinned at y=150 in a 270px media stack; its resolved box
+/// ran to y=295 and the subtitle was clipped under the rating row.
+#[test]
+fn hugging_copy_block_past_the_bottom_edge_is_shifted_up() {
+    let stack = json!({
+        "type":"frame","id":"stack","name":"hero-media-stack","layout":"none",
+        "width":375,"height":270,"clipContent":true,
+        "children":[{"type":"frame","id":"copy","name":"hero-store-copy","layout":"vertical",
+                     "x":0,"y":150,"width":375,"height":"fit_content",
+                     "children":[{"type":"text","id":"title","content":"蜀香小馆"}]}]
+    });
+    let rects = HashMap::from([
+        ("stack".to_string(), rect(0.0, 0.0, 375.0, 270.0)),
+        ("copy".to_string(), rect(0.0, 150.0, 375.0, 145.0)),
+    ]);
+    let mut cmds = Vec::new();
+    collect_absolute_child_clamp_fixes(&stack, &rects, &mut cmds);
+    // y = min(150, 270 - 145) = 125.
+    assert_eq!(update_node_xy(&cmds, "copy"), Some((None, Some(125))));
+}
+
+#[test]
+fn filling_height_child_is_still_untouched() {
+    let map = map_with_control(json!({"type":"frame","id":"fill","x":0,"y":40,
+               "width":44,"height":"fill_container","children":[]}));
+    let rects = HashMap::from([
+        ("map".to_string(), rect(0.0, 0.0, 375.0, 320.0)),
+        ("fill".to_string(), rect(0.0, 40.0, 44.0, 320.0)),
+    ]);
+    let mut cmds = Vec::new();
+    collect_absolute_child_clamp_fixes(&map, &rects, &mut cmds);
+    assert!(cmds.is_empty(), "{cmds:?}");
+}
+
 // ── Symmetric-inset shrink ──
 
 fn update_node_width(cmds: &[EditorCommand], id: &str) -> Option<Option<i32>> {

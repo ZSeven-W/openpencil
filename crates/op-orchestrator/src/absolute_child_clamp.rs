@@ -86,16 +86,23 @@ fn push_clamp_command(
     rects: &HashMap<String, Rect>,
     cmds: &mut Vec<EditorCommand>,
 ) {
-    // The child must be absolutely pinned (numeric x/y) at a FIXED numeric
-    // size; a keyword-sized child has no authored box to preserve.
-    let (Some(x), Some(y), Some(_), Some(_)) = (
-        numeric_prop(c, "x"),
-        numeric_prop(c, "y"),
-        fixed_width(c),
-        numeric_prop(c, "height"),
-    ) else {
+    // The child must be absolutely pinned (numeric x/y) with an authored
+    // box to preserve: a fixed numeric size, or a hugging (`fit_content`)
+    // height whose resolved box is its content. A `fill_container` child
+    // spans the parent; there is nothing to shift. Measured, arena-m01
+    // (Opus 5.5, 2026-10-01): the store hero's copy block — 375 wide,
+    // `fit_content` tall — pinned at y=150 in a 270px media stack ran past
+    // the stack's bottom and the subtitle was clipped under the rating row.
+    let (Some(x), Some(y)) = (numeric_prop(c, "x"), numeric_prop(c, "y")) else {
         return;
     };
+    let hugs = |key: &str| c.get(key).and_then(Value::as_str) == Some("fit_content");
+    if fixed_width(c).is_none() && !hugs("width") {
+        return;
+    }
+    if numeric_prop(c, "height").is_none() && !hugs("height") {
+        return;
+    }
     let Some(cid) = c.get("id").and_then(Value::as_str) else {
         return;
     };

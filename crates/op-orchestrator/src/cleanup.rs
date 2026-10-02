@@ -49,6 +49,8 @@ mod cleanup_empty_content_bar;
 mod cleanup_equalize_siblings;
 #[path = "cleanup_image_slots.rs"]
 pub(crate) mod cleanup_image_slots;
+#[path = "cleanup_light_plate_on_dark.rs"]
+mod cleanup_light_plate_on_dark;
 #[path = "cleanup_overflow_prepass.rs"]
 mod cleanup_overflow_prepass;
 #[path = "cleanup_root_and_nav.rs"]
@@ -520,6 +522,8 @@ fn run_cleanup_passes_with_summary_and_policy(
         counter.checkpoint(summary, CheckCategory::Structure, "category-grid-density");
         cleanup_empty_content_bar::remove_empty_content_bars(sink, &rid);
         counter.checkpoint(summary, CheckCategory::Structure, "empty-content-bar");
+        cleanup_light_plate_on_dark::strip_light_plates_on_dark(sink, &rid);
+        counter.checkpoint(summary, CheckCategory::Palette, "light-plate-on-dark");
         if intent_allows(sink, TieredPass::MotionRecipes) {
             motion_recipes::apply(sink, &rid);
         }
