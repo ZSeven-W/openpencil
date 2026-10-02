@@ -137,6 +137,7 @@ pub(crate) fn layout_rich(text: &str, budget: u32) -> Vec<RichLine> {
 
 /// Greedy word wrap that carries the style across the break.
 fn wrap_spans(spans: &[Span], budget: u32) -> Vec<Vec<Span>> {
+    let budget = budget.max(1);
     let mut lines: Vec<Vec<Span>> = Vec::new();
     let mut current: Vec<Span> = Vec::new();
     let mut used = 0u32;
@@ -144,7 +145,27 @@ fn wrap_spans(spans: &[Span], budget: u32) -> Vec<Vec<Span>> {
         let mut pending = String::new();
         for word in split_keeping_spaces(&span.text) {
             let width: u32 = word.chars().map(char_display_units).sum();
-            let fits = used + width <= budget || (used == 0 && pending.is_empty());
+            // CJK prose and URLs often have no spaces. Split oversized runs
+            // at glyph boundaries rather than letting the clip hide their tail.
+            if width > budget {
+                for c in word.chars() {
+                    let units = char_display_units(c);
+                    if used + units > budget && used > 0 {
+                        if !pending.is_empty() {
+                            current.push(Span {
+                                text: std::mem::take(&mut pending),
+                                style: span.style,
+                            });
+                        }
+                        lines.push(std::mem::take(&mut current));
+                        used = 0;
+                    }
+                    pending.push(c);
+                    used += units;
+                }
+                continue;
+            }
+            let fits = used + width <= budget;
             if !fits && !word.trim().is_empty() {
                 if !pending.is_empty() {
                     current.push(Span {

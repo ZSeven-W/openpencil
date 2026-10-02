@@ -6,6 +6,67 @@
 use super::*;
 
 #[test]
+fn continuous_cjk_narration_wraps_without_clipping_or_losing_styled_text() {
+    use crate::widgets::ai_chat_transcript_richtext::{layout_rich, SpanStyle};
+    use crate::widgets::ai_chat_transcript_text::char_display_units;
+    let text = "看了整个页面，**搜索框的提示文字预留空间太窄**，请把`提示文字`完整显示出来。";
+    let lines = layout_rich(text, 28);
+    assert!(lines.len() > 2, "continuous Chinese must wrap");
+    for line in &lines {
+        let units: u32 = line
+            .spans
+            .iter()
+            .flat_map(|s| s.text.chars())
+            .map(char_display_units)
+            .sum();
+        assert!(units <= 28, "a clipped line would hide its tail: {line:?}");
+    }
+    let joined: String = lines
+        .iter()
+        .flat_map(|l| &l.spans)
+        .map(|s| s.text.as_str())
+        .collect();
+    assert_eq!(
+        joined,
+        "看了整个页面，搜索框的提示文字预留空间太窄，请把提示文字完整显示出来。"
+    );
+    assert!(lines
+        .iter()
+        .flat_map(|l| &l.spans)
+        .any(|s| s.style == SpanStyle::Strong));
+    assert!(lines
+        .iter()
+        .flat_map(|l| &l.spans)
+        .any(|s| s.style == SpanStyle::Code));
+}
+
+#[test]
+fn long_narration_links_wrap_and_bullets_keep_their_indent() {
+    use crate::widgets::ai_chat_transcript_richtext::{layout_rich, BULLET_INDENT};
+    use crate::widgets::ai_chat_transcript_text::char_display_units;
+    let url = "https://example.com/a/very/long/reference/with/no/spaces";
+    let lines = layout_rich(&format!("- {url}"), 24);
+    assert!(lines.len() > 2);
+    assert!(lines[0].bullet);
+    assert!(lines.iter().skip(1).all(|l| !l.bullet));
+    assert!(lines.iter().all(|l| l.inset == BULLET_INDENT));
+    for line in &lines {
+        let units: u32 = line
+            .spans
+            .iter()
+            .flat_map(|s| s.text.chars())
+            .map(char_display_units)
+            .sum();
+        assert!(units <= 22, "bullet inset must stay inside the wrap budget");
+    }
+    let joined: String = lines
+        .iter()
+        .flat_map(|l| &l.spans)
+        .map(|s| s.text.as_str())
+        .collect();
+    assert_eq!(joined, url);
+}
+#[test]
 fn user_message_images_get_one_thumbnail_rect_each() {
     let mut m = ChatMessage::user("look");
     for i in 0..3 {
