@@ -109,6 +109,7 @@ object OpNative {
     external fun nativeEditorPasteText(engine: Long, text: String): Int
     external fun nativeEditorTakeCopyText(engine: Long): String?
     external fun nativeEditorImeFocused(engine: Long): Boolean
+    external fun nativeEditorImeDismiss(engine: Long): Boolean
     external fun nativeEditorConfigureAuth(
         engine: Long,
         storageDir: String,

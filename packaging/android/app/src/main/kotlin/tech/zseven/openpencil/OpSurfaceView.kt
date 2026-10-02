@@ -4,6 +4,7 @@ import android.content.Context
 import android.text.InputType
 import android.util.Log
 import android.view.Choreographer
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Surface
 import android.view.SurfaceHolder
@@ -216,6 +217,11 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
     }
 
     override fun onCheckIsTextEditor(): Boolean = editorMode && engine != 0L
+
+    override fun onKeyPreIme(keyCode: Int, event: KeyEvent): Boolean {
+        if (ime.handleBackKey(keyCode, event)) return true
+        return super.onKeyPreIme(keyCode, event)
+    }
 
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
         if (!editorMode || engine == 0L) return null
@@ -729,6 +735,7 @@ class OpSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Call
     fun setImeOwnedByOverlay(owned: Boolean) {
         if (imeOwnedByOverlay == owned) return
         imeOwnedByOverlay = owned
+        if (owned) ime.releaseBackDispatcher()
         if (!owned) {
             ime.retryAfterConfiguration()
             requestFrame()

@@ -187,3 +187,32 @@ pub unsafe extern "C" fn op_editor_ime_focused(
         })
     }
 }
+
+/// Dismiss a native field's software keyboard without navigating its surface.
+///
+/// # Safety
+/// `engine` must be live and `dismissed` must be writable.
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_ime_dismiss(
+    engine: *mut crate::OpEngine,
+    dismissed: *mut bool,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            if dismissed.is_null() {
+                return Err(FfiError::invalid("dismiss output pointer is null"));
+            }
+            let changed =
+                session.with_collab_local_edit(|host| host.dismiss_soft_keyboard_focus())?;
+            dismissed.write(changed);
+            if changed {
+                session.request_redraw();
+            }
+            Ok(())
+        })
+    }
+}
+
+#[cfg(test)]
+#[path = "editor_ime_dismiss_tests.rs"]
+mod dismiss_tests;

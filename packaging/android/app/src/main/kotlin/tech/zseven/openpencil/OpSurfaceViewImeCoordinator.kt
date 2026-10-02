@@ -1,6 +1,8 @@
 package tech.zseven.openpencil
 
 import android.content.Context
+import android.os.Build
+import android.view.KeyEvent
 import android.view.inputmethod.InputMethodManager
 
 /**
@@ -21,6 +23,10 @@ internal class OpSurfaceViewImeCoordinator(private val view: OpSurfaceView) {
     private var imeShowNeeded = false
     private var imeWasFocused = false
     private var imeShowAttempts = 0
+    private var imeBackKeyHandled = false
+    private val imeBack = if (Build.VERSION.SDK_INT >= 33) {
+        OpSurfaceViewImeBack(view) { dismissPlatformKeyboard() }
+    } else null
 
     private val clearImeShowRequest = Runnable {
         imeShowRequestPending = false
@@ -35,8 +41,12 @@ internal class OpSurfaceViewImeCoordinator(private val view: OpSurfaceView) {
         // insets dispatch that reports the overlay's keyboard as visible
         // schedules the frame whose sync() hides it again (and requestFocus
         // below would steal view focus from the overlay's fields).
-        if (view.imeOwnedByOverlay()) return
+        if (view.imeOwnedByOverlay()) {
+            releaseBackDispatcher()
+            return
+        }
         val focused = OpNative.nativeEditorImeFocused(view.editorEngine())
+        imeBack?.setActive(focused && imeVisible)
         if (focused && !imeWasFocused) {
             imeShowNeeded = true
             imeShowAttempts = 0
@@ -94,7 +104,39 @@ internal class OpSurfaceViewImeCoordinator(private val view: OpSurfaceView) {
         view.removeCallbacks(clearImeShowRequest)
     }
 
+    /** Legacy Back reaches a View before the IME consumes the navigation key. */
+    fun handleBackKey(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode != KeyEvent.KEYCODE_BACK) return false
+        if (event.action == KeyEvent.ACTION_UP && imeBackKeyHandled) {
+            imeBackKeyHandled = false
+            return true
+        }
+        if (event.action != KeyEvent.ACTION_DOWN || !imeVisible ||
+            !view.editorMode() || view.editorEngine() == 0L || view.imeOwnedByOverlay()
+        ) return false
+        if (!OpNative.nativeEditorImeDismiss(view.editorEngine())) return false
+        imeBackKeyHandled = true
+        dismissPlatformKeyboard(focusAlreadyDismissed = true)
+        return true
+    }
+
+    private fun dismissPlatformKeyboard(focusAlreadyDismissed: Boolean = false) {
+        if (view.imeOwnedByOverlay() || view.editorEngine() == 0L) return
+        if (!focusAlreadyDismissed) OpNative.nativeEditorImeDismiss(view.editorEngine())
+        imeShowNeeded = false
+        imeShowAttempts = 0
+        imeShowRequestPending = false
+        view.removeCallbacks(clearImeShowRequest)
+        imm.hideSoftInputFromWindow(view.windowToken, 0)
+        view.settleEditorPressFlow()
+    }
+
+    fun releaseBackDispatcher() {
+        imeBack?.setActive(false)
+    }
+
     fun teardown() {
         view.removeCallbacks(clearImeShowRequest)
+        releaseBackDispatcher()
     }
 }

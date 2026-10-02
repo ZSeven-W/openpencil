@@ -23,6 +23,35 @@ use op_editor_ui::Rect;
 use super::WidgetHostNative;
 
 impl WidgetHostNative {
+    /// Release ordinary composer/settings focus when the platform dismisses
+    /// its keyboard. Keep the surrounding surface and typed draft intact.
+    /// Other edit modes keep their own completion/cancellation semantics.
+    pub fn dismiss_soft_keyboard_focus(&mut self) -> bool {
+        let ui = &self.editor_state.editor_ui;
+        if ui.save_name_dialog.open || ui.login_modal_open || ui.account_menu_open {
+            return false;
+        }
+        if ui.agent_settings_open && ui.agent_settings.focus.is_some() {
+            self.commit_settings_focus_if_any();
+            self.mark_dirty();
+            return true;
+        }
+        if ui.home.visible {
+            if ui.home_composer_owns_keyboard() && ui.home.composer_focused {
+                self.editor_state.editor_ui.home.composer_focused = false;
+                self.mark_dirty();
+                return true;
+            }
+            return false;
+        }
+        if self.chat_input_owns_keyboard_pub() && self.editor_state.chat.focused {
+            self.editor_state.chat.blur_input(self.now_ms);
+            self.mark_dirty();
+            return true;
+        }
+        false
+    }
+
     /// True when a text input currently owns the keyboard — the flag the
     /// shells poll to raise / dismiss the software keyboard. Text routing
     /// follows the same overlay owner as clipboard and IME. An exposed

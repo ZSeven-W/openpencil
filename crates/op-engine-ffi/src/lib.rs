@@ -172,8 +172,8 @@ pub use editor_export::{
 pub use editor_image_import::{op_editor_import_image_or_svg, SHELL_ACTION_IMPORT_IMAGE_OR_SVG};
 #[cfg(feature = "editor")]
 pub use editor_ime::{
-    op_editor_ime_commit, op_editor_ime_focused, op_editor_ime_preedit, op_editor_paste_text,
-    op_editor_take_copy_text,
+    op_editor_ime_commit, op_editor_ime_dismiss, op_editor_ime_focused, op_editor_ime_preedit,
+    op_editor_paste_text, op_editor_take_copy_text,
 };
 #[cfg(feature = "editor")]
 pub use editor_pointer::{

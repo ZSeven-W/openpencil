@@ -393,6 +393,8 @@ OpStatus op_editor_take_copy_text(OpEngine *engine, uint8_t *buffer, size_t capa
 
 /* Whether the editor host currently holds the IME (show/hide keyboard). */
 OpStatus op_editor_ime_focused(OpEngine *engine, bool *out);
+/* Dismiss native composer/settings input focus without closing its surface. */
+OpStatus op_editor_ime_dismiss(OpEngine *engine, bool *dismissed);
 
 /* Drain the next platform-shell action. File actions not owned by the mobile
  * shell stay queued for their host integration. */
