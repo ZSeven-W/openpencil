@@ -3,6 +3,8 @@
 
 use super::*;
 use serde_json::Value;
+#[path = "cleanup_fixed_mobile_scroll.rs"]
+mod mobile_scroll;
 
 pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) {
     for _ in 0..12 {
@@ -30,7 +32,7 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) {
         let mut trial = value.clone();
         let slack = trim(&mut trial, floor, 1.0, false);
         if slack < 1.0 {
-            return;
+            break;
         }
         let share = (deficit / slack).clamp(0.1, 0.5);
         trim(&mut value, floor, share, false);
@@ -39,6 +41,7 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) {
             return;
         }
     }
+    mobile_scroll::repair(sink, root_id);
 }
 
 pub(super) fn apply_layout_changes(sink: &mut dyn DocSink, before: &Value, after: &Value) -> bool {

@@ -65,6 +65,41 @@ fn a_fill_wrapper_cannot_hide_overflow_in_a_nested_open_stack() {
 }
 
 #[test]
+fn a_dense_phone_keeps_navigation_visible_and_preserves_content_in_a_real_scroll_area() {
+    let mut state = state(
+        json!({"type":"frame","id":"root","width":390,"height":844,"layout":"vertical","gap":4,"children":[
+            {"type":"frame","id":"status","role":"status-bar","width":"fill_container","height":62},
+            {"type":"frame","id":"body","width":"fill_container","height":"fit_content","layout":"vertical","children":[
+                {"type":"text","id":"copy","content":"The complete menu","width":390,"height":800,"fontSize":20}
+            ]},
+            {"type":"frame","id":"nav","role":"bottom-tab-bar","width":"fill_container","height":72,"children":[
+                {"type":"text","id":"nav-text","content":"Home","width":100,"height":20,"fontSize":12}
+            ]}
+        ]}),
+    );
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
+    repair(&mut sink, "root");
+    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+    let page = scene.active_page().unwrap();
+    assert_eq!(page.find("root").unwrap().bounds.size.y, 844.0);
+    let nav = page.find("nav").unwrap();
+    assert!(nav.bounds.origin.y + nav.bounds.size.y <= 845.0);
+    let value = serde_json::to_value(&sink.state().doc).unwrap();
+    let viewport = &value["children"][0]["children"][1];
+    assert_eq!(viewport["role"], "scroll-area");
+    assert_eq!(viewport["clipContent"], true);
+    assert!(!viewport["events"]["onScroll"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert!(page.find("copy").is_some());
+    assert!(crate::geometry_validation::fixed_board_content_diagnostics(sink.state()).is_empty());
+    let before = sink.state().doc.clone();
+    repair(&mut sink, "root");
+    assert_eq!(sink.state().doc, before);
+}
+
+#[test]
 fn dense_content_without_excess_space_is_not_shrunk_or_deleted() {
     let mut state = state(
         json!({"type":"frame","id":"root","width":390,"height":844,"layout":"vertical","gap":4,"children":[
@@ -117,6 +152,7 @@ fn replay_retained_fixed_board_drafts() {
                 crate::geometry_validation::geometry_validate_and_fix(&mut guarded, &id);
             }
             repair(&mut sink, &id);
+            crate::text_contrast_repair::repair_text_contrast(&mut sink, &id);
         }
         let folder = output.join(entry.file_name());
         std::fs::create_dir_all(&folder).unwrap();

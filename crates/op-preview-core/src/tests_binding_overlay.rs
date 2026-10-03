@@ -459,6 +459,44 @@ fn scroll_doc() -> jian_ops_schema::PenDocument {
 }
 
 #[test]
+#[ignore = "requires an explicit retained generated phone document"]
+fn retained_phone_scroll_reaches_the_last_item_without_moving_navigation() {
+    let path = std::env::var("OPENPENCIL_QA_SCROLL_DOCUMENT").unwrap();
+    let source = std::fs::read_to_string(path).unwrap();
+    let document = op_pen_loader::payload::load_canonical(&source)
+        .unwrap()
+        .value;
+    let mut session = enter(&document);
+    let before = session.preview_scene_for_test();
+    let page = before.active_page().unwrap();
+    let root = &page.children[0];
+    let viewport = root
+        .children
+        .iter()
+        .find(|n| n.id != "n117" && n.id != "n218")
+        .unwrap();
+    let nav_y = find(&before, "n218").bounds.origin.y;
+    let last_y = find(&before, "n216").bounds.origin.y;
+    let wheel = jian_core::gesture::pointer::WheelEvent::simple(
+        jian_core::geometry::point(
+            viewport.bounds.origin.x + 100.0,
+            viewport.bounds.origin.y + 100.0,
+        ),
+        jian_core::geometry::point(0.0, -300.0),
+    );
+    let outcome = session.dispatch_input(PreviewInputEnvelope::new(PreviewInput::Wheel {
+        event: wheel,
+        phase: ScrollPhase::Changed,
+    }));
+    assert!(outcome.needs_redraw);
+    let after = session.preview_scene_for_test();
+    assert_eq!(find(&after, "n218").bounds.origin.y, nav_y);
+    let last = find(&after, "n216");
+    assert!(last.bounds.origin.y < last_y);
+    assert!(last.bounds.origin.y + last.bounds.size.y <= nav_y);
+}
+
+#[test]
 fn scroll_phase_updates_namespace_and_moves_only_unpinned_content() {
     let document = scroll_doc();
     let mut session = enter(&document);

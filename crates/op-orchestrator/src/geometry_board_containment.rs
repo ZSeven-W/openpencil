@@ -39,6 +39,19 @@ fn walk(
     rects: &HashMap<String, Rect>,
     out: &mut Vec<String>,
 ) {
+    // A real clipped scroll viewport deliberately paints only its visible
+    // window. Its descendants are reachable by scrolling, unlike root chrome
+    // pushed out of the artboard. Plain clipping does not earn this exception.
+    if node.get("clipContent").and_then(Value::as_bool) == Some(true)
+        && node
+            .get("events")
+            .and_then(|e| e.get("onScroll"))
+            .and_then(Value::as_array)
+            .is_some_and(|actions| !actions.is_empty())
+        && node.get("id") != root.get("id")
+    {
+        return;
+    }
     if out.len() >= MAX_DIAGNOSTICS
         || node.get("visible").and_then(Value::as_bool) == Some(false)
         || node.get("opacity").and_then(Value::as_f64) == Some(0.0)
