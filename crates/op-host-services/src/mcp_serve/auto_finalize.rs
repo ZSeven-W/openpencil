@@ -89,6 +89,15 @@ impl AutoFinalize {
         }
     }
 
+    /// A standalone precise annotation has no generation writes to finalize.
+    /// Keep an earlier design batch pending, but do not restyle a saved file
+    /// just because its confirmed screenshot annotation changed.
+    pub fn note_scoped_annotation(&mut self, revision: u64) {
+        if self.enabled() && self.last_write_at.is_none() {
+            self.finalized_at_revision = Some(revision);
+        }
+    }
+
     pub fn run(&mut self, state: &mut EditorState, reason: &'static str) -> Option<RepairSummary> {
         let revision = state.document_revision();
         if !self.enabled()

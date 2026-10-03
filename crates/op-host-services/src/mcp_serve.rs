@@ -221,7 +221,11 @@ fn process_message_with_auto_finalize(
             applier_failed = Some(format!("save failed: {e}"));
             return false;
         }
-        if !annotation_only {
+        if annotation_only {
+            if let Some(auto_finalize) = auto_finalize.as_deref_mut() {
+                auto_finalize.note_scoped_annotation(state.document_revision());
+            }
+        } else {
             if let Some(auto_finalize) = auto_finalize.as_deref_mut() {
                 auto_finalize.note_write(Instant::now());
             }

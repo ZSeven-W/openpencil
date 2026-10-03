@@ -3,6 +3,17 @@ use op_editor_core::PenNodeExt;
 use std::ffi::OsString;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
+#[test]
+fn precise_annotations_preserve_saved_layout_but_leave_design_batches_pending() {
+    let mut standalone = AutoFinalize::for_test(std::time::Duration::ZERO);
+    standalone.note_scoped_annotation(7);
+    assert_eq!(standalone.last_finalized_revision(), Some(7));
+    let mut pending = AutoFinalize::for_test(std::time::Duration::ZERO);
+    pending.note_write(std::time::Instant::now());
+    pending.note_scoped_annotation(7);
+    assert_eq!(pending.last_finalized_revision(), None);
+}
+
 fn env_lock() -> MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
