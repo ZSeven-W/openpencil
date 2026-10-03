@@ -94,10 +94,15 @@ fn modify_mode_runs_the_production_plan_turn_and_scoped_apply_path() {
     let execution = run_loaded_modify(
         state_with_roots(&["screen"]),
         "Complete the missing interaction states.",
-        None,
+        ModifyScope::One(None),
         "kimi-code/k3-256k",
         ThinkingMode::Disabled,
         &provider,
+        vec![ChatAttachment {
+            name: "source.png".into(),
+            media_type: "image/png".into(),
+            data: vec![1, 2, 3],
+        }],
     )
     .unwrap();
 
@@ -111,6 +116,8 @@ fn modify_mode_runs_the_production_plan_turn_and_scoped_apply_path() {
     let requests = provider.requests.lock().unwrap();
     assert_eq!(requests.len(), 1);
     assert_eq!(requests[0].max_output_tokens, 8192);
+    assert_eq!(requests[0].attachments.len(), 1);
+    assert_eq!(requests[0].attachments[0].data, vec![1, 2, 3]);
     assert_eq!(requests[0].thinking, ThinkingMode::Disabled);
     assert_eq!(requests[0].model.as_deref(), Some("kimi-code/k3-256k"));
     assert!(requests[0].user_message.contains("CONTEXT NODES:"));
@@ -204,6 +211,29 @@ fn implicit_target_requires_exactly_one_top_level_frame() {
         "screen-b"
     );
     assert_eq!(ambiguous.selection.set, vec![NodeId::new("screen-b")]);
+}
+
+#[test]
+fn explicit_all_roots_scope_builds_the_same_multi_board_refine_plan_as_home() {
+    let mut state = state_with_roots(&["card-a", "card-b", "card-c"]);
+    let before = state.doc.clone();
+    select_modify_scope(&mut state, ModifyScope::AllRoots).unwrap();
+    let plan =
+        build_modify_plan(&state, "Add clear tutorial labels to these three cards.").unwrap();
+    assert_eq!(plan.target_frame_ids, vec!["card-a", "card-b", "card-c"]);
+    assert_eq!(
+        state.doc, before,
+        "selecting the scope must not edit the baseline"
+    );
+    assert!(select_modify_scope(&mut state_with_roots(&[]), ModifyScope::AllRoots).is_err());
+}
+
+#[test]
+fn modify_attachments_reject_invalid_or_excessive_inputs_before_the_provider_runs() {
+    assert!(load_attachments(None).unwrap().is_empty());
+    assert!(load_attachments(Some("not json")).is_err());
+    assert!(load_attachments(Some(r#"["a.png","b.png","c.png","d.png","e.png"]"#)).is_err());
+    assert!(load_attachments(Some(r#"["not-an-image.txt"]"#)).is_err());
 }
 
 #[test]

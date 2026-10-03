@@ -47,6 +47,7 @@ use std::sync::Arc;
 
 mod audit_rubric;
 mod best_of;
+mod home_prompt;
 mod image_fill;
 mod llm_clients;
 mod loop_mode;
@@ -231,6 +232,13 @@ async fn main() -> std::process::ExitCode {
                    OPENPENCIL_SMOKE_PIN_STYLE_GUIDE=<style guide name>\n\
                    OPENPENCIL_SMOKE_VALIDATION=1"
             );
+            return std::process::ExitCode::from(2);
+        }
+    };
+    let prompt = match home_prompt::from_env(prompt) {
+        Ok(prompt) => prompt,
+        Err(error) => {
+            eprintln!("[HOME] {error}");
             return std::process::ExitCode::from(2);
         }
     };

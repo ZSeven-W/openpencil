@@ -11,7 +11,8 @@ use std::process::ExitCode;
 use std::sync::mpsc::Receiver;
 
 use op_ai::chat_provider::{
-    ChatDelta, ChatProvider, ChatRequest, ChatToolResult, CliName, StopReason, ThinkingMode,
+    ChatAttachment, ChatDelta, ChatProvider, ChatRequest, ChatToolResult, CliName, StopReason,
+    ThinkingMode,
 };
 use op_editor_core::{
     BuiltinAgentConfig, BuiltinAgentKind, BuiltinAgentPresetKey, EditorState, NodeId, PenNodeExt,
@@ -27,6 +28,8 @@ use sha2::{Digest as _, Sha256};
 
 const MODIFY_INPUT_ENV: &str = "OPENPENCIL_SMOKE_MODIFY_INPUT";
 const MODIFY_TARGET_ENV: &str = "OPENPENCIL_SMOKE_MODIFY_TARGET";
+const MODIFY_ALL_ROOTS_ENV: &str = "OPENPENCIL_SMOKE_MODIFY_ALL_ROOTS";
+const MODIFY_ATTACHMENTS_ENV: &str = "OPENPENCIL_SMOKE_MODIFY_ATTACHMENTS";
 const KEEP_THINKING_ENV: &str = "OPENPENCIL_SMOKE_KEEP_THINKING";
 const OUTPUT_ENV: &str = "OPENPENCIL_SMOKE_OUT";
 
@@ -65,6 +68,14 @@ fn run_from_env(instruction: &str, input: &Path) -> Result<(), String> {
     let target = std::env::var(MODIFY_TARGET_ENV)
         .ok()
         .filter(|value| !value.trim().is_empty());
+    let all_roots = std::env::var(MODIFY_ALL_ROOTS_ENV)
+        .ok()
+        .is_some_and(|value| truthy(&value));
+    if all_roots && target.is_some() {
+        return Err(format!(
+            "{MODIFY_TARGET_ENV} and {MODIFY_ALL_ROOTS_ENV} are mutually exclusive"
+        ));
+    }
 
     let input_bytes =
         std::fs::read(input).map_err(|error| format!("read {}: {error}", input.display()))?;
@@ -79,10 +90,15 @@ fn run_from_env(instruction: &str, input: &Path) -> Result<(), String> {
     let execution = run_loaded_modify(
         state,
         instruction,
-        target.as_deref(),
+        if all_roots {
+            ModifyScope::AllRoots
+        } else {
+            ModifyScope::One(target.as_deref())
+        },
         &model,
         thinking,
         provider.as_ref(),
+        load_attachments(std::env::var(MODIFY_ATTACHMENTS_ENV).ok().as_deref())?,
     )?;
 
     if let Some(parent) = output
@@ -249,15 +265,57 @@ struct ModifyExecution {
     applied_count: usize,
 }
 
+enum ModifyScope<'a> {
+    One(Option<&'a str>),
+    AllRoots,
+}
+
+fn load_attachments(value: Option<&str>) -> Result<Vec<ChatAttachment>, String> {
+    let Some(value) = value else {
+        return Ok(Vec::new());
+    };
+    let paths: Vec<PathBuf> = serde_json::from_str(value)
+        .map_err(|error| format!("{MODIFY_ATTACHMENTS_ENV} must be a JSON path array: {error}"))?;
+    if paths.len() > 4 {
+        return Err("modify-input accepts at most four image attachments".into());
+    }
+    paths
+        .into_iter()
+        .map(|path| {
+            let media_type = match path.extension().and_then(|ext| ext.to_str()) {
+                Some("png") => "image/png",
+                Some("jpg" | "jpeg") => "image/jpeg",
+                Some("webp") => "image/webp",
+                _ => return Err(format!("unsupported image attachment {}", path.display())),
+            };
+            let data = std::fs::read(&path)
+                .map_err(|error| format!("read image attachment {}: {error}", path.display()))?;
+            if data.is_empty() || data.len() > 5 * 1024 * 1024 {
+                return Err("image attachment must be nonempty and at most 5 MiB".into());
+            }
+            Ok(ChatAttachment {
+                name: path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned(),
+                media_type: media_type.into(),
+                data,
+            })
+        })
+        .collect()
+}
+
 fn run_loaded_modify(
     mut state: EditorState,
     instruction: &str,
-    requested_target: Option<&str>,
+    requested_target: ModifyScope<'_>,
     model: &str,
     thinking: ThinkingMode,
     provider: &dyn ChatProvider,
+    attachments: Vec<ChatAttachment>,
 ) -> Result<ModifyExecution, String> {
-    let target_id = select_target_frame(&mut state, requested_target)?;
+    let target_id = select_modify_scope(&mut state, requested_target)?;
     let plan = build_modify_plan(&state, instruction)
         .ok_or_else(|| "build_modify_plan rejected the selected Frame".to_string())?;
     let target_frame_ids = plan.target_frame_ids.clone();
@@ -267,6 +325,7 @@ fn run_loaded_modify(
         max_output_tokens: 8192,
         model: Some(model.to_string()),
         thinking,
+        attachments,
         ..Default::default()
     };
 
@@ -327,6 +386,26 @@ fn run_loaded_modify(
         target_frame_ids,
         applied_count: host.applied_count,
     })
+}
+
+fn select_modify_scope(state: &mut EditorState, scope: ModifyScope<'_>) -> Result<String, String> {
+    match scope {
+        ModifyScope::One(target) => select_target_frame(state, target),
+        ModifyScope::AllRoots => {
+            let ids: Vec<_> = state
+                .active_children()
+                .iter()
+                .filter(|node| matches!(node, jian_ops_schema::node::PenNode::Frame(_)))
+                .map(|node| NodeId::new(node.id_str()))
+                .collect();
+            let Some(first) = ids.first() else {
+                return Err("baseline has no top-level Frames to refine".into());
+            };
+            state.selection.anchor = first.clone();
+            state.selection.set = ids;
+            Ok("all top-level Frames".into())
+        }
+    }
 }
 
 fn select_target_frame(
