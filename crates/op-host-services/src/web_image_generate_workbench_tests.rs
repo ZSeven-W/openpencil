@@ -109,6 +109,9 @@ fn quick_polling() -> WorkbenchPolling {
 fn client() -> reqwest::Client {
     reqwest::Client::builder()
         .use_rustls_tls()
+        // These fixtures bind loopback, matching the desktop's private
+        // Workbench route. A system proxy turns deliberate drops into 502s.
+        .no_proxy()
         .timeout(Duration::from_secs(5))
         .build()
         .expect("client")
