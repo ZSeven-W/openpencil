@@ -14,7 +14,7 @@ pub(super) fn fix_button_foreground_contrast(node: &mut Value) {
     let Some(bg_raw) = get_first_solid_color(node) else {
         return;
     };
-    // A brand-accent token (`$--primary` / `$--primary`) binds to a
+    // A brand-accent token (`$--primary` / `$--destructive`) binds to a
     // concrete hex only at render time, so `resolve_color_maybe_ref` can't
     // read its luminance here and the pass used to bail — leaving the model's
     // default-dark icon on an orange accent button (measured: a `sliders`
