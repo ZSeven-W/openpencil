@@ -219,6 +219,30 @@ fn image_plate_cover(kids: &[Value], index: usize, rects: &HashMap<String, Rect>
     })
 }
 
+// Highlighter bands are smaller than the heading they decorate, so the
+// large-surface overlay threshold cannot detect even a fully hidden glyph.
+// Restrict this exception to named, empty highlighters behind direct text;
+// peer cards, photos and intentional strike-throughs keep their ordering.
+fn text_highlighter_cover(
+    kids: &[Value],
+    index: usize,
+    rects: &HashMap<String, Rect>,
+) -> Option<usize> {
+    if kids[index].get("type").and_then(Value::as_str) != Some("text") {
+        return None;
+    }
+    let text_rect = rect_of(&kids[index], rects)?;
+    kids[..index].iter().position(|cover| {
+        let name = cover.get("name").and_then(Value::as_str).unwrap_or("");
+        let highlighter = name.to_ascii_lowercase().contains("highlight") || name.contains("高亮");
+        highlighter
+            && children(cover).is_empty()
+            && matches!(cover.get("type").and_then(Value::as_str), Some("rectangle"))
+            && paints_opaque(cover)
+            && rect_of(cover, rects).is_some_and(|r| covered_fraction(text_rect, r) > 0.0)
+    })
+}
+
 /// Is this node a SCRIM — a fill that deliberately lets what is behind it
 /// through? Every colour in its first fill must carry a low alpha
 /// (`#RRGGBBAA` under ~0.8), whether a solid or each stop of a gradient.
@@ -424,6 +448,8 @@ pub(super) fn collect_buried_overlay_fixes(
                 0
             } else if let Some(plate_index) = image_plate_cover(kids, index, rects) {
                 plate_index
+            } else if let Some(band_index) = text_highlighter_cover(kids, index, rects) {
+                band_index
             } else {
                 continue;
             };

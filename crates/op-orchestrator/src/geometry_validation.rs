@@ -44,8 +44,11 @@ use text_collision::push_text_collision_diagnostics;
 // `geometry_diagnostics` / `fix_rail_width_collapse`); each family of
 // collectors lives in its own file and is re-imported here so the drivers (and
 // the test modules mounted below) see the same flat namespace as before.
+#[path = "geometry_board_containment.rs"]
+mod geometry_board_containment;
 #[path = "geometry_bottom_gap.rs"]
 mod geometry_bottom_gap;
+pub use geometry_board_containment::fixed_board_content_diagnostics;
 use geometry_bottom_gap::push_mobile_bottom_gap_diagnostic;
 pub(crate) use geometry_bottom_gap::{
     repair_mobile_bottom_breathing, repair_mobile_bottom_breathing_for_all_roots,
@@ -377,6 +380,7 @@ pub fn geometry_diagnostics(state: &EditorState) -> Vec<String> {
             break;
         }
         if let Ok(v) = serde_json::to_value(root) {
+            geometry_board_containment::collect(&v, &rects, &mut out);
             bottom_nav_root_containment_diagnostic(&v, &rects, &mut out);
             bottom_nav_order_diagnostic(&v, &mut out);
             push_mobile_bottom_gap_diagnostic(&v, &rects, &mut out);

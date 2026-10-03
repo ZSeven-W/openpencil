@@ -13,16 +13,34 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str, plan: &OrchestratorP
     let Ok(mut value) = serde_json::to_value(root) else {
         return;
     };
+    let before = value.clone();
     if anchor_layers(&mut value, width, height) == 0 {
         return;
     }
-    if let Ok(node) = serde_json::from_value(value) {
-        sink.apply(EditorCommand::ReplaceSubtree {
-            node_id: NodeId::new(root_id),
-            node,
-            drop_children: true,
-            page_id: None,
-        });
+    super::fixed_board_spacing::apply_layout_changes(sink, &before, &value);
+    // Child zero paints on top. The proven leading background layers belong
+    // behind content, including small grid dots that otherwise punch holes in
+    // heading glyphs. Keep the background layers' own relative order.
+    if let Some(body) = value
+        .get("children")
+        .and_then(Value::as_array)
+        .and_then(|c| c.first())
+    {
+        if let (Some(parent), Some(layers)) = (
+            body.get("id").and_then(Value::as_str),
+            body.get("children").and_then(Value::as_array),
+        ) {
+            for layer in layers.iter().take_while(|layer| pure_geometry(layer)) {
+                if let Some(id) = layer.get("id").and_then(Value::as_str) {
+                    sink.apply(EditorCommand::MoveNode {
+                        node_id: NodeId::new(id),
+                        target_parent: NodeId::new(parent),
+                        page_id: None,
+                        index: Some(layers.len().saturating_sub(1)),
+                    });
+                }
+            }
+        }
     }
 }
 
@@ -61,7 +79,10 @@ fn anchor_layers(root: &mut Value, width: f64, height: f64) -> usize {
     }
     let body = &mut children[0];
     if body.get("type").and_then(Value::as_str) != Some("frame")
-        || body.get("layout").and_then(Value::as_str) != Some("vertical")
+        || !matches!(
+            body.get("layout").and_then(Value::as_str),
+            Some("vertical" | "none")
+        )
         || body.get("height").and_then(Value::as_str) != Some("fit_content")
         || !contains_text(body)
     {
@@ -70,27 +91,60 @@ fn anchor_layers(root: &mut Value, width: f64, height: f64) -> usize {
     let Some(layers) = body.get_mut("children").and_then(Value::as_array_mut) else {
         return 0;
     };
+    let leading = layers
+        .iter()
+        .take_while(|layer| pure_geometry(layer))
+        .count();
+    // Generated margin/grid wrappers often hug their contents. Prove the
+    // page-sized background from the geometry inside, not the wrapper's
+    // absent numeric size. A cluster of chart dots alone does not qualify.
+    if !layers[..leading]
+        .iter()
+        .any(|layer| page_geometry(layer, width, height))
+    {
+        return 0;
+    }
     let mut count = 0;
-    for layer in layers {
-        if !pure_geometry(layer) {
-            break;
+    for layer in &mut layers[..leading] {
+        if layer.get("constraints").is_none() {
+            layer["constraints"] = serde_json::json!({"h":"left", "v":"top"});
+            // Constraints only opt out of flow when an authored coordinate
+            // exists; hugging background wrappers often omitted both axes.
+            if layer.get("x").is_none() {
+                layer["x"] = serde_json::json!(0.0);
+            }
+            if layer.get("y").is_none() {
+                layer["y"] = serde_json::json!(0.0);
+            }
+            count += 1;
         }
-        if layer.get("constraints").is_some() {
-            continue;
-        }
-        let h = layer.get("height").and_then(Value::as_f64).unwrap_or(0.0);
-        let w = layer.get("width").and_then(Value::as_f64).unwrap_or(0.0);
-        if h < height * 0.95 || !(w >= width * 0.95 || (w > 0.0 && w <= 8.0)) {
-            continue;
-        }
-        layer["constraints"] = serde_json::json!({"h":"left", "v":"top"});
-        count += 1;
     }
     if count > 0 {
         body["height"] = Value::String("fill_container".into());
         root["height"] = serde_json::json!(height);
     }
     count
+}
+
+fn page_geometry(node: &Value, width: f64, height: f64) -> bool {
+    let h = node.get("height").and_then(Value::as_f64).unwrap_or(0.0);
+    let w = node.get("width").and_then(Value::as_f64).unwrap_or(0.0);
+    let name = node
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let margin_rule = name.contains("margin") || name.contains("rule") || name.contains("边距");
+    (h >= height * 0.95 && w >= width * 0.95)
+        || (margin_rule && h >= height * 0.8 && w > 0.0 && w <= 8.0)
+        || node
+            .get("children")
+            .and_then(Value::as_array)
+            .is_some_and(|children| {
+                children
+                    .iter()
+                    .any(|child| page_geometry(child, width, height))
+            })
 }
 
 #[cfg(test)]
@@ -116,6 +170,46 @@ mod tests {
         assert!(page.find("title").unwrap().bounds.origin.y < 200.0);
         assert_eq!(page.find("root").unwrap().bounds.size.y, 1440.0);
         assert_eq!(page.find("rule").unwrap().bounds.origin.x, 62.0);
+    }
+    #[test]
+    fn background_repairs_preserve_every_existing_node_identity() {
+        let doc =
+            serde_json::from_value(serde_json::json!({"version":"1.0.0","children":[fixture()]}))
+                .unwrap();
+        let mut state = EditorState::from_document(doc);
+        let root = state.active_children()[0].clone();
+        let mut plan = crate::loop_finalize::synthesize_plan(std::slice::from_ref(&root), 1080.0);
+        plan.root_frame.height = 1440.0;
+        let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
+        repair(&mut sink, "root", &plan);
+        let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+        let page = scene.active_page().unwrap();
+        for id in ["root", "body", "grid", "dot", "rule", "title"] {
+            assert!(page.find(id).is_some(), "{id}");
+        }
+        assert!(page.find("title").unwrap().bounds.origin.y < 200.0);
+        assert_eq!(page.find("root").unwrap().bounds.size.y, 1440.0);
+        let body = find_root(sink.state(), "body").unwrap();
+        assert_eq!(body.children().unwrap()[0].id_str(), "title");
+    }
+    #[test]
+    fn hugging_margin_layer_stops_creating_a_page_of_blank_flow_space() {
+        let mut root = fixture();
+        let layers = root["children"][0]["children"].as_array_mut().unwrap();
+        layers[0] = serde_json::json!({"type":"frame","id":"margin","width":"fill_container","height":"fit_content","layout":"none","children":[
+            {"type":"rectangle","id":"margin-rule","name":"margin-rule","width":2,"height":1216,"fill":[{"type":"solid","color":"#cc0000"}]}
+        ]});
+        layers.remove(1);
+        assert_eq!(anchor_layers(&mut root, 1080.0, 1440.0), 1);
+        assert_eq!(
+            root["children"][0]["children"][0]["constraints"]["v"],
+            "top"
+        );
+        assert_eq!(root["children"][0]["height"], "fill_container");
+        let doc = serde_json::from_value(serde_json::json!({"version":"1.0.0","children":[root]}))
+            .unwrap();
+        let scene = op_pen_loader::editor_state_to_layout_scene(&EditorState::from_document(doc));
+        assert!(scene.pages[0].find("title").unwrap().bounds.origin.y < 200.0);
     }
     #[test]
     fn full_page_content_graphics_are_not_reinterpreted_as_backgrounds() {

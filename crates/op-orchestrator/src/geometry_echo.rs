@@ -11,7 +11,7 @@
 //! recursive detector (`collect_diagnostics`) to exactly the node ids one
 //! subtask inserted.
 
-use op_editor_core::{EditorState, NodeId};
+use op_editor_core::{EditorState, NodeId, PenNodeExt};
 
 use super::text_collision::push_text_collision_diagnostics;
 use super::{
@@ -46,6 +46,13 @@ pub(crate) fn geometry_diagnostics_for_roots(
         let Ok(v) = serde_json::to_value(root) else {
             continue;
         };
+        if state
+            .active_children()
+            .iter()
+            .any(|node| node.id_str() == root_id)
+        {
+            super::geometry_board_containment::collect(&v, &rects, &mut out);
+        }
         push_text_collision_diagnostics(&v, &rects, &mut out);
         collect_diagnostics(&v, &rects, &mut out);
     }

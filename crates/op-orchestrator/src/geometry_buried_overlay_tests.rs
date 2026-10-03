@@ -7,6 +7,30 @@
 use super::*;
 use serde_json::json;
 
+#[test]
+fn a_partial_highlighter_cannot_cover_heading_glyphs() {
+    let mut stack = json!({"type":"frame","id":"stack","layout":"none","children":[
+        {"type":"rectangle","id":"band","name":"highlight-band","fill":[{"type":"solid","color":"#A5F3C0"}]},
+        {"type":"text","id":"heading","content":"App界面先做一页"}
+    ]});
+    let rects = HashMap::from([
+        ("band".into(), rect(560.0, 52.0, 344.0, 66.0)),
+        ("heading".into(), rect(0.0, 0.0, 904.0, 132.0)),
+    ]);
+    let mut cmds = Vec::new();
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    assert_eq!(moved_ids(&cmds), vec!["heading"]);
+    stack["children"].as_array_mut().unwrap().swap(0, 1);
+    cmds.clear();
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    assert!(cmds.is_empty(), "correct ordering is stable");
+
+    stack["children"].as_array_mut().unwrap().swap(0, 1);
+    stack["children"][0]["name"] = json!("strike-through");
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    assert!(cmds.is_empty(), "intentional front decoration is unchanged");
+}
+
 fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
     Rect { x, y, w, h }
 }

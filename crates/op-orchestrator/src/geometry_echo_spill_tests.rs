@@ -131,9 +131,8 @@ fn image_much_taller_than_its_parent_is_echoed_vertically() {
     );
 }
 
-/// The bottom-breathing cleanup adds numeric root padding without changing
-/// business children. OpenPencil's post-layout reconciliation includes that
-/// padding in the resolved root extent; it is not evidence of a tall child.
+/// Padding on an implicitly clipped numeric artboard must not inflate its
+/// viewport or be reported as an oversized child.
 #[test]
 fn numeric_root_padding_alone_is_not_echoed_as_vertical_spill() {
     let doc: jian_ops_schema::PenDocument = serde_json::from_value(serde_json::json!({
@@ -152,10 +151,7 @@ fn numeric_root_padding_alone_is_not_echoed_as_vertical_spill() {
     let state = op_editor_core::EditorState::from_document(doc);
     let rects = resolved_rects(&state);
     let resolved_root = rects.get("root").expect("root rect").h;
-    assert!(
-        resolved_root > 844.0 + VERTICAL_SPILL_SLACK,
-        "fixture must exercise post-layout padding growth, got {resolved_root}"
-    );
+    assert_eq!(resolved_root, 844.0);
 
     let issues = super::geometry_diagnostics(&state);
     assert!(

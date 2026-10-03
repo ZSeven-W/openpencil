@@ -68,6 +68,7 @@ fn fixed_gap_screen(gap: f64) -> serde_json::Value {
     json!({
         "type": "frame", "id": "root", "name": "Mobile Screen",
         "width": 390, "height": 844, "layout": "vertical", "gap": 0,
+        "clipContent": false,
         "children": [
             { "type": "frame", "id": "body", "name": "Body",
               "width": "fill_container", "height": 844.0 - gap }
@@ -245,6 +246,20 @@ fn content_overflowing_the_root_is_left_to_the_spill_diagnostics() {
 }
 
 #[test]
+fn fixed_artboards_do_not_claim_padding_created_room_below_fixed_content() {
+    let mut root = fixed_gap_screen(0.0);
+    root.as_object_mut().unwrap().remove("clipContent");
+    let before = state_for(root.clone()).doc;
+    let (state, changed) = repair(root);
+    assert!(!changed);
+    assert_eq!(state.doc, before);
+    assert_eq!(resolved_direct_child_gap(&state), 0.0);
+    assert!(geometry_diagnostics(&state)
+        .iter()
+        .any(|issue| issue.contains(ECHO)));
+}
+
+#[test]
 fn cleanup_repairs_zero_and_eleven_pixel_gaps_to_twenty_eight() {
     for initial_gap in [0.0, 11.0] {
         let (state, changed) = repair(fixed_gap_screen(initial_gap));
@@ -339,6 +354,7 @@ fn cleanup_repairs_a_last_wrapper_without_nested_bottom_navigation() {
     let root = json!({
         "type": "frame", "id": "root", "name": "Article Detail",
         "width": 390, "height": 844, "layout": "vertical",
+        "clipContent": false,
         "children": [{
             "type": "frame", "id": "wrapper", "name": "Content Wrapper",
             "width": "fill_container", "height": 844, "layout": "vertical",
@@ -366,6 +382,7 @@ fn all_roots_driver_repairs_every_mobile_screen() {
         "children": [
             {
                 "type": "frame", "id": "root-a", "width": 390, "height": 844,
+                "clipContent": false,
                 "layout": "vertical",
                 "children": [
                     { "type": "frame", "id": "body-a",
@@ -374,6 +391,7 @@ fn all_roots_driver_repairs_every_mobile_screen() {
             },
             {
                 "type": "frame", "id": "root-b", "x": 440, "width": 390, "height": 844,
+                "clipContent": false,
                 "layout": "vertical",
                 "children": [
                     { "type": "frame", "id": "body-b",

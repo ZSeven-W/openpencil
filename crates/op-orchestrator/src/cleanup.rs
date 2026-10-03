@@ -30,6 +30,8 @@ mod cleanup_mobile_chrome;
 mod cleanup_root_patches;
 #[path = "cleanup_fixed_board_backdrops.rs"]
 mod fixed_board_backdrops;
+#[path = "cleanup_fixed_board_spacing.rs"]
+mod fixed_board_spacing;
 pub(crate) use cleanup_mobile_chrome::{
     anchor_bottom_nav_last_for_all_roots, repair_mobile_structural_chrome_for_all_roots,
 };
@@ -714,6 +716,9 @@ fn run_cleanup_passes_with_summary_and_policy(
         crate::square_ring_repair::repair_square_ring_wrappers(sink, rid);
         crate::stacked_text_repair::repair_stacked_overlapping_texts(sink, rid);
         adjust_root_height_to_content(sink, rid, preserve_root_height);
+        if policy.preserve_requested_root_height && policy.roots_are_run_output {
+            fixed_board_spacing::repair(sink, rid);
+        }
         debug_probe_child_height(sink, rid, "adjust_root_height");
         counter.checkpoint(summary, CheckCategory::Layout, "radial+root-height");
     }

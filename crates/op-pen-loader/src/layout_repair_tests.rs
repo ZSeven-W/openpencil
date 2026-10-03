@@ -151,6 +151,30 @@ fn legacy_fixed_width_text_badge_centers_label_like_badge_builder() {
 }
 
 #[test]
+fn implicit_artboard_clip_and_explicit_open_roots_use_their_authored_dimensions() {
+    for (clip, height, expected, clipped) in [
+        ("", "50", 50.0, true),
+        (",\"clipContent\":false", "50", 90.0, false),
+        ("", "\"fit_content\"", 90.0, true),
+    ] {
+        let src = format!(
+            r#"{{"version":"1.0.0","children":[{{"type":"frame","id":"root",
+            "width":100,"height":{height}{clip},"layout":"vertical","gap":10,
+            "children":[{{"type":"rectangle","id":"a","width":100,"height":40}},
+                        {{"type":"rectangle","id":"b","width":100,"height":40}}]}}]}}"#
+        );
+        let scene = editor_state_to_layout_scene(&state_from(&src));
+        let root = scene.pages[0].find("root").unwrap();
+        assert_eq!(root.bounds.size.y, expected, "{src}");
+        assert_eq!(root.clip_content, clipped);
+        // The content remains in the layout for diagnostics, even when a
+        // fixed artboard clips it. Honouring a viewport is not a content fix.
+        assert_eq!(root.find("b").unwrap().bounds.origin.y, 50.0);
+        assert_eq!(root.find("b").unwrap().bounds.size.y, 40.0);
+    }
+}
+
+#[test]
 fn non_clipped_fixed_height_layout_containers_expand_to_overflowing_children() {
     // Legacy generated files sometimes persisted numeric heights from an
     // optimistic text estimate. When the resolved child bounds are taller,

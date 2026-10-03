@@ -71,7 +71,7 @@ pub(super) fn push_mobile_bottom_gap_diagnostic(
 
 /// Repair a no-nav mobile screen to the shared 28px bottom-room contract.
 ///
-/// OpenPencil's post-layout reconciliation can grow an unclipped numeric root
+/// OpenPencil's post-layout reconciliation can grow an explicitly open numeric root
 /// to include its content plus padding. Increasing only the root's bottom
 /// padding therefore grows the resolved artboard without relocating any
 /// business child. Existing compliant gaps, navigation chrome, desktop roots,
@@ -87,6 +87,14 @@ pub(crate) fn repair_mobile_bottom_breathing(sink: &mut dyn DocSink, root_id: &s
     let Ok(value) = serde_json::to_value(root) else {
         return false;
     };
+    // Implicit root clipping is an artboard viewport contract. Padding alone
+    // cannot create room under fixed business children without changing that
+    // viewport or cropping content; leave the diagnostic for a real reflow.
+    if value.get("height").and_then(Value::as_f64).is_some()
+        && value.get("clipContent").and_then(Value::as_bool) != Some(false)
+    {
+        return false;
+    }
     let Some(gap) = resolved_mobile_bottom_gap(&value, &rects) else {
         return false;
     };
