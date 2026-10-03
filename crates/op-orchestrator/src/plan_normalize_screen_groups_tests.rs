@@ -64,6 +64,50 @@ fn plan(width: f64, subtasks: Vec<Subtask>) -> OrchestratorPlan {
     }
 }
 
+#[test]
+fn five_full_slide_tasks_cannot_collapse_into_two_shared_screen_labels() {
+    let mut request = req();
+    request.prompt = "做一份5页中文演示文稿，1920×1080。".into();
+    let mut tasks: Vec<_> = (0..5)
+        .map(|i| {
+            let mut task = subtask_with_screen(
+                &format!("slide-{i}"),
+                &format!("Topic {i}"),
+                Some(if i < 2 { "A" } else { "B" }),
+            );
+            task.region = Region {
+                width: 1920.0,
+                height: 1080.0,
+            };
+            task
+        })
+        .collect();
+    let mut p = plan(1920.0, std::mem::take(&mut tasks));
+    p.root_frame.height = 1080.0;
+    normalize(&mut p, &request);
+    let parents: std::collections::HashSet<_> = p
+        .subtasks
+        .iter()
+        .map(|task| task.parent_frame_id.clone())
+        .collect();
+    assert_eq!(parents.len(), 5);
+}
+
+#[test]
+fn slide_section_tasks_keep_their_shared_screen() {
+    let mut request = req();
+    request.prompt = "做一份2页演示文稿。".into();
+    let mut p = plan(
+        1920.0,
+        vec![
+            subtask_with_screen("header", "Header", Some("A")),
+            subtask_with_screen("body", "Body", Some("A")),
+        ],
+    );
+    normalize(&mut p, &request);
+    assert_eq!(p.subtasks[0].parent_frame_id, p.subtasks[1].parent_frame_id);
+}
+
 fn continuation_req() -> DesignRequest {
     DesignRequest {
         prompt: "Continue with the star map, observation plan, and profile screens".into(),

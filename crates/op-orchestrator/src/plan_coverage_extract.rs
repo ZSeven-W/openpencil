@@ -111,8 +111,16 @@ pub fn required_items(brief: &str) -> Vec<RequiredItem> {
             continue;
         };
         if intro.as_str() == "有" {
+            // Per-card copy requirements are not additional page sections.
+            let prefix = brief[..intro.start()].trim_end();
+            if ["每页", "每张", "每屏", "各页", "各张", "各屏"]
+                .iter()
+                .any(|unit| prefix.ends_with(unit))
+            {
+                continue;
+            }
             if let Some(prev) = brief[..intro.start()].chars().last() {
-                if matches!(prev, '没' | '所' | '还' | '只' | '拥' | '持') {
+                if matches!(prev, '没' | '所' | '还' | '只' | '拥' | '持' | '已') {
                     continue;
                 }
             }
@@ -388,6 +396,11 @@ fn split_cjk_items(list: &str) -> Vec<RawItem> {
         let sep_before = index.checked_sub(1).map_or("", |prev| pieces[prev].1);
         let (first, mut sep) = pieces[index];
         index += 1;
+        // The rest of an anti-fabrication list (prices, user counts, etc.)
+        // describes forbidden claims, not sections the planner must draw.
+        if is_non_content_instruction(first) {
+            break;
+        }
         if first.is_empty() {
             continue;
         }
@@ -409,6 +422,24 @@ fn split_cjk_items(list: &str) -> Vec<RawItem> {
         });
     }
     items
+}
+
+fn is_non_content_instruction(text: &str) -> bool {
+    [
+        "不增加",
+        "不新增",
+        "不添加",
+        "不要编造",
+        "不得编造",
+        "不编造",
+        "不要虚构",
+        "不得虚构",
+        "不虚构",
+        "不要捏造",
+        "不要杜撰",
+    ]
+    .iter()
+    .any(|prefix| text.starts_with(prefix))
 }
 
 fn split_english_items(list: &str) -> Vec<RawItem> {

@@ -32,6 +32,8 @@ mod plan_normalize_root_name;
 #[path = "plan_normalize_items.rs"]
 mod plan_normalize_items;
 
+#[path = "plan_normalize_board_labels.rs"]
+mod plan_normalize_board_labels;
 #[path = "plan_normalize_hero.rs"]
 mod plan_normalize_hero;
 
@@ -208,6 +210,7 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
 
     // Distinct screen labels get distinct placeholder roots; zero labels or a
     // single shared label retain the original single-root assignment.
+    plan_normalize_board_labels::apply(plan, req);
     let groups = crate::screen_groups::group_subtasks_by_screen(&plan.subtasks);
     if groups.len() > 1 {
         for group in &groups {

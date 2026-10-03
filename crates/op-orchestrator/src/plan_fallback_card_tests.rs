@@ -4,6 +4,34 @@
 use super::*;
 use crate::design_type::detect_design_type;
 
+#[test]
+fn an_explicit_single_card_is_a_complete_deliverable_not_a_two_card_series() {
+    let plan = plan_for("做1张图文卡片，包含标题、说明和行动提示。");
+    assert_eq!(plan.subtasks.len(), 1);
+    assert_eq!(plan.subtasks[0].label, "单张作品");
+    assert!(plan.subtasks[0]
+        .elements
+        .as_ref()
+        .unwrap()
+        .contains("complete standalone deliverable"));
+}
+
+#[test]
+fn home_poster_default_is_single_but_user_quantity_still_wins() {
+    assert_eq!(
+        plan_for("请做活动海报（card，竖版图文）。用户需求：介绍内部体验会。")
+            .subtasks
+            .len(),
+        1
+    );
+    assert_eq!(
+        plan_for("请做活动海报（card，竖版图文）。用户需求：做3张活动图。")
+            .subtasks
+            .len(),
+        3
+    );
+}
+
 fn req(prompt: &str) -> DesignRequest {
     DesignRequest {
         prompt: prompt.to_string(),

@@ -9,6 +9,53 @@ const ARENA_M02_BRIEF: &str = "健身 App 首页（375×812）：顶部问候与
 
 const ENGLISH_FITNESS_BRIEF: &str = "A fitness app home screen (375x812) with a greeting header, a daily goal ring, a horizontally scrolling course carousel, a weekly activity bar chart, and a bottom tab bar.";
 
+#[test]
+fn card_copy_constraints_do_not_request_an_extra_section() {
+    let sections = required_sections(
+        "做4张中文知识卡，每张只讲一个步骤，包含短标题和清楚的操作建议，不增加原文没有的能力承诺。",
+    );
+    assert!(
+        !sections.iter().any(|s| s.contains("不增加")),
+        "{sections:?}"
+    );
+    let complete = plan(vec![subtask(
+        "card1",
+        "从素材开始",
+        "短标题与清楚的操作建议",
+    )]);
+    assert!(check_coverage(&sections, &complete).missing.is_empty());
+}
+
+#[test]
+fn per_slide_quality_and_forbidden_claims_do_not_request_pricing() {
+    let sections = required_sections(
+        "做5页演示文稿。保持整套视觉一致，每页有重点而不堆满文字，不要编造用户数、价格、免费次数或已经正式发布的说法。",
+    );
+    assert!(sections.is_empty(), "{sections:?}");
+    let real_sections = required_sections("首页有搜索、商家列表、底部导航。");
+    assert!(
+        real_sections.iter().any(|s| s == "商家列表"),
+        "{real_sections:?}"
+    );
+    assert!(
+        real_sections.iter().any(|s| s == "底部导航"),
+        "{real_sections:?}"
+    );
+}
+
+#[test]
+fn forbidden_claim_enumeration_does_not_swallow_a_following_sentence() {
+    let sections = required_sections(
+        "海报包含活动标题、报名入口，不要编造用户数、价格、免费次数。页面包含评价列表、联系方式。",
+    );
+    assert!(
+        !sections.iter().any(|s| s == "价格" || s == "免费次数"),
+        "{sections:?}"
+    );
+    assert!(sections.iter().any(|s| s == "活动标题"), "{sections:?}");
+    assert!(sections.iter().any(|s| s == "评价列表"), "{sections:?}");
+}
+
 fn subtask(id: &str, label: &str, elements: &str) -> Subtask {
     Subtask {
         id: id.into(),

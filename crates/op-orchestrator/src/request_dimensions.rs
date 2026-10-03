@@ -23,6 +23,9 @@ const ROOT_CONTEXT_TERMS: &[&str] = &[
     "page",
     "screen",
     "canvas",
+    "interface",
+    "poster",
+    "slide",
     // "desktop dashboard" is the catalog's natural-language shorthand for
     // one desktop screen, including the accepted "1440x900 desktop dashboard"
     // form where no literal "screen" token is present.
@@ -38,6 +41,11 @@ const ROOT_CONTEXT_TERMS: &[&str] = &[
     "页面",
     "屏幕",
     "画布",
+    "界面",
+    "首页",
+    "海报",
+    "每张",
+    "每页",
 ];
 const NESTED_CONTEXT_TERMS: &[&str] = &[
     "hero",
@@ -232,6 +240,26 @@ mod tests {
         assert_eq!(
             requested_root_dimensions("Design a 1440×900 desktop analytics dashboard"),
             dimensions(1440.0, Some(900.0))
+        );
+    }
+
+    #[test]
+    fn ordinary_chinese_delivery_terms_keep_explicit_dimensions() {
+        for prompt in [
+            "手机App点单首页，只要1页，390×844，中文界面。",
+            "活动海报，1080×1440，信息清楚。",
+            "做4张知识卡，每张1080×1440。",
+        ] {
+            let expected = if prompt.contains("390") {
+                dimensions(390.0, Some(844.0))
+            } else {
+                dimensions(1080.0, Some(1440.0))
+            };
+            assert_eq!(requested_root_dimensions(prompt), expected, "{prompt}");
+        }
+        assert_eq!(
+            requested_root_dimensions("后台里每张卡片500×600，图片640×480。"),
+            None
         );
     }
 

@@ -486,7 +486,7 @@ fn fallback_slide_elements(title: &str) -> &'static str {
 /// Bounded to a plausible deck size so an unrelated number in the prompt (a
 /// year, a pixel size, a price) cannot turn into a 2026-slide plan — the unit
 /// word right after the digits is what qualifies it as a slide count at all.
-fn explicit_slide_count(prompt: &str) -> Option<usize> {
+pub(crate) fn explicit_slide_count(prompt: &str) -> Option<usize> {
     const UNITS: [&str; 5] = ["slides", "slide", "pages", "page", "页"];
     let lower = prompt.to_lowercase();
     let bytes = lower.as_bytes();

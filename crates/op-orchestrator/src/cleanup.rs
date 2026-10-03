@@ -28,6 +28,8 @@ mod cleanup_desktop_dashboard;
 mod cleanup_mobile_chrome;
 #[path = "cleanup_root_patches.rs"]
 mod cleanup_root_patches;
+#[path = "cleanup_fixed_board_backdrops.rs"]
+mod fixed_board_backdrops;
 pub(crate) use cleanup_mobile_chrome::{
     anchor_bottom_nav_last_for_all_roots, repair_mobile_structural_chrome_for_all_roots,
 };
@@ -674,6 +676,10 @@ fn run_cleanup_passes_with_summary_and_policy(
         // shrink single-line text that outgrew its rail, so the geometry loop
         // below only sees what a move or a shrink cannot fix.
         run_overflow_prepass(sink, rid, summary, &mut counter);
+        if policy.preserve_requested_root_height && policy.roots_are_run_output {
+            fixed_board_backdrops::repair(sink, rid, plan);
+            counter.checkpoint(summary, CheckCategory::Layout, "fixed-board-backdrops");
+        }
         let preserve_root_height = policy.preserve_requested_root_height
             || find_root(sink.state(), rid).is_some_and(|root| {
                 root_has_explicit_fit_content_height(root)

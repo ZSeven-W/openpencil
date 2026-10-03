@@ -19,7 +19,7 @@ use crate::DesignTypePreset;
 ///
 /// Separate from the deck's `explicit_slide_count` because the units differ —
 /// a card series is counted in 张 / 图 / cards, never in 页.
-fn explicit_card_count(prompt: &str) -> Option<usize> {
+pub(crate) fn explicit_card_count(prompt: &str) -> Option<usize> {
     const UNITS: [&str; 6] = ["cards", "card", "张", "張", "图", "圖"];
     let lower = prompt.to_lowercase();
     let bytes = lower.as_bytes();
@@ -42,7 +42,7 @@ fn explicit_card_count(prompt: &str) -> Option<usize> {
             .any(|unit| lower[unit_start..].starts_with(unit))
         {
             if let Ok(count) = lower[start..i].parse::<usize>() {
-                if (2..=20).contains(&count) {
+                if (1..=20).contains(&count) {
                     return Some(count);
                 }
             }
@@ -53,6 +53,9 @@ fn explicit_card_count(prompt: &str) -> Option<usize> {
 
 /// Cover, body, closing — §4.2's arrangement rule, sized to the count.
 fn card_titles(count: usize) -> Vec<String> {
+    if count == 1 {
+        return vec!["单张作品".into()];
+    }
     let mut titles = vec!["封面".to_string()];
     let body = count.saturating_sub(2).max(1);
     for index in 1..=body {
@@ -67,7 +70,9 @@ fn card_titles(count: usize) -> Vec<String> {
 
 /// What each card should carry, by position in the run.
 fn card_elements(title: &str) -> String {
-    if title == "封面" {
+    if title == "单张作品" {
+        "the complete standalone deliverable: include every requested fact, headline, body, visual and call to action; not a cover-only page".into()
+    } else if title == "封面" {
         "the hook: one short headline that makes someone stop scrolling, plus a one-line \
          subtitle. No body copy."
             .to_string()
@@ -83,11 +88,17 @@ pub(crate) fn build_fallback_card_plan(
     req: &DesignRequest,
     preset: DesignTypePreset,
 ) -> OrchestratorPlan {
-    let count = explicit_card_count(&req.prompt).unwrap_or(match req.prompt.chars().count() {
-        0..=80 => 5,
-        81..=200 => 6,
-        _ => 8,
-    });
+    let count = explicit_card_count(&req.prompt).unwrap_or(
+        if req.prompt.trim_start().starts_with("请做活动海报") {
+            1
+        } else {
+            match req.prompt.chars().count() {
+                0..=80 => 5,
+                81..=200 => 6,
+                _ => 8,
+            }
+        },
+    );
 
     let subtasks = card_titles(count)
         .into_iter()
