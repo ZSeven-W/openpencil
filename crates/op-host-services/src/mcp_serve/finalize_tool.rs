@@ -32,6 +32,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use jian_ops_schema::node::PenNode;
 use op_design_lint::design_form::classify_root_form_node;
 use op_design_lint::detectors::detect_shader_budget;
 use op_editor_core::{EditorCommand, EditorState, PenNodeExt};
@@ -121,8 +122,13 @@ impl McpTool for FinalizeDesignTool {
             &advisories,
             &void_advisories,
             &format_drift,
-            &shader_blocking,
-            &shader_informational,
+            RenderFindings {
+                shader_blocking: &shader_blocking,
+                shader_informational: &shader_informational,
+                clipped_content:
+                    &op_orchestrator::geometry_validation::fixed_board_content_diagnostics(&state),
+                changed_board_sizes: &fixed_board_size_changes(&self.state, &state),
+            },
         );
         if commands.is_empty() {
             ToolOutcome::OkJson(json)
@@ -206,14 +212,34 @@ fn default_root_ids(state: &EditorState) -> Vec<String> {
 /// `complete=false`; the informational ones (shader-budget) ride a separate
 /// echo-only `informational` array that never affects `complete`. None are
 /// edits and therefore never inflate the repair tally.
+struct RenderFindings<'a> {
+    shader_blocking: &'a [op_design_lint::Issue],
+    shader_informational: &'a [op_design_lint::Issue],
+    clipped_content: &'a [String],
+    changed_board_sizes: &'a [String],
+}
+
+fn fixed_board_size_changes(before: &EditorState, after: &EditorState) -> Vec<String> {
+    before.active_children().iter().filter_map(|node| {
+        let PenNode::Frame(frame) = node else { return None; };
+        if frame.container.clip_content == Some(false) { return None; }
+        let (width,height) = (node.width_px()?,node.height_px()?);
+        if width <= 0.0 || height <= 0.0 { return None; }
+        let current = after.active_children().iter().find(|n| n.id_str() == node.id_str())?;
+        let (new_width,new_height) = (current.width_px()?,current.height_px()?);
+        ((width-new_width).abs()>0.5 || (height-new_height).abs()>0.5).then(|| format!(
+            "fixed-board-size-changed: {} changed from {width:.0}×{height:.0} to {new_width:.0}×{new_height:.0} during finalization. Restore the requested viewport and reflow its content before declaring the delivery complete.",node.id_str()
+        ))
+    }).collect()
+}
+
 fn finalize_result_json(
     summary: &RepairSummary,
     roots: usize,
     advisories: &[op_orchestrator::orchestration_self_check::SectionStructureDriftAdvisory],
     void_advisories: &[op_orchestrator::board_trailing_void::BoardTrailingVoidAdvisory],
     format_drift: &[op_orchestrator::board_trailing_void::BoardFormatDriftAdvisory],
-    shader_blocking: &[op_design_lint::Issue],
-    shader_informational: &[op_design_lint::Issue],
+    findings: RenderFindings<'_>,
 ) -> String {
     let quality = crate::quality_credential::quality_summary_from_repairs(summary);
     let credential =
@@ -263,24 +289,37 @@ fn finalize_result_json(
             .map(|advisory| render(advisory.code, &advisory.node_ids, &advisory.message)),
     );
     advisories_json.extend(
+        findings
+            .changed_board_sizes
+            .iter()
+            .map(|message| render("fixed-board-size-changed", &[], message)),
+    );
+    advisories_json.extend(
         format_drift
             .iter()
             .map(|advisory| render(advisory.code, &advisory.node_ids, &advisory.message)),
     );
     // Shader-invalid (blocking) advisories are appended BEFORE complete/count are
     // computed so they gate completion like other blocking advisories.
-    advisories_json.extend(shader_blocking.iter().map(|issue| {
+    advisories_json.extend(findings.shader_blocking.iter().map(|issue| {
         render(
             "shader-invalid",
             std::slice::from_ref(&issue.node_id),
             &issue.reason,
         )
     }));
+    advisories_json.extend(
+        findings
+            .clipped_content
+            .iter()
+            .map(|message| render("fixed-board-content-outside", &[], message)),
+    );
     let complete = advisories_json.is_empty();
     let blocking_advisory_count = advisories_json.len();
     // Shader-budget (informational) advisories ride a separate always-present
     // array that never affects complete or blockingAdvisoryCount.
-    let informational_json: Vec<serde_json::Value> = shader_informational
+    let informational_json: Vec<serde_json::Value> = findings
+        .shader_informational
         .iter()
         .map(|issue| {
             render(
@@ -303,4 +342,64 @@ fn finalize_result_json(
         "summary": credential.trim().to_string(),
     })
     .to_string()
+}
+
+#[cfg(test)]
+mod delivery_tests {
+    use super::*;
+    #[test]
+    fn hidden_content_blocks_completion_even_when_export_dimensions_are_correct() {
+        let issues = vec!["fixed-board-content-outside: footer is outside the artboard".into()];
+        let result = finalize_result_json(
+            &RepairSummary::default(),
+            1,
+            &[],
+            &[],
+            &[],
+            RenderFindings {
+                shader_blocking: &[],
+                shader_informational: &[],
+                clipped_content: &issues,
+                changed_board_sizes: &[],
+            },
+        );
+        let result: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(result["complete"], false);
+        assert_eq!(result["blockingAdvisoryCount"], 1);
+        assert_eq!(
+            result["advisories"][0]["code"],
+            "fixed-board-content-outside"
+        );
+        assert_eq!(result["repairs"], 0);
+    }
+
+    #[test]
+    fn a_finalizer_cannot_claim_success_by_growing_the_original_fixed_viewport() {
+        let make = |height, clip| {
+            EditorState::from_document(serde_json::from_value(serde_json::json!({
+            "version":"1.0.0","children":[{"type":"frame","id":"board","width":390,"height":height,"clipContent":clip}]
+        })).unwrap())
+        };
+        let before = make(844, true);
+        let after = make(898, true);
+        let issues = fixed_board_size_changes(&before, &after);
+        assert_eq!(issues.len(), 1);
+        assert!(issues[0].contains("844") && issues[0].contains("898"));
+        let result = finalize_result_json(
+            &RepairSummary::default(),
+            1,
+            &[],
+            &[],
+            &[],
+            RenderFindings {
+                shader_blocking: &[],
+                shader_informational: &[],
+                clipped_content: &[],
+                changed_board_sizes: &issues,
+            },
+        );
+        let result: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(result["complete"], false);
+        assert!(fixed_board_size_changes(&make(844, false), &make(898, false)).is_empty());
+    }
 }

@@ -210,7 +210,7 @@ fn finalize_reports_structure_drift_as_an_advisory_not_a_repair() {
 }
 
 #[test]
-fn finalize_reports_no_advisory_for_an_isomorphic_family() {
+fn finalize_reports_no_structure_drift_but_still_blocks_a_resized_isomorphic_board() {
     let live = load_fixture(ISOMORPHIC_FIXTURE);
     let tool = finalize_design_snapshot(&live);
     let outcome = tool.call(&BTreeMap::new());
@@ -218,12 +218,19 @@ fn finalize_reports_no_advisory_for_an_isomorphic_family() {
         ToolOutcome::OkJsonWithCommand(json, _) | ToolOutcome::OkJson(json) => json,
         other => panic!("unexpected finalize outcome: {other:?}"),
     };
-    assert_eq!(
-        advisories_of(&json).len(),
-        0,
-        "an isomorphic FULL board must produce an empty advisory list: {json}"
+    let advisories = advisories_of(&json);
+    assert!(advisories
+        .iter()
+        .all(|issue| issue["code"] != "section-structure-drift"));
+    // The same fixture grows from 1440 to 1448 after margin cleanup. Equal
+    // item structure does not excuse that fixed delivery size change.
+    assert!(advisories
+        .iter()
+        .any(|issue| issue["code"] == "fixed-board-size-changed"));
+    assert!(
+        !complete_of(&json),
+        "a silently resized board is incomplete: {json}"
     );
-    assert!(complete_of(&json), "a clean full board is complete: {json}");
 }
 
 // ── DS P2-b item C: board-trailing-void advisories ──────────────────────────
