@@ -184,6 +184,19 @@ fn every_task_wraps_a_non_empty_draft_with_its_key_phrase() {
 }
 
 #[test]
+fn poster_task_does_not_expand_a_single_requested_delivery_into_a_bundle() {
+    let prompt = HomeFamily::EventPoster
+        .generation_prompt(&TaskDraft {
+            text: "只要1张1080×1440主海报。".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(prompt.contains("只要1张1080×1440主海报"));
+    assert!(prompt.contains("按用户指定的数量与尺寸交付"));
+    assert!(!prompt.contains("主海报竖版 + 社交方图"));
+}
+
+#[test]
 fn app_desktop_wrapper_names_the_desktop_contract() {
     let prompt = HomeFamily::AppUi.generation_prompt(&TaskDraft {
         text: "门店工作台".into(),

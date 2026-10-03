@@ -151,8 +151,8 @@ impl HomeFamily {
                 Self::info_kind_label(draft.info_kind)
             ),
             Self::EventPoster => format!(
-                "请做一套活动海报（card，主海报竖版 + 社交方图）。整组海报视觉一致，\
-主视觉、时间地点与报名信息完整，图层保持可编辑。\n\n用户需求：{text}"
+                "请做活动海报（card，竖版图文）。按用户指定的数量与尺寸交付，未指定时先做一张竖版主海报。\
+主视觉、时间地点与报名信息完整，图层保持可编辑；社交方图或成套物料仅在用户要求时增加。\n\n用户需求：{text}"
             ),
         };
         Some(prompt)
