@@ -199,6 +199,8 @@ fn process_message_with_auto_finalize(
     }
     let explicit_finalize =
         op_mcp::parse_tool_call(line.trim()).is_some_and(|call| call.tool == "finalize_design");
+    let annotation_only =
+        op_mcp::parse_tool_call(line.trim()).is_some_and(|call| call.tool == "annotate_image");
     let mut applier_failed: Option<String> = None;
     let mut apply_rejected = false;
     // File-backed mode has no live canvas for any tool call to animate —
@@ -212,13 +214,17 @@ fn process_message_with_auto_finalize(
             apply_rejected = true;
             return false;
         }
-        run_write_repairs_after_apply(state);
+        if !annotation_only {
+            run_write_repairs_after_apply(state);
+        }
         if let Err(e) = save_editor_state(state, path) {
             applier_failed = Some(format!("save failed: {e}"));
             return false;
         }
-        if let Some(auto_finalize) = auto_finalize.as_deref_mut() {
-            auto_finalize.note_write(Instant::now());
+        if !annotation_only {
+            if let Some(auto_finalize) = auto_finalize.as_deref_mut() {
+                auto_finalize.note_write(Instant::now());
+            }
         }
         true
     })?;

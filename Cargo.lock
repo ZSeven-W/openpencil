@@ -4845,6 +4845,8 @@ dependencies = [
 name = "op-mcp"
 version = "0.8.5"
 dependencies = [
+ "base64",
+ "image",
  "jian-ops-schema",
  "jian-scene",
  "op-ai-skills",
@@ -4853,6 +4855,7 @@ dependencies = [
  "op-design-lint",
  "op-editor-core",
  "op-html",
+ "op-image-enrich",
  "op-pen-loader",
  "op-util",
  "regex",
@@ -4875,7 +4878,9 @@ dependencies = [
 name = "op-orchestrator"
 version = "0.8.5"
 dependencies = [
+ "base64",
  "futures",
+ "image",
  "jian-ops-schema",
  "jian-scene",
  "op-ai-skills",

@@ -72,10 +72,16 @@ pub(super) fn scrim_over_content(
     rects: &HashMap<String, Rect>,
 ) -> Option<(usize, usize)> {
     kids.iter().enumerate().find_map(|(scrim_index, scrim)| {
+        let named_scrim = scrim
+            .get("name")
+            .and_then(Value::as_str)
+            .is_some_and(|name| {
+                name.to_ascii_lowercase().contains("scrim") || name.contains("遮罩")
+            });
         if !children(scrim).is_empty()
             || bears_content(scrim)
             || !paints_see_through(scrim)
-            || max_alpha(scrim) < MIN_HIDING_ALPHA
+            || (max_alpha(scrim) < MIN_HIDING_ALPHA && !named_scrim)
         {
             return None;
         }

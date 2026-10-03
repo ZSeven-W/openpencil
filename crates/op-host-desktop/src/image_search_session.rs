@@ -28,10 +28,18 @@ use op_host_services::image_relevance_judge::{ChatVisionJudge, OpenAiCompatVisio
 use op_host_services::web_image_generate::ImageGenerateError;
 use op_image_enrich::net::{ImageRelevanceJudge, NoJudge};
 pub(crate) use op_image_enrich::{
-    apply_result, collaboration_image_result_gate, collect_targets, collect_targets_with_scene,
+    collaboration_image_result_gate, collect_targets, collect_targets_with_scene,
     image_request_mode, is_image_fallback, ImageAspectRatio, ImageRequestMode, ImageSearchTarget,
     SEARCH_FAILED_PLACEHOLDER_SRC,
 };
+
+pub(crate) fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str) -> bool {
+    let changed = op_image_enrich::apply_result(state, node_id, url);
+    if changed {
+        op_orchestrator::repair_photo_caption_for_image(state, node_id);
+    }
+    changed
+}
 
 /// Desktop wrapper over the shared credential pair — adds the
 /// `EditorState` snapshot constructor the daemon side has no use for.

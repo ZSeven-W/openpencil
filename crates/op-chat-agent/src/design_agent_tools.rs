@@ -1,6 +1,6 @@
 //! In-process design tool surface for the AI design agent loop.
 //!
-//! Mirrors `chat_canvas_tools.rs` for the 15-tool design toolset (vs the
+//! Mirrors `chat_canvas_tools.rs` for the 16-tool design toolset (vs the
 //! 7-tool CRUD set). Schema definitions for every tool are derived from
 //! `mcp_serve::schemas::TOOL_SCHEMAS` — the same source the MCP server
 //! advertises — so the in-process and MCP surfaces stay byte-equal as JSON.
@@ -25,7 +25,7 @@ use op_mcp::ToolRegistry;
 use crate::chat_canvas_tools::{execute_chat_tool, execute_with_registry};
 use crate::mcp_serve::schemas;
 
-/// The 15-tool design toolset with auth levels.
+/// The 16-tool design toolset with auth levels.
 /// Reads = "read"; batch_design / set_variables / spawn_agents /
 /// export_nodes = "create".
 pub const DESIGN_TOOLS: &[(&str, &str)] = &[
@@ -40,6 +40,7 @@ pub const DESIGN_TOOLS: &[(&str, &str)] = &[
     ("snapshot_layout", "read"),
     ("find_empty_space", "read"),
     ("batch_design", "create"),
+    ("annotate_image", "create"),
     ("get_screenshot", "read"),
     ("export_nodes", "create"),
     ("spawn_agents", "create"),
@@ -542,6 +543,7 @@ fn design_tool_registry(state: &EditorState, requested: &str) -> ToolRegistry {
         "snapshot_layout" => r.register(Box::new(op_mcp::snapshot_layout_snapshot(state))),
         "find_empty_space" => r.register(Box::new(op_mcp::find_empty_space_snapshot(state))),
         "batch_design" => r.register(Box::new(op_mcp::batch_design_snapshot(state))),
+        "annotate_image" => r.register(Box::new(op_mcp::annotate_image_snapshot(state))),
         "get_screenshot" | "export_nodes" => {
             if let Some(registrar) = HOST_TOOL_REGISTRAR.get() {
                 let _ = registrar(state, requested, &mut r);

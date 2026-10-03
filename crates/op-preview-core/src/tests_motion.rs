@@ -202,7 +202,7 @@ fn reduced_motion_begin_lifecycle_is_instant_and_idempotent() {
 fn in_view_animation_fires_once_after_page_scroll_reveals_node() {
     let mut session = session_for(serde_json::json!({
         "version":"1.1","formatVersion":"1.1",
-        "children":[{"type":"frame","id":"screen","width":200,"height":100,
+        "children":[{"type":"frame","id":"screen","width":200,"height":100,"clipContent":false,
             "children":[{"type":"rectangle","id":"card","x":0,"y":180,"width":100,"height":40,
                 "opacity":1,"fill":[{"type":"solid","color":"#ffffff"}],
                 "animations":[{"trigger":"inView","keyframes":[

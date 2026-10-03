@@ -41,6 +41,7 @@ pub(super) fn rebuild_registry(
     register_tool!("get_document_info", document_info_snapshot(doc));
     register_tool!("get_selection", selection_snapshot(doc));
     register_tool!("get_node", get_node_snapshot(doc));
+    register_tool!("annotate_image", op_mcp::annotate_image_snapshot(doc));
     register_tool!("list_pages", list_pages_snapshot(doc));
     register_tool!("list_variables", list_variables_snapshot(doc));
     register_tool!("get_variables", get_variables_snapshot(doc));

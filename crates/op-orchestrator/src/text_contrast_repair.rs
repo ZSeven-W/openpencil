@@ -36,7 +36,10 @@ use op_editor_core::{EditorCommand, EditorState, NodeId, PenNodeExt};
 
 #[path = "text_contrast_gradient.rs"]
 mod gradient;
+#[path = "text_contrast_photo.rs"]
+mod photo;
 use gradient::{GradientSource, ResolvedGradient};
+pub use photo::repair_for_image as repair_photo_caption_for_image;
 
 /// Palette tokens allowed as a replacement, most-preferred first.
 ///
@@ -628,7 +631,9 @@ fn collect_contrast_offenders(
     }
     if matches!(node, PenNode::Text(_) | PenNode::IconFont(_)) {
         if let Some(text_color) = resolved_text_color(node_fills(node), variables, theme) {
-            if let Some(background) = nearest_background(ancestors, variables, theme) {
+            if let Some(background) =
+                photo::effective_background(node, ancestors, variables, theme, rects)
+            {
                 let is_icon = matches!(node, PenNode::IconFont(_));
                 // Icons need the same palette-backed repair as text, but only
                 // when they are effectively indistinguishable from a solid
@@ -660,6 +665,7 @@ fn collect_contrast_offenders(
 /// Repair invisible text under `root_id`. Returns how many fills were
 /// re-pointed.
 pub(crate) fn repair_text_contrast(sink: &mut dyn DocSink, root_id: &str) -> usize {
+    let photo_repairs = photo::repair(sink, root_id);
     let Some(root) = sink
         .state()
         .active_children()
@@ -694,7 +700,7 @@ pub(crate) fn repair_text_contrast(sink: &mut dyn DocSink, root_id: &str) -> usi
             page_id: None,
         });
     }
-    applied
+    applied + photo_repairs
 }
 
 /// The FIRST palette token, in preference order, that clears

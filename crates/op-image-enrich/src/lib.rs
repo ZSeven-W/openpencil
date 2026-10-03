@@ -23,6 +23,8 @@ mod apply;
 mod fallback_policy;
 #[cfg(feature = "net")]
 pub mod net;
+#[cfg(feature = "pixels")]
+pub mod pixels;
 mod targets;
 
 pub use apply::{apply_result, collaboration_image_result_gate};

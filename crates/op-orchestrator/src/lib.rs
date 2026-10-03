@@ -166,6 +166,7 @@ pub mod subtask_completeness;
 pub mod table_repair;
 pub mod template_provenance;
 pub(crate) mod text_contrast_repair;
+pub use text_contrast_repair::repair_photo_caption_for_image;
 pub mod tree_heuristics;
 pub mod unfilled_screens;
 pub(crate) mod unify_shared_nav;

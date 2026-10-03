@@ -50,4 +50,5 @@ tokio = { version = "1", default-features = false, features = [
 
 [features]
 default = []
+pixels = ["dep:base64", "dep:image"]
 net = ["dep:base64", "dep:image", "dep:reqwest", "dep:skia-safe", "dep:tokio"]

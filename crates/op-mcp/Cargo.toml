@@ -30,6 +30,7 @@ op-design-lint = { path = "../op-design-lint" }
 op-editor-core = { path = "../op-editor-core" }
 op-html = { path = "../op-html" }
 op-pen-loader = { path = "../op-pen-loader" }
+op-image-enrich = { path = "../op-image-enrich", features = ["pixels"] }
 # Canonical JSON string escaping (dependency-free, wasm-clean).
 op-util = { path = "../op-util" }
 regex = "1"
@@ -37,3 +38,7 @@ rquickjs = { version = "0.12", optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true, optional = true }
+
+[dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
+base64 = "0.22"

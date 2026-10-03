@@ -439,6 +439,7 @@ pub const TOOL_PROFILES: &[ToolProfile] = &[
     ),
     ToolProfile::new("delete_component", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new("delete_node", ToolAccess::Write, ToolSurface::InMemory),
+    ToolProfile::new("annotate_image", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new("delete_page", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new("delete_selected", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new("delete_variable", ToolAccess::Write, ToolSurface::InMemory),

@@ -36,6 +36,21 @@ fn photo() -> Value {
 
 /// arena-m04 0929a: `[hero-scrim, hero-copy, hero-illustration]`.
 #[test]
+fn an_explicit_low_opacity_scrim_still_belongs_below_copy() {
+    let mut scrim = fade_scrim();
+    scrim["fill"][0]["stops"][1]["color"] = json!("#00000040");
+    let stack = json!({"type":"frame","id":"stack","layout":"none","children":[
+        scrim,{"type":"text","id":"title","content":"Classic latte"},photo()
+    ]});
+    let rects = HashMap::from([
+        ("scrim".into(), rect(0.0, 280.0, 375.0, 285.0)),
+        ("title".into(), rect(20.0, 340.0, 220.0, 60.0)),
+        ("photo".into(), rect(0.0, 0.0, 375.0, 565.0)),
+    ]);
+    assert_eq!(moves(&stack, &rects), vec![("scrim".into(), Some(1))]);
+}
+
+#[test]
 fn a_scrim_listed_before_the_copy_drops_to_just_above_the_photo() {
     let stack = json!({"type":"frame","id":"stack","layout":"none","width":375,"height":565,
         "children":[fade_scrim(),
