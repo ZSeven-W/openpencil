@@ -493,6 +493,29 @@ fn parse_tool_call_allows_structured_read_nodes_ids_for_ts_parity() {
 }
 
 #[test]
+fn parse_tool_call_accepts_export_nodes_array_declared_by_its_schema() {
+    let line = r#"{"id":3,"method":"tools/call","params":{"name":"export_nodes","arguments":{"nodeIds":["page-1","page-2"],"format":"png","scale":0.5}}}"#;
+    let call = parse_tool_call(line).expect("export_nodes accepts its advertised nodeIds array");
+    assert_eq!(call.tool, "export_nodes");
+    assert_eq!(
+        call.arguments.get("nodeIds").unwrap(),
+        r#"["page-1","page-2"]"#
+    );
+    assert_eq!(call.arguments.get("format").unwrap(), "png");
+    assert_eq!(call.arguments.get("scale").unwrap(), "0.5");
+}
+
+#[test]
+fn parse_tool_call_keeps_export_format_and_unknown_fields_scalar() {
+    for line in [
+        r#"{"id":3,"method":"tools/call","params":{"name":"export_nodes","arguments":{"nodeIds":["page-1"],"format":{"format":"png"}}}}"#,
+        r#"{"id":3,"method":"tools/call","params":{"name":"export_nodes","arguments":{"nodeIds":["page-1"],"unexpected":["page-2"]}}}"#,
+    ] {
+        assert!(parse_tool_call(line).is_none(), "{line}");
+    }
+}
+
+#[test]
 fn parse_tool_call_allows_structured_style_ops_args_for_ts_parity() {
     let line = r#"{"id":5,"method":"tools/call","params":{"name":"search_all_unique_properties","arguments":{"parents":["n1"],"properties":["fillColor","textColor"]}}}"#;
     let call = parse_tool_call(line).expect("style ops must accept TS-style array arguments");

@@ -513,6 +513,7 @@ fn structured_arg_allowed(tool: &str, key: &str) -> bool {
             | ("upsert_screen", "node_json")
             | ("set_themes", "themes")
             | ("read_nodes", "nodeIds")
+            | ("export_nodes", "nodeIds")
             // The lean MCP profile's get_editor_state forwards nodeIds to
             // read_nodes; the full-catalog tool ignores arguments.
             | ("get_editor_state", "nodeIds")
