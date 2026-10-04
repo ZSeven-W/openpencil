@@ -141,6 +141,19 @@ pub(super) fn parse_modify_response(full_response: &str) -> ModifyNodeParse {
         })
         .unwrap_or_default();
     if !nodes.is_empty() {
+        // Script execution proves syntax, not node validity. Validate every
+        // subtree before any host write so malformed nested icons enter the
+        // bounded feedback retry instead of failing halfway through apply.
+        if let Some((index, error)) = nodes.iter().enumerate().find_map(|(index, (_, node))| {
+            op_mcp::validate_replacement_node_data(node)
+                .err()
+                .map(|error| (index, error))
+        }) {
+            return ModifyNodeParse {
+                nodes: Vec::new(),
+                diagnostic: Some(format!("modification node {index} is invalid: {error}")),
+            };
+        }
         return ModifyNodeParse {
             nodes,
             diagnostic: None,

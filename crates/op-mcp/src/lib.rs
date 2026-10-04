@@ -126,6 +126,7 @@ pub mod import_snapshot_tool;
 mod import_snapshot_tool_tests;
 mod insert_node_args;
 mod insert_node_data;
+pub use insert_node_data::validate_replacement_node_data;
 pub mod json_serializer;
 pub mod lint_tools;
 #[cfg(test)]

@@ -133,3 +133,103 @@ fn standalone_json_and_jsonl_keep_the_legacy_modification_route() {
         assert!(!parse_modify_nodes(response).is_empty(), "{response}");
     }
 }
+
+#[test]
+fn a_malformed_nested_icon_rejects_the_entire_script_before_apply() {
+    let result = parse_modify_response(
+        r#"
+        I(null,{type:"text",id:"valid",content:"first edit"});
+        I(null,{type:"frame",id:"board",children:[{type:"icon_font",id:"broken"}]});
+    "#,
+    );
+    assert!(result.nodes.is_empty(), "no partial script writes");
+    assert!(result.diagnostic.unwrap().contains("iconFontName"));
+}
+
+#[test]
+fn preflight_accepts_host_assigned_ids_and_the_canonical_mcp_dialect() {
+    let parsed = parse_modify_response(
+        r#"I(null,{type:"frame",children:[
+        {type:"text",content:"步骤 1"},
+        {type:"icon_font",iconFontName:"arrow-right",width:24,height:24},
+        {type:"frame",layout:{type:"vertical"},children:[{type:"text",content:"说明"}]}
+    ]});"#,
+    );
+    assert!(!parsed.nodes.is_empty(), "{:?}", parsed.diagnostic);
+    assert!(
+        parsed.nodes[0].1.get("id").is_none(),
+        "preflight assigns no live ids"
+    );
+}
+
+#[test]
+fn invalid_node_schema_gets_one_feedback_retry_and_one_host_apply() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex,
+    };
+    struct RetryProvider {
+        calls: AtomicUsize,
+        feedback: Mutex<String>,
+    }
+    impl ChatProvider for RetryProvider {
+        fn provider_label(&self) -> &str {
+            "schema-retry-fixture"
+        }
+        fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+            let response = if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                r#"I(null,{type:"frame",id:"board",children:[{type:"icon_font",id:"bad"}]});"#
+            } else {
+                *self.feedback.lock().unwrap() = request.user_message;
+                r#"I(null,{type:"text",id:"title",content:"corrected"});"#
+            };
+            Box::new(
+                vec![
+                    ChatDelta::TextDelta(response.into()),
+                    ChatDelta::Done {
+                        stop_reason: StopReason::EndTurn,
+                    },
+                ]
+                .into_iter(),
+            )
+        }
+    }
+    let provider = Arc::new(RetryProvider {
+        calls: AtomicUsize::new(0),
+        feedback: Mutex::new(String::new()),
+    });
+    let worker_provider = Arc::clone(&provider);
+    let (chat_tx, chat_rx) = mpsc::channel();
+    let (executor, tool_rx) = crate::chat_canvas_tools::chat_tool_channel();
+    let worker = std::thread::spawn(move || {
+        run_modify_turn(
+            worker_provider.as_ref(),
+            ChatRequest::default(),
+            &chat_tx,
+            &executor,
+            vec!["board".into()],
+        )
+    });
+    let request = tool_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(request.args_json.contains("corrected"));
+    assert!(!request.args_json.contains("icon_font"));
+    request
+        .ack
+        .send(ChatToolResult {
+            content: r#"{"success":true,"count":1}"#.into(),
+            is_error: false,
+        })
+        .unwrap();
+    worker.join().unwrap();
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 2);
+    assert!(provider.feedback.lock().unwrap().contains("iconFontName"));
+    assert!(
+        tool_rx.try_recv().is_err(),
+        "one host apply after validation"
+    );
+    let deltas: Vec<_> = chat_rx.try_iter().collect();
+    assert!(!deltas.iter().any(|d| matches!(d, ChatDelta::Error(_))));
+    assert!(deltas
+        .iter()
+        .any(|d| matches!(d,ChatDelta::TextDelta(t) if t.contains("APPLIED"))));
+}
