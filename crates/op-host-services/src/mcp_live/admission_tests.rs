@@ -40,7 +40,7 @@ fn drive(request: &str, req_tx: &Sender<UiRequest>) -> String {
     let stateful_lock = Mutex::new(());
     let quit_flag = AtomicBool::new(false);
     let wake_ui: UiWake = Arc::new(|| {});
-    let client_identity = Mutex::new(None);
+    let write_indicators = Mutex::new(ClientWriteIndicators::default());
     let mut stream = MockStream {
         input: std::io::Cursor::new(request.as_bytes().to_vec()),
         output: Vec::new(),
@@ -52,7 +52,7 @@ fn drive(request: &str, req_tx: &Sender<UiRequest>) -> String {
         &stateful_lock,
         &quit_flag,
         &wake_ui,
-        &client_identity,
+        &write_indicators,
     )
     .expect("a refused request is answered on the wire, never a server error");
     String::from_utf8_lossy(&stream.output).into_owned()

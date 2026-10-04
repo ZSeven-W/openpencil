@@ -71,7 +71,10 @@ pub mod file_path;
 mod sniff;
 
 pub use error::McpServeError;
-use sniff::{sniff_id_raw, sniff_method};
+// `pub(crate)`: the web-canvas `/mcp` loop sniffs `initialize` bodies so
+// the client-name parse only pays for the one message that carries it.
+use sniff::sniff_id_raw;
+pub(crate) use sniff::sniff_method;
 
 /// Unwrap an MCP `tools/call` reply to the inner tool-result JSON text,
 /// so tests assert on the flat result fields directly. Strips an HTTP

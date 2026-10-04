@@ -598,3 +598,95 @@ pub enum EditorCommand {
     /// [`EditorState::promote_legacy_widgets`]: crate::EditorState::promote_legacy_widgets
     PromoteLegacyWidgets,
 }
+
+/// The node ids `cmd` directly targets for mutation — used by the
+/// MCP-driven canvas indicators to focus the agent cursor on EXISTING
+/// nodes a write touched (vs the before/after id diff, which catches
+/// nodes the write *created*).
+///
+/// Only variants carrying an explicit node id on the command itself
+/// contribute: the `node_id` on `UpdateNode` / `PatchNodeData` /
+/// `DeleteNode` / `MoveNode` / `CopyNode` / `ReplaceNode` /
+/// `ReplaceSubtree`, `RefineDesign`'s `root_id`, `CreateComponent`'s
+/// `node_id`, `ReplaceAllMatchingProperties`' `parent_ids`, and every
+/// `SetNode*` / effect / image-video field writer. `Batch` contributes
+/// the union of its sub-commands. Everything else returns empty:
+///
+/// - insert-family commands whose fresh ids only the before/after diff
+///   can see (`InsertNode`, `InsertSubtree`, `InsertAuthoredSubtree`,
+///   `BatchInsert`, `ImportSvg`, kit/component instantiation);
+/// - `NodeId`-carrying fields that are NOT the write's target — the
+///   `parent_id`/`target_parent` on inserts and `MoveNode`/`CopyNode`
+///   (the moved node is focused, not the parent it lands under) and the
+///   `component_id` on component-registry ops (a registry key, not a
+///   scene node the canvas can paint);
+/// - selection/page/viewport/tool/clipboard commands — several of those
+///   (`NudgeSelected`, `AlignSelected`, `GroupSelected`, `DeleteSelected`…)
+///   DO mutate real nodes but carry no node id, so they produce no focus
+///   target here; whatever ids they create or remove still surface in
+///   the before/after diff that owns reveals;
+/// - document-wide rewrites that name no node (`ReplaceDocument`,
+///   `Undo`/`Redo`, font-family swaps, `PromoteLegacyWidgets`).
+///
+/// The result preserves command order and is de-duplicated; ids equal
+/// to [`NodeId::NONE`] are dropped.
+pub fn affected_node_ids(cmd: &EditorCommand) -> Vec<String> {
+    fn push(id: &NodeId, out: &mut Vec<String>) {
+        if id.is_real() {
+            let id = id.as_str();
+            if !out.iter().any(|seen| seen == id) {
+                out.push(id.to_string());
+            }
+        }
+    }
+    let mut out = Vec::new();
+    match cmd {
+        EditorCommand::UpdateNode { node_id, .. }
+        | EditorCommand::PatchNodeData { node_id, .. }
+        | EditorCommand::DeleteNode { node_id, .. }
+        | EditorCommand::MoveNode { node_id, .. }
+        | EditorCommand::CopyNode { node_id, .. }
+        | EditorCommand::ReplaceNode { node_id, .. }
+        | EditorCommand::ReplaceSubtree { node_id, .. }
+        | EditorCommand::CreateComponent { node_id, .. }
+        | EditorCommand::SetNodeFlag { node_id, .. }
+        | EditorCommand::SetNodeFlip { node_id, .. }
+        | EditorCommand::SetEllipseArc { node_id, .. }
+        | EditorCommand::AddNodeEffect { node_id, .. }
+        | EditorCommand::RemoveNodeEffect { node_id, .. }
+        | EditorCommand::SetEffectParam { node_id, .. }
+        | EditorCommand::SetEffectColor { node_id, .. }
+        | EditorCommand::SetNodeRotation { node_id, .. }
+        | EditorCommand::SetNodeText { node_id, .. }
+        | EditorCommand::SetNodeCornerRadius { node_id, .. }
+        | EditorCommand::SetNodeFontSize { node_id, .. }
+        | EditorCommand::SetNodeFontWeight { node_id, .. }
+        | EditorCommand::SetNodeStrokeHex { node_id, .. }
+        | EditorCommand::SetNodeStrokeWidth { node_id, .. }
+        | EditorCommand::SetNodeStrokeSideWidth { node_id, .. }
+        | EditorCommand::SetNodeFillHex { node_id, .. }
+        | EditorCommand::SetNodeName { node_id, .. }
+        | EditorCommand::SetImageVideoSrc { node_id, .. }
+        | EditorCommand::SetImageVideoPlayback { node_id, .. }
+        | EditorCommand::AddImageVideo { node_id }
+        | EditorCommand::RemoveImageVideo { node_id }
+        | EditorCommand::SetNodeLayoutProp { node_id, .. } => push(node_id, &mut out),
+        EditorCommand::RefineDesign { root_id, .. } => push(root_id, &mut out),
+        EditorCommand::ReplaceAllMatchingProperties { parent_ids, .. } => {
+            for node_id in parent_ids {
+                push(node_id, &mut out);
+            }
+        }
+        EditorCommand::Batch { commands } => {
+            for sub in commands {
+                for id in affected_node_ids(sub) {
+                    if !out.contains(&id) {
+                        out.push(id);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    out
+}

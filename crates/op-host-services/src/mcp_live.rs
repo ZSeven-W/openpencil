@@ -5,7 +5,7 @@
 //! requests a fresh snapshot from the UI thread for each HTTP request,
 //! then sends write commands back for the UI thread to apply.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::net::TcpListener;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, SyncSender, TryRecvError};
@@ -13,8 +13,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use jian_ops_schema::node::PenNode;
-use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::{
     CollabEditSource, CollabGateAction, CollabGatePolicy, EditorCommand, EditorState,
 };
@@ -44,16 +42,6 @@ const LIVE_CONN_STACK_SIZE: usize = 16 * 1024 * 1024;
 const _: () = assert!(LIVE_CONN_STACK_SIZE <= 16 * 1024 * 1024);
 type UiWake = Arc<dyn Fn() + Send + Sync + 'static>;
 
-/// Fallback client-facing label when `initialize` carried no
-/// `clientInfo.name` (some minimal/older MCP clients omit it) — honest
-/// about what it is ("some external MCP tool"), not a fabricated persona.
-const MCP_CLIENT_FALLBACK_NAME: &str = "MCP Client";
-/// Fixed neutral badge colour for every MCP-driven generation — a
-/// deliberate contrast with the in-app agent persona pool
-/// (`assign_agent_identities_seeded`'s vivid per-agent colours): an
-/// external MCP client isn't one of the app's own named agents.
-const MCP_CLIENT_COLOR: &str = "#8A8F98";
-
 pub struct McpLiveServer {
     port: u16,
     /// Per-instance identity token, reported in the live `ping` reply and
@@ -67,22 +55,14 @@ pub struct McpLiveServer {
     quit_flag: Arc<AtomicBool>,
     req_rx: Receiver<UiRequest>,
     stop_tx: Sender<()>,
-    /// The connected MCP client's declared identity — `(name, color)`,
-    /// captured from `initialize`'s `params.clientInfo.name` the first
-    /// time a connection thread sees it (`Arc<Mutex<_>>`: written from
-    /// whichever connection thread handles that request, read from the
-    /// UI thread in `pump` when tagging a `batch_design` root). A fixed
-    /// neutral colour, not the in-app persona pool — an external MCP
-    /// client is not one of the app's own named agents.
-    client_identity: Arc<Mutex<Option<(String, String)>>>,
-    /// The last epoch this server minted for a `batch_design` write, or
-    /// `0` before the first one. `pump`'s indicator hook reuses it
-    /// (rather than starting a fresh epoch) while its reveal queue is
-    /// still draining, so a burst of back-to-back `batch_design` calls
-    /// reads as one continuous generation instead of each call clipping
-    /// the previous one's tail animation. UI-thread-only (`pump` takes
-    /// `&mut self`), so a plain field — no interior mutability needed.
-    last_mcp_epoch: u64,
+    /// The MCP write → canvas-indicator session this loop shares with its
+    /// connection threads — the client-declared badge identity (sniffed
+    /// off `initialize` on whichever connection thread handles it) plus
+    /// the epoch `pump` last registered, reused while its reveal queue
+    /// drains so a burst of writes reads as one continuous run. See
+    /// `client_write.rs` — the serve-web daemon keeps the same session
+    /// so the two request loops cannot drift.
+    write_indicators: Arc<Mutex<ClientWriteIndicators>>,
     /// Validated extension evidence waiting for the desktop's asynchronous
     /// provider worker. Kept separate from `EditorState`: this route neither
     /// reads nor mutates the live document.
@@ -118,11 +98,8 @@ enum UiRequest {
         ack: SyncSender<op_mcp::ListPages>,
     },
     Apply {
-        /// The MCP tool that produced `cmd` — `McpLiveServer::pump` reads
-        /// this to gate canvas-generation indicators (frame glow + reveal
-        /// sweep) on `"batch_design"` specifically, mirroring how the
-        /// in-app design-agent loop only animates that one tool
-        /// (`design_agent_tools.rs::should_register_batch_reveals`).
+        /// The MCP tool that produced `cmd` — carried for the boundary
+        /// log the pump emits when the write lands canvas indicators.
         tool_name: String,
         cmd: EditorCommand,
         ack: SyncSender<ApplyAck>,
@@ -192,8 +169,8 @@ impl McpLiveServer {
         let quit_flag = Arc::new(AtomicBool::new(false));
         let server_quit = Arc::clone(&quit_flag);
         let wake_ui: UiWake = Arc::new(wake_ui);
-        let client_identity = Arc::new(Mutex::new(None));
-        let server_identity = Arc::clone(&client_identity);
+        let write_indicators = Arc::new(Mutex::new(ClientWriteIndicators::default()));
+        let server_indicators = Arc::clone(&write_indicators);
         thread::Builder::new()
             .name("op-mcp-live-http".into())
             .spawn(move || {
@@ -204,7 +181,7 @@ impl McpLiveServer {
                     admission,
                     server_quit,
                     wake_ui,
-                    server_identity,
+                    server_indicators,
                 )
             })
             .map_err(|e| McpLiveError::Startup(format!("spawn MCP live server: {e}")))?;
@@ -215,8 +192,7 @@ impl McpLiveServer {
             quit_flag,
             req_rx,
             stop_tx,
-            client_identity,
-            last_mcp_epoch: 0,
+            write_indicators,
             pending_design_md: VecDeque::new(),
         })
     }
@@ -272,20 +248,54 @@ impl McpLiveServer {
                         outcome.repaint = true;
                         continue;
                     }
-                    let layout_dirty = command_invalidates_layout(&cmd);
-                    // Snapshot BEFORE apply, only for the one tool the canvas
-                    // radar-scan cares about — `design_agent_tools.rs`'s
-                    // `should_register_batch_reveals` gates the in-app
-                    // design-agent loop's reveal registration the exact same
-                    // way, for the exact same reason (every other write tool
-                    // is a targeted property tweak, not a "generation").
-                    let ids_before = (tool_name == "batch_design")
+                    let layout_dirty = command_mutates_document(&cmd);
+                    // The id-diff snapshot that powers the indicators'
+                    // new-node reveal sweep — taken before apply, only
+                    // for commands that can change the active tree's id
+                    // set (a `SetNodeFillHex` never justifies the walk).
+                    let can_retree = command_can_change_id_set(&cmd);
+                    let ids_before = can_retree
                         .then(|| crate::design_agent_tools::collect_active_node_ids(state));
+                    // The page the diff was taken on — an apply that moves
+                    // the active page must not read its pre-existing tree
+                    // as fresh content.
+                    let page_before = can_retree.then(|| active_page_identity(state)).flatten();
+                    let touched_ids = op_editor_core::affected_node_ids(&cmd);
                     let applied = state.apply(cmd);
                     if applied {
                         let write_repairs = crate::mcp_serve::run_write_repairs_after_apply(state);
-                        if let Some(ids_before) = ids_before {
-                            self.register_mcp_generation(&ids_before, state);
+                        let ids_before = ids_before.filter(|_| {
+                            page_before.is_none() || active_page_identity(state) == page_before
+                        });
+                        // Canvas presence for the nodes this write touched /
+                        // created — the same `register_applied_writes` the
+                        // serve-web daemon runs, so every node-mutating MCP
+                        // write shows where the client just worked (a
+                        // targeted update focuses the cursor without a
+                        // pop; fresh content gets the full reveal sweep).
+                        let epoch = self
+                            .write_indicators
+                            .lock()
+                            .unwrap_or_else(|poison| poison.into_inner())
+                            .register_applied_writes(
+                                state,
+                                ids_before.as_ref(),
+                                &touched_ids,
+                                EpochReuse::WhileDraining,
+                                crate::design_agent_tools::reveal_now_millis(),
+                            );
+                        if let Some(epoch) = epoch {
+                            eprintln!(
+                                "openpencil-desktop mcp: {tool_name}: canvas indicators epoch {epoch}"
+                            );
+                            // Each call is its own self-contained turn —
+                            // the desktop's paint drains THIS process's
+                            // registry directly, so finishing now is safe:
+                            // `run_active` drops immediately but the
+                            // already-queued reveals keep animating at
+                            // their own pace (paint-side maintenance
+                            // retires the epoch once the queue empties).
+                            op_editor_core::agent_indicators::finish_if_epoch(epoch);
                         }
                         outcome.layout_dirty |= write_repairs;
                     }
@@ -353,113 +363,6 @@ impl McpLiveServer {
     pub fn stop(&mut self) {
         let _ = self.stop_tx.send(());
     }
-
-    /// Tag a JUST-APPLIED `batch_design` write's genuinely new content
-    /// with canvas-generation indicators, so the radar-scan (root frame
-    /// glow — `op_editor_ui`'s `canvas_generation_scan` gates purely on
-    /// `AgentIndicators.frames` being non-empty) and the per-node reveal
-    /// entrance animation activate for MCP-driven generation the same
-    /// way they already do for the in-app design-agent loop. A no-op
-    /// when nothing new landed (a `batch_design` Direct-op call that
-    /// only tweaked an existing node's properties, say).
-    fn register_mcp_generation(&mut self, ids_before: &HashSet<String>, state: &EditorState) {
-        let now_ms = crate::design_agent_tools::reveal_now_millis();
-        let mut saw_new_content = false;
-        for node in state.active_children() {
-            if !ids_before.contains(node.id_str()) {
-                saw_new_content = true;
-                break;
-            }
-        }
-        if !saw_new_content {
-            // Reveals can still land nested under an EXISTING root (an
-            // "add a section to this screen" follow-up) even when no
-            // top-level id is new — `register_new_node_reveals` below
-            // walks the whole tree, so check that shape too before
-            // giving up entirely.
-            saw_new_content = state
-                .active_children()
-                .iter()
-                .any(|node| subtree_has_new_id(node, ids_before));
-        }
-        if !saw_new_content {
-            return;
-        }
-        let epoch = self.resolve_mcp_epoch(now_ms);
-        let (name, color) = self
-            .client_identity
-            .lock()
-            .ok()
-            .and_then(|guard| guard.clone())
-            .unwrap_or_else(|| {
-                (
-                    MCP_CLIENT_FALLBACK_NAME.to_string(),
-                    MCP_CLIENT_COLOR.to_string(),
-                )
-            });
-        // Only a genuinely NEW top-level Frame is a fresh generation
-        // root — mirrors `design_loop_indicator.rs::register_new_frames`
-        // (Frame-only) and `run_screen_groups.rs::insert_screen_group_roots`
-        // (new-vs-existing top-level diff), the two established places
-        // this codebase already tags a root frame.
-        for node in state.active_children() {
-            if matches!(node, PenNode::Frame(_)) && !ids_before.contains(node.id_str()) {
-                op_editor_core::agent_indicators::add_frame(epoch, node.id_str(), &color, &name);
-            }
-        }
-        crate::design_agent_tools::register_new_node_reveals(
-            ids_before,
-            state,
-            Some(epoch),
-            now_ms,
-        );
-        self.last_mcp_epoch = epoch;
-        // Each `batch_design` call is its own self-contained turn — no
-        // idle-timeout bookkeeping needed. `finish_if_epoch` is the
-        // established graceful-drain: `run_active` drops immediately but
-        // the already-queued reveals keep animating at their own pace
-        // (`agent_indicators.rs`'s paint-side maintenance retires the
-        // epoch once the queue empties), so this is safe to call even
-        // though the call that just landed is still visually settling.
-        op_editor_core::agent_indicators::finish_if_epoch(epoch);
-    }
-
-    /// Reuse the last MCP epoch while its reveal queue is still
-    /// draining (`latest_reveal_end_ms` is the same "is anything still
-    /// animating" check the orchestrator's own tree-restructure gate
-    /// polls), so a burst of back-to-back `batch_design` calls (a
-    /// multi-screen design, one call per screen) reads as one
-    /// continuous generation instead of each call clipping the
-    /// previous one's tail animation via `begin()`'s "bump epoch +
-    /// clear every map" semantics. Starts fresh once the queue empties.
-    fn resolve_mcp_epoch(&self, now_ms: u64) -> u64 {
-        if self.last_mcp_epoch != 0 {
-            if let Some(end_ms) =
-                op_editor_core::agent_indicators::latest_reveal_end_ms(self.last_mcp_epoch)
-            {
-                if now_ms < end_ms {
-                    return self.last_mcp_epoch;
-                }
-            }
-        }
-        op_editor_core::agent_indicators::begin()
-    }
-}
-
-/// Whether `node` or any descendant carries an id not in `ids_before` —
-/// the "did ANY new content land, even nested under an existing root"
-/// check `register_mcp_generation` needs before deciding whether a
-/// `batch_design` call is worth animating at all.
-fn subtree_has_new_id(node: &PenNode, ids_before: &HashSet<String>) -> bool {
-    if !ids_before.contains(node.id_str()) {
-        return true;
-    }
-    if let Some(children) = node.children() {
-        return children
-            .iter()
-            .any(|child| subtree_has_new_id(child, ids_before));
-    }
-    false
 }
 
 impl Drop for McpLiveServer {
@@ -468,23 +371,8 @@ impl Drop for McpLiveServer {
     }
 }
 
-fn command_invalidates_layout(cmd: &EditorCommand) -> bool {
-    match cmd {
-        EditorCommand::ClearSelection
-        | EditorCommand::SetSelection { .. }
-        | EditorCommand::SetSelectionSet { .. }
-        | EditorCommand::ToggleNodeSelection { .. }
-        | EditorCommand::SetViewport { .. }
-        | EditorCommand::SetActiveTool { .. }
-        | EditorCommand::CopySelected => false,
-        EditorCommand::SetNodeFlag { flag, .. } => {
-            !matches!(flag, op_editor_core::NodeFlag::Collapsed)
-        }
-        _ => true,
-    }
-}
-
 mod admission;
+pub(crate) mod client_write;
 mod connection;
 mod design_md_output;
 pub(crate) mod design_md_route;
@@ -496,10 +384,17 @@ pub(crate) mod snapshot_ingest;
 mod ui_requests;
 
 use admission::*;
+// `pub(crate)` so the serve-web daemon reuses the same MCP write →
+// canvas-indicator session (`crate::mcp_live::ClientWriteIndicators` &
+// friends) instead of growing a second copy of the semantics.
+pub(crate) use client_write::*;
 use connection::*;
 use doc_sync::*;
 use ui_requests::*;
 
+#[cfg(test)]
+#[path = "mcp_live_cursor_tests.rs"]
+mod cursor_tests;
 #[cfg(test)]
 #[path = "mcp_live_tests.rs"]
 mod tests;

@@ -11,7 +11,9 @@
 /// Walks the line key by key so a nested or string-valued
 /// "method" in another field can't shadow the real top-level
 /// method (mirrors `arguments_field`'s discipline in shell-core).
-pub(super) fn sniff_method(line: &str) -> Option<String> {
+/// `pub(crate)` so the web-canvas `/mcp` loop can gate its (heavier)
+/// `initialize`-body parse behind this cheap check.
+pub(crate) fn sniff_method(line: &str) -> Option<String> {
     let bytes = line.as_bytes();
     // Skip past the leading `{` if present.
     let mut i = 0usize;
