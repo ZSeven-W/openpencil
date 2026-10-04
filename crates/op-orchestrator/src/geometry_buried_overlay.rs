@@ -144,7 +144,7 @@ fn is_photo(v: &Value) -> bool {
 /// fill-less hero `image` at a low index over its own scrim and caption. The
 /// old first-fill-only check read the photo as transparent, so the caption
 /// stayed buried in the render.
-fn paints_opaque(v: &Value) -> bool {
+pub(super) fn paints_opaque(v: &Value) -> bool {
     composites_opaque(v) && (is_photo(v) || fill_entries(v).iter().any(fill_entry_opaque))
 }
 

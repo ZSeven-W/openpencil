@@ -65,6 +65,9 @@ mod absolute_child_clamp;
 mod card_inner_padding;
 #[path = "geometry_buried_overlay.rs"]
 mod geometry_buried_overlay;
+#[path = "geometry_tutorial_labels.rs"]
+mod geometry_tutorial_labels;
+pub use geometry_tutorial_labels::repair_scoped_tutorial_labels;
 #[path = "none_stack_inset.rs"]
 mod none_stack_inset;
 #[path = "text_fit.rs"]
@@ -334,6 +337,7 @@ pub fn geometry_validate_and_fix_for_form(
                 &mut cmds,
             );
             geometry_buried_overlay::collect_buried_overlay_fixes(&v, &rects, &mut cmds);
+            geometry_tutorial_labels::collect_fixes(&v, &rects, &mut cmds);
             collect_row_overfull_fixes(&v, &rects, &mut cmds, false);
             collect_rail_width_collapse_fixes(&v, &rects, &mut cmds);
             // BEFORE the clip fallback: a fixed-size absolute child that fits

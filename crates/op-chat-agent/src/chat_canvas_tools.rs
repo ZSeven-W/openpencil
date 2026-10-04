@@ -263,6 +263,12 @@ pub fn apply_design_modification(
         count += applied;
         mutated |= did_mutate;
     }
+    if mutated {
+        op_orchestrator::geometry_validation::repair_scoped_tutorial_labels(
+            state,
+            target_frame_ids,
+        );
+    }
     (count, mutated)
 }
 
