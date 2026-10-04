@@ -163,6 +163,7 @@ impl WidgetHostNative {
     /// 专业: the full mobile canvas over the same document, selection and
     /// history, opened on the board the reader was showing.
     fn reader_enter_professional(&mut self, vw: f32, vh: f32) {
+        self.clear_reader_open_intent();
         let board = self.reader_current_board();
         let ui = &mut self.editor_state.editor_ui;
         let restore = ui.workspace.previous_tool;
@@ -458,14 +459,26 @@ impl WidgetHostNative {
     /// on a recent file; the shell performs the load).
     pub(in crate::widget_host) fn arm_reader_on_next_open(&mut self) {
         self.reader_on_next_open_ms = Some(self.now_ms);
+        self.reader_open_from_picker = false;
+    }
+
+    pub(in crate::widget_host) fn arm_reader_from_home_picker(&mut self) {
+        self.reader_on_next_open_ms = Some(self.now_ms);
+        self.reader_open_from_picker = true;
+    }
+
+    pub(in crate::widget_host) fn clear_reader_open_intent(&mut self) {
+        self.reader_on_next_open_ms = None;
+        self.reader_open_from_picker = false;
     }
 
     /// Called right after a whole-document swap: honour a fresh 作品 tap.
     pub(in crate::widget_host) fn take_reader_on_open(&mut self) {
+        let picker = std::mem::take(&mut self.reader_open_from_picker);
         let Some(armed) = self.reader_on_next_open_ms.take() else {
             return;
         };
-        if self.now_ms.saturating_sub(armed) > READER_ON_OPEN_WINDOW_MS {
+        if !picker && self.now_ms.saturating_sub(armed) > READER_ON_OPEN_WINDOW_MS {
             return;
         }
         if !self.editor_state.editor_ui.touch_chrome() {

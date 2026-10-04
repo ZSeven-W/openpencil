@@ -722,3 +722,6 @@ fn every_reader_press_is_swallowed_but_an_open_sheet_owns_its_presses() {
     host.apply_release_with_viewport(W, H);
     assert_eq!(host.editor_state().editor_ui.workspace.selected, 0);
 }
+
+#[path = "works_reader_open_tests.rs"]
+mod open_tests;

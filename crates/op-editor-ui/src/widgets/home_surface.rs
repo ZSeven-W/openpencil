@@ -263,6 +263,9 @@ impl<'a> HomeSurface<'a> {
         }
         connect::adapt_connect_card(&mut layout, self.ui);
         recent_names::adapt_layout(&mut layout, self.recent_files.len());
+        if self.works_page() {
+            layout.open_file = self.works_layout(viewport_width, viewport_height).open_file;
+        }
         if self.state.variants_unavailable {
             layout.variants = Rect::ZERO;
         }

@@ -669,7 +669,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showOpenDocumentError() {
-        Toast.makeText(this, R.string.document_open_failed, Toast.LENGTH_SHORT).show()
+        val tag = if (::surfaceView.isInitialized) surfaceView.localeCode() else EngineLanguage.storedPreference(this)
+        val copy = EngineLanguage.resourceContext(this, tag).getText(R.string.document_open_failed)
+        Toast.makeText(this, copy, Toast.LENGTH_SHORT).show()
     }
 
     private fun showImageImportError() {

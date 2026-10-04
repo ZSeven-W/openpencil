@@ -101,6 +101,7 @@ impl WidgetHostNative {
             workspace_dock_drag: None,
             reader_drag: None,
             reader_on_next_open_ms: None,
+            reader_open_from_picker: false,
             reader_framed_stage: None,
             auth_login_handle: None,
             auth_pending_browser_url: None,

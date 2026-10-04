@@ -1,6 +1,8 @@
 package tech.zseven.openpencil
 
 import android.content.Context
+import android.content.res.Configuration
+import java.util.Locale
 
 /**
  * The engine's 15 UI locales (mirrors `op_i18n::Locale::ALL` order and
@@ -35,5 +37,13 @@ internal object EngineLanguage {
     fun savePreference(context: Context, tag: String) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit().putString(KEY, tag).apply()
+    }
+
+    /** Native shell copy should use the same locale as the rendered editor. */
+    fun resourceContext(context: Context, tag: String?): Context {
+        if (tag == null || all.none { it.first == tag }) return context
+        val config = Configuration(context.resources.configuration)
+        config.setLocale(Locale.forLanguageTag(tag))
+        return context.createConfigurationContext(config)
     }
 }

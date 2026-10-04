@@ -16,7 +16,7 @@ use op_editor_core::{EditorState, HomeHit};
 
 const PAD_X: f32 = 17.0;
 const HEADING_TOP: f32 = 20.0;
-const HEADING_H: f32 = 32.0;
+const HEADING_H: f32 = 44.0;
 const HEADING_GAP: f32 = 12.0;
 const CURRENT_H: f32 = 96.0;
 const SECTION_GAP: f32 = 22.0;
@@ -71,6 +71,7 @@ impl CurrentWork {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorksListLayout {
     pub heading: Rect,
+    pub open_file: Rect,
     pub current: Option<Rect>,
     pub recent_heading: Rect,
     /// One rect per listed recent file (capped to what fits).
@@ -89,7 +90,13 @@ pub fn works_list_layout(
 ) -> WorksListLayout {
     let w = (viewport_w - PAD_X * 2.0).max(0.0);
     let mut y = HOME_TOPBAR_H + HEADING_TOP;
-    let heading = Rect::xywh(PAD_X, y, w, HEADING_H);
+    let open_file = Rect::xywh(viewport_w - PAD_X - 132.0, y, 132.0, HEADING_H);
+    let heading = Rect::xywh(
+        PAD_X,
+        y,
+        (open_file.origin.x - PAD_X - 12.0).max(0.0),
+        HEADING_H,
+    );
     y += HEADING_H + HEADING_GAP;
     let current = has_current.then(|| {
         let rect = Rect::xywh(PAD_X, y, w, CURRENT_H);
@@ -111,6 +118,7 @@ pub fn works_list_layout(
     let empty = (recent_count == 0 && !has_current).then(|| Rect::xywh(PAD_X, y, w, EMPTY_H));
     WorksListLayout {
         heading,
+        open_file,
         current,
         recent_heading,
         rows,
@@ -132,6 +140,9 @@ impl HomeSurface<'_> {
     /// Hit-test the 作品 page body (the pinned chrome is tested first by
     /// `hit_test`).
     pub(super) fn works_hit(&self, layout: &WorksListLayout, point: Point2D) -> Option<HomeHit> {
+        if layout.open_file.contains(point) {
+            return Some(HomeHit::OpenFile);
+        }
         if layout.current.is_some_and(|rect| rect.contains(point)) {
             return Some(HomeHit::WorksCurrent);
         }
@@ -188,10 +199,51 @@ pub(super) fn paint_works_page(
     text_weighted(
         cx,
         copy::home_str(locale, "home.nav.projects"),
-        Point2D::new(layout.heading.origin.x, layout.heading.origin.y + 24.0),
+        Point2D::new(
+            layout.heading.origin.x,
+            jian_widgets::centered_text_baseline_y(layout.heading, 24.0),
+        ),
         24.0,
         palette.ink,
         720,
+    );
+    let button = layout.open_file;
+    let pressed = surface.state.pressed == Some(HomeHit::OpenFile);
+    cx.backend.fill_round_rect(
+        button,
+        12.0,
+        if pressed {
+            palette.button_hover
+        } else {
+            palette.panel
+        },
+    );
+    cx.backend
+        .stroke_round_rect(button, 12.0, palette.line, 1.0);
+    draw_icon(
+        cx.backend,
+        Icon::FolderOpen,
+        Point2D::new(button.origin.x + 12.0, button.origin.y + 13.0),
+        18.0,
+        palette.link,
+        1.6,
+    );
+    let label = fit(
+        cx,
+        copy::home_str(locale, "home.topbar.openFile"),
+        13.0,
+        button.size.x - 46.0,
+    );
+    text_weighted(
+        cx,
+        &label,
+        Point2D::new(
+            button.origin.x + 38.0,
+            jian_widgets::centered_text_baseline_y(button, 13.0),
+        ),
+        13.0,
+        palette.ink,
+        600,
     );
     if let (Some(rect), Some(work)) = (layout.current, surface.current_work.as_ref()) {
         let pressed = surface.state.pressed == Some(HomeHit::WorksCurrent);

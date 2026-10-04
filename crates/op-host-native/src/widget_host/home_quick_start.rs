@@ -23,6 +23,7 @@ impl WidgetHostNative {
     /// [`HomeSendMode`] the button paints. Returns whether anything was
     /// queued or opened.
     pub(in crate::widget_host) fn home_send(&mut self) -> bool {
+        self.clear_reader_open_intent();
         let (mode, example) = {
             let Some(home) = HomeSurface::for_editor_at(&self.editor_state, self.now_ms) else {
                 return false;

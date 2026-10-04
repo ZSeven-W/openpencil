@@ -215,6 +215,7 @@ impl WidgetHostNative {
                 home.use_example(&example);
             }
             HomeHit::Professional => {
+                self.clear_reader_open_intent();
                 self.editor_state.tool = self
                     .editor_state
                     .editor_ui
@@ -311,6 +312,7 @@ impl WidgetHostNative {
                 self.home_send();
             }
             HomeHit::NewCanvas => {
+                self.clear_reader_open_intent();
                 self.editor_state.editor_ui.pending_file_action =
                     Some(op_editor_core::FileAction::New);
             }
@@ -322,6 +324,7 @@ impl WidgetHostNative {
                 self.open_account_entry();
             }
             HomeHit::OpenFile => {
+                self.arm_reader_from_home_picker();
                 self.editor_state.editor_ui.pending_file_action =
                     Some(op_editor_core::FileAction::Open);
             }

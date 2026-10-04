@@ -7,6 +7,45 @@ use op_editor_core::size_class::EditorSizeClass;
 const W: f32 = 390.0;
 const H: f32 = 844.0;
 
+#[test]
+fn phone_works_open_file_is_visible_clickable_and_separate_from_work_rows() {
+    for (width, height) in [
+        (280.0, 568.0),
+        (320.0, 568.0),
+        (390.0, 844.0),
+        (430.0, 932.0),
+    ] {
+        for current in [false, true] {
+            let mut state = EditorState::starter();
+            phone(&mut state);
+            if current {
+                state
+                    .editor_ui
+                    .workspace
+                    .open_for_reading(op_editor_core::HomeFamily::Presentation, 1);
+            }
+            with_recents(&mut state, 6);
+            let surface = HomeSurface::for_editor(&state).unwrap();
+            let works = surface.works_layout(width, height);
+            let layout = surface.layout(width, height);
+            assert_eq!(works.open_file, layout.open_file);
+            assert!(works.open_file.size.x >= 44.0 && works.open_file.size.y >= 44.0);
+            assert!(
+                works.open_file.origin.x >= 0.0
+                    && works.open_file.origin.x + works.open_file.size.x <= width
+            );
+            assert!(works.heading.origin.x + works.heading.size.x <= works.open_file.origin.x);
+            assert_eq!(
+                surface.hit_test(width, height, center(works.open_file)),
+                Some(HomeHit::OpenFile)
+            );
+            if let Some(row) = works.current {
+                assert!(works.open_file.origin.y + works.open_file.size.y < row.origin.y);
+            }
+        }
+    }
+}
+
 fn center(rect: Rect) -> Point2D {
     Point2D::new(
         rect.origin.x + rect.size.x / 2.0,
