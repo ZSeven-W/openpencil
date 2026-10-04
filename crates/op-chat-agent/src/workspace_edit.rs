@@ -53,7 +53,24 @@ fn routing_text(text: &str) -> String {
                 .any(|marker| prefix.contains(marker));
         }
     }
-    result.trim().to_lowercase()
+    let mut routed = result.trim().to_lowercase();
+    // A phone user often omits punctuation before "keep ... unchanged".
+    // Preserve that tail as its own clause instead of negating the edit.
+    // A tail containing another edit stays ambiguous and is rejected.
+    for marker in [" keep ", " leave "] {
+        if let Some(offset) = routed.match_indices(marker).find_map(|(offset, _)| {
+            let prefix = routed[..offset]
+                .rsplit([',', '，', ';', '；', '。', '\n'])
+                .next()
+                .unwrap_or("");
+            let tail = &routed[offset + 1..];
+            (requests_edit(prefix) && !protects_clause(prefix) && !requests_edit(tail))
+                .then_some(offset)
+        }) {
+            routed.insert(offset, ';');
+        }
+    }
+    routed
 }
 
 /// A question about editing is not itself an instruction to edit.

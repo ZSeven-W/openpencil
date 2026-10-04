@@ -1,5 +1,31 @@
 use super::*;
 
+#[test]
+fn unpunctuated_preservation_tail_does_not_erase_a_phone_page_edit() {
+    let mut state = normal_work();
+    state.editor_ui.workspace.selected = 2;
+    state.editor_ui.workspace.stage_page_edit("profile-id", 2);
+    assert_eq!(resolve_workspace_edit_scope(&state,"change only the action title on this page to checked tutorial keep everything else unchanged"),WorkspaceEditScope::Target(PageEditTarget {board_id:"profile-id".into(),index:2}));
+    state.editor_ui.workspace.clear_staged_page_edit();
+    assert_eq!(
+        resolve_workspace_edit_scope(&state, "change Home title keep Orders unchanged"),
+        WorkspaceEditScope::Target(PageEditTarget {
+            board_id: "home-id".into(),
+            index: 0
+        })
+    );
+    for text in [
+        "do not change Home keep Orders unchanged",
+        "change Home title keep Orders unchanged and change Profile title",
+    ] {
+        assert_eq!(
+            resolve_workspace_edit_scope(&state, text),
+            WorkspaceEditScope::NeedsTarget,
+            "{text}"
+        );
+    }
+}
+
 fn normal_work() -> EditorState {
     let mut state = EditorState::new();
     state.active_children_mut().clear();
