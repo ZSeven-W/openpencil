@@ -131,7 +131,10 @@ fn hit_test_answers_every_painted_target() {
     assert_eq!(hit(layout.continue_chat), Some(ReaderHit::ContinueChat));
     assert_eq!(hit(layout.edit_page), Some(ReaderHit::EditPage));
     assert_eq!(hit(layout.stage), Some(ReaderHit::Stage));
-    assert!(layout.status_action.is_none(), "a finished run offers none");
+    assert_eq!(
+        hit(layout.status_action.unwrap()),
+        Some(ReaderHit::ToggleDetail)
+    );
 }
 
 #[test]

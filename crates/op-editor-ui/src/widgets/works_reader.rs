@@ -306,6 +306,8 @@ pub struct WorksReader<'a> {
     /// When set, the stage outside it is masked so the reader shows one
     /// page — not the neighbours the canvas also painted.
     pub board_screen: Option<Rect>,
+    /// The host's camera is magnified beyond this board's fitted view.
+    pub detail_zoomed: bool,
     /// Width / height of the first board — sizes the tablet strip tiles.
     pub board_aspect: f32,
     /// The board on show's name (the tablet side panel's page line).
@@ -340,6 +342,7 @@ impl<'a> WorksReader<'a> {
             boards,
             now_ms,
             board_screen: None,
+            detail_zoomed: false,
             board_aspect,
             current_name,
             last_reply: extras::last_reply(state),
@@ -349,6 +352,11 @@ impl<'a> WorksReader<'a> {
     /// Builder: the current board's on-screen rect (see `board_screen`).
     pub fn with_board_screen(mut self, rect: Option<Rect>) -> Self {
         self.board_screen = rect;
+        self
+    }
+
+    pub fn with_detail_zoom(mut self, zoomed: bool) -> Self {
+        self.detail_zoomed = zoomed;
         self
     }
 
@@ -367,7 +375,7 @@ impl<'a> WorksReader<'a> {
     }
 
     /// The status row's action for the current phase: Stop while a run
-    /// is live, Retry once it failed or was stopped, nothing when done.
+    /// is live, Retry once it failed or was stopped, readable detail when done.
     /// Retry re-sends the stored brief, so a work opened for reading (no
     /// brief) offers none rather than a button that cannot do anything.
     pub fn status_action(&self) -> Option<ReaderHit> {
@@ -378,6 +386,7 @@ impl<'a> WorksReader<'a> {
             {
                 Some(ReaderHit::Retry)
             }
+            WorkspacePhase::Done if !self.boards.is_empty() => Some(ReaderHit::ToggleDetail),
             _ => None,
         }
     }
@@ -385,6 +394,8 @@ impl<'a> WorksReader<'a> {
     pub fn status_action_label(&self) -> Option<&'static str> {
         self.status_action().map(|hit| match hit {
             ReaderHit::Stop => self.tr("ai.stopGenerating"),
+            ReaderHit::ToggleDetail if self.detail_zoomed => self.tr("reader.fullPage"),
+            ReaderHit::ToggleDetail => self.tr("reader.viewDetails"),
             _ => self.tr("workspace.retry"),
         })
     }

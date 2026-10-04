@@ -76,7 +76,8 @@ impl WidgetHostNative {
             return None;
         }
         let hit = {
-            let reader = WorksReader::for_editor_at(&self.editor_state, self.now_ms)?;
+            let reader = WorksReader::for_editor_at(&self.editor_state, self.now_ms)?
+                .with_detail_zoom(self.reader_detail_zoomed(viewport_w, viewport_h));
             let layout = reader.layout(viewport_w, viewport_h);
             reader.hit_test_layout(&layout, Point2D::new(x, y))
         };
@@ -129,6 +130,17 @@ impl WidgetHostNative {
             }
             ReaderHit::Stop => self.reader_stop(),
             ReaderHit::Retry => self.retry_workspace_brief(),
+            ReaderHit::ToggleDetail => {
+                if self.reader_detail_zoomed(vw, vh) {
+                    self.frame_reader_board(vw, vh);
+                } else {
+                    self.frame_reader_board(vw, vh);
+                    let (_, _, cw, ch) = self.canvas_region(vw, vh);
+                    self.editor_state
+                        .viewport
+                        .zoom_at(Point2D::new(cw / 2.0, ch / 2.0), 3.0_f32.ln() / 0.0015);
+                }
+            }
             ReaderHit::ContinueChat => {
                 self.editor_state
                     .editor_ui
@@ -202,6 +214,7 @@ impl WidgetHostNative {
     /// the board) — move the binding to the page now on show, so the
     /// instruction lands on the page the user is looking at.
     fn reader_page_changed(&mut self, vw: f32, vh: f32) {
+        self.drop_pan_cache();
         self.frame_reader_board(vw, vh);
         if self.editor_state.editor_ui.workspace.page_edit.is_none() {
             return;
@@ -311,12 +324,24 @@ impl WidgetHostNative {
             .and_then(|page| page.find(&board))
             .map(|node| node.aggregate_bounds())?;
         let (_, _, cw, ch) = self.canvas_region(viewport_w, viewport_h);
-        let pad = READER_FIT_PADDING * 2.0;
-        Some(
-            ((cw - pad).max(1.0) / bounds.size.x.max(1.0))
-                .min((ch - pad).max(1.0) / bounds.size.y.max(1.0))
-                .clamp(Viewport::MIN_ZOOM, READER_MAX_ZOOM),
-        )
+        let mut fitted = Viewport::IDENTITY;
+        if reads_as_long_page(self.editor_state.editor_ui.workspace.family) {
+            fitted.zoom = ((cw - READER_FIT_PADDING * 2.0) / bounds.size.x.max(1.0))
+                .clamp(Viewport::MIN_ZOOM, READER_MAX_ZOOM);
+        } else {
+            let height = if self.editor_state.editor_ui.compact_layout() {
+                ch
+            } else {
+                (ch - READER_LABEL_BAND).max(1.0)
+            };
+            fitted.fit_to_with_max_zoom(bounds, cw, height, READER_FIT_PADDING, READER_MAX_ZOOM);
+        }
+        Some(fitted.zoom)
+    }
+
+    fn reader_detail_zoomed(&self, vw: f32, vh: f32) -> bool {
+        self.reader_fit_zoom(vw, vh)
+            .is_some_and(|fit| self.editor_state.viewport.zoom > fit * 1.01)
     }
 
     /// A stage drag follows the finger: a long page scrolls vertically
@@ -484,7 +509,9 @@ impl WidgetHostNative {
         let Some(reader) = WorksReader::for_editor_at(&self.editor_state, self.now_ms) else {
             return;
         };
-        let reader = reader.with_board_screen(board_screen);
+        let reader = reader
+            .with_board_screen(board_screen)
+            .with_detail_zoom(self.reader_detail_zoomed(viewport_w, viewport_h));
         let mut cx = PaintCx {
             backend: &mut *frame,
         };

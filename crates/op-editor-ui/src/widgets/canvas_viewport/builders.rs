@@ -49,6 +49,19 @@ impl<'a> CanvasViewport<'a> {
             id: WidgetId::new(4000),
             viewport,
             scene,
+            reader_board: reading.then(|| {
+                let boards = op_editor_core::preview_slideshow::active_page_boards(state);
+                boards
+                    .get(
+                        state
+                            .editor_ui
+                            .workspace
+                            .selected
+                            .min(boards.len().saturating_sub(1)),
+                    )
+                    .cloned()
+                    .unwrap_or_default()
+            }),
             selected: if reading {
                 String::new()
             } else {
@@ -150,6 +163,7 @@ impl<'a> CanvasViewport<'a> {
             id: WidgetId::new(4000),
             viewport,
             scene,
+            reader_board: None,
             selected: String::new(),
             selected_set: Vec::new(),
             selection_label: None,

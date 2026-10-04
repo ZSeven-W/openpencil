@@ -15,6 +15,201 @@ use op_editor_ui::{Point2D, Rect};
 const W: f32 = 390.0;
 const H: f32 = 844.0;
 
+#[test]
+fn overlapping_boards_paint_the_selected_page_without_repositioning_the_document() {
+    let doc=serde_json::from_value(serde_json::json!({"version":"1.0.0","children":[
+        {"type":"frame","id":"red","width":1080,"height":1440,"fill":[{"type":"solid","color":"#FF0000"}],"children":[]},
+        {"type":"frame","id":"green","width":1080,"height":1440,"fill":[{"type":"solid","color":"#00FF00"}],"children":[]},
+        {"type":"frame","id":"blue","width":1080,"height":1440,"fill":[{"type":"solid","color":"#0000FF"}],"children":[]}
+    ]})).unwrap();
+    let mut host = WidgetHostNative::new();
+    host.replace_editor_state(phone_state(doc));
+    host.editor_state_mut().editor_ui.home.hide();
+    host.editor_state_mut()
+        .editor_ui
+        .workspace
+        .open_for_reading(HomeFamily::ScreenshotTutorial, 1000);
+    let original = serde_json::to_value(&host.editor_state().doc).unwrap();
+    for (index, expected) in [(0, (255, 0, 0)), (1, (0, 255, 0)), (2, (0, 0, 255))] {
+        host.editor_state_mut()
+            .editor_ui
+            .workspace
+            .select_board(index, 3);
+        host.reader_page_changed(W, H);
+        let mut backend = crate::backend::NativeBackend::with_dpi(1.0);
+        let mut surface = skia_safe::surfaces::raster_n32_premul((W as i32, H as i32)).unwrap();
+        {
+            let mut frame = crate::backend::NativeFrameBackend::new(&mut backend, surface.canvas());
+            host.paint(&mut frame, W, H);
+        }
+        let p = center(layout(&host).stage);
+        let color = surface
+            .peek_pixels()
+            .unwrap()
+            .get_color((p.x as i32, p.y as i32));
+        assert_eq!(
+            (color.r(), color.g(), color.b()),
+            expected,
+            "page {} paints its own pixels",
+            index + 1
+        );
+    }
+    assert_eq!(
+        serde_json::to_value(&host.editor_state().doc).unwrap(),
+        original
+    );
+}
+
+#[test]
+fn detail_button_magnifies_pans_and_restores_without_editing_or_turning_pages() {
+    for family in [
+        HomeFamily::ScreenshotTutorial,
+        HomeFamily::AppUi,
+        HomeFamily::Web,
+    ] {
+        let mut host = reading_host(family, 3, 1080, 1440);
+        let original = serde_json::to_value(&host.editor_state().doc).unwrap();
+        let fitted = host.editor_state().viewport;
+        let action = layout(&host).status_action.unwrap();
+        tap(&mut host, action);
+        assert!((host.editor_state().viewport.zoom - fitted.zoom * 3.0).abs() < 0.001);
+        let reader = WorksReader::for_editor(host.editor_state())
+            .unwrap()
+            .with_detail_zoom(true);
+        assert_eq!(
+            reader.status_action_label(),
+            Some(op_i18n::translate(reader.ui.locale, "reader.fullPage"))
+        );
+        let point = center(layout(&host).stage);
+        host.apply_press(point.x, point.y, W, H);
+        host.apply_cursor_move(point.x - 100.0, point.y - 40.0);
+        host.apply_release_with_viewport(W, H);
+        assert_eq!(
+            host.editor_state().editor_ui.workspace.selected,
+            0,
+            "detail drag is not a page swipe"
+        );
+        assert!(host.reader_detail_zoomed(W, H));
+        let action = WorksReader::for_editor(host.editor_state())
+            .unwrap()
+            .with_detail_zoom(true)
+            .layout(W, H)
+            .status_action
+            .unwrap();
+        tap(&mut host, action);
+        assert_eq!(host.editor_state().viewport, fitted);
+        assert_eq!(
+            serde_json::to_value(&host.editor_state().doc).unwrap(),
+            original
+        );
+    }
+}
+
+#[test]
+fn detail_button_uses_the_same_fit_on_phone_and_both_tablet_orientations() {
+    for (width, height, class) in [
+        (320.0, 568.0, EditorSizeClass::Compact),
+        (834.0, 1194.0, EditorSizeClass::Medium),
+        (1366.0, 1024.0, EditorSizeClass::Expanded),
+    ] {
+        let mut host = reading_host(HomeFamily::ScreenshotTutorial, 3, 1080, 1440);
+        host.editor_state_mut().editor_ui.size_class = class;
+        host.frame_reader_board(width, height);
+        let fitted = host.editor_state().viewport;
+        for zoomed in [false, true] {
+            let rect = WorksReader::for_editor(host.editor_state())
+                .unwrap()
+                .with_detail_zoom(zoomed)
+                .layout(width, height)
+                .status_action
+                .unwrap();
+            assert!(rect.size.x >= 44.0 && rect.size.y >= 44.0);
+            let p = center(rect);
+            host.apply_press(p.x, p.y, width, height);
+            host.apply_release_with_viewport(width, height);
+        }
+        assert_eq!(host.editor_state().viewport, fitted);
+    }
+}
+
+#[test]
+#[ignore = "requires a retained tutorial and an output directory"]
+fn render_retained_tutorial_in_real_phone_reader_fit_and_detail_views() {
+    let input = std::path::PathBuf::from(std::env::var("OPENPENCIL_QA_READER_DOCUMENT").unwrap());
+    let output = std::path::PathBuf::from(std::env::var("OPENPENCIL_QA_READER_OUTPUT").unwrap());
+    std::fs::create_dir_all(&output).unwrap();
+    let source = std::fs::read_to_string(&input).unwrap();
+    let loaded = op_pen_loader::payload::load_canonical_with_compatibility(&source).unwrap();
+    let mut state = op_editor_core::EditorState::from_document(loaded.loaded.value);
+    state.editor_ui.locale = op_editor_core::Locale::ZhCn;
+    state.editor_ui.touch = true;
+    state.editor_ui.size_class = EditorSizeClass::Compact;
+    state.editor_ui.home.hide();
+    state
+        .editor_ui
+        .workspace
+        .open_for_reading(HomeFamily::ScreenshotTutorial, 1000);
+    let mut host = WidgetHostNative::new();
+    assert!(host.replace_editor_state(state));
+    host.set_now_ms(1000);
+    host.editor_state_mut().editor_ui.home.hide();
+    host.editor_state_mut()
+        .editor_ui
+        .workspace
+        .open_for_reading(HomeFamily::ScreenshotTutorial, 1000);
+    host.frame_reader_board(W, H);
+    let original = serde_json::to_value(&host.editor_state().doc).unwrap();
+    let mut backend = crate::backend::NativeBackend::with_dpi(1.0);
+    for name in ["fit", "detail", "panned", "restored"] {
+        if matches!(name, "detail" | "restored") {
+            let zoomed = host.reader_detail_zoomed(W, H);
+            let r = WorksReader::for_editor(host.editor_state())
+                .unwrap()
+                .with_detail_zoom(zoomed)
+                .layout(W, H)
+                .status_action
+                .unwrap();
+            tap(&mut host, r);
+        }
+        if name == "panned" {
+            let p = center(layout(&host).stage);
+            host.apply_press(p.x, p.y, W, H);
+            host.apply_cursor_move(p.x + 40.0, p.y + 180.0);
+            host.apply_release_with_viewport(W, H);
+        }
+        let mut surface = skia_safe::surfaces::raster_n32_premul((W as i32, H as i32)).unwrap();
+        for _ in 0..3 {
+            {
+                let mut frame =
+                    crate::backend::NativeFrameBackend::new(&mut backend, surface.canvas());
+                host.paint(&mut frame, W, H);
+            }
+            // Drive the same decode queue that the real native frame loop
+            // drains; a bare paint call deliberately only queues bitmap work.
+            use op_editor_ui::widgets::canvas_viewport_image as images;
+            for request in images::take_pending_decodes(usize::MAX) {
+                if let Some(bytes) = images::cached_bytes_for(request.id) {
+                    if let Some((image, edge)) =
+                        crate::backend::decode_raster_capped(&bytes, request.max_edge_px)
+                    {
+                        backend.install_raster_image(request.id, image, edge);
+                    }
+                }
+                images::mark_decode_done(request.id);
+            }
+        }
+        let bytes = surface
+            .image_snapshot()
+            .encode(None, skia_safe::EncodedImageFormat::PNG, 100)
+            .unwrap();
+        std::fs::write(output.join(format!("{name}.png")), bytes.as_bytes()).unwrap();
+    }
+    assert_eq!(
+        serde_json::to_value(&host.editor_state().doc).unwrap(),
+        original
+    );
+}
+
 fn center(rect: Rect) -> Point2D {
     Point2D::new(
         rect.origin.x + rect.size.x / 2.0,

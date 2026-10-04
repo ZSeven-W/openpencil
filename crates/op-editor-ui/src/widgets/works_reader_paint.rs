@@ -388,6 +388,9 @@ pub(super) fn paint_status_line(
     // A running page edit says which page it is changing; everything
     // else reads the phase.
     let line = match (&reader.state.page_edit_running, phase) {
+        (_, WorkspacePhase::Done) if reader.detail_zoomed => {
+            op_i18n::translate(locale, "reader.dragDetails").to_string()
+        }
         (Some(target), WorkspacePhase::Generating) => {
             op_i18n::translate(locale, "reader.editingPage")
                 .replace("{{page}}", &target.page_number().to_string())

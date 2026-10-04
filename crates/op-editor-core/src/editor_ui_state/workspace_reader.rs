@@ -32,6 +32,8 @@ pub enum ReaderHit {
     Stop,
     /// The status line's 重试 (after a failed or stopped run).
     Retry,
+    /// Magnify the current board for reading, or restore its fitted view.
+    ToggleDetail,
     /// The bottom bar's 继续对话: opens the chat sheet.
     ContinueChat,
     /// The bottom bar's 改这一页: a follow-up bound to the current board.

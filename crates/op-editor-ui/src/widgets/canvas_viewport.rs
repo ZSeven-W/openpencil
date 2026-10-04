@@ -73,6 +73,8 @@ pub struct CanvasViewport<'a> {
     pub(super) viewport: DocViewport,
     /// The resolved render scene — the node tree the painter walks.
     pub(super) scene: &'a LayoutScene,
+    /// A normal touch reader paints one board even when authored boards overlap.
+    pub(super) reader_board: Option<String>,
     /// Anchor-selected node id (scene-space string). Empty = none.
     pub(super) selected: String,
     /// Full selection set (scene-space string ids).
@@ -226,6 +228,15 @@ impl<'a> Widget for CanvasViewport<'a> {
 
         // 3. Walk the active page; clip enforces widget bounds.
         if let Some(page) = self.scene.active_page() {
+            let roots = if let Some(id) = self.reader_board.as_deref() {
+                page.children
+                    .iter()
+                    .find(|node| node.id == id)
+                    .map(std::slice::from_ref)
+                    .unwrap_or(&[])
+            } else {
+                page.children.as_slice()
+            };
             let viewport_origin = Point2D::new(
                 rect.origin.x + viewport.pan_x,
                 rect.origin.y + viewport.pan_y,
@@ -252,7 +263,7 @@ impl<'a> Widget for CanvasViewport<'a> {
                 .as_ref()
                 .map(|overlay| overlay.node_id.as_str());
             let generation_sets = super::canvas_generation_scan::generating_paint_sets(
-                &page.children,
+                roots,
                 indicators.as_ref(),
                 self.now_ms,
             );
@@ -289,7 +300,7 @@ impl<'a> Widget for CanvasViewport<'a> {
             }
             let child_hits = super::canvas_viewport_paint::paint_scene_nodes_with_options_hiding(
                 cx,
-                &page.children,
+                roots,
                 viewport_origin,
                 viewport.zoom,
                 edit_caret.clone(),
@@ -334,7 +345,7 @@ impl<'a> Widget for CanvasViewport<'a> {
             if let Some(indicators) = indicators.as_ref() {
                 super::canvas_agent_cursor::paint_agent_cursors(
                     cx,
-                    &page.children,
+                    roots,
                     viewport_origin,
                     viewport.zoom,
                     self.now_ms,
@@ -380,7 +391,7 @@ impl<'a> Widget for CanvasViewport<'a> {
             }
             super::canvas_frame_labels::paint_frame_labels(
                 cx,
-                &page.children,
+                roots,
                 frame_labels,
                 if selected_root_frame_label {
                     &[]
@@ -393,7 +404,7 @@ impl<'a> Widget for CanvasViewport<'a> {
             );
             super::canvas_generator_badge::paint_generator_badges(
                 cx,
-                &page.children,
+                roots,
                 &self.generator_badges,
                 &self.theme,
                 viewport_origin,
@@ -402,7 +413,7 @@ impl<'a> Widget for CanvasViewport<'a> {
             );
             super::canvas_collab_presence::paint(
                 cx,
-                &page.children,
+                roots,
                 &self.collab_presence,
                 rect,
                 viewport,
