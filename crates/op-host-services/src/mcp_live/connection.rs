@@ -23,7 +23,7 @@ pub(super) fn server_loop(
     admission: Arc<LiveAdmission>,
     quit_flag: Arc<AtomicBool>,
     wake_ui: UiWake,
-    client_identity: Arc<Mutex<Option<(String, String)>>>,
+    write_indicators: Arc<Mutex<ClientWriteIndicators>>,
 ) {
     // Serializes only *stateful* requests so a concurrent multi-apply batch
     // can't interleave. Stateless probes (`ping`/`initialize`) bypass it, so
@@ -62,7 +62,7 @@ pub(super) fn server_loop(
                 let quit = Arc::clone(&quit_flag);
                 let conns = Arc::clone(&conn_count);
                 let wake = Arc::clone(&wake_ui);
-                let identity = Arc::clone(&client_identity);
+                let indicators = Arc::clone(&write_indicators);
                 let spawned = thread::Builder::new()
                     .name("op-mcp-live-conn".into())
                     .stack_size(LIVE_CONN_STACK_SIZE)
@@ -82,7 +82,7 @@ pub(super) fn server_loop(
                             &lock,
                             &quit,
                             &wake,
-                            &identity,
+                            &indicators,
                         ) {
                             eprintln!("openpencil-desktop mcp: {e}");
                             let _ = crate::mcp_serve::write_mcp_http_response(
@@ -117,7 +117,7 @@ pub(super) fn serve_connection<S: std::io::Read + std::io::Write>(
     stateful_lock: &Mutex<()>,
     quit_flag: &AtomicBool,
     wake_ui: &UiWake,
-    client_identity: &Mutex<Option<(String, String)>>,
+    write_indicators: &Mutex<ClientWriteIndicators>,
 ) -> Result<(), McpLiveError> {
     // A refused body FRAMING (over a route's declared cap, or missing the
     // `Content-Length` a route requires) is a client fault detected before a
@@ -223,10 +223,12 @@ pub(super) fn serve_connection<S: std::io::Read + std::io::Write>(
             // Always overwrite (not "first wins"): a later `initialize`
             // means a different tool connected, and the badge should
             // say who is ACTUALLY driving now.
-            if let Some(name) = crate::mcp_serve::parse_client_info_name(&req.body) {
-                if let Ok(mut identity) = client_identity.lock() {
-                    *identity = Some((name, MCP_CLIENT_COLOR.to_string()));
-                }
+            {
+                let name = crate::mcp_serve::parse_client_info_name(&req.body);
+                write_indicators
+                    .lock()
+                    .unwrap_or_else(|poison| poison.into_inner())
+                    .note_client_name(name);
             }
             return write_json_rpc_response(stream, &resp);
         }

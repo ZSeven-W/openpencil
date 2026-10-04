@@ -515,6 +515,14 @@ pub(super) fn dispatch<S: Read + Write>(
         let mut guard = state.lock().unwrap_or_else(|p| p.into_inner());
         let before = guard.version;
         let mut applied_any = false;
+        // The badge's client name arrives on `initialize` — the ONLY
+        // message this wire carries one in (mcp_live parity). The cheap
+        // method sniff gates the full `clientInfo` parse so a large
+        // `tools/call` body is never parsed twice.
+        if crate::mcp_serve::sniff_method(&req.body).as_deref() == Some("initialize") {
+            let name = crate::mcp_serve::parse_client_info_name(&req.body);
+            guard.mcp_write_indicators.note_client_name(name);
+        }
         // The gateway. Snapshotted before dispatch because the applier only
         // borrows the editor, and `Copy` + the held state lock make the
         // snapshot exact for the whole message. Desktop refuses MCP document
@@ -523,27 +531,38 @@ pub(super) fn dispatch<S: Read + Write>(
         // out from under the peers.
         let policy = guard.collab_policy();
         let mut refused: Option<op_editor_core::CollabGateReason> = None;
-        // Mechanical passthrough only — this daemon (`--serve-web`/`op
-        // start`) is a SEPARATE request loop from `mcp_live.rs`'s
-        // `McpLiveServer` (desktop `--live-mcp`), not the same struct;
-        // wiring canvas-generation indicators here (so a `batch_design`
-        // call against a headless `op start` daemon also relays the
-        // radar-scan to the browser shell) is tracked as follow-up
-        // scope, not part of this pass.
+        // Canvas-presence bookkeeping, collected inside the applier so it
+        // is recorded exactly once per APPLIED command: `ids_before` is
+        // the active-tree id set captured lazily before the first
+        // id-set-changing command (the new-node reveal diff), `touched_ids`
+        // the ids each applied command directly targets (cursor focus),
+        // `applied_tools` the tool names for the boundary log.
+        let mut ids_before: Option<std::collections::HashSet<String>> = None;
+        let mut page_before: Option<String> = None;
+        let mut touched_ids: Vec<String> = Vec::new();
+        let mut applied_tools: Vec<String> = Vec::new();
         let response = crate::mcp_serve::process_message_with_applier_profiled(
             &mut guard.editor,
             &req.body,
             ctx.mcp_profile,
-            |_tool_name, editor, cmd| {
+            |tool_name, editor, cmd| {
                 if let Err(reason) =
                     policy.check_command(cmd, op_editor_core::CollabEditSource::Mcp)
                 {
                     refused = Some(reason);
                     return false;
                 }
+                if ids_before.is_none() && crate::mcp_live::command_can_change_id_set(cmd) {
+                    ids_before = Some(crate::design_agent_tools::collect_active_node_ids(editor));
+                    page_before = crate::mcp_live::active_page_identity(editor);
+                }
                 let ok = editor.apply(cmd.clone());
                 if ok {
                     crate::mcp_serve::run_write_repairs_after_apply(editor);
+                    touched_ids.extend(op_editor_core::affected_node_ids(cmd));
+                    if !applied_tools.iter().any(|t| t == tool_name) {
+                        applied_tools.push(tool_name.to_string());
+                    }
                 }
                 applied_any |= ok;
                 ok
@@ -562,6 +581,37 @@ pub(super) fn dispatch<S: Read + Write>(
         }
         if applied_any {
             guard.version += 1;
+            // Canvas presence for the write that just landed — AFTER
+            // apply + write-repairs and only where the relay actually
+            // serves (the registry is process-global; a shared deployment
+            // shows the empty projection, so nothing is registered for it
+            // either). Refused writes never reach `applied_any`, reads
+            // produce empty `touched`/`new` sets, and both no-op inside
+            // `register_applied_writes`.
+            if ctx.mode.allows_agent_indicator_relay() {
+                // `&mut *guard` first: disjoint-field borrows can't be
+                // tracked through `MutexGuard`'s `DerefMut`/`Deref`.
+                let s = &mut *guard;
+                // The diff is only meaningful on the page it was taken —
+                // an apply that moved the active page must not read its
+                // pre-existing tree as fresh content.
+                let ids_before = ids_before.filter(|_| {
+                    page_before.is_none()
+                        || crate::mcp_live::active_page_identity(&s.editor) == page_before
+                });
+                if let Some(epoch) = s.mcp_write_indicators.register_applied_writes(
+                    &s.editor,
+                    ids_before.as_ref(),
+                    &touched_ids,
+                    crate::mcp_live::EpochReuse::WhileRelayLive,
+                    crate::design_agent_tools::reveal_now_millis(),
+                ) {
+                    eprintln!(
+                        "openpencil serve-web mcp: {}: canvas indicators epoch {epoch}",
+                        applied_tools.join("+")
+                    );
+                }
+            }
         }
         // Atomic bump+broadcast under the state lock (see the REST path) so SSE
         // version events stay monotonic across concurrent mutations.

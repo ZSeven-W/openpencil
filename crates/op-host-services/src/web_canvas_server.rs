@@ -116,6 +116,15 @@ pub struct WebCanvasState {
     /// process's filesystem, settings file and device session between
     /// mutually untrusting accounts. See `online_policy.rs`.
     pub(crate) mode: ServeMode,
+    /// MCP write → canvas-indicator session: the client-declared badge
+    /// identity plus the epoch this daemon's `/mcp` loop last registered,
+    /// with its deferred relay finish (see
+    /// `mcp_live::client_write` — the same session the desktop live-MCP
+    /// server runs, so daemon and desktop presence semantics can't drift).
+    /// Reads from `initialize` are always recorded (cheap bookkeeping);
+    /// registrations only happen where `mode.allows_agent_indicator_relay()`
+    /// — the registry is process-global and has no tenant dimension.
+    pub(crate) mcp_write_indicators: crate::mcp_live::ClientWriteIndicators,
 }
 
 impl WebCanvasState {
@@ -168,6 +177,7 @@ impl WebCanvasState {
             auth_login_handle: None,
             collab: collab_state::WebCollabState::default(),
             mode: ServeMode::Local,
+            mcp_write_indicators: crate::mcp_live::ClientWriteIndicators::default(),
         }
     }
 
@@ -534,22 +544,14 @@ pub fn handle_web_canvas_request(
                 state.collab.seq()
             ),
         },
+        // Agent-indicator relay: design runs + MCP writes execute inside
+        // this daemon, so the process-global registry the canvas paints
+        // from lives HERE — the browser polls this and mirrors it into
+        // its own registry (agent_indicators::apply_remote) so agent
+        // borders / badges / reveal animations show on web.
         ("GET", "/api/mcp/indicators") => WebReply {
-            // Agent-indicator relay: design runs execute inside this
-            // daemon, so the process-global registry the canvas paints
-            // from lives HERE — the browser polls this and mirrors it
-            // into its own registry (agent_indicators::apply_remote) so
-            // agent borders / badges / reveal animations show on web.
-            //
-            // That registry has no tenant dimension, so a shared deployment
-            // relays the empty projection instead of showing one account the
-            // shape of another account's design run.
             status: "200 OK",
-            body: if state.mode.allows_agent_indicator_relay() {
-                op_editor_core::agent_indicators::relay_json()
-            } else {
-                online_policy::EMPTY_INDICATOR_RELAY.to_string()
-            },
+            body: state.indicator_relay_body(),
         },
         // The wasm shell posts a sync-reset on every mount. Locally that
         // means "the browser just booted, drop the transient document";
@@ -743,6 +745,7 @@ mod connection_ai_routes;
 mod doc_routes;
 mod export_routes;
 mod hub_verifier;
+mod indicators;
 pub mod online_policy;
 mod online_run_loop;
 mod origin_guard;

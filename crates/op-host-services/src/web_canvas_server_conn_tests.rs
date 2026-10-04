@@ -529,6 +529,220 @@ fn document_post_route_409s_on_stale_base_version_without_mutating() {
     assert_eq!(s.version, 0);
 }
 
+// ── MCP write → canvas-indicator relay ──────────────────────────────
+//
+// The spec's edge-case matrix for the daemon half: a mutating `/mcp`
+// `tools/call` registers the client's badge + the nodes it touched on
+// the process-global `agent_indicators` registry that
+// `GET /api/mcp/indicators` relays; reads, refused writes and writes
+// that never applied leave the relay empty; back-to-back writes share
+// one epoch while the first one's relay window is still open.
+//
+// Every test here drives the REAL `serve_one` loop against a shared
+// `WebCanvasState`, so the registry mutations must be serialized —
+// `agent_indicators::test_guard` is the established convention (the
+// registry is process-global and unguarded producers race each other).
+
+/// Drive one request through `serve_one` against a SHARED state —
+/// unlike `serve`, which fabricates fresh state per call and so can't
+/// carry an `initialize` → `tools/call` → indicators sequence.
+fn serve_on(state: &Mutex<WebCanvasState>, method: &str, path: &str, body: &str) -> String {
+    let request = format!(
+        "{method} {path} HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+    let mut stream = mock_stream(&request);
+    serve_one(&mut stream, state, &SseHub::default()).expect("serve_one");
+    String::from_utf8_lossy(&stream.output).into_owned()
+}
+
+/// The payload half of a raw `serve_on` response — everything past the
+/// blank line that ends the headers.
+fn response_body(response: &str) -> &str {
+    response
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body)
+        .unwrap_or(response)
+}
+
+const INITIALIZE: &str = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"cursor-agent","version":"1.0"}}}"#;
+const INSERT_NODE_CALL: &str = r##"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"insert_node","arguments":{"parent":null,"data":{"type":"rectangle","name":"Card","x":1,"y":2,"width":100,"height":50,"fill":[{"type":"solid","color":"#112233"}]}}}}"##;
+const UPDATE_N9_CALL: &str = r##"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"update_node","arguments":{"nodeId":"n9","data":{"x":5}}}}"##;
+
+/// Insert + declare + update, then read back the relay — the happy
+/// path: the declared badge lands on the touched node, `active:true`
+/// holds long enough for the browser's 400ms poll to observe it, and
+/// the focused node rides BOTH the `nodes` tag map and the reveal
+/// queue (the cursor's waypoint source).
+#[test]
+fn mutating_mcp_call_relays_touched_node_and_declared_badge() {
+    let _guard = op_editor_core::agent_indicators::test_guard();
+    op_editor_core::agent_indicators::clear();
+    let state = Mutex::new(fresh_state());
+    // Seed a node to edit: the document push installs `n9` verbatim.
+    assert!(serve_on(&state, "POST", "/api/mcp/document", SYNC_BODY).contains("200 OK"));
+    assert!(serve_on(&state, "POST", "/mcp", INITIALIZE).contains("200 OK"));
+    let written = serve_on(&state, "POST", "/mcp", UPDATE_N9_CALL);
+    assert!(written.contains("200 OK"), "{written}");
+
+    let body = serve_on(&state, "GET", "/api/mcp/indicators", "");
+    let relay = op_editor_core::agent_indicators::parse_relay_json(response_body(&body))
+        .unwrap_or_else(|| panic!("relay must parse: {body}"));
+    assert!(
+        relay.run_active,
+        "the grace window keeps the run live: {body}"
+    );
+    assert!(
+        relay.nodes.iter().any(|(id, _)| id == "n9"),
+        "the touched node must carry a badge tag: {body}"
+    );
+    let (_, tag) = relay
+        .nodes
+        .iter()
+        .find(|(id, _)| id == "n9")
+        .expect("checked above");
+    assert_eq!(tag.name, "cursor-agent", "the declared client name");
+    assert_eq!(tag.color, "#8A8F98", "neutral MCP color");
+    assert!(
+        relay.reveals.iter().any(|(id, _)| id == "n9"),
+        "the back-dated reveal anchors the cursor waypoint: {body}"
+    );
+    op_editor_core::agent_indicators::clear();
+}
+
+/// Reads never paint presence: `tools/list` and a `get_document` leave
+/// the relay byte-identical to the empty projection.
+#[test]
+fn readonly_mcp_calls_leave_the_indicator_relay_empty() {
+    let _guard = op_editor_core::agent_indicators::test_guard();
+    op_editor_core::agent_indicators::clear();
+    let state = Mutex::new(fresh_state());
+    let before = serve_on(&state, "GET", "/api/mcp/indicators", "");
+    assert!(before.contains(r#""active":false"#), "{before}");
+
+    let r = serve_on(
+        &state,
+        "POST",
+        "/mcp",
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+    );
+    assert!(r.contains("200 OK"), "{r}");
+    let r = serve_on(
+        &state,
+        "POST",
+        "/mcp",
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_document","arguments":{}}}"#,
+    );
+    assert!(r.contains("200 OK"), "{r}");
+
+    let after = serve_on(&state, "GET", "/api/mcp/indicators", "");
+    let relay = op_editor_core::agent_indicators::parse_relay_json(response_body(&after))
+        .unwrap_or_else(|| panic!("{after}"));
+    assert!(!relay.run_active, "{after}");
+    assert!(
+        relay.nodes.is_empty() && relay.reveals.is_empty(),
+        "{after}"
+    );
+    op_editor_core::agent_indicators::clear();
+}
+
+/// A write that never lands must not paint presence: both the
+/// not-found apply (no such node) and the collab-refused write are
+/// absent from the relay — indicators describe work that visibly
+/// LANDED, and a refusal already has its own `set_notice` surface.
+#[test]
+fn failed_and_refused_writes_leave_the_relay_empty() {
+    let _guard = op_editor_core::agent_indicators::test_guard();
+    op_editor_core::agent_indicators::clear();
+    let state = Mutex::new(fresh_state());
+    // Seed a target BEFORE the session goes live — a live session
+    // discards document pushes too, so the seed must land first.
+    assert!(serve_on(&state, "POST", "/api/mcp/document", SYNC_BODY).contains("200 OK"));
+
+    // 1. Apply reports not-applied — `ghost` resolves nowhere.
+    let r = serve_on(
+        &state,
+        "POST",
+        "/mcp",
+        r##"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"update_node","arguments":{"nodeId":"ghost","data":{"x":5}}}}"##,
+    );
+    assert!(r.contains("200 OK"), "{r}");
+    let body = serve_on(&state, "GET", "/api/mcp/indicators", "");
+    assert!(body.contains(r#""active":false"#), "{body}");
+
+    // 2. Collab-active session → the gateway refuses the write before apply.
+    {
+        let mut guard = state.lock().expect("state lock");
+        assert!(guard.editor.editor_ui.collab.set_authenticated_session(
+            op_editor_core::CollabConnectionPhase::Active,
+            op_editor_core::AuthenticatedCollabSession {
+                session_name: "Live session".to_string(),
+                role: op_editor_core::CollabUiRole::Owner,
+                share_endpoint: None,
+            },
+            Vec::new(),
+        ));
+    }
+    let r = serve_on(&state, "POST", "/mcp", UPDATE_N9_CALL);
+    assert!(r.contains("200 OK"), "{r}");
+    let body = serve_on(&state, "GET", "/api/mcp/indicators", "");
+    assert!(
+        body.contains(r#""active":false"#),
+        "a refused write registers nothing: {body}"
+    );
+    op_editor_core::agent_indicators::clear();
+}
+
+/// No `initialize` → the honest fallback names the write "MCP Client",
+/// never a fabricated persona.
+#[test]
+fn undeclared_client_writes_carry_the_fallback_badge() {
+    let _guard = op_editor_core::agent_indicators::test_guard();
+    op_editor_core::agent_indicators::clear();
+    let state = Mutex::new(fresh_state());
+    let written = serve_on(&state, "POST", "/mcp", INSERT_NODE_CALL);
+    assert!(written.contains("200 OK"), "{written}");
+
+    let body = serve_on(&state, "GET", "/api/mcp/indicators", "");
+    let relay = op_editor_core::agent_indicators::parse_relay_json(response_body(&body))
+        .unwrap_or_else(|| panic!("{body}"));
+    assert!(relay.run_active, "{body}");
+    assert!(!relay.reveals.is_empty(), "a fresh insert reveals: {body}");
+    let name = relay.cursor_agent.as_ref().map(|tag| tag.name.as_str());
+    assert_eq!(name, Some("MCP Client"), "{body}");
+    op_editor_core::agent_indicators::clear();
+}
+
+/// Two writes inside the relay grace land on ONE epoch — the same
+/// continuous-run read the desktop gives burst `batch_design` calls.
+/// The relay epoch is observable across polls, so the assertion reads
+/// the wire shape rather than the session's private counter.
+#[test]
+fn burst_writes_share_one_relay_epoch() {
+    let _guard = op_editor_core::agent_indicators::test_guard();
+    op_editor_core::agent_indicators::clear();
+    let state = Mutex::new(fresh_state());
+    for call in [INSERT_NODE_CALL, INSERT_NODE_CALL] {
+        let written = serve_on(&state, "POST", "/mcp", call);
+        assert!(written.contains("200 OK"), "{written}");
+    }
+    let body = serve_on(&state, "GET", "/api/mcp/indicators", "");
+    let relay = op_editor_core::agent_indicators::parse_relay_json(response_body(&body))
+        .unwrap_or_else(|| panic!("{body}"));
+    assert!(relay.run_active, "{body}");
+    let epoch = relay.epoch;
+    assert_ne!(epoch, 0, "a landed write mints an epoch: {body}");
+    // One epoch carried BOTH writes' reveals — a fresh `begin()` per
+    // write would have wiped the first insert's reveal the moment the
+    // second landed (the desktop pump's coalescing test makes the same
+    // point against `finish_if_epoch`'s drain semantics).
+    assert!(
+        relay.reveals.len() >= 2,
+        "both inserts' reveals must coexist under one epoch: {body}"
+    );
+    op_editor_core::agent_indicators::clear();
+}
+
 /// Route fall-through / shutdown-auth / argv-parsing cases, nested here for
 /// the same reason `sse_tests` is: `use super::*` keeps reaching the mock
 /// stream and the `serve` helpers.
