@@ -101,6 +101,7 @@ impl AutoFinalize {
     pub fn run(&mut self, state: &mut EditorState, reason: &'static str) -> Option<RepairSummary> {
         let revision = state.document_revision();
         if !self.enabled()
+            || self.last_write_at.is_none()
             || state.active_children().is_empty()
             || self.finalized_at_revision == Some(revision)
         {

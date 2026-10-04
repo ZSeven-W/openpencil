@@ -14,6 +14,48 @@ fn precise_annotations_preserve_saved_layout_but_leave_design_batches_pending() 
     assert_eq!(pending.last_finalized_revision(), None);
 }
 
+#[test]
+fn read_only_stdio_export_keeps_saved_board_geometry_and_file_bytes() {
+    let path = std::env::temp_dir().join(format!(
+        "openpencil-mcp-readonly-{}-{}.op",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let original = r##"{"version":"1.0.0","children":[{
+        "type":"frame","id":"tutorial","width":1080,"height":1440,
+        "fill":[{"type":"solid","color":"#F5F4F0"}],"children":[]
+    }]}"##;
+    std::fs::write(&path, original).unwrap();
+    let mut state = super::super::load_editor_state(&path).unwrap();
+    let before = serde_json::to_value(&state.doc).unwrap();
+    let revision = state.document_revision();
+    let read = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"export_nodes","arguments":{"nodeIds":["tutorial"],"format":"png","scale":0.1}}}"#;
+    let mut input = std::io::Cursor::new(format!("{read}\n").into_bytes());
+    let mut output = Vec::new();
+    let mut auto = AutoFinalize::for_test(std::time::Duration::ZERO);
+    run_stdio_session(
+        &mut input,
+        &mut output,
+        &mut state,
+        &path,
+        &mut auto,
+        &std::sync::atomic::AtomicBool::new(false),
+        super::super::tool_profile::McpAccessProfile::UNRESTRICTED,
+    )
+    .unwrap();
+    let response: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert!(!response["result"]["isError"].as_bool().unwrap_or(false));
+    assert!(response.get("error").is_none());
+    assert_eq!(serde_json::to_value(&state.doc).unwrap(), before);
+    assert_eq!(state.document_revision(), revision);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+    assert!(auto.run(&mut state, "shutdown").is_none());
+    std::fs::remove_file(path).unwrap();
+}
+
 fn env_lock() -> MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
