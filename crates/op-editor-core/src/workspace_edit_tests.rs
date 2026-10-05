@@ -45,7 +45,7 @@ fn normal_work() -> EditorState {
     state
         .editor_ui
         .workspace
-        .open_for_reading(op_editor_core::HomeFamily::AppUi, 1);
+        .open_for_reading(crate::HomeFamily::AppUi, 1);
     state
 }
 
@@ -219,7 +219,7 @@ fn staged_reader_target_is_explicit_and_fenced_against_sibling_changes() {
         .base_mut()
         .name = Some("Updated".into());
     state.active_children_mut()[1].base_mut().name = Some("Unwanted change".into());
-    assert!(op_editor_core::workspace_page_edit::restore_other_boards(
+    assert!(crate::workspace_page_edit::restore_other_boards(
         &mut state,
         &before,
         &target.board_id

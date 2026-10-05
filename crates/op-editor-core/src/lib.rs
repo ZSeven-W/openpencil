@@ -174,6 +174,7 @@ pub fn svg_path_data_bounds(d: &str) -> Option<(f32, f32, f32, f32)> {
         bounds.h as f32,
     ))
 }
+pub mod screen_sets;
 pub mod text_edit;
 pub mod text_input_focus;
 pub mod text_script;
@@ -193,6 +194,7 @@ pub mod variables_resolve;
 pub mod viewport;
 pub mod walkers;
 pub mod web_sync;
+pub mod workspace_edit;
 pub mod workspace_page_edit;
 pub mod workspace_run;
 
