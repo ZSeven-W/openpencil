@@ -307,7 +307,7 @@ impl<'a> Widget for AIChatPlaceholder<'a> {
         let footer = self.footer_layout(rect, self.input_rect(rect), toolbar_y);
         let streaming = self.is_streaming();
         let send_active = can_use_model
-            && (!self.state.input.text().trim().is_empty()
+            && (!self.state.input.effective_text().trim().is_empty()
                 || !self.state.pending_attachments.is_empty());
         paint_bottom_toolbar(cx, self, &footer, toolbar_center_y, streaming, send_active);
 

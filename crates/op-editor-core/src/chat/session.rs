@@ -69,7 +69,8 @@ impl ChatState {
     /// may be queued with text, with staged attachments, or both
     /// (TS parity: an attachment-only message is sendable).
     pub fn begin_send(&mut self) -> bool {
-        let trimmed = self.input.text().trim().to_string();
+        // An explicit send confirms the text visible in the IME, including preedit.
+        let trimmed = self.input.effective_text().trim().to_string();
         if trimmed.is_empty() && self.pending_attachments.is_empty() {
             return false;
         }

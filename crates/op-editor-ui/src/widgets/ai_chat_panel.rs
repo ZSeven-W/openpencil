@@ -457,7 +457,7 @@ impl<'a> AIChatPlaceholder<'a> {
             panel_h
         };
         let lines = crate::widgets::ai_chat_input_text::visible_input_line_count(
-            self.state.input.text(),
+            &self.state.input.effective_text(),
             input_w,
             budget_h,
         );

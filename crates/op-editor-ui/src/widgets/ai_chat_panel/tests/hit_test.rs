@@ -588,3 +588,18 @@ fn hit_test_resolves_header_new_chat_button() {
     let p = Point2D::new(AI_CHAT_WIDTH - PAD - 22.0 + 9.0, 17.0);
     assert_eq!(panel.hit_test(rect, p), Some(AIChatHit::NewChat));
 }
+
+#[test]
+fn a_visible_composing_candidate_enables_the_send_button() {
+    let mut state = EditorState::new();
+    state.editor_ui.enter_chat_tab();
+    seed_available_model(&mut state);
+    state
+        .chat
+        .input
+        .set_composition("改这一页", "改这一页".len(), 1);
+    let panel = AIChatPlaceholder::from_editor(&state);
+    let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
+    let point = Point2D::new(AI_CHAT_WIDTH - PAD - 15.0, toolbar_center_y());
+    assert_eq!(panel.hit_test(rect, point), Some(AIChatHit::Send));
+}

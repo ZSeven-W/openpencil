@@ -322,7 +322,7 @@ impl<'a> AIChatPlaceholder<'a> {
                     return Some(
                         if can_use_model
                             && !streaming
-                            && (!self.state.input.text().trim().is_empty()
+                            && (!self.state.input.effective_text().trim().is_empty()
                                 || !self.state.pending_attachments.is_empty())
                         {
                             AIChatHit::Send

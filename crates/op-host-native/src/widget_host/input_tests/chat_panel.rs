@@ -441,3 +441,26 @@ fn sending_from_the_composer_card_lands_the_rail_on_the_agent_tab() {
         .expect("pinned panel visible");
     assert!(pinned.size.y > rect.size.y);
 }
+
+#[test]
+fn clicking_send_keeps_the_platform_preedit_suffix() {
+    let mut host = WidgetHostNative::new();
+    host.editor_state_mut()
+        .chat
+        .available_models
+        .push(op_editor_core::chat::ModelEntry::new(
+            op_editor_core::chat::AgentProvider::CodexCli,
+            "glm-5.3-flash",
+            "GLM 5.3 Flash",
+        ));
+    let chat = &mut host.editor_state_mut().chat;
+    chat.set_input_text("keep everything else ");
+    chat.input.set_composition("unchanged", 9, 1);
+    let rect = host.ai_chat_rect(1200.0, 800.0).unwrap();
+    let send = scan_footer_for_hit(&host, rect, op_editor_ui::widgets::AIChatHit::Send).unwrap();
+    assert!(host.apply_click(send.x, send.y, 1200.0, 800.0));
+    assert_eq!(
+        host.editor_state().chat.pending_send.as_deref(),
+        Some("keep everything else unchanged")
+    );
+}

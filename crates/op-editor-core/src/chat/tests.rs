@@ -634,3 +634,35 @@ fn begin_send_showing_keeps_the_prompt_but_shows_the_users_words() {
     assert!(chat.begin_send_showing("   "));
     assert_eq!(chat.messages[0].content, "plain prompt");
 }
+
+#[test]
+fn send_keeps_the_visible_platform_preedit_including_the_last_word() {
+    let mut chat = ChatState::default();
+    chat.set_input_text("keep everything else ");
+    chat.input.set_composition("unchanged", 9, 1);
+    assert_eq!(
+        chat.input.effective_text(),
+        "keep everything else unchanged"
+    );
+    assert!(chat.begin_send());
+    assert_eq!(
+        chat.pending_send.as_deref(),
+        Some("keep everything else unchanged")
+    );
+    assert_eq!(chat.messages[0].content, "keep everything else unchanged");
+    assert!(chat.input.text().is_empty());
+    assert!(chat.input.composition().is_none());
+}
+
+#[test]
+fn a_composition_only_chinese_prompt_can_be_sent_once() {
+    let mut chat = ChatState::default();
+    chat.input.set_composition("保留原文", "保留原文".len(), 1);
+    assert!(chat.begin_send());
+    assert_eq!(chat.pending_send.as_deref(), Some("保留原文"));
+    assert_eq!(chat.messages[0].content, "保留原文");
+    assert!(
+        !chat.begin_send(),
+        "the composing candidate was consumed once"
+    );
+}
