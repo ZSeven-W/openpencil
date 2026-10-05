@@ -627,3 +627,48 @@ fn toolbar_labels_are_centered_inside_their_painted_hit_targets() {
         }
     }
 }
+
+#[test]
+fn finished_apps_and_web_pages_offer_runtime_preview_and_reserve_header_room() {
+    use op_editor_core::{EditorState, WorkspacePhase};
+    for family in [HomeFamily::AppUi, HomeFamily::Web] {
+        let document = serde_json::from_value(serde_json::json!({"version":"1.0.0","children":[
+            {"type":"frame","id":"work","width":390,"height":844,"children":[
+                {"type":"text","id":"title","content":"Preview fixture"}
+            ]}
+        ]}))
+        .unwrap();
+        let mut state = EditorState::from_document(document);
+        state.editor_ui.workspace.visible = true;
+        state.editor_ui.workspace.family = family;
+        state.editor_ui.workspace.phase = WorkspacePhase::Done;
+        state.editor_ui.deck_html_export_supported = true;
+        for width in [800.0, 1024.0, 1440.0] {
+            let surface = WorkspaceSurface::for_editor(&state).unwrap();
+            let layout = surface.layout(width, 900.0);
+            let preview = surface.preview_button(&layout).unwrap();
+            assert_eq!(
+                surface.hit_test(
+                    width,
+                    900.0,
+                    Point2D::new(preview.origin.x + 2.0, preview.origin.y + 2.0)
+                ),
+                Some(WorkspaceHit::Play)
+            );
+            assert!(layout.title.origin.x + layout.title.size.x <= preview.origin.x - 11.9);
+            assert!(
+                preview.origin.x + preview.size.x
+                    <= surface.share_button(&layout).unwrap().origin.x - 7.9
+            );
+            assert!(surface
+                .focus_order(&layout)
+                .iter()
+                .any(|(hit, _)| *hit == WorkspaceHit::Play));
+        }
+        state.editor_ui.workspace.phase = WorkspacePhase::Generating;
+        assert!(WorkspaceSurface::for_editor(&state)
+            .unwrap()
+            .preview_button(&layout_1440_900(family, false, 1))
+            .is_none());
+    }
+}

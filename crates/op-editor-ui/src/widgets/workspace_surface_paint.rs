@@ -265,6 +265,13 @@ fn paint_header(
     }
     subtitle.push_str(" · ");
     subtitle.push_str(phase);
+    let subtitle = crate::widgets::text_metrics::fit_in_family(
+        cx.backend,
+        &subtitle,
+        layout.title.size.x,
+        12.0,
+        SANS,
+    );
     text(
         cx,
         &subtitle,
@@ -286,7 +293,15 @@ fn paint_header(
             Icon::Share,
         )
     });
-    for (button, hit, label, icon) in share.into_iter().chain([
+    let preview = surface.preview_button(layout).map(|button| {
+        (
+            button,
+            WorkspaceHit::Play,
+            tr(locale, "tooltip.topbar.preview"),
+            Icon::Play,
+        )
+    });
+    for (button, hit, label, icon) in preview.into_iter().chain(share).chain([
         (
             layout.export,
             WorkspaceHit::Export,

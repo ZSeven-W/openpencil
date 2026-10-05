@@ -3,6 +3,36 @@ use op_editor_core::agent_settings::{BuiltinAgentField, SettingsFocus};
 use op_editor_core::editor_ui_state::VariableRowFocus;
 
 #[test]
+fn preview_mode_merge_wakes_even_when_the_document_has_no_animation() {
+    let _guard = crate::agent_indicator_test_support::write();
+    op_editor_core::agent_indicators::clear();
+    let mut host = WidgetHostNative::new();
+    host.set_now_ms(1_000);
+    for kind in [
+        crate::preview::ModeTransitionKind::Enter,
+        crate::preview::ModeTransitionKind::Exit,
+    ] {
+        host.preview_mode_transition = Some(crate::preview::ModeTransition::start(
+            kind,
+            Some(op_editor_ui::Rect::xywh(0.0, 0.0, 390.0, 844.0)),
+            op_editor_ui::Rect::xywh(100.0, 100.0, 195.0, 422.0),
+            1_000,
+        ));
+        assert!(host
+            .next_animation_deadline_ms()
+            .is_some_and(|at| at <= 1_016));
+        host.set_now_ms(10_000);
+        assert!(
+            host.next_animation_deadline_ms()
+                .is_some_and(|at| at <= 10_016),
+            "the settled transition still owes its cleanup frame"
+        );
+        host.preview_mode_transition = None;
+        host.set_now_ms(1_000);
+    }
+}
+
+#[test]
 fn settings_input_uses_text_input_state_for_editing() {
     let mut host = WidgetHostNative::new();
     {

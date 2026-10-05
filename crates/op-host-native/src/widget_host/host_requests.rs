@@ -242,6 +242,12 @@ impl WidgetHostNative {
                 .and_then(|preview| preview.next_wake_deadline_ms()),
             self.now_ms,
         );
+        // Enter has no runtime animation deadline until the canvas/device
+        // merge settles and begins lifecycle. Exit also needs its final frame
+        // to tear down the runtime, even when the document itself is static.
+        if self.preview_mode_transition.is_some() {
+            next = bookkeeping::earliest(next, self.now_ms.saturating_add(16));
+        }
         // Gesture-end full-quality repaint: wake once the
         // interactive-degrade window closes. Quantized UP to a 50 ms
         // grid so consecutive gesture ticks report the SAME deadline —

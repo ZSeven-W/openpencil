@@ -11,6 +11,10 @@ use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Point2D, Rect};
+#[path = "workspace_surface_preview.rs"]
+mod preview_entry;
+pub use preview_entry::header_button_width;
+
 use op_editor_core::{
     EditorState, EditorUiState, HomeFamily, WorkspaceHit, WorkspaceState, WorkspaceView,
     WORKSPACE_DECK_STRIP_H, WORKSPACE_HEADER_H, WORKSPACE_TOOLBAR_H,
@@ -337,18 +341,6 @@ pub fn layout_for(
     }
 }
 
-/// Width of a header outline button holding a 15 px icon and `label`
-/// at 13 px. Estimated per char (wide scripts at a full em) so layout,
-/// hit-test and paint agree without a text measurer; never narrower
-/// than the 导出 button beside it.
-pub fn header_button_width(label: &str) -> f32 {
-    let label_w: f32 = label
-        .chars()
-        .map(|c| if (c as u32) >= 0x1100 { 13.0 } else { 7.4 })
-        .sum();
-    (label_w + 15.0 + 8.0 + 18.0).max(EXPORT_BUTTON_W)
-}
-
 /// The work's display title: the file name, else the brief's first 16
 /// chars, else the localized untitled fallback. Shared by the desktop
 /// header and the phone reader so the two never name one work twice.
@@ -453,6 +445,14 @@ impl<'a> WorkspaceSurface<'a> {
         }
         layout.thumb_first =
             thumb_window_start(self.boards.len(), layout.thumbs.len(), self.state.selected);
+        let action_left = self
+            .quality_chip(&layout)
+            .or_else(|| self.preview_button(&layout))
+            .or_else(|| self.share_button(&layout))
+            .unwrap_or(layout.export)
+            .origin
+            .x;
+        layout.title.size.x = (action_left - 12.0 - layout.title.origin.x).max(0.0);
         layout
     }
 
@@ -475,7 +475,10 @@ impl<'a> WorkspaceSurface<'a> {
     /// The 质检 chip's rect (left of the leftmost header button), when
     /// there is a report to show.
     pub fn quality_chip(&self, layout: &WorkspaceLayout) -> Option<Rect> {
-        let anchor = self.share_button(layout).unwrap_or(layout.export);
+        let anchor = self
+            .preview_button(layout)
+            .or_else(|| self.share_button(layout))
+            .unwrap_or(layout.export);
         self.quality_label()
             .map(|label| quality_chip_rect(anchor, &label))
     }
@@ -687,6 +690,12 @@ impl<'a> WorkspaceSurface<'a> {
             return None;
         }
         if layout.header.contains(point) {
+            if self
+                .preview_button(layout)
+                .is_some_and(|button| button.contains(point))
+            {
+                return Some(WorkspaceHit::Play);
+            }
             if self
                 .quality_chip(layout)
                 .is_some_and(|chip| chip.contains(point))

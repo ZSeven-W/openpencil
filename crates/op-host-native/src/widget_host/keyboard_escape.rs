@@ -11,6 +11,10 @@ impl WidgetHostNative {
     /// Escape — priority cascade: rename → property → pickers →
     /// chat → selection. One layer per press.
     pub fn apply_escape(&mut self) -> bool {
+        if self.editor_state.editor_ui.escape_missing_fonts() {
+            self.mark_dirty();
+            return true;
+        }
         // Transient pointer capture is the topmost interaction layer. Escape
         // cancels it without replaying a delayed tap or committing a reorder.
         if self.editor_state.editor_ui.touch_chrome() && self.cancel_native_touch_gestures() {

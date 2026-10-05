@@ -15,6 +15,21 @@ use crate::editor_ui_state::EditorUiState;
 use crate::state::EditorState;
 
 impl EditorUiState {
+    /// Dismiss the top font-picker layer, then its parent modal. Keep the
+    /// diagnostic data so normal mode can still offer its non-modal notice.
+    pub fn escape_missing_fonts(&mut self) -> bool {
+        if !self.missing_fonts_modal_open {
+            return false;
+        }
+        if self.font_picker.open {
+            self.close_font_picker();
+        } else {
+            self.missing_fonts_modal_open = false;
+            self.missing_fonts_hover = None;
+        }
+        true
+    }
+
     /// Close the export dialog.
     pub fn escape_export_dialog(&mut self) -> bool {
         if !self.export_dialog_open {
@@ -576,5 +591,36 @@ mod tests {
             ui.scenario,
             Some(crate::scene_template_catalog::TemplateScene::Slides)
         );
+    }
+}
+
+#[cfg(test)]
+mod font_escape_regression_tests {
+    use super::*;
+    #[test]
+    fn font_escape_peels_picker_then_modal_without_discarding_diagnostics() {
+        let mut ui = EditorUiState {
+            missing_fonts_modal_open: true,
+            missing_fonts_prompt: Some(crate::missing_fonts::MissingFontsPrompt {
+                entries: vec![crate::missing_fonts::MissingFontEntry {
+                    family: "QA Missing Face".into(),
+                    run_count: 30,
+                    resolved: false,
+                    mismatch_note: None,
+                }],
+            }),
+            ..EditorUiState::default()
+        };
+        ui.font_picker.open = true;
+        assert!(ui.escape_missing_fonts());
+        assert!(!ui.font_picker.open);
+        assert!(ui.missing_fonts_modal_open);
+        assert!(ui.escape_missing_fonts());
+        assert!(!ui.missing_fonts_modal_open);
+        assert_eq!(
+            ui.missing_fonts_prompt.as_ref().unwrap().entries[0].run_count,
+            30
+        );
+        assert!(!ui.escape_missing_fonts());
     }
 }

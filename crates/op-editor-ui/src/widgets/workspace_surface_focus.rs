@@ -55,6 +55,9 @@ impl WorkspaceSurface<'_> {
         );
         order.push((WorkspaceHit::Export, layout.export));
         order.push((WorkspaceHit::Professional, layout.professional));
+        if let Some(button) = self.preview_button(layout) {
+            order.push((WorkspaceHit::Play, button));
+        }
         order.push((WorkspaceHit::ToggleDock, Self::toggle_rect(layout)));
         let views = super::family_views(self.state.family);
         for (view, rect) in views.iter().zip(&layout.view_segments) {
