@@ -75,23 +75,25 @@ Signature recipes:
 
 | Role              | Family            | Usage                                        |
 | ----------------- | ----------------- | -------------------------------------------- |
-| Display / Heading | Plus Jakarta Sans | Screen titles, section headings, hero prices |
-| Body / Functional | Plus Jakarta Sans | Body text, labels, buttons, navigation       |
+| Display / Heading | Plus Jakarta Sans, Noto Sans SC | Screen titles, section headings, hero prices |
+| Body / Functional | Plus Jakarta Sans, Noto Sans SC | Body text, labels, buttons, navigation       |
+
+Use the complete family stack `Plus Jakarta Sans, Noto Sans SC` on every text node: the first family supplies Latin letters and digits, and the second supplies Chinese glyphs consistently on desktop, web, iOS and Android. Both families ship with OpenPencil. Preserve an explicit user-supplied font choice.
 
 ### Type Scale
 
 | Level   | Size | Font              | Weight | Usage                                |
 | ------- | ---- | ----------------- | ------ | ------------------------------------ |
-| Display | 34px | Plus Jakarta Sans | 700    | Hero prices, promo values            |
-| Title 1 | 24px | Plus Jakarta Sans | 700    | Screen titles                        |
-| Title 2 | 18px | Plus Jakarta Sans | 600    | Section headings, category titles    |
-| Title 3 | 16px | Plus Jakarta Sans | 600    | Card titles, restaurant names        |
-| Body    | 14px | Plus Jakarta Sans | 400    | Descriptions, ingredients            |
-| Label   | 13px | Plus Jakarta Sans | 500    | Field labels, button text            |
-| Price   | 16px | Plus Jakarta Sans | 700    | Item prices, totals                  |
-| Caption | 12px | Plus Jakarta Sans | 400    | Delivery times, distances, reviews   |
-| Small   | 11px | Plus Jakarta Sans | 500    | Badges, deal labels                  |
-| Micro   | 10px | Plus Jakarta Sans | 600    | Tab labels (uppercase), micro badges |
+| Display | 34px | Plus Jakarta Sans, Noto Sans SC | 700    | Hero prices, promo values            |
+| Title 1 | 24px | Plus Jakarta Sans, Noto Sans SC | 700    | Screen titles                        |
+| Title 2 | 18px | Plus Jakarta Sans, Noto Sans SC | 600    | Section headings, category titles    |
+| Title 3 | 16px | Plus Jakarta Sans, Noto Sans SC | 600    | Card titles, restaurant names        |
+| Body    | 14px | Plus Jakarta Sans, Noto Sans SC | 400    | Descriptions, ingredients            |
+| Label   | 13px | Plus Jakarta Sans, Noto Sans SC | 500    | Field labels, button text            |
+| Price   | 16px | Plus Jakarta Sans, Noto Sans SC | 700    | Item prices, totals                  |
+| Caption | 12px | Plus Jakarta Sans, Noto Sans SC | 400    | Delivery times, distances, reviews   |
+| Small   | 11px | Plus Jakarta Sans, Noto Sans SC | 500    | Badges, deal labels                  |
+| Micro   | 10px | Plus Jakarta Sans, Noto Sans SC | 600    | Tab labels (uppercase), micro badges |
 
 ### Font Weights
 

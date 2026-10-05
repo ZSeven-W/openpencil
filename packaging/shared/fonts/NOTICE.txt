@@ -16,3 +16,11 @@ Android stages both sources into generated/design-font-assets/fonts.
 Desktop embeds Noto Sans SC from this shared asset alongside its Inter font.
 Desktop distributions include these notices beside the binary or in resources.
 The existing platform player-font.ttf resources remain in place.
+
+PlusJakartaSans-VF.ttf
+Family: Plus Jakarta Sans (upright variable weight, 200-800)
+Source: https://github.com/google/fonts/tree/6e8069ff8ba3dab2a397fb30e7fbd243aba9b57a/ofl/plusjakartasans
+SHA-256: 89b3fb38aa0d275d7a731d0d817a4f1622b316b4d7fbdedcf02ee9099ff68bc8
+License: OFL-PlusJakartaSans.txt (SIL Open Font License 1.1)
+Desktop embeds this shared asset; iOS and Android register it from their shared fonts folder.
+Web stages and loads the same bytes before document font detection.

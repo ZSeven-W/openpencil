@@ -26,6 +26,7 @@ const BUNDLED: &[&[u8]] = &[
     // The featured bilingual templates use this family on desktop and mobile.
     // Reuse the same OFL asset so reopen/measurement cannot diverge by host.
     include_bytes!("../../../packaging/shared/fonts/NotoSansSC-VF.ttf"),
+    include_bytes!("../../../packaging/shared/fonts/PlusJakartaSans-VF.ttf"),
     include_bytes!("../assets/fonts/SpaceGrotesk-VF.ttf"),
     include_bytes!("../assets/fonts/Manrope-VF.ttf"),
     include_bytes!("../assets/fonts/Outfit-VF.ttf"),

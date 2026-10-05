@@ -68,6 +68,7 @@ copy_file "${UI_ASSETS}/iconify-catalog-core.json" "iconify-catalog-core.json"
 # e.g. Inter pops the missing-fonts modal and renders a fallback face; the web
 # host fetches them all at mount (`op-host-web/src/bundled_fonts_web.rs`).
 copy_dir "${DESKTOP_FONTS}" "fonts"
+copy_dir "packaging/shared/fonts" "fonts"
 # Roboto lives with the native host (it is also that backend's last-resort
 # face), not in the desktop font directory, so it is staged separately.
 copy_file "${NATIVE_ASSETS}/Roboto-Regular.ttf" "fonts/Roboto-Regular.ttf"

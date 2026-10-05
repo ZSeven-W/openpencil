@@ -256,6 +256,7 @@ mod tests {
             "avoid pastel pink/blue search shells",
             "heart/bookmark icons sit directly over the image with no circular border bubble",
             "Featured food cards default to an image-top product-card composition",
+            "Use the complete family stack `Plus Jakarta Sans, Noto Sans SC`",
         ] {
             assert!(
                 guide.content.contains(required),

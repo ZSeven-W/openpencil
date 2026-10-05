@@ -19,6 +19,8 @@ required=(
   "$repo_dir/packaging/shared/fonts/NotoSansSC-VF.ttf"
   "$repo_dir/packaging/shared/fonts/OFL-Inter.txt"
   "$repo_dir/packaging/shared/fonts/OFL-NotoSansSC.txt"
+  "$repo_dir/packaging/shared/fonts/PlusJakartaSans-VF.ttf"
+  "$repo_dir/packaging/shared/fonts/OFL-PlusJakartaSans.txt"
   "$player_dir/Resources/en.lproj/InfoPlist.strings"
   "$player_dir/Resources/zh-Hans.lproj/InfoPlist.strings"
   "$player_dir/Sources/OpPlayerApp.swift"

@@ -3,8 +3,10 @@
 /// Desktop's default app-shipped design-font catalog. Runtime availability
 /// never trusts this list: hosts populate `EditorUiState::bundled_font_families`
 /// from the renderer registry after registering their actual font blobs.
-pub const BUNDLED_FONT_FAMILIES: [&str; 10] = [
+pub const BUNDLED_FONT_FAMILIES: [&str; 12] = [
     "Inter",
+    "Noto Sans SC",
+    "Plus Jakarta Sans",
     "Space Grotesk",
     "Manrope",
     "Outfit",

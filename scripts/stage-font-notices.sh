@@ -8,7 +8,7 @@ if [ "$#" -ne 1 ]; then
 fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 mkdir -p "$1"
-for name in NOTICE.txt OFL-Inter.txt OFL-NotoSansSC.txt; do
+for name in NOTICE.txt OFL-Inter.txt OFL-NotoSansSC.txt OFL-PlusJakartaSans.txt; do
   cp "$repo_root/packaging/shared/fonts/$name" "$1/$name"
   chmod 644 "$1/$name"
 done

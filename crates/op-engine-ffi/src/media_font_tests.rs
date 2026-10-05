@@ -59,6 +59,10 @@ fn registering_mobile_font_resolves_prompt_and_survives_document_reopen() {
             "Noto Sans SC",
             "../../packaging/shared/fonts/NotoSansSC-VF.ttf",
         ),
+        (
+            "Plus Jakarta Sans",
+            "../../packaging/shared/fonts/PlusJakartaSans-VF.ttf",
+        ),
     ] {
         let font = std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(path))
             .expect("shipped mobile font asset");
