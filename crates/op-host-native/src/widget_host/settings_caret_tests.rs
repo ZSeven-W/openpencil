@@ -18,9 +18,13 @@ fn preview_mode_merge_wakes_even_when_the_document_has_no_animation() {
             op_editor_ui::Rect::xywh(100.0, 100.0, 195.0, 422.0),
             1_000,
         ));
-        assert!(host
-            .next_animation_deadline_ms()
-            .is_some_and(|at| at <= 1_016));
+        assert!(
+            host.next_animation_deadline_ms()
+                .is_some_and(|at| at <= host.now_ms.saturating_add(16)),
+            "clock={} deadline={:?}",
+            host.now_ms,
+            host.next_animation_deadline_ms()
+        );
         host.set_now_ms(10_000);
         assert!(
             host.next_animation_deadline_ms()
