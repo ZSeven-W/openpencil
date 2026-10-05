@@ -153,10 +153,42 @@ pub fn complete_pending_detection(state: &mut EditorState) -> bool {
     if !state.editor_ui.missing_fonts_pending_detect || !state.editor_ui.system_fonts_loaded {
         return false;
     }
-    let open_modal =
-        state.editor_ui.missing_fonts_pending_open_modal && !settings_fonts_open(state);
+    let open_modal = state.editor_ui.missing_fonts_pending_open_modal
+        && !normal_surface(state)
+        && !settings_fonts_open(state);
     replace_data(state, open_modal);
     true
+}
+
+fn normal_surface(state: &EditorState) -> bool {
+    state.editor_ui.home.visible || state.editor_ui.workspace.visible
+}
+
+/// Automatic document scans keep normal creation/reading available. The
+/// notice can open the detailed picker explicitly; professional loads retain
+/// their one-shot modal.
+pub fn detect_for_document(state: &mut EditorState) {
+    let open_modal = !normal_surface(state) && !settings_fonts_open(state);
+    replace_data(state, open_modal);
+}
+
+fn reset_notice_for_changed_families(
+    state: &mut EditorState,
+    next: Option<&op_editor_core::missing_fonts::MissingFontsPrompt>,
+) {
+    let families = |prompt: Option<&op_editor_core::missing_fonts::MissingFontsPrompt>| {
+        prompt
+            .map(|p| {
+                p.entries
+                    .iter()
+                    .map(|e| e.family.to_lowercase())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    };
+    if families(state.editor_ui.missing_fonts_prompt.as_ref()) != families(next) {
+        state.editor_ui.missing_fonts_notice_dismissed = false;
+    }
 }
 
 /// Whether the settings modal is parked on its Fonts tab — that surface
@@ -174,6 +206,7 @@ pub fn settings_fonts_open(state: &EditorState) -> bool {
 /// one-shot modal (only when something is actually missing).
 pub fn replace_data(state: &mut EditorState, open_modal: bool) {
     let prompt = detect_missing_fonts(state);
+    reset_notice_for_changed_families(state, prompt.as_ref());
     let ui = &mut state.editor_ui;
     ui.missing_fonts_pending_detect = false;
     ui.missing_fonts_pending_open_modal = false;
@@ -187,8 +220,9 @@ pub fn replace_data(state: &mut EditorState, open_modal: bool) {
 /// Reconcile existing rows against the latest system/imported snapshots,
 /// preserving the per-row mismatch notes an import already produced.
 pub fn refresh_prompt(state: &mut EditorState) {
-    let previous = state.editor_ui.missing_fonts_prompt.take();
     let mut next = detect_missing_fonts(state);
+    reset_notice_for_changed_families(state, next.as_ref());
+    let previous = state.editor_ui.missing_fonts_prompt.take();
     if let (Some(previous), Some(next)) = (previous.as_ref(), next.as_mut()) {
         for entry in &mut next.entries {
             if let Some(old) = previous

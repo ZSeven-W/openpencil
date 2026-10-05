@@ -536,6 +536,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "รูปภาพ",
         "settings.tab.fonts" => "แบบอักษร",
         "settings.tab.system" => "ระบบ",
+        "missingFonts.fallbackNotice" => "ใช้แบบอักษรทดแทน",
+        "missingFonts.manage" => "แบบอักษร",
         "missingFonts.title" => "แบบอักษรที่ขาดหาย",
         "missingFonts.subtitle" => {
             "ยังไม่ได้ติดตั้งแบบอักษรเหล่านี้ ข้อความจึงแสดงด้วยแบบอักษรสำรอง"

@@ -553,6 +553,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "圖片",
         "settings.tab.fonts" => "字型",
         "settings.tab.system" => "系統",
+        "missingFonts.fallbackNotice" => "已使用替代字型顯示",
+        "missingFonts.manage" => "處理字型",
         "missingFonts.title" => "缺少字型",
         "missingFonts.subtitle" => "以下字型尚未安裝，文字目前會使用替代字型顯示。",
         "missingFonts.usage" => "{n} 處使用",

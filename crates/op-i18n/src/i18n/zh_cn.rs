@@ -582,6 +582,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "图片",
         "settings.tab.fonts" => "字体",
         "settings.tab.system" => "系统",
+        "missingFonts.fallbackNotice" => "已使用替代字体显示",
+        "missingFonts.manage" => "处理字体",
         "missingFonts.title" => "缺失字体",
         "missingFonts.subtitle" => "以下字体未安装,文本暂以回退字体渲染。",
         "missingFonts.usage" => "{n} 处使用",

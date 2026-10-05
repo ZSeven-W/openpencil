@@ -51,6 +51,15 @@ impl WidgetHost {
             self.mark_dirty();
             return Some(true);
         }
+        if op_editor_ui::widgets::missing_fonts_notice::press(
+            &mut self.editor_state,
+            Point2D::new(x, y),
+            viewport_width,
+            viewport_height,
+        ) {
+            self.mark_dirty();
+            return Some(true);
+        }
         // Post-import HTML diagnostics — a non-modal notice painted just
         // under the missing-font modal, so it hit-tests right after it. Only
         // presses inside its own card are consumed (native parity).

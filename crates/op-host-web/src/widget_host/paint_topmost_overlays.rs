@@ -30,6 +30,19 @@ impl WidgetHost {
             panel.paint(&mut cx, panel_rect);
         }
 
+        // The normal workspace keeps font fallback visible without blocking reading.
+        {
+            let mut cx = PaintCx {
+                backend: &mut *backend,
+            };
+            op_editor_ui::widgets::missing_fonts_notice::paint(
+                &mut cx,
+                &self.editor_state,
+                viewport_width,
+                viewport_height,
+            );
+        }
+
         // Transient notice banner — painted above every panel and the
         // diagnostics notice, but under the missing-font modal, so its press
         // tier sits in exactly the same place (hit-test is reverse paint

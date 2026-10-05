@@ -536,6 +536,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "छवियाँ",
         "settings.tab.fonts" => "फ़ॉन्ट",
         "settings.tab.system" => "सिस्टम",
+        "missingFonts.fallbackNotice" => "वैकल्पिक फ़ॉन्ट उपयोग में",
+        "missingFonts.manage" => "फ़ॉन्ट",
         "missingFonts.title" => "अनुपलब्ध फ़ॉन्ट",
         "missingFonts.subtitle" => "ये फ़ॉन्ट इंस्टॉल नहीं हैं; टेक्स्ट फ़ॉलबैक फ़ॉन्ट में दिखाया जा रहा है।",
         "missingFonts.usage" => "{n} जगह इस्तेमाल",

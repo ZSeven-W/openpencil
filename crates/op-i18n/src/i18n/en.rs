@@ -566,6 +566,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "Images",
         "settings.tab.fonts" => "Fonts",
         "settings.tab.system" => "System",
+        "missingFonts.fallbackNotice" => "Using substitute fonts",
+        "missingFonts.manage" => "Fonts",
         "missingFonts.title" => "Missing fonts",
         "missingFonts.subtitle" => {
             "These fonts are not installed; text renders with a fallback."

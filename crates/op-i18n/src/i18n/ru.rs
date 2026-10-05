@@ -536,6 +536,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "Изображения",
         "settings.tab.fonts" => "Шрифты",
         "settings.tab.system" => "Система",
+        "missingFonts.fallbackNotice" => "Используются замены шрифтов",
+        "missingFonts.manage" => "Шрифты",
         "missingFonts.title" => "Отсутствующие шрифты",
         "missingFonts.subtitle" => {
             "Эти шрифты не установлены, поэтому текст отображается запасным шрифтом."

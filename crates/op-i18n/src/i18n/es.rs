@@ -536,6 +536,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "Imágenes",
         "settings.tab.fonts" => "Fuentes",
         "settings.tab.system" => "Sistema",
+        "missingFonts.fallbackNotice" => "Usando fuentes alternativas",
+        "missingFonts.manage" => "Fuentes",
         "missingFonts.title" => "Fuentes que faltan",
         "missingFonts.subtitle" => {
             "Estas fuentes no están instaladas; el texto se muestra con una fuente alternativa."

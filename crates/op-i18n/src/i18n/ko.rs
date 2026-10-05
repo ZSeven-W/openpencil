@@ -536,6 +536,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "이미지",
         "settings.tab.fonts" => "글꼴",
         "settings.tab.system" => "시스템",
+        "missingFonts.fallbackNotice" => "대체 글꼴로 표시 중",
+        "missingFonts.manage" => "글꼴",
         "missingFonts.title" => "누락된 글꼴",
         "missingFonts.subtitle" => "이 글꼴이 설치되어 있지 않아 텍스트가 대체 글꼴로 표시됩니다.",
         "missingFonts.usage" => "{n}곳에서 사용",

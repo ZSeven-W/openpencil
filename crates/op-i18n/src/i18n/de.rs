@@ -536,6 +536,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "Bilder",
         "settings.tab.fonts" => "Schriftarten",
         "settings.tab.system" => "System",
+        "missingFonts.fallbackNotice" => "Ersatzschriften aktiv",
+        "missingFonts.manage" => "Schriften",
         "missingFonts.title" => "Fehlende Schriftarten",
         "missingFonts.subtitle" => {
             "Diese Schriftarten sind nicht installiert; Text wird mit einer Ersatzschrift dargestellt."

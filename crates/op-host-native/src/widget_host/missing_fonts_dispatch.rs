@@ -76,7 +76,7 @@ impl WidgetHostNative {
         }
         self.ensure_system_fonts_loaded();
         if self.editor_state.editor_ui.system_fonts_loaded {
-            fonts_flow::replace_data(&mut self.editor_state, true);
+            fonts_flow::detect_for_document(&mut self.editor_state);
             self.mark_dirty();
         }
     }

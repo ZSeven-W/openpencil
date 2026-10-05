@@ -536,6 +536,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "Gambar",
         "settings.tab.fonts" => "Font",
         "settings.tab.system" => "Sistem",
+        "missingFonts.fallbackNotice" => "Menggunakan font pengganti",
+        "missingFonts.manage" => "Font",
         "missingFonts.title" => "Font yang tidak tersedia",
         "missingFonts.subtitle" => "Font ini belum terpasang; teks ditampilkan dengan font pengganti.",
         "missingFonts.usage" => "Digunakan {n} kali",

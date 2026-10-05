@@ -536,6 +536,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "Images",
         "settings.tab.fonts" => "Polices",
         "settings.tab.system" => "Système",
+        "missingFonts.fallbackNotice" => "Polices de remplacement",
+        "missingFonts.manage" => "Polices",
         "missingFonts.title" => "Polices manquantes",
         "missingFonts.subtitle" => {
             "Ces polices ne sont pas installées ; le texte s’affiche avec une police de remplacement."

@@ -57,7 +57,7 @@ impl WidgetHost {
     /// queryLocalFonts path supplies the asynchronous system snapshot.
     pub fn arm_missing_fonts_detection(&mut self) {
         if self.editor_state.editor_ui.system_fonts_loaded {
-            fonts_flow::replace_data(&mut self.editor_state, true);
+            fonts_flow::detect_for_document(&mut self.editor_state);
             self.mark_dirty();
             return;
         }

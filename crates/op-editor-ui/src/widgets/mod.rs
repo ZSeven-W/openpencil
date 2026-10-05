@@ -402,6 +402,7 @@ pub mod login_modal;
 pub mod marquee_flow;
 pub(crate) mod menu_paint;
 pub mod missing_fonts_flow;
+pub mod missing_fonts_notice;
 pub mod missing_fonts_panel;
 pub mod mobile_chrome;
 #[cfg(test)]

@@ -536,6 +536,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "Görseller",
         "settings.tab.fonts" => "Yazı tipleri",
         "settings.tab.system" => "Sistem",
+        "missingFonts.fallbackNotice" => "Yedek yazı tipleri kullanılıyor",
+        "missingFonts.manage" => "Yazı tipi",
         "missingFonts.title" => "Eksik yazı tipleri",
         "missingFonts.subtitle" => {
             "Bu yazı tipleri yüklü değil; metin yedek bir yazı tipiyle görüntüleniyor."

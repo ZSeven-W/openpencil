@@ -174,6 +174,7 @@ impl Default for EditorUiState {
             missing_fonts_prompt: None,
             missing_fonts_modal_open: false,
             missing_fonts_scroll: jian_core::scroll::ScrollState::default(),
+            missing_fonts_notice_dismissed: false,
             missing_fonts_pending_detect: false,
             missing_fonts_pending_open_modal: false,
             missing_fonts_import_row: None,

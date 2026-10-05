@@ -536,6 +536,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "Hình ảnh",
         "settings.tab.fonts" => "Phông chữ",
         "settings.tab.system" => "Hệ thống",
+        "missingFonts.fallbackNotice" => "Đang dùng phông thay thế",
+        "missingFonts.manage" => "Phông chữ",
         "missingFonts.title" => "Phông chữ bị thiếu",
         "missingFonts.subtitle" => {
             "Các phông chữ này chưa được cài đặt; văn bản đang hiển thị bằng phông chữ thay thế."

@@ -33,8 +33,15 @@ pub fn toast_rect<'a>(
     now_ms: u64,
 ) -> Option<(EditorToast<'a>, Rect)> {
     let toast = EditorToast::for_editor(state, now_ms)?;
-    let canvas =
+    let mut canvas =
         crate::widgets::host_canvas_geometry::canvas_rect(state, viewport_width, viewport_height);
+    if let Some(rect) = crate::widgets::missing_fonts_notice::MissingFontsNotice::for_editor(state)
+        .and_then(|notice| notice.rect(viewport_width, viewport_height))
+    {
+        let occupied = rect.origin.y + rect.size.y + 8.0 - canvas.origin.y;
+        canvas.origin.y += occupied;
+        canvas.size.y = (canvas.size.y - occupied).max(0.0);
+    }
     let width = toast.width(cx);
     // The align toolbar owns the same strip when a multi-selection is up; the
     // banner stacks below it rather than over it.

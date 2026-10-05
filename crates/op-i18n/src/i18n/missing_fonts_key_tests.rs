@@ -2,9 +2,11 @@
 
 #[test]
 fn missing_fonts_keys_exist_in_every_locale_table() {
-    const KEYS: [&str; 11] = [
+    const KEYS: [&str; 13] = [
         "settings.tab.fonts",
         "missingFonts.title",
+        "missingFonts.fallbackNotice",
+        "missingFonts.manage",
         "missingFonts.subtitle",
         "missingFonts.usage",
         "missingFonts.chooseFile",

@@ -536,6 +536,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "settings.tab.images" => "画像",
         "settings.tab.fonts" => "フォント",
         "settings.tab.system" => "システム",
+        "missingFonts.fallbackNotice" => "代替フォントで表示中",
+        "missingFonts.manage" => "フォント",
         "missingFonts.title" => "不足しているフォント",
         "missingFonts.subtitle" => {
             "これらのフォントはインストールされていないため、テキストは代替フォントで表示されています。"

@@ -588,6 +588,8 @@ pub struct EditorUiState {
     /// Missing-font data shared by the one-shot prompt and Settings Fonts tab.
     /// `None` means no missing families have been detected.
     pub missing_fonts_prompt: Option<crate::missing_fonts::MissingFontsPrompt>,
+    /// The normal workspace's non-modal font notice was dismissed.
+    pub missing_fonts_notice_dismissed: bool,
     /// Whether the one-shot modal is visible. Dismissal keeps prompt data so
     /// the Settings Fonts tab can continue to expose unresolved rows.
     pub missing_fonts_modal_open: bool,
