@@ -376,9 +376,10 @@ pub use editor_ui_state::workspace::drawer::{
 pub use editor_ui_state::workspace::{
     clamp_variant_count, infer_reading_family, pick_workspace_variant, pin_home_brief_route,
     pin_workspace_retry_route, reader_is_paged, reads_as_long_page, use_workspace_variant,
-    variant_letter, variant_pick_commands, PageEditTarget, ReaderHit, WorkspaceHit, WorkspacePhase,
-    WorkspaceState, WorkspaceVariant, WorkspaceView, DEFAULT_VARIANT_COUNT, MAX_VARIANT_COUNT,
-    WORKSPACE_DECK_STRIP_H, WORKSPACE_ENTER_MS, WORKSPACE_HEADER_H, WORKSPACE_TOOLBAR_H,
+    variant_letter, variant_pick_commands, PageEditRetry, PageEditTarget, ReaderHit, WorkspaceHit,
+    WorkspacePhase, WorkspaceState, WorkspaceVariant, WorkspaceView, DEFAULT_VARIANT_COUNT,
+    MAX_VARIANT_COUNT, WORKSPACE_DECK_STRIP_H, WORKSPACE_ENTER_MS, WORKSPACE_HEADER_H,
+    WORKSPACE_TOOLBAR_H,
 };
 pub use editor_ui_state::{
     sanitize_share_text, MakeSameStage, ShareRecipe, SHARE_BRIEF_MAX_CHARS, SHARE_REDACTED,

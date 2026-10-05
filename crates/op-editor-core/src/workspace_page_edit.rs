@@ -21,6 +21,47 @@
 use crate::{EditorState, PageEditTarget, PenNodeExt};
 use jian_ops_schema::node::PenNode;
 
+/// Queue the original in-place edit, restoring its captured board even after
+/// paging elsewhere. A removed board or document swap never becomes generation.
+pub fn retry_page_edit(state: &mut EditorState) -> bool {
+    let workspace = &state.editor_ui.workspace;
+    if !workspace.active
+        || !matches!(
+            workspace.phase,
+            crate::WorkspacePhase::Failed | crate::WorkspacePhase::Stopped
+        )
+    {
+        return false;
+    }
+    let Some(retry) = workspace.page_edit_retry.clone() else {
+        return false;
+    };
+    let boards = crate::preview_slideshow::active_page_boards(state);
+    let Some(index) = boards.iter().position(|id| id == &retry.target.board_id) else {
+        return false;
+    };
+    if retry.instruction.trim().is_empty() {
+        return false;
+    }
+    state.editor_ui.workspace.selected = index;
+    state
+        .editor_ui
+        .workspace
+        .stage_page_edit(&retry.target.board_id, index);
+    state.selection.set.clear();
+    state
+        .selection
+        .set
+        .push(crate::NodeId::new(&retry.target.board_id));
+    state.chat.launch_route = crate::LaunchRoute::Auto;
+    state.chat.set_input_text(retry.instruction);
+    if !state.chat.begin_send() {
+        return false;
+    }
+    state.editor_ui.workspace.resume_generating(0);
+    true
+}
+
 /// The scoped user message for a page edit, or `None` when the bound
 /// board no longer exists on the active page (the caller then sends the
 /// instruction unscoped rather than naming a board that is gone).

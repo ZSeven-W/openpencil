@@ -324,10 +324,22 @@ impl WidgetHostNative {
         );
     }
 
-    /// Re-send the stored brief through the orchestrator route — the
-    /// same three-call pattern Home's send uses, without leaving the
-    /// workspace.
+    /// Retry a captured page edit in place; otherwise re-send the stored
+    /// generation brief through the same route Home uses.
     pub(in crate::widget_host) fn retry_workspace_brief(&mut self) {
+        if self
+            .editor_state
+            .editor_ui
+            .workspace
+            .page_edit_retry
+            .is_some()
+        {
+            if op_editor_core::workspace_page_edit::retry_page_edit(&mut self.editor_state) {
+                self.editor_state.chat.focused = false;
+                self.mark_dirty();
+            }
+            return;
+        }
         let workspace = &self.editor_state.editor_ui.workspace;
         let family = workspace.family;
         let brief = workspace.brief.trim().to_string();

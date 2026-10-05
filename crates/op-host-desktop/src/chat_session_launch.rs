@@ -122,6 +122,9 @@ fn launch_if_pending_inner(
     // briefs only finish on the orchestrator pipeline with
     // reasoning-budget models.
     let launch_route = std::mem::take(&mut host.editor_state_mut().chat.launch_route);
+    if launch_route != op_editor_core::LaunchRoute::Auto {
+        host.editor_state_mut().editor_ui.workspace.page_edit_retry = None;
+    }
     host.mark_editor_state_dirty();
     let effective_user_text = resolve_turn_user_text(host.editor_state(), &user_text);
     // A pinned refine edits the selected template draft in place, for

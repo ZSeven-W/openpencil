@@ -2,6 +2,26 @@
 use super::ai_chat_panel::ExampleCard;
 use op_editor_core::EditorState;
 
+/// Localize a provider failure for display, keeping the raw transcript intact.
+pub(crate) fn failure_copy(locale: op_i18n::Locale, content: &str) -> &str {
+    let Some(error) = content.trim_start().strip_prefix("error:") else {
+        return content;
+    };
+    let error = error.trim_start();
+    let lower = error.to_ascii_lowercase();
+    let rate_limited = lower.match_indices("http 429").any(|(offset, marker)| {
+        lower[offset + marker.len()..]
+            .chars()
+            .next()
+            .is_none_or(|ch| !ch.is_ascii_digit())
+    });
+    if rate_limited {
+        op_i18n::translate(locale, "ai.error.rateLimited")
+    } else {
+        error
+    }
+}
+
 pub(crate) struct WorkspaceCopy {
     pub hint: String,
     pub placeholder: String,

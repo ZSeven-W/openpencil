@@ -245,7 +245,7 @@ fn discovery_outcome(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{Read, Write};
+    use std::io::Write;
     use std::net::TcpListener;
     use std::time::Duration;
 
@@ -288,9 +288,11 @@ mod tests {
         let address = listener.local_addr().expect("local catalog address");
         let handle = std::thread::spawn(move || {
             let (mut stream, _) = listener.accept().expect("accept discovery request");
-            let mut request = [0_u8; 4096];
-            let length = stream.read(&mut request).expect("read discovery request");
-            let request = String::from_utf8_lossy(&request[..length]).into_owned();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .expect("fixture deadline");
+            let request = crate::test_http::read_request(&mut stream)
+                .expect("read complete discovery request");
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 body.len(),
@@ -338,7 +340,19 @@ mod tests {
         );
         let request = server.join().expect("catalog server exits");
         assert!(request.starts_with("GET /v1/models HTTP/1.1"));
-        assert!(request.contains("authorization: Bearer sk-mobile"));
+        let authorization = request.lines().find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            name.eq_ignore_ascii_case("authorization")
+                .then_some(value.trim())
+        });
+        assert!(
+            authorization == Some("Bearer sk-mobile"),
+            "fixture authorization mismatch; header names: {:?}",
+            request
+                .lines()
+                .filter_map(|line| line.split_once(':').map(|(name, _)| name))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]

@@ -26,6 +26,9 @@ fn workspace_keys_exist_in_every_locale_table() {
         "workspace.returnEdit",
         "workspace.backToWorkspace",
         "workspace.failed.note",
+        "workspace.editFailed",
+        "workspace.editFailed.note",
+        "ai.error.rateLimited",
     ];
     type Lookup = fn(&str) -> Option<&'static str>;
     let tables: [(&str, Lookup); 15] = [

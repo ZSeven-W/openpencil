@@ -280,3 +280,29 @@ fn the_reader_canvas_hides_selection_chrome_but_keeps_the_selection() {
     let canvas = crate::widgets::CanvasViewport::from_editor(&state, &scene);
     assert_eq!(canvas.selected_set, vec!["b1".to_string()]);
 }
+
+#[test]
+fn an_imported_work_offers_retry_for_the_failed_edit_without_a_generation_brief() {
+    let mut state = reading(HomeFamily::AppUi, 3, WorkspacePhase::Done);
+    state
+        .editor_ui
+        .workspace
+        .open_for_reading(HomeFamily::AppUi, 1);
+    state.editor_ui.workspace.selected = 2;
+    state.editor_ui.workspace.stage_page_edit("b2", 2);
+    op_editor_core::workspace_edit::begin_workspace_edit(
+        &mut state,
+        "change this page title to Coffee",
+    );
+    state.editor_ui.workspace.mark_failed(0);
+    let reader = WorksReader::for_editor(&state).unwrap();
+    assert_eq!(reader.status_action(), Some(ReaderHit::Retry));
+    assert!(state.editor_ui.workspace.brief.is_empty());
+    state.active_children_mut().pop();
+    let reader = WorksReader::for_editor(&state).unwrap();
+    assert_eq!(
+        reader.status_action(),
+        None,
+        "a deleted target is not replaced by regeneration"
+    );
+}

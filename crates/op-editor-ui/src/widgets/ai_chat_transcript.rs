@@ -12,7 +12,7 @@
 //! hit-test compute identical rects without sharing a backend.
 
 use crate::theme::Theme;
-use crate::widgets::ai_chat_workspace_copy::progress_label;
+use crate::widgets::ai_chat_workspace_copy::{failure_copy, progress_label};
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
@@ -212,7 +212,7 @@ pub(crate) fn build_item(
     let raw_visible_content = if is_user {
         msg.content.clone()
     } else {
-        let display_content = strip_tool_call_xml(&msg.content);
+        let display_content = strip_tool_call_xml(failure_copy(locale, &msg.content));
         let extracted = extract_step_blocks(&display_content, msg.streaming);
         progress_steps.extend(extracted.steps);
         extracted.visible_text

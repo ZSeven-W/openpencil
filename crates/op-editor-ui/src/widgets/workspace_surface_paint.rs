@@ -88,6 +88,14 @@ pub(crate) fn phase_key(phase: WorkspacePhase) -> &'static str {
     }
 }
 
+pub(crate) fn workspace_phase_key(state: &op_editor_core::WorkspaceState) -> &'static str {
+    if state.phase == WorkspacePhase::Failed && state.page_edit_retry.is_some() {
+        "workspace.editFailed"
+    } else {
+        phase_key(state.phase)
+    }
+}
+
 /// One family's short name through the shared `home.task.*` keys.
 pub(crate) fn family_label(locale: op_i18n::Locale, family: HomeFamily) -> &'static str {
     let key: &'static str = match family {
@@ -238,7 +246,7 @@ fn paint_header(
 
     // Title + subtitle.
     let title = crate::util::ellipsize_to_width(&surface.title, layout.title.size.x, |s| {
-        cx.backend.measure_text_family(s, 15.0, SANS)
+        super::super::text_metrics::measure_chrome_weighted(cx.backend, s, 15.0, 650)
     });
     text_weighted(
         cx,
@@ -249,7 +257,7 @@ fn paint_header(
         650,
     );
     let options = options_label(locale, surface.state.family, &surface.state.options);
-    let phase = tr(locale, phase_key(surface.state.phase));
+    let phase = tr(locale, workspace_phase_key(surface.state));
     let mut subtitle = family_label(locale, surface.state.family).to_string();
     if !options.is_empty() {
         subtitle.push_str(" · ");

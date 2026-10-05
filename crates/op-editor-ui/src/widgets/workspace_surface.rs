@@ -537,6 +537,9 @@ impl<'a> WorkspaceSurface<'a> {
         ) {
             return None;
         }
+        if !self.state.can_retry(&self.boards) {
+            return None;
+        }
         let cy = layout.canvas.origin.y + 28.0;
         let cx = layout.canvas.origin.x + layout.canvas.size.x / 2.0;
         Some((
@@ -740,7 +743,7 @@ impl Widget for WorkspaceSurface<'_> {
 
 #[path = "workspace_surface_paint.rs"]
 mod paint;
-pub(crate) use paint::{family_label, phase_key};
+pub(crate) use paint::{family_label, workspace_phase_key};
 
 #[path = "workspace_surface_banner.rs"]
 mod banner;

@@ -52,6 +52,13 @@ pub struct PageEditTarget {
     pub index: usize,
 }
 
+/// An in-place edit retained for manual retry, independent of reader position.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PageEditRetry {
+    pub target: PageEditTarget,
+    pub instruction: String,
+}
+
 impl PageEditTarget {
     /// One-based page number for user-facing copy.
     pub fn page_number(&self) -> usize {
@@ -125,6 +132,7 @@ impl WorkspaceState {
         self.fitted_bounds = None;
         self.page_edit = None;
         self.page_edit_running = None;
+        self.page_edit_retry = None;
         self.reader_pressed = None;
     }
 
@@ -148,6 +156,16 @@ impl WorkspaceState {
         let target = self.page_edit.take()?;
         self.page_edit_running = Some(target.clone());
         Some(target)
+    }
+
+    /// Retry a retained edit when its original board still belongs to this work.
+    pub fn can_retry(&self, boards: &[String]) -> bool {
+        match &self.page_edit_retry {
+            Some(retry) => {
+                !retry.instruction.trim().is_empty() && boards.contains(&retry.target.board_id)
+            }
+            None => !self.brief.trim().is_empty(),
+        }
     }
 }
 

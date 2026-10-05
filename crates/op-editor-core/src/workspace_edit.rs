@@ -11,6 +11,25 @@ pub enum WorkspaceEditScope {
     NeedsTarget,
 }
 
+/// Capture this request before a host launches it, including failures to launch.
+/// A later send replaces the retry intent; the generation brief stays intact.
+pub fn begin_workspace_edit(state: &mut EditorState, instruction: &str) -> WorkspaceEditScope {
+    let scope = resolve_workspace_edit_scope(state, instruction);
+    let workspace = &mut state.editor_ui.workspace;
+    workspace.page_edit_retry = None;
+    workspace.page_edit_running = None;
+    if let WorkspaceEditScope::Target(target) = &scope {
+        workspace.selected = target.index;
+        workspace.page_edit_retry = Some(crate::PageEditRetry {
+            target: target.clone(),
+            instruction: instruction.to_string(),
+        });
+        workspace.page_edit_running = Some(target.clone());
+        workspace.resume_generating(0);
+    }
+    scope
+}
+
 /// Replacement copy is data, not an instruction or a second board reference.
 fn routing_text(text: &str) -> String {
     let mut result = String::new();

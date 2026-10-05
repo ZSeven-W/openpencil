@@ -24,7 +24,8 @@ use super::{EditorUiState, EntrySurface, LeftPanelTab};
 use crate::quality_report::QualityReport;
 use crate::tool::Tool;
 pub use reader::{
-    infer_reading_family, reader_is_paged, reads_as_long_page, PageEditTarget, ReaderHit,
+    infer_reading_family, reader_is_paged, reads_as_long_page, PageEditRetry, PageEditTarget,
+    ReaderHit,
 };
 pub use variants::{
     clamp_variant_count, pick_workspace_variant, pin_home_brief_route, pin_workspace_retry_route,
@@ -199,6 +200,8 @@ pub struct WorkspaceState {
     /// The board the running follow-up turn is bound to. Set when the
     /// staged edit launches; cleared when that run settles.
     pub page_edit_running: Option<PageEditTarget>,
+    /// Original instruction and board for retry; never the generation brief.
+    pub page_edit_retry: Option<PageEditRetry>,
     /// Pressed feedback for the phone reader's chrome.
     pub reader_pressed: Option<ReaderHit>,
     /// Directions a variants run asked for; `0` = an ordinary run.
@@ -246,6 +249,7 @@ impl Default for WorkspaceState {
             draft_awaiting_refine: false,
             page_edit: None,
             page_edit_running: None,
+            page_edit_retry: None,
             reader_pressed: None,
             variant_count: 0,
             variants: Vec::new(),
@@ -291,6 +295,7 @@ impl WorkspaceState {
         self.draft_awaiting_refine = false;
         self.page_edit = None;
         self.page_edit_running = None;
+        self.page_edit_retry = None;
         self.reader_pressed = None;
         self.clear_variants();
         // A new run in a narrow window gives the design the width; the
@@ -381,6 +386,7 @@ impl WorkspaceState {
         }
         self.phase = WorkspacePhase::Done;
         self.page_edit_running = None;
+        self.page_edit_retry = None;
         true
     }
 
@@ -489,6 +495,7 @@ impl WorkspaceState {
         self.draft_awaiting_refine = false;
         self.page_edit = None;
         self.page_edit_running = None;
+        self.page_edit_retry = None;
         self.reader_pressed = None;
         self.clear_variants();
         self.drawer_open = false;

@@ -40,6 +40,7 @@ pub(crate) fn scope_launch(
     let state = host.editor_state_mut();
     use op_chat_agent::workspace_edit::{self, WorkspaceEditScope};
     if route.forces_in_place_refine() {
+        state.editor_ui.workspace.page_edit_retry = None;
         let boards = op_editor_core::preview_slideshow::active_page_boards(state);
         let ids: Vec<String> = state
             .selection
@@ -55,7 +56,7 @@ pub(crate) fn scope_launch(
             error: (!valid).then(|| workspace_edit::scope_unavailable_message(state.editor_ui.locale)),
         };
     }
-    let target = match workspace_edit::resolve_workspace_edit_scope(state, user_text) {
+    let target = match workspace_edit::begin_workspace_edit(state, user_text) {
         WorkspaceEditScope::Target(target) => target,
         WorkspaceEditScope::NotApplicable => {
             state.editor_ui.workspace.clear_staged_page_edit();

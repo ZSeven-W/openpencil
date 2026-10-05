@@ -141,7 +141,15 @@ pub(crate) fn drain_chat_flags<C: RepaintContext + 'static>(inner: &Rc<RefCell<C
         // Bind a run to the tab it starts on BEFORE launching (the active tab
         // is the sending tab at this point).
         let active = state.chat.active_index();
-        prepare_turn(state).inspect(|_| RUNNING_TAB.with(|t| t.set(Some(active))))
+        let had_pending = state.chat.pending_send.is_some();
+        let prepared = prepare_turn(state);
+        let consumed_without_launch =
+            had_pending && state.chat.pending_send.is_none() && prepared.is_none();
+        if consumed_without_launch {
+            b.host_mut().mark_editor_state_dirty();
+            let _ = b.repaint();
+        }
+        prepared.inspect(|_| RUNNING_TAB.with(|t| t.set(Some(active))))
     };
     if let Some(prepared) = prepared {
         launch_turn(inner, prepared);
@@ -325,6 +333,25 @@ pub(crate) fn prepare_turn(state: &mut EditorState) -> Option<PreparedTurn> {
     // A pinned route (Studio Home brief / draft refine) travels with the
     // turn and is consumed by it, like the desktop launcher's drain.
     let route = std::mem::take(&mut state.chat.launch_route);
+    if route == op_editor_core::LaunchRoute::Auto {
+        let scope = op_editor_core::workspace_edit::begin_workspace_edit(state, &user_text);
+        state.editor_ui.workspace.clear_staged_page_edit();
+        if scope == op_editor_core::workspace_edit::WorkspaceEditScope::NeedsTarget {
+            if let Some(message) = state.chat.messages.last_mut() {
+                message.content = format!(
+                    "error: {}",
+                    op_editor_core::workspace_edit::scope_unavailable_message(
+                        state.editor_ui.locale
+                    )
+                );
+                message.streaming = false;
+            }
+            state.chat.pending_attachments.clear();
+            return None;
+        }
+    } else {
+        state.editor_ui.workspace.page_edit_retry = None;
+    }
     let launch_route = match route {
         op_editor_core::LaunchRoute::Auto => None,
         op_editor_core::LaunchRoute::Orchestrator => Some("orchestrator"),

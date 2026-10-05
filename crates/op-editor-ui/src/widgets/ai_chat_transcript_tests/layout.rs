@@ -214,3 +214,19 @@ fn tight_final_turn_pins_completion_and_scrolls_to_reveal_prompt() {
         "prompt sits at the top when scrolled up"
     );
 }
+
+#[test]
+fn rate_limit_copy_is_localized_in_layout_without_rewriting_raw_error_history() {
+    let raw = "error: openai-compatible http 429";
+    let message = ChatMessage::assistant(raw);
+    for locale in [op_editor_core::Locale::ZhCn, op_editor_core::Locale::EnUs] {
+        let (item, _) = build_item(&message, 0, 0.0, body(), locale);
+        let displayed = item.bubble.unwrap().lines.concat();
+        let expected = op_i18n::translate(locale, "ai.error.rateLimited");
+        assert_eq!(displayed.replace(' ', ""), expected.replace(' ', ""));
+        assert_eq!(message.content, raw);
+    }
+    let user = ChatMessage::user(raw);
+    let (item, _) = build_item(&user, 0, 0.0, body(), op_editor_core::Locale::ZhCn);
+    assert!(item.bubble.unwrap().lines.concat().contains("error:"));
+}

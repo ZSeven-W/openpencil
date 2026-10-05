@@ -113,3 +113,88 @@ fn a_well_behaved_turn_is_left_alone() {
     assert!(!restore_other_boards(&mut state, &before, "s2"));
     assert_eq!(state.document_revision(), revision);
 }
+
+#[test]
+fn failed_edit_retries_its_original_instruction_and_board_without_replacing_the_work() {
+    let mut state = deck();
+    state
+        .editor_ui
+        .workspace
+        .open_for_reading(crate::HomeFamily::Presentation, 1);
+    state.editor_ui.workspace.brief = "old generation brief".into();
+    state.editor_ui.workspace.selected = 2;
+    state.editor_ui.workspace.stage_page_edit("s3", 2);
+    let instruction =
+        "change the title on this page to checked tutorial keep everything else unchanged";
+    assert!(matches!(
+        crate::workspace_edit::begin_workspace_edit(&mut state, instruction),
+        crate::workspace_edit::WorkspaceEditScope::Target(_)
+    ));
+    state.editor_ui.workspace.clear_staged_page_edit();
+    state.editor_ui.workspace.resume_generating(7);
+    assert!(state.editor_ui.workspace.mark_failed(7));
+    state.editor_ui.workspace.selected = 0;
+    let before = state.doc.clone();
+    assert!(retry_page_edit(&mut state));
+    assert_eq!(state.doc, before);
+    assert_eq!(state.chat.pending_send.as_deref(), Some(instruction));
+    assert_eq!(state.chat.launch_route, crate::LaunchRoute::Auto);
+    assert_eq!(state.editor_ui.workspace.brief, "old generation brief");
+    assert_eq!(state.editor_ui.workspace.selected, 2);
+    assert_eq!(
+        state
+            .editor_ui
+            .workspace
+            .page_edit
+            .as_ref()
+            .unwrap()
+            .board_id,
+        "s3"
+    );
+}
+
+#[test]
+fn a_removed_retry_target_cannot_fall_back_to_the_old_generation_brief() {
+    let mut state = deck();
+    state
+        .editor_ui
+        .workspace
+        .open_for_reading(crate::HomeFamily::Presentation, 1);
+    state.editor_ui.workspace.brief = "generate another work".into();
+    state.editor_ui.workspace.selected = 2;
+    state.editor_ui.workspace.stage_page_edit("s3", 2);
+    crate::workspace_edit::begin_workspace_edit(&mut state, "change this page title to coffee");
+    state.editor_ui.workspace.mark_failed(0);
+    state.active_children_mut().pop();
+    let before = state.doc.clone();
+    assert!(!retry_page_edit(&mut state));
+    assert!(state.chat.pending_send.is_none());
+    assert_eq!(state.doc, before);
+    assert!(!state
+        .editor_ui
+        .workspace
+        .can_retry(&crate::preview_slideshow::active_page_boards(&state)));
+}
+
+#[test]
+fn completed_edits_and_new_documents_forget_the_retry_intent() {
+    let mut state = deck();
+    state
+        .editor_ui
+        .workspace
+        .open_for_reading(crate::HomeFamily::Presentation, 1);
+    state.editor_ui.workspace.selected = 1;
+    state.editor_ui.workspace.stage_page_edit("s2", 1);
+    crate::workspace_edit::begin_workspace_edit(&mut state, "change this page title to coffee");
+    state.editor_ui.workspace.resume_generating(8);
+    assert!(!state.editor_ui.workspace.mark_done(7));
+    assert!(state.editor_ui.workspace.page_edit_retry.is_some());
+    assert!(state.editor_ui.workspace.mark_done(8));
+    assert!(state.editor_ui.workspace.page_edit_retry.is_none());
+    state.editor_ui.workspace.selected = 1;
+    state.editor_ui.workspace.stage_page_edit("s2", 1);
+    crate::workspace_edit::begin_workspace_edit(&mut state, "change this page title to coffee");
+    state.editor_ui.workspace.reset_for_new_document();
+    assert!(state.editor_ui.workspace.page_edit_retry.is_none());
+    assert!(!retry_page_edit(&mut state));
+}

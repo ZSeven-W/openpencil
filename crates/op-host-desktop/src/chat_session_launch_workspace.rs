@@ -16,7 +16,7 @@ pub(super) fn launch_workspace_edit(
         return false;
     }
     let missing_target =
-        match workspace_edit::resolve_workspace_edit_scope(host.editor_state(), user_text) {
+        match workspace_edit::begin_workspace_edit(host.editor_state_mut(), user_text) {
             WorkspaceEditScope::NotApplicable => return false,
             WorkspaceEditScope::Target(_) => {
                 if super::launch_direct_modify_turn(
@@ -47,11 +47,14 @@ pub(super) fn launch_workspace_edit(
         op_i18n::translate(state.editor_ui.locale, "workspace.draft.refineUnavailable")
     };
     if let Some(message) = state.chat.messages.last_mut() {
-        message.content = note.to_string();
+        message.content = format!("error: {note}");
         message.streaming = false;
     }
     state.chat.pending_attachments.clear();
     state.editor_ui.workspace.clear_staged_page_edit();
+    if state.editor_ui.workspace.page_edit_retry.is_some() {
+        state.editor_ui.workspace.mark_failed(0);
+    }
     host.mark_editor_state_dirty();
     true
 }

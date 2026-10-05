@@ -311,6 +311,7 @@ fn failed_phase_surfaces_the_banner_buttons() {
     editor.editor_ui.workspace = op_editor_core::WorkspaceState {
         visible: true,
         active: true,
+        brief: "A three-page presentation".into(),
         phase: WorkspacePhase::Failed,
         ..op_editor_core::WorkspaceState::default()
     };
@@ -472,6 +473,7 @@ fn stopped_phase_offers_retry_too() {
     editor.editor_ui.workspace = op_editor_core::WorkspaceState {
         visible: true,
         active: true,
+        brief: "A three-page presentation".into(),
         phase: WorkspacePhase::Stopped,
         ..op_editor_core::WorkspaceState::default()
     };

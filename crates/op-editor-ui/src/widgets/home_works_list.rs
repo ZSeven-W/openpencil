@@ -50,7 +50,7 @@ impl CurrentWork {
                 super::super::workspace_surface::family_label(locale, workspace.family),
                 op_i18n::translate(
                     locale,
-                    super::super::workspace_surface::phase_key(workspace.phase)
+                    super::super::workspace_surface::workspace_phase_key(workspace)
                 )
             );
             return Some(Self { title, subtitle });

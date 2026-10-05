@@ -7,7 +7,7 @@ use super::*;
 use crate::editor_chat::MobileChatHost;
 use op_editor_core::size_class::EditorSizeClass;
 use op_editor_core::{BuiltinAgentKind, HomeFamily, PenNodeExt};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -76,33 +76,12 @@ fn spawn_server(responses: Vec<String>) -> (String, Arc<Mutex<Vec<String>>>) {
             let Ok((mut stream, _)) = listener.accept() else {
                 return;
             };
-            let mut raw = Vec::new();
-            let mut chunk = [0_u8; 8192];
-            loop {
-                let Ok(n) = stream.read(&mut chunk) else {
-                    return;
-                };
-                raw.extend_from_slice(&chunk[..n]);
-                let text = String::from_utf8_lossy(&raw);
-                let complete = text.find("\r\n\r\n").is_some_and(|end| {
-                    let length = text
-                        .lines()
-                        .find_map(|line| {
-                            let (name, value) = line.split_once(':')?;
-                            name.eq_ignore_ascii_case("content-length")
-                                .then(|| value.trim().parse::<usize>().ok())?
-                        })
-                        .unwrap_or(0);
-                    raw.len() >= end + 4 + length
-                });
-                if n == 0 || complete {
-                    break;
-                }
-            }
-            requests
-                .lock()
-                .expect("log")
-                .push(String::from_utf8_lossy(&raw).into_owned());
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .expect("fixture deadline");
+            let raw =
+                crate::test_http::read_request(&mut stream).expect("complete fixture request");
+            requests.lock().expect("log").push(raw);
             let _ = stream.write_all(response.as_bytes());
         }
     });
@@ -390,4 +369,73 @@ fn a_tablet_run_through_the_chat_pump_settles_in_the_tablet_reader() {
             layout.stage.size.y
         )
     );
+}
+
+#[test]
+fn a_rate_limited_edit_retry_keeps_its_original_page_and_changes_only_the_requested_copy() {
+    let title = serde_json::json!({"type":"text","id":"retry-title","name":"Action title","content":"原标题","x":24,"y":80,"width":340,"fontSize":28,"fontWeight":"700"});
+    let mut edited = title.clone();
+    edited["content"] = serde_json::json!("checked tutorial");
+    let response = sse(&[
+        serde_json::json!({"choices":[{"delta":{"content":format!("I(null,{});", edited)}}]})
+            .to_string(),
+        r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#.into(),
+        "[DONE]".into(),
+    ]);
+    let (base_url, requests) = spawn_server(vec![
+        "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".into(),
+        response,
+    ]);
+    let mut host = phone_deck(&base_url);
+    let state = host.editor_state_mut();
+    state.active_children_mut()[2]
+        .children_mut()
+        .unwrap()
+        .push(serde_json::from_value(title).unwrap());
+    let before = state.doc.clone();
+    let mut expected = before.clone();
+    expected.children[2].children_mut().unwrap()[0] = serde_json::from_value(edited).unwrap();
+    state.editor_ui.workspace.selected = 2;
+    state.editor_ui.workspace.stage_page_edit("b2", 2);
+    let instruction = "change only the action title on this page to checked tutorial keep everything else unchanged";
+    send(&mut host, instruction);
+    let mut chat = MobileChatHost::default();
+    pump_to_completion(&mut chat, &mut host);
+    assert_eq!(host.editor_state().doc, before);
+    assert_eq!(
+        host.editor_state().editor_ui.workspace.phase,
+        WorkspacePhase::Failed
+    );
+    let reader = op_editor_ui::widgets::WorksReader::for_editor(host.editor_state()).unwrap();
+    assert_eq!(
+        reader.status_action(),
+        Some(op_editor_core::ReaderHit::Retry)
+    );
+    host.editor_state_mut().editor_ui.workspace.selected = 0;
+    assert!(op_editor_core::workspace_page_edit::retry_page_edit(
+        host.editor_state_mut()
+    ));
+    pump_to_completion(&mut chat, &mut host);
+    assert_eq!(host.editor_state().doc, expected);
+    assert_eq!(
+        host.editor_state().editor_ui.workspace.phase,
+        WorkspacePhase::Done
+    );
+    assert!(host
+        .editor_state()
+        .editor_ui
+        .workspace
+        .page_edit_retry
+        .is_none());
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 2);
+    for request in requests.iter() {
+        let body: serde_json::Value =
+            serde_json::from_str(request.split_once("\r\n\r\n").unwrap().1).unwrap();
+        assert_eq!(body["model"], "glm-5.3-flash");
+        let prompt = body["messages"].as_array().unwrap().last().unwrap()["content"]
+            .as_str()
+            .unwrap();
+        assert!(prompt.ends_with(instruction));
+    }
 }

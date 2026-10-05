@@ -602,3 +602,6 @@ mod tests {
         assert!(storage < configure);
     }
 }
+
+#[cfg(test)]
+mod test_http;

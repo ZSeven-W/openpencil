@@ -128,6 +128,8 @@ fn paint_failed_banner(
     let locale = surface.ui.locale;
     let note = if surface.state.phase == WorkspacePhase::Stopped {
         "workspace.phase.stopped"
+    } else if surface.state.page_edit_retry.is_some() {
+        "workspace.editFailed.note"
     } else {
         "workspace.failed.note"
     };

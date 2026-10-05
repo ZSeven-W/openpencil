@@ -376,13 +376,13 @@ impl<'a> WorksReader<'a> {
 
     /// The status row's action for the current phase: Stop while a run
     /// is live, Retry once it failed or was stopped, readable detail when done.
-    /// Retry re-sends the stored brief, so a work opened for reading (no
-    /// brief) offers none rather than a button that cannot do anything.
+    /// Retry replays a captured edit, or the original generation brief. An
+    /// imported work offers retry after a scoped edit, never an empty action.
     pub fn status_action(&self) -> Option<ReaderHit> {
         match self.state.phase {
             WorkspacePhase::Generating => Some(ReaderHit::Stop),
             WorkspacePhase::Failed | WorkspacePhase::Stopped
-                if !self.state.brief.trim().is_empty() =>
+                if self.state.can_retry(&self.boards) =>
             {
                 Some(ReaderHit::Retry)
             }

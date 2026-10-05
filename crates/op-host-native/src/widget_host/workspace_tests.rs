@@ -418,3 +418,37 @@ fn touch_chrome_never_shows_the_pointer_workspace() {
         "touch hosts keep their own chrome until the phone reader exists"
     );
 }
+
+#[test]
+fn retrying_a_stopped_page_edit_keeps_the_document_and_uses_the_edit_route() {
+    let mut host = host_with_boards(HomeFamily::Presentation, 3);
+    let state = host.editor_state_mut();
+    state.editor_ui.workspace.selected = 2;
+    state.editor_ui.workspace.stage_page_edit("board-2", 2);
+    let instruction =
+        "change the title on this page to checked tutorial keep everything else unchanged";
+    op_editor_core::workspace_edit::begin_workspace_edit(state, instruction);
+    state.editor_ui.workspace.clear_staged_page_edit();
+    state.editor_ui.workspace.mark_stopped(0);
+    state.editor_ui.workspace.selected = 0;
+    let before = state.doc.clone();
+    host.retry_workspace_brief();
+    let state = host.editor_state();
+    assert_eq!(
+        state.doc, before,
+        "no fresh document on a stopped edit retry"
+    );
+    assert_eq!(state.chat.pending_send.as_deref(), Some(instruction));
+    assert_eq!(state.chat.launch_route, op_editor_core::LaunchRoute::Auto);
+    assert_eq!(state.editor_ui.workspace.selected, 2);
+    assert_eq!(
+        state
+            .editor_ui
+            .workspace
+            .page_edit
+            .as_ref()
+            .unwrap()
+            .board_id,
+        "board-2"
+    );
+}

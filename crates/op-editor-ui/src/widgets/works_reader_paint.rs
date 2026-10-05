@@ -7,7 +7,7 @@
 use super::{ReaderLayout, WorksReader};
 use crate::widgets::home_surface::StudioPalette;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::workspace_surface::{family_label, phase_key};
+use crate::widgets::workspace_surface::{family_label, workspace_phase_key};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
 use op_editor_core::{ReaderHit, WorkspacePhase};
@@ -148,7 +148,7 @@ fn paint_header(
     let subtitle = format!(
         "{} · {}",
         family_label(locale, reader.state.family),
-        op_i18n::translate(locale, phase_key(reader.state.phase))
+        op_i18n::translate(locale, workspace_phase_key(reader.state))
     );
     let subtitle = fit_text(cx, &subtitle, 11.0, layout.title.size.x, 500);
     text_weighted(
@@ -403,7 +403,7 @@ pub(super) fn paint_status_line(
             op_i18n::translate(locale, "reader.editingPage")
                 .replace("{{page}}", &target.page_number().to_string())
         }
-        _ => op_i18n::translate(locale, phase_key(phase)).to_string(),
+        _ => op_i18n::translate(locale, workspace_phase_key(reader.state)).to_string(),
     };
     let text_x = content_x + 24.0;
     let right = layout
