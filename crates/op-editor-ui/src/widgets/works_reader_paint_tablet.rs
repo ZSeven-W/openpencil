@@ -6,7 +6,7 @@
 use super::super::{thumb_plate, ReaderForm, ReaderLayout, WorksReader, THUMB_LABEL_H};
 use super::{
     centered_label, fade, fit_text, inset, paint_actions, paint_arrows, paint_bar_background,
-    paint_status_line, text_weighted, SANS,
+    paint_status_line, text_weighted,
 };
 use crate::widgets::home_surface::StudioPalette;
 use crate::widgets::PaintCx;
@@ -125,7 +125,7 @@ fn paint_side_panel(
             let eyebrow = op_i18n::translate(locale, "reader.pageOf")
                 .replace("{{page}}", &(reader.current_index() + 1).to_string())
                 .replace("{{count}}", &count.to_string());
-            let eyebrow = fit_text(cx, &eyebrow, 12.0, info.size.x);
+            let eyebrow = fit_text(cx, &eyebrow, 12.0, info.size.x, 600);
             text_weighted(
                 cx,
                 &eyebrow,
@@ -136,7 +136,7 @@ fn paint_side_panel(
             );
         }
         let name = reader.current_name.as_deref().unwrap_or(&reader.title);
-        let name = fit_text(cx, name, 18.0, info.size.x);
+        let name = fit_text(cx, name, 18.0, info.size.x, 680);
         text_weighted(
             cx,
             &name,
@@ -225,7 +225,11 @@ fn wrap_lines(
         for ch in paragraph.chars() {
             let mut candidate = line.clone();
             candidate.push(ch);
-            if line.is_empty() || cx.backend.measure_text_family(&candidate, size, SANS) <= max_w {
+            if line.is_empty()
+                || super::super::super::text_metrics::measure_chrome_weighted(
+                    cx.backend, &candidate, size, 450,
+                ) <= max_w
+            {
                 line = candidate;
                 continue;
             }
@@ -261,7 +265,7 @@ fn wrap_lines(
     }
     if cut {
         if let Some(last) = lines.last_mut() {
-            *last = fit_text(cx, &format!("{last}…"), size, max_w);
+            *last = fit_text(cx, &format!("{last}…"), size, max_w, 450);
         }
     }
     lines

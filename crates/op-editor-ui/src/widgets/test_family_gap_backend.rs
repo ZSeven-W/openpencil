@@ -51,9 +51,6 @@ pub(crate) struct PaintedRun {
     pub(crate) text: String,
     pub(crate) family: String,
     pub(crate) font_size: f32,
-    /// Captured so a future guard can measure a weighted run in its own
-    /// face; the width model here is weight-independent.
-    #[allow(dead_code)]
     pub(crate) font_weight: u16,
     /// Origin passed to `draw_text` — x is the run's left edge.
     pub(crate) origin: Point2D,
@@ -63,6 +60,7 @@ pub(crate) struct PaintedRun {
     pub(crate) clip: Option<Rect>,
     /// Advance ratio the painting backend charges a named family.
     painted_ascii_ratio: f32,
+    weight_gap: f32,
 }
 
 impl PaintedRun {
@@ -73,7 +71,7 @@ impl PaintedRun {
         } else {
             self.painted_ascii_ratio
         };
-        width(&self.text, self.font_size, ratio)
+        width(&self.text, self.font_size, ratio) * weight_factor(self.font_weight, self.weight_gap)
     }
 
     /// Right edge of the painted run.
@@ -103,6 +101,7 @@ pub(crate) struct FamilyGapBackend {
     /// real machine; `BLIND_ASCII_RATIO` is the control where the two faces
     /// agree, which is what every other test backend models.
     family_ascii_ratio: f32,
+    weight_gap: f32,
 }
 
 impl Default for FamilyGapBackend {
@@ -111,11 +110,20 @@ impl Default for FamilyGapBackend {
             runs: Vec::new(),
             clip_stack: vec![None],
             family_ascii_ratio: FAMILY_ASCII_RATIO,
+            weight_gap: 0.0,
         }
     }
 }
 
 impl FamilyGapBackend {
+    /// Model a wider bold face while leaving regular-family metrics intact.
+    pub(crate) fn weighted() -> Self {
+        Self {
+            weight_gap: 0.001,
+            ..Self::default()
+        }
+    }
+
     /// The control: named families measure exactly like the default face, so
     /// nothing a family-aware fitter does can change the outcome. Paint a
     /// panel into this and into [`Self::default`] and diff — see
@@ -156,6 +164,7 @@ impl RenderBackend for FamilyGapBackend {
                 origin: Point2D::new(point.x + run.origin.x, point.y + run.origin.y),
                 clip: self.clip(),
                 painted_ascii_ratio: self.family_ascii_ratio,
+                weight_gap: self.weight_gap,
             });
         }
     }
@@ -183,6 +192,16 @@ impl RenderBackend for FamilyGapBackend {
         };
         width(text, font_size, ratio)
     }
+    fn measure_text_family_styled(
+        &mut self,
+        text: &str,
+        font_size: f32,
+        family: &str,
+        weight: u16,
+        _: bool,
+    ) -> f32 {
+        self.measure_text_family(text, font_size, family) * weight_factor(weight, self.weight_gap)
+    }
     fn save(&mut self) {
         self.clip_stack.push(self.clip());
     }
@@ -196,6 +215,10 @@ impl RenderBackend for FamilyGapBackend {
     fn dpi_scale(&self) -> f32 {
         1.0
     }
+}
+
+fn weight_factor(weight: u16, gap: f32) -> f32 {
+    1.0 + weight.saturating_sub(400) as f32 * gap
 }
 
 /// Horizontal intersection of two clips. Only x matters here — every guard

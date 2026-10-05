@@ -38,19 +38,25 @@ pub(super) fn fade(color: Color, factor: f32) -> Color {
 }
 
 /// Cut `content` (by whole chars, with an ellipsis) until it fits `max_w`.
-pub(super) fn fit_text(cx: &mut PaintCx<'_>, content: &str, size: f32, max_w: f32) -> String {
-    if cx.backend.measure_text_family(content, size, SANS) <= max_w {
+pub(super) fn fit_text(
+    cx: &mut PaintCx<'_>,
+    content: &str,
+    size: f32,
+    max_w: f32,
+    weight: u16,
+) -> String {
+    if super::super::text_metrics::measure_chrome_weighted(cx.backend, content, size, weight)
+        <= max_w
+    {
         return content.to_string();
     }
-    let mut chars: Vec<char> = content.chars().collect();
-    while !chars.is_empty() {
-        chars.pop();
-        let candidate: String = chars.iter().collect::<String>() + "…";
-        if cx.backend.measure_text_family(&candidate, size, SANS) <= max_w {
-            return candidate;
-        }
+    if super::super::text_metrics::measure_chrome_weighted(cx.backend, "…", size, weight) > max_w
+    {
+        return String::new();
     }
-    String::new()
+    crate::util::ellipsize_to_width(content, max_w, |candidate| {
+        super::super::text_metrics::measure_chrome_weighted(cx.backend, candidate, size, weight)
+    })
 }
 
 /// A label centred in `rect` on its baseline.
@@ -62,7 +68,7 @@ pub(super) fn centered_label(
     color: Color,
     weight: u16,
 ) {
-    let w = cx.backend.measure_text_family(label, size, SANS);
+    let w = super::super::text_metrics::measure_chrome_weighted(cx.backend, label, size, weight);
     text_weighted(
         cx,
         label,
@@ -130,7 +136,7 @@ fn paint_header(
     );
 
     // Title over "family · phase".
-    let title = fit_text(cx, &reader.title, 15.0, layout.title.size.x);
+    let title = fit_text(cx, &reader.title, 15.0, layout.title.size.x, 650);
     text_weighted(
         cx,
         &title,
@@ -144,7 +150,7 @@ fn paint_header(
         family_label(locale, reader.state.family),
         op_i18n::translate(locale, phase_key(reader.state.phase))
     );
-    let subtitle = fit_text(cx, &subtitle, 11.0, layout.title.size.x);
+    let subtitle = fit_text(cx, &subtitle, 11.0, layout.title.size.x, 500);
     text_weighted(
         cx,
         &subtitle,
@@ -167,6 +173,7 @@ fn paint_header(
         op_i18n::translate(locale, "home.mode.normal"),
         12.0,
         layout.mode_normal.size.x - 12.0,
+        600,
     );
     centered_label(
         cx,
@@ -186,6 +193,7 @@ fn paint_header(
         op_i18n::translate(locale, "home.mode.professional"),
         12.0,
         layout.mode_professional.size.x - 12.0,
+        500,
     );
     centered_label(
         cx,
@@ -289,7 +297,7 @@ fn paint_empty_stage(
     );
     cx.backend.fill_round_rect(band, 14.0, palette.panel);
     cx.backend.stroke_round_rect(band, 14.0, palette.line, 1.0);
-    let fitted = fit_text(cx, note, 13.0, band.size.x - 24.0);
+    let fitted = fit_text(cx, note, 13.0, band.size.x - 24.0, 500);
     centered_label(cx, &fitted, band, 13.0, palette.muted, 500);
 }
 
@@ -403,7 +411,7 @@ pub(super) fn paint_status_line(
         .map_or(status.origin.x + status.size.x - 16.0, |rect| {
             rect.origin.x - 8.0
         });
-    let line = fit_text(cx, &line, 13.0, (right - text_x).max(0.0));
+    let line = fit_text(cx, &line, 13.0, (right - text_x).max(0.0), 500);
     text_weighted(
         cx,
         &line,

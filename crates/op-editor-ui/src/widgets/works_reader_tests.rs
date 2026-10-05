@@ -9,6 +9,63 @@ use op_editor_core::{HomeFamily, TaskDraft};
 const W: f32 = 390.0;
 const H: f32 = 844.0;
 
+#[test]
+fn bold_reader_titles_fit_before_the_mode_switch_on_phone_and_tablet() {
+    use crate::widgets::test_family_gap_backend::FamilyGapBackend;
+    use crate::widgets::{PaintCx, Widget};
+
+    for (width, height) in [
+        (320.0, 844.0),
+        (390.0, 844.0),
+        (768.0, 1024.0),
+        (1024.0, 768.0),
+    ] {
+        let mut state = reading(HomeFamily::Presentation, 3, WorkspacePhase::Done);
+        state.editor_ui.size_class = op_editor_core::size_class::size_class(width, height);
+        let mut reader = WorksReader::for_editor(&state).unwrap();
+        reader.title = "qa-literal-copy-20261005.op — 很长的作品名称".into();
+        let layout = reader.layout(width, height);
+        let mut backend = FamilyGapBackend::weighted();
+        reader.paint(
+            &mut PaintCx {
+                backend: &mut backend,
+            },
+            Rect::xywh(0.0, 0.0, width, height),
+        );
+        let title = backend
+            .runs
+            .iter()
+            .find(|run| run.origin.x == layout.title.origin.x && run.font_size == 15.0)
+            .expect("reader title painted");
+        if title.text != reader.title {
+            assert!(
+                title.text.ends_with('…'),
+                "cut title must signal truncation"
+            );
+        }
+        assert!(
+            title.right_edge() <= layout.title.origin.x + layout.title.size.x + 0.01,
+            "bold title overlaps controls at {width}px: {title:?}"
+        );
+        for rect in [layout.mode_normal, layout.mode_professional] {
+            let run = backend
+                .runs
+                .iter()
+                .find(|run| {
+                    run.font_size == 12.0
+                        && run.origin.x >= rect.origin.x
+                        && run.origin.x < rect.origin.x + rect.size.x
+                })
+                .expect("mode label painted");
+            let painted_center = run.origin.x + run.width_in_paint_family() / 2.0;
+            assert!(
+                (painted_center - center(rect).x).abs() < 0.01,
+                "weighted mode label is not centered"
+            );
+        }
+    }
+}
+
 fn center(rect: Rect) -> Point2D {
     Point2D::new(
         rect.origin.x + rect.size.x / 2.0,
