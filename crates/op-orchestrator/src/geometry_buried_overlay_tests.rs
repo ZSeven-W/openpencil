@@ -31,6 +31,79 @@ fn a_partial_highlighter_cannot_cover_heading_glyphs() {
     assert!(cmds.is_empty(), "intentional front decoration is unchanged");
 }
 
+#[test]
+fn a_parent_named_highlighter_rescues_text_above_a_generic_band() {
+    let mut stack = json!({"type":"frame","id":"stack","name":"highlight-band",
+    "layout":"none","children":[
+        {"type":"rectangle","id":"band","name":"band-fill",
+         "fill":[{"type":"solid","color":"#FFEB60"}]},
+        {"type":"text","id":"heading","content":"一页"}
+    ]});
+    let rects = HashMap::from([
+        ("band".into(), rect(8.0, 52.0, 264.0, 72.0)),
+        ("heading".into(), rect(0.0, 0.0, 280.0, 132.0)),
+    ]);
+    let mut cmds = Vec::new();
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    assert_eq!(moved_ids(&cmds), vec!["heading"]);
+    stack["children"].as_array_mut().unwrap().swap(0, 1);
+    cmds.clear();
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    assert!(cmds.is_empty());
+
+    stack["children"].as_array_mut().unwrap().swap(0, 1);
+    stack["children"][0]["name"] = json!("strike-through");
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    assert!(
+        cmds.is_empty(),
+        "explicit strike-through remains intentional"
+    );
+}
+
+#[test]
+fn a_full_board_paper_cannot_bury_a_large_content_column() {
+    let stack = json!({"type":"frame","id":"stack","layout":"none","children":[
+        {"type":"rectangle","id":"paper","name":"paper-bg",
+         "fill":[{"type":"solid","color":"#FFFFFF"}]},
+        {"type":"frame","id":"body","layout":"vertical","children":[
+            {"type":"text","id":"heading","content":"保存后检查，再交付"}
+        ]}
+    ]});
+    let rects = HashMap::from([
+        ("stack".into(), rect(0.0, 0.0, 1080.0, 1440.0)),
+        ("paper".into(), rect(0.0, 0.0, 1080.0, 1440.0)),
+        ("body".into(), rect(112.0, 88.0, 888.0, 1300.0)),
+    ]);
+    let mut cmds = Vec::new();
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    assert!(
+        matches!(&cmds[..], [EditorCommand::MoveNode { node_id, index:Some(1), .. }]
+        if node_id.as_str()=="paper")
+    );
+}
+
+#[test]
+fn a_large_caption_card_does_not_stop_a_full_bleed_photo_from_sinking() {
+    let stack = json!({"type":"frame","id":"stack","layout":"none","children":[
+        {"type":"image","id":"photo","src":"latte.jpg"},
+        {"type":"frame","id":"card","layout":"vertical",
+         "fill":[{"type":"solid","color":"#FFF9F0"}],"children":[
+            {"type":"text","id":"price","content":"¥28"}
+         ]}
+    ]});
+    let rects = HashMap::from([
+        ("stack".into(), rect(0.0, 0.0, 390.0, 210.0)),
+        ("photo".into(), rect(0.0, 0.0, 390.0, 210.0)),
+        ("card".into(), rect(24.0, 57.0, 342.0, 153.0)),
+    ]);
+    let mut cmds = Vec::new();
+    collect_buried_overlay_fixes(&stack, &rects, &mut cmds);
+    assert!(
+        matches!(&cmds[..], [EditorCommand::MoveNode { node_id, index:Some(1), .. }]
+        if node_id.as_str()=="photo")
+    );
+}
+
 fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
     Rect { x, y, w, h }
 }

@@ -180,13 +180,39 @@ pub(super) fn collect_text_overflow_fixes_with_context(
             let Some(cr) = rects.get(cid) else {
                 continue;
             };
-            // Already bounded to its block (fill + wrap) → nothing to correct.
+            // A fill+wrap text can still resolve to the entire row width
+            // after a rigid marker. Bound the trailing paragraph to the
+            // measured remaining room, instead of cropping its last glyphs.
             let fill = c.get("width").and_then(Value::as_str) == Some("fill_container");
             let wrap = c
                 .get("textGrowth")
                 .and_then(Value::as_str)
                 .is_some_and(|g| g.starts_with("fixed-width"));
             if fill && wrap {
+                let is_trailing_text = children(v).last().is_some_and(|last| last == c);
+                let Some([_, right, _, _]) = numeric_padding_sides(v) else {
+                    continue;
+                };
+                let inner_right = parent_x + parent_w - right;
+                let available = inner_right - cr.x;
+                if layout_str(v) == Some("horizontal")
+                    && is_trailing_text
+                    && c.get("textGrowth").and_then(Value::as_str) == Some("fixed-width")
+                    && cr.x + cr.w > inner_right + TEXT_OVERFLOW_EPS
+                    && available >= 64.0
+                    && available < cr.w - TEXT_OVERFLOW_EPS
+                {
+                    cmds.push(EditorCommand::UpdateNode {
+                        node_id: NodeId::new(cid),
+                        x: None,
+                        y: None,
+                        width: Some(available.floor() as i32),
+                        height: None,
+                        name: None,
+                        fill_hex: None,
+                        page_id: None,
+                    });
+                }
                 continue;
             }
             // Wider than the block, OR its right edge past the block's right

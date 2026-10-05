@@ -514,12 +514,6 @@ fn run_cleanup_passes_with_summary_and_policy(
         if policy.is_deck || (policy.roots_are_run_output && root_is_deck_board(sink, &rid)) {
             centre_deck_board_content(sink, &rid);
         }
-        // Text that resolves to ~1:1 against its own background is not
-        // styled, it is missing. The lint crate has detected this since
-        // 2026-05, but the generation path called exactly one of its
-        // detectors, so it only ever fired for a user running
-        // `lint_document` by hand.
-        crate::text_contrast_repair::repair_text_contrast(sink, &rid);
         if intent_allows(sink, TieredPass::HeroBleed) {
             crate::hero_bleed::enforce(sink, plan, &rid);
         }
@@ -721,6 +715,11 @@ fn run_cleanup_passes_with_summary_and_policy(
         }
         debug_probe_child_height(sink, rid, "adjust_root_height");
         counter.checkpoint(summary, CheckCategory::Layout, "radial+root-height");
+        // Contrast reads photo pixels and positions backing rectangles.
+        // Wait for settled geometry: a clipped caption moved into its hero
+        // has a different background, and a backing at its old y hides ink.
+        crate::text_contrast_repair::repair_text_contrast(sink, rid);
+        counter.checkpoint(summary, CheckCategory::Layout, "text-contrast");
     }
 
     crate::avatar_repair::repair_avatar_slots_for_all_roots(sink);

@@ -97,10 +97,22 @@ fn push_clamp_command(
         return;
     };
     let hugs = |key: &str| c.get(key).and_then(Value::as_str) == Some("fit_content");
-    if fixed_width(c).is_none() && !hugs("width") {
+    let full_width_caption = c.get("width").and_then(Value::as_str) == Some("fill_container")
+        && x.abs() <= FIT_EPS
+        && c.get("type").and_then(Value::as_str) == Some("frame")
+        && matches!(layout_str(c), Some("vertical" | "horizontal"))
+        && !children(c).is_empty();
+    if fixed_width(c).is_none() && !hugs("width") && !full_width_caption {
         return;
     }
-    if numeric_prop(c, "height").is_none() && !hugs("height") {
+    // A flex content frame with no height also hugs its children. The model
+    // often omits it on a photo caption; rejecting that resolved box leaves
+    // its title, price and CTA clipped below the hero.
+    let implicit_hug_height = c.get("height").is_none_or(Value::is_null)
+        && c.get("type").and_then(Value::as_str) == Some("frame")
+        && matches!(layout_str(c), Some("vertical" | "horizontal"))
+        && !children(c).is_empty();
+    if numeric_prop(c, "height").is_none() && !hugs("height") && !implicit_hug_height {
         return;
     }
     let Some(cid) = c.get("id").and_then(Value::as_str) else {

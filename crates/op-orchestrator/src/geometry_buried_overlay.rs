@@ -224,6 +224,7 @@ fn image_plate_cover(kids: &[Value], index: usize, rects: &HashMap<String, Rect>
 // Restrict this exception to named, empty highlighters behind direct text;
 // peer cards, photos and intentional strike-throughs keep their ordering.
 fn text_highlighter_cover(
+    stack: &Value,
     kids: &[Value],
     index: usize,
     rects: &HashMap<String, Rect>,
@@ -232,10 +233,18 @@ fn text_highlighter_cover(
         return None;
     }
     let text_rect = rect_of(&kids[index], rects)?;
+    let named_highlighter = |node: &Value| {
+        let name = node.get("name").and_then(Value::as_str).unwrap_or("");
+        name.to_ascii_lowercase().contains("highlight") || name.contains("高亮")
+    };
     kids[..index].iter().position(|cover| {
         let name = cover.get("name").and_then(Value::as_str).unwrap_or("");
-        let highlighter = name.to_ascii_lowercase().contains("highlight") || name.contains("高亮");
+        // A generic band-fill inside a named highlighter is the same shape.
+        // Explicit strike-throughs remain intentional front decorations.
+        let highlighter = named_highlighter(cover) || named_highlighter(stack);
         highlighter
+            && !name.to_ascii_lowercase().contains("strike")
+            && !name.contains("删除线")
             && children(cover).is_empty()
             && matches!(cover.get("type").and_then(Value::as_str), Some("rectangle"))
             && paints_opaque(cover)
@@ -345,7 +354,12 @@ fn backdrop_photo_sink(
 ) -> Option<(usize, usize)> {
     let stack_rect = rect_of(stack, rects)?;
     kids.iter().enumerate().find_map(|(photo_index, photo)| {
-        if !(is_photo(photo) && paints_opaque(photo)) {
+        // An empty full-board rectangle is also a backdrop: the generated
+        // paper surface must not cover a large content column merely because
+        // that column exceeds the small-overlay area threshold.
+        let empty_surface = photo.get("type").and_then(Value::as_str) == Some("rectangle")
+            && children(photo).is_empty();
+        if !((is_photo(photo) || empty_surface) && paints_opaque(photo)) {
             return None;
         }
         let photo_rect = rect_of(photo, rects)?;
@@ -368,8 +382,9 @@ fn backdrop_photo_sink(
             .map(|(index, _)| index)?;
         let blocked = kids[photo_index + 1..=last_hidden].iter().any(|sib| {
             paints_opaque(sib)
-                && rect_of(sib, rects)
-                    .is_some_and(|r| covered_fraction(photo_rect, r) >= MIN_BURIED_FRACTION)
+                && rect_of(sib, rects).is_some_and(|r| {
+                    covered_fraction(photo_rect, r) >= BACKDROP_MIN_SPAN * BACKDROP_MIN_SPAN
+                })
         });
         // `MoveNode` inserts after detaching, so index `last_hidden` lands the
         // photo directly behind that sibling.
@@ -448,7 +463,7 @@ pub(super) fn collect_buried_overlay_fixes(
                 0
             } else if let Some(plate_index) = image_plate_cover(kids, index, rects) {
                 plate_index
-            } else if let Some(band_index) = text_highlighter_cover(kids, index, rects) {
+            } else if let Some(band_index) = text_highlighter_cover(v, kids, index, rects) {
                 band_index
             } else {
                 continue;

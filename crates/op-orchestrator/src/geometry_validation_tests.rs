@@ -5,6 +5,67 @@
 use super::*;
 use serde_json::json;
 
+#[test]
+fn trailing_wrapped_paragraph_leaves_room_for_the_row_marker() {
+    let mut row = json!({"type":"frame","id":"row","layout":"horizontal",
+    "width":920,"padding":[0,40],"children":[
+        {"type":"text","id":"marker","content":"2","width":40},
+        {"type":"text","id":"paragraph","content":"保留可编辑原稿以便下次更新",
+         "width":"fill_container","height":"fit_content","textGrowth":"fixed-width"}
+    ]});
+    let mut rects = HashMap::from([
+        (
+            "row".into(),
+            Rect {
+                x: 3640.0,
+                y: 980.0,
+                w: 920.0,
+                h: 160.0,
+            },
+        ),
+        (
+            "marker".into(),
+            Rect {
+                x: 3680.0,
+                y: 980.0,
+                w: 40.0,
+                h: 40.0,
+            },
+        ),
+        (
+            "paragraph".into(),
+            Rect {
+                x: 3760.0,
+                y: 980.0,
+                w: 840.0,
+                h: 129.0,
+            },
+        ),
+    ]);
+    let mut cmds = Vec::new();
+    collect_text_overflow_fixes(&row, &rects, &mut cmds);
+    assert!(
+        matches!(&cmds[..], [EditorCommand::UpdateNode {node_id, width:Some(760), height:None, ..}]
+        if node_id.as_str()=="paragraph")
+    );
+    row["children"][1]["width"] = json!(760);
+    rects.get_mut("paragraph").unwrap().w = 760.0;
+    cmds.clear();
+    collect_text_overflow_fixes(&row, &rects, &mut cmds);
+    assert!(
+        cmds.is_empty(),
+        "settled paragraph keeps its readable font size"
+    );
+    row["children"][1]["width"] = json!("fill_container");
+    row["children"][1]["textGrowth"] = json!("fixed-width-height");
+    rects.get_mut("paragraph").unwrap().w = 840.0;
+    collect_text_overflow_fixes(&row, &rects, &mut cmds);
+    assert!(
+        cmds.is_empty(),
+        "explicit fixed-height text remains authored"
+    );
+}
+
 fn cell(id: &str, w: serde_json::Value) -> serde_json::Value {
     json!({ "type": "frame", "id": id, "name": id, "width": w, "children": [] })
 }

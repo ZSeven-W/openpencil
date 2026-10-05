@@ -158,6 +158,59 @@ fn hugging_copy_block_past_the_bottom_edge_is_shifted_up() {
 }
 
 #[test]
+fn implicit_hug_caption_is_shifted_without_resizing_its_content() {
+    // GLM 5.3 Flash coffee first draft: a 160px caption at y=118 in a
+    // 204px photo. Omitted height means content-sized, just like fit_content.
+    let stack = json!({"type":"frame","id":"hero","layout":"none",
+    "width":390,"height":204,"clipContent":true,"children":[
+        {"type":"frame","id":"copy","x":24,"y":118,"width":280,
+         "layout":"vertical","children":[
+            {"type":"text","id":"price","content":"¥28","fontSize":34}
+         ]}
+    ]});
+    let rects = HashMap::from([
+        ("hero".into(), rect(80.0, 216.0, 390.0, 204.0)),
+        ("copy".into(), rect(104.0, 334.0, 280.0, 160.0)),
+    ]);
+    let mut cmds = Vec::new();
+    collect_absolute_child_clamp_fixes(&stack, &rects, &mut cmds);
+    assert_eq!(update_node_xy(&cmds, "copy"), Some((None, Some(44))));
+    assert!(matches!(
+        &cmds[0],
+        EditorCommand::UpdateNode {
+            width: None,
+            height: None,
+            ..
+        }
+    ));
+
+    // Unknown-size decorative stacks must not acquire the same permission.
+    let mut decorative = stack;
+    decorative["children"][0]["layout"] = json!("none");
+    cmds.clear();
+    collect_absolute_child_clamp_fixes(&decorative, &rects, &mut cmds);
+    assert!(cmds.is_empty());
+}
+
+#[test]
+fn a_full_width_hugging_caption_can_shift_vertically() {
+    let stack = json!({"type":"frame","id":"hero","layout":"none",
+    "width":342,"height":204,"children":[
+        {"type":"frame","id":"copy","x":0,"y":186,"width":"fill_container",
+         "height":"fit_content","layout":"horizontal","children":[
+             {"type":"text","id":"price","content":"¥28"}
+         ]}
+    ]});
+    let rects = HashMap::from([
+        ("hero".into(), rect(0.0, 0.0, 342.0, 204.0)),
+        ("copy".into(), rect(0.0, 186.0, 342.0, 124.0)),
+    ]);
+    let mut cmds = Vec::new();
+    collect_absolute_child_clamp_fixes(&stack, &rects, &mut cmds);
+    assert_eq!(update_node_xy(&cmds, "copy"), Some((None, Some(80))));
+}
+
+#[test]
 fn filling_height_child_is_still_untouched() {
     let map = map_with_control(json!({"type":"frame","id":"fill","x":0,"y":40,
                "width":44,"height":"fill_container","children":[]}));
