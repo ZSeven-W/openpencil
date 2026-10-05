@@ -148,6 +148,8 @@ const MINIMAL_SUFFIX: &str =
 const PLANNING_QUALITY_GUARDRAILS: &str = r#"
 
 PLANNING QUALITY GUARDRAILS:
+- SOURCE FACTS: preserve the user's supplied names, prices and source claims. Do not invent distances, ratings, sales, delivery/pickup times, discounts or stock. Omit unknown facts unless the user explicitly requests clearly labelled sample data. Domain examples are layout references, not facts. A single-store ordering home does not need marketplace metrics or order history.
+- FIXED CARD COPY: for article/knowledge cards, summarize the supplied material instead of adding new explanations. Plan at most three short points per card and keep the footer inside the requested board height.
 - Do not plan the same predictable mobile stack of search + categories + orange promo + two cards unless the request explicitly asks for that exact convention.
 - Mobile top rhythm: planned header/title/search/primary-content sections should be compact; avoid allocating a huge empty band between the title and first useful module.
 - Plan one signature moment in the first viewport: a crafted hero/product composition, editorial crop, distinctive category rail, refined data module, or other domain-specific focal idea.
@@ -210,9 +212,11 @@ pub fn build_orchestrator_prompt(
             );
             let mut user_prompt = cp.user_prompt;
             append_reference_skeleton(&mut user_prompt, req);
+            let mut system_prompt = cp.system;
+            system_prompt.push_str(PLANNING_QUALITY_GUARDRAILS);
             PlanningPrompt {
                 call_request: CallRequest {
-                    system_prompt: cp.system,
+                    system_prompt,
                     user_prompt,
                     model: req.model.clone(),
                     provider: req.provider.clone(),

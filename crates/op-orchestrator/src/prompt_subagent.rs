@@ -498,6 +498,7 @@ Overall design: {}\n\n\
 {}\
 {}\
 CRITICAL LAYOUT CONSTRAINTS:\n\
+- SOURCE FACTS: preserve only supplied business facts; never add sales, ratings, distance, discounts, stock or pickup/delivery times merely to make a mockup look complete. Omit unknown facts. Explicit user requests for labelled sample data are the exception.\n\
 - {}\n\
 - Target content amount: ~{:.0}px tall. Generate enough elements to fill this area.\n\
 - DENSITY: Do NOT pack the area edge-to-edge. Prefer fewer, stronger modules with visible negative space; most sections should have 3-5 primary rows/cards at most.\n\

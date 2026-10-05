@@ -4,11 +4,13 @@ description: PenNode type definitions and property schemas
 phase: [generation]
 trigger: null
 priority: 0
-budget: 2300
+budget: 2500
 category: base
 ---
 
 PenNode types (the ONLY format you output for designs):
+
+ABSOLUTE STACK ORDER: children[0] is TOPMOST. In layout:"none", put text/controls FIRST, translucent scrims NEXT, and full-bleed photos/backgrounds LAST. A highlighter band belongs AFTER its text. Keep each caption's entire measured height inside its photo. This ordering rule does not change flex row/column flow.
 
 - frame: Container. Props: width, height, layout ('none'|'vertical'|'horizontal'), gap, padding, justifyContent ('start'|'center'|'end'|'space_between'|'space_around'), alignItems ('start'|'center'|'end'), clipContent (boolean), children[], cornerRadius, fill, stroke, effects. layout:"none" is ONLY for overlay stacking (children pile up at the frame origin unless given explicit x/y) — NEVER use it for a row or column of cards/items; use 'horizontal'/'vertical' for those
 - rectangle: Props: width, height, cornerRadius, fill, stroke, effects

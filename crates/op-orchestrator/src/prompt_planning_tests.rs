@@ -29,6 +29,23 @@ fn provider_planning_prompt_carries_quality_guardrails() {
     assert!(prompt.contains("Do not plan the same predictable mobile stack"));
     assert!(prompt.contains("Mobile top rhythm"));
     assert!(prompt.contains("signature moment"));
+    assert!(prompt.contains("SOURCE FACTS"));
+    assert!(prompt.contains("FIXED CARD COPY"));
+}
+
+#[test]
+fn source_facts_and_card_copy_limits_reach_every_planning_mode() {
+    for mode in [
+        PlanningMode::Rich,
+        PlanningMode::Minimal,
+        PlanningMode::Compact,
+    ] {
+        let mut request = req();
+        request.model = Some("glm-5.3-flash".into());
+        let pp = build_orchestrator_prompt(&request, mode, AbortFlag::new());
+        assert!(pp.call_request.system_prompt.contains("SOURCE FACTS"));
+        assert!(pp.call_request.system_prompt.contains("FIXED CARD COPY"));
+    }
 }
 
 #[test]

@@ -11,6 +11,8 @@ category: domain
 
 FOOD DELIVERY / TAKEOUT — what the leading apps converge on. Sources: Baymard Food Delivery & Takeout research (8 leading apps, 390+ UX parameters), DoorDash Merchant menu data, 美团 / 饿了么 product teardowns, 优设 金刚区 analysis. Where these rules differ from the generic mobile rules (icon tiles, list-row alignment), these win. A restaurant web page uses only the photo, dish-row and store-header rules.
 
+SCOPE FIRST: a single cafe/brand ordering home is not a multi-store marketplace. Use the supplied store/pickup details, one hero drink, the supplied menu and compact categories. Skip reorder history, flash deals, multi-store lists and delivery metadata unless requested. Never treat the numeric examples below as facts; unknown ratings, distance, sales and discounts must be omitted.
+
 The look comes from FOOD PHOTOGRAPHY, not from painted blocks. Store header images lift sales up to 50%, logos 23%, dish photos 30-44%, dish descriptions 18% (DoorDash). So every store, dish and category visual is an `image` with a specific `imagePrompt` + `imageSearchQuery` ("mapo tofu in clay bowl, overhead"). Dish shots share one angle: overhead, 1:1, warm light. Accent colour is only for prices, add buttons, the checkout CTA, the active tab and promo tag text. At most ONE block per screen has an accent fill.
 
 HOME, top to bottom:

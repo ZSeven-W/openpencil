@@ -6,6 +6,25 @@ use crate::types::SubtaskOutcome;
 use jian_ops_schema::variable::VariableDefinition;
 use std::collections::BTreeMap;
 
+#[test]
+fn source_facts_survive_all_subtask_complexity_levels() {
+    for (reduced, minimal) in [(false, false), (true, false), (true, true)] {
+        let mut request = req();
+        request.model = Some("glm-5.3-flash".into());
+        request.prompt = "晴日咖啡，静安店，到店自取；拿铁28元、美式22元、燕麦拿铁32元".into();
+        let (call, _) = bsp(
+            &subtask(),
+            &plan(),
+            &request,
+            AbortFlag::new(),
+            reduced,
+            minimal,
+        );
+        assert!(call.user_prompt.contains("SOURCE FACTS"));
+        assert!(call.user_prompt.contains(&request.prompt));
+    }
+}
+
 /// Build a prompt for a document variable table using the same non-empty check
 /// as the production sub-agent runner.
 fn prompt_for_variables(
