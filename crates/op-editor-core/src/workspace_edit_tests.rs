@@ -259,3 +259,56 @@ fn english_sentences_separate_protection_but_decimal_values_remain_intact() {
         assert_eq!(resolve_workspace_edit_scope(&state,prompt),WorkspaceEditScope::Target(PageEditTarget {board_id:"home-id".into(),index:0}),"{prompt}");
     }
 }
+
+#[test]
+fn unquoted_replacement_words_are_data_even_when_they_look_like_questions_or_new_work() {
+    let state = normal_work();
+    for prompt in [
+        "把首页标题改成如何做咖啡",
+        "把首页标题改成创建一个新页面，其他页面保持不变",
+        "Change the Home title to How to create a new page",
+        "Change Home title to Create a new page keep everything else unchanged",
+        "Change Home title to Orders",
+        "Change Home title to Do not edit the design",
+        "Replace the Home heading with Why change Orders",
+        "Set the Home button to Create a new page",
+        "Rename Home to Orders",
+        "把首頁標題換成如何建立新頁面",
+    ] {
+        assert!(!is_workspace_question(&state, prompt), "{prompt}");
+        assert_eq!(
+            resolve_workspace_edit_scope(&state, prompt),
+            WorkspaceEditScope::Target(PageEditTarget {
+                board_id: "home-id".into(),
+                index: 0
+            }),
+            "{prompt}"
+        );
+    }
+}
+
+#[test]
+fn instructions_after_unquoted_copy_remain_authoritative() {
+    let state = normal_work();
+    for prompt in [
+        "Change Home title to Coffee and change Orders title to How to create a new page",
+        "把首页标题改成如何做咖啡，并把第二页标题改成创建新页面",
+        "Change Home title to Coffee keep Orders unchanged and change Profile title to How to create",
+        "Do not change Home title to Create a new page",
+    ] {
+        assert_eq!(resolve_workspace_edit_scope(&state, prompt), WorkspaceEditScope::NeedsTarget, "{prompt}");
+    }
+    for prompt in [
+        "Change Home title to Coffee; create a new page",
+        "把首页标题改成咖啡，然后新增一页",
+        "把首頁標題換成如何開始，然後新增一頁",
+        "How do I change Home title to Create a new page?",
+        "Change Home title to Coffee. Do not edit the design.",
+    ] {
+        assert_eq!(
+            resolve_workspace_edit_scope(&state, prompt),
+            WorkspaceEditScope::NotApplicable,
+            "{prompt}"
+        );
+    }
+}

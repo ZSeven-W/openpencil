@@ -3,6 +3,9 @@
 
 use crate::{EditorState, PageEditTarget, PenNodeExt};
 
+#[path = "workspace_copy_routing.rs"]
+mod copy_routing;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceEditScope {
     NotApplicable,
@@ -72,7 +75,7 @@ fn routing_text(text: &str) -> String {
                 .any(|marker| prefix.contains(marker));
         }
     }
-    let mut routed = result.trim().to_lowercase();
+    let mut routed = copy_routing::mask_replacement_copy(&result.trim().to_lowercase());
     // A phone user often omits punctuation before "keep ... unchanged".
     // Preserve that tail as its own clause instead of negating the edit.
     // A tail containing another edit stays ambiguous and is rejected.
@@ -171,6 +174,17 @@ fn creates_new_work(text: &str) -> bool {
             "生成一个",
             "做一个",
             "画一个",
+            "重新畫",
+            "新增頁面",
+            "新增一頁",
+            "加一頁",
+            "加一個頁面",
+            "添加頁面",
+            "添加一頁",
+            "再畫",
+            "生成一個",
+            "做一個",
+            "畫一個",
         ]
         .iter()
         .any(|signal| text.contains(signal))
@@ -204,6 +218,9 @@ fn requests_edit(text: &str) -> bool {
         "修复",
         "替换",
         "换成",
+        "換成",
+        "變成",
+        "替換",
         "变成",
         "删除",
         "移除",
@@ -220,7 +237,8 @@ fn requests_edit(text: &str) -> bool {
     .any(|signal| text.contains(signal))
         || [
             "change", "modify", "update", "adjust", "resize", "move", "restyle", "refine", "fix",
-            "tweak", "edit", "replace", "remove", "delete", "add", "smaller", "larger",
+            "tweak", "edit", "replace", "remove", "delete", "add", "set", "rename", "smaller",
+            "larger",
         ]
         .iter()
         .any(|signal| contains_phrase(text, signal))
@@ -291,6 +309,7 @@ pub fn resolve_workspace_edit_scope(state: &EditorState, text: &str) -> Workspac
         || contains_phrase(subject, "page")
         || contains_phrase(subject, "screen");
     let home = subject.contains("首页")
+        || subject.contains("首頁")
         || contains_phrase(subject, "home")
         || contains_phrase(subject, "homepage");
     let current = [
@@ -317,11 +336,14 @@ pub fn resolve_workspace_edit_scope(state: &EditorState, text: &str) -> Workspac
     let chinese = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"];
     for (index, id) in boards.iter().enumerate() {
         let ordinal = subject.contains(&format!("第{}页", index + 1))
+            || subject.contains(&format!("第{}頁", index + 1))
             || subject.contains(&format!("第 {} 页", index + 1))
+            || subject.contains(&format!("第 {} 頁", index + 1))
             || contains_phrase(subject, &format!("page {}", index + 1))
-            || chinese
-                .get(index)
-                .is_some_and(|number| subject.contains(&format!("第{number}页")))
+            || chinese.get(index).is_some_and(|number| {
+                subject.contains(&format!("第{number}页"))
+                    || subject.contains(&format!("第{number}頁"))
+            })
             || (index == 0 && subject.contains("first page"));
         let Some(board) = state
             .active_children()
@@ -337,6 +359,7 @@ pub fn resolve_workspace_edit_scope(state: &EditorState, text: &str) -> Workspac
         let named = !name.is_empty() && contains_phrase(subject, name);
         let home_board = home
             && (name.contains("首页")
+                || name.contains("首頁")
                 || contains_phrase(name, "home")
                 || contains_phrase(name, "homepage"));
         if ordinal || named || home_board {

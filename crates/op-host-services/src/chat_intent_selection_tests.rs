@@ -209,11 +209,21 @@ fn normal_mode_replacement_copy_cannot_override_the_scoped_route() {
     for prompt in [
         "把首页标题改成“如何做咖啡”",
         "Change Home title to \"Create a new page\"",
+        "把首页标题改成如何做咖啡",
+        "Change Home title to How to create a new page",
+        "Change Home title to Orders",
+        "Set Home title to Create a new page",
     ] {
         assert_eq!(
             classify_intent_for_standard_route(&Scripted, &state, prompt, None),
             DesignIntent::Modify,
             "{prompt}"
         );
+        let plan = build_modify_plan(&state, prompt).expect("literal copy is a scoped edit");
+        assert!(
+            plan.user_message.ends_with(prompt),
+            "routing must not rewrite model copy"
+        );
+        assert_eq!(plan.target_frame_ids.len(), 1);
     }
 }

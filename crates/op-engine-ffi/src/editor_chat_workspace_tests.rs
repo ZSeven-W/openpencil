@@ -194,7 +194,7 @@ fn a_mobile_title_edit_changes_exactly_one_field_without_finalize() {
         "width":340, "fontSize":28, "fontWeight":"700"
     });
     let mut edited = title.clone();
-    edited["content"] = serde_json::json!("weekend coffee");
+    edited["content"] = serde_json::json!("how to create a new page");
     let response = sse(&[
         serde_json::json!({"choices":[{"delta":{"content":format!("I(null,{});", edited)}}]})
             .to_string(),
@@ -211,9 +211,28 @@ fn a_mobile_title_edit_changes_exactly_one_field_without_finalize() {
     let mut expected = state.doc.clone();
     expected.children[0].children_mut().unwrap()[0] = serde_json::from_value(edited).unwrap();
     state.editor_ui.workspace.stage_page_edit("b0", 0);
-    send(&mut host, "edit title to weekend coffee");
+    send(
+        &mut host,
+        "change this page title to how to create a new page keep everything else unchanged",
+    );
     pump_to_completion(&mut MobileChatHost::default(), &mut host);
-    assert_eq!(requests.lock().unwrap().len(), 1);
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 1);
+    let body: serde_json::Value =
+        serde_json::from_str(requests[0].split_once("\r\n\r\n").unwrap().1).unwrap();
+    assert!(
+        body.get("tools").is_none(),
+        "literal title does not start the whole-design loop"
+    );
+    assert_eq!(body["model"], "glm-5.3-flash");
+    assert!(
+        body["messages"].as_array().unwrap().last().unwrap()["content"]
+            .as_str()
+            .unwrap()
+            .ends_with(
+                "change this page title to how to create a new page keep everything else unchanged"
+            )
+    );
     assert_eq!(
         host.editor_state().doc,
         expected,
