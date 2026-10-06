@@ -11,6 +11,8 @@ name = "op_host_native"
 path = "src/lib.rs"
 
 [features]
+# Offline design measurement for desktop and QA runners; mobile uses packaged assets.
+bundled-design-fonts = []
 # `gl-host` (NON-default) enables the desktop winit/glutin interactive runner
 # tier + skia-safe's `gl` feature + accesskit. Consumers that need the GUI host
 # (`op-host-desktop`, `op-app`) opt in via `features = ["gl-host"]`. Left OFF —

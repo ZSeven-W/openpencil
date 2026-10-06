@@ -11,6 +11,7 @@ name = "op-smoke"
 path = "src/main.rs"
 
 [dependencies]
+op-host-native = { path = "../op-host-native", default-features = false, features = ["bundled-design-fonts"] }
 # AnthropicProvider — the `anthropic` feature gates the real HTTP client.
 agent = { path = "../../vendor/agent/crates/agent", default-features = false, features = [
   "anthropic",

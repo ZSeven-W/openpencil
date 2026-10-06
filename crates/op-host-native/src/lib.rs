@@ -196,3 +196,6 @@ pub(crate) mod agent_indicator_test_support {
         LOCK.write().unwrap_or_else(|e| e.into_inner())
     }
 }
+
+#[cfg(feature = "bundled-design-fonts")]
+pub mod bundled_design_fonts;

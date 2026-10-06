@@ -80,7 +80,7 @@ role = "Editor"
 # Phase 7.3 reorg: openpencil-shell-core dissolved — widget facade /
 # render-backend / layout scene paths resolve through op-editor-ui.
 op-editor-ui = { path = "../op-editor-ui" }
-op-host-native = { path = "../op-host-native", features = ["gl-host"] }
+op-host-native = { path = "../op-host-native", features = ["gl-host", "bundled-design-fonts"] }
 # Phase 2: the headless daemon crate. The `--serve-web` closure migrates here
 # over Phases 2-5; op-host-desktop's serve-web dispatch + GUI residuals call into
 # it via `op_host_services::*`.

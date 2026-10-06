@@ -704,6 +704,8 @@ pub(super) fn enforce_slide_padding_floor_and_board_text_wrap(
     counter.checkpoint(summary, CheckCategory::Layout, "slide-padding-floor");
     wrap_board_overflowing_text(sink, root_id);
     counter.checkpoint(summary, CheckCategory::Overflow, "board-text-wrap");
+    crate::geometry_validation::repair_headline_tails(sink, root_id);
+    counter.checkpoint(summary, CheckCategory::Overflow, "headline-tail-fit");
 }
 
 #[cfg(test)]

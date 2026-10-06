@@ -68,10 +68,13 @@ mod geometry_buried_overlay;
 #[path = "geometry_tutorial_labels.rs"]
 mod geometry_tutorial_labels;
 pub use geometry_tutorial_labels::repair_scoped_tutorial_labels;
+#[path = "headline_tail_fit.rs"]
+mod headline_tail_fit;
 #[path = "none_stack_inset.rs"]
 mod none_stack_inset;
 #[path = "text_fit.rs"]
 mod text_fit;
+pub(crate) use headline_tail_fit::repair_headline_tails;
 #[path = "touch_target_floor.rs"]
 mod touch_target_floor;
 pub(crate) use absolute_child_clamp::{

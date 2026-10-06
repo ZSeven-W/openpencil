@@ -31,6 +31,7 @@ tracing = { workspace = true }
 tokio = { version = "1", features = ["sync", "rt", "macros"] }
 
 [dev-dependencies]
+jian-skia = { path = "../../vendor/jian/crates/jian-skia" }
 base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["png"] }
 serde = { workspace = true, features = ["derive"] }
