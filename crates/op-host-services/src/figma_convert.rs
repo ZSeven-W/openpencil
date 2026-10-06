@@ -61,6 +61,7 @@ pub(crate) fn convert_fig_json(body: &str) -> Result<String> {
             // A Figma import is whatever the source file was; nothing here
             // establishes it as a deck or a card set, nor pins a style.
             scenario: None,
+            work_family: None,
             pinned_style_guide: None,
             share_recipe: None,
             imported_from: None,

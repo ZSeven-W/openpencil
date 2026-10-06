@@ -191,6 +191,7 @@ impl WidgetHost {
         ui.file_name_display = None;
         ui.pending_file_action = None;
         ui.scenario = None;
+        ui.home.work_family = None;
         ui.pinned_style_guide = None;
         // A new deliverable is not the replaced one's import; an import
         // stamps its own origin right after this swap.

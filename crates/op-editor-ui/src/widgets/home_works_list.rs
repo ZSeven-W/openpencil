@@ -47,7 +47,7 @@ impl CurrentWork {
         if workspace.active {
             let subtitle = format!(
                 "{} · {}",
-                super::super::workspace_surface::family_label(locale, workspace.family),
+                super::super::workspace_surface::work_family_label(locale, workspace),
                 op_i18n::translate(
                     locale,
                     super::super::workspace_surface::workspace_phase_key(workspace)

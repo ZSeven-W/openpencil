@@ -7,7 +7,7 @@
 use super::{ReaderLayout, WorksReader};
 use crate::widgets::home_surface::StudioPalette;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::workspace_surface::{family_label, workspace_phase_key};
+use crate::widgets::workspace_surface::{work_family_label, workspace_phase_key};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect};
 use op_editor_core::{ReaderHit, WorkspacePhase};
@@ -147,7 +147,7 @@ fn paint_header(
     );
     let subtitle = format!(
         "{} · {}",
-        family_label(locale, reader.state.family),
+        work_family_label(locale, reader.state),
         op_i18n::translate(locale, workspace_phase_key(reader.state))
     );
     let subtitle = fit_text(cx, &subtitle, 11.0, layout.title.size.x, 500);

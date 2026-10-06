@@ -110,19 +110,31 @@ pub(crate) fn family_label(locale: op_i18n::Locale, family: HomeFamily) -> &'sta
     tr(locale, key)
 }
 
+pub(crate) fn work_family_label(
+    locale: op_i18n::Locale,
+    work: &op_editor_core::WorkspaceState,
+) -> &'static str {
+    if work.family_known {
+        family_label(locale, work.family)
+    } else {
+        tr(locale, "home.nav.projects")
+    }
+}
+
 /// One view mode's segment label.
 pub(super) fn view_label(
     locale: op_i18n::Locale,
     family: HomeFamily,
+    known: bool,
     view: WorkspaceView,
 ) -> &'static str {
     match view {
         WorkspaceView::AllBoards => tr(locale, "workspace.view.all"),
         WorkspaceView::Single { .. } => {
-            if family == HomeFamily::Presentation {
-                tr(locale, "workspace.view.singlePage")
-            } else {
+            if family == HomeFamily::AppUi && known {
                 tr(locale, "workspace.view.singleScreen")
+            } else {
+                tr(locale, "workspace.view.singlePage")
             }
         }
         WorkspaceView::LongPage => tr(locale, "workspace.view.long"),
@@ -256,9 +268,13 @@ fn paint_header(
         palette.ink,
         650,
     );
-    let options = options_label(locale, surface.state.family, &surface.state.options);
+    let options = if surface.state.brief.is_empty() && surface.ui.home.recipe.is_none() {
+        ""
+    } else {
+        options_label(locale, surface.state.family, &surface.state.options)
+    };
     let phase = tr(locale, workspace_phase_key(surface.state));
-    let mut subtitle = family_label(locale, surface.state.family).to_string();
+    let mut subtitle = work_family_label(locale, surface.state).to_string();
     if !options.is_empty() {
         subtitle.push_str(" · ");
         subtitle.push_str(options);
@@ -433,7 +449,12 @@ fn paint_toolbar(
                 palette.segment_bg
             },
         );
-        let label = view_label(locale, surface.state.family, view);
+        let label = view_label(
+            locale,
+            surface.state.family,
+            surface.state.family_known,
+            view,
+        );
         centered_label(
             cx,
             label,

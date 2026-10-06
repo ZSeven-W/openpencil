@@ -31,16 +31,8 @@ fn prepare(prompt: String, family: Option<&str>) -> Result<String, HomePromptErr
     let Some(family) = family else {
         return Ok(prompt);
     };
-    let family = match family {
-        "app" => HomeFamily::AppUi,
-        "web" => HomeFamily::Web,
-        "presentation" => HomeFamily::Presentation,
-        "cards" => HomeFamily::KnowledgeCards,
-        "tutorial" => HomeFamily::ScreenshotTutorial,
-        "infographic" => HomeFamily::Infographic,
-        "poster" => HomeFamily::EventPoster,
-        value => return Err(HomePromptError::UnknownFamily(value.into())),
-    };
+    let family =
+        parse_family(family).ok_or_else(|| HomePromptError::UnknownFamily(family.into()))?;
     let mut state = EditorState::new();
     state.editor_ui.home.task = family;
     state.editor_ui.home.set_draft(prompt);
@@ -49,6 +41,17 @@ fn prepare(prompt: String, family: Option<&str>) -> Result<String, HomePromptErr
         .home
         .generation_prompt()
         .ok_or(HomePromptError::EmptyBrief)
+}
+
+fn parse_family(id: &str) -> Option<HomeFamily> {
+    HomeFamily::from_id(id).or_else(|| (id == "cards").then_some(HomeFamily::KnowledgeCards))
+}
+
+pub(crate) fn record_purpose(state: &mut EditorState) {
+    state.editor_ui.home.work_family = std::env::var("OPENPENCIL_SMOKE_HOME_FAMILY")
+        .ok()
+        .as_deref()
+        .and_then(parse_family);
 }
 
 #[cfg(test)]

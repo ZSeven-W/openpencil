@@ -19,10 +19,7 @@ use super::WidgetHostNative;
 use crate::backend::NativeFrameBackend;
 use op_editor_core::preview_slideshow::active_page_boards;
 use op_editor_core::size_class::MobileSheetKind;
-use op_editor_core::{
-    infer_reading_family, reads_as_long_page, EntrySurface, NodeId, PenNodeExt, ReaderHit, Tool,
-    Viewport,
-};
+use op_editor_core::{reads_as_long_page, EntrySurface, NodeId, ReaderHit, Tool, Viewport};
 use op_editor_ui::widgets::{PaintCx, Widget, WorksReader};
 use op_editor_ui::{Point2D, Rect};
 
@@ -433,13 +430,6 @@ impl WidgetHostNative {
     /// document already has, or open a finished-work reading of it (the
     /// 作品 list, a blank canvas the user drew on).
     pub fn open_current_work_in_reader(&mut self, viewport_w: f32, viewport_h: f32) {
-        let sizes: Vec<(f64, f64)> = self
-            .editor_state
-            .active_children()
-            .iter()
-            .filter(|node| matches!(node, jian_ops_schema::node::PenNode::Frame(_)))
-            .filter_map(|node| Some((node.width_px()?, node.height_px()?)))
-            .collect();
         let tool = self.editor_state.tool;
         let ui = &mut self.editor_state.editor_ui;
         ui.home.hide();
@@ -447,8 +437,8 @@ impl WidgetHostNative {
         if ui.workspace.active {
             ui.workspace.reenter(self.now_ms);
         } else {
-            ui.workspace
-                .open_for_reading(infer_reading_family(&sizes), self.now_ms);
+            op_editor_core::work_identity::open_for_reading(&mut self.editor_state, self.now_ms);
+            let ui = &mut self.editor_state.editor_ui;
             ui.workspace.previous_tool = Some(tool);
         }
         self.frame_reader_board(viewport_w, viewport_h);

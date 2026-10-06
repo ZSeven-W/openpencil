@@ -53,6 +53,7 @@ mod llm_clients;
 mod loop_mode;
 mod loop_seed;
 mod modify_mode;
+mod smoke_save;
 mod smoke_support;
 mod variants_mode;
 
@@ -78,7 +79,7 @@ use smoke_support::{
 /// Reads the openai-compat `OPENPENCIL_LLM_*` env (the ab-v9 wire), runs the
 /// production builtin design loop against a live `EditorState`, then dumps
 /// `state.doc` to `OPENPENCIL_SMOKE_OUT` using the SAME serialize path as the
-/// orchestrator mode (`serde_json::to_string_pretty` → `std::fs::write`).
+/// orchestrator mode (canonical bytes with editor metadata → file write).
 async fn run_loop_mode(prompt: String) -> std::process::ExitCode {
     let model =
         std::env::var("OPENPENCIL_ORCHESTRATOR_MODEL").unwrap_or_else(|_| "gpt-4o-mini".into());
@@ -186,7 +187,7 @@ async fn run_loop_mode(prompt: String) -> std::process::ExitCode {
 
     // Dump via the IDENTICAL serialize path the orchestrator mode uses.
     let save_failed = match std::env::var("OPENPENCIL_SMOKE_OUT") {
-        Ok(out_path) if !out_path.is_empty() => match serde_json::to_string_pretty(&guard.doc) {
+        Ok(out_path) if !out_path.is_empty() => match smoke_save::bytes(&guard) {
             Ok(json) => match std::fs::write(&out_path, json) {
                 Ok(()) => {
                     eprintln!("[SMOKE] saved doc → {out_path}");
@@ -352,6 +353,7 @@ async fn main() -> std::process::ExitCode {
             EditorState::new()
         },
     };
+    home_prompt::record_purpose(&mut sink.state);
     // `OPENPENCIL_SMOKE_LIBRARY=<path-to-.lib.op>` loads a harvested component
     // library into the doc BEFORE generation so the generator can instantiate
     // its reusable masters (the AVAILABLE COMPONENTS manifest path). Unset =
@@ -460,7 +462,7 @@ async fn main() -> std::process::ExitCode {
             }
         };
         let code = match std::env::var("OPENPENCIL_SMOKE_OUT") {
-            Ok(out) if !out.is_empty() => match serde_json::to_string_pretty(&sink.state.doc) {
+            Ok(out) if !out.is_empty() => match smoke_save::bytes(&sink.state) {
                 Ok(j) => match std::fs::write(&out, j) {
                     Ok(()) => {
                         eprintln!("[PROGRAM] saved doc -> {out}");
@@ -635,13 +637,12 @@ async fn main() -> std::process::ExitCode {
 
     // Persist the produced PenDocument when OPENPENCIL_SMOKE_OUT is set,
     // so the render / screenshot step can pick it up. Canonical
-    // serde_json mirrors `persistence::save_to_path`. Saved regardless of
+    // bytes use `persistence::save_to_path` metadata. Saved regardless of
     // Ok/Err so a partial doc stays inspectable on failure.
     // A requested save that FAILS forces a non-zero exit below — a
     // benchmark driver must not read "success" when no `.op` was written.
     let save_failed = match std::env::var("OPENPENCIL_SMOKE_OUT") {
-        Ok(out_path) if !out_path.is_empty() => match serde_json::to_string_pretty(&sink.state.doc)
-        {
+        Ok(out_path) if !out_path.is_empty() => match smoke_save::bytes(&sink.state) {
             Ok(json) => match std::fs::write(&out_path, json) {
                 Ok(()) => {
                     eprintln!("[SMOKE] saved doc → {out_path}");

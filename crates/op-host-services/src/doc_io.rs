@@ -46,6 +46,9 @@ mod load;
 mod load_report;
 #[cfg(test)]
 mod load_report_tests;
+#[cfg(test)]
+#[path = "doc_io/work_family_tests.rs"]
+mod work_family_tests;
 
 use atomic_file::{create_sibling_temp, replace_file};
 pub use canonical_save::{

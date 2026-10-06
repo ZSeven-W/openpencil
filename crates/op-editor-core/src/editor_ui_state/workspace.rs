@@ -153,6 +153,8 @@ pub struct WorkspaceState {
     /// The workspace chrome is painted and the canvas is docked.
     pub visible: bool,
     pub family: HomeFamily,
+    /// Whether the family came from declared intent, rather than reading geometry.
+    pub family_known: bool,
     /// The brief that launched this run (retried verbatim, shown as the
     /// title fallback).
     pub brief: String,
@@ -235,6 +237,7 @@ impl Default for WorkspaceState {
             active: false,
             visible: false,
             family: HomeFamily::AppUi,
+            family_known: false,
             brief: String::new(),
             options: TaskDraft::default(),
             view: WorkspaceView::default_for(HomeFamily::AppUi),
@@ -282,6 +285,7 @@ impl WorkspaceState {
         self.active = true;
         self.visible = true;
         self.family = family;
+        self.family_known = true;
         self.brief = brief.into();
         self.options = options;
         self.view = WorkspaceView::default_for(family);
@@ -590,6 +594,7 @@ impl EditorUiState {
         now_ms: u64,
         previous_tool: Option<Tool>,
     ) {
+        self.home.work_family = Some(family);
         self.workspace.open_for_generation(
             family,
             brief,

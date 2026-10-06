@@ -194,6 +194,7 @@ pub mod variables_resolve;
 pub mod viewport;
 pub mod walkers;
 pub mod web_sync;
+pub mod work_identity;
 pub mod workspace_edit;
 pub mod workspace_history;
 pub mod workspace_page_edit;

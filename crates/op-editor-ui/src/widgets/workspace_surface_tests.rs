@@ -3,6 +3,34 @@
 use super::*;
 use op_editor_core::WorkspacePhase;
 
+#[test]
+fn unclassified_works_have_neutral_labels_and_page_navigation() {
+    let mut work = op_editor_core::WorkspaceState::default();
+    assert_eq!(
+        super::paint::work_family_label(op_i18n::Locale::ZhCn, &work),
+        "作品"
+    );
+    assert_eq!(
+        super::paint::view_label(
+            op_i18n::Locale::ZhCn,
+            work.family,
+            false,
+            WorkspaceView::Single { index: 0 }
+        ),
+        "单页"
+    );
+    work.family_known = true;
+    assert_eq!(
+        super::paint::work_family_label(op_i18n::Locale::ZhCn, &work),
+        "应用界面"
+    );
+    work.family = HomeFamily::EventPoster;
+    assert_eq!(
+        super::paint::work_family_label(op_i18n::Locale::ZhCn, &work),
+        "活动海报"
+    );
+}
+
 fn layout_1440_900(family: HomeFamily, collapsed: bool, boards: usize) -> WorkspaceLayout {
     layout_for(1440.0, 900.0, family, 320.0, collapsed, boards)
 }
@@ -104,6 +132,7 @@ fn surface_hit(
         visible: true,
         active: true,
         family,
+        family_known: true,
         view,
         // A finished result: Present is only live once the run is Done.
         phase: WorkspacePhase::Done,

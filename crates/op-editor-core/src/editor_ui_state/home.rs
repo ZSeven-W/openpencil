@@ -451,6 +451,9 @@ pub struct HomeState {
     /// the file carries one. Drives Make-one-like-this; see
     /// `share_recipe.rs`. Document-scoped: every open replaces it.
     pub recipe: Option<ShareRecipe>,
+    /// Declared purpose of the current document, without its generation brief.
+    /// Document-scoped: never inherit it when opening another work.
+    pub work_family: Option<HomeFamily>,
     /// The website the open document was imported from (its
     /// `editorMeta.importedFrom`), already reduced to scheme + host + path
     /// by [`site_import::sanitize_import_origin`]. The repair policy reads
@@ -487,6 +490,7 @@ impl Default for HomeState {
             brand: brand::HomeBrandState::default(),
             site_import: site_import::HomeSiteImportState::default(),
             recipe: None,
+            work_family: None,
             imported_from: None,
             make_same: None,
         }

@@ -120,6 +120,7 @@ impl WorkspaceState {
         self.active = true;
         self.visible = true;
         self.family = family;
+        self.family_known = true;
         self.brief.clear();
         self.view = WorkspaceView::default_for_reader(family);
         self.selected = 0;

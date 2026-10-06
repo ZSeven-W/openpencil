@@ -51,6 +51,7 @@ impl DocumentSyncRequest<'_> {
             // style guide or the share recipe, so the document's own values
             // always survive the merge.
             scenario: embedded.scenario,
+            work_family: embedded.work_family,
             pinned_style_guide: embedded.pinned_style_guide,
             share_recipe: embedded.share_recipe,
             imported_from: embedded.imported_from,

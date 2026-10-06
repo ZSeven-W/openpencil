@@ -413,8 +413,12 @@ impl<'a> WorkspaceSurface<'a> {
         let widths: Vec<f32> = views
             .iter()
             .map(|view| {
-                (header_button_width(paint::view_label(self.ui.locale, self.state.family, *view))
-                    - 17.0)
+                (header_button_width(paint::view_label(
+                    self.ui.locale,
+                    self.state.family,
+                    self.state.family_known,
+                    *view,
+                )) - 17.0)
                     .max(SEGMENT_W)
             })
             .collect();
@@ -744,7 +748,7 @@ impl Widget for WorkspaceSurface<'_> {
 
 #[path = "workspace_surface_paint.rs"]
 mod paint;
-pub(crate) use paint::{family_label, workspace_phase_key};
+pub(crate) use paint::{work_family_label, workspace_phase_key};
 
 #[path = "workspace_surface_banner.rs"]
 mod banner;

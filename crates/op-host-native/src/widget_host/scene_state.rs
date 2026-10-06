@@ -388,6 +388,7 @@ impl WidgetHostNative {
         // The share recipe says how the DOCUMENT was made; an import is
         // not the replaced document's recipe.
         preserved.home.recipe = state.editor_ui.home.recipe.take();
+        preserved.home.work_family = state.editor_ui.home.work_family;
         // Likewise the import origin: it belongs to the incoming document.
         preserved.home.imported_from = state.editor_ui.home.imported_from.take();
         // Dirty/saved state belongs to the incoming document. The rest of the

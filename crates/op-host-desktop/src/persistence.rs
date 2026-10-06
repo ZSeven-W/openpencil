@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use op_editor_core::{EditorState, PenNodeExt};
+use op_editor_core::EditorState;
 use op_host_native::WidgetHostNative;
 #[cfg(test)]
 use op_host_services::doc_io::active_page_bbox;
@@ -246,20 +246,12 @@ fn load_into_host(
 /// Reopen existing work without inventing a generation or carrying the
 /// previous document's brief, task family, selection, or running state.
 fn open_loaded_normal_workspace(host: &mut WidgetHostNative) {
-    let sizes: Vec<_> = host
-        .editor_state()
-        .active_children()
-        .iter()
-        .filter(|node| matches!(node, jian_ops_schema::node::PenNode::Frame(_)))
-        .filter_map(|node| Some((node.width_px()?, node.height_px()?)))
-        .collect();
-    let family = op_editor_core::infer_reading_family(&sizes);
     let now_ms = host.now_ms();
     let state = host.editor_state_mut();
+    op_editor_core::work_identity::open_for_reading(state, now_ms);
     let ui = &mut state.editor_ui;
     ui.entry_surface = op_editor_core::EntrySurface::Home;
-    ui.workspace.open_for_reading(family, now_ms);
-    ui.workspace.view = op_editor_core::WorkspaceView::default_for(family);
+    ui.workspace.view = op_editor_core::WorkspaceView::default_for(ui.workspace.family);
     ui.workspace.previous_tool = Some(state.tool);
     ui.enter_chat_tab();
     state.tool = op_editor_core::Tool::Hand;
