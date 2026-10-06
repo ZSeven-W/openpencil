@@ -1,0 +1,164 @@
+{
+  "version": "1.0.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "n61",
+      "name": "卡片二 · 第二步",
+      "width": "fill_container",
+      "height": "fit_content",
+      "layout": "vertical",
+      "padding": [
+        96.0,
+        80.0,
+        128.0,
+        80.0
+      ],
+      "fill": [
+        {
+          "type": "solid",
+          "color": "$--background"
+        }
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "n62",
+          "name": "meta-row",
+          "width": "fill_container",
+          "layout": "horizontal",
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "n63",
+              "name": "series-eyebrow",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "普通人改稿的三个步骤",
+              "fontFamily": "Archivo, Noto Serif SC",
+              "fontSize": 32.0,
+              "fontWeight": 400,
+              "letterSpacing": 2.0,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--muted-foreground"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "n64",
+              "name": "page-no",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "贰",
+              "fontFamily": "Archivo, Noto Serif SC",
+              "fontSize": 40.0,
+              "fontWeight": 700,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--foreground"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "n65",
+          "name": "meta-row-2",
+          "width": "fill_container",
+          "layout": "horizontal",
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "n66",
+              "name": "eyebrow-en",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "REVISE IN THREE STEPS",
+              "fontFamily": "Archivo, Noto Serif SC",
+              "fontSize": 26.0,
+              "fontWeight": 400,
+              "letterSpacing": 10.0,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--muted-foreground"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "n67",
+              "name": "page-count",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "02 / 03",
+              "fontFamily": "Archivo, Noto Serif SC",
+              "fontSize": 26.0,
+              "fontWeight": 400,
+              "letterSpacing": 2.0,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--muted-foreground"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "n68",
+          "name": "masthead",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 0.0,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "rectangle",
+              "id": "n69",
+              "name": "rule-heavy",
+              "width": "fill_container",
+              "height": 6.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--primary"
+                }
+              ],
+              "children": []
+            },
+            {
+              "type": "frame",
+              "id": "n70",
+              "name": "headline-block",
+              "width": "fill_container",
+              "layout": "vertical",
+              "padding": [
+                48.0,
+                0.0,
+                48.0,
+                0.0
+              ],
+              "alignItems": "center",
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

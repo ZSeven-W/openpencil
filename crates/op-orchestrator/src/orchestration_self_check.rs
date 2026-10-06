@@ -696,6 +696,8 @@ mod drift;
 use drift::sibling_structure_drift;
 pub use drift::{collect_section_structure_drift, SectionStructureDriftAdvisory};
 
+#[path = "orchestration_self_check_card_copy.rs"]
+mod card_copy;
 #[path = "orchestration_self_check_card_image.rs"]
 mod card_image;
 

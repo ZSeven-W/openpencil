@@ -12,6 +12,7 @@ pub(crate) fn check_generated_nodes_for_prompt(
     prompt: &str,
 ) -> SelfCheckReport {
     let mut report = check_generated_nodes(nodes, canvas_width);
+    super::card_copy::check_reading_content(nodes, prompt, &mut report);
     if is_text_only_social_card_prompt(prompt) {
         let value = serde_json::to_value(nodes).unwrap_or(Value::Null);
         if let Some(node_id) = first_raster_asset_node_id(&value) {
