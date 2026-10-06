@@ -51,7 +51,7 @@ tokio-tungstenite = { version = "0.24", optional = true, default-features = fals
   "rustls-tls-webpki-roots",
 ] }
 futures-util = { version = "0.3", optional = true }
-rustls = { version = "0.23", optional = true, default-features = false, features = [
+rustls = { version = "0.23.45", optional = true, default-features = false, features = [
   "ring",
   "std",
   "tls12",

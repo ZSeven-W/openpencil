@@ -15,7 +15,7 @@ publish = false
 # PKCS#11 and crypto stack for code that cannot run there.
 [target.'cfg(unix)'.dependencies]
 base64 = "0.22"
-cryptoki = "0.12"
+cryptoki = "0.12.1"
 ed25519-dalek = { version = "2.2", default-features = false, features = ["std"] }
 libc = "0.2"
 op-collab-relay-protocol = { path = "../op-collab-relay-protocol" }
