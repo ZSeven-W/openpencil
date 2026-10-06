@@ -243,10 +243,22 @@ impl WidgetHostNative {
         if !self.collab_allows_user_action(op_editor_core::CollabGateAction::ReplaceDocument) {
             return false;
         }
+        self.drop_preview_runtime();
         self.editor_state = state;
+        self.editor_state.editor_ui.exit_preview();
+        // A New / Open while a Home-launched generation is still running
+        // must never repaint a workspace for boards that no longer
+        // exist — the incoming state never carries one, but reset it
+        // anyway so the seam guarantees that itself.
+        self.editor_state
+            .editor_ui
+            .workspace
+            .reset_for_new_document();
         self.document_epoch = self.document_epoch.wrapping_add(1);
+        self.layout_transition = None;
         self.scene_cache.invalidate();
         self.editor_state_dirty = true;
+        self.drop_pan_cache();
         true
     }
 
@@ -264,17 +276,23 @@ impl WidgetHostNative {
             return Err(Box::new(document));
         }
 
+        self.drop_preview_runtime();
         // `replace_document` deliberately preserves editor chrome and app
         // preferences while clearing every document-scoped draft and stale id.
         self.editor_state.replace_document(document);
+        // ...and that preservation would carry a stale workspace across
+        // the swap. Clear it here for the same reason as
+        // `replace_editor_state` above.
+        self.editor_state
+            .editor_ui
+            .workspace
+            .reset_for_new_document();
         op_pen_loader::apply_editor_meta_or_legacy_fallback(&mut self.editor_state, editor_meta);
         self.editor_state.editor_ui.file_name_display = file_name;
         self.editor_state.editor_ui.mobile_sheet = None;
         self.editor_state.editor_ui.pending_file_action = None;
-        self.editor_state.editor_ui.exit_preview();
         self.editor_state.mark_saved_revision();
 
-        self.preview = None;
         self.layout_transition = None;
         self.document_epoch = self.document_epoch.wrapping_add(1);
         self.force_rotate_layer_panel_owner();
@@ -283,6 +301,27 @@ impl WidgetHostNative {
         self.drop_pan_cache();
         self.arm_missing_fonts_detection();
         Ok(())
+    }
+
+    /// Swap in a blank starter page for a brief launched from Studio
+    /// Home, keeping chrome, chat model selection and app preferences.
+    ///
+    /// Shares `install_open_document`'s teardown deliberately: the
+    /// preview-runtime postmortem (a live preview session survived a
+    /// document swap and kept painting the old tree) is exactly what a
+    /// second, hand-rolled swap seam would reproduce. The transcript is
+    /// reset too, because the new document's run must not read the last
+    /// design's conversation as its own history.
+    pub fn start_fresh_document_for_home(&mut self) -> bool {
+        let starter = op_editor_core::EditorState::starter();
+        if self
+            .install_open_document(starter.doc.clone(), None, None)
+            .is_err()
+        {
+            return false;
+        }
+        self.editor_state.chat.new_chat();
+        true
     }
 
     /// Install a Figma-imported editor state. The worker only parses
@@ -314,6 +353,10 @@ impl WidgetHostNative {
             return false;
         }
         let imported_document_dirty = state.editor_ui.document_dirty;
+        // The preview runtime (if any) was built from the document being
+        // replaced; drop it before the shell UI is cloned so the retained
+        // `editor_ui` carries no preview-mode state into the import.
+        self.drop_preview_runtime();
         let mut preserved = self.editor_state.editor_ui.clone();
         preserved.figma_import_in_progress = false;
         preserved.file_name_display = state.editor_ui.file_name_display.take();

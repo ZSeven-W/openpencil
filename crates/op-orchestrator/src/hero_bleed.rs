@@ -1,0 +1,660 @@
+//! Enforce the mobile full-bleed hero contract for marked plan subtasks.
+
+use crate::design_type::DesignForm;
+use crate::plan::{OrchestratorPlan, Subtask};
+use crate::types::DocSink;
+use jian_ops_schema::node::PenNode;
+use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
+use serde_json::{json, Value};
+use std::collections::HashSet;
+
+const BLEED_NAME_SUFFIX: &str = " (bleed)";
+
+/// Apply the marked hero contract to one mobile root. The whole section is
+/// replaced through `PatchNodeData`, which preserves every existing child id.
+/// Returns one accepted edit when the section was repaired, otherwise zero.
+pub(crate) fn enforce(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_id: &str) -> usize {
+    if crate::geometry_validation::root_design_form(sink.state(), root_id)
+        != DesignForm::MobileScreen
+    {
+        return 0;
+    }
+
+    let Some(section_id) = find_marked_section_id(sink, plan, root_id) else {
+        return 0;
+    };
+    let Some(section) = op_editor_core::walkers::find_node(
+        sink.state().active_children(),
+        &NodeId::new(section_id.clone()),
+    ) else {
+        return 0;
+    };
+    if is_bottom_navigation(section) {
+        return 0;
+    }
+    let Ok(mut section_value) = serde_json::to_value(section) else {
+        return 0;
+    };
+    if section_value
+        .get("name")
+        .and_then(Value::as_str)
+        .is_some_and(|name| name.ends_with(BLEED_NAME_SUFFIX))
+    {
+        return 0;
+    }
+
+    let Some(children) = section_value
+        .get("children")
+        .and_then(Value::as_array)
+        .cloned()
+    else {
+        return 0;
+    };
+    let Some(first_index) = children
+        .iter()
+        .position(|child| !crate::cleanup::is_status_bar_from_json(child))
+    else {
+        return 0;
+    };
+    let Some(media_path) = first_media_path(&children, first_index) else {
+        return 0;
+    };
+
+    let original_name = section_value
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or(section_id.as_str())
+        .to_string();
+    let document = {
+        let mut document = sink.state().doc.clone();
+        document.children = sink.state().active_children().to_vec();
+        document.pages = None;
+        document
+    };
+    let variables = document.variables.clone().unwrap_or_default();
+    let theme = op_design_lint::node_util::default_theme(document.themes.as_ref());
+    let mut next_children = children;
+    let chosen_original_width = value_at_path_mut(&mut next_children, &media_path)
+        .and_then(|media| media.get("width").and_then(Value::as_f64));
+    let Some(media) = value_at_path_mut(&mut next_children, &media_path) else {
+        return 0;
+    };
+    media["width"] = Value::String("fill_container".into());
+    media["x"] = json!(0);
+    // A none-stack is the media's containing viewport. It must stretch too;
+    // otherwise a fixed-width authored stack would still clip the hero.
+    if media_path.len() == 2 {
+        if let Some(stack) = next_children
+            .get_mut(media_path[0])
+            .and_then(Value::as_object_mut)
+        {
+            stack.insert("width".into(), Value::String("fill_container".into()));
+            if let Some(stack_children) = stack.get_mut("children").and_then(Value::as_array_mut) {
+                let chosen_index = media_path[1];
+                for (index, child) in stack_children.iter_mut().enumerate() {
+                    if index == chosen_index
+                        || crate::cleanup::is_status_bar_from_json(child)
+                        || !child
+                            .get("width")
+                            .and_then(Value::as_f64)
+                            .is_some_and(|width| {
+                                chosen_original_width.is_some_and(|chosen| width == chosen)
+                            })
+                        || !matches!(child.get("type").and_then(Value::as_str), Some("image"))
+                            && !is_coloured_media(child)
+                    {
+                        continue;
+                    }
+                    child["width"] = Value::String("fill_container".into());
+                    child["x"] = json!(0);
+                }
+            }
+        }
+    }
+
+    if media_path.len() == 2 {
+        let stack_id = media_path[0];
+        let media_index = media_path[1];
+        if let Some(stack) = next_children.get_mut(stack_id) {
+            repair_image_hero_stack(
+                stack,
+                media_index,
+                &original_name,
+                sink.state(),
+                &variables,
+                &theme,
+            );
+        }
+    }
+    let original_gap = section_value
+        .get("gap")
+        .cloned()
+        .unwrap_or_else(|| json!(0));
+    let original_padding = section_value.get("padding").cloned();
+    section_value["name"] = Value::String(format!("{original_name}{BLEED_NAME_SUFFIX}"));
+    section_value["padding"] = zero_horizontal_padding(original_padding.as_ref());
+
+    let trailing = next_children.split_off(first_index + 1);
+    if !trailing.is_empty() {
+        let wrapper_id = unique_wrapper_id(sink.state(), &section_id);
+        next_children.push(json!({
+            "type": "frame",
+            "id": wrapper_id,
+            "name": format!("{original_name} inset"),
+            "layout": "vertical",
+            "gap": original_gap,
+            "padding": [0, 24],
+            "width": "fill_container",
+            "height": "fit_content",
+            "children": trailing,
+        }));
+    }
+    section_value["children"] = Value::Array(next_children);
+
+    let Ok(patch_json) = serde_json::to_string(&json!({
+        "name": section_value.get("name").cloned().unwrap_or(Value::Null),
+        "padding": section_value
+            .get("padding")
+            .cloned()
+            .unwrap_or(Value::Null),
+        "children": section_value
+            .get("children")
+            .cloned()
+            .unwrap_or(Value::Array(Vec::new())),
+    })) else {
+        return 0;
+    };
+
+    usize::from(sink.apply(EditorCommand::PatchNodeData {
+        node_id: NodeId::new(section_id),
+        patch_json,
+        page_id: None,
+    }))
+}
+
+fn find_marked_section_id(
+    sink: &dyn DocSink,
+    plan: &OrchestratorPlan,
+    root_id: &str,
+) -> Option<String> {
+    let root = op_editor_core::walkers::find_node(
+        sink.state().active_children(),
+        &NodeId::new(root_id.to_string()),
+    )?;
+    let children = root.children()?;
+    plan.subtasks
+        .iter()
+        .filter(|subtask| subtask.bleed_hero)
+        .find_map(|subtask| find_section_for_subtask(children, subtask))
+}
+
+fn find_section_for_subtask(children: &[PenNode], subtask: &Subtask) -> Option<String> {
+    if let Some(generated_id) = subtask.generated_root_id.as_deref() {
+        if let Some(child) = children.iter().find(|child| child.id_str() == generated_id) {
+            return Some(child.id_str().to_string());
+        }
+    }
+    children
+        .iter()
+        .find(|child| {
+            let name = child.base().name.as_deref();
+            name == Some(subtask.label.as_str()) || name == Some(subtask.id.as_str())
+        })
+        .map(|child| child.id_str().to_string())
+}
+
+fn is_bottom_navigation(node: &PenNode) -> bool {
+    crate::cleanup::is_bottom_nav_section(node)
+        || crate::cleanup::is_trailing_bottom_nav_section(node)
+}
+
+/// Rail passes must leave an already-bleeding section and its flush first
+/// media alone. This JSON predicate is shared by passes that already inspect
+/// serialized node values.
+pub(crate) fn is_bleed_section_or_flush_media(value: &Value) -> bool {
+    if is_bleed_section_value(value) {
+        return true;
+    }
+    let Some(first) = value
+        .get("children")
+        .and_then(Value::as_array)
+        .and_then(|children| {
+            children
+                .iter()
+                .find(|child| !crate::cleanup::is_status_bar_from_json(child))
+        })
+    else {
+        return false;
+    };
+    is_flush_media(first)
+}
+
+pub(crate) fn is_bleed_section_node(node: &PenNode) -> bool {
+    node.base()
+        .name
+        .as_deref()
+        .is_some_and(|name| name.ends_with(BLEED_NAME_SUFFIX))
+}
+
+fn is_bleed_section_value(value: &Value) -> bool {
+    value
+        .get("name")
+        .and_then(Value::as_str)
+        .is_some_and(|name| name.ends_with(BLEED_NAME_SUFFIX))
+}
+
+/// Typed-node bridge for passes that operate before their JSON conversion.
+pub(crate) fn is_bleed_section_or_flush_media_node(node: &PenNode) -> bool {
+    serde_json::to_value(node)
+        .ok()
+        .is_some_and(|value| is_bleed_section_or_flush_media(&value))
+}
+
+fn is_flush_media(value: &Value) -> bool {
+    if value.get("type").and_then(Value::as_str) == Some("image") {
+        return value.get("width").and_then(Value::as_str) == Some("fill_container");
+    }
+    if is_coloured_media(value) {
+        return value.get("width").and_then(Value::as_str) == Some("fill_container");
+    }
+    if value.get("type").and_then(Value::as_str) == Some("frame")
+        && layout_str(value) == Some("none")
+    {
+        return value
+            .get("children")
+            .and_then(Value::as_array)
+            .is_some_and(|children| {
+                children
+                    .iter()
+                    .filter(|child| !crate::cleanup::is_status_bar_from_json(child))
+                    .any(|child| {
+                        (child.get("type").and_then(Value::as_str) == Some("image")
+                            || is_coloured_media(child))
+                            && child.get("width").and_then(Value::as_str) == Some("fill_container")
+                    })
+            });
+    }
+    false
+}
+
+/// Return the path to the first media candidate. The path is relative to the
+/// section's children array; a two-element path targets media inside a none
+/// stack rather than the stack itself.
+fn first_media_path(children: &[Value], first_index: usize) -> Option<Vec<usize>> {
+    let first = children.get(first_index)?;
+    if first.get("type").and_then(Value::as_str) == Some("image") {
+        return Some(vec![first_index]);
+    }
+    if first.get("type").and_then(Value::as_str) == Some("frame")
+        && layout_str(first) == Some("none")
+    {
+        let nested = first.get("children").and_then(Value::as_array)?;
+        let nested_index = nested
+            .iter()
+            .enumerate()
+            .filter(|(_, child)| !crate::cleanup::is_status_bar_from_json(child))
+            .find(|(_, child)| child.get("type").and_then(Value::as_str) == Some("image"))
+            .or_else(|| {
+                nested
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, child)| !crate::cleanup::is_status_bar_from_json(child))
+                    .find(|(_, child)| is_coloured_media(child))
+            })
+            .map(|(index, _)| index)?;
+        return Some(vec![first_index, nested_index]);
+    }
+    if is_coloured_media(first) {
+        return Some(vec![first_index]);
+    }
+    None
+}
+
+fn is_coloured_media(value: &Value) -> bool {
+    matches!(
+        value.get("type").and_then(Value::as_str),
+        Some("frame" | "rectangle")
+    ) && has_solid_or_gradient_fill(value)
+        && !value
+            .get("children")
+            .and_then(Value::as_array)
+            .is_some_and(|children| {
+                children
+                    .iter()
+                    .any(|child| child.get("type").and_then(Value::as_str) == Some("text"))
+            })
+}
+
+/// Add the legibility layer to the none-stack that owns an image hero. This
+/// deliberately stays scoped to the stack selected by `enforce`: coloured
+/// media and ordinary image sections must keep their authored treatment.
+fn repair_image_hero_stack(
+    stack: &mut Value,
+    media_index: usize,
+    section_name: &str,
+    state: &op_editor_core::EditorState,
+    variables: &op_design_lint::node_util::Variables,
+    theme: &op_design_lint::node_util::Theme,
+) -> bool {
+    if stack.get("type").and_then(Value::as_str) != Some("frame")
+        || layout_str(stack) != Some("none")
+        || stack
+            .get("children")
+            .and_then(Value::as_array)
+            .and_then(|children| children.get(media_index))
+            .and_then(|media| media.get("type"))
+            .and_then(Value::as_str)
+            != Some("image")
+    {
+        return false;
+    }
+
+    let stack_width = stack.get("width").cloned();
+    let stack_id = stack
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or("hero-stack")
+        .to_string();
+    let Some(children) = stack.get_mut("children").and_then(Value::as_array_mut) else {
+        return false;
+    };
+    if !children.iter().any(contains_non_status_text) {
+        return false;
+    }
+
+    let has_scrim = children
+        .iter()
+        .enumerate()
+        .skip(media_index.saturating_add(1))
+        .any(|(_, child)| acts_as_hero_scrim(child, stack_width.as_ref(), variables, theme));
+    let mut changed = false;
+    if !has_scrim {
+        let scrim_id = unique_id(state, &format!("{stack_id}-scrim"));
+        children.insert(
+            media_index + 1,
+            json!({
+                "type": "frame",
+                "id": scrim_id,
+                "name": format!("{section_name} scrim"),
+                "x": 0,
+                "y": 0,
+                "width": "fill_container",
+                "height": "fill_container",
+                "children": [],
+                "fill": [{
+                    // .op convention: 0° flows left→right, 90° top→bottom.
+                    "type": "linear_gradient",
+                    "angle": 90,
+                    "stops": [
+                        {"offset": 0.0, "color": "#00000000"},
+                        {"offset": 1.0, "color": "#000000A6"}
+                    ],
+                    "explain": "hero scrim"
+                }]
+            }),
+        );
+        changed = true;
+    }
+
+    for child in children.iter_mut() {
+        changed |= recolor_hero_text(child, false, variables, theme);
+    }
+    changed
+}
+
+fn contains_non_status_text(node: &Value) -> bool {
+    if crate::cleanup::is_status_bar_from_json(node) {
+        return false;
+    }
+    if node.get("type").and_then(Value::as_str) == Some("text") {
+        return true;
+    }
+    node.get("children")
+        .and_then(Value::as_array)
+        .is_some_and(|children| children.iter().any(contains_non_status_text))
+}
+
+fn recolor_hero_text(
+    node: &mut Value,
+    inside_solid_container: bool,
+    variables: &op_design_lint::node_util::Variables,
+    theme: &op_design_lint::node_util::Theme,
+) -> bool {
+    if crate::cleanup::is_status_bar_from_json(node) {
+        return false;
+    }
+    let current_is_solid = is_solid_filled_container(node, variables, theme);
+    let mut changed = false;
+    if !inside_solid_container
+        && matches!(
+            node.get("type").and_then(Value::as_str),
+            Some("text" | "icon_font")
+        )
+        && dark_hero_fill_should_change(node, variables, theme)
+    {
+        let secondary = node.get("type").and_then(Value::as_str) == Some("text")
+            && node
+                .get("fontSize")
+                .and_then(Value::as_f64)
+                .is_some_and(|size| size < 16.0);
+        node["fill"] = json!([{
+            "type": "solid",
+            "color": if secondary { "#FFFFFFCC" } else { "#FFFFFF" }
+        }]);
+        changed = true;
+    }
+    let nested_solid = inside_solid_container || current_is_solid;
+    if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+        for child in children.iter_mut() {
+            changed |= recolor_hero_text(child, nested_solid, variables, theme);
+        }
+    }
+    changed
+}
+
+fn dark_hero_fill_should_change(
+    node: &Value,
+    variables: &op_design_lint::node_util::Variables,
+    theme: &op_design_lint::node_util::Theme,
+) -> bool {
+    let Some(raw) = node
+        .get("fill")
+        .and_then(Value::as_array)
+        .and_then(|fills| {
+            fills.iter().find_map(|fill| {
+                (fill.get("type").and_then(Value::as_str) == Some("solid"))
+                    .then(|| fill.get("color").and_then(Value::as_str))
+                    .flatten()
+            })
+        })
+    else {
+        return false;
+    };
+    let Some(resolved) = op_design_lint::node_util::resolve_color_ref(raw, variables, theme) else {
+        return false;
+    };
+    let Some(rgba) = crate::text_contrast_repair::parse_color_rgba(&resolved) else {
+        return false;
+    };
+    if relative_luminance(rgba) >= 0.5 {
+        return false;
+    }
+    !raw.starts_with('$') || is_hero_semantic_token(raw)
+}
+
+fn relative_luminance(rgba: [u8; 4]) -> f64 {
+    let channel = |value: u8| {
+        let value = f64::from(value) / 255.0;
+        if value <= 0.03928 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * channel(rgba[0]) + 0.7152 * channel(rgba[1]) + 0.0722 * channel(rgba[2])
+}
+
+fn is_hero_semantic_token(raw: &str) -> bool {
+    let lower = raw.to_ascii_lowercase();
+    lower.starts_with("$--")
+        && (lower.contains("foreground") || lower.contains("-text") || lower.ends_with("text"))
+}
+
+fn is_solid_filled_container(
+    node: &Value,
+    variables: &op_design_lint::node_util::Variables,
+    theme: &op_design_lint::node_util::Theme,
+) -> bool {
+    if !matches!(
+        node.get("type").and_then(Value::as_str),
+        Some("frame" | "rectangle" | "group")
+    ) {
+        return false;
+    }
+    node.get("fill")
+        .and_then(Value::as_array)
+        .is_some_and(|fills| {
+            fills.iter().any(|fill| {
+                if fill.get("type").and_then(Value::as_str) != Some("solid") {
+                    return false;
+                }
+                let Some(raw) = fill.get("color").and_then(Value::as_str) else {
+                    return false;
+                };
+                let Some(resolved) =
+                    op_design_lint::node_util::resolve_color_ref(raw, variables, theme)
+                else {
+                    return true;
+                };
+                crate::text_contrast_repair::parse_color_rgba(&resolved)
+                    .is_some_and(|rgba| rgba[3] > 0)
+            })
+        })
+}
+
+fn acts_as_hero_scrim(
+    node: &Value,
+    stack_width: Option<&Value>,
+    variables: &op_design_lint::node_util::Variables,
+    theme: &op_design_lint::node_util::Theme,
+) -> bool {
+    if !matches!(
+        node.get("type").and_then(Value::as_str),
+        Some("frame" | "rectangle")
+    ) || !width_spans_stack(node.get("width"), stack_width)
+    {
+        return false;
+    }
+    node.get("fill")
+        .and_then(Value::as_array)
+        .is_some_and(|fills| {
+            fills
+                .iter()
+                .any(|fill| match fill.get("type").and_then(Value::as_str) {
+                    Some("linear_gradient" | "radial_gradient") => fill
+                        .get("opacity")
+                        .and_then(Value::as_f64)
+                        .is_none_or(|opacity| opacity > 0.0),
+                    Some("solid") => {
+                        let Some(raw) = fill.get("color").and_then(Value::as_str) else {
+                            return false;
+                        };
+                        let Some(resolved) =
+                            op_design_lint::node_util::resolve_color_ref(raw, variables, theme)
+                        else {
+                            return false;
+                        };
+                        let Some(rgba) = crate::text_contrast_repair::parse_color_rgba(&resolved)
+                        else {
+                            return false;
+                        };
+                        let fill_opacity =
+                            fill.get("opacity").and_then(Value::as_f64).unwrap_or(1.0);
+                        f64::from(rgba[3]) / 255.0 * fill_opacity < 0.9
+                    }
+                    _ => false,
+                })
+        })
+}
+
+fn width_spans_stack(width: Option<&Value>, stack_width: Option<&Value>) -> bool {
+    if width.and_then(Value::as_str) == Some("fill_container") {
+        return true;
+    }
+    let Some(child_width) = width.and_then(Value::as_f64) else {
+        return false;
+    };
+    let Some(stack_width) = stack_width.and_then(Value::as_f64) else {
+        return false;
+    };
+    child_width + f64::EPSILON >= stack_width
+}
+
+fn has_solid_or_gradient_fill(value: &Value) -> bool {
+    value
+        .get("fill")
+        .and_then(Value::as_array)
+        .is_some_and(|fills| {
+            fills.iter().any(|fill| {
+                matches!(
+                    fill.get("type").and_then(Value::as_str),
+                    Some("solid" | "linear_gradient" | "radial_gradient")
+                )
+            })
+        })
+}
+
+fn layout_str(value: &Value) -> Option<&str> {
+    value.get("layout").and_then(Value::as_str)
+}
+
+fn value_at_path_mut<'a>(value: &'a mut [Value], path: &[usize]) -> Option<&'a mut Value> {
+    let (first, rest) = path.split_first()?;
+    let value = value.get_mut(*first)?;
+    if rest.is_empty() {
+        return Some(value);
+    }
+    value_at_path_mut(value.get_mut("children")?.as_array_mut()?, rest)
+}
+
+fn zero_horizontal_padding(padding: Option<&Value>) -> Value {
+    let number = |value: &Value| value.as_f64().unwrap_or(0.0);
+    match padding {
+        Some(Value::Array(values)) if values.len() == 4 => {
+            json!([number(&values[0]), 0, number(&values[2]), 0])
+        }
+        Some(Value::Array(values)) if values.len() == 2 => json!([number(&values[0]), 0]),
+        Some(Value::Number(value)) => json!([number(&Value::Number(value.clone())), 0]),
+        _ => json!([0, 0]),
+    }
+}
+
+fn unique_wrapper_id(state: &op_editor_core::EditorState, section_id: &str) -> String {
+    unique_id(state, &format!("{section_id}-bleed-inset"))
+}
+
+pub(super) fn unique_id(state: &op_editor_core::EditorState, base: &str) -> String {
+    let mut ids = HashSet::new();
+    collect_ids(state.active_children(), &mut ids);
+    let base = base.to_string();
+    let mut candidate = base.clone();
+    let mut suffix = 2;
+    while ids.contains(&candidate) {
+        candidate = format!("{base}-{suffix}");
+        suffix += 1;
+    }
+    candidate
+}
+
+fn collect_ids(nodes: &[PenNode], ids: &mut HashSet<String>) {
+    for node in nodes {
+        ids.insert(node.id_str().to_string());
+        if let Some(children) = node.children() {
+            collect_ids(children, ids);
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "hero_bleed_tests.rs"]
+mod tests;

@@ -242,7 +242,7 @@ fn basic_tier_components_prompt_keeps_both_manifest_and_teaching() {
     );
 
     // A Basic-tier mobile request — the actual smoke scenario. Mobile routes
-    // through the wider 9200-token budget so the drop is provably tier-caused,
+    // through the wider 10400-token budget so the drop is provably tier-caused,
     // not budget-caused.
     let basic_req = DesignRequest {
         prompt: "Design a 402x874 mobile shop home screen with product cards, \
@@ -261,8 +261,10 @@ fn basic_tier_components_prompt_keeps_both_manifest_and_teaching() {
             width: 402.0,
             height: 640.0,
         },
+        bleed_hero: false,
         id_prefix: "main-content".into(),
         parent_frame_id: Some("page".into()),
+        insert_after_sibling_id: None,
         elements: Some("product cards, search bar, category chips".into()),
         screen: None,
         generated_root_id: None,
@@ -377,8 +379,10 @@ fn tight_budget_dashboard_keeps_component_composition() {
             width: 1280.0,
             height: 600.0,
         },
+        bleed_hero: false,
         id_prefix: "main".into(),
         parent_frame_id: Some("page".into()),
+        insert_after_sibling_id: None,
         elements: Some("metric cards, chart, table".into()),
         screen: None,
         generated_root_id: None,
@@ -395,6 +399,7 @@ fn tight_budget_dashboard_keeps_component_composition() {
         &dash_plan,
         &basic_req,
         AbortFlag::new(),
+        false,
         false,
         false,
         false,
@@ -509,8 +514,10 @@ fn tight_budget_dashboard_without_library_does_not_pin_component_composition() {
             width: 1280.0,
             height: 600.0,
         },
+        bleed_hero: false,
         id_prefix: "main".into(),
         parent_frame_id: Some("page".into()),
+        insert_after_sibling_id: None,
         elements: Some("metric cards, chart, table".into()),
         screen: None,
         generated_root_id: None,

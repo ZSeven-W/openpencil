@@ -395,8 +395,8 @@ pub(crate) fn paint_gradient_rect(
 
 /// Dispatch a [`SceneShader`] onto the `RenderBackend` shader method.
 /// Uniforms are flattened into `(name, values)` slices because the
-/// backend trait stays free of scene-specific types. Only the native
-/// host runs the program; every other backend paints `fallback` solid.
+/// backend trait stays free of scene-specific types. Native Skia and the
+/// CanvasKit web host run the program; other backends paint `fallback` solid.
 pub(crate) fn paint_shader_rect(
     cx: &mut PaintCx<'_>,
     shader: &SceneShader,

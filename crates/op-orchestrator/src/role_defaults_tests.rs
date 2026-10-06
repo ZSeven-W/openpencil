@@ -30,7 +30,10 @@ fn theme_from_fill_luminance() {
 #[test]
 fn theme_from_fill_unknown_inputs() {
     // Unresolved ref (variables: null or binding failure) → Unknown.
-    assert_eq!(detect_theme_from_fill(Some("$color-bg")), Theme::Unknown);
+    assert_eq!(
+        detect_theme_from_fill(Some("$--background")),
+        Theme::Unknown
+    );
     // No fill at all → Unknown (can't tell what page sits behind).
     assert_eq!(detect_theme_from_fill(None), Theme::Unknown);
     // Malformed hex → Unknown (can't tell luminance).

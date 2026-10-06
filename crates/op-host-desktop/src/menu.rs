@@ -22,6 +22,7 @@
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
+    Home,
     New,
     Open,
     /// Open the recent-file at this index into `editor_ui.recent_files`
@@ -77,6 +78,7 @@ mod backend {
     // `action_for_id`. Kept as `&str` consts so the build + the
     // dispatch can't drift.
     const ID_NEW: &str = "new";
+    const ID_HOME: &str = "home";
     const ID_OPEN: &str = "open";
     const ID_SAVE: &str = "save";
     const ID_SAVE_AS: &str = "save-as";
@@ -110,6 +112,7 @@ mod backend {
             return index.parse::<usize>().ok().map(MenuAction::OpenRecent);
         }
         Some(match id {
+            ID_HOME => MenuAction::Home,
             ID_NEW => MenuAction::New,
             ID_OPEN => MenuAction::Open,
             ID_SAVE => MenuAction::Save,
@@ -206,6 +209,7 @@ mod backend {
             let recent_submenu = Submenu::new(tr(locale, "menu.openRecent"), true);
             let file = Submenu::new(tr(locale, "menu.file"), true);
             let _ = file.append_items(&[
+                &item(ID_HOME, tr(locale, "fileMenu.home"), None),
                 &item(ID_NEW, tr(locale, "menu.new"), Some(accel(Code::KeyN))),
                 &item(ID_OPEN, tr(locale, "menu.open"), Some(accel(Code::KeyO))),
                 &recent_submenu,

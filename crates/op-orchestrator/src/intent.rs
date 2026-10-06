@@ -73,6 +73,29 @@ const DESIGN_KEYWORDS: &[&str] = &[
     "网页",
     "小程序",
     "后台",
+    // 中文动词 —— 量词形式。Studio 首页的七类任务包装语都用"做一份/
+    // 一套/一张/一篇"起头，而旧表只有"做一个/做个"，于是演示文稿、图文
+    // 卡片、截图教程、信息图、活动海报五类全部落到 chat。
+    "做一份",
+    "做一套",
+    "做一张",
+    "做一篇",
+    "做份",
+    "做套",
+    "做张",
+    // 中文设计名词 —— 交付物形态。与上面的页面类名词同理：在设计工具
+    // 语境里这些词几乎总是"造一个 X"。
+    "演示文稿",
+    "幻灯片",
+    "ppt",
+    "slides",
+    "图文卡片",
+    "卡片",
+    "海报",
+    "信息图",
+    "长图",
+    "截图教程",
+    "排版",
 ];
 
 /// 把用户消息分类为 [`Intent::Design`] 或 [`Intent::Chat`]。
@@ -109,6 +132,25 @@ mod tests {
             "admin panel for orders",
             "一个理发店管理网站",
             "记账小程序",
+        ] {
+            assert_eq!(classify_intent(p), Intent::Design, "{p}");
+        }
+    }
+
+    /// Every Studio Home task wrapper must classify as Design. The
+    /// deliverable is already chosen by the task card, so a wrapper that
+    /// reads as chat silently answers the user in prose instead of
+    /// drawing (measured 2026-09-13 on 演示文稿).
+    #[test]
+    fn every_studio_home_task_wrapper_classifies_as_design() {
+        for p in [
+            "请设计一套可编辑的高保真手机 App 界面（mobile app，375×812）。",
+            "请设计一个完整的纵向滚动网站页面（landing page，1440 宽）。",
+            "请做一份 5 页的 PPT 演示文稿（slides，16:9）。封面、正文与结束页风格统一。",
+            "请做一套图文卡片（card，竖版 3:4，多页轮播）。保持统一排版与视觉系统。",
+            "请做一篇截图教程图文（card，竖版，截图配上步骤说明）。",
+            "请做一张数据对比信息图长图（card，竖版图文长图）。",
+            "请做一套活动海报（card，主海报竖版 + 社交方图）。",
         ] {
             assert_eq!(classify_intent(p), Intent::Design, "{p}");
         }

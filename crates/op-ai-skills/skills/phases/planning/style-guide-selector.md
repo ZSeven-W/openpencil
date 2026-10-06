@@ -4,7 +4,7 @@ description: Select a pre-built visual style guide based on user request
 phase: [planning]
 trigger: null
 priority: 3
-budget: 1500
+budget: 1600
 category: base
 ---
 

@@ -6,6 +6,11 @@
 //! the original file.
 
 use super::*;
+use crate::cleanup::run_cleanup_passes_with_summary;
+use crate::plan::{OrchestratorPlan, RootFrameSpec};
+use crate::repair_summary::RepairSummary;
+use crate::test_support::VecDocSink;
+use op_editor_core::{EditorState, PenNodeExt};
 use serde_json::json;
 
 #[test]
@@ -124,7 +129,7 @@ fn notification_badge_becomes_corner_circle() {
         "layout":"horizontal","gap":8.0,"cornerRadius":12.0,
         "children":[
             {"type":"frame","name":"Badge","width":8.0,"height":8.0,
-             "fill":[{"type":"solid","color":"$color-chart-6"}],"children":[]},
+             "fill":[{"type":"solid","color":"$--chart-6"}],"children":[]},
             {"type":"icon_font","name":"Bell","iconFontName":"bell","width":22.0,"height":22.0}
         ]
     });
@@ -224,19 +229,19 @@ fn normal_vertical_stack_not_converted() {
 
 #[test]
 fn dominant_accent_prefers_most_used_chart_token() {
-    // glm uses $color-chart-6 as the de-facto accent (3×) over $color-accent (1×).
+    // glm uses $--chart-6 as the de-facto accent (3×) over $--primary (1×).
     let nodes: Vec<PenNode> = vec![serde_json::from_value(json!({
         "type":"frame","id":"r","name":"Page","children":[
-            {"type":"frame","id":"b","name":"Btn","role":"button","fill":[{"type":"solid","color":"$color-chart-6"}]},
-            {"type":"frame","id":"c","name":"Chip","role":"chip","fill":[{"type":"solid","color":"$color-chart-6"}]},
-            {"type":"text","id":"t","name":"T","content":"x","fill":[{"type":"solid","color":"$color-chart-6"}]},
-            {"type":"frame","id":"a","name":"A","fill":[{"type":"solid","color":"$color-accent"}]}
+            {"type":"frame","id":"b","name":"Btn","role":"button","fill":[{"type":"solid","color":"$--chart-6"}]},
+            {"type":"frame","id":"c","name":"Chip","role":"chip","fill":[{"type":"solid","color":"$--chart-6"}]},
+            {"type":"text","id":"t","name":"T","content":"x","fill":[{"type":"solid","color":"$--chart-6"}]},
+            {"type":"frame","id":"a","name":"A","fill":[{"type":"solid","color":"$--primary"}]}
         ]
     }))
     .unwrap()];
     assert_eq!(
         dominant_design_accent(&nodes).as_deref(),
-        Some("$color-chart-6"),
+        Some("$--chart-6"),
         "the most-used accent token wins over the palette default"
     );
 }
@@ -274,13 +279,13 @@ fn nested_card_redundant_shadow_and_radius_stripped() {
 fn invisible_white_text_band_gets_accent_on_light_page() {
     // glm's transparent promo banner: white copy, no fill → invisible on cream.
     let mut band = json!({"type":"frame","role":"section","children":[
-        {"type":"text","content":"50% OFF","fill":[{"type":"solid","color":"$color-surface"}]},
+        {"type":"text","content":"50% OFF","fill":[{"type":"solid","color":"$--card"}]},
         {"type":"text","content":"first order","fill":[{"type":"solid","color":"#FFFFFF"}]}
     ]});
-    fix_invisible_text_band(&mut band, Theme::Light, "$color-accent");
+    fix_invisible_text_band(&mut band, Theme::Light, "$--primary");
     assert_eq!(
         band["fill"],
-        json!([{"type":"solid","color":"$color-accent"}]),
+        json!([{"type":"solid","color":"$--primary"}]),
         "all-white-text band on a light page → accent fill so copy is readable"
     );
 }
@@ -291,46 +296,46 @@ fn banner_with_filled_button_still_filled() {
     // button's accent text sits on its OWN surface → must not count → the
     // all-light headline alone triggers the banner fill. (gen9 Promo Content.)
     let mut band = json!({"type":"frame","role":"section","children":[
-        {"type":"text","content":"50% OFF","fill":[{"type":"solid","color":"$color-surface"}]},
-        {"type":"text","content":"Code: X","fill":[{"type":"solid","color":"$color-surface-2"}]},
-        {"type":"frame","role":"button","fill":[{"type":"solid","color":"$color-surface"}],"children":[
-            {"type":"text","content":"Order Now","fill":[{"type":"solid","color":"$color-accent"}]}
+        {"type":"text","content":"50% OFF","fill":[{"type":"solid","color":"$--card"}]},
+        {"type":"text","content":"Code: X","fill":[{"type":"solid","color":"$--muted"}]},
+        {"type":"frame","role":"button","fill":[{"type":"solid","color":"$--card"}],"children":[
+            {"type":"text","content":"Order Now","fill":[{"type":"solid","color":"$--primary"}]}
         ]}
     ]});
-    fix_invisible_text_band(&mut band, Theme::Light, "$color-accent");
+    fix_invisible_text_band(&mut band, Theme::Light, "$--primary");
     assert_eq!(
         band["fill"],
-        json!([{"type":"solid","color":"$color-accent"}]),
+        json!([{"type":"solid","color":"$--primary"}]),
         "button's accent text excluded (own surface) → light headline → filled"
     );
 }
 
 #[test]
 fn light_surface_filled_banner_repainted_accent() {
-    // tt5: a feature-card carrying a `$color-surface` (light) fill with white
+    // tt5: a feature-card carrying a `$--card` (light) fill with white
     // headline + subtext + a translucent-white badge + a dark CTA button. The
     // light surface makes the white headline INVISIBLE. The light-surface fill
     // must be treated like no fill → repaint with the design accent.
     let mut band = json!({
         "type":"frame","role":"feature-card","cornerRadius":12,
-        "fill":[{"type":"solid","color":"$color-surface"}],
+        "fill":[{"type":"solid","color":"$--card"}],
         "children":[
             {"type":"frame","name":"Promo Content","children":[
                 {"type":"frame","role":"badge","fill":[{"type":"solid","color":"#FFFFFF30"}],"children":[
-                    {"type":"text","content":"FLASH","fill":[{"type":"solid","color":"$color-surface"}]}
+                    {"type":"text","content":"FLASH","fill":[{"type":"solid","color":"$--card"}]}
                 ]},
-                {"type":"text","content":"Get 30% off","fill":[{"type":"solid","color":"$color-surface"}]},
+                {"type":"text","content":"Get 30% off","fill":[{"type":"solid","color":"$--card"}]},
                 {"type":"text","content":"first order","fill":[{"type":"solid","color":"#FFFFFFCC"}]},
                 {"type":"frame","role":"button","fill":[{"type":"solid","color":"#1C1410"}],"children":[
-                    {"type":"text","content":"Order Now","fill":[{"type":"solid","color":"$color-surface"}]}
+                    {"type":"text","content":"Order Now","fill":[{"type":"solid","color":"$--card"}]}
                 ]}
             ]}
         ]
     });
-    fix_invisible_text_band(&mut band, Theme::Light, "$color-chart-6");
+    fix_invisible_text_band(&mut band, Theme::Light, "$--chart-6");
     assert_eq!(
         band["fill"],
-        json!([{"type":"solid","color":"$color-chart-6"}]),
+        json!([{"type":"solid","color":"$--chart-6"}]),
         "light-surface banner with all-white copy → repainted with the accent"
     );
 }
@@ -342,13 +347,13 @@ fn gradient_filled_banner_left_alone() {
     let mut band = json!({
         "type":"frame","role":"feature-card",
         "fill":[{"type":"linear_gradient","angle":135,"stops":[
-            {"offset":0.0,"color":"$color-chart-6"},{"offset":1.0,"color":"#FB923C"}]}],
+            {"offset":0.0,"color":"$--chart-6"},{"offset":1.0,"color":"#FB923C"}]}],
         "children":[
-            {"type":"text","content":"Get 30% off","fill":[{"type":"solid","color":"$color-surface"}]}
+            {"type":"text","content":"Get 30% off","fill":[{"type":"solid","color":"$--card"}]}
         ]
     });
     let before = band["fill"].clone();
-    fix_invisible_text_band(&mut band, Theme::Light, "$color-accent");
+    fix_invisible_text_band(&mut band, Theme::Light, "$--primary");
     assert_eq!(
         band["fill"], before,
         "gradient banner keeps its real surface"
@@ -360,7 +365,7 @@ fn white_text_band_untouched_on_dark_page() {
     let mut band = json!({"type":"frame","children":[
         {"type":"text","fill":[{"type":"solid","color":"#FFFFFF"}]}
     ]});
-    fix_invisible_text_band(&mut band, Theme::Dark, "$color-accent");
+    fix_invisible_text_band(&mut band, Theme::Dark, "$--primary");
     assert!(
         band.get("fill").is_none(),
         "white text on a dark page is fine — no fill stamped"
@@ -374,8 +379,99 @@ fn mixed_text_band_not_filled() {
         {"type":"text","fill":[{"type":"solid","color":"#FFFFFF"}]},
         {"type":"text","fill":[{"type":"solid","color":"#1C1410"}]}
     ]});
-    fix_invisible_text_band(&mut band, Theme::Light, "$color-accent");
+    fix_invisible_text_band(&mut band, Theme::Light, "$--primary");
     assert!(band.get("fill").is_none(), "mixed text → not a hidden band");
+}
+
+fn next_panel_fixture() -> serde_json::Value {
+    let document: serde_json::Value =
+        serde_json::from_str(include_str!("test_fixtures/next_panel_before_cleanup.op"))
+            .expect("next panel fixture JSON");
+    document["children"][0]["children"][2].clone()
+}
+
+#[test]
+fn next_panel_fixture_cleanup_keeps_white_surface_and_border() {
+    let document: jian_ops_schema::PenDocument =
+        serde_json::from_str(include_str!("test_fixtures/next_panel_before_cleanup.op"))
+            .expect("next panel fixture document");
+    let mut sink = VecDocSink {
+        state: EditorState::from_document(document),
+        applied: Vec::new(),
+        batch_depth: 0,
+    };
+    let plan = OrchestratorPlan {
+        root_frame: RootFrameSpec {
+            id: "root".into(),
+            name: "Result screen".into(),
+            width: 1440.0,
+            height: 900.0,
+            layout: Some("vertical".into()),
+            gap: None,
+            padding: None,
+            fill: None,
+        },
+        subtasks: Vec::new(),
+        style_guide_name: None,
+    };
+    let mut summary = RepairSummary::default();
+    run_cleanup_passes_with_summary(&mut sink, &plan, &["root"], &mut summary);
+    let panel = sink
+        .state
+        .active_children()
+        .iter()
+        .find_map(|root| find_value(root, "panel"))
+        .expect("fixture panel");
+
+    assert_eq!(
+        panel["fill"],
+        json!([{"type": "solid", "color": "#FFFFFF"}])
+    );
+    assert_eq!(panel["stroke"]["thickness"], 1.0);
+    assert_eq!(panel["stroke"]["fill"][0]["color"], "#EDE8E0");
+    assert_eq!(panel["fill"][0]["color"], "#FFFFFF");
+    assert!(!summary
+        .records()
+        .iter()
+        .any(|record| { record.node_id == "panel" && record.detail.starts_with("fill ") }));
+}
+
+fn find_value(node: &PenNode, id: &str) -> Option<serde_json::Value> {
+    if node.id_str() == id {
+        return serde_json::to_value(node).ok();
+    }
+    node.children()?
+        .iter()
+        .find_map(|child| find_value(child, id))
+}
+
+#[test]
+fn next_panel_body_and_buttons_block_nested_accent_wall() {
+    let mut panel = next_panel_fixture();
+    panel["children"][0]["fill"] = json!([{"type": "solid", "color": "#FFFFFF"}]);
+
+    let mut nested_content = json!({
+        "type": "frame",
+        "id": "panel-content",
+        "fill": [{"type": "solid", "color": "#FFFFFF"}],
+        "children": []
+    });
+    let children = panel["children"].as_array_mut().expect("panel children");
+    let description = children.remove(1);
+    nested_content["children"] = json!([description]);
+    nested_content["children"]
+        .as_array_mut()
+        .expect("nested content children")
+        .extend(children.drain(1..));
+    panel["children"] = json!([panel["children"][0].clone(), nested_content]);
+
+    fix_invisible_text_band(&mut panel, Theme::Light, "$--primary");
+
+    assert_eq!(
+        panel["fill"],
+        json!([{"type": "solid", "color": "#FFFFFF"}]),
+        "dark body/button copy under nested surfaces must not create an accent wall"
+    );
 }
 
 #[test]
@@ -400,14 +496,14 @@ fn media_clipper_radius_preserved_under_decorated_card() {
 #[test]
 fn backdrop_sibling_fill_merges_into_the_nav_item() {
     // test07021's verbatim defect: "Dashboard Item" [Active Bg(fill×fill,
-    // $color-surface), icon, labels] — the backdrop ate the row's left half
+    // $--card), icon, labels] — the backdrop ate the row's left half
     // and shoved the label outside the sidebar. Its fill must move onto the
     // item and the backdrop must disappear.
     let mut nodes: Vec<PenNode> = vec![serde_json::from_value(json!({
         "type":"frame","id":"item","name":"Dashboard Item","layout":"horizontal","gap":16,
         "width":"fill_container","height":"fit_content","padding":[12,16],"children":[
             {"type":"rectangle","id":"bg","name":"Active Bg","width":"fill_container","height":"fill_container",
-             "fill":[{"type":"solid","color":"$color-surface"}],"cornerRadius":8},
+             "fill":[{"type":"solid","color":"$--card"}],"cornerRadius":8},
             {"type":"icon_font","id":"ic","iconFontName":"layout-dashboard","width":20,"height":20},
             {"type":"text","id":"lbl","content":"Dashboard","fontSize":14}
         ]
@@ -418,7 +514,7 @@ fn backdrop_sibling_fill_merges_into_the_nav_item() {
     let kids = v["children"].as_array().unwrap();
     assert_eq!(kids.len(), 2, "backdrop removed: {kids:?}");
     assert_eq!(
-        v["fill"][0]["color"], "$color-surface",
+        v["fill"][0]["color"], "$--card",
         "backdrop fill moved onto the item"
     );
     assert_eq!(v["cornerRadius"], json!(8.0), "radius moved along");

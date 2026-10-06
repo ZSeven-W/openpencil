@@ -64,6 +64,7 @@ pub fn open(out: &mut String, n: &SceneNode, rect: Rect, ellipse: bool) {
     }
 
     let _ = write!(out, r#"<div class="n" style="{style}">"#);
+    super::video::emit(out, n);
 }
 
 /// Close the node's box, laying the stroke overlay over the children
@@ -101,6 +102,9 @@ fn write_background(style: &mut String, n: &SceneNode, rect: Rect) {
     let Some(src) = n.image_src.as_deref() else {
         return;
     };
+    if src.trim().is_empty() {
+        return;
+    }
     css::decl(
         style,
         "background-image",

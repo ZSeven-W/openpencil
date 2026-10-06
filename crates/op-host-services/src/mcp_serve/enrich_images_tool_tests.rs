@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::style::PenFill;
 use op_editor_core::{EditorCommand, EditorState, NodeId};
-use op_image_enrich::{ImageSearchTarget, SEARCH_FAILED_PLACEHOLDER_SRC as SENTINEL};
+use op_image_enrich::ImageSearchTarget;
 use op_mcp::{McpTool, ToolOutcome};
 
 use super::enrich_images_tool::{
@@ -182,10 +182,21 @@ fn enrich_fills_search_slots_and_fails_generate_without_searching() {
     assert_eq!(photo.src, "data:image/png;base64,AA==");
 
     let art = find(live.active_children(), "art").expect("art survives");
-    let PenNode::Image(art) = art else {
-        panic!("art must stay an image node");
+    let PenNode::Frame(art) = art else {
+        panic!("failed art must become a fallback frame");
     };
-    assert_eq!(art.src, SENTINEL, "explicit Generate must fail visibly");
+    assert!(
+        art.base
+            .name
+            .as_deref()
+            .is_some_and(|name| name.ends_with(" (image fallback)")),
+        "explicit Generate must fail visibly"
+    );
+    assert!(art
+        .base
+        .explain
+        .as_deref()
+        .is_some_and(|explain| explain.starts_with("image fallback:")));
 }
 
 #[test]

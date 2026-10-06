@@ -35,18 +35,40 @@
 
 ## Why OpenPencil
 
+<table>
+<tr>
+<td width="50%" align="center" valign="middle">
 <a href="https://www.infistar.cc/register?aff=LLZC3RLG&amp;ref_source=link" title="Infistar.cc 无限星河">
   <img src="./screenshot/infistar-sponsor-banner.png" alt="Infistar.cc 无限星河 — 一站式全球大模型 API 服务平台" width="100%" />
 </a>
-
-### [OpenPencil × Infistar.cc 无限星河｜全模型 API · 驱动 AI 原生设计创作](https://www.infistar.cc/register?aff=LLZC3RLG&ref_source=link)
-
-感谢 [Infistar.cc 无限星河](https://www.infistar.cc/register?aff=LLZC3RLG&ref_source=link) 赞助并为 OpenPencil 提供模型服务支持！
-
-- ⚡ **稳定承载复杂设计任务：** 提供企业级高并发通道与多节点冗余，价格低至官方渠道 1 折，稳定支持长任务、流式响应与连续工具调用。
-- 🧠 **一个 API Key 接入主流模型：** 全面支持 ChatGPT、Claude、Gemini、Kimi、GLM、DeepSeek 等模型，兼容 OpenAI、Anthropic 等主流接口，可在 OpenPencil 中灵活配置模型服务。
-- 🎨 **赋能 AI 原生矢量设计：** 适用于提示词生成设计、画布内容修改、多模型协同、图片生成及设计方案迭代，让 AI Agent 更高效地完成从创意到成稿的全过程。
-- 🎁 **OpenPencil 用户专属福利：** 通过 [专属推广链接](https://www.infistar.cc/register?aff=LLZC3RLG&ref_source=link) 注册并完成首次调用，即可领取 **5 美元等值测试额度 / 首充专属优惠**！
+</td>
+<td width="50%" align="center" valign="middle">
+<a href="https://fluxionai.world/register?source=github&amp;campaign=github-openpencil&amp;promo=OPENPENCIL" title="Fluxion AI">
+  <img src="./screenshot/fluxion-ai-sponsor-banner.png" alt="Fluxion AI — reliable, cost-efficient access to GPT, Claude, and other leading AI models through one unified API" width="100%" />
+</a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<h3><a href="https://www.infistar.cc/register?aff=LLZC3RLG&amp;ref_source=link">OpenPencil × Infistar.cc 无限星河｜全模型 API · 驱动 AI 原生设计创作</a></h3>
+<p>感谢 <a href="https://www.infistar.cc/register?aff=LLZC3RLG&amp;ref_source=link">Infistar.cc 无限星河</a> 赞助并为 OpenPencil 提供模型服务支持！</p>
+<ul>
+<li>⚡ <strong>稳定承载复杂设计任务：</strong> 提供企业级高并发通道与多节点冗余，价格低至官方渠道 1 折，稳定支持长任务、流式响应与连续工具调用。</li>
+<li>🧠 <strong>一个 API Key 接入主流模型：</strong> 全面支持 ChatGPT、Claude、Gemini、Kimi、GLM、DeepSeek 等模型，兼容 OpenAI、Anthropic 等主流接口，可在 OpenPencil 中灵活配置模型服务。</li>
+<li>🎨 <strong>赋能 AI 原生矢量设计：</strong> 适用于提示词生成设计、画布内容修改、多模型协同、图片生成及设计方案迭代，让 AI Agent 更高效地完成从创意到成稿的全过程。</li>
+<li>🎁 <strong>OpenPencil 用户专属福利：</strong> 通过 <a href="https://www.infistar.cc/register?aff=LLZC3RLG&amp;ref_source=link">专属推广链接</a> 注册并完成首次调用，即可领取 <strong>5 美元等值测试额度 / 首充专属优惠</strong>！</li>
+</ul>
+</td>
+<td width="50%" valign="top">
+<h3><a href="https://fluxionai.world/register?source=github&amp;campaign=github-openpencil&amp;promo=OPENPENCIL">OpenPencil × Fluxion AI | One unified API for GPT, Claude, and more</a></h3>
+<p>Thanks to <a href="https://fluxionai.world/register?source=github&amp;campaign=github-openpencil&amp;promo=OPENPENCIL">Fluxion AI</a> for sponsoring OpenPencil!</p>
+<ul>
+<li>⚡ <strong>Reliable, cost-efficient access:</strong> GPT, Claude, and other leading AI models through one unified API — save up to 70% compared with official API pricing.</li>
+<li>🎁 <strong>OpenPencil user bonus:</strong> get <strong>$1 in API credits</strong> when you <a href="https://fluxionai.world/register?source=github&amp;campaign=github-openpencil&amp;promo=OPENPENCIL">sign up through this link</a>.</li>
+</ul>
+</td>
+</tr>
+</table>
 
 <table>
 <tr>

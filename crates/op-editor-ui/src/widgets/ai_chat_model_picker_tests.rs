@@ -61,8 +61,13 @@ fn content_height_counts_groups_and_rows() {
         entry(AgentProvider::ClaudeCode, "b"),
         entry(AgentProvider::CodexCli, "c"),
     ];
-    let expected =
-        MODEL_SEARCH_H + 2.0 * MODEL_GROUP_H + 3.0 * MODEL_ROW_H + MODEL_PICKER_PAD_Y * 2.0;
+    // Studio restyle: the height now also carries the fixed 36 px
+    // "添加模型" footer row.
+    let expected = MODEL_SEARCH_H
+        + 2.0 * MODEL_GROUP_H
+        + 3.0 * MODEL_ROW_H
+        + MODEL_PICKER_PAD_Y * 2.0
+        + MODEL_FOOTER_H;
     assert!((picker_content_height(&models, "") - expected).abs() < 0.01);
 }
 
@@ -74,8 +79,11 @@ fn content_height_groups_noncontiguous_models_by_provider_like_ts_model_groups()
         entry(AgentProvider::ClaudeCode, "claude-b"),
     ];
 
-    let expected =
-        MODEL_SEARCH_H + 2.0 * MODEL_GROUP_H + 3.0 * MODEL_ROW_H + MODEL_PICKER_PAD_Y * 2.0;
+    let expected = MODEL_SEARCH_H
+        + 2.0 * MODEL_GROUP_H
+        + 3.0 * MODEL_ROW_H
+        + MODEL_PICKER_PAD_Y * 2.0
+        + MODEL_FOOTER_H;
     assert!((picker_content_height(&models, "") - expected).abs() < 0.01);
 }
 
@@ -228,7 +236,15 @@ fn chat_hit_test_prioritizes_picker_outside_panel_and_over_header_resize() {
     use super::{AIChatHit, AIChatPlaceholder};
 
     let state = open_panel_with_models(10);
-    let panel = AIChatPlaceholder::from_editor(&state);
+    let panel = {
+        // The minimized bar is the TOUCH sheet's collapsed form now: on
+        // desktop the composer-only card replaced it, so these tests ask
+        // for the bar explicitly rather than relying on a default that
+        // no longer produces one.
+        let mut panel = AIChatPlaceholder::from_editor(&state);
+        panel.composer_only = false;
+        panel
+    };
     let chat = Rect::xywh(100.0, 100.0, 320.0, 250.0);
     let picker = panel.model_picker_bounds(chat).unwrap();
     assert!(picker.origin.y < chat.origin.y);
@@ -242,15 +258,21 @@ fn chat_hit_test_prioritizes_picker_outside_panel_and_over_header_resize() {
 
     // The capped 10-model popup covers both the header and the north resize
     // gutter. Its visible rows must win over the hidden controls underneath.
+    // Probe y's moved with the Studio metrics (header 22→26, rows 28→36,
+    // list pad 6→8 shift the first rows down 6 px inside the same capped
+    // card): the old chat.y+18 / chat.y pair landed both probes on row 0.
     assert_eq!(
         panel.hit_test(
             chat,
-            Point2D::new(chat.origin.x + 25.0, chat.origin.y + 18.0)
+            Point2D::new(chat.origin.x + 25.0, chat.origin.y + 34.0)
         ),
         Some(AIChatHit::SelectModel(1))
     );
     assert_eq!(
-        panel.hit_test(chat, Point2D::new(chat.origin.x + 25.0, chat.origin.y)),
+        panel.hit_test(
+            chat,
+            Point2D::new(chat.origin.x + 25.0, chat.origin.y - 2.0)
+        ),
         Some(AIChatHit::SelectModel(0))
     );
 }
@@ -261,7 +283,15 @@ fn collapsed_chat_never_exposes_stale_model_picker_bounds() {
 
     let mut state = open_panel_with_models(10);
     state.chat.minimize();
-    let panel = AIChatPlaceholder::from_editor(&state);
+    let panel = {
+        // The minimized bar is the TOUCH sheet's collapsed form now: on
+        // desktop the composer-only card replaced it, so these tests ask
+        // for the bar explicitly rather than relying on a default that
+        // no longer produces one.
+        let mut panel = AIChatPlaceholder::from_editor(&state);
+        panel.composer_only = false;
+        panel
+    };
     let chat = Rect::xywh(100.0, 100.0, 150.0, 32.0);
 
     assert_eq!(panel.model_picker_bounds(chat), None);
@@ -272,7 +302,7 @@ fn collapsed_chat_never_exposes_stale_model_picker_bounds() {
 }
 
 #[test]
-fn pressed_model_row_uses_shared_select_feedback() {
+fn pressed_model_row_paints_studio_pressed_pill() {
     let models = vec![entry(AgentProvider::ClaudeCode, "claude-sonnet")];
     let rect = Rect {
         origin: Point2D::new(10.0, 20.0),
@@ -290,11 +320,13 @@ fn pressed_model_row_uses_shared_select_feedback() {
         backend: &mut backend,
     };
     let row_y = rect.origin.y + MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H;
-    let expected_rect = Rect {
-        origin: Point2D::new(rect.origin.x + 4.0, row_y + 1.0),
-        size: Point2D::new(rect.size.x - 8.0, MODEL_ROW_H - 2.0),
-    };
-    let expected = theme.button_hover.with_alpha(theme.button_hover.a * 1.8);
+    // Studio restyle: the pressed row now paints the picker's own
+    // pressed token on the 6 px-inset radius-8 pill. Previously the
+    // shared select feedback wash at a 4 px inset / radius 6 with
+    // `theme.button_hover × 1.8`; the dark pressed token is now
+    // derived from `theme.muted`.
+    let expected_rect = model_row_pill_rect(rect, row_y);
+    let expected = theme.muted;
 
     paint_model_picker(
         &mut cx,
@@ -310,9 +342,9 @@ fn pressed_model_row_uses_shared_select_feedback() {
 
     assert!(
         backend.fills.iter().any(|(fill, radius, color)| {
-            *fill == expected_rect && (*radius - 6.0).abs() < 0.01 && color_close(*color, expected)
+            *fill == expected_rect && (*radius - 8.0).abs() < 0.01 && color_close(*color, expected)
         }),
-        "pressed model row should paint the shared pressed feedback token"
+        "pressed model row should paint the Studio pressed pill"
     );
 }
 
@@ -440,8 +472,11 @@ fn builtin_groups_stay_separate_when_ids_differ_but_provider_matches() {
         ),
     ];
 
-    let expected =
-        MODEL_SEARCH_H + 2.0 * MODEL_GROUP_H + 2.0 * MODEL_ROW_H + MODEL_PICKER_PAD_Y * 2.0;
+    let expected = MODEL_SEARCH_H
+        + 2.0 * MODEL_GROUP_H
+        + 2.0 * MODEL_ROW_H
+        + MODEL_PICKER_PAD_Y * 2.0
+        + MODEL_FOOTER_H;
     assert!((picker_content_height(&models, "") - expected).abs() < 0.01);
 }
 
@@ -452,7 +487,171 @@ fn acp_models_with_same_placeholder_provider_stay_in_separate_groups() {
         ModelEntry::new(AgentProvider::CodexCli, "acp:acp-2", "Remote ACP"),
     ];
 
-    let expected =
-        MODEL_SEARCH_H + 2.0 * MODEL_GROUP_H + 2.0 * MODEL_ROW_H + MODEL_PICKER_PAD_Y * 2.0;
+    let expected = MODEL_SEARCH_H
+        + 2.0 * MODEL_GROUP_H
+        + 2.0 * MODEL_ROW_H
+        + MODEL_PICKER_PAD_Y * 2.0
+        + MODEL_FOOTER_H;
     assert!((picker_content_height(&models, "") - expected).abs() < 0.01);
+}
+
+#[test]
+fn total_height_matches_studio_row_and_group_metrics() {
+    // Literal numbers pin the Studio metrics independently of the
+    // constants: search strip 40 + list pad 8 + group header 26 +
+    // model row 36 + list pad 8 + footer row 36 = 154.
+    let one = vec![entry(AgentProvider::ClaudeCode, "a")];
+    assert!((picker_content_height(&one, "") - 154.0).abs() < 0.01);
+
+    let models = vec![
+        entry(AgentProvider::ClaudeCode, "a"),
+        entry(AgentProvider::ClaudeCode, "b"),
+        entry(AgentProvider::CodexCli, "c"),
+    ];
+    // 40 + 8 + 2×26 + 3×36 + 8 + 36 = 252.
+    assert!((picker_content_height(&models, "") - 252.0).abs() < 0.01);
+
+    // Empty catalogue: search strip + 44 px empty band + footer.
+    assert!((picker_content_height(&[], "") - 120.0).abs() < 0.01);
+}
+
+#[test]
+fn long_catalog_scroll_math_reserves_search_and_footer_bands() {
+    let models: Vec<ModelEntry> = (0..40)
+        .map(|i| entry(AgentProvider::OpenCode, &format!("m{i}")))
+        .collect();
+
+    // The cap still bites with the taller Studio rows.
+    assert!((picker_view_height(&models, "") - 288.0).abs() < 0.01);
+    // Only the band between the fixed search strip and the fixed
+    // footer scrolls: 1 group + 40 rows + both list pads against
+    // 288 − 40 (search) − 36 (footer).
+    let list_h = MODEL_GROUP_H + 40.0 * MODEL_ROW_H + MODEL_PICKER_PAD_Y * 2.0;
+    let view_list_h = 288.0 - MODEL_SEARCH_H - MODEL_FOOTER_H;
+    assert!((max_picker_scroll(&models, "") - (list_h - view_list_h)).abs() < 0.01);
+    assert!(max_picker_scroll(&models, "") > 0.0);
+}
+
+#[test]
+fn selected_row_pill_stays_inside_popover_at_minimum_width() {
+    let models = vec![entry(AgentProvider::ClaudeCode, "claude-sonnet")];
+    let rect = Rect::xywh(10.0, 20.0, 180.0, picker_view_height(&models, ""));
+    let state = SelectState {
+        open: true,
+        ..Default::default()
+    };
+    let theme = Theme::light();
+    let input = TextInputState::default();
+    let mut backend = RoundFillBackend::default();
+    let mut cx = PaintCx {
+        backend: &mut backend,
+    };
+
+    paint_model_picker(
+        &mut cx,
+        &theme,
+        rect,
+        &models,
+        0,
+        &state,
+        &input,
+        0,
+        op_editor_core::Locale::EnUs,
+    );
+
+    let row_y = rect.origin.y + MODEL_SEARCH_H + MODEL_PICKER_PAD_Y + MODEL_GROUP_H;
+    let pill = model_row_pill_rect(rect, row_y);
+    assert!(pill.origin.x >= rect.origin.x + 6.0 - 0.01);
+    assert!(pill.origin.x + pill.size.x <= rect.origin.x + rect.size.x - 6.0 + 0.01);
+    assert!(pill.size.y > 0.0 && pill.size.x > 0.0);
+    // The 14 px check glyph (right − 34 … right − 20) rides inside
+    // the pill's vertical band.
+    let check_top = row_y + (MODEL_ROW_H - 14.0) / 2.0;
+    assert!(check_top >= pill.origin.y - 0.01);
+    assert!(check_top + 14.0 <= pill.origin.y + pill.size.y + 0.01);
+    // The light-theme selected fill is the Studio `#EAF2FF` pill at
+    // radius 8, painted at exactly the pill rect.
+    let studio_selected = Color::rgb_u8(0xEA, 0xF2, 0xFF);
+    assert!(
+        backend.fills.iter().any(|(fill, radius, color)| {
+            *fill == pill && (*radius - 8.0).abs() < 0.01 && color_close(*color, studio_selected)
+        }),
+        "selected row should paint the Studio selected pill"
+    );
+}
+
+#[test]
+fn long_model_name_never_collides_with_qualifier_line() {
+    let mut backend = RoundFillBackend::default();
+    let rect = Rect::xywh(0.0, 0.0, 240.0, MODEL_ROW_H);
+    let long_name = "An Extremely Long Model Name That Cannot Fit On One Row";
+
+    for selected in [false, true] {
+        let label = fit_row_text(&mut backend, rect, selected, long_name, Some("API Key"));
+        assert!(
+            label.name.ends_with('…'),
+            "name must ellipsize: {:?}",
+            label.name
+        );
+        let name_w = crate::widgets::text_metrics::measure_chrome_weighted(
+            &mut backend,
+            &label.name,
+            13.0,
+            if selected { 600 } else { 500 },
+        );
+        // The 10 px name↔qualifier gutter must survive the clip.
+        assert!(
+            label.name_x + name_w + 10.0 <= label.detail_x + 0.01,
+            "name end + gutter ({}) must clear the qualifier start ({})",
+            label.name_x + name_w + 10.0,
+            label.detail_x
+        );
+        // The qualifier itself stays inside the row's right inset
+        // (12 px, or 36 px when the check glyph is present).
+        let right_inset = if selected { 36.0 } else { 12.0 };
+        assert!(
+            label.detail_x + label.detail_w <= rect.origin.x + rect.size.x - right_inset + 0.01
+        );
+    }
+}
+
+#[test]
+fn footer_row_is_chrome_never_a_model_row() {
+    let models: Vec<ModelEntry> = (0..40)
+        .map(|i| entry(AgentProvider::OpenCode, &format!("m{i}")))
+        .collect();
+    let state = SelectState {
+        open: true,
+        ..Default::default()
+    };
+    let rect = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(220.0, picker_view_height(&models, "")),
+    };
+    // The footer action row sits below the list band; a press there
+    // must resolve as chrome (`Inside`), never as a model row —
+    // including at max scroll, where off-screen row bands would
+    // otherwise extend past the clip into the footer.
+    let footer_y = rect.origin.y + rect.size.y - MODEL_FOOTER_H / 2.0;
+    assert_eq!(
+        model_picker_hit(&state, rect, Point2D::new(110.0, footer_y), &models, "",),
+        SelectHit::Inside
+    );
+    let scrolled_state = SelectState {
+        open: true,
+        scroll: jian_core::scroll::ScrollState {
+            offset: max_picker_scroll(&models, ""),
+        },
+        ..Default::default()
+    };
+    assert_eq!(
+        model_picker_hit(
+            &scrolled_state,
+            rect,
+            Point2D::new(110.0, footer_y),
+            &models,
+            "",
+        ),
+        SelectHit::Inside
+    );
 }

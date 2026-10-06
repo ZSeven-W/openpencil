@@ -76,52 +76,69 @@ impl<'a> AIChatPlaceholder<'a> {
         // carries no interactive sub-controls and cannot be dragged — a
         // single unambiguous target beats splitting a 64 px-tall strip
         // between drag intent, model switching and expand intent.
-        if self.state.is_minimized() {
+        if self.state.is_minimized() && !self.composer_only {
             return Some(AIChatHit::ToggleCollapse);
         }
         let can_use_model = !self.state.available_models.is_empty();
-        // Expanded: chevron + "New Chat" title group toggles collapse.
-        if (self.expanded_header_title_rect(rect)).contains(point) {
-            return Some(AIChatHit::ToggleCollapse);
-        }
-        // Hit rects must mirror the paint geometry exactly.
-        // Constants live in `ai_chat_panel_header` (imported above):
-        //   NEW_CHAT_D = 28, MAXIMIZE_GAP = 6, MAXIMIZE_W = 18, HEADER_HEIGHT = 36
-        let right_edge = rect.origin.x + rect.size.x - PAD;
-        let header_icon_y = rect.origin.y + (HEADER_HEIGHT - MAXIMIZE_W) / 2.0;
-        // New-chat circle (far right).
-        let new_chat_rect = Rect {
-            origin: Point2D::new(
-                right_edge - NEW_CHAT_D,
-                rect.origin.y + (HEADER_HEIGHT - NEW_CHAT_D) / 2.0,
-            ),
-            size: Point2D::new(NEW_CHAT_D, NEW_CHAT_D),
-        };
-        if (new_chat_rect).contains(point) {
-            return Some(AIChatHit::NewChat);
-        }
-        // Maximize / minimize icon (just left of new-chat).
-        let maximize_rect = Rect {
-            origin: Point2D::new(
-                right_edge - NEW_CHAT_D - MAXIMIZE_GAP - MAXIMIZE_W,
-                header_icon_y,
-            ),
-            size: Point2D::new(MAXIMIZE_W, MAXIMIZE_W),
-        };
-        if (maximize_rect).contains(point) {
-            return Some(AIChatHit::ToggleMaximize);
-        }
-        // Tab row — between chevron and maximize button.
-        // Returns SwitchTab(i) for a tab body click; CloseTab(i) for the × glyph.
-        let tab_count = self.tabs_snapshot.len();
-        if tab_count > 0 {
-            if let Some((tab_idx, over_close)) = tab_hit_at(rect, tab_count, point, self.tab_hover)
-            {
-                return Some(if over_close {
-                    AIChatHit::CloseTab(tab_idx)
-                } else {
-                    AIChatHit::SwitchTab(tab_idx)
-                });
+        // Composer-only: nothing above the composer exists except the
+        // focused card's slim header, whose two glyphs both mean "take
+        // me to the Agent tab".
+        if self.composer_only {
+            if self.state.focused {
+                use crate::widgets::ai_chat_panel::COMPOSER_HEADER_HEIGHT;
+                let header = Rect {
+                    origin: rect.origin,
+                    size: Point2D::new(rect.size.x, COMPOSER_HEADER_HEIGHT),
+                };
+                if header.contains(point) {
+                    return Some(AIChatHit::ToggleMaximize);
+                }
+            }
+        } else {
+            // Expanded: chevron + "New Chat" title group toggles collapse.
+            if (self.expanded_header_title_rect(rect)).contains(point) {
+                return Some(AIChatHit::ToggleCollapse);
+            }
+            // Hit rects must mirror the paint geometry exactly.
+            // Constants live in `ai_chat_panel_header` (imported above):
+            //   NEW_CHAT_D = 28, MAXIMIZE_GAP = 6, MAXIMIZE_W = 18, HEADER_HEIGHT = 36
+            let right_edge = rect.origin.x + rect.size.x - PAD;
+            let header_icon_y = rect.origin.y + (HEADER_HEIGHT - MAXIMIZE_W) / 2.0;
+            // New-chat circle (far right).
+            let new_chat_rect = Rect {
+                origin: Point2D::new(
+                    right_edge - NEW_CHAT_D,
+                    rect.origin.y + (HEADER_HEIGHT - NEW_CHAT_D) / 2.0,
+                ),
+                size: Point2D::new(NEW_CHAT_D, NEW_CHAT_D),
+            };
+            if (new_chat_rect).contains(point) {
+                return Some(AIChatHit::NewChat);
+            }
+            // Maximize / minimize icon (just left of new-chat).
+            let maximize_rect = Rect {
+                origin: Point2D::new(
+                    right_edge - NEW_CHAT_D - MAXIMIZE_GAP - MAXIMIZE_W,
+                    header_icon_y,
+                ),
+                size: Point2D::new(MAXIMIZE_W, MAXIMIZE_W),
+            };
+            if !self.column_pinned && (maximize_rect).contains(point) {
+                return Some(AIChatHit::ToggleMaximize);
+            }
+            // Tab row — between chevron and maximize button.
+            // Returns SwitchTab(i) for a tab body click; CloseTab(i) for the × glyph.
+            let tab_count = self.tabs_snapshot.len();
+            if tab_count > 0 {
+                if let Some((tab_idx, over_close)) =
+                    tab_hit_at(rect, tab_count, point, self.tab_hover, self.column_pinned)
+                {
+                    return Some(if over_close {
+                        AIChatHit::CloseTab(tab_idx)
+                    } else {
+                        AIChatHit::SwitchTab(tab_idx)
+                    });
+                }
             }
         }
         // Must match `paint` exactly: paint draws the separator at
@@ -654,7 +671,7 @@ impl<'a> AIChatPlaceholder<'a> {
         }
         // Iterate tab rects and check containment — same layout as `tab_hit_at`
         // but ignores the × sub-rect (hover is per-tab-body, not sub-element).
-        let rects = tab_row_rects(rect, tab_count);
+        let rects = tab_row_rects(rect, tab_count, self.column_pinned);
         rects.iter().position(|tr| tr.body.contains(point))
     }
 

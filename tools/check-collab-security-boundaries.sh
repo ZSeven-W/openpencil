@@ -77,11 +77,14 @@ cfg_test_external_module_files() {
     local source_dir
     local relative_path
     while IFS= read -r source_file; do
+        # Membership is matched as an exact line, so every entry must be in
+        # the same canonical form (no leading ./) that the lookups below use.
+        source_file=${source_file#./}
         source_dir=${source_file%/*}
         base=${source_file##*/}
         base=${base%.rs}
         while IFS= read -r relative_path; do
-            printf '%s/%s\n' "$source_dir" "$relative_path"
+            printf '%s/%s\n' "$source_dir" "${relative_path#./}"
         done < <(awk -v parent_base="$base" '
             function reset_attributes() {
                 cfg_test = 0
@@ -194,10 +197,17 @@ require_cfg_test_literal() {
             continue
         fi
 
-        if printf '%s\n' "$cfg_test_external_sources" \
-            | grep -Fxq -- "$source_file"; then
-            return
-        fi
+        # Exact-line membership without a pipeline: `printf | grep -Fxq`
+        # races grep's early exit under pipefail — on a list longer than the
+        # pipe buffer grep can match and exit while printf is still writing,
+        # printf dies of SIGPIPE (exit 141), and pipefail flips this
+        # membership to false for a covered literal (CI, ubuntu).
+        source_file=${source_file#./}
+        case $'\n'"$cfg_test_external_sources"$'\n' in
+            *$'\n'"$source_file"$'\n'*)
+                return
+                ;;
+        esac
 
         if awk -v literal="$literal" '
             /^[[:space:]]*#\[cfg\(test\)\][[:space:]]*$/ {
@@ -368,12 +378,15 @@ if [[ -n "$ordinary_ticket_deserializer" ]]; then
     record_failure "dedicated ticket decoder must not materialize ordinary strings or Values:
 $ordinary_ticket_deserializer"
 fi
-credential_probe_line=$(grep -nE \
+# `grep -m1` lets grep stop on its own match while `cut` drains the pipe to
+# EOF; `head -1` exits after one line and can SIGPIPE grep under pipefail,
+# leaving the captured line number empty on a covered anchor.
+credential_probe_line=$(grep -m1 -nE \
     '^[[:space:]]*declared_kind_rejecting_renew_ticket\(bytes\)\?;' \
-    crates/op-collab/src/codec.rs | head -1 | cut -d: -f1 || true)
-generic_value_decode_line=$(grep -nF \
+    crates/op-collab/src/codec.rs | cut -d: -f1 || true)
+generic_value_decode_line=$(grep -m1 -nF \
     'let mut value = decode_json_value(bytes, limits)?;' \
-    crates/op-collab/src/codec.rs | head -1 | cut -d: -f1 || true)
+    crates/op-collab/src/codec.rs | cut -d: -f1 || true)
 if [[ -z "$credential_probe_line" || -z "$generic_value_decode_line" ]] \
     || [[ "$credential_probe_line" -ge "$generic_value_decode_line" ]]; then
     record_failure \
@@ -382,9 +395,9 @@ fi
 # The guest-to-owner envelope ceiling is selected from authenticated local
 # connection direction before the discriminator or generic Value is parsed.
 # An attacker-declared Snapshot kind must never select the 64 MiB owner budget.
-inbound_direction_limit_line=$(grep -nE \
+inbound_direction_limit_line=$(grep -m1 -nE \
     '^[[:space:]]*enforce_inbound_envelope_limit\(inbound_direction, bytes\.len\(\), limits\)\?;' \
-    crates/op-collab/src/codec.rs | head -1 | cut -d: -f1 || true)
+    crates/op-collab/src/codec.rs | cut -d: -f1 || true)
 if [[ -z "$inbound_direction_limit_line" || -z "$credential_probe_line" \
         || -z "$generic_value_decode_line" ]] \
     || [[ "$inbound_direction_limit_line" -ge "$credential_probe_line" ]] \
@@ -644,10 +657,15 @@ require_cfg_test_literal \
     "production_signed_policy_path_never_falls_back_to_raw_jwks" \
     "production/test issuer isolation regression test"
 
-if [[ -f crates/op-auth-bridge/tests/collab_verifier.rs ]] \
-    && ! sed -n '1,5p' crates/op-auth-bridge/tests/collab_verifier.rs \
-        | grep -Fq '#![cfg(feature = "test-issuer")]'; then
-    record_failure "auth integration fixtures must require feature = \"test-issuer\""
+# Capture the header without a pipeline: `sed | grep -q` races grep's early
+# exit under pipefail — grep can match and exit while sed is still writing,
+# sed dies of SIGPIPE (exit 141), and pipefail turns a passing fixture into a
+# spurious failure.
+if [[ -f crates/op-auth-bridge/tests/collab_verifier.rs ]]; then
+    collab_verifier_header=$(sed -n '1,5p' crates/op-auth-bridge/tests/collab_verifier.rs)
+    if [[ "$collab_verifier_header" != *'#![cfg(feature = "test-issuer")]'* ]]; then
+        record_failure "auth integration fixtures must require feature = \"test-issuer\""
+    fi
 fi
 
 production_fixture_hits=
@@ -661,6 +679,9 @@ while IFS= read -r source_file; do
     # Exact-line containment without a pipeline: `printf | grep -q` races
     # grep's early exit under pipefail — printf can take SIGPIPE after grep
     # already matched, flipping this exemption to false intermittently.
+    # Compare in the same canonical form (no leading ./) used to build the
+    # list and by require_cfg_test_literal.
+    source_file=${source_file#./}
     case $'\n'"$cfg_test_external_sources"$'\n' in
         *$'\n'"$source_file"$'\n'*)
             continue

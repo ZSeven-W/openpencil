@@ -21,6 +21,7 @@ fn f2_request() -> DesignRequest {
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     }
 }
 
@@ -49,8 +50,10 @@ fn f2_subtask() -> Subtask {
             width: 390.0,
             height: 200.0,
         },
+        bleed_hero: false,
         id_prefix: "sec0".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,

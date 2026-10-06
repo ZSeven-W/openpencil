@@ -125,17 +125,17 @@ pub(super) fn resolve_color_maybe_ref(color: &str) -> Option<String> {
 
 /// A design-system token that always binds to a saturated, mid-dark colour
 /// needing a WHITE foreground (accent / primary brand colour + the saturated
-/// state colours). `$color-warning` is deliberately excluded — it's often a
+/// state colours). `$--color-warning` is deliberately excluded — it's often a
 /// light amber that reads better with a dark foreground. Matches with or
-/// without a trailing shade suffix (`$color-accent`, `$color-primary-600`).
+/// without a trailing shade suffix (`$--primary`, `$--primary-600`).
 pub(super) fn is_saturated_accent_token(color: &str) -> bool {
     let t = color.trim().trim_start_matches('$').to_ascii_lowercase();
     const ROOTS: &[&str] = &[
-        "color-accent",
-        "color-primary",
-        "color-danger",
-        "color-error",
-        "color-success",
+        "--primary",
+        "--primary",
+        "--color-error",
+        "--color-error",
+        "--color-success",
     ];
     ROOTS.iter().any(|root| {
         t == *root

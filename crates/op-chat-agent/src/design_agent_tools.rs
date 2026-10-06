@@ -222,6 +222,16 @@ pub fn execute_design_tool_with_root_seed_guard(
         // finalize. Deterministic analogue of Pencil's per-batch
         // snapshot_layout feedback.
         let dup_bars_removed = remove_nested_duplicate_status_bars(state);
+        let icon_path_report = op_editor_core::icon_path_normalize::normalize_icon_paths(
+            state,
+            op_editor_ui::widgets::icons::lucide_name_for_path_d,
+        );
+        if icon_path_report != Default::default() {
+            eprintln!(
+                "openpencil agent: icon path normalization: converted_to_icon_font={}, refit_uniform={}",
+                icon_path_report.converted_to_icon_font, icon_path_report.refit_uniform
+            );
+        }
         // A mobile skeleton is deliberately numeric while it is empty. Once a
         // trailing bottom nav lands, recover any stale numeric content-shell
         // remainder before diagnostics: otherwise the old shell consumes the
@@ -591,9 +601,17 @@ pub use root_seed::*;
 mod tests;
 
 #[cfg(test)]
+#[path = "design_agent_tools_seed_tests.rs"]
+mod seed_tests;
+
+#[cfg(test)]
 #[path = "design_agent_tools_scan_tests.rs"]
 mod scan_tests;
 
 #[cfg(test)]
 #[path = "design_agent_tools_continuation_tests.rs"]
 mod continuation_tests;
+
+#[cfg(test)]
+#[path = "mobile_normalize_tests.rs"]
+mod mobile_normalize_tests;

@@ -14,7 +14,7 @@ use jian_ops_schema::node::TextNode;
 use jian_ops_schema::style::FontStyleKind as SegmentFontStyle;
 
 use crate::payload::{NodePayload, TextRunPayload};
-use crate::style_payload::parse_hex;
+use crate::style_payload::parse_color;
 
 /// Flatten `n.content` onto `p.text` and harvest styled segments into
 /// `p.text_runs`. Also resolves the node-level italic / underline /
@@ -40,7 +40,7 @@ pub(crate) fn apply_text_content(p: &mut NodePayload, n: &TextNode) {
                         .font_weight
                         .map(|w| w.min(u16::MAX as u32) as u16)
                         .unwrap_or(0),
-                    fill: seg.fill.as_deref().and_then(parse_hex),
+                    fill: seg.fill.as_deref().and_then(parse_color),
                     italic: seg
                         .font_style
                         .as_ref()

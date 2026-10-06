@@ -28,8 +28,10 @@ impl DesktopApp {
             || self.host.apply_nudge(0.0, sign * step)
     }
 
-    /// Bare Left / Right — focused text inputs move their caret before the
-    /// arrow falls through to selection nudging.
+    /// Bare Left / Right — focused text inputs move their caret, then
+    /// the workspace's deck pager claims the key while the workspace
+    /// shows one board / the overview, before the arrow falls through
+    /// to selection nudging.
     pub(crate) fn arrow_horizontal(&mut self, forward: bool, step: f32) -> bool {
         let sign = if forward { 1.0 } else { -1.0 };
         self.host.apply_chat_model_picker_caret(forward)
@@ -39,6 +41,23 @@ impl DesktopApp {
             || self.host.apply_rename_caret(forward)
             || self.host.apply_text_edit_caret(forward)
             || self.host.apply_property_caret(forward)
+            || self.workspace_page_board(forward)
             || self.host.apply_nudge(sign * step, 0.0)
+    }
+
+    /// ← / → step the deck while the workspace is up in a paging view.
+    fn workspace_page_board(&mut self, forward: bool) -> bool {
+        let ui = &self.host.editor_state().editor_ui;
+        let paging = ui.workspace.visible
+            && matches!(
+                ui.workspace.view,
+                op_editor_core::WorkspaceView::Single { .. }
+                    | op_editor_core::WorkspaceView::Overview
+            );
+        if !paging {
+            return false;
+        }
+        self.host
+            .workspace_step_board(forward, self.viewport_width, self.viewport_height)
     }
 }

@@ -18,7 +18,10 @@ use crate::catalog_toml::{
     non_empty, parse_string_array, parse_text, required, set_once, ValueError,
 };
 
-const SCENE_TEMPLATES_TOML: &str = include_str!("../assets/scene_templates.toml");
+const SCENE_TEMPLATES_TOML: &str = concat!(
+    include_str!("../assets/scene_templates_prefix.toml"),
+    include_str!("../assets/scene_templates.toml")
+);
 
 /// The shipped documents.
 ///
@@ -133,8 +136,22 @@ pub fn scene_template_document_route(template_id: &str) -> Option<&'static str> 
         "gridpaper-graphite-deck" => route!("gridpaper-graphite-deck"),
         "dossier-linen-deck" => route!("dossier-linen-deck"),
         "ledger-tick-deck" => route!("ledger-tick-deck"),
+        "ai-support-pitch-deck" => route!("ai-support-pitch-deck"),
+        "quarterly-review-deck" => route!("quarterly-review-deck"),
+        "quicksort-lecture-deck" => route!("quicksort-lecture-deck"),
         "brand-concept-sheet" => route!("brand-concept-sheet"),
         "logo-qa-board" => route!("logo-qa-board"),
+        "event-invitation-card" => route!("event-invitation-card"),
+        "livestream-teaser-card" => route!("livestream-teaser-card"),
+        "hiring-poster-card" => route!("hiring-poster-card"),
+        "course-enroll-card" => route!("course-enroll-card"),
+        "conference-agenda-card" => route!("conference-agenda-card"),
+        "product-launch-card" => route!("product-launch-card"),
+        "annual-report-card" => route!("annual-report-card"),
+        "music-fest-poster-card" => route!("music-fest-poster-card"),
+        "book-club-invite-card" => route!("book-club-invite-card"),
+        "compound-effect-card" => route!("compound-effect-card"),
+        "analytics-metric-card" => route!("analytics-metric-card"),
         _ => None,
     }
 }
@@ -215,8 +232,22 @@ pub fn scene_template_document(template_id: &str) -> Option<&'static str> {
         "gridpaper-graphite-deck" => template_document!("gridpaper-graphite-deck"),
         "dossier-linen-deck" => template_document!("dossier-linen-deck"),
         "ledger-tick-deck" => template_document!("ledger-tick-deck"),
+        "ai-support-pitch-deck" => template_document!("ai-support-pitch-deck"),
+        "quarterly-review-deck" => template_document!("quarterly-review-deck"),
+        "quicksort-lecture-deck" => template_document!("quicksort-lecture-deck"),
         "brand-concept-sheet" => template_document!("brand-concept-sheet"),
         "logo-qa-board" => template_document!("logo-qa-board"),
+        "event-invitation-card" => template_document!("event-invitation-card"),
+        "livestream-teaser-card" => template_document!("livestream-teaser-card"),
+        "hiring-poster-card" => template_document!("hiring-poster-card"),
+        "course-enroll-card" => template_document!("course-enroll-card"),
+        "conference-agenda-card" => template_document!("conference-agenda-card"),
+        "product-launch-card" => template_document!("product-launch-card"),
+        "annual-report-card" => template_document!("annual-report-card"),
+        "music-fest-poster-card" => template_document!("music-fest-poster-card"),
+        "book-club-invite-card" => template_document!("book-club-invite-card"),
+        "compound-effect-card" => template_document!("compound-effect-card"),
+        "analytics-metric-card" => template_document!("analytics-metric-card"),
         _ => None,
     }
 }

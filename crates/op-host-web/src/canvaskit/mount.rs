@@ -48,10 +48,7 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     let logical_w = (dev_w / dpr).round().max(1.0) as u32;
     let logical_h = (dev_h / dpr).round().max(1.0) as u32;
 
-    let backend = init_backend(&canvas_id, dpr, logical_w, logical_h).await?;
     let mut host = crate::widget_host::WidgetHost::new();
-    // Set the OpCk for preview text measurement before any paint.
-    host.set_op_ck(backend.op_ck());
     // The editor opens on its canvas, not on a chat panel: the AI panel
     // starts as its compact input bar and expands on click. Applied here
     // rather than in `WidgetHost::new` because that constructor is also
@@ -84,6 +81,21 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
             .editor_ui
             .set_host_locale_override(Some(locale));
     }
+    // The anon-partition locale is synchronously known now. Start its catalog
+    // XHR before CanvasKit's ~24 MB initialization so the two downloads overlap;
+    // the host-side prefetch directly claims the existing asset registry because
+    // the normal request queue is not drained until the first repaint.
+    let initial_locale = host.editor_state().editor_ui.effective_locale();
+    let initial_catalog = crate::web_asset_fetch::prefetch_initial_catalog(initial_locale);
+    let backend = init_backend(&canvas_id, dpr, logical_w, logical_h).await?;
+    if let Some(catalog) = initial_catalog {
+        // The XHR itself owns the three-second timeout. Success installs the
+        // target catalog; failure leaves the stored locale in place so its first
+        // paint uses the embedded English fallback without blocking mount.
+        let _ = catalog.await;
+    }
+    // Set the OpCk for preview text measurement before any paint.
+    host.set_op_ck(backend.op_ck());
     host.mark_editor_state_dirty();
     let settings_fingerprint = credential_load.initial_settings_fingerprint(host.editor_state());
     let credential_fingerprint = credential_load.initial_fingerprint(host.editor_state());
@@ -97,6 +109,8 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     // Hidden IME-capture input (#54) — composition is wired to `apply_ime`
     // below; focus is driven from `input_active()` in `repaint`.
     let ime = crate::ime_input::ImeInput::create(&canvas);
+    let video_overlay = crate::video_overlay::VideoOverlayLayer::create(&canvas)
+        .ok_or_else(|| JsValue::from_str("mount_ck: document unavailable for video preview"))?;
     let inner = Rc::new(RefCell::new(CkInner {
         backend,
         host,
@@ -105,6 +119,7 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
         canvas: canvas.clone(),
         a11y,
         ime,
+        video_overlay,
     }));
     // Reset the credential-sync queue BEFORE the first repaint and before the
     // rAF coalescer is installed below. `repaint` calls
@@ -163,6 +178,7 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                 );
                 b.repaint();
                 drop(b);
+                crate::preview_pump::ensure(&inner_for_paint);
                 crate::web_fonts::drain_font_requests(&inner_for_paint);
                 crate::bundled_fonts_web::drain_pending_apply(&inner_for_paint);
                 crate::web_fonts::drain_missing_fonts_detection(&inner_for_paint);

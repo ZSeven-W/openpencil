@@ -131,7 +131,7 @@ pub fn apply_tree_heuristics(
                 .filter_map(|n| serde_json::to_value(n).ok())
                 .find_map(|v| find_design_accent(&v))
         })
-        .unwrap_or_else(|| "$color-accent".to_string());
+        .unwrap_or_else(|| "$--primary".to_string());
     for node in nodes.iter_mut() {
         let Ok(mut v) = serde_json::to_value(&*node) else {
             continue;

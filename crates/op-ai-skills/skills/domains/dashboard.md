@@ -34,7 +34,7 @@ CHARTS:
 - Keep charts as bar charts unless explicitly asked otherwise. If using line/area, still avoid absolute positioning; flex bars are the default.
 - DONUT / RING: same concentric `layout="none"` stack as the `shapes-and-decks` worked example (center content, then progress arc, then track — front-to-back); arc ellipses left in a flex row lay out side by side and the donut falls apart.
 - Legend rows: dot(8) + label + value, gap 6-8 between label and value — never butt "Solar" against "44%".
-- Chart tooltip (floating value callout): a SURFACE — fill $color-surface + hairline stroke + cornerRadius 6 + padding [8,10]; a fill-less tooltip paints bare text over the plot lines.
+- Chart tooltip (floating value callout): a SURFACE — fill $--card + hairline stroke + cornerRadius 6 + padding [8,10]; a fill-less tooltip paints bare text over the plot lines.
 - Status pill in a table cell: text lives INSIDE the pill frame (pill > text), never beside it — a childless tinted pill collapses to a smear with the label floating outside.
 
 DATA TABLES (use only when no predefined Table component exists):

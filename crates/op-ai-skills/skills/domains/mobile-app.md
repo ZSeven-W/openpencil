@@ -4,8 +4,9 @@ description: Mobile app three-section architecture with enforced Blueprint
 phase: [generation]
 trigger:
   keywords: [mobile, phone, ios, android, 移动, 手机]
+  flags: [isMobileScreen]
 priority: 25
-budget: 2100
+budget: 2800
 category: domain
 ---
 
@@ -17,9 +18,18 @@ to wrap every content section inside one padded App Content frame.
 
 Screen-height contract: use numeric 390-393×844 as a temporary construction seed so an empty skeleton is visible. Before finishing, a normal content-driven mobile page switches its root to `height="fit_content"` (Hug), matching its completed flow. Keep a numeric viewport only when the user explicitly requested that viewport/device frame or the design deliberately contains one clipped viewport body that must consume remaining height.
 
+## 0) EXPRESSION LAYER — where the look comes from
+
+Structure is the floor. Use the selected guide for mood, accent, depth, type, radii, and hero; keep support quiet. ARCHETYPE handoff: your subtask `elements` may start with `ARCHETYPE: …`; realise exactly that composition; the area percentages are of the 812px first screen; do not add a second hero. Realise the selected guide's two Signature recipes; the ARCHETYPE line says where, the recipes say how.
+
+Platform roles: use a three-size type scale — screen title 28–34px semibold, section title 20–22px, body 16–17px (labels 12–13px). Allow one display size per screen; hero numbers use 40–57px and fit one line (8+ characters → 40–44px). Keep the accent in one block/treatment; separate sections with tonal surface tiers, not accent fills or hairlines.
+
+Focal idioms include a hero card in the rail, full-bleed media under the status bar with gradient scrim/white title, display number + 12–13px caption, or stacked tonal cards with soft shadow. For maps, emit an image with imageSearchQuery: "map" and size; the pipeline draws the map placeholder. Icon tiles are 40–44px tonal circles/squircles (M3 icon button 40dp; HIG 44pt target) holding a 22–24px icon — no stroke, no card box; siblings in one grid share fill and icon colour. Overlap only inside a layout:none stack with numeric x, y, width, height; do not float a card over the header.
+- A plain search + category grid + promo banner + list stack is acceptable only when the brief asks for that inventory; even then the style guide's treatment lands on the first section, not on a small accent strip.
+
 ## 1) STATUS BAR (OS-controlled) — PRE-INSERTED
 
-The status bar (time, signal, wifi, battery) is **automatically pre-inserted** by the orchestrator as the first child of the root frame. It is a fixed 62px-tall frame with hardcoded path icons.
+The status bar (time, signal, wifi, battery) is **automatically provided by OpenPencil on every generation path (orchestrator, design agent, and direct MCP)** as the first child of the root frame — a hand-drawn one is replaced by the canonical node. It is a fixed 62px-tall frame with hardcoded path icons.
 
 - **DO NOT generate a status bar** — it already exists
 - **DO NOT delete or modify** the pre-inserted status bar
@@ -61,7 +71,7 @@ Rules:
 - First 1-2 elements must answer "where am I" + "what can I do here"
 - Mobile top rhythm: keep header/title close to the first useful control or content; use 20-32px, not an empty hero-sized band.
 - Section header actions: prefer a 20px `chevron-right` / `arrow-right` icon, not visible "See all", "View all", "查看全部", or "查看更多" text.
-- Category sections: section root and chip row both use height="fit_content". Use a header row, then chip row/grid. Chip row uses gap 12 and justifyContent start even when there are only two categories; never space_between/space_around. Each category item frame contains icon + label. Show four full chips or wrap; no half-clipped item.
+- Category sections: section root and chip row both use height="fit_content". Use a header row, then chip row/grid. Chip row uses gap 12 and justifyContent start even when there are only two categories; never space_between/space_around. A category grid (九宫格) on a 375 root is 5 per row (4 only when a label exceeds 4 CJK / 8 Latin characters), at most two rows above the fold, ≤150px tall in total: each item = 40–44px tonal icon container + one 11–12px label, gap 8–12, no stroke, no card box. Show full items or wrap; no half-clipped item.
 - Product card rows: two equal `fill_container` cards, gap 12, inside the content rail; no fixed-width clipped second card.
 - List rows of [thumbnail, text stack]: alignItems="center" on the row — a missing alignItems top-pins the text against a taller thumbnail and leaves a dead band under it.
 - Corner badge on an image ("-35%", "NEW"): a CHILD of the image's wrapper frame with explicit x/y (e.g. x=8, y=8) — never a card-level sibling between the image and the content column (it renders straddling the seam).
@@ -72,12 +82,12 @@ Rules:
 - Design for one-handed use: primary actions in lower half
 - When the screen is explicitly a fixed viewport, use at most one clipped content viewport; otherwise keep the content wrapper Hug Height. Avoid nested scrolls.
 - Touch targets: minimum 44x44px
-- Do not repeat the same predictable mobile stack of search + categories + orange promo + two cards. Choose a distinct concept for the domain and make one signature moment carry the personality.
+- Do not repeat the same predictable mobile stack of search + categories + orange promo + two cards. Choose a distinct concept for the domain and let the handed-off archetype carry the personality.
 
 DO NOT:
 
 - Put the 24px content rail on the root page or duplicate it on an inner wrapper
-- Let an ordinary root-direct content section touch the screen edge
+- Let an ordinary root-direct content section touch the screen edge (the ONE full-bleed hero section is the exception: padding 0, media spans the root, text in an inner 24px inset)
 - Use spacer elements for bottom space (use padding-bottom)
 - Cram multiple competing sections above the fold
 

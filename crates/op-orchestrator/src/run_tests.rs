@@ -31,6 +31,7 @@ fn req() -> DesignRequest {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     }
 }
 
@@ -49,6 +50,7 @@ fn req_standard() -> DesignRequest {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     }
 }
 
@@ -70,6 +72,7 @@ fn req_basic() -> DesignRequest {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     }
 }
 
@@ -145,6 +148,45 @@ fn existing_root_json(
         ]
     }))
     .expect("valid existing root")
+}
+
+#[test]
+fn sequential_subtask_prompt_receives_the_previous_section_headline() {
+    let first = r##"I(null, {"type":"frame","name":"Hero Section","width":1200,"height":300,"layout":"vertical","children":[{"type":"text","name":"Hero Heading","content":"Ship your next idea","fontSize":48},{"type":"text","content":"A supporting promise.","fontSize":16}]});"##;
+    let second = r##"I(null, {"type":"frame","name":"Features Section","width":1200,"height":300,"layout":"vertical","children":[{"type":"text","name":"Features Heading","content":"Built for thoughtful teams","fontSize":40}]});"##;
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(PLAN_JSON.into()),
+        ScriptResponse::Text(first.into()),
+        ScriptResponse::Text(second.into()),
+    ]);
+    let mut request = req();
+    request.validation_enabled = false;
+    let mut sink = VecDocSink::new();
+    let mut progress = Vec::new();
+    let mut on_progress = |event| progress.push(event);
+
+    let summary = futures::executor::block_on(Orchestrator::new().run(
+        request,
+        &mut sink,
+        &llm,
+        &mut on_progress,
+        &AbortFlag::new(),
+        &stub_providers(),
+    ))
+    .expect("two scripted sections should run");
+
+    let prompts = llm.user_prompts();
+    assert_eq!(prompts.len(), 3, "unexpected scripted call count");
+    assert!(
+        prompts[2].contains("HEADLINES ALREADY ON THIS PAGE")
+            && prompts[2].contains("\"Ship your next idea\""),
+        "the second subtask must receive the first headline:\n{}",
+        prompts[2]
+    );
+    assert_eq!(
+        summary.subtasks[0].headline.as_deref(),
+        Some("Ship your next idea")
+    );
 }
 
 // Cluster test modules — this file keeps the shared fixtures (plan JSON,

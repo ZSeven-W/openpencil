@@ -1,5 +1,6 @@
 use super::*;
 use jian_ops_schema::PenDocument;
+use std::collections::BTreeMap;
 
 /// A root of `width x height` whose children are described by `fills`: each
 /// entry is `(id, w, h, sksl_len, uniforms_json)`. `uniforms_json` of `null`
@@ -37,6 +38,214 @@ fn doc_with_shaders(
 
 fn ids(issues: &[Issue]) -> Vec<&str> {
     issues.iter().map(|i| i.node_id.as_str()).collect()
+}
+
+fn shader_body(
+    preset: Option<&str>,
+    sksl: Option<String>,
+    uniforms: BTreeMap<String, ShaderUniformValue>,
+) -> ShaderFillBody {
+    ShaderFillBody {
+        preset: preset.map(str::to_string),
+        sksl,
+        uniforms: (!uniforms.is_empty()).then_some(uniforms),
+        explain: None,
+        opacity: None,
+        blend_mode: None,
+    }
+}
+
+fn turbulence_uniform(name: &str, value: ShaderUniformValue) -> ShaderFillBody {
+    shader_body(
+        Some("turbulence"),
+        None,
+        BTreeMap::from([(name.to_string(), value)]),
+    )
+}
+
+fn doc_with_shader_bodies(
+    root_w: f32,
+    root_h: f32,
+    fills: &[(&str, f32, f32, serde_json::Value)],
+) -> PenNode {
+    let children = fills
+        .iter()
+        .map(|(id, width, height, body)| {
+            let mut body = body.as_object().expect("shader body object").clone();
+            body.insert("type".to_string(), serde_json::json!("shader"));
+            format!(
+                r#"{{"type":"frame","id":"{id}","width":{width},"height":{height},"fill":[{}]}}"#,
+                serde_json::Value::Object(body)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let source = format!(
+        r#"{{"version":"1.0","children":[{{"type":"frame","id":"root","width":{root_w},"height":{root_h},"layout":"vertical","children":[{children}]}}]}}"#
+    );
+    let document: PenDocument = serde_json::from_str(&source).expect("preset fixture document");
+    document.children.into_iter().next().expect("root node")
+}
+
+#[test]
+fn turbulence_preset_wins_over_non_empty_sksl_without_source_size_warning() {
+    let body = shader_body(Some("turbulence"), Some("x".repeat(9_000)), BTreeMap::new());
+    let issues = shader_issues("hero", &body);
+    assert_eq!(issues.len(), 1, "ignored source must not also trip 8192");
+    assert_eq!(issues[0].severity, IssueSeverity::Warning);
+    assert_eq!(
+        issues[0].reason,
+        "shader preset `turbulence` takes precedence, so the non-empty authored SkSL is ignored"
+    );
+}
+
+#[test]
+fn invalid_num_octaves_warns_with_the_loader_resolution() {
+    for (value, effective) in [(0.0, 1), (99.0, 6)] {
+        let body = turbulence_uniform("numOctaves", ShaderUniformValue::Float(value));
+        let issues = shader_issues("hero", &body);
+        assert_eq!(issues.len(), 1, "{value} must warn");
+        assert_eq!(
+            issues[0].reason,
+            format!(
+                "numOctaves {value} is outside the supported range 1..=6; the turbulence loader clamps it to {effective}"
+            )
+        );
+    }
+
+    for value in [2.5, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        let body = turbulence_uniform("numOctaves", ShaderUniformValue::Float(value));
+        let issues = shader_issues("hero", &body);
+        assert_eq!(issues.len(), 1, "{value} must warn");
+        assert_eq!(
+            issues[0].reason,
+            format!(
+                "numOctaves {value} must be a finite integer; the turbulence loader falls back to the default 3"
+            )
+        );
+    }
+
+    for value in [1.0, 6.0] {
+        let body = turbulence_uniform("numOctaves", ShaderUniformValue::Float(value));
+        assert!(shader_issues("hero", &body).is_empty());
+    }
+
+    for value in [
+        ShaderUniformValue::Vec(vec![2.0, 3.0]),
+        ShaderUniformValue::Color("#ffffff".to_string()),
+    ] {
+        let body = turbulence_uniform("numOctaves", value);
+        let issues = shader_issues("hero", &body);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(
+            issues[0].reason,
+            "numOctaves must be a number; the turbulence loader falls back to the default 3"
+        );
+    }
+}
+
+#[test]
+fn non_positive_turbulence_frequency_warns_about_constant_noise() {
+    for value in [
+        ShaderUniformValue::Float(0.0),
+        ShaderUniformValue::Float(-0.1),
+        ShaderUniformValue::Vec(vec![0.08, 0.0]),
+        ShaderUniformValue::Vec(vec![-0.02, 0.08]),
+    ] {
+        let body = turbulence_uniform("baseFrequency", value);
+        let issues = shader_issues("hero", &body);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(
+            issues[0].reason,
+            "baseFrequency must stay positive on every axis; zero or negative values make turbulence degenerate to a constant"
+        );
+    }
+
+    for value in [
+        ShaderUniformValue::Float(0.08),
+        ShaderUniformValue::Vec(vec![0.08, 0.11]),
+    ] {
+        let body = turbulence_uniform("baseFrequency", value);
+        assert!(shader_issues("hero", &body).is_empty());
+    }
+}
+
+#[test]
+fn turbulence_base_frequency_reuses_uniform_arity_warning() {
+    let root = doc_with_shader_bodies(
+        390.0,
+        844.0,
+        &[(
+            "hero",
+            100.0,
+            100.0,
+            serde_json::json!({
+                "preset":"turbulence",
+                "uniforms":{"baseFrequency":[0.08,0.08,0.08,0.08,0.08]}
+            }),
+        )],
+    );
+    let issues = detect_shader_budget(&root, DesignForm::MobileScreen);
+    assert_eq!(issues.len(), 1);
+    assert!(
+        issues[0]
+            .reason
+            .contains("uniform `baseFrequency` has 5 components"),
+        "{:?}",
+        issues[0]
+    );
+}
+
+#[test]
+fn unknown_preset_warns_for_authored_and_empty_fallbacks() {
+    let authored = shader_body(
+        Some("future_noise"),
+        Some("half4 main(float2 p){ return half4(1.0); }".to_string()),
+        BTreeMap::new(),
+    );
+    let issues = shader_issues("authored", &authored);
+    assert_eq!(issues.len(), 1);
+    assert_eq!(
+        issues[0].reason,
+        "unknown shader preset `future_noise`; the loader falls back to the non-empty authored SkSL"
+    );
+
+    for sksl in [None, Some("   ".to_string())] {
+        let empty = shader_body(Some("future_noise"), sksl, BTreeMap::new());
+        let issues = shader_issues("empty", &empty);
+        assert_eq!(issues.len(), 1);
+        assert_eq!(
+            issues[0].reason,
+            "unknown shader preset `future_noise`; without non-empty authored SkSL this fill does not render"
+        );
+    }
+}
+
+#[test]
+fn turbulence_presets_share_the_mobile_full_bleed_budget() {
+    let fills = ["a", "b", "c", "d"]
+        .map(|id| (id, 390.0, 600.0, serde_json::json!({"preset":"turbulence"})));
+    let root = doc_with_shader_bodies(390.0, 844.0, &fills);
+    let issues = detect_shader_budget(&root, DesignForm::MobileScreen);
+    assert_eq!(ids(&issues), vec!["c", "d"]);
+    assert!(issues.iter().all(|issue| {
+        issue.category == IssueCategory::ShaderBudget && issue.severity == IssueSeverity::Info
+    }));
+}
+
+#[test]
+fn a_390_by_600_turbulence_hero_is_valid_on_mobile() {
+    let root = doc_with_shader_bodies(
+        390.0,
+        844.0,
+        &[(
+            "hero",
+            390.0,
+            600.0,
+            serde_json::json!({"preset":"turbulence"}),
+        )],
+    );
+    assert!(detect_shader_budget(&root, DesignForm::MobileScreen).is_empty());
 }
 
 #[test]

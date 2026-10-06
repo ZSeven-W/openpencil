@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 op-editor-core = { path = "../op-editor-core" }
+op-editor-ui = { path = "../op-editor-ui" }
 op-design-lint = { path = "../op-design-lint" }
 op-mcp = { path = "../op-mcp", features = ["script"] }
 op-ai-skills = { path = "../op-ai-skills" }
@@ -17,6 +18,7 @@ op-ai-skills = { path = "../op-ai-skills" }
 # Already in the dep tree via op-mcp; direct dep makes `editor_state_to_layout_scene`
 # callable. Default features (skia-measure) match op-mcp's snapshot_layout.
 op-pen-loader = { path = "../op-pen-loader" }
+op-image-enrich = { path = "../op-image-enrich" }
 jian-scene = { path = "../../vendor/jian/crates/jian-scene" }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 # Canonical hex-color parsing (dependency-free).

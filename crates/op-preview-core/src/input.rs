@@ -1,11 +1,7 @@
 //! Input dispatch for [`super::PreviewSession`] — keyboard, focus,
 //! and the pointer pipeline with its scene→runtime coordinate mapping.
 //!
-//! Split out of `preview/mod.rs` to honor the repo's 800-line-per-file
-//! cap (same pattern as `app_mode.rs` / `scene_helpers.rs`: an inherent
-//! `impl` block in a child module reaching the session's plain-private
-//! fields, which Rust's default privacy already exposes to descendant
-//! modules).
+//! Split out of `preview/mod.rs` to honor the repo's 800-line-per-file cap.
 //!
 //! ## Scene→runtime mapping + pointer capture
 //!
@@ -50,7 +46,134 @@ impl PreviewSession {
     /// `CoreResult<bool>` — `Err(CoreError::Busy)` means the runtime is
     /// mid variant-swap and froze input for IME safety, which reads as
     /// "not consumed" here, same as any other declined dispatch.
+    /// R8: store one deferred discrete input, replacing whatever was
+    /// there. Never a queue — the user's latest intent is the only one
+    /// worth honouring when the screen finally arrives.
+    pub(crate) fn defer_discrete(&mut self, input: crate::transition::DeferredDiscreteInput) {
+        self.deferred_discrete_input = Some(input);
+    }
+
+    /// R8: watch a press that began during a transition. `Down` opens the
+    /// tracker, `Up` closes it and defers a Tap when the press stayed
+    /// within jian's tap slop and duration; `Cancel` and anything else
+    /// drop it. Move/Hover are ignored entirely — drift is judged once,
+    /// at Up, against the Down point.
+    pub(crate) fn track_transition_press(
+        &mut self,
+        pointer_id: u32,
+        kind: jian_core::gesture::pointer::PointerKind,
+        scene_x: f32,
+        scene_y: f32,
+        phase: PointerPhase,
+        t_ms: u64,
+    ) {
+        match phase {
+            PointerPhase::Down => {
+                self.transition_tap = Some(crate::transition::TransitionTapTracker {
+                    pointer_id,
+                    kind,
+                    down_x: scene_x,
+                    down_y: scene_y,
+                    down_ms: t_ms,
+                });
+            }
+            PointerPhase::Up => {
+                let completes = self
+                    .transition_tap
+                    .as_ref()
+                    .is_some_and(|t| t.completes_tap(pointer_id, scene_x, scene_y, t_ms));
+                if completes {
+                    let activation = self.pending_activation;
+                    let route_generation = self.route_generation;
+                    self.defer_discrete(crate::transition::DeferredDiscreteInput::Tap {
+                        scene_x,
+                        scene_y,
+                        pointer_id,
+                        kind,
+                        activation,
+                        route_generation,
+                    });
+                }
+                self.transition_tap = None;
+            }
+            PointerPhase::Cancel => {
+                self.transition_tap = None;
+            }
+            _ => {}
+        }
+    }
+
+    /// R8: replay the deferred input, if one survived, now that the
+    /// transition has finished and the arriving screen's layout and hit
+    /// mapping have settled.
+    ///
+    /// A stale input is dropped rather than replayed: a route change
+    /// between capture and completion means the screen it was aimed at is
+    /// no longer on screen, and its coordinates would land somewhere the
+    /// user never pointed at.
+    /// Returns whether an input was actually replayed — `false` when the
+    /// slot was empty or the stored input had gone stale. Callers use it
+    /// to tell "nothing was waiting" apart from "something was dropped".
+    pub(crate) fn replay_deferred_input(&mut self) -> bool {
+        if self.transition_active() {
+            // Replaying into a live transition would route the input
+            // straight back into the deferral path and store it again.
+            // Replay belongs to the completion edge, and only there.
+            return false;
+        }
+        let Some(input) = self.deferred_discrete_input.take() else {
+            return false;
+        };
+        self.transition_tap = None;
+        if input.route_generation() != self.route_generation {
+            return false;
+        }
+        let restore = self.pending_activation;
+        self.pending_activation = input.activation();
+        match input {
+            crate::transition::DeferredDiscreteInput::Tap {
+                scene_x,
+                scene_y,
+                pointer_id,
+                kind,
+                ..
+            } => {
+                let now = self.last_now_ms;
+                self.dispatch_pointer_for_id_at(
+                    pointer_id,
+                    kind,
+                    scene_x,
+                    scene_y,
+                    PointerPhase::Down,
+                    now,
+                );
+                self.dispatch_pointer_for_id_at(
+                    pointer_id,
+                    kind,
+                    scene_x,
+                    scene_y,
+                    PointerPhase::Up,
+                    now,
+                );
+            }
+            crate::transition::DeferredDiscreteInput::Submit { key, modifiers, .. } => {
+                self.dispatch_key(&key, modifiers);
+            }
+            crate::transition::DeferredDiscreteInput::Back { .. } => {
+                self.dispatch_key("Escape", Modifiers::default());
+            }
+        }
+        self.pending_activation = restore;
+        true
+    }
+
     pub fn dispatch_text(&mut self, text: &str) -> bool {
+        if self.transition_active() {
+            // R8: text and IME are never deferred. A commit replayed onto
+            // the arriving screen would land in whatever field happens to
+            // hold focus there — a different field, or none.
+            return false;
+        }
         self.runtime.dispatch_text_input(text).unwrap_or(false)
     }
 
@@ -58,9 +181,28 @@ impl PreviewSession {
     /// `"Tab"`) into the runtime with the given modifier set. Returns
     /// `true` when the dispatch emitted any semantic event.
     pub fn dispatch_key(&mut self, key: &str, modifiers: Modifiers) -> bool {
+        if self.transition_active() {
+            // R8: Enter and Escape are discrete decisions that survive the
+            // wait — everything else (arrows, editing keys) belongs to a
+            // text session that will not exist on the arriving screen.
+            match key {
+                "Enter" => self.defer_discrete(crate::transition::DeferredDiscreteInput::Submit {
+                    key: key.to_string(),
+                    modifiers,
+                    activation: self.pending_activation,
+                    route_generation: self.route_generation,
+                }),
+                "Escape" => self.defer_discrete(crate::transition::DeferredDiscreteInput::Back {
+                    activation: self.pending_activation,
+                    route_generation: self.route_generation,
+                }),
+                _ => {}
+            }
+            return false;
+        }
         !self
             .runtime
-            .dispatch_keyboard(key.to_string(), modifiers)
+            .dispatch_keyboard(key.to_string(), key.to_string(), false, modifiers)
             .is_empty()
     }
 
@@ -155,7 +297,8 @@ impl PreviewSession {
     /// which is what makes Scale/Rotate claims possible through the
     /// product preview path at all. `kind` rides along untouched; hosts
     /// that only speak mouse pass [`PointerKind::Mouse`] with id 1 via
-    /// the legacy wrappers.
+    /// the legacy wrappers. Returns true for either emitted runtime
+    /// semantics or `$pointer` binding work that requires a redraw.
     pub fn dispatch_pointer_for_id_at(
         &mut self,
         pointer_id: u32,
@@ -166,6 +309,11 @@ impl PreviewSession {
         t_ms: u64,
     ) -> bool {
         use jian_core::gesture::pointer::{MouseButtons, PointerEvent};
+        self.debug.note_host_time(t_ms);
+        if self.debug.is_paused() {
+            return false;
+        }
+        let t_ms = self.debug.logical_time(t_ms);
         // Sync the session/runtime clock from the event's own timestamp
         // BEFORE `transition_active` consults `last_now_ms` — that gate
         // is only as fresh as the last host clock push, and an explicit
@@ -173,7 +321,7 @@ impl PreviewSession {
         // discarded on a stale push. Guarded so an out-of-order event
         // never moves the clock backwards.
         if t_ms > self.last_now_ms {
-            self.set_now_ms(t_ms);
+            self.set_logical_now_ms(t_ms);
         }
         // Track C-3: discard pointer input while a screen-transition
         // animation plays — see `transition_active`'s doc for why discard
@@ -181,8 +329,18 @@ impl PreviewSession {
         // dropped with the transition's screen rebuild, so nothing stale
         // can resume under it either way.
         if self.transition_active() {
+            // R8: raw phases never reach the runtime during a transition.
+            // The tracker remembers just enough about the press to decide,
+            // at Up, whether it was a Tap worth replaying.
+            self.track_transition_press(pointer_id, kind, scene_x, scene_y, phase, t_ms);
             return false;
         }
+        let binding_before = self.binding_values();
+        let hit = self
+            .deepest_mapped_hit(scene_x, scene_y)
+            .map(|(_, _, id)| id);
+        self.interaction
+            .track_pointer(pointer_id, kind, phase, (scene_x, scene_y), hit.as_deref());
         let (rt_x, rt_y) = self.resolve_runtime_point(scene_x, scene_y, phase, pointer_id);
         use jian_core::geometry::point;
         let mut ev = PointerEvent::simple_at(pointer_id, phase, point(rt_x, rt_y), t_ms);
@@ -192,7 +350,59 @@ impl PreviewSession {
             ev.buttons = MouseButtons::empty();
             ev.pressure = 0.0;
         }
-        !self.runtime.dispatch_pointer(ev).is_empty()
+        let emitted = !self.runtime.dispatch_pointer(ev).is_empty();
+        self.sync_toggle_progress();
+        let binding_changed =
+            self.finish_binding_update(&binding_before) != crate::InvalidationKind::None;
+        emitted || binding_changed
+    }
+
+    /// The R4 Canonical PreviewInput POINTER path: take a FULL host
+    /// [`PointerEvent`], transform ONLY its coordinates through the same
+    /// per-pointer capture pipeline as the legacy wrappers, and pass
+    /// every other fact (id, kind, pressure, buttons, modifiers, tilt,
+    /// timestamp) into the runtime unchanged. Returns the semantic
+    /// events it produced so [`super::input_event`]'s `dispatch_input`
+    /// can report handler keys.
+    ///
+    /// The transition gate matches the legacy path (discard while a
+    /// screen transition plays); R8 replaces that discard with the
+    /// one-slot deferred discrete-input policy.
+    pub(crate) fn dispatch_pointer_event(
+        &mut self,
+        mut event: jian_core::gesture::PointerEvent,
+    ) -> Vec<jian_core::gesture::SemanticEvent> {
+        use jian_core::gesture::pointer::MouseButtons;
+        use jian_core::gesture::PointerPhase;
+        if event.t_ms > self.last_now_ms {
+            self.set_now_ms(event.t_ms);
+        }
+        if self.transition_active() {
+            return Vec::new();
+        }
+        // Interaction-state tracking reads the SCENE-space hit; compute
+        // it before the transform overwrites the position below.
+        let hit_node = self
+            .deepest_mapped_hit(event.position.x, event.position.y)
+            .map(|(_, _, id)| id);
+        self.interaction.track_pointer(
+            event.id.0,
+            event.kind,
+            event.phase,
+            (event.position.x, event.position.y),
+            hit_node.as_deref(),
+        );
+        let (rt_x, rt_y) =
+            self.resolve_runtime_point(event.position.x, event.position.y, event.phase, event.id.0);
+        event.position = jian_core::geometry::point(rt_x, rt_y);
+        if matches!(event.phase, PointerPhase::Hover) {
+            // Hover is definitionally unpressed regardless of kind.
+            event.buttons = MouseButtons::empty();
+            event.pressure = 0.0;
+        }
+        let events = self.runtime.dispatch_pointer(event);
+        self.sync_toggle_progress();
+        events
     }
 
     /// Cancel one pointer's live stream by id WITHOUT needing its last
@@ -213,7 +423,7 @@ impl PreviewSession {
     /// clears it, `Hover` (unpressed) always resolves fresh and never
     /// stores. Pointers whose `Down` hit no mapped node resolve fresh
     /// every event until an anchored `Down` replaces that state.
-    fn resolve_runtime_point(
+    pub(crate) fn resolve_runtime_point(
         &mut self,
         x: f32,
         y: f32,
@@ -278,7 +488,7 @@ impl PreviewSession {
     ///
     /// Falls back to the root-origin translation when the point is
     /// outside every mapped node (empty canvas — nothing to hit).
-    fn scene_to_runtime(&self, x: f32, y: f32) -> (f32, f32) {
+    pub(crate) fn scene_to_runtime(&self, x: f32, y: f32) -> (f32, f32) {
         let mapping = self.deepest_mapped_rects(x, y);
         self.scene_to_runtime_via(x, y, mapping)
     }
@@ -320,7 +530,16 @@ impl PreviewSession {
     /// Children win over parents; later siblings (painted on top) win
     /// over earlier ones.
     fn deepest_mapped_rects(&self, x: f32, y: f32) -> Option<(Rect, Rect)> {
-        let page = self.scene.active_page()?;
+        self.deepest_mapped_hit(x, y)
+            .map(|(scene, runtime, _)| (scene, runtime))
+    }
+
+    /// [`Self::deepest_mapped_rects`] plus the hit node's SCHEMA id —
+    /// what R4 interaction-state tracking needs to record which node a
+    /// pointer pressed or hovers.
+    pub(crate) fn deepest_mapped_hit(&self, x: f32, y: f32) -> Option<(Rect, Rect, String)> {
+        let scene = self.overlay_runtime_state(&self.scene);
+        let page = scene.active_page()?;
         for node in page.children.iter().rev() {
             if let Some(hit) = self.deepest_mapped_in(node, x, y) {
                 return Some(hit);
@@ -329,11 +548,12 @@ impl PreviewSession {
         None
     }
 
-    fn deepest_mapped_in(&self, node: &SceneNode, x: f32, y: f32) -> Option<(Rect, Rect)> {
+    fn deepest_mapped_in(&self, node: &SceneNode, x: f32, y: f32) -> Option<(Rect, Rect, String)> {
         if node.hidden {
             return None;
         }
         let b = node.bounds;
+        let (x, y) = inverse_node_transform(node, x, y);
         if x < b.origin.x
             || x > b.origin.x + b.size.x
             || y < b.origin.y
@@ -346,7 +566,10 @@ impl PreviewSession {
                 return Some(hit);
             }
         }
-        self.runtime_rect(&node.id).map(|r| (b, r))
+        if node.locked {
+            return None;
+        }
+        self.runtime_rect(&node.id).map(|r| (b, r, node.id.clone()))
     }
 
     /// Match the design/preview painter's tabs rule when choosing a scene
@@ -438,7 +661,7 @@ impl PreviewSession {
     /// away — `Runtime::focus_next` only moves the focus pointer; it
     /// does not touch the widget-state store. A no-op for non-widget
     /// (or already-seeded) focus targets.
-    fn seed_focused_widget_state(&mut self) {
+    pub(crate) fn seed_focused_widget_state(&mut self) {
         let Some(key) = self.runtime.focus.current() else {
             return;
         };
@@ -529,4 +752,26 @@ impl PreviewSession {
         self.seed_focused_widget_state();
         self.runtime.focus.current() == Some(key)
     }
+}
+
+fn inverse_node_transform(node: &SceneNode, x: f32, y: f32) -> (f32, f32) {
+    let pivot_x = node.bounds.origin.x + node.bounds.size.x / 2.0;
+    let pivot_y = node.bounds.origin.y + node.bounds.size.y / 2.0;
+    let mut local_x = x;
+    let mut local_y = y;
+    if node.rotation.abs() > f32::EPSILON {
+        let dx = local_x - pivot_x;
+        let dy = local_y - pivot_y;
+        let cosine = (-node.rotation).cos();
+        let sine = (-node.rotation).sin();
+        local_x = pivot_x + dx * cosine - dy * sine;
+        local_y = pivot_y + dx * sine + dy * cosine;
+    }
+    if node.flip_x {
+        local_x = 2.0 * pivot_x - local_x;
+    }
+    if node.flip_y {
+        local_y = 2.0 * pivot_y - local_y;
+    }
+    (local_x, local_y)
 }

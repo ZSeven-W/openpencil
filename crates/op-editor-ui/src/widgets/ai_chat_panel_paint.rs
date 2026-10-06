@@ -90,6 +90,17 @@ pub(crate) fn paint_panel_surface(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rec
 }
 
 /// Paint the message body's TS-style background and internal dividers.
+/// Just the rule above the composer, for the pinned rail where the
+/// panel's other chrome would be a second border inside one surface.
+pub(crate) fn paint_composer_divider(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, sep_y: f32) {
+    let inner_x = rect.origin.x + 1.0;
+    let inner_w = (rect.size.x - 2.0).max(0.0);
+    cx.backend.fill_rect(
+        Rect::xywh(inner_x, sep_y, inner_w, 1.0),
+        (theme.border).with_alpha(0.75),
+    );
+}
+
 pub(crate) fn paint_panel_body_chrome(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, sep_y: f32) {
     let inner_x = rect.origin.x + 1.0;
     let inner_w = (rect.size.x - 2.0).max(0.0);
@@ -160,10 +171,12 @@ pub(crate) fn paint_examples(
     );
     let hint_y = rect.origin.y + HEADER_HEIGHT + HINT_OFFSET + hint_font * 0.35;
     let hint_w = text_metrics::measure_chrome(cx.backend, &hint_label, hint_font);
-    cx.backend.draw_text(
-        &hint,
-        Point2D::new(rect.origin.x + (rect.size.x - hint_w) / 2.0, hint_y),
-    );
+    // Left-aligned with the pills below it, not centred: in the rail
+    // every other label starts at the same gutter, and a lone centred
+    // line reads as a caption that belongs to nothing.
+    let _ = hint_w;
+    cx.backend
+        .draw_text(&hint, Point2D::new(rect.origin.x + PAD, hint_y));
 
     // ── 4 stacked full-width pills ───────────────────────────────────────────
     // Pill fill is slightly lighter than the panel bg — use card color with

@@ -31,6 +31,11 @@ pub(super) const IMAGE_REMOTE_ACTIONS_AVAILABLE: bool = !cfg!(target_arch = "was
 /// `SECTION_GAP` the walkers add — header + thumb row + optional
 /// warning + buttons row + the legacy 34 px divider tail.
 pub fn image_section_height(has_warning: bool) -> f32 {
+    image_section_height_with_video(has_warning, false)
+}
+
+/// Total height of the image section including its Add/Remove video action.
+pub fn image_section_height_with_video(has_warning: bool, _has_video: bool) -> f32 {
     let warning = if has_warning {
         IMAGE_ROW_GAP + IMAGE_WARNING_H
     } else {
@@ -41,10 +46,12 @@ pub fn image_section_height(has_warning: bool) -> f32 {
     } else {
         0.0
     };
+    let video_action = IMAGE_ROW_GAP + IMAGE_BUTTON_H;
     crate::widgets::property_panel_inputs::SECTION_HEADER_HEIGHT
         + INPUT_HEIGHT
         + warning
         + buttons
+        + video_action
         + 34.0
 }
 
@@ -56,6 +63,18 @@ pub fn push_image_action_rects(
     y: f32,
     w: f32,
     has_warning: bool,
+) {
+    push_image_action_rects_with_video(out, x0, y, w, has_warning, false);
+}
+
+/// Push image-section actions, including the Add/Remove video action.
+pub fn push_image_action_rects_with_video(
+    out: &mut Vec<(PropertyPanelAction, Rect)>,
+    x0: f32,
+    y: f32,
+    w: f32,
+    has_warning: bool,
+    has_video: bool,
 ) {
     let usable_w = w - PAD_X * 2.0;
     let mut y = y + crate::widgets::property_panel_inputs::SECTION_HEADER_HEIGHT;
@@ -99,7 +118,20 @@ pub fn push_image_action_rects(
                 size: Point2D::new(half_w, IMAGE_BUTTON_H),
             },
         ));
+        y += IMAGE_BUTTON_H;
     }
+    y += IMAGE_ROW_GAP;
+    out.push((
+        if has_video {
+            PropertyPanelAction::RemoveVideo
+        } else {
+            PropertyPanelAction::AddVideo
+        },
+        Rect {
+            origin: Point2D::new(x0 + PAD_X, y),
+            size: Point2D::new(usable_w, IMAGE_BUTTON_H),
+        },
+    ));
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -202,6 +234,26 @@ pub fn paint_image_node_section(
         );
         y += IMAGE_BUTTON_H;
     }
+    y += IMAGE_ROW_GAP;
+    paint_outline_button(
+        cx,
+        theme,
+        Rect {
+            origin: Point2D::new(x + PAD_X, y),
+            size: Point2D::new(usable_w, IMAGE_BUTTON_H),
+        },
+        if snapshot.video.is_some() {
+            Icon::Trash
+        } else {
+            Icon::Video
+        },
+        if snapshot.video.is_some() {
+            op_i18n::translate(locale, "video.remove")
+        } else {
+            op_i18n::translate(locale, "video.add")
+        },
+    );
+    y += IMAGE_BUTTON_H;
     y += 34.0;
     paint_section_divider(cx, theme, x, y, width);
     y + SECTION_GAP

@@ -176,37 +176,7 @@ pub fn shadows_from_canonical(node: &PenNode) -> Vec<ShadowPayload> {
 /// 0..1) that canonical `.op` shadow colours use. Returns `None`
 /// only for genuinely unparseable input.
 fn parse_css_color(s: &str) -> Option<[f32; 4]> {
-    let t = s.trim();
-    if let Some(rgba) = parse_hex(t) {
-        return Some(rgba);
-    }
-    let lower = t.to_ascii_lowercase();
-    let inner = lower
-        .strip_prefix("rgba(")
-        .or_else(|| lower.strip_prefix("rgb("))?
-        .strip_suffix(')')?;
-    let parts: Vec<&str> = inner.split(',').map(str::trim).collect();
-    if parts.len() < 3 {
-        return None;
-    }
-    let r = parts[0].parse::<f32>().ok()?;
-    let g = parts[1].parse::<f32>().ok()?;
-    let b = parts[2].parse::<f32>().ok()?;
-    let a = if parts.len() >= 4 {
-        parts[3].parse::<f32>().ok()?
-    } else {
-        1.0
-    };
-    Some([
-        (r / 255.0).clamp(0.0, 1.0),
-        (g / 255.0).clamp(0.0, 1.0),
-        (b / 255.0).clamp(0.0, 1.0),
-        a.clamp(0.0, 1.0),
-    ])
-}
-
-fn parse_hex(s: &str) -> Option<[f32; 4]> {
-    crate::style_payload::parse_hex(s)
+    crate::style_payload::parse_color(s)
 }
 
 #[cfg(test)]

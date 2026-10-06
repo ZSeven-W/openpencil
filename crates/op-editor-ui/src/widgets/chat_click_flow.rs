@@ -124,6 +124,19 @@ pub fn apply_chat_hit(state: &mut EditorState, hit: AIChatHit, now_ms: u64) -> C
         // path bypass.
         AIChatHit::DragHandle | AIChatHit::Resize(_) => ChatClickStep::Unhandled,
         AIChatHit::ToggleCollapse => {
+            // A pinned chat (workspace dock or the rail's Chat tab) has
+            // no minimized bar to collapse into; while the workspace is
+            // up its own toggle owns collapse, and in the professional
+            // editor the tab row does.
+            if state.editor_ui.chat_pinned() {
+                return ChatClickStep::Dirty;
+            }
+            // Same for the composer card's minimize glyph.
+            if state.editor_ui.chat_composer_only() {
+                state.editor_ui.enter_chat_tab();
+                state.editor_ui.close_chat_model_picker();
+                return ChatClickStep::Dirty;
+            }
             // Touch chrome hosts the chat as a modal bottom sheet — there
             // is no minimized desktop bar to collapse INTO, so the chevron
             // CLOSES the sheet instead. Blur the input too: `chat.focused`
@@ -152,6 +165,19 @@ pub fn apply_chat_hit(state: &mut EditorState, hit: AIChatHit, now_ms: u64) -> C
             ChatClickStep::Dirty
         }
         AIChatHit::ToggleMaximize => {
+            // Pinned chat (see ToggleCollapse) has no floating size of
+            // its own — the column's width is the panel width.
+            if state.editor_ui.chat_pinned() {
+                return ChatClickStep::Dirty;
+            }
+            // Composer-only: both glyphs on the card's header mean "open
+            // the conversation", and the conversation's one home is the
+            // rail's Agent tab. There is no floating panel to maximize.
+            if state.editor_ui.chat_composer_only() {
+                state.editor_ui.enter_chat_tab();
+                state.editor_ui.close_chat_model_picker();
+                return ChatClickStep::Dirty;
+            }
             state.chat.maximized = !state.chat.maximized;
             state.chat.expand();
             state.editor_ui.close_chat_model_picker();

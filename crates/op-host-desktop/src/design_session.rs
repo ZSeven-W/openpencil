@@ -251,17 +251,19 @@ pub fn launch_subtask_retry_if_pending(
             return true;
         }
     };
-    let subtask: op_orchestrator::plan::Subtask = match serde_json::from_str(&entry.subtask_json) {
-        Ok(s) => s,
-        Err(e) => {
-            write_inline_error(
-                host,
-                msg_idx,
-                &format!("error: could not restore the failed section's spec for retry: {e}"),
-            );
-            return true;
-        }
-    };
+    let mut subtask: op_orchestrator::plan::Subtask =
+        match serde_json::from_str(&entry.subtask_json) {
+            Ok(s) => s,
+            Err(e) => {
+                write_inline_error(
+                    host,
+                    msg_idx,
+                    &format!("error: could not restore the failed section's spec for retry: {e}"),
+                );
+                return true;
+            }
+        };
+    subtask.insert_after_sibling_id = entry.insert_after_sibling_id.clone();
     // Whatever provider is CURRENTLY selected — not frozen from the
     // original turn. The user may have switched specifically because the
     // first provider kept failing; `ChatProviderLlmClient` adapts any
@@ -349,6 +351,37 @@ fn apply_progress(msg: &mut ChatMessage, progress: &[Progress], locale: Locale) 
                 id,
                 ChatActivityStatus::Error,
                 Some(subtask_failure_detail(locale, error)),
+            ),
+            Progress::SubtaskIncomplete {
+                id,
+                expected,
+                delivered,
+            } => update_activity(
+                msg,
+                id,
+                ChatActivityStatus::Error,
+                Some(format!(
+                    "Only {delivered} of {expected} promised item(s) delivered"
+                )),
+            ),
+            Progress::SubtaskLanguageMismatch {
+                id,
+                checked,
+                mismatched,
+            } => update_activity(
+                msg,
+                id,
+                ChatActivityStatus::Error,
+                Some(format!(
+                    "{mismatched} of {checked} text node(s) not in the brief's language"
+                )),
+            ),
+            Progress::PlanCoverageRetry { missing } => append_narration(
+                msg,
+                &format!(
+                    "• Plan missed section(s): {} — re-planning",
+                    missing.join(", ")
+                ),
             ),
             Progress::SubtaskRetry { id, attempt, .. } => update_activity(
                 msg,
@@ -467,6 +500,9 @@ fn apply_progress(msg: &mut ChatMessage, progress: &[Progress], locale: Locale) 
                 ChatActivityStatus::Done,
                 Some(op_i18n::translate(locale, "ai.designProgress.detail.standardPath").into()),
             ),
+            Progress::ReferenceUnavailable { reason } => {
+                append_narration(msg, &format!("• {reason}"))
+            }
             // "承诺-交付" honest report — not translated, same diagnostic
             // confirmation-line treatment as GeometryEcho above. The canvas
             // itself already carries the " (unfilled)" name suffix
@@ -686,6 +722,14 @@ fn count_u32(count: usize) -> u32 {
 #[cfg(test)]
 #[path = "design_session_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "design_session_attachment_tests.rs"]
+mod attachment_tests;
+
+#[cfg(test)]
+#[path = "design_session_anchor_tests.rs"]
+mod anchor_tests;
 
 #[cfg(test)]
 #[path = "design_session_quality_tests.rs"]

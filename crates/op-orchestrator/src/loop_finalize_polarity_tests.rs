@@ -7,20 +7,20 @@ use op_editor_core::EditorState;
 use serde_json::json;
 
 /// A dark design whose ACTIVE (Light) slot carries stock-light border values —
-/// `0808-gm-1.op`'s verbatim palette. `color-text-primary` is correctly light
+/// `0808-gm-1.op`'s verbatim palette. `--foreground` is correctly light
 /// in both slots and must stay untouched.
 fn dusk_state() -> EditorState {
     let doc: jian_ops_schema::PenDocument = serde_json::from_value(json!({
         "version": "1.0",
         "themes": {"Mode": ["Light", "Dark"]},
         "variables": {
-            "color-border": {"type":"color","value":[
+            "--border": {"type":"color","value":[
                 {"value":"#E2E8F0","theme":{"Mode":"Light"}},
                 {"value":"#334155","theme":{"Mode":"Dark"}}]},
-            "color-border-strong": {"type":"color","value":[
+            "--input": {"type":"color","value":[
                 {"value":"#CBD5E1","theme":{"Mode":"Light"}},
                 {"value":"#475569","theme":{"Mode":"Dark"}}]},
-            "color-text-primary": {"type":"color","value":[
+            "--foreground": {"type":"color","value":[
                 {"value":"#F1F5F9","theme":{"Mode":"Light"}},
                 {"value":"#F1F5F9","theme":{"Mode":"Dark"}}]}
         },
@@ -52,22 +52,22 @@ fn a_dark_design_pulls_its_border_tokens_to_the_dark_slot() {
     // survived on a #0A0A0A page — and the widget renderer paints a tabs bar
     // with the node's STROKE colour, turning that hairline into a white slab.
     let mut state = dusk_state();
-    assert!(resolved(&state, "color-border").eq_ignore_ascii_case("#E2E8F0"));
+    assert!(resolved(&state, "--border").eq_ignore_ascii_case("#E2E8F0"));
 
     heal(&mut state);
 
     assert!(
-        resolved(&state, "color-border").eq_ignore_ascii_case("#334155"),
+        resolved(&state, "--border").eq_ignore_ascii_case("#334155"),
         "got {}",
-        resolved(&state, "color-border")
+        resolved(&state, "--border")
     );
     assert!(
-        resolved(&state, "color-border-strong").eq_ignore_ascii_case("#475569"),
+        resolved(&state, "--input").eq_ignore_ascii_case("#475569"),
         "got {}",
-        resolved(&state, "color-border-strong")
+        resolved(&state, "--input")
     );
     assert!(
-        resolved(&state, "color-text-primary").eq_ignore_ascii_case("#F1F5F9"),
+        resolved(&state, "--foreground").eq_ignore_ascii_case("#F1F5F9"),
         "a correctly-light text token on a dark page is untouched"
     );
 }
@@ -80,7 +80,7 @@ fn a_light_design_keeps_its_light_borders() {
         "version": "1.0",
         "themes": {"Mode": ["Light", "Dark"]},
         "variables": {
-            "color-border": {"type":"color","value":[
+            "--border": {"type":"color","value":[
                 {"value":"#E2E8F0","theme":{"Mode":"Light"}},
                 {"value":"#334155","theme":{"Mode":"Dark"}}]}
         },
@@ -94,7 +94,7 @@ fn a_light_design_keeps_its_light_borders() {
     .expect("valid doc");
     let mut state = EditorState::from_document(doc);
     heal(&mut state);
-    assert!(resolved(&state, "color-border").eq_ignore_ascii_case("#E2E8F0"));
+    assert!(resolved(&state, "--border").eq_ignore_ascii_case("#E2E8F0"));
 }
 
 #[test]
@@ -102,8 +102,8 @@ fn healing_the_border_token_does_not_darken_the_headlines() {
     // THE INTERLOCK. These two repairs are only safe together.
     //
     // Before the binding pass became slot-aware, a headline authored
-    // `#E2E8F0` bound to `$color-border` purely because the hexes matched.
-    // Pulling `color-border` to its dark slot (the test above) would then have
+    // `#E2E8F0` bound to `$--border` purely because the hexes matched.
+    // Pulling `--border` to its dark slot (the test above) would then have
     // repainted every headline #334155 — hairline grey on a #0A0A0A page.
     //
     // This asserts the defence actually holds when both run: bind first, heal
@@ -124,7 +124,7 @@ fn healing_the_border_token_does_not_darken_the_headlines() {
         .expect("a solid fill colour")
         .to_string();
     assert_ne!(
-        authored, "$color-border",
+        authored, "$--border",
         "the slot filter must refuse a border token on a glyph"
     );
 
@@ -142,5 +142,5 @@ fn healing_the_border_token_does_not_darken_the_headlines() {
         "headline stayed light after the border repair — painted {painted} (luminance {luminance})"
     );
     // And the repair really did move the border, so this is not a vacuous pass.
-    assert!(resolved(&state, "color-border").eq_ignore_ascii_case("#334155"));
+    assert!(resolved(&state, "--border").eq_ignore_ascii_case("#334155"));
 }

@@ -86,6 +86,81 @@ fn host_with_doc(doc: jian_ops_schema::PenDocument) -> WidgetHostNative {
     host
 }
 
+fn animated_opacity_doc() -> jian_ops_schema::PenDocument {
+    load(
+        r##"{
+            "version":"1.1","formatVersion":"1.1","id":"motion",
+            "app":{"name":"motion","version":"1","id":"motion"},
+            "children":[{
+                "type":"frame","id":"screen","x":0,"y":0,"width":390,"height":844,
+                "fill":[{"type":"solid","color":"#ffffff"}],
+                "children":[{
+                    "type":"rectangle","id":"button","x":0,"y":0,"width":100,"height":100,
+                    "opacity":1,
+                    "fill":[{"type":"solid","color":"#000000"}],
+                    "events":{"onTap":[{"animate":{
+                        "target":"button","property":"opacity","from":1,"to":0.2,
+                        "durationMs":600,"iterations":2,"direction":"alternate",
+                        "fillMode":"forwards"
+                    }}]}
+                }]
+            }]
+        }"##,
+    )
+}
+
+fn tap_preview_session(host: &mut WidgetHostNative) {
+    let session = host.preview.as_mut().expect("preview session");
+    let mut down = jian_core::gesture::PointerEvent::simple_at(
+        1,
+        jian_core::gesture::pointer::PointerPhase::Down,
+        jian_core::geometry::point(50.0, 50.0),
+        0,
+    );
+    down.kind = jian_core::gesture::pointer::PointerKind::Touch;
+    let _ = session.dispatch_input(op_preview_core::PreviewInputEnvelope::new(
+        op_preview_core::PreviewInput::Pointer(down),
+    ));
+    let mut up = jian_core::gesture::PointerEvent::simple_at(
+        1,
+        jian_core::gesture::pointer::PointerPhase::Up,
+        jian_core::geometry::point(50.0, 50.0),
+        0,
+    );
+    up.kind = jian_core::gesture::pointer::PointerKind::Touch;
+    let _ = session.dispatch_input(op_preview_core::PreviewInputEnvelope::new(
+        op_preview_core::PreviewInput::Pointer(up),
+    ));
+}
+
+#[test]
+fn preview_animation_deadline_replaces_the_old_blanket_tick() {
+    let _guard = test_lock();
+    let mut host = host_with_doc(animated_opacity_doc());
+    assert!(host.enter_preview((800.0, 600.0)));
+    host.preview_mode_transition = None;
+    host.set_now_ms(0);
+    tap_preview_session(&mut host);
+
+    let deadline = host
+        .next_animation_deadline_ms()
+        .expect("running animate track must own a wake");
+    assert!(deadline <= 16, "first animation wake should be frame paced");
+}
+
+#[test]
+fn idle_preview_has_no_blanket_33ms_wake() {
+    let _guard = test_lock();
+    let mut host = host_with_doc(animated_opacity_doc());
+    assert!(host.enter_preview((800.0, 600.0)));
+    host.preview_mode_transition = None;
+    host.set_now_ms(0);
+
+    // The old host kept every idle preview alive with a blanket 33 ms tick.
+    // An idle session now contributes no preview-driven wake at all.
+    assert_eq!(host.next_animation_deadline_ms(), None);
+}
+
 #[test]
 fn enter_preview_infers_and_writes_back_kind() {
     let _guard = test_lock();
@@ -153,6 +228,34 @@ fn device_scroll_divides_by_fit_and_clamps() {
     assert!((host.preview_scroll_y - 100.0 / fit).abs() < 0.5);
     host.apply_device_scroll(1e6);
     assert_eq!(host.preview_scroll_y, 0.0);
+}
+
+/// Page-scroll contract: the device frame's scroll position is mirrored
+/// into the session so `$scroll` under the framed root tracks it.
+#[test]
+fn device_scroll_feeds_the_session_page_scroll() {
+    let _guard = test_lock();
+    let mut host = host_with_doc(phone_doc(2000));
+    host.last_viewport_w = 800.0;
+    host.last_viewport_h = 400.0;
+    assert!(host.enter_preview((800.0, 400.0)));
+    host.recompute_device_frame(800.0, 400.0);
+    let frame = host.preview_device_frame.as_ref().unwrap();
+    let (fit, max) = (frame.fit, scroll_max(frame));
+    assert!(max > 0.0, "a 2000 px screen overflows the frame");
+    assert_eq!(
+        host.preview.as_ref().unwrap().page_scroll(),
+        Some((0.0, max)),
+        "entering preview publishes max_offset before any scroll"
+    );
+    host.apply_device_scroll(-100.0);
+    let (offset, published_max) = host.preview.as_ref().unwrap().page_scroll().unwrap();
+    assert!(
+        (offset - 100.0 / fit).abs() < 0.5,
+        "offset mirrors preview_scroll_y"
+    );
+    assert_eq!(published_max, max);
+    assert_eq!(offset, host.preview_scroll_y);
 }
 
 #[test]

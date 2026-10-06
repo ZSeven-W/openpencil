@@ -5,14 +5,12 @@ use op_host_native::WidgetHostNative;
 use op_orchestrator::agent_identity::AgentIdentity;
 use op_orchestrator::{AbortFlag, Progress, RunSummary, SubtaskOutcome};
 use std::sync::mpsc;
-
 fn identity(name: &str, color: &str) -> AgentIdentity {
     AgentIdentity {
         name: name.into(),
         color: color.into(),
     }
 }
-
 fn persisted_subtask_json() -> String {
     serde_json::to_string(&op_orchestrator::plan::Subtask {
         id: "hero".into(),
@@ -23,15 +21,16 @@ fn persisted_subtask_json() -> String {
         },
         id_prefix: "hero".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: Some("Profile".into()),
         generated_root_id: None,
         existing_section_labels: None,
         retry_feedback: None,
+        bleed_hero: false,
     })
     .unwrap()
 }
-
 fn persisted_request_json() -> String {
     serde_json::to_string(&op_orchestrator::DesignRequest {
         prompt: "design profile".into(),
@@ -44,10 +43,10 @@ fn persisted_request_json() -> String {
         validation_enabled: false,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     })
     .unwrap()
 }
-
 fn activity(id: &str, status: ChatActivityStatus) -> ChatActivity {
     ChatActivity {
         id: id.into(),
@@ -57,7 +56,6 @@ fn activity(id: &str, status: ChatActivityStatus) -> ChatActivity {
         content_offset: None,
     }
 }
-
 #[test]
 fn worker_scoped_progress_builds_one_stable_message_per_screen_group() {
     let (delta_tx, delta_rx) = mpsc::channel::<DesignDelta>();
@@ -110,7 +108,6 @@ fn worker_scoped_progress_builds_one_stable_message_per_screen_group() {
     }
 
     assert!(pump_progress(&mut host, &mut current, None));
-
     let messages = &host.editor_state().chat.messages;
     let primary = messages
         .iter()
@@ -216,10 +213,12 @@ fn worker_summary_finishes_all_messages_and_keeps_retry_on_owning_worker() {
                 node_count: 0,
                 error: Some("empty content".into()),
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: Some(subtask),
             }],
             total_nodes: 0,
             unfilled_screens: Vec::new(),
+            incomplete_subtask_failure: false,
         })))
         .unwrap();
 
@@ -564,10 +563,12 @@ fn partial_summary_marks_omitted_active_rows_error() {
                 node_count: 7,
                 error: None,
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: None,
             }],
             total_nodes: 7,
             unfilled_screens: Vec::new(),
+            incomplete_subtask_failure: false,
         })))
         .unwrap();
     assert!(pump_progress(&mut host, &mut current, None));

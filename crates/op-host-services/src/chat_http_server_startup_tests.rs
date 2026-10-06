@@ -21,6 +21,16 @@ fn test_client() -> reqwest::Client {
         .expect("test HTTP client")
 }
 
+/// Budget for "an expected event must eventually happen" waits (a stub
+/// reaching its listen line, a probe request arriving, a cancelled worker
+/// finishing). These are liveness bounds, not the property under test:
+/// a broken path either never fires (and still fails here) or returns
+/// the wrong result (caught by the result asserts). Generous, because a
+/// loaded machine — CI, or several test binaries running concurrently —
+/// can delay a spawn chain or timer by whole seconds, and a tight bound
+/// turns that scheduling noise into a spurious failure.
+const LIVENESS_BUDGET: Duration = Duration::from_secs(10);
+
 fn wait_until(timeout: Duration, mut predicate: impl FnMut() -> bool) -> bool {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
@@ -66,9 +76,7 @@ impl HangingHealthServer {
     }
 
     fn wait_for_request(&self) -> bool {
-        wait_until(Duration::from_secs(2), || {
-            self.accepted.load(Ordering::Acquire)
-        })
+        wait_until(LIVENESS_BUDGET, || self.accepted.load(Ordering::Acquire))
     }
 }
 
@@ -137,7 +145,7 @@ fn receiver_drop_interrupts_the_default_health_probe() {
 
     drop(rx);
     let stopped = crate::chat_runtime::block_on_anywhere(async {
-        tokio::time::timeout(Duration::from_millis(500), worker).await
+        tokio::time::timeout(LIVENESS_BUDGET, worker).await
     });
     let (result, spawned) = stopped
         .expect("receiver drop must interrupt the default probe")
@@ -186,12 +194,75 @@ mod unix {
         fs::read_to_string(path).ok()?.trim().parse().ok()
     }
 
+    /// How long the terminated stub tree may take to disappear from the
+    /// process table. Generous: the SIGTERM'd descendant is briefly an
+    /// orphaned zombie until launchd/init reaps it, and a loaded machine
+    /// stretches that window.
+    const TREE_REAP_BUDGET: Duration = Duration::from_secs(5);
+
+    fn process_alive(pid: i32) -> bool {
+        // SAFETY: signal 0 is a read-only existence probe for an exact
+        // positive pid written by this test's own stub.
+        (unsafe { libc::kill(pid, 0) }) == 0
+            || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+    }
+
+    /// Assert that the caller's final tree cleanup actually cleaned the
+    /// retained stub tree (leader + backgrounded `sleep 30`, pids written
+    /// by the stub itself).
+    ///
+    /// Deliberately NOT `terminate_result.is_ok()`: on macOS, `killpg`
+    /// reports `EPERM` when the group's only remaining member is an
+    /// orphaned zombie that init has not reaped yet, so under load a fully
+    /// successful cleanup can still surface as a transient `Err` from
+    /// `terminate_tokio_process_tree`. The contract cancellation must keep
+    /// is observable — no process from the retained tree survives — so
+    /// that is what we poll for. A tree that really escaped cleanup (e.g.
+    /// a detached handle) keeps its 30s sleep alive and still fails here.
+    fn assert_retained_tree_cleaned(
+        pid_file: &Path,
+        terminate: &std::io::Result<std::process::ExitStatus>,
+        context: &str,
+    ) {
+        let pids: Vec<i32> = fs::read_to_string(pid_file)
+            .expect("stub pid file")
+            .split_whitespace()
+            .map(|pid| pid.parse().expect("numeric stub pid"))
+            .collect();
+        assert_eq!(pids.len(), 2, "stub must report leader + descendant pids");
+        let deadline = Instant::now() + TREE_REAP_BUDGET;
+        while pids.iter().any(|&pid| process_alive(pid)) && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(10));
+        }
+        let survivors: Vec<i32> = pids
+            .iter()
+            .copied()
+            .filter(|&pid| process_alive(pid))
+            .collect();
+        for &pid in &survivors {
+            // SAFETY: exact still-live test child pid, force-killed only
+            // as cleanup before reporting the regression.
+            let _ = unsafe { libc::kill(pid, libc::SIGKILL) };
+        }
+        assert!(
+            survivors.is_empty(),
+            "{context}: surviving pids {survivors:?}, terminate result {terminate:?}"
+        );
+    }
+
     #[test]
     fn receiver_drop_during_listen_retains_child_for_final_tree_cleanup() {
         let marker = temp_path("listen-marker");
+        let pid_file = temp_path("listen-pids");
+        // The pid file is written before the marker so it is guaranteed
+        // present once the test observes the marker.
         let script = write_script(
             "listen-cancel.sh",
-            &format!("printf started > {}\nsleep 30", shell_quote(&marker)),
+            &format!(
+                "sleep 30 &\nprintf '%s %s\\n' \"$$\" \"$!\" > {}\nprintf started > {}\nwait",
+                shell_quote(&pid_file),
+                shell_quote(&marker),
+            ),
         );
         let (tx, rx) = mpsc::channel::<()>(1);
         let worker = crate::chat_runtime::shared_runtime().spawn(async move {
@@ -204,32 +275,40 @@ mod unix {
             )
             .await;
             let retained = spawned.is_some();
-            let cleaned = if let Some(mut child) = spawned {
-                op_process_io::terminate_tokio_process_tree(&mut child, Duration::from_millis(100))
+            let terminate = match spawned {
+                Some(mut child) => {
+                    op_process_io::terminate_tokio_process_tree(
+                        &mut child,
+                        Duration::from_millis(100),
+                    )
                     .await
-                    .is_ok()
-            } else {
-                false
+                }
+                None => Err(std::io::Error::other("no retained child to clean")),
             };
-            (result, retained, cleaned, script)
+            (result, retained, terminate, script)
         });
         assert!(
-            wait_until(Duration::from_secs(2), || marker.exists()),
+            wait_until(LIVENESS_BUDGET, || marker.exists()),
             "fake OpenCode must reach its listen wait"
         );
 
         drop(rx);
         let stopped = crate::chat_runtime::block_on_anywhere(async {
-            tokio::time::timeout(Duration::from_secs(2), worker).await
+            tokio::time::timeout(LIVENESS_BUDGET, worker).await
         });
-        let (result, retained, cleaned, script) = stopped
+        let (result, retained, terminate, script) = stopped
             .expect("receiver drop must interrupt the listen handshake")
             .expect("startup worker must not panic");
         assert_eq!(result, Ok(None));
         assert!(retained, "spawned child must remain caller-owned");
-        assert!(cleaned, "retained child tree must be cleanable");
+        assert_retained_tree_cleaned(
+            &pid_file,
+            &terminate,
+            "retained child tree must be cleanable",
+        );
         let _ = fs::remove_file(script);
         let _ = fs::remove_file(marker);
+        let _ = fs::remove_file(pid_file);
     }
 
     #[test]
@@ -276,12 +355,16 @@ mod unix {
     fn receiver_drop_interrupts_post_spawn_identity_probe_and_retains_child() {
         let port_file = temp_path("announced-port");
         let gate = temp_path("announce-gate");
+        let pid_file = temp_path("probe-pids");
+        // The pid file is written before the listen announcement so it is
+        // guaranteed present before cancellation can trigger cleanup.
         let script = write_script(
             "post-probe.sh",
             &format!(
-                "port=\nfor argument in \"$@\"; do\n  case \"$argument\" in\n    --port=*) port=${{argument#--port=}} ;;\n  esac\ndone\nprintf '%s' \"$port\" > {}\nwhile [ ! -f {} ]; do sleep 0.01; done\nprintf 'opencode server listening on http://127.0.0.1:%s\\n' \"$port\"\nsleep 30",
+                "port=\nfor argument in \"$@\"; do\n  case \"$argument\" in\n    --port=*) port=${{argument#--port=}} ;;\n  esac\ndone\nprintf '%s' \"$port\" > {}\nwhile [ ! -f {} ]; do sleep 0.01; done\nsleep 30 &\nprintf '%s %s\\n' \"$$\" \"$!\" > {}\nprintf 'opencode server listening on http://127.0.0.1:%s\\n' \"$port\"\nwait",
                 shell_quote(&port_file),
                 shell_quote(&gate),
+                shell_quote(&pid_file),
             ),
         );
         let closed_port = reserve_loopback_port().expect("reserve closed default port");
@@ -300,19 +383,22 @@ mod unix {
             )
             .await;
             let retained = spawned.is_some();
-            let cleaned = if let Some(mut child) = spawned {
-                op_process_io::terminate_tokio_process_tree(&mut child, Duration::from_millis(100))
+            let terminate = match spawned {
+                Some(mut child) => {
+                    op_process_io::terminate_tokio_process_tree(
+                        &mut child,
+                        Duration::from_millis(100),
+                    )
                     .await
-                    .is_ok()
-            } else {
-                false
+                }
+                None => Err(std::io::Error::other("no retained child to clean")),
             };
-            (result, retained, cleaned)
+            (result, retained, terminate)
         });
 
         let mut announced_port = None;
         assert!(
-            wait_until(Duration::from_secs(2), || {
+            wait_until(LIVENESS_BUDGET, || {
                 announced_port = read_port(&port_file);
                 announced_port.is_some()
             }),
@@ -329,18 +415,23 @@ mod unix {
 
         drop(rx);
         let stopped = crate::chat_runtime::block_on_anywhere(async {
-            tokio::time::timeout(Duration::from_secs(2), worker).await
+            tokio::time::timeout(LIVENESS_BUDGET, worker).await
         });
-        let (result, retained, cleaned) = stopped
+        let (result, retained, terminate) = stopped
             .expect("receiver drop must interrupt post-spawn probe")
             .expect("startup worker must not panic");
         assert_eq!(result, Ok(ServerResolution::Cancelled));
         assert!(retained, "spawned child must remain caller-owned");
-        assert!(cleaned, "retained child tree must be cleanable");
+        assert_retained_tree_cleaned(
+            &pid_file,
+            &terminate,
+            "retained child tree must be cleanable",
+        );
 
         drop(server);
         let _ = fs::remove_file(script);
         let _ = fs::remove_file(port_file);
         let _ = fs::remove_file(gate);
+        let _ = fs::remove_file(pid_file);
     }
 }

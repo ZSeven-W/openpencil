@@ -70,3 +70,90 @@ fn agents_that_do_not_hard_require_mcp_report_nothing() {
         );
     }
 }
+
+fn builtin_agent(api_key: &str, enabled: bool) -> crate::BuiltinAgentConfig {
+    crate::BuiltinAgentConfig {
+        id: "builtin-1".into(),
+        preset: crate::BuiltinAgentPresetKey::Custom,
+        display_name: "Custom".into(),
+        kind: crate::BuiltinAgentKind::OpenAiCompat,
+        api_key: api_key.into(),
+        models: vec!["model-a".into()],
+        base_url: "http://localhost:9".into(),
+        enabled,
+    }
+}
+
+#[test]
+fn has_usable_chat_agent_is_false_on_a_fresh_state() {
+    let state = EditorState::default();
+    assert!(
+        !state.has_usable_chat_agent(),
+        "a first-run machine has no answering agent — Home must offer the connect card"
+    );
+}
+
+#[test]
+fn has_usable_chat_agent_matrix_over_every_agent_source() {
+    // Built-in: enabled with a key is usable; disabled, or enabled with a
+    // blank key, is not.
+    let mut state = EditorState::default();
+    state
+        .editor_ui
+        .agent_settings
+        .builtin_agents
+        .push(builtin_agent("sk-live", true));
+    assert!(state.has_usable_chat_agent());
+    state.editor_ui.agent_settings.builtin_agents[0].enabled = false;
+    assert!(
+        !state.has_usable_chat_agent(),
+        "a disabled agent cannot answer"
+    );
+    state.editor_ui.agent_settings.builtin_agents[0].enabled = true;
+    state.editor_ui.agent_settings.builtin_agents[0].api_key = "   ".into();
+    assert!(
+        !state.has_usable_chat_agent(),
+        "an enabled agent without a key cannot answer"
+    );
+
+    // CLI: any connected provider flag is usable.
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.connected[0] = true;
+    assert!(state.has_usable_chat_agent());
+
+    // ACP: any enabled entry is usable.
+    let mut state = EditorState::default();
+    state
+        .editor_ui
+        .agent_settings
+        .acp_agents
+        .push(crate::AcpAgentConfig {
+            id: "acp-1".into(),
+            display_name: "Zed AI".into(),
+            connection_type: crate::AcpConnectionType::Local,
+            command: "zed-ai".into(),
+            args: Vec::new(),
+            env: Default::default(),
+            url: None,
+            enabled: true,
+            connected: false,
+        });
+    assert!(state.has_usable_chat_agent());
+}
+
+#[test]
+fn launch_route_defaults_to_auto_and_only_orchestrator_bypasses_the_loop() {
+    assert_eq!(
+        crate::ChatState::default().launch_route,
+        crate::LaunchRoute::Auto
+    );
+    assert!(!crate::LaunchRoute::Auto.bypasses_design_agent_loop());
+    assert!(crate::LaunchRoute::Orchestrator.bypasses_design_agent_loop());
+    // The pending-family reset also re-arms the route.
+    let mut chat = crate::ChatState {
+        launch_route: crate::LaunchRoute::Orchestrator,
+        ..crate::ChatState::default()
+    };
+    chat.new_chat();
+    assert_eq!(chat.launch_route, crate::LaunchRoute::Auto);
+}

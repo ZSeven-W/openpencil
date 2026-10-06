@@ -219,6 +219,8 @@ fn standalone_synchronous_save_as_failure_does_not_rebind() {
 #[test]
 fn new_file_action_resets_to_starter_frame() {
     let mut host = WidgetHostNative::new();
+    host.editor_state_mut().editor_ui.entry_surface = op_editor_core::EntrySurface::Home;
+    host.editor_state_mut().editor_ui.home.visible = true;
     host.editor_state_mut().doc.children.clear();
     host.editor_state_mut().viewport.pan_x = -5000.0;
     host.editor_state_mut().viewport.pan_y = -5000.0;
@@ -233,6 +235,11 @@ fn new_file_action_resets_to_starter_frame() {
     );
 
     assert_eq!(outcome, ActionOutcome::Saved);
+    assert!(!host.editor_state().editor_ui.home.visible);
+    assert_eq!(
+        host.editor_state().editor_ui.entry_surface,
+        op_editor_core::EntrySurface::Home
+    );
     assert!(current_path.is_none());
     assert_eq!(host.editor_state().doc.children.len(), 1);
     assert!(host.editor_state().selection.is_empty());

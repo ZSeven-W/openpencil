@@ -89,6 +89,9 @@ fn cursor_move_sets_chat_tab_hover_when_over_tab() {
     // `tabs_snapshot.len() >= 1`). The default ChatSessions starts with
     // one implicit tab; `new_tab()` adds a second.
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     host.editor_state_mut().chat.new_tab(); // now 2 tabs
     let viewport_w = 1440.0_f32;
     let viewport_h = 900.0_f32;
@@ -132,6 +135,9 @@ fn cursor_move_sets_chat_tab_hover_when_over_tab() {
 #[test]
 fn cursor_move_tracks_hovered_design_json_card_for_copy_reveal() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     host.editor_state_mut()
         .chat
         .messages
@@ -162,6 +168,9 @@ fn cursor_move_tracks_hovered_design_json_card_for_copy_reveal() {
 #[test]
 fn cursor_move_tracks_chat_footer_buttons() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     host.editor_state_mut()
         .chat
         .available_models
@@ -207,6 +216,9 @@ fn cursor_move_tracks_chat_footer_buttons() {
 #[test]
 fn cursor_move_tracks_quick_action_card_hover() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     host.editor_state_mut()
         .chat
         .available_models
@@ -237,6 +249,9 @@ fn cursor_move_tracks_quick_action_card_hover() {
 #[test]
 fn ordinary_chat_blank_surface_blocks_canvas_hover_and_stays_stable() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     seed(
         &mut host,
         r#"{"version":"1.0.0","children":[
@@ -280,6 +295,9 @@ fn ordinary_chat_blank_surface_blocks_canvas_hover_and_stays_stable() {
 #[test]
 fn chat_control_hover_and_lower_cleanup_happen_in_the_same_move() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let (viewport_w, viewport_h) = (1440.0, 900.0);
     host.last_viewport_w = viewport_w;
     host.last_viewport_h = viewport_h;
@@ -299,6 +317,9 @@ fn chat_control_hover_and_lower_cleanup_happen_in_the_same_move() {
 #[test]
 fn ordinary_chat_surface_blocks_layer_panel_predispatch() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let (viewport_w, viewport_h) = (1440.0, 900.0);
     host.last_viewport_w = viewport_w;
     host.last_viewport_h = viewport_h;
@@ -318,21 +339,29 @@ fn ordinary_chat_surface_wins_when_overlapping_variables_panel() {
     let (viewport_w, viewport_h) = (1440.0, 900.0);
     host.last_viewport_w = viewport_w;
     host.last_viewport_h = viewport_h;
+    // The floating panel that could be dragged over the VariablesPanel
+    // is retired; the chat surface that can still overlap it is the
+    // composer card at the canvas floor, under a VariablesPanel the
+    // user stretched tall. The point is derived from BOTH live rects.
     host.editor_state_mut().editor_ui.variables_panel_open = true;
+    host.editor_state_mut().editor_ui.variables_panel_size = Some((744.0, 760.0));
     let variables_rect = host
         .variables_panel_rect(viewport_w, viewport_h)
         .expect("variables panel rect");
-    host.editor_state_mut().chat.panel_position = Some((
-        variables_rect.origin.x + 20.0,
-        variables_rect.origin.y + 20.0,
-    ));
+    let card = host
+        .ai_chat_rect(viewport_w, viewport_h)
+        .expect("composer card");
     host.editor_state_mut().editor_ui.variables_panel_hover =
         Some(op_editor_core::VariablesPanelButton::Close);
     let point = Point2D::new(
-        variables_rect.origin.x + 80.0,
-        variables_rect.origin.y + 120.0,
+        card.origin.x + card.size.x / 2.0,
+        (variables_rect.origin.y + variables_rect.size.y + card.origin.y) / 2.0,
     );
 
+    assert!(
+        variables_rect.contains(point),
+        "probe must overlap both surfaces"
+    );
     assert!(host.chat_panel_surface_contains(point.x, point.y, viewport_w, viewport_h));
     assert!(host.apply_cursor_move(point.x, point.y));
     assert_eq!(host.editor_state().editor_ui.variables_panel_hover, None);
@@ -341,6 +370,9 @@ fn ordinary_chat_surface_wins_when_overlapping_variables_panel() {
 #[test]
 fn align_toolbar_whole_card_wins_over_chat_surface() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     seed(
         &mut host,
         r#"{"version":"1.0.0","children":[
@@ -364,29 +396,43 @@ fn align_toolbar_whole_card_wins_over_chat_surface() {
         host.selection_toolbar_hit(point.x, point.y, viewport_w, viewport_h),
         None
     );
-    host.editor_state_mut().chat.panel_position = Some((point.x - 100.0, point.y - 104.0));
+    // RETIRED PREMISE: the floating chat panel could be dragged under
+    // the toolbar to manufacture an overlap. Both chat surfaces are
+    // docked now (rail body / composer card at the canvas floor), and
+    // neither can reach the toolbar — so the whole-card guarantee is
+    // asserted where it still bites: blank toolbar padding owns its
+    // point and clears Chat hover state in the same move.
     let chat_rect = host
         .ai_chat_rect(viewport_w, viewport_h)
         .expect("chat rect");
     let chat = AIChatPlaceholder::from_editor(host.editor_state());
-    assert_eq!(chat.example_hover_at(chat_rect, point), Some(0));
-    assert!(host.chat_panel_surface_contains(point.x, point.y, viewport_w, viewport_h));
+    assert_eq!(chat.example_hover_at(chat_rect, point), None);
+    assert!(!host.chat_panel_surface_contains(point.x, point.y, viewport_w, viewport_h));
+    seed_chat_and_lower_hover(&mut host);
 
-    assert!(!host.apply_cursor_move(point.x, point.y));
+    assert!(host.apply_cursor_move(point.x, point.y));
     assert_eq!(
         host.editor_state().editor_ui.chat_example_hover,
         None,
         "the blank AlignToolbar card must stop Chat hover dispatch"
+    );
+    assert_chat_and_lower_hover_cleared(&host);
+    assert!(
+        !host.apply_cursor_move(point.x, point.y),
+        "stable blank-card hover must not request another repaint"
     );
 }
 
 #[test]
 fn moving_from_chat_into_status_clears_chat_and_lower_hover_in_one_event() {
     let mut host = WidgetHostNative::new();
-    let (viewport_w, viewport_h) = (1440.0, 900.0);
+    // The maximized panel that covered the status bar is retired. The
+    // real overlap on the new contract is the composer card meeting
+    // the status bar at the canvas floor on a NARROW viewport — both
+    // dock to the floor, and the canvas is too slim to keep them apart.
+    let (viewport_w, viewport_h) = (700.0, 800.0);
     host.last_viewport_w = viewport_w;
     host.last_viewport_h = viewport_h;
-    host.editor_state_mut().chat.maximized = true;
     let status_rect = host
         .status_bar_rect(viewport_w, viewport_h)
         .expect("status bar rect");
@@ -416,6 +462,9 @@ fn moving_from_chat_into_status_clears_chat_and_lower_hover_in_one_event() {
 #[test]
 fn moving_from_chat_into_align_action_clears_chat_and_preserves_align_hover() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     seed(
         &mut host,
         r#"{"version":"1.0.0","children":[
@@ -428,7 +477,6 @@ fn moving_from_chat_into_align_action_clears_chat_and_preserves_align_hover() {
     host.last_viewport_h = viewport_h;
     host.editor_state_mut().selection.set = vec![NodeId::new("a"), NodeId::new("b")];
     host.editor_state_mut().selection.anchor = NodeId::new("b");
-    host.editor_state_mut().chat.maximized = true;
     let align_rect = host
         .align_toolbar_rect(viewport_w, viewport_h)
         .expect("align toolbar rect");
@@ -446,7 +494,12 @@ fn moving_from_chat_into_align_action_clears_chat_and_preserves_align_hover() {
         y += 2.0;
     }
     let (point, expected) = hit.expect("align action point");
-    assert!(host.chat_panel_surface_contains(point.x, point.y, viewport_w, viewport_h));
+    // RETIRED PREMISE: the maximized panel used to cover the toolbar,
+    // so the move genuinely left the chat surface. The toolbar hangs
+    // over the canvas top and no chat surface reaches it any more —
+    // what is still load-bearing is the ONE-EVENT semantics: a stale
+    // Chat hover is cleared by the same move that sets the Align hover.
+    assert!(!host.chat_panel_surface_contains(point.x, point.y, viewport_w, viewport_h));
     seed_chat_and_lower_hover(&mut host);
 
     assert!(host.apply_cursor_move(point.x, point.y));
@@ -465,292 +518,5 @@ fn moving_from_chat_into_align_action_clears_chat_and_preserves_align_hover() {
     );
 }
 
-#[test]
-fn model_picker_extension_is_a_floating_overlay() {
-    let mut host = WidgetHostNative::new();
-    let (viewport_w, viewport_h) = (1440.0, 900.0);
-    host.last_viewport_w = viewport_w;
-    host.last_viewport_h = viewport_h;
-    open_populated_model_picker(&mut host);
-    host.editor_state_mut().chat.panel_position = Some((320.0, 420.0));
-
-    let chat_rect = host
-        .ai_chat_rect(viewport_w, viewport_h)
-        .expect("chat rect");
-    let picker = host
-        .chat_model_picker_rect(viewport_w, viewport_h)
-        .expect("model picker rect");
-    let point = Point2D::new(picker.origin.x + 8.0, picker.origin.y + 8.0);
-
-    assert!(
-        !chat_rect.contains(point),
-        "the capped picker should extend above a minimum-height chat panel"
-    );
-    assert!(host.over_floating_overlay(point.x, point.y, viewport_w, viewport_h));
-}
-
-#[test]
-fn open_model_picker_blocks_layer_panel_hover() {
-    let mut host = WidgetHostNative::new();
-    let (viewport_w, viewport_h) = (1440.0, 900.0);
-    host.last_viewport_w = viewport_w;
-    host.last_viewport_h = viewport_h;
-    open_populated_model_picker(&mut host);
-    host.editor_state_mut().editor_ui.hovered_layer_id = Some(NodeId::new("stale"));
-    let point = Point2D::new(40.0, 180.0);
-
-    assert!(!host.cursor_over_layer_panel(point.x, point.y, viewport_w, viewport_h));
-    assert!(host.update_layer_hover(point.x, point.y, viewport_w, viewport_h));
-    assert_eq!(host.editor_state().editor_ui.hovered_layer_id, None);
-}
-
-#[test]
-fn open_model_picker_owns_hover_without_repainting_unchanged_rows() {
-    let mut host = WidgetHostNative::new();
-    let (viewport_w, viewport_h) = (1440.0, 900.0);
-    host.last_viewport_w = viewport_w;
-    host.last_viewport_h = viewport_h;
-    open_populated_model_picker(&mut host);
-    let picker = host
-        .chat_model_picker_rect(viewport_w, viewport_h)
-        .expect("model picker rect");
-    let point = Point2D::new(
-        picker.origin.x + 80.0,
-        picker.origin.y
-            + ai_chat_model_picker::MODEL_SEARCH_H
-            + ai_chat_model_picker::MODEL_PICKER_PAD_Y
-            + ai_chat_model_picker::MODEL_GROUP_H
-            + ai_chat_model_picker::MODEL_ROW_H / 2.0,
-    );
-    {
-        let ui = &mut host.editor_state_mut().editor_ui;
-        ui.canvas_hover_node = Some(NodeId::new("stale-canvas"));
-        ui.property_action_hover = Some(0);
-        ui.chat_header_hover = Some(op_editor_core::ChatHeaderButton::NewChat);
-        ui.chat_tab_hover = Some(0);
-        ui.chat_footer_hover = Some(op_editor_core::ChatFooterButton::Send);
-        ui.chat_example_hover = Some(0);
-        ui.parallel_agents_picker_hover = Some(1);
-        ui.variables_panel_hover = Some(op_editor_core::VariablesPanelButton::Close);
-        ui.variables_preset_menu_hover =
-            Some(op_editor_core::variables_panel_state::PresetMenuButton::SaveCurrent);
-        ui.topbar_button_hover = Some(op_editor_core::TopBarButton::ToggleSidebar);
-        ui.topbar_traffic_hover = true;
-    }
-
-    assert!(host.apply_cursor_move(point.x, point.y));
-    assert_eq!(
-        host.editor_state().editor_ui.chat_model_picker.hover,
-        Some(0)
-    );
-    assert_eq!(host.editor_state().editor_ui.canvas_hover_node, None);
-    assert_eq!(host.editor_state().editor_ui.property_action_hover, None);
-    assert_eq!(host.editor_state().editor_ui.chat_header_hover, None);
-    assert_eq!(host.editor_state().editor_ui.chat_tab_hover, None);
-    assert_eq!(host.editor_state().editor_ui.chat_footer_hover, None);
-    assert_eq!(host.editor_state().editor_ui.chat_example_hover, None);
-    assert_eq!(
-        host.editor_state().editor_ui.parallel_agents_picker_hover,
-        None
-    );
-    assert_eq!(host.editor_state().editor_ui.variables_panel_hover, None);
-    assert_eq!(
-        host.editor_state().editor_ui.variables_preset_menu_hover,
-        None
-    );
-    assert_eq!(host.editor_state().editor_ui.topbar_button_hover, None);
-    assert!(!host.editor_state().editor_ui.topbar_traffic_hover);
-
-    assert!(
-        !host.apply_cursor_move(point.x, point.y),
-        "an unchanged picker row must stop dispatch without forcing another repaint"
-    );
-    assert_eq!(
-        host.editor_state().editor_ui.chat_model_picker.hover,
-        Some(0)
-    );
-}
-
-#[test]
-fn leaving_higher_context_menu_updates_model_picker_in_same_move() {
-    let mut host = WidgetHostNative::new();
-    let (viewport_w, viewport_h) = (1440.0, 900.0);
-    host.last_viewport_w = viewport_w;
-    host.last_viewport_h = viewport_h;
-    open_populated_model_picker(&mut host);
-    host.editor_state_mut().ui.path_anchor_menu = Some(PathAnchorMenuState {
-        node_id: NodeId::new("n1"),
-        anchor_index: 0,
-        x: 80.0,
-        y: 80.0,
-        menu: Default::default(),
-    });
-    host.editor_state_mut()
-        .ui
-        .path_anchor_menu
-        .as_mut()
-        .expect("menu open")
-        .menu
-        .hover = Some(0);
-    let picker = host
-        .chat_model_picker_rect(viewport_w, viewport_h)
-        .expect("model picker rect");
-    let point = Point2D::new(
-        picker.origin.x + 80.0,
-        picker.origin.y
-            + ai_chat_model_picker::MODEL_SEARCH_H
-            + ai_chat_model_picker::MODEL_PICKER_PAD_Y
-            + ai_chat_model_picker::MODEL_GROUP_H
-            + ai_chat_model_picker::MODEL_ROW_H / 2.0,
-    );
-
-    assert!(host.apply_cursor_move(point.x, point.y));
-    assert_eq!(
-        host.editor_state().editor_ui.chat_model_picker.hover,
-        Some(0),
-        "clearing the higher menu must not defer picker hover to another move"
-    );
-    assert_eq!(
-        host.editor_state()
-            .ui
-            .path_anchor_menu
-            .as_ref()
-            .expect("menu remains open")
-            .menu
-            .hover,
-        None
-    );
-}
-
-#[test]
-fn leaving_higher_floating_panel_updates_model_picker_in_same_move() {
-    let mut host = WidgetHostNative::new();
-    let (viewport_w, viewport_h) = (1440.0, 900.0);
-    host.last_viewport_w = viewport_w;
-    host.last_viewport_h = viewport_h;
-    open_populated_model_picker(&mut host);
-    {
-        let ui = &mut host.editor_state_mut().editor_ui;
-        ui.design_md_panel.open = true;
-        ui.design_md_panel.pos = Some((0.0, 0.0));
-        ui.design_md_panel.hover = Some(op_editor_core::DesignMdButton::Close);
-    }
-    let picker = host
-        .chat_model_picker_rect(viewport_w, viewport_h)
-        .expect("model picker rect");
-    let point = Point2D::new(
-        picker.origin.x + 80.0,
-        picker.origin.y
-            + ai_chat_model_picker::MODEL_SEARCH_H
-            + ai_chat_model_picker::MODEL_PICKER_PAD_Y
-            + ai_chat_model_picker::MODEL_GROUP_H
-            + ai_chat_model_picker::MODEL_ROW_H / 2.0,
-    );
-    assert!(
-        !host
-            .design_md_panel_rect(viewport_w, viewport_h)
-            .expect("design panel")
-            .contains(point),
-        "probe must leave the higher panel"
-    );
-
-    assert!(host.apply_cursor_move(point.x, point.y));
-    assert_eq!(host.editor_state().editor_ui.design_md_panel.hover, None);
-    assert_eq!(
-        host.editor_state().editor_ui.chat_model_picker.hover,
-        Some(0),
-        "higher-panel hover cleanup must not defer picker hover"
-    );
-}
-
-#[test]
-fn model_picker_hover_wins_when_overlapping_variables_panel() {
-    let mut host = WidgetHostNative::new();
-    let (viewport_w, viewport_h) = (1440.0, 900.0);
-    host.last_viewport_w = viewport_w;
-    host.last_viewport_h = viewport_h;
-    host.editor_state_mut().editor_ui.variables_panel_open = true;
-    let variables_rect = host
-        .variables_panel_rect(viewport_w, viewport_h)
-        .expect("variables panel rect");
-    host.editor_state_mut().chat.panel_position = Some((
-        variables_rect.origin.x + 20.0,
-        variables_rect.origin.y + 20.0,
-    ));
-    open_populated_model_picker(&mut host);
-    host.editor_state_mut().editor_ui.variables_panel_hover =
-        Some(op_editor_core::VariablesPanelButton::Close);
-    let picker = host
-        .chat_model_picker_rect(viewport_w, viewport_h)
-        .expect("model picker rect");
-    let point = Point2D::new(
-        picker.origin.x + 80.0,
-        picker.origin.y
-            + ai_chat_model_picker::MODEL_SEARCH_H
-            + ai_chat_model_picker::MODEL_PICKER_PAD_Y
-            + ai_chat_model_picker::MODEL_GROUP_H
-            + ai_chat_model_picker::MODEL_ROW_H / 2.0,
-    );
-    assert!(
-        variables_rect.contains(point),
-        "probe must exercise the visual overlap between both panels"
-    );
-
-    assert!(host.apply_cursor_move(point.x, point.y));
-    assert_eq!(
-        host.editor_state().editor_ui.chat_model_picker.hover,
-        Some(0)
-    );
-    assert_eq!(host.editor_state().editor_ui.variables_panel_hover, None);
-}
-
-#[test]
-fn open_model_picker_suppresses_chat_and_variables_resize_cursors() {
-    let mut host = WidgetHostNative::new();
-    let (viewport_w, viewport_h) = (1440.0, 900.0);
-    host.last_viewport_w = viewport_w;
-    host.last_viewport_h = viewport_h;
-    open_populated_model_picker(&mut host);
-    host.editor_state_mut().chat.panel_position = Some((320.0, 420.0));
-
-    let chat = host
-        .ai_chat_rect(viewport_w, viewport_h)
-        .expect("chat rect");
-    let picker = host
-        .chat_model_picker_rect(viewport_w, viewport_h)
-        .expect("model picker rect");
-    let point = Point2D::new(chat.origin.x + 24.0, chat.origin.y);
-    assert!(picker.contains(point), "picker must cover the north gutter");
-
-    assert_eq!(
-        host.cursor_hint(point.x, point.y, viewport_w, viewport_h),
-        CursorHint::Default,
-        "the popup painted over the resize gutter owns the cursor"
-    );
-}
-
-#[test]
-fn model_picker_without_visible_bounds_closes_and_releases_layer_panel() {
-    let mut host = WidgetHostNative::new();
-    let (viewport_w, viewport_h) = (120.0, 120.0);
-    host.last_viewport_w = viewport_w;
-    host.last_viewport_h = viewport_h;
-    open_populated_model_picker(&mut host);
-    let point = Point2D::new(20.0, 60.0);
-
-    assert!(
-        host.chat_model_picker_rect(viewport_w, viewport_h)
-            .is_none(),
-        "the narrow viewport cannot lay out a visible chat picker"
-    );
-    assert!(
-        host.cursor_over_layer_panel(point.x, point.y, viewport_w, viewport_h),
-        "stale open state without painted bounds must not block the layer rail"
-    );
-
-    assert!(host.apply_cursor_move(point.x, point.y));
-    assert!(
-        !host.editor_state().editor_ui.chat_model_picker.open,
-        "cursor dispatch should heal an invisible open picker"
-    );
-}
+#[path = "chat_design_hover_picker_tests.rs"]
+mod picker_tests;

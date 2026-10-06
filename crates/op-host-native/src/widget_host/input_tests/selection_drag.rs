@@ -140,7 +140,6 @@ fn marquee_drag_with_shift_extends_existing_selection() {
 
 #[test]
 fn layer_drag_to_reorder_commits_on_release_with_threshold_move() {
-    use op_editor_ui::widgets::TOP_BAR_HEIGHT;
     let mut host = WidgetHostNative::new();
     // Three top-level nodes painted as flat layer rows.
     seed(
@@ -161,8 +160,12 @@ fn layer_drag_to_reorder_commits_on_release_with_threshold_move() {
     let section_gap = 8.0;
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
+    // The rail's tree no longer starts at the window's top bar: the tab
+    // row (对话 / 图层 / 幻灯片) sits above it, so measure from the
+    // rail's live CONTENT rect.
+    let content_top = host.layers_content_rect(viewport_w, viewport_h).origin.y;
     let layers_top =
-        TOP_BAR_HEIGHT + 8.0 + section_header_h + page_row_h + section_gap + section_header_h;
+        content_top + 8.0 + section_header_h + page_row_h + section_gap + section_header_h;
     let row_y = |i: usize| layers_top + (i as f32) * row_h + row_h / 2.0;
     let row_x = host.editor_state().editor_ui.layer_panel_width / 2.0;
     host.apply_press(row_x, row_y(0), viewport_w, viewport_h);
@@ -185,7 +188,6 @@ fn layer_drag_to_reorder_commits_on_release_with_threshold_move() {
 
 #[test]
 fn layer_drag_below_activation_threshold_is_a_click_not_a_reorder() {
-    use op_editor_ui::widgets::TOP_BAR_HEIGHT;
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
@@ -199,10 +201,16 @@ fn layer_drag_below_activation_threshold_is_a_click_not_a_reorder() {
         ),
     );
     host.editor_state_mut().clear_selection();
-    let row_y_first = TOP_BAR_HEIGHT + 8.0 + 28.0 + 32.0 + 8.0 + 28.0 + 14.0;
     let row_x = host.editor_state().editor_ui.layer_panel_width / 2.0;
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
+    let row_y_first = host.layers_content_rect(viewport_w, viewport_h).origin.y
+        + 8.0
+        + 28.0
+        + 32.0
+        + 8.0
+        + 28.0
+        + 14.0;
     host.apply_press(row_x, row_y_first, viewport_w, viewport_h);
     host.apply_cursor_move(row_x, row_y_first + 2.0);
     assert!(
@@ -255,7 +263,6 @@ fn layer_context_create_component_click_promotes_frame() {
 
 #[test]
 fn property_panel_create_component_click_promotes_selected_frame() {
-    use op_editor_ui::widgets::TOP_BAR_HEIGHT;
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
@@ -282,7 +289,6 @@ fn property_panel_create_component_click_promotes_selected_frame() {
 
 #[test]
 fn layer_context_group_preserves_multi_selection_and_groups() {
-    use op_editor_ui::widgets::TOP_BAR_HEIGHT;
     let mut host = WidgetHostNative::new();
     seed(
         &mut host,
@@ -301,7 +307,13 @@ fn layer_context_group_preserves_multi_selection_and_groups() {
     let viewport_w = 1440.0;
     let viewport_h = 900.0;
     let row_x = host.editor_state().editor_ui.layer_panel_width / 2.0;
-    let first_row_y = TOP_BAR_HEIGHT + 8.0 + 28.0 + 32.0 + 8.0 + 28.0 + 14.0;
+    let first_row_y = host.layers_content_rect(viewport_w, viewport_h).origin.y
+        + 8.0
+        + 28.0
+        + 32.0
+        + 8.0
+        + 28.0
+        + 14.0;
     assert!(host.apply_right_press(row_x, first_row_y, viewport_w, viewport_h));
     assert_eq!(
         host.editor_state().selection.set.len(),

@@ -23,3 +23,16 @@ impl Session {
         }
     }
 }
+
+impl Session {
+    /// Pump the editor-mode preview once per frame / background tick at the
+    /// global clock. Pointer entries advance the clock but never pump: an
+    /// event whose timestamp trails the clock must not flush the gesture it
+    /// is still feeding.
+    pub(crate) fn pump_editor_preview(&mut self) {
+        #[cfg(feature = "editor")]
+        if let Some(host) = self.editor.as_mut() {
+            let _ = host.pump_preview();
+        }
+    }
+}

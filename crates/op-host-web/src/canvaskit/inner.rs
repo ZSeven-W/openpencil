@@ -25,10 +25,18 @@ pub(super) struct CkInner {
     /// so the browser IME can compose CJK into it; its `compositionend` is
     /// routed to `apply_ime`. `None` only if the DOM is unreachable.
     pub(super) ime: Option<crate::ime_input::ImeInput>,
+    /// DOM-side video playback layer used only while CanvasKit preview is
+    /// active. The painted canvas remains the poster source of truth.
+    pub(super) video_overlay: crate::video_overlay::VideoOverlayLayer,
 }
 
 impl CkInner {
     pub(super) fn repaint(&mut self) {
+        if crate::web_asset_fetch::reconcile_pending_locale(
+            &mut self.host.editor_state_mut().editor_ui,
+        ) {
+            self.host.mark_editor_state_dirty();
+        }
         self.backend.drain_pending_decodes(2);
         // Assets the last paint asked for but the bundle does not carry
         // (preview JPEGs, template documents, the icon catalog). Bounded per
@@ -80,6 +88,8 @@ impl CkInner {
         self.backend.begin_frame();
         self.host.paint_dyn(&mut self.backend, w, h);
         self.backend.end_frame();
+        let placements = self.host.preview_video_overlay_placements(w, h);
+        self.video_overlay.sync(&self.canvas, w, h, &placements);
         self.sync_a11y();
         // #54: focus the hidden IME input only while a text field owns the
         // keyboard, so CJK composition works when editing and no soft keyboard

@@ -68,9 +68,9 @@ impl Session {
                 changed
             }
             OpPointerPhase::Move => {
-                if !collab
+                if collab
                     .presence_pointer
-                    .is_some_and(|pointer| pointer.pointer_id == Some(pointer_id))
+                    .is_none_or(|pointer| pointer.pointer_id != Some(pointer_id))
                 {
                     return false;
                 }
@@ -80,9 +80,9 @@ impl Session {
                 changed
             }
             OpPointerPhase::Up => {
-                if !collab
+                if collab
                     .presence_pointer
-                    .is_some_and(|pointer| pointer.pointer_id == Some(pointer_id))
+                    .is_none_or(|pointer| pointer.pointer_id != Some(pointer_id))
                 {
                     return false;
                 }

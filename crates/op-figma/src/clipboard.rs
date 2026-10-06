@@ -723,6 +723,7 @@ fn build_doc_for_resolve(children: Vec<PenNode>) -> jian_ops_schema::document::P
         logic_modules: None,
         design_md: None,
         conversion: None,
+        motion: None,
         // Figma import never authors the responsive schema opt-in.
         responsive: None,
     }

@@ -377,6 +377,35 @@ fn transparent_full_bleed_media_overlay_is_not_inset() {
 }
 
 #[test]
+fn coloured_full_bleed_media_overlay_is_not_inset() {
+    let root = node(json!({
+        "type":"frame","id":"root","width":375,"height":812,"layout":"vertical",
+        "children":[
+            {
+                "type":"frame","id":"map-section","padding":[0,0],
+                "children":[
+                    {
+                        "type":"frame","id":"map-placeholder",
+                        "width":"fill_container",
+                        "fill":[{"type":"linear_gradient","stops":[]}]
+                    },
+                    {
+                        "type":"frame","id":"map-inset","padding":[0,24],
+                        "children":[{"type":"text","id":"map-title","content":"Map"}]
+                    }
+                ]
+            },
+            {
+                "type":"frame","id":"body","padding":[0,24],
+                "children":[{"type":"text","id":"body-title","content":"Body"}]
+            }
+        ]
+    }));
+
+    assert!(detect_edge_section_padding(&root).is_empty());
+}
+
+#[test]
 fn nested_fit_content_component_without_mobile_chrome_is_not_a_screen() {
     let root = node(json!({
         "type":"frame","id":"desktop-root","width":1200,"height":900,"layout":"vertical",
@@ -392,4 +421,39 @@ fn nested_fit_content_component_without_mobile_chrome_is_not_a_screen() {
     }));
 
     assert!(detect_edge_section_padding(&root).is_empty());
+}
+
+#[test]
+fn a_section_the_hero_bleed_pass_marked_is_not_inset_even_with_a_labelled_map_canvas() {
+    // GLM shape from wave-glmflash-0908/B/app-07: the bleed section holds a
+    // bordered map canvas whose direct children include text labels, so
+    // none of the media predicates match — only the pass's own marker does.
+    let root = node(json!({
+        "type":"frame","id":"root","width":375,"height":812,"layout":"vertical",
+        "children":[
+            {
+                "type":"frame","id":"map-section","name":"地图占位区 (bleed)","padding":[0,0],
+                "children":[{
+                    "type":"frame","id":"map-canvas","width":"fill_container","height":260,
+                    "layout":"none","fill":[{"type":"solid","color":"#e5e7eb"}],
+                    "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#d1d5db"}]},
+                    "children":[
+                        {"type":"rectangle","id":"road","width":"fill_container","height":6},
+                        {"type":"text","id":"label","content":"科技南路","x":120,"y":40}
+                    ]
+                }]
+            },
+            {
+                "type":"frame","id":"body","padding":[0,24],
+                "children":[{"type":"text","id":"body-title","content":"Body"}]
+            },
+            {
+                "type":"frame","id":"body-2","padding":[0,24],
+                "children":[{"type":"text","id":"body-title-2","content":"More"}]
+            }
+        ]
+    }));
+
+    assert!(detect_edge_section_padding(&root).is_empty());
+    assert!(super::siblings::detect_mixed_sibling_padding(&root).is_empty());
 }

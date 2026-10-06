@@ -13,6 +13,7 @@ fn request(prompt: &str) -> DesignRequest {
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     }
 }
 
@@ -24,8 +25,10 @@ fn section(id: &str, label: &str) -> Subtask {
             width: 375.0,
             height: 120.0,
         },
+        bleed_hero: false,
         id_prefix: String::new(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,

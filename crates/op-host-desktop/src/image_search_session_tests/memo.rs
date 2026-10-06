@@ -41,6 +41,8 @@ fn a_repeat_query_gets_the_same_photo_back_not_a_dedup_downgrade() {
         Arc::clone(&used_urls),
         Arc::clone(&resolved),
         1,
+        Arc::new(NoJudge),
+        false,
     );
     let answer = job
         .rx
@@ -85,6 +87,8 @@ fn a_pending_search_intent_is_singleflight() {
         Arc::new(Mutex::new(HashSet::new())),
         Arc::clone(&memo),
         8,
+        Arc::new(NoJudge),
+        false,
     );
 
     let waiters = match memo.lock().unwrap().remove(&key) {

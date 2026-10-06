@@ -315,7 +315,7 @@ fn loop_finalize_restores_nested_front_card_surface_without_reordering_stack() {
                     {
                         "type":"frame","id":"back","name":"Peeked Back Card","role":"card",
                         "x":14,"y":0,"width":317,"height":148,"cornerRadius":18,
-                        "fill":[{"type":"solid","color":"$color-surface-3"}],
+                        "fill":[{"type":"solid","color":"$--accent"}],
                         "children":[{"type":"text","id":"back-text","content":"Example"}]
                     }
                 ]
@@ -332,7 +332,7 @@ fn loop_finalize_restores_nested_front_card_surface_without_reordering_stack() {
     );
     assert_eq!(
         fill_of(&state, "Front Card"),
-        Some(json!([{"type":"solid","color":"$color-surface"}])),
+        Some(json!([{"type":"solid","color":"$--card"}])),
         "the front card needs a theme-aware opaque surface, not page-bg white that later gets stripped"
     );
 
@@ -599,20 +599,20 @@ fn theme_polarity_split_variables_are_healed() {
     let doc: jian_ops_schema::PenDocument = serde_json::from_value(json!({
         "version": "1.0",
         "variables": {
-            "color-bg-deep": {"type":"color","value":[
+            "--background": {"type":"color","value":[
                 {"value":"#0A0A0A","theme":{"Mode":"Light"}},
                 {"value":"#0F172A","theme":{"Mode":"Dark"}}]},
-            "color-surface-2": {"type":"color","value":[
+            "--muted": {"type":"color","value":[
                 {"value":"#F1F5F9","theme":{"Mode":"Light"}},
                 {"value":"#334155","theme":{"Mode":"Dark"}}]},
-            "color-text-primary": {"type":"color","value":[
+            "--foreground": {"type":"color","value":[
                 {"value":"#FAFAFA","theme":{"Mode":"Light"}},
                 {"value":"#F1F5F9","theme":{"Mode":"Dark"}}]}
         },
         "themes": {"Mode": ["Light", "Dark"]},
         "children": [
             {"type":"frame","id":"root","name":"Page","width":1200,"height":800,
-             "fill":[{"type":"solid","color":"$color-bg-deep"}],"children":[]}
+             "fill":[{"type":"solid","color":"$--background"}],"children":[]}
         ]
     }))
     .expect("valid doc");
@@ -620,14 +620,14 @@ fn theme_polarity_split_variables_are_healed() {
     let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
     crate::loop_finalize::fix_theme_variable_polarity(&mut sink);
     let s2 = state
-        .resolve_color_variable_hex("color-surface-2")
+        .resolve_color_variable_hex("--muted")
         .expect("resolves");
     assert!(
         s2.eq_ignore_ascii_case("#334155"),
         "light-slot surface-2 adopted the dark value, got {s2}"
     );
     let tp = state
-        .resolve_color_variable_hex("color-text-primary")
+        .resolve_color_variable_hex("--foreground")
         .expect("resolves");
     assert!(
         tp.eq_ignore_ascii_case("#FAFAFA"),

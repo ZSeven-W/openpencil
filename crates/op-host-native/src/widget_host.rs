@@ -118,6 +118,9 @@ mod git_panel_placement_tests;
 mod git_press;
 mod helpers;
 mod history_guard;
+mod home;
+mod home_overlays;
+mod home_scroll;
 mod host_lifecycle;
 mod host_requests;
 mod html_import_diagnostics_dispatch;
@@ -192,7 +195,13 @@ mod preview_frame;
 #[cfg(test)]
 #[cfg(all(test, not(target_os = "windows")))]
 mod preview_frame_tests;
+#[cfg(all(test, feature = "gl-host", not(target_os = "windows")))]
+mod preview_hover_tests;
 mod preview_input;
+#[cfg(all(test, feature = "gl-host", not(target_os = "windows")))]
+mod preview_motion_clock_tests;
+#[cfg(all(test, feature = "gl-host", not(target_os = "windows")))]
+mod preview_replace_document_tests;
 mod preview_slideshow;
 #[cfg(test)]
 mod preview_slideshow_tests;
@@ -253,6 +262,8 @@ mod theme_tests;
 mod toolbar_actions;
 mod toolbar_hover;
 #[cfg(test)]
+mod top_bar_home_tests;
+#[cfg(test)]
 mod top_bar_tooltip_tests;
 mod touch_panel_gesture;
 #[cfg(test)]
@@ -271,6 +282,8 @@ mod variables_preset_press;
 mod viewport_fit;
 #[cfg(test)]
 mod window_control_tests;
+mod workspace;
+mod workspace_paint;
 
 /// Cursor affordance the host suggests for a given screen point — re-exported
 /// from `jian-core` so widgets (via `cursor_at`) and hosts share one vocabulary.
@@ -605,6 +618,9 @@ pub struct WidgetHostNative {
     /// `None` — the default arrow — until the new tab's first paint re-stores the
     /// slot under the rotated owner).
     pub(in crate::widget_host) last_chat_session_index: usize,
+    /// Live workspace dock-width drag (press on the dock handle →
+    /// cursor moves → release). `None` outside the gesture.
+    pub(in crate::widget_host) workspace_dock_drag: Option<workspace::WorkspaceDockDrag>,
 }
 
 // Transient pointer-drag records that carry no platform types are

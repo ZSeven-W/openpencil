@@ -104,6 +104,7 @@ impl WidgetHost {
                 // transition, so every tap after the first screen switch is
                 // silently dropped.
                 preview.set_now_ms(self.now_ms);
+                let _ = preview.pump(self.now_ms);
                 let outcome = preview.reconcile(self.now_ms);
                 if outcome.repaint {
                     let warnings = preview.warnings().to_vec();
@@ -192,7 +193,24 @@ impl WidgetHost {
         if let Some(slides) = &slides_panel {
             self.paint_slides_panel(&mut *backend, slides);
         }
-        if rail_open && slides_panel.is_none() {
+        // 3a-1. Chat tab — the pinned chat owns the rail's BODY (it
+        //        paints in the ordinary chat pass below); the rail keeps
+        //        its card behind the panel and its tab row on top, and a
+        //        minimized chat carried in from a floating session is
+        //        expanded exactly like the native rail does.
+        let chat_owns_rail = rail_open
+            && slides_panel.is_none()
+            && op_editor_ui::widgets::slides_panel_flow::chat_tab_active(&self.editor_state);
+        if chat_owns_rail {
+            backend.fill_rect(self.layer_panel_rect(viewport_height), self.theme.card);
+            if self.editor_state.chat.is_minimized() {
+                self.editor_state.chat.expand();
+            }
+            if let Some(tabs) = self.slides_tab_row(viewport_height) {
+                self.paint_slides_tab_row(&mut *backend, &tabs);
+            }
+        }
+        if rail_open && slides_panel.is_none() && !chat_owns_rail {
             let layer_panel_rect = self.layer_panel_rect(viewport_height);
             // While a drag is active, paint against a panel with the
             // source's subtree excluded — see native paint.rs. The
@@ -583,7 +601,12 @@ impl WidgetHost {
                 .preview
                 .as_ref()
                 .is_some_and(|session| session.transition_active());
-            if mode_animating || screen_animating {
+            let preview_wake_pending = self.preview_wake_deadline_ms().is_some();
+            if crate::preview_pump::needs_next_paint(
+                mode_animating,
+                screen_animating,
+                preview_wake_pending,
+            ) {
                 crate::repaint_coalescer::request();
             }
         }

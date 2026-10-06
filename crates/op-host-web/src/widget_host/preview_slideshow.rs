@@ -195,6 +195,7 @@ impl WidgetHost {
             self.editor_state.ui.active_page_index,
             op_ck,
             op_editor_core::preview_slideshow::slideshow_for_document(&self.editor_state).is_some(),
+            self.now_ms,
         ) {
             Ok(mut session) => {
                 let source_rect = session
@@ -220,6 +221,8 @@ impl WidgetHost {
                                 self.now_ms,
                             ));
                     }
+                } else if let Some(preview) = self.preview.as_mut() {
+                    preview.begin_lifecycle(self.now_ms);
                 }
                 self.mark_dirty();
                 true

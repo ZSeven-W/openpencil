@@ -7,6 +7,10 @@
 //! intentionally search-only: Auto and Search targets use stock search, while
 //! an explicit Generate target fails instead of silently changing acquisition
 //! mode.
+//!
+//! Headless Openverse credentials may also be supplied with
+//! `OPENPENCIL_OPENVERSE_CLIENT_ID` and `OPENPENCIL_OPENVERSE_CLIENT_SECRET`.
+//! These are used only when both persisted Openverse settings are empty.
 
 use std::ffi::OsString;
 use std::fmt;
@@ -228,21 +232,31 @@ fn enrich_document(request: &EnrichRequest) -> Result<EnrichSummary, EnrichError
         });
     }
     let summary = result?;
-    save_enriched_state(&state, &request.output, summary)
+    save_enriched_state(&mut state, &request.output, summary)
 }
 
 fn save_enriched_state(
-    state: &EditorState,
+    state: &mut EditorState,
     output: &Path,
     summary: EnrichSummary,
 ) -> Result<EnrichSummary, EnrichError> {
-    if summary.failed != 0 || summary.unresolved != 0 {
-        return Err(EnrichError::Failed(summary));
-    }
+    // Enrichment is additive: every resolved target is a fetch already paid
+    // for, and the document itself is the caller's work. Discarding all of it
+    // because one slot is unresolvable was measured to cost a 1.28 MB design
+    // plus five downloaded images when a single apparel shot had no match in
+    // the stock library (2026-09-04). Write the partial result, then report
+    // the failure — the non-zero exit still makes it loud.
+    // Cleanup runs before this late enrichment pass. Reuse the orchestrator's
+    // shared policy here so failed and still-empty slots are materialized
+    // before the partial result is persisted.
+    op_orchestrator::apply_image_fallback_policy_to_state(state, true);
     op_host_services::doc_io::save_to_path(state, output).map_err(|error| EnrichError::Save {
         path: output.to_path_buf(),
         message: error.to_string(),
     })?;
+    if summary.failed != 0 || summary.unresolved != 0 {
+        return Err(EnrichError::Failed(summary));
+    }
     Ok(summary)
 }
 
@@ -381,10 +395,13 @@ mod tests {
                 unresolved: 0,
             }))
         ));
-        assert_eq!(
-            std::fs::read(&output).expect("read preserved output"),
-            b"keep-existing-output"
-        );
+        // The partially enriched document is written even though the run
+        // failed: the generate target keeps its sentinel, everything else the
+        // caller authored survives.
+        let reloaded =
+            op_host_services::doc_io::load_editor_state(&output, op_editor_core::Locale::EnUs)
+                .expect("the partial result is written even on failure");
+        assert_eq!(reloaded.active_children().len(), 1);
         std::fs::remove_dir_all(directory).expect("remove fixture directory");
     }
 

@@ -12,11 +12,13 @@ use jian_ops_schema::node::PenNode;
 use jian_ops_schema::PenDocument;
 
 use crate::design_form::{classify_root_form_node, DesignForm};
-use crate::issue::Issue;
+use crate::issue::{Issue, IssueCategory};
 
 pub mod empty_filled_panel;
+pub mod motion_budget;
 pub mod shader_budget;
 pub mod siblings;
+pub mod slop;
 pub mod spacing;
 pub mod structural_quality;
 pub mod structure;
@@ -28,11 +30,15 @@ pub mod widget_a11y;
 #[cfg(test)]
 mod siblings_tests;
 #[cfg(test)]
+mod slop_tests;
+#[cfg(test)]
 mod spacing_edge_tests;
 
 pub use empty_filled_panel::*;
+pub use motion_budget::*;
 pub use shader_budget::*;
 pub use siblings::*;
+pub use slop::*;
 pub use spacing::*;
 pub use structural_quality::*;
 pub use structure::*;
@@ -90,14 +96,28 @@ pub fn detect_all_for_form(root: &PenNode, doc: &PenDocument, form: DesignForm) 
     // form today, because a phone and a desktop page genuinely have different
     // fragment-pass headroom.
     combined.extend(detect_shader_budget(root, form));
-    // Phase E5 — widget a11y. No TS counterpart; runs last so it never
+    combined.extend(detect_motion_budget(root, form));
+    // Phase E5 — widget a11y. No TS counterpart; runs late so it never
     // shadows an earlier detector under the `{node_id}:{property}` dedup.
     combined.extend(detect_unlabeled_inputs(root));
+    // Slop rules (open-design `impeccable-design-polish` "AI tells") —
+    // report-only warnings, no auto-fix; they run last so a slop finding never
+    // shadows a structural issue on the same node.
+    combined.extend(detect_purple_glow_gradient(root, doc));
+    combined.extend(detect_three_card_feature_row(root));
+    combined.extend(detect_rounded_card_wall(root));
 
     let mut seen = HashSet::new();
     combined
         .into_iter()
-        .filter(|issue| seen.insert(format!("{}:{}", issue.node_id, issue.property.wire_str())))
+        .filter(|issue| {
+            let key = if issue.category == IssueCategory::MotionBudget {
+                format!("{}:{:?}:{}", issue.node_id, issue.category, issue.reason)
+            } else {
+                format!("{}:{}", issue.node_id, issue.property.wire_str())
+            };
+            seen.insert(key)
+        })
         .collect()
 }
 

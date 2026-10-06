@@ -58,7 +58,7 @@ pub(super) fn normalize_nested_search_shell(node: &mut Value) {
     // children are bare icon/text leaves IS the input itself — clearing
     // its chrome stripped the authored background, repainted the search
     // icon white (invisible on a light field) and re-inked the filter
-    // glyph with a dangling `$color-accent` (measured: test0711-1-ds).
+    // glyph with a dangling `$--primary` (measured: test0711-1-ds).
     if node.get("role").and_then(Value::as_str) == Some("search-bar") {
         return;
     }
@@ -104,7 +104,7 @@ pub(super) fn normalize_nested_search_shell(node: &mut Value) {
             child["cornerRadius"] = json!(8);
         } else if is_filter_button_child(child) {
             // The button's own saturated fill IS the design's accent — move
-            // it onto the glyph instead of a symbolic `$color-accent`,
+            // it onto the glyph instead of a symbolic `$--primary`,
             // which dangled on variable-less documents and rendered the
             // fallback blue (measured: test0711-1-ds).
             let demoted_accent = child
@@ -233,7 +233,7 @@ pub(super) fn rewrite_text_node_as_chevron(child: &mut Value) {
     obj.insert("iconFontName".to_string(), json!("chevron-right"));
     obj.insert("width".to_string(), json!(20));
     obj.insert("height".to_string(), json!(20));
-    obj.insert("fill".to_string(), solid_fill("$color-accent"));
+    obj.insert("fill".to_string(), solid_fill("$--primary"));
     obj.remove("content");
     obj.remove("fontFamily");
     obj.remove("fontSize");

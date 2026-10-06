@@ -69,6 +69,24 @@ pub(super) fn progress_label(p: &Progress) -> String {
             format!("• Subtask `{id}` done ({node_count} nodes)")
         }
         Progress::SubtaskFailed { id, error } => format!("• Subtask `{id}` failed: {error}"),
+        Progress::SubtaskIncomplete {
+            id,
+            expected,
+            delivered,
+        } => format!(
+            "• Subtask `{id}` incomplete: {delivered} of {expected} promised item(s) delivered"
+        ),
+        Progress::SubtaskLanguageMismatch {
+            id,
+            checked,
+            mismatched,
+        } => format!(
+            "• Subtask `{id}` language mismatch: {mismatched} of {checked} text node(s) not in the brief's language"
+        ),
+        Progress::PlanCoverageRetry { missing } => format!(
+            "• Plan missed section(s): {} — re-planning",
+            missing.join(", ")
+        ),
         Progress::SubtaskSkills {
             id,
             included,
@@ -162,6 +180,7 @@ pub(super) fn progress_label(p: &Progress) -> String {
             }
         }
         Progress::VisualRefFallback { reason } => format!("• Visual-ref fallback: {reason}"),
+        Progress::ReferenceUnavailable { reason } => format!("• {reason}"),
         Progress::UnfilledScreens { names } => {
             format!(
                 "• {} screen(s) left unfilled: {}",

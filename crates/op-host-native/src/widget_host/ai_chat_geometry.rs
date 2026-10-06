@@ -39,6 +39,35 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) -> Option<Rect> {
+        // The chat is PINNED into a left column — the workspace's dock,
+        // or the professional editor's Chat tab — whenever one owns it:
+        // the panel stops being floating/minimized/draggable and fills
+        // the column. A pinned-but-closed column (panel shut, another
+        // tab showing, presenting) means no chat at all, never a
+        // floating fallback. Both columns resolve through the ONE
+        // shared helper so they cannot drift apart again; the touch
+        // branch below keeps its own sheet geometry.
+        use op_editor_ui::widgets::host_canvas_geometry::{pinned_chat, PinnedChat};
+        match pinned_chat(&self.editor_state, viewport_w, viewport_h) {
+            Some(PinnedChat::At(rect)) => return Some(rect),
+            Some(PinnedChat::Closed) => return None,
+            Some(PinnedChat::Composer { x, bottom, width }) => {
+                // Composer-only: the card's height follows the draft, the
+                // chip rows and whether the input has focus, so the
+                // widget resolves it and the card grows UPWARD from the
+                // canvas floor.
+                let panel = op_editor_ui::widgets::AIChatPlaceholder::from_editor_at(
+                    &self.editor_state,
+                    self.now_ms,
+                );
+                let height = panel.composer_only_height(width);
+                return Some(Rect {
+                    origin: Point2D::new(x, bottom - height),
+                    size: Point2D::new(width, height),
+                });
+            }
+            None => {}
+        }
         let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
         // Native touch chrome uses a modal bottom sheet on phones and a
         // non-modal bounded trailing assistant on tablets. The latter keeps

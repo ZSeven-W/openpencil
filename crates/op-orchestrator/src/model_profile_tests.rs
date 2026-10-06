@@ -274,7 +274,9 @@ fn version_lane_comparator_and_tail_rule() {
 fn glm_version_lane_entries() {
     let five_three = resolve_model_profile("glm-5.3");
     assert_eq!(five_three.tier, ModelTier::Full);
-    assert!(five_three.thinking_disabled);
+    // The API rejects `thinking:disabled` for this always-thinking model
+    // (HTTP 400 code 1210 since 2026-09-03), so the field is never sent.
+    assert!(!five_three.thinking_disabled);
     assert_eq!(five_three.timeout_multiplier, 3.0);
     // Vendor prefix (ark/) hits the same rows.
     assert_eq!(resolve_model_profile("ark/glm-5.3").tier, ModelTier::Full);
@@ -366,5 +368,20 @@ fn unknown_id_defaults_standard() {
     assert_eq!(
         resolve_model_profile("some-unknown-model").tier,
         ModelTier::Standard
+    );
+}
+
+#[test]
+fn claude_cli_aliases_resolve_to_the_full_tier() {
+    for alias in ["opus", "sonnet", "fable", "Opus"] {
+        assert_eq!(
+            resolve_model_profile(alias).tier,
+            ModelTier::Full,
+            "alias {alias} must not fall to the weak default"
+        );
+    }
+    assert_ne!(
+        resolve_model_profile("opus-mini-unknown").tier,
+        ModelTier::Full
     );
 }

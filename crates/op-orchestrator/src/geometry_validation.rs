@@ -56,8 +56,25 @@ use geometry_interaction_backfill::push_interaction_backfill_diagnostics;
 pub(crate) use geometry_interaction_backfill::{
     screen_has_back_control_shape, wire_interaction_backfill,
 };
+#[path = "absolute_child_clamp.rs"]
+mod absolute_child_clamp;
+#[path = "card_inner_padding.rs"]
+mod card_inner_padding;
 #[path = "geometry_buried_overlay.rs"]
 mod geometry_buried_overlay;
+#[path = "none_stack_inset.rs"]
+mod none_stack_inset;
+#[path = "text_fit.rs"]
+mod text_fit;
+#[path = "touch_target_floor.rs"]
+mod touch_target_floor;
+pub(crate) use absolute_child_clamp::{
+    clamp_absolute_children_into_parent, shrink_oversized_absolute_children_into_parent,
+};
+pub(crate) use card_inner_padding::repair_card_inner_padding;
+pub(crate) use none_stack_inset::repair_none_stack_insets;
+pub(crate) use text_fit::repair_text_fit;
+pub(crate) use touch_target_floor::repair_touch_target_floor;
 #[path = "geometry_card_rail_fixes.rs"]
 mod geometry_card_rail_fixes;
 #[path = "geometry_diagnostics_collect.rs"]
@@ -89,9 +106,6 @@ use geometry_value_readers::*;
 #[derive(Clone, Copy, Debug)]
 struct Rect {
     x: f64,
-    /// Not read yet — vertical stacking-overlap detection will need it; kept
-    /// so the resolved-rect map carries the full geometry.
-    #[allow(dead_code)]
     y: f64,
     w: f64,
     h: f64,
@@ -298,6 +312,14 @@ pub fn geometry_validate_and_fix_for_form(
             geometry_buried_overlay::collect_buried_overlay_fixes(&v, &rects, &mut cmds);
             collect_row_overfull_fixes(&v, &rects, &mut cmds, false);
             collect_rail_width_collapse_fixes(&v, &rects, &mut cmds);
+            // BEFORE the clip fallback: a fixed-size absolute child that fits
+            // its `layout: "none"` parent is shifted back inside, never
+            // cropped; a child WIDER than the parent keeps its left inset
+            // mirrored on the right (the cleanup driver already ran both as
+            // their own `absolute-child-clamp` / `absolute-child-shrink`
+            // steps; direct callers of this loop get them here).
+            absolute_child_clamp::collect_absolute_child_clamp_fixes(&v, &rects, &mut cmds);
+            absolute_child_clamp::collect_absolute_child_shrink_fixes(&v, &rects, &mut cmds);
             collect_card_overflow_clips(&v, &rects, &mut cmds);
             cmds
         };

@@ -706,7 +706,7 @@ mod tests {
                 { "type": "rectangle", "id": "unknown", "width": 40, "height": 40,
                   "fill": [{"type":"solid","color":"$--gray-100"}] },
                 { "type": "rectangle", "id": "numeric-token", "width": 40, "height": 40,
-                  "fill": [{"type":"solid","color":"$radius-lg"}] },
+                  "fill": [{"type":"solid","color":"$--radius-l"}] },
                 { "type": "rectangle", "id": "black", "width": 40, "height": 40,
                   "fill": [{"type":"solid","color":"$--black"}] }
             ]
@@ -731,7 +731,7 @@ mod tests {
         assert!(diagnostics
             .variable_issues
             .iter()
-            .any(|issue| issue.contains("$radius-lg")));
+            .any(|issue| issue.contains("$--radius-l")));
         assert_eq!(serde_json::to_value(&state.doc).unwrap(), before);
     }
 

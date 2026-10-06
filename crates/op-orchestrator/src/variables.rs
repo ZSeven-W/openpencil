@@ -1,13 +1,12 @@
 //! 设计变量 seed —— 语义调色板播种 / 快照 / 回滚。
 //!
-//! 编排开始时把 56-token 语义调色板([`crate::semantic_palette`],
-//! TS `applySemanticPalette` 的 Rust 移植)播进文档,让 theme="system"
-//! 元素发出的 `$color-*` 引用在 paint 时能解析(此前 seeding 休眠,
-//! 悬空引用渲染灰底)。
+//! 编排开始时把 74-token shadcn 语义调色板([`crate::semantic_palette`])
+//! 播进文档,让 theme="system" 元素发出的 `$--token` 引用在 paint 时能
+//! 解析(此前 seeding 休眠,悬空引用渲染灰底)。
 //!
 //! 合并语义:**已有者赢**(对齐 TS)。`set_variables_bulk(merge)` 在
 //! editor-core 侧是 `.extend`(新值赢),所以这里先用快照算出缺失集,
-//! seed 只发缺失的 token / 轴 —— 文档里已自定义的 `color-accent`
+//! seed 只发缺失的 token / 轴 —— 文档里已自定义的 `--primary`
 //! 永远不被覆盖。
 //!
 //! 当 plan 带有 styleGuideName 时，先播种缺省语义 palette，再用该
@@ -105,29 +104,25 @@ fn apply_style_guide_palette(
     palette: &mut BTreeMap<String, VariableDefinition>,
     values: &StyleGuideValues,
 ) {
+    set_light_color(palette, "--background", values.colors.background.as_deref());
+    set_light_color(palette, "--card", values.colors.surface.as_deref());
+    set_light_color(palette, "--primary", values.colors.accent.as_deref());
     set_light_color(
         palette,
-        "color-bg-deep",
-        values.colors.background.as_deref(),
-    );
-    set_light_color(palette, "color-surface", values.colors.surface.as_deref());
-    set_light_color(palette, "color-accent", values.colors.accent.as_deref());
-    set_light_color(
-        palette,
-        "color-text-primary",
+        "--foreground",
         values.colors.text_primary.as_deref(),
     );
     set_light_color(
         palette,
-        "color-text-body",
+        "--secondary-foreground",
         values.colors.text_secondary.as_deref(),
     );
     set_light_color(
         palette,
-        "color-text-muted",
+        "--muted-foreground",
         values.colors.text_muted.as_deref(),
     );
-    set_light_color(palette, "color-border", values.colors.border.as_deref());
+    set_light_color(palette, "--border", values.colors.border.as_deref());
 }
 
 fn set_light_color(
@@ -204,6 +199,7 @@ mod tests {
 
             visual_ref_enabled: false,
             pinned_style_guide: None,
+            reference_skeleton: None,
         })
     }
 
@@ -233,13 +229,13 @@ mod tests {
         }
     }
 
-    /// 空文档:快照报告全部 56 token + Mode 轴缺失,seed 出一条
+    /// 空文档:快照报告全部 74 token + Mode 轴缺失,seed 出一条
     /// MergeThemePreset 把它们全部带上。
     #[test]
     fn seed_on_empty_doc_carries_full_palette() {
         let sink = VecDocSink::new();
         let snap = snapshot_plan_vars(&sink, &plan());
-        assert_eq!(snap.created.len(), 56);
+        assert_eq!(snap.created.len(), 74);
         assert_eq!(snap.created_axes, vec!["Mode".to_string()]);
 
         let cmds = seed_commands(&plan(), &snap);
@@ -247,8 +243,8 @@ mod tests {
         let EditorCommand::MergeThemePreset { variables, themes } = &cmds[0] else {
             panic!("expected MergeThemePreset, got {:?}", cmds[0]);
         };
-        assert_eq!(variables.len(), 56);
-        assert!(variables.contains_key("color-accent"));
+        assert_eq!(variables.len(), 74);
+        assert!(variables.contains_key("--primary"));
         assert_eq!(themes.get("Mode").map(Vec::len), Some(2));
     }
 
@@ -264,7 +260,7 @@ mod tests {
         };
 
         assert_eq!(
-            light_hex(variables.get("color-accent").expect("color-accent")),
+            light_hex(variables.get("--primary").expect("--primary")),
             "#FF5A1F"
         );
     }
@@ -277,7 +273,7 @@ mod tests {
         let mut sink = VecDocSink::new();
         sink.state.doc.variables = Some(
             [(
-                "color-accent".to_string(),
+                "--primary".to_string(),
                 VariableDefinition {
                     kind: VariableKind::Color,
                     value: VariableValue::Scalar(VariableScalar::Str("#FF00FF".into())),
@@ -288,15 +284,15 @@ mod tests {
         sink.state.doc.themes = Some([("Mode".to_string(), vec!["Light".to_string()])].into());
 
         let snap = snapshot_plan_vars(&sink, &plan());
-        assert_eq!(snap.created.len(), 55);
-        assert!(!snap.created.contains(&"color-accent".to_string()));
+        assert_eq!(snap.created.len(), 73);
+        assert!(!snap.created.contains(&"--primary".to_string()));
         assert!(snap.created_axes.is_empty(), "Mode axis pre-exists");
 
         let cmds = seed_commands(&plan(), &snap);
         let EditorCommand::MergeThemePreset { variables, themes } = &cmds[0] else {
             panic!("expected MergeThemePreset");
         };
-        assert!(!variables.contains_key("color-accent"));
+        assert!(!variables.contains_key("--primary"));
         assert!(themes.is_empty());
     }
 
@@ -321,13 +317,13 @@ mod tests {
     fn rollback_deletes_created_vars_and_axes() {
         let mut sink = VecDocSink::new();
         let snap = VarSnapshot {
-            created: vec!["color-accent".to_string()],
+            created: vec!["--primary".to_string()],
             created_axes: vec!["Mode".to_string()],
         };
         rollback(&mut sink, &snap);
         assert!(sink.applied.iter().any(|c| matches!(
             c,
-            EditorCommand::DeleteVariable { name } if name == "color-accent"
+            EditorCommand::DeleteVariable { name } if name == "--primary"
         )));
         assert!(sink.applied.iter().any(|c| matches!(
             c,

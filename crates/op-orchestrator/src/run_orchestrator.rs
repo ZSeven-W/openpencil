@@ -32,13 +32,34 @@ impl Orchestrator {
         // -- 阶段 1:规划(单档 Rich + 规范化)--
         // `planning_loop` 内部已 normalize 并回传 `NormInfo`,此处不再二次规范化。
         on_progress(Progress::Planning);
-        let (mut plan, norm) = planning_loop(&request, llm, abort).await?;
+        let (mut plan, norm) = planning_loop(&request, llm, abort, on_progress).await?;
 
         // -- S3b-4 Task B2 call site 1: apply append context (TS :737) --
         // Must run AFTER planning_loop (which calls normalize) so root_frame.id
         // and subtasks are already normalized before we repoint them.
         let append_result =
             apply_append_context_to_plan(&mut plan, request.append_context.as_ref());
+
+        // `OPENPENCIL_DEBUG_PLAN=1` prints what the planner decided beyond the
+        // subtask list: headless runs (op-smoke, the arena) otherwise cannot
+        // tell whether a style guide was picked or a phone root was planned.
+        if std::env::var_os("OPENPENCIL_DEBUG_PLAN").is_some() {
+            eprintln!(
+                "[PLAN] root={}x{} styleGuideName={:?} subtasks={}",
+                plan.root_frame.width,
+                plan.root_frame.height,
+                plan.style_guide_name,
+                plan.subtasks.len()
+            );
+            for subtask in &plan.subtasks {
+                let elements = subtask.elements.as_deref().unwrap_or("");
+                let head: String = elements.chars().take(160).collect();
+                eprintln!(
+                    "[PLAN] subtask {} ({}) elements={head:?}",
+                    subtask.id, subtask.label
+                );
+            }
+        }
 
         // Surface the FULL planned task list upfront (TS parity) so the UI can
         // render the complete checklist immediately, rather than revealing
@@ -333,136 +354,159 @@ impl Orchestrator {
         // loop and every screen-group worker so parallelizing groups (item
         // D-lite) can never drift from this retry semantics.
         //
-        // A partial result (node_count > 0) is never retried.
+        // A partial result (node_count > 0) is normally never retried; a
+        // promised repeated-item section is the deliberate exception handled
+        // inside the shared ladder.
         // After 3 still-zero → zero_node_failure stop.
         let tier = resolve_model_profile(request.model.as_deref().unwrap_or("")).tier;
         // `effective_concurrency` was already computed above (before the
         // scaffold step, so `group_identities` could see it too) — reused
         // here unchanged, not recomputed.
 
-        let (mut outcomes, mut aborted_mid, mut zero_node_failure, salvage): (
-            Vec<SubtaskOutcome>,
-            bool,
-            bool,
-            Vec<(usize, usize)>,
-        ) = if effective_concurrency > 1 {
-            // Item D-lite: ≥2 screen groups AND the user's ⚡Nx setting
-            // allows it — run the groups genuinely CONCURRENTLY (never
-            // same-screen section parallelism; see the module doc for why
-            // that distinction matters against `aca0d3a0`'s data verdict).
-            let result = crate::concurrent::run_screen_groups_concurrent(
-                &groups,
-                &group_identities,
-                &plan,
-                &request,
-                llm,
-                sink,
-                abort,
-                tier,
-                effective_concurrency,
-                self.agent_indicator_epoch,
-                &geometry_echo_budget,
-                on_progress,
-            )
-            .await;
-            (
-                result.outcomes,
-                result.aborted_mid,
-                result.zero_node_failure,
-                result.salvage,
-            )
-        } else {
-            // Single group / single screen / append mode — the ORIGINAL
-            // sequential loop, unchanged in behavior (byte-identical
-            // regression lock), just calling the extracted retry ladder.
-            //
-            // Self-diagnostic (2026-07-17, sequential-execution root-cause
-            // hunt): when ≥2 screen groups exist but this branch still ran
-            // (i.e. `effective_concurrency == 1` despite `groups.len() > 1`),
-            // announce it — this is the dual of `ConcurrentGroupsStarted`. By
-            // `effective_concurrency`'s own contract this can only happen
-            // when `clamp_concurrency(request.concurrency) <= 1`, so the
-            // announced `requested_workers` value is diagnostic gold: `1`
-            // here proves the ⚡Nx picker's value never reached
-            // `DesignRequest.concurrency` for this turn; anything `> 1`
-            // would mean `effective_concurrency` itself has a bug.
-            if groups.len() > 1 {
-                on_progress(Progress::ScreenGroupsSequential {
-                    group_count: groups.len(),
-                    requested_workers: request.concurrency,
-                });
-            }
-            let mut outcomes: Vec<SubtaskOutcome> = Vec::new();
-            let mut aborted_mid = false;
-            let mut zero_node_failure = false;
-            // (subtask index, outcomes index) of every all-attempts-failed
-            // subtask, for the end-of-run salvage pass below.
-            let mut salvage: Vec<(usize, usize)> = Vec::new();
-            for (subtask_index, subtask) in plan.subtasks.iter().enumerate() {
-                if abort.is_set() {
-                    aborted_mid = true;
-                    break;
-                }
-                let outcome = crate::concurrent::run_subtask_retry_ladder(
-                    subtask,
+        let (
+            mut outcomes,
+            mut aborted_mid,
+            mut zero_node_failure,
+            mut incomplete_subtask_failure,
+            salvage,
+        ): (Vec<SubtaskOutcome>, bool, bool, bool, Vec<(usize, usize)>) =
+            if effective_concurrency > 1 {
+                // Item D-lite: ≥2 screen groups AND the user's ⚡Nx setting
+                // allows it — run the groups genuinely CONCURRENTLY (never
+                // same-screen section parallelism; see the module doc for why
+                // that distinction matters against `aca0d3a0`'s data verdict).
+                let result = crate::concurrent::run_screen_groups_concurrent(
+                    &groups,
+                    &group_identities,
                     &plan,
                     &request,
                     llm,
                     sink,
                     abort,
                     tier,
+                    effective_concurrency,
                     self.agent_indicator_epoch,
                     &geometry_echo_budget,
                     on_progress,
                 )
                 .await;
+                (
+                    result.outcomes,
+                    result.aborted_mid,
+                    result.zero_node_failure,
+                    result.incomplete_subtask_failure,
+                    result.salvage,
+                )
+            } else {
+                // Single group / single screen / append mode — the ORIGINAL
+                // sequential loop, unchanged in behavior (byte-identical
+                // regression lock), just calling the extracted retry ladder.
+                //
+                // Self-diagnostic (2026-07-17, sequential-execution root-cause
+                // hunt): when ≥2 screen groups exist but this branch still ran
+                // (i.e. `effective_concurrency == 1` despite `groups.len() > 1`),
+                // announce it — this is the dual of `ConcurrentGroupsStarted`. By
+                // `effective_concurrency`'s own contract this can only happen
+                // when `clamp_concurrency(request.concurrency) <= 1`, so the
+                // announced `requested_workers` value is diagnostic gold: `1`
+                // here proves the ⚡Nx picker's value never reached
+                // `DesignRequest.concurrency` for this turn; anything `> 1`
+                // would mean `effective_concurrency` itself has a bug.
+                if groups.len() > 1 {
+                    on_progress(Progress::ScreenGroupsSequential {
+                        group_count: groups.len(),
+                        requested_workers: request.concurrency,
+                    });
+                }
+                let mut outcomes: Vec<SubtaskOutcome> = Vec::new();
+                let mut aborted_mid = false;
+                let mut zero_node_failure = false;
+                let mut incomplete_subtask_failure = false;
+                // (subtask index, outcomes index) of every all-attempts-failed
+                // subtask, for the end-of-run salvage pass below.
+                let mut salvage: Vec<(usize, usize)> = Vec::new();
+                for (subtask_index, subtask) in plan.subtasks.iter().enumerate() {
+                    if abort.is_set() {
+                        aborted_mid = true;
+                        break;
+                    }
+                    let outcome = crate::concurrent::run_subtask_retry_ladder_with_outcomes(
+                        subtask,
+                        &plan,
+                        &request,
+                        llm,
+                        sink,
+                        abort,
+                        tier,
+                        self.agent_indicator_epoch,
+                        &geometry_echo_budget,
+                        on_progress,
+                        &outcomes,
+                    )
+                    .await;
 
-                let zero = outcome.node_count == 0;
-                let node_count = outcome.node_count;
-                let err_msg = outcome.error.clone();
-                outcomes.push(outcome);
+                    let zero = outcome.node_count == 0;
+                    let incomplete = crate::subtask_completeness::is_incomplete_outcome(&outcome);
+                    let language_mismatch =
+                        crate::output_language::is_language_mismatch_outcome(&outcome);
+                    incomplete_subtask_failure |= incomplete;
+                    let node_count = outcome.node_count;
+                    let err_msg = outcome.error.clone();
+                    outcomes.push(outcome);
 
-                // abort 在 run_subtask 期间被置位 —— 优先于零节点判定归
-                // abort 路径(否则 mid-stream abort 会被误判为错误路径,
-                // 错误地移除 scaffold root 并返回 NoContent 而非 Aborted)。
-                if abort.is_set() {
-                    aborted_mid = true;
+                    // abort 在 run_subtask 期间被置位 —— 优先于零节点判定归
+                    // abort 路径(否则 mid-stream abort 会被误判为错误路径,
+                    // 错误地移除 scaffold root 并返回 NoContent 而非 Aborted)。
+                    if abort.is_set() {
+                        aborted_mid = true;
+                        if zero {
+                            on_progress(Progress::SubtaskFailed {
+                                id: subtask.id.clone(),
+                                error: err_msg.unwrap_or_else(|| "aborted".into()),
+                            });
+                        } else {
+                            on_progress(Progress::SubtaskDone {
+                                id: subtask.id.clone(),
+                                node_count,
+                            });
+                        }
+                        break;
+                    }
+                    if incomplete || language_mismatch {
+                        // The shared ladder already emitted SubtaskIncomplete
+                        // or SubtaskLanguageMismatch; do not overwrite that
+                        // terminal state with SubtaskDone.
+                        continue;
+                    }
                     if zero {
+                        // 零节点失败(非 abort,全部 3 次皆失败)。**不 break** ——
+                        // 一个 section 失败不该放弃后续所有 subtask。各 subtask
+                        // 独立 InsertSubtree 到 root、互不依赖;break 会把失败点
+                        // 之后的必要内容(bottom nav 等)全丢掉(用户报的"管线丢
+                        // 内容")。跳过这个、继续后面的;`zero_node_failure` 仍标记
+                        // "至少一个失败",最终若**全部**零内容(zero_content)才删
+                        // scaffold root。
                         on_progress(Progress::SubtaskFailed {
                             id: subtask.id.clone(),
-                            error: err_msg.unwrap_or_else(|| "aborted".into()),
+                            error: err_msg.unwrap_or_default(),
                         });
-                    } else {
-                        on_progress(Progress::SubtaskDone {
-                            id: subtask.id.clone(),
-                            node_count,
-                        });
+                        zero_node_failure = true;
+                        salvage.push((subtask_index, outcomes.len() - 1));
+                        continue;
                     }
-                    break;
-                }
-                if zero {
-                    // 零节点失败(非 abort,全部 3 次皆失败)。**不 break** ——
-                    // 一个 section 失败不该放弃后续所有 subtask。各 subtask
-                    // 独立 InsertSubtree 到 root、互不依赖;break 会把失败点
-                    // 之后的必要内容(bottom nav 等)全丢掉(用户报的"管线丢
-                    // 内容")。跳过这个、继续后面的;`zero_node_failure` 仍标记
-                    // "至少一个失败",最终若**全部**零内容(zero_content)才删
-                    // scaffold root。
-                    on_progress(Progress::SubtaskFailed {
+                    on_progress(Progress::SubtaskDone {
                         id: subtask.id.clone(),
-                        error: err_msg.unwrap_or_default(),
+                        node_count,
                     });
-                    zero_node_failure = true;
-                    salvage.push((subtask_index, outcomes.len() - 1));
-                    continue;
                 }
-                on_progress(Progress::SubtaskDone {
-                    id: subtask.id.clone(),
-                    node_count,
-                });
-            }
-            (outcomes, aborted_mid, zero_node_failure, salvage)
-        };
+                (
+                    outcomes,
+                    aborted_mid,
+                    zero_node_failure,
+                    incomplete_subtask_failure,
+                    salvage,
+                )
+            };
 
         // -- 阶段 4.4:失败抢救轮 --
         // 瞬时故障(供应商网络抖动、偶发空回复)会把一个 subtask 的 3 次
@@ -486,6 +530,7 @@ impl Orchestrator {
                     outcomes.get(outcome_index),
                     &plan.subtasks[subtask_index],
                 );
+                let prior_outcomes = outcomes.get(..outcome_index).unwrap_or(&[]);
                 on_progress(scope_progress_for_subtask(
                     &groups,
                     &group_identities,
@@ -496,7 +541,7 @@ impl Orchestrator {
                         reason: "salvage pass after transient failures".into(),
                     },
                 ));
-                let mut outcome = run_subtask_with_reveal_at(
+                let mut outcome = run_subtask_with_reveal_at_and_outcomes(
                     &subtask,
                     &plan,
                     &request,
@@ -508,9 +553,20 @@ impl Orchestrator {
                     self.agent_indicator_epoch,
                     reveal_now_millis(),
                     None,
+                    prior_outcomes,
                 )
                 .await;
                 if outcome.node_count > 0 {
+                    // The salvage appended the section after everything
+                    // generated since it first failed; put it back where
+                    // the plan placed it.
+                    crate::run_salvage_feedback::restore_planned_order(
+                        sink,
+                        &plan,
+                        &outcomes,
+                        subtask_index,
+                        &outcome,
+                    );
                     on_progress(scope_progress_for_subtask(
                         &groups,
                         &group_identities,
@@ -536,7 +592,15 @@ impl Orchestrator {
                 }
             }
             zero_node_failure = outcomes.iter().any(|o| o.node_count == 0);
+            incomplete_subtask_failure = outcomes
+                .iter()
+                .any(crate::subtask_completeness::is_incomplete_outcome);
         }
+
+        tracing::debug!(
+            incomplete_subtask_failure,
+            "subtask completeness gate summary"
+        );
 
         // -- 阶段 4.5:收尾判定(spec §6.3 三路径)--
         // Compute zero-content BEFORE cleanup. `finalize_design`'s structural
@@ -710,6 +774,7 @@ impl Orchestrator {
             subtasks: outcomes,
             total_nodes,
             unfilled_screens,
+            incomplete_subtask_failure,
         })
     }
 }

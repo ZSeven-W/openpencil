@@ -663,6 +663,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "assetCenter.style.importEmpty" => "Bu dosya boş ya da bir stil kılavuzu olamayacak kadar kısa.",
         "assetCenter.style.importNotText" => "Bu dosya Markdown metni olarak okunamıyor.",
         "assetCenter.style.importTooLarge" => "Bu dosya 512 KB'tan büyük.",
+        "leftPanel.tab.chat" => "Agent",
         "slidesPanel.tabSlides" => "Slaytlar",
         "slidesPanel.tabCards" => "Kartlar",
         "slidesPanel.present" => "Sun",

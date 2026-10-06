@@ -59,6 +59,7 @@ fn enter_compiles_binding_sites() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter");
     assert_eq!(
@@ -87,6 +88,7 @@ fn invalid_binding_becomes_warning_not_error() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter still ok");
     assert_eq!(session.binding_sites_len_for_test(), 0);
@@ -115,6 +117,7 @@ fn binding_content_resolves_on_enter() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter");
     let scene = session.preview_scene_for_test();
@@ -135,6 +138,7 @@ fn tap_event_updates_bound_text() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter");
     session.set_now_ms(0);
@@ -161,6 +165,7 @@ fn bindings_do_not_mutate_document() {
             false,
             false,
             test_measure(),
+            0,
         )
         .expect("enter");
         session.set_now_ms(0);

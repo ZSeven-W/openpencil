@@ -41,10 +41,13 @@ mod live_sync;
 // Daemon → browser agent-indicator relay (poll + local mirror + rAF pump).
 #[cfg(feature = "canvaskit")]
 mod agent_indicator_sync;
+mod preview_pump;
 // Top-bar hover-tooltip dwell → rAF repaint (the web host has no
 // animation-deadline scheduler of its own).
 #[cfg(feature = "canvaskit")]
 mod tooltip_pump;
+#[cfg(feature = "canvaskit")]
+mod video_overlay;
 // Daemon device-login relay (action drain + login-status poll + popup).
 #[cfg(feature = "canvaskit")]
 mod live_sync_glue;

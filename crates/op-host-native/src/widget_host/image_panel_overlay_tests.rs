@@ -26,16 +26,13 @@ fn topbar_point(host: &mut WidgetHostNative, target: TopBarHit) -> Point2D {
 }
 
 fn layer_row_point(host: &WidgetHostNative, target: &NodeId) -> Point2D {
-    let rect = Rect::xywh(
-        0.0,
-        TOP_BAR_HEIGHT,
-        host.editor_state().editor_ui.layer_panel_width,
-        VIEWPORT_H - TOP_BAR_HEIGHT,
-    );
+    // The rail carries a tab row now (对话 / 图层 / 幻灯片), so the tree
+    // starts below it; ask the host rather than rebuilding the rect.
+    let rect = host.layers_content_rect(VIEWPORT_W, VIEWPORT_H);
     let panel = LayerPanel::from_editor(host.editor_state());
     let mut y = rect.origin.y;
     while y < rect.origin.y + rect.size.y {
-        let point = Point2D::new(48.0, y);
+        let point = Point2D::new(rect.origin.x + 48.0, y);
         if panel.hit_test(rect, point) == Some(LayerPanelHit::Layer(target.clone())) {
             return point;
         }
@@ -63,6 +60,9 @@ fn image_popup_point(panel: &PropertyPanel, rect: Rect) -> Point2D {
 #[test]
 fn topbar_modal_takes_input_ownership_from_image_search() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let mut state = EditorState::sample();
     let _ = state.insert_image_node_at_viewport("Hero photo", "https://x/y.png");
     state.editor_ui.image_panel.search_open = true;
@@ -104,6 +104,9 @@ fn selection_changing_right_press_closes_image_search() {
     .expect("fixture")
     .value;
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     *host.editor_state_mut() = EditorState::from_document(doc);
     host.editor_state_mut()
         .set_single_selection(NodeId::new("n2"));
@@ -140,6 +143,9 @@ fn image_search_popup_wins_above_chat_picker_and_clears_covered_hover() {
     .expect("fixture")
     .value;
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     *host.editor_state_mut() = EditorState::from_document(doc);
     host.editor_state_mut()
         .set_single_selection(NodeId::new("hero"));
@@ -154,7 +160,6 @@ fn image_search_popup_wins_above_chat_picker_and_clears_covered_hover() {
     let property_rect = host.property_rect(VIEWPORT_W, VIEWPORT_H);
     let panel = PropertyPanel::for_selection(host.editor_state()).expect("property panel");
     let point = image_popup_point(&panel, property_rect);
-    host.editor_state_mut().chat.panel_position = Some((point.x - 100.0, point.y - 100.0));
     host.editor_state_mut().editor_ui.chat_model_picker.open = true;
     {
         let ui = &mut host.editor_state_mut().editor_ui;
@@ -165,11 +170,23 @@ fn image_search_popup_wins_above_chat_picker_and_clears_covered_hover() {
         ui.canvas_hover_node = Some(NodeId::new("stale-canvas"));
         ui.property_action_hover = Some(2);
     }
-    assert!(host.chat_panel_surface_contains(point.x, point.y, VIEWPORT_W, VIEWPORT_H));
-    assert!(host
+    // RETIRED PREMISE: the floating chat panel could be parked under
+    // the Image Search popup to manufacture a covered-picker overlap.
+    // The picker now lives over the composer card at the canvas floor
+    // while the popup floats in the right property rail — disjoint
+    // surfaces — so the popup's precedence is asserted where it still
+    // bites: it owns its point outright and clears every Chat hover in
+    // the same move.
+    let picker = host
         .chat_model_picker_rect(VIEWPORT_W, VIEWPORT_H)
-        .is_some());
+        .expect("model picker rect");
+    assert!(!picker.contains(point));
+    assert!(
+        !host.chat_panel_surface_contains(point.x, point.y, VIEWPORT_W, VIEWPORT_H),
+        "no chat surface can sit under the popup any more"
+    );
 
+    println!("DBG picker {picker:?} point {point:?} property {property_rect:?}");
     assert!(host.apply_cursor_move(point.x, point.y));
     let ui = &host.editor_state().editor_ui;
     assert!(ui.image_panel.search_open, "the higher popup stays open");

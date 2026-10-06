@@ -22,34 +22,65 @@ pub trait DocSink: Send {
     fn state(&self) -> &EditorState;
     /// 应用一条编辑命令;返回 `false` 表示命令被拒(文档未变)。
     fn apply(&mut self, cmd: EditorCommand) -> bool;
-    /// Apply an `InsertSubtree` and return the post-remap root ids.
-    /// `None` = rejected (document unchanged).
-    ///
-    /// The default implementation routes through `apply` and returns
-    /// `Some(vec![])` on success — post-remap ids are unavailable on
-    /// buffered / remote sinks where the real `EditorState` is not local.
-    /// Override on immediate-apply sinks (e.g. `VecDocSink`) to surface
-    /// the real remapped ids from `EditorState::insert_subtree_returning_root_ids`.
+    /// Apply an `InsertSubtree` and return post-remap root ids when available.
     fn insert_subtree_returning_root_ids(
         &mut self,
         nodes: Vec<PenNode>,
         parent_id: &NodeId,
     ) -> Option<Vec<String>> {
+        // Diff child ids around the apply so immediate sinks report remapped ids.
+        let before = child_ids_under(self.state(), parent_id);
         let applied = self.apply(EditorCommand::InsertSubtree {
             nodes,
             parent_id: parent_id.clone(),
             page_id: None,
         });
-        if applied {
-            Some(vec![])
-        } else {
-            None
+        if !applied {
+            return None;
         }
+        let after = child_ids_under(self.state(), parent_id);
+        Some(
+            after
+                .into_iter()
+                .filter(|id| !before.contains(id))
+                .collect(),
+        )
     }
     /// 开启一个 undo 批 —— 批内的所有 apply 合并为一次 undo。
     fn begin_undo_batch(&mut self);
     /// 关闭当前 undo 批。
     fn end_undo_batch(&mut self);
+    /// Roll back roots inserted by the current attempt.
+    fn rollback_inserted_roots(&mut self, root_ids: &[String]) {
+        for root_id in root_ids {
+            self.apply(EditorCommand::DeleteNode {
+                node_id: NodeId::new(root_id.clone()),
+                page_id: None,
+            });
+        }
+    }
+    /// Whether this sink buffers commands instead of applying them to the live document.
+    fn is_buffered(&self) -> bool {
+        false
+    }
+}
+
+/// Child ids of `parent_id` in document order (page-level children when the
+/// parent is `NodeId::NONE`); empty when the parent is missing.
+fn child_ids_under(state: &EditorState, parent_id: &NodeId) -> Vec<String> {
+    use op_editor_core::PenNodeExt;
+    let children = if parent_id.is_real() {
+        match op_editor_core::walkers::find_node(state.active_children(), parent_id) {
+            Some(node) => node.children().map(Vec::as_slice).unwrap_or(&[]),
+            None => &[],
+        }
+    } else {
+        state.active_children()
+    };
+    children
+        .iter()
+        .map(|node| node.id_str().to_owned())
+        .collect()
 }
 
 /// LLM 调用出口。每次 [`call`](LlmClient::call) 是一次独立、无累积
@@ -314,10 +345,7 @@ pub enum Intent {
 #[derive(Debug, Clone)]
 pub enum Progress {
     Planning,
-    /// Planning produced the FULL subtask list — emitted ONCE right after
-    /// planning so the UI can show the complete task checklist upfront (TS
-    /// parity), instead of revealing tasks one-by-one as each starts. Pairs
-    /// `id` with `label` so the UI can mark each row done on `SubtaskDone`.
+    /// Planning produced the full subtask checklist.
     Planned {
         subtasks: Vec<(String, String)>,
     },
@@ -334,10 +362,23 @@ pub enum Progress {
         id: String,
         error: String,
     },
-    /// Per-subtask skill-load report — emitted right after the sub-agent
-    /// prompt is built (from the merged `SkillLoadReport`). `dropped` carries
-    /// `(name, reason_display)` pairs for diagnostics; user-facing activity
-    /// deliberately omits skill, token-budget, and context-drop internals.
+    /// Repeated-item section still short after the ladder.
+    SubtaskIncomplete {
+        id: String,
+        expected: usize,
+        delivered: usize,
+    },
+    /// Copy language disagrees with the brief after one retry.
+    SubtaskLanguageMismatch {
+        id: String,
+        checked: usize,
+        mismatched: usize,
+    },
+    /// Parsed plan omitted a section the brief enumerated; one re-plan follows.
+    PlanCoverageRetry {
+        missing: Vec<String>,
+    },
+    /// Per-subtask skill-load report emitted after the sub-agent prompt is built.
     SubtaskSkills {
         id: String,
         included: Vec<SkillBrief>,
@@ -345,34 +386,22 @@ pub enum Progress {
         budget_used: u32,
         budget_max: u32,
     },
-    /// Emitted on each subtask retry with the reason (e.g. "zero nodes
-    /// generated"). `attempt` is the 1-based attempt number being retried into.
+    /// Retry into `attempt` (1-based) with the given reason.
     SubtaskRetry {
         id: String,
         attempt: u8,
         reason: String,
     },
-    /// Emitted once, right before a `geometry_echo` in-loop self-correction
-    /// retry starts (`concurrent::run_subtask_retry_ladder`'s tail) — a
-    /// fact line so the progress panel shows this step actually working,
-    /// not a silent extra LLM call. `issue_count` is how many diagnostic
-    /// lines `geometry_validation::geometry_diagnostics_for_roots` found.
+    /// geometry_echo in-loop self-correction is about to retry.
     GeometryEcho {
         id: String,
         issue_count: usize,
     },
-    /// Emitted ONCE, right before `RunSummary` is returned, whenever the
-    /// "promise-delivery" invariant check (`unfilled_screens::detect_unfilled_screens`)
-    /// finds a scaffolded screen that never received real content — the
-    /// classic-path honest report (postmortem 0718-1-glm-1: a silently
-    /// delivered blank screen). `names` are already marked on the canvas
-    /// (`" (unfilled)"` suffix) by the time this fires. Never emitted when
-    /// nothing is unfilled.
+    /// Promise-delivery check found an unfilled scaffolded screen.
     UnfilledScreens {
         names: Vec<String>,
     },
-    /// Emitted after each sub-agent LLM reply is applied — lets the UI
-    /// show a live node count while the subtask is still running.
+    /// Live node count while a subtask is still running.
     SubtaskNodes {
         id: String,
         nodes_so_far: usize,
@@ -497,6 +526,12 @@ pub enum Progress {
         /// Human-readable reason for the fallback.
         reason: String,
     },
+    /// Reference-page enrichment failed; the ordinary design route continues
+    /// without the optional reference context.
+    ReferenceUnavailable {
+        /// Human-readable reason shown by the host's progress surface.
+        reason: String,
+    },
 }
 
 /// Stable context attached to one screen group's progress events.
@@ -579,15 +614,17 @@ pub fn report_to_progress_parts(
 
 /// 单个 subtask 的执行结果。`error` 带值但 `node_count > 0` 表示
 /// "部分产出"(软错误);`node_count == 0` 表示零节点失败。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubtaskOutcome {
     pub id: String,
     pub node_count: usize,
     pub error: Option<String>,
-    /// Post-remap ids of the roots this subtask inserted (append-mode
-    /// cleanup scopes to exactly these — Component 11). Empty on failure
-    /// or when the sink is buffered (ids unavailable until replay).
+    /// Post-remap ids of the roots this subtask inserted; empty on failure or
+    /// when the sink is buffered (ids unavailable until replay).
     pub inserted_root_ids: Vec<String>,
+    /// Visually dominant headline extracted from the inserted section.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headline: Option<String>,
     /// The persisted subtask spec, present ONLY on a zero-node failure —
     /// carries `region`/`elements`/`screen`/`parent_frame_id` through to the
     /// host so a failed row's manual "Retry" button (progress-panel remedy,
@@ -608,9 +645,11 @@ pub struct RunSummary {
     /// "promise-delivery" invariant's classic-path honest report. Empty on
     /// the common path. Each name is also already marked on the canvas
     /// itself (`unfilled_screens::mark_unfilled_screens`'s " (unfilled)"
-    /// suffix) before this summary is built, so a caller that only reads
-    /// this field and one that only looks at the canvas see the same story.
+    /// suffix) before this summary is built, so callers reading either see the same story.
     pub unfilled_screens: Vec<String>,
+    /// True when at least one promised repeated-item subtask remained short
+    /// after its retry ladder, even though its last non-empty result was kept.
+    pub incomplete_subtask_failure: bool,
 }
 
 /// `run()` 的失败。
@@ -684,6 +723,7 @@ pub struct DesignRequest {
     /// 并发度:允许同时运行的 screen-group worker 数。
     /// 调用方应传 store-clamped 值 [1,6];crate 内部防御性 clamp。
     /// 默认为 1(顺序执行)。Port of TS `request.concurrency ?? 1`.
+    #[serde(default = "default_concurrency")]
     pub concurrency: u32,
     /// 追加模式上下文 —— 仅当 host 检测到 append intent 时填入。
     /// Port of `AIDesignRequest.context.appendContext` in `ai-types.ts:51`.
@@ -714,6 +754,9 @@ pub struct DesignRequest {
     /// name the registry has dropped falls back to the ranking with a log.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pinned_style_guide: Option<String>,
+    /// Content-free structure extracted from an imported reference page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference_skeleton: Option<crate::reference_skeleton::ReferenceSkeleton>,
 }
 
 /// Mirrors the serde defaults exactly, so a request built through `Default`
@@ -734,12 +777,17 @@ impl Default for DesignRequest {
             validation_enabled: default_validation_enabled(),
             visual_ref_enabled: default_visual_ref_enabled(),
             pinned_style_guide: None,
+            reference_skeleton: None,
         }
     }
 }
 
 fn default_validation_enabled() -> bool {
     true
+}
+
+fn default_concurrency() -> u32 {
+    1
 }
 
 fn default_visual_ref_enabled() -> bool {

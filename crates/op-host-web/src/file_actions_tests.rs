@@ -68,6 +68,8 @@ fn app_preferences_preserve_transient_embedding_theme_and_locale_separately() {
         .editor_ui
         .set_host_theme_override(Some(op_editor_core::ThemeMode::Dark));
     previous.editor_ui.locale = op_editor_core::Locale::ZhCn;
+    previous.editor_ui.pending_locale = Some(op_editor_core::Locale::Ja);
+    previous.editor_ui.locale_persistence_override = Some(op_editor_core::Locale::Ja);
     previous
         .editor_ui
         .set_host_locale_override(Some(op_editor_core::Locale::EnUs));
@@ -81,6 +83,14 @@ fn app_preferences_preserve_transient_embedding_theme_and_locale_separately() {
         op_editor_core::ThemeMode::Dark
     );
     assert_eq!(next.editor_ui.locale, op_editor_core::Locale::ZhCn);
+    assert_eq!(
+        next.editor_ui.pending_locale,
+        Some(op_editor_core::Locale::Ja)
+    );
+    assert_eq!(
+        next.editor_ui.locale_persistence_override,
+        Some(op_editor_core::Locale::Ja)
+    );
     assert_eq!(
         next.editor_ui.effective_locale(),
         op_editor_core::Locale::EnUs

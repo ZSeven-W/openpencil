@@ -365,6 +365,9 @@ impl WidgetHostNative {
 
     /// The chat model dropdown extends above the chat panel, so the chat
     /// panel's own bounds are not enough for cursor and occlusion gates.
+    /// While Home is visible the picker is anchored above the sheet's
+    /// model chip instead (see `home_overlays`), and every gate here
+    /// must resolve that same rect.
     pub(in crate::widget_host) fn chat_model_picker_rect(
         &self,
         viewport_w: f32,
@@ -372,6 +375,12 @@ impl WidgetHostNative {
     ) -> Option<Rect> {
         if !self.editor_state.editor_ui.chat_model_picker.open {
             return None;
+        }
+        if self.editor_state.editor_ui.home.visible {
+            // The card IS the whole footprint now: the external connect
+            // row that used to hang below it is gone, folded into the
+            // picker's own footer.
+            return self.home_model_picker_geometry(viewport_w, viewport_h);
         }
         let chat_rect = self.ai_chat_rect(viewport_w, viewport_h)?;
         AIChatPlaceholder::from_editor(&self.editor_state).model_picker_bounds(chat_rect)

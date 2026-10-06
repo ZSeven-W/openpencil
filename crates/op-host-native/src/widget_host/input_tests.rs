@@ -99,15 +99,3 @@ fn toolbar_action_point_for_test(
     );
     (sum_x / count, sum_y / count)
 }
-
-fn toolbar_center_y_for_test() -> f32 {
-    op_editor_ui::widgets::AI_CHAT_HEIGHT - 19.0
-}
-
-fn textarea_center_y_for_test() -> f32 {
-    const INPUT_AREA_HEIGHT: f32 = 56.0;
-    const INPUT_TOOLBAR_HEIGHT: f32 = 40.0;
-    op_editor_ui::widgets::AI_CHAT_HEIGHT - (INPUT_AREA_HEIGHT + INPUT_TOOLBAR_HEIGHT)
-        + 1.0
-        + INPUT_AREA_HEIGHT / 2.0
-}

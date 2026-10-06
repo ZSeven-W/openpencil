@@ -15,7 +15,7 @@ use super::*;
 // colored/gradient fill it intended (gen2/3/5: "Get 30% Off" white-on-cream =
 // invisible). Deterministic floor: on a LIGHT page, a fill-less container whose
 // text descendants are ALL white/light → it was meant to sit on a colored
-// surface → stamp `$color-accent` so the copy becomes readable. Conservative:
+// surface → stamp `$--primary` so the copy becomes readable. Conservative:
 // fires only when every text is light (no dark text to contradict) and the
 // container truly has no renderable fill.
 
@@ -23,10 +23,13 @@ use super::*;
 // surface tints (a banner headline written in any of these needs a colored
 // surface beneath it).
 pub(super) const LIGHT_TEXT_REFS: &[&str] = &[
-    "$color-surface",
-    "$color-surface-2",
-    "$color-surface-3",
-    "$color-bg-deep",
+    "$--card",
+    "$--muted",
+    "$--accent",
+    "$--secondary",
+    "$--popover",
+    "$--sidebar",
+    "$--background",
 ];
 pub(super) const LIGHT_TEXT_HEXES: &[&str] = &["#ffffff", "#fff", "#fefefe", "#fdfdfd", "white"];
 
@@ -35,6 +38,91 @@ pub(super) fn is_light_text(color: &str) -> bool {
         return true;
     }
     LIGHT_TEXT_HEXES.contains(&normalize_hex(color).as_str())
+}
+
+/// A text colour that would become unreadable if this container were painted
+/// with the accent. Accent tokens themselves stay unknown here: their
+/// resolved value belongs to the document variable table, and a button may
+/// intentionally use an accent token for its own foreground.
+fn is_dark_text(color: &str) -> bool {
+    if is_light_text(color) || is_accent_ref(color) {
+        return false;
+    }
+    if matches!(
+        color,
+        "$--foreground"
+            | "$--card-foreground"
+            | "$--muted-foreground"
+            | "$--secondary-foreground"
+            | "$--popover-foreground"
+            | "$--sidebar-foreground"
+            | "$--color-error-foreground"
+            | "$--color-info-foreground"
+            | "$--color-success-foreground"
+            | "$--color-warning-foreground"
+    ) {
+        return true;
+    }
+    let normalized = normalize_hex(color);
+    if SAFE_DARK_HEXES.contains(&normalized.as_str()) {
+        return true;
+    }
+    let Some(hex) = normalized.strip_prefix('#') else {
+        return false;
+    };
+    if hex.len() < 6 || !hex.is_ascii() {
+        return false;
+    }
+    let Ok(r) = u8::from_str_radix(&hex[0..2], 16) else {
+        return false;
+    };
+    let Ok(g) = u8::from_str_radix(&hex[2..4], 16) else {
+        return false;
+    };
+    let Ok(b) = u8::from_str_radix(&hex[4..6], 16) else {
+        return false;
+    };
+    (0.299 * f64::from(r) + 0.587 * f64::from(g) + 0.114 * f64::from(b)) / 255.0 < 0.6
+}
+
+/// True when a container combines prose with buttons. This is the shape of a
+/// content panel, not a promo band: a dark descendant text colour is evidence
+/// that painting the whole container with the accent would fail contrast.
+fn has_body_text_and_button(node: &Value) -> bool {
+    fn walk(node: &Value, inside_button: bool, body: &mut bool, button: &mut bool) {
+        let is_button = matches!(role_of(node), Some("button") | Some("icon-button"));
+        *button |= is_button;
+        if node.get("type").and_then(Value::as_str) == Some("text") && !inside_button {
+            let role = role_of(node);
+            if !matches!(role, Some("heading") | Some("label") | Some("caption")) {
+                *body = true;
+            }
+        }
+        for child in children_of(node) {
+            walk(child, inside_button || is_button, body, button);
+        }
+    }
+
+    let (mut body, mut button) = (false, false);
+    walk(node, false, &mut body, &mut button);
+    body && button
+}
+
+/// Inspect all text descendants, including text inside a child surface. The
+/// ordinary surface tally deliberately skips those surfaces because their
+/// text does not describe the parent's background; this separate guard is
+/// only for the content-panel-plus-buttons contrast veto above.
+fn has_dark_text_descendant(node: &Value) -> bool {
+    for child in children_of(node) {
+        if child.get("type").and_then(Value::as_str) == Some("text") {
+            if first_solid_color(child).is_some_and(|color| is_dark_text(&color)) {
+                return true;
+            }
+        } else if has_dark_text_descendant(child) {
+            return true;
+        }
+    }
+    false
 }
 
 /// Tally text colors that sit DIRECTLY on this container's (unfilled) surface.
@@ -59,17 +147,13 @@ pub(super) fn tally_surface_text_colors(node: &Value, light: &mut usize, dark: &
 }
 
 /// The emphasis color the design ACTUALLY uses (glm often repurposes a chart
-/// token as the brand accent because the palette's `$color-accent` defaults to
+/// token as the brand accent because the palette's `$--primary` defaults to
 /// blue — wrong for a warm app). Returns the first chart/accent/primary token
 /// found in the subtree, so the band matches the rest of the screen instead of
 /// stamping a clashing default blue.
 pub(super) fn find_design_accent(node: &Value) -> Option<String> {
     if let Some(c) = first_solid_color(node) {
-        if c == "$color-accent"
-            || c == "$color-primary"
-            || c == "$color-brand"
-            || c.starts_with("$color-chart-")
-        {
+        if is_accent_ref(&c) {
             return Some(c);
         }
     }
@@ -87,8 +171,20 @@ pub(super) fn find_design_accent(node: &Value) -> Option<String> {
 pub(super) fn is_light_surface_color(color: &str) -> bool {
     matches!(
         color,
-        "$color-surface" | "$color-surface-2" | "$color-surface-3" | "$color-bg-deep"
+        "$--card"
+            | "$--muted"
+            | "$--accent"
+            | "$--secondary"
+            | "$--popover"
+            | "$--sidebar"
+            | "$--background"
     ) || SAFE_LIGHT_HEXES.contains(&normalize_hex(color).as_str())
+}
+
+/// The brand/emphasis colour tokens: shadcn `--primary` (+ its sidebar
+/// variant) and the chart ramp.
+fn is_accent_ref(c: &str) -> bool {
+    matches!(c, "$--primary" | "$--sidebar-primary") || c.starts_with("$--chart-")
 }
 
 pub(super) fn fix_invisible_text_band(node: &mut Value, theme: super::Theme, design_accent: &str) {
@@ -111,13 +207,21 @@ pub(super) fn fix_invisible_text_band(node: &mut Value, theme: super::Theme, des
     if crate::cleanup::is_status_bar_from_json(node) {
         return;
     }
+    if has_body_text_and_button(node) && has_dark_text_descendant(node) {
+        // A content panel can contain white/light text in one nested surface
+        // and dark body/button text in another. The surface tally skips both
+        // child surfaces by design, but the dark text still vetoes painting
+        // the parent with the accent. This is a contrast proof, not a node-name
+        // heuristic; unrecognized unresolved text refs remain unclassified.
+        return;
+    }
     // Skip only when the node ALREADY paints a non-light surface (a colored or
     // dark solid, or a gradient / image) — light text reads fine there. A node
-    // with NO fill, OR a LIGHT-SURFACE solid fill (`$color-surface`, white), is a
+    // with NO fill, OR a LIGHT-SURFACE solid fill (`$--card`, white), is a
     // band where light text is invisible. The latter is the broken-promo-banner
     // case: glm gives the card white text + a dark CTA + a translucent-white
     // badge (all implying a colored background) yet fills the card with
-    // `$color-surface`, so the headline vanishes. Repaint with the design accent.
+    // `$--card`, so the headline vanishes. Repaint with the design accent.
     if has_renderable_fill(node) {
         match first_solid_color(node) {
             Some(c) if is_light_surface_color(&c) => {} // light surface → still invisible
@@ -138,9 +242,9 @@ pub(super) fn fix_invisible_text_band(node: &mut Value, theme: super::Theme, des
 
 /// The design's DOMINANT accent token across already-generated siblings — glm
 /// uses a chart token as the de-facto brand accent (the palette's
-/// `$color-accent` often defaults to a clashing blue). Counting across the
+/// `$--primary` often defaults to a clashing blue). Counting across the
 /// assembled-so-far page (passed by the caller from the doc sink) picks e.g.
-/// `$color-chart-6` when it's used 9× vs `$color-accent` 1×, so an injected
+/// `$--chart-6` when it's used 9× vs `$--primary` 1×, so an injected
 /// banner band matches the rest of the screen.
 pub fn dominant_design_accent(nodes: &[PenNode]) -> Option<String> {
     let mut counts: Vec<(String, usize)> = Vec::new();
@@ -154,11 +258,7 @@ pub fn dominant_design_accent(nodes: &[PenNode]) -> Option<String> {
 
 pub(super) fn tally_accent(node: &Value, counts: &mut Vec<(String, usize)>) {
     if let Some(c) = first_solid_color(node) {
-        if c == "$color-accent"
-            || c == "$color-primary"
-            || c == "$color-brand"
-            || c.starts_with("$color-chart-")
-        {
+        if is_accent_ref(&c) {
             if let Some(e) = counts.iter_mut().find(|(k, _)| *k == c) {
                 e.1 += 1;
             } else {
@@ -192,8 +292,8 @@ mod tests {
             ]
         });
 
-        // Apply the pass: theme = Light, design_accent = "$color-accent" (blue).
-        fix_invisible_text_band(&mut bar, super::Theme::Light, "$color-accent");
+        // Apply the pass: theme = Light, design_accent = "$--primary" (blue).
+        fix_invisible_text_band(&mut bar, super::Theme::Light, "$--primary");
 
         // Status bar should have NO fill (exempt by role).
         assert!(
@@ -218,7 +318,7 @@ mod tests {
             ]
         });
 
-        fix_invisible_text_band(&mut bar, super::Theme::Light, "$color-accent");
+        fix_invisible_text_band(&mut bar, super::Theme::Light, "$--primary");
 
         assert!(
             bar.get("fill").is_none(),
@@ -242,7 +342,7 @@ mod tests {
             ]
         });
 
-        fix_invisible_text_band(&mut banner, super::Theme::Light, "$color-accent");
+        fix_invisible_text_band(&mut banner, super::Theme::Light, "$--primary");
 
         // Non-status-bar frame SHOULD get the accent fill.
         assert!(
@@ -250,7 +350,7 @@ mod tests {
             "Non-status-bar frame with light text should receive fill stamp"
         );
         assert_eq!(
-            banner["fill"][0]["color"], "$color-accent",
+            banner["fill"][0]["color"], "$--primary",
             "Fill should be the design accent"
         );
     }
@@ -271,7 +371,7 @@ mod tests {
             ]
         });
 
-        fix_invisible_text_band(&mut bar, super::Theme::Light, "$color-accent");
+        fix_invisible_text_band(&mut bar, super::Theme::Light, "$--primary");
 
         assert!(
             bar.get("fill").is_none(),
@@ -304,7 +404,7 @@ mod tests {
         });
 
         // Theme is Unknown (unresolved token or missing variables).
-        fix_invisible_text_band(&mut screen_root, super::Theme::Unknown, "$color-accent");
+        fix_invisible_text_band(&mut screen_root, super::Theme::Unknown, "$--primary");
 
         // Screen root should NOT be repainted, even though all text is light.
         assert!(
@@ -329,7 +429,7 @@ mod tests {
                     "type": "frame",
                     "id": "card",
                     "name": "Card",
-                    "fill": [{"type": "solid", "color": "$color-surface"}],
+                    "fill": [{"type": "solid", "color": "$--card"}],
                     "children": [
                         {
                             "type": "text",
@@ -341,7 +441,7 @@ mod tests {
             ]
         });
 
-        fix_invisible_text_band(&mut section, super::Theme::Light, "$color-accent");
+        fix_invisible_text_band(&mut section, super::Theme::Light, "$--primary");
 
         // Section with frame children is a container, not a band.
         assert!(
@@ -358,7 +458,7 @@ mod tests {
             "type": "frame",
             "id": "banner-001",
             "name": "Promo Banner",
-            "fill": [{"type": "solid", "color": "$color-surface"}],
+            "fill": [{"type": "solid", "color": "$--card"}],
             "children": [
                 {
                     "type": "text",
@@ -373,7 +473,7 @@ mod tests {
             ]
         });
 
-        fix_invisible_text_band(&mut banner, super::Theme::Light, "$color-accent");
+        fix_invisible_text_band(&mut banner, super::Theme::Light, "$--primary");
 
         // True band with only text children (no nested frames with text) should
         // be repainted when all text is light and surface fill is light.
@@ -382,7 +482,7 @@ mod tests {
             "Genuine band with direct text should receive fill stamp"
         );
         assert_eq!(
-            banner["fill"][0]["color"], "$color-accent",
+            banner["fill"][0]["color"], "$--primary",
             "Fill should be the design accent"
         );
     }
@@ -398,7 +498,7 @@ mod tests {
                 {
                     "type": "frame",
                     "id": "card-1",
-                    "fill": [{"type": "solid", "color": "$color-surface"}],
+                    "fill": [{"type": "solid", "color": "$--card"}],
                     "children": [
                         {
                             "type": "text",
@@ -410,7 +510,7 @@ mod tests {
                 {
                     "type": "frame",
                     "id": "card-2",
-                    "fill": [{"type": "solid", "color": "$color-surface"}],
+                    "fill": [{"type": "solid", "color": "$--card"}],
                     "children": [
                         {
                             "type": "text",
@@ -422,7 +522,7 @@ mod tests {
             ]
         });
 
-        fix_invisible_text_band(&mut grid, super::Theme::Light, "$color-accent");
+        fix_invisible_text_band(&mut grid, super::Theme::Light, "$--primary");
 
         // Grid with frame children is a container structure, not a band.
         assert!(

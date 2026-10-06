@@ -396,7 +396,7 @@ pub(super) fn rebind_dark_literal_text(node: &mut Value) {
     if node.get("type").and_then(Value::as_str) == Some("text") {
         if let Some(color) = get_first_solid_color(node) {
             if hex_luminance(&color).is_some_and(|l| l < 0.45) {
-                node["fill"] = solid_fill("$color-text-muted");
+                node["fill"] = solid_fill("$--muted-foreground");
             }
         }
     }

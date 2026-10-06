@@ -16,6 +16,9 @@ use op_editor_ui::{Point2D, Rect};
 /// (no saved file → the disabled-Init empty state).
 fn host_with_git_panel_open() -> WidgetHostNative {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let panel = &mut host.editor_state_mut().editor_ui.git_panel;
     panel.open = true;
     panel.loading = false;
@@ -53,6 +56,9 @@ fn open_model_picker(host: &mut WidgetHostNative) {
 #[test]
 fn open_git_popover_is_modal_and_dismisses_on_any_outside_press() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     {
         let panel = &mut host.editor_state_mut().editor_ui.git_panel;
         panel.open = true;
@@ -211,6 +217,9 @@ fn stale_git_popover_flag_does_not_dead_end_input() {
     // press: the modal guard only consumes a press the Git panel
     // actually handled, so an outside click still reaches the canvas.
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     {
         let panel = &mut host.editor_state_mut().editor_ui.git_panel;
         panel.open = true;
@@ -399,6 +408,9 @@ fn init_card_hover_tracks_the_card_index_and_not_allowed_cursor() {
 #[test]
 fn git_popover_row_hover_uses_shared_menu_state() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let (vw, vh) = (1400.0, 900.0);
     host.last_viewport_w = vw;
     host.last_viewport_h = vh;
@@ -442,6 +454,9 @@ fn git_popover_row_hover_uses_shared_menu_state() {
 #[test]
 fn open_model_picker_does_not_mask_git_button_hover() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let (vw, vh) = (1440.0, 900.0);
     host.last_viewport_w = vw;
     host.last_viewport_h = vh;
@@ -476,10 +491,12 @@ fn open_model_picker_does_not_mask_git_button_hover() {
 #[test]
 fn moving_from_chat_into_git_clears_chat_and_lower_hover_in_one_event() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let (vw, vh) = (1440.0, 900.0);
     host.last_viewport_w = vw;
     host.last_viewport_h = vh;
-    host.editor_state_mut().chat.maximized = true;
     {
         let panel = &mut host.editor_state_mut().editor_ui.git_panel;
         panel.open = true;
@@ -490,7 +507,19 @@ fn moving_from_chat_into_git_clears_chat_and_lower_hover_in_one_event() {
     let body = host.git_panel_rect(vw, vh).expect("Git panel rect");
     let panel = GitPanel::for_editor(host.editor_state()).expect("Git panel widget");
     let point = find_git_hit(&panel, body, GitPanelHit::Overflow);
-    assert!(host.chat_panel_surface_contains(point.x, point.y, vw, vh));
+    // RETIRED PREMISE: the maximized chat panel used to cover the Git
+    // popover, so the move genuinely left the chat surface. The Git
+    // popover hangs under the TopBar's Git button over the canvas, and
+    // no chat surface can reach it any more (the rail is west of the
+    // canvas, the composer card is pinned to its floor) — what is
+    // still load-bearing is the ONE-EVENT semantics: a stale Chat
+    // hover is cleared by the same move that sets the Git hover.
+    let chat = host.ai_chat_rect(vw, vh).expect("chat rect");
+    assert!(!chat.contains(point));
+    assert!(
+        point.x >= chat.origin.x + chat.size.x,
+        "the chat column and the Git popover are disjoint now"
+    );
     {
         let ui = &mut host.editor_state_mut().editor_ui;
         ui.chat_header_hover = Some(op_editor_core::ChatHeaderButton::NewChat);
@@ -527,6 +556,9 @@ fn moving_from_chat_into_git_clears_chat_and_lower_hover_in_one_event() {
 #[test]
 fn open_model_picker_still_truncates_hover_outside_git_panel() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let (vw, vh) = (1440.0, 900.0);
     host.last_viewport_w = vw;
     host.last_viewport_h = vh;
@@ -574,6 +606,9 @@ fn open_model_picker_still_truncates_hover_outside_git_panel() {
 #[test]
 fn git_panel_press_sets_and_release_clears_pressed_button() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let (vw, vh) = (1400.0, 900.0);
     {
         let panel = &mut host.editor_state_mut().editor_ui.git_panel;

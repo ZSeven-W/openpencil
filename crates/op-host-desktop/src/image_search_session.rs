@@ -6,7 +6,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::sync::{Arc, Mutex};
 
 use op_editor_core::agent_settings::ImageGenProfile;
-use op_editor_core::{EditorState, NodeId};
+use op_editor_core::{walkers, EditorState, NodeId};
 // Provider plumbing shared with the web daemon (single-sourced in
 // op-host-services): keyword simplification, Openverse token exchange, and
 // image mime handling. The desktop keeps its own `fetch_image_data_url`
@@ -23,9 +23,12 @@ pub(crate) use op_host_services::web_image_search::{simplify_search_query, sniff
 // desktop session share one predicate vocabulary; the desktop keeps its own
 // provider fetches, memoization, and job bookkeeping. The old paths are
 // re-exported so every existing importer and test stays stable.
+use op_ai::chat_provider::ChatProvider;
+use op_host_services::image_relevance_judge::{ChatVisionJudge, OpenAiCompatVisionJudge};
+use op_image_enrich::net::{ImageRelevanceJudge, NoJudge};
 pub(crate) use op_image_enrich::{
     apply_result, collaboration_image_result_gate, collect_targets, collect_targets_with_scene,
-    image_request_mode, ImageAspectRatio, ImageRequestMode, ImageSearchTarget,
+    image_request_mode, is_image_fallback, ImageAspectRatio, ImageRequestMode, ImageSearchTarget,
     SEARCH_FAILED_PLACEHOLDER_SRC,
 };
 
@@ -37,11 +40,20 @@ pub(crate) struct OpenverseCredentials(WebOpenverseCredentials);
 impl OpenverseCredentials {
     pub(crate) fn from_state(state: &EditorState) -> Option<Self> {
         let settings = &state.editor_ui.agent_settings;
-        WebOpenverseCredentials::from_parts(
-            &settings.openverse_client_id,
-            &settings.openverse_client_secret,
-        )
-        .map(Self)
+        let (client_id, client_secret) = if settings.openverse_client_id.trim().is_empty()
+            && settings.openverse_client_secret.trim().is_empty()
+        {
+            (
+                std::env::var("OPENPENCIL_OPENVERSE_CLIENT_ID").unwrap_or_default(),
+                std::env::var("OPENPENCIL_OPENVERSE_CLIENT_SECRET").unwrap_or_default(),
+            )
+        } else {
+            (
+                settings.openverse_client_id.clone(),
+                settings.openverse_client_secret.clone(),
+            )
+        };
+        WebOpenverseCredentials::from_parts(&client_id, &client_secret).map(Self)
     }
 
     pub(crate) fn as_web(&self) -> &WebOpenverseCredentials {
@@ -69,6 +81,45 @@ enum SearchMemoEntry {
         waiters: Vec<mpsc::Sender<Option<String>>>,
     },
     Ready(String),
+}
+
+/// Which relevance judge a session resolved — logged once per session as
+/// `image-search judge: env | provider:<name> | none`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum JudgeChoice {
+    Env,
+    Provider(String),
+    None,
+}
+
+impl JudgeChoice {
+    fn log_label(&self) -> String {
+        match self {
+            JudgeChoice::Env => "env".to_string(),
+            JudgeChoice::Provider(name) => format!("provider:{name}"),
+            JudgeChoice::None => "none".to_string(),
+        }
+    }
+}
+
+/// Pick the relevance judge for one image-search session. The env-configured
+/// OpenAI-compatible judge wins when present; otherwise the user's selected
+/// chat provider backs a [`ChatVisionJudge`] (desktop users configure a
+/// vision-capable provider in the product, not env vars); otherwise
+/// [`NoJudge`] keeps the legacy one-result ladder byte-identical.
+pub(crate) fn resolve_judge(
+    provider: Option<Arc<dyn ChatProvider>>,
+    model: Option<String>,
+) -> (Box<dyn ImageRelevanceJudge>, JudgeChoice) {
+    if let Some(judge) = OpenAiCompatVisionJudge::from_env() {
+        return (Box::new(judge), JudgeChoice::Env);
+    }
+    if let Some(provider) = provider {
+        let choice = JudgeChoice::Provider(provider.provider_label().to_string());
+        let judge = ChatVisionJudge::new(provider).with_model(model);
+        return (Box::new(judge), choice);
+    }
+    (Box::new(NoJudge), JudgeChoice::None)
 }
 
 #[derive(Default)]
@@ -126,6 +177,13 @@ pub(crate) struct ImageSearchSession {
     /// document has enqueued the same intent. Matching the request id avoids
     /// that old completion consuming the new waiters (the classic ABA race).
     next_search_request_id: u64,
+    /// Lazily resolved relevance judge + which source won. `None` until the
+    /// app handler hands over the selected chat provider (`ensure_judge`) or
+    /// the first search actually spawns, whichever comes first — resolving
+    /// any earlier would lock in `none` for a user who configures a model
+    /// only after the window opens. Survives `reset()`: it is process-level
+    /// configuration, not document state.
+    judge: Option<(Arc<dyn ImageRelevanceJudge>, JudgeChoice)>,
 }
 
 // Memo key for the authored stock-search intent — see
@@ -163,6 +221,37 @@ impl ImageSearchSession {
 
     pub(crate) fn is_pending(&self) -> bool {
         !self.jobs.is_empty()
+    }
+
+    /// Whether the relevance judge has been resolved for this session.
+    pub(crate) fn judge_resolved(&self) -> bool {
+        self.judge.is_some()
+    }
+
+    /// Resolve and install the relevance judge once; later calls are no-ops.
+    /// The choice is logged exactly once per session so the active judge
+    /// (env / provider / none) is observable on stderr.
+    pub(crate) fn ensure_judge(
+        &mut self,
+        provider: Option<Arc<dyn ChatProvider>>,
+        model: Option<String>,
+    ) {
+        if self.judge.is_some() {
+            return;
+        }
+        let (judge, choice) = resolve_judge(provider, model);
+        eprintln!("image-search judge: {}", choice.log_label());
+        self.judge = Some((Arc::from(judge), choice));
+    }
+
+    /// The judge for one spawn. Always `Some` after `ensure_judge`; the
+    /// `NoJudge` fallback only covers a spawn that somehow precedes
+    /// resolution, and keeps the legacy one-result ladder byte-identical.
+    fn judge_pair(&self) -> (Arc<dyn ImageRelevanceJudge>, bool) {
+        match &self.judge {
+            Some((judge, choice)) => (Arc::clone(judge), *choice != JudgeChoice::None),
+            None => (Arc::new(NoJudge), false),
+        }
     }
 
     /// Re-admit terminal stock-search failures for a bounded caller-managed
@@ -263,12 +352,19 @@ impl ImageSearchSession {
                 (ImageRequestMode::Search, _) | (ImageRequestMode::Auto, None) => {
                     let request_id = self.next_search_request_id;
                     self.next_search_request_id = self.next_search_request_id.wrapping_add(1);
+                    // A search is actually starting: if the app handler has
+                    // not handed over a provider by now, lock in env/none so
+                    // the choice is logged once and stable for the session.
+                    self.ensure_judge(None, None);
+                    let (judge, judge_enabled) = self.judge_pair();
                     spawn_job(
                         target,
                         credentials.clone(),
                         Arc::clone(&self.used_urls),
                         Arc::clone(&self.search_memo),
                         request_id,
+                        judge,
+                        judge_enabled,
                     )
                 }
             };
@@ -354,7 +450,10 @@ impl ImageSearchSession {
                     let url = url.unwrap_or_else(|| SEARCH_FAILED_PLACEHOLDER_SRC.to_string());
                     if apply_result(state, &job.node_id, &url) {
                         changed = true;
-                        if url == SEARCH_FAILED_PLACEHOLDER_SRC {
+                        if url == SEARCH_FAILED_PLACEHOLDER_SRC
+                            && walkers::find_node(state.active_children(), &job.node_id)
+                                .is_some_and(is_image_fallback)
+                        {
                             self.completed.insert(id);
                         }
                     } else {
@@ -385,12 +484,20 @@ fn spawn_job(
     used_urls: Arc<Mutex<HashSet<String>>>,
     search_memo: Arc<Mutex<HashMap<SearchIntentKey, SearchMemoEntry>>>,
     request_id: u64,
+    judge: Arc<dyn ImageRelevanceJudge>,
+    judge_enabled: bool,
 ) -> ImageSearchJob {
     let (tx, rx) = mpsc::channel();
     let node_id = target.node_id.clone();
     let aspect_ratio = target.aspect_ratio;
     let key = search_intent_key(&target.query, aspect_ratio);
     let intent = Some(intent_fingerprint(&target, None));
+    let judge_intent = target
+        .prompt
+        .as_deref()
+        .filter(|prompt| !prompt.trim().is_empty())
+        .unwrap_or(target.query.as_str())
+        .to_string();
     // One full search intent, one in-flight request and one session result.
     // Rebuilt nodes subscribe to the same pending request instead of racing
     // duplicate searches; completed intents return from the memo.
@@ -425,12 +532,26 @@ fn spawn_job(
         }
     }
     std::thread::spawn(move || {
-        let url = fetch_first_image_url_blocking(
-            &target.query,
-            aspect_ratio,
-            credentials.as_ref().map(OpenverseCredentials::as_web),
-            &used_urls,
-        );
+        let url = if judge_enabled {
+            fetch_first_image_url_blocking_with_judge(
+                &target.query,
+                aspect_ratio,
+                credentials.as_ref().map(OpenverseCredentials::as_web),
+                &used_urls,
+                judge.as_ref(),
+                &judge_intent,
+            )
+        } else {
+            // No configured judge deliberately uses the old one-result path;
+            // this is the NoJudge behavior and keeps default output bytes
+            // unchanged.
+            fetch_first_image_url_blocking(
+                &target.query,
+                aspect_ratio,
+                credentials.as_ref().map(OpenverseCredentials::as_web),
+                &used_urls,
+            )
+        };
         publish_search_result(&search_memo, key, request_id, url);
     });
     ImageSearchJob {
@@ -519,8 +640,8 @@ fn spawn_unavailable_gen_job(target: ImageSearchTarget) -> ImageSearchJob {
 mod fetch;
 mod intent;
 
-use fetch::fetch_first_image_url_blocking;
 pub(crate) use fetch::fetch_image_data_url;
+use fetch::{fetch_first_image_url_blocking, fetch_first_image_url_blocking_with_judge};
 pub(crate) use intent::{current_intent_fingerprints, intent_fingerprint, search_intent_key};
 
 // `apply_result` + the slot predicates + the target/mode/aspect types live in

@@ -406,6 +406,25 @@ impl DesktopApp {
         self.request_redraw(true);
     }
 
+    /// First time the window is actually visible: re-arm the Home
+    /// entrance clock. The first paint (which stamps it) runs while the
+    /// window is still off screen during start-up, so without this the
+    /// choreography has already finished by the time the user sees Home.
+    /// Later focus / occlusion changes never replay it.
+    pub(crate) fn on_window_shown(&mut self) {
+        if self.window_shown_once {
+            return;
+        }
+        self.window_shown_once = true;
+        let home = &mut self.host.editor_state_mut().editor_ui.home;
+        if !home.visible {
+            return;
+        }
+        home.shown_at_ms = 0;
+        self.host.mark_editor_state_dirty();
+        self.request_redraw(true);
+    }
+
     pub(super) fn on_left_release(&mut self) {
         // Drain pending cursor moves before release so drag-end commits final position.
         if self.drain_pending_cursor_move() {

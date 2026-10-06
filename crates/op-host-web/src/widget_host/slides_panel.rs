@@ -94,18 +94,12 @@ impl WidgetHost {
         slides: &SlidesFrame,
     ) {
         use op_editor_ui::widgets::PaintCx;
-        let (layers_label, slides_label) = flow::tab_labels(&self.editor_state);
+        let desc = flow::tab_row_desc(&self.editor_state);
         let actions = flow::action_labels(
             &self.editor_state,
             flow::selected_slide_count(&self.editor_state, &slides.chips),
         );
-        let widget = flow::widget(
-            slides.active,
-            &self.editor_state,
-            layers_label,
-            slides_label,
-            actions.labels(),
-        );
+        let widget = flow::widget(slides.active, &self.editor_state, &desc, actions.labels());
         let mut cx = PaintCx { backend };
         widget.paint(&mut cx, &slides.layout, &self.theme);
         // No blit comes between the two here — the browser has no board
@@ -122,14 +116,13 @@ impl WidgetHost {
         tabs: &SlidesPanelTabs,
     ) {
         use op_editor_ui::widgets::PaintCx;
-        let (layers_label, slides_label) = flow::tab_labels(&self.editor_state);
+        let desc = flow::tab_row_desc(&self.editor_state);
         let mut cx = PaintCx { backend };
         tabs.paint(
             &mut cx,
             &self.theme,
             self.editor_state.editor_ui.slides_panel.hover,
-            layers_label,
-            slides_label,
+            &desc,
         );
     }
 

@@ -47,6 +47,18 @@ fn buffer_doc_sink_collects_commands() {
     assert_eq!(sink.commands.len(), 1);
 }
 
+#[test]
+fn buffer_doc_sink_rollback_discards_the_current_attempt() {
+    let mut sink = BufferDocSink::new(EditorState::new());
+    sink.apply(EditorCommand::InsertSubtree {
+        nodes: vec![],
+        parent_id: op_editor_core::NodeId::NONE,
+        page_id: None,
+    });
+    sink.rollback_inserted_roots(&[]);
+    assert!(sink.commands.is_empty());
+}
+
 /// `state()` on `BufferDocSink` returns the snapshot passed at construction.
 #[test]
 fn buffer_doc_sink_state_returns_snapshot() {
@@ -92,6 +104,7 @@ mod geometry_echo {
             validation_enabled: true,
             visual_ref_enabled: false,
             pinned_style_guide: None,
+            reference_skeleton: None,
         }
     }
 
@@ -120,8 +133,10 @@ mod geometry_echo {
                 width: 375.0,
                 height: 200.0,
             },
+            bleed_hero: false,
             id_prefix: "goals".into(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,
@@ -170,6 +185,7 @@ mod geometry_echo {
             node_count: 1,
             error: None,
             inserted_root_ids: vec!["rail".into()],
+            headline: None,
             subtask: None,
         }
     }
@@ -315,6 +331,7 @@ mod geometry_echo {
                 node_count: 1,
                 error: None,
                 inserted_root_ids: vec!["rail".into()],
+                headline: None,
                 subtask: None,
             },
         ));
@@ -391,6 +408,7 @@ mod geometry_echo {
                 node_count: 0,
                 error: Some("script error: unexpected end of string".into()),
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: None,
             },
         ));
@@ -401,9 +419,8 @@ mod geometry_echo {
     fn buffered_sink_with_empty_ids_is_never_echoed() {
         // The concurrent screen-group path's `BufferDocSink` always returns
         // an empty `inserted_root_ids` (its `state()` never reflects its
-        // own buffered inserts — see `BufferDocSink`'s doc) — this is the
-        // signal `maybe_geometry_echo` uses to recognise "nothing live to
-        // address", regardless of sink type.
+        // caller-supplied empty ids — this is the signal `maybe_geometry_echo`
+        // uses to recognise "nothing live to address", regardless of sink type.
         let mut sink = BufferDocSink::new(EditorState::new());
         let llm = ScriptedLlm::new(vec![]);
         let budget = GeometryEchoBudget::new(6);
@@ -427,6 +444,7 @@ mod geometry_echo {
                 node_count: 1,
                 error: None,
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: None,
             },
         ));

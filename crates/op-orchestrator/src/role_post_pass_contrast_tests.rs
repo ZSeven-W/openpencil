@@ -23,12 +23,12 @@ fn button_dark_bg_gets_white_text() {
 
 #[test]
 fn accent_token_button_flips_dark_icon_to_white() {
-    // Regression: a `$color-accent` (or `$color-primary`) button binds its bg
+    // Regression: a `$--primary` (or `$--primary`) button binds its bg
     // hex only at render time, so the contrast pass could not read its
     // luminance and left the model's default-dark icon on the orange accent.
     let mut btn = json!({
         "type":"frame","role":"icon-button",
-        "fill":[{"type":"solid","color":"$color-accent"}],
+        "fill":[{"type":"solid","color":"$--primary"}],
         "children":[{"type":"icon_font","iconFontName":"sliders",
             "fill":[{"type":"solid","color":"#0F172A"}]}]
     });
@@ -42,7 +42,7 @@ fn accent_token_button_flips_dark_icon_to_white() {
     // An already-light icon on the accent stays put.
     let mut ok = json!({
         "type":"frame","role":"icon-button",
-        "fill":[{"type":"solid","color":"$color-primary"}],
+        "fill":[{"type":"solid","color":"$--primary"}],
         "children":[{"type":"icon_font","fill":[{"type":"solid","color":"#FFFFFF"}]}]
     });
     fix_button_foreground_contrast(&mut ok);
@@ -55,7 +55,7 @@ fn accent_token_button_flips_dark_icon_to_white() {
     // no accidental white on a light button.
     let mut surface = json!({
         "type":"frame","role":"icon-button",
-        "fill":[{"type":"solid","color":"$color-surface"}],
+        "fill":[{"type":"solid","color":"$--card"}],
         "children":[{"type":"icon_font","fill":[{"type":"solid","color":"#0F172A"}]}]
     });
     fix_button_foreground_contrast(&mut surface);
@@ -110,10 +110,10 @@ fn button_transparent_fill_skipped() {
 fn button_unresolved_non_accent_ref_bg_skipped() {
     // A non-accent design token can't resolve to a hex here AND isn't a known
     // saturated-accent family, so the pass can't pick a safe fg → skip. (An
-    // accent token like $color-accent now DOES flip children to white — see
+    // accent token like $--primary now DOES flip children to white — see
     // `accent_token_button_flips_dark_icon_to_white`.)
     let mut btn = json!({
-        "type":"frame","role":"button","fill":[{"type":"solid","color":"$color-surface-raised"}],
+        "type":"frame","role":"button","fill":[{"type":"solid","color":"$--card-raised"}],
         "children":[{"type":"text","id":"t","content":"Go"}]
     });
     fix_button_foreground_contrast(&mut btn);
@@ -130,10 +130,7 @@ fn orphan_card_gets_fill_and_shadow() {
     });
     // Parent exists (Some) but has no fill (Null) → orphan fix fires.
     fix_orphan_container_contrast(&mut card, Some(&Value::Null));
-    assert_eq!(
-        card["fill"],
-        json!([{"type":"solid","color":"$color-surface"}])
-    );
+    assert_eq!(card["fill"], json!([{"type":"solid","color":"$--card"}]));
     assert!(card["effects"].is_array());
 }
 
@@ -281,7 +278,7 @@ fn orphan_card_with_only_small_filled_controls_still_gets_surface() {
     fix_orphan_container_contrast(&mut card, Some(&Value::Null));
     assert_eq!(
         card["fill"],
-        json!([{"type":"solid","color":"$color-surface"}]),
+        json!([{"type":"solid","color":"$--card"}]),
         "small filled descendants are controls, not a replacement card surface"
     );
     assert!(
@@ -306,7 +303,7 @@ fn padded_flex_wrapper_does_not_treat_fill_child_as_full_bleed() {
     fix_orphan_container_contrast(&mut card, Some(&Value::Null));
     assert_eq!(
         card["fill"],
-        json!([{"type":"solid","color":"$color-surface"}]),
+        json!([{"type":"solid","color":"$--card"}]),
         "fill_container spans the padded content box, not the outer card bounds"
     );
 }
@@ -347,10 +344,7 @@ fn orphan_card_keeps_authored_effects_when_surface_is_restored() {
     });
 
     fix_orphan_container_contrast(&mut card, Some(&Value::Null));
-    assert_eq!(
-        card["fill"],
-        json!([{"type":"solid","color":"$color-surface"}])
-    );
+    assert_eq!(card["fill"], json!([{"type":"solid","color":"$--card"}]));
     assert_eq!(
         card["effects"], authored_effects,
         "restoring the missing card fill must preserve authored elevation"
@@ -365,10 +359,7 @@ fn orphan_card_preserves_explicit_empty_effects() {
     });
 
     fix_orphan_container_contrast(&mut card, Some(&Value::Null));
-    assert_eq!(
-        card["fill"],
-        json!([{"type":"solid","color":"$color-surface"}])
-    );
+    assert_eq!(card["fill"], json!([{"type":"solid","color":"$--card"}]));
     assert_eq!(
         card["effects"],
         json!([]),
@@ -439,16 +430,16 @@ fn structural_wrapper_keeps_card_fill() {
 
 #[test]
 fn redundant_colored_wrapper_strips_light_surface() {
-    // feature-card with a $color-surface fill wrapping a single full-bleed
+    // feature-card with a $--card fill wrapping a single full-bleed
     // gradient banner child → its surface is a redundant box, strip it.
     let mut wrap = json!({
         "type":"frame","role":"feature-card","cornerRadius":12,
-        "fill":[{"type":"solid","color":"$color-surface"}],
+        "fill":[{"type":"solid","color":"$--card"}],
         "children":[
             {
                 "type":"frame","role":"card","width":"fill_container",
                 "fill":[{"type":"linear_gradient","angle":135,"stops":[
-                    {"offset":0.0,"color":"$color-chart-6"},{"offset":1.0,"color":"#FB923C"}]}],
+                    {"offset":0.0,"color":"$--chart-6"},{"offset":1.0,"color":"#FB923C"}]}],
                 "children":[{"type":"text","content":"50% Off"}]
             },
             {"type":"text","content":"-30%"}
@@ -523,40 +514,40 @@ fn structural_wrapper_surface_variable_ref_stripped() {
     // glm emits UNRESOLVED $color-* refs (variable binding runs after post-pass),
     // so hex_luminance can't read them — the strip must match neutral surface
     // tokens by name. This is the actual header-background bug: role navbar +
-    // fill $color-surface-2 was surviving because luminance("$color-surface-2")
+    // fill $--muted was surviving because luminance("$--muted")
     // returned None.
     let mut header = json!({
-        "type":"frame","role":"navbar","fill":[{"type":"solid","color":"$color-surface-2"}],
+        "type":"frame","role":"navbar","fill":[{"type":"solid","color":"$--muted"}],
         "children":[{"type":"text"}]
     });
     fix_structural_wrapper_transparency(&mut header);
     assert_eq!(
         header["fill"],
         json!([]),
-        "navbar with $color-surface-2 → transparent"
+        "navbar with $--muted → transparent"
     );
     // A colored token (deliberate accent band) is NOT a neutral surface → kept.
     let mut band = json!({
-        "type":"frame","role":"section","fill":[{"type":"solid","color":"$color-accent"}],
+        "type":"frame","role":"section","fill":[{"type":"solid","color":"$--primary"}],
         "children":[{"type":"text"}]
     });
     fix_structural_wrapper_transparency(&mut band);
     assert_eq!(
         band["fill"],
-        json!([{"type":"solid","color":"$color-accent"}]),
+        json!([{"type":"solid","color":"$--primary"}]),
         "deliberate colored band kept"
     );
 }
 
 #[test]
 fn structural_wrapper_strips_border_with_fill() {
-    // The mobile header (role navbar) carried a $color-surface fill AND a bottom
+    // The mobile header (role navbar) carried a $--card fill AND a bottom
     // hairline stroke — the user flagged BOTH the background and the border.
     // Stripping the surface fill must drop the accompanying border too; a
     // transparent structural wrapper keeps no card/bar chrome.
     let mut header = json!({
-        "type":"frame","role":"navbar","fill":[{"type":"solid","color":"$color-surface"}],
-        "stroke":{"thickness":[0,0,1,0],"fill":[{"type":"solid","color":"$color-border"}]},
+        "type":"frame","role":"navbar","fill":[{"type":"solid","color":"$--card"}],
+        "stroke":{"thickness":[0,0,1,0],"fill":[{"type":"solid","color":"$--border"}]},
         "children":[{"type":"text"}]
     });
     fix_structural_wrapper_transparency(&mut header);
@@ -585,16 +576,16 @@ fn structural_wrapper_non_structural_role_left_alone() {
 
 #[test]
 fn state_bg_token_on_input_recolored_to_neutral() {
-    // The pink-search bug: glm used $color-danger-bg as the input surface.
+    // The pink-search bug: glm used $--color-error as the input surface.
     let mut input = json!({
         "type":"text_input","name":"Search Input",
-        "fill":[{"type":"solid","color":"$color-danger-bg"}]
+        "fill":[{"type":"solid","color":"$--color-error"}]
     });
     fix_surface_color_discipline(&mut input, false);
     assert_eq!(
         input["fill"],
-        json!([{"type":"solid","color":"$color-surface-2"}]),
-        "danger-bg misused as input surface → neutral surface-2"
+        json!([{"type":"solid","color":"$--muted"}]),
+        "danger-bg misused as input surface → neutral muted"
     );
 }
 
@@ -603,13 +594,13 @@ fn state_bg_token_kept_on_status_element() {
     // A real status element (name says "Error") legitimately uses danger-bg.
     let mut badge = json!({
         "type":"frame","role":"badge","name":"Error Badge",
-        "fill":[{"type":"solid","color":"$color-danger-bg"}],
+        "fill":[{"type":"solid","color":"$--color-error"}],
         "children":[{"type":"text","content":"Failed"}]
     });
     fix_surface_color_discipline(&mut badge, false);
     assert_eq!(
         badge["fill"],
-        json!([{"type":"solid","color":"$color-danger-bg"}]),
+        json!([{"type":"solid","color":"$--color-error"}]),
         "status element keeps its semantic state color"
     );
 }
@@ -618,17 +609,17 @@ fn state_bg_token_kept_on_status_element() {
 fn page_bg_token_stripped_from_inner_node_kept_on_root() {
     // Inner wrapper repainting the page bg (the cool grey panel behind search).
     let mut root = json!({
-        "type":"frame","name":"Page","fill":[{"type":"solid","color":"$color-bg-deep"}],
+        "type":"frame","name":"Page","fill":[{"type":"solid","color":"$--background"}],
         "children":[
             {"type":"frame","name":"Search & Categories",
-             "fill":[{"type":"solid","color":"$color-bg-deep"}],
+             "fill":[{"type":"solid","color":"$--background"}],
              "children":[{"type":"text_input","name":"Search"}]}
         ]
     });
     fix_surface_color_discipline(&mut root, true);
     assert_eq!(
         root["fill"],
-        json!([{"type":"solid","color":"$color-bg-deep"}]),
+        json!([{"type":"solid","color":"$--background"}]),
         "page root keeps the page-bg token"
     );
     assert_eq!(
@@ -641,21 +632,21 @@ fn page_bg_token_stripped_from_inner_node_kept_on_root() {
 #[test]
 fn page_bg_token_kept_when_root_paints_a_different_ground() {
     // 0808-gm-1.op: the page root paints a literal `#0A0A0A` while two of its
-    // sections paint `$color-bg-deep` (#0F172A) — a deliberate darker band,
+    // sections paint `$--background` (#0F172A) — a deliberate darker band,
     // NOT a repaint of the root's own ground. The strip is a redundancy
     // repair, so with nothing to be redundant WITH it must not fire.
     let mut root = json!({
         "type":"frame","name":"Page","fill":[{"type":"solid","color":"#0A0A0A"}],
         "children":[
             {"type":"frame","name":"Interactive Showcase",
-             "fill":[{"type":"solid","color":"$color-bg-deep"}],
+             "fill":[{"type":"solid","color":"$--background"}],
              "children":[{"type":"text","content":"x"}]}
         ]
     });
     fix_surface_color_discipline(&mut root, true);
     assert_eq!(
         root["children"][0]["fill"],
-        json!([{"type":"solid","color":"$color-bg-deep"}]),
+        json!([{"type":"solid","color":"$--background"}]),
         "a band the root does not repeat is a surface, not a redundant repaint"
     );
 }

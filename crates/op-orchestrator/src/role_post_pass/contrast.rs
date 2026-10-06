@@ -14,11 +14,11 @@ pub(super) fn fix_button_foreground_contrast(node: &mut Value) {
     let Some(bg_raw) = get_first_solid_color(node) else {
         return;
     };
-    // A brand-accent token (`$color-accent` / `$color-primary`) binds to a
+    // A brand-accent token (`$--primary` / `$--primary`) binds to a
     // concrete hex only at render time, so `resolve_color_maybe_ref` can't
     // read its luminance here and the pass used to bail — leaving the model's
     // default-dark icon on an orange accent button (measured: a `sliders`
-    // icon at `#0F172A` on a `$color-accent` filter button). These tokens are
+    // icon at `#0F172A` on a `$--primary` filter button). These tokens are
     // always saturated colours that need a WHITE foreground, so treat the bg
     // as dark and let the same override logic below flip the children.
     let bg = match resolve_color_maybe_ref(&bg_raw) {

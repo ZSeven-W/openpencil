@@ -324,6 +324,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.foodAppDesc" => "Desain beranda aplikasi",
         "ai.quickAction.bottomNavDesc" => "Bilah navigasi 5 tab",
         "ai.quickAction.colorPaletteDesc" => "Rekomendasi palet warna",
+        "fileMenu.home" => "Drafting table",
         "fileMenu.newFile" => "File baru",
         "fileMenu.exportAllFrames" => "Ekspor semua bingkai...",
         "fileMenu.exportSelectedFrames" => "Ekspor {{count}} bingkai...",

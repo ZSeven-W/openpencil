@@ -683,6 +683,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "assetCenter.style.importEmpty" => "Tệp này rỗng, hoặc quá ngắn để là một hướng dẫn phong cách.",
         "assetCenter.style.importNotText" => "Tệp này không đọc được dưới dạng văn bản Markdown.",
         "assetCenter.style.importTooLarge" => "Tệp này lớn hơn 512 KB.",
+        "leftPanel.tab.chat" => "Agent",
         "slidesPanel.tabSlides" => "Trang chiếu",
         "slidesPanel.tabCards" => "Thẻ",
         "slidesPanel.present" => "Trình chiếu",

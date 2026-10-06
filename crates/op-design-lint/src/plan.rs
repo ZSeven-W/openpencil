@@ -53,6 +53,8 @@ pub struct PlannedFix {
 /// | `Padding`       | `SetPadding(Value)`            | uniform or [L,T,R,B] array    |
 /// | `Stroke`        | `SetStroke(Value)`             | full PenStroke JSON object    |
 /// | `Fill`          | *(filtered out — no-op)*       | `apply_fixes` returns `false` |
+/// | `Label`         | *(filtered out — no-op)*       | detect-only (widget-a11y)     |
+/// | `Layout`        | *(filtered out — no-op)*       | detect-only (slop rules)      |
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlannedAction {
     /// Remove the node from its parent (mirrors `fixes::apply_remove`).
@@ -128,6 +130,7 @@ pub fn detect_and_plan(doc: &PenDocument) -> Vec<PlannedFix> {
         // mirroring the `set_property` dispatch in `fixes.rs`. Skip combinations
         // that `set_property` returns `false` for (Fill, non-fit_content Height, etc.).
         let action = match issue.property {
+            FixProperty::None => continue,
             FixProperty::Height => {
                 if issue.suggested_value.as_str() == Some("fit_content") {
                     PlannedAction::SetHeightFitContent
@@ -170,6 +173,8 @@ pub fn detect_and_plan(doc: &PenDocument) -> Vec<PlannedFix> {
             FixProperty::Fill => continue,
             // widget-a11y is detect-only (no auto-fix) — skip.
             FixProperty::Label => continue,
+            // slop three-card-feature-row is detect-only (no auto-fix) — skip.
+            FixProperty::Layout => continue,
             // Remove is handled above; this arm is unreachable.
             FixProperty::Remove => continue,
         };
@@ -386,14 +391,14 @@ mod tests {
     }
 
     /// Load the `invisible-container-with-var` fixture (doc declares
-    /// `color-border` variable) and assert equivalence — exercises the
-    /// `$color-border` design-token reference path.
+    /// `--border` variable) and assert equivalence — exercises the
+    /// `$--border` design-token reference path.
     ///
     /// Regression guard: caught by stop-time review — `LintPreValidator`
-    /// previously dropped `$color-border` refs while reporting success
+    /// previously dropped `$--border` refs while reporting success
     /// because `cmd_set_node_stroke_hex` strict-parsed the hex. The
     /// op-design-lint side (this test) ensures `detect_and_plan + apply`
-    /// produces the same `$color-border`-stamped doc as `detect_and_fix`;
+    /// produces the same `$--border`-stamped doc as `detect_and_fix`;
     /// the host parity test confirms the same through `EditorCommand`.
     #[test]
     fn equivalence_invisible_container_with_var() {
@@ -420,7 +425,7 @@ mod tests {
             "var-ref stroke must round-trip identically"
         );
 
-        // Verify the plan carries the $color-border ref (not a resolved hex).
+        // Verify the plan carries the $--border ref (not a resolved hex).
         let stroke_plan = plan
             .iter()
             .find(|f| f.node_id == "light-on-light")
@@ -437,7 +442,7 @@ mod tests {
             .and_then(|c| c.as_str())
             .expect("color field");
         assert_eq!(
-            color, "$color-border",
+            color, "$--border",
             "plan must preserve design-token ref, not resolve to hex"
         );
     }

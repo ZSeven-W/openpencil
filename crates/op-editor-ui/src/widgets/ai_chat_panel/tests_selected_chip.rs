@@ -159,7 +159,9 @@ fn selected_chip_keeps_model_picker_paint_bounds_and_hit_aligned() {
         backend
             .round_fills
             .iter()
-            .any(|(painted, radius)| *painted == picker && (*radius - 10.0).abs() < 0.01),
+            // Studio restyle: the popover's corner radius went 10 → 12
+            // alongside its new border and shadow (`ai_chat_model_picker_paint`).
+            .any(|(painted, radius)| *painted == picker && (*radius - 12.0).abs() < 0.01),
         "the painted picker card must use the same bounds as overlay and hit testing"
     );
 

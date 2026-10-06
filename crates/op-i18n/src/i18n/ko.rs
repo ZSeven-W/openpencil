@@ -324,6 +324,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.foodAppDesc" => "앱 홈페이지 디자인",
         "ai.quickAction.bottomNavDesc" => "5탭 네비게이션 바",
         "ai.quickAction.colorPaletteDesc" => "색상 팔레트 추천",
+        "fileMenu.home" => "Drafting table",
         "fileMenu.newFile" => "새 파일",
         "fileMenu.exportAllFrames" => "모든 프레임 내보내기...",
         "fileMenu.exportSelectedFrames" => "{{count}}개 프레임 내보내기...",

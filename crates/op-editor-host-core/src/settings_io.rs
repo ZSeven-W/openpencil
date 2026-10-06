@@ -71,6 +71,9 @@ pub struct Fingerprint {
     image_gen_profiles: Vec<ImageGenProfile>,
     active_image_gen_profile_id: Option<String>,
     preferred_agent_team_size: u32,
+    entry_surface: op_editor_core::EntrySurface,
+    chat_agent: String,
+    chat_model: String,
 }
 
 pub fn fingerprint(state: &EditorState) -> Fingerprint {
@@ -92,7 +95,47 @@ pub fn fingerprint(state: &EditorState) -> Fingerprint {
         image_gen_profiles: eui.agent_settings.image_gen_profiles.clone(),
         active_image_gen_profile_id: eui.agent_settings.active_image_gen_profile_id.clone(),
         preferred_agent_team_size: eui.preferred_agent_team_size,
+        entry_surface: eui.entry_surface,
+        chat_agent: selected_chat_agent_name(eui),
+        chat_model: selected_chat_model_value(state),
     }
+}
+
+/// The persisted identity of the selected chat agent — its stable
+/// provider NAME, never its index: `AgentProvider::ALL` is append-only
+/// but new entries still shift nothing, whereas any future re-ordering
+/// would silently re-map every persisted index. An out-of-range
+/// selection falls back to the first provider's name.
+fn selected_chat_agent_name(eui: &op_editor_core::EditorUiState) -> String {
+    op_editor_core::AgentProvider::ALL
+        .get(eui.chat_selected_agent)
+        .map(|provider| provider.name())
+        .unwrap_or(op_editor_core::AgentProvider::ALL[0].name())
+        .to_string()
+}
+
+/// Resolve a persisted agent name back to its `AgentProvider::ALL`
+/// index; unknown names (a provider renamed or removed by a newer
+/// build) fall back to index 0 rather than dangling.
+/// The picker row the user last chose, by the catalog entry's wire
+/// `value` (`builtin:<agent id>:<model>` for API-key agents, the model id
+/// for CLI providers, the agent id for ACP agents). `chat_agent` alone
+/// cannot carry this: a built-in or ACP choice never moves
+/// `chat_selected_agent`, so without this field every relaunch fell back
+/// to the first catalog row.
+fn selected_chat_model_value(state: &EditorState) -> String {
+    state
+        .chat
+        .selected_model_entry()
+        .map(|entry| entry.value.clone())
+        .unwrap_or_default()
+}
+
+fn chat_agent_index_for_name(name: &str) -> usize {
+    op_editor_core::AgentProvider::ALL
+        .iter()
+        .position(|provider| provider.name() == name)
+        .unwrap_or(0)
 }
 
 pub fn save_if_changed(state: &EditorState, before: Fingerprint) {
@@ -105,6 +148,12 @@ const SETTINGS_VERSION: u32 = 1;
 const APP_DIR: &str = "openpencil";
 const FILE_NAME: &str = "settings.json";
 static SETTINGS_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+/// Settings paths whose file existed but did not parse at startup. Every
+/// save to one of these is refused for the rest of the process: the
+/// alternative — writing this process's defaults over a file we could not
+/// read — is exactly how a user loses every API key after a build mismatch
+/// or a truncated write.
+static REJECTED_SETTINGS_PATHS: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SettingsPayload {
@@ -148,6 +197,17 @@ struct SettingsPayload {
     /// so an old file is fully backward-compatible.
     #[serde(default)]
     preferred_agent_team_size: Option<u32>,
+    /// First-launch surface; older settings default to Home.
+    #[serde(default)]
+    entry_surface: Option<String>,
+    /// The chat agent's stable provider name (see
+    /// `selected_chat_agent_name`); older settings keep index 0.
+    #[serde(default)]
+    chat_agent: Option<String>,
+    /// The last chosen picker row by catalog `value` (see
+    /// `selected_chat_model_value`); resolved after the catalog is rebuilt.
+    #[serde(default)]
+    chat_model: Option<String>,
 }
 
 /// Resolve the platform-specific settings path. `None` when no
@@ -163,8 +223,31 @@ fn settings_path() -> Option<PathBuf> {
     if let Some(root) = op_config_store::configured_user_root() {
         return Some(root.join(FILE_NAME));
     }
+    if let Some(sandbox) = test_process_settings_dir() {
+        return Some(sandbox.join(FILE_NAME));
+    }
     let base = dirs::config_dir()?;
     Some(base.join(APP_DIR).join(FILE_NAME))
+}
+
+/// A cargo test binary (`target/…/deps/<crate>-<hash>`) never touches the
+/// user's real settings file. A desktop test once called the public
+/// `save` on a fixture state and silently replaced the founder's
+/// settings.json — API keys included — on every `cargo test`; every test
+/// process now writes under its own temp directory instead. Explicit
+/// config roots (`op_config_store::configured_user_root`) still win, so
+/// tests that stage their own root keep working.
+fn test_process_settings_dir() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let under_deps = exe
+        .components()
+        .any(|component| component.as_os_str() == "deps");
+    let under_target = exe
+        .components()
+        .any(|component| component.as_os_str() == "target");
+    (under_deps && under_target).then(|| {
+        std::env::temp_dir().join(format!("openpencil-test-settings-{}", std::process::id()))
+    })
 }
 
 /// Snapshot the live `EditorState` preferences into a serializable
@@ -220,6 +303,9 @@ fn to_payload(state: &EditorState) -> SettingsPayload {
                 .collect(),
         ),
         preferred_agent_team_size: Some(eui.preferred_agent_team_size),
+        entry_surface: Some(eui.entry_surface.as_str().into()),
+        chat_agent: Some(selected_chat_agent_name(eui)),
+        chat_model: Some(selected_chat_model_value(state)),
     }
 }
 
@@ -232,6 +318,7 @@ fn apply_payload_with_options(
     payload: SettingsPayload,
     dedupe_builtins: bool,
 ) {
+    let chat_model = payload.chat_model.clone();
     if payload.version != SETTINGS_VERSION {
         return;
     }
@@ -329,6 +416,14 @@ fn apply_payload_with_options(
     if let Some(size) = payload.preferred_agent_team_size {
         eui.preferred_agent_team_size = size.clamp(1, 6);
     }
+    if let Some(surface) = payload.entry_surface.as_deref() {
+        eui.entry_surface = op_editor_core::EntrySurface::from_str(surface);
+    }
+    // Restore the chat agent by name — `rebuild_chat_models` further
+    // down re-derives the model catalog against this selection.
+    if let Some(name) = payload.chat_agent.as_deref() {
+        eui.chat_selected_agent = chat_agent_index_for_name(name);
+    }
     // Seed tab 0's ⚡Nx from the persisted preference — `load` runs before
     // any tab has been created beyond the default single tab, so this is
     // the ONE spot that reconnects "what the user last set" across a full
@@ -344,6 +439,19 @@ fn apply_payload_with_options(
     // empty this early, so this is a no-op until discovery lands and
     // `ModelProbe::poll_into` rebuilds again against the same mask.
     state.rebuild_chat_models();
+    // Now that the catalog exists, land on the row the user last chose.
+    // Later rebuilds (model discovery) preserve the selection by the same
+    // provider + value + built-in id triple.
+    if let Some(value) = chat_model.as_deref().filter(|v| !v.is_empty()) {
+        if let Some(index) = state
+            .chat
+            .available_models
+            .iter()
+            .position(|entry| entry.value == value)
+        {
+            state.chat.selected_model = index;
+        }
+    }
 }
 
 /// Remove the retired Gemini CLI slot from positional v1 settings without
@@ -475,12 +583,52 @@ pub fn load(state: &mut EditorState) {
     // detected locale instead of leaving the EnUs default.
     seed_system_locale(state);
     if let Some(path) = settings_path() {
-        if let Ok(bytes) = std::fs::read(&path) {
-            if let Ok(payload) = serde_json::from_slice::<SettingsPayload>(&bytes) {
-                apply_payload(state, payload);
+        load_lenient_from_path(state, &path);
+    }
+}
+
+/// The lenient startup load behind [`load`]. A missing file is a normal
+/// first run. A file that exists but does not parse is NOT silently
+/// replaced by defaults: its bytes are copied to a `settings.json.corrupt-…`
+/// sibling and the path is pinned so every later save is refused (see
+/// [`SettingsIoError::RejectedLoad`]). Returns `false` when the file was
+/// rejected.
+pub fn load_lenient_from_path(state: &mut EditorState, path: &Path) -> bool {
+    let Ok(bytes) = std::fs::read(path) else {
+        return true;
+    };
+    match serde_json::from_slice::<SettingsPayload>(&bytes) {
+        Ok(payload) => {
+            apply_payload(state, payload);
+            true
+        }
+        Err(_) => {
+            let _ = std::fs::write(corrupt_backup_path(path), &bytes);
+            if let Ok(mut rejected) = REJECTED_SETTINGS_PATHS.lock() {
+                rejected.push(path.to_path_buf());
             }
+            false
         }
     }
+}
+
+fn corrupt_backup_path(path: &Path) -> PathBuf {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(FILE_NAME);
+    path.with_file_name(format!("{name}.corrupt-{stamp}"))
+}
+
+fn save_refused_for(path: &Path) -> bool {
+    REJECTED_SETTINGS_PATHS
+        .lock()
+        .map(|rejected| rejected.iter().any(|p| p == path))
+        .unwrap_or(false)
 }
 
 /// Seed the first-run locale through the shared i18n environment resolver.
@@ -578,6 +726,9 @@ fn create_unique_settings_temp(path: &Path) -> Result<PendingSettingsFile, Setti
 }
 
 fn save_checked_to_path(state: &EditorState, path: &Path) -> Result<(), SettingsIoError> {
+    if save_refused_for(path) {
+        return Err(SettingsIoError::RejectedLoad);
+    }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| SettingsIoError::CreateDir {
             detail: error.to_string(),
@@ -615,3 +766,15 @@ fn resolve_persisted_locale(current: Locale, persisted: Option<&str>) -> Locale 
 #[cfg(test)]
 #[path = "settings_io_tests.rs"]
 mod settings_io_tests;
+
+#[cfg(test)]
+#[path = "settings_io_chat_agent_tests.rs"]
+mod settings_io_chat_agent_tests;
+
+#[cfg(test)]
+#[path = "settings_io_guard_tests.rs"]
+mod settings_io_guard_tests;
+
+#[cfg(test)]
+#[path = "settings_io_chat_model_tests.rs"]
+mod settings_io_chat_model_tests;

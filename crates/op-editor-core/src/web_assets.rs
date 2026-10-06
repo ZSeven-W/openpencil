@@ -166,6 +166,21 @@ pub fn take_pending_requests(max: usize) -> Vec<String> {
     registry.pending.drain(..take).collect()
 }
 
+/// Take one exact queued route without disturbing the FIFO order of others.
+///
+/// Mount-time locale prefetch uses this when a remount finds that a picker from
+/// the previous shell already queued the same route but no frame has drained it
+/// yet. The asset remains in [`WebAssetState::Pending`]; the caller becomes the
+/// host responsible for answering it with [`install`] or [`mark_failed`].
+pub fn take_pending_request(route: &str) -> bool {
+    let mut registry = lock();
+    let Some(index) = registry.pending.iter().position(|pending| pending == route) else {
+        return false;
+    };
+    registry.pending.remove(index);
+    true
+}
+
 /// Whether any route is waiting for the host to pick it up.
 pub fn has_pending_requests() -> bool {
     !lock().pending.is_empty()
@@ -311,6 +326,25 @@ mod tests {
             !has_pending_requests(),
             "an in-flight asset must not be re-enqueued behind the host's back"
         );
+    }
+
+    #[test]
+    fn an_exact_take_preserves_the_other_pending_routes_order() {
+        let _guard = lock_registry();
+        reset_for_test();
+        for route in ["/pkg/assets/a", "/pkg/assets/locale", "/pkg/assets/b"] {
+            request(route);
+        }
+
+        assert!(take_pending_request("/pkg/assets/locale"));
+        assert!(!take_pending_request("/pkg/assets/missing"));
+        assert_eq!(
+            take_pending_requests(usize::MAX),
+            ["/pkg/assets/a", "/pkg/assets/b"]
+        );
+        for route in ["/pkg/assets/a", "/pkg/assets/locale", "/pkg/assets/b"] {
+            mark_failed(route);
+        }
     }
 
     #[test]

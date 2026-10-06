@@ -19,7 +19,8 @@ use op_editor_core::{EditorState, LeftPanelTab, NodeId, SlidesDrag, SlidesPanelT
 use crate::layout_scene::LayoutScene;
 use crate::widgets::deck_boards::{board_chips, reorder_target_index, BoardChip};
 use crate::widgets::slides_panel::{
-    drag_is_live, SlidesPanel, SlidesPanelLayout, SlidesPanelTabs, DEFAULT_BOARD_ASPECT,
+    drag_is_live, SlidesPanel, SlidesPanelLayout, SlidesPanelTabs, SlidesTabRow,
+    DEFAULT_BOARD_ASPECT,
 };
 use crate::widgets::slides_panel_actions::{
     selected_slides_export_supported, SlidesActionLabels, SlidesActionState,
@@ -69,9 +70,10 @@ pub enum SlidesRelease {
 /// What the navigator tab is called for this document.
 ///
 /// The scenario picks the WORD — a deck lists slides, a card set lists
-/// cards — but never whether the tab exists; see [`tab_row_visible`].
-/// A document with no scenario recorded gets the neutral "Slides", which
-/// is what the boards of an ordinary design page are to a navigator.
+/// cards — but never whether the tab exists; see
+/// [`slides_tab_available`]. A document with no scenario recorded gets
+/// the neutral "Slides", which is what the boards of an ordinary design
+/// page are to a navigator.
 pub fn slides_tab_label_key(state: &EditorState) -> &'static str {
     match state.editor_ui.scenario {
         Some(TemplateScene::Card) => "slidesPanel.tabCards",
@@ -81,49 +83,79 @@ pub fn slides_tab_label_key(state: &EditorState) -> &'static str {
 
 /// Whether the left rail shows its tab row for this document.
 ///
-/// **Having boards is the whole test.** The tab used to be gated on the
-/// recorded scenario as well, which meant the navigator — the only place
-/// a page's order is visible, let alone reorderable — was missing from
-/// every document not tagged a deck, including every multi-frame design
-/// a user laid out by hand. A page with frames on it has an order, so it
-/// gets the tab; a page with none has nothing to list, so the rail stays
-/// the Layers tree it has always been. A pristine starter document has
-/// no top-level frame, so a new file still opens without one.
+/// The desktop row is ALWAYS there: 对话 and 图层 exist for every
+/// document, so the rail is a three-tab (or, without boards, two-tab)
+/// surface even on a pristine starter file. Only the 幻灯片 TAB is
+/// board-gated — see [`slides_tab_available`]. Touch keeps the older
+/// rule (row only when there are boards): its rail is a Layers sheet
+/// and its chat is a bottom sheet, so a boardless touch document would
+/// get a row with nothing to switch to.
 ///
 /// Presenting hides it along with the whole rail, so this answers
-/// `false` there too and no host can paint a navigator over a
-/// presentation.
+/// `false` there too and no host can paint tabs over a presentation.
 pub fn tab_row_visible(state: &EditorState) -> bool {
+    !state.editor_ui.preview.mode
+        && (!state.editor_ui.touch_chrome() || slides_tab_available(state))
+}
+
+/// Whether this document has a slides tab to offer — the old meaning
+/// of `tab_row_visible`, kept whole: having boards is the whole test.
+///
+/// A page with frames on it has an order, so it gets the navigator;
+/// a page with none has nothing to list, so the rail keeps its other
+/// tabs only. A stale `Slides` selection on a document that lost its
+/// boards falls back through this gate (see [`slides_tab_active`]).
+pub fn slides_tab_available(state: &EditorState) -> bool {
     !state.editor_ui.preview.mode && !board_chips(state).is_empty()
 }
 
-/// Both tab labels for this document, already translated.
+/// Whether the Chat tab owns the rail's BODY — the pinned chat panel
+/// paints there instead of the layer tree (see
+/// `host_canvas_geometry::pinned_chat`). Never on touch chrome: touch
+/// never offers the tab, and `enter_chat_tab` refuses to select it.
+pub fn chat_tab_active(state: &EditorState) -> bool {
+    !state.editor_ui.touch_chrome() && state.editor_ui.slides_panel.tab == LeftPanelTab::Chat
+}
+
+/// The row's three labels plus which optional tabs exist — the ONE
+/// description both the rects and the paint read, so the pill that is
+/// laid out is the pill that is drawn.
+pub fn tab_row_desc(state: &EditorState) -> SlidesTabRow<'static> {
+    let ui = &state.editor_ui;
+    let translate = crate::widgets::editor_state_ext::translate;
+    SlidesTabRow {
+        chat_label: translate(ui, "leftPanel.tab.chat"),
+        layers_label: translate(ui, "layers.title"),
+        slides_label: translate(ui, slides_tab_label_key(state)),
+        chat_available: !ui.touch_chrome(),
+        slides_available: slides_tab_available(state),
+    }
+}
+
+/// The three tab labels for this document, already translated:
+/// `(chat, layers, slides)`.
 ///
 /// The single place either host or the layout reads them from: the tab
 /// row's rects are sized from the labels, so a caller resolving its own
 /// copy could paint a pill that does not match the one it hit-tests.
-pub fn tab_labels(state: &EditorState) -> (&'static str, &'static str) {
-    let ui = &state.editor_ui;
-    (
-        crate::widgets::editor_state_ext::translate(ui, "layers.title"),
-        crate::widgets::editor_state_ext::translate(ui, slides_tab_label_key(state)),
-    )
+pub fn tab_labels(state: &EditorState) -> (&'static str, &'static str, &'static str) {
+    let desc = tab_row_desc(state);
+    (desc.chat_label, desc.layers_label, desc.slides_label)
 }
 
 /// The tab row's rects for a rail occupying `panel`, or `None` when
 /// this document shows no tab row.
 pub fn tab_row(state: &EditorState, panel: Rect) -> Option<SlidesPanelTabs> {
-    tab_row_visible(state).then(|| {
-        let (layers, slides) = tab_labels(state);
-        tabs_for_state(state, panel, layers, slides)
-    })
+    tab_row_visible(state).then(|| tabs_for_state(state, panel))
 }
 
-fn tabs_for_state(state: &EditorState, panel: Rect, layers: &str, slides: &str) -> SlidesPanelTabs {
+fn tabs_for_state(state: &EditorState, panel: Rect) -> SlidesPanelTabs {
+    let desc = tab_row_desc(state);
+    let active = state.editor_ui.slides_panel.tab;
     if state.editor_ui.touch_chrome() {
-        SlidesPanelTabs::new_touch(panel, state.editor_ui.slides_panel.tab, layers, slides)
+        SlidesPanelTabs::new_touch(panel, active, &desc)
     } else {
-        SlidesPanelTabs::new(panel, state.editor_ui.slides_panel.tab, layers, slides)
+        SlidesPanelTabs::new(panel, active, &desc)
     }
 }
 
@@ -140,11 +172,13 @@ pub fn layers_content_rect(state: &EditorState, panel: Rect) -> Rect {
     }
 }
 
-/// Whether the slides tab is the one on show. False whenever the tab
-/// row is hidden, so a stale tab selection cannot strand a document
-/// that stopped being a deck on a navigator it no longer has.
+/// Whether the slides tab is the one on show. False whenever the
+/// document has no slides tab to offer, so a stale tab selection cannot
+/// strand a document that stopped being a deck on a navigator it no
+/// longer has. (A stale CHAT selection can never strand: the tab is
+/// always available on the chrome that can select it.)
 pub fn slides_tab_active(state: &EditorState) -> bool {
-    tab_row_visible(state) && state.editor_ui.slides_panel.tab == LeftPanelTab::Slides
+    slides_tab_available(state) && state.editor_ui.slides_panel.tab == LeftPanelTab::Slides
 }
 
 /// The slides listed in the panel, in page order.
@@ -211,10 +245,9 @@ pub fn layout(
     if !slides_tab_active(state) {
         return None;
     }
-    let (layers, slides) = tab_labels(state);
     SlidesPanelLayout::new(
         panel,
-        tabs_for_state(state, panel, layers, slides),
+        tabs_for_state(state, panel),
         &board_aspects(chips, scene),
         state.editor_ui.slides_panel.scroll.offset,
         action_state(state, chips),
@@ -267,8 +300,7 @@ pub fn action_labels(state: &EditorState, selected: usize) -> SlidesActionText {
 pub fn widget<'a>(
     active: Option<usize>,
     state: &EditorState,
-    layers_label: &'a str,
-    slides_label: &'a str,
+    tabs: &'a SlidesTabRow<'a>,
     actions: SlidesActionLabels<'a>,
 ) -> SlidesPanel<'a> {
     let panel = state.editor_ui.slides_panel;
@@ -282,8 +314,7 @@ pub fn widget<'a>(
         hover: panel.hover.filter(|_| !dragging),
         drag: panel.drag,
         thumbnails_supported: state.editor_ui.slide_thumbnails_supported,
-        layers_label,
-        slides_label,
+        tabs,
         actions,
     }
 }
@@ -390,6 +421,7 @@ pub fn release(state: &mut EditorState, layout: &SlidesPanelLayout) -> SlidesRel
         return SlidesRelease::Cancelled;
     }
     match pressed {
+        SlidesPanelTarget::ChatTab => SlidesRelease::SelectTab(LeftPanelTab::Chat),
         SlidesPanelTarget::LayersTab => SlidesRelease::SelectTab(LeftPanelTab::Layers),
         SlidesPanelTarget::SlidesTab => SlidesRelease::SelectTab(LeftPanelTab::Slides),
         SlidesPanelTarget::Slide(index) => SlidesRelease::Activate(index),
@@ -458,6 +490,7 @@ pub fn tab_release(state: &mut EditorState) -> SlidesRelease {
         return SlidesRelease::Cancelled;
     }
     match pressed {
+        SlidesPanelTarget::ChatTab => SlidesRelease::SelectTab(LeftPanelTab::Chat),
         SlidesPanelTarget::LayersTab => SlidesRelease::SelectTab(LeftPanelTab::Layers),
         SlidesPanelTarget::SlidesTab => SlidesRelease::SelectTab(LeftPanelTab::Slides),
         // Nothing else on the panel exists while the Layers tab owns the
@@ -470,8 +503,13 @@ pub fn tab_release(state: &mut EditorState) -> SlidesRelease {
 ///
 /// Leaving the slides tab drops the pointer bookkeeping with it: a
 /// hover or a half-finished drag belonging to a list that is no longer
-/// on screen would otherwise wake up when the user came back.
+/// on screen would otherwise wake up when the user came back. Taking
+/// the CHAT tab goes through the state-layer entry that owns the
+/// one-time width bump.
 pub fn select_tab(state: &mut EditorState, tab: LeftPanelTab) -> bool {
+    if tab == LeftPanelTab::Chat {
+        return state.editor_ui.enter_chat_tab();
+    }
     let panel = &mut state.editor_ui.slides_panel;
     if panel.tab == tab {
         return false;

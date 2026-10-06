@@ -11,7 +11,10 @@ use crate::widgets::ai_chat_hit::AIChatHit;
 #[test]
 fn bottom_toolbar_layout_send_is_rightmost_circle() {
     // The send button is the rightmost element; stop shares its slot (#42).
-    let s = EditorState::new();
+    let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let input = panel.input_rect(rect);
@@ -39,7 +42,10 @@ fn bottom_toolbar_layout_send_is_rightmost_circle() {
 
 #[test]
 fn bottom_toolbar_layout_model_pill_is_leftmost() {
-    let s = EditorState::new();
+    let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let input = panel.input_rect(rect);
@@ -74,7 +80,10 @@ fn bottom_toolbar_layout_order_is_model_prompt_speed_attach_send() {
     // #38: ⚡/📎 moved right; #42: stop shares the send slot. Full
     // left-to-right order is:
     //   model (LEFT) | prompt | speed | attach | send (RIGHT)
-    let s = EditorState::new();
+    let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let input = panel.input_rect(rect);
@@ -113,7 +122,10 @@ fn bottom_toolbar_layout_order_is_model_prompt_speed_attach_send() {
 
 #[test]
 fn bottom_toolbar_min_width_rects_do_not_overlap() {
-    let s = EditorState::new();
+    let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_MIN_WIDTH, AI_CHAT_HEIGHT);
     let input = panel.input_rect(rect);
@@ -139,6 +151,9 @@ fn bottom_toolbar_min_width_rects_do_not_overlap() {
 fn hit_test_stop_circle_only_active_while_streaming() {
     // While streaming, a click on the stop rect returns Stop.
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat
         .messages
         .push(op_editor_core::ChatMessage::assistant_streaming());
@@ -174,6 +189,9 @@ fn hit_test_stop_circle_only_active_while_streaming() {
 fn parallel_agents_chip_label_is_agent_team_size_not_effort() {
     // #32: chip shows "{N}x" where N = agent_team_size, not effort level.
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     seed_available_model(&mut s);
     s.chat.agent_team_size = 4;
     let panel = AIChatPlaceholder::from_editor(&s);
@@ -188,6 +206,9 @@ fn parallel_agents_chip_label_is_agent_team_size_not_effort() {
 fn clicking_speed_chip_opens_parallel_agents_picker() {
     // #32: clicking the ⚡ chip returns ToggleParallelAgentsPicker (not CycleEffort).
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     seed_available_model(&mut s);
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
@@ -208,6 +229,9 @@ fn clicking_speed_chip_opens_parallel_agents_picker() {
 fn parallel_agents_picker_row_hit_returns_set_parallel_agents() {
     // When the picker is open, clicking a row returns SetParallelAgents(N).
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     seed_available_model(&mut s);
     s.editor_ui.parallel_agents_picker_open = true;
     let panel = AIChatPlaceholder::from_editor(&s);
@@ -234,6 +258,9 @@ fn parallel_agents_picker_outside_click_closes_picker() {
     // Clicking outside the picker while it is open returns ToggleParallelAgentsPicker
     // (the host handler treats this as a close).
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     seed_available_model(&mut s);
     s.editor_ui.parallel_agents_picker_open = true;
     let panel = AIChatPlaceholder::from_editor(&s);
@@ -250,6 +277,9 @@ fn parallel_agents_picker_outside_click_closes_picker() {
 fn parallel_agents_picker_hover_at_returns_row_index() {
     // parallel_agents_picker_hover_at returns the row the cursor is over.
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     seed_available_model(&mut s);
     s.editor_ui.parallel_agents_picker_open = true;
     let panel = AIChatPlaceholder::from_editor(&s);
@@ -276,6 +306,9 @@ fn parallel_agents_picker_closed_when_picker_not_open() {
     // When the picker is closed, the hover method returns None and
     // the hit-test falls through to normal chip behavior.
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     seed_available_model(&mut s);
     // picker NOT open
     let panel = AIChatPlaceholder::from_editor(&s);
@@ -290,7 +323,10 @@ fn parallel_agents_picker_closed_when_picker_not_open() {
 fn header_new_chat_circle_at_right_resolves_new_chat() {
     // The "+" new-chat button is a 28px circle at the far right of the header.
     // old: was a plain icon-button at right_edge-22; new: circle at right_edge-28.
-    let s = EditorState::new();
+    let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     // Center of the new-chat circle: right_edge - 14 (half of 28px diameter).
@@ -308,9 +344,14 @@ fn header_new_chat_circle_at_right_resolves_new_chat() {
 
 #[test]
 fn header_collapse_chevron_area_resolves_toggle_collapse() {
-    // Clicking on the chevron icon itself (left edge of pill cluster) must
-    // still return ToggleCollapse.
-    let s = EditorState::new();
+    // The chevron now lives only on the TOUCH sheet: desktop has no
+    // collapsed state left to toggle into, so the affordance is gone
+    // there and the hit rect with it.
+    let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
+    s.editor_ui.touch = true;
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     // Chevron center: PAD + 9 (half of 18px icon).
@@ -319,7 +360,7 @@ fn header_collapse_chevron_area_resolves_toggle_collapse() {
     assert_eq!(
         panel.hit_test(rect, p),
         Some(AIChatHit::ToggleCollapse),
-        "collapse chevron must resolve ToggleCollapse"
+        "collapse chevron must resolve ToggleCollapse on the touch sheet"
     );
 }
 
@@ -337,7 +378,10 @@ fn default_footer(s: &EditorState) -> (AIChatPlaceholder<'_>, Rect, FooterLayout
 
 #[test]
 fn thinking_toggle_sits_between_the_library_button_and_the_speed_chip() {
-    let s = EditorState::new();
+    let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     let (_panel, _rect, footer) = default_footer(&s);
 
     assert!(footer.thinking.size.x > 0.0, "toggle must be laid out");
@@ -368,7 +412,10 @@ fn thinking_toggle_is_dropped_before_the_model_pill_becomes_unreadable() {
     // zero-width rect can never be hit, so the row stays honest about what
     // is there. The boundary sits below `AI_CHAT_MIN_WIDTH`, so a user
     // dragging the panel to its narrowest still has the toggle.
-    let s = EditorState::new();
+    let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     let panel = AIChatPlaceholder::from_editor(&s);
     let footer_at = |w: f32| {
         let rect = Rect::xywh(0.0, 0.0, w, AI_CHAT_HEIGHT);
@@ -418,6 +465,9 @@ fn thinking_toggle_click_cycles_the_mode_through_the_hit() {
     use op_editor_core::chat::ThinkingMode;
 
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     let expected = [
         ThinkingMode::Disabled,
         ThinkingMode::Enabled,
@@ -442,7 +492,10 @@ fn thinking_toggle_click_cycles_the_mode_through_the_hit() {
 
 #[test]
 fn thinking_toggle_reports_its_own_hover() {
-    let s = EditorState::new();
+    let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     let (panel, rect, footer) = default_footer(&s);
     let point = Point2D::new(
         footer.thinking.origin.x + footer.thinking.size.x / 2.0,
@@ -460,6 +513,9 @@ fn thinking_toggle_stays_live_while_a_turn_streams() {
     // the mode is read at the NEXT launch, which is what a user clicking it
     // mid-stream is asking for.
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     seed_available_model(&mut s);
     let mut streaming = op_editor_core::chat::ChatMessage::assistant("designing…");
     streaming.streaming = true;
@@ -486,6 +542,9 @@ fn hovering_the_thinking_toggle_names_the_mode_it_is_in() {
         (ThinkingMode::Enabled, "ai.thinking.enabled"),
     ] {
         let mut s = EditorState::new();
+        // The expanded panel only exists where the conversation lives:
+        // the rail's Agent tab. Elsewhere the chat is composer-only.
+        s.editor_ui.enter_chat_tab();
         seed_available_model(&mut s);
         s.editor_ui.locale = op_editor_core::Locale::EnUs;
         s.chat.thinking_mode = mode;
@@ -515,7 +574,10 @@ fn the_zero_width_agent_team_slot_is_not_a_live_target() {
     // pill (which ends on that same column) shadows it, but `footer_hover_at`
     // gates the model pill on having models, so with nothing connected that
     // column reported a hover for a control that is not painted at all.
-    let s = EditorState::new();
+    let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     assert!(
         s.chat.available_models.is_empty(),
         "the reachable case is the one with no model connected"

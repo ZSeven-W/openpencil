@@ -31,3 +31,9 @@ glam = { version = "0.29", default-features = false, features = ["std"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
+
+# Test-only: the Home task wrappers must keep steering the orchestrator's
+# design-type detection. op-orchestrator depends on this crate, so this
+# can only ever be a dev-dependency (a legal cycle in Cargo).
+[dev-dependencies]
+op-orchestrator = { path = "../op-orchestrator" }

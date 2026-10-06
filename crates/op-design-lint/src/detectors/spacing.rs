@@ -16,8 +16,8 @@ use serde_json::Value;
 
 use crate::issue::{FixProperty, Issue, IssueCategory, IssueSeverity};
 use crate::node_util::{
-    children, fmt_num, has_stroke, json_number, node_fills, node_id, node_kind, padding,
-    raw_padding_value, role, NodeKind,
+    children, fmt_num, has_stroke, is_mobile_screen_chrome, json_number, node_fills, node_id,
+    node_kind, padding, raw_padding_value, role, NodeKind,
 };
 
 const DEFAULT_MOBILE_SECTION_RAIL: f64 = 24.0;
@@ -118,16 +118,58 @@ fn is_image_only_section(node: &PenNode) -> bool {
     })
 }
 
-fn is_full_bleed_section(node: &PenNode, root_width: f64) -> bool {
+pub(super) fn is_full_bleed_section(node: &PenNode, root_width: f64) -> bool {
     let child_role = role(node).unwrap_or("").to_lowercase();
     FULL_BLEED_ROLES.contains(&child_role.as_str())
+        || carries_bleed_marker(node)
         || is_image_only_section(node)
         || has_transparent_full_bleed_media_child(node, root_width)
 }
 
+/// The orchestrator's hero-bleed pass renames the section it flattened with
+/// a ` (bleed)` suffix. Honour that decision here instead of re-deriving it:
+/// a map canvas with overlay labels, or any shape the structural predicates
+/// below do not recognise, must not be padded back by a later validator.
+fn carries_bleed_marker(node: &PenNode) -> bool {
+    node_name(node).is_some_and(|name| name.trim_end().ends_with(BLEED_NAME_SUFFIX))
+}
+
+const BLEED_NAME_SUFFIX: &str = "(bleed)";
+
+fn node_name(node: &PenNode) -> Option<&str> {
+    match node {
+        PenNode::Frame(n) => n.base.name.as_deref(),
+        PenNode::Group(n) => n.base.name.as_deref(),
+        PenNode::Rectangle(n) => n.base.name.as_deref(),
+        _ => None,
+    }
+}
+
 fn has_transparent_full_bleed_media_child(node: &PenNode, root_width: f64) -> bool {
     is_transparent_container(node)
-        && children(node).iter().any(|child| {
+        && children(node)
+            .iter()
+            .any(|child| is_full_bleed_media(child, root_width, true))
+}
+
+/// A media child that spans the width: an image / media-role node, a
+/// text-free coloured block, or (one level only) a transparent `layout: none`
+/// stack that spans the width and holds such a node — the shape the
+/// orchestrator's hero-bleed pass leaves behind when the hero image sits in
+/// an overlay stack with its scrim and controls.
+fn is_full_bleed_media(child: &PenNode, root_width: f64, look_into_stack: bool) -> bool {
+    if look_into_stack
+        && matches!(node_kind(child), NodeKind::Frame)
+        && is_transparent_container(child)
+        && layout_is_none(child)
+        && node_spans_width(child, root_width)
+    {
+        return children(child)
+            .iter()
+            .any(|nested| is_full_bleed_media(nested, root_width, false));
+    }
+    {
+        {
             let child_role = role(child).unwrap_or("").trim().to_ascii_lowercase();
             let role_is_media = matches!(
                 child_role.as_str(),
@@ -143,14 +185,44 @@ fn has_transparent_full_bleed_media_child(node: &PenNode, root_width: f64) -> bo
                             .iter()
                             .any(|fill| fill.get("type").and_then(Value::as_str) == Some("image"))
                     });
-            (role_is_media || image_like) && node_spans_width(child, root_width)
+            let coloured_media = is_coloured_media(child);
+            (role_is_media || image_like || coloured_media) && node_spans_width(child, root_width)
+        }
+    }
+}
+
+fn layout_is_none(node: &PenNode) -> bool {
+    match node {
+        PenNode::Frame(node) => node.container.layout == Some(LayoutMode::None),
+        _ => false,
+    }
+}
+
+fn is_coloured_media(node: &PenNode) -> bool {
+    matches!(node_kind(node), NodeKind::Frame | NodeKind::Rectangle)
+        && serde_json::to_value(node).ok().is_some_and(|value| {
+            value
+                .get("fill")
+                .and_then(Value::as_array)
+                .is_some_and(|fills| {
+                    fills.iter().any(|fill| {
+                        matches!(
+                            fill.get("type").and_then(Value::as_str),
+                            Some("solid" | "linear_gradient" | "radial_gradient")
+                        )
+                    })
+                })
         })
+        && !children(node)
+            .iter()
+            .any(|child| matches!(node_kind(child), NodeKind::Text))
 }
 
 fn node_spans_width(node: &PenNode, root_width: f64) -> bool {
     node_width(node).is_some_and(|width| {
         matches!(width, SizingBehavior::Keyword(SizingKeyword::FillContainer))
-            || matches!(width, SizingBehavior::Number(width) if *width >= root_width - 1.0)
+            || (root_width > 0.0
+                && matches!(width, SizingBehavior::Number(width) if *width >= root_width - 1.0))
     })
 }
 
@@ -164,7 +236,7 @@ fn node_width(node: &PenNode) -> Option<&SizingBehavior> {
     }
 }
 
-fn numeric_width(node: &PenNode) -> Option<f64> {
+pub(super) fn numeric_width(node: &PenNode) -> Option<f64> {
     match node_width(node) {
         Some(SizingBehavior::Number(width)) => Some(*width),
         _ => None,
@@ -328,22 +400,6 @@ fn looks_like_mobile_page(node: &PenNode, depth: usize) -> bool {
         }
         _ => false,
     }
-}
-
-fn is_mobile_screen_chrome(node: &PenNode) -> bool {
-    matches!(
-        role(node)
-            .unwrap_or("")
-            .trim()
-            .to_ascii_lowercase()
-            .as_str(),
-        "status-bar"
-            | "bottom-tab-bar"
-            | "bottom-nav"
-            | "bottom-navigation-bar"
-            | "tab-bar"
-            | "tabbar"
-    )
 }
 
 /// Port of `detectEdgeSectionPadding` (`detectors-spacing.ts:100-197`).

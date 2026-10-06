@@ -50,6 +50,13 @@ fn assert_touch_targets(state: &EditorState, viewport_w: f32, viewport_h: f32) {
 
 #[test]
 fn compact_and_medium_asset_centers_use_touch_sized_controls() {
+    // card_actions_visible(0) is a shipped-card assertion: a saved template
+    // left in the process-global registry by a concurrently running Asset
+    // Center test would make index 0 a saved card (which never shows the
+    // action strip) and fail it. Hold the registry lock like every other
+    // test that depends on the saved/shipped split.
+    let _templates =
+        super::asset_center_template_cards::template_test_support::exclusive_user_templates();
     for (class, width, height) in [
         (EditorSizeClass::Compact, 390.0_f32, 844.0_f32),
         (EditorSizeClass::Medium, 834.0_f32, 1_112.0_f32),

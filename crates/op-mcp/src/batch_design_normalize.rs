@@ -10,6 +10,13 @@ mod fill_normalize;
 use fill_normalize::normalize_fill;
 
 pub(crate) fn normalize_node_shape(value: &mut serde_json::Value) {
+    // Canonicalize authoring-only video nodes before any shape normalizer or
+    // typed PenNode parse can inspect their discriminator.
+    op_pen_loader::normalize_video_alias(value);
+    normalize_node_shape_inner(value);
+}
+
+fn normalize_node_shape_inner(value: &mut serde_json::Value) {
     let serde_json::Value::Object(obj) = value else {
         return;
     };
@@ -62,7 +69,7 @@ pub(crate) fn normalize_node_shape(value: &mut serde_json::Value) {
     normalize_sizing_keyword(obj, "height");
     if let Some(serde_json::Value::Array(children)) = obj.get_mut("children") {
         for child in children {
-            normalize_node_shape(child);
+            normalize_node_shape_inner(child);
         }
     }
 }

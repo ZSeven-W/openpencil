@@ -391,6 +391,64 @@ fn find_empty_space_returns_padded_position_from_active_page_bounds() {
 }
 
 #[test]
+fn file_mcp_applier_normalizes_mobile_document_before_save() {
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "openpencil-mcp-mobile-normalize-{}-{suffix}.op",
+        std::process::id()
+    ));
+    let mut state = op_editor_core::EditorState::new();
+    let operations = r##"root=I(null,{"type":"frame","name":"Screen","width":375,"height":"fit_content","fill":[{"type":"solid","color":"#f7f8fa"}],"children":[{"type":"frame","name":"Status Bar","width":"fill_container","height":62,"children":[{"type":"text","content":"9:41"},{"type":"text","content":"signal wifi battery"}]},{"type":"path","name":"ChevronDownIcon","role":"icon","d":"M6 9l6 6 6-6","width":14,"height":14,"stroke":{"thickness":2.2,"fill":[{"type":"solid","color":"#1A1614"}]}}]})"##;
+    let line = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "batch_design", "arguments": {"operations": operations}}
+    })
+    .to_string();
+
+    let response = process_message(&mut state, &path, &line)
+        .expect("dispatch")
+        .expect("response");
+    assert!(!response.contains(r#""isError":true"#), "{response}");
+
+    let saved = load_editor_state(&path).expect("saved document");
+    let root = &saved.active_children()[0];
+    assert_eq!(root.width_px(), Some(375.0));
+    assert_eq!(root.height_px(), Some(812.0));
+    let status_bar = &root.children().expect("root children")[0];
+    assert_eq!(status_bar.base().role.as_deref(), Some("status-bar"));
+    assert!(status_bar.children().is_some_and(|children| {
+        children
+            .iter()
+            .any(|child| child.base().name.as_deref() == Some("Levels"))
+    }));
+    let icon = &root.children().expect("root children")[1];
+    let jian_ops_schema::node::PenNode::IconFont(icon) = icon else {
+        panic!("hand-drawn chevron should be normalized before save")
+    };
+    assert_eq!(icon.icon_font_name, "chevron-down");
+    assert_eq!(icon.icon_font_family.as_deref(), Some("lucide"));
+    assert_eq!(
+        icon.fill
+            .as_ref()
+            .and_then(|fills| fills.first())
+            .and_then(|fill| {
+                let jian_ops_schema::style::PenFill::Solid(body) = fill else {
+                    return None;
+                };
+                Some(body.color.as_str())
+            }),
+        Some("#1A1614")
+    );
+
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
 fn read_nodes_accepts_structured_ids_over_mcp() {
     let mut state = op_editor_core::EditorState::new();
     assert!(state.apply(EditorCommand::InsertNode {

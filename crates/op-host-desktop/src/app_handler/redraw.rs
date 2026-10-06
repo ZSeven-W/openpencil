@@ -311,11 +311,56 @@ impl DesktopApp {
         // no chat / design / sub-agent run remains in flight, the tab
         // binding is stale, so clear it (a fresh turn re-captures the
         // active tab at launch).
-        if self.current_chat.is_none()
+        let all_idle = self.current_chat.is_none()
             && self.current_design.is_none()
-            && self.sub_agents.is_empty()
-        {
+            && self.sub_agents.is_empty();
+        if all_idle {
             self.chat_running_tab = None;
+        }
+        // The generation workspace: refresh boards / selection / camera
+        // every frame it is live, and on the idle edge resolve the
+        // phase (Done with ≥1 board, Failed otherwise) through the
+        // epoch fence — a stopped turn's late edges must not repaint.
+        {
+            let agents_running = {
+                let chat = &self.host.editor_state().chat;
+                chat.agents_running != (0, 0)
+                    || crate::workspace_phase::assistant_streaming(self.host.editor_state())
+            };
+            // A brief that Home queued but the launcher has not drained
+            // yet owns no session, so `all_idle` is true while the run
+            // has not started. Settling there judged the run before it
+            // ever ran (measured 2026-09-13: 失败 appeared within a
+            // second of 开始设计, over a page the run had not touched).
+            let awaiting_launch = crate::workspace_phase::awaiting_launch(self.host.editor_state());
+            let generating = !all_idle || agents_running || awaiting_launch;
+            if self.host.pump_workspace_generation(
+                self.viewport_width,
+                self.viewport_height,
+                generating,
+            ) {
+                self.host.mark_editor_state_dirty();
+                self.redraw_dirty = true;
+            }
+            if all_idle
+                && !awaiting_launch
+                && self.host.editor_state().editor_ui.workspace.active
+                && self.host.editor_state().editor_ui.workspace.phase
+                    == op_editor_core::WorkspacePhase::Generating
+            {
+                let boards = crate::workspace_phase::produced_board_count(self.host.editor_state());
+                let epoch = self.host.editor_state().editor_ui.workspace.run_epoch;
+                if self.host.settle_workspace_idle_edge(
+                    epoch,
+                    boards,
+                    crate::workspace_phase::last_assistant_failed(self.host.editor_state()),
+                    self.viewport_width,
+                    self.viewport_height,
+                ) {
+                    self.host.mark_editor_state_dirty();
+                    self.redraw_dirty = true;
+                }
+            }
         }
         // Starter ghost: painted from the moment a design prompt
         // clears the blank starter until the generated design's root
@@ -329,6 +374,18 @@ impl DesktopApp {
         ) {
             self.host.mark_editor_state_dirty();
             self.redraw_dirty = true;
+        }
+        // Background image search: hand the session the selected chat
+        // provider for its relevance judge until one sticks (env judge wins
+        // when configured; see `ImageSearchSession::ensure_judge`). A
+        // provider configured mid-session is still picked up until the
+        // first search actually spawns.
+        if !self.image_search.judge_resolved() {
+            if let Some(provider) = chat_session::provider_for_selected_model(&self.host) {
+                let model = chat_session::selected_cli_model_id(&self.host);
+                self.image_search
+                    .ensure_judge(Some(std::sync::Arc::from(provider)), model);
+            }
         }
         let (editor_state, layout_scene) = self.host.editor_state_mut_and_layout_scene();
         self.image_search

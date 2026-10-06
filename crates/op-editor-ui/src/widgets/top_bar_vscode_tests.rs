@@ -17,6 +17,7 @@ fn vscode_embed_hides_file_figma_title_and_fullscreen() {
                 hit,
                 Some(TopBarHit::ToggleFileMenu)
                     | Some(TopBarHit::OpenImportMenu)
+                    | Some(TopBarHit::Home)
                     | Some(TopBarHit::ToggleFullscreen)
             ),
             "hidden control hit at x={x}: {hit:?}"

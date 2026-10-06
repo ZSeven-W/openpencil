@@ -118,6 +118,8 @@ pub enum PropertyFocus {
     WidgetMin,
     WidgetMax,
     WidgetStep,
+    /// Image-node video source URL.
+    VideoSrc,
 }
 
 impl PropertyFocus {
@@ -153,6 +155,7 @@ impl PropertyFocus {
                 | PropertyFocus::WidgetLeadingIcon
                 | PropertyFocus::WidgetTrailingIcon
                 | PropertyFocus::WidgetBindKey
+                | PropertyFocus::VideoSrc
         )
     }
 

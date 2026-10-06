@@ -21,6 +21,7 @@ fn req() -> DesignRequest {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     }
 }
 
@@ -49,8 +50,10 @@ fn subtask() -> Subtask {
             width: 1200.0,
             height: 400.0,
         },
+        bleed_hero: false,
         id_prefix: "hero".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: None,
         generated_root_id: None,

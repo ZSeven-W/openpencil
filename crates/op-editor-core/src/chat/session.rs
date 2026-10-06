@@ -191,6 +191,7 @@ impl ChatState {
         self.pending_send = None;
         self.pending_stop_chat = false;
         self.pending_copy_text = None;
+        self.launch_route = LaunchRoute::Auto;
         self.transcript_selection = None;
         self.transcript_pinned = true;
         self.transcript_scroll.offset = 0.0;

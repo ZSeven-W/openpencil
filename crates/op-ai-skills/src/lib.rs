@@ -34,6 +34,10 @@ pub mod memory;
 pub mod resolve;
 pub mod resolve_style;
 pub mod resolver;
+#[cfg(test)]
+mod scroll_orchestration_corpus_tests;
+#[cfg(test)]
+mod shader_fill_corpus_tests;
 pub mod style_guide;
 pub mod types;
 
@@ -98,6 +102,19 @@ const GUIDELINE_TOPICS: &[(&str, &[&str], &[&str])] = &[
     ("form", &["form-ui"], &["form-ui"]),
     ("design-system", &[], &["design-system-composition"]),
     ("interactivity", &[], &["interactivity"]),
+    // The page-scroll contract for external agents driving the MCP tools:
+    // K3 and Grok over MCP built a 900 px clipped viewport root when the
+    // prompt did not spell the contract out (2026-09-03 matrix), because
+    // no guideline topic carried it.
+    (
+        "scroll",
+        &["scroll-orchestration", "parallax", "page-scroll"],
+        &["scroll-orchestration"],
+    ),
+    // Card boards had no MCP-side contract either (0825 A/B: the gap was
+    // the contract, not the model).
+    ("card", &["cards", "card-item"], &["cards"]),
+    ("icons", &["icon", "icon-font", "lucide"], &["icon-catalog"]),
 ];
 
 /// Compose the named skills (in order) into one coherent guideline doc,
@@ -133,6 +150,11 @@ fn compose_skills(names: &[&str]) -> Option<String> {
 /// - `"design-system"` — design-system composition
 /// - `"interactivity"` — multi-screen navigation contract (`screen` markers
 ///   + `events.onTap` actions) for tappable App Mode preview
+/// - `"scroll"` (`scroll-orchestration`, `parallax`, `page-scroll`) — the
+///   page-scroll contract: the page root is the `$scroll` source, `pin: true`
+///   pins, paint-only `translateX/Y` moves
+/// - `"card"` (`cards`, `card-item`) — card-board contract
+/// - `"icons"` (`icon`, `icon-font`, `lucide`) — icon_font/lucide icon catalog
 ///
 /// Returns `None` for any unrecognised topic so callers can produce a typed
 /// "unknown topic" error without special-casing the string themselves.
@@ -140,7 +162,10 @@ pub fn guideline_for(topic: &str) -> Option<String> {
     let (_, _, skill_names) = GUIDELINE_TOPICS
         .iter()
         .find(|(name, aliases, _)| *name == topic || aliases.contains(&topic))?;
-    compose_skills(skill_names)
+    compose_skills(skill_names).map(|mut guideline| {
+        guideline.push_str("\n\nWhen you are done, call finalize_design once — it runs the same repair passes the built-in pipeline applies.");
+        guideline
+    })
 }
 
 /// The primary name of every topic [`guideline_for`] accepts, in table
@@ -197,11 +222,12 @@ verifies the design is complete and visually polished.";
 fn design_agent_template() -> &'static str {
     static TEMPLATE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     TEMPLATE.get_or_init(|| {
-        let template = SKILLS
-            .get_file("phases/agent/design-agent.md")
+        let template = phase_corpus_dir()
+            .and_then(|dir| dir.get_file("phases/agent/design-agent.md"))
             .and_then(|f| f.contents_utf8())
             .expect(
-                "skills/phases/agent/design-agent.md must be embedded in the op-ai-skills corpus",
+                "skills/phases/agent/design-agent.md must be embedded in the op-ai-skills corpus \
+                 (a slim-corpus build must never reach the design-agent template)",
             );
         for placeholder in [
             JIAN_COMPONENTS_PLACEHOLDER,
@@ -327,7 +353,46 @@ pub fn design_agent_system_prompt_with_skills_for(
 /// The embedded `skills/` corpus — domain / knowledge / phase skill
 /// markdown plus the `style-guides/` subtree. Parsed into the skill
 /// registry on first access (see [`loader`]).
+// The slim gate is feature AND target: cargo feature unification opens
+// the feature for every crate in a workspace build that includes
+// op-host-web, and without the target gate that build would strip the
+// corpus out from under the desktop and daemon. Only an actual wasm32
+// compilation slims.
+#[cfg(not(all(feature = "slim-corpus", target_arch = "wasm32")))]
 pub static SKILLS: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/skills");
+
+/// slim-corpus: only the style-guides subtree is embedded. Everything
+/// that walks [`SKILLS`] must go through [`style_guides_dir`] /
+/// [`phase_corpus_dir`] so both embeds answer the same questions.
+#[cfg(all(feature = "slim-corpus", target_arch = "wasm32"))]
+pub static STYLE_GUIDES_ONLY: Dir<'static> =
+    include_dir!("$CARGO_MANIFEST_DIR/skills/style-guides");
+
+/// The style-guides subtree, wherever this build embedded it.
+pub fn style_guides_dir() -> Option<&'static Dir<'static>> {
+    #[cfg(not(all(feature = "slim-corpus", target_arch = "wasm32")))]
+    {
+        SKILLS.get_dir("style-guides")
+    }
+    #[cfg(all(feature = "slim-corpus", target_arch = "wasm32"))]
+    {
+        Some(&STYLE_GUIDES_ONLY)
+    }
+}
+
+/// The phase/domain/knowledge corpus root, absent on a slim build — the
+/// browser never composes prompts, so callers must treat `None` as "not
+/// this build's job", never as an error.
+pub fn phase_corpus_dir() -> Option<&'static Dir<'static>> {
+    #[cfg(not(all(feature = "slim-corpus", target_arch = "wasm32")))]
+    {
+        Some(&SKILLS)
+    }
+    #[cfg(all(feature = "slim-corpus", target_arch = "wasm32"))]
+    {
+        None
+    }
+}
 
 /// The embedded P2 style catalog. This is deliberately separate from
 /// [`SKILLS`] so catalog entries cannot be parsed as phase skills.

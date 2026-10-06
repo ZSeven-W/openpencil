@@ -24,7 +24,7 @@ fn apply_modification_replaces_avatar_image_fill_without_adding_border() {
                 "alignItems": "center",
                 "clipContent": true,
                 "cornerRadius": 22.0,
-                "fill": [{"type": "solid", "color": "$color-surface"}],
+                "fill": [{"type": "solid", "color": "$--card"}],
                 "children": [{
                     "type": "text",
                     "id": "n157",
@@ -50,10 +50,10 @@ fn apply_modification_replaces_avatar_image_fill_without_adding_border() {
             "alignItems": "center",
             "clipContent": true,
             "cornerRadius": 22.0,
-            "fill": {"type": "solid", "color": "$color-surface"},
+            "fill": {"type": "solid", "color": "$--card"},
             "stroke": {
                 "thickness": 1,
-                "fill": {"type": "solid", "color": "$color-border"}
+                "fill": {"type": "solid", "color": "$--border"}
             },
             "children": [{
                 "type": "rectangle",

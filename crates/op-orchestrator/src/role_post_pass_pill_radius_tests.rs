@@ -20,7 +20,7 @@ fn hug_badge(id: &str, content: &str, corner_radius: Option<f64>) -> serde_json:
         "type":"frame","id":id,
         "width":"fit_content","height":"fit_content",
         "padding":[4.0, 10.0],
-        "fill":[{"type":"solid","color":"$color-surface-3"}],
+        "fill":[{"type":"solid","color":"$--accent"}],
         "children":[{"type":"text","id":format!("{id}-t"),"width":"fit_content",
                      "height":"fit_content","content":content}]
     });
@@ -51,7 +51,7 @@ fn unrounded_hug_cta_buttons_are_rounded_when_the_design_already_uses_rounded_ba
             // Real gm-3 shape: text-only CTA, no cornerRadius.
             {"type":"frame","id":"n192","layout":"horizontal","padding":[8.0, 16.0],
              "justifyContent":"center","alignItems":"center",
-             "fill":[{"type":"solid","color":"$color-accent"}],
+             "fill":[{"type":"solid","color":"$--primary"}],
              "children":[{"type":"text","id":"n193","width":"fit_content","height":"fit_content",
                           "content":"继续"}]}
         ]
@@ -89,7 +89,7 @@ fn all_sharp_corner_design_is_left_alone() {
         "children":[
             {"type":"frame","id":"n192","layout":"horizontal","padding":[8.0, 16.0],
              "justifyContent":"center","alignItems":"center",
-             "fill":[{"type":"solid","color":"$color-accent"}],
+             "fill":[{"type":"solid","color":"$--primary"}],
              "children":[{"type":"text","id":"n193","width":"fit_content","height":"fit_content",
                           "content":"继续"}]}
         ]
@@ -149,7 +149,7 @@ fn literal_height_capsule_uses_half_height_when_under_ten() {
             hug_badge("n168", "2/3 完成", Some(9999.0)),
             {"type":"frame","id":"short-pill","width":80.0,"height":16.0,"layout":"horizontal",
              "justifyContent":"center","alignItems":"center",
-             "fill":[{"type":"solid","color":"$color-accent"}],
+             "fill":[{"type":"solid","color":"$--primary"}],
              "children":[{"type":"text","id":"sp-t","width":"fit_content","height":"fit_content",
                           "content":"New"}]}
         ]

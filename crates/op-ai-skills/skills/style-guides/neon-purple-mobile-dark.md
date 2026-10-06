@@ -21,6 +21,11 @@ Key aesthetics:
 - **Gradient cards**: Dark purple gradients on featured content for visual energy
 - **Integrated bottom nav**: full-width bottom navigation with purple active glow
 
+Signature recipes:
+
+- **Oversized secondary CTA** — Make the primary neon action 56px high, fill it with #A855F7, and keep #0D001A secondary controls quiet — M3 Expressive
+- **Mesh gradient as protagonist** — Make the #A855F7 mesh-gradient feature card the top-leading protagonist at least 25% of the #0D001A first screen — ADA 2025 Denim
+
 ## Color System
 
 ### Core Backgrounds

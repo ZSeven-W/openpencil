@@ -97,8 +97,15 @@ static DECODE_PUMP: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// same process) sits in the global in-flight set, where it suppresses
 /// re-recording, until that pump marks it done — only then does the next
 /// discovery pass re-record the miss so this export can decode it into its
-/// own backend. So: keep passing while anything is in flight, and return
-/// only from a pass that recorded nothing with nothing in flight.
+/// own backend. So a pass is conclusive only when NOTHING was in flight
+/// before its paint ran (so the paint could record every miss) AND the take
+/// after the paint found nothing AND nothing is in flight after the take.
+/// The pre-paint sample matters: an external `mark_decode_done` landing
+/// between the discovery paint and a post-only in-flight check made an
+/// empty take look conclusive even though that paint had still been
+/// suppressed from re-recording the released id — the export returned
+/// without the bitmap and shipped placeholder art (windows-x86_64 CI,
+/// 2026-08-29, the stolen-decode regression test).
 fn ensure_images_decoded(backend: &mut NativeBackend, nodes: &[SceneNode]) {
     use op_editor_ui::widgets::canvas_viewport_image::{
         cached_bytes_for, has_in_flight_decodes, mark_decode_done, take_pending_decodes,
@@ -110,6 +117,8 @@ fn ensure_images_decoded(backend: &mut NativeBackend, nodes: &[SceneNode]) {
     // pass may not capture every miss) and an external consumer can hold an
     // id in flight across passes — iterate, with a bounded budget.
     for _ in 0..64 {
+        // Sampled BEFORE the paint — see "Exit discipline" above.
+        let in_flight_before_paint = has_in_flight_decodes();
         let Some(mut surface) = skia_safe::surfaces::raster_n32_premul((1, 1)) else {
             return;
         };
@@ -124,11 +133,12 @@ fn ensure_images_decoded(backend: &mut NativeBackend, nodes: &[SceneNode]) {
         }
         let pending = take_pending_decodes(usize::MAX);
         if pending.is_empty() {
-            if !has_in_flight_decodes() {
+            if !in_flight_before_paint && !has_in_flight_decodes() {
                 return;
             }
-            // Someone else is decoding an id this scene may need; give them
-            // a moment to mark it done so the next pass can re-record it.
+            // Someone else is — or was, while this pass painted — decoding
+            // an id this scene may need; give them a moment to mark it done
+            // so a pass that starts clean can re-record it.
             std::thread::sleep(std::time::Duration::from_millis(1));
             continue;
         }

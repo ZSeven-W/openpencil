@@ -252,6 +252,13 @@ impl WidgetHostNative {
                 true
             }
             ChatClickStep::Host(ChatHostAction::Send) => {
+                // A send from the composer-only card starts a
+                // conversation, and a conversation lives in the rail's
+                // Agent tab — hand the user there so the reply is not
+                // streaming somewhere they cannot see.
+                if self.editor_state.editor_ui.chat_composer_only() {
+                    self.editor_state.editor_ui.enter_chat_tab();
+                }
                 self.editor_state.chat.begin_send();
                 self.mark_dirty();
                 true

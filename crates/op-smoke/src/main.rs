@@ -15,8 +15,9 @@
 //! Optional env overrides:
 //! - `OPENPENCIL_ORCHESTRATOR_MODEL` — default `claude-sonnet-4-6`.
 //! - `OPENPENCIL_LLM_PROVIDER` — `anthropic` (default), `openai-compat`,
-//!   or `antigravity` / `agy`. The Antigravity arm reuses the production
-//!   generation-only subprocess transport and the CLI's existing login.
+//!   `antigravity` / `agy`, or `claude` / `claude-code`. The CLI arms reuse
+//!   the production generation-only subprocess transport and the CLI's
+//!   existing login (no API key needed).
 //! - `OPENPENCIL_SMOKE_VALIDATION=1` — opt into the production lint
 //!   pre-validator and post-generation validation stage. The default remains
 //!   skipped so existing smoke traces are unchanged.
@@ -66,8 +67,8 @@ use crate::llm_clients::{DirectOpenAiClient, SmokeLlmClient};
 // items keep their original `crate::<item>` paths.
 pub(crate) use smoke_support::InlineDocSink;
 use smoke_support::{
-    antigravity_llm, loop_thinking_mode, maybe_merge_smoke_library, truthy_env_value,
-    SmokeProviderKind,
+    antigravity_llm, claude_code_llm, loop_thinking_mode, maybe_merge_smoke_library,
+    truthy_env_value, SmokeProviderKind,
 };
 
 /// Headless agentic tool-loop branch (`OPENPENCIL_SMOKE_LOOP=1`).
@@ -219,10 +220,12 @@ async fn main() -> std::process::ExitCode {
                  providers:\n\
                    anthropic (default): OPENPENCIL_ANTHROPIC_API_KEY=...\n\
                    openai-compat: OPENPENCIL_LLM_BASE_URL=... OPENPENCIL_LLM_API_KEY=...\n\
-                   antigravity/agy: uses the logged-in agy CLI\n\n\
+                   antigravity/agy: uses the logged-in agy CLI\n\
+                   claude/claude-code: uses the logged-in claude CLI (model alias e.g. opus)\n\n\
                  common:\n\
                    OPENPENCIL_ORCHESTRATOR_MODEL=<model>\n\
                    OPENPENCIL_SMOKE_OUT=<result.op>\n\
+                   OPENPENCIL_SMOKE_PIN_STYLE_GUIDE=<style guide name>\n\
                    OPENPENCIL_SMOKE_VALIDATION=1"
             );
             return std::process::ExitCode::from(2);
@@ -251,7 +254,7 @@ async fn main() -> std::process::ExitCode {
     let Some(provider_kind) = SmokeProviderKind::parse(&provider_kind_raw) else {
         eprintln!(
             "error: unknown OPENPENCIL_LLM_PROVIDER={provider_kind_raw:?} \
-             (want anthropic|openai-compat|antigravity|agy)"
+             (want anthropic|openai-compat|antigravity|agy|claude|claude-code)"
         );
         return std::process::ExitCode::from(3);
     };
@@ -260,6 +263,7 @@ async fn main() -> std::process::ExitCode {
             SmokeProviderKind::Anthropic => "claude-sonnet-4-6".into(),
             SmokeProviderKind::OpenAiCompat => "gpt-4o-mini".into(),
             SmokeProviderKind::Antigravity => "gemini-3.6-flash-high".into(),
+            SmokeProviderKind::ClaudeCode => "opus".into(),
         });
 
     eprintln!("[SMOKE] provider={} model={model}", provider_kind.label());
@@ -320,6 +324,7 @@ async fn main() -> std::process::ExitCode {
             }
         }
         SmokeProviderKind::Antigravity => antigravity_llm(&model),
+        SmokeProviderKind::ClaudeCode => claude_code_llm(&model),
     };
 
     // `OPENPENCIL_SMOKE_STARTER=1` seeds the fresh-canvas starter frame so a
@@ -477,7 +482,7 @@ async fn main() -> std::process::ExitCode {
 
     let validation_enabled =
         truthy_env_value(std::env::var("OPENPENCIL_SMOKE_VALIDATION").ok().as_deref());
-    let request = DesignRequest {
+    let mut request = DesignRequest {
         prompt,
         model: Some(model),
         provider: None,
@@ -490,9 +495,49 @@ async fn main() -> std::process::ExitCode {
             .unwrap_or(1),
         validation_enabled,
         visual_ref_enabled: false,
-        pinned_style_guide: None,
+        // `OPENPENCIL_SMOKE_PIN_STYLE_GUIDE=<name>` fixes the style guide so an
+        // ablation can vary one contract (corpus, pass, tier) while the look
+        // stays constant; unset keeps the planner's own choice.
+        pinned_style_guide: std::env::var("OPENPENCIL_SMOKE_PIN_STYLE_GUIDE")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty()),
+        reference_skeleton: None,
     };
     let abort = AbortFlag::new();
+    // Same three-way reference resolution the desktop / web design routes
+    // run (C1 M1), so a "参考 https://…" prompt exercises the real path here
+    // and the harness can validate it end to end.
+    match op_host_services::reference_context::resolve_reference_context(
+        llm.as_ref(),
+        &request.prompt,
+        request.model.clone(),
+        None,
+        &abort,
+    )
+    .await
+    {
+        Ok(Some(context)) => {
+            match context.skeleton.as_ref() {
+                Some(skeleton) => eprintln!(
+                    "[REFERENCE] host={} sections={} nav={:?} hero={:?}\n{}",
+                    context.source_host,
+                    skeleton.sections.len(),
+                    skeleton.nav_kind,
+                    skeleton.hero_kind,
+                    skeleton.render()
+                ),
+                None => eprintln!(
+                    "[REFERENCE] host={} (style only, no skeleton)",
+                    context.source_host
+                ),
+            }
+            request.reference_skeleton = context.skeleton;
+            request.design_md = Some(context.design_md);
+        }
+        Ok(None) => {}
+        Err(error) => eprintln!("[REFERENCE] unavailable: {error}"),
+    }
     // Preserve the historical skipped validator unless the caller explicitly
     // requests the production lint + validation path.
     let skipped_pre_validator = SkippedPreValidator;
@@ -543,6 +588,20 @@ async fn main() -> std::process::ExitCode {
         )
         .await;
     let elapsed = started.elapsed();
+
+    // Image-fill post step (OPENPENCIL_SMOKE_FILL_IMAGES=1), the same one the
+    // loop path runs: resolve pending image-search queries to real Openverse
+    // URLs BEFORE persisting, so the saved `.op` — and the render-shots pass
+    // that reads it — carries real pictures instead of grey placeholders.
+    // Scoped thread for the same reason as the loop path: the fetch bridge
+    // builds its own runtime and cannot be driven from this tokio main.
+    let image_config = image_fill::ImageFillConfig::from_env();
+    let dump_images = std::env::var("OPENPENCIL_SMOKE_DUMP").is_ok();
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            image_fill::fill_images(&mut sink.state, &image_config, dump_images);
+        });
+    });
 
     // Persist the produced PenDocument when OPENPENCIL_SMOKE_OUT is set,
     // so the render / screenshot step can pick it up. Canonical

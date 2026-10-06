@@ -30,11 +30,12 @@
 //! metrics), plus a focus caret drawn on top. The editor's normal
 //! selection / handles / grid do NOT paint in preview.
 //!
-//! Binding overlay limits (Spec-2 slice): only `content` bindings are
-//! re-resolved; the scene is NOT re-laid-out, so text that grows past
-//! its authored box paints per the design painter's normal overflow
-//! behavior. `visible` / fill / geometry bindings are collected but not
-//! yet applied.
+//! R6's typed binding overlay resolves content, widget values, visibility,
+//! paint, transforms, geometry, and structural state without mutating the
+//! authored document. Jian's canonical invalidation classifier orders the
+//! resulting work as PaintOnly, HitTest, Relayout, or Navigation. The
+//! read-only `$scroll` namespace drives PaintOnly bindings and sticky/pinned
+//! child geometry through the same overlay.
 //!
 //! ## Hit-testing across two coordinate spaces
 //!
@@ -56,23 +57,61 @@
 //! `format_warning`) live in `scene_helpers.rs`. The crate root keeps
 //! only module declarations and stable re-exports.
 
+mod animation;
 mod app_mode;
 #[cfg(feature = "gl-host")]
 mod auto_wire;
 #[cfg(not(feature = "gl-host"))]
 mod auto_wire_stub;
+mod binding_overlay;
+mod binding_overlay_apply;
 mod binding_sites;
+mod debug_trace;
 pub mod device_frame;
 #[cfg(all(test, not(target_os = "windows")))]
 mod device_frame_tests;
+mod effects;
 mod error;
 mod input;
+mod input_event;
+mod interaction_state;
+mod invalidation;
 mod mode_transition;
+mod motion;
 mod present;
 mod scene_helpers;
 mod session;
 mod session_paint;
+mod test_helpers;
 mod transition;
+mod ui_actions;
+
+/// R3 effect queue — the bounded FIFO between the engine's effect sink
+/// and the host.
+pub use effects::PreviewEffectQueue;
+/// R4 Canonical PreviewInput — the unified input envelope, dispatch
+/// outcome, and lifecycle phases behind
+/// [`PreviewSession::dispatch_input`].
+pub use input_event::{
+    AppLifecyclePhase, BackSource, PageLifecyclePhase, PreviewDispatchOutcome, PreviewInput,
+    PreviewInputEnvelope, PreviewLifecycle, ScrollPhase,
+};
+/// R4 interaction state — per-pointer pressed + hover node tracking.
+pub use interaction_state::InteractionState;
+pub use invalidation::InvalidationKind;
+pub use jian_ops_schema::motion::MotionPreference;
+/// Frozen Preview contract DTOs, re-exported so consumers of this crate
+/// (UI, FFI, hosts) need not take the leaf dependency directly.
+pub use op_preview_contracts::{
+    EffectSource, HapticStyle, PreviewCapability, PreviewEffect, PreviewEffectFailure,
+    PreviewEffectFailureCode, PreviewEffectResult, PreviewHostCapabilities, SharePayload,
+    UserActivationId,
+};
+pub use op_preview_contracts::{
+    PreviewDebugSnapshot, PreviewDiagnostic, PreviewQueueCounts, PreviewRunState,
+    PreviewStateProvenance, PreviewStateRow, PreviewStateScope, PreviewTraceEntry,
+    PreviewTraceKind,
+};
 
 /// Typed failure domains for entering / re-solving a preview session
 /// (`PreviewSession::enter` + `app_mode::solve_roots`).
@@ -86,6 +125,7 @@ pub use present::PinnedPaint;
 /// The live preview runtime session — constructed by
 /// [`PreviewSession::enter`] from a snapshot of the editor document.
 pub use session::PreviewSession;
+pub use session_paint::PreviewVideoOverlay;
 
 /// Internal re-export: `input` overlays live widget state through the
 /// shared scene formatter helper.
@@ -106,7 +146,11 @@ pub(crate) use session::{font_registry_test_support, test_measure};
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests;
 #[cfg(all(test, not(target_os = "windows")))]
+mod tests_animation;
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_app_mode;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_binding_overlay;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_bindings;
 #[cfg(all(test, not(target_os = "windows")))]
@@ -114,16 +158,44 @@ mod tests_caret;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_clock_gate;
 #[cfg(all(test, not(target_os = "windows")))]
+mod tests_debug_controls;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_debug_trace;
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_device_frame;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_effects;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_event_payloads;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_geometry_parity;
 #[cfg(all(test, not(target_os = "windows")))]
+mod tests_input_trace;
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_interaction;
 #[cfg(all(test, not(target_os = "windows")))]
+mod tests_interaction_state;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_motion;
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_multi_pointer;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_page_scroll;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_pointer_bindings;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_swipe;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_tabs;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_transition;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_ui_actions;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_widget_states;
+// Same platform gate as `tests_app_mode` / `tests_transition`, whose
+// fixture and helpers this file reuses: those are excluded on Windows,
+// so a Windows build cannot see `test_measure`, `TWO_SCREEN_DOC_JSON`
+// or `node_rect` either.
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_transition_input;

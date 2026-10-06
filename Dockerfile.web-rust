@@ -38,8 +38,8 @@
 # was retired 2026-06-17; the editor renders through the official CanvasKit
 # skia WASM loaded separately). So the only extra toolchain over a normal cargo
 # build is the wasm32 target + wasm-bindgen-cli + pinned Binaryen (wasm-opt) +
-# node, all installed in the builder stage. That keeps the image self-contained
-# and reproducible. The `WEB_BUNDLE_SOURCE=copy` build arg is the
+# node + Python, all installed in the builder stage. That keeps the image
+# self-contained and reproducible. The `WEB_BUNDLE_SOURCE=copy` build arg is the
 # fast path: it skips the wasm rebuild and copies a `./web-bundle` provided as
 # build context (e.g. the Task-1 CI artifact).
 
@@ -63,10 +63,11 @@ ENV BINARYEN_VERSION=version_123 \
 ARG SERVE_PORT=3100
 
 # pinned Binaryen -> wasm-opt -Oz ; nodejs -> the 0-env-import assert in the gate
-# script. op-host-web-server is the headless raster daemon (links op-host-services
-# only — no winit/glutin/skia-GL under Approach Y), so NONE of the GL/X11
-# link-time libs the desktop binary needed are required here. It does need
-# OpenSSL for SDK/native-tls compatibility plus freetype/fontconfig (+ CJK
+# script; python3 -> deterministic runtime i18n catalog export during asset
+# staging. op-host-web-server is the headless raster daemon (links
+# op-host-services only — no winit/glutin/skia-GL under Approach Y), so NONE of
+# the GL/X11 link-time libs the desktop binary needed are required here. It does
+# need OpenSSL for SDK/native-tls compatibility plus freetype/fontconfig (+ CJK
 # fonts) for skia's raster text shaping at export.
 RUN sed -ri \
       -e 's|^URIs: http://deb.debian.org/debian$|URIs: http://snapshot.debian.org/archive/debian/20260406T000000Z|' \
@@ -76,6 +77,7 @@ RUN sed -ri \
     && apt-get update && apt-get install -y --no-install-recommends \
       curl \
       nodejs \
+      python3 \
       gzip \
       ca-certificates \
       pkg-config \
@@ -141,15 +143,23 @@ RUN mkdir -p /out/web-bundle && \
     echo "assembled web-bundle:" && find /out/web-bundle -maxdepth 2 -type f | sort && \
     # The browser fetches these from `/pkg/assets/…` at run time (see
     # `op_editor_core::web_assets`); without them previews fall back to
-    # placeholders, templates refuse to instantiate and the icon panel stays
-    # empty. Catch it here rather than in production — the `copy` path is the
-    # likely offender, fed a pre-split artifact.
+    # placeholders, templates refuse to instantiate, the icon panel stays
+    # empty, and locale switches fail. Catch it here rather than in production
+    # — the `copy` path is the likely offender, fed a pre-split artifact.
     for required in assets/prompt_center_previews assets/scene_template_previews \
-                    assets/scene_templates assets/iconify-catalog-core.json; do \
+                    assets/scene_templates assets/iconify-catalog-core.json \
+                    assets/i18n; do \
       if [ ! -e "/out/web-bundle/$required" ]; then \
         echo "FAIL: web-bundle is missing $required (stale artifact?)" >&2; exit 1; \
       fi; \
-    done
+    done && \
+    expected_i18n_files="$(printf '%s\n' de.json es.json fr.json hi.json id.json ja.json ko.json pt.json ru.json th.json tr.json vi.json zh-TW.json | LC_ALL=C sort)" && \
+    actual_i18n_files="$(find /out/web-bundle/assets/i18n -mindepth 1 -maxdepth 1 -exec basename {} \; | LC_ALL=C sort)" && \
+    i18n_count="$(find /out/web-bundle/assets/i18n -maxdepth 1 -type f -name '*.json' | wc -l | tr -d ' ')" && \
+    if [ "$i18n_count" -ne 13 ] || [ "$actual_i18n_files" != "$expected_i18n_files" ]; then \
+      echo "FAIL: web-bundle runtime i18n catalogs differ from the exact 13-file BCP-47 set" >&2; \
+      printf '%s\n' "$actual_i18n_files" >&2; exit 1; \
+    fi
 
 # ── Stage 2: runtime (slim) ───────────────────────────────────────────────────
 # Only the runtime shared libs the daemon needs (OpenSSL, fontconfig/freetype,

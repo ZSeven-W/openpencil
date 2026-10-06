@@ -10,8 +10,8 @@ use super::WidgetHostNative;
 use op_editor_core::ui_draft::LayerContextTarget;
 use op_editor_core::{NodeId, PenNodeExt};
 use op_editor_ui::widgets::layer_context_menu::LayerContextAction as A;
-use op_editor_ui::widgets::{LayerPanel, TOP_BAR_HEIGHT};
-use op_editor_ui::{Point2D, Rect};
+use op_editor_ui::widgets::LayerPanel;
+use op_editor_ui::Point2D;
 
 const VW: f32 = 1440.0;
 const VH: f32 = 900.0;
@@ -114,13 +114,9 @@ fn eye_and_lock_toggles_via_click_are_undoable() {
     // and scan the panel for the hit the click path will resolve.
     host.editor_state_mut().editor_ui.hovered_layer_id = Some(NodeId::new("a"));
     host.mark_paint_dirty_for_test();
-    let layer_rect = Rect {
-        origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
-        size: Point2D::new(
-            host.editor_state().editor_ui.layer_panel_width,
-            VH - TOP_BAR_HEIGHT,
-        ),
-    };
+    // Ask the host where the tree is: the rail carries a tab row now
+    // (对话 / 图层 / 幻灯片), so the tree starts below it.
+    let layer_rect = host.layers_content_rect(VW, VH);
     let find = |host: &WidgetHostNative, want_eye: bool| -> Option<(f32, f32)> {
         let panel = LayerPanel::from_editor(host.editor_state());
         let mut y = layer_rect.origin.y;
@@ -170,13 +166,9 @@ fn layer_drag_reorder_is_undoable() {
     let mut host = two_rects_host();
     host.mark_paint_dirty_for_test();
     host.refresh_layout_scene();
-    let layer_rect = Rect {
-        origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
-        size: Point2D::new(
-            host.editor_state().editor_ui.layer_panel_width,
-            VH - TOP_BAR_HEIGHT,
-        ),
-    };
+    // Ask the host where the tree is: the rail carries a tab row now
+    // (对话 / 图层 / 幻灯片), so the tree starts below it.
+    let layer_rect = host.layers_content_rect(VW, VH);
     // Scan for a cursor point whose drop target moves "a" after "b".
     let panel = LayerPanel::from_editor_with_drag_source(host.editor_state(), &NodeId::new("a"));
     let mut drop_at: Option<(f32, f32)> = None;
@@ -233,9 +225,11 @@ fn add_page_via_click_is_undoable() {
     host.mark_paint_dirty_for_test();
     // The `+` affordance sits top-right of the Pages header:
     // plus_x = panel_w - ROW_PAD_X(12) - 12, a 14 px box.
-    let panel_w = host.editor_state().editor_ui.layer_panel_width;
-    let plus_x = panel_w - 12.0 - 12.0 + 7.0;
-    let plus_y = TOP_BAR_HEIGHT + 8.0 + 7.0;
+    // Measured from the rail's CONTENT rect, not the window: the rail
+    // carries a tab row now, so the Pages header starts below it.
+    let content = host.layers_content_rect(VW, VH);
+    let plus_x = content.origin.x + content.size.x - 12.0 - 12.0 + 7.0;
+    let plus_y = content.origin.y + 8.0 + 7.0;
     let before = history_len(&host);
     assert!(host.apply_click(plus_x, plus_y, VW, VH));
     assert_eq!(page_names(&host).len(), 4, "page added");

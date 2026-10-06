@@ -8,6 +8,33 @@ use super::WidgetHostNative;
 
 impl WidgetHostNative {
     pub fn apply_send(&mut self) -> bool {
+        if self.editor_state.editor_ui.home.visible {
+            // The overlays Home opens own Enter above the sheet: the
+            // settings modal falls through to its own ladder arm, the
+            // picker and sign-in modal simply swallow the key.
+            if self.editor_state.editor_ui.agent_settings_open {
+                // Fall through to the settings handling below.
+            } else if self.editor_state.editor_ui.chat_model_picker.open
+                || self.editor_state.editor_ui.login_modal_open
+            {
+                return true;
+            } else {
+                if self
+                    .editor_state
+                    .editor_ui
+                    .home
+                    .generation_prompt()
+                    .is_none()
+                {
+                    return true;
+                }
+                // Same wrapped-launch path as the sheet's Send button — one
+                // implementation arms the result view and queues the turn.
+                let sent = self.queue_home_send();
+                self.mark_dirty();
+                return sent;
+            }
+        }
         // Enter in the save-name dialog confirms (mobile keyboards send it
         // as the "done" action); a blank name swallows the key instead.
         if self.editor_state.editor_ui.save_name_dialog.open {
@@ -258,6 +285,11 @@ impl WidgetHostNative {
         // `begin_send` itself gates on (text OR staged attachments) —
         // an attachment-only turn is valid, so don't short-circuit on
         // empty text here.
+        // Same as the click path: a send from the composer-only card
+        // moves the user to the rail's Agent tab, where the reply is.
+        if self.editor_state.editor_ui.chat_composer_only() {
+            self.editor_state.editor_ui.enter_chat_tab();
+        }
         // Real provider turn — raises `chat.pending_send`.
         let sent = self.editor_state.chat.begin_send();
         if sent {

@@ -32,7 +32,7 @@ Build promise → proof → trust → action: what it is → why it works → wh
 
 ## Color for conversion
 
-- The CTA is the single most prominent thing on the page. Reserve `$color-accent` (or the style-guide accent; hex when no palette) for ACTIONS only — don't spend it on decorative chrome, or the button stops standing out.
+- The CTA is the single most prominent thing on the page. Reserve `$--primary` (or the style-guide accent; hex when no palette) for ACTIONS only — don't spend it on decorative chrome, or the button stops standing out.
 - One primary action per section; secondary actions are ghost/outline, visually quieter.
 
 ## Imagery

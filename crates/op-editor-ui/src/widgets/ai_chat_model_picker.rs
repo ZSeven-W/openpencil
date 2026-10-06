@@ -1,32 +1,45 @@
 //! Model-picker dropdown for the AI chat panel — the upward
 //! popover that lists saved models grouped by provider.
 //! Mirrors the TS `ai-chat-model-selector.tsx` `ModelDropdown`
-//! (search row + grouped rows + per-provider brand icon + selected
-//! check / badges).
+//! (search row + grouped rows + selected check / qualifiers),
+//! restyled to the Studio design language: a 12 px-radius card
+//! with a soft ink shadow, 36 px rows with an 18 px provider mark
+//! and a right-aligned qualifier line, a filled selected pill,
+//! and an "添加模型" footer action.
+//!
+//! This file owns the layout, scroll and hit-test contract; the
+//! painting lives in the sibling `ai_chat_model_picker_paint.rs`,
+//! declared below with `#[path]` so `widgets/mod.rs` keeps a
+//! single picker entry.
 
-use crate::theme::Theme;
 use crate::widgets::brand_icons::{
     paint_brand_logo, paint_deepseek_harness_logo, paint_opencode_logo, BrandLogo,
 };
-use crate::widgets::button::paint_button_feedback_wash;
-use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::property_panel_text_input::paint_text_input_view_value;
-use crate::widgets::text_metrics;
 use crate::widgets::PaintCx;
-use crate::{Color, Point2D, Rect, TextLayout};
-use jian_core::text_input::TextInputState;
+use crate::{Color, Point2D, Rect};
 pub use jian_widgets::components::select::SelectHit;
 use jian_widgets::components::select::SelectState;
 use op_editor_core::chat::{AgentProvider, ModelEntry};
 
+#[path = "ai_chat_model_picker_paint.rs"]
+mod paint;
+
+pub use paint::paint_model_picker;
+// Layout helper surfaced for the row-text collision tests.
+#[cfg(test)]
+pub(crate) use paint::fit_row_text;
+
 /// Height of a provider group-header row.
-pub const MODEL_GROUP_H: f32 = 22.0;
+pub const MODEL_GROUP_H: f32 = 26.0;
 /// Height of a single model row.
-pub const MODEL_ROW_H: f32 = 28.0;
-/// Vertical padding inside the dropdown card (top + bottom each).
-pub const MODEL_PICKER_PAD_Y: f32 = 6.0;
+pub const MODEL_ROW_H: f32 = 36.0;
+/// Vertical padding inside the dropdown card's list area (top +
+/// bottom each).
+pub const MODEL_PICKER_PAD_Y: f32 = 8.0;
 /// Fixed search strip at the top of the dropdown.
 pub const MODEL_SEARCH_H: f32 = 40.0;
+/// Fixed "添加模型" action row closing the card under the list.
+pub const MODEL_FOOTER_H: f32 = 36.0;
 /// Hard cap on the dropdown's painted height. A connected catalog
 /// taller than this (e.g. OpenCode's 75+ models) scrolls inside the
 /// card instead of growing off the top of the screen.
@@ -40,19 +53,23 @@ pub fn picker_view_height(models: &[ModelEntry], search: &str) -> f32 {
 }
 
 /// Largest valid scroll offset for `models` — `0` when the content
-/// already fits inside [`MODEL_PICKER_MAX_H`].
+/// already fits inside [`MODEL_PICKER_MAX_H`]. The search strip and
+/// the footer are fixed chrome, so only the list band between them
+/// scrolls.
 pub fn max_picker_scroll(models: &[ModelEntry], search: &str) -> f32 {
-    let view_list_h = (picker_view_height(models, search) - MODEL_SEARCH_H).max(0.0);
+    let view_list_h =
+        (picker_view_height(models, search) - MODEL_SEARCH_H - MODEL_FOOTER_H).max(0.0);
     (picker_list_height(models, search) - view_list_h).max(0.0)
 }
 
 /// One laid-out row in the dropdown.
 enum Row {
-    /// Provider group header — carries the provider for its logo.
+    /// Provider group header — a typographic label; the provider's
+    /// mark is painted inside each model row instead.
     Header {
-        provider: AgentProvider,
-        builtin: bool,
-        acp: bool,
+        /// `false` for every group after the first — those get a
+        /// hairline above them.
+        first_group: bool,
         label: String,
     },
     /// Selectable model — carries its index into the flat list.
@@ -134,14 +151,15 @@ fn grouped_visible_model_indices(models: &[ModelEntry], search: &str) -> Vec<Vec
 /// both drive off this so they never drift apart.
 fn walk_rows(models: &[ModelEntry], search: &str, top: f32, mut f: impl FnMut(&Row, f32, f32)) {
     let mut y = top + MODEL_PICKER_PAD_Y;
-    for group in grouped_visible_model_indices(models, search) {
+    for (group_idx, group) in grouped_visible_model_indices(models, search)
+        .into_iter()
+        .enumerate()
+    {
         let first_idx = group[0];
         let entry = &models[first_idx];
         f(
             &Row::Header {
-                provider: entry.provider,
-                builtin: is_builtin(entry),
-                acp: is_acp(entry),
+                first_group: group_idx == 0,
                 label: group_label_for_entry(entry),
             },
             y,
@@ -162,10 +180,10 @@ fn walk_rows(models: &[ModelEntry], search: &str, top: f32, mut f: impl FnMut(&R
     }
 }
 
-/// Total dropdown height for `models` (group headers + rows + the
-/// top/bottom padding).
+/// Total dropdown height for `models` (search strip + group headers
+/// + rows + the top/bottom list padding + the footer action row).
 pub fn picker_content_height(models: &[ModelEntry], search: &str) -> f32 {
-    MODEL_SEARCH_H + picker_list_height(models, search)
+    MODEL_SEARCH_H + picker_list_height(models, search) + MODEL_FOOTER_H
 }
 
 fn picker_list_height(models: &[ModelEntry], search: &str) -> f32 {
@@ -180,9 +198,10 @@ fn picker_list_height(models: &[ModelEntry], search: &str) -> f32 {
 }
 
 /// Map a click inside the dropdown `rect` to the index of the
-/// model row under it. `None` for a click on a header / padding.
-/// `scroll` is the dropdown's vertical scroll offset in px — paint
-/// and hit-test share it so a scrolled row resolves correctly.
+/// model row under it. `None` for a click on a header / footer /
+/// padding. `scroll` is the dropdown's vertical scroll offset in
+/// px — paint and hit-test share it so a scrolled row resolves
+/// correctly.
 pub fn model_at(
     rect: Rect,
     point: Point2D,
@@ -202,8 +221,8 @@ pub fn model_at(
 }
 
 /// Shared select-style hit protocol for the searchable model picker.
-/// Search/header/empty/padding chrome returns `Inside`; model rows
-/// return `Row(index)` where `index` addresses `available_models`.
+/// Search/header/footer/empty/padding chrome returns `Inside`; model
+/// rows return `Row(index)` where `index` addresses `available_models`.
 pub fn model_picker_hit(
     state: &SelectState,
     rect: Rect,
@@ -228,7 +247,9 @@ pub fn model_picker_hit(
     let mut hit = SelectHit::Inside;
     // Walk from a scroll-shifted origin — the same offset paint
     // applies via `translate` — then keep only hits whose row band
-    // actually falls inside the (unscrolled) card rect.
+    // intersects the visible list band (paint clips rows there, so
+    // the footer row below the list can never resolve to a model).
+    let list_bottom = list_rect.origin.y + list_rect.size.y;
     walk_rows(
         models,
         search,
@@ -237,7 +258,7 @@ pub fn model_picker_hit(
             if point.y >= y
                 && point.y < y + h
                 && point.y >= list_rect.origin.y
-                && point.y <= rect.origin.y + rect.size.y
+                && point.y < list_bottom
             {
                 hit = match row {
                     Row::Model { idx, .. } => SelectHit::Row(*idx),
@@ -253,17 +274,23 @@ pub fn search_clear_hit(rect: Rect, point: Point2D, search: &str) -> bool {
     !search.is_empty() && search_clear_rect(rect).contains(point)
 }
 
+/// The scrollable list band between the fixed search strip and the
+/// fixed footer row.
 fn model_list_rect(rect: Rect) -> Rect {
     Rect {
         origin: Point2D::new(rect.origin.x, rect.origin.y + MODEL_SEARCH_H),
-        size: Point2D::new(rect.size.x, (rect.size.y - MODEL_SEARCH_H).max(0.0)),
+        size: Point2D::new(
+            rect.size.x,
+            (rect.size.y - MODEL_SEARCH_H - MODEL_FOOTER_H).max(0.0),
+        ),
     }
 }
 
+/// The 32 px rounded search well floating in the 40 px search strip.
 fn search_field_rect(rect: Rect) -> Rect {
     Rect {
-        origin: Point2D::new(rect.origin.x + 8.0, rect.origin.y + 7.0),
-        size: Point2D::new((rect.size.x - 16.0).max(0.0), 24.0),
+        origin: Point2D::new(rect.origin.x + 10.0, rect.origin.y + 4.0),
+        size: Point2D::new((rect.size.x - 20.0).max(0.0), 32.0),
     }
 }
 
@@ -275,287 +302,15 @@ fn search_clear_rect(rect: Rect) -> Rect {
     }
 }
 
-/// Paint the dropdown card + grouped rows. `selected` is the index
-/// of the active model (gets a check mark), `hover` the index of the
-/// row under the cursor (gets a hover wash). `rect` is the painted
-/// dropdown bounds (already capped at [`MODEL_PICKER_MAX_H`]);
-/// `scroll` shifts the content up when the catalog overflows.
-#[allow(clippy::too_many_arguments)]
-pub fn paint_model_picker(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    rect: Rect,
-    models: &[ModelEntry],
-    selected: usize,
-    state: &SelectState,
-    input: &TextInputState,
-    now_ms: u64,
-    locale: op_editor_core::Locale,
-) {
-    let search = input.text();
-    let scroll = state.scroll.offset;
-    let hover = state.hover;
-    let pressed = state.pressed;
-    // Card background + border — painted unscrolled so the frame
-    // stays put while the rows scroll inside it.
-    cx.backend.fill_round_rect(rect, 10.0, theme.card);
-    cx.backend.stroke_round_rect(rect, 10.0, theme.border, 1.0);
-    let row_left = rect.origin.x + 12.0;
-    paint_search_row(cx, theme, rect, input, now_ms, locale);
-    let list_rect = model_list_rect(rect);
-    if visible_model_indices(models, search).is_empty() {
-        let empty = op_i18n::translate(locale, "ai.noModelsFound");
-        let layout = TextLayout::single_run(
-            empty,
-            "system-ui",
-            12.0,
-            (theme.muted_foreground).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
-        let w = text_metrics::measure_chrome(cx.backend, empty, 12.0);
-        cx.backend.draw_text(
-            &layout,
-            Point2D::new(
-                rect.origin.x + (rect.size.x - w) / 2.0,
-                list_rect.origin.y + 26.0,
-            ),
-        );
-        return;
+/// The filled pill a selected / hovered / pressed model row paints:
+/// inset 6 px from the popover's left and right edges and 3 px from
+/// the row's top and bottom, radius 8. Shared by paint and the
+/// geometry tests.
+pub(crate) fn model_row_pill_rect(rect: Rect, row_y: f32) -> Rect {
+    Rect {
+        origin: Point2D::new(rect.origin.x + 6.0, row_y + 3.0),
+        size: Point2D::new((rect.size.x - 12.0).max(0.0), MODEL_ROW_H - 6.0),
     }
-    // Clip to the card and shift by `-scroll` so off-card rows are
-    // trimmed and the visible band tracks the scroll offset.
-    cx.backend.save();
-    cx.backend.clip_rect(list_rect);
-    cx.backend.translate(Point2D::new(0.0, -scroll));
-    walk_rows(models, search, list_rect.origin.y, |row, y, h| match row {
-        Row::Header {
-            provider,
-            builtin,
-            acp,
-            label,
-        } => {
-            let logo_y = y + (h - 12.0) / 2.0;
-            if *builtin {
-                paint_key_glyph(
-                    cx,
-                    Point2D::new(row_left, logo_y),
-                    12.0,
-                    theme.muted_foreground,
-                );
-            } else if *acp {
-                paint_plug_glyph(
-                    cx,
-                    Point2D::new(row_left, logo_y),
-                    12.0,
-                    theme.muted_foreground,
-                );
-            } else {
-                paint_provider_logo(
-                    cx,
-                    *provider,
-                    Point2D::new(row_left, logo_y),
-                    12.0,
-                    theme.muted_foreground,
-                );
-            }
-            let label = TextLayout::single_run(
-                label,
-                "system-ui",
-                10.0,
-                (theme.muted_foreground).to_jian(),
-                Point2D::new(0.0, 0.0),
-            );
-            cx.backend
-                .draw_text(&label, Point2D::new(row_left + 18.0, y + h / 2.0 + 3.0));
-        }
-        Row::Model {
-            idx,
-            first_in_group,
-        } => {
-            let is_selected = *idx == selected;
-            let is_hovered = hover == Some(*idx);
-            let is_pressed = pressed == Some(*idx);
-            // Feedback wash on any non-selected row the cursor is over/pressing;
-            // the selected row keeps its own `muted` fill below.
-            if (is_hovered || is_pressed) && !is_selected {
-                paint_button_feedback_wash(
-                    cx.backend,
-                    theme,
-                    Rect {
-                        origin: Point2D::new(rect.origin.x + 4.0, y + 1.0),
-                        size: Point2D::new(rect.size.x - 8.0, h - 2.0),
-                    },
-                    6.0,
-                    is_hovered,
-                    is_pressed,
-                );
-            }
-            if is_selected {
-                cx.backend.fill_round_rect(
-                    Rect {
-                        origin: Point2D::new(rect.origin.x + 4.0, y + 1.0),
-                        size: Point2D::new(rect.size.x - 8.0, h - 2.0),
-                    },
-                    6.0,
-                    theme.muted,
-                );
-                draw_icon(
-                    cx.backend,
-                    Icon::Check,
-                    Point2D::new(row_left, y + (h - 13.0) / 2.0),
-                    13.0,
-                    theme.foreground,
-                    1.6,
-                );
-            }
-            let color = if is_selected {
-                theme.foreground
-            } else {
-                theme.muted_foreground
-            };
-            let name = models
-                .get(*idx)
-                .map(|m| m.display_name.as_str())
-                .unwrap_or("");
-            let label = TextLayout::single_run(
-                name,
-                "system-ui",
-                12.0,
-                (color).to_jian(),
-                Point2D::new(0.0, 0.0),
-            );
-            cx.backend
-                .draw_text(&label, Point2D::new(row_left + 22.0, y + h / 2.0 + 4.0));
-            if let Some(entry) = models.get(*idx) {
-                if is_builtin(entry) {
-                    paint_badge(
-                        cx,
-                        theme,
-                        op_i18n::translate(locale, "builtin.apiKeyBadge"),
-                        rect.origin.x + rect.size.x - 12.0,
-                        y + (h - 16.0) / 2.0,
-                    );
-                } else if *first_in_group && normalized_query(search).is_empty() {
-                    paint_badge(
-                        cx,
-                        theme,
-                        op_i18n::translate(locale, "common.best"),
-                        rect.origin.x + rect.size.x - 12.0,
-                        y + (h - 16.0) / 2.0,
-                    );
-                }
-            }
-        }
-    });
-    cx.backend.restore();
-
-    // Scrollbar thumb — drawn after `restore()` so it sits in
-    // unscrolled card space. Shown only when the content overflows.
-    let content_h = picker_list_height(models, search);
-    let view_h = list_rect.size.y;
-    let track_h = (view_h - 8.0).max(0.0);
-    if let Some(thumb_geom) =
-        (jian_core::scroll::ScrollState { offset: scroll }).thumb(track_h, content_h, view_h, 24.0)
-    {
-        let thumb_y = list_rect.origin.y + 4.0 + thumb_geom.offset;
-        let thumb = Rect {
-            origin: Point2D::new(rect.origin.x + rect.size.x - 6.0, thumb_y),
-            size: Point2D::new(3.0, thumb_geom.len),
-        };
-        cx.backend
-            .fill_round_rect(thumb, 1.5, theme.muted_foreground);
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn paint_search_row(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    rect: Rect,
-    input: &TextInputState,
-    now_ms: u64,
-    locale: op_editor_core::Locale,
-) {
-    let raw = input.text();
-    let divider_y = rect.origin.y + MODEL_SEARCH_H - 0.5;
-    cx.backend.fill_rect(
-        Rect {
-            origin: Point2D::new(rect.origin.x, divider_y),
-            size: Point2D::new(rect.size.x, 1.0),
-        },
-        theme.border,
-    );
-    let search_rect = search_field_rect(rect);
-    cx.backend
-        .fill_round_rect(search_rect, 6.0, (theme.muted).with_alpha(0.5));
-    draw_icon(
-        cx.backend,
-        Icon::Search,
-        Point2D::new(search_rect.origin.x + 8.0, search_rect.origin.y + 6.0),
-        12.0,
-        theme.muted_foreground,
-        1.4,
-    );
-    let text_x = search_rect.origin.x + 28.0;
-    let input_rect = Rect {
-        origin: Point2D::new(text_x, search_rect.origin.y),
-        size: Point2D::new((search_rect.size.x - 52.0).max(0.0), search_rect.size.y),
-    };
-    if raw.is_empty() {
-        let placeholder = op_i18n::translate(locale, "ai.searchModels");
-        let layout = TextLayout::single_run(
-            placeholder,
-            "system-ui",
-            12.0,
-            (theme.muted_foreground).to_jian(),
-            Point2D::new(0.0, 0.0),
-        );
-        cx.backend
-            .draw_text(&layout, Point2D::new(text_x, search_rect.origin.y + 17.0));
-    }
-    paint_text_input_view_value(
-        cx,
-        theme,
-        input,
-        input_rect,
-        12.0,
-        0.0,
-        search_rect.origin.y + 17.0,
-        now_ms,
-    );
-    if !raw.is_empty() {
-        draw_icon(
-            cx.backend,
-            Icon::Close,
-            Point2D::new(
-                search_rect.origin.x + search_rect.size.x - 18.0,
-                search_rect.origin.y + 7.0,
-            ),
-            10.0,
-            theme.muted_foreground,
-            1.4,
-        );
-    }
-}
-
-fn paint_badge(cx: &mut PaintCx<'_>, theme: &Theme, text: &str, right_x: f32, y: f32) {
-    let w = text_metrics::measure_chrome(cx.backend, text, 9.0) + 8.0;
-    let rect = Rect {
-        origin: Point2D::new(right_x - w, y),
-        size: Point2D::new(w, 16.0),
-    };
-    cx.backend.fill_round_rect(rect, 4.0, theme.muted);
-    let layout = TextLayout::single_run(
-        text,
-        "system-ui",
-        9.0,
-        (theme.muted_foreground).to_jian(),
-        Point2D::new(0.0, 0.0),
-    );
-    cx.backend.draw_text(
-        &layout,
-        Point2D::new(rect.origin.x + 4.0, rect.origin.y + 11.0),
-    );
 }
 
 pub(crate) fn paint_key_glyph(cx: &mut PaintCx<'_>, top_left: Point2D, size: f32, color: Color) {
@@ -568,34 +323,6 @@ pub(crate) fn paint_key_glyph(cx: &mut PaintCx<'_>, top_left: Point2D, size: f32
         size,
         color,
         1.4,
-    );
-}
-
-fn paint_plug_glyph(cx: &mut PaintCx<'_>, top_left: Point2D, size: f32, color: Color) {
-    let x = top_left.x;
-    let y = top_left.y;
-    let body = Rect {
-        origin: Point2D::new(x + size * 0.28, y + size * 0.36),
-        size: Point2D::new(size * 0.44, size * 0.34),
-    };
-    cx.backend.stroke_round_rect(body, size * 0.08, color, 1.3);
-    cx.backend.stroke_line(
-        Point2D::new(x + size * 0.38, y + size * 0.16),
-        Point2D::new(x + size * 0.38, y + size * 0.36),
-        color,
-        1.3,
-    );
-    cx.backend.stroke_line(
-        Point2D::new(x + size * 0.62, y + size * 0.16),
-        Point2D::new(x + size * 0.62, y + size * 0.36),
-        color,
-        1.3,
-    );
-    cx.backend.stroke_line(
-        Point2D::new(x + size * 0.50, y + size * 0.70),
-        Point2D::new(x + size * 0.50, y + size * 0.94),
-        color,
-        1.3,
     );
 }
 

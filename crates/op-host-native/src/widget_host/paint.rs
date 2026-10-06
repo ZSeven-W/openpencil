@@ -9,8 +9,8 @@ use op_editor_ui::widgets::editor_state_ext::theme_for;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
 use op_editor_ui::widgets::{
     variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar, CanvasViewport, GitPanel,
-    LayoutCx, LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar, TopBar,
-    Widget, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    HomeSurface, LayoutCx, LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar,
+    TopBar, Widget, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -37,6 +37,38 @@ impl WidgetHostNative {
             },
             self.theme.background,
         );
+
+        if self.editor_state.editor_ui.home.visible {
+            // The Home headline and the workspace title resolve their
+            // serif at paint time. Load the native family snapshot before
+            // constructing the surface so the first frame does not fall
+            // back to the editor sans face.
+            self.ensure_system_fonts_loaded();
+        }
+        if self.editor_state.editor_ui.home.visible
+            && self.editor_state.editor_ui.home.shown_at_ms == 0
+        {
+            // First frame since the show: stamp the wall clock the
+            // entrance choreography phases against. Every hide path
+            // resets the stamp, so each show animates from the top.
+            self.editor_state.editor_ui.home.shown_at_ms = self.now_ms;
+        }
+        if let Some(home) = HomeSurface::for_editor_at(&self.editor_state, self.now_ms) {
+            {
+                let mut cx = PaintCx {
+                    backend: &mut *frame,
+                };
+                home.paint(
+                    &mut cx,
+                    Rect::xywh(0.0, 0.0, viewport_width, viewport_height),
+                );
+            }
+            // The overlays Home opens (settings modal, sign-in modal,
+            // model picker) paint above the takeover — mirroring the
+            // z-order `paint_topmost_overlays` gives them elsewhere.
+            self.paint_home_overlays(frame, viewport_width, viewport_height);
+            return;
+        }
 
         let dpi = frame.dpi_scale();
 
@@ -113,6 +145,16 @@ impl WidgetHostNative {
         // stays: it carries the preview toggle, so there is always a visible
         // way out besides Esc and the toolbar's own exit.
         let presenting = self.preview_slideshow_active();
+        // The generation workspace chrome replaces the TopBar / rails
+        // while docked: header + toolbar + dock background paint UNDER
+        // the canvas here, and the deck strip's board rasters paint
+        // over the canvas bottom after the pinned chat (§8.1 below).
+        // The canvas itself and the chat panel paint through the
+        // ordinary sections below at the docked `canvas_region`.
+        let workspace_visible = self.workspace_visible() && !presenting;
+        if workspace_visible {
+            self.paint_workspace_chrome(frame, viewport_width, viewport_height);
+        }
         if self.device_mode_active() && self.preview_device_frame.is_none() {
             // Paint owns authoritative viewport dimensions; enter-time
             // cached dimensions can still be zero on a fresh host.
@@ -132,7 +174,7 @@ impl WidgetHostNative {
             origin: Point2D::new(0.0, 0.0),
             size: Point2D::new(viewport_width, TOP_BAR_HEIGHT),
         };
-        if !self.editor_state.editor_ui.touch_chrome() {
+        if !self.editor_state.editor_ui.touch_chrome() && !workspace_visible {
             {
                 let mut cx = PaintCx {
                     backend: &mut *frame,
@@ -144,9 +186,10 @@ impl WidgetHostNative {
         // 3. The left rail — painted BEFORE the canvas on the desktop
         //    (it pushes the canvas) and AFTER it in mobile layout (it
         //    overlays the canvas).
-        let persistent_layers = !self.editor_state.editor_ui.touch_chrome()
-            || (self.editor_state.editor_ui.expanded_touch_layout()
-                && self.editor_state.editor_ui.sidebar_open);
+        let persistent_layers = !workspace_visible
+            && (!self.editor_state.editor_ui.touch_chrome()
+                || (self.editor_state.editor_ui.expanded_touch_layout()
+                    && self.editor_state.editor_ui.sidebar_open));
         if persistent_layers {
             self.paint_left_rail(frame, viewport_width, viewport_height);
         }
@@ -297,7 +340,7 @@ impl WidgetHostNative {
                 == Some(op_editor_core::size_class::MobileSheetKind::Properties);
         if let Some(panel) = property_panel
             .as_ref()
-            .filter(|_| !presenting && properties_open)
+            .filter(|_| !presenting && properties_open && !workspace_visible)
         {
             let property_rect = self.property_rect(viewport_width, viewport_height);
             let mut cx = PaintCx {
@@ -321,7 +364,7 @@ impl WidgetHostNative {
         //     floating canvas overlay next to the toolbar.
         if let Some(vars_rect) = self
             .variables_panel_rect(viewport_width, viewport_height)
-            .filter(|_| !presenting)
+            .filter(|_| !presenting && !workspace_visible)
         {
             let vars = VariablesPanel::for_editor_at(&self.editor_state, self.now_ms);
             let mut cx = PaintCx {
@@ -335,7 +378,7 @@ impl WidgetHostNative {
         //       rows (variables_preset_press.rs owns the geometry).
         if let Some((preset_menu, preset_menu_rect)) = self
             .variables_preset_menu_with_rect(viewport_width, viewport_height)
-            .filter(|_| !presenting)
+            .filter(|_| !presenting && !workspace_visible)
         {
             let mut cx = PaintCx {
                 backend: &mut *frame,
@@ -355,7 +398,11 @@ impl WidgetHostNative {
             .y;
         let toolbar_rect = canvas_geometry::toolbar_rect(&self.editor_state, toolbar_h);
         let touch_layout = self.editor_state.editor_ui.touch_chrome();
-        if canvas_geometry::toolbar_fits(canvas_w) && !presenting && !touch_layout {
+        if canvas_geometry::toolbar_fits(canvas_w)
+            && !presenting
+            && !touch_layout
+            && !workspace_visible
+        {
             let mut cx = PaintCx {
                 backend: &mut *frame,
             };
@@ -381,6 +428,11 @@ impl WidgetHostNative {
             };
             chat.paint(&mut cx, chat_rect);
         }
+        // The rail's edge belongs to the rail, but it has to go down
+        // after the pinned chat has filled the rail's body.
+        if !presenting {
+            self.paint_rail_canvas_edge(frame, viewport_height);
+        }
 
         // 8. StatusBar — floating bottom-right.
         if let Some(status_rect) =
@@ -394,12 +446,20 @@ impl WidgetHostNative {
             status.paint(&mut cx, status_rect);
         }
 
+        // 8.1. Workspace deck strip — the presentation family's board
+        //      rasters blit over the strip's placeholder plates, above
+        //      the canvas but below the floating pickers / modals.
+        if workspace_visible {
+            self.paint_workspace_strip(frame, viewport_width, viewport_height);
+        }
+
         // 8.4. Floating align/distribute toolbar — visible whenever
         //      2+ nodes are selected. Sits above the canvas but
         //      below status / modal overlays.
         let canvas_region = canvas_rect;
         if self.preview.is_none()
             && !touch_layout
+            && !workspace_visible
             && self.editor_state.editor_ui.mobile_sheet.is_none()
         {
             if let Some(toolbar) =
@@ -416,7 +476,7 @@ impl WidgetHostNative {
         //      canvas (Select tool). Never in preview mode.
         if let Some(rect) = self
             .marquee_drag
-            .filter(|_| self.preview.is_none())
+            .filter(|_| self.preview.is_none() && !workspace_visible)
             .as_ref()
             .and_then(canvas_geometry::marquee_rect)
         {
@@ -444,7 +504,7 @@ impl WidgetHostNative {
                 == Some(op_editor_core::size_class::MobileSheetKind::Properties);
         if let Some(panel) = property_panel
             .as_ref()
-            .filter(|_| !presenting && properties_open)
+            .filter(|_| !presenting && properties_open && !workspace_visible)
         {
             let property_rect = self.property_rect(viewport_width, viewport_height);
             let mut cx = PaintCx {
@@ -614,29 +674,8 @@ impl WidgetHostNative {
         }
 
         // 10e. Sign-in modal — full-viewport scrim + centred card.
-        if !touch_presenting
-            && (ui.account_ui_available || ui.touch_chrome())
-            && ui.login_modal_open
-        {
-            use op_editor_ui::widgets::login_modal::LoginModal;
-            frame.fill_rect(
-                Rect {
-                    origin: Point2D::new(0.0, 0.0),
-                    size: Point2D::new(viewport_width, viewport_height),
-                },
-                op_editor_ui::Color {
-                    r: 0.0,
-                    g: 0.0,
-                    b: 0.0,
-                    a: 0.45,
-                },
-            );
-            let modal = LoginModal::for_editor(&self.editor_state);
-            let modal_rect = modal.rect(viewport_width, viewport_height);
-            let mut cx = PaintCx {
-                backend: &mut *frame,
-            };
-            modal.paint(&mut cx, modal_rect);
+        if !touch_presenting {
+            self.paint_login_modal_overlay(frame, viewport_width, viewport_height);
         }
 
         // 10f. Signed-in account dropdown — anchored under the TopBar
@@ -658,26 +697,8 @@ impl WidgetHostNative {
         }
 
         // 10a. Agent-settings modal — top-most overlay when open.
-        if !touch_presenting && ui.agent_settings_open {
-            // Dim scrim across the full viewport.
-            let scrim_color = op_editor_ui::Color {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-                a: 0.45,
-            };
-            frame.fill_rect(
-                Rect {
-                    origin: Point2D::new(0.0, 0.0),
-                    size: Point2D::new(viewport_width, viewport_height),
-                },
-                scrim_color,
-            );
-            let (panel, panel_rect) = self.agent_settings_geometry(viewport_width, viewport_height);
-            let mut cx = PaintCx {
-                backend: &mut *frame,
-            };
-            panel.paint(&mut cx, panel_rect);
+        if !touch_presenting {
+            self.paint_agent_settings_modal_overlay(frame, viewport_width, viewport_height);
         }
 
         // 10b. Color picker — floating overlay near the right rail.

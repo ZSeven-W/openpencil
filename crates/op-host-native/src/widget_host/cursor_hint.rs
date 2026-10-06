@@ -43,6 +43,14 @@ impl WidgetHostNative {
         if let Some(resize) = self.chat_resize {
             return Self::chat_resize_cursor(resize.edge);
         }
+        // The workspace dock's drag handle resizes the dock — an
+        // in-flight drag or a hover on the handle both read as EW.
+        if self.workspace_dock_drag.is_some() {
+            return CursorHint::ResizeEw;
+        }
+        if self.workspace_dock_resize_hover(x, y, viewport_w, viewport_h) {
+            return CursorHint::ResizeEw;
+        }
         // Keep an in-flight Variables resize gesture authoritative even if a
         // different overlay opens before the next pointer event.
         if let Some(edge) = self.variables_resize {

@@ -137,10 +137,33 @@ impl Drop for CodexHelpStub {
 #[cfg(unix)]
 #[test]
 fn codex_ephemeral_flag_is_capability_gated_and_cached() {
-    let supported = CodexHelpStub::new("      --ephemeral  Do not persist session files");
-    let mut args = vec!["exec".into(), "--json".into()];
-    quirks::append_codex_ephemeral_arg(&supported.binary, &mut args);
-    assert_eq!(args, ["exec", "--ephemeral", "--json"]);
+    // The gate result is negative-cached per binary path, and the probe
+    // behind it (`codex exec --help` through the real `env node` wrapper
+    // chain) is wall-clock bounded. On a saturated machine — parallel
+    // `cargo test` plus external load; measured locally with the whole
+    // suite running concurrently — the stub's spawn chain can outlive
+    // even a generous probe budget, and that one slow probe would pin
+    // "unsupported" for the stub's path forever. So when the flag fails
+    // to appear, retry with a FRESH stub (fresh path = fresh cache slot)
+    // instead of re-asking the poisoned entry. A real gating regression
+    // fails every attempt deterministically, so nothing the test proves
+    // is weakened; the retries only absorb scheduler starvation. The
+    // attempt count is generous because it is nearly free where it
+    // matters: a regressed gate completes each probe in well under a
+    // second (the stub exits immediately), so all attempts together
+    // still fail fast — only a starved machine pays a probe budget per
+    // attempt, and that is exactly the case the retries exist to
+    // outlast (the suite's own spawn-storm phase can starve a fresh
+    // child for tens of seconds; measured 10+ consecutive 10s probe
+    // timeouts with three test binaries running concurrently).
+    let supported = (0..12)
+        .find_map(|_| {
+            let stub = CodexHelpStub::new("      --ephemeral  Do not persist session files");
+            let mut args = vec!["exec".into(), "--json".into()];
+            quirks::append_codex_ephemeral_arg(&stub.binary, &mut args);
+            (args == ["exec", "--ephemeral", "--json"]).then_some(stub)
+        })
+        .expect("a Codex advertising --ephemeral must have the flag gated in");
 
     // Removing the stand-in proves the second lookup uses the path cache.
     std::fs::remove_file(&supported.binary).expect("remove supported stub");
@@ -148,6 +171,10 @@ fn codex_ephemeral_flag_is_capability_gated_and_cached() {
     quirks::append_codex_ephemeral_arg(&supported.binary, &mut cached);
     assert_eq!(cached, ["exec", "--ephemeral", "--json"]);
 
+    // No retry needed here: a probe failure and a genuine "not
+    // advertised" verdict both leave the flag out, which is exactly what
+    // the assertion requires — it cannot flake, only miss a regression
+    // that the retried positive case above would catch.
     let unsupported = CodexHelpStub::new("Usage: codex exec [OPTIONS]");
     let mut old_args = vec!["exec".into(), "--json".into()];
     quirks::append_codex_ephemeral_arg(&unsupported.binary, &mut old_args);
@@ -262,8 +289,17 @@ fn terminal_reap_obeys_its_deadline() {
         ];
         let mut child =
             LineStreamChild::spawn_command(build_command("/bin/sh", &args)).expect("spawn sleeper");
-        for _ in 0..100 {
-            if pid_file.is_file() {
+        // Liveness bound, not the property under test: a loaded machine
+        // can take whole seconds to schedule the stub far enough to write
+        // its pid file, so this wait is generous. It waits for the
+        // newline-terminated payload rather than existence — the shell's
+        // `>` redirection creates the file before `echo` writes into it,
+        // and an existence check raced that into reading an empty pid.
+        let spawn_deadline = std::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            let written =
+                std::fs::read_to_string(&pid_file).is_ok_and(|content| content.ends_with('\n'));
+            if written || std::time::Instant::now() >= spawn_deadline {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(5)).await;
@@ -285,11 +321,20 @@ fn terminal_reap_obeys_its_deadline() {
             status.is_some(),
             "deadline must force-kill and reap the child"
         );
-        assert!(started.elapsed() < Duration::from_secs(1));
-        for _ in 0..100 {
+        // Far below the 30s child lifetime (the property: the deadline,
+        // not the child, ends the reap), yet wide enough that scheduler
+        // starvation under a loaded parallel run cannot fail it.
+        assert!(started.elapsed() < Duration::from_secs(10));
+        // Generous liveness bound for kill delivery + init's zombie reap
+        // under load; the assert below still fails if the descendant
+        // genuinely survives the tree reap.
+        let reap_deadline = std::time::Instant::now() + Duration::from_secs(10);
+        loop {
             // SAFETY: signal 0 is a read-only existence probe for the exact
             // positive pid written by this test's own child.
-            if unsafe { libc::kill(descendant, 0) } != 0 {
+            if unsafe { libc::kill(descendant, 0) } != 0
+                || std::time::Instant::now() >= reap_deadline
+            {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(5)).await;
@@ -323,7 +368,9 @@ fn terminal_reap_obeys_receiver_cancellation() {
             status.is_some(),
             "cancellation must force-kill and reap the child"
         );
-        assert!(started.elapsed() < Duration::from_secs(1));
+        // Same rationale as the deadline case above: well under the 30s
+        // child lifetime, tolerant of load-induced scheduling lag.
+        assert!(started.elapsed() < Duration::from_secs(10));
     });
 }
 
@@ -473,13 +520,40 @@ fn codex_turn_args_map_effort_to_reasoning_config() {
 }
 
 #[test]
-fn claude_subprocess_template_ignores_model() {
-    // Claude Code's model rides the SDK adapter (chat_claude.rs); its
-    // subprocess template must not grow a model flag here.
+fn claude_subprocess_template_passes_the_model_alias() {
+    // Headless generation (op-smoke, the arena) selects the Claude model
+    // through the CLI's own `--model` flag; the routed chat still rides
+    // the SDK adapter (chat_claude.rs) and never reaches this template.
     let p = SubprocessProvider::for_cli(CliName::ClaudeCode).unwrap();
-    let base = p.args.clone();
-    let args = p.turn_args(&request_with_model(Some("some-model")));
-    assert_eq!(args, base, "Claude Code args must be unchanged");
+    let args = p.turn_args(&request_with_model(Some("opus")));
+    let at = args
+        .iter()
+        .position(|a| a == "--model")
+        .expect("--model flag present");
+    assert_eq!(args.get(at + 1).map(String::as_str), Some("opus"));
+}
+
+#[test]
+fn claude_generation_turns_disallow_every_tool() {
+    // A generation turn is parsed as text by the orchestrator; the child
+    // must not be able to touch files, run commands or load MCP servers.
+    let p = SubprocessProvider::for_cli_generation(CliName::ClaudeCode).unwrap();
+    assert!(p.args.iter().any(|a| a == "--strict-mcp-config"));
+    let at = p
+        .args
+        .iter()
+        .position(|a| a == "--disallowedTools")
+        .expect("disallowed tools flag");
+    let list = p.args.get(at + 1).expect("tool list");
+    for tool in ["Bash", "Write", "Edit", "Read", "WebFetch", "Task"] {
+        assert!(
+            list.split(',').any(|t| t == tool),
+            "{tool} missing from {list}"
+        );
+    }
+    // The canvas-agent template keeps the CLI's own tool policy.
+    let canvas = SubprocessProvider::for_cli(CliName::ClaudeCode).unwrap();
+    assert!(!canvas.args.iter().any(|a| a == "--disallowedTools"));
 }
 
 #[test]

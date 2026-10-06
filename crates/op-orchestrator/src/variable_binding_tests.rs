@@ -1,7 +1,7 @@
 //! Slot-awareness of `bind_generated_color_variables`.
 //!
 //! The fixture is `0808-gm-1.op`'s real palette: a dark design whose
-//! ACTIVE (Light-slot) `color-border` is the near-white `#E2E8F0`, close
+//! ACTIVE (Light-slot) `--border` is the near-white `#E2E8F0`, close
 //! enough to a heading's authored white that colour distance alone bound
 //! every title in the document to the border token.
 
@@ -13,16 +13,16 @@ fn state_with_dusk_palette() -> EditorState {
         "version": "1.0",
         "themes": {"Mode": ["Light", "Dark"]},
         "variables": {
-            "color-border": {"type":"color","value":[
+            "--border": {"type":"color","value":[
                 {"value":"#E2E8F0","theme":{"Mode":"Light"}},
                 {"value":"#334155","theme":{"Mode":"Dark"}}]},
-            "color-text-primary": {"type":"color","value":[
+            "--foreground": {"type":"color","value":[
                 {"value":"#F1F5F9","theme":{"Mode":"Light"}},
                 {"value":"#F1F5F9","theme":{"Mode":"Dark"}}]},
-            "color-surface": {"type":"color","value":[
+            "--card": {"type":"color","value":[
                 {"value":"#1E293B","theme":{"Mode":"Light"}},
                 {"value":"#1E293B","theme":{"Mode":"Dark"}}]},
-            "color-accent": {"type":"color","value":[
+            "--primary": {"type":"color","value":[
                 {"value":"#6B62F2","theme":{"Mode":"Light"}},
                 {"value":"#6B62F2","theme":{"Mode":"Dark"}}]}
         },
@@ -41,10 +41,10 @@ fn bind_one(value: serde_json::Value) -> serde_json::Value {
 
 #[test]
 fn a_heading_is_not_bound_to_the_border_token() {
-    // The measured defect: `#E2E8F0` IS `$color-border`'s active value, so
+    // The measured defect: `#E2E8F0` IS `$--border`'s active value, so
     // distance-only matching bound a 36px headline to the hairline token.
     // Nothing rendered differently — until the theme flipped, or the palette
-    // repair pulled `color-border` to its dark slot, and the headline went
+    // repair pulled `--border` to its dark slot, and the headline went
     // with it.
     let bound = bind_one(json!({
         "type":"text","id":"h","content":"Multimodal Neural Synthesis",
@@ -60,13 +60,13 @@ fn a_heading_is_not_bound_to_the_border_token() {
 #[test]
 fn the_same_hex_on_a_hairline_still_binds() {
     // Slot-awareness must not disarm binding: on the slot the token is FOR,
-    // the very same colour still resolves to `$color-border`.
+    // the very same colour still resolves to `$--border`.
     let bound = bind_one(json!({
         "type":"frame","id":"card","layout":"vertical",
         "stroke":{"thickness":1,"fill":[{"type":"solid","color":"#E2E8F0"}]},
         "children":[]
     }));
-    assert_eq!(bound["stroke"]["fill"][0]["color"], "$color-border");
+    assert_eq!(bound["stroke"]["fill"][0]["color"], "$--border");
 }
 
 #[test]
@@ -91,42 +91,42 @@ fn a_semantic_colour_still_themes_every_slot() {
         "type":"text","id":"t","content":"Live",
         "fill":[{"type":"solid","color":"#6B62F2"}]
     }));
-    assert_eq!(text["fill"][0]["color"], "$color-accent");
+    assert_eq!(text["fill"][0]["color"], "$--primary");
 
     let icon = bind_one(json!({
         "type":"icon_font","id":"i","iconFontName":"zap","width":14,"height":14,
         "fill":[{"type":"solid","color":"#6B62F2"}]
     }));
-    assert_eq!(icon["fill"][0]["color"], "$color-accent");
+    assert_eq!(icon["fill"][0]["color"], "$--primary");
 
     let surface = bind_one(json!({
         "type":"frame","id":"pill","layout":"horizontal",
         "fill":[{"type":"solid","color":"#6B62F2"}],
         "children":[]
     }));
-    assert_eq!(surface["fill"][0]["color"], "$color-accent");
+    assert_eq!(surface["fill"][0]["color"], "$--primary");
 }
 
 #[test]
 fn a_glyph_still_binds_to_the_text_family() {
-    // The positive case for text: an exact `$color-text-primary` hex on a
+    // The positive case for text: an exact `$--foreground` hex on a
     // text node binds, so the slot filter is a category guard and not a
     // blanket refusal to theme text.
     let bound = bind_one(json!({
         "type":"text","id":"t","content":"4K Render",
         "fill":[{"type":"solid","color":"#F1F5F9"}]
     }));
-    assert_eq!(bound["fill"][0]["color"], "$color-text-primary");
+    assert_eq!(bound["fill"][0]["color"], "$--foreground");
 }
 
 #[test]
 fn family_of_reads_the_naming_convention() {
-    assert_eq!(family_of("color-text-primary"), ColorFamily::Text);
+    assert_eq!(family_of("--foreground"), ColorFamily::Text);
     // A state TEXT token, not a state background — "text" must win.
-    assert_eq!(family_of("color-danger-text"), ColorFamily::Text);
-    assert_eq!(family_of("color-danger-bg"), ColorFamily::Surface);
-    assert_eq!(family_of("color-border-strong"), ColorFamily::Border);
-    assert_eq!(family_of("color-surface-2"), ColorFamily::Surface);
-    assert_eq!(family_of("color-accent"), ColorFamily::Semantic);
-    assert_eq!(family_of("color-chart-1"), ColorFamily::Semantic);
+    assert_eq!(family_of("--color-error-foreground"), ColorFamily::Text);
+    assert_eq!(family_of("--color-error"), ColorFamily::Surface);
+    assert_eq!(family_of("--input"), ColorFamily::Border);
+    assert_eq!(family_of("--muted"), ColorFamily::Surface);
+    assert_eq!(family_of("--primary"), ColorFamily::Semantic);
+    assert_eq!(family_of("--chart-1"), ColorFamily::Semantic);
 }

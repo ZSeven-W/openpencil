@@ -86,10 +86,12 @@ fn design_session_drains_progress_and_command_requests() {
                 node_count: 2,
                 error: None,
                 inserted_root_ids: Vec::new(),
+                headline: None,
                 subtask: None,
             }],
             total_nodes: 2,
             unfilled_screens: Vec::new(),
+            incomplete_subtask_failure: false,
         })))
         .expect("done");
 
@@ -126,6 +128,7 @@ fn design_session_drains_progress_queued_after_done_before_finishing() {
             subtasks: Vec::new(),
             total_nodes: 0,
             unfilled_screens: Vec::new(),
+            incomplete_subtask_failure: false,
         })))
         .expect("done");
     delta_tx
@@ -223,6 +226,7 @@ fn dropping_naturally_finished_design_session_does_not_abort_worker() {
             subtasks: Vec::new(),
             total_nodes: 0,
             unfilled_screens: Vec::new(),
+            incomplete_subtask_failure: false,
         })))
         .expect("done");
 

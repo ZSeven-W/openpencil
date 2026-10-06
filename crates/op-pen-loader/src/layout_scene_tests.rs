@@ -17,6 +17,8 @@ mod flex_pages;
 mod masks_blend;
 #[path = "layout_scene_tests/opacity.rs"]
 mod opacity;
+#[path = "layout_scene_tests/shader_preset.rs"]
+mod shader_preset;
 #[path = "layout_scene_tests/text.rs"]
 mod text;
 #[path = "layout_scene_tests/tokens_refs.rs"]

@@ -233,7 +233,7 @@ pub(super) fn style_count_badge(node: &mut Value) {
     node["layout"] = json!("horizontal");
     node["justifyContent"] = json!("center");
     node["alignItems"] = json!("center");
-    node["fill"] = solid_fill("$color-accent");
+    node["fill"] = solid_fill("$--primary");
     if let Some(obj) = node.as_object_mut() {
         obj.remove("stroke");
         obj.remove("effects");

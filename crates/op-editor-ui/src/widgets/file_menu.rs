@@ -27,6 +27,7 @@ use op_editor_core::editor_ui_state::EditorUiState;
 /// carry (a Mac-convention "..."), so the result is trimmed.
 fn t(ui: &EditorUiState, key: &str) -> &'static str {
     let full = match key {
+        "home" => "fileMenu.home",
         "new" => "fileMenu.newFile",
         "newFromTemplate" => "fileMenu.newFromTemplate",
         "open" => "fileMenu.openFile",
@@ -76,6 +77,7 @@ pub(crate) use paint::truncate_to_width;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileMenuChoice {
+    Home,
     NewFile,
     /// Open the Scene Template Center to start from a finished document.
     NewFromTemplate,
@@ -185,7 +187,7 @@ impl<'a> FileMenu<'a> {
     /// export rows precede it. Only meaningful when
     /// [`FileMenu::has_deck_export_rows`] holds.
     fn deck_html_row(&self) -> usize {
-        6 + usize::from(self.has_save_as_template_row()) + usize::from(self.has_export_all_row())
+        7 + usize::from(self.has_save_as_template_row()) + usize::from(self.has_export_all_row())
     }
 
     /// Row index of the PowerPoint row, directly under the slideshow one.
@@ -196,7 +198,7 @@ impl<'a> FileMenu<'a> {
     /// Row index of the first recent-file entry. Everything after the
     /// export section shifts with [`FileMenu::export_rows`].
     fn recent_row_start(&self) -> usize {
-        5 + usize::from(self.has_save_as_template_row()) + self.export_rows()
+        6 + usize::from(self.has_save_as_template_row()) + self.export_rows()
     }
 
     /// Label for the batch-export row: naming the selected frames when
@@ -216,7 +218,7 @@ impl<'a> FileMenu<'a> {
     /// empty hint) + clear row + section paddings.
     pub fn height(&self) -> f32 {
         let mut h = PAD_Y;
-        h += ROW_HEIGHT * 3.0; // New + New from template + Open
+        h += ROW_HEIGHT * 4.0; // Home + New + New from template + Open
         h += DIVIDER_GAP * 2.0 + 1.0; // divider
         h += ROW_HEIGHT * (2 + usize::from(self.has_save_as_template_row())) as f32;
         h += DIVIDER_GAP * 2.0 + 1.0;
@@ -252,17 +254,18 @@ impl<'a> FileMenu<'a> {
     pub fn choice_for_row(&self, row: usize) -> Option<FileMenuChoice> {
         let recent_start = self.recent_row_start();
         match row {
-            0 => Some(FileMenuChoice::NewFile),
-            1 => Some(FileMenuChoice::NewFromTemplate),
-            2 => Some(FileMenuChoice::OpenFile),
-            3 => Some(FileMenuChoice::Save),
-            4 => Some(FileMenuChoice::SaveAs),
-            5 if self.has_save_as_template_row() => Some(FileMenuChoice::SaveAsTemplate),
-            row if row == 5 + usize::from(self.has_save_as_template_row()) => {
+            0 => Some(FileMenuChoice::Home),
+            1 => Some(FileMenuChoice::NewFile),
+            2 => Some(FileMenuChoice::NewFromTemplate),
+            3 => Some(FileMenuChoice::OpenFile),
+            4 => Some(FileMenuChoice::Save),
+            5 => Some(FileMenuChoice::SaveAs),
+            6 if self.has_save_as_template_row() => Some(FileMenuChoice::SaveAsTemplate),
+            row if row == 6 + usize::from(self.has_save_as_template_row()) => {
                 Some(FileMenuChoice::ExportImage)
             }
             row if self.has_export_all_row()
-                && row == 6 + usize::from(self.has_save_as_template_row()) =>
+                && row == 7 + usize::from(self.has_save_as_template_row()) =>
             {
                 Some(FileMenuChoice::ExportAllFrames)
             }
@@ -288,7 +291,7 @@ impl<'a> FileMenu<'a> {
         }
         let mut row = 0usize;
         let mut y = panel.origin.y + PAD_Y;
-        for _ in 0..3 {
+        for _ in 0..4 {
             if row_hit(panel.origin.x, y, point) {
                 return MenuHit::Row(row);
             }

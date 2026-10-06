@@ -43,6 +43,7 @@ pub fn enter_preview(
     active_page_index: usize,
     op_ck: &crate::canvaskit::OpCk,
     presenting: bool,
+    now_ms: u64,
 ) -> Result<PreviewSession, op_preview_core::PreviewEnterError> {
     // Construct the browser-backed text measurement backend.
     // It uses the same browser Canvas2D measureText + font stack the design canvas does,
@@ -51,7 +52,7 @@ pub fn enter_preview(
 
     // Enter preview with the measure backend wired. The session takes ownership
     // of the `Rc` and holds it for the lifetime of hit-test queries.
-    PreviewSession::enter(
+    PreviewSession::enter_with_host_motion_preference(
         doc,
         canvas_size,
         active_theme,
@@ -59,5 +60,23 @@ pub fn enter_preview(
         false, // preserve_authored_geometry: web preview does not preserve hand-drawn bounds
         presenting,
         measure_backend,
+        op_preview_core::PreviewHostCapabilities::none(),
+        host_motion_preference(),
+        now_ms,
     )
+}
+
+fn host_motion_preference() -> jian_ops_schema::motion::MotionPreference {
+    // `match_media` yields `Result<Option<MediaQueryList>, JsValue>`: an `Err`
+    // (JS exception) or `None` (no MediaQueryList) means the host preference is
+    // unknowable — fall back to full motion.
+    let reduced = web_sys::window()
+        .and_then(|window| window.match_media("(prefers-reduced-motion: reduce)").ok())
+        .flatten()
+        .is_some_and(|query| query.matches());
+    if reduced {
+        jian_ops_schema::motion::MotionPreference::Reduced
+    } else {
+        jian_ops_schema::motion::MotionPreference::Full
+    }
 }

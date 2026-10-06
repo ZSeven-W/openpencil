@@ -165,7 +165,7 @@ fn color_variable_popup_owns_hover_instead_of_the_rail_underneath() {
         .set_single_selection(NodeId::new("n13"));
     for i in 0..6 {
         assert!(host.editor_state_mut().create_variable(
-            &format!("color-surface-{i:02}"),
+            &format!("--card-{i:02}"),
             VariableKind::Color,
             VariableScalar::Str("#DBD8CB".into()),
         ));

@@ -31,8 +31,13 @@ impl WidgetHostNative {
         let dx = x - resize.start_x;
         match resize.kind {
             PanelResizeKind::LayerRight => {
-                let new_w = (resize.start_width + dx).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH);
-                self.editor_state.editor_ui.layer_panel_width = new_w;
+                // The rail is the chat's column now: the shared clamp
+                // (240–440) through the state-layer setter, so the
+                // professional gutter and the workspace dock handle can
+                // never disagree about the limits.
+                self.editor_state
+                    .editor_ui
+                    .set_layer_panel_width(resize.start_width + dx);
             }
             PanelResizeKind::PropertyLeft => {
                 let new_w = (resize.start_width - dx).clamp(PANEL_MIN_WIDTH, PANEL_MAX_WIDTH);

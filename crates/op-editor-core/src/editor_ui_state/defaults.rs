@@ -4,9 +4,10 @@
 //! Split out of the `editor_ui_state` spine (800-line file ceiling).
 
 use super::{
-    DesignMdPanelState, EditorUiState, EmbedHost, ExportFormat, FlexLayout, GitPanelState, Locale,
-    PencilCursorStyle, PreviewState, PromptCenterState, PropertyTab, SaveNameDialogState,
-    SceneTemplateCenterState, SizeToggleState, ThemeMode, UpdateStatus,
+    DesignMdPanelState, EditorUiState, EmbedHost, EntrySurface, ExportFormat, FlexLayout,
+    GitPanelState, HomeState, Locale, PencilCursorStyle, PreviewState, PromptCenterState,
+    PropertyTab, SaveNameDialogState, SceneTemplateCenterState, SizeToggleState, ThemeMode,
+    UpdateStatus, WorkspaceState,
 };
 use crate::tool::Tool;
 use std::collections::HashSet;
@@ -17,13 +18,19 @@ impl Default for EditorUiState {
             sidebar_open: true,
             layer_panel_width: 240.0,
             property_panel_width: 256.0,
+            chat_tab_width_bumped: false,
             size_class: crate::size_class::EditorSizeClass::Expanded,
             touch: false,
             external_cli_available: true,
             mobile_sheet: None,
             theme_mode: ThemeMode::Dark,
             host_theme_override: None,
+            entry_surface: EntrySurface::default(),
+            home: HomeState::default(),
+            workspace: WorkspaceState::default(),
             locale: Locale::ZhCn,
+            pending_locale: None,
+            locale_persistence_override: None,
             host_locale_override: None,
             locale_picker: jian_widgets::components::select::SelectState::default(),
             preferred_agent_team_size: 1,

@@ -10,6 +10,9 @@ use super::*;
 #[test]
 fn toolbar_panel_actions_open_variables_and_design_panels() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     seed(
         &mut host,
         r#"{"version":"1.0.0","children":[{"type":"rectangle","id":"n1","name":"n1","x":0,"y":0,"width":100,"height":50}]}"#,
@@ -69,6 +72,9 @@ fn toolbar_panel_actions_open_variables_and_design_panels() {
 #[test]
 fn explicit_variables_toolbar_opens_floating_variables_panel() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     seed(
         &mut host,
         r##"{"version":"1.0.0","children":[{"type":"frame","id":"frame-1","name":"Frame","x":0,"y":0,"width":100,"height":50}]}"##,
@@ -103,6 +109,9 @@ fn explicit_variables_toolbar_opens_floating_variables_panel() {
 #[test]
 fn chat_input_click_clears_select_all_without_erasing_text() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let viewport_w = 1200.0;
     let viewport_h = 800.0;
     let rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
@@ -111,10 +120,15 @@ fn chat_input_click_clears_select_all_without_erasing_text() {
         .set_input_text("设计一个现代的移动端登录页面");
     host.editor_state_mut().chat.focused = true;
     host.editor_state_mut().chat.select_all_input(0);
+    // The input block is bottom-anchored in the rail's tall column, so
+    // the probe comes from the live text rect, not the old floating
+    // panel's fixed offset from the top.
+    let text = op_editor_ui::widgets::AIChatPlaceholder::from_editor(host.editor_state())
+        .input_text_rect(rect);
 
     assert!(host.apply_press(
-        rect.origin.x + 80.0,
-        rect.origin.y + textarea_center_y_for_test(),
+        text.origin.x + 64.0,
+        text.origin.y + text.size.y / 2.0,
         viewport_w,
         viewport_h
     ));
@@ -130,13 +144,20 @@ fn chat_input_click_clears_select_all_without_erasing_text() {
 #[test]
 fn chat_input_drag_selects_partial_text_and_replaces_it() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let viewport_w = 1200.0;
     let viewport_h = 800.0;
     let rect = host.ai_chat_rect(viewport_w, viewport_h).unwrap();
     host.editor_state_mut().chat.set_input_text("abcdef");
     host.editor_state_mut().chat.focused = true;
-    let text_x = rect.origin.x + 24.0;
-    let text_y = rect.origin.y + textarea_center_y_for_test();
+    // Offsets are measured from the live text rect's own inner inset
+    // (the old constants were offsets from the floating panel's edge).
+    let text = op_editor_ui::widgets::AIChatPlaceholder::from_editor(host.editor_state())
+        .input_text_rect(rect);
+    let text_x = text.origin.x + 8.0;
+    let text_y = text.origin.y + text.size.y / 2.0;
 
     assert!(host.apply_press(text_x + 6.6, text_y, viewport_w, viewport_h));
     assert_eq!(
@@ -167,6 +188,9 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
     // time, in the order property-focus → locale → shape →
     // fill-type → chat → selection.
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     host.editor_state_mut().ui.property_focus = Some(PropertyFocus::PositionX);
     host.editor_state_mut().ui.property_input.set_text("12");
     host.editor_state_mut().editor_ui.locale_picker.open = true;
@@ -213,6 +237,9 @@ fn escape_closes_one_overlay_per_press_in_priority_order() {
 #[test]
 fn rename_caret_arrows_move_caret_then_fall_through() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     seed(
         &mut host,
         &three_rects(
@@ -270,6 +297,9 @@ fn rename_caret_arrows_move_caret_then_fall_through() {
 fn status_bar_search_click_frames_content_in_viewport() {
     // Three rects spread across doc space (union ≈ x[100,400] y[100,300]).
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     seed(
         &mut host,
         &three_rects(
@@ -306,6 +336,9 @@ fn status_bar_search_click_frames_content_in_viewport() {
 #[test]
 fn status_bar_press_sets_and_release_clears_pressed_button() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let (vw, vh) = (1200.0, 800.0);
     let r = host
         .status_bar_rect(vw, vh)
@@ -328,6 +361,9 @@ fn status_bar_press_sets_and_release_clears_pressed_button() {
 #[test]
 fn export_dialog_press_sets_and_release_clears_pressed_button() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let (vw, vh) = (1200.0, 800.0);
     host.editor_state_mut().editor_ui.export_dialog_open = true;
     let dlg = op_editor_ui::widgets::ExportDialog::centered(vw, vh);
@@ -365,6 +401,9 @@ fn export_dialog_press_sets_and_release_clears_pressed_button() {
 #[test]
 fn figma_import_press_sets_and_release_clears_pressed_button() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     let (vw, vh) = (1200.0, 800.0);
     host.editor_state_mut().editor_ui.figma_import_open = true;
     let modal =

@@ -180,7 +180,8 @@ impl WidgetHostNative {
                 | TopBarHit::ToggleFileMenu
                 | TopBarHit::OpenExportMenu
                 | TopBarHit::OpenAssetCenter
-                | TopBarHit::OpenImportMenu => return Some(true),
+                | TopBarHit::OpenImportMenu
+                | TopBarHit::Home => return Some(true),
                 TopBarHit::ToggleFullscreen => {
                     // The widget host doesn't own the winit window — raise
                     // an intent the desktop runner consumes next frame.
@@ -222,17 +223,9 @@ impl WidgetHostNative {
                     return Some(true);
                 }
                 TopBarHit::Account => {
-                    if !self.editor_state.editor_ui.account_ui_available {
+                    if !self.open_account_entry() {
                         return Some(false);
                     }
-                    if self.editor_state.editor_ui.account.is_signed_in() {
-                        self.editor_state.editor_ui.account_menu_open = true;
-                        self.editor_state.editor_ui.account_menu_hover = None;
-                    } else {
-                        self.editor_state.editor_ui.login_modal_open = true;
-                        self.editor_state.editor_ui.login_modal_hover = None;
-                    }
-                    self.mark_dirty();
                     return Some(true);
                 }
             }

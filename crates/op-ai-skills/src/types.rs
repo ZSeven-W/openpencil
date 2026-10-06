@@ -69,6 +69,16 @@ impl Phase {
     /// cross-tier contract), so the fix is headroom rather than merging them
     /// back together.
     ///
+    /// Generation moved again 16830 → 17100 (2026-09-10): the generation
+    /// schema and interactivity skills gained the slim P1 motion language;
+    /// the extra room keeps their motion recipe complete in the mixed
+    /// generation prompt instead of trimming its tail.
+    ///
+    /// Generation moved again 17100 → 17150 (2026-09-11): schema.md gained a
+    /// concrete mount keyframe example so models emit the canonical
+    /// `{offset, values}` shape; the extra room keeps that line (and the
+    /// rest of the schema tail) inside the mixed generation prompt.
+    ///
     /// Generation moved again 13200 → 13500 (2026-08-11): nine new style guides
     /// and the projector-board corpus additions grew the deck set, so a deck
     /// prompt now resolves 13293 tokens with `design-principles` (438) included.
@@ -90,7 +100,11 @@ impl Phase {
     /// cjk-typography skills, then 15850 → 16050 (2026-08-23) when schema.md
     /// gained the payload-dialect rules (bare numbers, snake_case fill types,
     /// gradient stop `offset`, string text content) that four measured GLM
-    /// rejections proved the model needs stated. A mixed CJK branding + deck request (logo review +
+    /// rejections proved the model needs stated. Then 16050 → 16130 (2026-09-05)
+    /// when schema.md gained the video-on-image line, and 16130 → 16830 the same
+    /// day when mobile-app gained its signature-moment section (budget 2100 →
+    /// 2600); each step kept the mixed logo + deck assembly from clipping the
+    /// `slides` tail. A mixed CJK branding + deck request (logo review +
     /// slides + design rules) measured 15694 tokens; at 15700 the Step 3 knapsack
     /// truncated the `slides` tail, losing the contract. The new ceiling provides
     /// headroom for the expanded corpus while keeping all orthogonal skill contracts
@@ -104,10 +118,22 @@ impl Phase {
     /// `landing-page-predesign` — the phase's only Domain skill — could never
     /// be included on ANY prompt, matched or not. The ceiling now covers the
     /// base set plus that skill with headroom.
+    ///
+    /// Planning moved again 6050 → 6112 when the decomposition corpus gained
+    /// the side-progress-rail rule and squeezed the matched landing-page
+    /// skill's tail.
+    /// Then 6112 → 6300 (2026-09-06): every style-guide candidate line in the
+    /// planner now carries its lead "Key aesthetics" label so the planner can
+    /// pick by mood instead of by name; ~60 guides × a few tokens each.
+    /// Planning moved again 6300 → 6500 (2026-09-06) when the mobile screen
+    /// archetype corpus replaced the pre-design step. Its 591-token body was
+    /// otherwise cut to 452 tokens in the phone planning prompt, removing the
+    /// ARCHETYPE handoff contract; the extra headroom keeps the selected table
+    /// byte-complete.
     pub fn default_budget(self) -> u32 {
         match self {
-            Phase::Planning => 6000,
-            Phase::Generation => 16050,
+            Phase::Planning => 6600,
+            Phase::Generation => 17150,
             Phase::Validation => 3000,
             Phase::Maintenance => 5000,
         }
@@ -115,9 +141,16 @@ impl Phase {
 }
 
 /// Per-phase default token budgets — the TS `DEFAULT_BUDGETS` record.
+/// Generation 16830 → 17100 (2026-09-10): motion language was added to the
+/// schema/interactivity corpus; the phase total grows with those contracts.
+/// Generation 17100 → 17150 (2026-09-11): schema.md gained a concrete mount
+/// keyframe example (~46 tokens) and its per-skill budget 2250 → 2300.
+/// Planning 6500 → 6600 (2026-09-07): the style-guide catalog line now carries
+/// two signature-recipe names per guide, which pushed the runtime-augmented
+/// style-guide-selector to 1528 tokens (budget 1500 → 1600).
 pub const DEFAULT_BUDGETS: [(Phase, u32); 4] = [
-    (Phase::Planning, 6000),
-    (Phase::Generation, 16050),
+    (Phase::Planning, 6600),
+    (Phase::Generation, 17150),
     (Phase::Validation, 3000),
     (Phase::Maintenance, 5000),
 ];
@@ -133,6 +166,14 @@ pub enum SkillTrigger {
     Keywords(Vec<String>),
     /// Included when every named flag is set in `ResolveOptions`.
     Flags(Vec<String>),
+    /// Included when the message matches any keyword OR every named flag
+    /// is set. Domain skills whose subject a planner can detect (a phone
+    /// screen from its dimensions) use this so a brief that never says
+    /// "mobile" — "外卖 App 首页（375×812）" — still loads the domain rules.
+    Either {
+        keywords: Vec<String>,
+        flags: Vec<String>,
+    },
 }
 
 /// Budget-priority class. `Base` is always kept; `Domain` fills the
@@ -390,8 +431,8 @@ mod tests {
 
     #[test]
     fn default_budget_table() {
-        assert_eq!(Phase::Planning.default_budget(), 6000);
-        assert_eq!(Phase::Generation.default_budget(), 16050);
+        assert_eq!(Phase::Planning.default_budget(), 6600);
+        assert_eq!(Phase::Generation.default_budget(), 17150);
         assert_eq!(Phase::Validation.default_budget(), 3000);
         assert_eq!(Phase::Maintenance.default_budget(), 5000);
         // The const table agrees with the per-variant method.

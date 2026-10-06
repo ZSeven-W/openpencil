@@ -15,13 +15,21 @@ pub use super::groups::{
     PromptCenterState, PromptFilter, SaveNameDialogState, SceneFilter, SceneTemplateCenterState,
     SceneTemplateFocus, SizeToggleState, StyleImportState,
 };
+pub use super::home::{
+    EntrySurface, HomeDevice, HomeFamily, HomeHit, HomeState, InfoKind, SlideRatio, TaskDraft,
+};
 pub use super::pickers::{
     CanvasDropIndicator, CanvasOverlayLine, CanvasOverlayRect, CompositingPickerTarget,
     EffectParamFocus, FontPickerPurpose, LayerContextMenuState, MissingFontSurface,
     PageRenameState, PreviewDeviceKind, VariableRowFocus,
 };
 pub use super::slides_panel_state::{
-    LeftPanelTab, SlidesDrag, SlidesPanelState, SlidesPanelTarget,
+    LeftPanelTab, SlidesDrag, SlidesPanelState, SlidesPanelTarget, CHAT_TAB_MIN_WIDTH,
+    LAYER_PANEL_MAX_WIDTH, LAYER_PANEL_MIN_WIDTH,
+};
+pub use super::workspace::{
+    WorkspaceHit, WorkspacePhase, WorkspaceState, WorkspaceView, WORKSPACE_DECK_STRIP_H,
+    WORKSPACE_ENTER_MS, WORKSPACE_HEADER_H, WORKSPACE_TOOLBAR_H,
 };
 
 // `Locale` is the i18n locale enum — dependency-free + wasm-clean, so

@@ -743,7 +743,7 @@ fn preview_builder_reads_committed_rename_text_and_property_drafts() {
     state.ui.property_input.set_composition("2", 1, 1);
 
     assert!(
-        host.enter_preview_with_builder((VW, VH), |state, presenting| {
+        host.enter_preview_with_builder((VW, VH), |state, presenting, _now_ms| {
             let value = serde_json::to_value(&state.doc).unwrap();
             assert_eq!(value["children"][0]["name"], "Renamed!");
             assert_eq!(value["children"][0]["x"], 42.0);
@@ -756,6 +756,7 @@ fn preview_builder_reads_committed_rename_text_and_property_drafts() {
                 state.editor_ui.preserve_authored_geometry,
                 presenting,
                 std::rc::Rc::new(jian_skia::SkiaMeasure::new()),
+                0,
             )
         })
     );
@@ -777,7 +778,7 @@ fn preview_build_failure_still_releases_focus_ime_and_capture() {
         .set_composition("hao", 3, 1);
     host.editor_state_mut().editor_ui.prompt_center.open = true;
     host.begin_canvas_touch_gesture(VW / 2.0, VH / 2.0, VW, VH);
-    assert!(!host.enter_preview_with_builder((VW, VH), |_, _| Err(
+    assert!(!host.enter_preview_with_builder((VW, VH), |_, _, _| Err(
         crate::preview::PreviewEnterError::BuildRuntime("injected".into())
     )));
     assert!(host.preview.is_none());

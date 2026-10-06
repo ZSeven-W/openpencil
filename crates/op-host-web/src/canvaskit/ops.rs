@@ -5,10 +5,24 @@
 //! bodies live here as free functions over the bridge object and the trait
 //! methods in `backend.rs` forward to them verbatim.
 
+use js_sys::Array;
 use op_editor_ui::{Color, Point2D, Rect};
+use wasm_bindgen::JsValue;
 
 use super::bindings::OpCk;
 use super::convert::{flatten_gradient_colors, flatten_gradient_stops};
+
+fn flatten_shader_uniforms(uniforms: &[(&str, &[f32])]) -> (Array, Vec<f32>, Vec<u32>) {
+    let names = Array::new();
+    let mut values = Vec::new();
+    let mut arities = Vec::with_capacity(uniforms.len());
+    for (name, uniform_values) in uniforms {
+        names.push(&JsValue::from_str(name));
+        arities.push(uniform_values.len() as u32);
+        values.extend_from_slice(uniform_values);
+    }
+    (names, values, arities)
+}
 
 pub(super) fn fill_rect(ck: &OpCk, rect: Rect, color: Color) {
     ck.fill_rect(
@@ -232,6 +246,67 @@ pub(super) fn fill_round_rect_mesh_gradient_per_corner(
         cols,
         &colors,
         opacity,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn fill_round_rect_shader(
+    ck: &OpCk,
+    rect: Rect,
+    radius: f32,
+    sksl: &str,
+    uniforms: &[(&str, &[f32])],
+    opacity: f32,
+    fallback: Color,
+) {
+    let (names, values, arities) = flatten_shader_uniforms(uniforms);
+    ck.fill_round_rect_shader(
+        rect.origin.x,
+        rect.origin.y,
+        rect.size.x,
+        rect.size.y,
+        radius,
+        sksl,
+        &names,
+        &values,
+        &arities,
+        opacity,
+        fallback.r,
+        fallback.g,
+        fallback.b,
+        fallback.a,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn fill_round_rect_shader_per_corner(
+    ck: &OpCk,
+    rect: Rect,
+    radii: [f32; 4],
+    sksl: &str,
+    uniforms: &[(&str, &[f32])],
+    opacity: f32,
+    fallback: Color,
+) {
+    let (names, values, arities) = flatten_shader_uniforms(uniforms);
+    ck.fill_round_rect_shader_per_corner(
+        rect.origin.x,
+        rect.origin.y,
+        rect.size.x,
+        rect.size.y,
+        radii[0],
+        radii[1],
+        radii[2],
+        radii[3],
+        sksl,
+        &names,
+        &values,
+        &arities,
+        opacity,
+        fallback.r,
+        fallback.g,
+        fallback.b,
+        fallback.a,
     );
 }
 

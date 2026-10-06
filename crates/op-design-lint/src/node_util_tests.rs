@@ -188,12 +188,12 @@ fn resolve_color_ref_returns_literal_unchanged() {
 fn resolve_color_ref_resolves_known_scalar_ref() {
     let mut vars = Variables::new();
     vars.insert(
-        "color-primary".to_string(),
+        "--primary".to_string(),
         serde_json::from_value(json!({"type": "color", "value": "#112233"})).unwrap(),
     );
     let theme = Theme::new();
     assert_eq!(
-        resolve_color_ref("$color-primary", &vars, &theme),
+        resolve_color_ref("$--primary", &vars, &theme),
         Some("#112233".to_string())
     );
 }
@@ -202,7 +202,7 @@ fn resolve_color_ref_resolves_known_scalar_ref() {
 fn resolve_color_ref_resolves_themed_ref() {
     let mut vars = Variables::new();
     vars.insert(
-        "color-bg".to_string(),
+        "--background".to_string(),
         serde_json::from_value(json!({
             "type": "color",
             "value": [
@@ -215,13 +215,13 @@ fn resolve_color_ref_resolves_themed_ref() {
     let mut theme = Theme::new();
     theme.insert("Mode".to_string(), "Dark".to_string());
     assert_eq!(
-        resolve_color_ref("$color-bg", &vars, &theme),
+        resolve_color_ref("$--background", &vars, &theme),
         Some("#000000".to_string())
     );
 
     // With no active theme the first themed entry wins.
     assert_eq!(
-        resolve_color_ref("$color-bg", &vars, &Theme::new()),
+        resolve_color_ref("$--background", &vars, &Theme::new()),
         Some("#FFFFFF".to_string())
     );
 }

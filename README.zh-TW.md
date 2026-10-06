@@ -35,6 +35,17 @@
 
 ## 為什麼選擇 OpenPencil
 
+<a href="https://fluxionai.world/register?source=github&amp;campaign=github-openpencil&amp;promo=OPENPENCIL" title="Fluxion AI">
+  <img src="./screenshot/fluxion-ai-sponsor-banner.png" alt="Fluxion AI — reliable, cost-efficient access to GPT, Claude, and other leading AI models through one unified API" width="100%" />
+</a>
+
+### [OpenPencil × Fluxion AI｜一個統一 API 接入 GPT、Claude 等主流模型](https://fluxionai.world/register?source=github&campaign=github-openpencil&promo=OPENPENCIL)
+
+感謝 [Fluxion AI](https://fluxionai.world/register?source=github&campaign=github-openpencil&promo=OPENPENCIL) 贊助 OpenPencil！
+
+- ⚡ **穩定、低成本接入：** 透過一個統一 API 穩定呼叫 GPT、Claude 等主流 AI 模型，價格最高可比官方 API 節省 70%。
+- 🎁 **OpenPencil 使用者專屬福利：** 透過 [此連結註冊](https://fluxionai.world/register?source=github&campaign=github-openpencil&promo=OPENPENCIL) 即可獲得 **1 美元 API 額度**。
+
 <table>
 <tr>
 <td width="50%">

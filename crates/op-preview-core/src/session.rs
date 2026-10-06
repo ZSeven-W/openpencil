@@ -27,6 +27,7 @@ use op_editor_ui::layout_scene::LayoutScene;
 use op_editor_ui::Rect;
 
 use crate::app_mode::AppMode;
+use crate::binding_overlay::BindingOverlay;
 use crate::binding_sites::{collect_binding_sites, BindingSite};
 use crate::error::PreviewEnterError;
 use crate::scene_helpers::format_warning;
@@ -45,6 +46,19 @@ pub(crate) struct RootFrame {
     /// The root's authored `(base.x, base.y)` — the delta between scene
     /// space and the runtime's root-relative space.
     pub(crate) offset: (f32, f32),
+}
+
+#[derive(Clone)]
+pub(crate) struct ResetSeed {
+    pub(crate) document: jian_ops_schema::PenDocument,
+    pub(crate) canvas_size: (f32, f32),
+    pub(crate) active_theme: std::collections::BTreeMap<String, String>,
+    pub(crate) active_page_index: usize,
+    pub(crate) preserve_authored_geometry: bool,
+    pub(crate) presenting: bool,
+    pub(crate) measure: Rc<dyn MeasureBackend>,
+    pub(crate) host_capabilities: op_preview_contracts::PreviewHostCapabilities,
+    pub(crate) host_motion_preference: jian_ops_schema::motion::MotionPreference,
 }
 
 /// A live preview runtime built from a snapshot of the editor document.
@@ -70,6 +84,21 @@ pub struct PreviewSession {
     /// solved against.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) available: (f32, f32),
+    /// R8: the one deferred discrete input held while a transition
+    /// plays, replaced (never queued) when a newer one arrives.
+    pub(crate) deferred_discrete_input: Option<crate::transition::DeferredDiscreteInput>,
+    /// R8: the transition-local press tracker — `Some` only between a
+    /// `Down` and its `Up` while a transition plays.
+    pub(crate) transition_tap: Option<crate::transition::TransitionTapTracker>,
+    /// R8: the activation the canonical dispatch path is currently
+    /// carrying. Set for the duration of one `dispatch_input` so a
+    /// deferred input can capture the activation the host certified for
+    /// it; `None` on the legacy wrappers, which carry no activation.
+    pub(crate) pending_activation: Option<op_preview_contracts::UserActivationId>,
+    /// R8: advances on every route switch and document replacement, so a
+    /// deferred input can prove the screen it targeted is still on screen
+    /// before it replays.
+    pub(crate) route_generation: u64,
     /// Per-root scene↔runtime coordinate mapping for tap translation.
     /// `pub(crate)` so `app_mode`'s
     /// `current_screen_scene_rect` can read the first frame's scene rect.
@@ -95,9 +124,21 @@ pub struct PreviewSession {
     /// for display in the editor's `preview.warnings`.
     pub(crate) warnings: Vec<String>,
     /// Compiled non-`bind:value` bindings from the promoted document,
-    /// re-evaluated against the live state graph each overlay pass (see
-    /// `apply_binding_sites`) so `set $app.*` writes become visible.
+    /// re-evaluated against the live state graph each overlay pass so
+    /// authored actions and host `set_state` writes become visible.
     pub(crate) binding_sites: Vec<BindingSite>,
+    /// R6 typed overlay values plus read-only scroll/pointer namespaces.
+    pub(crate) binding_overlay: BindingOverlay,
+    /// R9 bounded trace, provenance, and debugger clock state.
+    pub(crate) debug: crate::debug_trace::PreviewDebugState,
+    /// Immutable source/options used to rebuild the entire session on reset.
+    pub(crate) reset_seed: ResetSeed,
+    /// R7 one bounded timeline plus its injected AnimationSink queue.
+    pub(crate) animation: crate::animation::PreviewAnimationState,
+    /// P1 node-level motion declarations and per-screen trigger state.
+    pub(crate) motion: crate::motion::PreviewMotionState,
+    /// Host reduced-motion preference; document preference can only reduce it.
+    pub(crate) host_motion_preference: jian_ops_schema::motion::MotionPreference,
     /// APP MODE state (routed multi-screen doc), or `None` for the
     /// classic single-page workbench preview. `pub(crate)`
     /// so `app_mode`'s `is_app_mode` can read it. See [`AppMode`].
@@ -122,6 +163,25 @@ pub struct PreviewSession {
     /// clock param of their own. Monotonic: never moves backward, exactly
     /// like the jian runtime clock it mirrors.
     pub(crate) last_now_ms: u64,
+    /// R4 interaction state: per-pointer pressed nodes + the hovered
+    /// node, tracked by the dispatch paths in `input.rs` and exposed to
+    /// paint via [`Self::interaction`].
+    pub(crate) interaction: crate::interaction_state::InteractionState,
+    /// The host-declared capability set (R4 `enter_with_capabilities`).
+    /// Fail-closed: the legacy `enter` wrapper supplies an explicit
+    /// all-false set, so an undeclared host capability can never read as
+    /// consent. The R3 effect queue reads this before enqueueing.
+    pub(crate) host_capabilities: op_preview_contracts::PreviewHostCapabilities,
+    /// The R3 effect queue: the bounded FIFO the engine's effect sink
+    /// enqueues into and the host drains from.
+    pub(crate) effects: crate::effects::PreviewEffectQueue,
+    /// R5 Preview-only visibility overrides, scroll requests, and their
+    /// accumulated redraw/hit-test invalidation work.
+    pub(crate) ui_actions: crate::ui_actions::PreviewUiActions,
+    /// Cached at enter/reset: skip switch-tween overlay clones when none exist.
+    pub(crate) has_switch_widgets: bool,
+    #[cfg(test)]
+    pub(crate) overlay_builds_for_test: std::cell::Cell<u64>,
 }
 
 impl PreviewSession {
@@ -174,6 +234,7 @@ impl PreviewSession {
     /// Returns [`PreviewEnterError`] if serialization, parsing, runtime
     /// build, or layout fails — the host then declines to enter preview and
     /// surfaces the rendered message.
+    #[allow(clippy::too_many_arguments)]
     pub fn enter(
         doc: &jian_ops_schema::PenDocument,
         canvas_size: (f32, f32),
@@ -182,7 +243,80 @@ impl PreviewSession {
         preserve_authored_geometry: bool,
         presenting: bool,
         measure: Rc<dyn MeasureBackend>,
+        now_ms: u64,
     ) -> Result<Self, PreviewEnterError> {
+        // R4: the legacy wrapper is fail-closed — no declared host
+        // capabilities means effects are denied, never silently allowed.
+        Self::enter_with_capabilities(
+            doc,
+            canvas_size,
+            active_theme,
+            active_page_index,
+            preserve_authored_geometry,
+            presenting,
+            measure,
+            op_preview_contracts::PreviewHostCapabilities::none(),
+            now_ms,
+        )
+    }
+
+    /// [`Self::enter`] with the host's capability declaration (R4 Step
+    /// 4). New hosts migrate onto this entry so the session knows which
+    /// effects the platform can actually perform; the parameter set is
+    /// otherwise identical.
+    #[allow(clippy::too_many_arguments)]
+    pub fn enter_with_capabilities(
+        doc: &jian_ops_schema::PenDocument,
+        canvas_size: (f32, f32),
+        active_theme: &std::collections::BTreeMap<String, String>,
+        active_page_index: usize,
+        preserve_authored_geometry: bool,
+        presenting: bool,
+        measure: Rc<dyn MeasureBackend>,
+        host_capabilities: op_preview_contracts::PreviewHostCapabilities,
+        now_ms: u64,
+    ) -> Result<Self, PreviewEnterError> {
+        Self::enter_with_host_motion_preference(
+            doc,
+            canvas_size,
+            active_theme,
+            active_page_index,
+            preserve_authored_geometry,
+            presenting,
+            measure,
+            host_capabilities,
+            jian_ops_schema::motion::MotionPreference::Full,
+            now_ms,
+        )
+    }
+
+    /// Preview entry with the host's reduced-motion preference known before
+    /// lifecycle animations are admitted.
+    #[allow(clippy::too_many_arguments)]
+    pub fn enter_with_host_motion_preference(
+        doc: &jian_ops_schema::PenDocument,
+        canvas_size: (f32, f32),
+        active_theme: &std::collections::BTreeMap<String, String>,
+        active_page_index: usize,
+        preserve_authored_geometry: bool,
+        presenting: bool,
+        measure: Rc<dyn MeasureBackend>,
+        host_capabilities: op_preview_contracts::PreviewHostCapabilities,
+        host_motion_preference: jian_ops_schema::motion::MotionPreference,
+        now_ms: u64,
+    ) -> Result<Self, PreviewEnterError> {
+        let reset_seed = ResetSeed {
+            document: doc.clone(),
+            canvas_size,
+            active_theme: active_theme.clone(),
+            active_page_index,
+            preserve_authored_geometry,
+            presenting,
+            measure: measure.clone(),
+            host_capabilities,
+            host_motion_preference,
+        };
+        let debug = crate::debug_trace::PreviewDebugState::default();
         let _ = canvas_size; // layout is root-derived, not canvas-derived.
 
         // Track C-1: if the document has no authored `screen` marker at
@@ -297,6 +431,7 @@ impl PreviewSession {
             .iter()
             .filter_map(format_warning)
             .collect::<Vec<_>>();
+        warnings.extend(crate::motion::load_warnings(&layout_doc));
 
         // Clone the prepared + promoted document BEFORE the runtime
         // consumes it: this is the exact tree (refs/tokens resolved,
@@ -341,10 +476,18 @@ impl PreviewSession {
             &promoted_doc.children
         };
         collect_binding_sites(site_children, &mut binding_sites, &mut warnings);
+        let binding_overlay = BindingOverlay::from_document(&promoted_doc);
         warnings.extend(projection_warnings);
 
         let mut runtime = Runtime::new_from_document(loaded.value)
             .map_err(|e| PreviewEnterError::BuildRuntime(e.to_string()))?;
+        runtime.set_action_observer(Rc::new(debug.trace.clone()));
+        binding_overlay.set_runtime_document(
+            runtime
+                .document
+                .as_ref()
+                .map(|document| document.schema.clone()),
+        );
         if let Some(a) = &app {
             runtime.nav = a.router.clone();
         }
@@ -367,21 +510,60 @@ impl PreviewSession {
             0,
         );
 
-        Ok(Self {
+        // R3: install the effect queue adapter (mapped through the
+        // host's declared capabilities, fail-closed) and the fixed
+        // Preview action allowlist before any input can spawn actions.
+        // Action reporting is on so denied actions surface as
+        // structured diagnostics instead of vanishing.
+        let effects = crate::effects::PreviewEffectQueue::new();
+        effects.set_trace(debug.trace.clone());
+        crate::effects::install_on_runtime(&mut runtime, &effects, &host_capabilities);
+        let ui_actions = crate::ui_actions::PreviewUiActions::default();
+        runtime.set_ui_mutation_sink(Rc::new(ui_actions.clone()));
+        let animation = crate::animation::PreviewAnimationState::default();
+        animation.set_trace(debug.trace.clone());
+        runtime.set_animation_sink(Rc::new(animation.clone()));
+        runtime.enable_action_reporting();
+        let motion = crate::motion::PreviewMotionState::default();
+        let has_switch_widgets = crate::motion::runtime_has_switch_widgets(&runtime);
+        let session = Self {
             runtime,
             measure,
             available: primary_available,
+            deferred_discrete_input: None,
+            transition_tap: None,
+            route_generation: 0,
+            pending_activation: None,
             root_frames,
             scene,
             layout_doc,
             preserve_authored_geometry,
             warnings,
             binding_sites,
+            binding_overlay,
+            debug,
+            reset_seed,
+            animation,
+            motion,
+            host_motion_preference,
             app,
             gesture_mappings: HashMap::new(),
             transition: None,
-            last_now_ms: 0,
-        })
+            last_now_ms: now_ms,
+            interaction: crate::interaction_state::InteractionState::default(),
+            host_capabilities,
+            effects,
+            ui_actions,
+            has_switch_widgets,
+            #[cfg(test)]
+            overlay_builds_for_test: std::cell::Cell::new(0),
+        };
+        session.motion.set_initial_lifecycle_values(
+            &session.runtime,
+            &session.scene,
+            &session.animation,
+        );
+        Ok(session)
     }
 
     /// The formatted load warnings collected on `enter` (for the
@@ -396,8 +578,116 @@ impl PreviewSession {
     /// the session clock, so an out-of-order host clock cannot re-arm a
     /// finished screen transition's input gate.
     pub fn set_now_ms(&mut self, now_ms: u64) {
+        self.debug.note_host_time(now_ms);
+        if self.debug.is_paused() {
+            return;
+        }
+        let now_ms = self.debug.logical_time(now_ms);
+        self.set_logical_now_ms(now_ms);
+    }
+
+    pub(crate) fn set_logical_now_ms(&mut self, now_ms: u64) {
+        let was_transitioning = self.transition_active();
         self.runtime.set_now_ms(now_ms);
         self.last_now_ms = self.last_now_ms.max(now_ms);
+        let animation_now = self.last_now_ms;
+        let _ = self.tick_animation(animation_now);
+        // R8: a transition ends by the clock, not by an event, so the
+        // clock push IS the completion edge. Replay here — after the
+        // arriving screen's layout and hit mapping have settled — rather
+        // than on the next input, which would leave the tap the user
+        // already made waiting on another one.
+        if was_transitioning && !self.transition_active() {
+            self.replay_deferred_input();
+        }
+    }
+
+    /// The R4 interaction state tracked by the dispatch paths: which
+    /// nodes each pointer is pressing and which node hovers. Preview
+    /// paint derives the approved touch fallback (and mouse-pressed
+    /// widget states) from this instead of the host re-deriving it from
+    /// raw pointer traffic.
+    pub fn interaction(&self) -> &crate::interaction_state::InteractionState {
+        &self.interaction
+    }
+
+    /// Clear a mouse/pen hover sample when the host moves outside the
+    /// preview-owned surface. Returns whether the visual state changed.
+    pub fn clear_hover(&mut self) -> bool {
+        self.interaction.clear_hover()
+    }
+
+    /// Resolve a node's authored visibility through the R5 Preview-only
+    /// action overrides. R6 consumes this while building the unified overlay.
+    pub fn action_visibility_for(&self, node_id: &str, authored: bool) -> bool {
+        self.ui_actions.visibility_for(node_id, authored)
+    }
+
+    /// Drain ordered R5 scroll requests for the host/R6 overlay.
+    pub fn drain_action_scroll_requests(
+        &self,
+    ) -> Vec<(String, jian_core::action::services::ScrollAlignment)> {
+        self.ui_actions.drain_scroll_requests()
+    }
+
+    /// Take and clear the redraw/hit-test work accumulated by R5 actions.
+    pub fn take_ui_action_work(&self) -> jian_core::action::services::UiMutationWork {
+        self.ui_actions.take_work()
+    }
+
+    /// The host-declared capability set this session was entered with
+    /// (R4 fail-closed: the legacy `enter` wrapper declares none).
+    pub fn host_capabilities(&self) -> &op_preview_contracts::PreviewHostCapabilities {
+        &self.host_capabilities
+    }
+
+    /// The R3 effect queue: drain every queued effect in FIFO order,
+    /// perform them host-side, then report each outcome back through
+    /// [`Self::complete_effect`]. Denied actions appear in the queue's
+    /// diagnostics, never as effects.
+    pub fn drain_effects(&self) -> Vec<op_preview_contracts::PreviewEffect> {
+        if self.debug.is_paused() {
+            Vec::new()
+        } else {
+            self.effects.drain()
+        }
+    }
+
+    /// Complete one effect EXACTLY ONCE (`false` on a double
+    /// completion — a host bug, diagnosed on the queue).
+    pub fn complete_effect(
+        &self,
+        id: u64,
+        result: op_preview_contracts::PreviewEffectResult,
+    ) -> bool {
+        let traced = result.clone();
+        let completed = self.effects.complete(id, result).is_ok();
+        if completed {
+            self.effects.trace_result(id, &traced, self.last_now_ms);
+        }
+        completed
+    }
+
+    /// The queue's structured rejection diagnostics (bounded).
+    pub fn effect_diagnostics(&self) -> Vec<String> {
+        self.effects.diagnostics()
+    }
+
+    /// Drain the action-level diagnostics (policy rejections, chain
+    /// errors, chain warnings) collected since the last call — the
+    /// denied-action surface "denied actions appear in diagnostics, not
+    /// effects" is built on.
+    pub fn take_action_diagnostics(&mut self) -> Vec<String> {
+        let mut lines = Vec::new();
+        for outcome in self.runtime.take_action_outcomes() {
+            if let Err(error) = outcome.outcome.result {
+                lines.push(error.to_string());
+            }
+            for warning in outcome.outcome.warnings {
+                lines.push(warning.message);
+            }
+        }
+        lines
     }
 
     /// Resize hook for the host's `Resized` handler. Layout is derived
@@ -415,6 +705,13 @@ impl PreviewSession {
         &self.runtime
     }
 
+    /// Test-only mutable access (e.g. `focused_editable_snapshot` for
+    /// the R4 IME trace assertions). Same `!Send` caveat as `runtime`.
+    #[cfg(all(test, not(target_os = "windows")))]
+    pub(crate) fn runtime_mut(&mut self) -> &mut Runtime {
+        &mut self.runtime
+    }
+
     /// Narrow test-only snapshot of one `$app` state value, CLONED out
     /// of the runtime. `Runtime.state` is interior-mutable, so it must
     /// never be handed out in production — cross-crate tests read this
@@ -423,24 +720,6 @@ impl PreviewSession {
     #[cfg(any(all(test, not(target_os = "windows")), feature = "testing"))]
     pub fn app_state_value_for_test(&self, key: &str) -> Option<jian_core::value::RuntimeValue> {
         self.runtime.state.app_get(key)
-    }
-
-    /// Narrow test-only clock readout: the session's current monotonic
-    /// time (`last_now_ms`). Cross-crate tests (op-host-native's
-    /// timestamp regression suite) assert the global clock stays where
-    /// the frame pump put it even when pointer events carry out-of-order
-    /// factual timestamps.
-    #[cfg(any(all(test, not(target_os = "windows")), feature = "testing"))]
-    pub fn now_ms_for_test(&self) -> u64 {
-        self.last_now_ms
-    }
-
-    /// Test-only: the session's own scene with live runtime widget
-    /// values overlaid — what `paint_scene` walks — so render tests can
-    /// assert widget values without a backend.
-    #[cfg(all(test, not(target_os = "windows")))]
-    pub(crate) fn preview_scene_for_test(&self) -> LayoutScene {
-        self.overlay_runtime_state(&self.scene)
     }
 
     /// Test-only: the absolute layout rect `(x, y, w, h)` the runtime
@@ -500,10 +779,9 @@ impl PreviewSession {
     }
 }
 
-/// The measurement backend preview tests solve layout against — the same
-/// skia backend the native host injects, so test geometry matches
+/// The measurement backend preview tests solve layout against the same skia
+/// backend the native host injects, so test geometry matches
 /// production. Kept in one place so the 45 call sites don't each spell
-/// out the construction.
 #[cfg(all(test, not(target_os = "windows")))]
 pub(crate) fn test_measure() -> Rc<dyn MeasureBackend> {
     Rc::new(jian_skia::SkiaMeasure::new())

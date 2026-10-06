@@ -283,9 +283,11 @@ impl McpLiveServer {
                         .then(|| crate::design_agent_tools::collect_active_node_ids(state));
                     let applied = state.apply(cmd);
                     if applied {
+                        let write_repairs = crate::mcp_serve::run_write_repairs_after_apply(state);
                         if let Some(ids_before) = ids_before {
                             self.register_mcp_generation(&ids_before, state);
                         }
+                        outcome.layout_dirty |= write_repairs;
                     }
                     let _ = ack.send(ApplyAck { applied });
                     if applied {

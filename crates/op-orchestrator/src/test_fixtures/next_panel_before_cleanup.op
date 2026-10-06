@@ -1,0 +1,82 @@
+{
+  "version": "0.8.5",
+  "themes": {"Mode": ["Light", "Dark"]},
+  "variables": {
+    "--primary": {
+      "type": "color",
+      "value": [
+        {"value": "#7C9070", "theme": {"Mode": "Light"}},
+        {"value": "#A7C397", "theme": {"Mode": "Dark"}}
+      ]
+    }
+  },
+  "children": [
+    {
+      "type": "frame",
+      "id": "root",
+      "name": "Result screen",
+      "width": 1440,
+      "height": 900,
+      "layout": "vertical",
+      "fill": [{"type": "solid", "color": "#FAF7F2"}],
+      "children": [
+        {
+          "type": "frame",
+          "id": "breadcrumb",
+          "name": "breadcrumb row",
+          "width": "fill_container",
+          "height": 32,
+          "layout": "horizontal",
+          "children": [
+            {"type": "text", "id": "crumb", "content": "你的卡片 · 知识观点轮播", "fill": [{"type": "solid", "color": "#6F6A62"}]}
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "stage",
+          "name": "preview stage",
+          "width": "fill_container",
+          "height": 560,
+          "layout": "vertical",
+          "fill": [{"type": "solid", "color": "#F3EDE2"}],
+          "children": [
+            {"type": "text", "id": "stage-title", "content": "整页预览", "fill": [{"type": "solid", "color": "#2B2723"}]}
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "panel",
+          "name": "next panel",
+          "width": 300,
+          "height": "fit_content",
+          "layout": "vertical",
+          "gap": 16,
+          "padding": 24,
+          "cornerRadius": 20,
+          "fill": [{"type": "solid", "color": "#FFFFFF"}],
+          "stroke": {"thickness": 1, "fill": [{"type": "solid", "color": "#EDE8E0"}]},
+          "children": [
+            {"type": "text", "id": "panel-title", "content": "接下来", "fill": [{"type": "solid", "color": "#2B2723"}]},
+            {"type": "text", "id": "panel-description", "content": "先改一处字，再导出。完整编辑不会丢掉这次修改。", "fill": [{"type": "solid", "color": "#6F6A62"}]},
+            {
+              "type": "frame",
+              "id": "button-primary",
+              "name": "primary action",
+              "role": "button",
+              "width": "fill_container",
+              "height": 48,
+              "layout": "horizontal",
+              "fill": [{"type": "solid", "color": "$--primary"}],
+              "children": [
+                {"type": "text", "id": "button-primary-label", "content": "改这一页", "fill": [{"type": "solid", "color": "#FFFFFF"}]}
+              ]
+            },
+            {"type": "frame", "id": "button-style", "name": "secondary action", "role": "button", "width": "fill_container", "height": 48, "fill": [], "children": [{"type": "text", "id": "button-style-label", "content": "换风格", "fill": [{"type": "solid", "color": "#2B2723"}]}]},
+            {"type": "frame", "id": "button-export", "name": "secondary action", "role": "button", "width": "fill_container", "height": 48, "fill": [], "children": [{"type": "text", "id": "button-export-label", "content": "导出", "fill": [{"type": "solid", "color": "#2B2723"}]}]},
+            {"type": "frame", "id": "button-edit", "name": "secondary action", "role": "button", "width": "fill_container", "height": 48, "fill": [], "children": [{"type": "text", "id": "button-edit-label", "content": "完整编辑", "fill": [{"type": "solid", "color": "#2B2723"}]}]}
+          ]
+        }
+      ]
+    }
+  ]
+}

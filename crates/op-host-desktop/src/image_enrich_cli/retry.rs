@@ -4,6 +4,10 @@ use std::time::{Duration, Instant};
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::style::{PenFill, SolidFillBody};
 use op_editor_core::{walkers, EditorState, NodeId, PenNodeExt as _};
+use op_image_enrich::{
+    fallback_request_mode, fallback_search_query_for_host, is_failed_image_slot_for_host,
+    is_image_fallback, restore_image_fallback_node,
+};
 
 use crate::image_search_session::{
     collect_targets, image_request_mode, ImageRequestMode, ImageSearchSession,
@@ -165,12 +169,15 @@ fn collect_target_records(state: &EditorState) -> HashMap<NodeId, TargetRecord> 
     let mut records = HashMap::new();
     for target in collect_targets(state, &HashSet::new()) {
         if let Some(node) = walkers::find_node(state.active_children(), &target.node_id) {
+            if is_image_fallback(node) {
+                continue;
+            }
             records.insert(
                 target.node_id,
                 TargetRecord {
                     mode: target.mode,
                     query: target.query,
-                    reset_node: node.clone(),
+                    reset_node: retry_reset_node(node, target.mode),
                 },
             );
         }
@@ -183,10 +190,10 @@ fn collect_sentinel_records(children: &[PenNode], records: &mut HashMap<NodeId, 
     for node in children {
         if node_contains_failure_sentinel(node) {
             if let Some(node_id) = NodeId::new_opt(node.id_str()) {
-                let mode = image_request_mode(node);
+                let mode = fallback_request_mode(node).unwrap_or_else(|| image_request_mode(node));
                 records.entry(node_id).or_insert_with(|| TargetRecord {
                     mode,
-                    query: String::new(),
+                    query: fallback_search_query_for_host(node),
                     reset_node: retry_reset_node(node, mode),
                 });
             }
@@ -214,6 +221,9 @@ fn report_failed_targets(state: &EditorState, records: &HashMap<NodeId, TargetRe
 }
 
 fn retry_reset_node(node: &PenNode, mode: ImageRequestMode) -> PenNode {
+    if let Some(restored) = restore_image_fallback_node(node) {
+        return restored;
+    }
     let mut reset = node.clone();
     if mode == ImageRequestMode::Generate {
         return reset;
@@ -287,25 +297,7 @@ fn node_has_failure_sentinel(state: &EditorState, node_id: &NodeId) -> bool {
 }
 
 fn node_contains_failure_sentinel(node: &PenNode) -> bool {
-    match node {
-        PenNode::Image(image) => image.src == SEARCH_FAILED_PLACEHOLDER_SRC,
-        PenNode::Frame(frame) => fills_have_failure_sentinel(frame.container.fill.as_deref()),
-        PenNode::Rectangle(rectangle) => {
-            fills_have_failure_sentinel(rectangle.container.fill.as_deref())
-        }
-        _ => false,
-    }
-}
-
-fn fills_have_failure_sentinel(fills: Option<&[PenFill]>) -> bool {
-    fills.is_some_and(|fills| {
-        fills.iter().any(|fill| {
-            matches!(
-                fill,
-                PenFill::Image(image) if image.url == SEARCH_FAILED_PLACEHOLDER_SRC
-            )
-        })
-    })
+    is_failed_image_slot_for_host(node)
 }
 
 #[cfg(test)]
@@ -451,6 +443,32 @@ mod tests {
     }
 
     #[test]
+    fn persisted_fallback_tile_is_restored_and_retried_as_an_image() {
+        let mut state = load(
+            r#"{"version":"1.0","children":[{"type":"image","id":"retry","name":"Forest","src":"","imageSearchQuery":"forest trail","width":160,"height":90}]}"#,
+        );
+        let id = NodeId::new("retry");
+        assert!(apply_result(&mut state, &id, SEARCH_FAILED_PLACEHOLDER_SRC));
+        assert!(op_image_enrich::is_image_fallback(
+            walkers::find_node(state.active_children(), &id).expect("fallback")
+        ));
+
+        let mut session =
+            ScriptedSession::with_outcomes("retry", vec![Some("data:image/png;base64,AQ==")]);
+        let summary =
+            enrich_state_with_session(&mut state, Duration::ZERO, &mut session).expect("retry");
+
+        assert_eq!(summary.resolved, 1);
+        let PenNode::Image(image) =
+            walkers::find_node(state.active_children(), &id).expect("image after retry")
+        else {
+            panic!("retry must restore an image node");
+        };
+        assert_eq!(image.src, "data:image/png;base64,AQ==");
+        assert_eq!(image.image_search_query.as_deref(), Some("forest trail"));
+    }
+
+    #[test]
     fn explicit_generate_failure_is_not_retried() {
         let mut state = load(
             r#"{"version":"1.0","children":[{"type":"image","id":"art","src":"","imagePrompt":"paint a moonlit forest","width":160,"height":90}]}"#,
@@ -466,7 +484,7 @@ mod tests {
     }
 
     #[test]
-    fn exhausted_search_retries_preserve_existing_output() {
+    fn exhausted_search_retries_still_write_the_partial_result() {
         let mut state = load(
             r#"{"version":"1.0","children":[{"type":"image","id":"photo","src":"","imageSearchQuery":"mountain lake","width":160,"height":90}]}"#,
         );
@@ -481,13 +499,17 @@ mod tests {
         let output = directory.join("output.op");
         std::fs::write(&output, b"keep-existing-output").expect("seed output");
 
-        let result = super::super::save_enriched_state(&state, &output, summary);
+        let result = super::super::save_enriched_state(&mut state, &output, summary);
 
+        // The run still fails loudly, but the document the caller authored is
+        // written rather than discarded — the seeded placeholder is gone.
         assert!(matches!(result, Err(EnrichError::Failed(_))));
-        assert_eq!(
-            std::fs::read(&output).expect("read preserved output"),
-            b"keep-existing-output"
-        );
+        let written = std::fs::read(&output).expect("read written output");
+        assert_ne!(written, b"keep-existing-output");
+        let reloaded =
+            op_host_services::doc_io::load_editor_state(&output, op_editor_core::Locale::EnUs)
+                .expect("the partial result parses");
+        assert_eq!(reloaded.active_children().len(), 1);
         std::fs::remove_dir_all(directory).expect("remove fixture directory");
     }
 }

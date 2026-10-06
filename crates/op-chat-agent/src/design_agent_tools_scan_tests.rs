@@ -246,7 +246,7 @@ fn deck_back_layers_are_exempted_as_decorative_stack() {
               "children": [ { "type": "text", "id": "t1", "content": "Hello" } ] },
             { "type": "frame", "id": "back1", "name": "Back Layer 1",
               "x": 8, "y": 4, "width": 338, "height": 124,
-              "fill": [{"type": "solid", "color": "$color-surface-3"}],
+              "fill": [{"type": "solid", "color": "$--accent"}],
               "children": [] },
             { "type": "frame", "id": "back2", "name": "Back Layer 2",
               "x": 16, "y": 8, "width": 338, "height": 124,

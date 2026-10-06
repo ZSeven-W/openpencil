@@ -661,6 +661,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "assetCenter.style.importEmpty" => "Berkas itu kosong, atau terlalu pendek untuk menjadi panduan gaya.",
         "assetCenter.style.importNotText" => "Berkas itu tidak terbaca sebagai teks Markdown.",
         "assetCenter.style.importTooLarge" => "Berkas itu lebih besar dari 512 KB.",
+        "leftPanel.tab.chat" => "Agent",
         "slidesPanel.tabSlides" => "Slide",
         "slidesPanel.tabCards" => "Kartu",
         "slidesPanel.present" => "Presentasikan",

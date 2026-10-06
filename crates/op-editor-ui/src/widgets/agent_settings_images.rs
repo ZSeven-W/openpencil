@@ -268,11 +268,16 @@ mod touch_tests {
         let closed_row = profile_row_rect_for_ui(content, &closed, 0, true);
         let open_row = profile_row_rect_for_ui(content, &open, 0, true);
 
-        assert_eq!(open_row.size.y - closed_row.size.y, 176.0);
+        // One 44 px row per entry of `ImageGenProvider::ALL`. The Atlas
+        // Cloud provider took the list from four to five, so the
+        // expanded profile grew 176 → 220; the constant here is the
+        // list's length, not a free number.
+        const EXPANDED_H: f32 = 44.0 * ImageGenProvider::ALL.len() as f32;
+        assert_eq!(open_row.size.y - closed_row.size.y, EXPANDED_H);
         assert_eq!(
             content_height_for_ui(&open, content.size.x, true)
                 - content_height_for_ui(&closed, content.size.x, true),
-            176.0
+            EXPANDED_H
         );
         let api = profile_input_rect_for_ui(open_row, &open, 0, ImageGenField::ApiKey, true);
         for (option_index, expected) in ImageGenProvider::ALL.iter().enumerate() {

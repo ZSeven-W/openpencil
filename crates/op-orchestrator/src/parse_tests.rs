@@ -40,6 +40,26 @@ fn parse_nodes_defaults_missing_image_src_to_empty_string() {
 }
 
 #[test]
+fn parse_nodes_accepts_the_video_authoring_alias() {
+    let text = r#"[
+      {"type":"video","id":"hero","name":"Hero video",
+       "src":"hero.mp4","poster":"poster.png",
+       "autoplay":true,"playback":{"loop":true,"clickToReplay":true}}
+    ]"#;
+
+    let nodes = parse_nodes(text).expect("video alias should parse");
+    let PenNode::Image(image) = &nodes[0] else {
+        panic!("video alias must become an image node");
+    };
+    assert_eq!(image.src.as_str(), "poster.png");
+    let video = image.video.as_ref().expect("video metadata");
+    assert_eq!(video.src, "hero.mp4");
+    assert!(video.autoplay);
+    assert!(video.r#loop);
+    assert!(video.click_to_replay);
+}
+
+#[test]
 fn parse_nodes_skips_prose_bracket_before_fenced_array() {
     // 弱模型在真正 JSON 之前写了带 `[` 的推理散文。老逻辑取第一个
     // `[` 会抓到 `[step 1]` 报 "expected ident";新逻辑扫描所有平衡
@@ -204,7 +224,7 @@ fn resolve_numeric_design_token_table() {
         Some(-0.5)
     );
     assert_eq!(resolve_numeric_design_token("$spacing-3"), Some(12.0));
-    assert_eq!(resolve_numeric_design_token("$radius-md"), Some(8.0));
+    assert_eq!(resolve_numeric_design_token("$--radius-m"), Some(8.0));
     // weight tokens resolve to numbers too (FontWeight accepts a number);
     // unresolved weight tokens would degrade text to the default weight.
     assert_eq!(
@@ -217,7 +237,7 @@ fn resolve_numeric_design_token_table() {
     );
     assert_eq!(resolve_numeric_design_token("$type-h2-weight"), Some(600.0));
     // colors / sizing keywords stay strings (not numeric tokens).
-    assert_eq!(resolve_numeric_design_token("$color-accent"), None);
+    assert_eq!(resolve_numeric_design_token("$--primary"), None);
     assert_eq!(resolve_numeric_design_token("fill_container"), None);
 }
 
@@ -231,7 +251,7 @@ fn normalize_resolves_numeric_token_and_wraps_bare_fill() {
         // design-system showcase may legitimately display "$spacing-3" as text.
         "content":"$spacing-3",
         "name":"$type-caption-size",
-        "fill":"$color-surface"
+        "fill":"$--card"
     });
     normalize_generated_node_json(&mut v);
     // Whole numbers serialize as integers so `fontWeight` (FontWeight::Number(u32))
@@ -243,7 +263,7 @@ fn normalize_resolves_numeric_token_and_wraps_bare_fill() {
     assert_eq!(v["name"], serde_json::json!("$type-caption-size")); // name preserved
     assert_eq!(
         v["fill"],
-        serde_json::json!([{"type":"solid","color":"$color-surface"}])
+        serde_json::json!([{"type":"solid","color":"$--card"}])
     );
     // The normalized node must round-trip into the canonical schema — this is the
     // real regression guard: a float fontWeight would fail here.

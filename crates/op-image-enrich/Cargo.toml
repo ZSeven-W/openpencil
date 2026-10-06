@@ -43,6 +43,7 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
 ], optional = true }
 tokio = { version = "1", default-features = false, features = [
   "rt-multi-thread",
+  "sync",
   "time",
 ], optional = true }
 

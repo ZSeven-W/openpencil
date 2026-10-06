@@ -67,18 +67,37 @@ const SPINNER_D: f32 = 10.0;
 
 /// Left x-coordinate where the tab row starts (just right of the chevron).
 pub(crate) fn tab_row_left(rect: Rect) -> f32 {
-    rect.origin.x + PAD + CHEVRON_W + PILL_GAP
+    tab_row_left_for(rect, false)
+}
+
+/// Left edge of the tab zone. Only the touch sheet still paints a
+/// collapse chevron ahead of it.
+pub(crate) fn tab_row_left_for(rect: Rect, touch_sheet: bool) -> f32 {
+    let chevron = if touch_sheet {
+        CHEVRON_W + PILL_GAP
+    } else {
+        0.0
+    };
+    rect.origin.x + PAD + chevron
 }
 
 /// Right x-coordinate where the tab row ends (just left of the maximize icon).
-pub(crate) fn tab_row_right(rect: Rect) -> f32 {
+/// Right edge of the tab zone. A PINNED chat has no window to maximize,
+/// so that button is not painted and the session selector takes the room
+/// it was holding.
+pub(crate) fn tab_row_right_for(rect: Rect, pinned: bool) -> f32 {
     let right_edge = rect.origin.x + rect.size.x - PAD;
-    right_edge - NEW_CHAT_D - MAXIMIZE_GAP - MAXIMIZE_W - PILL_RIGHT_GAP
+    let maximize = if pinned {
+        0.0
+    } else {
+        MAXIMIZE_GAP + MAXIMIZE_W
+    };
+    right_edge - NEW_CHAT_D - maximize - PILL_RIGHT_GAP
 }
 
 /// Available width for all tabs combined.
-pub(crate) fn tab_row_width(rect: Rect) -> f32 {
-    (tab_row_right(rect) - tab_row_left(rect)).max(0.0)
+pub(crate) fn tab_row_width_for(rect: Rect, pinned: bool) -> f32 {
+    (tab_row_right_for(rect, pinned) - tab_row_left(rect)).max(0.0)
 }
 
 // ── Rect computation (used by BOTH painter and hit-tester) ───────────────────
@@ -100,13 +119,20 @@ pub(crate) struct TabRect {
 /// the rightmost (usually the active) tab stays visible at the right edge.
 ///
 /// Returns one `TabRect` per tab.
-pub(crate) fn tab_row_rects(rect: Rect, tab_count: usize) -> Vec<TabRect> {
+pub(crate) fn tab_row_rects(rect: Rect, tab_count: usize, pinned: bool) -> Vec<TabRect> {
     if tab_count == 0 {
         return Vec::new();
     }
-    let avail_w = tab_row_width(rect);
-    // Per-tab width: at most TAB_MAX_W, sharing avail_w equally when tight.
-    let tab_w = {
+    let avail_w = tab_row_width_for(rect, pinned);
+    // Per-tab width: at most TAB_MAX_W, sharing avail_w equally when
+    // tight. A LONE session is the exception and takes the whole zone:
+    // capping it at 120 left a small pill floating in the middle of a
+    // 320 px rail, which is what made the conversation read as a widget
+    // dropped into the panel instead of the panel's own session
+    // selector (Pencil's "New Agent ⌄" spans its rail the same way).
+    let tab_w = if tab_count == 1 && pinned {
+        avail_w.max(24.0)
+    } else {
         let share = avail_w / tab_count as f32;
         TAB_MAX_W.min(share.max(24.0))
     };
@@ -116,7 +142,7 @@ pub(crate) fn tab_row_rects(rect: Rect, tab_count: usize) -> Vec<TabRect> {
     let start_x = if total_w <= avail_w {
         tab_row_left(rect)
     } else {
-        tab_row_right(rect) - total_w
+        tab_row_right_for(rect, pinned) - total_w
     };
 
     let tab_h = PILL_H;
@@ -182,15 +208,16 @@ pub(crate) fn paint_header_tabs(
     tab_hover: Option<usize>,
     is_running: bool,
     now_ms: u64,
+    pinned: bool,
 ) {
     let tab_count = tabs.len();
     if tab_count == 0 {
         return;
     }
 
-    let rects = tab_row_rects(rect, tab_count);
+    let rects = tab_row_rects(rect, tab_count, pinned);
     let zone_left = tab_row_left(rect);
-    let zone_right = tab_row_right(rect);
+    let zone_right = tab_row_right_for(rect, pinned);
 
     // Clip so left-overflowing tabs are hidden behind the chevron.
     cx.backend.save();
@@ -295,6 +322,69 @@ pub(crate) fn paint_header_tabs(
     }
 
     cx.backend.restore();
+}
+
+/// Paint the composer-only card's slim header: the session name, a
+/// minimize glyph and an expand glyph. Both actions take the user to the
+/// rail's Agent tab, which is where the conversation lives; the header
+/// exists so that destination is visible before you commit to it.
+pub(crate) fn paint_composer_header(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    rect: Rect,
+    title: &str,
+    hover: Option<op_editor_core::ChatHeaderButton>,
+    pressed: Option<op_editor_core::ChatHeaderButton>,
+) {
+    use crate::widgets::ai_chat_panel::COMPOSER_HEADER_HEIGHT;
+    use crate::widgets::icons::{draw_icon, Icon};
+    let row = Rect {
+        origin: rect.origin,
+        size: Point2D::new(rect.size.x, COMPOSER_HEADER_HEIGHT),
+    };
+    let label_x = rect.origin.x + PAD;
+    let baseline = row.origin.y + row.size.y / 2.0 + TAB_FONT_SIZE / 2.0 - 1.5;
+    cx.backend.draw_text(
+        &TextLayout::single_run(
+            title,
+            "system-ui",
+            TAB_FONT_SIZE,
+            theme.muted_foreground.to_jian(),
+            Point2D::ZERO,
+        )
+        .with_font_weight(500),
+        Point2D::new(label_x, baseline),
+    );
+    let glyph = 14.0_f32;
+    let right = rect.origin.x + rect.size.x - PAD;
+    for (index, (icon, button)) in [
+        (
+            Icon::Minimize,
+            op_editor_core::ChatHeaderButton::ToggleCollapse,
+        ),
+        (
+            Icon::Maximize,
+            op_editor_core::ChatHeaderButton::ToggleMaximize,
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let x = right - glyph - (1 - index) as f32 * (glyph + 10.0);
+        let color = if hover == Some(button) || pressed == Some(button) {
+            theme.foreground
+        } else {
+            theme.muted_foreground
+        };
+        draw_icon(
+            cx.backend,
+            icon,
+            Point2D::new(x, row.origin.y + (row.size.y - glyph) / 2.0),
+            glyph,
+            color,
+            1.4,
+        );
+    }
 }
 
 /// Paint the "New Chat ⌘T" dark tooltip below-left of the "+" button.
@@ -403,13 +493,14 @@ pub(crate) fn tab_hit_at(
     tab_count: usize,
     point: Point2D,
     tab_hover: Option<usize>,
+    pinned: bool,
 ) -> Option<(usize, bool)> {
     let zone_left = tab_row_left(rect);
-    let zone_right = tab_row_right(rect);
+    let zone_right = tab_row_right_for(rect, pinned);
     if point.x < zone_left || point.x > zone_right {
         return None;
     }
-    let rects = tab_row_rects(rect, tab_count);
+    let rects = tab_row_rects(rect, tab_count, pinned);
     for (i, tr) in rects.iter().enumerate() {
         if tr.body.contains(point) {
             // The × is only active when this tab is the currently hovered one.
@@ -441,7 +532,7 @@ mod tests {
     #[test]
     fn tab_row_rects_single_tab_starts_at_zone_left() {
         let rect = panel_rect();
-        let rects = tab_row_rects(rect, 1);
+        let rects = tab_row_rects(rect, 1, false);
         assert_eq!(rects.len(), 1);
         let expected_x = tab_row_left(rect);
         assert!(
@@ -454,7 +545,7 @@ mod tests {
     #[test]
     fn tab_row_rects_two_tabs_are_adjacent_and_non_overlapping() {
         let rect = panel_rect();
-        let rects = tab_row_rects(rect, 2);
+        let rects = tab_row_rects(rect, 2, false);
         assert_eq!(rects.len(), 2);
         let t0 = &rects[0];
         let t1 = &rects[1];
@@ -475,7 +566,7 @@ mod tests {
     #[test]
     fn tab_row_rects_active_tab_pill_does_not_overlap_inactive() {
         let rect = panel_rect();
-        let rects = tab_row_rects(rect, 2);
+        let rects = tab_row_rects(rect, 2, false);
         // Verify no overlap between the two tabs.
         let r0_right = rects[0].body.origin.x + rects[0].body.size.x;
         let r1_left = rects[1].body.origin.x;
@@ -488,7 +579,7 @@ mod tests {
     #[test]
     fn tab_row_rects_close_rect_inside_body() {
         let rect = panel_rect();
-        let rects = tab_row_rects(rect, 2);
+        let rects = tab_row_rects(rect, 2, false);
         for tr in &rects {
             assert!(tr.close.origin.x >= tr.body.origin.x - 0.01);
             assert!(
@@ -502,37 +593,53 @@ mod tests {
         let rect = panel_rect();
         let tabs = make_tabs(2);
         let _ = tabs; // tabs used for count below
-        let rects = tab_row_rects(rect, 2);
+        let rects = tab_row_rects(rect, 2, false);
         let center1 = Point2D::new(
             rects[1].body.origin.x + rects[1].body.size.x / 2.0,
             rects[1].body.origin.y + rects[1].body.size.y / 2.0,
         );
-        let result = tab_hit_at(rect, 2, center1, None);
+        let result = tab_hit_at(rect, 2, center1, None, false);
         assert_eq!(result, Some((1, false)));
     }
 
     #[test]
     fn tab_hit_at_close_requires_hover_state() {
         let rect = panel_rect();
-        let rects = tab_row_rects(rect, 2);
+        let rects = tab_row_rects(rect, 2, false);
         let close_center = Point2D::new(
             rects[0].close.origin.x + rects[0].close.size.x / 2.0,
             rects[0].close.origin.y + rects[0].close.size.y / 2.0,
         );
         // Without hover on tab 0, over_close=false.
-        assert_eq!(tab_hit_at(rect, 2, close_center, None), Some((0, false)));
+        assert_eq!(
+            tab_hit_at(rect, 2, close_center, None, false),
+            Some((0, false))
+        );
         // With hover on tab 0, over_close=true.
-        assert_eq!(tab_hit_at(rect, 2, close_center, Some(0)), Some((0, true)));
+        assert_eq!(
+            tab_hit_at(rect, 2, close_center, Some(0), false),
+            Some((0, true))
+        );
         // With hover on a different tab, over_close stays false.
-        assert_eq!(tab_hit_at(rect, 2, close_center, Some(1)), Some((0, false)));
+        assert_eq!(
+            tab_hit_at(rect, 2, close_center, Some(1), false),
+            Some((0, false))
+        );
     }
 
     #[test]
     fn tab_hit_outside_zone_returns_none() {
         let rect = panel_rect();
-        // Far left of tab zone (inside chevron area).
-        let p = Point2D::new(rect.origin.x + PAD, rect.origin.y + HEADER_HEIGHT / 2.0);
-        assert_eq!(tab_hit_at(rect, 2, p, None), None);
+        // The zone now starts at PAD (no chevron in front of it), so
+        // "outside" is to the LEFT of the panel's own padding.
+        let p = Point2D::new(rect.origin.x + 2.0, rect.origin.y + HEADER_HEIGHT / 2.0);
+        assert_eq!(tab_hit_at(rect, 2, p, None, false), None);
+        // ...and past the right edge of the zone, where the actions sit.
+        let past = Point2D::new(
+            tab_row_right_for(rect, false) + 2.0,
+            rect.origin.y + HEADER_HEIGHT / 2.0,
+        );
+        assert_eq!(tab_hit_at(rect, 2, past, None, false), None);
     }
 
     #[test]
@@ -553,5 +660,48 @@ mod tests {
             "tooltip must not exceed panel right edge"
         );
         assert!(tip.size.x > 0.0 && tip.size.y > 0.0);
+    }
+}
+
+#[cfg(test)]
+mod pinned_header_tests {
+    use super::*;
+
+    /// A pinned rail has no window to maximize, so that button's room
+    /// goes to the session selector: the lone session spans the zone
+    /// instead of sitting as a 120 px pill adrift in a 320 px rail.
+    #[test]
+    fn a_pinned_lone_session_spans_the_rail_and_a_floating_one_does_not() {
+        let rail = Rect::xywh(0.0, 0.0, 320.0, 400.0);
+        let pinned = tab_row_rects(rail, 1, true);
+        let floating = tab_row_rects(rail, 1, false);
+        assert_eq!(pinned.len(), 1);
+        assert_eq!(floating.len(), 1);
+        assert!(
+            pinned[0].body.size.x > floating[0].body.size.x + 40.0,
+            "pinned {:?} vs floating {:?}",
+            pinned[0].body,
+            floating[0].body
+        );
+        // Pinned, the selector reaches the zone's right edge; floating,
+        // it stops short so the drag handle survives.
+        let pinned_right = tab_row_right_for(rail, true);
+        assert!((pinned[0].body.origin.x + pinned[0].body.size.x - pinned_right).abs() < 0.01);
+        assert!(
+            floating[0].body.origin.x + floating[0].body.size.x < tab_row_right_for(rail, false)
+        );
+        // The zone itself is wider when nothing reserves the maximize slot.
+        assert!(tab_row_right_for(rail, true) > tab_row_right_for(rail, false));
+    }
+
+    /// Two sessions still share the zone in both modes — the stretch is
+    /// only for a LONE session.
+    #[test]
+    fn two_sessions_still_share_the_zone_when_pinned() {
+        let rail = Rect::xywh(0.0, 0.0, 320.0, 400.0);
+        let rects = tab_row_rects(rail, 2, true);
+        assert_eq!(rects.len(), 2);
+        assert!((rects[0].body.size.x - rects[1].body.size.x).abs() < 0.01);
+        assert!(rects[0].body.origin.x + rects[0].body.size.x <= rects[1].body.origin.x + 0.01);
     }
 }

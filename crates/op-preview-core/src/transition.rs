@@ -61,6 +61,103 @@ pub(crate) struct ScreenTransition {
     outgoing: ScenePage,
 }
 
+/// R8: the single deferred discrete input held across a transition.
+///
+/// Only these three shapes are safe to replay onto a screen that has just
+/// finished arriving: they are discrete (one decision, no in-flight
+/// state), they carry their own target, and none of them is meaningful
+/// half-applied. Continuous gestures, text and IME are discarded instead
+/// — replaying them would resume a drag or an edit against a widget that
+/// no longer exists.
+///
+/// `route_generation` is the session's route counter at the moment the
+/// input was captured. Replay compares it against the counter at
+/// transition end: a second navigation in between means the screen this
+/// input was aimed at is gone, so the input dies with it.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum DeferredDiscreteInput {
+    Tap {
+        scene_x: f32,
+        scene_y: f32,
+        pointer_id: u32,
+        kind: jian_core::gesture::pointer::PointerKind,
+        activation: Option<op_preview_contracts::UserActivationId>,
+        route_generation: u64,
+    },
+    Submit {
+        key: String,
+        modifiers: jian_core::gesture::pointer::Modifiers,
+        activation: Option<op_preview_contracts::UserActivationId>,
+        route_generation: u64,
+    },
+    Back {
+        activation: Option<op_preview_contracts::UserActivationId>,
+        route_generation: u64,
+    },
+}
+
+impl DeferredDiscreteInput {
+    pub(crate) fn route_generation(&self) -> u64 {
+        match self {
+            Self::Tap {
+                route_generation, ..
+            }
+            | Self::Submit {
+                route_generation, ..
+            }
+            | Self::Back {
+                route_generation, ..
+            } => *route_generation,
+        }
+    }
+
+    pub(crate) fn activation(&self) -> Option<op_preview_contracts::UserActivationId> {
+        match self {
+            Self::Tap { activation, .. }
+            | Self::Submit { activation, .. }
+            | Self::Back { activation, .. } => *activation,
+        }
+    }
+}
+
+/// R8: the transition-local pointer tracker.
+///
+/// A press that starts during a transition is NOT queued as raw phases —
+/// the runtime never sees them. The tracker only remembers enough to
+/// decide, at `Up`, whether the press was a Tap; anything that drifts too
+/// far or lingers too long is dropped rather than guessed at.
+///
+/// Thresholds are jian's own gesture defaults, not local inventions:
+/// [`jian_core::gesture::config::DEFAULT_DOUBLE_TAP_SLOP_PX`] bounds the
+/// drift and [`jian_core::gesture::config::DEFAULT_LONG_PRESS_MS`] bounds
+/// the duration — past it the press was a long-press, which is not a
+/// discrete input and must not be synthesized into a Tap.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct TransitionTapTracker {
+    pub(crate) pointer_id: u32,
+    pub(crate) kind: jian_core::gesture::pointer::PointerKind,
+    pub(crate) down_x: f32,
+    pub(crate) down_y: f32,
+    pub(crate) down_ms: u64,
+}
+
+impl TransitionTapTracker {
+    /// Whether an `Up` for `pointer_id` at this point and time completes
+    /// a Tap. A different pointer, too much drift, or too long a hold all
+    /// mean "not a tap".
+    pub(crate) fn completes_tap(&self, pointer_id: u32, x: f32, y: f32, now_ms: u64) -> bool {
+        if pointer_id != self.pointer_id {
+            return false;
+        }
+        let dx = x - self.down_x;
+        let dy = y - self.down_y;
+        let drift = (dx * dx + dy * dy).sqrt();
+        let held = now_ms.saturating_sub(self.down_ms);
+        drift <= jian_core::gesture::config::DEFAULT_DOUBLE_TAP_SLOP_PX
+            && held < jian_core::gesture::config::DEFAULT_LONG_PRESS_MS
+    }
+}
+
 impl ScreenTransition {
     pub(crate) fn start(kind: TransitionKind, outgoing: ScenePage, now_ms: u64) -> Self {
         let duration_ms = match kind {
@@ -80,11 +177,9 @@ impl ScreenTransition {
     }
 
     /// Next wake time for the host's animation loop — same shape as
-    /// `op_editor_ui::widgets::CanvasLayoutTransition::next_deadline_ms`,
-    /// though the host doesn't actually need this: `next_animation_deadline_ms`
-    /// already ticks ~30fps for the whole `self.preview.is_some()` window.
-    /// Kept for parity / a future host that wants a tighter wake schedule.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// `op_editor_ui::widgets::CanvasLayoutTransition::next_deadline_ms`.
+    /// `PreviewSession::next_wake_deadline_ms` folds this into the host's
+    /// deadline chain so an idle preview no longer needs a blanket tick.
     pub(crate) fn next_deadline_ms(&self, now_ms: u64) -> Option<u64> {
         if !self.is_active(now_ms) {
             return None;
@@ -228,7 +323,11 @@ impl PreviewSession {
 
         let overlaid_entering;
         let entering_scene: &LayoutScene = if self.runtime.widget_states.iter().next().is_none()
+            && !self.has_preview_widget_visuals()
             && self.binding_sites.is_empty()
+            && !self.ui_actions.has_visual_state()
+            && !self.binding_overlay.has_visual_state()
+            && !self.animation.has_visual_state()
         {
             &self.scene
         } else {

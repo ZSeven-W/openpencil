@@ -230,6 +230,54 @@ fn drain_stop_request_drops_session_without_clearing_transcript() {
 }
 
 #[test]
+fn drain_stop_request_marks_a_generating_workspace_stopped() {
+    // Serialize against the indicator tests (see the test above).
+    let _guard = crate::agent_indicator_test_lock::LOCK
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    op_editor_core::agent_indicators::clear();
+
+    let mut current = None;
+    let mut current_design = None;
+    let mut host = WidgetHostNative::new();
+    {
+        let editor = host.editor_state_mut();
+        editor
+            .chat
+            .messages
+            .push(ChatMessage::assistant_streaming());
+        editor.chat.stop_streaming();
+        // A Home-launched generation just opened the workspace.
+        editor.editor_ui.workspace.open_for_generation(
+            op_editor_core::HomeFamily::AppUi,
+            "取餐预约，3 个页面",
+            op_editor_core::TaskDraft::default(),
+            0,
+            1_000,
+            None,
+        );
+        editor.chat.pending_stop_chat = true;
+    }
+
+    assert!(drain_stop_request(
+        &mut host,
+        &mut current,
+        &mut current_design,
+        None,
+    ));
+    let workspace = &host.editor_state().editor_ui.workspace;
+    assert_eq!(workspace.phase, op_editor_core::WorkspacePhase::Stopped);
+    // The late idle edge can no longer flip it to Done or Failed.
+    assert!(!host.editor_state_mut().editor_ui.workspace.mark_done(0));
+    assert!(!host.editor_state_mut().editor_ui.workspace.mark_failed(0));
+    assert_eq!(
+        host.editor_state().editor_ui.workspace.phase,
+        op_editor_core::WorkspacePhase::Stopped
+    );
+    op_editor_core::agent_indicators::clear();
+}
+
+#[test]
 fn selected_builtin_model_routes_to_builtin_provider() {
     let mut host = WidgetHostNative::new();
     let id = host

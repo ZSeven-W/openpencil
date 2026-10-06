@@ -21,6 +21,11 @@ Key aesthetics:
 - **Soft industrial radii**: 8-24px corners balance the geometric sharpness with comfortable touch targets
 - **Integrated bottom nav**: full-width bottom navigation with lime active indicator
 
+Signature recipes:
+
+- **Mesh gradient as protagonist** — Make the #C4F82A feature gradient the top-leading protagonist, taking at least 25% of the #0A0A0A first screen — ADA 2025 Denim
+- **Labels stay** — Keep text labels on every icon action, with lime #C4F82A on #0A0A0A and a 24px content rail — M3 Expressive
+
 ## Color System
 
 ### Core Backgrounds

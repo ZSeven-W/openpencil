@@ -18,6 +18,21 @@ pub fn account_anchor(state: &EditorState, viewport_w: f32) -> Rect {
         let bar = host_canvas_geometry::touch_app_bar_rect(state, viewport_w);
         return MobileAppBar::overflow_rect(bar);
     }
+    // Home is a takeover with its own top bar, so the menu has to hang
+    // off ITS avatar. Anchoring to the professional TopBar's position
+    // put the menu somewhere Home has no avatar at all.
+    if state.editor_ui.home.visible {
+        // The top-bar rects are anchored off the viewport's right edge
+        // and depend on nothing else, so the task and chip width here
+        // cannot change the answer.
+        return crate::widgets::home_surface::layout::layout_for(
+            viewport_w,
+            1.0,
+            state.editor_ui.home.task,
+            0.0,
+        )
+        .account;
+    }
     let top_bar = Rect::xywh(0.0, 0.0, viewport_w, TOP_BAR_HEIGHT);
     TopBar::for_editor_ui(&state.editor_ui).account_button_rect(top_bar)
 }

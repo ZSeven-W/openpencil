@@ -30,6 +30,9 @@ pub(in super::super) fn color_close(actual: crate::Color, expected: crate::Color
 #[test]
 fn paint_header_uses_auto_generated_chat_title() {
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat.title = "现代移动端登录页面".into();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
@@ -61,6 +64,9 @@ fn paint_quick_action_card_hover_adds_visible_feedback() {
     // old→new (#33): pills use EXAMPLE_PILL_RADIUS (~20px) not 8px.
     // old→new (#37): pills now use EXAMPLE_PILL_RADIUS=14px (compact).
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     seed_available_model(&mut s);
     s.editor_ui.chat_example_hover = Some(0);
     let panel = AIChatPlaceholder::from_editor(&s);
@@ -88,6 +94,9 @@ fn paint_quick_action_card_pressed_uses_shared_feedback() {
     // old→new (#33): pills use EXAMPLE_PILL_RADIUS (~20px) not 8px.
     // old→new (#37): pills now use EXAMPLE_PILL_RADIUS=14px (compact).
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     seed_available_model(&mut s);
     s.editor_ui.pressed_button = Some(op_editor_core::ButtonPressTarget::ChatExample(0));
     let panel = AIChatPlaceholder::from_editor(&s);
@@ -115,6 +124,9 @@ fn paint_quick_action_card_pressed_uses_shared_feedback() {
 #[test]
 fn paint_new_chat_tooltip_after_transcript_bubbles() {
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.editor_ui.chat_header_hover = Some(op_editor_core::ChatHeaderButton::NewChat);
     s.chat
         .messages
@@ -182,6 +194,9 @@ fn paint_send_button_hover_adds_visible_feedback() {
     // hovered fill must visibly differ from the resting fill — not just exist.
     let send_fill = |hovered: bool| -> crate::Color {
         let mut s = EditorState::new();
+        // The expanded panel only exists where the conversation lives:
+        // the rail's Agent tab. Elsewhere the chat is composer-only.
+        s.editor_ui.enter_chat_tab();
         seed_available_model(&mut s);
         s.chat.set_input_text("design a login page");
         if hovered {
@@ -218,6 +233,9 @@ fn paint_send_button_hover_adds_visible_feedback() {
 #[test]
 fn from_editor_picks_up_chat_button_press_targets() {
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.editor_ui.pressed_button = Some(op_editor_core::ButtonPressTarget::ChatHeader(
         op_editor_core::ChatHeaderButton::NewChat,
     ));
@@ -254,6 +272,9 @@ fn paint_footer_neutral_hovers_use_visible_feedback() {
 
     for hover in cases {
         let mut s = EditorState::new();
+        // The expanded panel only exists where the conversation lives:
+        // the rail's Agent tab. Elsewhere the chat is composer-only.
+        s.editor_ui.enter_chat_tab();
         seed_available_model(&mut s);
         s.editor_ui.chat_footer_hover = Some(hover);
         let panel = AIChatPlaceholder::from_editor(&s);
@@ -294,6 +315,9 @@ fn paint_footer_neutral_hovers_use_visible_feedback() {
 #[test]
 fn paint_model_picker_hover_stays_inside_model_chip() {
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     seed_available_model(&mut s);
     s.editor_ui.chat_footer_hover = Some(op_editor_core::ChatFooterButton::ModelPicker);
     let panel = AIChatPlaceholder::from_editor(&s);
@@ -335,6 +359,9 @@ fn footer_speed_chip_paints_agent_team_size_after_zap_icon() {
     // old→new (#32): the ⚡ chip now shows "{N}x" (agent_team_size) instead of the
     // effort level label. old test was footer_speed_chip_paints_effort_label_after_zap_icon.
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     seed_available_model(&mut s);
     // Set a non-default value to confirm it's the agent_team_size being painted.
     s.chat.agent_team_size = 3;
@@ -378,6 +405,9 @@ fn footer_agent_team_chip_is_zero_width_in_27_layout() {
     // The agent_team rect is retained in FooterLayout for round-trip
     // compatibility but has zero width so contains() never fires.
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     seed_available_model(&mut s);
     s.chat.agent_team_size = 2;
     let panel = AIChatPlaceholder::from_editor(&s);
@@ -395,6 +425,9 @@ fn footer_agent_team_chip_is_zero_width_in_27_layout() {
 #[test]
 fn footer_model_dropdown_keeps_short_model_name_readable() {
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat
         .available_models
         .push(op_editor_core::chat::ModelEntry::new(
@@ -429,6 +462,9 @@ fn footer_model_dropdown_keeps_short_model_name_readable() {
 #[test]
 fn footer_toolbar_labels_align_and_model_label_leaves_chevron_room() {
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat
         .available_models
         .push(op_editor_core::chat::ModelEntry::new(
@@ -492,7 +528,10 @@ fn paint_expanded_header_active_tab_pill_is_painted() {
     // color. Instead the tab row always paints the active tab with a filled pill.
     // This test verifies: with one tab (default), the active tab pill is painted
     // inside the tab zone (x >= tab_row_left, y in header range).
-    let s = EditorState::new();
+    let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let mut backend = PanelPaintBackend::default();
@@ -588,6 +627,9 @@ impl crate::RenderBackend for PanelPaintBackend {
 #[test]
 fn paint_model_chip_uses_key_glyph_for_builtin_model() {
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat
         .available_models
         .push(op_editor_core::chat::ModelEntry::builtin_with_display_name(
@@ -626,7 +668,10 @@ fn has_fill_rect(fills: &[(Rect, crate::Color)], expected: Rect) -> bool {
 
 #[test]
 fn paint_draws_header_divider_and_message_body_background() {
-    let s = EditorState::new();
+    let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(10.0, 20.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let input_h = INPUT_BASE_HEIGHT;
@@ -638,22 +683,26 @@ fn paint_draws_header_divider_and_message_body_background() {
 
     panel.paint(&mut cx, rect);
 
-    assert!(has_fill_rect(
-        &backend.fills,
-        Rect::xywh(
-            rect.origin.x + 1.0,
-            rect.origin.y + HEADER_HEIGHT,
-            rect.size.x - 2.0,
-            1.0
-        )
-    ));
-    assert!(has_fill_rect(
-        &backend.fills,
-        Rect::xywh(
-            rect.origin.x + 1.0,
-            rect.origin.y + HEADER_HEIGHT + 1.0,
-            rect.size.x - 2.0,
-            sep_y - (rect.origin.y + HEADER_HEIGHT + 1.0),
-        )
-    ));
+    // Pinned into the rail the panel keeps ONE rule, the one above the
+    // composer: the rail already bounds it, so the header hairline and
+    // the transcript wash would be a second border inside one surface.
+    assert!(
+        !has_fill_rect(
+            &backend.fills,
+            Rect::xywh(
+                rect.origin.x + 1.0,
+                rect.origin.y + HEADER_HEIGHT,
+                rect.size.x - 2.0,
+                1.0
+            )
+        ),
+        "no header hairline in the rail"
+    );
+    assert!(
+        has_fill_rect(
+            &backend.fills,
+            Rect::xywh(rect.origin.x + 1.0, sep_y, rect.size.x - 2.0, 1.0)
+        ),
+        "the composer still has its rule"
+    );
 }

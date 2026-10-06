@@ -78,7 +78,7 @@ fn variable_ref_replaces_only_primary_fill_layer() {
     ));
     assert!((r1.opacity - 0.5).abs() < 0.001);
 
-    let fallback = fill_layers_to_scene(&[], Some(Color::rgba_u8(1, 2, 3, 0.75)));
+    let fallback = fill_layers_to_scene(&[], Some(Color::rgba_u8(1, 2, 3, 0.75)), [0.0, 0.0]);
     assert!(matches!(
         fallback.as_slice(),
         [SceneFillLayer::Solid {

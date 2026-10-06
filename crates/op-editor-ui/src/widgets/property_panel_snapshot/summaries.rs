@@ -151,6 +151,18 @@ pub struct IconSummary {
     pub icon_id: String,
 }
 
+/// Image-node video metadata formatted for the Video property section.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VideoSummary {
+    pub src: String,
+    pub poster_src: String,
+    pub autoplay: bool,
+    pub loop_video: bool,
+    pub muted: bool,
+    pub hold_last_frame: bool,
+    pub click_to_replay: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LayoutPaddingSummary {
     pub top: f32,

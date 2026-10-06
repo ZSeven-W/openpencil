@@ -46,6 +46,7 @@ pub(crate) fn build_design_request(
         // Policy the user set in the Asset Center: it overrides the
         // style guide the prompt would otherwise infer.
         pinned_style_guide: state.editor_ui.pinned_style_guide.clone(),
+        reference_skeleton: None,
     }
 }
 

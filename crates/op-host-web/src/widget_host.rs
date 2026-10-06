@@ -95,6 +95,8 @@ mod design_md_press;
 #[cfg(test)]
 mod design_md_press_tests;
 pub(crate) mod icon_ingest;
+#[cfg(all(test, feature = "canvaskit"))]
+mod preview_hover_tests;
 // Browser file-IO ingestion (Open / Figma import / clipboard paste)
 // — needs the codegen-gated document-pipeline deps (jian-ops-schema).
 #[cfg(feature = "canvaskit")]
@@ -170,6 +172,8 @@ mod press_surface_tiers;
 mod preview_frame;
 mod preview_frame_teardown;
 mod preview_slideshow;
+#[cfg(feature = "canvaskit")]
+mod preview_video;
 #[cfg(test)]
 mod prompt_center_host_tests;
 mod prompt_center_press;
@@ -476,25 +480,29 @@ impl WidgetHost {
         self.wall_now_secs = wall_now_secs;
     }
 
-    // Caret-blink / animation scheduling — tested + ready to wire, but the
-    // CanvasKit mount repaints on events rather than a blink-deadline pump.
+    // Caret-blink / animation scheduling. The browser pump consumes this
+    // deadline while native folds the same session deadline into its runner.
     #[allow(dead_code)]
     pub fn caret_animation_active(&self) -> bool {
         self.editor_state.active_text_input().is_some()
     }
 
-    /// Companion to `caret_animation_active` — unwired for the same reason
-    /// (the CanvasKit mount has no deadline pump to feed it).
-    #[allow(dead_code)]
+    /// The preview-only wake deadline used by the browser frame pump and the
+    /// paint-side self-perpetuating clause.
+    pub(crate) fn preview_wake_deadline_ms(&self) -> Option<u64> {
+        self.preview
+            .as_ref()
+            .and_then(|preview| preview.next_wake_deadline_ms())
+    }
+
+    /// Next absolute millisecond at which this host owes a repaint.
     pub fn next_animation_deadline_ms(&self) -> Option<u64> {
-        // The web host contributes no platform clauses of its own — the
-        // native spine folds gesture-degrade / pan-cache / preview / git-clone
-        // wake-ups onto this same base.
-        bookkeeping::base_animation_deadline_ms(
+        let next = bookkeeping::base_animation_deadline_ms(
             &self.editor_state,
             self.layout_transition.as_ref(),
             self.now_ms,
-        )
+        );
+        bookkeeping::fold_preview_deadline(next, self.preview_wake_deadline_ms(), self.now_ms)
     }
 
     /// Whether a top-bar tooltip is waiting out its dwell — i.e. a
@@ -554,9 +562,12 @@ impl WidgetHost {
     /// observes one monotonic identity and host caches cannot alias revision 0.
     #[cfg(feature = "canvaskit")]
     pub(crate) fn replace_editor_state(&mut self, state: op_editor_core::EditorState) {
+        self.finish_exit_teardown();
         self.editor_state = state;
+        self.editor_state.editor_ui.exit_preview();
         self.document_epoch = self.document_epoch.wrapping_add(1).max(1);
         self.force_rotate_layer_panel_owner();
+        self.layout_transition = None;
         self.scene_cache.invalidate();
         self.mark_editor_state_dirty();
     }

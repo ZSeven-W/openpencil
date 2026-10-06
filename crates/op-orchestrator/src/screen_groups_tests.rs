@@ -11,12 +11,14 @@ fn subtask_with_screen(id: &str, screen: Option<&str>) -> Subtask {
     Subtask {
         id: id.into(),
         label: id.into(),
+        bleed_hero: false,
         id_prefix: id.into(),
         region: Region {
             width: 1200.0,
             height: 400.0,
         },
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: screen.map(|s| s.to_string()),
         generated_root_id: None,

@@ -58,6 +58,38 @@ pub fn color_contrast(a: &str, b: &str) -> f64 {
     (lighter + 0.05) / (darker + 0.05)
 }
 
+/// Standard sRGB → HSL conversion. Returns `(hue, saturation, lightness)`
+/// with hue in `[0, 360)` degrees and saturation / lightness in `[0, 1]`.
+/// Achromatic colors (`max == min`) report hue `0` and saturation `0`, so a
+/// hue-range predicate never matches a gray.
+pub fn hsl(c: Rgb) -> (f64, f64, f64) {
+    let r = c.r as f64 / 255.0;
+    let g = c.g as f64 / 255.0;
+    let b = c.b as f64 / 255.0;
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let lightness = (max + min) / 2.0;
+    let delta = max - min;
+    if delta == 0.0 {
+        return (0.0, 0.0, lightness);
+    }
+    let saturation = if lightness > 0.5 {
+        delta / (2.0 - max - min)
+    } else {
+        delta / (max + min)
+    };
+    let hue = if max == r {
+        60.0 * (((g - b) / delta) % 6.0)
+    } else if max == g {
+        60.0 * ((b - r) / delta + 2.0)
+    } else {
+        60.0 * ((r - g) / delta + 4.0)
+    };
+    // `%` keeps the sign of the dividend; fold negative hues into [0, 360).
+    let hue = if hue < 0.0 { hue + 360.0 } else { hue };
+    (hue, saturation, lightness)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,6 +161,34 @@ mod tests {
             b: 0x77,
         });
         assert!((lum - 0.184_474_994_5).abs() < 1e-7);
+    }
+
+    #[test]
+    fn hsl_known_vectors() {
+        // Pure primaries and a mid purple, cross-checked against the CSS
+        // `hsl()` definition.
+        let (h, s, l) = hsl(Rgb { r: 255, g: 0, b: 0 });
+        assert!((h - 0.0).abs() < EPS && (s - 1.0).abs() < EPS && (l - 0.5).abs() < EPS);
+        let (h, s, _l) = hsl(Rgb { r: 0, g: 255, b: 0 });
+        assert!((h - 120.0).abs() < EPS && (s - 1.0).abs() < EPS);
+        let (h, s, _l) = hsl(Rgb { r: 0, g: 0, b: 255 });
+        assert!((h - 240.0).abs() < EPS && (s - 1.0).abs() < EPS);
+        // #8B5CF6 (Tailwind violet-500) ≈ hsl(258.3, 89.5%, 66.3%).
+        let (h, s, l) = hsl(Rgb {
+            r: 0x8B,
+            g: 0x5C,
+            b: 0xF6,
+        });
+        assert!((h - 258.3).abs() < 0.1);
+        assert!((s - 0.895).abs() < 0.01);
+        assert!((l - 0.663).abs() < 0.01);
+        // Achromatic gray: hue and saturation collapse to 0.
+        let (h, s, _) = hsl(Rgb {
+            r: 128,
+            g: 128,
+            b: 128,
+        });
+        assert!(h == 0.0 && s == 0.0);
     }
 
     #[test]

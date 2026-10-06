@@ -266,13 +266,39 @@ fn rank_industry_tag_outweighs_plain_tag() {
 }
 
 #[test]
-fn metadata_line_is_name_only_no_type_or_color() {
-    // Softened: names only — no `:: tags` (type) and no ` bg:` (color).
-    let g = &style_guide_registry()[0];
+fn metadata_line_is_name_platform_and_lead_aesthetic_no_type_or_color() {
+    // Softened (2026-06-23): no `:: tags` (type) and no ` bg:` (color).
+    // Re-opened (2026-09-06): the planner picks by mood, so the line carries
+    // the guide's lead "Key aesthetics" label — a few words, no hex, no tags.
+    let g = style_guide_registry()
+        .iter()
+        .find(|guide| guide.platform == op_ai_skills::style_guide::Platform::Mobile)
+        .expect("a mobile style guide is embedded");
     let line = format_guide_metadata_line(g, PlanningMode::Rich);
-    assert_eq!(line, format!("- {} [{}]", g.name, g.platform.as_str()));
+    let head = format!("- {} [{}]", g.name, g.platform.as_str());
+    assert!(line.starts_with(&head), "{line}");
+    let recipes = op_ai_skills::style_guide::signature_recipes(&g.content, 2);
+    assert_eq!(recipes.len(), 2, "{line}");
+    assert!(line.ends_with(&format!(" · recipes: {} / {}", recipes[0], recipes[1])));
+    match op_ai_skills::style_guide::key_aesthetics(&g.content, 1).first() {
+        Some(lead) => {
+            let label = lead.split(':').next().unwrap_or("").trim();
+            assert_eq!(
+                line,
+                format!(
+                    "{head} — {label} · recipes: {} / {}",
+                    recipes[0], recipes[1]
+                )
+            );
+        }
+        None => assert_eq!(
+            line,
+            format!("{head} · recipes: {} / {}", recipes[0], recipes[1])
+        ),
+    }
     assert!(!line.contains(" :: "), "type tags must be dropped: {line}");
     assert!(!line.contains(" bg:"), "bg color must be dropped: {line}");
+    assert!(!line.contains('#'), "no hex in the candidate line: {line}");
 }
 
 #[test]
@@ -458,5 +484,51 @@ fn a_colourless_guide_drops_the_exact_colors_instruction() {
     assert!(
         !summary.contains("EXACT hex colors"),
         "nothing to obey, so nothing should be demanded:\n{summary}"
+    );
+}
+
+#[test]
+fn compact_style_summary_carries_the_guides_key_aesthetics() {
+    // Weak tiers used to receive palette, fonts and radii only — the guide's
+    // expression layer never reached them, so every guide produced the same
+    // neutral template.
+    for tier in [
+        crate::model_profile::ModelTier::Basic,
+        crate::model_profile::ModelTier::Standard,
+    ] {
+        let text = crate::prompt::build_style_guide_instruction(Some("dark-bold-mobile"), tier)
+            .expect("shipped guide resolves");
+        assert!(text.contains("Key aesthetics"), "{text}");
+        assert!(text.contains("Electric lime"), "{text}");
+        assert!(text.contains("Signature recipes"), "{text}");
+        assert!(text.contains("Mesh gradient as protagonist"), "{text}");
+    }
+}
+
+#[test]
+fn pinned_mobile_metadata_carries_both_recipe_names() {
+    let ctx = build_planning_style_guide_context(
+        "a mobile wellness screen",
+        Some("claude-opus"),
+        PlanningMode::Rich,
+        None,
+        Some("wellness-green-mobile-light"),
+    );
+    assert!(
+        ctx.available_style_guides.contains(
+            "- wellness-green-mobile-light [mobile] — Nature-tinted canvas · recipes: \
+             Top-leading protagonist / Dim-and-highlight \"now\""
+        ),
+        "pinned mobile guide metadata must carry recipes:\n{}",
+        ctx.available_style_guides
+    );
+    assert!(
+        ctx.available_style_guides
+            .contains("Top-leading protagonist")
+            && ctx
+                .available_style_guides
+                .contains("Dim-and-highlight \"now\""),
+        "pinned mobile guide metadata must carry both recipe names:\n{}",
+        ctx.available_style_guides
     );
 }

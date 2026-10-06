@@ -12,7 +12,15 @@ use crate::widgets::{AI_CHAT_MINIMIZED_HEIGHT, AI_CHAT_WIDTH};
 fn paint_minimized_bar_reads_as_a_compact_input() {
     let mut s = EditorState::new();
     s.chat.minimize();
-    let panel = AIChatPlaceholder::from_editor(&s);
+    let panel = {
+        // The minimized bar is the TOUCH sheet's collapsed form now: on
+        // desktop the composer-only card replaced it, so these tests ask
+        // for the bar explicitly rather than relying on a default that
+        // no longer produces one.
+        let mut panel = AIChatPlaceholder::from_editor(&s);
+        panel.composer_only = false;
+        panel
+    };
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_MINIMIZED_HEIGHT);
     let mut backend = PanelPaintBackend::default();
     let mut cx = PaintCx {
@@ -60,7 +68,15 @@ fn the_model_name_sits_a_step_below_the_placeholder() {
     let mut s = EditorState::new();
     s.chat.minimize();
     seed_available_model(&mut s);
-    let panel = AIChatPlaceholder::from_editor(&s);
+    let panel = {
+        // The minimized bar is the TOUCH sheet's collapsed form now: on
+        // desktop the composer-only card replaced it, so these tests ask
+        // for the bar explicitly rather than relying on a default that
+        // no longer produces one.
+        let mut panel = AIChatPlaceholder::from_editor(&s);
+        panel.composer_only = false;
+        panel
+    };
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_MINIMIZED_HEIGHT);
     let mut backend = PanelPaintBackend::default();
     let mut cx = PaintCx {
@@ -91,7 +107,15 @@ fn paint_minimized_bar_prefers_the_unsent_draft_over_the_placeholder() {
     s.chat.minimize();
     s.chat
         .set_input_text("a pricing page\nsecond line".to_string());
-    let panel = AIChatPlaceholder::from_editor(&s);
+    let panel = {
+        // The minimized bar is the TOUCH sheet's collapsed form now: on
+        // desktop the composer-only card replaced it, so these tests ask
+        // for the bar explicitly rather than relying on a default that
+        // no longer produces one.
+        let mut panel = AIChatPlaceholder::from_editor(&s);
+        panel.composer_only = false;
+        panel
+    };
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_MINIMIZED_HEIGHT);
     let mut backend = PanelPaintBackend::default();
     let mut cx = PaintCx {
@@ -122,7 +146,15 @@ fn paint_minimized_bar_hover_adds_visible_feedback_across_the_bar() {
     let mut s = EditorState::new();
     s.chat.minimize();
     s.editor_ui.chat_header_hover = Some(op_editor_core::ChatHeaderButton::ToggleCollapse);
-    let panel = AIChatPlaceholder::from_editor(&s);
+    let panel = {
+        // The minimized bar is the TOUCH sheet's collapsed form now: on
+        // desktop the composer-only card replaced it, so these tests ask
+        // for the bar explicitly rather than relying on a default that
+        // no longer produces one.
+        let mut panel = AIChatPlaceholder::from_editor(&s);
+        panel.composer_only = false;
+        panel
+    };
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_MINIMIZED_HEIGHT);
     let mut backend = PanelPaintBackend::default();
     let mut cx = PaintCx {

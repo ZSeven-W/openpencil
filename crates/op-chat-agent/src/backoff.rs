@@ -121,6 +121,50 @@ pub fn default_backoff_knobs() -> (u32, Duration) {
     (BUILTIN_HTTP_MAX_RETRIES, builtin_http_min_gap())
 }
 
+/// Append a rejected response's status and body to the file named by
+/// `OPENPENCIL_DEBUG_HTTP_ERROR_BODY`, when it is set.
+///
+/// Off by default and never wired into chat, SSE, or stdout: a provider
+/// error body is untrusted and can echo the request's own headers, so it
+/// stays out of every channel the user or a browser can read. With the
+/// env var set it goes to that one file and nowhere else, which is what
+/// turns "http 400 Bad Request" from a dead end into a diagnosis
+/// (measured 2026-09-13: a modify turn died on a 400 whose reason was
+/// unreachable from inside the app).
+async fn dump_error_body(label: &str, status: reqwest::StatusCode, resp: reqwest::Response) {
+    let Ok(path) = std::env::var("OPENPENCIL_DEBUG_HTTP_ERROR_BODY") else {
+        return;
+    };
+    if path.is_empty() {
+        return;
+    }
+    let body = resp.text().await.unwrap_or_default();
+    let line = format!(
+        "[{}] {label} http {} {}\n{}\n",
+        chrono_like_stamp(),
+        status.as_u16(),
+        status.canonical_reason().unwrap_or(""),
+        body.chars().take(4_000).collect::<String>()
+    );
+    use std::io::Write as _;
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
+        let _ = file.write_all(line.as_bytes());
+    }
+}
+
+/// Seconds since the UNIX epoch — enough to line a dump up against the
+/// app log without pulling a date crate into this leaf.
+fn chrono_like_stamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
 pub async fn send_with_backoff(
     label: &str,
     url: &str,
@@ -164,6 +208,10 @@ pub async fn send_with_backoff(
                 // Provider error bodies are untrusted and can echo request
                 // headers. Never relay them into chat/SSE where credentials
                 // could be reflected back into logs or browser responses.
+                // They ARE the only way to tell WHY a provider rejected a
+                // request, so an explicit opt-in writes them to a local file
+                // the developer named — never to the transcript.
+                dump_error_body(label, status, resp).await;
                 return Err(BuiltinHttpError::HttpStatus {
                     label: label.to_string(),
                     status,
@@ -290,5 +338,16 @@ pub fn apply_reasoning_wire_control_anthropic(
         Some(op_orchestrator::ReasoningWireControl::ThinkingDisabled)
     ) {
         obj.insert("thinking".into(), serde_json::json!({ "type": "disabled" }));
+    }
+}
+
+#[cfg(test)]
+mod http_error_dump_tests {
+    #[test]
+    fn the_dump_is_off_unless_the_env_var_names_a_file() {
+        unsafe {
+            std::env::remove_var("OPENPENCIL_DEBUG_HTTP_ERROR_BODY");
+        }
+        assert!(std::env::var("OPENPENCIL_DEBUG_HTTP_ERROR_BODY").is_err());
     }
 }

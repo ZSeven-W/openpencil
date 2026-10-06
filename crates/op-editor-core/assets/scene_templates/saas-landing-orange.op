@@ -7,7 +7,7 @@
     ]
   },
   "variables": {
-    "color-accent": {
+    "--primary": {
       "type": "color",
       "value": [
         {
@@ -24,7 +24,7 @@
         }
       ]
     },
-    "color-bg-deep": {
+    "--background": {
       "type": "color",
       "value": [
         {
@@ -41,7 +41,7 @@
         }
       ]
     },
-    "color-border": {
+    "--border": {
       "type": "color",
       "value": [
         {
@@ -58,7 +58,7 @@
         }
       ]
     },
-    "color-border-strong": {
+    "--input": {
       "type": "color",
       "value": [
         {
@@ -75,31 +75,31 @@
         }
       ]
     },
-    "color-chart-1": {
+    "--chart-1": {
       "type": "color",
       "value": "#3B82F6"
     },
-    "color-chart-2": {
+    "--chart-2": {
       "type": "color",
       "value": "#8B5CF6"
     },
-    "color-chart-3": {
+    "--chart-3": {
       "type": "color",
       "value": "#EC4899"
     },
-    "color-chart-4": {
+    "--chart-4": {
       "type": "color",
       "value": "#14B8A6"
     },
-    "color-chart-5": {
+    "--chart-5": {
       "type": "color",
       "value": "#F59E0B"
     },
-    "color-chart-6": {
+    "--chart-6": {
       "type": "color",
       "value": "#F97316"
     },
-    "color-danger-bg": {
+    "--color-error": {
       "type": "color",
       "value": [
         {
@@ -116,7 +116,7 @@
         }
       ]
     },
-    "color-danger-text": {
+    "--color-error-foreground": {
       "type": "color",
       "value": [
         {
@@ -133,7 +133,7 @@
         }
       ]
     },
-    "color-destructive": {
+    "--destructive": {
       "type": "color",
       "value": [
         {
@@ -150,7 +150,7 @@
         }
       ]
     },
-    "color-info-bg": {
+    "--color-info": {
       "type": "color",
       "value": [
         {
@@ -167,7 +167,7 @@
         }
       ]
     },
-    "color-info-text": {
+    "--color-info-foreground": {
       "type": "color",
       "value": [
         {
@@ -184,7 +184,7 @@
         }
       ]
     },
-    "color-scrim": {
+    "--scrim": {
       "type": "color",
       "value": [
         {
@@ -201,7 +201,7 @@
         }
       ]
     },
-    "color-success": {
+    "--color-success": {
       "type": "color",
       "value": [
         {
@@ -218,7 +218,7 @@
         }
       ]
     },
-    "color-success-bg": {
+    "--color-success": {
       "type": "color",
       "value": [
         {
@@ -235,7 +235,7 @@
         }
       ]
     },
-    "color-success-text": {
+    "--color-success-foreground": {
       "type": "color",
       "value": [
         {
@@ -252,7 +252,7 @@
         }
       ]
     },
-    "color-surface": {
+    "--card": {
       "type": "color",
       "value": [
         {
@@ -269,7 +269,7 @@
         }
       ]
     },
-    "color-surface-2": {
+    "--muted": {
       "type": "color",
       "value": [
         {
@@ -286,7 +286,7 @@
         }
       ]
     },
-    "color-surface-3": {
+    "--accent": {
       "type": "color",
       "value": [
         {
@@ -303,7 +303,7 @@
         }
       ]
     },
-    "color-text-body": {
+    "--secondary-foreground": {
       "type": "color",
       "value": [
         {
@@ -320,7 +320,7 @@
         }
       ]
     },
-    "color-text-muted": {
+    "--muted-foreground": {
       "type": "color",
       "value": [
         {
@@ -337,7 +337,7 @@
         }
       ]
     },
-    "color-text-primary": {
+    "--foreground": {
       "type": "color",
       "value": [
         {
@@ -354,7 +354,7 @@
         }
       ]
     },
-    "color-text-subtle": {
+    "--muted-foreground": {
       "type": "color",
       "value": [
         {
@@ -371,7 +371,7 @@
         }
       ]
     },
-    "color-warning-bg": {
+    "--color-warning": {
       "type": "color",
       "value": [
         {
@@ -388,7 +388,7 @@
         }
       ]
     },
-    "color-warning-text": {
+    "--color-warning-foreground": {
       "type": "color",
       "value": [
         {
@@ -405,15 +405,15 @@
         }
       ]
     },
-    "radius-lg": {
+    "--radius-l": {
       "type": "number",
       "value": 12.0
     },
-    "radius-md": {
+    "--radius-m": {
       "type": "number",
       "value": 8.0
     },
-    "radius-sm": {
+    "--radius-xs": {
       "type": "number",
       "value": 4.0
     },
@@ -607,7 +607,7 @@
                       "fill": [
                         {
                           "type": "solid",
-                          "color": "$color-text-primary"
+                          "color": "$--foreground"
                         }
                       ]
                     }
@@ -637,7 +637,7 @@
                       "fill": [
                         {
                           "type": "solid",
-                          "color": "$color-text-primary"
+                          "color": "$--foreground"
                         }
                       ]
                     },
@@ -656,7 +656,7 @@
                       "fill": [
                         {
                           "type": "solid",
-                          "color": "$color-text-primary"
+                          "color": "$--foreground"
                         }
                       ]
                     },
@@ -675,7 +675,7 @@
                       "fill": [
                         {
                           "type": "solid",
-                          "color": "$color-text-primary"
+                          "color": "$--foreground"
                         }
                       ]
                     },
@@ -694,7 +694,7 @@
                       "fill": [
                         {
                           "type": "solid",
-                          "color": "$color-text-primary"
+                          "color": "$--foreground"
                         }
                       ]
                     },
@@ -713,7 +713,7 @@
                       "fill": [
                         {
                           "type": "solid",
-                          "color": "$color-text-primary"
+                          "color": "$--foreground"
                         }
                       ]
                     }
@@ -793,7 +793,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         }
@@ -962,7 +962,7 @@
                       "fill": [
                         {
                           "type": "solid",
-                          "color": "$color-text-primary"
+                          "color": "$--foreground"
                         }
                       ]
                     },
@@ -982,7 +982,7 @@
                       "fill": [
                         {
                           "type": "solid",
-                          "color": "$color-text-primary"
+                          "color": "$--foreground"
                         }
                       ]
                     },
@@ -2204,7 +2204,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -2325,7 +2325,7 @@
                   "fill": [
                     {
                       "type": "solid",
-                      "color": "$color-text-primary"
+                      "color": "$--foreground"
                     }
                   ]
                 },
@@ -2352,7 +2352,7 @@
                       "fill": [
                         {
                           "type": "solid",
-                          "color": "$color-text-primary"
+                          "color": "$--foreground"
                         }
                       ]
                     }
@@ -2916,7 +2916,7 @@
                   "fill": [
                     {
                       "type": "solid",
-                      "color": "$color-text-primary"
+                      "color": "$--foreground"
                     }
                   ]
                 },
@@ -2935,7 +2935,7 @@
                   "fill": [
                     {
                       "type": "solid",
-                      "color": "$color-text-primary"
+                      "color": "$--foreground"
                     }
                   ]
                 }
@@ -4412,7 +4412,7 @@
           "fill": [
             {
               "type": "solid",
-              "color": "$color-accent"
+              "color": "$--primary"
             }
           ],
           "children": [
@@ -5759,7 +5759,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         }
@@ -5779,7 +5779,7 @@
                       "fill": [
                         {
                           "type": "solid",
-                          "color": "$color-text-primary"
+                          "color": "$--foreground"
                         }
                       ]
                     },
@@ -5993,7 +5993,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6010,7 +6010,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6027,7 +6027,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6044,7 +6044,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6061,7 +6061,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         }
@@ -6086,7 +6086,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6103,7 +6103,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6120,7 +6120,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6137,7 +6137,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6154,7 +6154,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         }
@@ -6180,7 +6180,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6198,7 +6198,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6216,7 +6216,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6234,7 +6234,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6252,7 +6252,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         }
@@ -6278,7 +6278,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6296,7 +6296,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6314,7 +6314,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6332,7 +6332,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         },
@@ -6350,7 +6350,7 @@
                           "fill": [
                             {
                               "type": "solid",
-                              "color": "$color-text-primary"
+                              "color": "$--foreground"
                             }
                           ]
                         }
@@ -6378,7 +6378,7 @@
                       "fill": [
                         {
                           "type": "solid",
-                          "color": "$color-text-primary"
+                          "color": "$--foreground"
                         }
                       ]
                     },
@@ -6396,7 +6396,7 @@
                       "fill": [
                         {
                           "type": "solid",
-                          "color": "$color-text-primary"
+                          "color": "$--foreground"
                         }
                       ]
                     },

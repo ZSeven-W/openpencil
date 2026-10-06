@@ -212,6 +212,11 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // The workspace dock-width drag ends on release (the width is
+        // already clamped live).
+        if self.release_workspace_drag() {
+            return true;
+        }
         let was_dragging = self.drag.is_some();
         self.drag = None;
         was_dragging || pressed_released
@@ -354,6 +359,9 @@ impl WidgetHostNative {
         }
         // Chat drag without viewport — drop it (best effort).
         if self.chat_drag.take().is_some() {
+            return true;
+        }
+        if self.release_workspace_drag() {
             return true;
         }
         if self.design_md_drag.take().is_some() {

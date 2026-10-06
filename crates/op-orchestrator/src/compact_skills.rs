@@ -176,6 +176,7 @@ fn compact_subagent_skills<T: SkillNamed>(
             "cjk-typography",
             "mobile-app",
             "mobile-ui",
+            "interactivity",
             // Deck teaching. Keyword-gated at the resolve layer (deck words
             // only), so a no-op on every non-deck prompt. Required on a deck:
             // the allow-set used to drop `slides` unconditionally, so a
@@ -204,6 +205,14 @@ fn compact_subagent_skills<T: SkillNamed>(
             // RETRY_ALLOWED set — the reduced retry keeps the smallest
             // viable prompt, exactly like `cards` / `deck-patterns`.
             "card-item-template",
+            // Page-scroll orchestration (parallax / sticky / stagger).
+            // Keyword-gated at the resolve layer, so a no-op on every
+            // non-scroll prompt. Required on a scroll prompt for the same
+            // reason the deck and card entries are: without it the allow-set
+            // drops the only teaching that makes a weak-model landing page
+            // move, and the matching budget arm in `prompt_subagent.rs`
+            // has nothing left to keep.
+            "scroll-orchestration",
             "icon-catalog",
             "style-defaults",
             "elements",
@@ -219,6 +228,7 @@ fn compact_subagent_skills<T: SkillNamed>(
                 "text-rules",
                 "mobile-app",
                 "mobile-ui",
+                "interactivity",
                 "style-defaults",
                 "design-md",
                 "variables",

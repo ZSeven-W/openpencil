@@ -88,6 +88,86 @@ pub(crate) fn paint_node_with_options_hiding<'a>(
     generation_accent: Option<Color>,
     queued_shell_ids: Option<&HashSet<String>>,
 ) -> PaintNodeHits<'a> {
+    paint_node_with_options_hiding_mode(
+        cx,
+        node,
+        viewport_origin,
+        zoom,
+        edit_caret,
+        cull,
+        reveals,
+        hovered,
+        selected,
+        pen,
+        hidden,
+        now_ms,
+        generating_descendant_ids,
+        generation_accent,
+        queued_shell_ids,
+        false,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn paint_node_with_options_hiding_without_video_badge<'a>(
+    cx: &mut PaintCx<'_>,
+    node: &'a SceneNode,
+    viewport_origin: Point2D,
+    zoom: f32,
+    edit_caret: Option<EditCaret>,
+    cull: Rect,
+    reveals: Option<RevealSchedule<'a>>,
+    hovered: Option<&'a str>,
+    selected: Option<&'a str>,
+    pen: Option<&'a str>,
+    hidden: Option<&'a str>,
+    now_ms: u64,
+    generating_descendant_ids: Option<&HashSet<String>>,
+    generation_accent: Option<Color>,
+    queued_shell_ids: Option<&HashSet<String>>,
+) -> PaintNodeHits<'a> {
+    paint_node_with_options_hiding_mode(
+        cx,
+        node,
+        viewport_origin,
+        zoom,
+        edit_caret,
+        cull,
+        reveals,
+        hovered,
+        selected,
+        pen,
+        hidden,
+        now_ms,
+        generating_descendant_ids,
+        generation_accent,
+        queued_shell_ids,
+        false,
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn paint_node_with_options_hiding_mode<'a>(
+    cx: &mut PaintCx<'_>,
+    node: &'a SceneNode,
+    viewport_origin: Point2D,
+    zoom: f32,
+    edit_caret: Option<EditCaret>,
+    cull: Rect,
+    reveals: Option<RevealSchedule<'a>>,
+    hovered: Option<&'a str>,
+    selected: Option<&'a str>,
+    pen: Option<&'a str>,
+    hidden: Option<&'a str>,
+    now_ms: u64,
+    generating_descendant_ids: Option<&HashSet<String>>,
+    generation_accent: Option<Color>,
+    queued_shell_ids: Option<&HashSet<String>>,
+    fast_interaction: bool,
+    show_video_badge: bool,
+) -> PaintNodeHits<'a> {
     let options = PaintNodeOptions {
         viewport_origin,
         zoom,
@@ -103,8 +183,9 @@ pub(crate) fn paint_node_with_options_hiding<'a>(
         generation_accent,
         queued_shell_ids,
         mask_source: false,
+        show_video_badge,
         suppress_node_composite_id: None,
-        fast_interaction: false,
+        fast_interaction,
     };
     paint_node_inner(cx, node, &options, &mut Vec::new(), false)
 }
@@ -131,6 +212,87 @@ pub(crate) fn paint_scene_nodes_with_options_hiding<'a>(
     queued_shell_ids: Option<&HashSet<String>>,
     fast_interaction: bool,
 ) -> PaintNodeHits<'a> {
+    paint_scene_nodes_with_options_hiding_mode(
+        cx,
+        nodes,
+        viewport_origin,
+        zoom,
+        edit_caret,
+        cull,
+        reveals,
+        hovered,
+        selected,
+        pen,
+        hidden,
+        now_ms,
+        generating_descendant_ids,
+        generation_accent,
+        queued_shell_ids,
+        fast_interaction,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn paint_scene_nodes_with_options_hiding_without_video_badge<'a>(
+    cx: &mut PaintCx<'_>,
+    nodes: &'a [SceneNode],
+    viewport_origin: Point2D,
+    zoom: f32,
+    edit_caret: Option<EditCaret>,
+    cull: Rect,
+    reveals: Option<RevealSchedule<'a>>,
+    hovered: Option<&'a str>,
+    selected: Option<&'a str>,
+    pen: Option<&'a str>,
+    hidden: Option<&'a str>,
+    now_ms: u64,
+    generating_descendant_ids: Option<&HashSet<String>>,
+    generation_accent: Option<Color>,
+    queued_shell_ids: Option<&HashSet<String>>,
+    fast_interaction: bool,
+) -> PaintNodeHits<'a> {
+    paint_scene_nodes_with_options_hiding_mode(
+        cx,
+        nodes,
+        viewport_origin,
+        zoom,
+        edit_caret,
+        cull,
+        reveals,
+        hovered,
+        selected,
+        pen,
+        hidden,
+        now_ms,
+        generating_descendant_ids,
+        generation_accent,
+        queued_shell_ids,
+        fast_interaction,
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn paint_scene_nodes_with_options_hiding_mode<'a>(
+    cx: &mut PaintCx<'_>,
+    nodes: &'a [SceneNode],
+    viewport_origin: Point2D,
+    zoom: f32,
+    edit_caret: Option<EditCaret>,
+    cull: Rect,
+    reveals: Option<RevealSchedule<'a>>,
+    hovered: Option<&'a str>,
+    selected: Option<&'a str>,
+    pen: Option<&'a str>,
+    hidden: Option<&'a str>,
+    now_ms: u64,
+    generating_descendant_ids: Option<&HashSet<String>>,
+    generation_accent: Option<Color>,
+    queued_shell_ids: Option<&HashSet<String>>,
+    fast_interaction: bool,
+    show_video_badge: bool,
+) -> PaintNodeHits<'a> {
     let options = PaintNodeOptions {
         viewport_origin,
         zoom,
@@ -146,6 +308,7 @@ pub(crate) fn paint_scene_nodes_with_options_hiding<'a>(
         generation_accent,
         queued_shell_ids,
         mask_source: false,
+        show_video_badge,
         suppress_node_composite_id: None,
         fast_interaction,
     };
@@ -178,6 +341,36 @@ pub fn paint_scene_page(
     cull: Rect,
 ) {
     paint_scene_page_with_options(cx, page, viewport_origin, zoom, cull, None);
+}
+
+/// Preview paint entry: render the scene without editor-only video chrome.
+/// The web host supplies the actual HTML video overlay, while native preview
+/// remains poster-only.
+pub fn paint_scene_page_without_video_badge(
+    cx: &mut PaintCx<'_>,
+    page: &crate::layout_scene::ScenePage,
+    viewport_origin: Point2D,
+    zoom: f32,
+    cull: Rect,
+) {
+    let _ = paint_scene_nodes_with_options_hiding_without_video_badge(
+        cx,
+        &page.children,
+        viewport_origin,
+        zoom,
+        None,
+        cull,
+        None,
+        None,
+        None,
+        None,
+        None,
+        0,
+        None,
+        None,
+        None,
+        false,
+    );
 }
 
 /// Like [`paint_scene_page`], but with an optional inline text-edit

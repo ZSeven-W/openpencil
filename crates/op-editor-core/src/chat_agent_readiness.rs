@@ -45,6 +45,23 @@ fn required_mcp_cli(provider: AgentProvider) -> Option<McpCli> {
     }
 }
 
+impl crate::EditorState {
+    /// True when at least one chat agent can actually answer a turn: a
+    /// built-in API-key agent that is enabled with a key, a connected CLI
+    /// provider, or an enabled ACP agent. The Home sheet uses this to swap
+    /// its send affordance for the 接入卡 instead of letting a first-run
+    /// send fail silently.
+    pub fn has_usable_chat_agent(&self) -> bool {
+        let settings = &self.editor_ui.agent_settings;
+        settings
+            .builtin_agents
+            .iter()
+            .any(|agent| agent.enabled && !agent.api_key.trim().is_empty())
+            || settings.connected.iter().any(|connected| *connected)
+            || settings.acp_agents.iter().any(|agent| agent.enabled)
+    }
+}
+
 #[cfg(test)]
 #[path = "chat_agent_readiness_tests.rs"]
 mod tests;

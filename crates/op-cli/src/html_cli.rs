@@ -203,8 +203,17 @@ pub(super) fn run_import_snapshot(json_path: &str, out_path: &str) -> Result<Str
 
 fn local_resource_fetch(dir: &Path, href: &str) -> Option<Vec<u8>> {
     let href = href.split(['?', '#']).next()?.trim_start_matches('/');
+    // `Url::join` percent-encodes spaces and non-ASCII path bytes before the
+    // importer calls this fetcher, so `hero style.css` arrives as
+    // `hero%20style.css` and misses the file on disk. Decode first and keep
+    // the component + canonical containment checks below as the security
+    // boundary, so encoded separators and `..` still cannot escape `dir`
+    // (mirrors `html_import_session.rs`'s local fetch).
+    let href = percent_decode_path(href)?;
+    let href = href.as_str();
     let relative = Path::new(href);
     if href.is_empty()
+        || href.contains('\0')
         || relative.is_absolute()
         || relative.components().any(|component| {
             matches!(
@@ -220,6 +229,35 @@ fn local_resource_fetch(dir: &Path, href: &str) -> Option<Vec<u8>> {
     path.starts_with(&root)
         .then(|| std::fs::read(path).ok())
         .flatten()
+}
+
+/// Percent-decode a resolved resource path. A stray `%` that is not followed
+/// by two hex digits, or bytes that are not UTF-8, reject the lookup.
+fn percent_decode_path(encoded: &str) -> Option<String> {
+    let source = encoded.as_bytes();
+    let mut decoded = Vec::with_capacity(source.len());
+    let mut index = 0;
+    while index < source.len() {
+        if source[index] != b'%' {
+            decoded.push(source[index]);
+            index += 1;
+            continue;
+        }
+        let high = hex_value(*source.get(index + 1)?)?;
+        let low = hex_value(*source.get(index + 2)?)?;
+        decoded.push((high << 4) | low);
+        index += 3;
+    }
+    String::from_utf8(decoded).ok()
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn count_nodes(nodes: &[PenNode]) -> usize {
@@ -389,6 +427,86 @@ mod tests {
             document.contains("你好"),
             "BOM-decoded text must survive the CLI conversion: {document}"
         );
+    }
+
+    fn temp_html_dir(tag: &str) -> std::path::PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or_default();
+        let dir =
+            std::env::temp_dir().join(format!("op-cli-html-{tag}-{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("create fixture dir");
+        dir
+    }
+
+    /// The importer resolves every relative href through `Url::join`, which
+    /// percent-encodes spaces and non-ASCII bytes, so a stylesheet saved as
+    /// `hero style.css` reaches the fetcher as `hero%20style.css`.
+    #[test]
+    fn local_import_reads_a_percent_encoded_resource_name() {
+        let dir = temp_html_dir("encoded");
+        std::fs::write(dir.join("hero style.css"), "p{color:#00ff00}").expect("write stylesheet");
+        let input = dir.join("page.html");
+        std::fs::write(
+            &input,
+            concat!(
+                "<html><head><link rel=\"stylesheet\" href=\"hero style.css\">",
+                "</head><body><p>Hi</p></body></html>"
+            ),
+        )
+        .expect("write HTML fixture");
+        let output = dir.join("page.op");
+
+        let result = super::run_import_html(
+            input.to_str().expect("UTF-8 input path"),
+            output.to_str().expect("UTF-8 output path"),
+            None,
+        )
+        .expect("import HTML");
+        let document = std::fs::read_to_string(&output).expect("read imported document");
+
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(
+            result.matches("skipped").count(),
+            0,
+            "a local stylesheet must not be reported as skipped: {result}"
+        );
+        assert!(
+            document.contains("#00ff00"),
+            "the stylesheet must style the imported text: {document}"
+        );
+    }
+
+    /// The decode must not widen what the fetcher accepts: encoded separators
+    /// and encoded `..` stay outside the resource directory.
+    #[test]
+    fn local_resource_fetch_rejects_escapes_however_they_are_encoded() {
+        let dir = temp_html_dir("escape");
+        std::fs::write(dir.join("inside.css"), "p{color:#0000ff}").expect("write stylesheet");
+        std::fs::write(dir.join("outside.css"), "p{color:#ff0000}")
+            .expect("write outside stylesheet");
+        let nested = dir.join("nested");
+        std::fs::create_dir_all(&nested).expect("create nested dir");
+
+        let inside = super::local_resource_fetch(&dir, "inside.css");
+        let parent = super::local_resource_fetch(&nested, "../outside.css");
+        let encoded_parent = super::local_resource_fetch(&nested, "%2e%2e/outside.css");
+        let encoded_root = super::local_resource_fetch(&dir, "%2Fetc/hosts");
+        let encoded_nul = super::local_resource_fetch(&dir, "inside.css%00.png");
+
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(inside.is_some(), "a plain in-directory name still resolves");
+        assert!(parent.is_none(), "`..` must not escape the resource dir");
+        assert!(
+            encoded_parent.is_none(),
+            "an encoded `..` must not escape the resource dir"
+        );
+        assert!(
+            encoded_root.is_none(),
+            "an encoded separator must not reach an absolute path"
+        );
+        assert!(encoded_nul.is_none(), "an embedded NUL must be rejected");
     }
 
     #[test]

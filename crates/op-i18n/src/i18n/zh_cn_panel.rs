@@ -624,6 +624,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "assetCenter.style.importEmpty" => "这个文件是空的，或者内容太短，不像一份风格指南。",
         "assetCenter.style.importNotText" => "这个文件不是 Markdown 文本。",
         "assetCenter.style.importTooLarge" => "这个文件超过 512 KB。",
+        "leftPanel.tab.chat" => "Agent",
         "slidesPanel.tabSlides" => "幻灯片",
         "slidesPanel.tabCards" => "卡片",
         "slidesPanel.present" => "放映",

@@ -47,7 +47,17 @@ impl WidgetHostNative {
             let panel =
                 AIChatPlaceholder::from_editor(&self.editor_state).owned_by(self.chat_panel_owner);
             if let Some(hit) = panel.hit_test(chat_rect, Point2D::new(x, y)) {
+                // A column pins the chat (workspace dock, or the
+                // professional editor's Chat tab): its floating-state
+                // controls (drag, resize, minimize, maximize) must not
+                // act — the column owns the panel's rect until the user
+                // leaves it.
+                let pinned = self.editor_state.editor_ui.chat_pinned();
                 if let AIChatHit::Resize(edge) = hit {
+                    if pinned {
+                        self.mark_dirty();
+                        return Some(true);
+                    }
                     self.chat_resize = Some(ChatResizeState {
                         edge,
                         start_x: x,
@@ -82,6 +92,10 @@ impl WidgetHostNative {
                     return Some(true);
                 }
                 if matches!(hit, AIChatHit::DragHandle) {
+                    if pinned {
+                        self.mark_dirty();
+                        return Some(true);
+                    }
                     self.chat_drag = Some(ChatDragState {
                         grab_dx: x - chat_rect.origin.x,
                         grab_dy: y - chat_rect.origin.y,

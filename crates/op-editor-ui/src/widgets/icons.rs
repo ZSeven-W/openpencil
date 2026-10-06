@@ -126,6 +126,8 @@ pub enum Icon {
     Component,
     /// Unlink — detach component instance.
     Unlink,
+    /// Link — reference-link affordance (Home composer tools).
+    Link,
     /// Check — checkbox tick.
     Check,
     /// ArrowUpRight — link / external nav indicator.
@@ -338,6 +340,7 @@ impl Icon {
             Icon::Diamond => DIAMOND,
             Icon::Component => COMPONENT,
             Icon::Unlink => UNLINK,
+            Icon::Link => LINK,
             Icon::Check => CHECK,
             Icon::ArrowUpRight => ARROW_UP_RIGHT,
             Icon::Circle => CIRCLE,
@@ -501,6 +504,7 @@ impl Icon {
             "brain" => Icon::Brain,
             "diamond" => Icon::Diamond,
             "component" => Icon::Component,
+            "link" => Icon::Link,
             "circle" => Icon::Circle,
             "triangle" => Icon::Triangle,
             "square" | "rectangle" => Icon::Square,
@@ -775,6 +779,8 @@ const PALETTE: &[&str] = &[
 ];
 
 use super::icons_data::*;
+
+pub use super::icons_lookup::lucide_name_for_path_d;
 
 #[cfg(test)]
 mod spinner_tests {

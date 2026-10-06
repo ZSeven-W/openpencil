@@ -19,7 +19,9 @@ pub mod design_md_policy;
 //  generic sequential path; dashboard_columns keeps only normalizer predicates.)
 pub mod design_system;
 pub mod design_type;
+pub mod image_fallback_policy;
 pub mod intent;
+pub mod map_placeholder;
 pub(crate) mod mobile_content_rail;
 mod mobile_reflow;
 pub mod model_profile;
@@ -30,14 +32,18 @@ pub mod orchestration_self_check;
 pub mod palette_harmonize;
 pub mod parse;
 pub mod plan;
+pub mod plan_coverage;
 mod plan_fallback_card;
 pub mod plan_normalize;
 pub mod plan_repair;
 pub mod program_gen;
+pub mod reference_intent;
+pub mod reference_skeleton;
 mod request_dimensions;
 mod resolved_style_prompt;
 pub mod retry;
 pub mod script_gen;
+mod scroll_intent;
 pub mod semantic_palette;
 pub mod stub_providers;
 pub mod style_guide_context;
@@ -62,12 +68,58 @@ mod avatar_repair_tests;
 pub mod board_trailing_void;
 pub(crate) mod chip_repair;
 pub mod cleanup;
+#[path = "cleanup_image_fallback.rs"]
+mod cleanup_image_fallback;
+/// Cheap image-slot materialization for hosts that apply one MCP write at a
+/// time. The whole-document cleanup driver uses the same underlying pass.
+pub mod cleanup_image_slots {
+    use crate::types::DocSink;
+    use op_editor_core::{EditorCommand, EditorState, PenNodeExt};
+
+    /// Convert childless frame/rectangle nodes with an empty image fill into
+    /// real image nodes across the active page.
+    pub fn materialize_empty_image_fill_slots(state: &mut EditorState) -> bool {
+        let root_ids: Vec<String> = state
+            .active_children()
+            .iter()
+            .map(|node| node.id_str().to_string())
+            .collect();
+        let mut sink = EditorStateSink { state };
+        root_ids.into_iter().fold(false, |changed, root_id| {
+            let root_changed =
+                crate::cleanup::cleanup_image_slots::materialize_empty_image_fill_slots(
+                    &mut sink, &root_id,
+                );
+            changed || root_changed
+        })
+    }
+
+    struct EditorStateSink<'a> {
+        state: &'a mut EditorState,
+    }
+
+    impl DocSink for EditorStateSink<'_> {
+        fn state(&self) -> &EditorState {
+            self.state
+        }
+
+        fn apply(&mut self, command: EditorCommand) -> bool {
+            self.state.apply(command)
+        }
+
+        fn begin_undo_batch(&mut self) {}
+
+        fn end_undo_batch(&mut self) {}
+    }
+}
 pub(crate) mod cleanup_layout;
 pub(crate) mod cleanup_typography;
 pub mod concurrent;
 pub mod geometry_validation;
+pub(crate) mod hero_bleed;
 pub mod loop_finalize;
 pub mod nav_issues;
+pub mod output_language;
 pub mod prompt;
 pub mod radial_repair;
 pub mod repair_record;
@@ -85,6 +137,7 @@ pub mod run;
 mod run_salvage_feedback;
 pub mod scaffold;
 pub mod screen_groups;
+pub(crate) mod section_headline;
 pub(crate) mod section_shell_fill_repair;
 pub(crate) mod sidebar_archetype;
 pub mod spacing_repair;
@@ -92,6 +145,7 @@ pub mod spawn_concurrent;
 pub(crate) mod spread_screen_roots;
 pub mod stub_repair;
 pub mod subagent;
+pub mod subtask_completeness;
 pub mod table_repair;
 pub mod template_provenance;
 pub(crate) mod text_contrast_repair;
@@ -126,6 +180,8 @@ mod radial_stub_tests;
 #[cfg(test)]
 mod run_retry_feedback_tests;
 #[cfg(test)]
+mod shadcn_vocabulary_tests;
+#[cfg(test)]
 mod sidebar_archetype_tests;
 #[cfg(test)]
 mod test_support;
@@ -143,6 +199,11 @@ pub use design_type::{
     classify_root_form, classify_root_form_node, classify_root_form_value, detect_design_type,
     DesignForm, DesignType, DesignTypePreset,
 };
+pub use image_fallback_policy::{
+    apply_image_fallback_policy_to_state, icon_name_for_query, image_fallback_policy,
+    ImageFallbackBranch, ImageFallbackPatch, ResolvedRect,
+    SEARCH_FAILED_PLACEHOLDER_SRC as IMAGE_SEARCH_FAILED_PLACEHOLDER_SRC,
+};
 pub use intent::classify_intent;
 pub use loop_finalize::{
     apply_loop_finalize, apply_loop_finalize_counted, record_loop_finalize_counted,
@@ -154,6 +215,8 @@ pub use model_profile::{
     resolve_model_profile, ModelProfile, ModelTier, ReasoningWireControl,
 };
 pub use prompt::build_orchestrator_prompt;
+pub use reference_intent::{detect_reference_intent, has_reference_trigger, ReferenceIntent};
+pub use reference_skeleton::ReferenceSkeleton;
 pub use repair_record::RepairRecord;
 pub use repair_summary::{CheckCategory, RepairSummary};
 pub use repair_tier::{RepairTier, RepairTierPolicy, TieredPass};

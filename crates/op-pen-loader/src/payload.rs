@@ -18,6 +18,7 @@ mod compatibility;
 mod fast_load;
 mod legacy_normalize;
 mod paint_payloads;
+mod video_alias;
 
 // Re-exported so every `crate::payload::…` import path stays stable across
 // the split.
@@ -25,6 +26,7 @@ pub use paint_payloads::{
     AnchorPayload, GradientPayload, GradientStopPayload, ImageAdjustmentPayload, ShaderPayload,
     ShaderUniformPayload, StrokePayload, TextRunPayload,
 };
+pub use video_alias::normalize_video_alias;
 
 #[cfg(test)]
 static THUMBNAIL_REGISTRY_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -230,6 +232,10 @@ pub struct NodePayload {
     /// string).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_src: Option<jian_ops_schema::node::ImageSrc>,
+    /// Video playback metadata carried by an image poster. The video source
+    /// is never externalized into the image table.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video: Option<jian_ops_schema::node::VideoMeta>,
     /// Image placement mode for `image_src` (`fill`, `fit`, `crop`,
     /// `tile`, `stretch`). `None` defaults to `fill`.
     #[serde(default, skip_serializing_if = "Option::is_none")]

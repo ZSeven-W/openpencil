@@ -83,6 +83,8 @@ pub enum TopBarHit {
     ToggleFileMenu,
     /// Figma logo — open the .fig import modal.
     OpenImportMenu,
+    /// House icon — return to the Home surface (制图台).
+    Home,
     /// Sun icon — flip theme dark↔light.
     ToggleTheme,
     /// Globe icon — cycle through UI locales.
@@ -430,6 +432,9 @@ impl TopBar {
             }
             if (self.import_button_rect(rect)).contains(point) {
                 return Some(TopBarHit::OpenImportMenu);
+            }
+            if (self.home_button_rect(rect)).contains(point) {
+                return Some(TopBarHit::Home);
             }
         }
         // Git-panel toggle, just right of the centred file name (desktop

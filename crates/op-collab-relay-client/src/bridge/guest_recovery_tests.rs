@@ -72,7 +72,12 @@ async fn guest_pair_gate_preserves_an_authentication_rejection() {
         .await
         .unwrap();
     let error = bridge
-        .wait_until_paired(Duration::from_secs(1))
+        // The rejection WILL arrive; the budget only bounds how loaded a
+        // machine may be before the wait is misreported as a timeout, and
+        // this test asserts WHICH error came back. At one second a busy
+        // runner returned PairTimeout instead of the rejection it was
+        // checking for. Its siblings below already use 3-7s.
+        .wait_until_paired(Duration::from_secs(10))
         .await
         .unwrap_err();
     assert!(matches!(

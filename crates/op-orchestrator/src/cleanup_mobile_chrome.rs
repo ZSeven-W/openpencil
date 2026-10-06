@@ -119,6 +119,18 @@ pub(crate) fn repair_mobile_structural_chrome(sink: &mut dyn DocSink, root_id: &
             page_id: None,
         });
     }
+    for node_id in repairs.bottom_nav_wrappers {
+        // The wrapper survived only as the tab row's stack context (it also
+        // holds e.g. a home-indicator clearance); keep it a vertical stack so
+        // those siblings stay BELOW the row instead of beside it.
+        sink.apply(EditorCommand::PatchNodeData {
+            node_id,
+            patch_json:
+                r#"{"layout":"vertical","gap":0,"width":"fill_container","height":"fit_content"}"#
+                    .to_string(),
+            page_id: None,
+        });
+    }
     for node_id in repairs.bottom_nav_surfaces {
         // `x`/`y` are CLEARED, never set: any authored position reads as
         // ABSOLUTE placement in jian and yanks the nav out of flex flow —
@@ -334,6 +346,7 @@ fn contains_meaningful_business_content(node: &PenNode) -> bool {
 #[derive(Default)]
 struct MobileChromeRepairs {
     structural_shells: Vec<NodeId>,
+    bottom_nav_wrappers: Vec<NodeId>,
     bottom_nav_surfaces: Vec<NodeId>,
     bottom_nav_items: Vec<NodeId>,
 }
@@ -462,6 +475,21 @@ fn collect_bottom_nav_chrome_repairs(
     let Some(nav) = bottom_nav_surface_target(root_child, allow_structural) else {
         return;
     };
+    // The wrapper matched by name/role but the redirect picked a STRUCTURAL
+    // tab row inside it, and the wrapper also holds other children (the
+    // home-indicator clearance). Keep the wrapper a vertical stack — only the
+    // row is a nav surface.
+    if is_bottom_nav_surface(root_child, allow_structural)
+        && nav.id_str() != root_child.id_str()
+        && is_structural_tab_row(nav)
+        && root_child
+            .children()
+            .is_some_and(|children| children.iter().any(|child| child.id_str() != nav.id_str()))
+    {
+        repairs
+            .bottom_nav_wrappers
+            .push(NodeId::new(root_child.id_str().to_string()));
+    }
     repairs
         .bottom_nav_surfaces
         .push(NodeId::new(nav.id_str().to_string()));
@@ -512,11 +540,49 @@ fn nested_bottom_nav_surface(node: &PenNode, allow_structural: bool) -> Option<&
         return None;
     }
     let last_index = children.len().saturating_sub(1);
-    children.iter().enumerate().find_map(|(index, child)| {
+    let named = children.iter().enumerate().find_map(|(index, child)| {
         (child.is_container()
             && is_bottom_nav_surface(child, allow_structural && index == last_index))
         .then_some(child)
-    })
+    });
+    if named.is_some() {
+        return named;
+    }
+    // No role/name match inside the wrapper: the row may still be the tab
+    // bar by STRUCTURE (e.g. "Tab Items Row" beside a home-indicator
+    // clearance). Redirect so the surface patch lands on the row, not on the
+    // wrapper that also stacks the clearance.
+    children.iter().find(|child| is_structural_tab_row(child))
+}
+
+/// A wrapper's inner child that IS the tab row by structure rather than
+/// role/name: a horizontal (or layout-less) container whose direct children
+/// are ≥ 3 bottom-nav items plus at most one other child. Deliberately
+/// stricter than it looks — every counted item must carry its own nav
+/// identity via `is_bottom_nav_item` — so an arbitrary content row inside a
+/// matched wrapper never qualifies.
+fn is_structural_tab_row(node: &PenNode) -> bool {
+    if !node.is_container() || is_bottom_nav_surface(node, false) || has_vertical_layout(node) {
+        return false;
+    }
+    let Some(children) = node.children() else {
+        return false;
+    };
+    let nav_items = children
+        .iter()
+        .filter(|child| is_bottom_nav_item(child))
+        .count();
+    nav_items >= 3 && children.len() - nav_items <= 1
+}
+
+fn has_vertical_layout(node: &PenNode) -> bool {
+    use jian_ops_schema::node::container::LayoutMode;
+    match node {
+        PenNode::Frame(node) => node.container.layout == Some(LayoutMode::Vertical),
+        PenNode::Group(node) => node.container.layout == Some(LayoutMode::Vertical),
+        PenNode::Rectangle(node) => node.container.layout == Some(LayoutMode::Vertical),
+        _ => false,
+    }
 }
 
 fn is_bottom_nav_surface(node: &PenNode, allow_structural: bool) -> bool {

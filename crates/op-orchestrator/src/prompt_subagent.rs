@@ -1,6 +1,7 @@
 //! `build_subagent_prompt` and its core builder.
 
 use super::*;
+use crate::types::SubtaskOutcome;
 
 /// 单个 sub-agent 的 LLM 调用输入。
 ///
@@ -32,6 +33,9 @@ pub fn build_subagent_prompt(
         abort,
         reduced_complexity,
         minimal_skills,
+        // This compatibility wrapper has no live document snapshot. The
+        // production runner uses the route-aware wrapper below.
+        false,
         components,
         &[],
     )
@@ -44,6 +48,9 @@ pub fn build_subagent_prompt(
 /// Generation paths call this variant after resolving normalized plan groups
 /// (or loop continuation's live screens) through navigation's shared route
 /// allocator.
+///
+/// * `doc_has_variables` — derived from the live document's non-empty
+///   `sink.state().doc.variables` table by the sub-agent runner.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn build_subagent_prompt_with_screen_routes(
     subtask: &Subtask,
@@ -52,6 +59,7 @@ pub(crate) fn build_subagent_prompt_with_screen_routes(
     abort: AbortFlag,
     reduced_complexity: bool,
     minimal_skills: bool,
+    doc_has_variables: bool,
     components: &ComponentLibrary,
     screen_routes: &[(String, String)],
 ) -> (CallRequest, SkillLoadReport) {
@@ -65,9 +73,41 @@ pub(crate) fn build_subagent_prompt_with_screen_routes(
         abort,
         reduced_complexity,
         minimal_skills,
+        doc_has_variables,
         script_on,
         components,
         screen_routes,
+    )
+}
+
+/// Production prompt builder with prior section headlines threaded from the
+/// sequential orchestrator. Concurrent screen-group workers deliberately pass
+/// an empty slice because their section results are buffered independently.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_subagent_prompt_with_screen_routes_and_outcomes(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    req: &DesignRequest,
+    abort: AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
+    doc_has_variables: bool,
+    components: &ComponentLibrary,
+    screen_routes: &[(String, String)],
+    prior_outcomes: &[SubtaskOutcome],
+) -> (CallRequest, SkillLoadReport) {
+    build_subagent_prompt_core_with_outcomes(
+        subtask,
+        plan,
+        req,
+        abort,
+        reduced_complexity,
+        minimal_skills,
+        doc_has_variables,
+        true,
+        components,
+        screen_routes,
+        prior_outcomes,
     )
 }
 
@@ -82,9 +122,41 @@ pub(super) fn build_subagent_prompt_core(
     abort: AbortFlag,
     reduced_complexity: bool,
     minimal_skills: bool,
+    doc_has_variables: bool,
     script_on: bool,
     components: &ComponentLibrary,
     screen_routes: &[(String, String)],
+) -> (CallRequest, SkillLoadReport) {
+    build_subagent_prompt_core_with_outcomes(
+        subtask,
+        plan,
+        req,
+        abort,
+        reduced_complexity,
+        minimal_skills,
+        doc_has_variables,
+        script_on,
+        components,
+        screen_routes,
+        &[],
+    )
+}
+
+/// Core sub-agent prompt builder with the headlines produced by earlier
+/// sections on the same page.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn build_subagent_prompt_core_with_outcomes(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    req: &DesignRequest,
+    abort: AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
+    doc_has_variables: bool,
+    script_on: bool,
+    components: &ComponentLibrary,
+    screen_routes: &[(String, String)],
+    prior_outcomes: &[SubtaskOutcome],
 ) -> (CallRequest, SkillLoadReport) {
     // Apply tier-gated filtering, then resolve the generation skill set under
     // the budget — that order, not the reverse; see the resolve call below.
@@ -128,10 +200,9 @@ pub(super) fn build_subagent_prompt_core(
     let mut flags = HashMap::new();
     flags.insert("isBasicTier".to_string(), tier == ModelTier::Basic);
     flags.insert("hasDesignMd".to_string(), has_design_md);
-    // No existing-document variable context is wired into `DesignRequest`
-    // (TS sources this from `request.context.variables`), so this is always
-    // false on the Rust path today.
-    flags.insert("hasVariables".to_string(), false);
+    // `doc_has_variables` comes from `sink.state().doc.variables` in the
+    // sub-agent runner, mirroring the TS `request.context.variables` gate.
+    flags.insert("hasVariables".to_string(), doc_has_variables);
     flags.insert("noStyleGuideMatch".to_string(), no_style_guide_match);
     // Element-tools (N-tool) path is not ported to Rust (feature-flag off in
     // TS production); `elements`/`elements-cookbook` therefore stay gated off.
@@ -204,7 +275,8 @@ pub(super) fn build_subagent_prompt_core(
     //
     // The arm is the Generation phase default rather than a literal, because
     // the deck path IS the worst case that default was last sized for
-    // (`Phase::Generation` moved 12000 → 13200 when `deck-contract` landed).
+    // (`Phase::Generation` is now 17150 after the motion keyframe example;
+    // earlier raises included 12000 → 13200 when `deck-contract` landed).
     // Restating it as a number is what let the old 11500 rot when the corpus
     // grew under it: the deck skills were then silently dropped/tail-cut,
     // which `prompt_deck_skill_tests` now asserts against.
@@ -216,22 +288,59 @@ pub(super) fn build_subagent_prompt_core(
     // 2026-08-04 `slides` failure, in a card jacket.
     //
     // Measured 2026-08-09 on that file's fixtures, every resolved skill
-    // untruncated: Basic 11529/13200, Standard and Full both 12548/13200.
+    // untruncated: the deck arm follows the current 17150 generation default.
     // Standard lands on Full's exact skill set here — at an unbounded budget
-    // it also carries `design-principles` (12986), and at 13200 the deck
+    // it also carries `design-principles`; the deck
     // corpus crowds that Knowledge skill out. That is NOT this arm's doing:
     // Full tier reads the same default and loses it identically, so the deck
     // load simply fills the phase. Buying it back means raising the phase
     // default, which belongs to the corpus owner, not to this override.
+    //
+    // Scroll orchestration (parallax / sticky / stagger) joins the same arm
+    // for the same reason again: the `scroll-orchestration` skill is ~3000
+    // tokens on top of the always-kept base, so under the plain 5200 / 6500
+    // arms it was dropped for BudgetExhausted on every scroll prompt a weak
+    // model saw — and it is the only teaching that makes such a page move.
+    // The intent test reuses the skill's own trigger keywords
+    // (`scroll_intent.rs`) so the arm and the resolver cannot disagree.
     let is_deck = is_deck_board(plan);
     let is_card = is_card_board(plan);
+    let is_scroll = crate::scroll_intent::is_scroll_orchestration_request(&req.prompt);
+    let is_interactivity = [
+        "interactive",
+        "interactivity",
+        "clickable",
+        "functional",
+        "prototype",
+        "stateful",
+        "motion",
+        "animation",
+        "animated",
+        "mount",
+        "inview",
+        "transition",
+        "交互",
+        "可交互",
+        "原型",
+        "可点击",
+        "动效",
+        "动画",
+    ]
+    .iter()
+    .any(|keyword| req.prompt.to_ascii_lowercase().contains(keyword));
     let deck_budget = Phase::Generation.default_budget();
     let budget_override = match tier {
-        ModelTier::Basic if is_mobile_layout || is_mobile_screen => Some(9200),
-        ModelTier::Basic if is_deck || is_card => Some(deck_budget),
+        ModelTier::Basic if is_mobile_layout || is_mobile_screen => {
+            Some(if is_interactivity { 10600 } else { 10400 })
+        }
+        ModelTier::Basic if is_deck || is_card || is_scroll => Some(deck_budget),
+        ModelTier::Basic if is_interactivity => Some(5400),
         ModelTier::Basic => Some(5200),
-        ModelTier::Standard if is_mobile_layout => Some(9500),
-        ModelTier::Standard if is_deck || is_card => Some(deck_budget),
+        ModelTier::Standard if is_mobile_layout => {
+            Some(if is_interactivity { 10700 } else { 10500 })
+        }
+        ModelTier::Standard if is_deck || is_card || is_scroll => Some(deck_budget),
+        ModelTier::Standard if is_interactivity => Some(6700),
         ModelTier::Standard => Some(6500),
         ModelTier::Full => None,
     };
@@ -265,7 +374,7 @@ pub(super) fn build_subagent_prompt_core(
     // standing example: `design_system_covered` is true on essentially every
     // real request, so the budget bought it, the filter dropped it, and the
     // 554 tokens were never returned to the skills that had just lost to it —
-    // a deck prompt reported 12548/13200 while `design-principles` (438) sat
+    // a deck prompt reported less than the phase ceiling while `design-principles` (438) sat
     // in the dropped list as BudgetExhausted, because at knapsack time only 98
     // tokens were actually free. Ordering, not sizing: raising the ceiling
     // would have hidden it rather than fixed it.
@@ -358,6 +467,7 @@ pub(super) fn build_subagent_prompt_core(
         .map(|instruction| format!("{instruction}\n\n"))
         .unwrap_or_default();
     let screen_route_block = screen_route_prompt_block(screen_routes);
+    let headline_block = section_headline_prompt_block(prior_outcomes, tier);
     let spacing_rule = if is_mobile_layout {
         "SPACING CONSISTENCY — MOBILE CONTENT RAIL: The root page may keep 0 horizontal padding for full-width status/navigation/full-bleed media. This ordinary transparent root-direct section owns padding:[0,24] exactly once; do not duplicate it on an inner wrapper. If this section is a clipped horizontal scroller, keep its section full width, inset its header 24px on both sides, and give the clipped viewport a 24px leading inset with a flush 0px trailing edge."
     } else {
@@ -382,6 +492,7 @@ pub(super) fn build_subagent_prompt_core(
     };
     let mut user_prompt = format!(
         "Page sections:\n{}\n\n\
+{}\
 Generate ONLY \"{}\" (~{:.0}px of content).{}\n\
 Overall design: {}\n\n\
 {}\
@@ -409,6 +520,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
 - ICONS: use icon_font with lucide iconFontName; never use path nodes for icons.\n\
 - {}",
         section_list,
+        headline_block,
         subtask.label,
         subtask.region.height,
         my_elements,
@@ -421,18 +533,16 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
         output_rule,
     );
 
+    if subtask.bleed_hero {
+        user_prompt.push_str("\nThis section is full-bleed: give the section frame no horizontal padding, let its first media node (image or colour block) span the full root width, and put every text or control that follows inside one inner frame with `padding: [0,24]`.");
+    }
+
     // (Mobile UI guardrails now load from the `mobile-ui` skill — see the
     // `isMobileScreen` flag + dynamic-content setup above.)
 
     // Quality-rejection feedback echoed back into a SAME-tier retry instead
     // of silently narrowing the skill set — the content was otherwise
-    // real, so the model just needs to fix the flagged issue. Two sources,
-    // two wordings (`plan::RetryFeedback`):
-    // - `SelfCheck` — `orchestration_self_check` rejected it BEFORE
-    //   insertion (retry ladder attempt 2; `retry::is_self_check_rejection`).
-    // - `Geometry` — the REAL resolved layout of an already-INSERTED
-    //   subtree proved a structural violation (the `geometry_echo` step,
-    //   `concurrent::run_subtask_retry_ladder`'s tail).
+    // real, so the model just needs to fix the flagged issue.
     if let Some(feedback) = subtask.retry_feedback.as_ref() {
         let block = match feedback {
             crate::plan::RetryFeedback::SelfCheck(reason) => format!(
@@ -448,8 +558,17 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
                  attempt at this exact section has these structural problems:\n{reason}\n\
 - Regenerate the section fixing exactly these — do not change anything else \
   about the approach.\n\
-- Keep using the full skill set and design detail from your previous attempt; \
-  these are layout/structure problems, not a signal to simplify."
+                 - Keep using the full skill set and design detail from your previous attempt; \
+                 these are layout/structure problems, not a signal to simplify."
+            ),
+            crate::plan::RetryFeedback::Completeness(reason) => format!(
+                "\n\nCOMPLETENESS FIX REQUIRED: your previous attempt delivered too few repeated items:\n{reason}\n\
+- Emit every promised item as a sibling in this exact section.\n\
+- Keep the section's visual treatment and detail; only fix the missing repeated items."
+            ),
+            crate::plan::RetryFeedback::Language(reason) => format!(
+                "\n\nLANGUAGE FIX REQUIRED: {reason}\n\
+- Keep layout, structure, and brand/acronym tokens unchanged."
             ),
         };
         user_prompt.push_str(&block);
@@ -487,10 +606,8 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
     // Assemble the per-subtask skill-load report from the FINAL skill set
     // (post tier/dedup filtering). `budget_max` reflects the tier budget
     // override. Full-tier falls through to `Phase::Generation::default_budget()`
-    // (13200 today — see that constant's doc comment for both raises: 8000 →
-    // 12000 because image-rich data-list sections overflowed and truncated
-    // their scripts to zero generated nodes, then 12000 → 13200 when
-    // `deck-contract` joined the deck corpus). This used to be a bare literal
+    // (17150 today — see that constant's doc comment for the corpus raises).
+    // This used to be a bare literal
     // that only affected this diagnostic number — `resolve_skills` (called
     // above via `resolve_generation_skills`) independently fell back to the
     // OLD default for a `None` override, so Full tier's real skill trimming
@@ -535,6 +652,27 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
             first_text_timeout: Some(t.first_text),
         },
         report,
+    )
+}
+
+fn section_headline_prompt_block(prior_outcomes: &[SubtaskOutcome], tier: ModelTier) -> String {
+    let limit = if tier == ModelTier::Basic { 4 } else { 12 };
+    let headlines = prior_outcomes
+        .iter()
+        .filter_map(|outcome| outcome.headline.as_deref())
+        .filter(|headline| !headline.trim().is_empty())
+        .take(limit)
+        .map(|headline| {
+            let truncated = headline.chars().take(60).collect::<String>();
+            serde_json::to_string(&truncated).expect("serializing a string cannot fail")
+        })
+        .collect::<Vec<_>>();
+    if headlines.is_empty() {
+        return String::new();
+    }
+    format!(
+        "HEADLINES ALREADY ON THIS PAGE (earlier sections — do NOT reuse or paraphrase them; this section needs its own distinct headline): {}\n\n",
+        headlines.join(", ")
     )
 }
 

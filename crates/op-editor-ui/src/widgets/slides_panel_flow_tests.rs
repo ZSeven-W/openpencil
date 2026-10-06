@@ -92,21 +92,38 @@ fn the_scenario_names_the_tab_without_gating_it() {
 }
 
 #[test]
-fn presenting_and_empty_decks_show_no_tab_row() {
+fn presenting_hides_the_row_and_an_empty_desktop_deck_keeps_it() {
     let mut deck = deck_state(THREE_BOARDS);
     deck.editor_ui.enter_preview();
     assert!(!tab_row_visible(&deck), "the rail is gone while presenting");
     deck.editor_ui.exit_preview();
     assert!(tab_row_visible(&deck));
 
+    // A desktop document with no boards still has its Chat and Layers
+    // tabs — the row is permanent now; only the slides TAB is gated.
     let empty = deck_state(r#"{"version":"1.0.0","children":[]}"#);
-    assert!(!tab_row_visible(&empty));
+    assert!(tab_row_visible(&empty));
+    assert!(!slides_tab_available(&empty));
+    let tabs = tab_row(&empty, PANEL).expect("the row outlives the boards");
+    assert_eq!(tabs.slides, crate::Rect::ZERO, "no slides pill to click");
+    assert!(tabs.chat.size.x > 0.0);
+
+    // Touch keeps the older rule: its rail is a Layers sheet and its
+    // chat is a bottom sheet, so a boardless touch document shows no
+    // row at all.
+    let mut touch_empty = deck_state(r#"{"version":"1.0.0","children":[]}"#);
+    touch_empty.editor_ui.touch = true;
+    assert!(!tab_row_visible(&touch_empty));
 }
 
 #[test]
-fn the_layers_tree_keeps_the_whole_rail_without_a_tab_row() {
+fn the_rail_body_starts_below_the_tab_row() {
     let empty = deck_state(r#"{"version":"1.0.0","children":[]}"#);
-    assert_eq!(layers_content_rect(&empty, PANEL), PANEL);
+    assert_eq!(
+        layers_content_rect(&empty, PANEL).origin.y,
+        PANEL.origin.y + crate::widgets::slides_panel::SLIDES_TAB_ROW_HEIGHT,
+        "the row heads the rail even with nothing to list"
+    );
 
     let deck = deck_state(THREE_BOARDS);
     let content = layers_content_rect(&deck, PANEL);
@@ -311,7 +328,7 @@ fn the_wheel_scrolls_the_list_only_over_the_rail() {
     let mut deck = deck_state(THREE_BOARDS);
     let tall = SlidesPanelLayout::new(
         PANEL,
-        SlidesPanelTabs::new(PANEL, LeftPanelTab::Slides, "Layers", "Slides"),
+        SlidesPanelTabs::new(PANEL, LeftPanelTab::Slides, &test_row()),
         &[DEFAULT_BOARD_ASPECT; 20],
         0.0,
         crate::widgets::SlidesActionState::default(),
@@ -329,37 +346,37 @@ fn the_wheel_scrolls_the_list_only_over_the_rail() {
 
 /// The tab row's mode has to reach the product through the LOCALE, not
 /// just through a hand-passed label: the flow is the only place either
-/// host resolves the pair from, so this is where "Vietnamese at 180 px
+/// host resolves the set from, so this is where "Vietnamese at 240 px
 /// shows icons" is either true or a lie the unit tests cannot catch.
 #[test]
 fn the_tab_row_mode_follows_the_documents_own_labels() {
     let mut deck = deck_state(THREE_BOARDS);
-    let narrow = Rect {
+    let wide = Rect {
         origin: PANEL.origin,
-        size: Point2D::new(180.0, PANEL.size.y),
+        size: Point2D::new(440.0, PANEL.size.y),
     };
 
     deck.editor_ui.locale = op_editor_core::Locale::EnUs;
-    let (layers, slides) = tab_labels(&deck);
-    assert_eq!((layers, slides), ("Layers", "Slides"));
+    let (chat, layers, slides) = tab_labels(&deck);
+    assert_eq!((chat, layers, slides), ("Agent", "Layers", "Slides"));
     assert!(
-        !tab_row(&deck, narrow).expect("tab row").compact,
-        "English fits the minimum rail, so it keeps its words"
+        !tab_row(&deck, PANEL).expect("tab row").compact,
+        "English fits the default rail three ways, so it keeps its words"
     );
 
     deck.editor_ui.locale = op_editor_core::Locale::Vi;
-    let (layers, slides) = tab_labels(&deck);
+    let (chat, layers, slides) = tab_labels(&deck);
     assert!(
-        !layers.is_empty() && !slides.is_empty(),
-        "the Vietnamese catalogue answers for both tabs"
+        !chat.is_empty() && !layers.is_empty() && !slides.is_empty(),
+        "the Vietnamese catalogue answers for all three tabs"
     );
     assert!(
-        tab_row(&deck, narrow).expect("tab row").compact,
-        "Vietnamese does not fit the minimum rail, so it falls back to icons"
+        tab_row(&deck, PANEL).expect("tab row").compact,
+        "Vietnamese does not fit the default rail three ways, so it falls back to icons"
     );
     assert!(
-        !tab_row(&deck, PANEL).expect("tab row").compact,
-        "and gets its words back at the default width"
+        !tab_row(&deck, wide).expect("tab row").compact,
+        "and gets its words back at the maximum width"
     );
 }
 
@@ -369,11 +386,25 @@ fn the_tab_row_mode_follows_the_documents_own_labels() {
 fn the_scenario_label_is_the_one_the_row_is_measured_against() {
     let mut cards = deck_state(THREE_BOARDS);
     cards.editor_ui.scenario = Some(TemplateScene::Card);
-    let (_, slides) = tab_labels(&cards);
+    let (_, _, slides) = tab_labels(&cards);
     assert_eq!(
         slides,
         crate::widgets::editor_state_ext::translate(&cards.editor_ui, "slidesPanel.tabCards")
     );
+}
+
+/// The English labels the widget tests hand in are the ones the flow
+/// resolves — otherwise the fixtures would drift from the catalogue.
+fn test_row() -> SlidesTabRow<'static> {
+    let deck = deck_state(THREE_BOARDS);
+    let (chat, layers, slides) = tab_labels(&deck);
+    SlidesTabRow {
+        chat_label: chat,
+        layers_label: layers,
+        slides_label: slides,
+        chat_available: true,
+        slides_available: true,
+    }
 }
 
 // ─── The bottom action bar and its export dropdown ─────────────────────

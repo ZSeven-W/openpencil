@@ -66,6 +66,7 @@ pub fn tooltip_for(ui: &EditorUiState, button: TopBarButton) -> TopBarTooltip {
         ),
         TopBarButton::ToggleFileMenu => (translate(ui, "tooltip.topbar.file"), None),
         TopBarButton::OpenImportMenu => (translate(ui, "tooltip.topbar.import"), None),
+        TopBarButton::Home => (translate(ui, "fileMenu.home"), None),
         TopBarButton::ToggleTheme => (
             // The glyph shows the destination, so the label must too: a
             // Sun in dark mode means "go light".
@@ -136,6 +137,7 @@ pub fn suppressed(ui: &EditorUiState, button: TopBarButton) -> bool {
         // Sidebar / theme / fullscreen / preview act immediately — they
         // open no surface that could cover or repeat the tooltip.
         TopBarButton::ToggleSidebar
+        | TopBarButton::Home
         | TopBarButton::ToggleTheme
         | TopBarButton::ToggleFullscreen
         | TopBarButton::TogglePreview => false,
@@ -197,10 +199,11 @@ pub fn paint_top_bar_tooltip(
 }
 
 /// Every button the bar can hover, for exhaustive coverage checks.
-pub const ALL_TOP_BAR_BUTTONS: [TopBarButton; 13] = [
+pub const ALL_TOP_BAR_BUTTONS: [TopBarButton; 14] = [
     TopBarButton::ToggleSidebar,
     TopBarButton::ToggleFileMenu,
     TopBarButton::OpenImportMenu,
+    TopBarButton::Home,
     TopBarButton::ToggleTheme,
     TopBarButton::ToggleLocale,
     TopBarButton::OpenExportMenu,

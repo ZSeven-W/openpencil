@@ -107,6 +107,7 @@ pub mod host_ui_transitions;
 pub mod host_variables_commit;
 pub mod host_variables_transitions;
 pub mod html_import_diagnostics;
+pub mod icon_path_normalize;
 pub mod icon_picker_state;
 pub mod id_allocator;
 pub mod image_aspect;
@@ -153,6 +154,7 @@ pub mod svg_path_bounds;
 mod svg_path_data;
 pub mod sync_gate;
 pub mod user_scene_templates;
+pub mod video_node_props;
 pub mod web_assets;
 
 /// Tight source-coordinate bounds for an SVG path-data string.
@@ -238,6 +240,9 @@ mod history_bench_tests;
 #[cfg(test)]
 mod history_snapshot_tests;
 #[cfg(test)]
+#[path = "icon_path_normalize_tests.rs"]
+mod icon_path_normalize_tests;
+#[cfg(test)]
 mod prompt_center_catalog_tests;
 #[cfg(test)]
 mod property_task9_tests;
@@ -292,7 +297,7 @@ pub use align::AlignAction;
 pub use button_press_state::ButtonPressTarget;
 pub use chat::{
     AgentProvider, ChatAnchor, ChatImage, ChatMessage, ChatRole, ChatState, ChatToolCall,
-    ModelEntry,
+    LaunchRoute, ModelEntry,
 };
 pub use chat_activity::{ChatActivity, ChatActivityStatus, ChatCompletion, PendingSubtaskRetry};
 pub use chat_button_state::{ChatFooterButton, ChatHeaderButton};
@@ -327,7 +332,7 @@ pub use collab_ui_state::{
 pub use color_picker::{hsv_to_rgb, parse_hex_alpha, parse_hex_rgb, rgb_to_hex, rgb_to_hsv};
 pub use command::{
     BatchInsertItem, EditorCommand, EffectField, LayoutPropValue, NodeFlag, StrokeSide,
-    StylePropValue, StylePropertyReplacement, VariableScalarPayload,
+    StylePropValue, StylePropertyReplacement, VariableScalarPayload, VideoPlaybackField,
 };
 pub use command_node_attrs::{WidgetNumberField, WidgetTextField};
 pub use command_promote::PromoteResult;
@@ -341,18 +346,25 @@ pub use document_install::{DocumentInstallError, DocumentInstallReport, Prepared
 pub use edit_transaction::{
     CompletedLocalEdit, EditOrigin, LocalEditCapture, LocalEditError, LocalEditOutcome,
 };
+pub use editor_ui_state::home::{HOME_ART_SWITCH_MS, HOME_ENTER_FRAME_MS, HOME_ENTER_WINDOW_MS};
+pub use editor_ui_state::workspace::{
+    WorkspaceHit, WorkspacePhase, WorkspaceState, WorkspaceView, WORKSPACE_DECK_STRIP_H,
+    WORKSPACE_ENTER_MS, WORKSPACE_HEADER_H, WORKSPACE_TOOLBAR_H,
+};
 pub use editor_ui_state::{
     AssetCenterTab, BooleanOp, CloneField, CloneFormState, CommitDiffPatch, CommitDiffSummary,
     CommitDiffView, CompositingPickerTarget, CustomPrompt, DesignMdPanelState, DesignMdRequest,
-    EditorUiState, EmbedHost, ExportFormat, FileAction, FillType, FlexLayout, FontPickerPurpose,
-    GitBranchPickerMode, GitCandidateFile, GitCommitSummary, GitDiffTarget, GitDiffView,
-    GitFileEntry, GitOverflowView, GitPanelAction, GitPanelState, ImageAdjustmentField,
-    ImageFillMode, LayerContextMenuState, LeftPanelTab, Locale, MergeConflictRow, MergeResolveFile,
+    EditorUiState, EmbedHost, EntrySurface, ExportFormat, FileAction, FillType, FlexLayout,
+    FontPickerPurpose, GitBranchPickerMode, GitCandidateFile, GitCommitSummary, GitDiffTarget,
+    GitDiffView, GitFileEntry, GitOverflowView, GitPanelAction, GitPanelState, HomeDevice,
+    HomeFamily, HomeHit, HomeState, ImageAdjustmentField, ImageFillMode, InfoKind,
+    LayerContextMenuState, LeftPanelTab, Locale, MergeConflictRow, MergeResolveFile,
     MergeResolveState, MissingFontSurface, PaddingEditMode, PageRenameState, PencilCursorStyle,
-    PreviewDeviceKind, PreviewState, PromptCenterFocus, PromptCenterState, PromptFilter,
-    PropertyTab, RecentFile, SceneFilter, SceneTemplateCenterState, SceneTemplateFocus,
-    SizeToggleState, SlidesDrag, SlidesPanelState, SlidesPanelTarget, StyleImportState, ThemeMode,
-    UpdateStatus, VariableRowFocus, WindowControlRequest,
+    PreviewDeviceKind, PromptCenterFocus, PromptCenterState, PromptFilter, PropertyTab, RecentFile,
+    SceneFilter, SceneTemplateCenterState, SceneTemplateFocus, SizeToggleState, SlideRatio,
+    SlidesDrag, SlidesPanelState, SlidesPanelTarget, StyleImportState, TaskDraft, ThemeMode,
+    UpdateStatus, VariableRowFocus, WindowControlRequest, CHAT_TAB_MIN_WIDTH,
+    LAYER_PANEL_MAX_WIDTH, LAYER_PANEL_MIN_WIDTH,
 };
 pub use export_dialog_state::ExportDialogButton;
 pub use export_quick_menu_state::ExportQuickRow;

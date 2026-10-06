@@ -74,6 +74,27 @@ fn read_test_pids(path: &std::path::Path) -> Vec<i32> {
         .collect()
 }
 
+/// Wait for a stub to write its pid file. A liveness bound, not the
+/// property under test: under parallel `cargo test` on a loaded machine
+/// the stub's spawn chain alone can take several seconds (an earlier 5s
+/// bound expired for real under concurrent full-suite runs), so this is
+/// generous — it only shapes how long a genuinely broken spawn takes to
+/// report, never whether a healthy one passes.
+///
+/// Waits for the newline-terminated payload, not mere existence: the
+/// shell's `>` redirection creates the file before the pid write lands,
+/// so an existence check can hand the reader an empty file (observed
+/// under load as a ParseIntError on an "Empty" pid).
+fn wait_for_pid_file(path: &std::path::Path) {
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while std::time::Instant::now() < deadline {
+        if std::fs::read_to_string(path).is_ok_and(|content| content.ends_with('\n')) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 fn process_alive(pid: i32) -> bool {
     // SAFETY: signal 0 is a read-only existence probe for an exact positive
     // pid written by this test's own child.
@@ -82,7 +103,10 @@ fn process_alive(pid: i32) -> bool {
 }
 
 fn assert_process_tree_reaped(pids: &[i32], context: &str) {
-    for _ in 0..200 {
+    // 5s: signal delivery plus init's reap of orphaned zombies can lag by
+    // seconds on a loaded machine; a genuinely surviving process (the
+    // regression this guards) still fails below, just a bit later.
+    for _ in 0..500 {
         if pids.iter().copied().all(|pid| !process_alive(pid)) {
             break;
         }
@@ -343,20 +367,19 @@ wait "$descendant"
         Arc::clone(&cancel),
     );
 
-    for _ in 0..500 {
-        if pid_file.is_file() {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
+    wait_for_pid_file(&pid_file);
     let pids = read_test_pids(&pid_file);
     assert_eq!(pids.len(), 2, "leader and descendant pids");
 
     cancel.store(true, std::sync::atomic::Ordering::Release);
     let started = std::time::Instant::now();
     assert!(deltas.next().is_none(), "cancelled iterator must terminate");
+    // Far below the 30s the tree would otherwise live, which is the
+    // property (cancellation is not tied to child lifetime) — but not so
+    // tight that scheduler starvation under a loaded parallel test run
+    // fails a cancellation that did work; a 1s bound flaked for real.
     assert!(
-        started.elapsed() < Duration::from_secs(1),
+        started.elapsed() < Duration::from_secs(10),
         "silent cancellation took {:?}",
         started.elapsed()
     );
@@ -391,12 +414,7 @@ wait "$descendant"
         Arc::clone(&cancel),
     );
 
-    for _ in 0..500 {
-        if pid_file.is_file() {
-            break;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
+    wait_for_pid_file(&pid_file);
     let pids = read_test_pids(&pid_file);
     assert_eq!(pids.len(), 2, "leader and descendant pids");
 
@@ -411,7 +429,7 @@ wait "$descendant"
 fn stdout_eof_does_not_allow_a_live_process_tree_to_outlast_exit_grace() {
     let body = r#"#!/bin/sh
 cat >/dev/null
-sleep 15 </dev/null >/dev/null 2>&1 &
+sleep 30 </dev/null >/dev/null 2>&1 &
 descendant=$!
 printf '%s %s\n' "$$" "$descendant" > "$0.pids"
 exec 1>&-
@@ -431,8 +449,17 @@ wait "$descendant"
             ..Default::default()
         })
         .collect();
+    // The elapsed bound covers the WHOLE turn, not just the post-EOF
+    // reap: spawn, prompt feed, EOF detection, and up to two EXIT_GRACE
+    // waits (~4s of legitimate fixed budget) all land inside it, and a
+    // loaded machine adds scheduling/timer lag on top. What the test must
+    // prove is only that the turn never waits out the still-live 30s
+    // descendant after stdout EOF — so the bound stays far below the
+    // descendant's lifetime while leaving real headroom over the fixed
+    // grace budget. The previous 15s-sleep/8s-bound pairing left ~4s of
+    // slack and flaked under parallel `cargo test` on loaded machines.
     assert!(
-        started.elapsed() < Duration::from_secs(8),
+        started.elapsed() < Duration::from_secs(15),
         "post-EOF child wait exceeded exit grace: {:?}",
         started.elapsed()
     );

@@ -402,10 +402,22 @@ fn cli_version_does_not_wait_for_a_descendant_holding_its_pipes() {
 #[test]
 fn cli_version_accepts_a_healthy_cli_and_bounds_a_hung_one() {
     let (healthy_dir, healthy) = fake_cli("healthy-cli", "printf 'codex-cli 0.9.1\\n'\n");
-    assert_eq!(
-        cli_version_retry(&healthy, std::time::Duration::from_secs(5)),
-        Ok("codex-cli 0.9.1".to_string())
-    );
+    // A loaded runner can starve the freshly spawned shell past a fixed
+    // budget; escalate like the hung-CLI branch below so scheduling delay
+    // cannot fail the healthy path, while a genuine regression still
+    // reports within a few fast attempts.
+    let budget_cap = std::time::Duration::from_secs(20);
+    let mut budget = std::time::Duration::from_secs(5);
+    let version = loop {
+        match cli_version_retry(&healthy, budget) {
+            Ok(version) => break version,
+            Err(failure) if budget >= budget_cap => {
+                panic!("healthy CLI must yield a version: {failure:?}")
+            }
+            Err(_) => budget = (budget * 2).min(budget_cap),
+        }
+    };
+    assert_eq!(version, "codex-cli 0.9.1");
     let _ = std::fs::remove_dir_all(&healthy_dir);
 
     // Mid first-run OAuth: prints a prompt, then hangs past the budget. A

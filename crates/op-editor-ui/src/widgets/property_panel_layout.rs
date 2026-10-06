@@ -374,15 +374,23 @@ pub fn action_button_rects_with_fill_picker(
     }
 
     if visible.image {
-        crate::widgets::property_panel_image_node::push_image_action_rects(
+        crate::widgets::property_panel_image_node::push_image_action_rects_with_video(
             &mut out,
             x0,
             y,
             w,
             visible.image_warning,
+            visible.video,
         );
-        y += crate::widgets::property_panel_image_node::image_section_height(visible.image_warning);
+        y += crate::widgets::property_panel_image_node::image_section_height_with_video(
+            visible.image_warning,
+            visible.video,
+        );
         y += SECTION_GAP;
+    }
+    if visible.video {
+        crate::widgets::property_panel_video::push_video_action_rects(&mut out, x0, y, w);
+        y += crate::widgets::property_panel_video::video_section_height();
     }
 
     if visible.opacity {

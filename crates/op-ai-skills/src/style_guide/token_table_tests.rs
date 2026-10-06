@@ -220,3 +220,29 @@ fn the_palette_floor_reports_colours_with_their_own_role_text() {
     assert_eq!(prose.len(), 2);
     assert_eq!(prose[0].color, "#101014");
 }
+
+/// A radius sentence whose description is not written in Latin script. The
+/// per-number context is cut at 48 bytes, and a guide's prose is arbitrary
+/// author text — most CJK and Hangul characters are three bytes each, so that
+/// cut lands mid-character on ordinary input.
+#[test]
+fn a_radius_line_written_in_another_script_is_read_and_classified() {
+    for line in [
+        "Corner radius: 12px  卡片与面板容器的外框圆角，用于所有卡片与弹层",
+        "Corner radius: 12px卡片与面板容器的外框圆角，用于所有卡片与弹层",
+        "Corner radius: 12px 카드와 패널 컨테이너의 바깥 테두리 라운드에 사용",
+    ] {
+        let content = format!("# G\n\n## Shape\n\n{line}\n");
+        let values = extract_style_guide_values(&content);
+        // Nothing in these says which role the radius is for, so nothing is
+        // invented — but the scan has to reach that answer, not panic on
+        // the way.
+        assert_eq!(values.radius, StyleRadius::default(), "line: {line}");
+    }
+
+    // The same sentence with an English role cue still classifies.
+    let mixed = extract_style_guide_values(
+        "# G\n\n## Shape\n\nCorner radius: 24px card 카드와 패널 컨테이너의 바깥 테두리\n",
+    );
+    assert_eq!(mixed.radius.card, Some(24));
+}

@@ -517,3 +517,81 @@ fn image_self_check_is_limited_to_rendering_integrity() {
         .trim_end()
         .ends_with(IMAGE_SELF_CHECK_SCOPE.trim_end()));
 }
+
+/// External agents over MCP only see contracts through `get_guidelines`;
+/// the page-scroll contract and the card-board contract must be reachable
+/// there (2026-09-03 matrix: K3 / Grok built a clipped 900 px root when the
+/// prompt did not carry the contract).
+#[test]
+fn guideline_for_scroll_and_card_carry_their_contracts() {
+    let scroll = guideline_for("scroll").expect("scroll guideline must be present");
+    for needle in [
+        "window.scrollY",
+        "\"pin\": true",
+        "translateY",
+        "$scroll.progress",
+    ] {
+        assert!(scroll.contains(needle), "scroll guideline lacks {needle:?}");
+    }
+    for alias in ["scroll-orchestration", "parallax", "page-scroll"] {
+        assert!(guideline_for(alias).is_some(), "{alias} alias resolves");
+    }
+    let card = guideline_for("card").expect("card guideline must be present");
+    assert!(!card.trim().is_empty());
+    assert!(guideline_for("cards").is_some(), "cards alias resolves");
+    let topics = guideline_topics();
+    assert!(topics.contains(&"scroll") && topics.contains(&"card"));
+}
+
+#[test]
+fn guideline_for_icons_carries_the_catalog() {
+    let icons = guideline_for("icons").expect("icons guideline must be present");
+    assert!(icons.contains("icon_font"));
+    assert!(icons.contains("NEVER `path`"));
+    assert!(icons.contains("lucide"));
+    for alias in ["icon", "icon-font", "lucide"] {
+        assert!(guideline_for(alias).is_some(), "{alias} alias resolves");
+    }
+    assert!(guideline_topics().contains(&"icons"));
+}
+
+#[test]
+fn planning_resolves_the_mobile_screen_archetype_for_phone_briefs() {
+    // "外卖 App 首页（375×812）" never says mobile / 手机; the archetype package
+    // still resolves from the app keyword and phone-sized brief.
+    let ctx = crate::resolve_skills(
+        crate::Phase::Planning,
+        "外卖 App 首页（375×812）：顶部地址与搜索、分类九宫格、商家列表",
+        &crate::ResolveOptions::default(),
+    );
+    let names: Vec<&str> = ctx.skills.iter().map(|s| s.meta.name.as_str()).collect();
+    assert!(
+        names.contains(&"mobile-screen-archetypes"),
+        "mobile screen archetypes must resolve for an App brief; got {names:?}"
+    );
+    assert!(
+        !names.contains(&"landing-page-predesign"),
+        "an app brief must not pull the landing-page predesign; got {names:?}"
+    );
+    let ctx = crate::resolve_skills(
+        crate::Phase::Planning,
+        "为开源向量数据库做官网首页（1440，浅色）",
+        &crate::ResolveOptions::default(),
+    );
+    let names: Vec<&str> = ctx.skills.iter().map(|s| s.meta.name.as_str()).collect();
+    assert!(
+        !names.contains(&"mobile-screen-archetypes"),
+        "a website brief must not pull the mobile screen archetypes; got {names:?}"
+    );
+
+    let ctx = crate::resolve_skills(
+        crate::Phase::Planning,
+        "Mobile banking home",
+        &crate::ResolveOptions::default(),
+    );
+    let names: Vec<&str> = ctx.skills.iter().map(|s| s.meta.name.as_str()).collect();
+    assert!(
+        names.contains(&"mobile-screen-archetypes"),
+        "mobile banking must resolve screen archetypes; got {names:?}"
+    );
+}

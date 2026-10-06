@@ -11,7 +11,8 @@ impl WidgetHostNative {
     /// canonical editor-core resolver.
     pub fn non_chat_input_owns_keyboard_pub(&self) -> bool {
         let editor_ui = &self.editor_state.editor_ui;
-        if self.preview.is_some()
+        if editor_ui.home.visible
+            || self.preview.is_some()
             || editor_ui.collab_join_input_active()
             || editor_ui.font_picker.open
             || editor_ui.image_panel.search_open
@@ -181,6 +182,9 @@ impl WidgetHostNative {
     }
 
     fn apply_input_select_all(&mut self) -> bool {
+        if self.home_select_all() {
+            return true;
+        }
         if op_editor_core::save_name_keyboard::select_all(&mut self.editor_state, self.now_ms) {
             self.mark_dirty();
             return true;

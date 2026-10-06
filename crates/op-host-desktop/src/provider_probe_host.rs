@@ -244,6 +244,26 @@ impl DesktopApp {
     }
 }
 
+/// Serializes every test below that touches the shared `agents.json`.
+///
+/// The scratch config root is process-wide and install-once, so all of
+/// these tests read and write ONE file, and `drain_provider_connect`
+/// persists connection changes as a side effect. A sibling's write can
+/// therefore land between another test's `save` and `load` — measured on
+/// the macos-latest CI leg (2026-08-29) as `load()` returning `[]` where
+/// `[ClaudeCode]` had just been written.
+#[cfg(test)]
+static CONNECT_STORE_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Hold for the whole test body; poisoning is irrelevant because the
+/// guard protects a file, not an invariant held in memory.
+#[cfg(test)]
+fn lock_connect_store() -> std::sync::MutexGuard<'static, ()> {
+    CONNECT_STORE_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,6 +300,7 @@ mod tests {
 
     #[test]
     fn drain_spawns_probe_from_request_seam() {
+        let _store = super::lock_connect_store();
         let mut app = DesktopApp::new(None);
         reset_settings(&mut app);
         app.host
@@ -302,6 +323,7 @@ mod tests {
 
     #[test]
     fn landed_outcome_updates_card_and_splices_models() {
+        let _store = super::lock_connect_store();
         let mut app = DesktopApp::new(None);
         reset_settings(&mut app);
         // Seed another provider's discovered models — they must
@@ -371,6 +393,7 @@ mod tests {
 
     #[test]
     fn failed_outcome_keeps_provider_disconnected_with_error() {
+        let _store = super::lock_connect_store();
         let mut app = DesktopApp::new(None);
         reset_settings(&mut app);
         app.host
@@ -408,6 +431,7 @@ mod tests {
 
     #[test]
     fn landed_connected_outcome_without_models_is_failure() {
+        let _store = super::lock_connect_store();
         let mut app = DesktopApp::new(None);
         reset_settings(&mut app);
         app.host
@@ -461,6 +485,7 @@ mod tests {
 
     #[test]
     fn outcome_for_withdrawn_card_is_dropped() {
+        let _store = super::lock_connect_store();
         let mut app = DesktopApp::new(None);
         reset_settings(&mut app);
         // Probe launched, then the user disconnected mid-flight —
@@ -493,6 +518,7 @@ mod remembered_connection_tests {
 
     #[test]
     fn connection_store_writes_land_in_a_scratch_root_not_the_user_home() {
+        let _store = super::lock_connect_store();
         // Deliberately installs no redirect of its own: the store must
         // refuse the real config directory on its own, whatever order the
         // harness runs its threads in. If a future change drops that
@@ -520,6 +546,7 @@ mod remembered_connection_tests {
 
     #[test]
     fn a_failed_probe_leaves_the_remembered_list_intact() {
+        let _store = super::lock_connect_store();
         // The original regression: a GUI launch with a broken environment made
         // every probe fail, each failure wrote `connected = false` through
         // to `agents.json`, and the provider was gone from the startup
@@ -560,6 +587,7 @@ mod remembered_connection_tests {
 
     #[test]
     fn a_successful_probe_joins_the_remembered_list() {
+        let _store = super::lock_connect_store();
         let mut app = DesktopApp::new(None);
         reset_settings(&mut app);
         app.host
@@ -595,6 +623,7 @@ mod remembered_connection_tests {
 
     #[test]
     fn an_explicit_disconnect_drops_the_provider_from_the_remembered_list() {
+        let _store = super::lock_connect_store();
         let mut app = DesktopApp::new(None);
         reset_settings(&mut app);
         app.remembered_connections[2] = true;
@@ -612,6 +641,7 @@ mod remembered_connection_tests {
 
     #[test]
     fn a_provider_waiting_its_turn_in_the_startup_replay_is_not_a_disconnect() {
+        let _store = super::lock_connect_store();
         // Queued providers sit at Idle with `connected = false` until their
         // probe starts — the same absolute state an explicit Disconnect
         // leaves behind. Only the transition tells them apart.
@@ -627,6 +657,7 @@ mod remembered_connection_tests {
 
     #[test]
     fn a_probe_failure_that_lands_on_error_is_not_read_as_a_disconnect() {
+        let _store = super::lock_connect_store();
         let mut app = DesktopApp::new(None);
         reset_settings(&mut app);
         app.remembered_connections[5] = true;
@@ -645,6 +676,7 @@ mod remembered_connection_tests {
 
     #[test]
     fn the_replay_queue_advances_into_the_probing_phase() {
+        let _store = super::lock_connect_store();
         // The landing hook drops any outcome whose card is not Probing, so
         // handing the next provider a bare request-seam write produced a
         // probe whose result was discarded — and the queue stalled there.

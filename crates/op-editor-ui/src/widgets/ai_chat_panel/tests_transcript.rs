@@ -9,6 +9,9 @@ use crate::widgets::ai_chat_hit::AIChatHit;
 #[test]
 fn hit_test_resolves_individual_tool_card_header_toggle() {
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     let mut message = op_editor_core::ChatMessage::assistant("answer");
     message.tools_collapsed = false;
     message.tool_calls.push(op_editor_core::ChatToolCall {
@@ -44,6 +47,9 @@ fn hit_test_resolves_individual_tool_card_header_toggle() {
 #[test]
 fn hit_test_resolves_design_block_header_toggle() {
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat.messages.push(op_editor_core::ChatMessage::assistant(
         r#"```json
 [{"id":"frame-1","type":"Frame"}]
@@ -74,6 +80,9 @@ fn hit_test_resolves_design_block_header_toggle() {
 fn hit_test_resolves_design_block_copy_button() {
     let code = r#"[{"id":"frame-1","type":"Frame"}]"#;
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat
         .messages
         .push(op_editor_core::ChatMessage::assistant(format!(
@@ -104,6 +113,9 @@ fn hit_test_resolves_design_block_copy_button() {
 #[test]
 fn paint_model_chip_uses_key_glyph_for_builtin_model() {
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat
         .available_models
         .push(op_editor_core::chat::ModelEntry::builtin_with_display_name(
@@ -146,7 +158,10 @@ fn paint_model_chip_uses_key_glyph_for_builtin_model() {
 
 #[test]
 fn paint_draws_header_divider_and_message_body_background() {
-    let s = EditorState::new();
+    let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     let panel = AIChatPlaceholder::from_editor(&s);
     let rect = Rect::xywh(10.0, 20.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
     let input_h = INPUT_BASE_HEIGHT;
@@ -158,24 +173,28 @@ fn paint_draws_header_divider_and_message_body_background() {
 
     panel.paint(&mut cx, rect);
 
-    assert!(has_fill_rect(
-        &backend.fills,
-        Rect::xywh(
-            rect.origin.x + 1.0,
-            rect.origin.y + HEADER_HEIGHT,
-            rect.size.x - 2.0,
-            1.0
-        )
-    ));
-    assert!(has_fill_rect(
-        &backend.fills,
-        Rect::xywh(
-            rect.origin.x + 1.0,
-            rect.origin.y + HEADER_HEIGHT + 1.0,
-            rect.size.x - 2.0,
-            sep_y - (rect.origin.y + HEADER_HEIGHT + 1.0),
-        )
-    ));
+    // Pinned into the rail the panel keeps ONE rule, the one above the
+    // composer: the rail already bounds it, so the header hairline and
+    // the transcript wash would be a second border inside one surface.
+    assert!(
+        !has_fill_rect(
+            &backend.fills,
+            Rect::xywh(
+                rect.origin.x + 1.0,
+                rect.origin.y + HEADER_HEIGHT,
+                rect.size.x - 2.0,
+                1.0
+            )
+        ),
+        "no header hairline in the rail"
+    );
+    assert!(
+        has_fill_rect(
+            &backend.fills,
+            Rect::xywh(rect.origin.x + 1.0, sep_y, rect.size.x - 2.0, 1.0)
+        ),
+        "the composer still has its rule"
+    );
 }
 
 #[test]
@@ -187,6 +206,9 @@ fn paint_pass_fingerprints_transcript_at_most_once() {
     // once — the accepted floor.
     use crate::widgets::ai_chat_transcript_cache::transcript_fingerprint_count;
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat.messages.push(op_editor_core::ChatMessage::user(
         "fingerprint paint probe — unique",
     ));
@@ -217,6 +239,9 @@ fn hit_test_fingerprints_transcript_at_most_once() {
     // hands the build to every probe, so one input event hashes at most once.
     use crate::widgets::ai_chat_transcript_cache::transcript_fingerprint_count;
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat.messages.push(op_editor_core::ChatMessage::user(
         "fingerprint hit probe — unique",
     ));
@@ -249,6 +274,9 @@ fn cursor_probe_fingerprints_transcript_once_for_the_whole_event() {
     // fingerprints the transcript exactly once here.
     use crate::widgets::ai_chat_transcript_cache::transcript_fingerprint_count;
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat.messages.push(op_editor_core::ChatMessage::user(
         "cursor probe fingerprint — unique",
     ));
@@ -282,6 +310,9 @@ fn cursor_probe_matches_standalone_hit_and_design_hover() {
     // The combined probe must be behavior-identical to calling the two methods
     // separately — same hit, same design-block hover.
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat.messages.push(op_editor_core::ChatMessage::assistant(
         r#"```json
 [{"id":"frame-1","type":"Frame"}]
@@ -323,6 +354,9 @@ fn cursor_hint_reads_last_painted_build_with_zero_hashes_and_reflects_mutations(
     let mut m = op_editor_core::ChatMessage::assistant("hint build probe — unique base");
     m.thinking = "reasoning long enough to render a clickable thinking header".into();
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat.messages = vec![m];
 
     // A real owner is required: the display-frame hint refuses the UNOWNED
@@ -400,6 +434,9 @@ fn forced_rotation_on_same_index_session_replacement_yields_none_until_repaint()
         cached_canonical_transcript_owned, next_panel_owner, with_current_canonical,
     };
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat.messages = vec![op_editor_core::ChatMessage::assistant(
         "tab-0 transcript — session replaced in place at the same index",
     )];
@@ -460,6 +497,9 @@ fn tab_switch_before_paint_yields_no_cursor_hint_hit() {
     let mut m = op_editor_core::ChatMessage::assistant("switch-source transcript — unique base");
     m.thinking = "reasoning long enough to render a clickable thinking header".into();
     let mut s = EditorState::new();
+    // The expanded panel only exists where the conversation lives:
+    // the rail's Agent tab. Elsewhere the chat is composer-only.
+    s.editor_ui.enter_chat_tab();
     s.chat.messages = vec![m];
     let rect = Rect::xywh(0.0, 0.0, AI_CHAT_WIDTH, AI_CHAT_HEIGHT);
 

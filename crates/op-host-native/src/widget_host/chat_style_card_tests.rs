@@ -34,6 +34,9 @@ A dark reference system built around one violet accent.
 /// A host with a live pin, so the chip row paints and can be pointed at.
 fn hosted_with_pin() -> WidgetHostNative {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     host.last_viewport_w = VIEWPORT_W;
     host.last_viewport_h = VIEWPORT_H;
     let imported =

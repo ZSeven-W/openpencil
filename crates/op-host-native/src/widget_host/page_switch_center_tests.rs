@@ -1,6 +1,6 @@
 use super::WidgetHostNative;
-use op_editor_ui::widgets::{LayerPanelHit, TOP_BAR_HEIGHT};
-use op_editor_ui::{Point2D, Rect};
+use op_editor_ui::widgets::LayerPanelHit;
+use op_editor_ui::Point2D;
 
 const VIEWPORT_W: f32 = 1200.0;
 const VIEWPORT_H: f32 = 800.0;
@@ -29,13 +29,11 @@ fn page_switch_host() -> WidgetHostNative {
 
 fn point_for_page_row(host: &WidgetHostNative, page_index: usize) -> Point2D {
     let panel = host.layer_panel();
-    let rect = Rect {
-        origin: Point2D::new(0.0, TOP_BAR_HEIGHT),
-        size: Point2D::new(
-            host.editor_state().editor_ui.layer_panel_width,
-            (VIEWPORT_H - TOP_BAR_HEIGHT).max(0.0),
-        ),
-    };
+    // Ask the host where the tree actually is instead of rebuilding the
+    // panel rect here: the rail carries a tab row now (对话 / 图层 /
+    // 幻灯片), so the tree starts below it and a hand-rolled rect probes
+    // 36 px above every row.
+    let rect = host.layers_content_rect(VIEWPORT_W, VIEWPORT_H);
     let regions = panel.regions(rect);
     let mut y = regions.pages_rows_top + 2.0;
     while y < regions.pages_rows_top + regions.pages_view_h {

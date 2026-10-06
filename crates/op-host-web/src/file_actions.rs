@@ -362,6 +362,8 @@ pub fn preserve_app_preferences(previous: &EditorState, next: &mut EditorState) 
     next.editor_ui.theme_mode = previous.editor_ui.theme_mode;
     next.editor_ui.host_theme_override = previous.editor_ui.host_theme_override;
     next.editor_ui.locale = previous.editor_ui.locale;
+    next.editor_ui.pending_locale = previous.editor_ui.pending_locale;
+    next.editor_ui.locale_persistence_override = previous.editor_ui.locale_persistence_override;
     next.editor_ui.host_locale_override = previous.editor_ui.host_locale_override;
     next.editor_ui.recent_files = previous.editor_ui.recent_files.clone();
     next.editor_ui.font_import_supported = previous.editor_ui.font_import_supported;

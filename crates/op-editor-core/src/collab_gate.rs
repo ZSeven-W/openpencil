@@ -252,7 +252,8 @@ impl PropertyFocus {
             | P::WidgetBindKey
             | P::WidgetMin
             | P::WidgetMax
-            | P::WidgetStep => D::Unsupported(U::UnsupportedNodeProperty),
+            | P::WidgetStep
+            | P::VideoSrc => D::Unsupported(U::UnsupportedNodeProperty),
         }
     }
 }
@@ -411,6 +412,10 @@ impl EditorCommand {
                 }
             }
             C::UpdateNode { .. } => A::Document(D::NodePropertyBatch),
+            C::SetImageVideoSrc { .. }
+            | C::SetImageVideoPlayback { .. }
+            | C::AddImageVideo { .. }
+            | C::RemoveImageVideo { .. } => A::Document(D::NodePropertyBatch),
             C::PatchNodeData { .. } => A::Document(D::Unsupported(U::UnsupportedNodeProperty)),
             C::DeleteNode { .. } | C::DeleteSelected => A::Document(D::NodeDelete),
             C::MoveNode { .. } | C::ReorderSelected { .. } => A::Document(D::NodeMove),

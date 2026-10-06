@@ -109,6 +109,47 @@ impl ChatTranscriptSelection {
     }
 }
 
+/// Which pipeline the next drained send takes.
+///
+/// `Auto` keeps the usual routing (intent classification, the
+/// design-agent-loop gate); `Orchestrator` pins the turn to the
+/// orchestrator pipeline — the one `op-smoke` exercises and the only one
+/// reasoning-budget models such as GLM 5.3 / GLM Flash reliably finish a
+/// whole-design brief on, because the design-agent loop lets them spend
+/// the entire output budget thinking before writing a single node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LaunchRoute {
+    /// Route by the usual intent classification and loop gate.
+    #[default]
+    Auto,
+    /// Skip the design-agent loop; run the orchestrator pipeline.
+    Orchestrator,
+}
+
+impl LaunchRoute {
+    /// True when this route must skip the design-agent loop even when
+    /// the loop gate would otherwise say yes.
+    pub fn bypasses_design_agent_loop(self) -> bool {
+        matches!(self, Self::Orchestrator)
+    }
+
+    /// True when the route itself establishes that the turn is a design
+    /// request, so the keyword intent classifier must not get a vote.
+    ///
+    /// Studio Home pins this route only after the user has picked a task
+    /// card and pressed 开始设计 — the deliverable is already decided, and
+    /// re-deriving it from the prompt's wording is strictly worse
+    /// information. It is also wrong in practice: the keyword list grew up
+    /// around app/web briefs, so the 演示文稿 / 图文卡片 / 截图教程 /
+    /// 信息图 / 活动海报 wrappers matched nothing and five of the seven
+    /// task families silently answered as plain chat (measured
+    /// 2026-09-13: a 5-page PPT brief produced one empty starter frame and
+    /// a collapsed thinking block).
+    pub fn implies_design_intent(self) -> bool {
+        matches!(self, Self::Orchestrator)
+    }
+}
+
 /// Floating AI chat panel state — mirrors shell-core's `ChatState`
 /// (messages, input draft, focused flag, panel anchor, model catalog).
 #[derive(Debug, Clone)]
@@ -174,6 +215,12 @@ pub struct ChatState {
     /// Raised when the user clicks a transcript copy affordance; hosts
     /// drain this into the platform clipboard.
     pub pending_copy_text: Option<String>,
+    /// Which pipeline the next drained `pending_send` must take. Home and
+    /// the 成品视图's restyle set [`LaunchRoute::Orchestrator`] because
+    /// their briefs are whole-design requests that reasoning-tuned models
+    /// (GLM 5.x / Flash) can only finish on the orchestrator pipeline;
+    /// the desktop launcher consumes it and resets it to `Auto`.
+    pub launch_route: LaunchRoute,
     /// Full model catalog discovered from every *installed* CLI,
     /// before the connected-providers filter. The desktop host fills
     /// this from `model_discovery`; [`rebuild_available_models`] then
@@ -269,6 +316,7 @@ impl Default for ChatState {
             pending_new_chat: false,
             pending_stop_chat: false,
             pending_copy_text: None,
+            launch_route: LaunchRoute::Auto,
             discovered_models: Vec::new(),
             available_models: Vec::new(),
             selected_model: 0,

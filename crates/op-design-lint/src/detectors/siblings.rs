@@ -15,6 +15,7 @@ use std::collections::HashSet;
 use jian_ops_schema::node::{Padding, PenNode};
 use serde_json::Value;
 
+use super::spacing::{is_full_bleed_section, numeric_width};
 use crate::issue::{FixProperty, Issue, IssueCategory, IssueSeverity};
 use crate::node_util::{
     children, corner_radius_numeric, fmt_num, json_number, node_id, node_kind_str,
@@ -342,14 +343,19 @@ fn walk_mixed_corner_radius(node: &PenNode, issues: &mut Vec<Issue>) {
 /// `[t,r,b,l]` 4-tuple so shorthand and explicit padding compare equal.
 pub fn detect_mixed_sibling_padding(root: &PenNode) -> Vec<Issue> {
     let mut issues = Vec::new();
-    walk_mixed_padding(root, &mut issues);
+    let root_width = numeric_width(root).unwrap_or_default();
+    walk_mixed_padding(root, root_width, &mut issues);
     issues
 }
 
-fn walk_mixed_padding(node: &PenNode, issues: &mut Vec<Issue>) {
+fn walk_mixed_padding(node: &PenNode, root_width: f64, issues: &mut Vec<Issue>) {
     let kids = children(node);
     if kids.len() >= 3 {
-        for (_, siblings) in role_kind_groups(kids) {
+        for (_, grouped_siblings) in role_kind_groups(kids) {
+            let siblings: Vec<&PenNode> = grouped_siblings
+                .into_iter()
+                .filter(|sibling| !is_full_bleed_section(sibling, root_width))
+                .collect();
             if siblings.len() < 3 {
                 continue;
             }
@@ -403,7 +409,7 @@ fn walk_mixed_padding(node: &PenNode, issues: &mut Vec<Issue>) {
         }
     }
     for child in kids {
-        walk_mixed_padding(child, issues);
+        walk_mixed_padding(child, root_width, issues);
     }
 }
 

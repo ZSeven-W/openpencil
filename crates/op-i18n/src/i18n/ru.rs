@@ -324,6 +324,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.foodAppDesc" => "Дизайн главной страницы приложения",
         "ai.quickAction.bottomNavDesc" => "Панель навигации с 5 вкладками",
         "ai.quickAction.colorPaletteDesc" => "Рекомендация цветовой палитры",
+        "fileMenu.home" => "Drafting table",
         "fileMenu.newFile" => "Новый файл",
         "fileMenu.exportAllFrames" => "Экспортировать все фреймы...",
         "fileMenu.exportSelectedFrames" => "Экспортировать {{count}} фреймов...",

@@ -170,6 +170,45 @@ extern "C" {
         colors: &[f32],
         opacity: f32,
     );
+    #[wasm_bindgen(method, js_name = fillRoundRectShader)]
+    pub(super) fn fill_round_rect_shader(
+        this: &OpCk,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        radius: f32,
+        sksl: &str,
+        uniform_names: &js_sys::Array,
+        uniforms: &[f32],
+        uniform_arities: &[u32],
+        opacity: f32,
+        fallback_r: f32,
+        fallback_g: f32,
+        fallback_b: f32,
+        fallback_a: f32,
+    );
+    #[wasm_bindgen(method, js_name = fillRoundRectShaderPerCorner)]
+    pub(super) fn fill_round_rect_shader_per_corner(
+        this: &OpCk,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        top_left: f32,
+        top_right: f32,
+        bottom_right: f32,
+        bottom_left: f32,
+        sksl: &str,
+        uniform_names: &js_sys::Array,
+        uniforms: &[f32],
+        uniform_arities: &[u32],
+        opacity: f32,
+        fallback_r: f32,
+        fallback_g: f32,
+        fallback_b: f32,
+        fallback_a: f32,
+    );
     #[wasm_bindgen(method, js_name = strokeRoundRect)]
     pub(super) fn stroke_round_rect(
         this: &OpCk,

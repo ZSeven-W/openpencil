@@ -208,6 +208,17 @@ impl WidgetHostNative {
     ) -> bool {
         self.last_viewport_w = viewport_width;
         self.last_viewport_h = viewport_height;
+        // Home is a full-surface first-launch entry and owns every pointer
+        // event before document chrome or canvas tiers can see it — but the
+        // overlays Home itself opens (agent settings, sign-in modal, the
+        // Home-anchored model picker) paint ABOVE the takeover, so their
+        // presses must arrive first.
+        if let Some(consumed) = self.press_home_overlays(x, y, viewport_width, viewport_height) {
+            return consumed;
+        }
+        if let Some(consumed) = self.press_home(x, y, viewport_width, viewport_height) {
+            return consumed;
+        }
         // Tier 0 — the mobile save-name dialog is fully modal while open
         // (only the FFI hosts ever open it; desktop state stays closed).
         if let Some(consumed) =
@@ -328,6 +339,16 @@ impl WidgetHostNative {
         // affordance before app-bar/page/dock controls can claim the tap.
         if !self.preview_slideshow_active() {
             if let Some(consumed) = self.press_mobile_modal_surface_tier(&ctx) {
+                return consumed;
+            }
+        }
+        // Tier 3c — the generation workspace's chrome (header, toolbar,
+        // deck strip, dock handle) claims presses ahead of the top bar
+        // and rails, after Home and the modal tiers. Presses on the
+        // docked canvas and the pinned chat fall through to their
+        // ordinary tiers below.
+        if !presenting {
+            if let Some(consumed) = self.press_workspace(x, y, viewport_width, viewport_height) {
                 return consumed;
             }
         }

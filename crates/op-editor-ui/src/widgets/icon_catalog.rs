@@ -99,7 +99,33 @@ pub fn brand_catalog_loaded() -> bool {
 }
 
 pub fn lookup_icon(collection: &str, name: &str) -> Option<&'static IconCatalogEntry> {
-    let key = format!("{}:{}", collection.trim(), name.trim());
+    let collection = collection.trim();
+    let name = name.trim();
+    if let Some(entry) = lookup_icon_exact(collection, name) {
+        return Some(entry);
+    }
+    // Models keep writing the lucide names that were renamed upstream
+    // (`more-horizontal`, `check-circle`, `grid`, `edit`, `sliders`, the
+    // `bar-chart-*` family). A 20-screen run carried 48 such glyphs and
+    // every one painted as nothing. Resolve the legacy name, then fall back
+    // to feather — lucide's ancestor with the same 24-grid stroke language —
+    // where most of those names still live. Unknown names stay unpainted.
+    if collection == "lucide" {
+        if let Some(current) = super::icon_catalog_aliases::lucide_current_name(name) {
+            if let Some(entry) = lookup_icon_exact("lucide", current) {
+                return Some(entry);
+            }
+        }
+        if let Some(entry) = lookup_icon_exact("feather", name) {
+            return Some(entry);
+        }
+    }
+    None
+}
+
+/// Exact `collection:name` lookup across the core and brand catalogs.
+fn lookup_icon_exact(collection: &str, name: &str) -> Option<&'static IconCatalogEntry> {
+    let key = format!("{collection}:{name}");
     if let Some(idx) = core_index().get(&key) {
         return core_catalog().get(*idx);
     }

@@ -33,6 +33,7 @@ pub fn process_message_for_file_path_arg(
             if !state.apply(cmd.clone()) {
                 return false;
             }
+            super::run_write_repairs_after_apply(state);
             if let Err(e) = super::save_editor_state(state, &target.path) {
                 applier_failed = Some(format!("save {} failed: {e}", target.path.display()));
                 return false;

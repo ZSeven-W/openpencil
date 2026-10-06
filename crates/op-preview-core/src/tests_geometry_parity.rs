@@ -118,6 +118,7 @@ fn preview_matches_design_for_preserve_geometry_doc() {
         true,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
     let preview = session.preview_scene_for_test();
@@ -178,6 +179,7 @@ fn preview_matches_design_for_promoted_role_frame_doc() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
     let preview = session.preview_scene_for_test();
@@ -207,6 +209,7 @@ fn held_drag_stays_anchored_to_the_down_node() {
         true,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
 
@@ -286,6 +289,7 @@ fn preview_matches_design_for_free_layout_doc() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
     let preview = session.preview_scene_for_test();

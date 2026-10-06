@@ -251,7 +251,7 @@ pub(super) fn normalize_category_icon_tile(item: &mut Value, active: bool) {
             obj.remove("stroke");
             obj.remove("effects");
         }
-        set_subtree_foreground(tile, "$color-accent");
+        set_subtree_foreground(tile, "$--primary");
     } else {
         tile["fill"] = solid_fill("#FFFFFF");
         tile["stroke"] = neutral_stroke("#EAD8C8");

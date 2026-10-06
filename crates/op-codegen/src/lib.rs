@@ -46,7 +46,9 @@ pub trait Codegen {
 /// string; number/bool/string variables stringify their scalar.
 /// Themed values emit ONE entry per theme combination using a
 /// `:root[data-axis="value"]` selector so the same CSS reflows
-/// across theme switches with no JS.
+/// across theme switches with no JS. A pure `Mode=Dark` block also
+/// emits under shadcn's `.dark` class so shadcn component classes
+/// consume the generated globals.css directly.
 pub struct CssVariables;
 
 impl Codegen for CssVariables {
@@ -69,7 +71,7 @@ impl Codegen for CssVariables {
         if !root_scalars.is_empty() {
             out.push_str(":root {\n");
             for (name, value) in &root_scalars {
-                out.push_str(&format!("  --{}: {};\n", css_ident(name), value));
+                out.push_str(&format!("  {}: {};\n", css_custom_property(name), value));
             }
             out.push_str("}\n");
         }
@@ -98,6 +100,14 @@ impl Codegen for CssVariables {
             }
         }
         for (axes, decls) in &themed {
+            // shadcn's `.dark` class convention: a single-axis dark
+            // block also mounts on `.dark` so `dark:` variants resolve
+            // without the data-axis attribute. Multi-axis signatures
+            // keep the attribute selector only — `.dark` alone must not
+            // pick up density- or platform-scoped values.
+            let dark_class = axes.len() == 1
+                && axes[0].0.eq_ignore_ascii_case("mode")
+                && axes[0].1.eq_ignore_ascii_case("dark");
             if axes.is_empty() {
                 out.push_str(":root {\n");
             } else {
@@ -106,10 +116,14 @@ impl Codegen for CssVariables {
                     .map(|(k, v)| format!("[data-{}=\"{}\"]", k, v))
                     .collect::<Vec<_>>()
                     .join("");
-                out.push_str(&format!(":root{} {{\n", sel));
+                if dark_class {
+                    out.push_str(&format!(":root{}, .dark {{\n", sel));
+                } else {
+                    out.push_str(&format!(":root{} {{\n", sel));
+                }
             }
             for (name, value) in decls {
-                out.push_str(&format!("  --{}: {};\n", css_ident(name), value));
+                out.push_str(&format!("  {}: {};\n", css_custom_property(name), value));
             }
             out.push_str("}\n");
         }
@@ -391,4 +405,12 @@ fn css_ident(name: &str) -> String {
             }
         })
         .collect()
+}
+
+/// CSS custom-property name for a variable: exactly two leading
+/// dashes. shadcn-vocabulary names already carry the `--` prefix
+/// (`--primary`) and must emit verbatim, never triple-dash; legacy
+/// names (`primary`) get the prefix prepended.
+fn css_custom_property(name: &str) -> String {
+    format!("--{}", css_ident(name.trim_start_matches('-')))
 }

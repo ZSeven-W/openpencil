@@ -683,6 +683,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "assetCenter.style.importEmpty" => "Diese Datei ist leer oder zu kurz für einen Styleguide.",
         "assetCenter.style.importNotText" => "Diese Datei lässt sich nicht als Markdown-Text lesen.",
         "assetCenter.style.importTooLarge" => "Diese Datei ist größer als 512 KB.",
+        "leftPanel.tab.chat" => "Agent",
         "slidesPanel.tabSlides" => "Folien",
         "slidesPanel.tabCards" => "Karten",
         "slidesPanel.present" => "Präsentieren",

@@ -324,6 +324,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.quickAction.foodAppDesc" => "Uygulama ana sayfası tasarımı",
         "ai.quickAction.bottomNavDesc" => "5 sekmeli gezinme çubuğu",
         "ai.quickAction.colorPaletteDesc" => "Renk paleti önerisi",
+        "fileMenu.home" => "Drafting table",
         "fileMenu.newFile" => "Yeni dosya",
         "fileMenu.exportAllFrames" => "Tüm çerçeveleri dışa aktar...",
         "fileMenu.exportSelectedFrames" => "{{count}} çerçeveyi dışa aktar...",

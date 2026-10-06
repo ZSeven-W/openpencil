@@ -90,6 +90,10 @@ impl WidgetHost {
                 // ACTUAL teardown deferred by do_exit_preview
                 self.finish_exit_teardown();
             } else {
+                let now_ms = self.now_ms;
+                if let Some(preview) = self.preview.as_mut() {
+                    preview.begin_lifecycle(now_ms);
+                }
                 self.preview_mode_transition = None;
             }
         }

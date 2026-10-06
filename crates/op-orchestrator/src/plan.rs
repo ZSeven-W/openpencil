@@ -61,12 +61,19 @@ pub struct Subtask {
     pub id: String,
     pub label: String,
     pub region: Region,
+    /// Derived by plan normalization from the section's visual archetype.
+    /// The planner does not own this field and it is never serialized back.
+    #[serde(default, skip_serializing)]
+    pub bleed_hero: bool,
     /// 规范化后赋值 = `id`。
     #[serde(default)]
     pub id_prefix: String,
     /// 规范化后赋值 = 根 frame id。
     #[serde(default)]
     pub parent_frame_id: Option<String>,
+    /// The current sibling after which a later interactive retry should land.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub insert_after_sibling_id: Option<String>,
     /// 本区块包含的元素描述 —— port of TS `SubTask.elements`。
     #[serde(default)]
     pub elements: Option<String>,
@@ -106,6 +113,10 @@ pub enum RetryFeedback {
     /// structural violation (`geometry_validation::geometry_diagnostics_for_roots`,
     /// the `geometry_echo` step) — carries the joined diagnostic lines.
     Geometry(String),
+    /// A repeated-item promise was present, but the previous attempt was too short.
+    Completeness(String),
+    /// Generated copy was in a different language than the brief.
+    Language(String),
 }
 
 /// 规划阶段的完整产物。字段对齐规划语料 `decomposition.md`。
@@ -208,8 +219,10 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                         width: context.screen_width,
                         height: context.screen_height,
                     },
+                    bleed_hero: false,
                     id_prefix: id,
                     parent_frame_id: None,
+                    insert_after_sibling_id: None,
                     elements: Some(format!(
                         "the complete {screen_name} screen, continuing the existing product; reuse its established design system and shared navigation"
                     )),
@@ -273,8 +286,10 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                         width,
                         height: top_h,
                     },
+                    bleed_hero: false,
                     id_prefix: "top-summary".into(),
                     parent_frame_id: Some("page".into()),
+                    insert_after_sibling_id: None,
                     elements: Some(
                         "the screen's header / context for this product (title or greeting, \
                          and the key top-level action[s] this app needs); no status bar. \
@@ -293,8 +308,10 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                         width,
                         height: main_h,
                     },
+                    bleed_hero: false,
                     id_prefix: "main-content".into(),
                     parent_frame_id: Some("page".into()),
+                    insert_after_sibling_id: None,
                     elements: Some(
                         "this screen's primary content for the product — the main job-to-be-done \
                          and whatever modules genuinely fit it; do not repeat the top summary. \
@@ -328,8 +345,10 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
                     width: WIDTH,
                     height: SECTION_HEIGHT,
                 },
+                bleed_hero: false,
                 id_prefix: id,
                 parent_frame_id: None,
+                insert_after_sibling_id: None,
                 elements: None,
                 screen: None,
                 generated_root_id: None,
@@ -396,9 +415,11 @@ fn build_fallback_deck_plan(req: &DesignRequest, preset: DesignTypePreset) -> Or
                     width: preset.width,
                     height: preset.root_height,
                 },
+                bleed_hero: false,
                 id_prefix: id,
                 // Left to `plan_normalize`, which rewrites it per screen group.
                 parent_frame_id: None,
+                insert_after_sibling_id: None,
                 elements: Some(fallback_slide_elements(&title).to_string()),
                 screen: Some(title),
                 generated_root_id: None,
@@ -569,6 +590,7 @@ mod tests {
 
             visual_ref_enabled: false,
             pinned_style_guide: None,
+            reference_skeleton: None,
         }
     }
 
@@ -679,8 +701,10 @@ mod tests {
                 width: 1200.0,
                 height: 400.0,
             },
+            bleed_hero: false,
             id_prefix: "hero".into(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,
@@ -700,8 +724,10 @@ mod tests {
                 width: 1200.0,
                 height: 400.0,
             },
+            bleed_hero: false,
             id_prefix: "features".into(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,
@@ -723,8 +749,10 @@ mod tests {
                 width: 1200.0,
                 height: 400.0,
             },
+            bleed_hero: false,
             id_prefix: "hero".into(),
             parent_frame_id: None,
+            insert_after_sibling_id: None,
             elements: None,
             screen: None,
             generated_root_id: None,

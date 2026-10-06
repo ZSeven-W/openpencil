@@ -143,7 +143,7 @@ impl EditorState {
     /// Accepts either a literal `#RGB`/`#RRGGBB` hex OR a `$variable-name`
     /// design-token reference. The underlying `PenStroke.fill[*].color`
     /// field is a free `String`; `op-design-lint` detectors emit
-    /// `$color-border` refs when the doc declares that variable, and a
+    /// `$--border` refs when the doc declares that variable, and a
     /// strict hex parse here would silently drop them (regression caught
     /// by a stop-time review of `LintPreValidator`).
     pub(crate) fn cmd_set_node_stroke_hex(&mut self, node_id: &NodeId, hex: &str) -> bool {

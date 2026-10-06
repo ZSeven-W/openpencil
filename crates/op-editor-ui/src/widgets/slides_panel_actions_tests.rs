@@ -6,7 +6,9 @@
 //! keeps a button's picture and its click target the same rect.
 
 use super::*;
-use crate::widgets::slides_panel::{SlidesPanelLayout, SlidesPanelTabs, DEFAULT_BOARD_ASPECT};
+use crate::widgets::slides_panel::{
+    SlidesPanelLayout, SlidesPanelTabs, SlidesTabRow, DEFAULT_BOARD_ASPECT,
+};
 use op_editor_core::LeftPanelTab;
 
 const PANEL: Rect = Rect {
@@ -234,7 +236,17 @@ fn the_subset_exporter_is_wired_in_this_build() {
 fn the_list_band_stops_where_the_bar_starts() {
     let l = SlidesPanelLayout::new(
         PANEL,
-        SlidesPanelTabs::new(PANEL, LeftPanelTab::Slides, "Layers", "Slides"),
+        SlidesPanelTabs::new(
+            PANEL,
+            LeftPanelTab::Slides,
+            &SlidesTabRow {
+                chat_label: "Chat",
+                layers_label: "Layers",
+                slides_label: "Slides",
+                chat_available: true,
+                slides_available: true,
+            },
+        ),
         &[DEFAULT_BOARD_ASPECT; 12],
         0.0,
         SlidesActionState::default(),
@@ -251,7 +263,17 @@ fn the_list_band_stops_where_the_bar_starts() {
     // at the band's edge rather than reaching into the bar.
     let scrolled = SlidesPanelLayout::new(
         PANEL,
-        SlidesPanelTabs::new(PANEL, LeftPanelTab::Slides, "Layers", "Slides"),
+        SlidesPanelTabs::new(
+            PANEL,
+            LeftPanelTab::Slides,
+            &SlidesTabRow {
+                chat_label: "Chat",
+                layers_label: "Layers",
+                slides_label: "Slides",
+                chat_available: true,
+                slides_available: true,
+            },
+        ),
         &[DEFAULT_BOARD_ASPECT; 12],
         10_000.0,
         SlidesActionState::default(),

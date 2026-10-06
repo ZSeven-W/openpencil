@@ -119,8 +119,8 @@ impl TopBar {
             }
         }
         // ── Left cluster ───────────────────────────────────────
-        // sidebar toggle │ file-menu │ Figma — each group split by a
-        // TS-style 1×14 divider (4 px gap each side).
+        // sidebar toggle │ file-menu │ Figma │ Home — each group split
+        // by a TS-style 1×14 divider (4 px gap each side).
         let panel_left_x = rect.origin.x + PAD + self.left_inset();
         paint_icon_button(
             cx,
@@ -163,10 +163,27 @@ impl TopBar {
                 self.is_hovered(TopBarButton::OpenImportMenu),
                 self.is_pressed(TopBarButton::OpenImportMenu),
             );
+            // Divider then Home (制图台) — return to the drafting table.
+            let home = self.home_button_rect(rect);
+            paint_divider(
+                cx,
+                &self.theme,
+                home.origin.x - DIVIDER_GAP - DIVIDER_W,
+                center_y,
+            );
+            paint_icon_button(
+                cx,
+                &self.theme,
+                home.origin.x,
+                center_y,
+                Icon::Home,
+                self.is_hovered(TopBarButton::Home),
+                self.is_pressed(TopBarButton::Home),
+            );
 
             // ── Bounded centered file title ─────────────────────
             // File name, dirty marker, and Git button form one visual group
-            // centered against the full window. The slot between the import
+            // centered against the full window. The slot between the Home
             // control and agent chip only clamps that group when the viewport
             // is too narrow. Paint uses the same family metrics as the text
             // runs, so the title ends exactly at the reserved Git gap instead
@@ -595,7 +612,7 @@ fn paint_collaboration_chip(
 /// profile image with an initial-letter fallback when signed in. Shares the
 /// same hover/press ghost background as its icon-button siblings (Sun /
 /// Globe / Maximize) so it reads consistently in the chrome row.
-pub(super) fn paint_account_button(
+pub(crate) fn paint_account_button(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
     account: &op_editor_core::AccountState,

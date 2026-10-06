@@ -7,6 +7,10 @@ license.workspace = true
 description = "Canvas Preview (Play) mode runtime — jian runtime integration, hit-testing overlay, app-mode routing"
 
 [dependencies]
+# The dependency-light Preview contract DTOs (host capabilities, activation
+# ids; effects/debug in later tasks) — a leaf crate so core/UI/FFI/hosts can
+# share the frozen contract without the Core → UI cycle.
+op-preview-contracts = { path = "../op-preview-contracts" }
 # The canonical `.op` / `.pen` schema — the `PenDocument` loader
 # converts from. Also used for screen projection and JSON serialization.
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }

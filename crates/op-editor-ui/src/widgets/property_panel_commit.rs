@@ -119,6 +119,12 @@ pub fn property_focus_initial(focus: PropertyFocus, panel: &PropertyPanel) -> St
         F::WidgetLeadingIcon => widget_text(panel, |w| &w.leading_icon),
         F::WidgetTrailingIcon => widget_text(panel, |w| &w.trailing_icon),
         F::WidgetBindKey => widget_text(panel, |w| &w.bind_key),
+        F::VideoSrc => panel
+            .snapshot
+            .video
+            .as_ref()
+            .map(|video| video.src.clone())
+            .unwrap_or_default(),
         F::WidgetMin => widget_text(panel, |w| &w.min),
         F::WidgetMax => widget_text(panel, |w| &w.max),
         F::WidgetStep => widget_text(panel, |w| &w.step),
@@ -380,6 +386,9 @@ pub fn commit_property_focus(state: &mut EditorState) -> bool {
         }
         PropertyFocus::WidgetBindKey => {
             let _ = state.set_selected_widget_bind_value(draft.trim());
+        }
+        PropertyFocus::VideoSrc => {
+            let _ = state.set_selected_video_src(draft.trim());
         }
         _ => {
             if let Ok(value) = draft.trim().parse::<f32>() {

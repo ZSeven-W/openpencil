@@ -44,7 +44,7 @@ use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout, Theme};
 
 /// Height of the tab row that heads the rail.
-pub const SLIDES_TAB_ROW_HEIGHT: f32 = 36.0;
+pub const SLIDES_TAB_ROW_HEIGHT: f32 = 44.0;
 /// Touch rail tab row. Its 4pt vertical insets leave 44pt tab targets.
 pub const TOUCH_SLIDES_TAB_ROW_HEIGHT: f32 = 52.0;
 /// Minimum width and height of every touch rail tab target.
@@ -57,14 +57,20 @@ const TAB_ROW_HEIGHT: f32 = SLIDES_TAB_ROW_HEIGHT;
 /// `panel − tab row − this`, which is the whole reason the last
 /// thumbnail is never covered by the bar.
 pub const FOOTER_HEIGHT: f32 = ACTION_BAR_HEIGHT;
-const TAB_INSET_X: f32 = 8.0;
+/// The rail's one gutter — the tab row starts where the session
+/// selector, the Layers tree and the example pills do. The 12 px the
+/// wider inset costs is handed back by the tighter per-tab padding
+/// below, so the labels keep exactly the room they had.
+const TAB_INSET_X: f32 = 16.0;
 const TAB_INSET_Y: f32 = 5.0;
-const TAB_RADIUS: f32 = 6.0;
-const TAB_FONT: f32 = 12.0;
+const TAB_RADIUS: f32 = 7.0;
+const TAB_FONT: f32 = 13.0;
 /// Glyph size for a tab in icon mode.
 const TAB_ICON_SIZE: f32 = 14.0;
 /// Padding inside a tab, around whatever it holds.
 const TAB_PAD_X: f32 = 8.0;
+/// Gap between text-mode tabs; they carry their own label widths now.
+pub(crate) const TAB_GAP: f32 = 2.0;
 /// Gap between a tab's glyph and its label, when it keeps one.
 const TAB_ICON_GAP: f32 = 5.0;
 
@@ -105,7 +111,7 @@ const REFERENCE_RAIL_W: f32 = 240.0;
 ///
 /// **The one number that keeps the list a list.** Rows hold this height
 /// whether the page carries 16:9 decks, 3:4 cards or 9:19.5 phone
-/// screens, and whether the rail is dragged to 180 px or 480 — each
+/// screens, and whether the rail is dragged to 240 px or 440 — each
 /// board is fitted INTO the box, never the box to the board. Deriving
 /// it from the rail's width instead (so a deck always filled its card)
 /// looked right at one width and absurd at another: a rail dragged wide
@@ -131,7 +137,7 @@ const GHOST_ALPHA: f32 = 0.35;
 #[path = "slides_panel_tabs.rs"]
 mod tabs;
 
-pub use tabs::{text_tabs_fit, SlidesPanelTabs};
+pub use tabs::{text_tabs_fit, SlidesPanelTabs, SlidesTabRow};
 
 /// Where the slides tab's rows, list viewport and action bar sit.
 ///
@@ -437,8 +443,10 @@ pub struct SlidesPanel<'a> {
     /// instead of staying empty — a bare plate reads as broken, and the
     /// chip already says which slide it is.
     pub thumbnails_supported: bool,
-    pub layers_label: &'a str,
-    pub slides_label: &'a str,
+    /// The row's labels + availability — one description feeds the
+    /// rects (`SlidesPanelTabs::new`) and this paint, so the pill laid
+    /// out is the pill drawn.
+    pub tabs: &'a SlidesTabRow<'a>,
     /// Labels for the bottom action bar and its dropdown.
     pub actions: SlidesActionLabels<'a>,
 }
@@ -458,9 +466,7 @@ impl SlidesPanel<'_> {
             },
             theme.border,
         );
-        layout
-            .tabs
-            .paint(cx, theme, self.hover, self.layers_label, self.slides_label);
+        layout.tabs.paint(cx, theme, self.hover, self.tabs);
 
         cx.backend.save();
         cx.backend.clip_rect(layout.list);

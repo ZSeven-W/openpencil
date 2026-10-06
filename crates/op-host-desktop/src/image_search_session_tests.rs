@@ -44,6 +44,7 @@ fn image_node(id: &str, src: &str, query: Option<&str>) -> PenNode {
         shadows: None,
         image_prompt: None,
         image_search_query: query.map(str::to_string),
+        video: None,
         state: None,
         bindings: None,
         events: None,
@@ -199,6 +200,8 @@ fn image_fill(url: &str) -> PenFill {
 // module directory.
 #[path = "image_search_session_tests/collection.rs"]
 mod collection;
+#[path = "image_search_session_tests/judge.rs"]
+mod judge;
 #[path = "image_search_session_tests/lifecycle.rs"]
 mod lifecycle;
 #[path = "image_search_session_tests/memo.rs"]

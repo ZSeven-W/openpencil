@@ -39,7 +39,7 @@ const PALETTE_MIN_FROM_VARIABLES: usize = 3;
 /// The roles a band shows, in the order it shows them.
 ///
 /// Templates name their variables in two conventions — `c-bg` / `c-ink` in
-/// the hand-authored decks, `color-bg-deep` / `color-accent` in the generated
+/// the hand-authored decks, `--background` / `--primary` in the generated
 /// ones — and both put the same ideas in different orders. Hoisting the roles
 /// this table names, then filling the rest in declaration order, gives one
 /// reading (ground, surface, accent, ink, …) across both, without a

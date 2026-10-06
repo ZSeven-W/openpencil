@@ -94,6 +94,15 @@ pub fn is_acp_capability_marker(model_id: &str) -> bool {
 
 /// 模型表 —— verbatim 移植自 `model-profiles.ts:22-95`,首个命中胜出。
 const MODEL_PROFILES: &[Entry] = &[
+    // Claude Code CLI aliases (`--model opus|sonnet|fable`): the subprocess
+    // transport passes them verbatim, and an unmatched id falls to the
+    // conservative default tier, which budgets Opus like a weak model.
+    e(
+        Match::Exact(&["opus", "sonnet", "fable", "claude"]),
+        ModelTier::Full,
+        false,
+        "Claude (CLI alias)",
+    ),
     // Full tier
     e(
         Match::Sub("claude-fable"),
@@ -187,13 +196,15 @@ const MODEL_PROFILES: &[Entry] = &[
         label: "DeepSeek V4+ Pro",
     },
     // GLM-5.3 — explicit override BEFORE the glm lane so its ×3 beats the
-    // lane's ×2. 0814 measurement: always thinks (`thinking:disabled` is
-    // silently ignored, not a 400), one card took 635s ≈ 10× DeepSeek,
-    // hence ×3.
+    // lane's ×2. 0814 measurement: always thinks, one card took 635s ≈
+    // 10× DeepSeek, hence ×3. `thinking:disabled` used to be silently
+    // ignored; since 2026-09-03 the API rejects it outright (HTTP 400,
+    // code 1210 "该模型始终思考，不支持关闭思考"), which failed every
+    // subtask before the first token — so the field must not be sent.
     Entry {
         matcher: Match::Sub("glm-5.3"),
         tier: ModelTier::Full,
-        thinking_disabled: true,
+        thinking_disabled: false,
         timeout_multiplier: 3.0,
         label: "GLM-5.3",
     },

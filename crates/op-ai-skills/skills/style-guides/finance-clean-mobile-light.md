@@ -21,6 +21,11 @@ Key aesthetics:
 - **Data-first layout**: Generous spacing around numbers, clear visual hierarchy for financial metrics
 - **Integrated bottom nav**: full-width bottom navigation with teal active indicator
 
+Signature recipes:
+
+- **Top-leading protagonist** — Place the #0D9488 balance hero at the top-leading side, occupying at least 25% of the first screen above transaction cards — HIG Layout
+- **Three-step type** — Use 34px DM Mono figures, 17px DM Sans body, and 12px captions, with #0F172A primary text — HIG Typography
+
 ## Color System
 
 ### Core Backgrounds

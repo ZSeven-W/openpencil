@@ -33,38 +33,47 @@ pub(crate) use cleanup_mobile_chrome::{
 };
 #[path = "cleanup_mobile_dense.rs"]
 mod cleanup_mobile_dense;
-
-// Repair-pass submodules: this file keeps the public surface (`finalize_design`
-// / `run_cleanup_passes` / the `*_for_all_roots` drivers) plus the shared
-// predicates; each repair family lives in its own file and is re-imported here
-// so the drivers (and the test modules mounted below) see the same flat
-// namespace as before.
+// Repair-pass submodules keep the public cleanup drivers and shared predicates
+// flat, while each repair family lives in its own file.
+#[path = "category_grid_density.rs"]
+mod category_grid_density;
 #[path = "cleanup_bottom_nav_repairs.rs"]
 mod cleanup_bottom_nav_repairs;
 #[path = "cleanup_clip_row_stroke.rs"]
 mod cleanup_clip_row_stroke;
 #[path = "cleanup_container_geometry.rs"]
 mod cleanup_container_geometry;
+#[path = "cleanup_empty_content_bar.rs"]
+mod cleanup_empty_content_bar;
 #[path = "cleanup_equalize_siblings.rs"]
 mod cleanup_equalize_siblings;
 #[path = "cleanup_image_slots.rs"]
-mod cleanup_image_slots;
+pub(crate) mod cleanup_image_slots;
+#[path = "cleanup_overflow_prepass.rs"]
+mod cleanup_overflow_prepass;
 #[path = "cleanup_root_and_nav.rs"]
 mod cleanup_root_and_nav;
 #[path = "cleanup_root_transform.rs"]
 mod cleanup_root_transform;
 #[path = "cleanup_section_margins.rs"]
 mod cleanup_section_margins;
+use cleanup_overflow_prepass::run_overflow_prepass;
 #[path = "cleanup_section_sizing.rs"]
 mod cleanup_section_sizing;
 #[path = "cleanup_slide_padding.rs"]
 mod cleanup_slide_padding;
 #[path = "cleanup_status_bar.rs"]
 mod cleanup_status_bar;
+#[path = "motion_recipes.rs"]
+mod motion_recipes;
+#[path = "sibling_style_drift.rs"]
+mod sibling_style_drift;
 pub(crate) use cleanup_status_bar::{is_status_bar, is_status_bar_from_json};
+pub(crate) use sibling_style_drift::structural_signature;
 #[path = "finalize_enforce_status_bar.rs"]
 mod finalize_enforce_status_bar;
 
+use category_grid_density::repair_category_grid_density;
 use cleanup_bottom_nav_repairs::*;
 use cleanup_clip_row_stroke::*;
 use cleanup_container_geometry::*;
@@ -471,6 +480,7 @@ fn run_cleanup_passes_with_summary_and_policy(
         rid = apply_root_transform(sink, &rid, crate::ring_repair::wrap_ring_fragments);
         debug_probe_child_height(sink, &rid, "table_flush");
         counter.checkpoint(summary, CheckCategory::Structure, "chip+ring-extract");
+        super::cleanup_image_fallback::repair_map_placeholders(sink, &rid, summary, &mut counter);
         // Chip/badge text contrast (DS P1-a): the specific, provable chip
         // branch runs BEFORE the generic contrast repair so the chip-scoped
         // proof (solid chip fill, chip shape) wins the repair and the generic
@@ -491,6 +501,14 @@ fn run_cleanup_passes_with_summary_and_policy(
         // detectors, so it only ever fired for a user running
         // `lint_document` by hand.
         crate::text_contrast_repair::repair_text_contrast(sink, &rid);
+        crate::hero_bleed::enforce(sink, plan, &rid);
+        counter.checkpoint(summary, CheckCategory::Structure, "hero-bleed");
+        repair_category_grid_density(sink, &rid);
+        counter.checkpoint(summary, CheckCategory::Structure, "category-grid-density");
+        cleanup_empty_content_bar::remove_empty_content_bars(sink, &rid);
+        counter.checkpoint(summary, CheckCategory::Structure, "empty-content-bar");
+        motion_recipes::apply(sink, &rid);
+        counter.checkpoint(summary, CheckCategory::Structure, "motion-recipes");
         // Section-margin ownership (DS P1.5) runs BEFORE the wrapper-double-inset
         // stripper below: unifying first hands the stripper the group already
         // normalized, and the floor afterwards then sees no flush content left.
@@ -594,9 +612,10 @@ fn run_cleanup_passes_with_summary_and_policy(
         // Sibling-item scalar alignment (DS P1-a) runs AFTER slot
         // materialization: an empty image-slot rect becomes an Image node
         // above, so the structure comparison below sees the FINAL tree shape
-        // instead of treating the not-yet-materialized slot as drift.
-        equalize_sibling_items(sink, rid);
-        counter.checkpoint(summary, CheckCategory::Structure, "equalize-sibling-items");
+        // instead of treating the not-yet-materialized slot as drift. The
+        // paired style-drift vote runs right after it, behind its own
+        // Structure checkpoint, inside the shared driver.
+        equalize_siblings_and_style_drift(sink, rid, summary, &mut counter);
         // No-nav mobile screens share one deterministic closing contract:
         // 24-32px of bottom room. The repair reads the same resolved geometry
         // as the diagnostic and grows only root padding, never business nodes.
@@ -620,6 +639,10 @@ fn run_cleanup_passes_with_summary_and_policy(
                 }
             }
         }
+        // Overflow pre-pass: shift pinned controls back inside their parent and
+        // shrink single-line text that outgrew its rail, so the geometry loop
+        // below only sees what a move or a shrink cannot fix.
+        run_overflow_prepass(sink, rid, summary, &mut counter);
         let preserve_root_height = policy.preserve_requested_root_height
             || find_root(sink.state(), rid).is_some_and(|root| {
                 root_has_explicit_fit_content_height(root)
@@ -719,72 +742,13 @@ fn run_cleanup_passes_with_summary_and_policy(
     // not `root_ids`) so it also links pre-existing screens from earlier turns.
     crate::wire_screen_navigation::wire_screen_navigation(sink);
     counter.checkpoint(summary, CheckCategory::Structure, "shared-chrome+nav");
+
+    super::cleanup_image_fallback::repair_image_fallback_policy(sink, summary, &mut counter);
 }
 
 #[cfg(test)]
-#[path = "cleanup_tests.rs"]
-mod tests;
-
+#[path = "motion_recipes_tests.rs"]
+mod motion_recipes_tests;
 #[cfg(test)]
-#[path = "cleanup_repair_summary_tests.rs"]
-mod tests_repair_summary;
-
-#[cfg(test)]
-#[path = "cleanup_repair_tier_tests.rs"]
-mod tests_repair_tier;
-
-#[cfg(test)]
-#[path = "cleanup_abandoned_duplicate_roots_tests.rs"]
-mod tests_abandoned_duplicate_roots;
-
-#[cfg(test)]
-#[path = "cleanup_mobile_dense_tests.rs"]
-mod tests_mobile_dense;
-
-#[cfg(test)]
-#[path = "cleanup_mobile_chrome_tests.rs"]
-mod tests_mobile_chrome;
-
-#[cfg(test)]
-#[path = "cleanup_mobile_bottom_nav_dedup_tests.rs"]
-mod tests_mobile_bottom_nav_dedup;
-
-#[cfg(test)]
-#[path = "cleanup_bottom_nav_tests.rs"]
-mod tests_bottom_nav;
-
-#[cfg(test)]
-#[path = "cleanup_nested_horizontal_padding_tests.rs"]
-mod tests_nested_horizontal_padding;
-
-#[cfg(test)]
-#[path = "cleanup_rail_wrapper_gutter_tests.rs"]
-mod tests_rail_wrapper_gutter;
-
-#[cfg(test)]
-#[path = "cleanup_absolute_container_tests.rs"]
-mod tests_absolute_container;
-
-#[cfg(test)]
-#[path = "cleanup_fill_container_content_tests.rs"]
-mod tests_fill_container_content;
-
-#[cfg(test)]
-#[path = "cleanup_clip_row_stroke_tests.rs"]
-mod tests_clip_row_stroke;
-
-#[cfg(test)]
-#[path = "cleanup_image_slots_tests.rs"]
-mod cleanup_image_slots_tests;
-
-#[cfg(test)]
-#[path = "cleanup_card_height_equalize_tests.rs"]
-mod tests_card_height_equalize;
-
-#[cfg(test)]
-#[path = "cleanup_desktop_dashboard_tests.rs"]
-mod tests_desktop_dashboard;
-
-#[cfg(test)]
-#[path = "cleanup_deck_geometry_tests.rs"]
-mod tests_deck_geometry;
+#[path = "cleanup_tests_mounts.rs"]
+mod test_modules;

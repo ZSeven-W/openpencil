@@ -161,10 +161,10 @@ fn remove_selected_fill_clears_the_variable_ref() {
     s.set_single_selection(NodeId::new("n1"));
     // Mirror a `$ref` fill: bind writes `$name` into fill[0] + fill_refs.
     let node = find_node_mut(s.active_children_mut(), &NodeId::new("n1")).unwrap();
-    crate::fills::set_primary_fill_hex(node, "$color-info-bg");
+    crate::fills::set_primary_fill_hex(node, "$--color-info");
     s.ui.variables
         .fill_refs
-        .insert(NodeId::new("n1"), "color-info-bg".to_string());
+        .insert(NodeId::new("n1"), "--color-info".to_string());
 
     assert!(s.remove_selected_fill(0), "remove must report success");
 

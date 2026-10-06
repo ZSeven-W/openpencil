@@ -7,6 +7,8 @@ use jian_core::layout::measure::{FontStyleKind, MeasureBackend, MeasureRequest, 
 
 #[path = "tests/image_cache.rs"]
 mod image_cache;
+#[path = "tests/shader.rs"]
+mod shader;
 #[path = "tests/text_shaping.rs"]
 mod text_shaping;
 #[path = "tests/vector_paint.rs"]

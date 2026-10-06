@@ -24,7 +24,7 @@ pub(super) fn apply_nav_surface_fill(nav: &mut Value, role: &str) -> bool {
     };
     obj.insert(
         "fill".to_string(),
-        json!([{ "type": "solid", "color": "$color-surface" }]),
+        json!([{ "type": "solid", "color": "$--card" }]),
     );
     // Lift shadow only when no effects were authored. Bottom nav → shadow
     // points up (offsetY < 0); top/other nav → down.

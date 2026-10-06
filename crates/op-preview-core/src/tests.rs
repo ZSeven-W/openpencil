@@ -61,6 +61,7 @@ fn enter_input_exit_leaves_document_byte_identical() {
             false,
             false,
             test_measure(),
+            0,
         )
         .expect("enter preview");
         session.set_now_ms(0);
@@ -88,6 +89,7 @@ fn dispatched_text_reaches_runtime_state_graph() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
     session.set_now_ms(0);
@@ -120,6 +122,7 @@ fn overlay_reflects_typed_text() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
     session.set_now_ms(0);
@@ -148,7 +151,7 @@ fn preview_shows_resolved_color_in_scene() {
         "formatVersion": "1.1",
         "id": "x",
         "app": { "name": "x", "version": "1", "id": "x" },
-        "variables": { "color-brand": { "type": "color", "value": "#ff8800" } },
+        "variables": { "--primary": { "type": "color", "value": "#ff8800" } },
         "children": [
             {
                 "type": "frame", "id": "screen", "width": 200, "height": 200,
@@ -156,7 +159,7 @@ fn preview_shows_resolved_color_in_scene() {
                     {
                         "type": "rectangle", "id": "swatch",
                         "x": 0, "y": 0, "width": 100, "height": 100,
-                        "fill": [{ "type": "solid", "color": "$color-brand" }]
+                        "fill": [{ "type": "solid", "color": "$--primary" }]
                     }
                 ]
             }
@@ -173,6 +176,7 @@ fn preview_shows_resolved_color_in_scene() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
 
@@ -221,6 +225,7 @@ fn preview_shows_resolved_text_token() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
 
@@ -270,6 +275,7 @@ fn overlay_reflects_widget_toggle_on_tap() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
     session.set_now_ms(0);
@@ -329,6 +335,7 @@ fn tap_translates_scene_space_to_runtime_for_offset_root() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
 
@@ -422,6 +429,7 @@ fn preview_layout_matches_design_canvas() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
 
@@ -515,6 +523,7 @@ fn preview_children_stay_within_root_width() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
 
@@ -618,6 +627,7 @@ fn preview_lays_each_root_against_its_own_size() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview");
 

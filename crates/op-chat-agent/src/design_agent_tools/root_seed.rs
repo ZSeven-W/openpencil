@@ -4,11 +4,20 @@
 //! `design_agent_tools.rs` to keep the spine under the 800-line cap.
 
 use super::*;
+use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RootSeedTarget {
     Mobile,
     Desktop,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct MobileNormalizeReport {
+    pub status_bars_inserted: usize,
+    pub status_bars_replaced: usize,
+    pub duplicate_status_bars_removed: usize,
+    pub viewport_heights_fixed: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,6 +118,60 @@ pub fn root_seed_prompt_is_mobile(prompt: &str) -> bool {
         .any(|word| matches!(word, "mobile" | "app" | "phone" | "ios" | "android"))
 }
 
+/// Bring every mobile-sized top-level screen in `state` to the product's
+/// canonical shape, whatever path produced it.
+pub fn normalize_mobile_screens(state: &mut EditorState) -> MobileNormalizeReport {
+    let mut report = MobileNormalizeReport::default();
+    let mobile_root_indices = state
+        .active_children()
+        .iter()
+        .enumerate()
+        .filter_map(|(index, node)| is_mobile_sized_root(node).then_some(index))
+        .collect::<Vec<_>>();
+
+    for index in mobile_root_indices {
+        let Some(root) = state.active_children_mut().get_mut(index) else {
+            continue;
+        };
+        let change = apply_mobile_status_bar(root, true);
+        report.status_bars_inserted += change.inserted;
+        report.status_bars_replaced += change.replaced;
+
+        let has_canonical_status_bar = root
+            .children()
+            .into_iter()
+            .flatten()
+            .any(is_canonical_status_bar);
+        if has_canonical_status_bar && is_fit_content_height(root) {
+            root.set_height_px(812.0);
+            report.viewport_heights_fixed += 1;
+        }
+    }
+
+    // Run this after replacement/insertion as well as for bars that were
+    // already canonical, so a root with several hand-drawn bars is fully
+    // canonical in this same pass and the next pass is idempotent.
+    report.duplicate_status_bars_removed = remove_nested_duplicate_status_bars(state);
+    report
+}
+
+fn is_mobile_sized_root(node: &PenNode) -> bool {
+    matches!(node, PenNode::Frame(_))
+        && node
+            .width_px()
+            .is_some_and(|width| width.is_finite() && (320.0..=430.0).contains(&width))
+}
+
+fn is_fit_content_height(node: &PenNode) -> bool {
+    let PenNode::Frame(frame) = node else {
+        return false;
+    };
+    matches!(
+        frame.container.height,
+        Some(SizingBehavior::Keyword(SizingKeyword::FitContent))
+    )
+}
+
 pub(super) fn should_track_root_seed_candidate(
     _state: &EditorState,
     name: &str,
@@ -199,52 +262,9 @@ pub(super) fn inject_mobile_status_bar_if_missing(
         let Some(root) = state.active_children_mut().get_mut(index) else {
             continue;
         };
-        // OS chrome has exactly one canonical form. A model-built status bar
-        // (name matches, structure doesn't — no role, ad-hoc children) is
-        // REPLACED in place rather than kept: every hand-rolled variant we
-        // measured deviated visibly from the iOS reference (GLM-5.2 2026-07-11).
-        let noncanonical_index = root
-            .children()
-            .into_iter()
-            .flatten()
-            .position(|child| is_status_bar_node(child) && !is_canonical_status_bar(child));
-        if let Some(index) = noncanonical_index {
-            let root_id = root.id_str().to_string();
-            let fill_hex = op_editor_core::first_solid_fill_hex(root)
-                .unwrap_or("#ffffff")
-                .to_string();
-            let width = root.width_px().unwrap_or(390.0);
-            if let Ok(bar) =
-                op_orchestrator::scaffold::mobile_status_bar_node(&root_id, &fill_hex, width)
-            {
-                if let Some(children) = root.children_mut() {
-                    children[index] = bar;
-                    replaced = true;
-                }
-            }
-            continue;
-        }
-        if root
-            .children()
-            .into_iter()
-            .flatten()
-            .any(is_status_bar_node)
-        {
-            continue;
-        }
-        let root_id = root.id_str().to_string();
-        let fill_hex = op_editor_core::first_solid_fill_hex(root)
-            .unwrap_or("#ffffff")
-            .to_string();
-        let width = root.width_px().unwrap_or(390.0);
-        let Ok(bar) = op_orchestrator::scaffold::mobile_status_bar_node(&root_id, &fill_hex, width)
-        else {
-            continue;
-        };
-        if let Some(children) = root.children_mut() {
-            children.insert(0, bar);
-            inserted = true;
-        }
+        let change = apply_mobile_status_bar(root, false);
+        replaced |= change.replaced > 0;
+        inserted |= change.inserted > 0;
     }
     if replaced {
         Some(
@@ -261,6 +281,85 @@ pub(super) fn inject_mobile_status_bar_if_missing(
     } else {
         None
     }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct MobileStatusBarChange {
+    inserted: usize,
+    replaced: usize,
+}
+
+/// Apply the shared canonical status-bar construction to one root. The
+/// `initialize_missing_children` flag is only for the public full-state
+/// normalizer; the historical root-seed hook keeps its prior no-op behavior
+/// for a frame whose optional children field is absent.
+fn apply_mobile_status_bar(
+    root: &mut PenNode,
+    initialize_missing_children: bool,
+) -> MobileStatusBarChange {
+    // OS chrome has exactly one canonical form. A model-built status bar
+    // (name matches, structure doesn't — no role, ad-hoc children) is
+    // REPLACED in place rather than kept: every hand-rolled variant we
+    // measured deviated visibly from the iOS reference (GLM-5.2 2026-07-11).
+    let noncanonical_index = root
+        .children()
+        .into_iter()
+        .flatten()
+        .position(|child| is_status_bar_node(child) && !is_canonical_status_bar(child));
+    if let Some(index) = noncanonical_index {
+        let root_id = root.id_str().to_string();
+        let fill_hex = op_editor_core::first_solid_fill_hex(root)
+            .unwrap_or("#ffffff")
+            .to_string();
+        let width = root.width_px().unwrap_or(390.0);
+        let Ok(bar) = op_orchestrator::scaffold::mobile_status_bar_node(&root_id, &fill_hex, width)
+        else {
+            return MobileStatusBarChange::default();
+        };
+        if let Some(children) = root.children_mut() {
+            children[index] = bar;
+            return MobileStatusBarChange {
+                replaced: 1,
+                ..Default::default()
+            };
+        }
+        return MobileStatusBarChange::default();
+    }
+    if root
+        .children()
+        .into_iter()
+        .flatten()
+        .any(is_status_bar_node)
+    {
+        return MobileStatusBarChange::default();
+    }
+
+    let root_id = root.id_str().to_string();
+    let fill_hex = op_editor_core::first_solid_fill_hex(root)
+        .unwrap_or("#ffffff")
+        .to_string();
+    let width = root.width_px().unwrap_or(390.0);
+    let Ok(bar) = op_orchestrator::scaffold::mobile_status_bar_node(&root_id, &fill_hex, width)
+    else {
+        return MobileStatusBarChange::default();
+    };
+    if let Some(children) = root.children_mut() {
+        children.insert(0, bar);
+        return MobileStatusBarChange {
+            inserted: 1,
+            ..Default::default()
+        };
+    }
+    if initialize_missing_children {
+        if let PenNode::Frame(frame) = root {
+            frame.children = Some(vec![bar]);
+            return MobileStatusBarChange {
+                inserted: 1,
+                ..Default::default()
+            };
+        }
+    }
+    MobileStatusBarChange::default()
 }
 
 /// The injected/scaffold chrome shape: role tag + the Time/Levels pair.

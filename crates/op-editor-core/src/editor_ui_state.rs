@@ -17,11 +17,13 @@ mod defaults;
 mod exports;
 pub mod git_panel;
 pub mod groups;
+pub mod home;
 mod methods;
 pub mod pickers;
 pub mod slides_panel_state;
 #[cfg(test)]
 mod tests;
+pub mod workspace;
 
 pub use exports::*;
 
@@ -44,6 +46,11 @@ pub struct EditorUiState {
     pub sidebar_open: bool,
     pub layer_panel_width: f32,
     pub property_panel_width: f32,
+    /// Whether this session's one-time Chat-tab width bump has run (see
+    /// `CHAT_TAB_MIN_WIDTH`). Transient by design — a fresh session gets
+    /// one bump again, and the user's own drag is never overridden after
+    /// it. Never serialized.
+    pub chat_tab_width_bumped: bool,
     /// Responsive layout: live size class, touch density (≥44pt targets,
     /// bottom dock, sheets), and the single open mobile sheet.
     pub size_class: crate::size_class::EditorSizeClass,
@@ -61,8 +68,26 @@ pub struct EditorUiState {
     /// Page-lifetime color scheme imposed by an embedding host. Paint-only;
     /// separate from `theme_mode`, so host theme changes never persist.
     pub host_theme_override: Option<ThemeMode>,
+    /// First-launch surface preference. Home and Canvas share one document;
+    /// this only decides which chrome is visible when the app starts without
+    /// a file argument.
+    pub entry_surface: EntrySurface,
+    /// Drafting-table Home chrome state. Transient except for
+    /// `entry_surface`, which is persisted in app settings.
+    pub home: HomeState,
+    /// Studio generation-workspace chrome state (docked chat + real
+    /// canvas on the same document). Fully transient — never persisted.
+    pub workspace: WorkspaceState,
     /// UI locale — TopBar Globe cycles.
     pub locale: Locale,
+    /// A runtime catalog selected in the web picker but not installed yet.
+    /// Transient by design: settings persist only after the catalog is ready
+    /// and the selection becomes [`Self::locale`].
+    pub pending_locale: Option<Locale>,
+    /// Locale value browser settings must preserve while the painted locale is
+    /// temporarily older than an unavailable account preference. Transient and
+    /// never serialized as a field; cleared once a ready choice becomes active.
+    pub locale_persistence_override: Option<Locale>,
     /// Page-lifetime locale imposed by an embedding host. Presentation-only
     /// like the host theme; never persisted as the user's locale.
     pub host_locale_override: Option<Locale>,

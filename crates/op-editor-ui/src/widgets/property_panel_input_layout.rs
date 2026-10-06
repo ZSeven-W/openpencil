@@ -172,8 +172,15 @@ pub fn editable_input_rects(
         y += SECTION_GAP;
     }
     if visible.image {
-        y += crate::widgets::property_panel_image_node::image_section_height(visible.image_warning);
+        y += crate::widgets::property_panel_image_node::image_section_height_with_video(
+            visible.image_warning,
+            visible.video,
+        );
         y += SECTION_GAP;
+    }
+    if visible.video {
+        crate::widgets::property_panel_video::push_video_input_rects(&mut rects, x0, y, w);
+        y += crate::widgets::property_panel_video::video_section_height();
     }
     if visible.opacity {
         y += SECTION_HEADER_HEIGHT;

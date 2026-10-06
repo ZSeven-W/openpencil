@@ -355,6 +355,9 @@ fn describe_patch(before: Option<&Value>, patch_json: &str) -> String {
     let Some(fields) = patch.as_object() else {
         return format!("patched {}", elide(patch_json));
     };
+    if let Some(detail) = describe_category_grid_reflow(before, fields) {
+        return detail;
+    }
     let mut parts = Vec::new();
     for (key, after) in fields {
         let prior = before.and_then(|value| value.get(key));
@@ -371,6 +374,132 @@ fn describe_patch(before: Option<&Value>, patch_json: &str) -> String {
         return "patched (no field change)".to_string();
     }
     parts.join(", ")
+}
+
+fn describe_category_grid_reflow(
+    before: Option<&Value>,
+    fields: &serde_json::Map<String, Value>,
+) -> Option<String> {
+    let before = before?;
+    let next_children = fields.get("children")?.as_array()?;
+    let before_counts = horizontal_row_counts(before)?;
+    let after = before.as_object()?.clone();
+    let mut after = Value::Object(after);
+    after["children"] = Value::Array(next_children.clone());
+    let after_counts = horizontal_row_counts(&after)?;
+    let total = before_counts.iter().sum::<usize>();
+    if before_counts.len() < 2
+        || total < 6
+        || before_counts.iter().any(|count| *count > 4)
+        || after_counts != category_grid_target_row_lengths(total)
+        || !reflow_rows_have_canonical_layout(&after)
+    {
+        return None;
+    }
+
+    let name = before
+        .get("name")
+        .and_then(Value::as_str)
+        .filter(|name| !name.trim().is_empty())
+        .or_else(|| before.get("id").and_then(Value::as_str))?;
+    let mut detail = format!(
+        "category-grid-reflow · {name} · {} → {}",
+        format_row_counts(&before_counts, "×"),
+        format_row_counts(&after_counts, "+")
+    );
+    if numeric_tile_width_count(before) > 0 {
+        detail.push_str("; numeric tile width(s) dropped → fill_container");
+    }
+    Some(detail)
+}
+
+fn horizontal_row_counts(value: &Value) -> Option<Vec<usize>> {
+    if value.get("type").and_then(Value::as_str) != Some("frame")
+        || value.get("layout").and_then(Value::as_str) != Some("vertical")
+    {
+        return None;
+    }
+    let rows = value.get("children").and_then(Value::as_array)?;
+    if !(2..=3).contains(&rows.len()) {
+        return None;
+    }
+    rows.iter()
+        .map(|row| {
+            (row.get("type").and_then(Value::as_str) == Some("frame")
+                && row.get("layout").and_then(Value::as_str) == Some("horizontal"))
+            .then(|| row.get("children").and_then(Value::as_array).map(Vec::len))
+            .flatten()
+        })
+        .collect()
+}
+
+fn reflow_rows_have_canonical_layout(value: &Value) -> bool {
+    value
+        .get("children")
+        .and_then(Value::as_array)
+        .is_some_and(|rows| {
+            rows.iter().all(|row| {
+                row.get("gap").and_then(Value::as_f64) == Some(12.0)
+                    && row.get("justifyContent").and_then(Value::as_str) == Some("start")
+                    && row.get("width").and_then(Value::as_str) == Some("fill_container")
+                    && row.get("height").and_then(Value::as_str) == Some("fit_content")
+                    && row
+                        .get("children")
+                        .and_then(Value::as_array)
+                        .is_some_and(|tiles| {
+                            tiles.iter().all(|tile| {
+                                tile.get("width").and_then(Value::as_str) == Some("fill_container")
+                            })
+                        })
+            })
+        })
+}
+
+fn numeric_tile_width_count(value: &Value) -> usize {
+    value
+        .get("children")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .flat_map(|row| {
+            row.get("children")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+        })
+        .filter(|tile| tile.get("width").and_then(Value::as_f64).is_some())
+        .count()
+}
+
+fn category_grid_target_row_lengths(tile_count: usize) -> Vec<usize> {
+    if matches!(tile_count % 5, 1 | 2) {
+        let row_count = tile_count.div_ceil(5);
+        let base = tile_count / row_count;
+        let extra = tile_count % row_count;
+        return (0..row_count)
+            .map(|index| base + usize::from(index < extra))
+            .collect();
+    }
+
+    let mut lengths = Vec::new();
+    let mut remaining = tile_count;
+    while remaining > 0 {
+        let length = remaining.min(5);
+        lengths.push(length);
+        remaining -= length;
+    }
+    lengths
+}
+
+fn format_row_counts(counts: &[usize], separator: &str) -> String {
+    if separator == "×" && counts.len() > 1 && counts.windows(2).all(|pair| pair[0] == pair[1]) {
+        return format!("{}×{}", counts[0], counts.len());
+    }
+    counts
+        .iter()
+        .map(usize::to_string)
+        .collect::<Vec<_>>()
+        .join(separator)
 }
 
 /// Bounded node-and-field diff of a whole-subtree swap.

@@ -17,6 +17,35 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // The result view is retired; the workspace is not a takeover,
+        // so Escape in it walks the ordinary ladder (chat focus first,
+        // then selection).
+        // Home is the same kind of takeover, and its own overlays peel
+        // off first: the connect card, the 更多 popover, the inline
+        // replace strip, then the Home-anchored model picker. (The
+        // settings / sign-in modals Home opens are closed by their own
+        // rungs further down this ladder.)
+        if self.editor_state.editor_ui.home.visible {
+            if self.editor_state.editor_ui.home.connect_card_open {
+                self.editor_state.editor_ui.home.connect_card_open = false;
+                self.mark_dirty();
+                return true;
+            }
+            if self.editor_state.editor_ui.home.more_open {
+                self.editor_state.editor_ui.home.more_open = false;
+                self.mark_dirty();
+                return true;
+            }
+            if self.editor_state.editor_ui.home.replace_pending {
+                self.editor_state.editor_ui.home.keep_draft();
+                self.mark_dirty();
+                return true;
+            }
+            if self.editor_state.editor_ui.escape_chat_model_picker() {
+                self.mark_dirty();
+                return true;
+            }
+        }
         // Escape EXITS preview mode (top priority) — drops the runtime
         // and returns to the design surface.
         if self.preview.is_some() {

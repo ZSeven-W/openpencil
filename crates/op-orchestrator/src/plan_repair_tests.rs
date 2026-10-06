@@ -249,6 +249,7 @@ fn req(prompt: &str) -> DesignRequest {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     }
 }
 
@@ -278,6 +279,7 @@ fn req_with_design_md(prompt: &str) -> DesignRequest {
 
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     }
 }
 

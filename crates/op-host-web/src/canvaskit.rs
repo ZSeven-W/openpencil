@@ -13,7 +13,7 @@
 //!
 //! * `bindings` — the `op_ck_bridge.js` / `op_ck_image_cache.js` FFI blocks
 //! * `convert`  — pure DPR / gradient / enum-code helpers
-//! * `backend`  — `CanvasKitBackend` + `init_backend`
+//! * `backend` / `backend_state` — `CanvasKitBackend`, state methods, and init
 //! * `ops`      — the flat `OpCk` draw-call bodies the `RenderBackend` impl forwards to
 //! * `inner`    — `CkInner` live shell state + daemon bootstrap
 //! * `mount`    — the body of `mount_ck`
@@ -22,6 +22,7 @@ use op_editor_ui::{Color, Point2D, Rect, RenderBackend};
 use wasm_bindgen::prelude::*;
 
 mod backend;
+mod backend_state;
 mod bindings;
 mod convert;
 mod inner;

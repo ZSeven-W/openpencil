@@ -113,12 +113,18 @@ fn a_page_with_no_boards_has_nothing_to_list_and_shows_no_tab() {
     empty.last_viewport_h = VH;
     empty.editor_state.active_children_mut().clear();
     assert!(op_editor_core::preview_slideshow::active_page_boards(&empty.editor_state).is_empty());
-    assert!(empty.slides_tab_row(VW, VH).is_none());
+    // The row itself now always exists — 对话 and 图层 are offered on
+    // every document. What a board-less page must not offer is the
+    // SLIDES tab, so the row comes back with a zero-width slides rect
+    // and a stale Slides selection cannot strand the rail.
+    let row = empty.slides_tab_row(VW, VH).expect("the rail always tabs");
+    assert_eq!(row.slides.size.x, 0.0, "no slides tab without boards");
+    assert!(row.chat.size.x > 0.0 && row.layers.size.x > 0.0);
     assert!(empty.slides_panel_frame(VW, VH).is_none());
     assert_eq!(
         empty.layers_content_rect(VW, VH).origin.y,
-        op_editor_ui::widgets::TOP_BAR_HEIGHT,
-        "and the layer tree keeps the whole rail"
+        row.row.origin.y + row.row.size.y,
+        "and the layer tree starts under the tab row"
     );
 }
 
@@ -473,13 +479,14 @@ fn the_wheel_over_the_rail_scrolls_the_list_and_not_the_canvas() {
 #[test]
 fn the_rail_resize_gutter_drags_narrower_as_well_as_wider() {
     let _guard = test_lock();
-    let start = {
-        let host = host_with(Some(TemplateScene::Slides));
-        host.editor_state.editor_ui.layer_panel_width
-    };
     let y = op_editor_ui::widgets::TOP_BAR_HEIGHT + 200.0;
 
     let mut host = host_with(Some(TemplateScene::Slides));
+    // Start wide of the 240 px floor so the drag arithmetic is visible:
+    // the rail now clamps to 240–440, and a 40 px narrowing from the
+    // default 240 would simply sit on the clamp.
+    host.editor_state.editor_ui.layer_panel_width = 320.0;
+    let start = 320.0_f32;
     host.apply_press(start, y, VW, VH);
     assert!(
         host.is_resizing_panel(),
@@ -495,6 +502,7 @@ fn the_rail_resize_gutter_drags_narrower_as_well_as_wider() {
     assert!(!host.is_resizing_panel());
 
     let mut host = host_with(Some(TemplateScene::Slides));
+    host.editor_state.editor_ui.layer_panel_width = start;
     host.apply_press(start, y, VW, VH);
     host.apply_cursor_move(start + 40.0, y);
     assert_eq!(
@@ -511,7 +519,9 @@ fn the_rail_resize_gutter_drags_narrower_as_well_as_wider() {
 fn the_inner_half_of_the_gutter_starts_a_resize_too() {
     let _guard = test_lock();
     let mut host = host_with(Some(TemplateScene::Slides));
-    let start = host.editor_state.editor_ui.layer_panel_width;
+    // Same reason as above: start wide of the 240 px floor.
+    host.editor_state.editor_ui.layer_panel_width = 320.0;
+    let start = 320.0_f32;
     let y = op_editor_ui::widgets::TOP_BAR_HEIGHT + 200.0;
     host.apply_press(start - 2.0, y, VW, VH);
     assert!(

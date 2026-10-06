@@ -31,6 +31,9 @@
 
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::style::{PenFill, ShaderFillBody, ShaderUniformValue};
+use op_util::shader_preset::{
+    resolve_num_octaves, OctaveResolution, DEFAULT_NUM_OCTAVES, MAX_NUM_OCTAVES, MIN_NUM_OCTAVES,
+};
 use serde_json::Value;
 
 use crate::design_form::DesignForm;
@@ -125,15 +128,56 @@ fn shader_issues(node_id: &str, shader: &ShaderFillBody) -> Vec<Issue> {
         reason,
     };
 
-    let chars = shader.sksl.chars().count();
-    if chars > MAX_SKSL_CHARS {
-        issues.push(info(
-            format!(
-                "SkSL source is {chars} characters (limit {MAX_SKSL_CHARS}); the source is stored \
-                 raw in the document, and a shader this large is usually pasted rather than authored"
-            ),
-            Value::from(chars),
-        ));
+    match shader.preset.as_deref() {
+        Some("turbulence") => {
+            if shader
+                .sksl
+                .as_deref()
+                .is_some_and(|source| !source.trim().is_empty())
+            {
+                issues.push(info(
+                    "shader preset `turbulence` takes precedence, so the non-empty authored SkSL is ignored"
+                        .to_string(),
+                    Value::from("turbulence"),
+                ));
+            }
+            issues.extend(turbulence_issues(node_id, shader));
+        }
+        Some(preset) => {
+            let has_authored_fallback = shader
+                .sksl
+                .as_deref()
+                .is_some_and(|source| !source.trim().is_empty());
+            let fallback = if has_authored_fallback {
+                "the loader falls back to the non-empty authored SkSL"
+            } else {
+                "without non-empty authored SkSL this fill does not render"
+            };
+            issues.push(info(
+                format!("unknown shader preset `{preset}`; {fallback}"),
+                Value::from(preset),
+            ));
+        }
+        None => {}
+    }
+
+    // The loader replaces both absent and authored source for the recognized
+    // preset, so linting that ignored source would report a non-rendered cost.
+    // Unknown presets are treated as absent by the loader and retain raw-SkSL
+    // compatibility, so their source still follows the ordinary size check.
+    if shader.preset.as_deref() != Some("turbulence") {
+        if let Some(sksl) = shader.sksl.as_deref() {
+            let chars = sksl.chars().count();
+            if chars > MAX_SKSL_CHARS {
+                issues.push(info(
+                    format!(
+                        "SkSL source is {chars} characters (limit {MAX_SKSL_CHARS}); the source is stored \
+                         raw in the document, and a shader this large is usually pasted rather than authored"
+                    ),
+                    Value::from(chars),
+                ));
+            }
+        }
     }
 
     if let Some(uniforms) = shader.uniforms.as_ref() {
@@ -161,6 +205,65 @@ fn shader_issues(node_id: &str, shader: &ShaderFillBody) -> Vec<Issue> {
             }
         }
     }
+    issues
+}
+
+fn turbulence_issues(node_id: &str, shader: &ShaderFillBody) -> Vec<Issue> {
+    let Some(uniforms) = shader.uniforms.as_ref() else {
+        return Vec::new();
+    };
+    let issue = |reason: String, current: Value| Issue {
+        node_id: node_id.to_string(),
+        category: IssueCategory::ShaderInvalid,
+        severity: IssueSeverity::Warning,
+        property: FixProperty::Fill,
+        current_value: current,
+        suggested_value: Value::Null,
+        reason,
+    };
+    let mut issues = Vec::new();
+
+    if let Some(value) = uniforms.get("numOctaves") {
+        match value {
+            ShaderUniformValue::Float(value) => match resolve_num_octaves(*value) {
+                OctaveResolution::Exact(_) => {}
+                OctaveResolution::Clamped(effective) => issues.push(issue(
+                    format!(
+                        "numOctaves {value} is outside the supported range {MIN_NUM_OCTAVES}..={MAX_NUM_OCTAVES}; the turbulence loader clamps it to {effective}"
+                    ),
+                    Value::from(*value),
+                )),
+                OctaveResolution::Defaulted => issues.push(issue(
+                    format!(
+                        "numOctaves {value} must be a finite integer; the turbulence loader falls back to the default {DEFAULT_NUM_OCTAVES}"
+                    ),
+                    Value::from(*value),
+                )),
+            },
+            ShaderUniformValue::Vec(_) | ShaderUniformValue::Color(_) => issues.push(issue(
+                format!(
+                    "numOctaves must be a number; the turbulence loader falls back to the default {DEFAULT_NUM_OCTAVES}"
+                ),
+                Value::from("numOctaves"),
+            )),
+        }
+    }
+
+    if let Some(value) = uniforms.get("baseFrequency") {
+        let is_non_positive = match value {
+            ShaderUniformValue::Float(value) => *value <= 0.0,
+            ShaderUniformValue::Vec(values) => values.iter().any(|value| *value <= 0.0),
+            ShaderUniformValue::Color(_) => false,
+        };
+        if is_non_positive {
+            issues.push(issue(
+                "baseFrequency must stay positive on every axis; zero or negative values make turbulence degenerate to a constant"
+                    .to_string(),
+                Value::from("baseFrequency"),
+            ));
+        }
+    }
+
     issues
 }
 

@@ -16,14 +16,13 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::Arc;
 use std::thread;
 
-use op_ai::chat_provider::ChatProvider;
+use op_ai::chat_provider::{ChatAttachment, ChatProvider};
 use op_editor_core::{DocRect, EditorCommand, EditorState, Viewport};
 pub use op_editor_host_core::design::{DesignCmdReq, DesignDelta, DesignSession, RemoteDocSink};
-use op_editor_ui::widgets::TOP_BAR_HEIGHT;
 use op_orchestrator::{
     AbortFlag, DesignRequest, DocSink, LlmClient, Orchestrator, Progress,
     SkippedScreenshotProvider, SkippedVisionLlmClient, SpawnAgentResult, SpawnAgentSpec,
-    ValidationProviders,
+    ValidationProviders, VisionLlmClient,
 };
 
 use crate::chat_runtime::block_on_anywhere;
@@ -40,11 +39,18 @@ use crate::validation_providers::{
 /// the no-op stubs so the default path is unchanged. Pass the same
 /// `Arc<dyn ChatProvider>` that backs the design `llm` so the vision call
 /// reuses the user's selected auth/model.
+///
+/// `attachments` are the chat turn's staged attachments (C1 M2 desktop
+/// parity with the web route): a reference trigger in the prompt plus an
+/// image attachment drives the vision-based design.md + skeleton
+/// extraction before the orchestrator run.
+#[allow(clippy::too_many_arguments)]
 pub fn start<L: LlmClient + Send + 'static>(
     llm: L,
     request: DesignRequest,
     initial_state: EditorState,
     vision_provider: Option<Arc<dyn ChatProvider>>,
+    attachments: Vec<ChatAttachment>,
 ) -> DesignSession {
     let (delta_tx, delta_rx) = mpsc::channel::<DesignDelta>();
     let (cmd_tx, cmd_rx) = mpsc::channel::<DesignCmdReq>();
@@ -66,6 +72,7 @@ pub fn start<L: LlmClient + Send + 'static>(
                 indicator_epoch,
                 worker_abort,
                 vision_provider,
+                attachments,
             )
         })
     {
@@ -96,9 +103,14 @@ pub fn run_design_worker<L: LlmClient + Send>(
     indicator_epoch: u64,
     abort: AbortFlag,
     vision_provider: Option<Arc<dyn ChatProvider>>,
+    attachments: Vec<ChatAttachment>,
 ) {
     let mut sink = RemoteDocSink::new(cmd_tx, initial_state);
     let pre_validator = LintPreValidator;
+
+    // Cloned before the Class-C selection below consumes `vision_provider`:
+    // the C1 M2 image-attachment reference branch reuses the same provider.
+    let reference_vision_provider = vision_provider.clone();
 
     // ── Class-C vision-validation provider selection (Track-1 Step 3) ──────────
     // REAL providers only when a vision `ChatProvider` was supplied AND
@@ -138,8 +150,62 @@ pub fn run_design_worker<L: LlmClient + Send>(
         };
         block_on_anywhere(async {
             let mut request = request;
-            maybe_generate_design_md_for_follow_on_screen(&llm, &mut request, &mut sink, &abort)
+            let reference_used = match crate::reference_context::resolve_reference_context(
+                &llm,
+                &request.prompt,
+                request.model.clone(),
+                request.provider.clone(),
+                &abort,
+            )
+            .await
+            {
+                Ok(Some(context)) => {
+                    request.reference_skeleton = context.skeleton;
+                    request.design_md = Some(context.design_md.clone());
+                    let _ = sink.apply(EditorCommand::SetDesignMd {
+                        spec: Box::new(context.design_md),
+                    });
+                    true
+                }
+                Ok(None) => {
+                    // C1 M2 desktop parity with the web route
+                    // (`web_chat_standard::stream_new_design_route`): a
+                    // reference trigger plus an image attachment drives
+                    // vision-based design.md + skeleton extraction.
+                    image_reference_fallback(
+                        reference_vision_provider.as_ref(),
+                        &attachments,
+                        &mut request,
+                        &mut sink,
+                        &mut on_progress,
+                    )
+                }
+                Err(error) => {
+                    let reason = format!("reference page could not be used: {error}");
+                    eprintln!("[design-session] {reason}");
+                    on_progress(Progress::ReferenceUnavailable {
+                        reason: reason.clone(),
+                    });
+                    // Same as the web route: a page that could not be used
+                    // still leaves an attached screenshot as a reference.
+                    image_reference_fallback(
+                        reference_vision_provider.as_ref(),
+                        &attachments,
+                        &mut request,
+                        &mut sink,
+                        &mut on_progress,
+                    )
+                }
+            };
+            if !reference_used {
+                maybe_generate_design_md_for_follow_on_screen(
+                    &llm,
+                    &mut request,
+                    &mut sink,
+                    &abort,
+                )
                 .await;
+            }
             Orchestrator::new()
                 .with_indicator_epoch(indicator_epoch)
                 .run(
@@ -154,6 +220,75 @@ pub fn run_design_worker<L: LlmClient + Send>(
         })
     };
     let _ = delta_tx.send(DesignDelta::Done(summary));
+}
+
+/// The image half of the reference resolution, shared by the "no URL" and
+/// "URL failed" arms: without a vision-capable provider it is a no-op.
+fn image_reference_fallback(
+    reference_vision_provider: Option<&Arc<dyn ChatProvider>>,
+    attachments: &[ChatAttachment],
+    request: &mut DesignRequest,
+    sink: &mut dyn DocSink,
+    on_progress: &mut dyn FnMut(Progress),
+) -> bool {
+    match reference_vision_provider {
+        Some(provider) => {
+            let vision =
+                ChatVisionLlmClient::new(provider.clone()).with_model(request.model.clone());
+            apply_image_reference_branch(attachments, &vision, request, sink, on_progress)
+        }
+        None => false,
+    }
+}
+
+/// C1 M2 image-attachment reference branch — the desktop parity of the web
+/// route's `web_chat_standard_reference::resolve_image_reference` /
+/// `apply_image_reference` pair. Runs after URL reference resolution
+/// returned `Ok(None)`.
+///
+/// Three states:
+/// - reference trigger in the prompt + an image attachment → vision
+///   extraction; `Ok` writes the skeleton + design.md onto the request and
+///   persists the design.md (caller skips the follow-on auto design.md);
+/// - trigger + attachments but no image among them → `ReferenceUnavailable`
+///   progress, standard route continues;
+/// - no trigger, or no attachments at all → silent no-op (`false`).
+fn apply_image_reference_branch(
+    attachments: &[ChatAttachment],
+    vision: &dyn VisionLlmClient,
+    request: &mut DesignRequest,
+    sink: &mut dyn DocSink,
+    on_progress: &mut dyn FnMut(Progress),
+) -> bool {
+    if !op_orchestrator::has_reference_trigger(&request.prompt) || attachments.is_empty() {
+        return false;
+    }
+    let result = match crate::reference_context::first_image_attachment(attachments) {
+        Some(image) => crate::reference_context::reference_context_from_image(
+            vision,
+            image,
+            &request.prompt,
+            request.model.clone(),
+            request.provider.clone(),
+        ),
+        None => Err(crate::reference_context::ReferenceContextError::NotAnImage),
+    };
+    match result {
+        Ok(context) => {
+            request.reference_skeleton = context.skeleton;
+            request.design_md = Some(context.design_md.clone());
+            let _ = sink.apply(EditorCommand::SetDesignMd {
+                spec: Box::new(context.design_md),
+            });
+            true
+        }
+        Err(error) => {
+            let reason = format!("reference screenshot could not be used: {error}");
+            eprintln!("[design-session] {reason}");
+            on_progress(Progress::ReferenceUnavailable { reason });
+            false
+        }
+    }
 }
 
 /// Spawn a worker that retries exactly ONE previously-failed subtask against
@@ -440,20 +575,22 @@ pub fn design_canvas_size(
     viewport_width: f32,
     viewport_height: f32,
 ) -> (f32, f32) {
-    let canvas_left = if state.editor_ui.sidebar_open {
-        state.editor_ui.layer_panel_width
-    } else {
-        0.0
-    };
-    let canvas_right = if state.right_rail_visible() {
-        viewport_width - state.editor_ui.property_panel_width
-    } else {
-        viewport_width
-    };
-    (
-        (canvas_right - canvas_left).max(0.0),
-        (viewport_height - TOP_BAR_HEIGHT).max(0.0),
-    )
+    // Delegate to the ONE function the hosts paint the canvas widget
+    // with. This used to re-derive the size from the sidebar and the
+    // property panel alone, which is right for the professional editor
+    // and wrong everywhere else: the Studio workspace docks the chat on
+    // the left and reserves a deck strip at the bottom, so the design
+    // pipeline's own auto-fit centred each run's boards for a canvas
+    // 320 px wider and 218 px taller than the one they were drawn into,
+    // and every generated deck sat low and right of centre with its last
+    // board clipped (measured 2026-09-13). Two fits, two answers; the
+    // painter's answer is the only one that can be correct.
+    let (_, _, canvas_w, canvas_h) = op_editor_ui::widgets::host_canvas_geometry::canvas_region(
+        state,
+        viewport_width,
+        viewport_height,
+    );
+    (canvas_w, canvas_h)
 }
 
 #[cfg(test)]

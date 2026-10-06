@@ -160,6 +160,23 @@ CARDS = [
      [f"ledger-tick-deck-{i:02d}.png" for i in range(1, 8)]),
     ("brand-concept-sheet", "brand-concept-sheet.png"),
     ("logo-qa-board", "logo-qa-board.png"),
+    ("event-invitation-card", "event-invitation-card.png"),
+    ("livestream-teaser-card", "livestream-teaser-card.png"),
+    ("hiring-poster-card", "hiring-poster-card.png"),
+    ("course-enroll-card", "course-enroll-card.png"),
+    ("conference-agenda-card", "conference-agenda-card.png"),
+    ("product-launch-card", "product-launch-card.png"),
+    ("annual-report-card", "annual-report-card.png"),
+    ("music-fest-poster-card", "music-fest-poster-card.png"),
+    ("book-club-invite-card", "book-club-invite-card.png"),
+    ("ai-support-pitch-deck",
+     [f"ai-support-pitch-deck-{i:02d}.png" for i in range(1, 11)]),
+    ("quarterly-review-deck",
+     [f"quarterly-review-deck-{i:02d}.png" for i in range(1, 12)]),
+    ("quicksort-lecture-deck",
+     [f"quicksort-lecture-deck-{i:02d}.png" for i in range(1, 8)]),
+    ("compound-effect-card", "compound-effect-card.png"),
+    ("analytics-metric-card", "analytics-metric-card.png"),
 ]
 
 # Gap between tiles, in source pixels — scaled down with everything else.

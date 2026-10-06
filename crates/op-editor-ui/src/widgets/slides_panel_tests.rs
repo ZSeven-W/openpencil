@@ -1,17 +1,47 @@
 //! Geometry tests for the slides panel: tab row, row stack, cards,
 //! thumbnail boxes, number chips, scrolling, and the reorder drop
 //! arithmetic.
+//!
+//! The tab row's text / icon modes live in the sibling
+//! `slides_panel_tab_mode_tests.rs` (800-line cap).
 
 use super::*;
+
+/// The rail's one gutter: the tab row, the tree and the chat body all
+/// start here.
+const RAIL_GUTTER: f32 = 16.0;
 use crate::widgets::test_capture_backend::CaptureBackend;
 use op_editor_core::LeftPanelTab;
 
 /// Real shipped tab labels, not synthetic strings: whether the row
 /// compacts is a fact about the catalogue, and a made-up label would let
-/// a test pass while the product never reached the branch. `Layers` /
-/// `Slides` is the English pair, `Lớp` / `Trang chiếu` the Vietnamese.
-const EN: (&str, &str) = ("Layers", "Slides");
-const VI: (&str, &str) = ("Lớp", "Trang chiếu");
+/// a test pass while the product never reached the branch. `Chat` /
+/// `Layers` / `Slides` is the English set, `Trò chuyện` / `Lớp` /
+/// `Trang chiếu` the Vietnamese.
+const EN_ROW: SlidesTabRow<'static> = SlidesTabRow {
+    chat_label: "Chat",
+    layers_label: "Layers",
+    slides_label: "Slides",
+    chat_available: true,
+    slides_available: true,
+};
+const VI_ROW: SlidesTabRow<'static> = SlidesTabRow {
+    chat_label: "Trò chuyện",
+    layers_label: "Lớp",
+    slides_label: "Trang chiếu",
+    chat_available: true,
+    slides_available: true,
+};
+/// The touch row keeps two tabs — touch chrome hosts the chat as a
+/// sheet, so the Chat tab is not offered there.
+const TOUCH_ROW: SlidesTabRow<'static> = SlidesTabRow {
+    chat_available: false,
+    ..VI_ROW
+};
+
+fn tabs_at(width: f32, active: LeftPanelTab, row: &SlidesTabRow<'static>) -> SlidesPanelTabs {
+    SlidesPanelTabs::new(rail(width), active, row)
+}
 
 const PANEL: Rect = Rect {
     origin: Point2D { x: 0.0, y: 48.0 },
@@ -30,7 +60,7 @@ fn layout_of(aspects: &[f32], offset: f32) -> SlidesPanelLayout {
 fn layout_with(aspects: &[f32], offset: f32, actions: SlidesActionState) -> SlidesPanelLayout {
     SlidesPanelLayout::new(
         PANEL,
-        SlidesPanelTabs::new(PANEL, LeftPanelTab::Slides, EN.0, EN.1),
+        SlidesPanelTabs::new(PANEL, LeftPanelTab::Slides, &EN_ROW),
         aspects,
         offset,
         actions,
@@ -39,29 +69,51 @@ fn layout_with(aspects: &[f32], offset: f32, actions: SlidesActionState) -> Slid
 }
 
 #[test]
-fn the_tab_row_splits_the_rail_top_in_two() {
-    let tabs = SlidesPanelTabs::new(PANEL, LeftPanelTab::Slides, EN.0, EN.1);
+fn the_tab_row_lays_the_labels_out_at_their_own_widths() {
+    let tabs = SlidesPanelTabs::new(PANEL, LeftPanelTab::Slides, &EN_ROW);
     assert_eq!(tabs.row.size.y, SLIDES_TAB_ROW_HEIGHT);
-    assert_eq!(tabs.layers.size.x, tabs.slides.size.x);
+    // Agent · Layers · Slides, each as wide as its own label. Equal
+    // thirds made the row read as a segmented control bolted onto the
+    // rail; Pencil's row is three headings sitting on the panel itself.
+    let mut previous_right = PANEL.origin.x + RAIL_GUTTER;
+    for (rect, label) in [
+        (tabs.chat, EN_ROW.chat_label),
+        (tabs.layers, EN_ROW.layers_label),
+        (tabs.slides, EN_ROW.slides_label),
+    ] {
+        assert_eq!(rect.origin.x, previous_right, "the tabs run left to right");
+        assert!(rect.size.x > 0.0);
+        assert!(
+            rect.size.x < PANEL.size.x / 2.0,
+            "no tab takes half the rail: {label} -> {rect:?}"
+        );
+        previous_right = rect.origin.x + rect.size.x + 2.0;
+    }
+    // A wider label must claim a wider tab — the whole point of
+    // dropping equal shares.
     assert!(
-        (tabs.layers.origin.x + tabs.layers.size.x - tabs.slides.origin.x).abs() < f32::EPSILON,
-        "the two tabs abut"
+        tabs.slides.size.x > tabs.chat.size.x,
+        "Slides is a longer word than Agent"
     );
-    assert_eq!(
-        tabs.hit(Point2D::new(30.0, 60.0)),
-        Some(SlidesPanelTarget::LayersTab)
-    );
-    assert_eq!(
-        tabs.hit(Point2D::new(200.0, 60.0)),
-        Some(SlidesPanelTarget::SlidesTab)
-    );
+    // Each tab hit-tests exactly where it paints.
+    let mid_y = tabs.row.origin.y + tabs.row.size.y / 2.0;
+    for (rect, target) in [
+        (tabs.chat, SlidesPanelTarget::ChatTab),
+        (tabs.layers, SlidesPanelTarget::LayersTab),
+        (tabs.slides, SlidesPanelTarget::SlidesTab),
+    ] {
+        assert_eq!(
+            tabs.hit(Point2D::new(rect.origin.x + rect.size.x / 2.0, mid_y)),
+            Some(target)
+        );
+    }
     // Below the row is nobody's.
     assert_eq!(tabs.hit(Point2D::new(120.0, 200.0)), None);
 }
 
 #[test]
 fn the_layers_tree_gets_the_rail_below_the_tab_row() {
-    let tabs = SlidesPanelTabs::new(PANEL, LeftPanelTab::Slides, EN.0, EN.1);
+    let tabs = SlidesPanelTabs::new(PANEL, LeftPanelTab::Slides, &EN_ROW);
     let content = tabs.content_rect(PANEL);
     assert_eq!(content.origin.y, PANEL.origin.y + SLIDES_TAB_ROW_HEIGHT);
     assert_eq!(content.size.y, PANEL.size.y - SLIDES_TAB_ROW_HEIGHT);
@@ -210,7 +262,7 @@ fn the_row_height_is_the_same_at_every_rail_width() {
     let at = |width: f32| {
         SlidesPanelLayout::new(
             rail(width),
-            SlidesPanelTabs::new(rail(width), LeftPanelTab::Slides, EN.0, EN.1),
+            SlidesPanelTabs::new(rail(width), LeftPanelTab::Slides, &EN_ROW),
             &[DEFAULT_BOARD_ASPECT, 9.0 / 19.5],
             0.0,
             SlidesActionState::default(),
@@ -389,7 +441,7 @@ fn a_rail_too_short_for_a_row_lays_nothing_out() {
     };
     assert!(SlidesPanelLayout::new(
         squeezed,
-        SlidesPanelTabs::new(squeezed, LeftPanelTab::Slides, EN.0, EN.1),
+        SlidesPanelTabs::new(squeezed, LeftPanelTab::Slides, &EN_ROW),
         &[DEFAULT_BOARD_ASPECT; 3],
         0.0,
         SlidesActionState::default(),
@@ -401,7 +453,7 @@ fn a_rail_too_short_for_a_row_lays_nothing_out() {
     };
     assert!(SlidesPanelLayout::new(
         narrow,
-        SlidesPanelTabs::new(narrow, LeftPanelTab::Slides, EN.0, EN.1),
+        SlidesPanelTabs::new(narrow, LeftPanelTab::Slides, &EN_ROW),
         &[DEFAULT_BOARD_ASPECT; 3],
         0.0,
         SlidesActionState::default(),
@@ -439,8 +491,7 @@ fn panel_of(active: Option<usize>, hover: Option<SlidesPanelTarget>) -> SlidesPa
         hover,
         drag: None,
         thumbnails_supported: true,
-        layers_label: "Layers",
-        slides_label: "Slides",
+        tabs: &EN_ROW,
         actions: SlidesActionLabels {
             present: "Present",
             export: "Export PDF",
@@ -610,8 +661,8 @@ fn a_thumbnail_blit_is_clipped_to_the_list_band() {
     assert_eq!(l.visible_thumb_rect(below), None);
 }
 
-// ---- The tab row's text / icon modes -----------------------------------
-
+/// A rail of `width`, anchored at the shared PANEL origin. Used by the
+/// tab-mode sibling too.
 fn rail(width: f32) -> Rect {
     Rect {
         origin: PANEL.origin,
@@ -619,152 +670,5 @@ fn rail(width: f32) -> Rect {
     }
 }
 
-fn tabs_of(width: f32, active: LeftPanelTab, labels: (&str, &str)) -> SlidesPanelTabs {
-    SlidesPanelTabs::new(rail(width), active, labels.0, labels.1)
-}
-
-fn touch_tabs_of(width: f32, active: LeftPanelTab, labels: (&str, &str)) -> SlidesPanelTabs {
-    SlidesPanelTabs::new_touch(rail(width), active, labels.0, labels.1)
-}
-
-#[test]
-fn a_rail_with_room_for_its_labels_keeps_them() {
-    let tabs = tabs_of(240.0, LeftPanelTab::Slides, EN);
-    assert!(!tabs.compact, "English at 240 has room for both words");
-    assert_eq!(
-        tabs.layers.size.x, tabs.slides.size.x,
-        "text mode splits the row in equal halves"
-    );
-    assert!(
-        (tabs.layers.origin.x + tabs.layers.size.x - tabs.slides.origin.x).abs() < f32::EPSILON,
-        "the two tabs abut"
-    );
-    // The mode change must not cost the row its click targets.
-    assert_eq!(
-        tabs.hit(Point2D::new(30.0, 60.0)),
-        Some(SlidesPanelTarget::LayersTab)
-    );
-    assert_eq!(
-        tabs.hit(Point2D::new(200.0, 60.0)),
-        Some(SlidesPanelTarget::SlidesTab)
-    );
-}
-
-#[test]
-fn a_rail_too_narrow_for_its_labels_falls_back_to_icons() {
-    let tabs = tabs_of(180.0, LeftPanelTab::Slides, VI);
-    assert!(
-        tabs.compact,
-        "Vietnamese labels do not fit two ways across a 180 px rail"
-    );
-    // The active tab keeps `[icon label]`; the other shrinks to its glyph.
-    assert!(
-        tabs.slides.size.x > tabs.layers.size.x,
-        "the active tab is the one that keeps its label: {:?} vs {:?}",
-        tabs.slides.size,
-        tabs.layers.size
-    );
-    let inner_w = 180.0 - 8.0 * 2.0;
-    assert!(
-        tabs.layers.size.x + tabs.slides.size.x <= inner_w + 0.01,
-        "the tabs must not overhang the row"
-    );
-    assert!(
-        (tabs.layers.origin.x + tabs.layers.size.x - tabs.slides.origin.x).abs() < 0.01,
-        "they still abut, so no dead gap eats clicks between them"
-    );
-    // Both are still clickable, exactly where they paint.
-    let mid_y = tabs.row.origin.y + tabs.row.size.y / 2.0;
-    assert_eq!(
-        tabs.hit(Point2D::new(tabs.layers.origin.x + 2.0, mid_y)),
-        Some(SlidesPanelTarget::LayersTab)
-    );
-    assert_eq!(
-        tabs.hit(Point2D::new(tabs.slides.origin.x + 2.0, mid_y)),
-        Some(SlidesPanelTarget::SlidesTab)
-    );
-}
-
-#[test]
-fn touch_icon_tabs_keep_full_44_point_targets() {
-    for active in [LeftPanelTab::Layers, LeftPanelTab::Slides] {
-        let tabs = touch_tabs_of(180.0, active, VI);
-        assert!(tabs.compact, "Vietnamese labels use icon mode at 180pt");
-        for rect in [tabs.layers, tabs.slides] {
-            assert!(
-                rect.size.x >= 44.0 && rect.size.y >= 44.0,
-                "every painted touch tab stays at least 44x44: {rect:?}"
-            );
-            assert!(
-                tabs.row.contains(rect.origin)
-                    && tabs.row.contains(Point2D::new(
-                        rect.origin.x + rect.size.x,
-                        rect.origin.y + rect.size.y,
-                    )),
-                "the full target stays inside the visible row: {rect:?}"
-            );
-        }
-    }
-}
-
-#[test]
-fn the_labelled_pill_follows_whichever_tab_is_active() {
-    let on_slides = tabs_of(180.0, LeftPanelTab::Slides, VI);
-    let on_layers = tabs_of(180.0, LeftPanelTab::Layers, VI);
-    assert!(on_slides.compact && on_layers.compact);
-    assert!(on_slides.slides.size.x > on_slides.layers.size.x);
-    assert!(on_layers.layers.size.x > on_layers.slides.size.x);
-    // The un-labelled tab is the same square either way — it holds one
-    // glyph and nothing else, whichever side it happens to be on.
-    assert!((on_slides.layers.size.x - on_layers.slides.size.x).abs() < 0.01);
-}
-
-/// Dragging the rail switches modes at the measured width, and never
-/// switches back the wrong way: once the labels stop fitting they stay
-/// not-fitting as the rail keeps narrowing.
-#[test]
-fn resizing_the_rail_switches_modes_monotonically() {
-    let compact_at = |w: f32| tabs_of(w, LeftPanelTab::Slides, VI).compact;
-    assert!(compact_at(180.0), "at the minimum rail width, icons");
-    assert!(!compact_at(480.0), "at the maximum, words");
-    let mut seen_text = false;
-    for step in 0..=60 {
-        let width = 180.0 + step as f32 * 5.0;
-        let compact = compact_at(width);
-        if !compact {
-            seen_text = true;
-        }
-        assert!(
-            !(compact && seen_text),
-            "the row went back to icons at {width} after already fitting its labels"
-        );
-    }
-    assert!(seen_text);
-}
-
-/// English is short enough that two tabs fit at every rail width we
-/// allow, so the fallback is inert for it today — that is the measured
-/// answer, not an oversight, and it is what stops us shrinking a row
-/// that has room. The moment a third tab lands the same rule compacts
-/// the row without another line of code.
-#[test]
-fn the_fit_rule_scales_to_more_tabs_than_the_two_we_ship() {
-    let inner_w = 240.0 - 8.0 * 2.0;
-    let slides_w = crate::widgets::top_bar_geometry::estimated_text_width("Slides", 12.0);
-    assert!(
-        text_tabs_fit(inner_w, 2, slides_w),
-        "two English tabs fit the default rail"
-    );
-    assert!(
-        !text_tabs_fit(inner_w, 5, slides_w),
-        "five would not — the row compacts on tab count, not only on rail width"
-    );
-    // And the two we ship never compact anywhere in the resize range.
-    for step in 0..=60 {
-        let width = 180.0 + step as f32 * 5.0;
-        assert!(
-            !tabs_of(width, LeftPanelTab::Slides, EN).compact,
-            "English compacted at {width}, which means the estimate drifted"
-        );
-    }
-}
+#[path = "slides_panel_tab_mode_tests.rs"]
+mod tab_mode_tests;

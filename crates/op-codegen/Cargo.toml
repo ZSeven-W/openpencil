@@ -15,6 +15,7 @@ jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 op-editor-core = { path = "../op-editor-core" }
 # Canonical HTML escaping (dependency-free, wasm-clean).
 op-util = { path = "../op-util" }
+serde_json = { workspace = true }
 
 # AI pipeline deps — optional, pulled in only by the `ai` feature so
 # non-AI consumers (and the deterministic generators) stay lean. op-ai
@@ -22,7 +23,6 @@ op-util = { path = "../op-util" }
 # op-ai-skills (skill corpus is expanded at the transport edge).
 op-ai = { path = "../op-ai", optional = true }
 serde = { workspace = true, features = ["derive"], optional = true }
-serde_json = { workspace = true, optional = true }
 base64 = { version = "0.22", optional = true }
 
 [dev-dependencies]
@@ -32,4 +32,4 @@ zip = "2"
 
 [features]
 # Gates the AI code-generation pipeline (src/ai/). Off by default.
-ai = ["dep:op-ai", "dep:serde", "dep:serde_json", "dep:base64"]
+ai = ["dep:op-ai", "dep:serde", "dep:base64"]

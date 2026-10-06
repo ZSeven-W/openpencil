@@ -14,6 +14,9 @@ fn seed_available_model(host: &mut WidgetHostNative) {
 #[test]
 fn apply_send_ignores_chat_when_no_model_is_available() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     host.editor_state_mut()
         .chat
         .set_input_text("design a login page");
@@ -27,6 +30,9 @@ fn apply_send_ignores_chat_when_no_model_is_available() {
 #[test]
 fn apply_send_queues_chat_when_model_is_available() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     seed_available_model(&mut host);
     host.editor_state_mut()
         .chat
@@ -42,6 +48,9 @@ fn apply_send_queues_chat_when_model_is_available() {
 #[test]
 fn chat_collapse_click_stays_expanded_while_streaming_like_ts() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     host.editor_state_mut()
         .chat
         .messages

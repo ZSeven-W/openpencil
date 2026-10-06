@@ -21,6 +21,11 @@ Key aesthetics:
 - **Earth-toned palette**: Warm grays and amber tints reinforce the organic, exploratory mood
 - **Integrated bottom nav**: full-width bottom navigation with orange active indicator
 
+Signature recipes:
+
+- **Edge-to-edge hero** — Extend the destination photo hero to both screen edges; keep Outfit titles and #EA580C actions in a 24px text rail — HIG Layout
+- **Scrim for text on photo** — Put a gradient scrim behind white destination text on every photo, with the image filling at least 25% of the #FFFDF7 first screen — HIG Images
+
 ## Color System
 
 ### Core Backgrounds

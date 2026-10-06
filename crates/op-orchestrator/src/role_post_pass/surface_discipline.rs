@@ -7,19 +7,27 @@ use super::*;
 /// root is round-tripped through JSON; on any (de)serialize failure that root
 /// is left untouched (a fix can never drop a node).
 /// Semantic state-feedback tokens. Legit only on status/alert elements; glm
-/// grabs them as "a light color" for decorative surfaces (a `$color-danger-bg`
+/// grabs them as "a light color" for decorative surfaces (a `$--color-error`
 /// search input renders pink and clashes with the theme).
 pub(super) const STATE_BG_REFS: &[&str] = &[
-    "$color-danger-bg",
-    "$color-info-bg",
-    "$color-success-bg",
-    "$color-warning-bg",
+    "$--color-error",
+    "$--color-info",
+    "$--color-success",
+    "$--color-warning",
 ];
 
 /// The page-background token. Only the page root paints it; an inner node using
 /// it just repaints a redundant — or theme-clashing (cool `#F8FAFC` over a warm
 /// page) — panel.
-pub(super) const PAGE_BG_REF: &str = "$color-bg-deep";
+pub(super) fn is_page_bg_ref(color: &str) -> bool {
+    color == "$--background"
+}
+
+/// True for TEXT tokens used as a container fill — a slot-category error
+/// (`--foreground` / every `--*-foreground`).
+fn is_text_ref(color: &str) -> bool {
+    color.starts_with("$--") && color.contains("foreground")
+}
 
 /// A status / feedback element — the ONLY legitimate user of a state-bg token.
 pub(super) fn is_status_element(node: &Value) -> bool {
@@ -51,8 +59,8 @@ pub(super) fn is_status_element(node: &Value) -> bool {
 /// pipeline relies on the prompt for this; weak models (glm-5.2) ignore it, so
 /// Rust enforces it after the fact:
 ///   1. A state-bg token misused as a decorative surface → neutral
-///      `$color-surface-2`. (the pink search input / chips)
-///   2. `$color-bg-deep` on any inner node → transparent. (the cool grey panel
+///      `$--muted`. (the pink search input / chips)
+///   2. `$--background` on any inner node → transparent. (the cool grey panel
 ///      behind the search row / a nav tab repainting the page bg)
 ///
 /// Refs are still UNRESOLVED here (binding runs later), so match token names.
@@ -83,24 +91,24 @@ pub(super) fn fix_surface_color_discipline(node: &mut Value, is_root: bool) {
 fn walk_surface_color_discipline(node: &mut Value, is_root: bool, page_bg: Option<&str>) {
     if let Some(color) = get_first_solid_color(node) {
         if STATE_BG_REFS.contains(&color.as_str()) && !is_status_element(node) {
-            node["fill"] = solid_fill("$color-surface-2");
-        } else if !is_root && color == PAGE_BG_REF && page_bg == Some(PAGE_BG_REF) {
+            node["fill"] = solid_fill("$--muted");
+        } else if !is_root && is_page_bg_ref(&color) && page_bg.is_some_and(is_page_bg_ref) {
             // REDUNDANCY repair, not a taste call: the strip is only sound
             // where the root paints this very token, so the inner band is
             // provably invisible. A root grounded in anything else — a literal
-            // hex, a gradient, no fill at all — makes `$color-bg-deep` a
+            // hex, a gradient, no fill at all — makes `$--background` a
             // DISTINCT surface, and emptying it deletes an authored band
             // (measured: 0808-gm-1.op's `#0A0A0A` page, whose two
-            // `$color-bg-deep` (#0F172A) sections lost their darker ground).
+            // page-bg (#0F172A) sections lost their darker ground).
             node["fill"] = json!([]);
-        } else if color.starts_with("$color-text-") && is_container_kind(node) {
+        } else if is_text_ref(&color) && is_container_kind(node) {
             // A CONTAINER filled with a TEXT token is a slot-category error —
-            // a search pill painted `$color-text-primary` rendered as a WHITE
+            // a search pill painted `$--foreground` rendered as a WHITE
             // capsule on the dark luxury theme (measured: ATELIER's search +
             // FILTER pills). Text tokens color glyphs; the container slot for
-            // inputs/chips is surface-2. Its dark literal text (styled for
+            // inputs/chips is muted. Its dark literal text (styled for
             // the accidental white) flips to the text ladder with it.
-            node["fill"] = solid_fill("$color-surface-2");
+            node["fill"] = solid_fill("$--muted");
             rebind_dark_literal_text(node);
         }
     }

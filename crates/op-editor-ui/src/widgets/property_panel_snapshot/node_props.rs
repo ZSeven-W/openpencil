@@ -6,7 +6,7 @@
 //! Split out of `property_panel_snapshot.rs` to keep both files under
 //! the openpencil 800-line cap.
 
-use super::{EllipseArcSummary, IconSummary, LayoutPaddingSummary};
+use super::{EllipseArcSummary, IconSummary, LayoutPaddingSummary, VideoSummary};
 use crate::widgets::property_panel_action::{LayoutAlignValue, LayoutJustifyValue};
 use jian_ops_schema::node::base::NumberOrExpression;
 use jian_ops_schema::node::container::LayoutMode;
@@ -31,6 +31,22 @@ pub(super) fn polygon_sides_of(node: &PenNode) -> Option<u32> {
         PenNode::Polygon(n) => Some(n.polygon_count.clamp(3, 100)),
         _ => None,
     }
+}
+
+pub(super) fn video_summary_of(node: &PenNode) -> Option<VideoSummary> {
+    let PenNode::Image(image) = node else {
+        return None;
+    };
+    let video = image.video.as_ref()?;
+    Some(VideoSummary {
+        src: video.src.clone(),
+        poster_src: image.src.to_string(),
+        autoplay: video.autoplay,
+        loop_video: video.r#loop,
+        muted: video.muted,
+        hold_last_frame: video.hold_last_frame,
+        click_to_replay: video.click_to_replay,
+    })
 }
 
 pub(super) fn ellipse_arc_of(node: &PenNode) -> Option<EllipseArcSummary> {

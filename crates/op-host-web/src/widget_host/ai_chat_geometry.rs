@@ -29,6 +29,32 @@ impl WidgetHost {
             // The VS Code plugin is MCP-driven; the in-editor chat is hidden.
             return None;
         }
+        // The chat is PINNED into a left column — the workspace's dock,
+        // or the editor's Chat tab — whenever one owns it, through the
+        // ONE shared helper the native host routes through as well. A
+        // pinned-but-closed column means no chat at all, never a
+        // floating fallback; touch (the sheet branch below) is never
+        // pinned.
+        use op_editor_ui::widgets::host_canvas_geometry::{pinned_chat, PinnedChat};
+        match pinned_chat(&self.editor_state, viewport_w, viewport_h) {
+            Some(PinnedChat::At(rect)) => return Some(rect),
+            Some(PinnedChat::Closed) => return None,
+            Some(PinnedChat::Composer { x, bottom, width }) => {
+                // Composer-only: the card's height follows the draft and
+                // focus, so the widget resolves it and the card grows
+                // upward from the canvas floor — same seam as native.
+                let panel = op_editor_ui::widgets::AIChatPlaceholder::from_editor_at(
+                    &self.editor_state,
+                    self.now_ms,
+                );
+                let height = panel.composer_only_height(width);
+                return Some(Rect {
+                    origin: Point2D::new(x, bottom - height),
+                    size: Point2D::new(width, height),
+                });
+            }
+            None => {}
+        }
         let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
         if self.editor_state.chat.is_minimized() {
             return op_editor_ui::widgets::host_canvas_geometry::minimized_chat_bar_rect(

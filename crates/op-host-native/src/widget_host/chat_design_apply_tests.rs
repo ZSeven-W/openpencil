@@ -24,6 +24,9 @@ fn apply_button_point(chat_rect: op_editor_ui::Rect) -> (f32, f32) {
 #[test]
 fn clicking_apply_design_block_inserts_nodes_once_like_ts() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     host.editor_state_mut()
         .chat
         .messages

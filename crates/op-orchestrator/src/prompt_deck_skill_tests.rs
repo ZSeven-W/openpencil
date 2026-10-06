@@ -44,8 +44,10 @@ fn deck_subtask() -> crate::plan::Subtask {
             width: 1920.0,
             height: 1080.0,
         },
+        bleed_hero: false,
         id_prefix: "cover".into(),
         parent_frame_id: None,
+        insert_after_sibling_id: None,
         elements: None,
         screen: Some("封面".into()),
         generated_root_id: None,
@@ -66,6 +68,7 @@ fn deck_request(model: &str) -> DesignRequest {
         validation_enabled: true,
         visual_ref_enabled: false,
         pinned_style_guide: None,
+        reference_skeleton: None,
     }
 }
 

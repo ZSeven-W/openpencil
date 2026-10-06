@@ -8,7 +8,7 @@
 //! - `node_count > 0`(`error` 可带软错误)—— 部分产出,继续后续。
 
 use crate::plan::{OrchestratorPlan, Subtask};
-use crate::prompt::build_subagent_prompt_with_screen_routes;
+use crate::prompt::build_subagent_prompt_with_screen_routes_and_outcomes;
 use crate::types::{AbortFlag, DesignRequest, DocSink, LlmChunk, LlmClient, SubtaskOutcome};
 use futures::StreamExt;
 use jian_ops_schema::node::PenNode;
@@ -97,11 +97,44 @@ pub(crate) async fn run_subtask_with_reveal_at(
     reveal_started_ms: u64,
     on_progress: Option<&mut dyn FnMut(crate::types::Progress)>,
 ) -> SubtaskOutcome {
+    run_subtask_with_reveal_at_and_outcomes(
+        subtask,
+        plan,
+        req,
+        llm,
+        sink,
+        abort,
+        reduced_complexity,
+        minimal_skills,
+        indicator_epoch,
+        reveal_started_ms,
+        on_progress,
+        &[],
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
+    subtask: &Subtask,
+    plan: &OrchestratorPlan,
+    req: &DesignRequest,
+    llm: &dyn LlmClient,
+    sink: &mut dyn DocSink,
+    abort: &AbortFlag,
+    reduced_complexity: bool,
+    minimal_skills: bool,
+    indicator_epoch: Option<u64>,
+    reveal_started_ms: u64,
+    on_progress: Option<&mut dyn FnMut(crate::types::Progress)>,
+    prior_outcomes: &[SubtaskOutcome],
+) -> SubtaskOutcome {
     let fail = |msg: String| SubtaskOutcome {
         id: subtask.id.clone(),
         node_count: 0,
         error: Some(msg),
         inserted_root_ids: Vec::new(),
+        headline: None,
         // Persist the spec on every zero-node failure so the progress
         // panel's manual "Retry" button (see `crate::retry_subtask`) can
         // re-run this EXACT subtask later.
@@ -112,20 +145,23 @@ pub(crate) async fn run_subtask_with_reveal_at(
     // Classic fan-out derives routes from normalized planning groups; loop
     // continuation (whose synthetic plan has no screen labels) falls back to
     // live screen markers. Both paths share navigation's route allocator.
-    let screen_routes =
-        crate::wire_screen_navigation::prompt_screen_route_inventory(plan, sink.state());
-    let components = sink.state().components.clone();
+    let state = sink.state();
+    let screen_routes = crate::wire_screen_navigation::prompt_screen_route_inventory(plan, state);
+    let components = state.components.clone();
+    let has_variables = state.doc.variables.as_ref().is_some_and(|v| !v.is_empty());
 
     // 收集 LLM 文本输出。
-    let (call_req, skill_report) = build_subagent_prompt_with_screen_routes(
+    let (call_req, skill_report) = build_subagent_prompt_with_screen_routes_and_outcomes(
         subtask,
         plan,
         req,
         abort.clone(),
         reduced_complexity,
         minimal_skills,
+        has_variables,
         &components,
         &screen_routes,
+        prior_outcomes,
     );
     // Surface the per-subtask skill-load report to the chat UI immediately
     // after the prompt is built (spec Component 4).
@@ -277,7 +313,7 @@ pub(crate) async fn run_subtask_with_reveal_at(
         crate::variable_binding::bind_generated_color_variables(&mut nodes, sink.state());
     }
     // Surface-color discipline runs AFTER binding: glm emits raw hex, and binding
-    // is what turns it into the `$color-danger-bg` / `$color-bg-deep` refs this
+    // is what turns it into the `$--color-error` / `$--background` refs this
     // pass matches (recolor misused state-bg surfaces → neutral, strip the
     // page-bg token off inner wrappers). Pre-binding it only saw hex and missed.
     crate::role_post_pass::enforce_surface_color_discipline_with_tier(&mut nodes, &tier);
@@ -376,11 +412,20 @@ pub(crate) async fn run_subtask_with_reveal_at(
         return fail(error);
     };
 
+    let headline = inserted_root_ids.iter().find_map(|root_id| {
+        op_editor_core::walkers::find_node(
+            sink.state().active_children(),
+            &NodeId::new(root_id.clone()),
+        )
+        .and_then(crate::section_headline::section_headline)
+    });
+
     SubtaskOutcome {
         id: subtask.id.clone(),
         node_count,
         error: None,
         inserted_root_ids,
+        headline,
         subtask: None,
     }
 }
@@ -456,8 +501,20 @@ pub(crate) fn apply_insert_subtree_with_reveal(
     indicator_epoch: Option<u64>,
     reveal_started_ms: u64,
 ) -> Option<Vec<String>> {
+    let mut nodes = nodes;
+    let icon_path_report = op_editor_core::icon_path_normalize::normalize_icon_paths_in_nodes(
+        &mut nodes,
+        op_editor_ui::widgets::icons::lucide_name_for_path_d,
+    );
     let ids_before = indicator_epoch.map(|_| collect_active_node_ids(sink.state()));
     let root_ids = sink.insert_subtree_returning_root_ids(nodes, &parent_id)?;
+    if icon_path_report != Default::default() {
+        tracing::info!(
+            converted_to_icon_font = icon_path_report.converted_to_icon_font,
+            refit_uniform = icon_path_report.refit_uniform,
+            "icon path normalization applied after subtask insert"
+        );
+    }
     if let Some(ids_before) = ids_before.as_ref() {
         register_new_node_reveals(ids_before, sink.state(), indicator_epoch, reveal_started_ms);
     }

@@ -1,7 +1,15 @@
 //! `design_system.rs` — S4 A1 + B1: `DesignSystem` struct, parse, defaults,
 //! LLM generator, variable seeding, and prompt context.
 //!
-//! Port of `design-system-generator.ts` (deleted in commit `0f12b6e9`):
+//! Port of `design-system-generator.ts` (deleted in commit `0f12b6e9`),
+//! re-keyed by the B1 shadcn dictionary: palette keys are the shadcn
+//! token names (dash-less in the LLM JSON: `background`, `card`,
+//! `muted-foreground`, `--color-success` …) and seeding emits `--`-prefixed
+//! document variables that match the bundled `design-systems.json`
+//! presets and `apply_design_system` (`--background`, `--card`,
+//! `--color-success` …).
+//!
+//! Port map:
 //! - L20-29: `generateDesignSystem` entry (→ `generate_design_system`).
 //! - L40-100: `parseDesignSystem` + `tryParseDS` 4-stage fallback chain.
 //! - L102-124: `DEFAULT_DESIGN_SYSTEM` constant values.
@@ -41,21 +49,25 @@ pub struct Spacing {
 
 /// Structured design tokens (colors, typography, spacing, radius, aesthetic).
 ///
-/// Port of the `DesignSystem` interface in `ai-types.ts:59-81`.
+/// Port of the `DesignSystem` interface in `ai-types.ts:59-81`, with the
+/// palette re-keyed to the B1 shadcn dictionary:
 ///
 /// ```text
-/// palette  — keyed color tokens (background, surface, text, textSecondary,
-///            primary, primaryLight, accent, border)
+/// palette  — keyed color tokens (`background`, `foreground`, `card`,
+///            `card-foreground`, `popover(-foreground)`, `primary(-foreground)`,
+///            `secondary(-foreground)`, `muted(-foreground)`,
+///            `accent(-foreground)`, `destructive(-foreground)`, `border`,
+///            `input`, `ring`, the `sidebar-*` 8, the `color-<status>`
+///            pairs, `scrim`)
 /// typography — heading/body font names + type scale (px)
 /// spacing  — unit grid size + scale steps (px)
-/// radius   — corner-radius steps (px)
+/// radius   — corner-radius steps (px), seeded onto --radius-none/xs/m/l/pill
 /// aesthetic — prose adjectives describing the visual style
 /// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DesignSystem {
-    /// Color palette tokens. Keys match TS camelCase names
-    /// (`background`, `surface`, `text`, `textSecondary`, `primary`,
-    /// `primaryLight`, `accent`, `border`).
+    /// Color palette tokens. Keys are shadcn token names without the
+    /// leading dashes; seeding prefixes them with `--`.
     pub palette: BTreeMap<String, String>,
     pub typography: Typography,
     pub spacing: Spacing,
@@ -67,16 +79,90 @@ pub struct DesignSystem {
 
 // ── DEFAULT_DESIGN_SYSTEM (mirrors TS L102-124) ───────────────────────────────
 
+/// The palette keys the dictionary carries, in table order. Shared by
+/// the default palette and `try_parse_ds`'s fill-missing loop.
+const PALETTE_KEYS: &[&str] = &[
+    "background",
+    "foreground",
+    "card",
+    "card-foreground",
+    "popover",
+    "popover-foreground",
+    "primary",
+    "primary-foreground",
+    "secondary",
+    "secondary-foreground",
+    "muted",
+    "muted-foreground",
+    "accent",
+    "accent-foreground",
+    "destructive",
+    "destructive-foreground",
+    "border",
+    "input",
+    "ring",
+    "sidebar",
+    "sidebar-foreground",
+    "sidebar-primary",
+    "sidebar-primary-foreground",
+    "sidebar-accent",
+    "sidebar-accent-foreground",
+    "sidebar-border",
+    "sidebar-ring",
+    "--color-success",
+    "--color-success-foreground",
+    "--color-warning",
+    "--color-warning-foreground",
+    "--color-error",
+    "--color-error-foreground",
+    "--color-info",
+    "--color-info-foreground",
+    "scrim",
+];
+
 fn build_default() -> DesignSystem {
-    let mut palette = BTreeMap::new();
-    palette.insert("background".into(), "#F8FAFC".into());
-    palette.insert("surface".into(), "#FFFFFF".into());
-    palette.insert("text".into(), "#0F172A".into());
-    palette.insert("textSecondary".into(), "#475569".into());
-    palette.insert("primary".into(), "#2563EB".into());
-    palette.insert("primaryLight".into(), "#DBEAFE".into());
-    palette.insert("accent".into(), "#0EA5E9".into());
-    palette.insert("border".into(), "#E2E8F0".into());
+    let hexes: &[(&str, &str)] = &[
+        ("background", "#F8FAFC"),
+        ("foreground", "#0F172A"),
+        ("card", "#FFFFFF"),
+        ("card-foreground", "#0F172A"),
+        ("popover", "#FFFFFF"),
+        ("popover-foreground", "#0F172A"),
+        ("primary", "#2563EB"),
+        ("primary-foreground", "#FFFFFF"),
+        ("secondary", "#F1F5F9"),
+        ("secondary-foreground", "#0F172A"),
+        ("muted", "#F1F5F9"),
+        ("muted-foreground", "#64748B"),
+        ("accent", "#F3F4F6"),
+        ("accent-foreground", "#0F172A"),
+        ("destructive", "#EF4444"),
+        ("destructive-foreground", "#FFFFFF"),
+        ("border", "#E2E8F0"),
+        ("input", "#E2E8F0"),
+        ("ring", "#2563EB"),
+        ("sidebar", "#FFFFFF"),
+        ("sidebar-foreground", "#0F172A"),
+        ("sidebar-primary", "#2563EB"),
+        ("sidebar-primary-foreground", "#FFFFFF"),
+        ("sidebar-accent", "#F1F5F9"),
+        ("sidebar-accent-foreground", "#0F172A"),
+        ("sidebar-border", "#E2E8F0"),
+        ("sidebar-ring", "#2563EB"),
+        ("--color-success", "#10B981"),
+        ("--color-success-foreground", "#FFFFFF"),
+        ("--color-warning", "#F59E0B"),
+        ("--color-warning-foreground", "#FFFFFF"),
+        ("--color-error", "#EF4444"),
+        ("--color-error-foreground", "#FFFFFF"),
+        ("--color-info", "#3B82F6"),
+        ("--color-info-foreground", "#FFFFFF"),
+        ("scrim", "#00000080"),
+    ];
+    let palette = hexes
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect();
 
     DesignSystem {
         palette,
@@ -89,7 +175,7 @@ fn build_default() -> DesignSystem {
             unit: 8.0,
             scale: vec![8.0, 16.0, 24.0, 32.0, 48.0, 64.0],
         },
-        radius: vec![8.0, 12.0, 16.0],
+        radius: vec![4.0, 8.0, 12.0],
         aesthetic: "clean modern blue".into(),
     }
 }
@@ -161,25 +247,17 @@ fn try_parse_ds(json: &str) -> Option<DesignSystem> {
 
     let default = default_design_system();
 
-    // Build palette — fill missing keys with defaults
+    // Build palette — fill missing keys with defaults. Accepts both the
+    // dash-less key form taught by the skill and a literal `--token` key
+    // (LLMs sometimes echo the CSS custom-property spelling).
     let mut palette = BTreeMap::new();
-    let dp = &default.palette;
-    let palette_keys = [
-        "background",
-        "surface",
-        "text",
-        "textSecondary",
-        "primary",
-        "primaryLight",
-        "accent",
-        "border",
-    ];
-    for key in palette_keys {
+    for key in PALETTE_KEYS {
         let val = p
-            .get(key)
+            .get(*key)
+            .or_else(|| p.get(&format!("--{key}")))
             .and_then(|v| v.as_str())
-            .unwrap_or_else(|| dp.get(key).map(|s| s.as_str()).unwrap_or(""))
-            .to_string();
+            .map(str::to_string)
+            .unwrap_or_else(|| default.palette.get(*key).cloned().unwrap_or_default());
         palette.insert(key.to_string(), val);
     }
 
@@ -321,32 +399,50 @@ pub async fn generate_design_system(
 
 /// Convert a `DesignSystem` into `EditorCommand::SetVariable*` commands.
 ///
-/// Faithful port of `designSystemToVariables` in
-/// `design-system-generator.ts:134-156`. Emits ONLY:
-///  - Palette: `color-{kebab(key)}` → `SetVariableColor` (one per palette entry)
-///  - Spacing scale: `spacing-{xs|sm|md|lg|xl|2xl|3xl|4xl|5xl|6xl}` →
+/// Port of `designSystemToVariables` in
+/// `design-system-generator.ts:134-156`, re-keyed by B1. Emits:
+///  - Palette: `--{key}` → `SetVariableColor` (one per palette entry;
+///    keys are the shadcn token names sans leading dashes)
+///  - Fonts: `--font-primary` (body font) + `--font-secondary`
+///    (heading font) → `SetVariableScalar::String`
+///  - Spacing scale: `spacing-{xs|sm|md|lg|xl|2xl|…}` →
 ///    `SetVariableScalar::Number` (capped at `spacingNames.length`)
-///  - Radius: `radius-{sm|md|lg|xl}` → `SetVariableScalar::Number` (capped at
-///    `radiusNames.length`)
+///  - Radius: fixed `--radius-none` (0) + `--radius-pill` (999), with
+///    the DS radius scale mapped onto `--radius-xs/m/l` (capped at 3)
 ///
-/// Typography is NOT seeded into document variables — the TS source feeds
-/// heading/body fonts + type scale into the LLM via
-/// `design_system_to_prompt_context` only.
+/// The type SCALE is still not seeded (it reaches the LLM via
+/// `design_system_to_prompt_context` only).
 ///
-/// DEFAULT_DESIGN_SYSTEM emits exactly 17 commands: 8 palette + 6 spacing + 3 radius.
+/// DEFAULT_DESIGN_SYSTEM emits exactly 49 commands:
+/// 36 palette + 2 fonts + 6 spacing + 5 radius.
 pub fn design_system_to_seed_commands(ds: &DesignSystem) -> Vec<EditorCommand> {
     let mut cmds = Vec::new();
 
-    // Colors: palette → SetVariableColor with kebab-case name.
+    // Colors: palette → SetVariableColor named `--{key}`.
     // TS: `for (const [key, value] of Object.entries(ds.palette))`
     // Note: BTreeMap iterates in sorted key order, which is fine for determinism.
     for (key, value) in &ds.palette {
-        let name = format!("color-{}", camel_to_kebab(key));
+        let name = if key.starts_with("--") {
+            key.clone()
+        } else {
+            format!("--{key}")
+        };
         cmds.push(EditorCommand::SetVariableColor {
             name,
             hex: value.clone(),
         });
     }
+
+    // Fonts: body font is the primary reading face, heading the
+    // secondary display face.
+    cmds.push(EditorCommand::SetVariableScalar {
+        name: "--font-primary".into(),
+        scalar: VariableScalarPayload::String(ds.typography.body_font.clone()),
+    });
+    cmds.push(EditorCommand::SetVariableScalar {
+        name: "--font-secondary".into(),
+        scalar: VariableScalarPayload::String(ds.typography.heading_font.clone()),
+    });
 
     // Spacing scale → spacing-xs/sm/md/lg/xl/2xl/3xl/4xl/5xl/6xl
     // TS: `const spacingNames = ['xs', 'sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl', '6xl']`
@@ -365,45 +461,37 @@ pub fn design_system_to_seed_commands(ds: &DesignSystem) -> Vec<EditorCommand> {
         });
     }
 
-    // Radius → radius-sm/md/lg/xl
-    // TS: `const radiusNames = ['sm', 'md', 'lg', 'xl']`
-    const RADIUS_NAMES: &[&str] = &["sm", "md", "lg", "xl"];
-    for (i, &label) in RADIUS_NAMES.iter().enumerate().take(ds.radius.len()) {
-        let name = format!("radius-{label}");
+    // Radius → fixed --radius-none (0) + scale on --radius-xs/m/l
+    // (capped at 3 steps) + fixed --radius-pill (999).
+    const RADIUS_SCALE_NAMES: &[&str] = &["xs", "m", "l"];
+    cmds.push(EditorCommand::SetVariableScalar {
+        name: "--radius-none".into(),
+        scalar: VariableScalarPayload::Number(0.0),
+    });
+    for (i, &label) in RADIUS_SCALE_NAMES.iter().enumerate().take(ds.radius.len()) {
+        let name = format!("--radius-{label}");
         cmds.push(EditorCommand::SetVariableScalar {
             name,
             scalar: VariableScalarPayload::Number(ds.radius[i]),
         });
     }
+    cmds.push(EditorCommand::SetVariableScalar {
+        name: "--radius-pill".into(),
+        scalar: VariableScalarPayload::Number(999.0),
+    });
 
     cmds
-}
-
-/// Convert a camelCase string to kebab-case.
-///
-/// Port of `kebab` in `design-system-generator.ts`:
-/// `str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()`
-fn camel_to_kebab(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 4);
-    let chars: Vec<char> = s.chars().collect();
-    for i in 0..chars.len() {
-        let c = chars[i];
-        if i > 0 && c.is_uppercase() && chars[i - 1].is_lowercase() {
-            out.push('-');
-        }
-        out.push(c.to_ascii_lowercase());
-    }
-    out
 }
 
 // ── B1: design_system_to_prompt_context (port of TS L161-170) ────────────────
 
 /// Build a fixed-form design-system context string for AI prompts.
 ///
-/// Port of `designSystemToPromptContext` in `design-system-generator.ts:161-170`:
+/// Port of `designSystemToPromptContext` in `design-system-generator.ts:161-170`
+/// (labels re-keyed to the B1 shadcn tokens):
 /// ```text
 /// DESIGN SYSTEM (use these values consistently):
-/// Colors: bg {bg}, surface {surface}, text {text}, muted {muted}, ...
+/// Colors: background {bg}, foreground {fg}, card {card}, muted {muted}, ...
 /// Fonts: heading "{headingFont}", body "{bodyFont}"
 /// Type scale: {scale}px
 /// Spacing: {scale}px ({unit}px grid)
@@ -412,14 +500,7 @@ fn camel_to_kebab(s: &str) -> String {
 /// ```
 pub fn design_system_to_prompt_context(ds: &DesignSystem) -> String {
     let p = &ds.palette;
-    let bg = p.get("background").map(|s| s.as_str()).unwrap_or("");
-    let surface = p.get("surface").map(|s| s.as_str()).unwrap_or("");
-    let text = p.get("text").map(|s| s.as_str()).unwrap_or("");
-    let muted = p.get("textSecondary").map(|s| s.as_str()).unwrap_or("");
-    let primary = p.get("primary").map(|s| s.as_str()).unwrap_or("");
-    let primary_light = p.get("primaryLight").map(|s| s.as_str()).unwrap_or("");
-    let accent = p.get("accent").map(|s| s.as_str()).unwrap_or("");
-    let border = p.get("border").map(|s| s.as_str()).unwrap_or("");
+    let get = |key: &str| p.get(key).map(|s| s.as_str()).unwrap_or("");
 
     // Type scale: "14, 16, 20, 28, 40, 56px"
     let type_scale = ds
@@ -440,7 +521,7 @@ pub fn design_system_to_prompt_context(ds: &DesignSystem) -> String {
         .join(", ");
     let spacing_unit = format_num(ds.spacing.unit);
 
-    // Radius: "8, 12, 16px"
+    // Radius: "4, 8, 12px"
     let radius = ds
         .radius
         .iter()
@@ -450,14 +531,30 @@ pub fn design_system_to_prompt_context(ds: &DesignSystem) -> String {
 
     format!(
         "DESIGN SYSTEM (use these values consistently):\n\
-Colors: bg {bg}, surface {surface}, text {text}, muted {muted}, primary {primary}, primaryLight {primary_light}, accent {accent}, border {border}\n\
+Colors: background {background}, foreground {foreground}, card {card}, card-foreground {card_foreground}, muted {muted}, muted-foreground {muted_foreground}, primary {primary}, primary-foreground {primary_foreground}, accent {accent}, border {border}, input {input}, ring {ring}\n\
 Fonts: heading \"{heading}\", body \"{body}\"\n\
 Type scale: {type_scale}px\n\
 Spacing: {spacing_scale}px ({spacing_unit}px grid)\n\
 Radius: {radius}px\n\
 Style: {aesthetic}",
+        background = get("background"),
+        foreground = get("foreground"),
+        card = get("card"),
+        card_foreground = get("card-foreground"),
+        muted = get("muted"),
+        muted_foreground = get("muted-foreground"),
+        primary = get("primary"),
+        primary_foreground = get("primary-foreground"),
+        accent = get("accent"),
+        border = get("border"),
+        input = get("input"),
+        ring = get("ring"),
         heading = ds.typography.heading_font,
         body = ds.typography.body_font,
+        type_scale = type_scale,
+        spacing_scale = spacing_scale,
+        spacing_unit = spacing_unit,
+        radius = radius,
         aesthetic = ds.aesthetic,
     )
 }

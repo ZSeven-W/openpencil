@@ -79,6 +79,10 @@ pub enum SettingsIoError {
     /// 128 candidate temporary names were all taken — a stuck directory
     /// rather than a transient collision.
     TempAllocExhausted,
+    /// The lenient startup load found the file unreadable, backed it up and
+    /// pinned the path: saving over it now would replace whatever the user
+    /// had (API keys included) with this process's defaults.
+    RejectedLoad,
     /// Writing the encoded JSON into the temporary file failed.
     WriteTemp { detail: String },
     /// The completed temporary file could not be renamed over the real
@@ -105,6 +109,9 @@ impl fmt::Display for SettingsIoError {
                 write!(f, "unknown settings field in {context}")
             }
             SettingsIoError::Lossy => f.write_str("settings file cannot be loaded losslessly"),
+            SettingsIoError::RejectedLoad => f.write_str(
+                "settings file was rejected at load and backed up; refusing to overwrite it",
+            ),
             SettingsIoError::UnsupportedCredentialEntry => {
                 f.write_str("unsupported settings credential entry")
             }

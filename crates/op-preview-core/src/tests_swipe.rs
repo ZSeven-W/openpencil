@@ -56,6 +56,7 @@ fn enter() -> PreviewSession {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter preview")
 }
@@ -224,6 +225,7 @@ fn explicit_event_time_past_transition_end_is_not_discarded() {
         false,
         false,
         test_measure(),
+        0,
     )
     .expect("enter app-mode preview");
 

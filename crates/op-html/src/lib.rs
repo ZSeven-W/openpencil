@@ -479,6 +479,7 @@ pub(crate) fn wrap_imported_document(imported: HtmlImportResult) -> HtmlDocument
             logic_modules: None,
             design_md: None,
             conversion: None,
+            motion: None,
         },
         imported.diagnostics,
     )

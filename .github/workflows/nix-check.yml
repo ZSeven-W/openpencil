@@ -96,6 +96,13 @@ jobs:
       - name: Install headless display server
         run: |
           set -euo pipefail
+          # Runner images ship third-party apt sources (Google Chrome, Microsoft) this job never installs
+          # from; a bad index on one of those mirrors ("Hash Sum mismatch", 2026-09-10) fails `apt-get
+          # update` for everything. Drop them so only Ubuntu's own sources gate the prerequisites.
+          # Removed: google-chrome*.list/.sources, microsoft-*.list/.sources (azure-cli, edge,
+          # microsoft-prod). Ubuntu's own sources and the unused PPAs stay untouched.
+          sudo rm -f /etc/apt/sources.list.d/google-chrome*.list /etc/apt/sources.list.d/google-chrome*.sources \
+                     /etc/apt/sources.list.d/microsoft-*.list /etc/apt/sources.list.d/microsoft-*.sources
           apt_options=(
             -o Acquire::ForceIPv4=true
             -o Acquire::Retries=3

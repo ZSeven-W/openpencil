@@ -40,6 +40,14 @@ fn seed_many_chat_models(host: &mut WidgetHostNative, count: usize) {
         .collect();
 }
 
+fn seed(host: &mut WidgetHostNative, json: &str) {
+    let doc = jian_ops_schema::load_str(json)
+        .expect("fixture JSON parses")
+        .value;
+    *host.editor_state_mut() = op_editor_core::EditorState::from_document(doc);
+    host.mark_paint_dirty_for_test();
+}
+
 fn seed_layer_for_context_menu(host: &mut WidgetHostNative) {
     let doc = jian_ops_schema::load_str(
         r#"{"version":"1.0.0","children":[
@@ -75,6 +83,9 @@ fn first_layer_row_point(host: &WidgetHostNative, viewport_h: f32) -> Point2D {
 #[test]
 fn chat_model_row_press_selects_and_closes_immediately() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     seed_two_chat_models(&mut host);
     host.editor_state_mut().editor_ui.chat_model_picker.open = true;
     let chat_rect = host.ai_chat_rect(1200.0, 800.0).unwrap();
@@ -104,33 +115,41 @@ fn chat_model_row_press_selects_and_closes_immediately() {
 }
 
 #[test]
-fn chat_model_row_outside_chat_wins_over_layer_panel() {
+fn chat_model_row_outside_chat_wins_over_covered_canvas() {
+    // RETIRED PREMISE: the floating panel could be parked over the
+    // layer rail so its picker covered layer rows. The picker's only
+    // out-of-card reach now is over the CANVAS, from the composer
+    // card — so the covered surface underneath is a canvas node, and
+    // the row press must win over selecting it.
     let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"1.0.0","children":[
+          {"type":"rectangle","id":"under-picker","name":"Under picker",
+           "x":0,"y":0,"width":3000,"height":3000}
+        ]}"#,
+    );
     seed_many_chat_models(&mut host, 10);
-    {
-        let state = host.editor_state_mut();
-        state.chat.panel_height = op_editor_ui::widgets::AI_CHAT_MIN_HEIGHT;
-        state.chat.panel_position = Some((0.0, 400.0));
-        state.editor_ui.chat_model_picker.open = true;
-        state.editor_ui.chat_model_picker.scroll.offset = 56.0;
-    }
-    let chat_rect = host.ai_chat_rect(1200.0, 800.0).unwrap();
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
+    let card = host.ai_chat_rect(1200.0, 800.0).unwrap();
     let panel = AIChatPlaceholder::from_editor(host.editor_state());
-    let picker = panel.model_picker_bounds(chat_rect).unwrap();
+    let picker = panel.model_picker_bounds(card).unwrap();
     let point = Point2D::new(
         picker.origin.x + 24.0,
         picker.origin.y
             + ai_chat_model_picker::MODEL_SEARCH_H
             + ai_chat_model_picker::MODEL_PICKER_PAD_Y
             + ai_chat_model_picker::MODEL_GROUP_H
-            - 56.0
             + ai_chat_model_picker::MODEL_ROW_H
             + ai_chat_model_picker::MODEL_ROW_H / 2.0,
     );
-    assert!(!chat_rect.contains(point));
-    assert!(point.x < host.editor_state().editor_ui.layer_panel_width);
+    assert!(!card.contains(point), "row must sit outside the card");
+    assert!(
+        point.x > host.editor_state().editor_ui.layer_panel_width,
+        "the picker can no longer reach the layer rail's column"
+    );
     assert_eq!(
-        panel.hit_test(chat_rect, point),
+        panel.hit_test(card, point),
         Some(op_editor_ui::widgets::AIChatHit::SelectModel(1))
     );
     let selection_before = host.editor_state().selection.clone();
@@ -138,40 +157,73 @@ fn chat_model_row_outside_chat_wins_over_layer_panel() {
     assert!(host.apply_press(point.x, point.y, 1200.0, 800.0));
 
     assert_eq!(host.editor_state().chat.selected_model, 1);
-    assert_eq!(host.editor_state().selection, selection_before);
+    assert_eq!(
+        host.editor_state().selection,
+        selection_before,
+        "the covered canvas node must not be selected by the row press"
+    );
     assert!(!host.editor_state().editor_ui.chat_model_picker.open);
 }
 
 #[test]
-fn chat_model_row_over_layer_resize_gutter_wins_press() {
+fn chat_model_row_over_a_covered_resize_gutter_wins_press() {
+    // RETIRED PREMISE: the parked floating panel put its picker over
+    // the LAYER rail's resize gutter. The gutter a picker still covers
+    // is the VariablesPanel's south edge under the composer card's
+    // picker — and the row press must win over starting that resize.
     let mut host = WidgetHostNative::new();
     seed_many_chat_models(&mut host, 10);
-    let layer_edge = host.editor_state().editor_ui.layer_panel_width;
-    {
-        let state = host.editor_state_mut();
-        state.chat.panel_height = op_editor_ui::widgets::AI_CHAT_MIN_HEIGHT;
-        state.chat.panel_position = Some((layer_edge - 96.0, 400.0));
-        state.editor_ui.chat_model_picker.open = true;
-    }
-    let chat = host.ai_chat_rect(1200.0, 800.0).expect("chat rect");
-    let panel = AIChatPlaceholder::from_editor(host.editor_state());
-    let picker = panel.model_picker_bounds(chat).expect("picker rect");
-    let point = Point2D::new(
-        layer_edge,
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
+    // Row 1's centre from the live picker layout, then the variables
+    // panel is sized so its south gutter runs exactly through it — the
+    // user-sized panel is real persisted state, this just aims it.
+    let row1_center = {
+        let card = host.ai_chat_rect(1200.0, 800.0).expect("composer card");
+        let picker = AIChatPlaceholder::from_editor(host.editor_state())
+            .model_picker_bounds(card)
+            .expect("picker rect");
         picker.origin.y
             + ai_chat_model_picker::MODEL_SEARCH_H
             + ai_chat_model_picker::MODEL_PICKER_PAD_Y
             + ai_chat_model_picker::MODEL_GROUP_H
             + ai_chat_model_picker::MODEL_ROW_H
-            + ai_chat_model_picker::MODEL_ROW_H / 2.0,
+            + ai_chat_model_picker::MODEL_ROW_H / 2.0
+    };
+    host.editor_state_mut().editor_ui.variables_panel_open = true;
+    let vars_origin_y = host
+        .variables_panel_rect(1200.0, 800.0)
+        .expect("variables panel rect")
+        .origin
+        .y;
+    host.editor_state_mut().editor_ui.variables_panel_size =
+        Some((744.0, row1_center - vars_origin_y));
+    let variables_rect = host
+        .variables_panel_rect(1200.0, 800.0)
+        .expect("variables panel rect");
+    let card = host.ai_chat_rect(1200.0, 800.0).expect("composer card");
+    let panel = AIChatPlaceholder::from_editor(host.editor_state());
+    let picker = panel.model_picker_bounds(card).expect("picker rect");
+    let south_edge = variables_rect.origin.y + variables_rect.size.y;
+    let overlap_lo = picker.origin.x.max(variables_rect.origin.x);
+    let overlap_hi =
+        (picker.origin.x + picker.size.x).min(variables_rect.origin.x + variables_rect.size.x);
+    let point = Point2D::new((overlap_lo + overlap_hi) / 2.0, row1_center);
+    assert!(picker.contains(point), "probe must sit on picker row 1");
+    assert!(
+        (point.y - south_edge).abs() <= 3.0,
+        "probe must sit on the south resize gutter"
     );
     assert_eq!(
-        panel.hit_test(chat, point),
+        panel.hit_test(card, point),
         Some(op_editor_ui::widgets::AIChatHit::SelectModel(1))
     );
 
     assert!(host.apply_press(point.x, point.y, 1200.0, 800.0));
 
+    assert!(
+        host.variables_resize.is_none(),
+        "no resize gesture may start"
+    );
     assert!(!host.is_resizing_panel());
     assert_eq!(host.editor_state().chat.selected_model, 1);
     assert!(!host.editor_state().editor_ui.chat_model_picker.open);
@@ -183,26 +235,52 @@ fn right_press_on_model_picker_does_not_open_covered_layer_context_menu() {
     seed_layer_for_context_menu(&mut host);
     seed_many_chat_models(&mut host, 10);
     let viewport = (1200.0, 800.0);
+    // RETIRED PREMISE: the parked floating panel put its picker over
+    // the layer rail's rows. The rail (Layers tab) and the picker (the
+    // composer card's, right of the rail) are disjoint columns now, so
+    // the swallow below is asserted from the picker's own card: a
+    // secondary press on it belongs to the floating surface and never
+    // reaches the layer context-menu machinery beside it.
     let layer_point = first_layer_row_point(&host, viewport.1);
-    {
-        let state = host.editor_state_mut();
-        state.chat.panel_height = op_editor_ui::widgets::AI_CHAT_MIN_HEIGHT;
-        state.chat.panel_position = Some((0.0, layer_point.y + 40.0));
-        state.editor_ui.chat_model_picker.open = true;
-    }
-    let picker = host
-        .chat_model_picker_rect(viewport.0, viewport.1)
-        .expect("picker rect");
-    assert!(picker.contains(layer_point));
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
+    let card = host
+        .ai_chat_rect(viewport.0, viewport.1)
+        .expect("composer card");
+    let panel = AIChatPlaceholder::from_editor(host.editor_state());
+    let picker = panel.model_picker_bounds(card).expect("picker rect");
+    let point = Point2D::new(
+        picker.origin.x + 24.0,
+        picker.origin.y
+            + ai_chat_model_picker::MODEL_SEARCH_H
+            + ai_chat_model_picker::MODEL_PICKER_PAD_Y
+            + ai_chat_model_picker::MODEL_GROUP_H
+            + ai_chat_model_picker::MODEL_ROW_H / 2.0,
+    );
+    assert!(picker.contains(point));
+    assert!(
+        !host.cursor_over_layer_panel(point.x, point.y, viewport.0, viewport.1),
+        "the picker no longer reaches the layer rail's column"
+    );
+    assert!(
+        layer_point.x < picker.origin.x,
+        "rail rows stay west of the picker"
+    );
 
-    assert!(host.apply_right_press(layer_point.x, layer_point.y, viewport.0, viewport.1));
+    assert!(host.apply_right_press(point.x, point.y, viewport.0, viewport.1));
 
     assert!(host.editor_state().editor_ui.layer_context_menu.is_none());
     assert!(host.editor_state().editor_ui.chat_model_picker.open);
 }
 
+/// RETIRED BEHAVIOUR (minimize via chevron): the header chevron that
+/// collapsed the chat also closed the model picker and cleared its
+/// search. The chevron is gone from desktop; the composer card carries
+/// the same cleanup in two reachable steps: the open picker is modal
+/// over the card (any press on the card dismisses it AND its search),
+/// and once it is gone the header's glyphs — both of them — mean
+/// "open the Agent tab".
 #[test]
-fn minimizing_chat_closes_model_picker() {
+fn the_composer_card_header_opens_the_agent_tab_and_closes_the_model_picker() {
     let mut host = WidgetHostNative::new();
     seed_two_chat_models(&mut host);
     host.editor_state_mut().editor_ui.chat_model_picker.open = true;
@@ -210,11 +288,18 @@ fn minimizing_chat_closes_model_picker() {
         .editor_ui
         .chat_model_picker_input
         .set_text("gpt");
-    let chat = host.ai_chat_rect(1200.0, 800.0).unwrap();
+    // The card's slim header only exists while the input is focused.
+    host.editor_state_mut().chat.focused = true;
+    let card = host.ai_chat_rect(1200.0, 800.0).unwrap();
 
-    assert!(host.apply_press(chat.origin.x + 25.0, chat.origin.y + 18.0, 1200.0, 800.0,));
-
-    assert!(host.editor_state().chat.is_minimized());
+    // Step 1: the picker is modal over the card — the footer strip
+    // below its card is the reachable press that dismisses it.
+    assert!(host.apply_click(
+        card.origin.x + card.size.x - 28.0,
+        card.origin.y + card.size.y - 20.0,
+        1200.0,
+        800.0
+    ));
     assert!(!host.editor_state().editor_ui.chat_model_picker.open);
     assert!(host
         .editor_state()
@@ -222,22 +307,51 @@ fn minimizing_chat_closes_model_picker() {
         .chat_model_picker_input
         .text()
         .is_empty());
+    assert_eq!(
+        host.editor_state().editor_ui.slides_panel.tab,
+        op_editor_core::LeftPanelTab::Layers,
+        "dismissing the picker stays on this tab"
+    );
+
+    // Step 2: with the picker gone the header is reachable — anywhere
+    // on the 30 px strip, both glyphs route the same way.
+    assert!(host.apply_click(
+        card.origin.x + card.size.x / 2.0,
+        card.origin.y + 15.0,
+        1200.0,
+        800.0
+    ));
+    assert_eq!(
+        host.editor_state().editor_ui.slides_panel.tab,
+        op_editor_core::LeftPanelTab::Chat,
+        "the glyphs' one meaning is: the conversation lives in the Agent tab"
+    );
+    assert!(!host.editor_state().editor_ui.chat_model_picker.open);
 }
 
 #[test]
 fn chat_model_picker_visible_over_topbar_wins_press() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     seed_many_chat_models(&mut host, 10);
     host.set_now_ms(456);
-    {
-        let state = host.editor_state_mut();
-        state.chat.anchor = op_editor_core::ChatAnchor::TopLeft;
-        state.chat.panel_height = op_editor_ui::widgets::AI_CHAT_MIN_HEIGHT;
-        state.editor_ui.chat_model_picker.open = true;
-    }
-    let chat = host.ai_chat_rect(1200.0, 800.0).unwrap();
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
+    // A SHORT viewport is the one desktop shape where the capped picker
+    // still climbs past the rail top into the top bar's band: the rail
+    // body is only as tall as the window, and the picker is 288 px.
+    // The floating panel that used to reach up here on its own is
+    // retired — this is the remaining route, and the press precedence
+    // it always guarded still applies.
+    let viewport = (1200.0, 360.0);
+    let chat = host.ai_chat_rect(viewport.0, viewport.1).unwrap();
     let panel = AIChatPlaceholder::from_editor(host.editor_state());
     let picker = panel.model_picker_bounds(chat).unwrap();
+    assert!(
+        picker.origin.y < op_editor_ui::widgets::TOP_BAR_HEIGHT,
+        "fixture must put the picker's search strip over the top bar"
+    );
     let search_top = picker.origin.y.max(0.0);
     let search_bottom = (picker.origin.y + ai_chat_model_picker::MODEL_SEARCH_H)
         .min(op_editor_ui::widgets::TOP_BAR_HEIGHT);
@@ -248,7 +362,7 @@ fn chat_model_picker_visible_over_topbar_wins_press() {
         Some(op_editor_ui::widgets::AIChatHit::FocusModelSearch)
     );
 
-    assert!(host.apply_press(point.x, point.y, 1200.0, 800.0));
+    assert!(host.apply_press(point.x, point.y, viewport.0, viewport.1));
 
     assert!(host.editor_state().editor_ui.chat_model_picker.open);
     assert_eq!(
@@ -263,6 +377,9 @@ fn chat_model_picker_visible_over_topbar_wins_press() {
 #[test]
 fn image_provider_option_press_defers_selection_until_release() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     host.editor_state_mut().editor_ui.agent_settings.tab = AgentSettingsTab::Images;
     host.editor_state_mut()
         .editor_ui
@@ -341,6 +458,9 @@ fn image_provider_option_press_defers_selection_until_release() {
 #[test]
 fn font_weight_row_press_defers_selection_until_release() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     *host.editor_state_mut() = op_editor_core::EditorState::sample();
     host.editor_state_mut().editor_ui.font_weight_picker_open = true;
     let property_rect = Rect {
@@ -375,6 +495,9 @@ fn font_weight_row_press_defers_selection_until_release() {
 #[test]
 fn tracked_picker_row_press_defers_selection_until_release() {
     let mut host = WidgetHostNative::new();
+    // The expanded chat panel lives in the rail's Agent tab; anywhere
+    // else the chat is composer-only, so put the rail on its home.
+    host.editor_state_mut().editor_ui.enter_chat_tab();
     {
         let panel = &mut host.editor_state_mut().editor_ui.git_panel;
         *panel = GitPanelState {

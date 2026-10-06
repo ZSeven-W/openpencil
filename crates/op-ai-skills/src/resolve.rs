@@ -197,7 +197,7 @@ mod tests {
             "design a login form",
             &ResolveOptions::default(),
         );
-        assert_eq!(ctx.budget_max, 16050);
+        assert_eq!(ctx.budget_max, 17150);
         assert!(ctx.budget_used <= ctx.budget_max);
         assert!(
             !ctx.skills.is_empty(),
@@ -350,7 +350,7 @@ mod tests {
         };
         let ctx = resolve_skills(Phase::Planning, "plan a landing page", &opts);
         assert!(ctx.memory.document_context.is_some());
-        assert_eq!(ctx.budget_max, 6000);
+        assert_eq!(ctx.budget_max, 6600);
     }
 
     #[test]

@@ -272,6 +272,10 @@ fn import_menu_hover_clears_when_cursor_leaves_into_the_layer_panel() {
 #[test]
 fn panel_resize_drag_continues_inside_left_layer_panel() {
     let mut app = DesktopApp::new(None);
+    // Start wide of the rail's 240 px floor: the drag must be observable
+    // as a narrowing, and a 72 px pull from the 240 px default would
+    // just sit on the clamp.
+    app.host.editor_state_mut().editor_ui.layer_panel_width = 360.0;
     let start_width = app.host.editor_state().editor_ui.layer_panel_width;
     let y = op_editor_ui::widgets::TOP_BAR_HEIGHT + 140.0;
     assert!(app
@@ -364,10 +368,16 @@ fn selected_count_chip_clear_click_clears_canvas_selection() {
     ];
     app.host.editor_state_mut().chat.panel_position = Some((100.0, 100.0));
     // The app launches minimized; the selection chip lives in the
-    // expanded panel.
+    // expanded panel, and the expanded panel now lives in the rail's
+    // Agent tab — elsewhere the chat is composer-only and has no chip.
     app.host.editor_state_mut().chat.expand();
-    let chat = &app.host.editor_state().chat;
-    let chat_rect = op_editor_ui::Rect::xywh(100.0, 100.0, chat.panel_width, chat.panel_height);
+    app.host.editor_state_mut().editor_ui.enter_chat_tab();
+    // The panel's rect is the rail's body now, not a floating box the
+    // test can place itself.
+    let state = app.host.editor_state();
+    let panel_rect = op_editor_ui::widgets::host_canvas_geometry::layer_panel_rect(state, 800.0);
+    let chat_rect =
+        op_editor_ui::widgets::slides_panel_flow::layers_content_rect(state, panel_rect);
     let panel = op_editor_ui::widgets::AIChatPlaceholder::from_editor(app.host.editor_state());
     let input = panel.input_rect(chat_rect);
     let clear_point = (0..160)
@@ -471,7 +481,7 @@ fn design_md_auto_generate_does_not_fall_back_to_local_extraction() {
     let mut app = DesktopApp::new(None);
     let mut variables = BTreeMap::new();
     variables.insert(
-        "$color-brand".to_string(),
+        "$--primary".to_string(),
         VariableDefinition {
             kind: VariableKind::Color,
             value: VariableValue::Scalar(VariableScalar::Str("#2563eb".to_string())),
@@ -550,4 +560,24 @@ fn design_md_auto_generate_does_not_fall_back_to_local_extraction() {
         .as_ref()
         .expect("previous design.md restored");
     assert_eq!(restored.project_name.as_deref(), Some("Existing"));
+}
+
+#[test]
+fn first_window_show_rearms_the_home_entrance_once() {
+    let mut app = DesktopApp::new(None);
+    app.host.editor_state_mut().editor_ui.home.visible = true;
+    app.host.editor_state_mut().editor_ui.home.shown_at_ms = 700;
+    app.on_window_shown();
+    assert_eq!(
+        app.host.editor_state().editor_ui.home.shown_at_ms,
+        0,
+        "the entrance replays once the window is really on screen"
+    );
+    app.host.editor_state_mut().editor_ui.home.shown_at_ms = 9_000;
+    app.on_window_shown();
+    assert_eq!(
+        app.host.editor_state().editor_ui.home.shown_at_ms,
+        9_000,
+        "later focus or occlusion changes never replay it"
+    );
 }

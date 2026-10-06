@@ -199,6 +199,13 @@ fn failed_delete_restores_the_registry_clears_the_queue_and_warns() {
 #[test]
 fn file_menu_template_request_commits_a_focused_property_draft_before_snapshotting() {
     let _guard = exclusive();
+    // The drained save renders a template preview through the shared export
+    // painter, whose discovery pass DRAINS the process-global pending-decode
+    // registry (`ensure_images_decoded` → `take_pending_decodes(usize::MAX)`).
+    // Hold the decode-test lock so that drain cannot steal an entry a
+    // concurrently running `image_decode_host` test just queued (stolen
+    // avatar decode, linux-aarch64 CI 2026-08-29).
+    let _decode_guard = crate::image_decode_host::lock_decode_test_registry();
     let mut app = crate::DesktopApp::new(None);
     let state = app.host.editor_state_mut();
     state.set_single_selection(op_editor_core::NodeId::new("n10"));

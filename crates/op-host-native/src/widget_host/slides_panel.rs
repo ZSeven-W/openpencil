@@ -32,10 +32,15 @@ impl WidgetHostNative {
     ///
     /// Compact and Medium touch layouts show it in the Layers sheet while
     /// keeping `sidebar_open = false`; desktop and Expanded keep using the
-    /// persistent sidebar flag.
+    /// persistent sidebar flag. While the generation workspace is docked
+    /// the rail's own chrome (tab row included) does not exist — the
+    /// dock IS the column and the pinned chat owns its body — so no rail
+    /// tier may claim a press or hover in that band.
     pub(in crate::widget_host) fn left_rail_visible(&self) -> bool {
         let ui = &self.editor_state.editor_ui;
-        ui.sidebar_open || (ui.touch_chrome() && ui.mobile_sheet == Some(MobileSheetKind::Layers))
+        !op_editor_ui::widgets::host_canvas_geometry::workspace_docked(&self.editor_state)
+            && (ui.sidebar_open
+                || (ui.touch_chrome() && ui.mobile_sheet == Some(MobileSheetKind::Layers)))
     }
 
     /// Canonical visible rect for rail content.
@@ -128,18 +133,12 @@ impl WidgetHostNative {
         slides: &SlidesFrame,
     ) {
         use op_editor_ui::widgets::PaintCx;
-        let (layers_label, slides_label) = flow::tab_labels(&self.editor_state);
+        let desc = flow::tab_row_desc(&self.editor_state);
         let actions = flow::action_labels(
             &self.editor_state,
             flow::selected_slide_count(&self.editor_state, &slides.chips),
         );
-        let widget = flow::widget(
-            slides.active,
-            &self.editor_state,
-            layers_label,
-            slides_label,
-            actions.labels(),
-        );
+        let widget = flow::widget(slides.active, &self.editor_state, &desc, actions.labels());
         {
             let mut cx = PaintCx {
                 backend: &mut *frame,
@@ -158,7 +157,7 @@ impl WidgetHostNative {
         }
     }
 
-    /// Paint just the tab row, for the frames where the layer tree owns
+    /// Paint just the tab row, for the frames where another tab owns
     /// the rest of the rail.
     pub(in crate::widget_host) fn paint_slides_tab_row(
         &self,
@@ -166,14 +165,13 @@ impl WidgetHostNative {
         tabs: &SlidesPanelTabs,
     ) {
         use op_editor_ui::widgets::PaintCx;
-        let (layers_label, slides_label) = flow::tab_labels(&self.editor_state);
+        let desc = flow::tab_row_desc(&self.editor_state);
         let mut cx = PaintCx { backend: frame };
         tabs.paint(
             &mut cx,
             &self.theme,
             self.editor_state.editor_ui.slides_panel.hover,
-            layers_label,
-            slides_label,
+            &desc,
         );
     }
 

@@ -34,6 +34,13 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.touch_chrome() {
             return None;
         }
+        // While the workspace is docked, the dock's own 5 px handle owns
+        // the column's edge (and runs at a HIGHER press tier than this
+        // gutter) — a second gutter over the same pixels would only race
+        // it for the press.
+        if canvas_geometry::workspace_docked(&self.editor_state) {
+            return None;
+        }
         if y < TOP_BAR_HEIGHT {
             return None;
         }

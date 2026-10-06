@@ -152,6 +152,8 @@ fn worker_event_ids(event: &Progress) -> Vec<&str> {
         Progress::SubtaskStarted { id, .. }
         | Progress::SubtaskDone { id, .. }
         | Progress::SubtaskFailed { id, .. }
+        | Progress::SubtaskIncomplete { id, .. }
+        | Progress::SubtaskLanguageMismatch { id, .. }
         | Progress::SubtaskSkills { id, .. }
         | Progress::SubtaskRetry { id, .. }
         | Progress::GeometryEcho { id, .. }
@@ -347,7 +349,7 @@ pub(super) fn finish_design_success(
         }
     }
 
-    for outcome in &summary.subtasks {
+    for (outcome_index, outcome) in summary.subtasks.iter().enumerate() {
         let target = indices
             .iter()
             .copied()
@@ -387,7 +389,13 @@ pub(super) fn finish_design_success(
             }
         }
         if let Some(subtask) = &outcome.subtask {
-            if let Ok(subtask_json) = serde_json::to_string(subtask) {
+            let insert_after_sibling_id = summary.subtasks[..outcome_index]
+                .iter()
+                .rev()
+                .find_map(|prior| prior.inserted_root_ids.last().cloned());
+            let mut subtask = subtask.clone();
+            subtask.insert_after_sibling_id = insert_after_sibling_id.clone();
+            if let Ok(subtask_json) = serde_json::to_string(&subtask) {
                 let message = &mut messages[target];
                 if message.design_request_json_for_retry.is_none() {
                     message.design_request_json_for_retry = request_json.clone();
@@ -402,6 +410,7 @@ pub(super) fn finish_design_success(
                         .push(op_editor_core::PendingSubtaskRetry {
                             subtask_id: outcome.id.clone(),
                             subtask_json,
+                            insert_after_sibling_id,
                         });
                 }
             }

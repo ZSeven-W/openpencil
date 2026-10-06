@@ -34,6 +34,7 @@ pub mod tree;
 // Step 2 compositions (built on top of the primitives, driven by
 // `op_editor_core::EditorState`).
 pub(crate) mod font_picker_cache;
+pub mod home_surface;
 pub mod layer_context_menu;
 pub mod layer_panel;
 pub(crate) mod layer_panel_cache;
@@ -49,6 +50,12 @@ mod layer_panel_touch_tests;
 mod layer_panel_walkers;
 pub mod path_anchor_context_menu;
 pub mod prompt_center_panel;
+pub use home_surface::{home_enter, HomeEnterBlock, HomeLayout, HomeSurface, HOME_TOPBAR_H};
+pub mod workspace_surface;
+pub use workspace_surface::{
+    family_has_strip, family_views, layout_for as workspace_layout_for, workspace_enter,
+    WorkspaceLayout, WorkspaceSurface,
+};
 pub(crate) mod prompt_center_previews;
 pub mod scene_template_panel;
 pub use scene_template_panel::{
@@ -135,6 +142,9 @@ mod property_panel_text_tests;
 pub mod property_panel_typography;
 #[cfg(test)]
 mod property_panel_vector_fidelity_tests;
+pub mod property_panel_video;
+#[cfg(test)]
+mod property_panel_video_tests;
 pub mod property_panel_visibility;
 #[cfg(test)]
 mod property_panel_wash_tests;
@@ -224,7 +234,9 @@ pub mod scroll_flow;
 
 // Step 4 — icon glyph drawer for editor chrome (lucide-flavored line art).
 pub mod icon_catalog;
+pub mod icon_catalog_aliases;
 pub mod icons;
+mod icons_lookup;
 #[cfg(test)]
 mod icons_tests;
 // Lucide d-string data — extracted as a sibling so `icons.rs` stays
@@ -400,6 +412,9 @@ pub mod status_bar;
 pub mod tooltip;
 pub mod top_bar;
 mod top_bar_geometry;
+#[cfg(test)]
+#[path = "top_bar_home_tests.rs"]
+mod top_bar_home_tests;
 mod top_bar_paint;
 #[cfg(test)]
 mod top_bar_tests;
@@ -436,7 +451,7 @@ pub use canvas_viewport::{
     arc_handle_positions, path_handle_positions, rotate_point, rotation_corner_at_point,
     selection_handle_at_point, ArcHandle, CanvasNodeDragOverlay, CanvasViewport, SelectionHandle,
 };
-pub use canvas_viewport_paint::paint_scene_page;
+pub use canvas_viewport_paint::{paint_scene_page, paint_scene_page_without_video_badge};
 pub use canvas_viewport_widget::widget_text_inset_left;
 pub use preview_device_switcher::PreviewDeviceSwitcher;
 pub use scene_paint_options::{paint_scene_page_with, paint_scene_subtree, PaintSceneOptions};

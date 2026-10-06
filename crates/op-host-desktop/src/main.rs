@@ -109,6 +109,7 @@ mod user_template_save;
 mod user_template_store;
 mod window_resize;
 mod window_state;
+mod workspace_phase;
 
 use op_host_native::{NativeBackend, SharedSkiaContext, SharedSkiaError, WidgetHostNative};
 use std::ffi::OsStr;
@@ -206,6 +207,12 @@ struct DesktopApp {
     redraw_pending: bool,
     /// True when the pending redraw needs a paint even if cursor coalescing drained to no-op.
     redraw_dirty: bool,
+    /// Whether the window has been on screen at least once. The Home
+    /// entrance choreography stamps its clock at the first paint, which
+    /// on macOS happens seconds before the window is actually composited;
+    /// the first `Occluded(false)` / `Focused(true)` re-arms it so the
+    /// choreography plays when the user can see it.
+    window_shown_once: bool,
     /// Logical page whose first frame has completed. The document epoch
     /// distinguishes whole-document replacements, while the page id keeps
     /// page deletion/reorder correct even when an index is reused.
@@ -699,6 +706,10 @@ fn main() {
 #[cfg(test)]
 #[path = "chat_intent_host_tests.rs"]
 mod chat_intent_host_tests;
+
+#[cfg(test)]
+#[path = "settings_agent_preference_tests.rs"]
+mod settings_agent_preference_tests;
 
 #[cfg(test)]
 mod main_mcp_tests;

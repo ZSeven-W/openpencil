@@ -28,6 +28,10 @@ pub(super) struct PaintNodeOptions<'a, 'generation> {
     /// True while rendering a deferred mask source. Editor-only animation and
     /// image placeholder art must not contribute coverage to the mask.
     pub(super) mask_source: bool,
+    /// Whether the editor-only video play badge should be painted. Preview
+    /// hosts render the poster without chrome; the web host adds a real DOM
+    /// video element over it instead.
+    pub(super) show_video_badge: bool,
     /// The deferred mask root is already being used as a DstIn/luminance
     /// source, so its own node-level blend must not composite again. Exact id
     /// matching suppresses only that root; blended descendants still render.

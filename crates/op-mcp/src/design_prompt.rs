@@ -88,7 +88,7 @@ K("shadcn/btn-primary", hero, {label:"Get started"});
 
 Light/dark handling:
 - Inspect `get_variables` / `get_active_theme` first when the document already defines theme axes.
-- Use variable refs such as `$color-bg`, `$color-text`, and `$color-surface` when the document provides them.
+- Use variable refs such as `$--background`, `$--foreground`, and `$--card` when the document provides them.
 - If the user explicitly asks for a one-off dark or light design and no variables exist, use concrete high-contrast fills and text colors directly."##;
 
 const DEFAULT_DESIGN_MD: &str = "No design.md loaded in the current document.";
