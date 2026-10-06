@@ -68,8 +68,11 @@ mod geometry_buried_overlay;
 #[path = "geometry_tutorial_labels.rs"]
 mod geometry_tutorial_labels;
 pub use geometry_tutorial_labels::repair_scoped_tutorial_labels;
+#[path = "editorial_column_gutters.rs"]
+mod editorial_column_gutters;
 #[path = "headline_tail_fit.rs"]
 mod headline_tail_fit;
+pub(crate) use editorial_column_gutters::repair_divided_prose_gutters;
 #[path = "none_stack_inset.rs"]
 mod none_stack_inset;
 #[path = "text_fit.rs"]

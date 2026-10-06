@@ -13,6 +13,27 @@ use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
 
 use crate::types::DocSink;
 
+/// Column breathing is an editorial choice, confined to this run's own output.
+/// Apply it before geometry/board spacing so any additional wrapping is measured.
+pub(super) fn repair_generated_prose_gutters(
+    sink: &mut dyn DocSink,
+    root_id: &str,
+    summary: &mut crate::repair_summary::RepairSummary,
+    counter: &mut crate::repair_summary::RepairCounter,
+    policy: super::CleanupPolicy,
+) {
+    if policy.roots_are_run_output
+        && super::intent_allows(sink, crate::repair_tier::TieredPass::EditorialColumnGutters)
+    {
+        crate::geometry_validation::repair_divided_prose_gutters(sink, root_id);
+        counter.checkpoint(
+            summary,
+            crate::repair_summary::CheckCategory::Layout,
+            "prose-column-gutters",
+        );
+    }
+}
+
 /// Env-gated (`OPENPENCIL_DEBUG_CLEANUP=1`) probe: log the named child's
 /// current height under `root_id`, tagged with the pass that just ran.
 /// Lives here (not in the `cleanup.rs` spine) to keep the spine under the

@@ -160,7 +160,7 @@ Body lines cap at **22 Han characters**. At 40px on a 920px column that is the n
 - Canvas 1080 × 1440 (3:4). Content column 920: 12 columns of 62 with 16 gutters
 - Masthead: a 3px rule over a 1px rule, full content width, with the headline between them
 - Cover: masthead, then the doubled misregistered headline, then a deck line, then one rule
-- Columns: two-column body is allowed only at Body 36 in an 11-column measure; otherwise single column
+- Columns: two-column body is allowed only at Body 36 in an 11-column measure; otherwise single column. Leave at least 36px of clear space on each side of a vertical rule, through inner column padding or gaps. Root page margins do not provide this internal reading gutter.
 - Tables: header row in Card Surface, zebra rows in Tint Surface, no vertical rules
 - Inverted band: at most one per deck, full-bleed, 0 radius
 - Page number: bottom-right, Caption size, Muted Text, no frame

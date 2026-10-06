@@ -24,3 +24,5 @@ Holds for every standalone portrait card board — XHS 小红书 3:4 (1080×1440
 4. `VERTICAL RHYTHM: content fills the card's full height — top margin ≥64px, footer lands inside the bottom margin, trailing void ≤15%; grow type scale or section gaps rather than leaving the lower half empty.`
 
 5. `TEXT-ONLY IMAGE GATE: when the user supplies text but does not explicitly request a photo, image, illustration, texture, or other raster artwork, create NO image node, image slot, imageSearchQuery, imagePrompt, stock-search background, or generated-image background. The fixed board itself is the card — use typography, colour fields, vector paths, iconFont, rules, and repeated shapes for visual energy instead of placing a white card on an unrelated photo.`
+
+6. `PROSE COLUMN GUTTERS: root margins do not separate reading columns. Leave at least one body-font em on BOTH sides of a vertical column rule, using inner column padding or explicit gaps. If the remaining measure is too narrow, use one column; preserve the complete supplied facts, body type scale and requested page count.`

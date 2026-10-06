@@ -98,6 +98,8 @@ pub enum TieredPass {
     /// weights to rebuild a hierarchy. An imported site's 700-weight type is
     /// its brand, not an accident.
     OverboldTextHierarchy,
+    /// Space between generated reading columns and their vertical separator.
+    EditorialColumnGutters,
 
     // ── Contract ────────────────────────────────────────────────────────
     /// `geometry_validation::geometry_validate_and_fix` — runs the real layout
@@ -125,7 +127,8 @@ impl TieredPass {
             | TieredPass::TreeHeuristics
             | TieredPass::HeroBleed
             | TieredPass::MotionRecipes
-            | TieredPass::OverboldTextHierarchy => RepairTier::Intent,
+            | TieredPass::OverboldTextHierarchy
+            | TieredPass::EditorialColumnGutters => RepairTier::Intent,
             TieredPass::GeometryValidation
             | TieredPass::TextCollision
             | TieredPass::TextContrast

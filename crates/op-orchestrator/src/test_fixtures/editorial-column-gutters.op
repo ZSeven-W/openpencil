@@ -1,0 +1,2767 @@
+{
+  "version": "0.8.5",
+  "themes": {
+    "Mode": [
+      "Light",
+      "Dark"
+    ]
+  },
+  "variables": {
+    "--accent": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#F5F5F3",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#635C46",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--accent-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#F1F5F9",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--background": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#F1EDE1",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#241F0D",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--border": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#B3B1AA",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#4F4832",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--card": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#E5DDCC",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#1E293B",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--card-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#F1F5F9",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--chart-1": {
+      "type": "color",
+      "value": "#3B82F6"
+    },
+    "--chart-2": {
+      "type": "color",
+      "value": "#8B5CF6"
+    },
+    "--chart-3": {
+      "type": "color",
+      "value": "#EC4899"
+    },
+    "--chart-4": {
+      "type": "color",
+      "value": "#14B8A6"
+    },
+    "--chart-5": {
+      "type": "color",
+      "value": "#F59E0B"
+    },
+    "--chart-6": {
+      "type": "color",
+      "value": "#F97316"
+    },
+    "--color-error": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#EF4444",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#F87171",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--color-error-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--color-info": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#3B82F6",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#60A5FA",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--color-info-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--color-success": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#10B981",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#34D399",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--color-success-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--color-warning": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#F59E0B",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#FBBF24",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--color-warning-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--destructive": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#EF4444",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#F87171",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--destructive-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--font-primary": {
+      "type": "string",
+      "value": "Inter"
+    },
+    "--font-secondary": {
+      "type": "string",
+      "value": "Space Grotesk"
+    },
+    "--foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#1E1A16",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#F1F5F9",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--input": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#EEEBE2",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#4F4832",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--muted": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#F8F6F1",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#4F4832",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--muted-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#6D6863",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#94A3B8",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--popover": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FFFFFF",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#1E293B",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--popover-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#F1F5F9",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--primary": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#B74A37",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#60A5FA",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--primary-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--radius-l": {
+      "type": "number",
+      "value": 12.0
+    },
+    "--radius-m": {
+      "type": "number",
+      "value": 8.0
+    },
+    "--radius-none": {
+      "type": "number",
+      "value": 0.0
+    },
+    "--radius-pill": {
+      "type": "number",
+      "value": 999.0
+    },
+    "--radius-xs": {
+      "type": "number",
+      "value": 4.0
+    },
+    "--ring": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#60A5FA",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#60A5FA",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--scrim": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#00000080",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#00000099",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--secondary": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#F1F5F9",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#334155",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--secondary-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#544F4A",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#F1F5F9",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--sidebar": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#FFFFFF",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#1E293B",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--sidebar-accent": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#F1F5F9",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#334155",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--sidebar-accent-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#F1F5F9",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--sidebar-border": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#E2E8F0",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#334155",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--sidebar-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#F1F5F9",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--sidebar-primary": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#60A5FA",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#60A5FA",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--sidebar-primary-foreground": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#0F172A",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "--sidebar-ring": {
+      "type": "color",
+      "value": [
+        {
+          "value": "#60A5FA",
+          "theme": {
+            "Mode": "Light"
+          }
+        },
+        {
+          "value": "#60A5FA",
+          "theme": {
+            "Mode": "Dark"
+          }
+        }
+      ]
+    },
+    "spacing-1": {
+      "type": "number",
+      "value": 4.0
+    },
+    "spacing-2": {
+      "type": "number",
+      "value": 8.0
+    },
+    "spacing-3": {
+      "type": "number",
+      "value": 12.0
+    },
+    "spacing-4": {
+      "type": "number",
+      "value": 16.0
+    },
+    "spacing-5": {
+      "type": "number",
+      "value": 24.0
+    },
+    "type-body-line-height": {
+      "type": "number",
+      "value": 1.5
+    },
+    "type-body-size": {
+      "type": "number",
+      "value": 14.0
+    },
+    "type-body-weight": {
+      "type": "number",
+      "value": 400.0
+    },
+    "type-caption-line-height": {
+      "type": "number",
+      "value": 1.4
+    },
+    "type-caption-size": {
+      "type": "number",
+      "value": 12.0
+    },
+    "type-caption-weight": {
+      "type": "number",
+      "value": 400.0
+    },
+    "type-display-letter-spacing": {
+      "type": "number",
+      "value": -0.5
+    },
+    "type-display-line-height": {
+      "type": "number",
+      "value": 1.0
+    },
+    "type-display-size": {
+      "type": "number",
+      "value": 64.0
+    },
+    "type-display-weight": {
+      "type": "number",
+      "value": 700.0
+    },
+    "type-h1-line-height": {
+      "type": "number",
+      "value": 1.2
+    },
+    "type-h1-size": {
+      "type": "number",
+      "value": 24.0
+    },
+    "type-h1-weight": {
+      "type": "number",
+      "value": 600.0
+    },
+    "type-h2-line-height": {
+      "type": "number",
+      "value": 1.25
+    },
+    "type-h2-size": {
+      "type": "number",
+      "value": 20.0
+    },
+    "type-h2-weight": {
+      "type": "number",
+      "value": 600.0
+    },
+    "type-h3-line-height": {
+      "type": "number",
+      "value": 1.3
+    },
+    "type-h3-size": {
+      "type": "number",
+      "value": 16.0
+    },
+    "type-h3-weight": {
+      "type": "number",
+      "value": 600.0
+    },
+    "type-uppercase-label-letter-spacing": {
+      "type": "number",
+      "value": 1.5
+    }
+  },
+  "children": [
+    {
+      "type": "frame",
+      "id": "n1",
+      "name": "卡片一",
+      "x": 80.0,
+      "y": 40.0,
+      "width": 1080.0,
+      "height": 1440.0,
+      "layout": "vertical",
+      "gap": 20.0,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#F6F1E7"
+        }
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "n48",
+          "name": "卡片一 · 第一步 准备资料",
+          "width": "fill_container",
+          "height": "fit_content",
+          "layout": "vertical",
+          "padding": [
+            96.0,
+            80.0,
+            128.0,
+            80.0
+          ],
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--background"
+            }
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "n49",
+              "name": "报头规线组",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6.0,
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "n50",
+                  "name": "报头粗规线",
+                  "width": "fill_container",
+                  "height": 3.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--primary"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n51",
+                  "name": "报头细规线",
+                  "width": "fill_container",
+                  "height": 1.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--border"
+                    }
+                  ],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n52",
+              "name": "编号与栏目行",
+              "width": "fill_container",
+              "layout": "horizontal",
+              "gap": 24.0,
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "n53",
+                  "name": "栏目标签组",
+                  "layout": "horizontal",
+                  "gap": 16.0,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n54",
+                      "name": "栏目标签",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "普通人改稿的三个步骤",
+                      "fontFamily": "Archivo, Noto Serif SC",
+                      "fontSize": 32.0,
+                      "fontWeight": 500,
+                      "letterSpacing": 2.0,
+                      "lineHeight": 1.3,
+                      "textGrowth": "auto",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--secondary-foreground"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "n55",
+                  "name": "编号",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "01",
+                  "fontFamily": "Libre Caslon Text, Noto Serif SC",
+                  "fontSize": 120.0,
+                  "fontWeight": 700,
+                  "lineHeight": 1.0,
+                  "textGrowth": "auto",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--foreground"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n56",
+              "name": "标题错版块",
+              "width": "fill_container",
+              "height": 300.0,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "n57",
+                  "name": "朱红错版层",
+                  "x": 24.0,
+                  "y": 228.0,
+                  "width": 420.0,
+                  "height": 16.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--primary"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n58",
+                  "name": "朱红衬块",
+                  "x": 0.0,
+                  "y": 0.0,
+                  "width": 8.0,
+                  "height": 220.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--primary"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "text",
+                  "id": "n59",
+                  "name": "主标题",
+                  "x": 40.0,
+                  "y": 40.0,
+                  "width": 880.0,
+                  "height": "fit_content",
+                  "content": "第一步 · 准备资料",
+                  "fontFamily": "Libre Caslon Text, Noto Serif SC",
+                  "fontSize": 110.0,
+                  "fontWeight": 700,
+                  "letterSpacing": -1.0,
+                  "lineHeight": 1.5,
+                  "textGrowth": "fixed-width",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--foreground"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "rectangle",
+              "id": "n60",
+              "name": "导语规线",
+              "width": "fill_container",
+              "height": 1.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--border"
+                }
+              ],
+              "children": []
+            },
+            {
+              "type": "text",
+              "id": "n61",
+              "name": "导语",
+              "width": "fill_container",
+              "height": "fit_content",
+              "content": "改稿之前，先把材料备齐，把读者想清楚。",
+              "fontFamily": "Archivo, Noto Serif SC",
+              "fontSize": 40.0,
+              "fontWeight": 400,
+              "letterSpacing": 0.8,
+              "lineHeight": 1.7,
+              "textGrowth": "fixed-width",
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--secondary-foreground"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n62",
+              "name": "正文要点列",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 48.0,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "n63",
+                  "name": "要点·整理材料",
+                  "width": "fill_container",
+                  "layout": "horizontal",
+                  "gap": 32.0,
+                  "alignItems": "start",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "n64",
+                      "name": "点位块",
+                      "width": 88.0,
+                      "height": 88.0,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "n65",
+                          "name": "点位衬块",
+                          "x": 6.0,
+                          "y": 6.0,
+                          "width": 82.0,
+                          "height": 82.0,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "$--primary"
+                            }
+                          ],
+                          "children": []
+                        },
+                        {
+                          "type": "frame",
+                          "id": "n66",
+                          "name": "点位字框",
+                          "x": 0.0,
+                          "y": 0.0,
+                          "width": 88.0,
+                          "height": 88.0,
+                          "layout": "horizontal",
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "cornerRadius": 0.0,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#1E1A16"
+                            }
+                          ],
+                          "children": []
+                        },
+                        {
+                          "type": "frame",
+                          "id": "n67",
+                          "name": "点位字框",
+                          "x": 0.0,
+                          "y": 0.0,
+                          "width": 88.0,
+                          "height": 88.0,
+                          "layout": "horizontal",
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#1E1A16"
+                            }
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "n68",
+                              "name": "点位字",
+                              "width": "fit_content",
+                              "height": "fit_content",
+                              "content": "一",
+                              "fontFamily": "Libre Caslon Text, Noto Serif SC",
+                              "fontSize": 44.0,
+                              "fontWeight": 700,
+                              "lineHeight": 1.5,
+                              "textGrowth": "auto",
+                              "fill": [
+                                {
+                                  "type": "solid",
+                                  "color": "$--card"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n69",
+                      "name": "要点文字组",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 12.0,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n70",
+                          "name": "要点标题",
+                          "width": "fill_container",
+                          "height": "fit_content",
+                          "content": "整理材料",
+                          "fontFamily": "Archivo, Noto Serif SC",
+                          "fontSize": 48.0,
+                          "fontWeight": 600,
+                          "lineHeight": 1.3,
+                          "textGrowth": "fixed-width",
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "$--foreground"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n71",
+                          "name": "要点正文",
+                          "width": "fill_container",
+                          "height": "fit_content",
+                          "content": "把要用的文字、时间地点和图片整理好，随取随用，不临时翻找。",
+                          "fontFamily": "Archivo, Noto Serif SC",
+                          "fontSize": 36.0,
+                          "fontWeight": 400,
+                          "letterSpacing": 0.7,
+                          "lineHeight": 1.7,
+                          "textGrowth": "fixed-width",
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "$--secondary-foreground"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n72",
+                  "name": "要点·明确读者",
+                  "width": "fill_container",
+                  "layout": "horizontal",
+                  "gap": 32.0,
+                  "alignItems": "start",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "n73",
+                      "name": "点位块",
+                      "width": 88.0,
+                      "height": 88.0,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "n74",
+                          "name": "点位衬块",
+                          "x": 6.0,
+                          "y": 6.0,
+                          "width": 82.0,
+                          "height": 82.0,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "$--primary"
+                            }
+                          ],
+                          "children": []
+                        },
+                        {
+                          "type": "frame",
+                          "id": "n75",
+                          "name": "点位字框",
+                          "x": 0.0,
+                          "y": 0.0,
+                          "width": 88.0,
+                          "height": 88.0,
+                          "layout": "horizontal",
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "cornerRadius": 0.0,
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#1E1A16"
+                            }
+                          ],
+                          "children": []
+                        },
+                        {
+                          "type": "frame",
+                          "id": "n76",
+                          "name": "点位字框",
+                          "x": 0.0,
+                          "y": 0.0,
+                          "width": 88.0,
+                          "height": 88.0,
+                          "layout": "horizontal",
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "#1E1A16"
+                            }
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "n77",
+                              "name": "点位字",
+                              "width": "fit_content",
+                              "height": "fit_content",
+                              "content": "二",
+                              "fontFamily": "Libre Caslon Text, Noto Serif SC",
+                              "fontSize": 44.0,
+                              "fontWeight": 700,
+                              "lineHeight": 1.5,
+                              "textGrowth": "auto",
+                              "fill": [
+                                {
+                                  "type": "solid",
+                                  "color": "$--card"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n78",
+                      "name": "要点文字组",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 12.0,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n79",
+                          "name": "要点标题",
+                          "width": "fill_container",
+                          "height": "fit_content",
+                          "content": "明确读者",
+                          "fontFamily": "Archivo, Noto Serif SC",
+                          "fontSize": 48.0,
+                          "fontWeight": 600,
+                          "lineHeight": 1.3,
+                          "textGrowth": "fixed-width",
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "$--foreground"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n80",
+                          "name": "要点正文",
+                          "width": "fill_container",
+                          "height": "fit_content",
+                          "content": "明确作品给谁看，语气与取舍都跟着这位读者走。",
+                          "fontFamily": "Archivo, Noto Serif SC",
+                          "fontSize": 36.0,
+                          "fontWeight": 400,
+                          "letterSpacing": 0.7,
+                          "lineHeight": 1.7,
+                          "textGrowth": "fixed-width",
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "$--secondary-foreground"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n81",
+              "name": "几何装饰组",
+              "width": "fill_container",
+              "layout": "horizontal",
+              "gap": 16.0,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "n82",
+                  "name": "装饰长块",
+                  "width": 220.0,
+                  "height": 8.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--primary"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n83",
+                  "name": "装饰短线",
+                  "width": 64.0,
+                  "height": 8.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--border"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n84",
+                  "name": "装饰方点",
+                  "width": 8.0,
+                  "height": 8.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--primary"
+                    }
+                  ],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n85",
+              "name": "页脚",
+              "width": "fill_container",
+              "layout": "horizontal",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n86",
+                  "name": "页脚签",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "普通人改稿的三个步骤 · 之一",
+                  "fontFamily": "Archivo, Noto Serif SC",
+                  "fontSize": 32.0,
+                  "fontWeight": 400,
+                  "letterSpacing": 1.0,
+                  "lineHeight": 1.5,
+                  "textGrowth": "auto",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--muted-foreground"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "n87",
+                  "name": "页码",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "01 / 03",
+                  "fontFamily": "Archivo, Noto Serif SC",
+                  "fontSize": 32.0,
+                  "fontWeight": 400,
+                  "lineHeight": 1.5,
+                  "textGrowth": "auto",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--muted-foreground"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "screen": "/"
+    },
+    {
+      "type": "frame",
+      "id": "n199",
+      "name": "卡片二",
+      "x": 1240.0,
+      "y": 40.0,
+      "width": 1080.0,
+      "height": 1440.0,
+      "layout": "vertical",
+      "gap": 19.005357142857143,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#F6F1E7"
+        }
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "n200",
+          "name": "卡片二 · 第二步 先做一份",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "padding": [
+            76.10714285714286,
+            80.0,
+            100.15,
+            80.0
+          ],
+          "clipContent": true,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--background"
+            }
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "n201",
+              "name": "masthead",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "vertical",
+              "gap": 16.0,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "n202",
+                  "name": "masthead-row",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "horizontal",
+                  "justifyContent": "space_between",
+                  "alignItems": "start",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n203",
+                      "name": "issue-number",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "02",
+                      "fontFamily": "Libre Caslon Text, Noto Serif SC",
+                      "fontSize": 120.0,
+                      "fontWeight": 700,
+                      "letterSpacing": -1.2,
+                      "lineHeight": 1.0,
+                      "textGrowth": "auto",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--foreground"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n204",
+                      "name": "column-tag",
+                      "layout": "horizontal",
+                      "padding": [
+                        12.0,
+                        20.0,
+                        12.0,
+                        20.0
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "cornerRadius": 4.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--card"
+                        }
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n205",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "content": "普通人改稿的三个步骤",
+                          "fontFamily": "Archivo, Noto Serif SC",
+                          "fontSize": 32.0,
+                          "fontWeight": 600,
+                          "letterSpacing": 2.0,
+                          "lineHeight": 1.4,
+                          "textGrowth": "auto",
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "$--foreground"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n206",
+                  "name": "masthead-heavy-rule",
+                  "width": "fill_container",
+                  "height": 3.0,
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#1E1A16"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n207",
+                  "name": "masthead-hairline",
+                  "width": "fill_container",
+                  "height": 1.0,
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--border"
+                    }
+                  ],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n208",
+              "name": "headline-block",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "vertical",
+              "gap": 22.01071428571429,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n209",
+                  "name": "page-title",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "content": "第二步 · 先做一份",
+                  "fontFamily": "Libre Caslon Text, Noto Serif SC",
+                  "fontSize": 88.0,
+                  "fontWeight": 700,
+                  "letterSpacing": 0.0,
+                  "lineHeight": 1.5,
+                  "textGrowth": "fixed-width",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--foreground"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n210",
+                  "name": "deck-row",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "horizontal",
+                  "gap": 16.0,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "n211",
+                      "name": "deck-rule",
+                      "width": 56.0,
+                      "height": 4.0,
+                      "cornerRadius": 0.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--primary"
+                        }
+                      ],
+                      "children": []
+                    },
+                    {
+                      "type": "text",
+                      "id": "n212",
+                      "name": "deck-line",
+                      "width": "fill_container",
+                      "height": "fit_content",
+                      "content": "选择一页或多页，先做出来再谈好坏",
+                      "fontFamily": "Archivo, Noto Serif SC",
+                      "fontSize": 36.0,
+                      "fontWeight": 400,
+                      "letterSpacing": 0.7,
+                      "lineHeight": 1.5,
+                      "textGrowth": "fixed-width",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--secondary-foreground"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n213",
+              "name": "gap-after-head",
+              "width": "fill_container",
+              "height": 54.096428571428575,
+              "children": []
+            },
+            {
+              "type": "frame",
+              "id": "n214",
+              "name": "points-columns",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "horizontal",
+              "gap": 0.0,
+              "alignItems": "start",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "n215",
+                  "name": "col-a",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "vertical",
+                  "gap": 22.01071428571429,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n216",
+                      "name": "point-a-kicker",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "要点一",
+                      "fontFamily": "Archivo, Noto Serif SC",
+                      "fontSize": 32.0,
+                      "fontWeight": 600,
+                      "letterSpacing": 6.0,
+                      "lineHeight": 1.4,
+                      "textGrowth": "auto",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--muted-foreground"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n217",
+                      "name": "point-a-title",
+                      "width": "fill_container",
+                      "height": "fit_content",
+                      "content": "选择一页或多页",
+                      "fontFamily": "Archivo, Noto Serif SC",
+                      "fontSize": 48.0,
+                      "fontWeight": 700,
+                      "letterSpacing": 0.0,
+                      "lineHeight": 1.3,
+                      "textGrowth": "fixed-width",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--foreground"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "n218",
+                      "name": "point-a-rule",
+                      "width": "fill_container",
+                      "height": 1.0,
+                      "cornerRadius": 0.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--border"
+                        }
+                      ],
+                      "children": []
+                    },
+                    {
+                      "type": "text",
+                      "id": "n219",
+                      "name": "point-a-body",
+                      "width": "fill_container",
+                      "height": "fit_content",
+                      "content": "不必等一切都完美。先把要改的页面挑出来，一页也好，几页一起也好，手边先有一份能看的东西。",
+                      "fontFamily": "Archivo, Noto Serif SC",
+                      "fontSize": 36.0,
+                      "fontWeight": 400,
+                      "letterSpacing": 0.7,
+                      "lineHeight": 1.7,
+                      "textGrowth": "fixed-width",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--foreground"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n220",
+                  "name": "column-rule",
+                  "width": 1.0,
+                  "height": "fill_container",
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--border"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "frame",
+                  "id": "n221",
+                  "name": "col-b",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "vertical",
+                  "gap": 22.01071428571429,
+                  "padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    48.0
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n222",
+                      "name": "point-b-kicker",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "要点二",
+                      "fontFamily": "Archivo, Noto Serif SC",
+                      "fontSize": 32.0,
+                      "fontWeight": 600,
+                      "letterSpacing": 6.0,
+                      "lineHeight": 1.4,
+                      "textGrowth": "auto",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--muted-foreground"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n223",
+                      "name": "point-b-title",
+                      "width": "fill_container",
+                      "height": "fit_content",
+                      "content": "先查信息，再调样式",
+                      "fontFamily": "Archivo, Noto Serif SC",
+                      "fontSize": 48.0,
+                      "fontWeight": 700,
+                      "letterSpacing": 0.0,
+                      "lineHeight": 1.3,
+                      "textGrowth": "fixed-width",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--foreground"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "n224",
+                      "name": "point-b-rule",
+                      "width": "fill_container",
+                      "height": 1.0,
+                      "cornerRadius": 0.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--border"
+                        }
+                      ],
+                      "children": []
+                    },
+                    {
+                      "type": "text",
+                      "id": "n225",
+                      "name": "point-b-body",
+                      "width": "fill_container",
+                      "height": "fit_content",
+                      "content": "动手改样式之前，先检查有没有漏掉关键信息。内容齐了，样式才有可依的样子。",
+                      "fontFamily": "Archivo, Noto Serif SC",
+                      "fontSize": 36.0,
+                      "fontWeight": 400,
+                      "letterSpacing": 0.7,
+                      "lineHeight": 1.7,
+                      "textGrowth": "fixed-width",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--foreground"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n226",
+              "name": "gap-after-cols",
+              "width": "fill_container",
+              "height": 54.096428571428575,
+              "children": []
+            },
+            {
+              "type": "frame",
+              "id": "n227",
+              "name": "vermilion-quote-block",
+              "role": "testimonial",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "vertical",
+              "gap": 16.0,
+              "padding": [
+                34.03214285714286,
+                40.0,
+                34.03214285714286,
+                40.0
+              ],
+              "cornerRadius": 8.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#FAD5C8"
+                }
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n228",
+                  "name": "quote-mark",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "content": "先做一份，是一切修改的前提。",
+                  "fontFamily": "Libre Caslon Text, Noto Serif SC",
+                  "fontSize": 40.0,
+                  "fontWeight": 700,
+                  "letterSpacing": 0.0,
+                  "lineHeight": 1.4,
+                  "textGrowth": "fixed-width",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--foreground"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "n229",
+                  "name": "quote-sub",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "content": "漏了关键信息再好看的样式，也要推倒重来。",
+                  "fontFamily": "Archivo, Noto Serif SC",
+                  "fontSize": 32.0,
+                  "fontWeight": 400,
+                  "letterSpacing": 0.6,
+                  "lineHeight": 1.5,
+                  "textGrowth": "fixed-width",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--secondary-foreground"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n230",
+              "name": "gap-flex",
+              "width": "fill_container",
+              "height": "fill_container",
+              "children": []
+            },
+            {
+              "type": "frame",
+              "id": "n231",
+              "name": "deco-row",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "horizontal",
+              "gap": 16.0,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "n232",
+                  "name": "deco-square",
+                  "width": 24.0,
+                  "height": 24.0,
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--primary"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n233",
+                  "name": "deco-line-1",
+                  "width": "fill_container",
+                  "height": 1.0,
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--border"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n234",
+                  "name": "deco-square-outline",
+                  "width": 24.0,
+                  "height": 24.0,
+                  "cornerRadius": 0.0,
+                  "fill": [],
+                  "stroke": {
+                    "thickness": 2.0,
+                    "fill": [
+                      {
+                        "type": "solid",
+                        "color": "#717579"
+                      }
+                    ]
+                  },
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n235",
+              "name": "footer",
+              "role": "footer",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "horizontal",
+              "padding": [
+                22.01071428571429,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n236",
+                  "name": "footer-series",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "普通人改稿的三个步骤 · 之二",
+                  "fontFamily": "Archivo, Noto Serif SC",
+                  "fontSize": 32.0,
+                  "fontWeight": 400,
+                  "letterSpacing": 1.0,
+                  "lineHeight": 1.4,
+                  "textGrowth": "auto",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--muted-foreground"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "n237",
+                  "name": "page-number",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "02 / 03",
+                  "fontFamily": "Archivo, Noto Serif SC",
+                  "fontSize": 32.0,
+                  "fontWeight": 400,
+                  "letterSpacing": 1.0,
+                  "lineHeight": 1.4,
+                  "textGrowth": "auto",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--muted-foreground"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "screen": "/screen-1"
+    },
+    {
+      "type": "frame",
+      "id": "n3",
+      "name": "卡片三",
+      "x": 2400.0,
+      "y": 40.0,
+      "width": 1080.0,
+      "height": 1440.0,
+      "layout": "vertical",
+      "gap": 18.746875,
+      "padding": [
+        0.0,
+        0.0,
+        37.974999999999994,
+        0.0
+      ],
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#F6F1E7"
+        }
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "n159",
+          "name": "卡片三 · 第三步 小步修改与交付",
+          "width": "fill_container",
+          "height": "fit_content",
+          "layout": "vertical",
+          "gap": 0.0,
+          "padding": [
+            70.9375,
+            80.0,
+            48.9625,
+            80.0
+          ],
+          "clipContent": true,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--background"
+            }
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "n160",
+              "name": "masthead-rules",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "vertical",
+              "gap": 6.0,
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "n161",
+                  "name": "masthead-heavy-rule",
+                  "width": "fill_container",
+                  "height": 6.0,
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--primary"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n162",
+                  "name": "masthead-hairline",
+                  "width": "fill_container",
+                  "height": 2.0,
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#1E1A16"
+                    }
+                  ],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n163",
+              "name": "masthead-row",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "horizontal",
+              "padding": [
+                24.240625,
+                0.0,
+                24.240625,
+                0.0
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "n164",
+                  "name": "column-label",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "layout": "vertical",
+                  "gap": 10.0,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n165",
+                      "name": "column-label-text",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "普通人改稿的三个步骤",
+                      "fontFamily": "Archivo, Noto Serif SC",
+                      "fontSize": 32.0,
+                      "fontWeight": 600,
+                      "letterSpacing": 2.0,
+                      "lineHeight": 1.5,
+                      "textGrowth": "auto",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--foreground"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n166",
+                      "name": "column-label-sub",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "改稿方法 · 连载之三",
+                      "fontFamily": "Archivo, Noto Serif SC",
+                      "fontSize": 28.0,
+                      "fontWeight": 400,
+                      "letterSpacing": 2.0,
+                      "lineHeight": 1.5,
+                      "textGrowth": "auto",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--muted-foreground"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "n167",
+                  "name": "number-plate",
+                  "width": 176.0,
+                  "height": 120.0,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#1E1A16"
+                    }
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "n168",
+                      "name": "issue-number",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "03",
+                      "fontFamily": "Libre Caslon Text, Noto Serif SC",
+                      "fontSize": 80.0,
+                      "fontWeight": 700,
+                      "letterSpacing": -1.0,
+                      "lineHeight": 1.5,
+                      "textGrowth": "auto",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "$--card"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "rectangle",
+              "id": "n169",
+              "name": "masthead-bottom-hairline",
+              "width": "fill_container",
+              "height": 2.0,
+              "cornerRadius": 0.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#1E1A16"
+                }
+              ],
+              "children": []
+            },
+            {
+              "type": "frame",
+              "id": "n170",
+              "name": "headline-block",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "vertical",
+              "gap": 26.987499999999997,
+              "padding": [
+                54.45625,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n171",
+                  "name": "step-eyebrow",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "第三步",
+                  "fontFamily": "Archivo, Noto Serif SC",
+                  "fontSize": 36.0,
+                  "fontWeight": 600,
+                  "letterSpacing": 6.0,
+                  "lineHeight": 1.5,
+                  "textGrowth": "auto",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--secondary-foreground"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "n172",
+                  "name": "main-headline",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "content": "小步修改与交付",
+                  "fontFamily": "Libre Caslon Text, Noto Serif SC",
+                  "fontSize": 112.0,
+                  "fontWeight": 700,
+                  "letterSpacing": -1.0,
+                  "lineHeight": 1.5,
+                  "textGrowth": "fixed-width",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--foreground"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "n173",
+                  "name": "deck-line",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "content": "一次只改一处，改完确认，再交出去。",
+                  "fontFamily": "Archivo, Noto Serif SC",
+                  "fontSize": 40.0,
+                  "fontWeight": 400,
+                  "letterSpacing": 1.0,
+                  "lineHeight": 1.6,
+                  "textGrowth": "fixed-width",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--secondary-foreground"
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n174",
+                  "name": "headline-vermilion-rule",
+                  "width": 220.0,
+                  "height": 8.0,
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--primary"
+                    }
+                  ],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n175",
+              "name": "two-column-body",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "horizontal",
+              "gap": 0.0,
+              "padding": [
+                48.9625,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "alignItems": "start",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "n176",
+                  "name": "col-left",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "vertical",
+                  "gap": 21.49375,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "n177",
+                      "name": "point-一",
+                      "width": "fill_container",
+                      "height": "fit_content",
+                      "layout": "vertical",
+                      "gap": 18.746875,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "n178",
+                          "name": "point-num-row",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "layout": "horizontal",
+                          "gap": 16.0,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "n179",
+                              "name": "point-numeral",
+                              "width": "fit_content",
+                              "height": "fit_content",
+                              "content": "一",
+                              "fontFamily": "Libre Caslon Text, Noto Serif SC",
+                              "fontSize": 56.0,
+                              "fontWeight": 700,
+                              "lineHeight": 1.5,
+                              "textGrowth": "auto",
+                              "fill": [
+                                {
+                                  "type": "solid",
+                                  "color": "$--foreground"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "n180",
+                              "name": "point-num-rule",
+                              "width": 56.0,
+                              "height": 4.0,
+                              "cornerRadius": 0.0,
+                              "fill": [
+                                {
+                                  "type": "solid",
+                                  "color": "#1E1A16"
+                                }
+                              ],
+                              "children": []
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n181",
+                          "name": "point-title",
+                          "width": "fill_container",
+                          "height": "fit_content",
+                          "content": "说清改动",
+                          "fontFamily": "Archivo, Noto Serif SC",
+                          "fontSize": 48.0,
+                          "fontWeight": 600,
+                          "lineHeight": 1.3,
+                          "textGrowth": "fixed-width",
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "$--foreground"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n182",
+                          "name": "point-body",
+                          "width": "fill_container",
+                          "height": "fit_content",
+                          "content": "一次只说清要改的页面和内容，改错可以撤销。",
+                          "fontFamily": "Archivo, Noto Serif SC",
+                          "fontSize": 36.0,
+                          "fontWeight": 400,
+                          "letterSpacing": 0.7,
+                          "lineHeight": 1.7,
+                          "textGrowth": "fixed-width",
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "$--secondary-foreground"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n183",
+                  "name": "column-rule",
+                  "width": 2.0,
+                  "height": "fill_container",
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--border"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "frame",
+                  "id": "n184",
+                  "name": "col-right",
+                  "width": "fill_container",
+                  "height": "fit_content",
+                  "layout": "vertical",
+                  "gap": 21.49375,
+                  "padding": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    40.0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "n185",
+                      "name": "point-二",
+                      "width": "fill_container",
+                      "height": "fit_content",
+                      "layout": "vertical",
+                      "gap": 18.746875,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "n186",
+                          "name": "point-num-row",
+                          "width": "fit_content",
+                          "height": "fit_content",
+                          "layout": "horizontal",
+                          "gap": 16.0,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "n187",
+                              "name": "point-numeral",
+                              "width": "fit_content",
+                              "height": "fit_content",
+                              "content": "二",
+                              "fontFamily": "Libre Caslon Text, Noto Serif SC",
+                              "fontSize": 56.0,
+                              "fontWeight": 700,
+                              "lineHeight": 1.5,
+                              "textGrowth": "auto",
+                              "fill": [
+                                {
+                                  "type": "solid",
+                                  "color": "$--foreground"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "n188",
+                              "name": "point-num-rule",
+                              "width": 56.0,
+                              "height": 4.0,
+                              "cornerRadius": 0.0,
+                              "fill": [
+                                {
+                                  "type": "solid",
+                                  "color": "#1E1A16"
+                                }
+                              ],
+                              "children": []
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n189",
+                          "name": "point-title",
+                          "width": "fill_container",
+                          "height": "fit_content",
+                          "content": "交付确认",
+                          "fontFamily": "Archivo, Noto Serif SC",
+                          "fontSize": 48.0,
+                          "fontWeight": 600,
+                          "lineHeight": 1.3,
+                          "textGrowth": "fixed-width",
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "$--foreground"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n190",
+                          "name": "point-body",
+                          "width": "fill_container",
+                          "height": "fit_content",
+                          "content": "导出前检查，保存后再打开确认。",
+                          "fontFamily": "Archivo, Noto Serif SC",
+                          "fontSize": 36.0,
+                          "fontWeight": 400,
+                          "letterSpacing": 0.7,
+                          "lineHeight": 1.7,
+                          "textGrowth": "fixed-width",
+                          "fill": [
+                            {
+                              "type": "solid",
+                              "color": "$--secondary-foreground"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n191",
+              "name": "closing-deco",
+              "width": "fill_container",
+              "height": 200.0,
+              "layout": "none",
+              "padding": 0.0,
+              "clipContent": true,
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "n192",
+                  "name": "deco-rule-long",
+                  "x": 0.0,
+                  "y": 96.0,
+                  "width": "fill_container",
+                  "height": 2.0,
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--border"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n193",
+                  "name": "deco-block-vermilion",
+                  "x": 800.0,
+                  "y": 40.0,
+                  "width": 120.0,
+                  "height": 120.0,
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--primary"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n194",
+                  "name": "deco-block-wash",
+                  "x": 860.0,
+                  "y": 80.0,
+                  "width": 60.0,
+                  "height": 60.0,
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#FAD5C8"
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "rectangle",
+                  "id": "n195",
+                  "name": "deco-rule-lead",
+                  "x": 0.0,
+                  "y": 40.0,
+                  "width": 560.0,
+                  "height": 4.0,
+                  "cornerRadius": 0.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "#1E1A16"
+                    }
+                  ],
+                  "children": []
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "n196",
+              "name": "footer",
+              "role": "footer",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "horizontal",
+              "padding": [
+                37.974999999999994,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n197",
+                  "name": "footer-caption",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "改稿方法 · 完",
+                  "fontFamily": "Archivo, Noto Serif SC",
+                  "fontSize": 32.0,
+                  "fontWeight": 400,
+                  "letterSpacing": 2.0,
+                  "lineHeight": 1.5,
+                  "textGrowth": "auto",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--muted-foreground"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "n198",
+                  "name": "page-number",
+                  "width": "fit_content",
+                  "height": "fit_content",
+                  "content": "03 / 03",
+                  "fontFamily": "Archivo, Noto Serif SC",
+                  "fontSize": 32.0,
+                  "fontWeight": 400,
+                  "letterSpacing": 2.0,
+                  "lineHeight": 1.5,
+                  "textGrowth": "auto",
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--muted-foreground"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "screen": "/screen-2"
+    }
+  ]
+}

@@ -22,6 +22,8 @@ fn text_only_xhs_prompt_resolves_the_complete_card_contract() {
     assert_eq!(resolved.content, source.content);
     assert!(resolved.content.contains("TEXT-ONLY IMAGE GATE"));
     assert!(resolved.content.contains("create NO image node"));
+    assert!(resolved.content.contains("PROSE COLUMN GUTTERS"));
+    assert!(resolved.content.contains("on BOTH sides"));
 }
 
 #[test]

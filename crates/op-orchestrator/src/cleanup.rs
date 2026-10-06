@@ -672,6 +672,7 @@ fn run_cleanup_passes_with_summary_and_policy(
         // shrink single-line text that outgrew its rail, so the geometry loop
         // below only sees what a move or a shrink cannot fix.
         run_overflow_prepass(sink, rid, summary, &mut counter);
+        repair_generated_prose_gutters(sink, rid, summary, &mut counter, policy);
         if policy.preserve_requested_root_height && policy.roots_are_run_output {
             fixed_board_backdrops::repair(sink, rid, plan);
             counter.checkpoint(summary, CheckCategory::Layout, "fixed-board-backdrops");
