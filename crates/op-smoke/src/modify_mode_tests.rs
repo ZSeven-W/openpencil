@@ -1,6 +1,27 @@
 use super::*;
 use std::sync::Mutex;
 
+#[test]
+fn smoke_history_check_restores_complete_multi_write_results_and_rejects_missing_history() {
+    let mut state = state_with_roots(&["screen"]);
+    let original = state.doc.clone();
+    state.with_history_group(|state| {
+        assert!(state.apply(op_editor_core::EditorCommand::SetNodeText {
+            node_id: NodeId::new("screen-title"),
+            text: "New title".into()
+        }));
+        assert!(state.apply(op_editor_core::EditorCommand::SetNodeFontSize {
+            node_id: NodeId::new("screen-title"),
+            font_size: 36.0
+        }));
+    });
+    let edited = state.doc.clone();
+    assert!(verify_modify_history(&mut state, &original).is_ok());
+    assert_eq!(state.doc, edited);
+    state.history.past.clear();
+    assert!(verify_modify_history(&mut state, &original).is_err());
+}
+
 #[derive(Default)]
 struct ScriptedProvider {
     requests: Mutex<Vec<ChatRequest>>,

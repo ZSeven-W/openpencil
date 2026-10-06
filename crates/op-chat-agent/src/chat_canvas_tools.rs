@@ -223,11 +223,17 @@ fn error_result(message: String) -> ChatToolResult {
 /// Inserts and replacements dispatch through MCP tool validation before
 /// applying commands. Returns `(applied_count, mutated)`.
 ///
-/// Documented divergence: TS wraps the loop in one history batch;
-/// here every node is its own undo step — the same granularity the
-/// Rust design pipeline has until host batch mode lands
-/// (design_session.rs `BeginUndoBatch` TODO).
+/// The accepted modifications and their layout repairs form one undo step.
 pub fn apply_design_modification(
+    state: &mut EditorState,
+    nodes: &[DesignModificationOp],
+    target_frame_ids: &[String],
+) -> (usize, bool) {
+    state
+        .with_history_group(|state| apply_design_modification_group(state, nodes, target_frame_ids))
+}
+
+fn apply_design_modification_group(
     state: &mut EditorState,
     nodes: &[DesignModificationOp],
     target_frame_ids: &[String],
@@ -657,3 +663,7 @@ fn chat_tool_registry(state: &EditorState, requested: &str) -> ToolRegistry {
 #[cfg(test)]
 #[path = "chat_canvas_tools_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "chat_modify_history_tests.rs"]
+mod modify_history_tests;

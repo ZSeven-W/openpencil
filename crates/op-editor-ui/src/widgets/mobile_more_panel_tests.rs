@@ -28,11 +28,13 @@ fn normal_reader_offers_a_short_file_action_menu_at_all_touch_sizes() {
             vec![
                 MobileMoreEntry::SaveFile,
                 MobileMoreEntry::SaveAsFile,
-                MobileMoreEntry::Export
+                MobileMoreEntry::Export,
+                MobileMoreEntry::Undo,
+                MobileMoreEntry::Redo,
             ]
         );
         let panel = more_panel_rect(&state, width, height);
-        assert!(panel.size.y < 180.0, "file actions leave the work visible");
+        assert!(panel.size.y < 260.0, "file actions leave the work visible");
         assert_grid(
             &state,
             width,
@@ -86,7 +88,10 @@ fn assert_grid(
             tile.origin.x + tile.size.x / 2.0,
             tile.origin.y + tile.size.y / 2.0,
         );
-        assert_eq!(more_hit_test(state, panel, center), Some(entry));
+        assert_eq!(
+            more_hit_test(state, panel, center),
+            entry.enabled(state).then_some(entry)
+        );
     }
 
     let last_row_start = (rows - 1) * expected_columns;
@@ -243,7 +248,7 @@ fn code_entry_is_visible_only_on_touch_tablets() {
 #[test]
 fn restored_entries_reuse_localized_labels_and_desktop_icons() {
     let mut state = EditorState::starter();
-    assert_eq!(MobileMoreEntry::ALL.len(), 15);
+    assert_eq!(MobileMoreEntry::ALL.len(), 17);
     assert_eq!(MobileMoreEntry::visible(&state).len(), 13);
     assert_eq!(MobileMoreEntry::ALL[0], MobileMoreEntry::NewFile);
     assert_eq!(MobileMoreEntry::ALL[1], MobileMoreEntry::OpenFile);

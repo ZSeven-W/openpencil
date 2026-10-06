@@ -447,6 +447,8 @@ fn paint_toolbar(
         );
     }
 
+    surface.paint_history(cx, layout, palette);
+
     // Pager (prev / next) with a position label between when present.
     if let (Some(prev), Some(next)) = (layout.prev, layout.next) {
         let boards = surface.boards.len();

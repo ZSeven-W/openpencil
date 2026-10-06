@@ -13,6 +13,11 @@ use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Point2D, Rect};
 #[path = "workspace_surface_preview.rs"]
 mod preview_entry;
+#[path = "workspace_surface_title.rs"]
+mod title;
+pub use title::workspace_title;
+#[path = "workspace_surface_history.rs"]
+mod history;
 pub use preview_entry::header_button_width;
 
 use op_editor_core::{
@@ -341,28 +346,6 @@ pub fn layout_for(
     }
 }
 
-/// The work's display title: the file name, else the brief's first 16
-/// chars, else the localized untitled fallback. Shared by the desktop
-/// header and the phone reader so the two never name one work twice.
-pub fn workspace_title(state: &EditorState) -> String {
-    state
-        .editor_ui
-        .file_name_display
-        .clone()
-        .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| {
-            let brief = state.editor_ui.workspace.brief.trim();
-            if brief.is_empty() {
-                op_i18n::translate(state.editor_ui.locale, "common.untitled").to_string()
-            } else {
-                // The brief's first line; painters ellipsize it to their
-                // own width (a fixed 16-char cut left "为 OpenPencil 做一份"
-                // with no ellipsis next to a wide empty header).
-                brief.lines().next().unwrap_or(brief).trim().to_string()
-            }
-        })
-}
-
 pub struct WorkspaceSurface<'a> {
     pub id: WidgetId,
     pub theme: Theme,
@@ -377,6 +360,7 @@ pub struct WorkspaceSurface<'a> {
     /// Whether any chat agent can answer — the draft banner offers the
     /// refine once one can, and the connect path until then.
     pub usable_agent: bool,
+    pub history: op_editor_core::workspace_history::WorkspaceHistory,
 }
 
 impl<'a> WorkspaceSurface<'a> {
@@ -399,6 +383,7 @@ impl<'a> WorkspaceSurface<'a> {
             boards: op_editor_core::preview_slideshow::active_page_boards(state),
             now_ms,
             usable_agent: state.has_usable_chat_agent(),
+            history: op_editor_core::workspace_history::WorkspaceHistory::for_editor(state),
         })
     }
 
@@ -420,7 +405,11 @@ impl<'a> WorkspaceSurface<'a> {
         // measured text for centering; this conservative estimate reserves space.
         let views = family_views(self.state.family);
         let mut x = layout.view_segments.first().map_or(0.0, |r| r.origin.x);
-        let available = (layout.prev.unwrap_or(layout.zoom_out).origin.x - 12.0 - x).max(0.0);
+        let available = (layout.prev.unwrap_or(layout.zoom_out).origin.x
+            - 12.0
+            - x
+            - history::MIN_HISTORY_SPACE)
+            .max(0.0);
         let widths: Vec<f32> = views
             .iter()
             .map(|view| {
@@ -650,6 +639,9 @@ impl<'a> WorkspaceSurface<'a> {
             }
         }
         if layout.toolbar.contains(point) {
+            if let Some(hit) = self.history_hit(layout, point) {
+                return Some(hit);
+            }
             if layout.zoom_in.contains(point) {
                 return Some(WorkspaceHit::ZoomIn);
             }

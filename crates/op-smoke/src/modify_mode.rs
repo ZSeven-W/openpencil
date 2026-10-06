@@ -81,13 +81,14 @@ fn run_from_env(instruction: &str, input: &Path) -> Result<(), String> {
         std::fs::read(input).map_err(|error| format!("read {}: {error}", input.display()))?;
     let input_sha256 = sha256_hex(&input_bytes);
     let state = load_rewritable_baseline(input)?;
+    let baseline_doc = state.doc.clone();
     let provider = build_provider(
         provider_kind,
         &model,
         std::env::var("OPENPENCIL_LLM_BASE_URL").ok(),
         std::env::var("OPENPENCIL_LLM_API_KEY").ok(),
     )?;
-    let execution = run_loaded_modify(
+    let mut execution = run_loaded_modify(
         state,
         instruction,
         if all_roots {
@@ -100,6 +101,7 @@ fn run_from_env(instruction: &str, input: &Path) -> Result<(), String> {
         provider.as_ref(),
         load_attachments(std::env::var(MODIFY_ATTACHMENTS_ENV).ok().as_deref())?,
     )?;
+    verify_modify_history(&mut execution.state, &baseline_doc)?;
 
     if let Some(parent) = output
         .parent()
@@ -129,6 +131,8 @@ fn run_from_env(instruction: &str, input: &Path) -> Result<(), String> {
         "thinking": thinking.as_str(),
         "targetFrameIds": execution.target_frame_ids,
         "appliedCount": execution.applied_count,
+        "undoSteps": execution.state.history.past.len(),
+        "historyRoundTripVerified": true,
         "inputSha256": input_sha256,
         "instructionSha256": sha256_hex(instruction.as_bytes()),
         "outputSha256": sha256_hex(&output_bytes),
@@ -137,6 +141,24 @@ fn run_from_env(instruction: &str, input: &Path) -> Result<(), String> {
         "[MODIFY] {}",
         serde_json::to_string(&summary).unwrap_or_else(|_| "{}".into())
     );
+    Ok(())
+}
+
+/// The smoke checks the actual production apply result, including models that
+/// emitted several operations. Saving the final file alone cannot prove undo.
+fn verify_modify_history(
+    state: &mut EditorState,
+    baseline: &jian_ops_schema::PenDocument,
+) -> Result<(), String> {
+    let edited = state.doc.clone();
+    if state.history.past.len() != 1 || !state.undo() || state.doc != *baseline {
+        return Err("modify result did not restore its complete baseline in one undo".into());
+    }
+    if !state.redo() || state.doc != edited {
+        return Err(
+            "modify result did not restore the complete edited document in one redo".into(),
+        );
+    }
     Ok(())
 }
 

@@ -13,6 +13,51 @@ use op_editor_ui::{Color, Point2D, Rect, RenderBackend, TextLayout};
 const W: f32 = 1440.0;
 const H: f32 = 900.0;
 
+#[test]
+fn normal_history_buttons_restore_work_without_discarding_the_composer_draft() {
+    use op_editor_core::{EditorCommand, EditorState, NodeId, WorkspaceHit};
+    let doc = jian_ops_schema::load_str(r#"{"version":"1.0.0","children":[{"type":"frame","id":"work","name":"Original","width":400,"height":600,"children":[] }]}"#).unwrap().value;
+    let mut host = WidgetHost::new();
+    host.editor_state = EditorState::from_document(doc);
+    host.editor_state
+        .editor_ui
+        .workspace
+        .open_for_reading(HomeFamily::AppUi, 1);
+    let original = host.editor_state.doc.clone();
+    host.editor_state.with_history_group(|state| {
+        assert!(state.apply(EditorCommand::SetNodeName {
+            node_id: NodeId::new("work"),
+            name: "Edited".into()
+        }));
+    });
+    let edited = host.editor_state.doc.clone();
+    host.editor_state.chat.set_input_text("Unsent changes");
+    host.editor_state.chat.focused = true;
+    for (hit, expected) in [(WorkspaceHit::Undo, original), (WorkspaceHit::Redo, edited)] {
+        let surface = WorkspaceSurface::for_editor(&host.editor_state).unwrap();
+        let (_, rect, enabled) = surface
+            .history_buttons(&surface.layout(W, H))
+            .into_iter()
+            .find(|(item, _, _)| *item == hit)
+            .unwrap();
+        assert!(enabled);
+        assert_eq!(
+            host.press_workspace(
+                rect.origin.x + rect.size.x / 2.0,
+                rect.origin.y + rect.size.y / 2.0,
+                W,
+                H
+            ),
+            Some(true)
+        );
+        assert_eq!(host.editor_state.doc, expected);
+        assert_eq!(host.editor_state.chat.input.text(), "Unsent changes");
+        assert!(host.editor_state.editor_ui.workspace.visible);
+    }
+    host.editor_state.editor_ui.workspace.phase = WorkspacePhase::Generating;
+    assert!(!host.apply_undo());
+}
+
 /// A host with a workspace run queued from Home, exactly as a Home send
 /// leaves it (the brief waiting in `pending_send`).
 fn running_host() -> WidgetHost {

@@ -63,6 +63,11 @@ impl WorkspaceSurface<'_> {
         for (view, rect) in views.iter().zip(&layout.view_segments) {
             order.push((WorkspaceHit::View(*view), *rect));
         }
+        order.extend(
+            self.history_buttons(layout)
+                .into_iter()
+                .map(|(hit, rect, _)| (hit, rect)),
+        );
         order.extend(layout.prev.map(|rect| (WorkspaceHit::Prev, rect)));
         order.extend(layout.next.map(|rect| (WorkspaceHit::Next, rect)));
         order.push((WorkspaceHit::ZoomOut, layout.zoom_out));

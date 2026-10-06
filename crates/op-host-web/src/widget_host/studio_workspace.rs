@@ -30,6 +30,21 @@ pub(in crate::widget_host) struct WorkspaceDockDrag {
 const WORKSPACE_DOCK_MIN_WIDTH: f32 = 280.0;
 
 impl WidgetHost {
+    pub(in crate::widget_host) fn refit_work_after_history(&mut self) {
+        let count = active_page_boards(&self.editor_state).len();
+        let workspace = &mut self.editor_state.editor_ui.workspace;
+        workspace.selected = workspace.selected.min(count.saturating_sub(1));
+        if matches!(workspace.view, WorkspaceView::Single { .. }) {
+            workspace.view = WorkspaceView::Single {
+                index: workspace.selected,
+            };
+        }
+        let (w, h) = (self.last_viewport_w, self.last_viewport_h);
+        if w > 0.0 && h > 0.0 {
+            self.apply_workspace_fit(w, h);
+        }
+    }
+
     /// The workspace is a pointer surface; the browser never runs touch
     /// chrome, but the gate mirrors native so the two cannot drift.
     pub(crate) fn workspace_visible(&self) -> bool {
@@ -153,6 +168,14 @@ impl WidgetHost {
                 status_bar_zoom(&mut self.editor_state, zoom_in, viewport_w, viewport_h);
             }
             WorkspaceHit::ZoomFit => self.apply_workspace_fit(viewport_w, viewport_h),
+            WorkspaceHit::Undo | WorkspaceHit::Redo => {
+                self.editor_state.chat.focused = false;
+                if hit == WorkspaceHit::Undo {
+                    self.apply_undo();
+                } else {
+                    self.apply_redo();
+                }
+            }
             WorkspaceHit::Thumb(index) => {
                 let moved = {
                     let workspace = &mut self.editor_state.editor_ui.workspace;

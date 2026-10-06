@@ -97,6 +97,24 @@ impl History {
 }
 
 impl EditorState {
+    /// Group a synchronous document operation into one undo step. Individual
+    /// validated writes retain their normal behavior; only intermediate history
+    /// entries are collapsed and revision-only writes gain a recovery snapshot.
+    /// The closure must not call undo/redo or reset the
+    /// document. A no-op preserves both history stacks, including existing redo.
+    pub fn with_history_group<T>(&mut self, operation: impl FnOnce(&mut Self) -> T) -> T {
+        let before = self.snapshot_for_history();
+        let history = self.history.clone();
+        let result = operation(self);
+        if self.revision != before.revision {
+            // Restore the old stacks before pushing the group so reaching the
+            // cap inside a large operation cannot evict unrelated past entries.
+            self.history = history;
+            self.history_push_past(before);
+        }
+        result
+    }
+
     /// Snapshot the editor's undoable state without pushing it.
     ///
     /// The snapshot covers the document, selection, active page, component

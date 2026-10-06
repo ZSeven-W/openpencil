@@ -30,6 +30,26 @@ pub(in crate::widget_host) struct WorkspaceDockDrag {
 const WORKSPACE_DOCK_MIN_WIDTH: f32 = 280.0;
 
 impl WidgetHostNative {
+    pub(in crate::widget_host) fn refit_work_after_history(&mut self) {
+        let count = active_page_boards(&self.editor_state).len();
+        let workspace = &mut self.editor_state.editor_ui.workspace;
+        workspace.selected = workspace.selected.min(count.saturating_sub(1));
+        if matches!(workspace.view, WorkspaceView::Single { .. }) {
+            workspace.view = WorkspaceView::Single {
+                index: workspace.selected,
+            };
+        }
+        self.refresh_layout_scene();
+        let (w, h) = (self.last_viewport_w, self.last_viewport_h);
+        if w > 0.0 && h > 0.0 {
+            if self.works_reader_visible() {
+                self.frame_reader_board(w, h);
+            } else {
+                self.apply_workspace_fit(w, h);
+            }
+        }
+    }
+
     /// The generation workspace is a pointer surface: its presses are
     /// dropped under touch chrome, so it must not paint there either — a
     /// phone or tablet showed a desktop workspace nobody could tap. Touch
@@ -170,6 +190,16 @@ impl WidgetHostNative {
             }
             WorkspaceHit::ZoomFit => {
                 self.apply_workspace_fit(viewport_w, viewport_h);
+            }
+            WorkspaceHit::Undo | WorkspaceHit::Redo => {
+                // An explicit work action is independent of the composer caret.
+                // Keep its unsent text intact while releasing keyboard ownership.
+                self.editor_state.chat.focused = false;
+                if hit == WorkspaceHit::Undo {
+                    self.apply_undo();
+                } else {
+                    self.apply_redo();
+                }
             }
             WorkspaceHit::Thumb(index) => {
                 let moved = {
@@ -730,3 +760,7 @@ mod variants_tests;
 #[cfg(test)]
 #[path = "workspace_drawer_tests.rs"]
 mod drawer_tests;
+
+#[cfg(test)]
+#[path = "workspace_history_tests.rs"]
+mod history_tests;

@@ -624,6 +624,14 @@ impl WidgetHostNative {
             self.dismiss_mobile_surface();
             match entry {
                 op_editor_ui::widgets::MobileMoreEntry::Ai => unreachable!("handled above"),
+                op_editor_ui::widgets::MobileMoreEntry::Undo => {
+                    self.editor_state.chat.focused = false;
+                    self.apply_undo();
+                }
+                op_editor_ui::widgets::MobileMoreEntry::Redo => {
+                    self.editor_state.chat.focused = false;
+                    self.apply_redo();
+                }
                 op_editor_ui::widgets::MobileMoreEntry::Code => {
                     let ui = &mut self.editor_state.editor_ui;
                     ui.set_property_tab(op_editor_core::PropertyTab::Code);

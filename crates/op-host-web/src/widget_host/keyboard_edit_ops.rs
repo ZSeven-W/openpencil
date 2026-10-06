@@ -497,30 +497,64 @@ impl WidgetHost {
     }
 
     pub fn apply_undo(&mut self) -> bool {
+        if self.editor_state.editor_ui.workspace.visible
+            && !op_editor_core::workspace_history::WorkspaceHistory::for_editor(&self.editor_state)
+                .undo
+        {
+            return false;
+        }
         if self.editor_state.editor_ui.collab_join_input_active()
             || self.editor_state.ui.layer_rename.is_some()
             || self.editor_state.chat.focused
         {
             return false;
         }
+        let geometry = self.editor_state.editor_ui.workspace.visible.then(|| {
+            op_editor_core::workspace_history::WorkspaceHistory::geometry(&self.editor_state)
+        });
         if self.editor_state.undo() {
             self.mark_dirty();
             self.refresh_missing_fonts_after_history_change();
+            if geometry.is_some_and(|before| {
+                before
+                    != op_editor_core::workspace_history::WorkspaceHistory::geometry(
+                        &self.editor_state,
+                    )
+            }) {
+                self.refit_work_after_history();
+            }
             return true;
         }
         false
     }
 
     pub fn apply_redo(&mut self) -> bool {
+        if self.editor_state.editor_ui.workspace.visible
+            && !op_editor_core::workspace_history::WorkspaceHistory::for_editor(&self.editor_state)
+                .redo
+        {
+            return false;
+        }
         if self.editor_state.editor_ui.collab_join_input_active()
             || self.editor_state.ui.layer_rename.is_some()
             || self.editor_state.chat.focused
         {
             return false;
         }
+        let geometry = self.editor_state.editor_ui.workspace.visible.then(|| {
+            op_editor_core::workspace_history::WorkspaceHistory::geometry(&self.editor_state)
+        });
         if self.editor_state.redo() {
             self.mark_dirty();
             self.refresh_missing_fonts_after_history_change();
+            if geometry.is_some_and(|before| {
+                before
+                    != op_editor_core::workspace_history::WorkspaceHistory::geometry(
+                        &self.editor_state,
+                    )
+            }) {
+                self.refit_work_after_history();
+            }
             return true;
         }
         false

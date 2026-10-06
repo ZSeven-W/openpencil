@@ -284,6 +284,12 @@ impl WidgetHostNative {
     /// exiting edit mode (each pause-bounded burst is its own
     /// history entry).
     pub fn apply_undo(&mut self) -> bool {
+        if self.editor_state.editor_ui.workspace.visible
+            && !op_editor_core::workspace_history::WorkspaceHistory::for_editor(&self.editor_state)
+                .undo
+        {
+            return false;
+        }
         if self.editor_state.editor_ui.image_panel.search_open
             || self.editor_state.editor_ui.image_panel.generate_open
         {
@@ -296,15 +302,32 @@ impl WidgetHostNative {
         if !self.collab_allows_user_action(op_editor_core::CollabGateAction::GlobalUndo) {
             return true;
         }
+        let geometry = self.editor_state.editor_ui.workspace.visible.then(|| {
+            op_editor_core::workspace_history::WorkspaceHistory::geometry(&self.editor_state)
+        });
         let ok = self.editor_state.undo();
         if ok {
             self.mark_dirty();
             self.refresh_missing_fonts_after_history_change();
+            if geometry.is_some_and(|before| {
+                before
+                    != op_editor_core::workspace_history::WorkspaceHistory::geometry(
+                        &self.editor_state,
+                    )
+            }) {
+                self.refit_work_after_history();
+            }
         }
         ok
     }
 
     pub fn apply_redo(&mut self) -> bool {
+        if self.editor_state.editor_ui.workspace.visible
+            && !op_editor_core::workspace_history::WorkspaceHistory::for_editor(&self.editor_state)
+                .redo
+        {
+            return false;
+        }
         if self.editor_state.editor_ui.image_panel.search_open
             || self.editor_state.editor_ui.image_panel.generate_open
         {
@@ -317,10 +340,21 @@ impl WidgetHostNative {
         if !self.collab_allows_user_action(op_editor_core::CollabGateAction::GlobalRedo) {
             return true;
         }
+        let geometry = self.editor_state.editor_ui.workspace.visible.then(|| {
+            op_editor_core::workspace_history::WorkspaceHistory::geometry(&self.editor_state)
+        });
         let ok = self.editor_state.redo();
         if ok {
             self.mark_dirty();
             self.refresh_missing_fonts_after_history_change();
+            if geometry.is_some_and(|before| {
+                before
+                    != op_editor_core::workspace_history::WorkspaceHistory::geometry(
+                        &self.editor_state,
+                    )
+            }) {
+                self.refit_work_after_history();
+            }
         }
         ok
     }

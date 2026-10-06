@@ -105,6 +105,10 @@ pub enum WorkspaceHit {
     ZoomOut,
     ZoomFit,
     ZoomIn,
+    /// Restore the previous work without entering the professional canvas.
+    Undo,
+    /// Reapply an undone work change.
+    Redo,
     /// One thumbnail in the deck strip.
     Thumb(usize),
     /// The strip's 总览 toggle.
