@@ -750,6 +750,10 @@ impl WidgetHostNative {
 mod tests;
 
 #[cfg(test)]
+#[path = "workspace_focus_tests.rs"]
+mod focus_tests;
+
+#[cfg(test)]
 #[path = "workspace_quality_tests.rs"]
 mod quality_tests;
 

@@ -45,23 +45,47 @@ impl<'a> CanvasViewport<'a> {
         // is kept (it is the professional canvas's context and the scope
         // of 改这一页) but its outline, handles and size label stay off.
         let reading = state.editor_ui.works_reader_visible();
+        let focused_board = {
+            let workspace = &state.editor_ui.workspace;
+            let index = if reading {
+                Some(workspace.selected)
+            } else if workspace.visible {
+                match workspace.view {
+                    op_editor_core::WorkspaceView::Single { index } => Some(index),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+            index.map(|index| {
+                let boards = op_editor_core::preview_slideshow::active_page_boards(state);
+                let index = if reading {
+                    index.min(boards.len().saturating_sub(1))
+                } else {
+                    index
+                };
+                boards
+                    .get(index)
+                    .or_else(|| boards.first())
+                    .cloned()
+                    .unwrap_or_default()
+            })
+        };
+        // Keep root labels in the same order and scope as the rendered roots.
+        // Their painter walks labels and roots together rather than searching by ID.
+        let mut frame_labels = if reading {
+            Vec::new()
+        } else {
+            collect_frame_labels(state)
+        };
+        if let Some(id) = focused_board.as_deref() {
+            frame_labels.retain(|label| label.id == id);
+        }
         Self {
             id: WidgetId::new(4000),
             viewport,
             scene,
-            reader_board: reading.then(|| {
-                let boards = op_editor_core::preview_slideshow::active_page_boards(state);
-                boards
-                    .get(
-                        state
-                            .editor_ui
-                            .workspace
-                            .selected
-                            .min(boards.len().saturating_sub(1)),
-                    )
-                    .cloned()
-                    .unwrap_or_default()
-            }),
+            focused_board,
             selected: if reading {
                 String::new()
             } else {
@@ -121,11 +145,7 @@ impl<'a> CanvasViewport<'a> {
                 .map(|id| id.as_str().to_string()),
             // The reader's header owns the page name; a canvas label
             // above the board would sit half under it.
-            frame_labels: if reading {
-                Vec::new()
-            } else {
-                collect_frame_labels(state)
-            },
+            frame_labels,
             generator_badges: if reading {
                 Vec::new()
             } else {
@@ -163,7 +183,7 @@ impl<'a> CanvasViewport<'a> {
             id: WidgetId::new(4000),
             viewport,
             scene,
-            reader_board: None,
+            focused_board: None,
             selected: String::new(),
             selected_set: Vec::new(),
             selection_label: None,
@@ -200,7 +220,7 @@ impl<'a> CanvasViewport<'a> {
             rect.origin.y + self.viewport.pan_y,
         );
         crate::widgets::canvas_frame_labels::frame_label_at_point(
-            &page.children,
+            self.focused_roots(page),
             &self.frame_labels,
             viewport_origin,
             &self.viewport,
@@ -215,6 +235,21 @@ impl<'a> CanvasViewport<'a> {
 
     pub fn set_node_drag_overlay(&mut self, overlay: Option<CanvasNodeDragOverlay>) {
         self.node_drag_overlay = overlay;
+    }
+
+    pub(super) fn focused_roots<'s>(
+        &self,
+        page: &'s crate::layout_scene::ScenePage,
+    ) -> &'s [crate::layout_scene::SceneNode] {
+        match self.focused_board.as_deref() {
+            Some(id) => page
+                .children
+                .iter()
+                .find(|node| node.id == id)
+                .map(std::slice::from_ref)
+                .unwrap_or(&[]),
+            None => &page.children,
+        }
     }
 }
 

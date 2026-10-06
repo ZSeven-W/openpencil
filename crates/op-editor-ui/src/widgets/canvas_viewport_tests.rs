@@ -26,6 +26,9 @@ mod selection_overlay;
 #[path = "canvas_viewport_tests/scene_paint.rs"]
 mod scene_paint;
 
+#[path = "canvas_viewport_tests/normal_focus.rs"]
+mod normal_focus;
+
 #[path = "canvas_viewport_tests/lookup_traversal.rs"]
 mod lookup_traversal;
 

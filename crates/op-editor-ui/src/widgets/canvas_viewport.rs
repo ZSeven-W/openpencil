@@ -73,8 +73,8 @@ pub struct CanvasViewport<'a> {
     pub(super) viewport: DocViewport,
     /// The resolved render scene — the node tree the painter walks.
     pub(super) scene: &'a LayoutScene,
-    /// A normal touch reader paints one board even when authored boards overlap.
-    pub(super) reader_board: Option<String>,
+    /// A normal reader or single-page workspace paints only this root subtree.
+    pub(super) focused_board: Option<String>,
     /// Anchor-selected node id (scene-space string). Empty = none.
     pub(super) selected: String,
     /// Full selection set (scene-space string ids).
@@ -228,15 +228,7 @@ impl<'a> Widget for CanvasViewport<'a> {
 
         // 3. Walk the active page; clip enforces widget bounds.
         if let Some(page) = self.scene.active_page() {
-            let roots = if let Some(id) = self.reader_board.as_deref() {
-                page.children
-                    .iter()
-                    .find(|node| node.id == id)
-                    .map(std::slice::from_ref)
-                    .unwrap_or(&[])
-            } else {
-                page.children.as_slice()
-            };
+            let roots = self.focused_roots(page);
             let viewport_origin = Point2D::new(
                 rect.origin.x + viewport.pan_x,
                 rect.origin.y + viewport.pan_y,
@@ -493,7 +485,7 @@ impl<'a> Widget for CanvasViewport<'a> {
                 } else if !self.selected_set.is_empty() {
                     super::canvas_selection_overlay::paint_multi_selection_overlays(
                         cx,
-                        &page.children,
+                        self.focused_roots(page),
                         &self.selected_set,
                         &selection_input,
                     );
