@@ -9,9 +9,7 @@ use op_ai::chat_provider::{ChatDelta, ChatRequest, ChatToolExecutor, StopReason}
 use op_editor_core::EditorState;
 use op_mcp::{McpTool, ToolErrorCode, ToolOutcome};
 
-use super::design_agent_run_tool::{
-    DesignLoopDriver, HeadlessDesignExecutor, RunDesignAgentTool,
-};
+use super::design_agent_run_tool::{DesignLoopDriver, HeadlessDesignExecutor, RunDesignAgentTool};
 
 fn args(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
     pairs
@@ -35,19 +33,14 @@ impl DesignLoopDriver for ScriptedDriver {
         let program = serde_json::json!({
             "operations": "I(null, {type:'frame', name:'Landing', width:1200, height:800, fill:[{type:'solid', color:'#FFFFFF'}], layout:'vertical', children:[{type:'text', name:'Headline', content:'Hello', fontFamily:'Inter, system-ui, sans-serif', fontSize:32, fontWeight:700}]});"
         });
-        let result = self
-            .executor
-            .execute("batch_design", &program.to_string());
+        let result = self.executor.execute("batch_design", &program.to_string());
         assert!(
             !result.is_error,
             "scripted batch_design must succeed: {}",
             result.content
         );
         let report = self.executor.finalize();
-        assert!(
-            report.quality.ran(),
-            "finalize must run the quality passes"
-        );
+        assert!(report.quality.ran(), "finalize must run the quality passes");
         Box::new(
             [
                 ChatDelta::ToolUse {
@@ -182,10 +175,7 @@ fn missing_brief_and_unknown_provider_are_structured_errors() {
 fn a_stalled_loop_times_out_and_leaves_no_command() {
     let state = EditorState::new();
     let tool = RunDesignAgentTool::for_test(&state, Box::new(|_| Box::new(StalledDriver)));
-    let outcome = tool.call(&args(&[
-        ("brief", "a page"),
-        ("timeout_seconds", "1"),
-    ]));
+    let outcome = tool.call(&args(&[("brief", "a page"), ("timeout_seconds", "1")]));
     let ToolOutcome::Err(code, message) = outcome else {
         panic!("stalled loop must time out, got {outcome:?}");
     };

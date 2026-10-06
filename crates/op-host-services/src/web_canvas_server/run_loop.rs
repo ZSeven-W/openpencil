@@ -40,6 +40,7 @@ pub fn run_web_canvas(options: ServeWebOptions) -> Result<()> {
         managed,
         allow_origins,
         online: _,
+        config_root: _,
     } = options;
     let current_path = path.clone();
     let credential_persistence = crate::web_credential_policy::from_env();

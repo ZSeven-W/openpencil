@@ -27,6 +27,9 @@ pub struct ServeWebOptions {
     /// Mutually exclusive with `--managed`: managed mode's whole contract is
     /// one supervising operator holding the process stdin lease.
     pub online: bool,
+    /// Private settings and user-resource directory selected by a supervisor.
+    /// Only managed mode accepts this; standalone hosts keep platform defaults.
+    pub config_root: Option<PathBuf>,
 }
 
 impl ServeWebOptions {
@@ -98,6 +101,7 @@ pub fn parse_serve_web_args<I: Iterator<Item = String>>(mut args: I) -> Result<S
         managed: false,
         allow_origins: Vec::new(),
         online,
+        config_root: None,
     })
 }
 
@@ -117,10 +121,22 @@ pub(super) fn parse_serve_web_args_managed<I: Iterator<Item = String>>(
     let mut allow_origins: Vec<String> = Vec::new();
     let mut online = false;
     let mut next_flag = Some(first_flag);
+    let mut config_root = None;
     while let Some(arg) = next_flag.take().or_else(|| args.next()) {
         match arg.as_str() {
             "--managed" => managed = true,
             "--online" => online = true,
+            "--config-root" => {
+                let root = PathBuf::from(args.next().ok_or_else(|| {
+                    WebCanvasError::Config("--config-root needs an absolute directory".into())
+                })?);
+                if config_root.is_some() || !root.is_absolute() {
+                    return Err(WebCanvasError::Config(
+                        "--config-root must be one absolute directory".into(),
+                    ));
+                }
+                config_root = Some(root);
+            }
             "--port" => {
                 let value = args
                     .next()
@@ -167,6 +183,11 @@ pub(super) fn parse_serve_web_args_managed<I: Iterator<Item = String>>(
             "--managed requires a loopback --host (127.0.0.1, localhost, or ::1)".into(),
         ));
     }
+    if config_root.is_some() && !managed {
+        return Err(WebCanvasError::Config(
+            "--config-root requires --managed".into(),
+        ));
+    }
     Ok(ServeWebOptions {
         port,
         path,
@@ -174,6 +195,7 @@ pub(super) fn parse_serve_web_args_managed<I: Iterator<Item = String>>(
         managed,
         allow_origins,
         online,
+        config_root,
     })
 }
 

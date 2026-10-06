@@ -79,7 +79,9 @@ impl ImageSearchBackend for SleepingBackend {
 
     fn search_before(&self, _target: &ImageSearchTarget, deadline: Instant) -> Option<String> {
         // Overshoot the deadline by a margin regardless of the budget size.
-        std::thread::sleep(deadline.saturating_duration_since(Instant::now()) + Duration::from_millis(150));
+        std::thread::sleep(
+            deadline.saturating_duration_since(Instant::now()) + Duration::from_millis(150),
+        );
         Some(self.url.clone())
     }
 }
@@ -280,12 +282,7 @@ fn production_parallel_search_is_bounded_to_three_workers() {
         active: AtomicUsize::new(0),
         peak: AtomicUsize::new(0),
     };
-    let run = run_enrich_sync(
-        &mut state,
-        None,
-        Duration::from_secs(2),
-        &backend,
-    );
+    let run = run_enrich_sync(&mut state, None, Duration::from_secs(2), &backend);
     assert_eq!(run.summary.resolved, 6);
     assert_eq!(backend.peak.load(Ordering::SeqCst), 3);
 }
