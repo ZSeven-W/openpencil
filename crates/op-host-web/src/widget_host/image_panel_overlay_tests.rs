@@ -1,7 +1,7 @@
 use super::WidgetHost;
 use op_editor_core::{EditorState, NodeId, SettingsFocus};
 use op_editor_ui::widgets::{LayerPanel, LayerPanelHit, TopBarHit, TOP_BAR_HEIGHT};
-use op_editor_ui::{Point2D, Rect};
+use op_editor_ui::Point2D;
 
 const VIEWPORT_W: f32 = 1200.0;
 const VIEWPORT_H: f32 = 800.0;
