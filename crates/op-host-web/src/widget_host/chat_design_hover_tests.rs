@@ -57,6 +57,7 @@ fn assert_chat_and_lower_hover_cleared(host: &WidgetHost) {
 #[test]
 fn cursor_move_tracks_hovered_design_json_card_for_copy_reveal() {
     let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.enter_chat_tab();
     host.editor_state
         .chat
         .messages
@@ -260,12 +261,13 @@ fn entering_chat_clears_stale_higher_and_lower_hover_in_one_move() {
 }
 
 #[test]
-fn regular_chat_wins_when_overlapping_variables_panel() {
+fn composer_card_wins_when_overlapping_tall_variables_panel() {
     let mut host = WidgetHost::new();
     let (viewport_w, viewport_h) = (1440.0, 900.0);
     host.last_viewport_w = viewport_w;
     host.last_viewport_h = viewport_h;
     host.editor_state.editor_ui.variables_panel_open = true;
+    host.editor_state.editor_ui.variables_panel_size = Some((744.0, 760.0));
     host.editor_state.editor_ui.variables_panel_hover =
         Some(op_editor_core::VariablesPanelButton::Close);
     host.editor_state.editor_ui.canvas_hover_node = Some(NodeId::new("stale-canvas"));
@@ -300,7 +302,7 @@ fn regular_chat_wins_when_overlapping_variables_panel() {
 }
 
 #[test]
-fn align_toolbar_whole_rect_wins_above_maximized_chat() {
+fn align_toolbar_padding_clears_stale_chat_hover() {
     let mut host = WidgetHost::new();
     let (viewport_w, viewport_h) = (1440.0, 900.0);
     host.last_viewport_w = viewport_w;
@@ -325,18 +327,12 @@ fn align_toolbar_whole_rect_wins_above_maximized_chat() {
         None,
         "probe must land in opaque toolbar padding, not an action button"
     );
-    assert!(
-        AIChatPlaceholder::from_editor(&host.editor_state)
-            .owned_by(host.chat_panel_owner)
-            .cursor_probe(
-                host.ai_chat_rect(viewport_w, viewport_h)
-                    .expect("maximized chat rect"),
-                point,
-            )
-            .hit
-            .is_some(),
-        "the lower maximized Chat would otherwise own the same point"
-    );
+    // Both chat surfaces are docked now; toolbar padding cannot overlap
+    // them, but still owns the point and clears stale lower hover.
+    assert!(!host
+        .ai_chat_rect(viewport_w, viewport_h)
+        .expect("chat")
+        .contains(point));
 
     assert!(host.apply_cursor_move(point.x, point.y));
     assert_eq!(host.editor_state.editor_ui.chat_header_hover, None);
@@ -373,15 +369,10 @@ fn context_menu_footprint_clears_chat_and_lower_hover_in_one_move() {
     let rect = menu.rect();
     let point = Point2D::new(rect.origin.x + 20.0, rect.origin.y + 20.0);
     assert!(rect.contains(point));
-    assert!(AIChatPlaceholder::from_editor(&host.editor_state)
-        .owned_by(host.chat_panel_owner)
-        .cursor_probe(
-            host.ai_chat_rect(viewport_w, viewport_h)
-                .expect("maximized chat"),
-            point,
-        )
-        .hit
-        .is_some());
+    assert!(!host
+        .ai_chat_rect(viewport_w, viewport_h)
+        .expect("chat")
+        .contains(point));
 
     assert!(host.apply_cursor_move(point.x, point.y));
     assert_chat_and_lower_hover_cleared(&host);
@@ -414,7 +405,7 @@ fn status_bar_footprint_clears_chat_and_lower_hover_in_one_move() {
 }
 
 #[test]
-fn static_color_picker_owns_point_above_maximized_chat() {
+fn static_color_picker_clears_stale_chat_hover() {
     let mut host = WidgetHost::new();
     let (viewport_w, viewport_h) = (1440.0, 900.0);
     host.last_viewport_w = viewport_w;
@@ -439,9 +430,9 @@ fn static_color_picker_owns_point_above_maximized_chat() {
         rect.origin.x + rect.size.x / 2.0,
         rect.origin.y + rect.size.y / 2.0,
     );
-    assert!(host
+    assert!(!host
         .ai_chat_rect(viewport_w, viewport_h)
-        .expect("maximized chat")
+        .expect("chat")
         .contains(point));
 
     assert!(host.apply_cursor_move(point.x, point.y));
@@ -450,7 +441,7 @@ fn static_color_picker_owns_point_above_maximized_chat() {
 }
 
 #[test]
-fn property_image_popup_wins_above_chat_model_picker() {
+fn property_image_popup_clears_stale_chat_model_picker_hover() {
     let mut host = WidgetHost::new();
     let (viewport_w, viewport_h) = (1440.0, 900.0);
     host.last_viewport_w = viewport_w;
@@ -475,16 +466,13 @@ fn property_image_popup_wins_above_chat_model_picker() {
             viewport_h - TOP_BAR_HEIGHT,
         ),
     };
-    let chat_rect = host
-        .ai_chat_rect(viewport_w, viewport_h)
-        .expect("maximized chat");
     let mut owned_point = None;
     let mut y = TOP_BAR_HEIGHT;
     while y < viewport_h && owned_point.is_none() {
         let mut x = 0.0;
         while x < viewport_w {
             let point = Point2D::new(x, y);
-            if panel.image_popovers_contain(property_rect, point) && chat_rect.contains(point) {
+            if panel.image_popovers_contain(property_rect, point) {
                 owned_point = Some(point);
                 break;
             }
@@ -492,7 +480,7 @@ fn property_image_popup_wins_above_chat_model_picker() {
         }
         y += 4.0;
     }
-    let point = owned_point.expect("image search popup must overlap maximized Chat");
+    let point = owned_point.expect("image search popup owns a painted point");
 
     assert!(host.apply_cursor_move(point.x, point.y));
     assert!(host.editor_state.editor_ui.image_panel.search_open);

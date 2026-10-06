@@ -1,4 +1,4 @@
-use super::{ChatDragState, WidgetHost};
+use super::WidgetHost;
 use op_editor_core::agent_settings::{
     AgentSettingsTab, ImageGenField, ImageGenProvider, SettingsFocus,
 };
@@ -122,38 +122,37 @@ fn chat_model_row_wins_over_variables_panel_and_preset_menu() {
 }
 
 #[test]
-fn right_press_on_model_picker_does_not_open_covered_layer_context_menu() {
+fn right_press_on_model_picker_does_not_open_layer_context_menu() {
     let mut host = WidgetHost::new();
     seed_layer_for_context_menu(&mut host);
     seed_two_chat_models(&mut host);
     let viewport = (1200.0, 800.0);
     let layer_point = first_layer_row_point(&host, viewport.1);
-    host.chat_drag = Some(ChatDragState {
-        grab_dx: 0.0,
-        grab_dy: 0.0,
-        pos_x: 0.0,
-        pos_y: 0.0,
-    });
     host.editor_state.editor_ui.chat_model_picker.open = true;
-    let initial_picker = host
-        .chat_model_picker_rect(viewport.0, viewport.1)
-        .expect("initial picker rect");
-    host.chat_drag.as_mut().expect("chat drag").pos_y +=
-        layer_point.y - (initial_picker.origin.y + initial_picker.size.y / 2.0);
     let picker = host
         .chat_model_picker_rect(viewport.0, viewport.1)
-        .expect("picker rect");
-    assert!(picker.contains(layer_point));
-
-    assert!(host.apply_right_press(layer_point.x, layer_point.y, viewport.0, viewport.1));
-
+        .expect("picker");
+    let point = Point2D::new(
+        picker.origin.x + 24.0,
+        picker.origin.y
+            + ai_chat_model_picker::MODEL_SEARCH_H
+            + ai_chat_model_picker::MODEL_PICKER_PAD_Y
+            + ai_chat_model_picker::MODEL_GROUP_H
+            + ai_chat_model_picker::MODEL_ROW_H / 2.0,
+    );
+    // The composer and Layers rail are disjoint now; a secondary press
+    // on the picker must still never fall through to the layer menu.
+    assert!(!picker.contains(layer_point));
+    assert!(picker.contains(point));
+    assert!(host.apply_right_press(point.x, point.y, viewport.0, viewport.1));
     assert!(host.editor_state.editor_ui.layer_context_menu.is_none());
     assert!(host.editor_state.editor_ui.chat_model_picker.open);
 }
 
 #[test]
-fn collapsing_chat_closes_model_picker() {
+fn header_press_closes_model_picker_without_minimizing_pinned_chat() {
     let mut host = WidgetHost::new();
+    host.editor_state.editor_ui.enter_chat_tab();
     seed_two_chat_models(&mut host);
     host.editor_state.editor_ui.chat_model_picker.open = true;
     host.editor_state
@@ -164,7 +163,7 @@ fn collapsing_chat_closes_model_picker() {
 
     assert!(host.apply_press(chat.origin.x + 25.0, chat.origin.y + 18.0, 1200.0, 800.0,));
 
-    assert!(host.editor_state.chat.is_minimized());
+    assert!(!host.editor_state.chat.is_minimized());
     assert!(!host.editor_state.editor_ui.chat_model_picker.open);
     assert!(host
         .editor_state

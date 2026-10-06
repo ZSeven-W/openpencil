@@ -66,12 +66,7 @@ fn selection_changing_right_press_closes_image_search() {
         .search_query
         .set_text("hero query");
 
-    let rect = Rect::xywh(
-        0.0,
-        TOP_BAR_HEIGHT,
-        host.editor_state.editor_ui.layer_panel_width,
-        VIEWPORT_H - TOP_BAR_HEIGHT,
-    );
+    let rect = host.layer_panel_rect(VIEWPORT_H);
     let panel = LayerPanel::from_editor(&host.editor_state);
     let mut point = None;
     let mut y = rect.origin.y;
