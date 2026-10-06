@@ -82,11 +82,11 @@ Vermilion appears **at most twice per card**. The masthead rule counts as one of
 
 | Role             | Family                                       | Range         | Usage                                                 |
 | ---------------- | -------------------------------------------- | ------------- | ----------------------------------------------------- |
-| Display          | Libre Caslon Text, 京华老宋体, Noto Serif SC   | 88px and up   | Mastheads, cover headlines, pull quotes               |
+| Display          | Libre Caslon Text, Noto Serif SC             | 88px and up   | Mastheads, cover headlines, pull quotes               |
 | Body / Interface | Archivo, Noto Serif SC                       | 64px and down | Body, deck lines, list rows, captions, page numbers   |
 | Data / Numerals  | Archivo                                      | any           | Every figure, with tabular-nums on                    |
 
-The Latin face leads every fallback chain so digits and Latin words are set by Archivo / Libre Caslon rather than by the Chinese face's own weak Latin. 京华老宋体 is free for commercial use; the rest are OFL.
+Write each family cell as one explicit fallback chain: `Libre Caslon Text, Noto Serif SC` for display and `Archivo, Noto Serif SC` for body. These families are supplied by OpenPencil. The Latin face leads so Latin words and figures use Archivo / Libre Caslon and Han characters use Noto Serif SC. If the user supplies 京华老宋体 as a custom font, it may lead the Chinese display treatment; do not require that unbundled face for the default design.
 
 Body copy is a **serif**, not a sans. This is a newspaper: a sans body would be a magazine, which is a different object.
 

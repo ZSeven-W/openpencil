@@ -8,7 +8,8 @@ val stagedDesignFonts = layout.buildDirectory.dir("generated/design-font-assets"
 val stageBundledDesignFonts = tasks.register<Copy>("stageBundledDesignFonts") {
     // Both native shells share the exact font bytes; keep the existing
     // player-font.ttf in src/main/assets alongside these design families.
-    from(repositoryRoot.file("crates/op-host-desktop/assets/fonts/Inter-VF.ttf")) {
+    from(repositoryRoot.dir("crates/op-host-desktop/assets/fonts")) {
+        include("*.ttf")
         into("fonts")
     }
     from(repositoryRoot.dir("packaging/shared/fonts")) { into("fonts") }

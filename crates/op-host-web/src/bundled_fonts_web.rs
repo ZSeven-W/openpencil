@@ -38,6 +38,9 @@ const BUNDLED_FONT_FILES: &[&str] = &[
     "Inter-VF.ttf",
     "NotoSansSC-VF.ttf",
     "PlusJakartaSans-VF.ttf",
+    "Archivo-VF.ttf",
+    "LibreCaslonText-VF.ttf",
+    "NotoSerifSC-VF.ttf",
     "SpaceGrotesk-VF.ttf",
     "Manrope-VF.ttf",
     "Outfit-VF.ttf",
@@ -146,7 +149,14 @@ mod tests {
         let root = env!("CARGO_MANIFEST_DIR");
         if file == "Roboto-Regular.ttf" {
             format!("{root}/../op-host-native/assets/{file}")
-        } else if matches!(file, "NotoSansSC-VF.ttf" | "PlusJakartaSans-VF.ttf") {
+        } else if matches!(
+            file,
+            "NotoSansSC-VF.ttf"
+                | "PlusJakartaSans-VF.ttf"
+                | "Archivo-VF.ttf"
+                | "LibreCaslonText-VF.ttf"
+                | "NotoSerifSC-VF.ttf"
+        ) {
             format!("{root}/../../packaging/shared/fonts/{file}")
         } else {
             format!("{root}/../op-host-desktop/assets/fonts/{file}")
@@ -162,7 +172,7 @@ mod tests {
                 "manifest names {file}, but {path} does not exist"
             );
         }
-        assert_eq!(BUNDLED_FONT_FILES.len(), 13);
+        assert_eq!(BUNDLED_FONT_FILES.len(), 16);
         let staging = include_str!("../../../tools/stage-web-assets.sh");
         assert!(staging.contains("copy_dir \"packaging/shared/fonts\" \"fonts\""));
         assert!(FONT_ROUTE_PREFIX.ends_with('/'));
@@ -196,6 +206,9 @@ mod tests {
             ("Inter-VF.ttf", "Inter"),
             ("NotoSansSC-VF.ttf", "Noto Sans SC"),
             ("PlusJakartaSans-VF.ttf", "Plus Jakarta Sans"),
+            ("Archivo-VF.ttf", "Archivo"),
+            ("LibreCaslonText-VF.ttf", "Libre Caslon Text"),
+            ("NotoSerifSC-VF.ttf", "Noto Serif SC"),
             ("SpaceGrotesk-VF.ttf", "Space Grotesk"),
             ("Manrope-VF.ttf", "Manrope"),
             ("Outfit-VF.ttf", "Outfit"),

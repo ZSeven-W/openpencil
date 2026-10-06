@@ -27,6 +27,9 @@ const BUNDLED: &[&[u8]] = &[
     // Reuse the same OFL asset so reopen/measurement cannot diverge by host.
     include_bytes!("../../../packaging/shared/fonts/NotoSansSC-VF.ttf"),
     include_bytes!("../../../packaging/shared/fonts/PlusJakartaSans-VF.ttf"),
+    include_bytes!("../../../packaging/shared/fonts/Archivo-VF.ttf"),
+    include_bytes!("../../../packaging/shared/fonts/LibreCaslonText-VF.ttf"),
+    include_bytes!("../../../packaging/shared/fonts/NotoSerifSC-VF.ttf"),
     include_bytes!("../assets/fonts/SpaceGrotesk-VF.ttf"),
     include_bytes!("../assets/fonts/Manrope-VF.ttf"),
     include_bytes!("../assets/fonts/Outfit-VF.ttf"),

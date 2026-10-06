@@ -24,3 +24,78 @@ SHA-256: 89b3fb38aa0d275d7a731d0d817a4f1622b316b4d7fbdedcf02ee9099ff68bc8
 License: OFL-PlusJakartaSans.txt (SIL Open Font License 1.1)
 Desktop embeds this shared asset; iOS and Android register it from their shared fonts folder.
 Web stages and loads the same bytes before document font detection.
+
+Desktop design fonts also shipped on Android and iOS (original desktop bytes):
+
+CormorantGaramond-VF.ttf
+Family: Cormorant Garamond
+Copyright from the bundled font: Copyright 2015 The Cormorant Project Authors (github.com/CatharsisFonts/Cormorant)
+License: OFL-cormorantgaramond.txt
+
+DMMono-Medium.ttf
+Family: DM Mono
+Copyright from the bundled font: Copyright 2020 The DM Mono Project Authors (https://www.github.com/googlefonts/dm-mono)
+License: OFL-dmmono.txt
+
+DMMono-Regular.ttf
+Family: DM Mono
+Copyright from the bundled font: Copyright 2020 The DM Mono Project Authors (https://www.github.com/googlefonts/dm-mono)
+License: OFL-dmmono.txt
+
+DMSans-VF.ttf
+Family: DM Sans
+Copyright from the bundled font: Copyright 2014 The DM Sans Project Authors (https://github.com/googlefonts/dm-fonts)
+License: OFL-dmsans.txt
+
+DMSerifDisplay-Regular.ttf
+Family: DM Serif Display
+Copyright from the bundled font: Copyright 2014 - 2017 Adobe Systems Incorporated (http://www.adobe.com/), with Reserved Font Name 'Source'. Copyright 2019 Google LLC.
+License: OFL-dmserifdisplay.txt
+
+InstrumentSerif-Regular.ttf
+Family: Instrument Serif
+Copyright from the bundled font: Copyright 2022 The Instrument Serif Project Authors (https://github.com/Instrument/instrument-serif)
+License: OFL-instrumentserif.txt
+
+Inter-VF.ttf
+Family: Inter
+Copyright from the bundled font: Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
+License: OFL-Inter.txt
+
+JetBrainsMono-VF.ttf
+Family: JetBrains Mono
+Copyright from the bundled font: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
+License: OFL-jetbrainsmono.txt
+
+Manrope-VF.ttf
+Family: Manrope
+Copyright from the bundled font: Copyright 2019 The Manrope Project Authors (https://github.com/sharanda/manrope)
+License: OFL-manrope.txt
+
+Outfit-VF.ttf
+Family: Outfit
+Copyright from the bundled font: Copyright 2021 The Outfit Project Authors (https://github.com/Outfitio/Outfit-Fonts)
+License: OFL-outfit.txt
+
+SpaceGrotesk-VF.ttf
+Family: Space Grotesk
+Copyright from the bundled font: Copyright 2020 The Space Grotesk Project Authors (https://github.com/floriankarsten/space-grotesk)
+License: OFL-spacegrotesk.txt
+
+Archivo-VF.ttf
+Family: Archivo
+Source: https://raw.githubusercontent.com/google/fonts/6e8069ff8ba3dab2a397fb30e7fbd243aba9b57a/ofl/archivo/Archivo%5Bwdth%2Cwght%5D.ttf
+SHA-256: 0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053
+License: OFL-archivo.txt
+
+LibreCaslonText-VF.ttf
+Family: Libre Caslon Text
+Source: https://raw.githubusercontent.com/google/fonts/6e8069ff8ba3dab2a397fb30e7fbd243aba9b57a/ofl/librecaslontext/LibreCaslonText%5Bwght%5D.ttf
+SHA-256: c11809dbfd5445886293d89b32bfc2584075c80e77750cf1c284113e36b8b3f4
+License: OFL-librecaslontext.txt
+
+NotoSerifSC-VF.ttf
+Family: Noto Serif SC
+Source: https://raw.githubusercontent.com/google/fonts/6e8069ff8ba3dab2a397fb30e7fbd243aba9b57a/ofl/notoserifsc/NotoSerifSC%5Bwght%5D.ttf
+SHA-256: 050080d9255a86808f2945bffac582b31ef32bc36411ce29563b4961670c66f9
+License: OFL-notoserifsc.txt

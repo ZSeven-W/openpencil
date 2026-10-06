@@ -21,6 +21,9 @@ required=(
   "$repo_dir/packaging/shared/fonts/OFL-NotoSansSC.txt"
   "$repo_dir/packaging/shared/fonts/PlusJakartaSans-VF.ttf"
   "$repo_dir/packaging/shared/fonts/OFL-PlusJakartaSans.txt"
+  "$repo_dir/packaging/shared/fonts/Archivo-VF.ttf"
+  "$repo_dir/packaging/shared/fonts/LibreCaslonText-VF.ttf"
+  "$repo_dir/packaging/shared/fonts/NotoSerifSC-VF.ttf"
   "$player_dir/Resources/en.lproj/InfoPlist.strings"
   "$player_dir/Resources/zh-Hans.lproj/InfoPlist.strings"
   "$player_dir/Sources/OpPlayerApp.swift"
@@ -142,6 +145,12 @@ target = project.fetch("targets").fetch("OpenPencilPlayer")
 font_sources = target.fetch("sources")
 raise "Inter must reuse the canonical desktop asset" unless font_sources.any? { |source| source["path"] == "../../crates/op-host-desktop/assets/fonts/Inter-VF.ttf" && source["buildPhase"] == "resources" }
 raise "shared design fonts must preserve their fonts folder" unless font_sources.any? { |source| source["path"] == "../shared/fonts" && source["type"] == "folder" && source["buildPhase"] == "resources" }
+desktop_font_dir = File.expand_path("../../crates/op-host-desktop/assets/fonts", File.dirname(ARGV.fetch(0)))
+raise "desktop font resource directory missing" unless File.directory?(desktop_font_dir)
+Dir.glob(File.join(desktop_font_dir, "*.ttf")).each do |font|
+  expected = "../../crates/op-host-desktop/assets/fonts/#{File.basename(font)}"
+  raise "missing desktop font resource #{expected}" unless font_sources.any? { |source| source["path"] == expected && source["buildPhase"] == "resources" }
+end
 raise "OpenPencilPlayer must be an iOS application" unless target["platform"] == "iOS" && target["type"] == "application"
 raise "bundle-id prefix must be tech.zseven" unless project.fetch("options").fetch("bundleIdPrefix") == "tech.zseven"
 settings = target.fetch("settings").fetch("base")

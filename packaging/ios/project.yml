@@ -22,6 +22,26 @@ targets:
         buildPhase: resources
       - path: ../../crates/op-host-desktop/assets/fonts/Inter-VF.ttf
         buildPhase: resources
+      - path: ../../crates/op-host-desktop/assets/fonts/CormorantGaramond-VF.ttf
+        buildPhase: resources
+      - path: ../../crates/op-host-desktop/assets/fonts/DMMono-Medium.ttf
+        buildPhase: resources
+      - path: ../../crates/op-host-desktop/assets/fonts/DMMono-Regular.ttf
+        buildPhase: resources
+      - path: ../../crates/op-host-desktop/assets/fonts/DMSans-VF.ttf
+        buildPhase: resources
+      - path: ../../crates/op-host-desktop/assets/fonts/DMSerifDisplay-Regular.ttf
+        buildPhase: resources
+      - path: ../../crates/op-host-desktop/assets/fonts/InstrumentSerif-Regular.ttf
+        buildPhase: resources
+      - path: ../../crates/op-host-desktop/assets/fonts/JetBrainsMono-VF.ttf
+        buildPhase: resources
+      - path: ../../crates/op-host-desktop/assets/fonts/Manrope-VF.ttf
+        buildPhase: resources
+      - path: ../../crates/op-host-desktop/assets/fonts/Outfit-VF.ttf
+        buildPhase: resources
+      - path: ../../crates/op-host-desktop/assets/fonts/SpaceGrotesk-VF.ttf
+        buildPhase: resources
       - path: ../shared/fonts
         type: folder
         buildPhase: resources

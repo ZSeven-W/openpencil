@@ -55,6 +55,17 @@ fn registering_mobile_font_resolves_prompt_and_survives_document_reopen() {
     for (family, path) in [
         ("Roboto", "../op-host-native/assets/Roboto-Regular.ttf"),
         ("Inter", "../op-host-desktop/assets/fonts/Inter-VF.ttf"),
+        ("Manrope", "../op-host-desktop/assets/fonts/Manrope-VF.ttf"),
+        ("DM Sans", "../op-host-desktop/assets/fonts/DMSans-VF.ttf"),
+        ("Archivo", "../../packaging/shared/fonts/Archivo-VF.ttf"),
+        (
+            "Libre Caslon Text",
+            "../../packaging/shared/fonts/LibreCaslonText-VF.ttf",
+        ),
+        (
+            "Noto Serif SC",
+            "../../packaging/shared/fonts/NotoSerifSC-VF.ttf",
+        ),
         (
             "Noto Sans SC",
             "../../packaging/shared/fonts/NotoSansSC-VF.ttf",

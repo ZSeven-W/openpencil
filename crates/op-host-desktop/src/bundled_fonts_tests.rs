@@ -47,7 +47,15 @@ fn desktop_bundled_fonts_reopen_saved_featured_template_without_missing_fonts() 
         )
         .is_ok());
     let ui = &host.editor_state().editor_ui;
-    for family in ["Inter", "Noto Sans SC", "Plus Jakarta Sans"] {
+    for family in [
+        "Inter",
+        "Noto Sans SC",
+        "Plus Jakarta Sans",
+        "Archivo",
+        "Libre Caslon Text",
+        "Noto Serif SC",
+        "Manrope",
+    ] {
         assert!(
             ui.bundled_font_families.iter().any(|name| name == family),
             "desktop must ship the actual {family} family"
