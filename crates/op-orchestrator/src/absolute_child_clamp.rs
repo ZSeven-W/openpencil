@@ -62,7 +62,8 @@ pub(super) fn collect_absolute_child_clamp_fixes(
 ) {
     // Only an ABSOLUTE parent pins children by x/y; a flex parent owns its
     // children's placement and the flex overflow fixers own its overflows.
-    if matches!(layout_str(v), None | Some("none")) {
+    if matches!(layout_str(v), None | Some("none")) && crate::text_effect_overlay::pair(v).is_none()
+    {
         if let Some(pr) = v
             .get("id")
             .and_then(Value::as_str)

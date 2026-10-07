@@ -16,6 +16,8 @@ There is exactly one chromatic colour: **vermilion**, the second-run red of an o
 
 The signature device is **misregistration**. The cover headline is set twice: once in vermilion, offset by (3, 3), sitting underneath the black setting. That is what a two-run press does when the sheet shifts. It happens once, on the cover, and only there — used twice it stops being a press artefact and becomes a graphic effect.
 
+**OpenPencil layer order:** earlier siblings paint on top. Emit the black reading layer FIRST at `(0, 0)`, then its vermilion copy at `(3, 3)`; emitting red first puts the red over the black. Place exactly these two text nodes in one transparent, non-clipping `layout: "none"` wrapper. Both copies keep the same full content, font family, size, weight, letter spacing, line height, growth and dimensions. Keep dates, descriptions, prices and other independent reading copy outside this effect wrapper. Do not replace the vermilion decoration with black just to make it pass the standalone body-text contrast check: the opaque black foreground carries the reading contrast.
+
 Everything else is rules and columns. The masthead is a heavy rule over a hairline. Columns are separated by a 1px vertical. Tables use a tinted zebra row rather than a border. There is no shadow anywhere in the system, because ink on pulp does not cast one.
 
 Key aesthetics:

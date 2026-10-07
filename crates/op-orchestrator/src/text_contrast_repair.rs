@@ -1,11 +1,7 @@
 //! Re-point text whose colour is invisible against its own background.
 //!
-//! `op_design_lint::detectors::typography` has detected this since 2026-05,
-//! but nothing in the generation path ever called it: the orchestrator uses
-//! exactly one lint detector (`detect_missing_progress_rings`), and the rest
-//! only run through the MCP `lint_document` tool a user invokes by hand. So a
-//! deck cover shipped with its title at **1.10:1** — `#FFFFFF` on `#F1F5F9`,
-//! effectively blank (measured 2026-08-01, deepseek-v4-pro).
+//! Measured blank-title defect: white on #F1F5F9, 1.10:1. Reading copy must
+//! remain readable; a proven offset decoration behind that copy keeps its ink.
 //!
 //! ## Why this repairs rather than echoes
 //!
@@ -36,21 +32,15 @@ use op_editor_core::{EditorCommand, EditorState, NodeId, PenNodeExt};
 
 #[path = "text_contrast_gradient.rs"]
 mod gradient;
+#[path = "text_contrast_overprint.rs"]
+mod overprint;
 #[path = "text_contrast_photo.rs"]
 mod photo;
 use gradient::{GradientSource, ResolvedGradient};
 pub use photo::repair_for_image as repair_photo_caption_for_image;
 
-/// Palette tokens allowed as a replacement, most-preferred first.
-///
-/// All are emitted by `design_system` / `palette_harmonize`, so they exist in
-/// any generated document. `--card` is included on purpose: on a dark
-/// background it is the readable choice, and excluding it would leave dark
-/// boards unrepairable.
-/// These are the names `design_system` actually emits. An earlier version of
-/// this list was written from memory (made-up text token names) and
-/// matched NOTHING in a real document, so every repair silently no-opped —
-/// the unit tests passed because their fixture used the invented names too.
+/// Palette-backed replacements in preferred reading order. Surface tokens
+/// remain candidates so dark boards can be repaired safely.
 const CANDIDATE_TOKENS: &[&str] = &[
     "--foreground",
     "--secondary-foreground",
@@ -649,7 +639,11 @@ fn collect_contrast_offenders(
                         threshold,
                         rects,
                     ) {
-                        out.push(offender);
+                        if !overprint::covered_by_readable_front(
+                            node, ancestors, variables, theme, rects,
+                        ) {
+                            out.push(offender);
+                        }
                     }
                 }
             }

@@ -157,8 +157,10 @@ globalThis.I = function (parent, obj) {
   }
   var effectiveParentMeta = __insertBindings[effectiveParent];
   var inheritedBackground = effectiveParentMeta == null ? null : effectiveParentMeta.background;
+  var beforeContrast = recorded;
   recorded = __normalizeForegroundContrast(recorded, inheritedBackground);
-  var binding = __record(effectiveParent, JSON.stringify(recorded));
+  var originalFill = beforeContrast !== recorded ? JSON.stringify(beforeContrast.fill) : "";
+  var binding = __record(effectiveParent, JSON.stringify(recorded), originalFill, inheritedBackground == null ? "" : inheritedBackground);
   var background = inheritedBackground;
   var isForegroundNode = recorded != null
     && typeof recorded === "object"

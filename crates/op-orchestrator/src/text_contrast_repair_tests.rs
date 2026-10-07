@@ -48,6 +48,9 @@ fn light_theme() -> op_design_lint::node_util::Theme {
     op_design_lint::node_util::default_theme(Some(&themes))
 }
 
+#[path = "text_contrast_overprint_tests.rs"]
+mod overprint;
+
 #[test]
 fn white_text_on_a_light_board_is_repointed_at_the_ink_token() {
     // The shipped defect: title fill `$--card` (#FFFFFF) on a

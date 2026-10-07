@@ -262,6 +262,7 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
     // full-width page bands (empty banner + floating invisible text, etc.).
     coalesce_subtask_section(&mut nodes);
     crate::role_infer::resolve_forest_roles(&mut nodes, canvas_width, theme);
+    crate::text_effect_overlay::normalize_generated_order(&mut nodes);
     // Cross-node contrast post-pass (I3) runs AFTER role resolution (it keys off
     // the roles I1/I2 set) and before the fallback sizing normalize.
     // Repair-tier policy for this document (see `crate::repair_tier`): the

@@ -20,6 +20,8 @@ mod error;
 #[path = "script_runner_dotted_keys.rs"]
 mod dotted_keys;
 
+#[path = "script_runner_overlay.rs"]
+mod overlay;
 #[path = "script_runner_prelude.rs"]
 mod prelude;
 
@@ -52,7 +54,7 @@ pub fn run_script_to_program(text: &str) -> Result<String, ScriptError> {
 /// and syntax-recovery ladder, but record the supplied I() node verbatim.
 pub fn run_modification_script_to_program(text: &str) -> Result<String, ScriptError> {
     const PRESERVE_NODES: &str = r#"globalThis.I = function(parent, obj) {
-        return __record(parent == null ? "null" : String(parent), JSON.stringify(obj));
+        return __record(parent == null ? "null" : String(parent), JSON.stringify(obj), "", "");
     };"#;
     run_script_to_program_with_preamble(text, Some(PRESERVE_NODES))
 }
@@ -321,6 +323,11 @@ pub(crate) fn eval_recorded(
     let lines: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
     let counter: Rc<Cell<usize>> = Rc::new(Cell::new(0));
     let bytes_used: Rc<Cell<usize>> = Rc::new(Cell::new(0));
+    let inserts = Rc::new(RefCell::new(Vec::new()));
+    let inserts_rec = inserts.clone();
+    let non_insert_ops = Rc::new(Cell::new(false));
+    let non_insert_k = non_insert_ops.clone();
+    let non_insert_u = non_insert_ops.clone();
     let lines_rec = lines.clone();
     let counter_rec = counter.clone();
     let bytes_rec = bytes_used.clone();
@@ -331,11 +338,30 @@ pub(crate) fn eval_recorded(
     let bytes_rec_u = bytes_used.clone();
 
     let outcome: Result<(), ScriptError> = ctx.with(|ctx| {
-        let record = Function::new(ctx.clone(), move |parent: String, json: String| -> String {
-            push_recorded_line(&lines_rec, &counter_rec, &bytes_rec, |bind| {
-                format!("{bind}=I({parent}, {json})")
-            })
-        })
+        let record = Function::new(
+            ctx.clone(),
+            move |parent: String,
+                  json: String,
+                  original: rquickjs::function::Opt<String>,
+                  background: rquickjs::function::Opt<String>|
+                  -> String {
+                let at = lines_rec.borrow().len();
+                let binding = push_recorded_line(&lines_rec, &counter_rec, &bytes_rec, |bind| {
+                    format!("{bind}=I({parent}, {json})")
+                });
+                if lines_rec.borrow().len() == at + 1 {
+                    inserts_rec.borrow_mut().push(overlay::capture(
+                        binding.clone(),
+                        parent,
+                        &json,
+                        &original.0.unwrap_or_default(),
+                        background.0.unwrap_or_default(),
+                        at,
+                    ));
+                }
+                binding
+            },
+        )
         .map_err(|e| ScriptError::BindHostFn {
             name: "__record",
             detail: e.to_string(),
@@ -343,6 +369,7 @@ pub(crate) fn eval_recorded(
         let record_k = Function::new(
             ctx.clone(),
             move |kit: String, parent: String, json: String| -> String {
+                non_insert_k.set(true);
                 push_recorded_line(&lines_rec_k, &counter_rec_k, &bytes_rec_k, |bind| {
                     format!("{bind}=K({kit}, {parent}, {json})")
                 })
@@ -355,6 +382,7 @@ pub(crate) fn eval_recorded(
         let record_u = Function::new(
             ctx.clone(),
             move |node_id: String, json: String| -> String {
+                non_insert_u.set(true);
                 push_recorded_operation(
                     &lines_rec_u,
                     &bytes_rec_u,
@@ -394,6 +422,14 @@ pub(crate) fn eval_recorded(
         ctx.eval::<(), _>(script)
             .map_err(|e| describe_js_error(&ctx, e))
     });
+    if outcome.is_ok()
+        && preamble.is_none()
+        && !non_insert_ops.get()
+        && bytes_used.get() < MAX_RECORDED_BYTES
+        && counter.get() <= MAX_RECORDED_LINES
+    {
+        overlay::restore(&mut lines.borrow_mut(), &inserts.borrow());
+    }
     let program = lines.borrow().join("\n");
     let capped = bytes_used.get() >= MAX_RECORDED_BYTES || counter.get() > MAX_RECORDED_LINES;
     if bytes_used.get() >= MAX_RECORDED_BYTES && !program.trim().is_empty() {

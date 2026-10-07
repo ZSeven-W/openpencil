@@ -35,6 +35,7 @@ mod chat_design_apply;
 mod chat_model_mutators;
 pub mod chat_sessions;
 mod chat_title;
+pub mod text_effect_overlay;
 pub use chat_title::{is_default_chat_title, suggest_chat_title};
 pub mod clipboard;
 pub mod codegen;

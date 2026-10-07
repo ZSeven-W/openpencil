@@ -2,6 +2,24 @@ use super::*;
 use serde_json::json;
 use std::collections::HashMap;
 
+#[test]
+fn identical_headline_with_a_small_authored_offset_is_a_text_effect() {
+    let doc = jian_ops_schema::load_str(&json!({"version":"1.0.0","children":[
+        {"type":"frame","id":"board","width":800,"height":600,"children":[
+            {"type":"frame","id":"effect","layout":"none","width":600,"height":180,"children":[
+                {"type":"text","id":"ink","x":0,"y":0,"content":"咖啡小聚","fontSize":100,"fontFamily":"Noto Serif SC","fontWeight":700,"width":"fit_content","height":"fit_content","fill":[{"type":"solid","color":"#1E1A16"}]},
+                {"type":"text","id":"red","x":3,"y":3,"content":"咖啡小聚","fontSize":100,"fontFamily":"Noto Serif SC","fontWeight":700,"width":"fit_content","height":"fit_content","fill":[{"type":"solid","color":"#B74A37"}]}
+            ]}
+        ]}
+    ]}).to_string()).unwrap().value;
+    let state = op_editor_core::EditorState::from_document(doc);
+    let issues = crate::geometry_validation::geometry_diagnostics(&state);
+    assert!(
+        !issues.iter().any(|i| i.contains("TEXT leaves")),
+        "{issues:?}"
+    );
+}
+
 fn text_node(id: &str, name: &str, content: &str) -> serde_json::Value {
     json!({ "type": "text", "id": id, "name": name, "content": content })
 }

@@ -25,6 +25,29 @@ fn source_facts_survive_all_subtask_complexity_levels() {
     }
 }
 
+#[test]
+fn pinned_print_style_layer_order_reaches_all_generation_complexity_levels() {
+    let mut request = req();
+    request.model = Some("glm-5.3-flash".into());
+    request.pinned_style_guide = Some("leadprint-vermilion-light".into());
+    request.prompt = "做一张中文咖啡活动卡，采用错位套印标题".into();
+    let mut guide_plan = plan();
+    guide_plan.style_guide_name = request.pinned_style_guide.clone();
+    for (reduced, minimal) in [(false, false), (true, false), (true, true)] {
+        let (call, _) = bsp(
+            &subtask(),
+            &guide_plan,
+            &request,
+            AbortFlag::new(),
+            reduced,
+            minimal,
+        );
+        let delivered = format!("{}\n{}", call.system_prompt, call.user_prompt);
+        assert!(delivered.contains("earlier siblings paint on top"));
+        assert!(delivered.contains("black reading layer FIRST"));
+    }
+}
+
 /// Build a prompt for a document variable table using the same non-empty check
 /// as the production sub-agent runner.
 fn prompt_for_variables(

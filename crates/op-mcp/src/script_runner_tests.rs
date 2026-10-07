@@ -186,6 +186,37 @@ I(dark, {type: "icon_font", name: "Faint icon", fill: [{type: "solid", color: "#
 }
 
 #[test]
+fn a_complete_offset_copy_keeps_its_ink_in_both_insert_orders() {
+    for reading_first in [true, false] {
+        let reading = r##"I(w,{type:"text",name:"ink",content:"咖啡小聚",x:0,y:0,width:920,fontSize:170,fontWeight:700,fill:[{type:"solid",color:"#1E1A16"}]});"##;
+        let decoration = r##"I(w,{type:"text",name:"red",content:"咖啡小聚",x:3,y:3,width:920,fontSize:170,fontWeight:700,fill:[{type:"solid",color:"#B74A37"}]});"##;
+        let prefix = r##"const p=I(null,{type:"frame",fill:[{type:"solid",color:"#F1EDE1"}]});const w=I(p,{type:"frame",layout:"none",width:920,height:340});"##;
+        let script = format!(
+            "{prefix}{}{}",
+            if reading_first { reading } else { decoration },
+            if reading_first { decoration } else { reading }
+        );
+        let program = run_script_to_program(&script).unwrap();
+        assert!(program.contains("#B74A37"), "{program}");
+        assert!(
+            program.find(r#""name":"ink""#).unwrap() < program.find(r#""name":"red""#).unwrap(),
+            "{program}"
+        );
+    }
+}
+
+#[test]
+fn independent_copy_or_explicit_updates_do_not_claim_the_recorded_effect() {
+    let script = r##"const p=I(null,{type:"frame",fill:[{type:"solid",color:"#F1EDE1"}]});const w=I(p,{type:"frame",layout:"none",width:920,height:340});I(w,{type:"text",content:"咖啡小聚",x:0,y:0,width:920,fontSize:170,fill:[{type:"solid",color:"#1E1A16"}]});I(w,{type:"text",content:"独立文案",x:3,y:3,width:920,fontSize:170,fill:[{type:"solid",color:"#B74A37"}]});"##;
+    assert!(!run_script_to_program(script).unwrap().contains("#B74A37"));
+    let with_update =
+        script.replace("独立文案", "咖啡小聚") + r#"U("existing",{name:"authorized update"});"#;
+    assert!(!run_script_to_program(&with_update)
+        .unwrap()
+        .contains("#B74A37"));
+}
+
+#[test]
 fn insert_preserves_qualified_foregrounds_and_non_foreground_nodes() {
     let program = run_script_to_program(
         r##"const root = I(null, {type: "frame", fill: [{type: "solid", color: "#FFFFFF"}]});

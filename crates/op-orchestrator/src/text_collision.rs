@@ -14,15 +14,12 @@
 //! pass never sees the pair at all.
 //!
 //! The contract here is deliberately flatter than the box-overlap one:
-//! unlike containers (where overlap is often the deliberate point — deck
-//! stacking, ring badges, notification dots), two rendered TEXT blocks
-//! landing on the same pixels is never design intent. So this detector
-//! applies a single fact-level rule with no name/role exceptions: real
-//! resolved overlap between two non-empty visible text leaves is always a
-//! defect. Detect-only — which text should move is an intent judgment for
-//! the model in the loop, not a fixer here.
+//! Different reading copy landing on the same pixels is a defect. A proven
+//! same-copy offset treatment is one text effect, not two competing messages;
+//! the shared text-effect proof scopes that exception to one tiny wrapper.
+//! Detect-only: which reading text should move belongs to the model.
 //!
-//! The rule has exactly one carve-out, and it is about INK rather than
+//! The other carve-out is about INK rather than
 //! intent: a block set at watermark opacity contributes no ink to obscure
 //! with, so the premise "neither is readable" never holds for it. See
 //! [`WATERMARK_MAX_OPACITY`].
@@ -99,9 +96,7 @@ fn is_visible_nonempty_text(v: &Value) -> bool {
     v.get("type").and_then(Value::as_str) == Some("text")
         && v.get("visible").and_then(Value::as_bool) != Some(false)
         && !is_watermark(v)
-        && v.get("content")
-            .and_then(Value::as_str)
-            .is_some_and(|c| !c.trim().is_empty())
+        && crate::text_effect_overlay::content(v).is_some_and(|c| !c.trim().is_empty())
 }
 
 /// Depth-first collection of every visible, non-empty text LEAF under `v`
@@ -138,10 +133,19 @@ pub(crate) fn collect_text_collisions(
 ) -> Vec<TextCollision> {
     let mut leaves = Vec::new();
     collect_text_leaves(root, rects, &mut leaves);
+    let effects = crate::text_effect_overlay::effect_pairs(root);
     let mut out = Vec::new();
     for i in 0..leaves.len() {
         let (a_id, a_name, a) = leaves[i];
         for &(b_id, b_name, b) in &leaves[i + 1..] {
+            let key = if a_id < b_id {
+                (a_id.into(), b_id.into())
+            } else {
+                (b_id.into(), a_id.into())
+            };
+            if effects.contains(&key) {
+                continue;
+            }
             let overlap_x = (a.x + a.w).min(b.x + b.w) - a.x.max(b.x);
             let overlap_y = (a.y + a.h).min(b.y + b.h) - a.y.max(b.y);
             if overlap_x <= MIN_AXIS_OVERLAP_PX || overlap_y <= MIN_AXIS_OVERLAP_PX {
