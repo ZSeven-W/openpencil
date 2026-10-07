@@ -113,11 +113,106 @@ fn dense_content_without_excess_space_is_not_shrunk_or_deleted() {
     assert_eq!(sink.state().doc, before);
 }
 
+#[test]
+fn chinese_and_unnamed_empty_flow_spacers_yield_before_a_footer_is_clipped() {
+    for name in [json!("标题至日期"), json!("报头留白"), Value::Null] {
+        let mut draft = state(
+            json!({"type":"frame","id":"root","width":1080,"height":1440,"layout":"vertical","clipContent":true,"children":[
+                {"type":"frame","id":"body","width":"fill_container","height":"fit_content","layout":"vertical","gap":16,"padding":[16,80,16,80],"children":[
+                    {"type":"text","id":"title","content":"咖啡小聚","width":"fill_container","height":400,"fontSize":120},
+                    {"type":"frame","id":"space-a","name":name,"width":"fill_container","height":300},
+                    {"type":"text","id":"details","content":"2026年10月17日 14:30–16:00","width":"fill_container","height":180,"fontSize":36},
+                    {"type":"frame","id":"space-b","name":name,"width":"fill_container","height":300},
+                    {"type":"text","id":"prices","content":"拿铁 28元 · 美式 22元 · 燕麦拿铁 32元","width":"fill_container","height":180,"fontSize":36},
+                    {"type":"frame","id":"space-c","name":name,"width":"fill_container","height":300},
+                    {"type":"text","id":"footer","content":"到店自取，不含配送。","width":"fill_container","height":60,"fontSize":36}
+                ]}
+            ]}),
+        );
+        let before = draft.doc.clone();
+        assert!(!crate::geometry_validation::fixed_board_content_diagnostics(&draft).is_empty());
+        let mut sink = crate::loop_finalize::StateDocSink { state: &mut draft };
+        repair(&mut sink, "root");
+        let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+        let page = scene.active_page().unwrap();
+        let footer = page.find("footer").unwrap();
+        assert!(
+            footer.bounds.origin.y + footer.bounds.size.y <= 1441.0,
+            "{name:?}: {:?}",
+            footer.bounds
+        );
+        assert!(
+            crate::geometry_validation::fixed_board_content_diagnostics(sink.state()).is_empty()
+        );
+        for id in ["title", "details", "prices", "footer"] {
+            assert_eq!(
+                op_editor_core::walkers::find_node(
+                    sink.state().active_children(),
+                    &NodeId::new(id)
+                ),
+                op_editor_core::walkers::find_node(&before.children, &NodeId::new(id))
+            );
+        }
+        assert_eq!(
+            find_root(sink.state(), "root").unwrap().height_px(),
+            Some(1440.0)
+        );
+        let settled = sink.state().doc.clone();
+        repair(&mut sink, "root");
+        assert_eq!(sink.state().doc, settled);
+    }
+}
+
+#[test]
+fn empty_frames_with_paint_interaction_or_authored_geometry_are_not_spacing() {
+    for protected in [
+        json!({"fill":[{"type":"solid","color":"#FFFFFF"}]}),
+        json!({"stroke":{"thickness":1,"fill":[{"type":"solid","color":"#111111"}]}}),
+        json!({"effects":[{"type":"shadow"}]}),
+        json!({"events":{"onTap":[{"toast":"Click"}]}}),
+        json!({"role":"input"}),
+        json!({"x":0}),
+        json!({"y":0}),
+        json!({"rotation":15}),
+        json!({"constraints":{"vertical":"bottom"}}),
+        json!({"clipContent":true}),
+        json!({"reusable":true}),
+        json!({"minHeight":200}),
+        json!({"screen":"/"}),
+    ] {
+        let mut node =
+            json!({"type":"frame","id":"space","name":"留白","height":300,"children":[]});
+        node.as_object_mut()
+            .unwrap()
+            .extend(protected.as_object().unwrap().clone());
+        let before = node.clone();
+        assert_eq!(trim(&mut node, 16.0, 1.0, true), 0.0, "{protected}");
+        assert_eq!(node, before);
+    }
+    let mut small = json!({"type":"frame","id":"small","height":4,"children":[]});
+    assert_eq!(trim(&mut small, 16.0, 1.0, true), 0.0);
+    assert_eq!(small["height"], 4.0);
+}
+
 /// Explicit local corpus replay; no provider or network calls. The same
 /// request-scoped passes operate on a copy of each retained generated draft.
 #[test]
 #[ignore = "requires explicit retained local QA input/output directories"]
 fn replay_retained_fixed_board_drafts() {
+    if std::env::var("OPENPENCIL_QA_NATIVE_BOARD_FONTS").as_deref() == Ok("1") {
+        let fonts =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packaging/shared/fonts");
+        jian_skia::register_bundled_fonts(
+            [
+                "Archivo-VF.ttf",
+                "LibreCaslonText-VF.ttf",
+                "NotoSerifSC-VF.ttf",
+            ]
+            .iter()
+            .map(|name| std::fs::read(fonts.join(name)).unwrap())
+            .collect(),
+        );
+    }
     let input = std::path::PathBuf::from(std::env::var("OPENPENCIL_QA_DRAFT_INPUT").unwrap());
     let output = std::path::PathBuf::from(std::env::var("OPENPENCIL_QA_DRAFT_OUTPUT").unwrap());
     for entry in std::fs::read_dir(input).unwrap() {

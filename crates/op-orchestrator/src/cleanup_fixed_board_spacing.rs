@@ -152,30 +152,11 @@ fn trim(node: &mut Value, floor: f64, share: f64, in_vertical_flow: bool) -> f64
             }
         }
     }
-    let name = node
-        .get("name")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    let empty = node
-        .get("children")
-        .and_then(Value::as_array)
-        .is_none_or(Vec::is_empty);
-    if in_vertical_flow
-        && empty
-        && (name.contains("spacer") || name.starts_with("gap-"))
-        && matches!(
-            node.get("type").and_then(Value::as_str),
-            Some("frame" | "rectangle")
-        )
-        && node
-            .get("fill")
-            .is_none_or(|fill| fill.as_array().is_some_and(Vec::is_empty))
-        && node.get("stroke").is_none()
-    {
+    if in_vertical_flow && is_plain_spacer(node) {
         if let Some(height) = node.get("height").and_then(Value::as_f64) {
-            slack += height;
-            node["height"] = serde_json::json!(height * (1.0 - share));
+            let excess = (height - floor).max(0.0);
+            slack += excess;
+            node["height"] = serde_json::json!(height - excess * share);
         }
     }
     if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
@@ -192,6 +173,49 @@ fn trim(node: &mut Value, floor: f64, share: f64, in_vertical_flow: bool) -> f64
         }
     }
     slack
+}
+
+/// An empty, unpainted flow frame supplies only whitespace, regardless of
+/// whether the generator named it in English, Chinese, or left it unnamed.
+/// Painted, interactive, pinned and semantic surfaces retain their sizing.
+fn is_plain_spacer(node: &Value) -> bool {
+    let name = node
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let kind = node.get("type").and_then(Value::as_str);
+    let spacer_kind = kind == Some("frame")
+        || (kind == Some("rectangle") && (name.contains("spacer") || name.starts_with("gap-")));
+    spacer_kind
+        && node
+            .get("children")
+            .and_then(Value::as_array)
+            .is_none_or(Vec::is_empty)
+        && node
+            .get("fill")
+            .is_none_or(|fill| fill.as_array().is_some_and(Vec::is_empty))
+        && node
+            .get("effects")
+            .is_none_or(|effects| effects.as_array().is_some_and(Vec::is_empty))
+        && node.get("stroke").is_none()
+        && node.get("rotation").and_then(Value::as_f64).unwrap_or(0.0) == 0.0
+        && node.get("clipContent").and_then(Value::as_bool) != Some(true)
+        && [
+            "role",
+            "events",
+            "x",
+            "y",
+            "constraints",
+            "position",
+            "screen",
+            "slot",
+            "minHeight",
+            "maxHeight",
+        ]
+        .iter()
+        .all(|key| node.get(key).is_none_or(Value::is_null))
+        && node.get("reusable").and_then(Value::as_bool) != Some(true)
 }
 
 #[cfg(test)]
