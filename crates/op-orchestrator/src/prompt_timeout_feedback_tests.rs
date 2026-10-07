@@ -438,6 +438,23 @@ fn subagent_prompt_injects_geometry_feedback_with_distinct_wording() {
     );
 }
 
+#[test]
+fn geometry_copy_lock_survives_all_complexity_levels() {
+    let mut task = subtask();
+    task.retry_feedback = Some(crate::plan::RetryFeedback::Geometry(
+        "Fix wrapped title\nCOPY LOCK: source copy data [\"周六 14:30\\n到店自取\",\"¥28.50\"]"
+            .into(),
+    ));
+    let mut request = req();
+    request.model = Some("glm-5.3-flash".into());
+    for (reduced, minimal) in [(false, false), (true, false), (true, true)] {
+        let (call, _) = bsp(&task, &plan(), &request, AbortFlag::new(), reduced, minimal);
+        assert!(call.user_prompt.contains("COPY LOCK"));
+        assert!(call.user_prompt.contains(r"周六 14:30\n到店自取"));
+        assert!(call.user_prompt.contains("¥28.50"));
+    }
+}
+
 // ── B0: subtask_intent ────────────────────────────────────────────────────
 
 /// subtask_intent must include the original request prompt, the subtask label,

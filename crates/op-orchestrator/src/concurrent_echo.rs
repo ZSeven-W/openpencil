@@ -5,6 +5,9 @@
 
 use super::*;
 
+#[path = "concurrent_echo_copy.rs"]
+mod copy;
+
 /// One in-loop self-correction round for real resolved-layout violations.
 ///
 /// A no-op (zero extra LLM calls) whenever:
@@ -77,6 +80,16 @@ pub(super) async fn maybe_geometry_echo_with_outcomes(
     if issues.is_empty() {
         return outcome;
     }
+    let Some(original_copy) = copy::CopySnapshot::capture(sink.state(), &outcome.inserted_root_ids)
+    else {
+        return outcome;
+    };
+    let copy_feedback = original_copy.feedback();
+    // A giant source-copy payload would consume the repair's output budget.
+    // Keep the original and let deterministic layout cleanup handle it.
+    if copy_feedback.len() > 16_384 {
+        return outcome;
+    }
     if !budget.try_consume() {
         return outcome;
     }
@@ -92,7 +105,10 @@ pub(super) async fn maybe_geometry_echo_with_outcomes(
     );
 
     let echo_subtask = Subtask {
-        retry_feedback: Some(crate::plan::RetryFeedback::Geometry(issues.join("\n"))),
+        retry_feedback: Some(crate::plan::RetryFeedback::Geometry(format!(
+            "{}\n\n{copy_feedback}",
+            issues.join("\n")
+        ))),
         ..subtask.clone()
     };
     let retried = run_subtask_with_reveal_at_and_outcomes(
@@ -125,11 +141,17 @@ pub(super) async fn maybe_geometry_echo_with_outcomes(
     // candidate again before deleting that original subtree.
     let (completeness, language) =
         crate::output_language::inspect_insert_gates(sink, request, subtask, &retried);
-    if completeness.is_some() || language.is_some() {
+    let copy_preserved = original_copy.matches_after_removal(
+        sink,
+        &retried.inserted_root_ids,
+        &outcome.inserted_root_ids,
+    );
+    if completeness.is_some() || language.is_some() || !copy_preserved {
         tracing::warn!(
             subtask = %subtask.id,
             completeness = ?completeness,
             language = ?language,
+            copy_preserved,
             "geometry echo candidate failed delivery gates; retaining original content"
         );
         crate::subtask_completeness::rollback_inserted_roots(sink, &retried.inserted_root_ids);

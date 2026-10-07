@@ -88,15 +88,28 @@ fn fixture(
     (sink, task, plan, req, outcome)
 }
 
-fn replacement(count: usize) -> String {
+fn replacement(count: usize, preserve_copy: bool) -> String {
     let mut script=r#"const root=I(null,{type:"frame",name:"Recovered list",layout:"vertical",width:220,height:"fit_content"});"#.to_string();
     for i in 0..count {
-        script.push_str(&format!(r#"I(root,{{type:"frame",name:"Item {i}",layout:"vertical",width:"fill_container",height:"fit_content",children:[{{type:"text",content:"Recovered item {i}",fontSize:14}}]}});"#));
+        let content = if preserve_copy {
+            format!("Alexander Wellington Montgomery item {i}")
+        } else {
+            format!("Recovered item {i}")
+        };
+        script.push_str(&format!(r#"I(root,{{type:"frame",name:"Item {i}",layout:"vertical",width:"fill_container",height:"fit_content",children:[{{type:"text",content:"{content}",fontSize:14}},{{type:"text",content:"9:00 AM",fontSize:13}}]}});"#));
     }
     script
 }
 
-fn echo(count: usize, cjk: bool) -> (VecDocSink, SubtaskOutcome, Vec<Progress>) {
+fn echo(
+    count: usize,
+    cjk: bool,
+    preserve_copy: bool,
+) -> (VecDocSink, SubtaskOutcome, Vec<Progress>) {
+    echo_candidate(cjk, replacement(count, preserve_copy))
+}
+
+fn echo_candidate(cjk: bool, script: String) -> (VecDocSink, SubtaskOutcome, Vec<Progress>) {
     let (mut sink, task, plan, req, outcome) = fixture(cjk);
     assert!(
         !crate::geometry_validation::geometry_diagnostics_for_roots(
@@ -107,7 +120,7 @@ fn echo(count: usize, cjk: bool) -> (VecDocSink, SubtaskOutcome, Vec<Progress>) 
         "the original must actually need a layout echo"
     );
     let unchanged = sink.state.doc.children[1].clone();
-    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(replacement(count))]);
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script)]);
     let mut events = Vec::new();
     let result = futures::executor::block_on(maybe_geometry_echo_with_outcomes(
         &task,
@@ -124,6 +137,10 @@ fn echo(count: usize, cjk: bool) -> (VecDocSink, SubtaskOutcome, Vec<Progress>) 
         &[],
         outcome,
     ));
+    let prompts = llm.user_prompts();
+    assert_eq!(prompts.len(), 1);
+    assert!(prompts[0].contains("COPY LOCK"));
+    assert!(prompts[0].contains("9:00 AM"));
     assert_eq!(
         op_editor_core::walkers::find_node(sink.state.active_children(), &NodeId::new("unrelated"))
             .unwrap(),
@@ -137,7 +154,7 @@ fn echo(count: usize, cjk: bool) -> (VecDocSink, SubtaskOutcome, Vec<Progress>) 
 
 #[test]
 fn incomplete_geometry_rewrite_keeps_all_original_items() {
-    let (sink, result, _) = echo(2, false);
+    let (sink, result, _) = echo(2, false, false);
     assert_eq!(result.inserted_root_ids, vec!["original"]);
     assert_eq!(
         crate::subtask_completeness::delivered_item_count(&sink, &result.inserted_root_ids),
@@ -152,13 +169,13 @@ fn incomplete_geometry_rewrite_keeps_all_original_items() {
 
 #[test]
 fn geometry_rewrite_in_the_wrong_language_keeps_original_copy() {
-    let (_, result, _) = echo(5, true);
+    let (_, result, _) = echo(5, true, false);
     assert_eq!(result.inserted_root_ids, vec!["original"]);
 }
 
 #[test]
 fn complete_geometry_rewrite_replaces_only_the_original_subtree() {
-    let (sink, result, _) = echo(5, false);
+    let (sink, result, _) = echo(5, false, true);
     assert!(op_editor_core::walkers::find_node(
         sink.state.active_children(),
         &NodeId::new("original")
@@ -173,4 +190,19 @@ fn complete_geometry_rewrite_replaces_only_the_original_subtree() {
         .active_children()
         .iter()
         .any(|n| n.base().name.as_deref() == Some("Recovered list")));
+}
+
+#[test]
+fn same_count_and_language_cannot_silently_rewrite_original_copy() {
+    let (sink, result, _) = echo(5, false, false);
+    assert_eq!(result.inserted_root_ids, vec!["original"]);
+    assert_eq!(sink.state.active_children().len(), 2);
+}
+
+#[test]
+fn changing_only_the_time_keeps_original_copy_and_removes_candidate() {
+    let script = replacement(5, true).replacen("9:00 AM", "10:00 AM", 1);
+    let (sink, result, _) = echo_candidate(false, script);
+    assert_eq!(result.inserted_root_ids, vec!["original"]);
+    assert_eq!(sink.state.active_children().len(), 2);
 }
