@@ -2,9 +2,10 @@
 
 use crate::plan::Subtask;
 use crate::types::{DocSink, SubtaskOutcome};
+use jian_ops_schema::node::container::LayoutMode;
 use jian_ops_schema::node::PenNode;
 use op_design_lint::node_util::is_node_visible;
-use op_editor_core::{NodeId, PenNodeExt};
+use op_editor_core::{EditorState, NodeId, PenNodeExt};
 use regex::Regex;
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -122,21 +123,8 @@ pub fn expected_item_count(subtask: &Subtask) -> Option<usize> {
         }
     }
 
-    if text.to_ascii_lowercase().contains("grid") {
-        static GRID: LazyLock<Regex> = LazyLock::new(|| {
-            Regex::new(r"(?i)(\d[\d,]*)\s*[x×]\s*(\d[\d,]*)").expect("valid grid-count pattern")
-        });
-        let grid = &*GRID;
-        for captures in grid.captures_iter(&text) {
-            let rows = captures.get(1).and_then(|m| parse_count(m.as_str()));
-            let columns = captures.get(2).and_then(|m| parse_count(m.as_str()));
-            if let (Some(rows), Some(columns)) = (rows, columns) {
-                if rows > 50 || columns > 50 {
-                    continue;
-                }
-                counts.push(rows.saturating_mul(columns));
-            }
-        }
+    if let Some((rows, columns)) = grid_dimensions(&text) {
+        counts.push(rows.saturating_mul(columns));
     }
 
     counts.into_iter().filter(|count| *count >= 2).max()
@@ -157,9 +145,9 @@ pub fn delivered_item_count(sink: &dyn DocSink, inserted_root_ids: &[String]) ->
         if !crate::cleanup::is_status_bar(root) {
             roots.push(root);
         }
-        collect_delivered_counts(root, &mut largest_family, &mut image_count);
+        collect_delivered_counts(sink.state(), root, &mut largest_family, &mut image_count);
     }
-    collect_sibling_family(&roots, &mut largest_family);
+    collect_sibling_family(sink.state(), &roots, &mut largest_family);
     if largest_family >= 2 {
         largest_family
     } else {
@@ -176,8 +164,22 @@ pub(crate) fn incomplete_attempt(
     if outcome.node_count == 0 || expected < 2 {
         return None;
     }
-    let delivered = delivered_item_count(sink, &outcome.inserted_root_ids);
-    (delivered < expected.min(2)).then(|| CompletenessFailure {
+    let mut delivered = delivered_item_count(sink, &outcome.inserted_root_ids);
+    let text = mask_quoted_copy(&format!(
+        "{}\n{}",
+        subtask.label,
+        subtask.elements.as_deref().unwrap_or("")
+    ));
+    if let Some((rows, columns)) = grid_dimensions(&text) {
+        for id in &outcome.inserted_root_ids {
+            if let Some(root) =
+                op_editor_core::walkers::find_node(sink.state().active_children(), &NodeId::new(id))
+            {
+                delivered = delivered.max(delivered_grid_cells(root, rows, columns));
+            }
+        }
+    }
+    (delivered < expected).then(|| CompletenessFailure {
         expected,
         delivered,
         feedback: completeness_feedback(expected, delivered),
@@ -212,8 +214,13 @@ pub(crate) fn rollback_inserted_roots(sink: &mut dyn DocSink, root_ids: &[String
     sink.rollback_inserted_roots(root_ids);
 }
 
-fn collect_delivered_counts(node: &PenNode, largest_family: &mut usize, image_count: &mut usize) {
-    if crate::cleanup::is_status_bar(node) {
+fn collect_delivered_counts(
+    state: &EditorState,
+    node: &PenNode,
+    largest_family: &mut usize,
+    image_count: &mut usize,
+) {
+    if !is_node_visible(node) || crate::cleanup::is_status_bar(node) {
         return;
     }
     if matches!(node, PenNode::Image(_)) {
@@ -223,22 +230,20 @@ fn collect_delivered_counts(node: &PenNode, largest_family: &mut usize, image_co
         return;
     };
     let child_refs: Vec<&PenNode> = children.iter().collect();
-    collect_sibling_family(&child_refs, largest_family);
+    collect_sibling_family(state, &child_refs, largest_family);
     for child in children {
         if !is_node_visible(child) {
             continue;
         }
-        collect_delivered_counts(child, largest_family, image_count);
+        collect_delivered_counts(state, child, largest_family, image_count);
     }
 }
 
-fn collect_sibling_family(children: &[&PenNode], largest_family: &mut usize) {
+fn collect_sibling_family(state: &EditorState, children: &[&PenNode], largest_family: &mut usize) {
     let mut families: BTreeMap<String, usize> = BTreeMap::new();
     for child in children {
         if is_item_node(child) && is_node_visible(child) && !crate::cleanup::is_status_bar(child) {
-            *families
-                .entry(crate::cleanup::structural_signature(child))
-                .or_default() += 1;
+            *families.entry(item_signature(state, child, 0)).or_default() += 1;
         }
     }
     if let Some(family) = families.values().copied().max() {
@@ -246,11 +251,91 @@ fn collect_sibling_family(children: &[&PenNode], largest_family: &mut usize) {
     }
 }
 
+/// Reused and inline copies of the same item belong to one delivery family.
+/// Bound alias lookup so malformed component cycles cannot recurse forever.
+fn item_signature(state: &EditorState, node: &PenNode, depth: usize) -> String {
+    if let PenNode::Ref(instance) = node {
+        if depth < 8 {
+            let target = NodeId::new(&instance.target);
+            let master =
+                op_editor_core::walkers::find_node(&state.doc.children, &target).or_else(|| {
+                    state
+                        .doc
+                        .pages
+                        .as_ref()
+                        .into_iter()
+                        .flatten()
+                        .find_map(|p| op_editor_core::walkers::find_node(&p.children, &target))
+                });
+            if let Some(master) = master {
+                return item_signature(state, master, depth + 1);
+            }
+        }
+    }
+    crate::cleanup::structural_signature(node)
+}
+
 fn is_item_node(node: &PenNode) -> bool {
     matches!(
         node,
-        PenNode::Frame(_) | PenNode::Rectangle(_) | PenNode::Image(_)
+        PenNode::Frame(_) | PenNode::Rectangle(_) | PenNode::Image(_) | PenNode::Ref(_)
     )
+}
+
+fn grid_dimensions(text: &str) -> Option<(usize, usize)> {
+    if !text.to_ascii_lowercase().contains("grid") {
+        return None;
+    }
+    static GRID: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?i)(\d[\d,]*)\s*[x×]\s*(\d[\d,]*)").expect("valid grid-count pattern")
+    });
+    GRID.captures_iter(text)
+        .filter_map(|c| {
+            Some((
+                parse_count(c.get(1)?.as_str())?,
+                parse_count(c.get(2)?.as_str())?,
+            ))
+        })
+        .filter(|&(r, c)| (1..=50).contains(&r) && (1..=50).contains(&c))
+        .max_by_key(|&(r, c)| r * c)
+}
+
+/// A row-major grid's cells may be nested under row wrappers, so its largest
+/// sibling family is only the column count. Sum cells only for the explicitly
+/// promised row shape; ordinary list metadata must not multiply the item count.
+fn delivered_grid_cells(node: &PenNode, rows: usize, columns: usize) -> usize {
+    if !is_node_visible(node) || crate::cleanup::is_status_bar(node) {
+        return 0;
+    }
+    let children = node.children().map(Vec::as_slice).unwrap_or(&[]);
+    let groups: Vec<_> = children
+        .iter()
+        .filter(|n| is_node_visible(n) && is_item_node(n))
+        .collect();
+    let mut total = 0;
+    if groups.len() == rows
+        && groups.iter().all(
+            |n| matches!(n,PenNode::Frame(f) if f.container.layout==Some(LayoutMode::Horizontal)),
+        )
+    {
+        let counts: Vec<_> = groups
+            .iter()
+            .map(|n| {
+                n.children()
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])
+                    .iter()
+                    .filter(|n| is_node_visible(n) && is_item_node(n))
+                    .count()
+            })
+            .collect();
+        if counts.iter().all(|&n| n <= columns) {
+            total = counts.into_iter().sum();
+        }
+    }
+    children.iter().fold(total, |total, n| {
+        total.max(delivered_grid_cells(n, rows, columns))
+    })
 }
 
 /// Longest quoted run (in chars) treated as display copy; anything longer
@@ -319,7 +404,7 @@ fn parse_count(raw: &str) -> Option<usize> {
 
 fn ignored_number_context(text: &str, start: usize) -> bool {
     let before = text[..start].trim_end();
-    before.ends_with(['¥', '$', '€', '£', ':'])
+    before.ends_with(['¥', '$', '€', '£', ':', '第'])
 }
 
 fn is_ignored_count(value: usize) -> bool {

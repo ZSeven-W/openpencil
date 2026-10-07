@@ -37,6 +37,17 @@ fn section(name: &str, height: u32, layout: &str, items: &[&str]) -> String {
     )
 }
 
+fn kanban_section() -> String {
+    let mut script=r#"const board=I(null,{type:"frame",name:"看板三列各四张任务卡",width:"fill_container",height:"fit_content",layout:"horizontal",gap:16});"#.to_string();
+    for (col_index, label) in ["待处理", "进行中", "已完成"].into_iter().enumerate() {
+        script.push_str(&format!(r#"const col_{col_index}=I(board,{{type:"frame",name:"{label}",width:"fill_container",height:640,layout:"vertical",gap:12}});"#));
+        for index in 0..4 {
+            script.push_str(&format!(r#"I(col_{col_index},{{type:"frame",name:"{label}任务{index}",width:"fill_container",height:120,layout:"vertical",children:[{{type:"text",content:"{label}任务{index}",fontSize:14}}]}});"#));
+        }
+    }
+    script
+}
+
 fn find_named<'a>(v: &'a serde_json::Value, name: &str) -> Option<&'a serde_json::Value> {
     if v["name"].as_str() == Some(name) {
         return Some(v);
@@ -65,12 +76,7 @@ fn right_drawer_generates_beside_the_board_not_under_it() {
             "horizontal",
             &["页面标题", "视图标签栏"],
         )),
-        ScriptResponse::Text(section(
-            "看板三列各四张任务卡",
-            640,
-            "horizontal",
-            &["待处理", "进行中", "已完成"],
-        )),
+        ScriptResponse::Text(kanban_section()),
         ScriptResponse::Text(section(
             "右侧任务详情抽屉",
             120,

@@ -120,6 +120,22 @@ pub(super) async fn maybe_geometry_echo_with_outcomes(
         return outcome;
     }
 
+    // Layout improvement cannot trade away already-delivered items or language.
+    // The normal ladder inspected the original before this echo; inspect the
+    // candidate again before deleting that original subtree.
+    let (completeness, language) =
+        crate::output_language::inspect_insert_gates(sink, request, subtask, &retried);
+    if completeness.is_some() || language.is_some() {
+        tracing::warn!(
+            subtask = %subtask.id,
+            completeness = ?completeness,
+            language = ?language,
+            "geometry echo candidate failed delivery gates; retaining original content"
+        );
+        crate::subtask_completeness::rollback_inserted_roots(sink, &retried.inserted_root_ids);
+        return outcome;
+    }
+
     // Adopt the corrected content: drop the original insert now that a
     // real replacement has landed. Delete-then-keep-the-new-insert rather
     // than a literal `EditorCommand::ReplaceSubtree` (which is 1-old-root-
@@ -129,3 +145,7 @@ pub(super) async fn maybe_geometry_echo_with_outcomes(
     crate::subtask_completeness::rollback_inserted_roots(sink, &outcome.inserted_root_ids);
     retried
 }
+
+#[cfg(test)]
+#[path = "concurrent_echo_contract_tests.rs"]
+mod contract_tests;

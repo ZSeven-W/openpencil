@@ -160,6 +160,75 @@ fn delivered_item_count_excludes_status_bar_subtrees() {
     assert_eq!(delivered_item_count(&sink, &["section".into()]), 0);
 }
 
+#[test]
+fn delivered_item_count_excludes_a_hidden_parent_and_counts_component_instances() {
+    let mut hidden = card(0);
+    hidden["visible"] = json!(false);
+    hidden["children"] = json!((0..5).map(card).collect::<Vec<_>>());
+    let sink = sink_with_roots(vec![hidden]);
+    assert_eq!(delivered_item_count(&sink, &["card-0".into()]), 0);
+
+    let refs = (0..5)
+        .map(|i| json!({"type":"ref","id":format!("instance-{i}"),"ref":"master"}))
+        .collect();
+    let mut sink = sink_with_section(refs);
+    sink.state.doc.children.push(serde_json::from_value(json!({"type":"frame","id":"master","name":"Reusable item","reusable":true,"children":[{"type":"text","id":"master-copy","content":"Actual item"}]})).unwrap());
+    assert_eq!(delivered_item_count(&sink, &["section".into()]), 5);
+}
+
+#[test]
+fn page_ordinals_and_quoted_copy_are_not_local_item_promises() {
+    assert_eq!(
+        expected_item_count(&subtask("第3页 · 交付确认", None)),
+        None
+    );
+    assert_eq!(
+        expected_item_count(&subtask("第3页，列出5项检查", None)),
+        Some(5)
+    );
+}
+
+#[test]
+fn nested_grid_counts_cells_without_multiplying_ordinary_row_metadata() {
+    for columns in [2, 3] {
+        let rows=(0..2).map(|r|json!({"type":"frame","id":format!("grid-row-{r}"),"layout":"horizontal","children":(0..columns).map(|c|card(r*3+c)).collect::<Vec<_>>()})).collect();
+        let sink = sink_with_section(rows);
+        let outcome = SubtaskOutcome {
+            id: "grid".into(),
+            node_count: 1,
+            error: None,
+            inserted_root_ids: vec!["section".into()],
+            headline: None,
+            subtask: None,
+        };
+        let failure = incomplete_attempt(&sink, &subtask("2x3 product grid", None), &outcome);
+        if columns == 3 {
+            assert!(failure.is_none());
+        } else {
+            assert_eq!(failure.unwrap().delivered, 4);
+        }
+    }
+}
+
+#[test]
+fn mixed_inline_and_component_items_share_the_resolved_delivery_family() {
+    let mut rows = (0..3)
+        .map(|i| json!({"type":"ref","id":format!("instance-{i}"),"ref":"master"}))
+        .collect::<Vec<_>>();
+    rows.extend((3..5).map(card));
+    let mut sink = sink_with_section(rows);
+    sink.state
+        .doc
+        .children
+        .push(serde_json::from_value(card(99)).unwrap());
+    let jian_ops_schema::node::PenNode::Frame(master) = &mut sink.state.doc.children[1] else {
+        panic!("master frame")
+    };
+    master.base.id = "master".into();
+    master.reusable = Some(true);
+    assert_eq!(delivered_item_count(&sink, &["section".into()]), 5);
+}
+
 fn request() -> DesignRequest {
     DesignRequest {
         prompt: "商家列表五个（图+名称+评分+配送费+时长）".into(),
@@ -196,7 +265,11 @@ fn plan(task: &Subtask) -> OrchestratorPlan {
 const HEADER_ONLY: &str = r#"I(null,{"type":"frame","name":"商家列表","children":[{"type":"text","content":"附近商家"}]});"#;
 
 fn cards_script() -> String {
-    let cards = (0..5)
+    cards_script_count(5)
+}
+
+fn cards_script_count(count: usize) -> String {
+    let cards = (0..count)
         .map(|index| {
             format!(
                 r#"I(sec,{{"type":"frame","name":"商家 {index}","children":[{{"type":"text","content":"商家 {index}"}}]}});"#
@@ -204,6 +277,51 @@ fn cards_script() -> String {
         })
         .collect::<String>();
     format!(r#"const sec=I(null,{{"type":"frame","name":"商家列表"}});{cards}"#)
+}
+
+#[test]
+fn a_non_empty_partial_list_still_retries_until_all_promised_items_are_delivered() {
+    for delivered in [2, 4] {
+        let partial = cards_script_count(delivered);
+        let complete = cards_script();
+        let (outcome, events, prompts, roots) = run_ladder(vec![&partial, &complete]);
+        assert!(outcome.error.is_none());
+        assert_eq!(roots.len(), 1);
+        let feedback = completeness_feedback(5, delivered);
+        assert!(events.iter().any(
+            |event| matches!(event,Progress::SubtaskRetry{attempt:2,reason,..} if reason==&feedback)
+        ));
+        assert!(prompts[1].contains(&feedback));
+        let final_sink = sink_with_roots(
+            roots
+                .iter()
+                .map(|r| serde_json::to_value(r).unwrap())
+                .collect(),
+        );
+        assert_eq!(
+            delivered_item_count(&final_sink, &outcome.inserted_root_ids),
+            5
+        );
+    }
+}
+
+#[test]
+fn the_last_partial_list_is_preserved_but_not_reported_as_complete() {
+    let partial = cards_script_count(2);
+    let (outcome, events, _, roots) = run_ladder(vec![&partial, &partial, &partial]);
+    assert_eq!(roots.len(), 1);
+    assert_eq!(
+        outcome.error.as_deref(),
+        Some(completeness_feedback(5, 2).as_str())
+    );
+    assert!(events.iter().any(|event| matches!(
+        event,
+        Progress::SubtaskIncomplete {
+            expected: 5,
+            delivered: 2,
+            ..
+        }
+    )));
 }
 
 fn run_ladder(responses: Vec<&str>) -> (SubtaskOutcome, Vec<Progress>, Vec<String>, Vec<PenNode>) {
