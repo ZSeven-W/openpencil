@@ -62,10 +62,12 @@ pub fn status_bar_zoom(state: &mut EditorState, zoom_in: bool, viewport_w: f32, 
 /// Callers refresh the scene first and `mark_dirty` after.
 pub fn zoom_to_fit(state: &mut EditorState, scene: &LayoutScene, viewport_w: f32, viewport_h: f32) {
     if let Some(content) = scene.content_bounds() {
-        let (_l, _t, canvas_w, canvas_h) = canvas_region(state, viewport_w, viewport_h);
+        let canvas = canvas_rect(state, viewport_w, viewport_h);
+        let fit = super::missing_fonts_notice::fit_canvas_rect(state, viewport_w, viewport_h);
         state
             .viewport
-            .fit_to_with_max_zoom(content, canvas_w, canvas_h, 64.0, 1.0);
+            .fit_to_with_max_zoom(content, fit.size.x, fit.size.y, 64.0, 1.0);
+        state.viewport.pan_y += fit.origin.y - canvas.origin.y;
     }
 }
 
@@ -90,11 +92,13 @@ pub fn zoom_to_fit_node(
     else {
         return false;
     };
-    let (_l, _t, canvas_w, canvas_h) = canvas_region(state, viewport_w, viewport_h);
+    let canvas = canvas_rect(state, viewport_w, viewport_h);
+    let fit = super::missing_fonts_notice::fit_canvas_rect(state, viewport_w, viewport_h);
     let before = state.viewport;
     state
         .viewport
-        .fit_to_with_max_zoom(bounds, canvas_w, canvas_h, 48.0, 1.0);
+        .fit_to_with_max_zoom(bounds, fit.size.x, fit.size.y, 48.0, 1.0);
+    state.viewport.pan_y += fit.origin.y - canvas.origin.y;
     state.viewport != before
 }
 

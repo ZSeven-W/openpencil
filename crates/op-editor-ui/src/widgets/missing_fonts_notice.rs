@@ -136,6 +136,23 @@ pub fn paint(cx: &mut PaintCx<'_>, state: &EditorState, viewport_w: f32, viewpor
     }
 }
 
+/// The camera's available area while the notice is visible. Keep the real
+/// canvas origin/clip unchanged so input and document coordinates never move.
+/// Only automatic fits reserve room above the artwork for the notice.
+pub fn fit_canvas_rect(state: &EditorState, viewport_w: f32, viewport_h: f32) -> Rect {
+    let mut canvas =
+        crate::widgets::host_canvas_geometry::canvas_rect(state, viewport_w, viewport_h);
+    if let Some(rect) =
+        MissingFontsNotice::for_editor(state).and_then(|notice| notice.rect(viewport_w, viewport_h))
+    {
+        let inset = (rect.origin.y + rect.size.y + 12.0 - canvas.origin.y)
+            .min((canvas.size.y - 1.0).max(0.0));
+        canvas.origin.y += inset;
+        canvas.size.y -= inset;
+    }
+    canvas
+}
+
 /// Only the notice itself consumes input; reading and canvas actions keep working.
 pub fn press(state: &mut EditorState, point: Point2D, viewport_w: f32, viewport_h: f32) -> bool {
     let hit = MissingFontsNotice::for_editor(state)

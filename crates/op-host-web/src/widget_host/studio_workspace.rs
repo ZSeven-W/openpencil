@@ -392,7 +392,13 @@ impl WidgetHost {
         if bounds.size.x <= 0.0 {
             return;
         }
-        let (_, _, canvas_w, canvas_h) = self.canvas_region(viewport_w, viewport_h);
+        let (_, canvas_y, _, _) = self.canvas_region(viewport_w, viewport_h);
+        let fit = op_editor_ui::widgets::missing_fonts_notice::fit_canvas_rect(
+            &self.editor_state,
+            viewport_w,
+            viewport_h,
+        );
+        let (canvas_w, canvas_h) = (fit.size.x, fit.size.y);
         let viewport = &mut self.editor_state.viewport;
         viewport.zoom = ((canvas_w - 48.0) / bounds.size.x).clamp(
             op_editor_core::Viewport::MIN_ZOOM,
@@ -401,7 +407,7 @@ impl WidgetHost {
         let centre_x = bounds.origin.x + bounds.size.x / 2.0;
         let centre_y = bounds.origin.y + bounds.size.y / 2.0;
         viewport.pan_x = canvas_w / 2.0 - centre_x * viewport.zoom;
-        viewport.pan_y = canvas_h / 2.0 - centre_y * viewport.zoom;
+        viewport.pan_y = fit.origin.y - canvas_y + canvas_h / 2.0 - centre_y * viewport.zoom;
     }
 
     /// ← / → step the deck while the workspace is up in a paging view. Runs

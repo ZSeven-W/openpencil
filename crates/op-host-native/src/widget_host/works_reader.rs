@@ -255,7 +255,8 @@ impl WidgetHostNative {
     pub fn frame_reader_board(&mut self, viewport_w: f32, viewport_h: f32) -> bool {
         // Recorded even when there is nothing to frame yet, so the
         // per-frame stage sync does not retry every frame.
-        self.reader_framed_stage = Some(self.canvas_region(viewport_w, viewport_h));
+        let (x, y, cw, ch) = self.reader_fit_region(viewport_w, viewport_h);
+        self.reader_framed_stage = Some((x, y, cw, ch));
         let Some(board) = self.reader_current_board() else {
             return false;
         };
@@ -271,7 +272,7 @@ impl WidgetHostNative {
         if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
             return false;
         }
-        let (_, _, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let (_, canvas_y, _, _) = self.canvas_region(viewport_w, viewport_h);
         let long = reads_as_long_page(self.editor_state.editor_ui.workspace.family);
         let tablet = !self.editor_state.editor_ui.compact_layout();
         let before = self.editor_state.viewport;
@@ -295,7 +296,14 @@ impl WidgetHostNative {
         } else {
             viewport.fit_to_with_max_zoom(bounds, cw, ch, READER_FIT_PADDING, READER_MAX_ZOOM);
         }
+        viewport.pan_y += y - canvas_y;
         self.editor_state.viewport != before
+    }
+
+    fn reader_fit_region(&self, w: f32, h: f32) -> (f32, f32, f32, f32) {
+        let rect =
+            op_editor_ui::widgets::missing_fonts_notice::fit_canvas_rect(&self.editor_state, w, h);
+        (rect.origin.x, rect.origin.y, rect.size.x, rect.size.y)
     }
 
     /// Keep the camera framed on the board on show when the reader's
@@ -307,7 +315,7 @@ impl WidgetHostNative {
             self.reader_framed_stage = None;
             return;
         }
-        if self.reader_framed_stage != Some(self.canvas_region(viewport_w, viewport_h)) {
+        if self.reader_framed_stage != Some(self.reader_fit_region(viewport_w, viewport_h)) {
             self.frame_reader_board(viewport_w, viewport_h);
         }
     }
@@ -321,7 +329,7 @@ impl WidgetHostNative {
             .active_page()
             .and_then(|page| page.find(&board))
             .map(|node| node.aggregate_bounds())?;
-        let (_, _, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let (_, _, cw, ch) = self.reader_fit_region(viewport_w, viewport_h);
         let mut fitted = Viewport::IDENTITY;
         if reads_as_long_page(self.editor_state.editor_ui.workspace.family) {
             fitted.zoom = ((cw - READER_FIT_PADDING * 2.0) / bounds.size.x.max(1.0))
@@ -536,3 +544,7 @@ mod tests;
 #[cfg(test)]
 #[path = "works_reader_tablet_tests.rs"]
 mod tablet_tests;
+
+#[cfg(test)]
+#[path = "works_reader_font_notice_tests.rs"]
+mod font_notice_tests;
