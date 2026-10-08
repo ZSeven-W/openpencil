@@ -429,6 +429,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.issue.no-baseline-bars" => "Grafik batang tidak punya garis dasar",
         "workspace.quality.issue.widget-a11y" => "Ada kontrol tanpa label aksesibilitas",
         "workspace.quality.issue.unfilled-screen" => "Layar ini tidak pernah mendapat kontennya",
+        "workspace.quality.issue.source-copy-missing" => "Teks yang diberikan ini tidak ada dalam konten yang dapat diedit",
         "workspace.quality.field.fill" => "Isian",
         "workspace.quality.field.stroke" => "Garis tepi",
         "workspace.quality.field.strokeWidth" => "Tebal garis tepi",

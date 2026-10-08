@@ -33,6 +33,16 @@ pub struct QualityAudit {
 /// now. Ids that are not a top-level frame are skipped; when none resolve
 /// the audit covers nothing and says so (`audited_topics` empty).
 pub fn audit_final_quality(state: &EditorState, board_ids: &[String]) -> QualityAudit {
+    audit_final_quality_with_brief(state, board_ids, "")
+}
+
+/// Also verify the explicit source-copy contract of this run's brief. The
+/// caller passes the actual request, never a previous document's Home brief.
+pub fn audit_final_quality_with_brief(
+    state: &EditorState,
+    board_ids: &[String],
+    brief: &str,
+) -> QualityAudit {
     let boards: Vec<_> = state
         .active_children()
         .iter()
@@ -77,6 +87,17 @@ pub fn audit_final_quality(state: &EditorState, board_ids: &[String]) -> Quality
             node_name: Some(screen.name),
             board_id: Some(screen.node_id),
             detail: String::new(),
+        });
+    }
+    let nodes: Vec<_> = boards.iter().map(|board| (**board).clone()).collect();
+    for line in crate::source_copy::SourceCopy::from_brief(brief).missing(state, &nodes) {
+        remaining.push(QualityItem {
+            topic: QualityTopic::Completeness,
+            source: "source-copy-missing".into(),
+            node_id: None,
+            node_name: Some(line),
+            board_id: (boards.len() == 1).then(|| boards[0].id_str().to_string()),
+            detail: "Supplied text is missing from editable content".into(),
         });
     }
     let mut audited_topics = lint_topics();

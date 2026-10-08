@@ -549,8 +549,8 @@ fn apply_progress(msg: &mut ChatMessage, progress: &[Progress], locale: Locale) 
                     notes: notes.clone(),
                 };
                 let mut event_changed =
-                    match op_host_services::quality_credential::quality_credential_line(
-                        &quality, None,
+                    match op_host_services::quality_credential::quality_credential_line_for_locale(
+                        &quality, locale,
                     ) {
                         Some(line) => append_narration(msg, line.trim_start()),
                         None => false,

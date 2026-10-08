@@ -445,6 +445,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.issue.no-baseline-bars" => "棒グラフに基線がない",
         "workspace.quality.issue.widget-a11y" => "アクセシビリティ用のラベルがないコントロールがある",
         "workspace.quality.issue.unfilled-screen" => "この画面にはコンテンツが生成されなかった",
+        "workspace.quality.issue.source-copy-missing" => "この原文が編集可能な内容に含まれていません",
         "workspace.quality.field.fill" => "塗り",
         "workspace.quality.field.stroke" => "線",
         "workspace.quality.field.strokeWidth" => "線の太さ",

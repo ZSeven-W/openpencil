@@ -587,6 +587,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.thinking.adaptive" => "사고: 자동",
         "ai.thinking.disabled" => "사고: 끄기",
         "ai.thinking.enabled" => "사고: 켜기",
+        "ai.designProgress.narration.qualityChecked" => "Design checks complete · {{count}} adjustments applied",
         "ai.designProgress.detail.repairsApplied" => "{{count}}건의 자동 수정 적용",
         "ai.designProgress.detail.repairsMore" => "…외 {{count}}건(로그 참조)",
         "ai.styleCard.builtin" => "기본 제공 스타일",

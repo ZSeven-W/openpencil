@@ -725,6 +725,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.thinking.adaptive" => "Suy nghĩ: tự động",
         "ai.thinking.disabled" => "Suy nghĩ: tắt",
         "ai.thinking.enabled" => "Suy nghĩ: bật",
+        "ai.designProgress.narration.qualityChecked" => "Design checks complete · {{count}} adjustments applied",
         "ai.designProgress.detail.repairsApplied" => "Đã áp dụng {{count}} sửa lỗi tự động",
         "ai.designProgress.detail.repairsMore" => "… và {{count}} mục nữa (xem nhật ký)",
         "ai.styleCard.builtin" => "Kiểu tích hợp",

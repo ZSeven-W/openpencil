@@ -100,7 +100,7 @@ impl WidgetHost {
         // the web chat launch stamps the turn's generation.
         self.editor_state.editor_ui.open_workspace_for_generation(
             family,
-            brief,
+            brief.clone(),
             options,
             0,
             self.now_ms,
@@ -114,7 +114,11 @@ impl WidgetHost {
         // honours the pinned route instead of re-classifying the wording.
         // With the directions toggle on, the daemon runs N directions.
         op_editor_core::pin_home_brief_route(&mut self.editor_state);
+        self.editor_state.chat.title_from_prompt_if_untitled(&brief);
         let sent = self.begin_chat_send();
+        if sent {
+            self.editor_state.chat.show_last_user_message_as(&brief);
+        }
         self.editor_state.chat.focused = false;
         self.mark_dirty();
         sent

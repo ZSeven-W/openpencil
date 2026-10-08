@@ -433,6 +433,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.issue.no-baseline-bars" => "बार चार्ट में बेसलाइन नहीं है",
         "workspace.quality.issue.widget-a11y" => "एक कंट्रोल पर सुलभता लेबल नहीं है",
         "workspace.quality.issue.unfilled-screen" => "इस स्क्रीन को कभी सामग्री नहीं मिली",
+        "workspace.quality.issue.source-copy-missing" => "दिया गया यह पाठ संपादन योग्य सामग्री में नहीं है",
         "workspace.quality.field.fill" => "फ़िल",
         "workspace.quality.field.stroke" => "स्ट्रोक",
         "workspace.quality.field.strokeWidth" => "स्ट्रोक चौड़ाई",

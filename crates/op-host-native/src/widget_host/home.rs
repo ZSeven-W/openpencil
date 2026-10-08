@@ -436,7 +436,7 @@ impl WidgetHostNative {
             // visible and Professional Editing keeps it that way.
             self.editor_state.editor_ui.open_workspace_for_generation(
                 family,
-                brief,
+                brief.clone(),
                 options,
                 0,
                 self.now_ms,
@@ -456,7 +456,8 @@ impl WidgetHostNative {
         // 3-directions toggle turns the brief into N side-by-side
         // directions, each pinned to its own style guide.
         op_editor_core::pin_home_brief_route(&mut self.editor_state);
-        let sent = self.editor_state.chat.begin_send();
+        self.editor_state.chat.title_from_prompt_if_untitled(&brief);
+        let sent = self.editor_state.chat.begin_send_showing(&brief);
         self.editor_state.chat.focused = false;
         sent
     }
@@ -615,7 +616,7 @@ mod tests {
             host.editor_state().chat.pending_send.as_deref(),
             Some(expected.as_str())
         );
-        assert_eq!(host.editor_state().chat.messages[0].content, expected);
+        assert_eq!(host.editor_state().chat.messages[0].content, "取餐预约");
     }
 
     #[test]

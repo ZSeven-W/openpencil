@@ -154,6 +154,7 @@ pub mod screen_groups;
 pub(crate) mod section_headline;
 pub(crate) mod section_shell_fill_repair;
 pub(crate) mod sidebar_archetype;
+mod source_copy;
 pub mod spacing_repair;
 pub mod spawn_concurrent;
 pub(crate) mod spread_screen_roots;

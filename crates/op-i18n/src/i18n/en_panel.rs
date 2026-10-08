@@ -710,6 +710,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.thinking.adaptive" => "Thinking: Auto",
         "ai.thinking.disabled" => "Thinking: Off",
         "ai.thinking.enabled" => "Thinking: On",
+        "ai.designProgress.narration.qualityChecked" => "Design checks complete · {{count}} adjustments applied",
         "ai.designProgress.detail.repairsApplied" => "{{count}} auto-repair(s) applied",
         "ai.designProgress.detail.repairsMore" => "… and {{count}} more (see log)",
         "ai.styleCard.builtin" => "Built-in style",

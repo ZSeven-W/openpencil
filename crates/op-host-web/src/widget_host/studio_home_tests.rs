@@ -118,6 +118,17 @@ fn enter_on_a_typed_brief_opens_the_workspace_and_queues_a_pinned_run() {
         host.editor_state.chat.pending_send.as_deref(),
         Some(expected.as_str())
     );
+    assert_eq!(host.editor_state.chat.title, "coffee pickup app");
+    assert_eq!(
+        host.editor_state
+            .chat
+            .messages
+            .iter()
+            .find(|message| message.role == op_editor_core::ChatRole::User)
+            .unwrap()
+            .content,
+        "coffee pickup app"
+    );
     assert_eq!(
         host.editor_state.chat.launch_route,
         LaunchRoute::Orchestrator

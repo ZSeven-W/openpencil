@@ -149,6 +149,41 @@ fn progress_folds_into_the_report_and_the_run_end_audits_it() {
 }
 
 #[test]
+fn desktop_audit_uses_the_queued_request_even_when_the_user_bubble_is_shorter() {
+    let mut state = state_with_boards();
+    state.chat.messages[0].content = "a readable short brief".into();
+    let request = op_orchestrator::DesignRequest {
+        prompt: "Keep all following text verbatim:\nHi\nPickup only.".into(),
+        model: Some("glm-5.3-flash".into()),
+        provider: None,
+        design_md: None,
+        concurrency: 1,
+        validation_enabled: true,
+        visual_ref_enabled: false,
+        append_context: None,
+        continuation_context: None,
+        pinned_style_guide: None,
+        reference_skeleton: None,
+    };
+    state.chat.messages[1].design_request_json_for_retry =
+        Some(serde_json::to_string(&request).unwrap());
+    fold_quality_progress(&mut state, &[quality_event()]);
+    finish_quality_report(&mut state, &summary(), None, Locale::ZhCn);
+    let report = state.editor_ui.workspace.quality.as_ref().unwrap();
+    let omitted = report
+        .topics
+        .iter()
+        .find(|t| t.topic == QualityTopic::Completeness)
+        .unwrap();
+    assert_eq!(omitted.remaining.len(), 1);
+    assert_eq!(
+        omitted.remaining[0].node_name.as_deref(),
+        Some("Pickup only.")
+    );
+    assert!(state.chat.messages[1].content.contains("待关注"));
+}
+
+#[test]
 fn worker_scoped_quality_events_are_folded_too() {
     let mut state = state_with_boards();
     let identity = op_orchestrator::agent_identity::AgentIdentity {

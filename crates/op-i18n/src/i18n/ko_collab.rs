@@ -445,6 +445,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.issue.no-baseline-bars" => "막대 차트에 기준선이 없습니다",
         "workspace.quality.issue.widget-a11y" => "접근성 레이블이 없는 컨트롤이 있습니다",
         "workspace.quality.issue.unfilled-screen" => "이 화면에는 콘텐츠가 생성되지 않았습니다",
+        "workspace.quality.issue.source-copy-missing" => "제공된 이 원문이 편집 가능한 내용에 없습니다",
         "workspace.quality.field.fill" => "채우기",
         "workspace.quality.field.stroke" => "선",
         "workspace.quality.field.strokeWidth" => "선 두께",

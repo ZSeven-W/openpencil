@@ -55,9 +55,11 @@ pub fn audit_run_report(
     mut report: QualityReport,
     state: &EditorState,
     summary: &RunSummary,
+    brief: &str,
 ) -> QualityReport {
     let boards = run_boards(state, summary);
-    let audit = op_orchestrator::quality_audit::audit_final_quality(state, &boards);
+    let audit =
+        op_orchestrator::quality_audit::audit_final_quality_with_brief(state, &boards, brief);
     report.ingest_audit(&audit.audited_topics, audit.remaining);
     report.attribute_boards(state, &boards);
     report

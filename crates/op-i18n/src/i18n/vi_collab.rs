@@ -441,6 +441,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.issue.no-baseline-bars" => "Biểu đồ cột không có đường gốc",
         "workspace.quality.issue.widget-a11y" => "Có điều khiển thiếu nhãn trợ năng",
         "workspace.quality.issue.unfilled-screen" => "Màn hình này chưa được tạo nội dung",
+        "workspace.quality.issue.source-copy-missing" => "Văn bản gốc này thiếu trong nội dung có thể chỉnh sửa",
         "workspace.quality.field.fill" => "Màu tô",
         "workspace.quality.field.stroke" => "Viền",
         "workspace.quality.field.strokeWidth" => "Độ dày viền",

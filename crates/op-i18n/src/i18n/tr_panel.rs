@@ -705,6 +705,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.thinking.adaptive" => "Düşünme: otomatik",
         "ai.thinking.disabled" => "Düşünme: kapalı",
         "ai.thinking.enabled" => "Düşünme: açık",
+        "ai.designProgress.narration.qualityChecked" => "Design checks complete · {{count}} adjustments applied",
         "ai.designProgress.detail.repairsApplied" => "{{count}} otomatik onarım uygulandı",
         "ai.designProgress.detail.repairsMore" => "… ve {{count}} tane daha (günlüğe bakın)",
         "ai.styleCard.builtin" => "Yerleşik stil",

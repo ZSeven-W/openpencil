@@ -131,6 +131,21 @@ fn home_send_marks_the_turn_for_the_orchestrator_route() {
         "a Home-launched brief must take the orchestrator pipeline"
     );
     assert!(host.editor_state().chat.pending_send.is_some());
+    let chat = &host.editor_state().chat;
+    assert_eq!(chat.title, "取餐预约");
+    assert_eq!(
+        chat.messages
+            .iter()
+            .find(|message| message.role == op_editor_core::ChatRole::User)
+            .unwrap()
+            .content,
+        "取餐预约"
+    );
+    assert!(chat
+        .pending_send
+        .as_ref()
+        .unwrap()
+        .contains("用户需求：取餐预约"));
 }
 
 #[test]

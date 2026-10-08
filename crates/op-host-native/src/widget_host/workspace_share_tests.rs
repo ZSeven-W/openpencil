@@ -116,16 +116,21 @@ fn the_banner_prefills_home_and_the_send_keeps_the_style_pinned() {
     assert_eq!(workspace.brief, "五页咖啡品牌介绍，改成茶饮");
     let sent = state
         .chat
-        .messages
-        .iter()
-        .rev()
-        .find(|message| message.role == op_editor_core::ChatRole::User)
-        .map(|message| message.content.clone())
-        .unwrap_or_default();
+        .pending_send
+        .as_ref()
+        .expect("queued generation request");
     assert!(
         sent.contains("4:3") && sent.contains("改成茶饮"),
         "the recipe's options and the edited brief shape the prompt: {sent}"
     );
+    let shown = state
+        .chat
+        .messages
+        .iter()
+        .rev()
+        .find(|message| message.role == op_editor_core::ChatRole::User)
+        .unwrap();
+    assert_eq!(shown.content, workspace.brief);
     // The new run is the recipe now: sharing it re-captures the style.
     let next = state.editor_ui.share_recipe().expect("live run recipe");
     assert_eq!(next.style_guide.as_deref(), Some("editorial-dark"));

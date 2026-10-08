@@ -670,6 +670,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.thinking.adaptive" => "思考：自动",
         "ai.thinking.disabled" => "思考：关闭",
         "ai.thinking.enabled" => "思考：开启",
+        "ai.designProgress.narration.qualityChecked" => "已完成设计检查 · 自动调整 {{count}} 处",
         "ai.designProgress.detail.repairsApplied" => "已应用 {{count}} 处自动修复",
         "ai.designProgress.detail.repairsMore" => "…还有 {{count}} 条(见日志)",
         "ai.styleCard.builtin" => "内置风格",

@@ -418,6 +418,10 @@ async fn collect_text(
 mod tests;
 
 #[cfg(test)]
+#[path = "run_source_copy_tests.rs"]
+mod source_copy_tests;
+
+#[cfg(test)]
 #[path = "run_tests_pinned_style.rs"]
 mod tests_pinned_style;
 

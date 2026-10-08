@@ -23,10 +23,11 @@ pub(super) fn finished_run_report(
     folded: Option<QualityReport>,
     state: &Mutex<WebCanvasState>,
     summary: &RunSummary,
+    brief: &str,
 ) -> Option<QualityReport> {
     let report = folded.filter(|report| !report.audited)?;
     let guard = state.lock().unwrap_or_else(|p| p.into_inner());
-    let report = crate::run_quality::audit_run_report(report, &guard.editor, summary);
+    let report = crate::run_quality::audit_run_report(report, &guard.editor, summary, brief);
     (!report.is_empty()).then_some(report)
 }
 
@@ -104,7 +105,7 @@ mod tests {
     fn a_run_that_reported_checks_ships_an_audited_report() {
         let state = state_with_board();
         let report =
-            finished_run_report(folded_report(), &state, &summary()).expect("audited report");
+            finished_run_report(folded_report(), &state, &summary(), "").expect("audited report");
         assert!(report.audited);
         assert_eq!(report.total_fixed(), 1);
         assert_eq!(report.boards.len(), 1);
@@ -114,16 +115,16 @@ mod tests {
     #[test]
     fn a_run_without_quality_checks_ships_nothing() {
         let state = state_with_board();
-        assert!(finished_run_report(None, &state, &summary()).is_none());
+        assert!(finished_run_report(None, &state, &summary(), "").is_none());
         let mut already = folded_report().expect("report");
         already.audited = true;
-        assert!(finished_run_report(Some(already), &state, &summary()).is_none());
+        assert!(finished_run_report(Some(already), &state, &summary(), "").is_none());
     }
 
     #[test]
     fn the_wire_frame_round_trips_the_report() {
         let state = state_with_board();
-        let report = finished_run_report(folded_report(), &state, &summary()).expect("report");
+        let report = finished_run_report(folded_report(), &state, &summary(), "").expect("report");
         let mut out = Vec::new();
         write_quality_report_event(&mut out, &report).expect("write");
         let text = String::from_utf8(out).expect("utf8");
@@ -135,5 +136,30 @@ mod tests {
         let decoded: QualityReport =
             serde_json::from_value(value["qualityReport"].clone()).expect("report");
         assert_eq!(decoded, report);
+    }
+
+    #[test]
+    fn final_web_report_counts_missing_supplied_copy_on_the_current_run() {
+        let state = state_with_board();
+        let report = finished_run_report(
+            folded_report(),
+            &state,
+            &summary(),
+            "Keep all following text verbatim:\nHi\nPickup only.",
+        )
+        .unwrap();
+        assert_eq!(
+            report
+                .topics
+                .iter()
+                .find(|t| t.topic == op_editor_core::QualityTopic::Completeness)
+                .unwrap()
+                .remaining[0]
+                .node_name
+                .as_deref(),
+            Some("Pickup only.")
+        );
+        let wire = serde_json::to_value(&report).unwrap();
+        assert!(wire.to_string().contains("source-copy-missing"));
     }
 }

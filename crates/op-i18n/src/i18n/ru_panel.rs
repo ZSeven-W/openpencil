@@ -715,6 +715,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.thinking.adaptive" => "Размышление: авто",
         "ai.thinking.disabled" => "Размышление: выкл.",
         "ai.thinking.enabled" => "Размышление: вкл.",
+        "ai.designProgress.narration.qualityChecked" => "Design checks complete · {{count}} adjustments applied",
         "ai.designProgress.detail.repairsApplied" => "Применено автоисправлений: {{count}}",
         "ai.designProgress.detail.repairsMore" => "… и ещё {{count}} (см. журнал)",
         "ai.styleCard.builtin" => "Встроенный стиль",

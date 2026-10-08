@@ -26,10 +26,30 @@ fn every_reported_lint_category_has_a_sentence_in_every_locale() {
         }
     }
     assert!(issue_key("unfilled-screen").is_some());
+    assert!(issue_key("source-copy-missing").is_some());
     assert!(
         issue_key("redundant-wrapper").is_none(),
         "code shape stays hidden"
     );
+}
+
+#[test]
+fn a_missing_source_line_names_the_actual_omission_in_plain_chinese() {
+    let issue = item(
+        "source-copy-missing",
+        Some("燕麦拿铁 32元"),
+        "Supplied text is missing from editable content",
+    );
+    assert_eq!(
+        issue.localized_label(Locale::ZhCn, false),
+        "燕麦拿铁 32元 · 这条原文未出现在可编辑内容中"
+    );
+    for locale in op_i18n::Locale::ALL {
+        assert!(
+            op_i18n::translate_dynamic(locale, "workspace.quality.issue.source-copy-missing")
+                .is_some()
+        );
+    }
 }
 
 #[test]

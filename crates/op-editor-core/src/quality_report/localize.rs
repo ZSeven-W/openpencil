@@ -84,6 +84,10 @@ pub(super) const ISSUE_KEYS: &[(&str, &str)] = &[
     ),
     ("widget-a11y", "workspace.quality.issue.widget-a11y"),
     ("unfilled-screen", "workspace.quality.issue.unfilled-screen"),
+    (
+        "source-copy-missing",
+        "workspace.quality.issue.source-copy-missing",
+    ),
 ];
 
 /// Repair-record field token → the i18n key naming it. Several wire

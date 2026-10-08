@@ -429,6 +429,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.issue.no-baseline-bars" => "Çubuk grafiğin taban çizgisi yok",
         "workspace.quality.issue.widget-a11y" => "Bir denetimin erişilebilir etiketi yok",
         "workspace.quality.issue.unfilled-screen" => "Bu ekran içeriğini hiç almadı",
+        "workspace.quality.issue.source-copy-missing" => "Bu kaynak metin düzenlenebilir içerikte eksik",
         "workspace.quality.field.fill" => "Dolgu",
         "workspace.quality.field.stroke" => "Kontur",
         "workspace.quality.field.strokeWidth" => "Kontur kalınlığı",

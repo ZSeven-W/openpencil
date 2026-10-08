@@ -429,6 +429,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.issue.no-baseline-bars" => "Balkendiagramm hat keine Grundlinie",
         "workspace.quality.issue.widget-a11y" => "Ein Bedienelement hat keine barrierefreie Beschriftung",
         "workspace.quality.issue.unfilled-screen" => "Dieser Bildschirm hat nie Inhalt erhalten",
+        "workspace.quality.issue.source-copy-missing" => "Dieser vorgegebene Text fehlt im bearbeitbaren Inhalt",
         "workspace.quality.field.fill" => "Füllung",
         "workspace.quality.field.stroke" => "Kontur",
         "workspace.quality.field.strokeWidth" => "Konturstärke",

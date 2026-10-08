@@ -565,6 +565,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.thinking.adaptive" => "思考: 自動",
         "ai.thinking.disabled" => "思考: オフ",
         "ai.thinking.enabled" => "思考: オン",
+        "ai.designProgress.narration.qualityChecked" => "Design checks complete · {{count}} adjustments applied",
         "ai.designProgress.detail.repairsApplied" => "{{count}} 件の自動修正を適用",
         "ai.designProgress.detail.repairsMore" => "…他 {{count}} 件(ログ参照)",
         "ai.styleCard.builtin" => "組み込みスタイル",

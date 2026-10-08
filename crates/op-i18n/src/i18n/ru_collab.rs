@@ -459,6 +459,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.issue.no-baseline-bars" => "У столбчатой диаграммы нет базовой линии",
         "workspace.quality.issue.widget-a11y" => "У элемента управления нет доступной подписи",
         "workspace.quality.issue.unfilled-screen" => "Этот экран так и не получил содержимое",
+        "workspace.quality.issue.source-copy-missing" => "Этот исходный текст отсутствует в редактируемом содержимом",
         "workspace.quality.field.fill" => "Заливка",
         "workspace.quality.field.stroke" => "Обводка",
         "workspace.quality.field.strokeWidth" => "Толщина обводки",

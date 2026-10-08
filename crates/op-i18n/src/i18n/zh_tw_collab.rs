@@ -429,6 +429,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.issue.no-baseline-bars" => "長條圖缺少基線",
         "workspace.quality.issue.widget-a11y" => "有控制項缺少無障礙標籤",
         "workspace.quality.issue.unfilled-screen" => "這個頁面沒有生成內容",
+        "workspace.quality.issue.source-copy-missing" => "這條原文未出現在可編輯內容中",
         "workspace.quality.field.fill" => "填色",
         "workspace.quality.field.stroke" => "描邊",
         "workspace.quality.field.strokeWidth" => "描邊粗細",

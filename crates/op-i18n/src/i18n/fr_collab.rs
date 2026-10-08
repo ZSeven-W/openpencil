@@ -429,6 +429,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.issue.no-baseline-bars" => "Le graphique à barres n’a pas de ligne de base",
         "workspace.quality.issue.widget-a11y" => "Un contrôle n’a pas de libellé accessible",
         "workspace.quality.issue.unfilled-screen" => "Cet écran n’a jamais reçu son contenu",
+        "workspace.quality.issue.source-copy-missing" => "Ce texte fourni manque dans le contenu modifiable",
         "workspace.quality.field.fill" => "Remplissage",
         "workspace.quality.field.stroke" => "Contour",
         "workspace.quality.field.strokeWidth" => "Épaisseur du contour",

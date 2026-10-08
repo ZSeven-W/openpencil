@@ -100,3 +100,31 @@ fn quality_checked_items_mirror_the_rendered_records() {
     assert_eq!(item.node_name.as_deref(), Some("Hero"));
     assert_eq!(item.detail, "width 420 → 327");
 }
+
+#[test]
+fn supplied_copy_is_checked_across_this_runs_boards_without_borrowing_old_work() {
+    let state = state_from(json!([
+        {"type":"frame","id":"a","children":[{"type":"text","id":"date","content":"2026年10月17日"}]},
+        {"type":"frame","id":"b","children":[{"type":"text","id":"price","content":"拿铁 28元"}]},
+        {"type":"frame","id":"old","children":[{"type":"text","id":"old-time","content":"14:30–16:00"}]}
+    ]));
+    let brief = "把以下资料排版，保留全部原文：\n2026年10月17日\n拿铁 28元\n14:30–16:00";
+    let audit = audit_final_quality_with_brief(&state, &["a".into(), "b".into()], brief);
+    let missing = audit
+        .remaining
+        .iter()
+        .filter(|i| i.source == "source-copy-missing")
+        .collect::<Vec<_>>();
+    assert_eq!(missing.len(), 1);
+    assert_eq!(missing[0].node_name.as_deref(), Some("14:30–16:00"));
+    assert_eq!(
+        missing[0].board_id, None,
+        "a collective omission belongs to the work"
+    );
+    assert!(
+        !audit_final_quality_with_brief(&state, &["a".into(), "b".into()], "把价格改成29元")
+            .remaining
+            .iter()
+            .any(|i| i.source == "source-copy-missing")
+    );
+}

@@ -737,6 +737,7 @@ fn stream_new_design_route<W: Write>(
     let epoch = op_editor_core::agent_indicators::begin();
     op_editor_core::agent_indicators::confirm_cursor_agent(epoch, &identity.color, &identity.name);
     let mut folded_quality = None;
+    let quality_brief = request.prompt.clone();
     let summary = {
         let out_ref = &mut *out;
         let quality_ref = &mut folded_quality;
@@ -767,7 +768,7 @@ fn stream_new_design_route<W: Write>(
                 .count();
             let failed = summary.subtasks.len() - ok;
             if let Some(report) =
-                quality::finished_run_report(folded_quality, target.state, &summary)
+                quality::finished_run_report(folded_quality, target.state, &summary, &quality_brief)
             {
                 quality::write_quality_report_event(out, &report)?;
             }

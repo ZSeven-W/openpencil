@@ -663,6 +663,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.thinking.adaptive" => "思考：自動",
         "ai.thinking.disabled" => "思考：關閉",
         "ai.thinking.enabled" => "思考：開啟",
+        "ai.designProgress.narration.qualityChecked" => "已完成設計檢查 · 自動調整 {{count}} 處",
         "ai.designProgress.detail.repairsApplied" => "已套用 {{count}} 處自動修復",
         "ai.designProgress.detail.repairsMore" => "…還有 {{count}} 條(見記錄)",
         "ai.styleCard.builtin" => "內建風格",

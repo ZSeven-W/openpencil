@@ -703,6 +703,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.thinking.adaptive" => "Berpikir: otomatis",
         "ai.thinking.disabled" => "Berpikir: mati",
         "ai.thinking.enabled" => "Berpikir: aktif",
+        "ai.designProgress.narration.qualityChecked" => "Design checks complete · {{count}} adjustments applied",
         "ai.designProgress.detail.repairsApplied" => "{{count}} perbaikan otomatis diterapkan",
         "ai.designProgress.detail.repairsMore" => "… dan {{count}} lainnya (lihat log)",
         "ai.styleCard.builtin" => "Gaya bawaan",

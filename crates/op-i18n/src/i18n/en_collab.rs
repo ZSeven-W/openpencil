@@ -469,6 +469,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.issue.no-baseline-bars" => "Bar chart has no baseline",
         "workspace.quality.issue.widget-a11y" => "A control has no accessible label",
         "workspace.quality.issue.unfilled-screen" => "This screen never received its content",
+        "workspace.quality.issue.source-copy-missing" => "This supplied text is missing from editable content",
         "workspace.quality.field.fill" => "Fill",
         "workspace.quality.field.stroke" => "Stroke",
         "workspace.quality.field.strokeWidth" => "Stroke width",

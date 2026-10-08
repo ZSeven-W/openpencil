@@ -431,6 +431,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.issue.no-baseline-bars" => "กราฟแท่งไม่มีเส้นฐาน",
         "workspace.quality.issue.widget-a11y" => "มีตัวควบคุมที่ไม่มีป้ายกำกับสำหรับการเข้าถึง",
         "workspace.quality.issue.unfilled-screen" => "หน้าจอนี้ไม่ได้รับเนื้อหา",
+        "workspace.quality.issue.source-copy-missing" => "ข้อความต้นฉบับนี้ไม่ปรากฏในเนื้อหาที่แก้ไขได้",
         "workspace.quality.field.fill" => "สีเติม",
         "workspace.quality.field.stroke" => "เส้นขอบ",
         "workspace.quality.field.strokeWidth" => "ความหนาเส้นขอบ",

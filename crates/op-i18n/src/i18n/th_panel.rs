@@ -721,6 +721,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "ai.thinking.adaptive" => "การคิด: อัตโนมัติ",
         "ai.thinking.disabled" => "การคิด: ปิด",
         "ai.thinking.enabled" => "การคิด: เปิด",
+        "ai.designProgress.narration.qualityChecked" => "Design checks complete · {{count}} adjustments applied",
         "ai.designProgress.detail.repairsApplied" => "ใช้การซ่อมอัตโนมัติ {{count}} รายการ",
         "ai.designProgress.detail.repairsMore" => "… และอีก {{count}} รายการ (ดูบันทึก)",
         "ai.styleCard.builtin" => "สไตล์ในตัว",

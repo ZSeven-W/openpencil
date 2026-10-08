@@ -32,7 +32,12 @@ pub(super) fn finish_quality_report(
     running_tab: Option<usize>,
     locale: Locale,
 ) -> bool {
-    let Some(line) = finalize_quality_report(state, summary, locale) else {
+    let brief = primary_message(&mut state.chat.run_tab_mut(running_tab).messages)
+        .and_then(|message| message.design_request_json_for_retry.as_deref())
+        .and_then(|json| serde_json::from_str::<op_orchestrator::DesignRequest>(json).ok())
+        .map(|request| request.prompt)
+        .unwrap_or_default();
+    let Some(line) = finalize_quality_report(state, summary, locale, &brief) else {
         return false;
     };
     let chat = state.chat.run_tab_mut(running_tab);
@@ -54,6 +59,7 @@ pub(super) fn finalize_quality_report(
     state: &mut EditorState,
     summary: &RunSummary,
     locale: Locale,
+    brief: &str,
 ) -> Option<String> {
     if state
         .editor_ui
@@ -65,7 +71,7 @@ pub(super) fn finalize_quality_report(
         return None;
     }
     let report = state.editor_ui.workspace.quality.take()?;
-    let report = op_host_services::run_quality::audit_run_report(report, state, summary);
+    let report = op_host_services::run_quality::audit_run_report(report, state, summary, brief);
     let line = (!report.is_empty()).then(|| report.transcript_line(locale));
     state.editor_ui.workspace.quality = Some(report);
     line

@@ -429,6 +429,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "workspace.quality.issue.no-baseline-bars" => "El gráfico de barras no tiene línea base",
         "workspace.quality.issue.widget-a11y" => "Un control no tiene etiqueta accesible",
         "workspace.quality.issue.unfilled-screen" => "Esta pantalla nunca recibió su contenido",
+        "workspace.quality.issue.source-copy-missing" => "Este texto proporcionado falta en el contenido editable",
         "workspace.quality.field.fill" => "Relleno",
         "workspace.quality.field.stroke" => "Trazo",
         "workspace.quality.field.strokeWidth" => "Grosor del trazo",
