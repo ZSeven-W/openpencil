@@ -27,6 +27,9 @@ use crate::validation_providers::{
     RealScreenshotProvider,
 };
 
+#[path = "design_variant_labels.rs"]
+mod labels;
+
 /// Spawn a worker that generates `plans.len()` directions of `request`
 /// side by side. `vision_provider` has the same meaning as in
 /// [`crate::design_session::start`]: the Class-C vision loop runs per
@@ -117,6 +120,13 @@ pub fn localize_variant_plans(plans: &mut [VariantPlan], locale: op_editor_core:
         let letter = op_editor_core::variant_letter(plan.index).to_string();
         plan.name =
             op_i18n::translate_with(locale, "workspace.variants.name", &[("letter", &letter)]);
+        if let Some(label) = labels::label(&plan.style_guide, locale) {
+            plan.style_label = label.into();
+        } else if let Some(card) = op_ai_skills::style_guide::style_guide_card(&plan.style_guide)
+            .filter(|card| card.is_user && !card.name.trim().is_empty())
+        {
+            plan.style_label = card.name.clone();
+        }
     }
 }
 

@@ -13,6 +13,18 @@ use crate::plan_coverage::is_han;
 use crate::types::DesignRequest;
 
 pub(super) fn localize_root_name(plan: &mut OrchestratorPlan, req: &DesignRequest) {
+    // A fallback title copied from Home's trusted wrapper is implementation
+    // prose, not a work name. Its Chinese characters used to bypass the guard
+    // below and leave names like "做一套图文卡片（card" on the canvas.
+    if req.prompt.starts_with("请做一套图文卡片（card")
+        && ["请做一套图文卡片", "做一套图文卡片"]
+            .iter()
+            .any(|prefix| plan.root_frame.name.starts_with(prefix))
+        && (plan.root_frame.name.contains("（card") || plan.root_frame.name.contains("(card"))
+    {
+        plan.root_frame.name = "图文卡片".into();
+        return;
+    }
     if brief_language(&req.prompt) != Some(Lang::Cjk) || plan.root_frame.name.chars().any(is_han) {
         return;
     }
@@ -79,5 +91,17 @@ mod tests {
         let mut p = plan("Coffee Shop Home");
         localize_root_name(&mut p, &req("Design a coffee shop home screen"));
         assert_eq!(p.root_frame.name, "Coffee Shop Home");
+    }
+
+    #[test]
+    fn a_copied_home_preamble_is_a_work_name_without_the_schema_fragment() {
+        let request =
+            req("请做一套图文卡片（card，竖版3:4，多页轮播）。保持统一排版。\n用户需求：咖啡小聚");
+        let mut p = plan("做一套图文卡片（card");
+        localize_root_name(&mut p, &request);
+        assert_eq!(p.root_frame.name, "图文卡片");
+        let mut p = plan("咖啡小聚");
+        localize_root_name(&mut p, &request);
+        assert_eq!(p.root_frame.name, "咖啡小聚");
     }
 }
