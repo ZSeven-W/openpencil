@@ -24,6 +24,9 @@ use op_editor_core::{HomeFamily, HomeHit, InfoKind, SlideRatio};
 /// relies on.
 const PREVIEW_ASPECT: f32 = 1024.0 / 640.0;
 
+#[path = "home_surface_paint_app_preview.rs"]
+mod app_preview;
+
 pub(in crate::widgets::home_surface) fn text(
     cx: &mut PaintCx<'_>,
     content: &str,
@@ -211,6 +214,10 @@ pub(super) fn paint_template_paper(
     crop_aspect: Option<f32>,
     opacity: f32,
 ) {
+    if template_id == "coffee-order-app" {
+        app_preview::paint(cx, area, palette, opacity);
+        return;
+    }
     paint_paper_card(cx, area, template_id, palette, crop_aspect, 0.0, opacity);
 }
 

@@ -181,6 +181,17 @@ pub(crate) fn scene_template_preview(template_id: &str) -> Option<TemplatePrevie
     }
 }
 
+/// Full portrait renders for Home's separated phone showcase. These are
+/// presentation assets, not additional templates or generation choices.
+pub(crate) fn coffee_app_screen_preview(index: usize) -> Option<TemplatePreview> {
+    match index {
+        0 => preview!(99, "coffee-order-app-home-preview"),
+        1 => preview!(100, "coffee-order-app-menu-preview"),
+        2 => preview!(101, "coffee-order-app-order-preview"),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,6 +213,18 @@ mod tests {
                 preview.image_id
             );
         }
+        for index in 0..3 {
+            let preview = coffee_app_screen_preview(index).expect("phone showcase page");
+            assert!(
+                ids.insert(preview.image_id),
+                "showcase must not reuse a template cache id"
+            );
+            assert!(!preview.bytes.expect("native portrait").is_empty());
+            assert!(preview
+                .route
+                .starts_with("/pkg/assets/scene_template_previews/"));
+        }
+        assert!(coffee_app_screen_preview(3).is_none());
         assert!(scene_template_preview("no-such-template").is_none());
     }
 

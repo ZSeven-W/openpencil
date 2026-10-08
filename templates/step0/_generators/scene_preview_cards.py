@@ -301,18 +301,28 @@ def bake(source: pathlib.Path | list[pathlib.Path] | Top) -> Image.Image:
     return canvas
 
 
+# Home paints these three portraits separately, rather than stretching the
+# gallery's tightly tiled 16:10 contact sheet inside one large paper frame.
+HOME_PHONE_SCREENS = [
+    ("coffee-order-app-home-preview", "coffee-order-app-01.png"),
+    ("coffee-order-app-menu-preview", "coffee-order-app-02.png"),
+    ("coffee-order-app-order-preview", "coffee-order-app-03.png"),
+]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
     parser.add_argument("card_ids", nargs="*")
     args = parser.parse_args()
 
-    known_ids = {card_id for card_id, _ in CARDS}
+    all_cards = CARDS + HOME_PHONE_SCREENS
+    known_ids = {card_id for card_id, _ in all_cards}
     unknown_ids = sorted(set(args.card_ids) - known_ids)
     if unknown_ids:
         parser.error(f"unknown card id(s): {', '.join(unknown_ids)}")
     requested = set(args.card_ids)
-    cards = [card for card in CARDS if not requested or card[0] in requested]
+    cards = [card for card in all_cards if not requested or card[0] in requested]
 
     if not args.check:
         DST.mkdir(parents=True, exist_ok=True)
@@ -344,7 +354,9 @@ def main() -> int:
             print(f"{status}: {target.relative_to(REPO)}")
             failed = failed or status == "MISSING"
             continue
-        bake(source).save(target, "JPEG", quality=JPEG_QUALITY, optimize=True)
+        image = (Image.open(source).convert("RGB")
+                 if (card_id, source_name) in HOME_PHONE_SCREENS else bake(source))
+        image.save(target, "JPEG", quality=JPEG_QUALITY, optimize=True)
         print(f"{target.relative_to(REPO)}  {target.stat().st_size // 1024} KB")
     return 1 if failed else 0
 
