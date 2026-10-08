@@ -13,6 +13,40 @@ use super::parse_script;
 use op_editor_core::PenNodeExt;
 
 #[test]
+#[ignore = "requires the explicitly retained GLM response; no provider calls"]
+fn replay_retained_glm_corrected_program_without_a_model_retry() {
+    let source =
+        std::path::PathBuf::from(std::env::var("OPENPENCIL_CORRECTION_REPLAY_SOURCE").unwrap());
+    let raw = std::fs::read_to_string(&source).unwrap();
+    let (nodes, _) = parse_script(&raw).expect("the complete correction is directly runnable");
+    assert_eq!(nodes.len(), 1, "exactly the final program's one design");
+    let json = serde_json::to_string(&nodes).unwrap();
+    for fact in [
+        "晴日咖啡",
+        "咖啡小聚",
+        "2026年10月17日",
+        "14:30",
+        "拿铁",
+        "28元",
+        "美式",
+        "22元",
+        "燕麦拿铁",
+        "32元",
+        "到店自取，不含配送。",
+    ] {
+        assert!(json.contains(fact), "missing material: {fact}");
+    }
+    let mut state = op_editor_core::EditorState::new();
+    state.active_children_mut().clear();
+    state.active_children_mut().extend(nodes);
+    std::fs::write(
+        source.with_file_name("decoded-correction.op"),
+        serde_json::to_string_pretty(&state.doc).unwrap(),
+    )
+    .unwrap();
+}
+
+#[test]
 fn js_loop_builds_repeated_rows_nested_under_the_table() {
     // The whole point: a JS `for` loop generates N rows; each row's cells nest
     // under the row purely via the binding returned by `I`.

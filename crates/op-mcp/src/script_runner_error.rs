@@ -24,6 +24,8 @@ pub enum ScriptError {
     EmptySource,
     /// The source exceeds `MAX_SCRIPT_BYTES`.
     SourceTooLarge { bytes: usize, max: usize },
+    /// Several alternative programs were supplied without an explicit choice.
+    AmbiguousCodeBlocks { count: usize },
     /// The script ran to completion but never called `I(...)`.
     NoOperations,
     /// The QuickJS runtime could not be created — a host fault.
@@ -56,6 +58,8 @@ impl fmt::Display for ScriptError {
             ScriptError::SourceTooLarge { bytes, max } => {
                 write!(f, "script too large: {bytes} bytes (max {max})")
             }
+            ScriptError::AmbiguousCodeBlocks { count } => write!(f,
+                "script response contains {count} code blocks without a clear final program; return one complete JavaScript program"),
             ScriptError::NoOperations => {
                 f.write_str("script emitted no I(...), K(...), or U(...) operations")
             }

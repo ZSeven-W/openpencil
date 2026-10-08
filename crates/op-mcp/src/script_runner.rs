@@ -20,6 +20,8 @@ mod error;
 #[path = "script_runner_dotted_keys.rs"]
 mod dotted_keys;
 
+#[path = "script_runner_fences.rs"]
+mod fences;
 #[path = "script_runner_overlay.rs"]
 mod overlay;
 #[path = "script_runner_prelude.rs"]
@@ -63,7 +65,7 @@ fn run_script_to_program_with_preamble(
     text: &str,
     preamble: Option<&str>,
 ) -> Result<String, ScriptError> {
-    let script = strip_fences(text);
+    let script = strip_fences(text)?;
     if script.trim().is_empty() {
         return Err(ScriptError::EmptySource);
     }
@@ -755,19 +757,8 @@ fn strip_reasoning(text: &str) -> &str {
 ///    prose preamble ("Here's the design:") before the fence, so a
 ///    start-anchored strip missed it and passed the prose to the runtime.
 /// 3. No fence → the reasoning-stripped text is the script (bare-script case).
-fn strip_fences(text: &str) -> String {
-    let text = strip_reasoning(text).trim();
-    if let Some(open) = text.find("```") {
-        // Drop the ``` and any language tag on the fence line (```js).
-        let after_open = &text[open + 3..];
-        let body = after_open.split_once('\n').map(|x| x.1).unwrap_or("");
-        // Body ends at the next closing fence; if the response was truncated
-        // mid-block there is no closing fence, so keep the runnable prefix and
-        // let `repair_truncated_script` salvage it.
-        let body = body.rsplit_once("```").map(|x| x.0).unwrap_or(body);
-        return body.trim().to_string();
-    }
-    text.to_string()
+fn strip_fences(text: &str) -> Result<String, ScriptError> {
+    fences::extract(strip_reasoning(text).trim())
 }
 
 #[cfg(test)]
