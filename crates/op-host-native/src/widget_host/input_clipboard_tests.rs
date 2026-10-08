@@ -80,6 +80,24 @@ fn copy_and_cut_are_noops_without_a_focused_input() {
 }
 
 #[test]
+fn home_paste_preserves_material_lines_and_replaces_the_selected_draft() {
+    let mut host = WidgetHostNative::new();
+    let home = &mut host.editor_state_mut().editor_ui.home;
+    home.visible = true;
+    home.composer_focused = true;
+    home.set_draft("旧资料");
+    home.input.select_all();
+    assert!(host.apply_input_paste("晴日咖啡\r\n拿铁 28元\r美式 22元\n到店自取\t不配送"));
+    let home = &host.editor_state().editor_ui.home;
+    assert_eq!(
+        home.draft,
+        "晴日咖啡\n拿铁 28元\n美式 22元\n到店自取\t不配送"
+    );
+    assert_eq!(home.input.text(), home.draft);
+    assert!(home.generation_prompt().unwrap().contains(&home.draft));
+}
+
+#[test]
 fn copy_reads_a_focused_effect_param_input() {
     use op_editor_core::editor_ui_state::EffectParamFocus;
     use op_editor_core::EffectField;

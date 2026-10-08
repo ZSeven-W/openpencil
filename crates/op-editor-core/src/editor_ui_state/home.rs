@@ -659,6 +659,18 @@ impl HomeState {
         true
     }
 
+    /// Paste a complete material payload, preserving its row boundaries and
+    /// replacing the current selection. Normalize platform newline spellings.
+    pub fn paste_text(&mut self, text: &str, now_ms: u64) -> bool {
+        let normalized: String = text
+            .replace("\r\n", "\n")
+            .replace('\r', "\n")
+            .chars()
+            .filter(|c| !c.is_control() || matches!(c, '\n' | '\t'))
+            .collect();
+        self.insert_text(&normalized, now_ms)
+    }
+
     pub fn backspace(&mut self, now_ms: u64) -> bool {
         let before = (self.input.text().to_string(), self.input.selection());
         self.input.backspace(now_ms);

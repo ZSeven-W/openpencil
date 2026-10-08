@@ -72,6 +72,17 @@ impl WidgetHostNative {
         if self.editor_state.editor_ui.agent_settings.focus.is_some() {
             return self.apply_settings_text_payload(text);
         }
+        if self.editor_state.editor_ui.home_composer_owns_keyboard() {
+            let changed = self
+                .editor_state
+                .editor_ui
+                .home
+                .paste_text(text, self.now_ms);
+            if changed {
+                self.mark_dirty();
+            }
+            return changed;
+        }
         let mut inserted = false;
         for c in text.chars() {
             if c.is_control() {

@@ -69,6 +69,27 @@ fn typing_lands_in_the_home_draft_and_never_switches_tools() {
 }
 
 #[test]
+fn home_paste_keeps_material_rows_in_the_sent_brief() {
+    let mut host = served_home_host();
+    let home = &mut host.editor_state.editor_ui.home;
+    home.set_draft("旧资料");
+    home.input.select_all();
+    assert!(host.apply_paste_text("咖啡小聚\r\n拿铁 28元\r美式 22元"));
+    assert_eq!(
+        host.editor_state.editor_ui.home.draft,
+        "咖啡小聚\n拿铁 28元\n美式 22元"
+    );
+    assert!(host.apply_send());
+    assert!(host
+        .editor_state
+        .chat
+        .pending_send
+        .as_ref()
+        .unwrap()
+        .contains("咖啡小聚\n拿铁 28元\n美式 22元"));
+}
+
+#[test]
 fn ime_commits_and_beforeinput_payloads_reach_the_composer() {
     let mut host = home_host();
     let commit = crate::event::ime::composition_end("取餐预约".to_string());
