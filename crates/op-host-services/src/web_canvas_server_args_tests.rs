@@ -146,6 +146,47 @@ fn parse_serve_web_args_managed_flag_form() {
 }
 
 #[test]
+fn managed_config_root_is_explicit_and_never_changes_standalone_defaults() {
+    let root = std::env::temp_dir().join("op-managed-config-test");
+    let parse = |args: Vec<String>| parse_serve_web_args(args.into_iter());
+    let options = parse(vec![
+        "--managed".into(),
+        "--port".into(),
+        "0".into(),
+        "--config-root".into(),
+        root.to_string_lossy().into_owned(),
+    ])
+    .unwrap();
+    assert_eq!(options.config_root.as_deref(), Some(root.as_path()));
+    assert!(parse(vec!["3100".into()]).unwrap().config_root.is_none());
+    for args in [
+        vec!["--managed", "--port", "0", "--config-root"],
+        vec!["--managed", "--port", "0", "--config-root", "relative"],
+        vec!["--online", "--port", "0", "--config-root"],
+    ] {
+        assert!(parse(args.into_iter().map(String::from).collect()).is_err());
+    }
+    let absolute = root.to_string_lossy().into_owned();
+    assert!(parse(vec![
+        "--port".into(),
+        "0".into(),
+        "--config-root".into(),
+        absolute.clone()
+    ])
+    .is_err());
+    assert!(parse(vec![
+        "--managed".into(),
+        "--port".into(),
+        "0".into(),
+        "--config-root".into(),
+        absolute.clone(),
+        "--config-root".into(),
+        absolute
+    ])
+    .is_err());
+}
+
+#[test]
 fn parse_serve_web_args_managed_accepts_only_loopback_hosts() {
     for host in ["127.0.0.1", "localhost", "::1"] {
         let o = parse_serve_web_args(

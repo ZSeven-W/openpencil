@@ -75,7 +75,7 @@ fn any_document_with_boards_gets_the_slides_tab() {
 }
 
 #[test]
-fn a_page_with_no_boards_has_nothing_to_list_and_shows_no_tab() {
+fn empty_page_keeps_chat_and_layers_tabs_without_a_slides_tab() {
     let mut empty = WidgetHost::new();
     empty.editor_state.editor_ui.slides_panel.tab = LeftPanelTab::Slides;
     // The starter document opens with one empty Frame, which IS a board;
@@ -85,12 +85,16 @@ fn a_page_with_no_boards_has_nothing_to_list_and_shows_no_tab() {
     empty.last_viewport_w = VW;
     empty.last_viewport_h = VH;
     assert!(active_page_boards(&empty.editor_state).is_empty());
-    assert!(empty.slides_tab_row(VH).is_none());
+    let row = empty
+        .slides_tab_row(VH)
+        .expect("desktop rail always has tabs");
+    assert_eq!(row.slides.size.x, 0.0);
+    assert!(row.chat.size.x > 0.0 && row.layers.size.x > 0.0);
     assert!(empty.slides_panel_frame(VW, VH).is_none());
     assert_eq!(
         empty.layers_content_rect(VH).origin.y,
-        op_editor_ui::widgets::TOP_BAR_HEIGHT,
-        "a document without a tab row keeps the whole rail"
+        row.row.origin.y + row.row.size.y,
+        "the layer tree starts below the persistent tab row"
     );
 }
 
