@@ -19,6 +19,16 @@ use crate::node_id::NodeId;
 use crate::selection::SelectionState;
 use crate::state::EditorState;
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
+
+/// Document-dependent comparison state. Camera and other view-only state stay
+/// outside history; picking a direction must be undoable as a usable comparison.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct WorkspaceDirectionsSnapshot {
+    run_epoch: u64,
+    count: u8,
+    variants: Arc<Vec<crate::WorkspaceVariant>>,
+}
 
 /// Largest number of undo entries kept. Past this the oldest entry is
 /// dropped (`VecDeque::pop_front`) — matches shell-core's cap.
@@ -66,6 +76,7 @@ pub struct EditorSnapshot {
     /// of running flex layout. Layout mutations can clear this document-level
     /// latch, so undo / redo must restore it alongside the document snapshot.
     pub preserve_authored_geometry: bool,
+    pub(crate) workspace_directions: Option<WorkspaceDirectionsSnapshot>,
     /// Document revision at snapshot time. Restoring it lets undo back
     /// to a saved snapshot clear the dirty marker naturally.
     pub revision: u64,
@@ -150,6 +161,7 @@ impl EditorState {
             fill_refs: self.ui.variables.fill_refs.clone(),
             stroke_refs: self.ui.variables.stroke_refs.clone(),
             preserve_authored_geometry: self.editor_ui.preserve_authored_geometry,
+            workspace_directions: self.capture_workspace_directions(anchor),
             revision: self.revision,
         }
     }
@@ -181,8 +193,54 @@ impl EditorState {
         self.ui.variables.fill_refs = snapshot.fill_refs;
         self.ui.variables.stroke_refs = snapshot.stroke_refs;
         self.editor_ui.preserve_authored_geometry = snapshot.preserve_authored_geometry;
+        self.restore_workspace_directions(snapshot.workspace_directions);
         self.revision = snapshot.revision;
         self.sync_dirty_flag();
+    }
+
+    fn capture_workspace_directions(
+        &self,
+        anchor: Option<&EditorSnapshot>,
+    ) -> Option<WorkspaceDirectionsSnapshot> {
+        let workspace = &self.editor_ui.workspace;
+        if !workspace.active {
+            return None;
+        }
+        let variants = anchor
+            .and_then(|snapshot| snapshot.workspace_directions.as_ref())
+            .filter(|snapshot| snapshot.variants.as_ref() == &workspace.variants)
+            .map(|snapshot| Arc::clone(&snapshot.variants))
+            .unwrap_or_else(|| Arc::new(workspace.variants.clone()));
+        Some(WorkspaceDirectionsSnapshot {
+            run_epoch: workspace.run_epoch,
+            count: workspace.variant_count,
+            variants,
+        })
+    }
+
+    fn restore_workspace_directions(&mut self, snapshot: Option<WorkspaceDirectionsSnapshot>) {
+        let Some(snapshot) = snapshot else { return };
+        let workspace = &mut self.editor_ui.workspace;
+        // History from another run must never bring its old chooser into a new
+        // generation. Professional/reading mode transitions remain view state.
+        if !workspace.active || workspace.run_epoch != snapshot.run_epoch {
+            return;
+        }
+        if workspace.variant_count == snapshot.count
+            && &workspace.variants == snapshot.variants.as_ref()
+        {
+            return;
+        }
+        workspace.variant_count = snapshot.count;
+        workspace.variants = snapshot.variants.as_ref().clone();
+        workspace.view = if workspace.variants.is_empty() {
+            crate::WorkspaceView::default_for(workspace.family)
+        } else {
+            crate::WorkspaceView::AllBoards
+        };
+        workspace.selected = 0;
+        workspace.fitted_board_count = 0;
+        workspace.fitted_bounds = None;
     }
 
     /// Undo the last change. Returns false when the undo stack is empty.

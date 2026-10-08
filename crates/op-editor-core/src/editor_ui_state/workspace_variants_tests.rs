@@ -185,6 +185,48 @@ fn an_unknown_direction_is_not_picked() {
 }
 
 #[test]
+fn undoing_a_pick_restores_the_comparison_and_allows_a_different_choice() {
+    let mut state = three_directions();
+    let original = state.doc.clone();
+    let directions = state.editor_ui.workspace.variants.clone();
+    assert_eq!(use_workspace_variant(&mut state, 1), Some(true));
+    let picked = state.doc.clone();
+    assert!(state.apply(EditorCommand::Undo));
+    assert_eq!(state.doc, original);
+    assert_eq!(state.editor_ui.workspace.variants, directions);
+    assert!(state.editor_ui.workspace.variant_pick_enabled());
+    assert_eq!(state.editor_ui.workspace.view, WorkspaceView::AllBoards);
+    assert!(state.apply(EditorCommand::Redo));
+    assert_eq!(state.doc, picked);
+    assert!(!state.editor_ui.workspace.variant_pick_enabled());
+    assert!(state.apply(EditorCommand::Undo));
+    assert_eq!(use_workspace_variant(&mut state, 2), Some(true));
+    assert_eq!(
+        state.active_children()[0].id_str(),
+        directions[2].root_ids[0]
+    );
+    assert_eq!(state.doc.variables.as_ref(), Some(&palette("#000002")));
+    assert!(!state.history.can_redo());
+}
+
+#[test]
+fn old_history_does_not_replace_the_directions_of_a_new_run() {
+    let mut state = three_directions();
+    state.editor_ui.workspace.run_epoch = 10;
+    assert!(pick_workspace_variant(&mut state, 1, "其他方案"));
+    state.editor_ui.workspace.begin_variants(2);
+    state.editor_ui.workspace.run_epoch = 11;
+    state
+        .editor_ui
+        .workspace
+        .record_variant(variant(0, vec!["new".into()], "#abcdef"));
+    let current = state.editor_ui.workspace.variants.clone();
+    assert!(state.apply(EditorCommand::Undo));
+    assert_eq!(state.editor_ui.workspace.variants, current);
+    assert_eq!(state.editor_ui.workspace.variant_count, 2);
+}
+
+#[test]
 fn a_new_run_forgets_the_directions() {
     let mut state = three_directions();
     state.editor_ui.workspace.open_for_generation(

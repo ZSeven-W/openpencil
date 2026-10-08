@@ -277,6 +277,26 @@ pub fn variant_request(base: &DesignRequest, plan: &VariantPlan, count: usize) -
     request.append_context = None;
     request.continuation_context = None;
     request.pinned_style_guide = Some(plan.style_guide.clone());
+    // The host already fans the brief out. Repeating an instruction such as
+    // "give me three directions" inside every run otherwise creates N x N
+    // boards. Keep the original brief verbatim and scope only alternatives,
+    // never the number of pages/screens within this direction.
+    request.prompt = format!(
+        "{}\n\n<direction_scope>\n\
+         This is ONE independent design direction ({}) of {} alternatives. \
+         The host generates the other alternatives in separate runs. \
+         If the brief asks for several directions, options, versions, or styles, \
+         create ONLY this direction using the pinned style guide. \
+         Do not create alternative designs inside this run. Preserve all supplied \
+         facts, original deliverable count and dimensions WITHIN this direction. \
+         Alternative count is separate from the requested deliverable count.\n\
+         本任务仅生成一个设计方向，其余方向由宿主另行生成。\
+         不要在本方向内再次生成多套方案。用户指定的页数、尺寸与原文保持不变。\n\
+         </direction_scope>",
+        base.prompt,
+        plan.name,
+        count.max(1),
+    );
     if plan.index > 0 {
         request.design_md = None;
     }

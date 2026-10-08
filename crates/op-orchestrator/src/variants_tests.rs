@@ -214,6 +214,39 @@ fn progress_is_scoped_per_direction() {
 }
 
 #[test]
+fn each_direction_scopes_alternatives_without_rewriting_copy_or_page_count() {
+    for brief in [
+        "提供三个明显不同的方向。每个方向仅1页。原文：晴日咖啡 · 静安店，拿铁28元。",
+        "设计三种风格的记账 App，每套有首页、账单、个人中心三个页面。",
+        "Give me 3 alternatives of a 12-slide deck. Keep ‘Price: $28’ verbatim.",
+        "做三种风格的小红书图文，每种只要1页，标题晴日咖啡。",
+        "提供三个按钮设计方向，文字：确认。",
+    ] {
+        let base = base_request(brief);
+        let plans = choose_variant_style_guides(brief, None, 3);
+        for plan in &plans {
+            let scoped = variant_request(&base, plan, 3);
+            assert!(scoped
+                .prompt
+                .starts_with(&format!("{brief}\n\n<direction_scope>")));
+            assert!(scoped.prompt.contains("ONE independent design direction"));
+            assert_eq!(
+                scoped.pinned_style_guide.as_deref(),
+                Some(plan.style_guide.as_str())
+            );
+            assert!(scoped
+                .prompt
+                .contains("original deliverable count and dimensions"));
+            assert_eq!(
+                detect_design_type(&scoped.prompt).type_,
+                detect_design_type(brief).type_
+            );
+        }
+        assert_eq!(base.prompt, brief);
+    }
+}
+
+#[test]
 fn humanized_labels_read_as_names() {
     assert_eq!(
         humanize_style_guide_name("editorial-orange-light"),

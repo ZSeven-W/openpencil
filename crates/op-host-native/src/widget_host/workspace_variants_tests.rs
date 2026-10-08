@@ -11,6 +11,10 @@ use op_editor_ui::Point2D;
 const W: f32 = 1440.0;
 const H: f32 = 900.0;
 
+#[cfg(feature = "bundled-design-fonts")]
+#[path = "workspace_variants_replay_tests.rs"]
+mod replay;
+
 fn centre(rect: op_editor_ui::Rect) -> (f32, f32) {
     (
         rect.origin.x + rect.size.x / 2.0,
@@ -176,6 +180,51 @@ fn use_this_keeps_one_direction_and_parks_the_others() {
         "A and C were moved, not deleted"
     );
     assert!(state.editor_ui.workspace.variants.is_empty());
+}
+
+#[test]
+fn undo_restores_visible_choice_buttons_and_can_pick_a_different_direction() {
+    let mut host = settled_variants_host();
+    host.editor_state_mut().editor_ui.workspace.phase = WorkspacePhase::Done;
+    let original = host.editor_state().doc.clone();
+    let pick = |host: &mut WidgetHostNative, index: usize| {
+        let surface = WorkspaceSurface::for_editor(host.editor_state()).unwrap();
+        let layout = surface.layout(W, H);
+        let (x, y) = centre(surface.variant_bar(&layout)[index].button);
+        assert!(host.apply_press(x, y, W, H));
+        host.apply_release_with_viewport(W, H);
+    };
+    let history = |host: &mut WidgetHostNative, hit: WorkspaceHit| {
+        let surface = WorkspaceSurface::for_editor(host.editor_state()).unwrap();
+        let layout = surface.layout(W, H);
+        let (_, button, enabled) = surface
+            .history_buttons(&layout)
+            .into_iter()
+            .find(|(item, _, _)| *item == hit)
+            .unwrap();
+        assert!(enabled);
+        let (x, y) = centre(button);
+        assert!(host.apply_press(x, y, W, H));
+        host.apply_release_with_viewport(W, H);
+    };
+    pick(&mut host, 1);
+    let picked = host.editor_state().doc.clone();
+    history(&mut host, WorkspaceHit::Undo);
+    assert_eq!(host.editor_state().doc, original);
+    let surface = WorkspaceSurface::for_editor(host.editor_state()).unwrap();
+    assert_eq!(surface.variant_bar(&surface.layout(W, H)).len(), 3);
+    assert_eq!(
+        host.editor_state().editor_ui.workspace.view,
+        WorkspaceView::AllBoards
+    );
+    history(&mut host, WorkspaceHit::Redo);
+    assert_eq!(host.editor_state().doc, picked);
+    let surface = WorkspaceSurface::for_editor(host.editor_state()).unwrap();
+    assert!(surface.variant_bar(&surface.layout(W, H)).is_empty());
+    history(&mut host, WorkspaceHit::Undo);
+    pick(&mut host, 2);
+    assert_eq!(host.editor_state().active_children()[0].id_str(), "c");
+    assert!(!host.editor_state().history.can_redo());
 }
 
 #[test]
