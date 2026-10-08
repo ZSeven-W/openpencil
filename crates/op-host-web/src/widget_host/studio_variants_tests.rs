@@ -162,9 +162,9 @@ fn a_retry_of_a_variants_run_asks_for_the_same_directions() {
 fn use_this_keeps_one_direction_once_the_run_settled() {
     let source = r#"{ "version": "1.0.0", "children": [
         { "type": "frame", "id": "a", "name": "方案 A · Guide A · Home", "x": 0, "y": 0,
-          "width": 375, "height": 812, "children": [] },
-        { "type": "frame", "id": "b", "name": "方案 B · Guide B · Home", "x": 615, "y": 0,
-          "width": 375, "height": 812, "children": [] }
+          "width": 800, "height": 600, "children": [] },
+        { "type": "frame", "id": "b", "name": "方案 B · Guide B · Home", "x": 1040, "y": 0,
+          "width": 800, "height": 600, "children": [] }
     ] }"#;
     let document = jian_ops_schema::load_str(source).expect("fixture").value;
     let mut host = home_host(true);
@@ -183,6 +183,8 @@ fn use_this_keeps_one_direction_once_the_run_settled() {
         host.apply_run_variant(4, None, event);
     }
     host.editor_state.editor_ui.workspace.phase = WorkspacePhase::Done;
+    host.apply_workspace_fit(W, H);
+    let comparison_zoom = host.editor_state.viewport.zoom;
 
     let button = {
         let surface = WorkspaceSurface::for_editor(&host.editor_state).expect("workspace");
@@ -198,6 +200,10 @@ fn use_this_keeps_one_direction_once_the_run_settled() {
     };
     let (x, y) = centre(button);
     assert!(host.apply_press(x, y, W, H));
+    assert!(
+        host.editor_state.viewport.zoom > comparison_zoom * 1.1,
+        "a clean scene cache must fit the kept direction after the pick"
+    );
     let names: Vec<String> = host
         .editor_state
         .active_children()

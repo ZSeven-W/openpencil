@@ -137,6 +137,19 @@ fn the_bar_waits_for_the_run_to_settle() {
 }
 
 #[test]
+fn choosing_from_an_already_fitted_comparison_refits_only_the_kept_direction() {
+    let mut host = settled_variants_host();
+    host.editor_state_mut().editor_ui.workspace.phase = WorkspacePhase::Done;
+    host.apply_workspace_fit(W, H);
+    let comparison_zoom = host.editor_state().viewport.zoom;
+    assert!(host.use_workspace_variant(1, W, H));
+    assert!(
+        host.editor_state().viewport.zoom > comparison_zoom * 1.1,
+        "a clean scene cache must not keep fitting the removed directions"
+    );
+}
+
+#[test]
 fn use_this_keeps_one_direction_and_parks_the_others() {
     let mut host = settled_variants_host();
     host.editor_state_mut().editor_ui.workspace.phase = WorkspacePhase::Done;

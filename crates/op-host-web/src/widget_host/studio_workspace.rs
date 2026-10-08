@@ -317,8 +317,8 @@ impl WidgetHost {
         else {
             return false;
         };
-        self.apply_workspace_fit(viewport_w, viewport_h);
         self.mark_dirty();
+        self.apply_workspace_fit(viewport_w, viewport_h);
         changed
     }
 
