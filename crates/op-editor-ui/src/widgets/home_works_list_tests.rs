@@ -108,7 +108,7 @@ fn recent_rows_map_to_recent_file_indices_and_stop_above_the_nav() {
     with_recents(&mut state, 20);
     let home = HomeSurface::for_editor(&state).unwrap();
     assert_eq!(home.works_recent.len(), WORKS_RECENT_CAP);
-    assert_eq!(home.works_recent[3], "作品 3.op");
+    assert_eq!(home.works_recent[3], "作品 3");
     let layout = home.works_layout(W, H);
     assert!(!layout.rows.is_empty());
     let nav_top = H - crate::widgets::home_surface::HOME_BOTTOM_NAV_H;

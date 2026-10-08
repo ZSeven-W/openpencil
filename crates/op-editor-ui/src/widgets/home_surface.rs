@@ -123,31 +123,14 @@ pub struct HomeSurface<'a> {
     /// Names of the chat composer's staged attachments (the shared
     /// `chat.pending_attachments` list is the single source of truth).
     pub attachment_names: Vec<String>,
-    /// Recent `.op` files (basename only), capped to the row's five
+    /// Recent work labels, disambiguated by folder and capped to five
     /// chips.
     pub recent_files: Vec<String>,
-    /// The 作品 page's recent rows (basename only), in `recent_files`
+    /// The 作品 page's recent labels, in `recent_files`
     /// order so a row index is a `recent_files` index.
     pub works_recent: Vec<String>,
     /// The live document as the 作品 page's current-work card.
     pub current_work: Option<CurrentWork>,
-}
-
-/// The first `cap` recent files, basename only.
-fn recent_basenames(state: &EditorState, cap: usize) -> Vec<String> {
-    state
-        .editor_ui
-        .recent_files
-        .iter()
-        .take(cap)
-        .map(|file| {
-            file.path
-                .rsplit(['/', '\\'])
-                .next()
-                .unwrap_or(&file.path)
-                .to_string()
-        })
-        .collect()
 }
 
 impl<'a> HomeSurface<'a> {
@@ -156,23 +139,32 @@ impl<'a> HomeSurface<'a> {
     }
 
     pub fn for_editor_at(state: &'a EditorState, now_ms: u64) -> Option<Self> {
-        state.editor_ui.home.visible.then(|| Self {
-            id: WidgetId::new(7600),
-            theme: theme_for(&state.editor_ui),
-            state: &state.editor_ui.home,
-            ui: &state.editor_ui,
-            now_ms,
-            chip_label: model::model_chip_label(state),
-            usable_agent: state.has_usable_chat_agent(),
-            attachment_names: state
-                .chat
-                .pending_attachments
+        state.editor_ui.home.visible.then(|| {
+            let paths: Vec<_> = state
+                .editor_ui
+                .recent_files
                 .iter()
-                .map(|attachment| attachment.name.clone())
-                .collect(),
-            recent_files: recent_basenames(state, 5),
-            works_recent: recent_basenames(state, WORKS_RECENT_CAP),
-            current_work: CurrentWork::for_editor(state),
+                .map(|f| f.path.as_str())
+                .collect();
+            let labels = recent_names::work_labels(&paths);
+            Self {
+                id: WidgetId::new(7600),
+                theme: theme_for(&state.editor_ui),
+                state: &state.editor_ui.home,
+                ui: &state.editor_ui,
+                now_ms,
+                chip_label: model::model_chip_label(state),
+                usable_agent: state.has_usable_chat_agent(),
+                attachment_names: state
+                    .chat
+                    .pending_attachments
+                    .iter()
+                    .map(|attachment| attachment.name.clone())
+                    .collect(),
+                recent_files: labels.iter().take(5).cloned().collect(),
+                works_recent: labels.into_iter().take(WORKS_RECENT_CAP).collect(),
+                current_work: CurrentWork::for_editor(state),
+            }
         })
     }
 

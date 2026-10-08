@@ -132,7 +132,7 @@ fn paint_card(
             None => return,
         },
         HomeHit::WorksRecent(index) => match surface.works_recent.get(index) {
-            Some(name) => (None, name.trim_end_matches(".op").to_string(), None),
+            Some(name) => (None, name.clone(), None),
             None => return,
         },
         _ => return,
@@ -154,7 +154,13 @@ fn paint_card(
             600,
         );
     }
-    let title = fit(cx, &title, 15.0, text_w);
+    let title = if current {
+        fit(cx, &title, 15.0, text_w)
+    } else {
+        super::super::recent_names::fit_label(&title, text_w, |s| {
+            cx.backend.measure_text_family(s, 15.0, SANS)
+        })
+    };
     text_weighted(
         cx,
         &title,

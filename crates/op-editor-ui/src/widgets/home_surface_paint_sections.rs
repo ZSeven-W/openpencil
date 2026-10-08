@@ -145,7 +145,7 @@ pub(super) fn paint_recent(
             cx.backend
                 .stroke_round_rect(chip, 6.0, palette.raised_line, 1.0);
             let label =
-                super::super::recent_names::fit_name(name, (chip.size.x - 22.0).max(0.0), |s| {
+                super::super::recent_names::fit_label(name, (chip.size.x - 22.0).max(0.0), |s| {
                     cx.backend.measure_text_family(s, 12.0, SANS)
                 });
             text(

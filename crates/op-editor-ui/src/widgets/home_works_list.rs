@@ -352,7 +352,7 @@ pub(super) fn paint_works_page(
             palette.link,
             1.6,
         );
-        let label = super::recent_names::fit_name(name, (rect.size.x - 88.0).max(0.0), |s| {
+        let label = super::recent_names::fit_label(name, (rect.size.x - 88.0).max(0.0), |s| {
             cx.backend
                 .measure_text_family_styled(s, 14.0, "system-ui", 500, false)
         });
