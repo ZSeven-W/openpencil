@@ -14,6 +14,10 @@ impl DesktopApp {
     /// pumps target it even after the user switches tabs. When nothing started
     /// (error bubble only), leave the binding untouched.
     pub(crate) fn launch_chat_if_pending(&mut self) -> bool {
+        // Home can replace the transcript and queue its first send in one
+        // gesture. Retire the OLD worker before launching that send; otherwise
+        // the pointer/redraw tail consumes the reset and aborts the NEW run.
+        let retired = self.drain_new_chat();
         let launched = chat_session::launch_if_pending(
             &mut self.host,
             &mut self.current_chat,
@@ -22,7 +26,7 @@ impl DesktopApp {
         if launched && (self.current_chat.is_some() || self.current_design.is_some()) {
             self.chat_running_tab = Some(self.host.editor_state().chat.active_index());
         }
-        launched
+        retired || launched
     }
 
     /// Drain a manual subtask-retry click and BIND the run to the tab it
@@ -46,6 +50,13 @@ impl DesktopApp {
     /// tab). Aborts any in-flight worker and clears the now-stale tab binding.
     pub(crate) fn drain_new_chat(&mut self) -> bool {
         let running_tab = self.chat_running_tab;
+        let fresh_turn_tab = self
+            .host
+            .editor_state()
+            .chat
+            .pending_send
+            .as_ref()
+            .map(|_| self.host.editor_state().chat.active_index());
         let drained = chat_session::drain_new_chat_request(
             &mut self.host,
             &mut self.current_chat,
@@ -53,8 +64,9 @@ impl DesktopApp {
         );
         if drained {
             crate::sub_agent_session::abort_all(&mut self.sub_agents, &mut self.active_sub_agent);
-            if let Some(chat) =
-                running_tab.and_then(|idx| self.host.editor_state_mut().chat.tab_mut(idx))
+            if let Some(chat) = running_tab
+                .filter(|idx| Some(*idx) != fresh_turn_tab)
+                .and_then(|idx| self.host.editor_state_mut().chat.tab_mut(idx))
             {
                 chat.agents_running = (0, 0);
                 chat.pending_send = None;
@@ -160,6 +172,79 @@ impl DesktopApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_home_send_retires_the_old_chat_before_launching_the_new_design() {
+        let _guard = crate::agent_indicator_test_lock::LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let mut app = DesktopApp::new(None);
+        app.host.editor_state_mut().editor_ui.home.visible = true;
+        let doc = jian_ops_schema::load_str(r#"{"version":"1.0.0","children":[{"type":"frame","id":"old","width":375,"height":812,"children":[]}]}"#).unwrap().value;
+        app.host
+            .install_imported_state(op_editor_core::EditorState::from_document(doc));
+        let state = app.host.editor_state_mut();
+        state.editor_ui.agent_settings.builtin_agents.clear();
+        let id = state.editor_ui.agent_settings.add_builtin_agent_config(
+            "QA",
+            "sk-test",
+            "glm-5.3-flash",
+            op_editor_core::BuiltinAgentKind::OpenAiCompat,
+            "http://127.0.0.1:9/v1",
+        );
+        state.rebuild_chat_models();
+        state.chat.selected_model = state
+            .chat
+            .available_models
+            .iter()
+            .position(|entry| entry.builtin_provider_id.as_deref() == Some(&id))
+            .unwrap();
+        state.editor_ui.home.visible = true;
+        state.editor_ui.home.task = op_editor_core::HomeFamily::KnowledgeCards;
+        state.editor_ui.home.variants_on = true;
+        state.editor_ui.home.set_draft("做一张咖啡活动卡");
+        let home = op_editor_ui::widgets::HomeSurface::for_editor(app.host.editor_state()).unwrap();
+        let send = home.layout(1440.0, 900.0).send;
+        assert!(app.host.apply_press(
+            send.origin.x + send.size.x / 2.0,
+            send.origin.y + send.size.y / 2.0,
+            1440.0,
+            900.0
+        ));
+        assert!(app.host.editor_state().chat.pending_new_chat);
+        assert!(app.launch_chat_if_pending());
+        assert!(
+            !app.host.editor_state().chat.pending_new_chat,
+            "the old-chat cleanup must be consumed BEFORE launch"
+        );
+        assert!(app.current_design.is_some());
+        assert_eq!(app.chat_running_tab, Some(0));
+        assert!(
+            !app.drain_new_chat(),
+            "the pointer/redraw tail must not abort the new run"
+        );
+        assert!(app.current_design.is_some());
+        app.host.editor_state_mut().chat.pending_stop_chat = true;
+        app.drain_stop_chat();
+    }
+
+    #[test]
+    fn clearing_a_replaced_chat_keeps_its_already_queued_fresh_turn() {
+        let mut app = DesktopApp::new(None);
+        app.chat_running_tab = Some(0);
+        let chat = &mut app.host.editor_state_mut().chat;
+        chat.new_chat();
+        chat.set_input_text("新作品的资料");
+        assert!(chat.begin_send());
+        let messages = chat.messages.clone();
+        assert!(app.drain_new_chat());
+        assert_eq!(
+            app.host.editor_state().chat.pending_send.as_deref(),
+            Some("新作品的资料")
+        );
+        assert_eq!(app.host.editor_state().chat.messages, messages);
+        assert_eq!(app.chat_running_tab, None);
+    }
 
     #[test]
     fn closing_active_tab_reconciles_the_survivors_model_rows() {
