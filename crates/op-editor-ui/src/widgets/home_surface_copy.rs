@@ -65,30 +65,14 @@ pub(crate) fn task_copy(locale: Locale, family: HomeFamily, draft: &TaskDraft) -
                 "home.task.app.exampleTitle"
             },
             if draft.device == HomeDevice::Desktop {
-                if draft.app_pages == AppPages::Single {
-                    "home.task.app.desktopSingleDesc"
-                } else {
-                    "home.task.app.desktopDesc"
-                }
+                "home.task.app.desktopDesc"
             } else {
-                if draft.app_pages == AppPages::Single {
-                    "home.task.app.singleDesc"
-                } else {
-                    "home.task.app.exampleDesc"
-                }
+                "home.task.app.exampleDesc"
             },
             if draft.device == HomeDevice::Desktop {
-                if draft.app_pages == AppPages::Single {
-                    "home.task.app.desktopSinglePages"
-                } else {
-                    "home.task.app.desktopPages"
-                }
+                "home.task.app.desktopPages"
             } else {
-                if draft.app_pages == AppPages::Single {
-                    "home.task.app.singlePages"
-                } else {
-                    "home.task.app.examplePages"
-                }
+                "home.task.app.examplePages"
             },
         ],
         HomeFamily::Web => [

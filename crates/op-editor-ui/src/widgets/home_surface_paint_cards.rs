@@ -324,29 +324,21 @@ fn paint_paper_card(
 /// The preview a task's art area shows, with the crop aspect to paint it
 /// at (`None` = the baked card's own 16:10).
 ///
-/// Every task shows the very template its example opens as the instant
-/// draft ([`HomeState::example_draft_template`]), so the picture on Home is
-/// exactly what 开始设计 puts on the canvas — the web, 16:9 deck and
-/// comparison previews used to show a different template than the draft
-/// they opened. A 16:9 deck is still cropped to the slide shape.
+/// App showcases display the complete three-screen example. The requested
+/// page count still controls the input example and the instant draft. Other
+/// tasks show the template their example opens; a 16:9 deck keeps its crop.
 ///
 /// [`HomeState::example_draft_template`]: op_editor_core::HomeState::example_draft_template
 pub(super) fn task_art(surface: &HomeSurface<'_>) -> (&'static str, Option<f32>) {
     let draft = surface.state.task_draft();
-    if surface.state.task == HomeFamily::AppUi
-        && draft.device == op_editor_core::HomeDevice::Desktop
-        && draft.app_pages == op_editor_core::AppPages::Multiple
-    {
-        return ("coffee-counter-desktop", None);
-    }
-    if surface.state.task == HomeFamily::AppUi
-        && draft.app_pages == op_editor_core::AppPages::Single
-    {
-        return if draft.device == op_editor_core::HomeDevice::Mobile {
-            ("coffee-order-app-single", Some(375.0 / 812.0))
-        } else {
-            ("coffee-counter-desktop-single", Some(1440.0 / 900.0))
-        };
+    if surface.state.task == HomeFamily::AppUi {
+        return (
+            match draft.device {
+                op_editor_core::HomeDevice::Mobile => "coffee-order-app",
+                op_editor_core::HomeDevice::Desktop => "coffee-counter-desktop",
+            },
+            None,
+        );
     }
     let template = surface
         .state
