@@ -191,6 +191,8 @@ fn sequential_subtask_prompt_receives_the_previous_section_headline() {
 
 // Cluster test modules — this file keeps the shared fixtures (plan JSON,
 // scripted LLM helpers); each child mounts with `use super::*`.
+#[path = "run_tests_authentication_retry.rs"]
+mod authentication_retry_tests;
 #[path = "run_tests_core.rs"]
 mod core_tests;
 #[path = "run_tests_dashboard.rs"]

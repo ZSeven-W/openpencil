@@ -41,6 +41,28 @@ pub(crate) fn is_provider_access_denied(msg: &str) -> bool {
     msg.to_ascii_lowercase().contains("model access denied")
 }
 
+/// Only primary, actionable authentication errors qualify. Auxiliary CLI
+/// telemetry saying it is not logged in is not proof a model request failed.
+pub(crate) fn is_provider_authentication_required(msg: &str) -> bool {
+    let lower = msg.to_ascii_lowercase();
+    let primary = lower
+        .trim_start()
+        .strip_prefix("stream error: ")
+        .unwrap_or(lower.trim_start());
+    [
+        "authentication failed",
+        "error: authentication failed",
+        "authentication required",
+        "error: authentication required",
+        "http 401",
+    ]
+    .iter()
+    .any(|prefix| primary.starts_with(prefix))
+        || ["antigravity", "codex", "claude code", "copilot"]
+            .iter()
+            .any(|provider| primary.starts_with(&format!("{provider} is not authenticated")))
+}
+
 /// 判断错误消息是否为不可重试的终止条件。
 ///
 /// Port of `orchestrator-sub-agent.ts:150-152`:
@@ -58,6 +80,8 @@ pub(crate) fn is_non_retryable(msg: &str) -> bool {
         || lower.contains("http 451")
         || lower.contains("content blocked")
         || lower.contains("authentication failed")
+        || is_provider_authentication_required(msg)
+        || is_provider_access_denied(msg)
         || lower.contains("censorship")
         // A CLI's own transport-config failure is deterministic — codex's
         // stream-reconnect rejects the macOS system proxy with "Invalid
@@ -94,6 +118,20 @@ pub(crate) fn is_self_check_rejection(msg: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn primary_cli_authentication_errors_are_terminal_but_telemetry_is_not() {
+        assert!(is_non_retryable(
+            "Antigravity is not authenticated. Run `agy` once in a terminal."
+        ));
+        assert!(is_non_retryable(
+            "Error: authentication required. Run 'agy' to log in, then retry."
+        ));
+        assert!(!is_provider_authentication_required("Antigravity returned no output — CLI log: Failed to poll ListExperiments: You are not logged into Antigravity."));
+        assert!(!is_non_retryable(
+            "self-check failed: source-copy-missing: Authentication required"
+        ));
+    }
 
     // ── is_non_retryable — true cases ───────────────────────────────────────
 

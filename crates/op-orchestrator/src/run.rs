@@ -222,6 +222,7 @@ async fn planning_loop(
                 // shell (arena, Gemini via agy, 2026-09-29: 11 runs did).
                 if crate::retry::is_provider_limit(&error.message)
                     || crate::retry::is_provider_access_denied(&error.message)
+                    || crate::retry::is_provider_authentication_required(&error.message)
                 {
                     return Err(OrchestratorError::AllFailed(reason));
                 }

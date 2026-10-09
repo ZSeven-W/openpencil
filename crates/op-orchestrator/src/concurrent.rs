@@ -239,17 +239,12 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         crate::subtask_completeness::rollback_inserted_roots(sink, &outcome1.inserted_root_ids);
     }
 
-    // Evaluate the non-retryable predicate once from attempt-1's error
-    // (faithful to the sequential path: computed before the retry chain and
-    // reused for both the attempt-2 and attempt-3 guards).
-    let non_retryable = outcome1
-        .error
-        .as_deref()
-        .map(is_non_retryable)
-        .unwrap_or(false);
-
+    // The latest attempt may reveal a terminal failure after a transient one.
+    // Re-evaluate it before each rung, including completeness/language retries.
     let retryable = |o: &SubtaskOutcome, gate: bool| {
-        (gate || (o.error.is_some() && o.node_count == 0 && !non_retryable)) && !abort.is_set()
+        !abort.is_set()
+            && !o.error.as_deref().is_some_and(is_non_retryable)
+            && (gate || (o.error.is_some() && o.node_count == 0))
     };
 
     // A self-check quality rejection (`orchestration_self_check` fatally
