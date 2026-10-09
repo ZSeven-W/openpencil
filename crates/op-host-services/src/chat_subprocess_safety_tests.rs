@@ -82,6 +82,52 @@ fn grok_generation_prompt_is_unguarded_and_still_private() {
 }
 
 #[test]
+fn agy_generation_reuses_current_login_privately_and_removes_the_copy() {
+    let host = std::env::temp_dir().join(format!(
+        "openpencil-agy-login-source-{}-{}",
+        std::process::id(),
+        TURN_SEQ.fetch_add(1, Ordering::Relaxed)
+    ));
+    let data = host.join(".gemini/antigravity-cli");
+    fs::create_dir_all(&data).unwrap();
+    let source = data.join("antigravity-oauth-token");
+    fs::write(&source, b"fake-login-for-transport-test").unwrap();
+    let turn = IsolatedTurn::prepare_for(
+        Some(CliName::Antigravity),
+        "return a design script",
+        &[],
+        TurnPurpose::Generation,
+        Some(&host),
+    )
+    .unwrap()
+    .unwrap();
+    let private = turn.home_dir().unwrap().join(".gemini/antigravity-cli");
+    let copied = private.join("antigravity-oauth-token");
+    assert_eq!(fs::read(&copied).unwrap(), b"fake-login-for-transport-test");
+    let settings: serde_json::Value =
+        serde_json::from_slice(&fs::read(private.join("settings.json")).unwrap()).unwrap();
+    assert!(settings["permissions"]["deny"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("read_file(*)")));
+    assert!(!turn.prompt().contains("fake-login"));
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(&copied).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+    fs::write(&copied, b"private-refresh").unwrap();
+    assert_eq!(fs::read(&source).unwrap(), b"fake-login-for-transport-test");
+    drop(turn);
+    assert!(!copied.exists());
+    assert!(source.exists());
+    fs::remove_dir_all(host).unwrap();
+}
+
+#[test]
 fn non_agent_cli_does_not_get_an_isolated_turn() {
     assert!(IsolatedTurn::prepare(Some(CliName::Codex), "hi", &[])
         .unwrap()

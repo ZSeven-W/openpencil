@@ -4,6 +4,9 @@ use std::fs;
 use std::io;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
+
+#[path = "chat_subprocess_auth.rs"]
+mod auth;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -445,18 +448,23 @@ fn prepare_antigravity_home(
     } else {
         serde_json::json!([])
     };
+    let mut deny = ANTIGRAVITY_DENY_RULES.to_vec();
+    if !use_canvas_mcp {
+        deny.extend(["read_file(*)", "list_dir(*)", "grep(*)"]);
+    }
     let settings = serde_json::json!({
         "toolPermission": "strict",
         "allowNonWorkspaceAccess": false,
         "enableTerminalSandbox": true,
         "permissions": {
             "allow": allow,
-            "deny": ANTIGRAVITY_DENY_RULES,
+            "deny": deny,
             "ask": []
         }
     });
     write_private_json(&config_dir.join("mcp_config.json"), &mcp_config)?;
     write_private_json(&settings_dir.join("settings.json"), &settings)?;
+    auth::copy_antigravity_oauth(host_home, &settings_dir)?;
     Ok(home)
 }
 
