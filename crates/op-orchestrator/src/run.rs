@@ -220,7 +220,9 @@ async fn planning_loop(
                 // (hours, not seconds). Falling back to a heuristic plan only
                 // runs every subtask into the same wall and ships an empty
                 // shell (arena, Gemini via agy, 2026-09-29: 11 runs did).
-                if crate::retry::is_provider_limit(&error.message) {
+                if crate::retry::is_provider_limit(&error.message)
+                    || crate::retry::is_provider_access_denied(&error.message)
+                {
                     return Err(OrchestratorError::AllFailed(reason));
                 }
                 debug_plan_attempt_failed(attempt, "stream error", &error.message);

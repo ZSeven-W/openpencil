@@ -37,6 +37,10 @@ pub(crate) fn is_provider_limit(msg: &str) -> bool {
         || (lower.contains("resets ") && lower.contains("limit"))
 }
 
+pub(crate) fn is_provider_access_denied(msg: &str) -> bool {
+    msg.to_ascii_lowercase().contains("model access denied")
+}
+
 /// 判断错误消息是否为不可重试的终止条件。
 ///
 /// Port of `orchestrator-sub-agent.ts:150-152`:

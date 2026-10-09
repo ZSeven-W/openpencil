@@ -107,3 +107,37 @@ fn exhausted_source_copy_failures_cannot_be_reported_as_success() {
         "incomplete board must not survive as a completed work"
     );
 }
+
+#[test]
+fn denied_model_access_never_spends_subtask_or_fallback_calls() {
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Fail(crate::types::LlmError {
+        message: "Model access denied by the current subscription (provider code 1311, HTTP 429)"
+            .into(),
+        aborted: false,
+    })]);
+    let request = DesignRequest {
+        prompt: "a simple landing page".into(),
+        ..Default::default()
+    };
+    let mut sink = VecDocSink::new();
+    let result = futures::executor::block_on(Orchestrator::new().run(
+        request,
+        &mut sink,
+        &llm,
+        &mut |_| {},
+        &AbortFlag::new(),
+        &stub_providers(),
+    ));
+    assert!(
+        matches!(result, Err(OrchestratorError::AllFailed(ref reason)) if reason.contains("Model access denied"))
+    );
+    assert_eq!(
+        llm.user_prompts().len(),
+        1,
+        "permission cannot recover through a re-plan"
+    );
+    assert!(
+        sink.applied.is_empty(),
+        "do not draw an empty fallback on access failure"
+    );
+}

@@ -54,6 +54,12 @@ pub enum BuiltinHttpError {
     /// The account is rate-limited and the backoff ladder could not ride it
     /// out. `Display` MUST keep the literal `HTTP 429` — see the module doc.
     RateLimited { label: String, max_retries: u32 },
+    /// A known vendor entitlement refusal, not a temporary frequency limit.
+    ModelAccessDenied {
+        label: String,
+        status: reqwest::StatusCode,
+        provider_code: u32,
+    },
     /// A non-retryable (or retry-exhausted) HTTP status. The provider's own
     /// error BODY is deliberately dropped, not carried: those bodies are
     /// untrusted and can echo request headers, and this text reaches the
@@ -99,6 +105,11 @@ pub enum BuiltinHttpError {
 impl fmt::Display for BuiltinHttpError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            BuiltinHttpError::ModelAccessDenied { label, status, provider_code } => write!(
+                f,
+                "Model access denied by the current subscription (provider code {provider_code}, HTTP {}). Check the account's model permissions. ({label})",
+                status.as_u16()
+            ),
             BuiltinHttpError::ClientUnavailable => {
                 f.write_str("Provider HTTP client is unavailable")
             }

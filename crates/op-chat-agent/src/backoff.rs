@@ -10,6 +10,9 @@ use serde_json::Value;
 
 use crate::chat_builtin_http::BuiltinHttpError;
 
+#[path = "backoff_policy.rs"]
+mod policy;
+
 /// Design turns build one <=25-op section batch per model turn, plus repair
 /// turns after layoutIssues feedback. 28 sits in the requested 24-32 window:
 /// enough for roughly 8-10 sections with fixes, without letting a bad loop run
@@ -179,8 +182,15 @@ pub async fn send_with_backoff(
                 relax_adaptive_gap();
                 return Ok(resp);
             }
-            Ok(resp) => {
+            Ok(mut resp) => {
                 let status = resp.status();
+                if let Some(provider_code) = policy::model_access_denial(url, &mut resp).await {
+                    return Err(BuiltinHttpError::ModelAccessDenied {
+                        label: label.to_string(),
+                        status,
+                        provider_code,
+                    });
+                }
                 if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
                     widen_adaptive_gap();
                 }
