@@ -167,3 +167,44 @@ fn the_missing_conversations_directory_is_not_a_cause() {
     );
     assert_eq!(antigravity_log_error(&path), None);
 }
+
+#[test]
+fn background_code_assist_login_noise_is_not_a_generation_failure() {
+    // Measured in a successful isolated agy 1.3.1 text turn on 2026-10-09.
+    let path = write_log(
+        "background-login",
+        concat!(
+            "W1009 14:22:00.0 142 cache.go:135] Cache(userInfo): Singleflight refresh failed: failed to get load code assist response: error getting token source: You are not logged into Antigravity.\n",
+            "E1009 14:22:00.0 142 errorreport.go:224] failed to get load code assist response: error getting token source: You are not logged into Antigravity.\n",
+        ),
+    );
+    assert_eq!(antigravity_log_error(&path), None);
+}
+
+#[test]
+fn actual_model_authentication_failure_survives_background_login_noise() {
+    let path = write_log(
+        "model-login",
+        concat!(
+            "E1009 14:22:00.0 142 run.go:1] agent executor error: calling model: UNAUTHENTICATED (code 401): token expired\n",
+            "E1009 14:22:01.0 142 errorreport.go:224] failed to get load code assist response: error getting token source: You are not logged into Antigravity.\n",
+        ),
+    );
+    let found = antigravity_log_error(&path).expect("actual model failure");
+    assert!(found.contains("calling model: UNAUTHENTICATED"), "{found}");
+    assert!(!found.contains("load code assist"), "{found}");
+}
+
+#[test]
+fn timeout_retains_the_model_quota_reason_instead_of_only_the_deadline() {
+    let path = write_log("timeout-quota", QUOTA_TAIL);
+    let message = timeout_with_log("Antigravity", 300, Some(&path));
+    assert!(message.starts_with("Antigravity request timed out after 300s."));
+    assert!(message.contains("RESOURCE_EXHAUSTED"), "{message}");
+    assert!(message.contains("Resets in 2h11m18s"), "{message}");
+    assert!(!message.contains("trajectory"), "{message}");
+    assert_eq!(
+        timeout_with_log("Other CLI", 60, None),
+        "Other CLI request timed out after 60s."
+    );
+}

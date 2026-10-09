@@ -234,4 +234,24 @@ mod tests {
         let message = with_classified_tail("Grok Build is not authenticated.".into(), "", "");
         assert_eq!(message, "Grok Build is not authenticated.");
     }
+
+    #[test]
+    fn oauth_endpoint_network_failure_does_not_claim_the_user_is_logged_out() {
+        let output = "error: Eligibility check failed: Get \"https://www.googleapis.com/oauth2/v2/userinfo\": EOF";
+        let message = exit_failure_message(Some(CliName::Antigravity), None, output, "");
+        assert!(!message.contains("is not authenticated"), "{message}");
+        assert!(message.contains("Eligibility check failed"), "{message}");
+        assert!(message.contains("EOF"), "{message}");
+    }
+
+    #[test]
+    fn actual_authorization_redirect_in_stderr_still_requests_login() {
+        let output = "https://accounts.google.com/o/oauth2/auth?client_id=FAKEID&state=FAKESTATE";
+        let message = exit_failure_message(Some(CliName::Antigravity), None, output, "");
+        assert!(
+            message.starts_with("Antigravity is not authenticated"),
+            "{message}"
+        );
+        assert!(!message.contains("state=FAKESTATE"), "{message}");
+    }
 }

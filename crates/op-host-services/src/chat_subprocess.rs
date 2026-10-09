@@ -26,6 +26,7 @@ use tokio::sync::mpsc;
 
 use crate::chat_runtime::{prompt_with_system_prompt, shared_runtime, BlockingRecvIter};
 use crate::chat_spawn::{build_command, find_binary, runtime_path_for_binary};
+use crate::chat_subprocess_antigravity_log::timeout_message;
 use crate::chat_subprocess_lifecycle::{child_env_for_cli, wait_for_terminal_exit};
 use crate::chat_subprocess_quirks as quirks;
 use crate::chat_subprocess_quirks::codex_reasoning_effort;
@@ -481,9 +482,7 @@ impl SubprocessProvider {
                 })
             });
 
-            // Bound both a backpressured prompt write and EOF delivery by the
-            // same receiver/deadline contract as stdout. Dropping this future
-            // releases its child borrow before tree-aware cleanup below.
+            // Stdin shares stdout's deadline and cancellation contract.
             let stdin_result = {
                 let prepare_stdin = async {
                     if prompt_mode == PromptMode::Stdin {
@@ -498,9 +497,8 @@ impl SubprocessProvider {
                     _ = tx.closed() => None,
                     _ = tokio::time::sleep_until(deadline), if turn_timeout.is_some() => {
                         let secs = turn_timeout.map(|d| d.as_secs()).unwrap_or_default();
-                        let _ = tx.send(ChatDelta::Error(format!(
-                            "{label} request timed out after {secs}s."
-                        ))).await;
+                        let message = timeout_message(&label, secs, _isolation.as_ref());
+                        let _ = tx.send(ChatDelta::Error(message)).await;
                         let _ = tx.send(ChatDelta::Done {
                             stop_reason: StopReason::Aborted,
                         }).await;
@@ -567,11 +565,8 @@ impl SubprocessProvider {
                     // (`codex-client.ts` rejects text).
                     _ = tokio::time::sleep_until(deadline), if turn_timeout.is_some() => {
                         let secs = turn_timeout.map(|d| d.as_secs()).unwrap_or_default();
-                        let _ = tx
-                            .send(ChatDelta::Error(format!(
-                                "{label} request timed out after {secs}s."
-                            )))
-                            .await;
+                        let message = timeout_message(&label, secs, _isolation.as_ref());
+                        let _ = tx.send(ChatDelta::Error(message)).await;
                         let _ = tx
                             .send(ChatDelta::Done {
                                 stop_reason: StopReason::Aborted,

@@ -66,6 +66,11 @@ pub(crate) fn antigravity_log_error(path: &Path) -> Option<String> {
             // Logged on every isolated turn (its private HOME has no
             // conversation history yet); never the reason a turn failed.
             || message.contains("Failed to read conversations directory")
+            // agy 1.3 logs this legacy userInfo-cache error even in successful
+            // consumer-model turns. Keep actual executor auth errors below.
+            || message.eq_ignore_ascii_case(
+                "failed to get load code assist response: error getting token source: You are not logged into Antigravity.",
+            )
         {
             continue;
         }
@@ -111,6 +116,23 @@ pub(crate) fn with_log_evidence(
         .and_then(antigravity_log_error)
     {
         Some(logged) => format!("{message} — CLI log: {logged}"),
+        None => message,
+    }
+}
+
+/// Preserve the CLI's model failure before timeout cleanup deletes its log.
+pub(crate) fn timeout_message(
+    label: &str,
+    seconds: u64,
+    turn: Option<&crate::chat_subprocess_safety::IsolatedTurn>,
+) -> String {
+    timeout_with_log(label, seconds, turn.and_then(|t| t.log_file()).as_deref())
+}
+
+fn timeout_with_log(label: &str, seconds: u64, log: Option<&Path>) -> String {
+    let message = format!("{label} request timed out after {seconds}s.");
+    match log.and_then(antigravity_log_error) {
+        Some(cause) => format!("{message} — CLI log: {cause}"),
         None => message,
     }
 }

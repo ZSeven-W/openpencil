@@ -365,24 +365,10 @@ pub fn append_isolated_env(env: &mut Vec<(String, String)>, turn: Option<&Isolat
 
 /// Build the private per-turn Antigravity HOME.
 ///
-/// SIGNPOST, not a fix — where credentials come from on this path.
-/// Every turn gets a FRESH private `--gemini_dir` (see
-/// `IsolatedTurn::append_cli_args`), so no on-disk login from a
-/// previous turn or from the user's own `agy` session is ever visible
-/// to the child. The real HOME is kept (see `append_isolated_env`)
-/// precisely so the OS keyring stays reachable — which makes the
-/// keyring the ONLY credential source for a generation turn.
-///
-/// The consequence: if the keyring is unreachable (a GUI launch
-/// without a usable session, a denied keychain prompt, a Linux box with
-/// no dbus session), EVERY turn fails the same way — the child prints
-/// its interactive-login block and exits non-zero once its own auth
-/// wait elapses. Measured 2026-08-07: with a private `--gemini_dir` and
-/// piped stdio, that block lands entirely on stderr and stdout comes
-/// back empty, which is why the failure used to surface as a bare
-/// `CLI exited with status 1`. It no longer does — the child's own
-/// words now ride the error — so if this is ever suspected again, read
-/// the quoted tail rather than re-deriving it from here.
+/// Keep mutable config and logs private while reusing the existing login.
+/// agy 1.3's OAuth file is copied separately; real HOME remains available
+/// for older keyring-based versions. Neither a background cache auth error
+/// nor an OAuth endpoint URL alone proves that model authentication failed.
 fn prepare_antigravity_home(
     turn_dir: &Path,
     host_home: Option<&Path>,
@@ -705,7 +691,18 @@ fn mentions_auth(lower: &str) -> bool {
 
 pub fn friendly_stderr_error(cli: Option<CliName>, stderr: &str) -> Option<String> {
     let lower = stderr.to_ascii_lowercase();
-    if mentions_auth(&lower) || lower.contains("login") || lower.contains("sign in") {
+    // A network error fetching /oauth2/v2/userinfo is not a logged-out user.
+    // Explicit authorization redirects remain recognizable in either stream.
+    let auth_text = lower
+        .split_whitespace()
+        .filter(|word| !word.contains("://"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    if friendly_stdout_error(cli, stderr).is_some()
+        || mentions_auth(&auth_text)
+        || auth_text.contains("login")
+        || auth_text.contains("sign in")
+    {
         return Some(match cli {
             Some(CliName::Antigravity) => {
                 "Antigravity is not authenticated. Run `agy` once in a terminal.".into()
