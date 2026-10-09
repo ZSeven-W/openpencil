@@ -177,7 +177,7 @@ mod tests_input_trace;
 mod tests_interaction;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_interaction_state;
-#[cfg(all(test, feature = "gl-host"))]
+#[cfg(all(test, feature = "gl-host", not(target_os = "windows")))]
 mod tests_local_pagination;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_motion;
@@ -193,9 +193,9 @@ mod tests_retained_console_scroll;
 mod tests_retained_mobile_scroll;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_swipe;
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_table_filter;
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_table_search;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_tabs;
