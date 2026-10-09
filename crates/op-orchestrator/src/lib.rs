@@ -17,6 +17,7 @@ pub mod deck_echo;
 pub mod design_md_policy;
 // (run_dashboard / scaffold_dashboard removed: dashboards flow through the
 //  generic sequential path; dashboard_columns keeps only normalizer predicates.)
+mod chrome_copy_context;
 pub mod design_system;
 pub mod design_type;
 pub mod image_fallback_policy;

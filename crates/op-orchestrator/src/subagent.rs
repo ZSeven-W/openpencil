@@ -162,7 +162,7 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
     let has_variables = state.doc.variables.as_ref().is_some_and(|v| !v.is_empty());
 
     // 收集 LLM 文本输出。
-    let (call_req, skill_report) = build_subagent_prompt_with_screen_routes_and_outcomes(
+    let (mut call_req, skill_report) = build_subagent_prompt_with_screen_routes_and_outcomes(
         subtask,
         plan,
         req,
@@ -174,6 +174,14 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
         &screen_routes,
         prior_outcomes,
     );
+    call_req
+        .user_prompt
+        .push_str(&crate::chrome_copy_context::prompt_block(
+            state,
+            subtask,
+            plan,
+            prior_outcomes,
+        ));
     // Surface the per-subtask skill-load report to the chat UI immediately
     // after the prompt is built (spec Component 4).
     if let Some(cb) = on_progress {
