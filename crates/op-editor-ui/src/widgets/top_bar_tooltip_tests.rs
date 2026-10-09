@@ -110,6 +110,29 @@ fn an_unhovered_bar_schedules_nothing() {
 }
 
 #[test]
+fn touch_chrome_never_paints_or_schedules_desktop_button_tooltips() {
+    use op_editor_core::size_class::EditorSizeClass;
+
+    for size_class in [
+        EditorSizeClass::Compact,
+        EditorSizeClass::Medium,
+        EditorSizeClass::Expanded,
+    ] {
+        for button in ALL_TOP_BAR_BUTTONS {
+            let mut ui = hovering(button, 1_000);
+            ui.touch = true;
+            ui.size_class = size_class;
+            assert_eq!(top_bar_tooltip::next_deadline_ms(&ui, 1_000), None);
+            assert_eq!(
+                top_bar_tooltip::visible_button(&ui, 1_000 + TOOLTIP_DWELL_MS),
+                None
+            );
+            assert!(paint_at(&ui, 1_000 + TOOLTIP_DWELL_MS).is_none());
+        }
+    }
+}
+
+#[test]
 fn an_open_menu_suppresses_its_own_buttons_tooltip() {
     let mut ui = hovering(TopBarButton::ToggleFileMenu, 1_000);
     let now = 1_000 + TOOLTIP_DWELL_MS;

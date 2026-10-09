@@ -124,6 +124,11 @@ pub fn tooltip_for(ui: &EditorUiState, button: TopBarButton) -> TopBarTooltip {
 /// Whether `button`'s own surface is already open. Its dropdown or modal
 /// says more than a tooltip would, and the tooltip would paint over it.
 pub fn suppressed(ui: &EditorUiState, button: TopBarButton) -> bool {
+    // Touch chrome paints its own navigation and More button. The desktop
+    // hit-test underneath it must not label those controls or arm a dwell.
+    if ui.touch_chrome() {
+        return true;
+    }
     match button {
         TopBarButton::ToggleFileMenu => ui.file_menu_open,
         TopBarButton::OpenImportMenu => ui.import_menu_open || ui.import_menu.open,
