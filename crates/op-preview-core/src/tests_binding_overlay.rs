@@ -459,6 +459,19 @@ fn scroll_doc() -> jian_ops_schema::PenDocument {
 }
 
 #[test]
+fn legacy_wheel_updates_the_scroll_overlay_used_by_desktop_hosts() {
+    let document = scroll_doc();
+    let mut session = enter(&document);
+    let before = session.preview_scene_for_test();
+    let body_y = find(&before, "body").bounds.origin.y;
+    let sticky_y = find(&before, "sticky").bounds.origin.y;
+    assert!(session.dispatch_wheel(80.0, 50.0, 0.0, -60.0));
+    let after = session.preview_scene_for_test();
+    assert!(find(&after, "body").bounds.origin.y < body_y);
+    assert_eq!(find(&after, "sticky").bounds.origin.y, sticky_y);
+}
+
+#[test]
 #[ignore = "requires an explicit retained generated phone document"]
 fn retained_phone_scroll_reaches_the_last_item_without_moving_navigation() {
     let path = std::env::var("OPENPENCIL_QA_SCROLL_DOCUMENT").unwrap();

@@ -465,12 +465,17 @@ impl PreviewSession {
     pub fn dispatch_wheel(&mut self, scene_x: f32, scene_y: f32, dx: f32, dy: f32) -> bool {
         use jian_core::geometry::point;
         use jian_core::gesture::pointer::WheelEvent;
-        if self.transition_active() {
-            return false;
-        }
-        let (rt_x, rt_y) = self.scene_to_runtime(scene_x, scene_y);
-        let ev = WheelEvent::simple(point(rt_x, rt_y), point(dx, dy));
-        !self.runtime.dispatch_wheel(ev).is_empty()
+        let mut event = WheelEvent::simple(point(scene_x, scene_y), point(dx, dy));
+        event.t_ms = self.last_now_ms;
+        // Desktop hosts still use this bool adapter. Keep its consumed result
+        // while sharing scroll offsets, hit geometry and clocks with the core.
+        let outcome = self.dispatch_input(crate::PreviewInputEnvelope::new(
+            crate::PreviewInput::Wheel {
+                event,
+                phase: crate::ScrollPhase::Changed,
+            },
+        ));
+        !outcome.semantic_handlers.is_empty()
     }
 
     /// Translate a scene-space point into the runtime's hit-test space.
@@ -512,16 +517,8 @@ impl PreviewSession {
             };
             return (r.origin.x + fx * r.size.x, r.origin.y + fy * r.size.y);
         }
-        for frame in &self.root_frames {
-            let rect = frame.scene_rect;
-            if x >= rect.origin.x
-                && x <= rect.origin.x + rect.size.x
-                && y >= rect.origin.y
-                && y <= rect.origin.y + rect.size.y
-            {
-                return (x - frame.offset.0, y - frame.offset.1);
-            }
-        }
+        // The spatial index already includes authored root offsets.
+        // Without a mapped paint node, scene coordinates are the fallback.
         (x, y)
     }
 
@@ -595,49 +592,16 @@ impl PreviewSession {
     /// `pub(crate)` so `mod.rs`'s test-only `node_rect`
     /// accessor can reach it from the parent module.
     ///
-    /// Merge note (responsive-m1a into main): jian-core's `node_rect`
-    /// now bakes a non-viewport-normalized root's own authored origin
-    /// into every rect under it (see `op-pen-loader`'s `compute_layout`
-    /// for the full mechanism) — jian's own convention calls this
-    /// "absolute scene coordinates" and its own runtimes hit-test
-    /// directly against it. OpenPencil's PreviewSession keeps a SECOND,
-    /// separate coordinate frame ("runtime space", root-relative) for
-    /// `Runtime::dispatch_pointer` and friends, which `scene_to_runtime`
-    /// above maps into via this function. Subtract the root's authored
-    /// origin back out so `runtime_rect` keeps returning root-relative
-    /// space regardless of jian-core's own internal convention.
+    /// Use the engine's absolute coordinates, including authored root
+    /// origins, so mapping and the spatial index share the same space.
     pub(crate) fn runtime_rect(&self, id: &str) -> Option<Rect> {
         let doc = self.runtime.document.as_ref()?;
         let key = doc.tree.by_id.get(id).copied()?;
         let r = self.runtime.layout.node_rect(key)?;
-        let (ox, oy) = self.root_authored_origin_of(doc, key);
         Some(Rect {
-            origin: Point2D::new(r.origin.x - ox, r.origin.y - oy),
+            origin: Point2D::new(r.origin.x, r.origin.y),
             size: Point2D::new(r.size.width, r.size.height),
         })
-    }
-
-    /// Walk `key` up to its tree root and return that root's authored
-    /// `(x, y)`, or `(0, 0)` when the root is viewport-normalized (its
-    /// origin is already baked out of `node_rect` by jian-core) or has
-    /// no authored position.
-    fn root_authored_origin_of(
-        &self,
-        doc: &jian_core::document::RuntimeDocument,
-        key: jian_core::document::tree::NodeKey,
-    ) -> (f32, f32) {
-        let mut cur = key;
-        while let Some(parent) = doc.tree.nodes.get(cur).and_then(|n| n.parent) {
-            cur = parent;
-        }
-        if self.runtime.layout.is_origin_normalized(cur) {
-            return (0.0, 0.0);
-        }
-        doc.tree
-            .nodes
-            .get(cur)
-            .map(|root| op_pen_loader::root_authored_origin(&root.schema))
-            .unwrap_or((0.0, 0.0))
     }
 
     /// Advance focus to the next focusable widget (Tab). `focus_next` now
@@ -683,7 +647,7 @@ impl PreviewSession {
     }
 
     /// Test-only: translate a scene-space point into the runtime's
-    /// root-relative space (exercises the tap coordinate fix).
+    /// engine hit-test space (exercises the tap coordinate fix).
     #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn scene_to_runtime_for_test(&self, x: f32, y: f32) -> (f32, f32) {
         self.scene_to_runtime(x, y)

@@ -10,7 +10,12 @@ use super::*;
 /// container is named "Navigation" / "Menu" / "Nav Group" — never "table". A
 /// bare row/column count evicted the entire navigation; the name gate fixes it.
 pub(super) fn is_named_data_table(v: &Value) -> bool {
-    if !is_table_named(&ident_text(v)) {
+    if !is_table_named(&ident_text(v))
+        && !matches!(
+            v.get("role").and_then(Value::as_str),
+            Some("table" | "data-table" | "data-grid")
+        )
+    {
         return false;
     }
     v.get("children")
@@ -37,6 +42,9 @@ pub(super) fn is_table_named(t: &str) -> bool {
         || t.contains("data grid")
         || t.contains("datagrid")
         || t.contains("data-grid")
+        || t.contains("表格")
+        || t.contains("数据表")
+        || t.contains("数据网格")
 }
 
 /// True when a sidebar child is really a MAIN-CONTENT data section: its OWN name
@@ -83,7 +91,8 @@ pub(super) fn sidebar_child_is_misplaced_content(v: &Value) -> bool {
 /// column that is a fixed width ≤ 400 (or non-numeric, where the strong name
 /// carries it).
 pub(super) fn is_narrow_sidebar_column(v: &Value) -> bool {
-    if !is_sidebar_named(&ident_text(v)) {
+    if !is_sidebar_named(&ident_text(v)) && v.get("role").and_then(Value::as_str) != Some("sidebar")
+    {
         return false;
     }
     match num(v, "width") {
@@ -126,6 +135,9 @@ pub(crate) fn ensure_split_shell_is_row(root: &mut PenNode) -> bool {
 }
 
 pub(super) fn ensure_row_mut(v: &mut Value) -> bool {
+    if num(v, "width").is_some_and(|w| w < DESKTOP_MIN_WIDTH) {
+        return false;
+    }
     let already_row = layout_str(v) == Some("horizontal");
     let Some(kids) = v.get("children").and_then(Value::as_array) else {
         return false;

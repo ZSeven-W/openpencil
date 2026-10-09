@@ -34,7 +34,11 @@ pub(super) fn is_sidebar_named(t: &str) -> bool {
         || t.contains("left nav")
         || t.contains("nav rail")
         || t.contains("navigation rail")
-        || t.contains("nav-rail");
+        || t.contains("nav-rail")
+        || t.contains("侧边栏")
+        || t.contains("侧栏")
+        || t.contains("侧边导航")
+        || t.contains("左侧导航");
     strong && !is_topbar_named(t)
 }
 

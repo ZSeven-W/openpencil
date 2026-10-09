@@ -716,9 +716,9 @@ fn run_cleanup_passes_with_summary_and_policy(
         }
         debug_probe_child_height(sink, rid, "adjust_root_height");
         counter.checkpoint(summary, CheckCategory::Layout, "radial+root-height");
-        // Contrast reads photo pixels and positions backing rectangles.
-        // Wait for settled geometry: a clipped caption moved into its hero
-        // has a different background, and a backing at its old y hides ink.
+        crate::app_shell::repair_height_contract(sink, rid);
+        counter.checkpoint(summary, CheckCategory::Layout, "desktop-shell-height");
+        // Contrast reads photo pixels after final shell geometry settles.
         crate::text_contrast_repair::repair_text_contrast(sink, rid);
         counter.checkpoint(summary, CheckCategory::Layout, "text-contrast");
     }

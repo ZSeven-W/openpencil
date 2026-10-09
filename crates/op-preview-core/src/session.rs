@@ -33,19 +33,13 @@ use crate::error::PreviewEnterError;
 use crate::scene_helpers::format_warning;
 use crate::transition::ScreenTransition;
 
-/// One page-root's mapping between the design scene's coordinate space
-/// (root offset baked in) and the jian runtime's root-relative
-/// hit-test space. Used to translate a scene-space tap back into the
-/// space `Runtime::dispatch_pointer` expects.
+/// Absolute root bounds used to identify and present an active preview root.
 ///
 /// Fields are `pub(crate)` so the sibling `app_mode` module's
 /// `solve_roots` (which constructs these) can reach them.
 pub(crate) struct RootFrame {
     /// The root's bounds in SCENE space (authored origin + size).
     pub(crate) scene_rect: Rect,
-    /// The root's authored `(base.x, base.y)` — the delta between scene
-    /// space and the runtime's root-relative space.
-    pub(crate) offset: (f32, f32),
 }
 
 #[derive(Clone)]

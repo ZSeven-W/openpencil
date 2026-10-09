@@ -661,9 +661,7 @@ pub(crate) fn solve_roots(
     };
     runtime.rebuild_spatial();
 
-    // Capture each root's scene↔runtime coordinate mapping for tap
-    // translation. The design scene offsets every root by its authored
-    // `(base.x, base.y)`; the runtime lays each at its own origin.
+    // Capture the engine's absolute root bounds for preview presentation.
     // `runtime.document` + `runtime.layout` are disjoint fields, so the
     // two immutable borrows below co-exist.
     //
@@ -675,17 +673,14 @@ pub(crate) fn solve_roots(
     // `offset`. Adding `offset` again doubled `scene_rect`'s origin,
     // making every scene-space tap fall outside every root's bounds
     // (matched nothing, fell through to the "outside all roots"
-    // passthrough). `frame.offset` itself (used unchanged by
-    // `input.rs`'s scene→runtime subtraction) is still the standalone
-    // authored origin, independent of this rect-construction bug.
+    // passthrough). Input shares these absolute engine coordinates.
     let root_frames = {
         let mut frames = Vec::new();
         if let Some(rt_doc) = runtime.document.as_ref() {
             for root_key in rt_doc.tree.roots.iter() {
-                let Some(node_data) = rt_doc.tree.nodes.get(*root_key) else {
+                if !rt_doc.tree.nodes.contains_key(*root_key) {
                     continue;
-                };
-                let offset = op_pen_loader::root_authored_origin(&node_data.schema);
+                }
                 let rrect = runtime.layout.node_rect(*root_key);
                 let (rx, ry, rw, rh) = rrect
                     .map(|r| (r.origin.x, r.origin.y, r.size.width, r.size.height))
@@ -695,7 +690,6 @@ pub(crate) fn solve_roots(
                         origin: Point2D::new(rx, ry),
                         size: Point2D::new(rw, rh),
                     },
-                    offset,
                 });
             }
         }

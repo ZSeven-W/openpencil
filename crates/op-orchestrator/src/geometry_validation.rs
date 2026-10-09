@@ -390,6 +390,11 @@ pub fn geometry_diagnostics(state: &EditorState) -> Vec<String> {
             break;
         }
         if let Ok(v) = serde_json::to_value(root) {
+            crate::app_shell::height_contract_diagnostics(
+                &v,
+                |id| rects.get(id).map(|r| (r.x, r.y, r.w, r.h)),
+                &mut out,
+            );
             geometry_board_containment::collect(&v, &rects, &mut out);
             bottom_nav_root_containment_diagnostic(&v, &rects, &mut out);
             bottom_nav_order_diagnostic(&v, &mut out);

@@ -184,6 +184,8 @@ mod tests_page_scroll;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_pointer_bindings;
 #[cfg(all(test, not(target_os = "windows")))]
+mod tests_retained_console_scroll;
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_swipe;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_tabs;

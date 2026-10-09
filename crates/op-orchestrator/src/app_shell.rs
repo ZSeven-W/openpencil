@@ -36,10 +36,13 @@ mod app_shell_detect;
 mod app_shell_evict;
 #[path = "app_shell_restructure.rs"]
 mod app_shell_restructure;
+#[path = "app_shell_height_contract.rs"]
+mod height_contract;
 
 use app_shell_detect::*;
 pub(crate) use app_shell_evict::*;
 pub(crate) use app_shell_restructure::*;
+pub(crate) use height_contract::{height_contract_diagnostics, repair_height_contract};
 
 /// Fixed left-sidebar column width. Mirrors the surviving sizing constant in
 /// `dashboard_columns.rs` for parity with the removed scaffold.
