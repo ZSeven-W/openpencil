@@ -150,7 +150,7 @@ fn push_page_slides(
     slides: &mut Vec<ShareSlide>,
     package: &mut SharePackage,
 ) -> Result<(), ExportError> {
-    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(state);
+    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(state);
     let Some(page) = scene.active_page() else {
         return Ok(());
     };

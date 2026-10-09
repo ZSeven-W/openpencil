@@ -2,7 +2,7 @@
 //!
 //! [`editor_state_to_active_page_layout_scene`](crate::editor_state_to_active_page_layout_scene)
 //! is a pure function of just the document, the authored-geometry latch, the
-//! active page index, and the resolved variable table (which folds the active
+//! active page index, normal table reading posture, and the resolved variable table (which folds the active
 //! theme and the transient fill / stroke ref caches). It drops every other piece
 //! of editor state — selection, hover, chat, viewport, history. Yet the host
 //! marks the scene dirty on nearly every interaction: hover (each mouse-move),
@@ -27,7 +27,7 @@ pub struct SceneBuildCache {
 /// Every value `editor_state_to_active_page_layout_scene` reads off the
 /// `EditorState`:
 /// the document, the authored-geometry latch (preview toggles it, changing the
-/// layout mode), the active page index, and the resolved variable table — which
+/// layout mode), the active page index, normal table posture, and the resolved variable table — which
 /// folds the active theme plus the transient fill / stroke ref caches, i.e. all
 /// the non-doc resolution inputs. Everything else on the state (selection /
 /// chat / hover / viewport) is dropped by the builder.
@@ -35,6 +35,7 @@ struct BuiltInputs {
     document_generation: u64,
     document_revision: u64,
     preserve_authored_geometry: bool,
+    normal_table_view: bool,
     active_page_index: usize,
     var_table: VariableTable,
     /// Font-registry generation the scene was laid out against. A runtime
@@ -60,6 +61,7 @@ impl SceneBuildCache {
         let document_revision = state.document_revision();
         let preserve_authored_geometry = state.editor_ui.preserve_authored_geometry;
         let active_page_index = state.ui.active_page_index;
+        let normal_table_view = state.editor_ui.workspace.visible;
         // Resolves the active theme + transient fill/stroke ref caches + the
         // doc-defined variables — every non-doc input the builder consumes.
         // Proportional to variable count, not node count, so cheap to rebuild
@@ -71,6 +73,7 @@ impl SceneBuildCache {
                 && last.document_revision == document_revision
                 && last.active_page_index == active_page_index
                 && last.preserve_authored_geometry == preserve_authored_geometry
+                && last.normal_table_view == normal_table_view
                 && last.font_generation == font_generation
                 && last.var_table == var_table
             {
@@ -82,6 +85,7 @@ impl SceneBuildCache {
             document_generation,
             document_revision,
             preserve_authored_geometry,
+            normal_table_view,
             active_page_index,
             var_table,
             font_generation,

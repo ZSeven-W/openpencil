@@ -121,6 +121,8 @@ pub mod run_quality;
 pub mod site_import;
 pub mod site_import_error;
 pub mod site_import_route;
+#[cfg(all(test, not(target_os = "windows")))]
+mod table_snapshot_export_tests;
 #[cfg(test)]
 pub(crate) mod test_support;
 // Settings persistence moved to op-editor-host-core (feature `settings-io`)

@@ -51,7 +51,7 @@ pub fn export_download_file_name(state: &EditorState) -> String {
 }
 
 pub fn export_svg_document(state: &EditorState) -> Result<String, DocumentExportError> {
-    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(state);
+    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(state);
     if state.selection_count() == 1 && state.selection.anchor.is_real() {
         Ok(op_editor_ui::svg_export::serialize_node_svg(
             &scene,

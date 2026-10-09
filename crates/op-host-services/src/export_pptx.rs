@@ -90,7 +90,7 @@ pub fn export_deck_pptx(state: &EditorState, target: &Path) -> Result<DeckPptxEx
 
 /// The package bytes plus the summary, without touching the filesystem.
 pub fn build_deck_pptx(state: &EditorState) -> Result<(Vec<u8>, DeckPptxExport), ExportError> {
-    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(state);
+    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(state);
     let page = scene.active_page().ok_or(ExportError::NoActivePage)?;
 
     let mut library = MediaLibrary::default();

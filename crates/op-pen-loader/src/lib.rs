@@ -32,6 +32,7 @@ mod layout_repair;
 mod layout_scene;
 mod legacy_payload_repair;
 mod library;
+mod table_default_snapshot;
 // Only the real-shaper (`skia-measure`) build benefits from caching; the
 // estimate backend is already cheap, so the module is gated to avoid dead code
 // under the CanvasKit (no-skia-measure) web build.
@@ -85,7 +86,10 @@ pub mod variables;
 /// against the editor's variables + active theme. Builds the scene
 /// directly from the layout-resolved `DocPayload` — no intermediate
 /// shell-core `Document`.
-pub use editor_scene::{editor_state_to_active_page_layout_scene, editor_state_to_layout_scene};
+pub use editor_scene::{
+    editor_state_to_active_page_export_layout_scene, editor_state_to_active_page_layout_scene,
+    editor_state_to_export_layout_scene, editor_state_to_layout_scene,
+};
 pub use layout_scene::{
     pen_document_to_layout_scene, pen_document_to_layout_scene_for_preview,
     pen_document_to_layout_scene_with_geometry_mode,

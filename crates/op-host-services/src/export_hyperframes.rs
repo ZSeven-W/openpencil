@@ -194,7 +194,7 @@ pub struct HyperframesExport {
 /// one file whose timeline would silently close over the hole, and the
 /// missing slide would only surface in the finished video.
 pub fn deck_composition(state: &EditorState) -> Result<Composition, ExportError> {
-    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(state);
+    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(state);
     let page = scene.active_page().ok_or(ExportError::NoActivePage)?;
 
     let mut scenes: Vec<Scene> = Vec::new();

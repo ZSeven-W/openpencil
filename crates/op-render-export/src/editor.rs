@@ -84,13 +84,13 @@ fn render_configured(state: &EditorState) -> Result<(&'static str, Vec<u8>), Exp
         let bytes = if state.editor_ui.scenario == Some(TemplateScene::Slides) || app_pages {
             render_deck_pdf_bytes(state)?
         } else {
-            let scene = op_pen_loader::editor_state_to_layout_scene(state);
+            let scene = op_pen_loader::editor_state_to_export_layout_scene(state);
             render_pdf_bytes(&scene)?
         };
         return Ok(("application/pdf", bytes));
     }
 
-    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(state);
+    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(state);
     let page = scene.active_page().ok_or(ExportError::NoActivePage)?;
     let single_node = (state.selection_count() == 1 && state.selection.anchor.is_real())
         .then(|| state.selection.anchor.as_str());

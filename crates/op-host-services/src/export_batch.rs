@@ -59,7 +59,7 @@ pub fn export_frames_to_dir(
     }
     // One scene for the whole batch — the layout pass is the expensive
     // part and it is identical for every frame on the page.
-    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(state);
+    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(state);
     let scale = state.editor_ui.export_scale;
     for target in targets {
         let path: PathBuf = directory.join(&target.file_name);

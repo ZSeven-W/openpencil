@@ -12,6 +12,12 @@ use crate::payload::DocPayload;
 
 /// Build a paint-only [`LayoutScene`] from every page in an editor state.
 pub fn editor_state_to_layout_scene(state: &op_editor_core::EditorState) -> LayoutScene {
+    full_scene(state, state.editor_ui.workspace.visible)
+}
+pub fn editor_state_to_export_layout_scene(state: &op_editor_core::EditorState) -> LayoutScene {
+    full_scene(state, true)
+}
+fn full_scene(state: &op_editor_core::EditorState, paged: bool) -> LayoutScene {
     let mut prepared = std::borrow::Cow::Borrowed(&state.doc);
     if op_editor_core::ref_resolve::document_has_refs(&prepared) {
         prepared = std::borrow::Cow::Owned(op_editor_core::ref_resolve::resolve_refs_for_canvas(
@@ -25,6 +31,28 @@ pub fn editor_state_to_layout_scene(state: &op_editor_core::EditorState) -> Layo
                 &state.ui.variables.active_theme,
             ),
         );
+    }
+    let root_snapshot = crate::table_default_snapshot::roots(&prepared.children, &state.doc, paged);
+    let page_snapshots: Vec<_> = prepared
+        .pages
+        .as_ref()
+        .into_iter()
+        .flatten()
+        .map(|page| crate::table_default_snapshot::roots(&page.children, &state.doc, paged))
+        .collect();
+    if root_snapshot.is_some() || page_snapshots.iter().any(Option::is_some) {
+        let mut snapshot = prepared.into_owned();
+        if let Some(nodes) = root_snapshot {
+            snapshot.children = nodes;
+        }
+        if let Some(pages) = &mut snapshot.pages {
+            for (page, nodes) in pages.iter_mut().zip(page_snapshots) {
+                if let Some(nodes) = nodes {
+                    page.children = nodes;
+                }
+            }
+        }
+        prepared = std::borrow::Cow::Owned(snapshot);
     }
     let payload: DocPayload = if state.editor_ui.preserve_authored_geometry {
         crate::adapter::pen_document_to_payload_preserving_geometry(&prepared).payload
@@ -61,6 +89,25 @@ pub fn editor_state_to_layout_scene(state: &op_editor_core::EditorState) -> Layo
 pub fn editor_state_to_active_page_layout_scene(
     state: &op_editor_core::EditorState,
 ) -> LayoutScene {
+    active_scene(state, state.editor_ui.workspace.visible)
+}
+pub fn editor_state_to_active_page_export_layout_scene(
+    state: &op_editor_core::EditorState,
+) -> LayoutScene {
+    let scene = active_scene(state, true);
+    if state.selection_count() == 1
+        && state.selection.anchor.is_real()
+        && scene
+            .active_page()
+            .is_some_and(|page| page.find(state.selection.anchor.as_str()).is_none())
+    {
+        // A specifically selected record remains exportable outside page one.
+        active_scene(state, false)
+    } else {
+        scene
+    }
+}
+fn active_scene(state: &op_editor_core::EditorState, paged: bool) -> LayoutScene {
     let (mut pages, active_page_index, roots): (
         Vec<ScenePage>,
         usize,
@@ -136,6 +183,10 @@ pub fn editor_state_to_active_page_layout_scene(
         prepared = std::borrow::Cow::Owned(owned);
     }
 
+    if let Some(nodes) = crate::table_default_snapshot::roots(prepared.as_ref(), &state.doc, paged)
+    {
+        prepared = std::borrow::Cow::Owned(nodes);
+    }
     let active_meta = &pages[active_page_index];
     let payload = crate::adapter::pen_roots_to_page_payload(
         &active_meta.id,

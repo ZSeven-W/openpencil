@@ -47,7 +47,10 @@ pub fn pick_save_as_path(state: &EditorState) -> Option<PathBuf> {
             "dialog.pickerSaveTitle",
         ))
         .add_filter(op_editor_ui::PRODUCT_NAME, DOCUMENT_EXTENSIONS)
-        .set_file_name("untitled.op")
+        .set_file_name(format!(
+            "{}.op",
+            op_editor_core::export_name::document_export_stem(state)
+        ))
         .save_file()
 }
 
@@ -375,11 +378,11 @@ fn export_editor_state_to_path(
             return op_host_services::export_pdf::export_deck_pdf(state, path);
         }
         // PDF is intentionally multi-page; keep the full builder for it.
-        let scene = op_pen_loader::editor_state_to_layout_scene(state);
+        let scene = op_pen_loader::editor_state_to_export_layout_scene(state);
         return op_host_services::export_pdf::export_pdf(&scene, path);
     }
 
-    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(state);
+    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(state);
     let raster = |rf: op_host_services::export::RasterFormat| match single_node {
         Some(id) => op_host_services::export::export_node_raster(&scene, id, path, rf, scale),
         None => op_host_services::export::export_raster(&scene, path, rf, scale),

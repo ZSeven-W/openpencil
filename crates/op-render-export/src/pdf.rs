@@ -244,7 +244,7 @@ pub fn render_deck_pdf_boards_bytes(
     state: &op_editor_core::EditorState,
     boards: &[String],
 ) -> Result<Vec<u8>, ExportError> {
-    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(state);
+    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(state);
     // Without a resolvable active page no board can be looked up at all —
     // that is "nothing to export", not a separate failure mode.
     let Some(page) = scene.active_page() else {

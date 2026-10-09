@@ -52,7 +52,7 @@ pub struct DeckHtmlExport {
 /// numbering would silently close over the hole, and the presenter would
 /// only discover the missing slide on stage.
 pub fn export_deck_html(state: &EditorState, target: &Path) -> Result<DeckHtmlExport, ExportError> {
-    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(state);
+    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(state);
     let page = scene.active_page().ok_or(ExportError::NoActivePage)?;
 
     let mut slides = Vec::new();

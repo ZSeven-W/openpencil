@@ -69,7 +69,7 @@ pub fn run_cli_if_requested() -> bool {
         Ok(store) => store.rescan_and_register(),
         Err(err) => eprintln!("render-shots: skipping imported-font rescan: {err}"),
     }
-    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(&state);
+    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(&state);
 
     let Some(page) = scene.active_page() else {
         eprintln!("render-shots: no active page");
