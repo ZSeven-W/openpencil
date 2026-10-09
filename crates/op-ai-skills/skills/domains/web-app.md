@@ -5,7 +5,7 @@ phase: [generation]
 trigger:
   keywords: [web app, webapp, saas, crm, admin, console, internal tool, product, workspace, app interface, 后台, 控制台, 管理后台, 应用]
 priority: 30
-budget: 1400
+budget: 1700
 category: domain
 ---
 
@@ -41,5 +41,10 @@ DENSITY → METRICS (one mode per screen, do not mix):
 RESPONSIVE STRUCTURE — hierarchy must survive width:
 - Narrow: collapse to the single dominant column; the subordinate zone becomes a stacked section or a sheet, never a squeezed second column. One owner of horizontal padding; inner sections don't re-add gutters.
 - Wide: the multi-zone skeleton and higher density are permitted. The primary action and dominant region stay in the same relative place across widths (recognition over recall).
+
+LOCAL TABLE INTERACTION — keep prototype data and controls consistent:
+- Search/role/status operate on the records actually authored in the file. Pagination must use those records and their page size; do not invent unseen pages from a decorative global statistic. Use a single `Users Table` vertical frame of horizontal header/data rows, a `Pagination Footer`, `Rows Per Page Select` with numeric options >=5, and `Page Buttons` with `Prev Button`, `Page 1 Button`, `Next Button`. Shared cleanup wires unbound controls and retains the full editable dataset.
+- Time controls require explicit source timestamps. If the brief supplies an exact snapshot, add a line `op-table-clock:v1 {"reference_ms":...}` to the TABLE's `explain`, and `op-table-time:v1 {"last_active_ms":...}` to each DATA ROW's `explain`. Values are integer UTC epoch milliseconds; `last_active_ms:null` means no recorded activity. Preserve any existing explain text on other lines. Only use timestamps supported by the supplied data or clearly requested demo records. Never infer precise timestamps from ambiguous display text such as "Yesterday".
+- A `Select Last active` control may use `24h`, `7d`, `30d` and an explicit All time option. The inclusive cutoff is anchored to `reference_ms`, not the viewer's changing wall clock. Missing activity stays visible under All time and is excluded from bounded intervals. Without complete timestamp metadata, do not claim a functioning time filter.
 
 Output discipline: functional product UI only — no hero sections, no marketing copy. Reach for a container (card/panel) only when it groups related content for a real structural reason; structural wrappers (page bg, section, top bar) stay transparent, not filled white cards. Apply these silently through node structure.

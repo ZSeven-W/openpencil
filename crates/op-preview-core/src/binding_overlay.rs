@@ -131,6 +131,8 @@ struct OverlayInner {
     page_scrollers: BTreeSet<String>,
     authored_runtime_document: Option<jian_ops_schema::PenDocument>,
     filter_row_ids: BTreeSet<String>,
+    paging: Vec<op_editor_core::table_pagination::Spec>,
+    paging_signature: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Default)]
@@ -151,6 +153,7 @@ impl BindingOverlay {
         *inner = OverlayInner::default();
         if let Ok(value) = serde_json::to_value(document) {
             op_editor_core::table_filter_contract::row_ids(&value, &mut inner.filter_row_ids);
+            op_editor_core::table_pagination::specs(&value, &mut inner.paging);
         }
         collect_scroll_metadata(&document.children, None, true, &mut inner);
         if let Some(pages) = &document.pages {
@@ -180,6 +183,7 @@ impl BindingOverlay {
         let mut document = serde_json::to_value(authored).ok()?;
         materialize_json_nodes(&mut document, sites, self, state, pointer, extra_values);
         op_editor_core::table_filter_contract::materialize(&mut document);
+        self.materialize_pagination(&mut document, state);
         serde_json::from_value(document).ok()
     }
 
@@ -686,9 +690,12 @@ impl crate::session::PreviewSession {
         before: &[serde_json::Value],
     ) -> InvalidationKind {
         let after = self.binding_values();
-        let invalidation =
+        let mut invalidation =
             self.binding_overlay
                 .filter_invalidation(&self.binding_sites, before, &after);
+        if self.binding_overlay.pagination_changed(&self.runtime.state) {
+            invalidation = invalidation.merge(InvalidationKind::Relayout);
+        }
         self.apply_invalidation(invalidation);
         invalidation
     }
@@ -726,6 +733,7 @@ impl crate::session::PreviewSession {
                     &pointer,
                     extra_values,
                 ) {
+                    self.runtime.scheduler.flush();
                     let focus_id = self.bound_focus_id();
                     if let Err(error) = self.runtime.replace_document(document) {
                         self.warnings

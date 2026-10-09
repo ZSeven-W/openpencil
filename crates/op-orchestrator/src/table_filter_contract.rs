@@ -6,10 +6,14 @@ use op_editor_core::{EditorCommand, NodeId};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "table_pagination_contract.rs"]
+mod pagination;
 #[path = "table_filter_search.rs"]
 mod search;
 #[path = "table_status_tint.rs"]
 mod status_tint;
+#[path = "table_time_filter.rs"]
+mod time_filter;
 
 fn children(value: &Value) -> &[Value] {
     value["children"]
@@ -428,3 +432,39 @@ fn find_counters<'a>(value: &'a Value, out: &mut Vec<&'a Value>, previous: Optio
 #[cfg(test)]
 #[path = "table_filter_contract_tests.rs"]
 mod tests;
+
+pub(crate) fn wire_local_pagination(sink: &mut dyn DocSink) {
+    let roots: Vec<Value> = sink
+        .state()
+        .active_children()
+        .iter()
+        .filter_map(|root| serde_json::to_value(root).ok())
+        .collect();
+    for root in roots {
+        let mut tables = vec![];
+        find_tables(&root, &mut tables);
+        if tables.len() == 1 {
+            pagination::wire(sink, &root, tables[0]);
+        }
+    }
+}
+
+pub(crate) fn wire_timestamp_filters(sink: &mut dyn DocSink) {
+    let roots: Vec<Value> = sink
+        .state()
+        .active_children()
+        .iter()
+        .filter_map(|root| serde_json::to_value(root).ok())
+        .collect();
+    for root in roots {
+        let mut tables = vec![];
+        find_tables(&root, &mut tables);
+        if tables.len() == 1 {
+            time_filter::wire(sink, &root, tables[0]);
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "table_paging_tests.rs"]
+mod paging_tests;

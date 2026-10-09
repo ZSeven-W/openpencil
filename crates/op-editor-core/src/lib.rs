@@ -36,6 +36,7 @@ mod chat_model_mutators;
 pub mod chat_sessions;
 mod chat_title;
 pub mod table_filter_contract;
+pub mod table_pagination;
 pub mod text_effect_overlay;
 pub use chat_title::{is_default_chat_title, suggest_chat_title};
 pub mod clipboard;

@@ -177,6 +177,8 @@ mod tests_input_trace;
 mod tests_interaction;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_interaction_state;
+#[cfg(all(test, feature = "gl-host"))]
+mod tests_local_pagination;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_motion;
 #[cfg(all(test, not(target_os = "windows")))]

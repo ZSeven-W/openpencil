@@ -40,6 +40,7 @@ impl BindingOverlay {
         let mut value = serde_json::to_value(authored).ok()?;
         materialize_json_nodes(&mut value, sites, self, state, pointer, extra);
         op_editor_core::table_filter_contract::materialize(&mut value);
+        self.materialize_pagination(&mut value, state);
         serde_json::from_value(value).ok()
     }
 
@@ -124,5 +125,44 @@ impl crate::session::PreviewSession {
             page,
         );
         self.binding_overlay.clamp_scroll_after_filter(&self.scene);
+    }
+}
+
+impl BindingOverlay {
+    fn pagination_values(
+        &self,
+        state: &jian_core::state::StateGraph,
+    ) -> BTreeMap<String, serde_json::Value> {
+        self.inner
+            .borrow()
+            .paging
+            .iter()
+            .flat_map(|spec| spec.keys())
+            .map(|key| {
+                (
+                    key.to_owned(),
+                    state.app_get(key).map_or(serde_json::Value::Null, |v| v.0),
+                )
+            })
+            .collect()
+    }
+    pub(super) fn pagination_changed(&self, state: &jian_core::state::StateGraph) -> bool {
+        self.pagination_values(state) != self.inner.borrow().paging_signature
+    }
+    pub(super) fn materialize_pagination(
+        &self,
+        document: &mut serde_json::Value,
+        state: &jian_core::state::StateGraph,
+    ) {
+        let updates = op_editor_core::table_pagination::materialize(document, &|key| {
+            state.app_get(key).map(|v| v.0)
+        });
+        for (key, value) in updates {
+            if state.app_get(&key).map(|v| v.0).as_ref() != Some(&value) {
+                state.app_set(&key, value);
+            }
+        }
+        let signature = self.pagination_values(state);
+        self.inner.borrow_mut().paging_signature = signature;
     }
 }

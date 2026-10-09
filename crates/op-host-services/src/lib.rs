@@ -103,6 +103,8 @@ pub mod pre_validator;
 #[cfg(all(test, not(target_os = "windows")))]
 mod preview_carousel_capture_tests;
 #[cfg(all(test, not(target_os = "windows")))]
+mod preview_local_paging_capture_tests;
+#[cfg(all(test, not(target_os = "windows")))]
 mod preview_mobile_bounds_capture_tests;
 #[cfg(all(test, not(target_os = "windows")))]
 mod preview_table_filter_capture_tests;

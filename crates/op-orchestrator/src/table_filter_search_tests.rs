@@ -151,9 +151,11 @@ fn replay_retained_console_search_and_status_tints() {
         .unwrap()
         .value;
     let mut state = EditorState::from_document(doc.clone());
-    crate::geometry_validation::wire_interaction_backfill(
-        &mut crate::loop_finalize::StateDocSink { state: &mut state },
-    );
+    {
+        let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
+        super::super::wire(&mut sink);
+        super::super::repair_status_tints(&mut sink);
+    }
     let before = EditorState::from_document(doc);
     for (id, color) in [
         ("n959", "#DC26261A"),
@@ -193,9 +195,11 @@ fn replay_retained_console_search_and_status_tints() {
     assert_eq!(node(&state, "n890"), node(&before, "n890"));
     assert_eq!(node(&state, "n1096"), node(&before, "n1096"));
     let settled = state.doc.clone();
-    crate::geometry_validation::wire_interaction_backfill(
-        &mut crate::loop_finalize::StateDocSink { state: &mut state },
-    );
+    {
+        let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
+        super::super::wire(&mut sink);
+        super::super::repair_status_tints(&mut sink);
+    }
     assert_eq!(state.doc, settled);
     let output = std::path::PathBuf::from(std::env::var("OPENPENCIL_QA_SEARCH_OUTPUT").unwrap());
     std::fs::create_dir_all(output.parent().unwrap()).unwrap();

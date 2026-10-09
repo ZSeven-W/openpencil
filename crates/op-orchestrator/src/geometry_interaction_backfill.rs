@@ -49,6 +49,8 @@ struct BackShapeFact {
 pub(crate) fn wire_interaction_backfill(sink: &mut dyn DocSink) {
     crate::table_filter_contract::wire(sink);
     crate::table_filter_contract::repair_status_tints(sink);
+    crate::table_filter_contract::wire_timestamp_filters(sink);
+    crate::table_filter_contract::wire_local_pagination(sink);
     let facts = interaction_backfill_facts(sink.state());
     for target in facts.back_targets {
         sink.apply(EditorCommand::PatchNodeData {

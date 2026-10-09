@@ -39,6 +39,8 @@ mod scroll_orchestration_corpus_tests;
 #[cfg(test)]
 mod shader_fill_corpus_tests;
 pub mod style_guide;
+#[cfg(test)]
+mod table_interaction_corpus_tests;
 pub mod types;
 
 pub use compose::compose_system_prompt;
