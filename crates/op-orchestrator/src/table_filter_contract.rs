@@ -6,6 +6,11 @@ use op_editor_core::{EditorCommand, NodeId};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "table_filter_search.rs"]
+mod search;
+#[path = "table_status_tint.rs"]
+mod status_tint;
+
 fn children(value: &Value) -> &[Value] {
     value["children"]
         .as_array()
@@ -236,6 +241,7 @@ pub(crate) fn wire(sink: &mut dyn DocSink) {
         }
         let table = tables[0];
         if owned(table, TABLE_MARKER) {
+            search::upgrade(sink, &root, table, &state_keys);
             continue;
         }
         let Some(table_id) = table["id"].as_str() else {
@@ -272,14 +278,15 @@ pub(crate) fn wire(sink: &mut dyn DocSink) {
                 }
             }
         }
-        if filters.is_empty() {
+        let search = search::candidate(&root, rows, &state_keys);
+        if filters.is_empty() && search.is_none() {
             continue;
         }
         let unique_keys: BTreeSet<_> = filters.iter().map(|f| &f.key).collect();
         if unique_keys.len() != filters.len() {
             continue;
         }
-        let definitions: BTreeMap<String, jian_ops_schema::state::StateEntry> = filters
+        let mut definitions: BTreeMap<String, jian_ops_schema::state::StateEntry> = filters
             .iter()
             .map(|f| {
                 (
@@ -289,6 +296,9 @@ pub(crate) fn wire(sink: &mut dyn DocSink) {
                 )
             })
             .collect();
+        if let Some(search) = &search {
+            definitions.insert(search.key.clone(), search::state_entry());
+        }
         sink.apply(EditorCommand::MergeAppState {
             plan_idx: usize::MAX,
             state: definitions,
@@ -298,7 +308,7 @@ pub(crate) fn wire(sink: &mut dyn DocSink) {
             let Some(id) = row["id"].as_str() else {
                 continue;
             };
-            let condition = filters
+            let mut predicates = filters
                 .iter()
                 .map(|f| {
                     format!(
@@ -309,8 +319,11 @@ pub(crate) fn wire(sink: &mut dyn DocSink) {
                         json!(f.row_values[index])
                     )
                 })
-                .collect::<Vec<_>>()
-                .join(" && ");
+                .collect::<Vec<_>>();
+            if let Some(search) = &search {
+                predicates.push(search.condition(index));
+            }
+            let condition = predicates.join(" && ");
             conditions.push(condition.clone());
             let mut bindings = row["bindings"].as_object().cloned().unwrap_or_default();
             bindings.insert("visible".into(), json!(condition));
@@ -328,54 +341,78 @@ pub(crate) fn wire(sink: &mut dyn DocSink) {
             sink.apply(EditorCommand::PatchNodeData{node_id:NodeId::new(id),patch_json:json!({"value":filter.initial,"options":filter.options,
                 "bindings":{"bind:value":format!("$state.{}",filter.key)},"explain":marker(filter.control,CONTROL_MARKER)}).to_string(),page_id:None});
         }
+        if let Some(search) = search {
+            search.bind(sink);
+        }
         let chinese = children(&children(table)[0]).iter().any(|cell| {
             single_text(cell)
                 .is_some_and(|s| s.chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c)))
         });
         sink.apply(EditorCommand::PatchNodeData{node_id:NodeId::new(table_id),patch_json:json!({"explain":marker(table,&format!("{TABLE_MARKER} lang={}",if chinese{"zh"}else{"en"}))}).to_string(),page_id:None});
-        let count = conditions
-            .iter()
-            .map(|condition| format!("to_num({condition})"))
-            .collect::<Vec<_>>()
-            .join(" + ");
-        wire_counter(
-            sink,
-            &root,
-            &format!(
-                "{} + ({count})",
-                json!(if chinese {
-                    "当前页数据："
-                } else {
-                    "Rows on this page: "
-                })
-            ),
-        );
+        wire_counter(sink, &root, &counter_expression(&conditions, chinese), None);
     }
 }
 
-fn wire_counter(sink: &mut dyn DocSink, value: &Value, expression: &str) {
+pub(crate) fn repair_status_tints(sink: &mut dyn DocSink) {
+    let roots: Vec<Value> = sink
+        .state()
+        .active_children()
+        .iter()
+        .filter_map(|root| serde_json::to_value(root).ok())
+        .collect();
+    for root in roots {
+        let mut tables = vec![];
+        find_tables(&root, &mut tables);
+        for table in tables {
+            status_tint::repair(sink, table);
+        }
+    }
+}
+
+fn counter_expression(conditions: &[String], chinese: bool) -> String {
+    let count = conditions
+        .iter()
+        .map(|condition| format!("to_num({condition})"))
+        .collect::<Vec<_>>()
+        .join(" + ");
+    format!(
+        "{} + ({count})",
+        json!(if chinese {
+            "当前页数据："
+        } else {
+            "Rows on this page: "
+        })
+    )
+}
+
+fn wire_counter(sink: &mut dyn DocSink, value: &Value, expression: &str, previous: Option<&str>) {
     let name = value["name"].as_str().unwrap_or("").to_lowercase();
     if name.contains("pagination") || name.contains("分页") {
         let mut counters = vec![];
-        find_counters(value, &mut counters);
+        find_counters(value, &mut counters, previous);
         if counters.len() == 1 {
             let id = counters[0]["id"].as_str().unwrap();
+            let mut bindings = counters[0]["bindings"]
+                .as_object()
+                .cloned()
+                .unwrap_or_default();
+            bindings.insert("content".into(), json!(expression));
             sink.apply(EditorCommand::PatchNodeData {
                 node_id: NodeId::new(id),
-                patch_json: json!({"bindings":{"content":expression}}).to_string(),
+                patch_json: json!({"bindings":bindings}).to_string(),
                 page_id: None,
             });
         }
         return;
     }
     for child in children(value) {
-        wire_counter(sink, child, expression);
+        wire_counter(sink, child, expression, previous);
     }
 }
 
-fn find_counters<'a>(value: &'a Value, out: &mut Vec<&'a Value>) {
+fn find_counters<'a>(value: &'a Value, out: &mut Vec<&'a Value>, previous: Option<&str>) {
     if value["type"] == "text"
-        && !protected(value)
+        && (!protected(value) || previous.is_some_and(|expr| value["bindings"]["content"] == expr))
         && value["content"]
             .as_str()
             .is_some_and(|s| s.starts_with("Showing ") || s.starts_with("显示"))
@@ -384,7 +421,7 @@ fn find_counters<'a>(value: &'a Value, out: &mut Vec<&'a Value>) {
         out.push(value);
     }
     for child in children(value) {
-        find_counters(child, out);
+        find_counters(child, out, previous);
     }
 }
 

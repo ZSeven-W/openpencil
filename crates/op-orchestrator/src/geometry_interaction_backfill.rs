@@ -48,6 +48,7 @@ struct BackShapeFact {
 /// This is cleanup-only; preview's cloned-state fallback never calls it.
 pub(crate) fn wire_interaction_backfill(sink: &mut dyn DocSink) {
     crate::table_filter_contract::wire(sink);
+    crate::table_filter_contract::repair_status_tints(sink);
     let facts = interaction_backfill_facts(sink.state());
     for target in facts.back_targets {
         sink.apply(EditorCommand::PatchNodeData {

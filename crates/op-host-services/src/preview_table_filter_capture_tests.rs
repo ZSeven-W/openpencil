@@ -153,3 +153,6 @@ fn retained_console_filters_reflow_and_restore_the_canonical_dataset() {
     assert_eq!(serde_json::to_value(&doc).unwrap(), original);
     std::fs::write(out.join("receipt.json"),serde_json::to_vec_pretty(&json!({"native_skia":true,"real_pointer_and_key_input":true,"canonical_dataset_unchanged":true,"root":root_id,"table":table_id,"cases":receipts,"limits":["time filtering","pagination","sorting"]})).unwrap()).unwrap();
 }
+
+#[path = "preview_table_search_capture_tests.rs"]
+mod search;
