@@ -191,6 +191,8 @@ mod tests_retained_console_scroll;
 mod tests_retained_mobile_scroll;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_swipe;
+#[cfg(test)]
+mod tests_table_filter;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_tabs;
 #[cfg(all(test, not(target_os = "windows")))]

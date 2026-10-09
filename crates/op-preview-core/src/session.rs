@@ -520,7 +520,7 @@ impl PreviewSession {
         runtime.enable_action_reporting();
         let motion = crate::motion::PreviewMotionState::default();
         let has_switch_widgets = crate::motion::runtime_has_switch_widgets(&runtime);
-        let session = Self {
+        let mut session = Self {
             runtime,
             measure,
             available: primary_available,
@@ -552,6 +552,7 @@ impl PreviewSession {
             #[cfg(test)]
             overlay_builds_for_test: std::cell::Cell::new(0),
         };
+        session.materialize_initial_table_filter();
         session.motion.set_initial_lifecycle_values(
             &session.runtime,
             &session.scene,

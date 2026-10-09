@@ -54,6 +54,7 @@ mod scroll_intent;
 pub mod semantic_palette;
 pub mod stub_providers;
 pub mod style_guide_context;
+mod table_filter_contract;
 pub mod timeouts;
 pub mod types;
 pub mod validation;

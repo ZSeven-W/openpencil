@@ -16,6 +16,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[path = "binding_overlay_horizontal.rs"]
 mod horizontal;
+#[path = "binding_overlay_table_filter.rs"]
+mod table_filter;
 pub(crate) use horizontal::is_horizontal_viewport;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -128,6 +130,7 @@ struct OverlayInner {
     /// children — doing so would double the host's scroll.
     page_scrollers: BTreeSet<String>,
     authored_runtime_document: Option<jian_ops_schema::PenDocument>,
+    filter_row_ids: BTreeSet<String>,
 }
 
 #[derive(Default)]
@@ -146,6 +149,9 @@ impl BindingOverlay {
         let mut inner = self.inner.borrow_mut();
         let retained_scroll = std::mem::take(&mut inner.scroll_values);
         *inner = OverlayInner::default();
+        if let Ok(value) = serde_json::to_value(document) {
+            op_editor_core::table_filter_contract::row_ids(&value, &mut inner.filter_row_ids);
+        }
         collect_scroll_metadata(&document.children, None, true, &mut inner);
         if let Some(pages) = &document.pages {
             for page in pages {
@@ -173,6 +179,7 @@ impl BindingOverlay {
         let authored = self.inner.borrow().authored_runtime_document.clone()?;
         let mut document = serde_json::to_value(authored).ok()?;
         materialize_json_nodes(&mut document, sites, self, state, pointer, extra_values);
+        op_editor_core::table_filter_contract::materialize(&mut document);
         serde_json::from_value(document).ok()
     }
 
@@ -680,7 +687,8 @@ impl crate::session::PreviewSession {
     ) -> InvalidationKind {
         let after = self.binding_values();
         let invalidation =
-            BindingOverlay::changed_invalidation(&self.binding_sites, before, &after);
+            self.binding_overlay
+                .filter_invalidation(&self.binding_sites, before, &after);
         self.apply_invalidation(invalidation);
         invalidation
     }
@@ -718,9 +726,13 @@ impl crate::session::PreviewSession {
                     &pointer,
                     extra_values,
                 ) {
+                    let focus_id = self.bound_focus_id();
                     if let Err(error) = self.runtime.replace_document(document) {
                         self.warnings
                             .push(format!("preview: binding document swap failed: {error}"));
+                    } else {
+                        self.restore_bound_focus(focus_id);
+                        self.refresh_filtered_scene(&pointer, extra_values);
                     }
                 }
                 match crate::app_mode::solve_roots(&mut self.runtime, &self.measure) {

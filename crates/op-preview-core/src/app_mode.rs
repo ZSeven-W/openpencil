@@ -383,6 +383,7 @@ impl PreviewSession {
         // AFTER the scene/layout rebuild so it seeds against the screen
         // that will actually paint.
         self.seed_all_widget_states();
+        self.materialize_initial_table_filter();
 
         // R4 lifecycle: resolve the INCOMING side's `onMount` /
         // `onEnter` against the freshly-mounted tree, then spawn all

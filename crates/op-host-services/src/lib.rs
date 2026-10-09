@@ -104,6 +104,8 @@ pub mod pre_validator;
 mod preview_carousel_capture_tests;
 #[cfg(all(test, not(target_os = "windows")))]
 mod preview_mobile_bounds_capture_tests;
+#[cfg(all(test, not(target_os = "windows")))]
+mod preview_table_filter_capture_tests;
 pub mod profile_avatar_fetch;
 mod provider_dial;
 pub mod provider_probe;

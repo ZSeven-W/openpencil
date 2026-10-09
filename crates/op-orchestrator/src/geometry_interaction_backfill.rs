@@ -47,6 +47,7 @@ struct BackShapeFact {
 /// Persist every interaction that the shared fact scan proves unambiguous.
 /// This is cleanup-only; preview's cloned-state fallback never calls it.
 pub(crate) fn wire_interaction_backfill(sink: &mut dyn DocSink) {
+    crate::table_filter_contract::wire(sink);
     let facts = interaction_backfill_facts(sink.state());
     for target in facts.back_targets {
         sink.apply(EditorCommand::PatchNodeData {
