@@ -88,6 +88,7 @@ fn anchor_layers(root: &mut Value, width: f64, height: f64) -> usize {
     {
         return 0;
     }
+    let body_width = inherited_width(body, Some(width));
     let Some(layers) = body.get_mut("children").and_then(Value::as_array_mut) else {
         return 0;
     };
@@ -100,7 +101,7 @@ fn anchor_layers(root: &mut Value, width: f64, height: f64) -> usize {
     // absent numeric size. A cluster of chart dots alone does not qualify.
     if !layers[..leading]
         .iter()
-        .any(|layer| page_geometry(layer, width, height))
+        .any(|layer| page_geometry(layer, width, height, body_width))
     {
         return 0;
     }
@@ -126,9 +127,21 @@ fn anchor_layers(root: &mut Value, width: f64, height: f64) -> usize {
     count
 }
 
-fn page_geometry(node: &Value, width: f64, height: f64) -> bool {
+fn inherited_width(node: &Value, parent_width: Option<f64>) -> Option<f64> {
+    match node.get("width") {
+        Some(Value::Number(n)) => n.as_f64(),
+        Some(Value::String(s)) if s == "fill_container" => parent_width,
+        _ => None,
+    }
+}
+
+fn page_geometry(node: &Value, width: f64, height: f64, parent_width: Option<f64>) -> bool {
     let h = node.get("height").and_then(Value::as_f64).unwrap_or(0.0);
-    let w = node.get("width").and_then(Value::as_f64).unwrap_or(0.0);
+    // A full-height grid commonly inherits the body's proven page width.
+    // Do not assume every fill_container is page-wide: narrow/unknown parents
+    // retain their own width proof through nested geometry wrappers.
+    let inherited = inherited_width(node, parent_width);
+    let w = inherited.unwrap_or(0.0);
     let name = node
         .get("name")
         .and_then(Value::as_str)
@@ -143,7 +156,7 @@ fn page_geometry(node: &Value, width: f64, height: f64) -> bool {
             .is_some_and(|children| {
                 children
                     .iter()
-                    .any(|child| page_geometry(child, width, height))
+                    .any(|child| page_geometry(child, width, height, inherited))
             })
 }
 
@@ -170,6 +183,28 @@ mod tests {
         assert!(page.find("title").unwrap().bounds.origin.y < 200.0);
         assert_eq!(page.find("root").unwrap().bounds.size.y, 1440.0);
         assert_eq!(page.find("rule").unwrap().bounds.origin.x, 62.0);
+    }
+    #[test]
+    fn inherited_full_width_grid_cannot_push_poster_text_outside_the_board() {
+        let mut root = fixture();
+        let layers = root["children"][0]["children"].as_array_mut().unwrap();
+        layers[0]["width"] = serde_json::json!("fill_container");
+        layers.remove(1);
+        assert_eq!(anchor_layers(&mut root, 1080.0, 1440.0), 1);
+        let doc = serde_json::from_value(serde_json::json!({"version":"1.0.0","children":[root]}))
+            .unwrap();
+        let scene = op_pen_loader::editor_state_to_layout_scene(&EditorState::from_document(doc));
+        assert!(scene.pages[0].find("title").unwrap().bounds.origin.y < 200.0);
+    }
+
+    #[test]
+    fn inherited_width_in_a_narrow_body_is_not_a_page_background() {
+        let mut root = fixture();
+        root["children"][0]["width"] = serde_json::json!(540.0);
+        let layers = root["children"][0]["children"].as_array_mut().unwrap();
+        layers[0]["width"] = serde_json::json!("fill_container");
+        layers.remove(1);
+        assert_eq!(anchor_layers(&mut root, 1080.0, 1440.0), 0);
     }
     #[test]
     fn background_repairs_preserve_every_existing_node_identity() {
@@ -221,5 +256,65 @@ mod tests {
         let before = root.clone();
         assert_eq!(anchor_layers(&mut root, 1080.0, 1440.0), 0);
         assert_eq!(root, before);
+    }
+
+    /// Replay the production repair on a captured design without regenerating
+    /// its content. Ignored in CI because artifact paths are supplied locally.
+    #[test]
+    #[ignore = "requires OPENPENCIL_REPLAY_INPUT and OPENPENCIL_REPLAY_OUTPUT"]
+    fn replay_captured_fixed_board_background_without_changing_copy() {
+        fn copy(node: &Value, values: &mut Vec<(String, Value)>) {
+            if node.get("type").and_then(Value::as_str) == Some("text") {
+                values.push((
+                    node["id"].as_str().unwrap().to_owned(),
+                    node["content"].clone(),
+                ));
+            }
+            for child in node
+                .get("children")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                copy(child, values);
+            }
+        }
+        let input = std::env::var("OPENPENCIL_REPLAY_INPUT").unwrap();
+        let output = std::env::var("OPENPENCIL_REPLAY_OUTPUT").unwrap();
+        let doc = serde_json::from_slice(&std::fs::read(input).unwrap()).unwrap();
+        let mut state = EditorState::from_document(doc);
+        let root = state.active_children()[0].clone();
+        let before = serde_json::to_value(&root).unwrap();
+        let width = before["width"].as_f64().unwrap();
+        let height = before["height"].as_f64().unwrap();
+        let mut original = Vec::new();
+        copy(&before, &mut original);
+        original.sort_by(|a, b| a.0.cmp(&b.0));
+        let mut plan = crate::loop_finalize::synthesize_plan(std::slice::from_ref(&root), width);
+        plan.root_frame.height = height;
+        let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
+        repair(&mut sink, root.id_str(), &plan);
+        let after = serde_json::to_value(find_root(sink.state(), root.id_str()).unwrap()).unwrap();
+        let mut repaired = Vec::new();
+        copy(&after, &mut repaired);
+        repaired.sort_by(|a, b| a.0.cmp(&b.0));
+        assert!(!original.is_empty());
+        assert_eq!(original, repaired);
+        let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+        let page = scene.active_page().unwrap();
+        let board = page.find(root.id_str()).unwrap().bounds;
+        for (id, _) in &repaired {
+            let text = page.find(id).unwrap().bounds;
+            assert!(text.origin.y >= board.origin.y - 1.0, "{id}");
+            assert!(
+                text.origin.y + text.size.y <= board.origin.y + board.size.y + 1.0,
+                "{id} remains outside the board"
+            );
+        }
+        std::fs::write(
+            output,
+            serde_json::to_vec_pretty(&sink.state().doc).unwrap(),
+        )
+        .unwrap();
     }
 }
