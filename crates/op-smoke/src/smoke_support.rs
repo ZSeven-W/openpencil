@@ -20,6 +20,7 @@ pub(crate) enum SmokeProviderKind {
     OpenAiCompat,
     Antigravity,
     ClaudeCode,
+    Codex,
 }
 
 impl SmokeProviderKind {
@@ -29,6 +30,7 @@ impl SmokeProviderKind {
             "openai" | "openai-compat" => Some(Self::OpenAiCompat),
             "antigravity" | "agy" => Some(Self::Antigravity),
             "claude" | "claude-code" => Some(Self::ClaudeCode),
+            "codex" => Some(Self::Codex),
             _ => None,
         }
     }
@@ -39,6 +41,7 @@ impl SmokeProviderKind {
             Self::OpenAiCompat => "openai-compat",
             Self::Antigravity => "antigravity",
             Self::ClaudeCode => "claude-code",
+            Self::Codex => "codex",
         }
     }
 }
@@ -66,6 +69,15 @@ pub(crate) fn claude_code_llm(model: &str) -> Box<dyn LlmClient> {
 pub(crate) fn antigravity_llm(model: &str) -> Box<dyn LlmClient> {
     let provider = SubprocessProvider::for_cli_generation(CliName::Antigravity)
         .expect("Antigravity has a production subprocess transport");
+    let provider: Arc<dyn ChatProvider> = Arc::new(provider);
+    Box::new(ChatProviderLlmClient::new(provider).with_model(Some(model.to_string())))
+}
+
+/// Reuse the product's logged-in Codex generation transport. The CLI returns
+/// text to the orchestrator; OP still owns planning, execution and validation.
+pub(crate) fn codex_llm(model: &str) -> Box<dyn LlmClient> {
+    let provider = SubprocessProvider::for_cli_generation(CliName::Codex)
+        .expect("Codex has a production subprocess transport");
     let provider: Arc<dyn ChatProvider> = Arc::new(provider);
     Box::new(ChatProviderLlmClient::new(provider).with_model(Some(model.to_string())))
 }
@@ -180,5 +192,20 @@ pub(crate) fn loop_thinking_mode() -> op_ai::chat_provider::ThinkingMode {
         ThinkingMode::Enabled
     } else {
         ThinkingMode::Disabled
+    }
+}
+
+#[cfg(test)]
+mod provider_tests {
+    use super::*;
+
+    #[test]
+    fn codex_selection_stays_on_its_existing_generation_transport() {
+        assert_eq!(
+            SmokeProviderKind::parse("codex"),
+            Some(SmokeProviderKind::Codex)
+        );
+        assert_eq!(SmokeProviderKind::Codex.label(), "codex");
+        let _ = codex_llm("gpt-6.1-sol");
     }
 }

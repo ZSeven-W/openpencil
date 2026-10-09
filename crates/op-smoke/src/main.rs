@@ -70,7 +70,7 @@ use crate::llm_clients::{DirectOpenAiClient, SmokeLlmClient};
 // items keep their original `crate::<item>` paths.
 pub(crate) use smoke_support::InlineDocSink;
 use smoke_support::{
-    antigravity_llm, claude_code_llm, loop_thinking_mode, maybe_merge_smoke_library,
+    antigravity_llm, claude_code_llm, codex_llm, loop_thinking_mode, maybe_merge_smoke_library,
     truthy_env_value, SmokeProviderKind,
 };
 
@@ -227,6 +227,7 @@ async fn main() -> std::process::ExitCode {
                    anthropic (default): OPENPENCIL_ANTHROPIC_API_KEY=...\n\
                    openai-compat: OPENPENCIL_LLM_BASE_URL=... OPENPENCIL_LLM_API_KEY=...\n\
                    antigravity/agy: uses the logged-in agy CLI\n\
+                   codex: uses the logged-in Codex CLI\n\
                    claude/claude-code: uses the logged-in claude CLI (model alias e.g. opus)\n\n\
                  common:\n\
                    OPENPENCIL_ORCHESTRATOR_MODEL=<model>\n\
@@ -267,7 +268,7 @@ async fn main() -> std::process::ExitCode {
     let Some(provider_kind) = SmokeProviderKind::parse(&provider_kind_raw) else {
         eprintln!(
             "error: unknown OPENPENCIL_LLM_PROVIDER={provider_kind_raw:?} \
-             (want anthropic|openai-compat|antigravity|agy|claude|claude-code)"
+             (want anthropic|openai-compat|antigravity|agy|claude|claude-code|codex)"
         );
         return std::process::ExitCode::from(3);
     };
@@ -277,6 +278,7 @@ async fn main() -> std::process::ExitCode {
             SmokeProviderKind::OpenAiCompat => "gpt-4o-mini".into(),
             SmokeProviderKind::Antigravity => "gemini-3.6-flash-high".into(),
             SmokeProviderKind::ClaudeCode => "opus".into(),
+            SmokeProviderKind::Codex => "gpt-6.1-sol".into(),
         });
 
     eprintln!("[SMOKE] provider={} model={model}", provider_kind.label());
@@ -338,6 +340,7 @@ async fn main() -> std::process::ExitCode {
         }
         SmokeProviderKind::Antigravity => antigravity_llm(&model),
         SmokeProviderKind::ClaudeCode => claude_code_llm(&model),
+        SmokeProviderKind::Codex => codex_llm(&model),
     };
 
     // `OPENPENCIL_SMOKE_STARTER=1` seeds the fresh-canvas starter frame so a
