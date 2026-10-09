@@ -201,6 +201,17 @@ const MODEL_PROFILES: &[Entry] = &[
     // ignored; since 2026-09-03 the API rejects it outright (HTTP 400,
     // code 1210 "该模型始终思考，不支持关闭思考"), which failed every
     // subtask before the first token — so the field must not be sent.
+    // FlashX must precede Flash's substring matcher. Its standard Model API
+    // rejects thinking:disabled (1210); use the shared low-effort control.
+    // Verified 2026-10-09 against BigModel and documented at
+    // https://docs.z.ai/guides/vlm/glm-5.3-flash.
+    Entry {
+        matcher: Match::Exact(&["glm-5.3-flashx"]),
+        tier: ModelTier::Full,
+        thinking_disabled: true,
+        timeout_multiplier: 2.0,
+        label: "GLM-5.3-FlashX",
+    },
     // GLM-5.3-Flash — BEFORE the glm-5.3 row, whose `Sub` would otherwise
     // claim it. Unlike glm-5.3 the Flash variant ACCEPTS `thinking:disabled`
     // (measured 2026-09-26 on the Coding Plan endpoint: 200, finish=stop,
@@ -523,7 +534,7 @@ pub fn reasoning_wire_control(model_id: &str) -> Option<ReasoningWireControl> {
         None => model_id,
     };
     let lower = normalized.to_ascii_lowercase();
-    if lower.contains("kimi-k3") {
+    if lower.contains("kimi-k3") || lower == "glm-5.3-flashx" {
         return Some(ReasoningWireControl::ReasoningEffortLow);
     }
     (lower.starts_with("minimax")

@@ -438,6 +438,8 @@ mod tests {
             "kimi-k2.6",
             "glm-5.2",
             "ark/glm-5.1",
+            "glm-5.3-flashx",
+            "bigmodel/GLM-5.3-FlashX",
             "MiniMax-M3",
             "deepseek-v4-pro",
             "gpt-5.6-sol",
@@ -450,6 +452,13 @@ mod tests {
                 "harness and production disagree for {model}"
             );
         }
+    }
+
+    #[test]
+    fn flashx_design_body_uses_low_effort_without_a_thinking_field() {
+        let body = harness_body("glm-5.3-flashx");
+        assert_eq!(body["reasoning_effort"], json!("low"));
+        assert!(body.get("thinking").is_none(), "{body}");
     }
 
     /// Kimi K3 rejects `thinking` outright (`cannot specify both 'thinking'

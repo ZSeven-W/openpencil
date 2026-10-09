@@ -312,6 +312,35 @@ pub fn apply_reasoning_wire_control(body: &mut Value, model: &str, reduce_reason
     }
 }
 
+#[cfg(test)]
+mod flashx_reasoning_tests {
+    use super::*;
+
+    #[test]
+    fn flashx_replaces_disabled_thinking_with_supported_low_effort() {
+        for model in ["glm-5.3-flashx", "bigmodel/GLM-5.3-FlashX"] {
+            let mut body = serde_json::json!({"thinking":{"type":"disabled"}});
+            apply_reasoning_wire_control(&mut body, model, true);
+            assert_eq!(body["reasoning_effort"], "low");
+            assert!(body.get("thinking").is_none(), "{body}");
+        }
+    }
+
+    #[test]
+    fn flashx_preserves_explicit_reasoning_when_reduction_is_not_requested() {
+        let mut body = serde_json::json!({"reasoning_effort":"max"});
+        apply_reasoning_wire_control(&mut body, "glm-5.3-flashx", false);
+        assert_eq!(body, serde_json::json!({"reasoning_effort":"max"}));
+    }
+
+    #[test]
+    fn flashx_anthropic_request_does_not_receive_disabled_thinking() {
+        let mut body = serde_json::json!({"model":"glm-5.3-flashx"});
+        apply_reasoning_wire_control_anthropic(&mut body, "glm-5.3-flashx", true);
+        assert!(body.get("thinking").is_none(), "{body}");
+    }
+}
+
 /// Whether `url` is an OpenRouter endpoint.
 pub fn is_openrouter_url(url: &str) -> bool {
     url.to_ascii_lowercase().contains("openrouter.ai")
