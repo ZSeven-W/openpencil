@@ -7,6 +7,9 @@ use std::path::{Path, PathBuf};
 
 #[path = "chat_subprocess_auth.rs"]
 mod auth;
+#[path = "chat_subprocess_budget.rs"]
+mod budget;
+pub use budget::antigravity_timeout;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -62,7 +65,7 @@ pub fn antigravity_args(purpose: TurnPurpose) -> Vec<String> {
     let mut args = vec![
         "--sandbox".into(),
         "--print-timeout".into(),
-        ANTIGRAVITY_PRINT_TIMEOUT.into(),
+        budget::antigravity_print_timeout(),
     ];
     if purpose == TurnPurpose::Generation {
         args.extend(["--mode".into(), "plan".into()]);

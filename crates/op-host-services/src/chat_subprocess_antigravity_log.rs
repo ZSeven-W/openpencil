@@ -53,8 +53,17 @@ pub(crate) fn antigravity_log_error(path: &Path) -> Option<String> {
         let redacted = op_util::cli_output::redact_secrets(&cause);
         return Some(truncate_chars(&redacted, MAX_CHARS));
     }
+    let authenticated_at = text
+        .lines()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            (line.contains("OAuth: authenticated successfully")
+                || line.contains("ChainedAuth: authenticated via"))
+            .then_some(index)
+        })
+        .last();
     let mut seen: Vec<String> = Vec::new();
-    for line in text.lines() {
+    for (index, line) in text.lines().enumerate() {
         let Some(message) = error_message(line) else {
             continue;
         };
@@ -71,6 +80,14 @@ pub(crate) fn antigravity_log_error(path: &Path) -> Option<String> {
             || message.eq_ignore_ascii_case(
                 "failed to get load code assist response: error getting token source: You are not logged into Antigravity.",
             )
+            // A failed earlier auth candidate is recovered by a later login.
+            || (authenticated_at.is_some_and(|at| index < at)
+                && message.eq_ignore_ascii_case(
+                    "error getting token source: You are not logged into Antigravity.",
+                ))
+            // Google Play log uploads are telemetry, not model requests.
+            || message.starts_with("Post \"https://play.googleapis.com/log\"")
+            || message.starts_with("[Post \"https://play.googleapis.com/log\"")
         {
             continue;
         }

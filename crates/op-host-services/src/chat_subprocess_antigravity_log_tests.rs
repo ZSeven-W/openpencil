@@ -208,3 +208,34 @@ fn timeout_retains_the_model_quota_reason_instead_of_only_the_deadline() {
         "Other CLI request timed out after 60s."
     );
 }
+
+#[test]
+fn recovered_auth_candidate_and_play_telemetry_do_not_explain_a_timeout() {
+    let path = write_log(
+        "recovered-startup",
+        concat!(
+            "E1009 14:42:29.0 155 errorreport.go:224] error getting token source: You are not logged into Antigravity.\n",
+            "I1009 14:42:29.1 1 server_oauth.go:209] OAuth: authenticated successfully as fake@example.test\n",
+            "E1009 14:43:04.0 31 g3syslog.go:23] [Post \"https://play.googleapis.com/log\": dial tcp 192.0.2.1:443: i/o timeout]\n",
+            "E1009 14:43:04.0 28 client.go:70] Post \"https://play.googleapis.com/log\": dial tcp 192.0.2.1:443: i/o timeout\n",
+        ),
+    );
+    assert_eq!(
+        timeout_with_log("Antigravity", 300, Some(&path)),
+        "Antigravity request timed out after 300s."
+    );
+}
+
+#[test]
+fn token_failure_after_auth_success_is_not_discarded() {
+    let path = write_log(
+        "later-auth-failure",
+        concat!(
+            "I1009 14:42:29.1 1 server_oauth.go:209] OAuth: authenticated successfully as fake@example.test\n",
+            "E1009 14:43:04.0 155 errorreport.go:224] error getting token source: You are not logged into Antigravity.\n",
+        ),
+    );
+    assert!(antigravity_log_error(&path)
+        .expect("later auth failure")
+        .contains("error getting token source"));
+}

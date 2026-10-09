@@ -411,7 +411,7 @@ impl SubprocessProvider {
         safety::append_isolated_env(&mut env_pairs, isolation.as_ref());
         let turn_timeout = match cli {
             Some(CliName::Codex) => Some(quirks::CODEX_TURN_TIMEOUT),
-            Some(CliName::Antigravity) => Some(safety::ANTIGRAVITY_TIMEOUT),
+            Some(CliName::Antigravity) => Some(safety::antigravity_timeout()),
             Some(CliName::GrokBuild) => Some(safety::GROK_TIMEOUT),
             Some(CliName::Dsh) => Some(crate::chat_subprocess_dsh::DSH_TIMEOUT),
             _ => None,
