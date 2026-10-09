@@ -125,7 +125,7 @@ impl WidgetHost {
         };
         let dlg = ExportDialog::centered(viewport_w, viewport_h);
         let point = op_editor_ui::Point2D::new(x, y);
-        let hit = dlg.hit_test(point);
+        let hit = dlg.hit_test_for_ui(point, &self.editor_state.editor_ui);
         self.editor_state.editor_ui.pressed_button = hit
             .map(op_editor_ui::widgets::editor_state_ext::export_dialog_button)
             .map(op_editor_core::ButtonPressTarget::ExportDialog);
@@ -133,6 +133,7 @@ impl WidgetHost {
             Some(ExportDialogHit::Format(f)) => {
                 self.editor_state.editor_ui.export_format =
                     op_editor_ui::widgets::editor_state_ext::export_format(f);
+                self.editor_state.editor_ui.export_dialog_hover = None;
             }
             Some(ExportDialogHit::Scale(i)) => {
                 self.editor_state.editor_ui.export_scale = scale_from_index(i);

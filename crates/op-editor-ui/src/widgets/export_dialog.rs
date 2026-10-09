@@ -161,6 +161,10 @@ impl ExportDialog {
             Point2D::new(self.rect.origin.x + PAD, scale_label_y),
         );
         for (i, lbl) in ["1x", "2x", "3x"].iter().enumerate() {
+            if !raster_scale_enabled(ui) {
+                self.paint_disabled_pill(backend, theme, self.scale_pill_rect(i), lbl);
+                continue;
+            }
             let s = (i as u8) + 1;
             let selected = scale_index(ui.export_scale) == s;
             let button = op_editor_core::ExportDialogButton::Scale(s);
@@ -249,6 +253,14 @@ impl ExportDialog {
         paint_centered_label(backend, label, 12.0, color, rect);
     }
 
+    /// Resolve only controls that apply to the currently selected format.
+    pub fn hit_test_for_ui(&self, point: Point2D, ui: &EditorUiState) -> Option<ExportDialogHit> {
+        match self.hit_test(point) {
+            Some(ExportDialogHit::Scale(_)) if !raster_scale_enabled(ui) => None,
+            hit => hit,
+        }
+    }
+
     pub fn hit_test(&self, point: Point2D) -> Option<ExportDialogHit> {
         if !(self.rect).contains(point) {
             return None;
@@ -309,6 +321,15 @@ impl ExportDialog {
             Rect::xywh(export_x, y, BUTTON_WIDTH, BUTTON_HEIGHT),
         )
     }
+}
+
+fn raster_scale_enabled(ui: &EditorUiState) -> bool {
+    matches!(
+        ui.export_format,
+        op_editor_core::ExportFormat::Png
+            | op_editor_core::ExportFormat::Jpeg
+            | op_editor_core::ExportFormat::Webp
+    )
 }
 
 fn export_dialog_pressed(ui: &EditorUiState, button: op_editor_core::ExportDialogButton) -> bool {
@@ -490,6 +511,41 @@ mod tests {
                 Some(ExportDialogHit::Scale((i as u8) + 1))
             );
         }
+    }
+
+    #[test]
+    fn vector_formats_have_no_scale_action_or_selected_raster_pill() {
+        let dlg = ExportDialog::centered(1000.0, 800.0);
+        let theme = Theme::dark();
+        let mut ui = EditorUiState {
+            export_scale: 3.0,
+            ..Default::default()
+        };
+        for format in [
+            op_editor_core::ExportFormat::Svg,
+            op_editor_core::ExportFormat::Pdf,
+        ] {
+            ui.export_format = format;
+            let mut backend = CaptureBackend::default();
+            dlg.paint(&mut backend, &theme, &ui);
+            for i in 0..3 {
+                let rect = dlg.scale_pill_rect(i);
+                let point = Point2D::new(rect.origin.x + 32.0, rect.origin.y + 16.0);
+                assert_eq!(dlg.hit_test_for_ui(point, &ui), None);
+                assert!(!backend
+                    .round_fills
+                    .iter()
+                    .any(|(r, _, color)| { *r == rect && color_close(*color, theme.primary) }));
+            }
+        }
+        ui.export_format = op_editor_core::ExportFormat::Png;
+        let rect = dlg.scale_pill_rect(2);
+        let point = Point2D::new(rect.origin.x + 32.0, rect.origin.y + 16.0);
+        assert_eq!(ui.export_scale, 3.0);
+        assert_eq!(
+            dlg.hit_test_for_ui(point, &ui),
+            Some(ExportDialogHit::Scale(3))
+        );
     }
 
     #[test]
