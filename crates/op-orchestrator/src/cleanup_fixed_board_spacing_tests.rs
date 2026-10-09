@@ -1,6 +1,9 @@
 use super::*;
 use serde_json::json;
 
+#[path = "cleanup_mobile_bounds_replay_tests.rs"]
+mod mobile_bounds_replay;
+
 fn state(root: Value) -> EditorState {
     EditorState::from_document(
         serde_json::from_value(json!({"version":"1.0.0","children":[root]})).unwrap(),
@@ -111,6 +114,46 @@ fn dense_content_without_excess_space_is_not_shrunk_or_deleted() {
     let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
     repair(&mut sink, "root");
     assert_eq!(sink.state().doc, before);
+}
+
+#[test]
+fn existing_phone_scroll_area_reserves_the_navigation_actual_height() {
+    let mut draft = state(
+        json!({"type":"frame","id":"root","width":375,"height":812,"layout":"vertical","children":[
+            {"type":"frame","id":"status","role":"status-bar","height":62,"width":"fill_container"},
+            {"type":"frame","id":"body","role":"scroll-area","height":"fill_container","width":"fill_container","clipContent":true,"layout":"vertical","events":{"onScroll":[{"set":{"$state.scrolled":"true"}}]},
+             "children":[{"type":"text","id":"copy","content":"Keep the full content","width":375,"height":900,"fontSize":20}]},
+            {"type":"frame","id":"nav","role":"bottom-tab-bar","height":72,"width":"fill_container","layout":"horizontal","padding":[8,16],"children":[
+                {"type":"frame","id":"tab","height":68,"width":80,"children":[{"type":"text","id":"label","content":"Home","height":20,"fontSize":14}]}
+            ]}
+        ]}),
+    );
+    let before = op_pen_loader::editor_state_to_active_page_layout_scene(&draft);
+    let nav = before.active_page().unwrap().find("nav").unwrap().bounds;
+    assert!(
+        nav.origin.y + nav.size.y > 813.0,
+        "fixture must reproduce overflow: {nav:?}"
+    );
+    let original = draft.doc.clone();
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut draft };
+    repair(&mut sink, "root");
+    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+    let nav = scene.active_page().unwrap().find("nav").unwrap().bounds;
+    assert!(nav.origin.y + nav.size.y <= 813.0, "{nav:?}");
+    let value = serde_json::to_value(&sink.state().doc).unwrap();
+    let original = serde_json::to_value(original).unwrap();
+    assert_eq!(value["children"][0]["height"], 812.0);
+    assert_eq!(
+        value["children"][0]["children"][1],
+        original["children"][0]["children"][1]
+    );
+    assert_eq!(
+        value["children"][0]["children"][2]["children"],
+        original["children"][0]["children"][2]["children"]
+    );
+    let settled = sink.state().doc.clone();
+    repair(&mut sink, "root");
+    assert_eq!(sink.state().doc, settled);
 }
 
 #[test]

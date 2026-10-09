@@ -101,11 +101,13 @@ fn fallback_patch(
     after_enrich: bool,
     covered_by_overlay: bool,
 ) -> Option<ImageFallbackPatch> {
+    if is_image_fallback(node) {
+        return normalize_legacy_media_caption(node);
+    }
     if !matches!(
         node,
         PenNode::Image(_) | PenNode::Frame(_) | PenNode::Rectangle(_)
-    ) || is_image_fallback(node)
-        || !is_failed_image_slot(node, after_enrich)
+    ) || !is_failed_image_slot(node, after_enrich)
     {
         return None;
     }
@@ -132,7 +134,7 @@ fn fallback_patch(
     let patch = match branch {
         ImageFallbackBranch::Thumb => thumbnail_patch(node, &name, &icon_name),
         ImageFallbackBranch::Media => {
-            media_patch(node, &name, &icon_name, &caption_for_query(&query), width)
+            media_patch(node, &name, &icon_name, &caption_for_query(&query))
         }
         ImageFallbackBranch::Covered => covered_patch(node, &name),
     };
@@ -373,7 +375,7 @@ fn thumbnail_patch(node: &PenNode, name: &str, icon_name: &str) -> Value {
     )
 }
 
-fn media_patch(node: &PenNode, name: &str, icon_name: &str, caption: &str, width: f64) -> Value {
+fn media_patch(node: &PenNode, name: &str, icon_name: &str, caption: &str) -> Value {
     fallback_frame_patch(
         node,
         json!({
@@ -400,8 +402,9 @@ fn media_patch(node: &PenNode, name: &str, icon_name: &str, caption: &str, width
                     "id": format!("{}-image-fallback-caption", node.id_str()),
                     "name": "Image fallback caption",
                     "content": caption,
-                    "width": width.clamp(1.0, 160.0),
-                    "height": 16,
+                    "width": "fill_container",
+                    "height": "fit_content",
+                    "textGrowth": "fixed-width",
                     "fontSize": 12,
                     "textAlign": "center",
                     "fill": solid_fill("$--muted-foreground")
@@ -410,6 +413,40 @@ fn media_patch(node: &PenNode, name: &str, icon_name: &str, caption: &str, width
             "explain": fallback_explain(node, ImageFallbackBranch::Media)
         }),
     )
+}
+
+/// Upgrade only the policy-owned legacy caption layout. Keep edited copy,
+/// typography, intent metadata and node ids intact; unrelated text is not a
+/// fallback caption merely because its name resembles one.
+fn normalize_legacy_media_caption(node: &PenNode) -> Option<ImageFallbackPatch> {
+    if !node
+        .base()
+        .explain
+        .as_deref()?
+        .starts_with("image fallback: media ")
+    {
+        return None;
+    }
+    let mut children = serde_json::to_value(node.children()?).ok()?;
+    let caption_id = format!("{}-image-fallback-caption", node.id_str());
+    let caption = children
+        .as_array_mut()?
+        .iter_mut()
+        .find(|child| child["id"] == caption_id && child["type"] == "text")?;
+    if caption["height"].as_f64() != Some(16.0)
+        || caption["width"].as_f64().is_none()
+        || !caption["textGrowth"].is_null()
+    {
+        return None;
+    }
+    caption["width"] = json!("fill_container");
+    caption["height"] = json!("fit_content");
+    caption["textGrowth"] = json!("fixed-width");
+    Some(ImageFallbackPatch {
+        node_id: node.id_str().to_owned(),
+        branch: ImageFallbackBranch::Media,
+        patch_json: json!({"children":children}).to_string(),
+    })
 }
 
 fn covered_patch(node: &PenNode, name: &str) -> Value {

@@ -24,6 +24,59 @@ fn patch_value(patch: &ImageFallbackPatch) -> Value {
 }
 
 #[test]
+fn keyword_width_media_caption_uses_the_resolved_slot_and_wraps() {
+    let doc=jian_ops_schema::load_str(&json!({"version":"1.0.0","children":[
+        {"type":"frame","id":"root","width":100,"height":120,"layout":"vertical","children":[
+            {"type":"image","id":"slot","width":"fill_container","height":120,
+             "src":SEARCH_FAILED_PLACEHOLDER_SRC,"imageSearchQuery":"stretching recovery exercise after a long day"}
+        ]}
+    ]}).to_string()).unwrap().value;
+    let mut state = EditorState::from_document(doc);
+    assert!(apply_image_fallback_policy_to_node(
+        &mut state,
+        &NodeId::new("slot")
+    ));
+    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(&state);
+    let page = scene.active_page().unwrap();
+    let slot = page.find("slot").unwrap().bounds;
+    let caption = page.find("slot-image-fallback-caption").unwrap().bounds;
+    assert!(
+        caption.size.x <= slot.size.x + 1.0,
+        "{caption:?} inside {slot:?}"
+    );
+    assert!(
+        caption.origin.y + caption.size.y <= slot.origin.y + slot.size.y + 1.0,
+        "{caption:?} inside {slot:?}"
+    );
+    let saved = state.doc.clone();
+    assert!(!apply_image_fallback_policy_to_node(
+        &mut state,
+        &NodeId::new("slot")
+    ));
+    assert_eq!(state.doc, saved);
+}
+
+#[test]
+fn legacy_policy_caption_upgrades_its_layout_without_rewriting_copy_or_typography() {
+    let node:PenNode=serde_json::from_value(json!({"type":"frame","id":"slot","name":"Media (image fallback)",
+        "explain":"image fallback: media {}","width":"fill_container","height":120,"layout":"vertical",
+        "children":[{"type":"text","id":"slot-image-fallback-caption","name":"Image fallback caption",
+            "content":"用户修改后的说明","width":160,"height":16,"fontSize":14,"fontWeight":600,"fill":[{"type":"solid","color":"#123456"}]}]
+    })).unwrap();
+    let patches = image_fallback_policy(&node, false);
+    assert_eq!(patches.len(), 1);
+    let caption = &patch_value(&patches[0])["children"][0];
+    assert_eq!(caption["content"], "用户修改后的说明");
+    assert_eq!(caption["fontSize"], 14.0);
+    assert_eq!(caption["fontWeight"], 600.0);
+    assert_eq!(caption["id"], "slot-image-fallback-caption");
+    assert_eq!(caption["width"], "fill_container");
+    let mut customized = serde_json::to_value(&node).unwrap();
+    customized["children"][0]["height"] = json!(32);
+    assert!(image_fallback_policy(&serde_json::from_value(customized).unwrap(), false).is_empty());
+}
+
+#[test]
 fn authored_width_selects_thumb_and_media_branches() {
     let thumb = image(SEARCH_FAILED_PLACEHOLDER_SRC, "jump squat exercise", 56.0);
     let media = image(SEARCH_FAILED_PLACEHOLDER_SRC, "city skyline", 320.0);
