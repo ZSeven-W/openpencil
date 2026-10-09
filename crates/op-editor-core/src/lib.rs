@@ -151,6 +151,7 @@ pub mod scene_template_keyboard;
 pub mod scene_template_palette;
 pub mod scene_template_prompt;
 pub mod scene_vars;
+pub mod scroll_viewport;
 pub mod selection;
 pub mod selection_resolve;
 pub mod share_routes;

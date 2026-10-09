@@ -170,6 +170,8 @@ mod tests_event_payloads;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_geometry_parity;
 #[cfg(all(test, not(target_os = "windows")))]
+mod tests_horizontal_scroll;
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_input_trace;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_interaction;
@@ -185,6 +187,8 @@ mod tests_page_scroll;
 mod tests_pointer_bindings;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_retained_console_scroll;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_retained_mobile_scroll;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_swipe;
 #[cfg(all(test, not(target_os = "windows")))]

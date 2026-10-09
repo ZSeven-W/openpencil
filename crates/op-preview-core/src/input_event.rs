@@ -342,7 +342,11 @@ impl super::PreviewSession {
     fn dispatch_input_inner(&mut self, envelope: PreviewInputEnvelope) -> PreviewDispatchOutcome {
         match envelope.input {
             PreviewInput::Pointer(event) => {
-                PreviewDispatchOutcome::from_events(&self.dispatch_pointer_event(event))
+                let before = self.binding_overlay.scroll_revision();
+                let mut outcome =
+                    PreviewDispatchOutcome::from_events(&self.dispatch_pointer_event(event));
+                outcome.needs_redraw |= before != self.binding_overlay.scroll_revision();
+                outcome
             }
             PreviewInput::Wheel { event, phase } => self.dispatch_input_wheel(event, phase),
             PreviewInput::Key {
@@ -490,6 +494,7 @@ impl super::PreviewSession {
             self.cancel_pointer(pointer_id, self.last_now_ms);
         }
         self.gesture_mappings.clear();
+        self.binding_overlay.clear_horizontal_drags();
         self.interaction.clear_all_pressed();
         // Drop any live IME composition, then blur focus (emits
         // `onBlur` for the previously-focused node, like any focus move).
@@ -510,29 +515,47 @@ impl super::PreviewSession {
             return PreviewDispatchOutcome::none();
         }
         let (rt_x, rt_y) = self.scene_to_runtime(event.position.x, event.position.y);
-        let delta_y = event.delta.y;
+        let (delta_x, delta_y) = (event.delta.x, event.delta.y);
+        let horizontal_target = (delta_x != 0.0)
+            .then(|| self.horizontal_scroll_target(event.position.x, event.position.y))
+            .flatten();
         let mut ev = event;
         ev.position = jian_core::geometry::point(rt_x, rt_y);
         let events: Vec<SemanticEvent> = self.runtime.dispatch_wheel(ev);
-        let scroll_node_id = events.iter().find_map(|semantic| {
-            let SemanticEvent::Scroll { node, .. } = semantic else {
-                return None;
-            };
-            self.runtime
-                .document
-                .as_ref()
-                .and_then(|document| document.tree.nodes.get(*node))
-                .map(|data| jian_core::document::tree::node_schema_id(&data.schema).to_owned())
+        let scroll_node_id = horizontal_target.or_else(|| {
+            events.iter().find_map(|semantic| {
+                let SemanticEvent::Scroll { node, .. } = semantic else {
+                    return None;
+                };
+                self.runtime
+                    .document
+                    .as_ref()
+                    .and_then(|document| document.tree.nodes.get(*node))
+                    .map(|data| jian_core::document::tree::node_schema_id(&data.schema).to_owned())
+            })
         });
+        let delta = if scroll_node_id
+            .as_deref()
+            .is_some_and(|id| self.binding_overlay.is_horizontal(id))
+        {
+            delta_x
+        } else {
+            delta_y
+        };
         let max_offset = scroll_node_id
             .as_deref()
             .map(|node_id| self.binding_overlay.max_offset(&self.scene, node_id));
-        let scroll_changed = self.binding_overlay.update_scroll(
-            scroll_node_id.as_deref(),
-            delta_y,
-            max_offset,
-            phase,
-        );
+        let scroll_changed = (scroll_node_id.is_some()
+            || matches!(
+                phase,
+                ScrollPhase::Ended | ScrollPhase::Cancelled | ScrollPhase::Momentum
+            ))
+            && self.binding_overlay.update_scroll(
+                scroll_node_id.as_deref(),
+                delta,
+                max_offset,
+                phase,
+            );
         let mut outcome = PreviewDispatchOutcome::from_events(&events);
         outcome.needs_redraw |= scroll_changed;
         outcome

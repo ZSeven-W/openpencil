@@ -116,6 +116,9 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
 libc = "0.2"
 
 [dev-dependencies]
+jian-core = { path = "../../vendor/jian/crates/jian-core" }
+op-preview-core = { path = "../op-preview-core", features = ["testing", "gl-host"] }
+jian-skia = { path = "../../vendor/jian/crates/jian-skia", features = ["textlayout"] }
 # Controlled collaboration fixtures so the collab_state tests can drive the
 # real begin -> install -> reject/fail path instead of asserting on a
 # hand-built outcome value. Dev-only: the normal dependency above (line 53)

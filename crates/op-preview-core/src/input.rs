@@ -341,6 +341,16 @@ impl PreviewSession {
             .map(|(_, _, id)| id);
         self.interaction
             .track_pointer(pointer_id, kind, phase, (scene_x, scene_y), hit.as_deref());
+        let mut scene_event = PointerEvent::simple_at(
+            pointer_id,
+            phase,
+            jian_core::geometry::point(scene_x, scene_y),
+            t_ms,
+        );
+        scene_event.kind = kind;
+        if self.handle_horizontal_drag(&scene_event) {
+            return true;
+        }
         let (rt_x, rt_y) = self.resolve_runtime_point(scene_x, scene_y, phase, pointer_id);
         use jian_core::geometry::point;
         let mut ev = PointerEvent::simple_at(pointer_id, phase, point(rt_x, rt_y), t_ms);
@@ -392,6 +402,9 @@ impl PreviewSession {
             (event.position.x, event.position.y),
             hit_node.as_deref(),
         );
+        if self.handle_horizontal_drag(&event) {
+            return Vec::new();
+        }
         let (rt_x, rt_y) =
             self.resolve_runtime_point(event.position.x, event.position.y, event.phase, event.id.0);
         event.position = jian_core::geometry::point(rt_x, rt_y);
@@ -459,14 +472,15 @@ impl PreviewSession {
     }
 
     /// Route a wheel at a SCENE-space point into the runtime. Returns
-    /// `true` only when a node carrying `events.onScroll` consumed it —
-    /// the host falls back to canvas pan/zoom otherwise. `dx`/`dy` are
+    /// `true` when an authored scroll handler or an implicit carousel
+    /// consumes it; the host falls back to canvas pan/zoom otherwise. `dx`/`dy` are
     /// screen-pixel deltas (same magnitude the design canvas pans by).
     pub fn dispatch_wheel(&mut self, scene_x: f32, scene_y: f32, dx: f32, dy: f32) -> bool {
         use jian_core::geometry::point;
         use jian_core::gesture::pointer::WheelEvent;
         let mut event = WheelEvent::simple(point(scene_x, scene_y), point(dx, dy));
         event.t_ms = self.last_now_ms;
+        let scroll_before = self.binding_overlay.scroll_revision();
         // Desktop hosts still use this bool adapter. Keep its consumed result
         // while sharing scroll offsets, hit geometry and clocks with the core.
         let outcome = self.dispatch_input(crate::PreviewInputEnvelope::new(
@@ -475,7 +489,8 @@ impl PreviewSession {
                 phase: crate::ScrollPhase::Changed,
             },
         ));
-        !outcome.semantic_handlers.is_empty()
+        scroll_before != self.binding_overlay.scroll_revision()
+            || !outcome.semantic_handlers.is_empty()
     }
 
     /// Translate a scene-space point into the runtime's hit-test space.

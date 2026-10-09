@@ -81,7 +81,9 @@ fn collect_binding_sites_under(
     for node in nodes {
         let node_id = node.id_str();
         let page_root = page_root.or(Some(node_id));
-        let own_scroll = node_has_on_scroll(node).then_some(node_id);
+        let own_scroll = (node_has_on_scroll(node)
+            || crate::binding_overlay::is_horizontal_viewport(node))
+        .then_some(node_id);
         let nearest_scroll = own_scroll.or(scroll_ancestor).or(page_root);
         if let Some(bindings) = node_bindings(node) {
             for (property, expression) in bindings {
