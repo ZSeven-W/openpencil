@@ -7,12 +7,15 @@ use crate::layout_scene::{
 use crate::{Color, Rect};
 use std::fmt::Write as _;
 
+mod composite;
+#[cfg(test)]
+mod composite_tests;
 mod image_metadata;
 #[path = "svg_export_rect.rs"]
 mod rect;
 mod transform;
 
-use rect::{emit_rect, emit_rect_fill, emit_rect_stroke_overlay};
+use rect::{emit_rect, emit_rect_fill, emit_rect_stroke_overlay, emit_widget_frame_background};
 use transform::{
     apply_ancestor_clip_bounds, apply_clip_bounds, close_ancestor_clip_groups,
     emit_affine_group_start, emit_ancestor_clip_defs, emit_ancestor_clip_groups_start,
@@ -287,7 +290,7 @@ fn collect_bounds(n: &SceneNode, parent_xform: glam::Affine2, acc: &mut BoundsAc
     }
     if n.clip_content && !n.children.is_empty() && n.bounds.size.x > 0.0 && n.bounds.size.y > 0.0 {
         let mut child_acc = BoundsAcc::new();
-        for child in &n.children {
+        for child in n.visible_children() {
             collect_bounds(child, local_xform, &mut child_acc);
         }
         if let Some(visible) = child_acc
@@ -303,12 +306,24 @@ fn collect_bounds(n: &SceneNode, parent_xform: glam::Affine2, acc: &mut BoundsAc
         }
         return;
     }
-    for child in &n.children {
+    for child in n.visible_children() {
         collect_bounds(child, local_xform, acc);
     }
 }
 
 fn own_paint_corners(n: &SceneNode) -> Option<Vec<glam::Vec2>> {
+    if composite::has_widget_visual(n) {
+        // An empty input still paints its surface, placeholder and icons.
+        // Its degraded Text kind must not make the export appear empty.
+        let r = normalize_rect(n.bounds);
+        let pad = n.stroke.map_or(0.0, |stroke| stroke.width.max(0.0) / 2.0);
+        return Some(vec![
+            glam::Vec2::new(r.origin.x - pad, r.origin.y - pad),
+            glam::Vec2::new(r.origin.x + r.size.x + pad, r.origin.y - pad),
+            glam::Vec2::new(r.origin.x + r.size.x + pad, r.origin.y + r.size.y + pad),
+            glam::Vec2::new(r.origin.x - pad, r.origin.y + r.size.y + pad),
+        ]);
+    }
     crate::scene_bounds::own_paint_corners(n, SVG_PAINT_RULES)
 }
 
@@ -333,20 +348,27 @@ fn emit_node(out: &mut String, n: &SceneNode) {
     let defers_rect_stroke = matches!(n.kind, NodeKind::Rect | NodeKind::Frame)
         && !n.children.is_empty()
         && n.stroke.is_some();
-    match &n.kind {
-        NodeKind::Rect | NodeKind::Frame if defers_rect_stroke => emit_rect_fill(out, n),
-        NodeKind::Rect | NodeKind::Frame => emit_rect(out, n),
-        NodeKind::Ellipse => emit_ellipse(out, n),
-        NodeKind::Polygon => emit_polygon(out, n),
-        NodeKind::Line => emit_line(out, n),
-        NodeKind::Path => emit_path(out, n),
-        NodeKind::Text => emit_text(out, n),
-        NodeKind::Group => {}
-        NodeKind::Other(_) => {
-            if n.image_src.is_some() {
-                emit_image(out, n);
-            } else if n.fill.is_some() || n.gradient.is_some() || n.stroke.is_some() {
-                emit_rect(out, n);
+    if matches!(n.kind, NodeKind::Frame) && composite::has_widget_visual(n) {
+        // Frame widgets retain their authored container behind the tab bar.
+        emit_widget_frame_background(out, n, defers_rect_stroke);
+    }
+    let composite_painted = composite::emit_visual(out, n);
+    if !composite_painted {
+        match &n.kind {
+            NodeKind::Rect | NodeKind::Frame if defers_rect_stroke => emit_rect_fill(out, n),
+            NodeKind::Rect | NodeKind::Frame => emit_rect(out, n),
+            NodeKind::Ellipse => emit_ellipse(out, n),
+            NodeKind::Polygon => emit_polygon(out, n),
+            NodeKind::Line => emit_line(out, n),
+            NodeKind::Path => emit_path(out, n),
+            NodeKind::Text => emit_text(out, n),
+            NodeKind::Group => {}
+            NodeKind::Other(_) => {
+                if n.image_src.is_some() {
+                    emit_image(out, n);
+                } else if n.fill.is_some() || n.gradient.is_some() || n.stroke.is_some() {
+                    emit_rect(out, n);
+                }
             }
         }
     }
@@ -357,13 +379,13 @@ fn emit_node(out: &mut String, n: &SceneNode) {
     if clips_children {
         let _ = write!(out, r#"<g clip-path="url(#clip-{})">"#, svg_id(&n.id));
     }
-    for child in &n.children {
+    for child in n.visible_children() {
         emit_node(out, child);
     }
     if clips_children {
         out.push_str("</g>");
     }
-    if defers_rect_stroke {
+    if defers_rect_stroke && (!composite_painted || matches!(n.kind, NodeKind::Frame)) {
         emit_rect_stroke_overlay(out, n);
     }
     if needs_opacity_group {

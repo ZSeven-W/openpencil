@@ -19,6 +19,16 @@ pub(super) fn emit_rect_fill(out: &mut String, node: &SceneNode) {
     emit_rect_shape(out, node, Some(&node.id), &fill_attrs(node));
 }
 
+pub(super) fn emit_widget_frame_background(out: &mut String, node: &SceneNode, defer_stroke: bool) {
+    let attrs = if defer_stroke {
+        fill_attrs(node)
+    } else {
+        fill_stroke_attrs(node)
+    };
+    // The widget group owns the scene id; this background is a paint detail.
+    emit_rect_shape(out, node, None, &attrs);
+}
+
 pub(super) fn emit_rect_stroke_overlay(out: &mut String, node: &SceneNode) {
     let Some(stroke) = node.stroke else {
         return;
