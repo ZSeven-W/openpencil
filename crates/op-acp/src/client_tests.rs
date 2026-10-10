@@ -688,3 +688,27 @@ fn remote_connector_uses_explicit_rustls_configuration() {
     assert_eq!(config.max_message_size, Some(MAX_INBOUND_FRAME_BYTES));
     assert_eq!(config.max_frame_size, Some(MAX_INBOUND_FRAME_BYTES));
 }
+
+/// Same rule as the chat spawn resolver: on Windows the executable extensions
+/// have to be probed before the bare name, because `is_executable_candidate`
+/// is only an `is_file()` check there and `npm i -g` leaves an extensionless
+/// POSIX shell script sitting next to the `.cmd` shim.
+#[cfg(windows)]
+#[test]
+fn windows_candidates_try_executable_extensions_before_the_bare_name() {
+    let dir = std::path::Path::new(r"C:\tools\bin");
+    let path = std::env::join_paths([dir]).unwrap();
+    let candidates = command_candidates("codex", &path.to_string_lossy());
+
+    assert_eq!(
+        &candidates[..6],
+        &[
+            dir.join("codex.exe"),
+            dir.join("codex.cmd"),
+            dir.join("codex.bat"),
+            dir.join("codex.com"),
+            dir.join("codex.ps1"),
+            dir.join("codex"),
+        ]
+    );
+}
