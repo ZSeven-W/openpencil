@@ -235,7 +235,12 @@ fn text_highlighter_cover(
     let text_rect = rect_of(&kids[index], rects)?;
     let named_highlighter = |node: &Value| {
         let name = node.get("name").and_then(Value::as_str).unwrap_or("");
-        name.to_ascii_lowercase().contains("highlight") || name.contains("高亮")
+        let lower = name.to_ascii_lowercase();
+        lower.contains("highlight")
+            || lower.contains("marker")
+            || ["高亮", "记号笔", "记号带", "荧光笔"]
+                .iter()
+                .any(|label| name.contains(label))
     };
     kids[..index].iter().position(|cover| {
         let name = cover.get("name").and_then(Value::as_str).unwrap_or("");

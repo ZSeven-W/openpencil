@@ -5,6 +5,44 @@
 //! controls authored after it.
 
 use super::*;
+
+#[test]
+fn marker_names_from_generated_knowledge_cards_cannot_hide_supplied_copy() {
+    for (stack_name, band_name) in [
+        ("标题-记号笔层", "薄荷色带"),
+        ("对应关系句-带层", "黄记号带"),
+        ("荧光笔强调", "色带"),
+        ("marker-emphasis", "band"),
+    ] {
+        let mut stack = json!({
+            "type": "frame", "id": "stack", "name": stack_name, "layout": "none",
+            "children": [
+                {"type": "rectangle", "id": "band", "name": band_name,
+                 "fill": [{"type": "solid", "color": "#A5F3C0"}]},
+                {"type": "text", "id": "copy", "content": "一一对应。"}
+            ]
+        });
+        let rects = HashMap::from([
+            ("band".to_string(), rect(0.0, 14.0, 216.0, 50.0)),
+            ("copy".to_string(), rect(0.0, 0.0, 220.0, 60.0)),
+        ]);
+        let mut commands = Vec::new();
+        collect_buried_overlay_fixes(&stack, &rects, &mut commands);
+        assert_eq!(
+            moved_ids(&commands),
+            vec!["copy"],
+            "{stack_name}/{band_name}"
+        );
+
+        stack["children"][0]["name"] = json!("删除线 strike-through");
+        commands.clear();
+        collect_buried_overlay_fixes(&stack, &rects, &mut commands);
+        assert!(
+            commands.is_empty(),
+            "an explicit strike-through remains intentional"
+        );
+    }
+}
 use serde_json::json;
 
 #[test]

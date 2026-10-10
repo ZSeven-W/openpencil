@@ -111,6 +111,61 @@ fn fenced_materials_stop_at_the_closing_fence_and_oversized_contracts_are_not_tr
     assert!(SourceCopy::from_brief(&large).lines.is_empty());
 }
 
+fn copy_plan(elements: &[&str]) -> crate::plan::OrchestratorPlan {
+    serde_json::from_value(json!({
+        "rootFrame":{"id":"root","name":"Cards","width":1080,"height":1440},
+        "subtasks":elements.iter().enumerate().map(|(i, copy)| json!({
+            "id":format!("s{i}"),"label":format!("Card {i}"),
+            "elements":copy,"region":{"width":1080,"height":1440},
+        })).collect::<Vec<_>>(),
+    }))
+    .unwrap()
+}
+
+#[test]
+fn multi_section_copy_has_one_owner_and_duplicate_occurrences_are_not_reused() {
+    let contract = SourceCopy::from_brief(
+        "Keep all following text verbatim:\nLatte 28\nOat Latte 28\nLatte 28",
+    );
+    let plan = copy_plan(&["Latte 28\nOat Latte 28", "Latte 28"]);
+    assert!(contract.missing_in_plan(&plan).is_empty());
+    assert_eq!(
+        contract.for_subtask(&plan, &plan.subtasks[0]).lines,
+        ["Latte 28", "Oat Latte 28"]
+    );
+    assert_eq!(
+        contract.for_subtask(&plan, &plan.subtasks[1]).lines,
+        ["Latte 28"]
+    );
+    let dropped = copy_plan(&["Latte 28\nOat Latte 28", "Another card"]);
+    assert_eq!(contract.missing_in_plan(&dropped), ["Latte 28"]);
+}
+
+#[test]
+fn a_title_or_paraphrase_is_not_a_complete_source_line_in_the_plan() {
+    let contract = SourceCopy::from_brief(
+        "保留全部原文，以下内容逐条排版。\n先做1页试稿，核对原始资料，再决定是否扩展为多页。\n正文不要靠缩小字号塞进版面；可以调整留白、行长和分组。",
+    );
+    let plan = copy_plan(&[
+        "先做1页试稿；核对原始资料，再决定是否扩展为多页。",
+        "核对交付",
+    ]);
+    assert_eq!(contract.missing_in_plan(&plan), contract.lines);
+    assert!(contract
+        .for_subtask(&plan, &plan.subtasks[0])
+        .lines
+        .is_empty());
+}
+
+#[test]
+fn source_contract_does_not_expand_the_prompts_of_freeform_creative_briefs() {
+    let contract = SourceCopy::from_brief("设计天马行空的咖啡主题卡片");
+    let mut prompt = String::from("unchanged");
+    contract.append_planning_instruction(&mut prompt);
+    contract.append_section_instruction(&mut prompt);
+    assert_eq!(prompt, "unchanged");
+}
+
 #[test]
 #[ignore = "set OPENPENCIL_SOURCE_COPY_REPLAY to the retained desktop document"]
 fn replay_saved_desktop_missing_copy() {

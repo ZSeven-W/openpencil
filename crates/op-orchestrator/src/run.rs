@@ -57,6 +57,9 @@ mod run_orchestrator;
 #[path = "run_salvage_pass.rs"]
 mod run_salvage_pass;
 
+#[path = "run_source_copy_plan.rs"]
+mod source_copy_plan;
+
 /// TS `replaceEmptyFrame` parity: detect a single EMPTY top-level frame (the
 /// fresh-canvas starter) that can be REUSED as the design root instead of
 /// inserting a brand-new root. Returns its id when the active page holds
@@ -188,8 +191,7 @@ async fn planning_loop(
                     apply_plan_pins(&mut plan, forced_style_guide_name, request);
                     plan =
                         maybe_replan_for_coverage(request, llm, abort, on_progress, plan).await?;
-                    let norm = normalize_logging_coverage_drops(&mut plan, request);
-                    return Ok((plan, norm));
+                    return source_copy_plan::ensure(request, llm, abort, on_progress, plan).await;
                 }
                 let preview = raw.trim().chars().take(150).collect::<String>();
                 tracing::warn!(
@@ -244,8 +246,7 @@ async fn planning_loop(
     // without this a pin was lost precisely when planning had already failed
     // twice and the design needed every bit of direction it could get.
     crate::style_guide_context::enforce_pinned_style_guide(&mut fallback, request);
-    let norm = normalize(&mut fallback, request);
-    Ok((fallback, norm))
+    source_copy_plan::ensure(request, llm, abort, on_progress, fallback).await
 }
 
 /// Longest model-output / error preview echoed by the debug-plan lines.
@@ -423,6 +424,10 @@ mod tests;
 #[cfg(test)]
 #[path = "run_source_copy_tests.rs"]
 mod source_copy_tests;
+
+#[cfg(test)]
+#[path = "run_source_copy_multi_tests.rs"]
+mod source_copy_multi_tests;
 
 #[cfg(test)]
 #[path = "run_tests_pinned_style.rs"]

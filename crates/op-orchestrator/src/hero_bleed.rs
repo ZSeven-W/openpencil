@@ -131,10 +131,29 @@ pub(crate) fn enforce(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_id: 
         .cloned()
         .unwrap_or_else(|| json!(0));
     let original_padding = section_value.get("padding").cloned();
+    let is_overlay_section = layout_str(&section_value) == Some("none");
     section_value["name"] = Value::String(format!("{original_name}{BLEED_NAME_SUFFIX}"));
     section_value["padding"] = zero_horizontal_padding(original_padding.as_ref());
 
-    let trailing = next_children.split_off(first_index + 1);
+    // Direct overlay siblings belong to one viewport. Putting its scrim and
+    // copy into a vertical inset turns their heights into a tall blank band.
+    if is_overlay_section && media_path.len() == 1 {
+        for child in &mut next_children {
+            if child.get("width").and_then(Value::as_f64) == chosen_original_width
+                && chosen_original_width.is_some()
+                && (child.get("type").and_then(Value::as_str) == Some("image")
+                    || is_coloured_media(child))
+            {
+                child["width"] = Value::String("fill_container".into());
+                child["x"] = json!(0);
+            }
+        }
+    }
+    let trailing = if is_overlay_section {
+        Vec::new()
+    } else {
+        next_children.split_off(first_index + 1)
+    };
     if !trailing.is_empty() {
         let wrapper_id = unique_wrapper_id(sink.state(), &section_id);
         next_children.push(json!({
@@ -150,6 +169,16 @@ pub(crate) fn enforce(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_id: 
         }));
     }
     section_value["children"] = Value::Array(next_children);
+    if is_overlay_section && media_path.len() == 1 {
+        repair_image_hero_stack(
+            &mut section_value,
+            media_path[0],
+            &original_name,
+            sink.state(),
+            &variables,
+            &theme,
+        );
+    }
 
     let Ok(patch_json) = serde_json::to_string(&json!({
         "name": section_value.get("name").cloned().unwrap_or(Value::Null),

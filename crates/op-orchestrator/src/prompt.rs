@@ -212,6 +212,8 @@ pub fn build_orchestrator_prompt(
             );
             let mut user_prompt = cp.user_prompt;
             append_reference_skeleton(&mut user_prompt, req);
+            crate::source_copy::SourceCopy::from_brief(&req.prompt)
+                .append_planning_instruction(&mut user_prompt);
             let mut system_prompt = cp.system;
             system_prompt.push_str(PLANNING_QUALITY_GUARDRAILS);
             PlanningPrompt {
@@ -258,6 +260,8 @@ pub fn build_orchestrator_prompt(
             system_prompt.push_str(planning_suffix(mode));
             let mut user_prompt = req.prompt.clone();
             append_reference_skeleton(&mut user_prompt, req);
+            crate::source_copy::SourceCopy::from_brief(&req.prompt)
+                .append_planning_instruction(&mut user_prompt);
             PlanningPrompt {
                 call_request: CallRequest {
                     system_prompt,

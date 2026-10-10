@@ -217,7 +217,7 @@ fn full_bleed_instruction_is_scoped_to_the_marked_subtask() {
     hero.bleed_hero = true;
     let plan = plan();
     let req = req();
-    let exact = "This section is full-bleed: give the section frame no horizontal padding, let its first media node (image or colour block) span the full root width, and put every text or control that follows inside one inner frame with `padding: [0,24]`.";
+    let exact = "This section is full-bleed:";
 
     let (ordinary_call, _) = build_subagent_prompt(
         &ordinary,
@@ -240,6 +240,11 @@ fn full_bleed_instruction_is_scoped_to_the_marked_subtask() {
 
     assert!(!ordinary_call.user_prompt.contains(exact));
     assert!(hero_call.user_prompt.contains(exact));
+    assert!(hero_call.user_prompt.contains("BELOW the media"));
+    assert!(hero_call.user_prompt.contains("OVER the media"));
+    assert!(hero_call
+        .user_prompt
+        .contains("never stack overlay layers vertically"));
 }
 
 #[test]

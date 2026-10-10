@@ -163,6 +163,74 @@ fn hero_bleed_is_idempotent() {
 }
 
 #[test]
+fn direct_overlay_hero_keeps_copy_and_scrim_in_the_same_viewport() {
+    let mut root = evidence_root();
+    root["children"][1] = json!({
+        "type": "frame", "id": "hero-section", "name": "Hero",
+        "width": "fill_container", "height": "fit_content",
+        "layout": "none", "padding": [0, 24], "clipContent": true,
+        "children": [
+            {"type": "image", "id": "hero-image", "width": 327, "height": 330,
+             "x": 24, "y": 0, "src": "coffee.png"},
+            {"type": "rectangle", "id": "hero-scrim", "width": 327, "height": 330,
+             "x": 24, "y": 0, "fill": [{"type": "linear_gradient", "angle": 90,
+                "stops": [{"offset": 0, "color": "#FFFFFF00"},
+                          {"offset": 1, "color": "#FFFFFFFF"}]}]},
+            {"type": "frame", "id": "hero-copy", "x": 24, "y": 220,
+             "width": 327, "height": 76, "layout": "vertical", "children": [
+                {"type": "text", "id": "hero-title", "content": "晴日咖啡 · 静安店",
+                 "fontSize": 24, "fill": [{"type": "solid", "color": "#0F172A"}]}
+             ]}
+        ]
+    });
+    root["children"].as_array_mut().unwrap().push(json!({
+        "type": "frame", "id": "prices", "name": "Prices", "width": "fill_container",
+        "height": 100, "children": []
+    }));
+    let mut sink = sink_with(root);
+
+    assert_eq!(enforce(&mut sink, &plan(), "root"), 1);
+
+    let hero = hero_value(&sink);
+    assert_eq!(hero["layout"], "none");
+    let children = hero["children"].as_array().unwrap();
+    assert_eq!(
+        children.len(),
+        3,
+        "overlay must not gain a vertical wrapper or second scrim"
+    );
+    assert_eq!(children[1]["width"], "fill_container");
+    assert_eq!(children[1]["x"], 0.0);
+    assert_eq!(children[2]["id"], "hero-copy");
+    assert_eq!(children[2]["x"], 24.0);
+    assert_eq!(children[2]["y"], 220.0);
+    assert_eq!(children[2]["width"], 327.0);
+    assert_eq!(children[2]["children"][0]["fill"][0]["color"], "#0F172A");
+
+    let scene = op_pen_loader::editor_state_to_layout_scene(sink.state());
+    let root = &scene.active_page().unwrap().children[0];
+    let hero = root
+        .children
+        .iter()
+        .find(|n| n.id == "hero-section")
+        .unwrap();
+    let prices = root.children.iter().find(|n| n.id == "prices").unwrap();
+    assert!(
+        (hero.bounds.size.y - 330.0).abs() < 0.5,
+        "overlay heights must not be added together: {:?}",
+        hero.bounds
+    );
+    assert!(
+        prices.bounds.origin.y < 450.0,
+        "prices must follow the 330px hero without a blank band: {:?}",
+        prices.bounds
+    );
+    let after_first = root_value(&sink);
+    assert_eq!(enforce(&mut sink, &plan(), "root"), 0);
+    assert_eq!(root_value(&sink), after_first);
+}
+
+#[test]
 fn section_whose_first_non_status_child_is_text_is_untouched() {
     let mut root = evidence_root();
     root["children"][1]["children"] = json!([

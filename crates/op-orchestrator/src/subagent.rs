@@ -244,15 +244,13 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
     if is_blank_container_forest(&nodes) {
         return fail("blank container root produced no content nodes".into());
     }
-    // A single planned section owns the whole supplied-copy contract. A
-    // multi-section plan is checked once across its final boards instead;
-    // requiring every section to repeat all copy would corrupt that design.
-    if plan.subtasks.len() == 1 {
-        let missing =
-            crate::source_copy::SourceCopy::from_brief(&req.prompt).missing(sink.state(), &nodes);
-        if !missing.is_empty() {
-            return fail(crate::source_copy::SourceCopy::retry_feedback(&missing));
-        }
+    // Check only this section's promised copy; multi-page runs must neither
+    // lose supplied lines nor repeat every line on each page.
+    let missing = crate::source_copy::SourceCopy::from_brief(&req.prompt)
+        .for_subtask(plan, subtask)
+        .missing(sink.state(), &nodes);
+    if !missing.is_empty() {
+        return fail(crate::source_copy::SourceCopy::retry_feedback(&missing));
     }
     // Semantic role inference + role-default injection (P2 I1/I2) on the parsed
     // subtree, BEFORE the fallback sizing normalize (semantic-before-fallback,
