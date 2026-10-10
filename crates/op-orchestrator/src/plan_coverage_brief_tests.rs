@@ -10,6 +10,38 @@ const ARENA_M02_BRIEF: &str = "健身 App 首页（375×812）：顶部问候与
 const ENGLISH_FITNESS_BRIEF: &str = "A fitness app home screen (375x812) with a greeting header, a daily goal ring, a horizontally scrolling course carousel, a weekly activity bar chart, and a bottom tab bar.";
 
 #[test]
+fn optional_photo_method_does_not_require_an_extra_coffee_section() {
+    assert_eq!(
+        required_sections("首屏包含品牌、推荐饮品、三款饮品价格以及自取说明，可使用真实咖啡照片。"),
+        vec!["品牌", "推荐饮品", "饮品价格", "自取说明"]
+    );
+}
+
+#[test]
+fn optional_material_list_preserves_later_required_sections() {
+    assert_eq!(
+        required_sections("海报包含活动标题，可采用照片、插画和纹理，报名入口。"),
+        vec!["活动标题", "报名入口"]
+    );
+    assert_eq!(
+        required_sections(
+            "A page with a hero, optionally use photos and illustrations, and a footer."
+        ),
+        vec!["hero", "footer"]
+    );
+}
+
+#[test]
+fn optional_method_bullets_do_not_drop_real_photo_or_capability_sections() {
+    assert_eq!(
+        required_sections(
+            "- 可选用真实照片\n- 真实咖啡照片\n- 可编辑表格\n- 可横滑卡片\n- 可视化统计\n- 可使用的优惠券列表\n- 可选用户列表"
+        ),
+        vec!["真实咖啡照片", "可编辑表格", "可横滑卡片", "可视化统计", "可使用的优惠券列表", "可选用户列表"]
+    );
+}
+
+#[test]
 fn card_copy_constraints_do_not_request_an_extra_section() {
     let sections = required_sections(
         "做4张中文知识卡，每张只讲一个步骤，包含短标题和清楚的操作建议，不增加原文没有的能力承诺。",

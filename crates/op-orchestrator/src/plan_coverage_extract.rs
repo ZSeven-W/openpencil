@@ -217,6 +217,7 @@ fn normalize_section(raw: &str, declared: bool) -> Option<String> {
     let text = text.trim();
     if text.is_empty()
         || is_negated_section(text)
+        || is_optional_method_instruction(text)
         || is_motion_clause(text)
         || is_descriptor_clause(text)
         || is_sentence_length(text)
@@ -292,6 +293,41 @@ fn is_negated_section(text: &str) -> bool {
         || text.starts_with("别加")
         || text.starts_with("别放")
         || text.starts_with("没有")
+}
+
+/// Optional ways to render a section are not extra sections. Keep capability
+/// nouns such as `可编辑表格` and explicitly requested photo sections intact.
+fn is_optional_method_instruction(text: &str) -> bool {
+    let text = text.trim();
+    // `可选用户列表` is a selectable-user section, not the verb `可选用`.
+    if text.starts_with("可选用户") {
+        return false;
+    }
+    if [
+        "可使用",
+        "可以使用",
+        "可采用",
+        "可以采用",
+        "可选用",
+        "可以选用",
+    ]
+    .iter()
+    .any(|prefix| {
+        text.strip_prefix(prefix)
+            .is_some_and(|rest| !rest.starts_with('的'))
+    }) {
+        return true;
+    }
+    let lower = text.to_ascii_lowercase();
+    [
+        "may use ",
+        "can use ",
+        "you may use ",
+        "you can use ",
+        "optionally use ",
+    ]
+    .iter()
+    .any(|prefix| lower.starts_with(prefix))
 }
 
 /// Very short CJK items are usually text fields, not sections (`歌名`, `时间`,
@@ -378,7 +414,15 @@ fn split_cjk_items(list: &str) -> Vec<RawItem> {
     // splitting inside them cut the section in half and the paren-balance
     // screen then dropped BOTH halves (arena-m02 lost its course rail).
     let list = PARENS.replace_all(list, "");
-    let list = list.as_ref();
+    // A comma-delimited optional method clause can contain its own material
+    // list (`可使用照片和插画`). Drop that entire clause, but resume extracting
+    // required sections after the next comma, such as `报名入口`.
+    let list = list
+        .split('，')
+        .filter(|clause| !is_optional_method_instruction(clause))
+        .collect::<Vec<_>>()
+        .join("，");
+    let list = list.as_str();
     // Split on every separator, remembering the conjunction that followed each
     // piece: a `与/和` pair with a ≤2-char side is kept whole (they are the text
     // fields of one section, `歌名与歌手`), not split into bare nouns.
@@ -450,12 +494,15 @@ fn split_english_items(list: &str) -> Vec<RawItem> {
             .trim_start_matches("and ")
             .trim_start_matches("And ")
             .trim();
-        if trimmed.is_empty() {
+        if trimmed.is_empty() || is_optional_method_instruction(trimmed) {
             continue;
         }
         let mut sep_before = "";
         for and_part in trimmed.split(" and ") {
             let item = and_part.trim();
+            if is_optional_method_instruction(item) {
+                break;
+            }
             if !item.is_empty() {
                 let detail_of =
                     descriptor_parent(items.last(), sep_before, opens_english_descriptor);

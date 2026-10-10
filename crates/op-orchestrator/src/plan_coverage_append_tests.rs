@@ -6,6 +6,25 @@ const ARENA_M02_BRIEF: &str = "健身 App 首页（375×812）：顶部问候与
 
 const ENGLISH_FITNESS_BRIEF: &str = "A fitness app home screen (375x812) with a greeting header, a daily goal ring, a horizontally scrolling course carousel, a weekly activity bar chart, and a bottom tab bar.";
 
+#[test]
+fn optional_coffee_photos_do_not_append_a_phantom_section() {
+    let required =
+        required_sections("首屏包含品牌、推荐饮品、三款饮品价格以及自取说明，可使用真实咖啡照片。");
+    let mut plan = plan(vec![
+        subtask("brand", "品牌", "晴日咖啡 · 静安店"),
+        subtask("drinks", "推荐饮品", "真实咖啡照片及饮品价格"),
+        subtask("pickup", "自取说明", "到店自取，不含配送。"),
+    ]);
+    let before = ids(&plan)
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    let outcome = append_missing_sections(&mut plan, &required, &[]);
+    assert!(outcome.appended.is_empty(), "{:?}", outcome.appended);
+    assert!(outcome.skipped.is_empty(), "{:?}", outcome.skipped);
+    assert_eq!(ids(&plan), before);
+}
+
 fn subtask(id: &str, label: &str, elements: &str) -> Subtask {
     Subtask {
         id: id.into(),
