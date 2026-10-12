@@ -8,6 +8,38 @@
 use super::*;
 use serde_json::json;
 
+#[test]
+fn binding_does_not_attach_authored_colors_to_tokens_that_cleanup_will_flip() {
+    for (background, name, literal, alternate, kind) in [
+        (
+            "#FAFAF8",
+            "--color-error-foreground",
+            "#FFFFFF",
+            "#0F172A",
+            "text",
+        ),
+        ("#0A0A0A", "--popover", "#FFFFFF", "#1E293B", "frame"),
+    ] {
+        let doc = serde_json::from_value(json!({
+            "version":"1.0", "themes":{"Mode":["Light","Dark"]},
+            "variables":{name:{"type":"color","value":[
+                {"value":literal,"theme":{"Mode":"Light"}},
+                {"value":alternate,"theme":{"Mode":"Dark"}}]}},
+            "children":[{"type":"frame","id":"root","fill":[{"type":"solid","color":background}]}]
+        }))
+        .unwrap();
+        let state = EditorState::from_document(doc);
+        let mut nodes = vec![serde_json::from_value(json!({
+            "type":kind,"id":"authored","content":"Authored caption","fill":[{"type":"solid","color":literal}]
+        })).unwrap()];
+        bind_generated_color_variables(&mut nodes, &state);
+        assert_eq!(
+            serde_json::to_value(&nodes[0]).unwrap()["fill"][0]["color"],
+            literal
+        );
+    }
+}
+
 fn state_with_dusk_palette() -> EditorState {
     let doc: jian_ops_schema::PenDocument = serde_json::from_value(json!({
         "version": "1.0",

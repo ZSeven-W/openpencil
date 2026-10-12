@@ -338,7 +338,11 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
         );
     }
     if tier.runs_pass(crate::repair_tier::TieredPass::VariableBinding) {
-        crate::variable_binding::bind_generated_color_variables(&mut nodes, sink.state());
+        crate::variable_binding::bind_generated_color_variables_for_background(
+            &mut nodes,
+            sink.state(),
+            page_bg.as_deref(),
+        );
     }
     // Surface-color discipline runs AFTER binding: glm emits raw hex, and binding
     // is what turns it into the `$--color-error` / `$--background` refs this

@@ -261,6 +261,11 @@ fn resolve_node_role(node: &mut PenNode, parent_role: Option<&str>) {
     let mut role: Option<String> = node.base().role.clone();
     if role.is_none() {
         if let Some(inferred) = infer_role_from_name(node) {
+            let inferred = if inferred == "cta-section" && is_compact_cta(node) {
+                "button"
+            } else {
+                inferred
+            };
             // The page-chrome-in-card guard applies ONLY to INFERRED roles (TS
             // resolveNodeRole runs it inside the `if (!role)` branch): a card's
             // inner "Header" must not be inferred as a navbar.
@@ -356,6 +361,32 @@ pub fn resolve_forest_roles(nodes: &mut [PenNode], canvas_width: f64, theme: The
     for node in nodes.iter_mut() {
         resolve_tree_roles(node, &ctx);
     }
+}
+
+/// A compact label/action row is a control, even when named `hero-cta`.
+fn is_compact_cta(node: &PenNode) -> bool {
+    let value = serde_json::to_value(node).unwrap_or_default();
+    let compact_width = value["width"].is_null()
+        || value["width"].as_str() == Some("fit_content")
+        || value["width"]
+            .as_f64()
+            .is_some_and(|w| w > 0.0 && w <= 320.0);
+    compact_width
+        && value["height"]
+            .as_f64()
+            .is_some_and(|h| h > 0.0 && h <= 64.0)
+        && value["layout"].as_str() == Some("horizontal")
+        && node.children().is_some_and(|children| {
+            children
+                .iter()
+                .any(|child| matches!(child, PenNode::Text(_)))
+                && children.iter().all(|child| {
+                    matches!(
+                        child,
+                        PenNode::Text(_) | PenNode::IconFont(_) | PenNode::Path(_)
+                    )
+                })
+        })
 }
 
 #[cfg(test)]

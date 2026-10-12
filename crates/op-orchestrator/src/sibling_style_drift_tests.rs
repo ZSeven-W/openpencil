@@ -4,6 +4,26 @@
 //! too-small family, non-twin siblings and chrome subtrees are left alone.
 
 use super::*;
+
+#[test]
+fn primary_play_control_retains_its_circle_among_secondary_controls() {
+    let root: PenNode = serde_json::from_value(serde_json::json!({
+        "type":"frame","id":"controls","layout":"horizontal","children":[
+            {"type":"frame","id":"shuffle","role":"button","width":48,"height":48,"children":[{"type":"icon_font","id":"icon-shuffle","iconFontName":"shuffle"}]},
+            {"type":"frame","id":"previous","role":"button","width":48,"height":48,"children":[{"type":"icon_font","id":"icon-skip-back","iconFontName":"skip-back"}]},
+            {"type":"frame","id":"play","role":"button","width":76,"height":76,"cornerRadius":38,"fill":[{"type":"solid","color":"#FFFFFF"}],"children":[{"type":"icon_font","id":"icon-play","iconFontName":"play"}]},
+            {"type":"frame","id":"next","role":"button","width":48,"height":48,"children":[{"type":"icon_font","id":"icon-skip-forward","iconFontName":"skip-forward"}]},
+            {"type":"frame","id":"repeat","role":"button","width":48,"height":48,"children":[{"type":"icon_font","id":"icon-repeat","iconFontName":"repeat"}]}
+        ]
+    })).unwrap();
+    let mut state = op_editor_core::EditorState::new();
+    state.active_children_mut().clear();
+    state.active_children_mut().push(root);
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
+    repair_sibling_style_drift(&mut sink, "controls");
+    let value = serde_json::to_value(&state.active_children()[0]).unwrap();
+    assert_eq!(value["children"][2]["cornerRadius"], 38.0);
+}
 use crate::cleanup::run_cleanup_passes_with_summary;
 use crate::plan::{OrchestratorPlan, RootFrameSpec};
 use crate::repair_summary::{CheckCategory, RepairSummary};

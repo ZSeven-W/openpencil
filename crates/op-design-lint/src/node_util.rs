@@ -569,6 +569,13 @@ pub fn corner_radius_numeric(node: &PenNode) -> f64 {
     }
 }
 
+/// Fully rounded geometry is an authored shape, not a sibling-style outlier.
+pub fn has_fully_round_shape(node: &PenNode) -> bool {
+    let value = serde_json::to_value(node).unwrap_or_default();
+    matches!((value["width"].as_f64(), value["height"].as_f64()),
+        (Some(w), Some(h)) if w > 0.0 && h > 0.0 && corner_radius_numeric(node) >= w.min(h) / 2.0)
+}
+
 /// Borrow a node's `padding`. Only Frame/Group/Rectangle (`ContainerProps`)
 /// carry it; every other kind yields `None`, matching the TS reading
 /// `undefined` off a non-container sibling. Backs `detect_mixed_sibling_padding`.

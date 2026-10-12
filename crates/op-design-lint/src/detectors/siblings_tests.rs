@@ -14,6 +14,27 @@ use jian_ops_schema::node::PenNode;
 #[cfg(test)]
 mod sibling_inconsistency_tests {
     use super::*;
+
+    #[test]
+    fn a_primary_circular_play_button_is_not_a_sibling_radius_mismatch() {
+        let root: PenNode = serde_json::from_value(serde_json::json!({
+        "type":"frame","id":"controls","layout":"horizontal","children":[
+            {"type":"frame","id":"shuffle","role":"button","width":48,"height":48},
+            {"type":"frame","id":"previous","role":"button","width":48,"height":48},
+            {"type":"frame","id":"play","role":"button","width":76,"height":76,"cornerRadius":38},
+            {"type":"frame","id":"next","role":"button","width":48,"height":48},
+            {"type":"frame","id":"repeat","role":"button","width":48,"height":48}
+        ]
+    })).unwrap();
+        for issues in [
+            detect_sibling_inconsistencies(&root),
+            detect_mixed_sibling_corner_radius(&root),
+        ] {
+            assert!(!issues.iter().any(
+                |issue| issue.node_id == "play" && issue.property == FixProperty::CornerRadius
+            ));
+        }
+    }
     use serde_json::json;
 
     fn node(value: serde_json::Value) -> PenNode {

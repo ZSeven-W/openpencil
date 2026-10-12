@@ -484,8 +484,14 @@ fn plan_family_commands(family: &[Member], commands: &mut Vec<EditorCommand>) {
 
         let radii: Vec<RadiusFact> = nodes.iter().map(|node| radius_fact(node)).collect();
         if let Some(norm) = majority_of(&radii) {
+            let norm_is_round = nodes.iter().zip(&radii).any(|(node, fact)| {
+                *fact == norm && op_design_lint::node_util::has_fully_round_shape(node)
+            });
             for (index, fact) in radii.iter().enumerate() {
-                if fact != &norm {
+                if fact != &norm
+                    && !norm_is_round
+                    && !op_design_lint::node_util::has_fully_round_shape(nodes[index])
+                {
                     member_edits[index].push(Edit::Radius {
                         node_id: nodes[index].id_str().to_string(),
                         patch: radius_patch(&norm),

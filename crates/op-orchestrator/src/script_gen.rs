@@ -62,3 +62,7 @@ pub fn parse_script(text: &str) -> Result<(Vec<PenNode>, StateSchema), ScriptGen
 #[cfg(test)]
 #[path = "script_gen_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "script_gen_style_replay_tests.rs"]
+mod style_replay_tests;

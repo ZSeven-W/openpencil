@@ -130,7 +130,24 @@ struct ColorCandidate {
 }
 
 pub(crate) fn bind_generated_color_variables(nodes: &mut [PenNode], state: &EditorState) {
-    let refs = color_refs(state, NEAR_COLOR_MAX_DISTANCE);
+    bind_generated_color_variables_for_background(nodes, state, None);
+}
+
+pub(crate) fn bind_generated_color_variables_for_background(
+    nodes: &mut [PenNode],
+    state: &EditorState,
+    background: Option<&str>,
+) {
+    let mut refs = color_refs(state, NEAR_COLOR_MAX_DISTANCE);
+    // Binding is not allowed to attach an authored literal to a stock token
+    // whose value the shared cleanup will change. That would silently change
+    // white photo captions and intentionally light controls into dark surfaces.
+    let unstable = crate::loop_finalize::theme_variable_polarity_fixes(state, background);
+    refs.candidates.retain(|candidate| {
+        !unstable
+            .iter()
+            .any(|(name, _)| candidate.reference.strip_prefix('$') == Some(name.as_str()))
+    });
     if refs.candidates.is_empty() {
         return;
     }

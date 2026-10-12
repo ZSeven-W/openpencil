@@ -18,8 +18,8 @@ use serde_json::Value;
 use super::spacing::{is_full_bleed_section, numeric_width};
 use crate::issue::{FixProperty, Issue, IssueCategory, IssueSeverity};
 use crate::node_util::{
-    children, corner_radius_numeric, fmt_num, json_number, node_id, node_kind_str,
-    node_property_value, padding, raw_padding_value, role,
+    children, corner_radius_numeric, fmt_num, has_fully_round_shape, json_number, node_id,
+    node_kind_str, node_property_value, padding, raw_padding_value, role,
 };
 
 /// Properties whose consistency is role-dependent (a fixed mobile-chrome
@@ -222,10 +222,13 @@ fn check_consistency(
     const PILL_RADIUS: f64 = 40.0;
     let is_corner = property == "cornerRadius";
     let majority_is_pill = is_corner
-        && majority_value
+        && (siblings.iter().any(|node| {
+            node_property_value(node, property).as_ref() == Some(&majority_value)
+                && has_fully_round_shape(node)
+        }) || majority_value
             .as_f64()
             .map(|v| v >= PILL_RADIUS)
-            .unwrap_or(false);
+            .unwrap_or(false));
     for (idx, (_, group)) in values.iter().enumerate() {
         if idx == majority_idx {
             continue;
@@ -249,6 +252,13 @@ fn check_consistency(
             continue;
         }
         for node_id_str in &group.nodes {
+            if is_corner
+                && siblings
+                    .iter()
+                    .any(|node| node_id(node) == *node_id_str && has_fully_round_shape(node))
+            {
+                continue;
+            }
             issues.push(Issue {
                 node_id: node_id_str.clone(),
                 category: IssueCategory::SiblingInconsistency,
@@ -327,7 +337,13 @@ fn walk_mixed_corner_radius(node: &PenNode, issues: &mut Vec<Issue>) {
                     // round-then-lint-flattens bug) nor forces square siblings
                     // into pills. Card-scale radii (8–16) still normalize.
                     const PILL_RADIUS: f64 = 40.0;
-                    if num >= PILL_RADIUS || modal >= PILL_RADIUS {
+                    if num >= PILL_RADIUS
+                        || modal >= PILL_RADIUS
+                        || has_fully_round_shape(sibling)
+                        || siblings.iter().any(|node| {
+                            corner_radius_numeric(node) == modal && has_fully_round_shape(node)
+                        })
+                    {
                         continue;
                     }
                     issues.push(Issue {
