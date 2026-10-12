@@ -11,6 +11,17 @@ const SIDE_CUES: &[&str] = &[
     "side", "vertical", "right", "left", "rail", "竖向", "纵向", "右侧", "左侧", "侧边",
 ];
 
+const PAGE_SCROLL_CUES: &[&str] = &[
+    "scroll",
+    "scrolling",
+    "reading",
+    "阅读进度",
+    "滚动进度",
+    "页面滚动",
+];
+
+const RAIL_LABEL_CUES: &[&str] = &["rail", "bar", "indicator", "进度条", "指示", "阅读进度"];
+
 /// Cues that mark a progress subtask as something other than a page-edge
 /// scroll rail: a horizontal card rail whose cards carry progress bars, or a
 /// goal/progress ring. arena-m02 (0925): `今日目标环形进度` ("circular goal ring
@@ -72,6 +83,19 @@ fn is_page_navigation_label(label: &str) -> bool {
 }
 
 fn is_side_progress_candidate(st: &Subtask) -> bool {
+    // Progress plus a right/left-aligned control is not evidence of a page
+    // scroll rail. Folding a player's track information into the header
+    // deletes its title, artist and seek controls. Require page-scroll intent.
+    let scroll_intent = matches_cue(&st.label, PAGE_SCROLL_CUES)
+        || st
+            .elements
+            .as_deref()
+            .is_some_and(|elements| matches_cue(elements, PAGE_SCROLL_CUES));
+    // A whole article that mentions a scroll indicator is still content,
+    // not a dedicated rail. Only the rail itself may be folded away.
+    if !scroll_intent || !matches_cue(&st.label, RAIL_LABEL_CUES) {
+        return false;
+    }
     // A docked side surface (drawer, inspector, detail panel) lives on the
     // side and often lists a progress row, yet it is a whole region the brief
     // asked for. arena-w01 (Opus 5.5, 2026-10-01, both runs): `右侧任务详情抽屉`

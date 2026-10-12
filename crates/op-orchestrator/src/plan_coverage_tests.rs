@@ -14,6 +14,19 @@ const APP16_BRIEF: &str = "App 设置页（375×812）：账户区带头像、�
 const APP19_BRIEF: &str = "理财 App 持仓页（375×812）：总资产卡带涨跌、收益折线图、持仓列表五条（名称+份额+市值+涨跌幅）、快捷操作三按钮、底部导航。";
 const APP20_BRIEF: &str = "二手交易 App 首页（375×812）：搜索栏、分类图标八个、附近好物瀑布流六卡（图+标题+价格+距离）、底部导航五标签。";
 
+#[test]
+fn section_wrapper_suffix_does_not_duplicate_an_existing_album_cover() {
+    for (required, label) in [("大专辑封面", "专辑封面区"), ("品牌故事", "品牌故事区域")]
+    {
+        let planned = plan(vec![subtask("cover", label, None)]);
+        assert!(
+            missing_sections(&[required.to_string()], &planned).is_empty(),
+            "{label}"
+        );
+    }
+    assert!(!label_names_section("工作进度", "工作区"));
+}
+
 fn subtask(id: &str, label: &str, elements: Option<&str>) -> Subtask {
     Subtask {
         id: id.into(),

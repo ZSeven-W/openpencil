@@ -136,8 +136,24 @@ pub(crate) fn de_head(section: &str) -> Option<String> {
 /// [`strip_position_words`]).
 pub(crate) fn label_names_section(section: &str, label: &str) -> bool {
     let han = |text: &str| -> Vec<char> {
-        strip_position_words(text)
-            .chars()
+        let mut text = strip_position_words(text);
+        // Container suffixes describe the section wrapper, not its content.
+        // Keep at least four Han characters so a terse generic label cannot
+        // claim a longer business section (e.g. Work Area vs Work Progress).
+        for suffix in ["区域", "模块", "部分", "区"] {
+            if let Some(head) = text.strip_suffix(suffix) {
+                if head
+                    .chars()
+                    .filter(|ch| crate::plan_coverage::is_han(*ch))
+                    .count()
+                    >= 4
+                {
+                    text = head.to_string();
+                    break;
+                }
+            }
+        }
+        text.chars()
             .filter(|ch| crate::plan_coverage::is_han(*ch))
             .collect()
     };

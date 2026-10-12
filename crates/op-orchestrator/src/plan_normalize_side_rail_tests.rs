@@ -216,3 +216,24 @@ fn a_right_side_detail_drawer_with_a_progress_row_is_not_folded() {
     assert_eq!(fold_side_progress_rail(&mut plan), 0);
     assert_eq!(plan.subtasks.len(), 3);
 }
+
+#[test]
+fn business_progress_next_to_a_right_aligned_control_is_not_a_scroll_rail() {
+    for (label, elements) in [
+        ("Track Info & Progress", "song title (display 32px), artist name (body 16px), heart/favorite button aligned right, seek progress bar with elapsed and remaining time labels"),
+        ("歌曲与播放进度", "歌名、歌手、右侧收藏按钮，播放进度条与剩余时间"),
+        ("Upload Progress", "file name, upload progress, cancel action on the right"),
+        ("Article Content", "reading content, title and paragraphs; scroll progress indicator on the right"),
+    ] {
+        let mut plan = plan(vec![
+            subtask("header", "Now Playing Header", "back, cover"),
+            subtask("info", label, elements),
+            subtask("controls", "Playback Controls", "play, next"),
+        ]);
+        plan.root_frame.width = 375.0;
+        plan.root_frame.height = 812.0;
+        let before = plan.clone();
+        assert_eq!(fold_side_progress_rail(&mut plan), 0, "{label}");
+        assert_eq!(plan, before, "{label}");
+    }
+}
