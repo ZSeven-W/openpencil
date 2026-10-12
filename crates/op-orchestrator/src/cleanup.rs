@@ -333,6 +333,26 @@ pub fn run_cleanup_passes(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_
     run_cleanup_passes_with_summary(sink, plan, root_ids, &mut summary);
 }
 
+/// Async image landing reads the final mobile rails, which may have changed
+/// after the generation-time geometry pass. Preserve the phone viewport.
+pub(crate) fn settle_mobile_image_geometry(sink: &mut dyn DocSink, root_id: &str) {
+    let mobile = find_root(sink.state(), root_id)
+        .and_then(|root| serde_json::to_value(root).ok())
+        .is_some_and(|v| {
+            v["width"]
+                .as_f64()
+                .is_some_and(|w| (240.0..=480.0).contains(&w))
+                && v["height"].as_f64().is_some_and(|h| h >= 500.0)
+        });
+    if mobile {
+        let mut guarded = PreserveRootHeightSink {
+            inner: sink,
+            root_id,
+        };
+        crate::geometry_validation::geometry_validate_and_fix(&mut guarded, root_id);
+    }
+}
+
 /// The real cleanup driver. `summary` accumulates what each contiguous group
 /// of passes checked and how many document edits it applied — see
 /// `crate::repair_summary` for what one "repair" counts as. The measurement

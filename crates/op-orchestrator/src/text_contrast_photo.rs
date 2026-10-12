@@ -7,6 +7,8 @@ mod layers;
 #[cfg(test)]
 #[path = "text_contrast_photo_replay_tests.rs"]
 mod replay_tests;
+#[path = "text_contrast_photo_scrim.rs"]
+mod scrim;
 
 /// Run the same caption repair when asynchronous image enrichment lands.
 pub fn repair_for_image(state: &mut EditorState, image_id: &NodeId) -> usize {
@@ -21,6 +23,7 @@ pub fn repair_for_image(state: &mut EditorState, image_id: &NodeId) -> usize {
         return 0;
     };
     let mut sink = crate::loop_finalize::StateDocSink { state };
+    crate::cleanup::settle_mobile_image_geometry(&mut sink, &root);
     repair(&mut sink, &root)
 }
 
@@ -220,6 +223,53 @@ fn visit(
                     for overlay in &kids[..photo_index] {
                         transparent_caption_texts(overlay, variables, theme, &mut captions);
                     }
+                    let ib = image.bounds;
+                    let loose: Vec<_> = captions
+                        .iter()
+                        .copied()
+                        .filter(|caption| {
+                            opacity(caption) >= 0.99
+                                && kids[..photo_index]
+                                    .iter()
+                                    .find(|branch| {
+                                        op_editor_core::walkers::find_node(
+                                            std::slice::from_ref(*branch),
+                                            &NodeId::new(caption.id_str()),
+                                        )
+                                        .is_some()
+                                    })
+                                    .is_some_and(|branch| {
+                                        caption_tints(branch, caption.id_str(), variables, theme)
+                                            .is_empty()
+                                    })
+                        })
+                        .collect();
+                    if let Some(repaired) = scrim::repair(
+                        sink,
+                        scrim::Context {
+                            node,
+                            page,
+                            variables,
+                            theme,
+                            src,
+                            fit,
+                            image_box: [
+                                ib.origin.x as f64,
+                                ib.origin.y as f64,
+                                ib.size.x as f64,
+                                ib.size.y as f64,
+                            ],
+                        },
+                        &loose,
+                        photo_index,
+                    ) {
+                        count += repaired;
+                        captions.retain(|caption| {
+                            !loose
+                                .iter()
+                                .any(|handled| handled.id_str() == caption.id_str())
+                        });
+                    }
                     for caption in captions {
                         let index = kids
                             .iter()
@@ -319,8 +369,14 @@ fn visit(
                         // silhouette; a loose caption gets the small text panel.
                         let badge = &kids[index];
                         let badge_bounds = (!tints.is_empty()
-                            && node_children_of(badge).len() == 1
-                            && matches!(node_children_of(badge)[0], PenNode::Text(_)))
+                            && node_children_of(badge)
+                                .iter()
+                                .filter(|n| matches!(n, PenNode::Text(_)))
+                                .count()
+                                == 1
+                            && node_children_of(badge)
+                                .iter()
+                                .all(|n| matches!(n, PenNode::Text(_) | PenNode::IconFont(_))))
                         .then(|| page.find(badge.id_str()).map(|n| n.bounds))
                         .flatten();
                         let (panel_box, radius) = match badge_bounds {

@@ -252,6 +252,7 @@ fn dominant_accent_prefers_most_used_chart_token() {
 fn nested_card_redundant_shadow_and_radius_stripped() {
     let mut outer = json!({
         "type":"frame","role":"card","cornerRadius":12,
+        "fill":[{"type":"solid","color":"#FFFFFF"}],
         "effects":[{"type":"shadow","offsetX":0,"offsetY":1,"blur":3,"color":"#0000001A"}],
         "children":[{
             "type":"frame","role":"card","cornerRadius":10,

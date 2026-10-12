@@ -143,3 +143,50 @@ fn nested_card_action_is_not_promoted_as_screen_chrome() {
     assert!(!super::super::mobile_scroll::repair(&mut sink, "root"));
     assert_eq!(sink.state().doc, before);
 }
+
+fn scroll_text(id: &str, content: &str) -> Value {
+    json!({"type":"text","id":id,"content":content,"width":"fit_content","height":"fit_content"})
+}
+
+#[test]
+fn scroll_creation_replay_keeps_photo_card_and_add_button_inside_one_rail() {
+    let mut draft = state(json!({"type":"frame","id":"root","width":390,"height":844,
+    "layout":"vertical","clipContent":true,"children":[
+        {"type":"frame","id":"status","role":"status-bar","width":"fill_container","height":44},
+        {"type":"frame","id":"section","layout":"vertical","width":"fill_container",
+         "padding":[0,24],"children":[
+            {"type":"frame","id":"card","width":"fill_container","height":236,"layout":"none",
+             "clipContent":true,"fill":[{"type":"solid","color":"#F6EDE1"}],"children":[
+                {"type":"frame","id":"add","role":"button","x":282,"y":176,"width":44,"height":44,
+                 "fill":[{"type":"solid","color":"#713E2B"}],"children":[scroll_text("add-label","+")]},
+                {"type":"image","id":"photo","width":342,"height":236,"src":"photo.jpg"}
+             ]},
+            {"type":"rectangle","id":"more","width":"fill_container","height":900,"fill":[{"type":"solid","color":"#F6EDE1"}]}
+         ]},
+        {"type":"frame","id":"nav","role":"bottom-tab-bar","width":"fill_container","height":72,
+         "layout":"horizontal","children":[scroll_text("home","首页"),scroll_text("menu","菜单"),scroll_text("orders","订单"),scroll_text("profile","我的")]}
+    ]}));
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut draft };
+    assert!(super::super::mobile_scroll::repair(&mut sink, "root"));
+    for _ in 0..2 {
+        crate::mobile_content_rail::repair_mobile_content_rails_for_all_roots(&mut sink);
+        let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+        let page = scene.active_page().unwrap();
+        let card = page.find("card").unwrap().bounds;
+        let button = page.find("add").unwrap().bounds;
+        assert!((card.size.x - 342.0).abs() < 0.5, "{card:?}");
+        assert!(
+            button.origin.x + button.size.x <= card.origin.x + card.size.x + 0.5,
+            "{button:?} {card:?}"
+        );
+        assert!(
+            !crate::geometry_validation::geometry_diagnostics(sink.state())
+                .iter()
+                .any(|s| s.contains("clipped-control"))
+        );
+    }
+    assert!(serde_json::to_value(&sink.state().doc)
+        .unwrap()
+        .to_string()
+        .contains("scroll-area"));
+}

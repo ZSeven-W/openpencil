@@ -12,6 +12,35 @@ fn diagnostics_for(root: serde_json::Value) -> Vec<String> {
 }
 
 #[test]
+fn absolute_card_clipping_must_not_hide_a_button() {
+    let issues = diagnostics_for(json!({"type":"frame","id":"card","width":294,
+    "height":236,"layout":"none","clipContent":true,"children":[
+        {"type":"frame","id":"add","role":"button","x":282,"y":176,"width":44,"height":44},
+        {"type":"image","id":"photo","width":342,"height":236,"src":"photo.jpg"}
+    ]}));
+    assert!(
+        issues
+            .iter()
+            .any(|s| s.contains("clipped-control") && s.contains("add")),
+        "{issues:?}"
+    );
+    assert!(!issues
+        .iter()
+        .any(|s| s.contains("clipped-control") && s.contains("photo")));
+}
+
+#[test]
+fn intentional_horizontal_scroller_does_not_report_clipped_buttons() {
+    let issues = diagnostics_for(json!({"type":"frame","id":"rail","width":294,
+        "height":60,"layout":"horizontal","role":"scroll-area","clipContent":true,
+        "children":[{"type":"frame","id":"add","role":"button","width":342,"height":44}]}));
+    assert!(
+        !issues.iter().any(|s| s.contains("clipped-control")),
+        "{issues:?}"
+    );
+}
+
+#[test]
 fn clipped_mobile_root_reports_direct_flow_bottom_nav_past_root_bottom() {
     let issues = diagnostics_for(json!({
         "type": "frame", "id": "root", "name": "Music App Home",

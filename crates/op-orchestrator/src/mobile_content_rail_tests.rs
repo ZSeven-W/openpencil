@@ -39,6 +39,27 @@ fn text(id: &str, content: &str) -> Value {
 }
 
 #[test]
+fn vertical_scroll_shell_does_not_add_a_second_content_rail() {
+    let mut sink = insert(json!({"type":"frame","id":"root","width":390,"height":844,
+    "layout":"vertical","children":[
+        {"type":"frame","id":"status","role":"status-bar","height":44},
+        {"type":"frame","id":"scroll","role":"scroll-area","layout":"vertical",
+         "width":"fill_container","height":"fill_container","clipContent":true,"children":[
+            {"type":"frame","id":"section","layout":"vertical","width":"fill_container",
+             "padding":[0,24],"children":[text("title","今日推荐")]}
+         ]},
+        {"type":"frame","id":"nav","role":"bottom-tab-bar","height":72}
+    ]}));
+    let before = node_json(&sink, "scroll");
+    repair_mobile_content_rails_for_all_roots(&mut sink);
+    assert_eq!(
+        node_json(&sink, "scroll"),
+        before,
+        "the viewport transports already-inset sections; it does not own another gutter"
+    );
+}
+
+#[test]
 fn mixed_mobile_sections_converge_on_existing_content_rail() {
     let mut sink = insert(json!({
         "type":"frame","id":"root","width":375,"height":1285,"layout":"vertical",

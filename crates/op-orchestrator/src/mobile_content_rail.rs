@@ -343,6 +343,10 @@ fn collect_repairs(root: &PenNode) -> Vec<RailRepair> {
 
         if !section.is_container()
             || is_mobile_chrome(section)
+            // A vertical viewport transports complete content sections. Their
+            // own rails must not be duplicated on this new shell at finalize.
+            || (crate::mobile_reflow::is_explicit_scroll_viewport(section)
+                && container_props(section).is_some_and(|p| p.layout == Some(LayoutMode::Vertical)))
             || is_intentional_full_bleed_role(section)
             || is_empty_header_shell(section)
             || is_compact_header_action(section)
