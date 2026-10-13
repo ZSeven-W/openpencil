@@ -235,6 +235,7 @@ pub struct BlockingRecvIter<T> {
     rx: Option<mpsc::Receiver<T>>,
     cancel: Option<Arc<AtomicBool>>,
     task: Option<tokio::task::JoinHandle<()>>,
+    join_on_finish: bool,
 }
 
 impl<T> BlockingRecvIter<T> {
@@ -243,6 +244,7 @@ impl<T> BlockingRecvIter<T> {
             rx: Some(rx),
             cancel: None,
             task: None,
+            join_on_finish: false,
         }
     }
 
@@ -255,6 +257,7 @@ impl<T> BlockingRecvIter<T> {
             rx: Some(rx),
             cancel: Some(cancel),
             task: None,
+            join_on_finish: false,
         }
     }
 
@@ -271,6 +274,31 @@ impl<T> BlockingRecvIter<T> {
             rx: Some(rx),
             cancel: Some(cancel),
             task: Some(task),
+            join_on_finish: false,
+        }
+    }
+
+    /// A cancellation bridge that waits for the aborted task's destructors.
+    /// Consume or drop on a plain thread or a multi-thread runtime worker,
+    /// matching the synchronous contract of [`block_on_anywhere`].
+    pub fn cancellable_joined(
+        rx: mpsc::Receiver<T>,
+        cancel: Arc<AtomicBool>,
+        task: tokio::task::JoinHandle<()>,
+    ) -> Self {
+        let mut iter = Self::cancellable(rx, cancel, task);
+        iter.join_on_finish = true;
+        iter
+    }
+
+    fn abort_worker(&mut self) {
+        if let Some(task) = self.task.take() {
+            task.abort();
+            if self.join_on_finish {
+                block_on_anywhere(async {
+                    let _ = task.await;
+                });
+            }
         }
     }
 }
@@ -297,14 +325,17 @@ impl<T> Iterator for BlockingRecvIter<T> {
                 // Release the receiver before returning so cooperative
                 // provider tasks waiting on `Sender::closed` wake promptly.
                 self.rx.take();
-                if let Some(task) = self.task.take() {
-                    task.abort();
-                }
+                self.abort_worker();
                 return None;
             }
             match self.rx.as_mut()?.poll_recv(&mut cx) {
                 Poll::Ready(Some(value)) => return Some(value),
-                Poll::Ready(None) => return None,
+                Poll::Ready(None) => {
+                    if self.join_on_finish {
+                        self.abort_worker();
+                    }
+                    return None;
+                }
                 Poll::Pending => std::thread::park_timeout(Duration::from_millis(20)),
             }
         }
@@ -323,11 +354,13 @@ impl Wake for ThreadUnparker {
 impl<T> Drop for BlockingRecvIter<T> {
     fn drop(&mut self) {
         self.rx.take();
-        if let Some(task) = self.task.take() {
-            task.abort();
-        }
+        self.abort_worker();
     }
 }
+
+#[cfg(test)]
+#[path = "chat_runtime_joined_tests.rs"]
+mod joined_tests;
 
 fn map_stop_reason(s: Option<&str>) -> StopReason {
     match s.unwrap_or("") {

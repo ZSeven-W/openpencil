@@ -2,6 +2,48 @@ use super::*;
 
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
+pub(crate) fn valid_reply(verdict: &str, reason: &str) -> String {
+    let checks: Vec<serde_json::Value> = [
+        "subject",
+        "count",
+        "required_object",
+        "color_material",
+        "appearance",
+        "action",
+        "background",
+        "composition",
+        "medium",
+        "unrequested_brand",
+        "watermark_ad",
+        "forbidden_text",
+    ]
+    .into_iter()
+    .map(|key| {
+        let evidence = match key {
+            "subject" => ["requested subject", "requested subject is visible", "match"],
+            "unrequested_brand" => [
+                "no unrequested brand",
+                "no visible unrequested brand",
+                "match",
+            ],
+            "watermark_ad" => ["no watermark or ad", "no visible watermark or ad", "match"],
+            _ => ["", "", "not_required"],
+        };
+        serde_json::json!([key, evidence[0], evidence[1], evidence[2]])
+    })
+    .collect();
+    serde_json::json!({
+        "schema_version": 2,
+        "checks": checks,
+        "appearance_contract": {"kind":"not_required", "source_quote":""},
+        "aesthetic_preferences": [],
+        "soft_deviations": if verdict == "weak" { vec!["style"] } else { vec![] },
+        "verdict": verdict,
+        "reason": reason,
+    })
+    .to_string()
+}
+
 fn env_lock() -> MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
@@ -11,7 +53,7 @@ fn env_lock() -> MutexGuard<'static, ()> {
 
 // Deadline tests must not spend their small budgets behind another test's
 // intentionally delayed HTTP server on the production-wide semaphore.
-fn transport_lock() -> MutexGuard<'static, ()> {
+pub(crate) fn transport_lock() -> MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
         .lock()
@@ -66,8 +108,9 @@ fn from_env_requires_all_three_settings() {
 
 #[test]
 fn response_json_is_read_from_content_first() {
+    let reply = format!("prefix {} suffix", valid_reply("on", "clear subject match"));
     let result = parse_verdict_response(
-        Some(r#"prefix {"verdict":"on","reason":"clear subject match"} suffix"#),
+        Some(&reply),
         Some(r#"{"verdict":"off","reason":"ignored"}"#),
     );
     assert_eq!(
@@ -78,13 +121,14 @@ fn response_json_is_read_from_content_first() {
 
 #[test]
 fn response_json_falls_back_to_reasoning_content() {
-    let result = parse_verdict_response(
-        Some("thinking only"),
-        Some(r#"{"verdict":"weak","reason":"partial visual match"}"#),
-    );
+    let reply = valid_reply("weak", "partial visual match");
+    let result = parse_verdict_response(Some("thinking only"), Some(&reply));
     assert_eq!(
         result,
-        Some((RelevanceVerdict::Weak, "partial visual match".to_string()))
+        Some((
+            RelevanceVerdict::Weak,
+            "soft_deviations=style; partial visual match".to_string()
+        ))
     );
 }
 
@@ -150,12 +194,9 @@ fn only_minor_deviations_downgrade_on_to_weak_without_upgrading_off() {
         ("weak", RelevanceVerdict::Weak),
         ("off", RelevanceVerdict::Off),
     ] {
-        let reply = serde_json::json!({
-            "verdict": verdict,
-            "reason": "slightly harsher shadows",
-            "hard_conflicts": [],
-            "soft_deviations": ["lighting"]
-        });
+        let mut reply: serde_json::Value =
+            serde_json::from_str(&valid_reply(verdict, "slightly harsher shadows")).unwrap();
+        reply["soft_deviations"] = serde_json::json!(["lighting"]);
         let candidate = parse_candidate_response(0, Some(&reply.to_string()), None);
         assert_eq!(candidate.verdict, expected);
         assert!(candidate.reason.contains("slightly harsher shadows"));
@@ -163,11 +204,7 @@ fn only_minor_deviations_downgrade_on_to_weak_without_upgrading_off() {
             assert!(candidate.reason.contains("soft_deviations=lighting"));
         }
     }
-    let candidate = parse_candidate_response(
-        0,
-        Some(r#"{"verdict":"on","reason":"matches","hard_conflicts":[],"soft_deviations":[]}"#),
-        None,
-    );
+    let candidate = parse_candidate_response(0, Some(&valid_reply("on", "matches")), None);
     assert_eq!(candidate.verdict, RelevanceVerdict::On);
 }
 
@@ -354,10 +391,8 @@ fn unavailable_candidates_never_displace_confirmed_on_or_weak_matches() {
         }
         fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
             let delta = match request.attachments[0].data[4] {
-                1 => ChatDelta::TextDelta(r#"{"verdict":"on","reason":"match"}"#.into()),
-                2 => ChatDelta::TextDelta(
-                    r#"{"verdict":"weak","reason":"slightly harsh lighting","hard_conflicts":[],"soft_deviations":["lighting"]}"#.into(),
-                ),
+                1 => ChatDelta::TextDelta(valid_reply("on", "match")),
+                2 => ChatDelta::TextDelta(valid_reply("weak", "slightly different style")),
                 _ => ChatDelta::Error("rate limited".into()),
             };
             Box::new(vec![delta].into_iter())
@@ -392,7 +427,7 @@ fn unavailable_candidates_never_displace_confirmed_on_or_weak_matches() {
 
 #[test]
 fn chat_vision_judge_returns_one_verdict_per_thumb_index_aligned() {
-    let (judge, _seen) = scripted_judge(r#"{"verdict":"on","reason":"clear subject match"}"#);
+    let (judge, _seen) = scripted_judge(&valid_reply("on", "clear subject match"));
     let thumbs = vec![fake_jpeg(1), fake_jpeg(2), fake_jpeg(3)];
     let judged = judge.judge("q", "i", &thumbs);
     assert_eq!(judged.len(), 3, "one verdict per input thumbnail");
@@ -408,13 +443,13 @@ fn chat_vision_judge_returns_one_verdict_per_thumb_index_aligned() {
 /// replies with an OpenAI-shaped chat completion whose message content is the
 /// supplied verdict. One std::thread per connection because the judge fires
 /// candidates concurrently. The listener thread is intentionally leaked.
-fn start_verdict_stub(reply: &'static str) -> (u16, Arc<Mutex<Vec<serde_json::Value>>>) {
+fn start_verdict_stub(reply: &str) -> (u16, Arc<Mutex<Vec<serde_json::Value>>>) {
     start_http_judge_stub("200 OK", reply)
 }
 
 fn start_http_judge_stub(
     status: &'static str,
-    reply: &'static str,
+    reply: &str,
 ) -> (u16, Arc<Mutex<Vec<serde_json::Value>>>) {
     let (port, seen, _) = start_controlled_judge_stub(status, reply, Duration::ZERO);
     (port, seen)
@@ -428,7 +463,7 @@ struct StubConcurrency {
 
 fn start_controlled_judge_stub(
     status: &'static str,
-    reply: &'static str,
+    reply: &str,
     delay: Duration,
 ) -> (
     u16,
@@ -490,14 +525,16 @@ fn start_controlled_judge_stub(
     let server_seen = Arc::clone(&seen);
     let concurrency = Arc::new(StubConcurrency::default());
     let server_concurrency = Arc::clone(&concurrency);
+    let reply = reply.to_string();
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             match stream {
                 Ok(stream) => {
                     let seen = Arc::clone(&server_seen);
                     let concurrency = Arc::clone(&server_concurrency);
+                    let reply = reply.clone();
                     std::thread::spawn(move || {
-                        handle(stream, status, reply, &seen, delay, &concurrency)
+                        handle(stream, status, &reply, &seen, delay, &concurrency)
                     })
                 }
                 Err(_) => break,
@@ -536,7 +573,7 @@ fn env_judge_survives_being_called_inside_the_image_runtime() {
     let _transport = transport_lock();
     let _lock = env_lock();
     let _env = JudgeEnvGuard::clear();
-    let (port, _) = start_verdict_stub(r#"{"verdict":"on","reason":"stub"}"#);
+    let (port, _) = start_verdict_stub(&valid_reply("on", "stub"));
     std::env::set_var(BASE_URL_ENV, format!("http://127.0.0.1:{port}/v1"));
     std::env::set_var(API_KEY_ENV, "test-key");
     std::env::set_var(MODEL_ENV, "vision-model");
@@ -590,7 +627,7 @@ fn both_transports_send_identical_contract_and_reject_the_same_hard_conflict() {
 
 #[test]
 fn chat_judge_does_not_start_unbounded_followup_calls() {
-    let (judge, seen) = scripted_judge(r#"{"verdict":"on","reason":"match"}"#);
+    let (judge, seen) = scripted_judge(&valid_reply("on", "match"));
     assert!(!judge.supports_deadline_judging());
     assert!(judge
         .judge_before(
@@ -605,3 +642,6 @@ fn chat_judge_does_not_start_unbounded_followup_calls() {
 
 #[path = "image_relevance_judge_concurrency_tests.rs"]
 mod concurrency_tests;
+
+#[path = "image_relevance_judge_deadline_tests.rs"]
+mod deadline_tests;

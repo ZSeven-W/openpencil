@@ -189,15 +189,15 @@ impl ChatVisionLlmClient {
     }
 }
 
-impl VisionLlmClient for ChatVisionLlmClient {
-    fn validate(&self, req: VisionCallRequest) -> VisionResponse {
+impl ChatVisionLlmClient {
+    fn chat_request(&self, req: VisionCallRequest) -> Result<ChatRequest, VisionResponse> {
         // A malformed / empty screenshot string can't drive a vision
         // call — skip rather than send a text-only critique that would
         // hallucinate against no image.
         let Some(attachment) = Self::screenshot_attachment(&req.image_base64) else {
-            return VisionResponse::Skipped {
+            return Err(VisionResponse::Skipped {
                 reason: Some("screenshot was not valid base64 PNG".to_string()),
-            };
+            });
         };
 
         // Inline the vision system prompt into the user message: the
@@ -211,7 +211,7 @@ impl VisionLlmClient for ChatVisionLlmClient {
             format!("{}\n\n---\n\n{}", req.system, req.message)
         };
 
-        let chat_req = ChatRequest {
+        Ok(ChatRequest {
             system_prompt: String::new(),
             user_message,
             history: Vec::new(),
@@ -225,14 +225,16 @@ impl VisionLlmClient for ChatVisionLlmClient {
             attachments: vec![attachment],
             model: Self::transport_model(self.model.clone())
                 .or_else(|| Self::transport_model(req.model.clone())),
-        };
+        })
+    }
 
+    fn collect_response(deltas: Box<dyn Iterator<Item = ChatDelta> + Send>) -> VisionResponse {
         // `provider.send` is a blocking delta iterator (the same shape the
         // chat session + `ChatProviderLlmClient` drain). Accumulate the
         // text deltas into one reply string. An `Error` delta aborts to
         // `Skipped` so a transport failure can't crash the design turn.
         let mut text = String::new();
-        for delta in self.provider.send(chat_req) {
+        for delta in deltas {
             match delta {
                 ChatDelta::TextDelta(s) => text.push_str(&s),
                 // Thinking tokens are not part of the JSON verdict.
@@ -257,6 +259,18 @@ impl VisionLlmClient for ChatVisionLlmClient {
         }
     }
 }
+
+impl VisionLlmClient for ChatVisionLlmClient {
+    fn validate(&self, req: VisionCallRequest) -> VisionResponse {
+        match self.chat_request(req) {
+            Ok(request) => Self::collect_response(self.provider.send(request)),
+            Err(skipped) => skipped,
+        }
+    }
+}
+
+#[path = "validation_vision_deadline.rs"]
+mod deadline;
 
 #[cfg(test)]
 mod tests {

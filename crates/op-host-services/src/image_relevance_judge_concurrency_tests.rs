@@ -20,7 +20,7 @@ impl ChatProvider for SlowChatProvider {
             concurrency.peak.fetch_max(active, Ordering::SeqCst);
             std::thread::sleep(Duration::from_millis(60));
             concurrency.active.fetch_sub(1, Ordering::SeqCst);
-            ChatDelta::TextDelta(r#"{"verdict":"on","reason":"match"}"#.into())
+            ChatDelta::TextDelta(valid_reply("on", "match"))
         }))
     }
 }
@@ -31,7 +31,7 @@ fn chat_instances_and_mixed_transports_share_the_same_request_budget() {
     for env_count in [0, 1] {
         let (port, seen, concurrency) = start_controlled_judge_stub(
             "200 OK",
-            r#"{"verdict":"on","reason":"match"}"#,
+            &valid_reply("on", "match"),
             Duration::from_millis(60),
         );
         let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -84,7 +84,7 @@ fn chat_instances_and_mixed_transports_share_the_same_request_budget() {
 #[test]
 fn chat_capacity_deadline_cancels_queue_before_provider_is_called() {
     let _transport = transport_lock();
-    let (judge, seen) = scripted_judge(r#"{"verdict":"on","reason":"match"}"#);
+    let (judge, seen) = scripted_judge(&valid_reply("on", "match"));
     let permits = op_image_enrich::net::block_on_image_runtime(async {
         JUDGE_REQUEST_PERMITS
             .acquire_many(MAX_CONCURRENT_CALLS as u32)
@@ -92,7 +92,13 @@ fn chat_capacity_deadline_cancels_queue_before_provider_is_called() {
             .unwrap()
     });
     let started = Instant::now();
-    let candidate = judge.judge_one(0, "q", &fake_jpeg(1), started + Duration::from_millis(40));
+    let candidate = judge.judge_one(
+        0,
+        ("q", ""),
+        &fake_jpeg(1),
+        started + Duration::from_millis(40),
+        &JudgeTraceBatch::default(),
+    );
     let elapsed = started.elapsed();
     assert_eq!(candidate.verdict, RelevanceVerdict::Off);
     assert_eq!(candidate.reason, "judge unavailable");
@@ -116,7 +122,7 @@ fn concurrent_slots_share_one_http_budget_across_clones_and_instances() {
     let _transport = transport_lock();
     let (port, seen, concurrency) = start_controlled_judge_stub(
         "200 OK",
-        r#"{"verdict":"on","reason":"match"}"#,
+        &valid_reply("on", "match"),
         Duration::from_millis(60),
     );
     let make_judge = || OpenAiCompatVisionJudge {
@@ -153,7 +159,7 @@ fn concurrent_slots_share_one_http_budget_across_clones_and_instances() {
 #[test]
 fn deadline_cancels_queued_http_without_opening_a_request() {
     let _transport = transport_lock();
-    let (port, seen) = start_verdict_stub(r#"{"verdict":"on","reason":"match"}"#);
+    let (port, seen) = start_verdict_stub(&valid_reply("on", "match"));
     let judge = OpenAiCompatVisionJudge {
         client: reqwest::Client::builder().no_proxy().build().unwrap(),
         endpoint: format!("http://127.0.0.1:{port}/v1/chat/completions"),
@@ -224,7 +230,10 @@ fn env_judge_deadline_keeps_completed_verdicts_and_cancels_a_silent_candidate() 
                     let _ = socket.read_exact(&mut body);
                     let index = server_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     if index == 0 {
-                        let payload = r#"{"choices":[{"message":{"content":"{\"verdict\":\"on\",\"reason\":\"match\"}"}}]}"#;
+                        let payload = serde_json::json!({
+                            "choices": [{"message": {"content": valid_reply("on", "match")}}]
+                        })
+                        .to_string();
                         let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", payload.len(), payload);
                         socket.write_all(response.as_bytes()).unwrap();
                     } else {

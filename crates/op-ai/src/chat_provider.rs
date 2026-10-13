@@ -327,6 +327,21 @@ pub trait ChatProvider: Send + Sync {
         false
     }
 
+    /// Whether cancellation and iterator drop wait for transport task cleanup.
+    /// This stronger guarantee lets callers retain capacity until work exits.
+    fn supports_joined_cancellable_send(&self) -> bool {
+        false
+    }
+
+    /// Start a joined cancellable turn, or return `None` without starting work.
+    fn send_cancellable_joined(
+        &self,
+        _request: ChatRequest,
+        _cancel: Arc<AtomicBool>,
+    ) -> Option<Box<dyn Iterator<Item = ChatDelta> + Send>> {
+        None
+    }
+
     /// Whether this provider guarantees a text-only turn with no local tools,
     /// filesystem access, MCP surface, or other side effects. Untrusted
     /// evidence workflows must require this separately from cancellation: an
