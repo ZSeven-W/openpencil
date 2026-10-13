@@ -372,7 +372,6 @@ pub struct EditorUiState {
     /// across chrome families, so one field covers toolbar / topbar /
     /// statusbar / chat buttons without duplicating every hover field.
     pub pressed_button: Option<crate::button_press_state::ButtonPressTarget>,
-
     /// True after Cmd/Ctrl+A in the component-browser search box. The
     /// next edit replaces the whole search query.
     pub component_browser_select_all: bool,

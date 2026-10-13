@@ -6,6 +6,9 @@
 
 pub fn lookup(key: &str) -> Option<&'static str> {
     Some(match key {
+        "preview.device.phone" => "Phone",
+        "preview.device.desktop" => "Desktop",
+        "preview.device.canvas" => "Canvas",
         "imagePanel.searchPlaceholder" => "Search images...",
         "imagePanel.searching" => "Searching...",
         "imagePanel.noResults" => "No results found",

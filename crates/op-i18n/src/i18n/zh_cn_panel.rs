@@ -6,6 +6,9 @@
 
 pub fn lookup(key: &str) -> Option<&'static str> {
     Some(match key {
+        "preview.device.phone" => "手机",
+        "preview.device.desktop" => "桌面",
+        "preview.device.canvas" => "画布",
         "imagePanel.searchPlaceholder" => "搜索图片…",
         "imagePanel.searching" => "搜索中…",
         "imagePanel.noResults" => "未找到结果",
