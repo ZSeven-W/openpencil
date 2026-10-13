@@ -129,15 +129,26 @@ pub fn fetch_first_image_resolved_blocking_with_judge_and_deadline(
     if query.is_empty() {
         return None;
     }
-    crate::net::block_on_image_runtime(fetch_first_image_url_with_judge(
-        query,
-        aspect_ratio,
-        credentials,
-        used_urls,
-        judge,
-        intent,
-        deadline,
-    ))
+    crate::net::block_on_image_runtime(async {
+        let (selected, delivery_deadline) = fetch_first_image_url_with_judge(
+            query,
+            aspect_ratio,
+            credentials,
+            used_urls,
+            judge,
+            intent,
+            deadline,
+        )
+        .await?;
+        Some(
+            super::original_delivery::upgrade_selected_image(
+                selected,
+                used_urls,
+                delivery_deadline,
+            )
+            .await,
+        )
+    })
 }
 
 async fn fetch_first_image_url_with_judge(
@@ -148,7 +159,7 @@ async fn fetch_first_image_url_with_judge(
     judge: &dyn ImageRelevanceJudge,
     intent: &str,
     deadline: Option<Instant>,
-) -> Option<ResolvedImage> {
+) -> Option<(ResolvedImage, Option<Instant>)> {
     let client = reqwest::Client::builder()
         .use_rustls_tls()
         .timeout(Duration::from_secs(8))
@@ -178,7 +189,7 @@ async fn fetch_first_image_url_with_judge(
         fetch_judged_openverse(&client, hits, &slot, used_urls, true, "openverse").await
     {
         if let Some(image) = fallback.consider("openverse", &query, image) {
-            return Some(image);
+            return Some((image, fallback.delivery_deadline()));
         }
     }
 
@@ -191,7 +202,7 @@ async fn fetch_first_image_url_with_judge(
     // judge bound per call is unchanged.
     for rewrite in rewrite_queries(&query, intent) {
         if !fallback.can_continue(judge) {
-            return fallback.finish();
+            return fallback.finish_with_deadline();
         }
         eprintln!("[ENRICH] judge-rewrite: \"{query}\" → \"{rewrite}\"");
         let slot = JudgeSlot {
@@ -221,11 +232,11 @@ async fn fetch_first_image_url_with_judge(
         })
         .await;
         let Ok(image) = result else {
-            return fallback.finish();
+            return fallback.finish_with_deadline();
         };
         if let Some(image) = image {
             if let Some(image) = fallback.consider("openverse-rewrite", &rewrite, image) {
-                return Some(image);
+                return Some((image, fallback.delivery_deadline()));
             }
         }
     }
@@ -242,7 +253,7 @@ async fn fetch_first_image_url_with_judge(
     if words.len() > 2 {
         let truncated = words[..2].join(" ");
         if !fallback.can_continue(judge) {
-            return fallback.finish();
+            return fallback.finish_with_deadline();
         }
         let slot = JudgeSlot {
             deadline: fallback.deadline(),
@@ -254,16 +265,16 @@ async fn fetch_first_image_url_with_judge(
         )
         .await;
         let Ok(image) = result else {
-            return fallback.finish();
+            return fallback.finish_with_deadline();
         };
         if let Some(image) = image {
             if let Some(image) = fallback.consider("wikimedia", &truncated, image) {
-                return Some(image);
+                return Some((image, fallback.delivery_deadline()));
             }
         }
     }
     if !fallback.can_continue(judge) {
-        return fallback.finish();
+        return fallback.finish_with_deadline();
     }
     let slot = JudgeSlot {
         deadline: fallback.deadline(),
@@ -275,27 +286,14 @@ async fn fetch_first_image_url_with_judge(
     )
     .await;
     let Ok(image) = result else {
-        return fallback.finish();
+        return fallback.finish_with_deadline();
     };
     if let Some(image) = image {
         if let Some(image) = fallback.consider("wikimedia", &query, image) {
-            return Some(image);
+            return Some((image, fallback.delivery_deadline()));
         }
     }
-    fallback.finish()
-}
-
-fn resolved(
-    provider: &'static str,
-    provider_query: &str,
-    (title, src): (String, String),
-) -> ResolvedImage {
-    ResolvedImage {
-        src,
-        provider,
-        provider_query: provider_query.to_string(),
-        title,
-    }
+    fallback.finish_with_deadline()
 }
 
 struct PreparedJudgeCandidate {
@@ -303,6 +301,8 @@ struct PreparedJudgeCandidate {
     data_url: String,
     thumb_jpeg: Vec<u8>,
     identity: Option<String>,
+    attribution: String,
+    original: Option<crate::net::providers::OriginalImageSource>,
 }
 
 async fn fetch_judged_openverse(
@@ -327,7 +327,13 @@ async fn fetch_judged_openverse(
             title: hit.title,
             data_url,
             thumb_jpeg,
-            identity: None,
+            identity: Some(if hit.id.trim().is_empty() {
+                format!("openverse:url:{}", hit.thumb_url)
+            } else {
+                format!("openverse:{}", hit.id)
+            }),
+            attribution: hit.attribution,
+            original: hit.original,
         });
     }
     if candidates.len() < taken {
@@ -409,6 +415,11 @@ async fn fetch_judged_wikimedia(
             data_url,
             thumb_jpeg,
             identity: Some(identity),
+            attribution: page["imageinfo"][0]["extmetadata"]["LicenseShortName"]["value"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
+            original: crate::net::providers::original_source(&page["imageinfo"][0], &candidate_url),
         });
     }
     if candidates.is_empty() {
@@ -564,7 +575,7 @@ fn wikimedia_search_url(query: &str, limit: usize) -> Option<reqwest::Url> {
             ("gsrnamespace", "6"),
             ("gsrlimit", limit.as_str()),
             ("prop", "imageinfo"),
-            ("iiprop", "url|size|mime"),
+            ("iiprop", "url|size|mime|extmetadata"),
             ("iiurlwidth", "800"),
             ("format", "json"),
             ("origin", "*"),

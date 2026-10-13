@@ -18,6 +18,7 @@ fn isolated_retry_preserves_the_original_isolation_contract() {
                 "modern sofa isolated photo" => Some(Vec::new()),
                 "sofa" => Some(vec![
                     RawHit {
+                        original: None,
                         id: "bare-studio".to_string(),
                         thumb_url: "https://x/bare-studio.jpg".to_string(),
                         attribution: String::new(),
@@ -25,6 +26,7 @@ fn isolated_retry_preserves_the_original_isolation_contract() {
                         relevance_metadata: "Modern sofa studio photograph".to_string(),
                     },
                     RawHit {
+                        original: None,
                         id: "cutout".to_string(),
                         thumb_url: "https://x/cutout.jpg".to_string(),
                         attribution: String::new(),
@@ -60,6 +62,7 @@ fn relevance_filtered_openverse_results_retry_the_concrete_subject_once() {
         async move {
             match query.as_str() {
                 "wool sweater studio photo" => Some(vec![RawHit {
+                    original: None,
                     id: "catalog".to_string(),
                     thumb_url: "https://x/catalog.jpg".to_string(),
                     attribution: String::new(),
@@ -68,6 +71,7 @@ fn relevance_filtered_openverse_results_retry_the_concrete_subject_once() {
                 }]),
                 "wool sweater" => Some(vec![
                     RawHit {
+                        original: None,
                         id: "holiday".to_string(),
                         thumb_url: "https://x/holiday.jpg".to_string(),
                         attribution: String::new(),
@@ -75,6 +79,7 @@ fn relevance_filtered_openverse_results_retry_the_concrete_subject_once() {
                         relevance_metadata: "Christmas holiday lights".to_string(),
                     },
                     RawHit {
+                        original: None,
                         id: "sweater".to_string(),
                         thumb_url: "https://x/sweater.jpg".to_string(),
                         attribution: String::new(),
@@ -242,6 +247,7 @@ fn wooden_lamp_retry_prefers_concise_product_title() {
 #[test]
 fn explicit_toy_query_keeps_toy_results_but_product_query_rejects_them() {
     let toy = RawHit {
+        original: None,
         id: "toy".to_string(),
         thumb_url: "https://x/toy.jpg".to_string(),
         attribution: String::new(),
@@ -256,6 +262,7 @@ fn explicit_toy_query_keeps_toy_results_but_product_query_rejects_them() {
     );
 
     let toy = RawHit {
+        original: None,
         id: "toy".to_string(),
         thumb_url: "https://x/toy.jpg".to_string(),
         attribution: String::new(),
@@ -274,6 +281,7 @@ fn wikimedia_filtered_primary_retries_concrete_subject() {
         async move {
             match query.as_str() {
                 "wooden lamp studio photo" => vec![RawHit {
+                    original: None,
                     id: "montage".to_string(),
                     thumb_url: "https://x/montage.jpg".to_string(),
                     attribution: String::new(),
@@ -282,6 +290,7 @@ fn wikimedia_filtered_primary_retries_concrete_subject() {
                 }],
                 "wooden lamp" => vec![
                     RawHit {
+                        original: None,
                         id: "dining-room".to_string(),
                         thumb_url: "https://x/dining-room.jpg".to_string(),
                         attribution: String::new(),
@@ -289,6 +298,7 @@ fn wikimedia_filtered_primary_retries_concrete_subject() {
                         relevance_metadata: "Wooden lamp in dining room interior".to_string(),
                     },
                     RawHit {
+                        original: None,
                         id: "lamp".to_string(),
                         thumb_url: "https://x/lamp.jpg".to_string(),
                         attribution: String::new(),
@@ -325,6 +335,7 @@ fn zero_openverse_results_use_the_same_single_retry_path() {
                 "ceramic vase studio photo" => Some(Vec::new()),
                 "ceramic vase" => Some(vec![
                     RawHit {
+                        original: None,
                         id: "hotel".to_string(),
                         thumb_url: "https://x/hotel.jpg".to_string(),
                         attribution: String::new(),
@@ -332,6 +343,7 @@ fn zero_openverse_results_use_the_same_single_retry_path() {
                         relevance_metadata: "Ceramic vase in a hotel lounge interior".to_string(),
                     },
                     RawHit {
+                        original: None,
                         id: "catalog".to_string(),
                         thumb_url: "https://x/catalog.jpg".to_string(),
                         attribution: String::new(),
@@ -339,6 +351,7 @@ fn zero_openverse_results_use_the_same_single_retry_path() {
                         relevance_metadata: "Ceramic vase catalogue illustration".to_string(),
                     },
                     RawHit {
+                        original: None,
                         id: "vase".to_string(),
                         thumb_url: "https://x/vase.jpg".to_string(),
                         attribution: String::new(),
@@ -393,6 +406,7 @@ fn openverse_network_failure_falls_through_without_retrying() {
 #[test]
 fn non_photo_query_keeps_relevant_illustrations() {
     let hits = vec![RawHit {
+        original: None,
         id: "drawing".to_string(),
         thumb_url: "https://x/drawing.jpg".to_string(),
         attribution: String::new(),
@@ -409,6 +423,7 @@ fn non_photo_query_keeps_relevant_illustrations() {
 #[test]
 fn descriptor_only_studio_photo_query_preserves_unclassified_hits() {
     let hits = vec![RawHit {
+        original: None,
         id: "unclassified".to_string(),
         thumb_url: "https://x/unclassified.jpg".to_string(),
         attribution: String::new(),
@@ -430,6 +445,7 @@ fn descriptor_only_isolated_query_still_requires_positive_evidence() {
     ]
     .into_iter()
     .map(|(id, metadata)| RawHit {
+        original: None,
         id: id.to_string(),
         thumb_url: format!("https://x/{id}.jpg"),
         attribution: String::new(),
@@ -448,6 +464,7 @@ fn descriptor_only_isolated_query_still_requires_positive_evidence() {
 fn failed_relevant_thumbnail_never_falls_through_to_downloadable_holiday_hit() {
     let hits = vec![
         RawHit {
+            original: None,
             id: "chair".to_string(),
             thumb_url: "https://x/chair.jpg".to_string(),
             attribution: "By Chair".to_string(),
@@ -455,6 +472,7 @@ fn failed_relevant_thumbnail_never_falls_through_to_downloadable_holiday_hit() {
             relevance_metadata: "Modern armchair".to_string(),
         },
         RawHit {
+            original: None,
             id: "holiday".to_string(),
             thumb_url: "https://x/holiday.jpg".to_string(),
             attribution: "By Holiday".to_string(),

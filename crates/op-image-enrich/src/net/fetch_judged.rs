@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use super::{
-    claim_unused_image_src, image_content_identity, resolved, PreparedJudgeCandidate, ResolvedImage,
+    claim_unused_image_src, image_content_identity, PreparedJudgeCandidate, ResolvedImage,
 };
 use crate::net::judge::select_with_judge_before;
 use crate::net::search_trace::trace_line;
@@ -34,6 +34,8 @@ pub(super) struct JudgedImage {
     pub src: String,
     pub verdict: RelevanceVerdict,
     pub identity: Option<String>,
+    pub attribution: String,
+    pub original: Option<crate::net::providers::OriginalImageSource>,
 }
 
 pub(super) fn claim_ranked_image(
@@ -61,6 +63,8 @@ pub(super) fn claim_ranked_image(
                 src: candidate.data_url.clone(),
                 verdict,
                 identity: candidate.identity.clone(),
+                attribution: candidate.attribution.clone(),
+                original: candidate.original.clone(),
             });
         }
         // Duplicate content keeps its page identity claimed, as in the
@@ -97,6 +101,18 @@ impl<'a> WeakFallback<'a> {
         self.deadline
     }
 
+    pub fn delivery_deadline(&self) -> Option<Instant> {
+        match (self.deadline, self.outer_deadline) {
+            (Some(window), Some(outer)) => Some(window.min(outer)),
+            (window, outer) => window.or(outer),
+        }
+    }
+
+    pub fn finish_with_deadline(self) -> Option<(ResolvedImage, Option<Instant>)> {
+        let deadline = self.delivery_deadline();
+        self.finish().map(|image| (image, deadline))
+    }
+
     pub fn can_continue(&self, judge: &dyn ImageRelevanceJudge) -> bool {
         if self.image.is_none() {
             return true;
@@ -119,7 +135,14 @@ impl<'a> WeakFallback<'a> {
         query: &str,
         image: JudgedImage,
     ) -> Option<ResolvedImage> {
-        let result = resolved(provider, query, (image.title, image.src));
+        let result = ResolvedImage {
+            src: image.src,
+            provider,
+            provider_query: query.to_string(),
+            title: image.title,
+            attribution: image.attribution,
+            original: image.original,
+        };
         if image.verdict == RelevanceVerdict::On {
             self.release();
             eprintln!("[ENRICH] image-selected: verdict=On {}", result.describe());

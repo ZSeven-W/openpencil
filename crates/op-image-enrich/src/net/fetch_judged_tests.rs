@@ -47,11 +47,33 @@ impl ImageRelevanceJudge for RecordingJudge {
 
 fn candidate(src: &str, grade: u8) -> PreparedJudgeCandidate {
     PreparedJudgeCandidate {
+        attribution: "CC BY 4.0".into(),
+        original: None,
         title: src.into(),
         data_url: src.into(),
         thumb_jpeg: vec![grade],
         identity: None,
     }
+}
+
+#[test]
+fn same_artwork_cannot_win_again_with_different_resolution_bytes() {
+    let used = Mutex::new(HashSet::new());
+    let judge = RecordingJudge::default();
+    let slot = JudgeSlot {
+        query: "cream",
+        intent: "cream",
+        judge: &judge,
+        deadline: None,
+    };
+    let mut first = candidate("preview-600", 2);
+    first.identity = Some("openverse:artwork-1".into());
+    let mut second = candidate("original-2048", 2);
+    second.identity = first.identity.clone();
+    let mut fallback = WeakFallback::new(&used, None);
+    let chosen = stage(&slot, &used, &mut fallback, "cream", &[first]).unwrap();
+    assert_eq!(chosen.attribution, "CC BY 4.0");
+    assert!(stage(&slot, &used, &mut fallback, "cream", &[second]).is_none());
 }
 
 fn stage(
@@ -84,6 +106,7 @@ fn weak_primary_does_not_hide_on_in_a_later_tier() {
     let mut weak = candidate("weak", 1);
     weak.identity = Some("wikimedia:123".into());
     assert!(stage(&slot, &used, &mut fallback, slot.query, &[weak]).is_none());
+    let original_window = fallback.delivery_deadline();
     let winner = stage(
         &slot,
         &used,
@@ -94,6 +117,11 @@ fn weak_primary_does_not_hide_on_in_a_later_tier() {
     .unwrap();
     assert_eq!(winner.src, "on");
     assert_eq!(winner.provider_query, "serum bottle");
+    assert_eq!(
+        fallback.delivery_deadline(),
+        original_window,
+        "winning On cannot restart the original-download budget"
+    );
     assert!(fallback.finish().is_none());
     assert!(!used.lock().unwrap().contains("wikimedia:123"));
     assert!(
@@ -104,6 +132,33 @@ fn weak_primary_does_not_hide_on_in_a_later_tier() {
         !claim_unused_image_src(&used, "on"),
         "final winner stays reserved"
     );
+}
+
+#[test]
+fn finishing_weak_preserves_its_original_opportunity_deadline_for_delivery() {
+    let used = Mutex::new(HashSet::new());
+    let judge = RecordingJudge::default();
+    let slot = JudgeSlot {
+        query: "serum",
+        intent: "bottle",
+        judge: &judge,
+        deadline: None,
+    };
+    let outer = Instant::now() + Duration::from_secs(120);
+    let mut fallback = WeakFallback::new(&used, Some(outer));
+    assert!(stage(
+        &slot,
+        &used,
+        &mut fallback,
+        "serum",
+        &[candidate("weak", 1)]
+    )
+    .is_none());
+    let original_window = fallback.deadline().unwrap();
+    let (winner, delivery_deadline) = fallback.finish_with_deadline().unwrap();
+    assert_eq!(winner.src, "weak");
+    assert_eq!(delivery_deadline, Some(original_window));
+    assert!(original_window < outer);
 }
 
 #[test]

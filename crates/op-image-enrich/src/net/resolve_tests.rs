@@ -4,7 +4,9 @@
 
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use super::{fenced_openverse_list_with, fetch_first_image_resolved_blocking, ResolvedImage};
 use crate::net::providers::{fence_rejection, retain_relevant_hits_for_intent, RawHit};
@@ -17,8 +19,65 @@ const CLEANSER_QUERY: &str = "cleanser tube white";
 const CLEANSER_INTENT: &str = "minimal product photography of cleanser tube on a warm neutral \
      background, soft natural light";
 
+#[test]
+fn expired_unjudged_deadline_never_polls_the_provider_ladder() {
+    let polled = AtomicBool::new(false);
+    let result = crate::net::block_on_image_runtime(super::thumbnail_before_deadline(
+        Some(Instant::now()),
+        async {
+            polled.store(true, Ordering::Relaxed);
+            Some(())
+        },
+    ));
+    assert!(result.is_none());
+    assert!(!polled.load(Ordering::Relaxed));
+}
+
+#[test]
+fn unjudged_deadline_cancels_download_and_releases_only_its_pending_identity() {
+    let used = Mutex::new(HashSet::from(["other-slot".into()]));
+    let started = AtomicBool::new(false);
+    let result = crate::net::block_on_image_runtime(super::thumbnail_before_deadline(
+        Some(Instant::now() + Duration::from_millis(280)),
+        async {
+            let _claim =
+                super::PendingProviderClaim::new(&used, "openverse:pending".into()).unwrap();
+            started.store(true, Ordering::Relaxed);
+            std::future::pending::<Option<()>>().await
+        },
+    ));
+    assert!(result.is_none());
+    assert!(started.load(Ordering::Relaxed));
+    assert_eq!(*used.lock().unwrap(), HashSet::from(["other-slot".into()]));
+}
+
+#[test]
+fn completed_unjudged_candidate_keeps_its_identity_at_the_deadline_boundary() {
+    let used = Mutex::new(HashSet::new());
+    let result = crate::net::block_on_image_runtime(super::thumbnail_before_deadline(
+        Some(Instant::now() + Duration::from_secs(1)),
+        async {
+            super::PendingProviderClaim::new(&used, "openverse:complete".into())
+                .unwrap()
+                .settle(crate::net::fetch::ImageCandidateClaim::Claimed(
+                    "preview".into(),
+                ))
+        },
+    ));
+    assert_eq!(result.as_deref(), Some("preview"));
+    assert!(used.lock().unwrap().contains("openverse:complete"));
+}
+
+#[test]
+fn duplicate_pending_claim_cannot_release_another_slots_identity() {
+    let used = Mutex::new(HashSet::from(["openverse:existing".into()]));
+    assert!(super::PendingProviderClaim::new(&used, "openverse:existing".into()).is_none());
+    assert!(used.lock().unwrap().contains("openverse:existing"));
+}
+
 fn hit(id: &str, title: &str, tags: &[&str]) -> RawHit {
     RawHit {
+        original: None,
         id: id.to_string(),
         thumb_url: format!("https://example.invalid/{id}/thumb/"),
         attribution: String::new(),
@@ -217,6 +276,8 @@ fn a_longer_query_retries_with_its_concrete_tail_under_the_authored_fence() {
 #[test]
 fn resolved_image_description_is_one_line_and_url_free() {
     let resolved = ResolvedImage {
+        attribution: String::new(),
+        original: None,
         src: "data:image/jpeg;base64,AAAA".to_string(),
         provider: "openverse",
         provider_query: "serum oil bottle".to_string(),

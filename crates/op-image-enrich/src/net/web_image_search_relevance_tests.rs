@@ -41,6 +41,7 @@ fn relevance_fence_rejects_holiday_hit_and_accepts_armchair_title_or_tag() {
 #[test]
 fn relevance_fence_returns_empty_when_no_hit_mentions_the_subject() {
     let hits = vec![RawHit {
+        original: None,
         id: "holiday".to_string(),
         thumb_url: "https://x/holiday.jpg".to_string(),
         attribution: "By X".to_string(),
@@ -61,6 +62,7 @@ fn relevance_fence_ranks_more_complete_matches_stably() {
     ]
     .into_iter()
     .map(|(id, metadata)| RawHit {
+        original: None,
         id: id.to_string(),
         thumb_url: format!("https://x/{id}.jpg"),
         attribution: String::new(),
@@ -88,6 +90,7 @@ fn multi_word_product_query_rejects_one_generic_match() {
     ]
     .into_iter()
     .map(|(id, metadata)| RawHit {
+        original: None,
         id: id.to_string(),
         thumb_url: format!("https://x/{id}.jpg"),
         attribution: String::new(),
@@ -105,6 +108,7 @@ fn multi_word_product_query_rejects_one_generic_match() {
 #[test]
 fn single_word_product_query_keeps_one_exact_subject_match() {
     let hits = vec![RawHit {
+        original: None,
         id: "armchair".to_string(),
         thumb_url: "https://x/armchair.jpg".to_string(),
         attribution: String::new(),
@@ -134,6 +138,7 @@ fn product_photo_query_rejects_room_scenes_unless_the_query_requests_one() {
     ]
     .into_iter()
     .map(|(id, title, metadata)| RawHit {
+        original: None,
         id: id.to_string(),
         thumb_url: format!("https://x/{id}.jpg"),
         attribution: String::new(),
@@ -147,6 +152,7 @@ fn product_photo_query_rejects_room_scenes_unless_the_query_requests_one() {
     assert_eq!(ids, ["product"]);
 
     let requested_scene = vec![RawHit {
+        original: None,
         id: "scene".to_string(),
         thumb_url: "https://x/scene.jpg".to_string(),
         attribution: String::new(),
@@ -181,6 +187,7 @@ fn lounge_chair_does_not_opt_into_scenes_but_explicit_scene_phrases_do() {
     ]
     .into_iter()
     .map(|(id, title, metadata)| RawHit {
+        original: None,
         id: id.to_string(),
         thumb_url: format!("https://x/{id}.jpg"),
         attribution: String::new(),
@@ -220,6 +227,7 @@ fn concise_subject_dense_vase_title_beats_long_kylix_metadata() {
     ]
     .into_iter()
     .map(|(id, title, metadata)| RawHit {
+        original: None,
         id: id.to_string(),
         thumb_url: format!("https://x/{id}.jpg"),
         attribution: String::new(),
@@ -246,6 +254,7 @@ fn photo_query_rejects_explicit_illustration_and_catalog_hits() {
     ]
     .into_iter()
     .map(|(id, metadata)| RawHit {
+        original: None,
         id: id.to_string(),
         thumb_url: format!("https://x/{id}.jpg"),
         attribution: String::new(),
@@ -279,6 +288,7 @@ fn isolated_query_requires_positive_isolation_metadata() {
     ]
     .into_iter()
     .map(|(id, metadata)| RawHit {
+        original: None,
         id: id.to_string(),
         thumb_url: format!("https://x/{id}.jpg"),
         attribution: String::new(),
@@ -305,6 +315,7 @@ fn hyphenated_compound_survives_the_two_keyword_rewrite() {
 
 fn raw(id: &str, title: &str, tags: &str) -> RawHit {
     RawHit {
+        original: None,
         id: id.to_string(),
         thumb_url: format!("https://x/{id}.jpg"),
         attribution: String::new(),

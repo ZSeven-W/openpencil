@@ -42,6 +42,31 @@ pub struct RawHit {
     pub(crate) attribution: String,
     pub(crate) title: String,
     pub(crate) relevance_metadata: String,
+    pub(crate) original: Option<OriginalImageSource>,
+}
+
+/// The same catalogue artwork's original raster, never an invented URL.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OriginalImageSource {
+    pub url: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+}
+
+pub(crate) fn original_source(
+    info: &serde_json::Value,
+    thumbnail: &str,
+) -> Option<OriginalImageSource> {
+    let url = info.get("url")?.as_str()?.trim();
+    if url.is_empty() || url == thumbnail {
+        return None;
+    }
+    let dimension = |key| info.get(key)?.as_u64().and_then(|n| u32::try_from(n).ok());
+    Some(OriginalImageSource {
+        url: url.to_string(),
+        width: dimension("width"),
+        height: dimension("height"),
+    })
 }
 
 /// `None` = request-level failure (429 / network), `Some([])` = the
@@ -201,6 +226,7 @@ pub fn parse_openverse_results(json: &serde_json::Value) -> Vec<RawHit> {
                     .unwrap_or("")
                     .to_string(),
                 relevance_metadata: openverse_relevance_metadata(r),
+                original: original_source(r, thumb),
             })
         })
         .take(SEARCH_CANDIDATE_COUNT)
@@ -361,6 +387,7 @@ pub fn parse_wikimedia_results(json: &serde_json::Value) -> Vec<RawHit> {
                     .and_then(serde_json::Value::as_str)
                     .unwrap_or("")
                     .to_string(),
+                original: original_source(info, thumb),
             })
         })
         .take(SEARCH_CANDIDATE_COUNT)

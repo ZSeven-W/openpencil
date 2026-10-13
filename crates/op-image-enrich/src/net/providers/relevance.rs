@@ -251,8 +251,8 @@ const INTENT_STYLE_WORDS: &[&str] = &[
 /// Wikimedia ladder.
 ///
 /// 1. The last two content words of the query.
-/// 2. The leading subject words of the intent (the image prompt) with stop
-///    words and style words removed, capped at three words.
+/// 2. Subject words from the intent anchored to the original query, with
+///    nearby concrete context when useful, capped at four words.
 ///
 /// Candidates that are empty, equal to the original query, or equal to an
 /// earlier rewrite are dropped, so the caller's cost bound is at most two
@@ -267,7 +267,7 @@ pub(crate) fn rewrite_queries(query: &str, intent: &str) -> Vec<String> {
         }
     };
     push(two_keyword_rewrite(query));
-    push(intent_rewrite(intent));
+    push(intent_rewrite(query, intent));
     rewrites
 }
 
@@ -280,18 +280,141 @@ fn two_keyword_rewrite(query: &str) -> Option<String> {
     (!tail.is_empty()).then(|| tail.join(" "))
 }
 
-/// The leading subject words of the intent with stop words and style words
-/// removed, capped at three words. `None` when nothing searchable remains.
-fn intent_rewrite(intent: &str) -> Option<String> {
-    let words: Vec<String> = lexical_words(intent)
-        .into_iter()
-        .filter(|word| {
-            !IMAGE_SEARCH_STOP_WORDS.contains(&word.as_str())
-                && !INTENT_STYLE_WORDS.contains(&word.as_str())
+/// Find the authored subject before selecting a short retrieval phrase. Rich
+/// prompts often start with an arbitrary art-direction prefix; taking its
+/// first three tokens can search for staging adjectives instead of the subject.
+fn intent_rewrite(query: &str, intent: &str) -> Option<String> {
+    let mut anchors = Vec::new();
+    for word in core_query_words(query) {
+        if !IMAGE_SEARCH_STOP_WORDS.contains(&word.as_str())
+            && !INTENT_STYLE_WORDS.contains(&word.as_str())
+            && !anchors.contains(&word)
+        {
+            anchors.push(word);
+        }
+    }
+    if anchors.is_empty() {
+        return None;
+    }
+    let words: Vec<(String, usize)> = intent
+        .split([',', ';', '.', '!', '?', '\n'])
+        .enumerate()
+        .flat_map(|(clause, text)| {
+            lexical_words(text)
+                .into_iter()
+                .map(move |word| (word, clause))
         })
-        .take(3)
         .collect();
-    (!words.is_empty()).then(|| words.join(" "))
+    let mut subject = Vec::new();
+    let mut first_match = None;
+    let mut last_match = None;
+    for (index, (word, _)) in words.iter().enumerate() {
+        let canonical = canonicalize_word(word);
+        if anchors.contains(&canonical) && !subject.contains(&canonical) {
+            subject.push(canonical);
+            first_match.get_or_insert(index);
+            last_match = Some(index);
+            if subject.len() == 4 {
+                break;
+            }
+        }
+    }
+    // One generic overlap ("bottle", "model") cannot establish that a
+    // multi-word prompt describes the same subject. Keep the existing query
+    // ladder instead of inventing a rewrite from unrelated intent wording.
+    if subject.len() < anchors.len().min(2) {
+        return None;
+    }
+    let last_match = last_match?;
+    let clause = words[last_match].1;
+    // Preserve a simple location phrase such as "in a clinic". Arbitrary
+    // trailing praise is not subject context; ambiguous longer phrases stay
+    // with the visual judge rather than becoming new retrieval keywords.
+    if subject.len() == 2
+        && words
+            .get(last_match + 1)
+            .is_some_and(|(word, _)| matches!(word.as_str(), "in" | "at" | "inside" | "within"))
+    {
+        let context: Vec<_> = words
+            .iter()
+            .skip(last_match + 2)
+            .take_while(|(_, next_clause)| *next_clause == clause)
+            .map(|(word, _)| word.as_str())
+            .collect();
+        let context = match context.as_slice() {
+            ["a" | "an" | "the", rest @ ..] => rest,
+            rest => rest,
+        };
+        if let [word] = context {
+            let canonical = canonicalize_word(word);
+            if !IMAGE_SEARCH_STOP_WORDS.contains(word)
+                && !INTENT_STYLE_WORDS.contains(word)
+                && !IMAGE_SEARCH_DESCRIPTORS.contains(word)
+                && !subject.contains(&canonical)
+            {
+                subject.push(canonical);
+            }
+        }
+    }
+    // A literal color/material directly before the subject is useful stock
+    // metadata. Positive recognition avoids a growing blacklist of arbitrary
+    // taste adjectives (premium, elegant, etc.) and never displaces a subject.
+    if subject.len() < 4 {
+        let first_match = first_match?;
+        if let Some((word, modifier_clause)) = first_match.checked_sub(1).map(|i| &words[i]) {
+            let canonical = canonicalize_word(word);
+            if *modifier_clause == words[first_match].1
+                && concrete_visual_modifier(&canonical)
+                && !subject.contains(&canonical)
+            {
+                subject.insert(0, canonical);
+            }
+        }
+    }
+    Some(subject.join(" "))
+}
+
+fn concrete_visual_modifier(word: &str) -> bool {
+    matches!(
+        word,
+        "white"
+            | "black"
+            | "gray"
+            | "grey"
+            | "red"
+            | "green"
+            | "blue"
+            | "yellow"
+            | "pink"
+            | "purple"
+            | "orange"
+            | "cyan"
+            | "amber"
+            | "brown"
+            | "ivory"
+            | "beige"
+            | "gold"
+            | "silver"
+            | "glass"
+            | "ceramic"
+            | "porcelain"
+            | "wood"
+            | "steel"
+            | "metal"
+            | "aluminum"
+            | "brass"
+            | "copper"
+            | "chrome"
+            | "plastic"
+            | "paper"
+            | "linen"
+            | "leather"
+            | "fabric"
+            | "wicker"
+            | "stone"
+            | "concrete"
+            | "bamboo"
+    )
 }
 
 pub(super) fn core_query_words(query: &str) -> Vec<String> {
@@ -669,57 +792,5 @@ pub fn simplify_search_query(prompt: &str) -> String {
 }
 
 #[cfg(test)]
-mod rewrite_queries_tests {
-    use super::rewrite_queries;
-
-    #[test]
-    fn two_keyword_rewrite_precedes_the_intent_rewrite() {
-        assert_eq!(
-            rewrite_queries(
-                "female dermatologist portrait",
-                "professional photo of a female dermatologist in a clinic",
-            ),
-            vec![
-                "dermatologist portrait".to_string(),
-                "female dermatologist clinic".to_string(),
-            ]
-        );
-    }
-
-    #[test]
-    fn intent_rewrite_strips_style_words() {
-        assert_eq!(
-            rewrite_queries(
-                "fitness model gym workout",
-                "professional photo of a fitness model in a gym, cinematic lighting, 4k hd",
-            ),
-            vec!["gym workout".to_string(), "fitness model gym".to_string(),]
-        );
-    }
-
-    #[test]
-    fn empty_intent_keeps_only_the_two_keyword_rewrite() {
-        assert_eq!(
-            rewrite_queries("oak desk lamp", ""),
-            vec!["desk lamp".to_string()]
-        );
-    }
-
-    #[test]
-    fn rewrites_matching_the_query_or_each_other_are_dropped() {
-        // Both rewrites resolve to the primary query itself: nothing to retry.
-        assert!(rewrite_queries(
-            "dermatologist portrait",
-            "photo of a dermatologist portrait"
-        )
-        .is_empty());
-        // The intent rewrite duplicates the two-keyword rewrite: deduped.
-        assert_eq!(
-            rewrite_queries(
-                "dermatologist clinic portrait",
-                "professional photo clinic portrait",
-            ),
-            vec!["clinic portrait".to_string()]
-        );
-    }
-}
+#[path = "relevance_rewrite_tests.rs"]
+mod rewrite_queries_tests;

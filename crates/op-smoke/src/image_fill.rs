@@ -231,6 +231,8 @@ mod tests {
     #[test]
     fn provenance_line_names_provider_and_hit_title_without_urls() {
         let hit = op_image_enrich::net::fetch::ResolvedImage {
+            attribution: String::new(),
+            original: None,
             src: "data:image/jpeg;base64,AAAA".to_string(),
             provider: "openverse",
             provider_query: "serum oil bottle".to_string(),
