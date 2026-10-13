@@ -5,6 +5,9 @@
 
 use super::RawHit;
 
+#[path = "relevance_matching.rs"]
+mod matching;
+
 /// Design-artifact words that are pure noise against a photo corpus (see
 /// the desktop `image_search_session.rs` for the measurement notes).
 const IMAGE_SEARCH_ARTIFACT_WORDS: &[&str] = &[
@@ -551,7 +554,7 @@ struct RelevanceContract<'a> {
 
 impl<'a> RelevanceContract<'a> {
     fn new(query: &'a str, intent: &str) -> Self {
-        let core = core_query_words(query);
+        let core = matching::distinct_subjects(concrete_query_words(query));
         // Multi-word product subjects need more than one token of evidence.
         // A single generic overlap such as "lamp" previously accepted
         // "Photography lamp setup" for "ceramic table lamp studio photo",
@@ -607,21 +610,21 @@ fn fence_verdict(
     // reach bait, not a description: an event crowd shot titled that way
     // passed as a "skincare model" photo (2026-09-30). Only prose words and
     // the provider's own tags count as subject evidence.
-    let title = normalized_words(&without_hashtags(&hit.title));
-    let metadata = normalized_words(&without_hashtags(metadata));
-    let title_overlap = overlap_count(core, &title);
+    let title = matching::evidence(core, &without_hashtags(&hit.title));
+    let metadata = matching::evidence(core, &without_hashtags(metadata));
+    let title_overlap = title.overlap;
     if contract.requires_photo && title_overlap == 0 {
         return Err("photo requested but no subject word in the title");
     }
-    let total_overlap = overlap_count(core, &metadata);
+    let total_overlap = metadata.overlap;
     if total_overlap < contract.minimum_overlap {
         return Err("too few subject words in title/tags");
     }
     let title_extra_tokens = title
+        .unmatched
         .iter()
         .filter(|word| {
-            !core.contains(word)
-                && !IMAGE_SEARCH_STOP_WORDS.contains(&word.as_str())
+            !IMAGE_SEARCH_STOP_WORDS.contains(&word.as_str())
                 && !IMAGE_SEARCH_DESCRIPTORS.contains(&word.as_str())
         })
         .count();
@@ -673,10 +676,6 @@ fn retain_relevant_hits_enforcing(
     ranked.into_iter().map(|(_, hit)| hit).collect()
 }
 
-fn overlap_count(core: &[String], candidate: &[String]) -> usize {
-    core.iter().filter(|word| candidate.contains(word)).count()
-}
-
 fn query_requests_photo(query: &str) -> bool {
     normalized_words(query).iter().any(|word| {
         matches!(
@@ -687,7 +686,7 @@ fn query_requests_photo(query: &str) -> bool {
 }
 
 fn metadata_is_explicitly_non_photo(metadata: &str) -> bool {
-    normalized_words(metadata)
+    matching::normalized_fence_words(metadata)
         .iter()
         .any(|word| NON_PHOTO_RESULT_WORDS.contains(&word.as_str()))
 }
@@ -695,12 +694,14 @@ fn metadata_is_explicitly_non_photo(metadata: &str) -> bool {
 fn metadata_is_off_subject(metadata: &str, query: &str) -> bool {
     // Brand names are matched on raw lexical words: canonicalisation would
     // turn "starbucks" into "starbuck" and miss the list.
-    if super::brand_fence::names_unrequested_brand(&lexical_words(metadata), &lexical_words(query))
-    {
+    if super::brand_fence::names_unrequested_brand(
+        &matching::fence_words(metadata),
+        &matching::fence_words(query),
+    ) {
         return true;
     }
-    let metadata = normalized_words(metadata);
-    let query = normalized_words(query);
+    let metadata = matching::normalized_fence_words(metadata);
+    let query = matching::normalized_fence_words(query);
     OFF_SUBJECT_RESULT_GROUPS.iter().any(|group| {
         let query_requests_group = query.iter().any(|word| group.contains(&word.as_str()));
         !query_requests_group && metadata.iter().any(|word| group.contains(&word.as_str()))
@@ -708,7 +709,7 @@ fn metadata_is_off_subject(metadata: &str, query: &str) -> bool {
 }
 
 pub(super) fn query_requests_scene(query: &str) -> bool {
-    let words = normalized_words(query);
+    let words = matching::normalized_fence_words(query);
     words
         .iter()
         .any(|word| SCENE_QUERY_OPT_IN_WORDS.contains(&word.as_str()))
@@ -716,7 +717,7 @@ pub(super) fn query_requests_scene(query: &str) -> bool {
 }
 
 pub(super) fn metadata_is_scene_heavy(metadata: &str) -> bool {
-    let words = normalized_words(metadata);
+    let words = matching::normalized_fence_words(metadata);
     words
         .iter()
         .any(|word| word != "lounge" && SCENE_HEAVY_RESULT_WORDS.contains(&word.as_str()))
