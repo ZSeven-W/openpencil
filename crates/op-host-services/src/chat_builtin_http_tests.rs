@@ -458,6 +458,28 @@ fn provider_does_not_follow_redirects_or_echo_upstream_error_bodies() {
 
 #[test]
 fn exhausted_rate_limit_error_names_http_429_for_the_non_retryable_classifier() {
+    const CHILD: &str = "OPENPENCIL_HTTP_429_TEST_CHILD";
+    if std::env::var_os(CHILD).as_deref() != Some(std::ffi::OsStr::new("1")) {
+        // A real 429 widens the process-wide adaptive throttle, including
+        // providers whose base gap is zero. Keep the production response path
+        // in a child so unrelated parallel deadline tests stay independent.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "chat_builtin_http::tests::exhausted_rate_limit_error_names_http_429_for_the_non_retryable_classifier",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .expect("rate-limit probe process starts");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("1 passed"),
+            "rate-limit probe failed or did not execute\nstdout={stdout}\nstderr={}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
     // Regression lock for a real bug: the prior wording "...(429)..." never
     // contained the literal substring `op_orchestrator::retry::is_non_retryable`
     // matches on ("http 429"), so a genuinely exhausted rate limit from this
