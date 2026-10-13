@@ -2,7 +2,7 @@
 //! backed by the user's configured chat provider.
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use base64::Engine as _;
 use futures::stream::{self, StreamExt};
@@ -150,10 +150,13 @@ impl OpenAiCompatVisionJudge {
             .and_then(value_as_text);
         Ok((content, reasoning_content))
     }
-}
-
-impl ImageRelevanceJudge for OpenAiCompatVisionJudge {
-    fn judge(&self, query: &str, intent: &str, thumbs_jpeg: &[Vec<u8>]) -> Vec<JudgedCandidate> {
+    fn judge_until(
+        &self,
+        query: &str,
+        intent: &str,
+        thumbs_jpeg: &[Vec<u8>],
+        deadline: Option<Instant>,
+    ) -> Vec<JudgedCandidate> {
         let query = query.to_string();
         let intent = intent.to_string();
         let jobs = thumbs_jpeg
@@ -173,13 +176,53 @@ impl ImageRelevanceJudge for OpenAiCompatVisionJudge {
         // 2026-09-05 A/B run saw k=0 on all 170 slots. `block_on_anywhere` is the
         // one sanctioned way to block from sync code whatever the ambient context.
         let mut judged = crate::chat_runtime::block_on_anywhere(async move {
-            stream::iter(jobs)
-                .buffer_unordered(MAX_CONCURRENT_CALLS)
-                .collect::<Vec<_>>()
-                .await
+            let mut jobs = stream::iter(jobs).buffer_unordered(MAX_CONCURRENT_CALLS);
+            let mut completed = Vec::new();
+            loop {
+                let next = if let Some(deadline) = deadline {
+                    let remaining = deadline.saturating_duration_since(Instant::now());
+                    if remaining.is_zero() {
+                        break;
+                    }
+                    match tokio::time::timeout(remaining, jobs.next()).await {
+                        Ok(next) => next,
+                        Err(_) => break,
+                    }
+                } else {
+                    jobs.next().await
+                };
+                let Some(candidate) = next else {
+                    break;
+                };
+                completed.push(candidate);
+            }
+            // Dropping pending async jobs cancels their HTTP futures, including
+            // retries. Keep already completed verdicts instead of discarding
+            // a valid On because a different candidate never answered.
+            completed
         });
         judged.sort_by_key(|candidate| candidate.index);
         judged
+    }
+}
+
+impl ImageRelevanceJudge for OpenAiCompatVisionJudge {
+    fn judge(&self, query: &str, intent: &str, thumbs_jpeg: &[Vec<u8>]) -> Vec<JudgedCandidate> {
+        self.judge_until(query, intent, thumbs_jpeg, None)
+    }
+
+    fn supports_deadline_judging(&self) -> bool {
+        true
+    }
+
+    fn judge_before(
+        &self,
+        query: &str,
+        intent: &str,
+        thumbs_jpeg: &[Vec<u8>],
+        deadline: Instant,
+    ) -> Vec<JudgedCandidate> {
+        self.judge_until(query, intent, thumbs_jpeg, Some(deadline))
     }
 }
 
@@ -242,6 +285,10 @@ impl ChatVisionJudge {
 }
 
 impl ImageRelevanceJudge for ChatVisionJudge {
+    // `ChatVisionLlmClient::validate` drains a blocking provider iterator and
+    // currently does not enforce VisionCallRequest.timeout. Keep the trait's
+    // bounded-judge opt-out so a saved Weak image is delivered immediately
+    // instead of starting an extra call that cannot be interrupted reliably.
     fn judge(&self, query: &str, intent: &str, thumbs_jpeg: &[Vec<u8>]) -> Vec<JudgedCandidate> {
         let prompt = judge_prompt(query, intent);
         let indexed: Vec<(usize, &Vec<u8>)> = thumbs_jpeg.iter().enumerate().collect();

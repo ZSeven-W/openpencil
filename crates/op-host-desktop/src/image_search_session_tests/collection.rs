@@ -344,6 +344,7 @@ fn failed_search_writes_the_adaptive_placeholder_sentinel() {
     let mut session = ImageSearchSession {
         in_flight: HashSet::from(["img1".to_string()]),
         jobs: vec![ImageSearchJob {
+            deadline: None,
             node_id: NodeId::new("img1"),
             intent: None,
             fallback_target: None,

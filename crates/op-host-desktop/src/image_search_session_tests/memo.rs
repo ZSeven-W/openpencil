@@ -48,6 +48,7 @@ fn a_repeat_query_gets_the_same_photo_back_not_a_dedup_downgrade() {
             "kitten photo".to_lowercase(),
             Option::<op_image_enrich::ImageAspectRatio>::None
         ),
+        None,
     );
     let answer = job
         .rx
@@ -99,6 +100,7 @@ fn a_pending_search_intent_is_singleflight() {
             "bali, indonesia",
             Option::<op_image_enrich::ImageAspectRatio>::None
         ),
+        None,
     );
 
     let waiters = match memo.lock().unwrap().remove(&key) {

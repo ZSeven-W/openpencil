@@ -31,6 +31,7 @@ fn poll_into_applies_finished_job_to_placeholder_frame() {
         in_flight: HashSet::from(["photo".to_string()]),
         completed: HashSet::new(),
         jobs: vec![ImageSearchJob {
+            deadline: None,
             node_id: NodeId::new("photo"),
             intent: None,
             fallback_target: None,
@@ -74,6 +75,7 @@ fn poll_discards_standalone_image_result_after_collaboration_binds() {
     let mut session = ImageSearchSession {
         in_flight: HashSet::from(["img1".to_string()]),
         jobs: vec![ImageSearchJob {
+            deadline: None,
             node_id: NodeId::new("img1"),
             intent: None,
             fallback_target: None,
@@ -134,6 +136,7 @@ fn successful_apply_does_not_suppress_later_unfilled_retry() {
         in_flight: HashSet::from(["photo".to_string()]),
         completed: HashSet::new(),
         jobs: vec![ImageSearchJob {
+            deadline: None,
             node_id: NodeId::new("photo"),
             intent: None,
             fallback_target: None,
@@ -193,6 +196,7 @@ fn poll_into_completion_invalidates_scan_gate() {
         in_flight: HashSet::from(["img1".to_string()]),
         completed: HashSet::new(),
         jobs: vec![ImageSearchJob {
+            deadline: None,
             node_id: NodeId::new("img1"),
             intent: None,
             fallback_target: None,
@@ -247,6 +251,7 @@ fn poll_discards_a_result_when_the_nodes_image_intent_changed() {
     let mut session = ImageSearchSession {
         in_flight: HashSet::from(["img1".to_string()]),
         jobs: vec![ImageSearchJob {
+            deadline: None,
             node_id: NodeId::new("img1"),
             intent: Some(expected),
             fallback_target: None,
@@ -298,6 +303,7 @@ fn poll_discards_a_result_when_only_provider_truncated_words_changed() {
     let mut session = ImageSearchSession {
         in_flight: HashSet::from(["img1".to_string()]),
         jobs: vec![ImageSearchJob {
+            deadline: None,
             node_id: NodeId::new("img1"),
             intent: Some(expected),
             fallback_target: None,
@@ -349,6 +355,7 @@ fn poll_shares_one_stale_intent_scan_across_a_completed_batch() {
         ))))
         .unwrap();
         jobs.push(ImageSearchJob {
+            deadline: None,
             node_id: NodeId::new(id),
             intent: Some(expected_by_id[id].clone()),
             fallback_target: None,
@@ -397,6 +404,7 @@ fn poll_does_not_scan_intents_while_all_jobs_are_pending() {
     let mut session = ImageSearchSession {
         in_flight: HashSet::from(["img1".to_string()]),
         jobs: vec![ImageSearchJob {
+            deadline: None,
             node_id: NodeId::new("img1"),
             intent: Some(intent_fingerprint(&target, None)),
             fallback_target: None,
@@ -548,6 +556,7 @@ fn document_replacement_reset_drops_stale_pending_job_so_it_cannot_apply_to_new_
         in_flight: HashSet::from(["photo".to_string()]),
         completed: HashSet::new(),
         jobs: vec![ImageSearchJob {
+            deadline: None,
             node_id: NodeId::new("photo"),
             intent: None,
             fallback_target: None,

@@ -1,5 +1,7 @@
 //! Visual relevance judging and the provider-independent re-ranking policy.
 
+use std::time::Instant;
+
 /// Coarse visual relevance for one candidate thumbnail.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RelevanceVerdict {
@@ -21,6 +23,25 @@ pub struct JudgedCandidate {
 /// calls concurrently, but must return one entry per input thumbnail.
 pub trait ImageRelevanceJudge: Send + Sync {
     fn judge(&self, query: &str, intent: &str, thumbs_jpeg: &[Vec<u8>]) -> Vec<JudgedCandidate>;
+
+    /// Only opt in when the implementation can stop its transport by the
+    /// deadline, including silent providers and retries. A synchronous judge
+    /// cannot be bounded by wrapping its caller in an async timeout.
+    fn supports_deadline_judging(&self) -> bool {
+        false
+    }
+
+    /// Return completed verdicts by the deadline. Unsupported judges do not
+    /// start an unbounded extra call when a usable Weak fallback exists.
+    fn judge_before(
+        &self,
+        _query: &str,
+        _intent: &str,
+        _thumbs_jpeg: &[Vec<u8>],
+        _deadline: Instant,
+    ) -> Vec<JudgedCandidate> {
+        Vec::new()
+    }
 }
 
 /// The default keeps the pre-judge behavior: every candidate is eligible and
@@ -39,6 +60,24 @@ impl ImageRelevanceJudge for NoJudge {
                 reason: String::new(),
             })
             .collect()
+    }
+
+    fn supports_deadline_judging(&self) -> bool {
+        true
+    }
+
+    fn judge_before(
+        &self,
+        query: &str,
+        intent: &str,
+        thumbs: &[Vec<u8>],
+        deadline: Instant,
+    ) -> Vec<JudgedCandidate> {
+        if Instant::now() >= deadline {
+            Vec::new()
+        } else {
+            self.judge(query, intent, thumbs)
+        }
     }
 }
 
@@ -67,6 +106,22 @@ impl JudgeSelection {
     pub fn ordered_indices(&self) -> &[usize] {
         &self.ordered
     }
+
+    /// Preserve the winning candidate's grade across provider tiers. An On
+    /// count alone is insufficient when every On image is already used and
+    /// the provider advances to a Weak candidate in the same result set.
+    pub fn verdict_for(&self, index: usize) -> Option<RelevanceVerdict> {
+        self.ordered
+            .iter()
+            .position(|item| *item == index)
+            .map(|rank| {
+                if rank < self.on {
+                    RelevanceVerdict::On
+                } else {
+                    RelevanceVerdict::Weak
+                }
+            })
+    }
 }
 
 /// Judge batches in order, stopping at the first batch with an On candidate.
@@ -83,6 +138,16 @@ pub fn select_with_judge(
     intent: &str,
     batches: &[Vec<Vec<u8>>],
 ) -> JudgeSelection {
+    select_with_judge_before(judge, query, intent, batches, None)
+}
+
+pub(crate) fn select_with_judge_before(
+    judge: &dyn ImageRelevanceJudge,
+    query: &str,
+    intent: &str,
+    batches: &[Vec<Vec<u8>>],
+    deadline: Option<Instant>,
+) -> JudgeSelection {
     let mut selection = JudgeSelection {
         picked: None,
         rounds: 0,
@@ -96,6 +161,9 @@ pub fn select_with_judge(
     let mut weak_fallback: Vec<usize> = Vec::new();
 
     for batch in batches {
+        if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+            break;
+        }
         if batch.is_empty() {
             continue;
         }
@@ -103,7 +171,10 @@ pub fn select_with_judge(
             selection.k = batch.len();
         }
         selection.rounds += 1;
-        let judged = judge.judge(query, intent, batch);
+        let judged = match deadline {
+            Some(deadline) => judge.judge_before(query, intent, batch, deadline),
+            None => judge.judge(query, intent, batch),
+        };
         let mut on = Vec::new();
         let mut weak = Vec::new();
         for candidate in judged {

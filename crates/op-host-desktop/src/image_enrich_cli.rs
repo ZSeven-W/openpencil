@@ -226,8 +226,18 @@ fn enrich_document(request: &EnrichRequest) -> Result<EnrichSummary, EnrichError
     // environment so no credential is ever persisted by this process.
     install_env_generation_profile(&mut state);
 
+    let mut session = ImageSearchSession::new();
+    enrich_and_save_state(&mut state, &request.output, request.timeout, &mut session)
+}
+
+fn enrich_and_save_state<S: retry::EnrichSession>(
+    state: &mut EditorState,
+    output: &Path,
+    timeout: Duration,
+    session: &mut S,
+) -> Result<EnrichSummary, EnrichError> {
     let original_page = state.ui.active_page_index;
-    let result = enrich_state(&mut state, request.timeout);
+    let result = retry::enrich_state_with_session(state, timeout, session);
     let restored = state.set_active_page(original_page);
     if !restored {
         return Err(EnrichError::InvalidPage {
@@ -235,8 +245,17 @@ fn enrich_document(request: &EnrichRequest) -> Result<EnrichSummary, EnrichError
             page_count: state.page_count(),
         });
     }
-    let summary = result?;
-    save_enriched_state(&mut state, &request.output, summary)
+    match result {
+        Ok(summary) => save_enriched_state(state, output, summary),
+        Err(error @ EnrichError::Timeout { .. }) => {
+            // Other slots may already have completed before the pending one
+            // exhausted the shared deadline. Persist those results atomically,
+            // while retaining the timeout so the CLI still exits non-zero.
+            save_current_image_state(state, output)?;
+            Err(error)
+        }
+        Err(error) => Err(error),
+    }
 }
 
 /// `OPENPENCIL_ENRICH_WORKBENCH_BASE_URL` + `_KEY` (+ optional `_MODEL`)
@@ -280,6 +299,14 @@ fn save_enriched_state(
     // plus five downloaded images when a single apparel shot had no match in
     // the stock library (2026-09-04). Write the partial result, then report
     // the failure — the non-zero exit still makes it loud.
+    save_current_image_state(state, output)?;
+    if summary.failed != 0 || summary.unresolved != 0 {
+        return Err(EnrichError::Failed(summary));
+    }
+    Ok(summary)
+}
+
+fn save_current_image_state(state: &mut EditorState, output: &Path) -> Result<(), EnrichError> {
     // Cleanup runs before this late enrichment pass. Reuse the orchestrator's
     // shared policy here so failed and still-empty slots are materialized
     // before the partial result is persisted.
@@ -287,13 +314,10 @@ fn save_enriched_state(
     op_host_services::doc_io::save_to_path(state, output).map_err(|error| EnrichError::Save {
         path: output.to_path_buf(),
         message: error.to_string(),
-    })?;
-    if summary.failed != 0 || summary.unresolved != 0 {
-        return Err(EnrichError::Failed(summary));
-    }
-    Ok(summary)
+    })
 }
 
+#[cfg(test)]
 fn enrich_state(state: &mut EditorState, timeout: Duration) -> Result<EnrichSummary, EnrichError> {
     let mut session = ImageSearchSession::new();
     retry::enrich_state_with_session(state, timeout, &mut session)

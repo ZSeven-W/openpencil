@@ -21,6 +21,9 @@ use super::{EnrichError, EnrichSummary, POLL_INTERVAL};
 const MAX_STOCK_SEARCH_ATTEMPTS: usize = 3;
 
 pub(super) trait EnrichSession {
+    /// One absolute deadline covers all pages and stock-search retries.
+    fn set_deadline(&mut self, _deadline: Instant) {}
+
     fn enqueue(
         &mut self,
         state: &EditorState,
@@ -36,6 +39,10 @@ pub(super) trait EnrichSession {
 }
 
 impl EnrichSession for ImageSearchSession {
+    fn set_deadline(&mut self, deadline: Instant) {
+        self.set_deadline(deadline);
+    }
+
     fn enqueue(
         &mut self,
         state: &EditorState,
@@ -76,6 +83,9 @@ pub(super) fn enrich_state_with_session<S: EnrichSession>(
     // One deadline covers every retry on every page. Document load and the
     // final atomic save intentionally sit outside it.
     let started = Instant::now();
+    if let Some(deadline) = started.checked_add(timeout) {
+        session.set_deadline(deadline);
+    }
     let timeout_seconds = timeout.as_secs();
     let page_count = state.page_count();
     let mut targets = 0usize;
@@ -309,9 +319,12 @@ mod tests {
 
     #[derive(Default)]
     struct ScriptedSession {
+        deadlines: Vec<Instant>,
+        dispatched_deadlines: Vec<Instant>,
         outcomes: HashMap<String, VecDeque<Option<String>>>,
         attempts: HashMap<String, usize>,
         completed: HashSet<String>,
+        stalled: HashSet<String>,
         pending: Vec<(NodeId, ImageRequestMode)>,
     }
 
@@ -342,6 +355,10 @@ mod tests {
     }
 
     impl EnrichSession for ScriptedSession {
+        fn set_deadline(&mut self, deadline: Instant) {
+            self.deadlines.push(deadline);
+        }
+
         fn enqueue(
             &mut self,
             state: &EditorState,
@@ -355,6 +372,8 @@ mod tests {
             );
             let targets = collect_targets(state, &known);
             for target in targets {
+                self.dispatched_deadlines
+                    .push(*self.deadlines.last().expect("deadline precedes dispatch"));
                 *self
                     .attempts
                     .entry(target.node_id.as_str().to_string())
@@ -373,6 +392,10 @@ mod tests {
             let mut changed = false;
             for (node_id, _) in pending {
                 let id = node_id.as_str().to_string();
+                if self.stalled.contains(&id) {
+                    self.pending.push((node_id, ImageRequestMode::Search));
+                    continue;
+                }
                 let outcome = self
                     .outcomes
                     .get_mut(&id)
@@ -402,6 +425,79 @@ mod tests {
             op_editor_core::Locale::EnUs,
         )
         .expect("load enrichment fixture")
+    }
+
+    #[test]
+    fn all_pages_and_retries_keep_the_original_absolute_deadline() {
+        let mut state = load(
+            r#"{"version":"1.0","pages":[
+              {"id":"p1","name":"One","children":[{"type":"image","id":"first","src":"","imageSearchQuery":"forest trail","width":160,"height":90}]},
+              {"id":"p2","name":"Two","children":[{"type":"image","id":"second","src":"","imageSearchQuery":"mountain lake","width":160,"height":90}]}
+            ]}"#,
+        );
+        let mut session =
+            ScriptedSession::with_outcomes("first", vec![None, Some("data:image/png;base64,AA==")])
+                .and_outcomes("second", vec![None, Some("data:image/png;base64,AQ==")]);
+        let timeout = Duration::from_secs(120);
+        let before = Instant::now();
+
+        let summary = enrich_state_with_session(&mut state, timeout, &mut session).expect("enrich");
+
+        assert_eq!(summary.resolved, 2);
+        assert_eq!(
+            session.deadlines.len(),
+            1,
+            "retries never restart the clock"
+        );
+        let deadline = session.deadlines[0];
+        assert!(deadline >= before + timeout);
+        assert!(deadline <= Instant::now() + timeout);
+        assert_eq!(session.dispatched_deadlines, vec![deadline; 4]);
+    }
+
+    #[test]
+    fn timeout_saves_completed_slot_before_returning_the_original_error() {
+        let mut state = load(
+            r#"{"version":"1.0","children":[{"type":"image","id":"ready","src":"","imageSearchQuery":"forest trail","width":160,"height":90},{"type":"image","id":"stalled","src":"","imageSearchQuery":"mountain lake","width":160,"height":90}]}"#,
+        );
+        let mut session =
+            ScriptedSession::with_outcomes("ready", vec![Some("data:image/png;base64,AA==")]);
+        session.stalled.insert("stalled".into());
+        let directory = std::env::temp_dir().join(format!(
+            "openpencil-enrich-timeout-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock after epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&directory).expect("create fixture directory");
+        let output = directory.join("output.op");
+        op_host_services::doc_io::save_to_path(&state, &output).expect("seed output");
+
+        let result =
+            super::super::enrich_and_save_state(&mut state, &output, Duration::ZERO, &mut session);
+
+        assert!(matches!(
+            result,
+            Err(EnrichError::Timeout {
+                page: 0,
+                seconds: 0
+            })
+        ));
+        assert_eq!(session.attempts.get("ready"), Some(&1));
+        assert!(session.is_pending(), "the other slot really timed out");
+        let reloaded =
+            op_host_services::doc_io::load_editor_state(&output, op_editor_core::Locale::EnUs)
+                .expect("reopen the partially enriched document");
+        let Some(PenNode::Image(image)) =
+            walkers::find_node(reloaded.active_children(), &NodeId::new("ready"))
+        else {
+            panic!("completed image survives timeout and reload");
+        };
+        assert_eq!(image.src, "data:image/png;base64,AA==");
+        assert!(walkers::find_node(reloaded.active_children(), &NodeId::new("stalled")).is_some());
+        std::fs::remove_dir_all(directory).expect("remove fixture directory");
     }
 
     #[test]
