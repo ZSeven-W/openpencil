@@ -51,7 +51,8 @@ mod geometry_bottom_gap;
 pub use geometry_board_containment::fixed_board_content_diagnostics;
 use geometry_bottom_gap::push_mobile_bottom_gap_diagnostic;
 pub(crate) use geometry_bottom_gap::{
-    repair_mobile_bottom_breathing, repair_mobile_bottom_breathing_for_all_roots,
+    fixed_mobile_bottom_gap, repair_mobile_bottom_breathing,
+    repair_mobile_bottom_breathing_for_all_roots,
 };
 #[path = "geometry_interaction_backfill.rs"]
 mod geometry_interaction_backfill;

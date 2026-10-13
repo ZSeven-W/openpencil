@@ -3,6 +3,8 @@
 
 use super::*;
 use serde_json::Value;
+#[path = "cleanup_fixed_control_rows.rs"]
+mod control_rows;
 #[path = "cleanup_fixed_mobile_scroll.rs"]
 mod mobile_scroll;
 
@@ -12,41 +14,107 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) {
     if mobile_scroll::repair(sink, root_id) {
         return;
     }
+    if repair_bottom_room(sink, root_id) {
+        return;
+    }
+    fit_spacing(sink, root_id, 0.0);
+    mobile_scroll::repair(sink, root_id);
+}
+
+/// Reserve the closing inset on a clone before spending interior whitespace.
+/// A failed attempt must not add padding that pushes business content offscreen.
+fn repair_bottom_room(sink: &mut dyn DocSink, root_id: &str) -> bool {
+    let Some(gap) = crate::geometry_validation::fixed_mobile_bottom_gap(sink.state(), root_id)
+    else {
+        return false;
+    };
+    if gap >= 24.0 {
+        return false;
+    }
+    let Some(root) = find_root(sink.state(), root_id) else {
+        return false;
+    };
+    if root
+        .children()
+        .and_then(|children| children.last())
+        .is_some_and(mobile_scroll::is_bottom_chrome)
+    {
+        return false;
+    }
+    let Ok(before) = serde_json::to_value(root) else {
+        return false;
+    };
+    if before.get("padding").is_some_and(Value::is_string) {
+        return false;
+    }
+    let mut inset = padding(&before);
+    inset[2] = inset[2].max(28.0);
+    let mut probe = sink.state().clone();
+    let mut trial = crate::loop_finalize::StateDocSink { state: &mut probe };
+    trial.apply(EditorCommand::PatchNodeData {
+        node_id: NodeId::new(root_id),
+        patch_json: serde_json::json!({"padding": inset}).to_string(),
+        page_id: None,
+    });
+    if !fit_spacing(&mut trial, root_id, inset[2]) {
+        return false;
+    }
+    if !crate::geometry_validation::fixed_mobile_bottom_gap(trial.state(), root_id)
+        .is_some_and(|gap| gap >= 24.0)
+    {
+        return false;
+    }
+    let Some(root) = find_root(trial.state(), root_id) else {
+        return false;
+    };
+    let Ok(after) = serde_json::to_value(root) else {
+        return false;
+    };
+    apply_layout_changes(sink, &before, &after)
+}
+
+fn fit_spacing(sink: &mut dyn DocSink, root_id: &str, bottom_floor: f64) -> bool {
     for _ in 0..12 {
         let Some(root) = find_root(sink.state(), root_id) else {
-            return;
+            return false;
         };
         let Ok(mut value) = serde_json::to_value(root) else {
-            return;
+            return false;
         };
         let before = value.clone();
         let Some(height) = value.get("height").and_then(Value::as_f64) else {
-            return;
+            return false;
         };
         let width = value.get("width").and_then(Value::as_f64).unwrap_or(0.0);
         let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
         let Some(board) = scene.active_page().and_then(|p| p.find(root_id)) else {
-            return;
+            return false;
         };
         let bottom = flow_bottom(&value, board);
         let deficit = bottom - board.bounds.origin.y as f64 - height;
         if deficit <= 1.0 {
-            return;
+            return true;
+        }
+        if bottom_floor > 0.0 && control_rows::spend_blank_row_height(&mut value, board, deficit) {
+            if !apply_layout_changes(sink, &before, &value) {
+                return false;
+            }
+            continue;
         }
         let floor = if width <= 480.0 { 4.0 } else { 16.0 };
         let mut trial = value.clone();
-        let slack = trim(&mut trial, floor, 1.0, false);
+        let slack = trim(&mut trial, floor, 1.0, false, bottom_floor);
         if slack < 1.0 {
             break;
         }
         let share = (deficit / slack).clamp(0.1, 0.5);
-        trim(&mut value, floor, share, false);
+        trim(&mut value, floor, share, false, bottom_floor);
         value["height"] = serde_json::json!(height);
         if !apply_layout_changes(sink, &before, &value) {
-            return;
+            return false;
         }
     }
-    mobile_scroll::repair(sink, root_id);
+    false
 }
 
 pub(super) fn apply_layout_changes(sink: &mut dyn DocSink, before: &Value, after: &Value) -> bool {
@@ -131,7 +199,13 @@ fn padding(node: &Value) -> [f64; 4] {
     }
 }
 
-fn trim(node: &mut Value, floor: f64, share: f64, in_vertical_flow: bool) -> f64 {
+fn trim(
+    node: &mut Value,
+    floor: f64,
+    share: f64,
+    in_vertical_flow: bool,
+    bottom_floor: f64,
+) -> f64 {
     if node.get("constraints").is_some() {
         return 0.0;
     }
@@ -147,14 +221,23 @@ fn trim(node: &mut Value, floor: f64, share: f64, in_vertical_flow: bool) -> f64
         Some("vertical" | "horizontal")
     );
     if layout {
-        let mut pad = padding(node);
-        for i in [0, 2] {
-            let excess = (pad[i] - floor).max(0.0);
-            slack += excess;
-            pad[i] -= excess * share;
-        }
-        if node.get("padding").is_some() {
-            node["padding"] = serde_json::json!(pad);
+        // Token/expression insets are authored constraints, not numeric slack.
+        // Preserve them even when an ancestor's gap can recover enough room.
+        if !node.get("padding").is_some_and(Value::is_string) {
+            let mut pad = padding(node);
+            for i in [0, 2] {
+                let minimum = if i == 2 {
+                    floor.max(bottom_floor)
+                } else {
+                    floor
+                };
+                let excess = (pad[i] - minimum).max(0.0);
+                slack += excess;
+                pad[i] -= excess * share;
+            }
+            if node.get("padding").is_some() {
+                node["padding"] = serde_json::json!(pad);
+            }
         }
         if vertical {
             let gap = node.get("gap").and_then(Value::as_f64).unwrap_or(0.0);
@@ -178,7 +261,7 @@ fn trim(node: &mut Value, floor: f64, share: f64, in_vertical_flow: bool) -> f64
     }
     if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
         for child in children {
-            slack += trim(child, floor, share, vertical);
+            slack += trim(child, floor, share, vertical, 0.0);
         }
     }
     // Numeric heights in open flow wrappers are often stale layout estimates.

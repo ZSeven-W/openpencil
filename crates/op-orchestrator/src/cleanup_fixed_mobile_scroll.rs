@@ -166,7 +166,7 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) -> bool {
     true
 }
 
-fn is_bottom_chrome(node: &PenNode) -> bool {
+pub(super) fn is_bottom_chrome(node: &PenNode) -> bool {
     if crate::cleanup::is_trailing_bottom_nav_section(node) {
         return true;
     }

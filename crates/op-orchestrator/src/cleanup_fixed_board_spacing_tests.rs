@@ -269,11 +269,11 @@ fn empty_frames_with_paint_interaction_or_authored_geometry_are_not_spacing() {
             .unwrap()
             .extend(protected.as_object().unwrap().clone());
         let before = node.clone();
-        assert_eq!(trim(&mut node, 16.0, 1.0, true), 0.0, "{protected}");
+        assert_eq!(trim(&mut node, 16.0, 1.0, true, 0.0), 0.0, "{protected}");
         assert_eq!(node, before);
     }
     let mut small = json!({"type":"frame","id":"small","height":4,"children":[]});
-    assert_eq!(trim(&mut small, 16.0, 1.0, true), 0.0);
+    assert_eq!(trim(&mut small, 16.0, 1.0, true, 0.0), 0.0);
     assert_eq!(small["height"], 4.0);
 }
 
@@ -347,3 +347,6 @@ fn replay_retained_fixed_board_drafts() {
         .unwrap();
     }
 }
+
+#[path = "cleanup_fixed_mobile_bottom_room_tests.rs"]
+mod mobile_bottom_room;

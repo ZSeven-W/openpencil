@@ -130,6 +130,26 @@ pub(crate) fn repair_mobile_bottom_breathing_for_all_roots(sink: &mut dyn DocSin
 }
 
 fn resolved_mobile_bottom_gap(root: &Value, rects: &HashMap<String, Rect>) -> Option<f64> {
+    mobile_bottom_gap_including_overflow(root, rects).filter(|gap| *gap >= 0.0)
+}
+
+/// The fixed-board fitter must reserve breathing room while recovering overflow,
+/// not only after the content already happens to fit inside the viewport.
+pub(crate) fn fixed_mobile_bottom_gap(state: &EditorState, root_id: &str) -> Option<f64> {
+    let root = op_editor_core::walkers::find_node(state.active_children(), &NodeId::new(root_id))?;
+    let value = serde_json::to_value(root).ok()?;
+    if value.get("height").and_then(Value::as_f64).is_none()
+        || value.get("clipContent").and_then(Value::as_bool) == Some(false)
+    {
+        return None;
+    }
+    mobile_bottom_gap_including_overflow(&value, &resolved_rects(state))
+}
+
+fn mobile_bottom_gap_including_overflow(
+    root: &Value,
+    rects: &HashMap<String, Rect>,
+) -> Option<f64> {
     let root_rect = resolved(root, rects)?;
     if root_rect.w > MOBILE_ROOT_MAX_WIDTH || root_rect.h < MOBILE_ROOT_MIN_HEIGHT {
         return None;
@@ -156,11 +176,6 @@ fn resolved_mobile_bottom_gap(root: &Value, rects: &HashMap<String, Rect>) -> Op
         return None;
     }
     let gap = root_rect.y + root_rect.h - content_bottom;
-    // A negative gap is content OVERFLOWING the root — a different fact, and
-    // the spill diagnostics already report it.
-    if gap < 0.0 {
-        return None;
-    }
     Some(gap)
 }
 
