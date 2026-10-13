@@ -181,6 +181,7 @@ pub fn auto_fix_fixable_issues(nodes: &mut [PenNode], canvas_width: f64) -> bool
 
 fn check_node(node: &Value, canvas_width: f64, in_scroller: bool, report: &mut SelfCheckReport) {
     static_paint::check(node, report);
+    motion::check(node, report);
     let in_scroller = in_scroller || is_clipping_horizontal_scroller(node);
     if crate::radial_repair::is_authored_radial_stack_unsafe(node) {
         report.issues.push(SelfCheckIssue {
@@ -695,6 +696,8 @@ fn numeric_prop(node: &Value, key: &str) -> Option<f64> {
 
 #[path = "orchestration_self_check_drift.rs"]
 mod drift;
+#[path = "orchestration_self_check_motion.rs"]
+mod motion;
 #[path = "orchestration_self_check_static_paint.rs"]
 mod static_paint;
 use drift::sibling_structure_drift;

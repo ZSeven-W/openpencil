@@ -66,6 +66,51 @@ const MULTI_SCREEN_PLAN_JSON: &str = r##"{
   ]
 }"##;
 
+#[test]
+fn multiple_screens_consume_only_a_sole_empty_starter() {
+    for preserve_existing in [false, true] {
+        let llm = ScriptedLlm::new(vec![
+            ScriptResponse::Text(MULTI_SCREEN_PLAN_JSON.into()),
+            ScriptResponse::Text(node_json("home")),
+            ScriptResponse::Text(node_json("profile")),
+        ]);
+        let mut sink = VecDocSink::new();
+        sink.state = EditorState::starter();
+        if preserve_existing {
+            sink.state.active_children_mut()[0].base_mut().name = Some("User work".into());
+            if let PenNode::Frame(frame) = &mut sink.state.active_children_mut()[0] {
+                frame.screen = Some("/user-work".into());
+            }
+            let child = serde_json::from_value(serde_json::json!({
+                "type":"text","id":"keep","content":"Keep user content"
+            }))
+            .unwrap();
+            sink.state.active_children_mut()[0]
+                .children_mut()
+                .unwrap()
+                .push(child);
+        }
+        let original = sink.state.active_children()[0].clone();
+        futures::executor::block_on(Orchestrator::new().run(
+            req(),
+            &mut sink,
+            &llm,
+            &mut |_| {},
+            &AbortFlag::new(),
+            &stub_providers(),
+        ))
+        .unwrap();
+        let roots = sink.state.active_children();
+        assert_eq!(roots.len(), if preserve_existing { 3 } else { 2 });
+        if preserve_existing {
+            assert_eq!(roots[0], original);
+        } else {
+            assert!(roots.iter().all(|root| root.id_str() != original.id_str()));
+            assert_eq!(roots[0].base().x, Some(DEFAULT_ROOT_X));
+        }
+    }
+}
+
 // Script-gen (the default protocol): `I(parent, obj)` calls, not raw
 // `_parent` JSONL. Ids are dropped — batch_design reassigns fresh ones
 // anyway; the "content" string is what survives verbatim and identifies

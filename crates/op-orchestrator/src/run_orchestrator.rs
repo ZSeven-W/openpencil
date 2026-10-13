@@ -115,9 +115,8 @@ impl Orchestrator {
         // subtask sharing the SAME one, both give `groups.len() <= 1` — the
         // single-root path below runs byte-identical to today (regression
         // lock). Multi-root is mutually exclusive with append mode (a
-        // continuation turn always targets ONE existing frame) and with the
-        // empty-canvas-reuse path (reuse only replaces ONE frame in place —
-        // see `insert_screen_group_roots`'s doc). `groups.len()` also feeds
+        // continuation turn always targets ONE existing frame). A sole empty
+        // starter is consumed only after every group root lands. `groups.len()` also feeds
         // `effective_concurrency` below (item D-lite) — computed once here so
         // both the scaffold branch and the phase-3 executor choice see the
         // SAME grouping.

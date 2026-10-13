@@ -11,7 +11,7 @@ use crate::scaffold::{build_screen_group_scaffold, ScaffoldError};
 use crate::screen_groups::ScreenGroup;
 use crate::subagent::{apply_command_with_reveal, reveal_now_millis};
 use crate::types::DocSink;
-use op_editor_core::PenNodeExt;
+use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
 
 /// Failure of the multi-root screen-group scaffold insertion.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,8 +83,15 @@ pub(crate) fn insert_screen_group_roots(
     agent_indicator_epoch: Option<u64>,
     identities: &[AgentIdentity],
 ) -> Result<(Vec<String>, Vec<usize>), ScreenGroupScaffoldError> {
-    let (insert_x, insert_y) =
-        super::next_root_insert_position(sink.state(), plan.root_frame.width);
+    // Multi-root inserts intentionally bypass the editor's single-root
+    // replacement heuristic. Consume the same sole empty starter explicitly
+    // after all roots land, rather than exporting it as an extra blank screen.
+    let starter = super::detect_reusable_empty_frame(sink.state());
+    let (insert_x, insert_y) = if starter.is_some() {
+        (super::DEFAULT_ROOT_X, super::DEFAULT_ROOT_Y)
+    } else {
+        super::next_root_insert_position(sink.state(), plan.root_frame.width)
+    };
     let (cmds, _placeholder_ids, baselines) =
         build_screen_group_scaffold(plan, groups, is_mobile, insert_x, insert_y)?;
 
@@ -94,8 +101,7 @@ pub(crate) fn insert_screen_group_roots(
         }
     }
 
-    // Every group's root is a fresh `InsertSubtree` (multi-root never reuses
-    // the empty-canvas starter — see the module doc / call site), so the
+    // Every group gets a fresh root in one batched insert, so the
     // remap discovery is the single-root path's diff trick generalized to N:
     // every top-level child NOT present before insertion is a new root, in
     // insertion order.
@@ -111,6 +117,14 @@ pub(crate) fn insert_screen_group_roots(
             expected: groups.len(),
             actual: new_root_ids.len(),
         });
+    }
+    if let Some(id) = starter {
+        if !sink.apply(EditorCommand::DeleteNode {
+            node_id: NodeId::new(id),
+            page_id: None,
+        }) {
+            return Err(ScreenGroupScaffoldError::InsertRejected);
+        }
     }
 
     for (group, real_id) in groups.iter().zip(new_root_ids.iter()) {

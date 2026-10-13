@@ -359,6 +359,16 @@ fn app_page_choice_defaults_to_one_and_reaches_both_generation_contracts() {
             .generation_prompt(&draft)
             .unwrap()
             .contains("交付 5 页完整界面"));
+        draft.text = "跑步记录 App 两屏可交互（375×812）".into();
+        assert!(HomeFamily::AppUi
+            .generation_prompt(&draft)
+            .unwrap()
+            .contains("交付 2 页完整界面"));
+        draft.app_pages = AppPages::Single;
+        assert!(HomeFamily::AppUi
+            .generation_prompt(&draft)
+            .unwrap()
+            .contains("交付 1 页界面"));
     }
     let mut home = HomeState::default();
     home.set_app_pages(AppPages::Multiple);

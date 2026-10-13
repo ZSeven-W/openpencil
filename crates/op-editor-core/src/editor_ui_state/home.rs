@@ -263,34 +263,9 @@ impl AppPages {
     }
 }
 
-fn explicit_app_page_count(text: &str) -> Option<u32> {
-    for (start, character) in text.char_indices() {
-        if !character.is_ascii_digit()
-            || text[..start]
-                .chars()
-                .next_back()
-                .is_some_and(|c| c.is_ascii_digit())
-        {
-            continue;
-        }
-        let tail = &text[start..];
-        let end = tail
-            .find(|c: char| !c.is_ascii_digit())
-            .unwrap_or(tail.len());
-        let Ok(count) = tail[..end].parse::<u32>() else {
-            continue;
-        };
-        let unit = tail[end..].trim_start().to_lowercase();
-        if (1..=30).contains(&count)
-            && ["页", "个页面", "个界面", "个屏幕", "page", "screen"]
-                .iter()
-                .any(|u| unit.starts_with(u))
-        {
-            return Some(count);
-        }
-    }
-    None
-}
+#[path = "home_page_count.rs"]
+mod page_count;
+use page_count::explicit_app_page_count;
 
 /// One task's kept draft: the text plus the options its segmented
 /// control owns. Attachments deliberately live in the chat composer's
