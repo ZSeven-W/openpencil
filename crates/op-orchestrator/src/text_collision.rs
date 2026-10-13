@@ -100,28 +100,66 @@ fn is_visible_nonempty_text(v: &Value) -> bool {
 }
 
 /// Depth-first collection of every visible, non-empty text LEAF under `v`
-/// that has a positive-area resolved rect. Document order, so pairwise
-/// comparison downstream is deterministic.
+/// that has a positive-area visible rect. Ancestor clips limit the ink that
+/// can collide; text outside a scroll viewport must not collide with fixed
+/// chrome. Document order keeps pairwise comparison deterministic.
 fn collect_text_leaves<'a>(
     v: &'a Value,
     rects: &HashMap<String, Rect>,
+    ancestor_clip: Option<Rect>,
     out: &mut Vec<(&'a str, &'a str, Rect)>,
 ) {
     if is_visible_nonempty_text(v) {
         if let Some(id) = v.get("id").and_then(Value::as_str) {
-            if let Some(rect) = rects.get(id) {
-                if rect.w > 0.0 && rect.h > 0.0 {
-                    let name = v.get("name").and_then(Value::as_str).unwrap_or("text");
-                    out.push((id, name, *rect));
-                }
+            if let Some(rect) = rects
+                .get(id)
+                .and_then(|rect| visible_rect(*rect, ancestor_clip))
+            {
+                let name = v.get("name").and_then(Value::as_str).unwrap_or("text");
+                out.push((id, name, rect));
             }
         }
     }
+    // Match the painter: only positive-size bounded containers clip their
+    // descendants. A missing/degenerate container rect is not a proven clip.
+    let child_clip = if v.get("clipContent").and_then(Value::as_bool) == Some(true) {
+        match v
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(|id| rects.get(id))
+        {
+            Some(rect) if rect.w > 0.0 && rect.h > 0.0 => {
+                let Some(clip) = visible_rect(*rect, ancestor_clip) else {
+                    return;
+                };
+                Some(clip)
+            }
+            _ => ancestor_clip,
+        }
+    } else {
+        ancestor_clip
+    };
     // Text is a leaf in this schema; recursing defensively costs nothing
     // and matches the `bears_text` convention elsewhere in this module.
     for c in children(v) {
-        collect_text_leaves(c, rects, out);
+        collect_text_leaves(c, rects, child_clip, out);
     }
+}
+
+fn visible_rect(rect: Rect, clip: Option<Rect>) -> Option<Rect> {
+    let visible = if let Some(clip) = clip {
+        let x = rect.x.max(clip.x);
+        let y = rect.y.max(clip.y);
+        Rect {
+            x,
+            y,
+            w: (rect.x + rect.w).min(clip.x + clip.w) - x,
+            h: (rect.y + rect.h).min(clip.y + clip.h) - y,
+        }
+    } else {
+        rect
+    };
+    (visible.w > 0.0 && visible.h > 0.0).then_some(visible)
 }
 
 /// All TEXT-vs-TEXT collisions inside `root`'s subtree (root included),
@@ -132,7 +170,7 @@ pub(crate) fn collect_text_collisions(
     rects: &HashMap<String, Rect>,
 ) -> Vec<TextCollision> {
     let mut leaves = Vec::new();
-    collect_text_leaves(root, rects, &mut leaves);
+    collect_text_leaves(root, rects, None, &mut leaves);
     let effects = crate::text_effect_overlay::effect_pairs(root);
     let mut out = Vec::new();
     for i in 0..leaves.len() {
@@ -218,3 +256,7 @@ pub(crate) fn push_text_collision_diagnostics(
 #[cfg(test)]
 #[path = "text_collision_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "text_collision_clip_tests.rs"]
+mod clip_tests;
