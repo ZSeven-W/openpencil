@@ -8,6 +8,13 @@ use super::RawHit;
 #[path = "relevance_matching.rs"]
 mod matching;
 
+#[path = "relevance_intent.rs"]
+mod intent;
+pub(crate) use intent::retrieval_plan;
+#[cfg(test)]
+pub(crate) use intent::rewrite_queries;
+use intent::INTENT_STYLE_WORDS;
+
 /// Design-artifact words that are pure noise against a photo corpus (see
 /// the desktop `image_search_session.rs` for the measurement notes).
 const IMAGE_SEARCH_ARTIFACT_WORDS: &[&str] = &[
@@ -222,204 +229,6 @@ pub(crate) fn two_keyword_retry(query: &str) -> Option<String> {
     (!retry.is_empty() && retry != primary).then_some(retry)
 }
 
-/// Style and staging words stripped from an intent-derived rewrite. The
-/// judged-ladder rewrite wants the subject of the image prompt, not its art
-/// direction. Multi-word forms are matched per token because the tokenizer
-/// splits on non-alphanumerics ("close-up" → "close up", "high quality" →
-/// "high" + "quality").
-const INTENT_STYLE_WORDS: &[&str] = &[
-    "photo",
-    "photography",
-    "professional",
-    "shot",
-    "close",
-    "closeup",
-    "image",
-    "stock",
-    "high",
-    "quality",
-    "4k",
-    "hd",
-    "cinematic",
-    "lighting",
-    "background",
-    "minimal",
-];
-
-/// Up to two rewritten queries for the judged Openverse ladder, in attempt
-/// order. The visual judge can reject every primary candidate (k=0 after the
-/// lexical filter, or all Off verdicts) while a looser phrasing still has
-/// good hits — the two-keyword retry inside the list fetch only fires on a
-/// zero-hit response, so judge-rejected slots used to fall straight to the
-/// Wikimedia ladder.
-///
-/// 1. The last two content words of the query.
-/// 2. Subject words from the intent anchored to the original query, with
-///    nearby concrete context when useful, capped at four words.
-///
-/// Candidates that are empty, equal to the original query, or equal to an
-/// earlier rewrite are dropped, so the caller's cost bound is at most two
-/// extra Openverse list calls per slot.
-pub(crate) fn rewrite_queries(query: &str, intent: &str) -> Vec<String> {
-    let mut rewrites: Vec<String> = Vec::new();
-    let mut push = |rewrite: Option<String>| {
-        if let Some(rewrite) = rewrite {
-            if !rewrite.is_empty() && rewrite != query && !rewrites.contains(&rewrite) {
-                rewrites.push(rewrite);
-            }
-        }
-    };
-    push(two_keyword_rewrite(query));
-    push(intent_rewrite(query, intent));
-    rewrites
-}
-
-/// The last two content words of the query — tighter than
-/// [`two_keyword_retry`]'s three-word tail, which equals the primary query
-/// for the common three-word subject phrase and therefore never fires there.
-fn two_keyword_rewrite(query: &str) -> Option<String> {
-    let core = concrete_query_words(query);
-    let tail = &core[core.len().saturating_sub(2)..];
-    (!tail.is_empty()).then(|| tail.join(" "))
-}
-
-/// Find the authored subject before selecting a short retrieval phrase. Rich
-/// prompts often start with an arbitrary art-direction prefix; taking its
-/// first three tokens can search for staging adjectives instead of the subject.
-fn intent_rewrite(query: &str, intent: &str) -> Option<String> {
-    let mut anchors = Vec::new();
-    for word in core_query_words(query) {
-        if !IMAGE_SEARCH_STOP_WORDS.contains(&word.as_str())
-            && !INTENT_STYLE_WORDS.contains(&word.as_str())
-            && !anchors.contains(&word)
-        {
-            anchors.push(word);
-        }
-    }
-    if anchors.is_empty() {
-        return None;
-    }
-    let words: Vec<(String, usize)> = intent
-        .split([',', ';', '.', '!', '?', '\n'])
-        .enumerate()
-        .flat_map(|(clause, text)| {
-            lexical_words(text)
-                .into_iter()
-                .map(move |word| (word, clause))
-        })
-        .collect();
-    let mut subject = Vec::new();
-    let mut first_match = None;
-    let mut last_match = None;
-    for (index, (word, _)) in words.iter().enumerate() {
-        let canonical = canonicalize_word(word);
-        if anchors.contains(&canonical) && !subject.contains(&canonical) {
-            subject.push(canonical);
-            first_match.get_or_insert(index);
-            last_match = Some(index);
-            if subject.len() == 4 {
-                break;
-            }
-        }
-    }
-    // One generic overlap ("bottle", "model") cannot establish that a
-    // multi-word prompt describes the same subject. Keep the existing query
-    // ladder instead of inventing a rewrite from unrelated intent wording.
-    if subject.len() < anchors.len().min(2) {
-        return None;
-    }
-    let last_match = last_match?;
-    let clause = words[last_match].1;
-    // Preserve a simple location phrase such as "in a clinic". Arbitrary
-    // trailing praise is not subject context; ambiguous longer phrases stay
-    // with the visual judge rather than becoming new retrieval keywords.
-    if subject.len() == 2
-        && words
-            .get(last_match + 1)
-            .is_some_and(|(word, _)| matches!(word.as_str(), "in" | "at" | "inside" | "within"))
-    {
-        let context: Vec<_> = words
-            .iter()
-            .skip(last_match + 2)
-            .take_while(|(_, next_clause)| *next_clause == clause)
-            .map(|(word, _)| word.as_str())
-            .collect();
-        let context = match context.as_slice() {
-            ["a" | "an" | "the", rest @ ..] => rest,
-            rest => rest,
-        };
-        if let [word] = context {
-            let canonical = canonicalize_word(word);
-            if !IMAGE_SEARCH_STOP_WORDS.contains(word)
-                && !INTENT_STYLE_WORDS.contains(word)
-                && !IMAGE_SEARCH_DESCRIPTORS.contains(word)
-                && !subject.contains(&canonical)
-            {
-                subject.push(canonical);
-            }
-        }
-    }
-    // A literal color/material directly before the subject is useful stock
-    // metadata. Positive recognition avoids a growing blacklist of arbitrary
-    // taste adjectives (premium, elegant, etc.) and never displaces a subject.
-    if subject.len() < 4 {
-        let first_match = first_match?;
-        if let Some((word, modifier_clause)) = first_match.checked_sub(1).map(|i| &words[i]) {
-            let canonical = canonicalize_word(word);
-            if *modifier_clause == words[first_match].1
-                && concrete_visual_modifier(&canonical)
-                && !subject.contains(&canonical)
-            {
-                subject.insert(0, canonical);
-            }
-        }
-    }
-    Some(subject.join(" "))
-}
-
-fn concrete_visual_modifier(word: &str) -> bool {
-    matches!(
-        word,
-        "white"
-            | "black"
-            | "gray"
-            | "grey"
-            | "red"
-            | "green"
-            | "blue"
-            | "yellow"
-            | "pink"
-            | "purple"
-            | "orange"
-            | "cyan"
-            | "amber"
-            | "brown"
-            | "ivory"
-            | "beige"
-            | "gold"
-            | "silver"
-            | "glass"
-            | "ceramic"
-            | "porcelain"
-            | "wood"
-            | "steel"
-            | "metal"
-            | "aluminum"
-            | "brass"
-            | "copper"
-            | "chrome"
-            | "plastic"
-            | "paper"
-            | "linen"
-            | "leather"
-            | "fabric"
-            | "wicker"
-            | "stone"
-            | "concrete"
-            | "bamboo"
-    )
-}
-
 pub(super) fn core_query_words(query: &str) -> Vec<String> {
     concrete_query_words(query)
         .into_iter()
@@ -509,7 +318,8 @@ pub(crate) fn retain_relevant_hits(hits: Vec<RawHit>, query: &str) -> Vec<RawHit
 /// photography of …"); without it the photo fence never engaged and an
 /// Instagram tattoo shot that merely mentions "cleanser" in its caption
 /// passed as a product photo. The intent only ever tightens the photo
-/// contract — subject words still come from the query.
+/// contract — subject words still come from the query. Positive intent
+/// context then ranks surviving hits without accepting a fenced result.
 pub(crate) fn retain_relevant_hits_for_intent(
     hits: Vec<RawHit>,
     query: &str,
@@ -518,14 +328,18 @@ pub(crate) fn retain_relevant_hits_for_intent(
     let contract = RelevanceContract::new(query, intent);
     let strict = retain_relevant_hits_enforcing(hits.clone(), &contract, true);
     if !strict.is_empty() {
-        return strict;
+        return intent::rank_context(strict, query, intent);
     }
     // Isolation evidence ("isolated", "white background", …) is sparse in
     // provider metadata, and treating it as a hard fence empties the result
     // set for perfectly good product queries — the slot then publishes as a
     // gray placeholder. When the strict pass keeps nothing, degrade the
     // isolation requirement to a preference and keep the subject fence.
-    retain_relevant_hits_enforcing(hits, &contract, false)
+    intent::rank_context(
+        retain_relevant_hits_enforcing(hits, &contract, false),
+        query,
+        intent,
+    )
 }
 
 /// Why the fence would drop `hit` for `query`/`intent`, or `None` when it

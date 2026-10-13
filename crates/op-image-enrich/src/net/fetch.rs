@@ -3,8 +3,8 @@
 //! to keep it under the 800-line cap; pure code motion.
 //!
 //! The judged ladder (`fetch_first_image_url_with_judge`) runs: primary
-//! Openverse query → up to two judge rewrites (`rewrite_queries`: the
-//! two-keyword tail of the query, then the intent-derived subject) through
+//! intent-refined Openverse query → up to two retrieval fallbacks (including
+//! the original query when refined) through
 //! the same judged Openverse path → the judged Wikimedia fallback ladder.
 //! The no-judge ladder lives in `resolve.rs`; both ladders fence their
 //! provider lists through the same subject/photo/brand relevance contract.
@@ -15,7 +15,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::net::providers::{
-    fetch_image_and_judge_thumbnail_for_view, normalize_image_mime_header, rewrite_queries,
+    fetch_image_and_judge_thumbnail_for_view, normalize_image_mime_header, retrieval_plan,
     simplify_search_query, wikimedia_info_is_image, RawHit, WebOpenverseCredentials,
     MAX_EMBEDDED_IMAGE_BYTES,
 };
@@ -89,7 +89,7 @@ async fn fetch_first_image_url_with_judge(
         view,
         deadline: judging_deadline(judge, deadline),
     };
-    let query = simplify_search_query(query);
+    let (query, rewrites) = retrieval_plan(&simplify_search_query(query), intent);
     let mut fallback = WeakFallback::new(used_urls, deadline);
     let seen = Mutex::new(HashSet::new());
     trace_line(format_args!(
@@ -143,7 +143,7 @@ async fn fetch_first_image_url_with_judge(
 
     // The existing rewrite ladder keeps its two-query / two-batch ceiling.
     // Network deadlines remain active even for a legacy synchronous judge.
-    for rewrite in rewrite_queries(&query, intent) {
+    for rewrite in rewrites {
         if !fallback.can_continue(judge) {
             return fallback.finish_with_deadline();
         }

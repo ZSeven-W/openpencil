@@ -44,11 +44,13 @@ pub(crate) use catalog::fetch_relevant_wikimedia_list_for_intent;
 use catalog::{fetch_relevant_wikimedia_list, materialize_first_thumb, materialize_thumbs};
 use relevance::retain_relevant_hits;
 pub(crate) use relevance::{
-    fence_rejection, retain_relevant_hits_for_intent, rewrite_queries, two_keyword_retry,
+    fence_rejection, retain_relevant_hits_for_intent, retrieval_plan, two_keyword_retry,
 };
 
 #[cfg(test)]
 use catalog::fetch_relevant_wikimedia_list_with;
+#[cfg(test)]
+pub(crate) use relevance::rewrite_queries;
 #[cfg(test)]
 use relevance::{
     core_query_words, metadata_is_scene_heavy, query_requests_scene, SCENE_HEAVY_RESULT_WORDS,
