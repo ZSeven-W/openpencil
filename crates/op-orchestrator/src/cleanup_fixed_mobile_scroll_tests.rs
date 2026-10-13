@@ -91,10 +91,17 @@ fn ordinary_trailing_content_is_not_misidentified_as_fixed_chrome() {
             footer["events"] = json!({"onTap":[{"toast":"Read more"}]});
         }
         let mut draft = phone(footer);
-        let before = draft.doc.clone();
+        let before = serde_json::to_value(&draft.doc).unwrap();
         let mut sink = crate::loop_finalize::StateDocSink { state: &mut draft };
-        assert!(!super::super::mobile_scroll::repair(&mut sink, "root"));
-        assert_eq!(sink.state().doc, before);
+        assert!(super::super::mobile_scroll::repair(&mut sink, "root"));
+        let after = serde_json::to_value(&sink.state().doc).unwrap();
+        let children = after["children"][0]["children"].as_array().unwrap();
+        assert_eq!(children.len(), 2);
+        assert_eq!(children[1]["role"], "scroll-area");
+        assert_eq!(
+            children[1]["children"][1], before["children"][0]["children"][2],
+            "ordinary trailing content scrolls with the body, never pinned as chrome"
+        );
     }
 }
 
@@ -189,4 +196,62 @@ fn scroll_creation_replay_keeps_photo_card_and_add_button_inside_one_rail() {
         .unwrap()
         .to_string()
         .contains("scroll-area"));
+}
+
+#[test]
+fn detail_without_footer_scrolls_without_compressing_content() {
+    let mut draft = phone(json!({"type":"text","id":"last-row","content":"Split 5",
+        "width":"fill_container","height":44,"fontSize":18}));
+    let before = serde_json::to_value(&draft.doc).unwrap();
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut draft };
+    repair(&mut sink, "root");
+    let after = serde_json::to_value(&sink.state().doc).unwrap();
+    let root = &after["children"][0];
+    assert_eq!(root["height"], 812.0);
+    assert_eq!(root["children"][0], before["children"][0]["children"][0]);
+    let scroll = &root["children"][1];
+    assert_eq!(scroll["role"], "scroll-area");
+    assert_eq!(scroll["clipContent"], true);
+    assert_eq!(scroll["padding"], json!([0.0, 0.0, 28.0, 0.0]));
+    assert!(scroll["events"]["onScroll"].is_array());
+    assert_eq!(
+        scroll["children"],
+        json!(before["children"][0]["children"].as_array().unwrap()[1..])
+    );
+    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+    let page = scene.active_page().unwrap();
+    let viewport = page.find(scroll["id"].as_str().unwrap()).unwrap().bounds;
+    let last = page.find("last-row").unwrap().bounds;
+    assert_eq!(viewport.origin.y, 62.0);
+    assert_eq!(viewport.size.y, 750.0);
+    assert!(
+        last.origin.y + last.size.y > 812.0,
+        "overflow retained for scrolling"
+    );
+    assert!(crate::geometry_validation::fixed_board_content_diagnostics(sink.state()).is_empty());
+    let settled = sink.state().doc.clone();
+    repair(&mut sink, "root");
+    assert_eq!(settled, sink.state().doc);
+}
+
+#[test]
+fn fitting_detail_and_narrow_poster_are_not_given_scroll() {
+    for has_status in [true, false] {
+        let mut draft = state(json!({"type":"frame","id":"root","width":375,"height":812,
+        "layout":"vertical","children":[
+            {"type":"frame","id":"top","height":62,"width":"fill_container"},
+            {"type":"text","id":"body","content":"Keep my layout","height":if has_status {400} else {1000}}
+        ]}));
+        if has_status {
+            draft.apply(EditorCommand::PatchNodeData {
+                node_id: NodeId::new("top"),
+                patch_json: json!({"role":"status-bar"}).to_string(),
+                page_id: None,
+            });
+        }
+        let before = draft.doc.clone();
+        let mut sink = crate::loop_finalize::StateDocSink { state: &mut draft };
+        assert!(!super::super::mobile_scroll::repair(&mut sink, "root"));
+        assert_eq!(before, sink.state().doc);
+    }
 }

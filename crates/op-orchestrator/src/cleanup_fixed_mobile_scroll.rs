@@ -28,7 +28,10 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) -> bool {
             .and_then(|nodes| nodes.last())
             .is_some_and(is_bottom_chrome)
     }) else {
-        return promote_nested_chrome(sink, root_id) && repair(sink, root_id);
+        if promote_nested_chrome(sink, root_id) {
+            return repair(sink, root_id);
+        }
+        return repair_without_footer(sink, root_id, &value);
     };
     let Some(nav_id) = nav.get("id").and_then(Value::as_str) else {
         return false;
@@ -103,6 +106,59 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) -> bool {
             });
         }
     }
+    if !wrap_content(sink, root_id, &value, prefix, middle, 0.0) {
+        return false;
+    }
+    // The first insertion must reserve the full intrinsic nav row too. Waiting
+    // for another finalize leaves a centered nested tab row below the viewport.
+    if needs_nav_height {
+        sink.apply(EditorCommand::PatchNodeData {
+            node_id: NodeId::new(nav_id),
+            patch_json: json!({"height":required.unwrap().ceil()}).to_string(),
+            page_id: None,
+        });
+    }
+    true
+}
+
+// A detail screen can have status chrome without a tab bar. Recognize that
+// explicit phone contract, not arbitrary narrow posters or trailing cards.
+fn repair_without_footer(sink: &mut dyn DocSink, root_id: &str, value: &Value) -> bool {
+    let Some(children) = value.get("children").and_then(Value::as_array) else {
+        return false;
+    };
+    if !children
+        .first()
+        .is_some_and(crate::cleanup::is_status_bar_from_json)
+    {
+        return false;
+    }
+    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+    let Some(board) = scene.active_page().and_then(|page| page.find(root_id)) else {
+        return false;
+    };
+    if super::flow_bottom(value, board)
+        <= (board.bounds.origin.y + board.bounds.size.y) as f64 + 1.0
+    {
+        return false;
+    }
+    // Preserve the existing single-screen player/control layout when its blank
+    // space can supply a complete closing inset. That probe is transactional:
+    // an overflowing detail which cannot fit keeps all its authored spacing.
+    if super::repair_bottom_room(sink, root_id) {
+        return true;
+    }
+    wrap_content(sink, root_id, value, 1, &children[1..], 28.0)
+}
+
+fn wrap_content(
+    sink: &mut dyn DocSink,
+    root_id: &str,
+    value: &Value,
+    prefix: usize,
+    middle: &[Value],
+    bottom_inset: f64,
+) -> bool {
     if middle.is_empty()
         || middle.iter().any(|n| {
             n.get("constraints").is_some()
@@ -124,6 +180,7 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) -> bool {
     let wrapper: PenNode = serde_json::from_value(json!({
         "type":"frame","id":"content-scroll","name":"Scrollable content","role":"scroll-area",
         "width":"fill_container","height":"fill_container","layout":"vertical","gap":gap,"clipContent":true,
+        "padding":[0,0,bottom_inset,0],
         "state":{"scrolled":{"type":"bool","default":false}},
         "events":{"onScroll":[{"set":{"$state.scrolled":"true"}}]},"children":[]
     })).expect("valid scroll viewport");
@@ -154,15 +211,6 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) -> bool {
         patch_json: json!({"gap":0}).to_string(),
         page_id: None,
     });
-    // The first insertion must reserve the full intrinsic nav row too. Waiting
-    // for another finalize leaves a centered nested tab row below the viewport.
-    if needs_nav_height {
-        sink.apply(EditorCommand::PatchNodeData {
-            node_id: NodeId::new(nav_id),
-            patch_json: json!({"height":required.unwrap().ceil()}).to_string(),
-            page_id: None,
-        });
-    }
     true
 }
 

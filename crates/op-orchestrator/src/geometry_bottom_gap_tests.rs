@@ -416,3 +416,21 @@ fn all_roots_driver_repairs_every_mobile_screen() {
         );
     }
 }
+
+#[test]
+fn interactive_scroll_clip_edge_is_not_a_flush_content_edge() {
+    let mut root = json!({"type":"frame","id":"root","width":375,"height":812,"layout":"vertical",
+        "children":[{"type":"frame","id":"scroll","role":"scroll-area","height":"fill_container",
+            "width":"fill_container","layout":"vertical","clipContent":true,"padding":[0,0,28,0],
+            "events":{"onScroll":[{"toast":"Scrolled"}]},
+            "children":[{"type":"text","id":"body","content":"Long detail","height":1000}]}]});
+    assert!(!echoed(root.clone()));
+    root["children"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("events");
+    assert!(
+        echoed(root),
+        "clipping alone must not hide a flush-content defect"
+    );
+}

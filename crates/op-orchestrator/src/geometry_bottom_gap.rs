@@ -161,7 +161,20 @@ fn mobile_bottom_gap_including_overflow(
     }
     let kids = children(root);
     let last = kids.last()?;
-    if is_bottom_nav_shape(last, &root_rect, rects) {
+    // An interactive viewport intentionally meets the device edge. Its body
+    // scrolls to a separate closing inset; its clip edge is not a content edge.
+    let scroll_viewport = last.get("clipContent").and_then(Value::as_bool) == Some(true)
+        && last.get("height").and_then(Value::as_str) == Some("fill_container")
+        && matches!(
+            last.get("role").and_then(Value::as_str),
+            Some("scroll" | "scroll-area" | "scroll-viewport")
+        )
+        && last
+            .get("events")
+            .and_then(|e| e.get("onScroll"))
+            .and_then(Value::as_array)
+            .is_some_and(|events| !events.is_empty());
+    if scroll_viewport || is_bottom_nav_shape(last, &root_rect, rects) {
         return None;
     }
     // The lowest resolved edge across the root's direct children — not just
