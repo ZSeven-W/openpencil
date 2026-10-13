@@ -2,9 +2,9 @@
 //!
 //! The sub-agent writes a real JavaScript program (`I(parent, {...})` +
 //! loops); expansion, sandboxing, limits, and truncation repair live in
-//! `op_mcp::script_runner` (shared verbatim with external
-//! `batch_design(script)` calls). This module only bridges the recorded
-//! program into the section-forest executor.
+//! `op_mcp::script_runner` (shared with external `batch_design(script)` calls).
+//! Generation defers foreground repair until the complete forest has passed
+//! structural repair; direct MCP calls retain insertion-time contrast checks.
 
 use crate::program_gen::ProgramGenError;
 use jian_ops_schema::node::PenNode;
@@ -15,7 +15,7 @@ use jian_ops_schema::state::StateSchema;
 /// message exactly as it did when this was a bare `String`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ScriptGenError {
-    /// `op_mcp::script_runner::run_script_to_program` rejected the emitted
+    /// `op_mcp::script_runner::run_generation_script_to_program` rejected the emitted
     /// JS. Carried as its display text because the runner lives in a crate
     /// this module does not own.
     ScriptRun(String),
@@ -54,7 +54,7 @@ impl From<ScriptGenError> for String {
 pub fn parse_script(text: &str) -> Result<(Vec<PenNode>, StateSchema), ScriptGenError> {
     // `to_string()` (not `?`-with-`From`) so this stays source-compatible
     // whether the script runner returns a `String` or its own typed error.
-    let program = op_mcp::script_runner::run_script_to_program(text)
+    let program = op_mcp::script_runner::run_generation_script_to_program(text)
         .map_err(|error| ScriptGenError::ScriptRun(error.to_string()))?;
     Ok(crate::program_gen::run_program_to_forest(&program)?)
 }

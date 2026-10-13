@@ -39,6 +39,7 @@ use crate::role_layout_post_pass::{fix_horizontal_overflow, fix_text_heights, si
 // test modules mounted below) see the same flat namespace as before.
 mod color_utils;
 mod contrast;
+mod deferred_foreground;
 mod layout_props;
 mod micro_surface_radius;
 mod mobile_cards;
@@ -72,7 +73,6 @@ fn post_pass_value(
     if node.get("type").and_then(Value::as_str) != Some("frame") {
         return;
     }
-    adopt_orphan_button_parts(node);
     // I4 layout-property fixes (TS resolveTreePostPass order 1/2/3/4/6/8).
     // Still deferred: frame-height expansion (needs intrinsic measurement) and
     // placeholder icon repair (needs the icon catalog).
@@ -171,6 +171,8 @@ pub fn post_pass_forest_with_tier(
         let Ok(mut v) = serde_json::to_value(&*node) else {
             continue;
         };
+        repair_orphan_controls(&mut v);
+        deferred_foreground::repair(&mut v, None);
         post_pass_value(&mut v, None, canvas_width, run_intent, form, &mut echoes);
         if let Ok(new_node) = serde_json::from_value::<PenNode>(v) {
             *node = new_node;

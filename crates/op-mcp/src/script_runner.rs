@@ -51,6 +51,16 @@ pub fn run_script_to_program(text: &str) -> Result<String, ScriptError> {
     run_script_to_program_with_preamble(text, None)
 }
 
+/// Generation callers repair foregrounds after assembling and repairing the
+/// complete tree. Insertion-time ancestry can still be an orphan label's
+/// incorrect parent; all other recorder defaults and limits remain active.
+pub fn run_generation_script_to_program(text: &str) -> Result<String, ScriptError> {
+    run_script_to_program_with_preamble(
+        text,
+        Some("__normalizeForegroundContrast = function(obj) { return obj; };"),
+    )
+}
+
 /// Existing-node edits must not receive generation defaults, contrast repairs,
 /// divider reparenting, or text-height rewrites. Keep the same sandbox limits
 /// and syntax-recovery ladder, but record the supplied I() node verbatim.

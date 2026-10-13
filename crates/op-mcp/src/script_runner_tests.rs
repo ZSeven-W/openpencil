@@ -3,6 +3,32 @@
 use super::*;
 
 #[test]
+fn generation_defers_only_foreground_repairs_until_structural_ancestry_is_known() {
+    let script = r##"
+        const row = I(null,{type:"frame",layout:"center",fill:[{type:"solid",color:"#FFFFFF"}]});
+        I(row,{type:"text",name:"Button Label",content:"订阅",fill:[{type:"solid",color:"#FFFFFF"}]});
+        I(row,{type:"icon_font",iconFontName:"magnifying-glass",fill:[{type:"solid",color:"#EEEEEE"}]});
+    "##;
+    let generated =
+        crate::parse_program_objects(&run_generation_script_to_program(script).unwrap());
+    assert_eq!(generated[0].1["layout"], "vertical");
+    assert_eq!(generated[1].1["fill"][0]["color"], "#FFFFFF");
+    assert_eq!(generated[1].1["fontFamily"], "Inter");
+    assert_eq!(generated[1].1["lineHeight"], 1.5);
+    assert_eq!(generated[2].1["iconFontName"], "search");
+    assert_eq!(generated[2].1["fill"][0]["color"], "#EEEEEE");
+    let direct = crate::parse_program_objects(&run_script_to_program(script).unwrap());
+    assert_eq!(direct[1].1["fill"][0]["color"], "#17191D");
+    assert_eq!(direct[2].1["fill"][0]["color"], "#17191D");
+    let truncated = format!("{script}\nI(row, {{type:");
+    assert_eq!(
+        crate::parse_program_objects(&run_generation_script_to_program(&truncated).unwrap()),
+        generated,
+        "syntax recovery must preserve the generation mode"
+    );
+}
+
+#[test]
 fn modification_recording_preserves_authored_text_metrics_without_generation_defaults() {
     let source =
         r#"I(null,{id:"title",type:"text",content:"咖啡",height:56,fontSize:28,lineHeight:1.1});"#;
