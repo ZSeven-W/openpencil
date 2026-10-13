@@ -347,6 +347,7 @@ fn failed_search_writes_the_adaptive_placeholder_sentinel() {
             deadline: None,
             node_id: NodeId::new("img1"),
             intent: None,
+            stock_view: None,
             fallback_target: None,
             rx,
         }],

@@ -37,7 +37,12 @@ fn auto_search_result_applies_with_a_saved_but_disabled_generator() {
     let expected = intent_fingerprint(&target, None);
     let mut session = ImageSearchSession::new();
     session.search_memo.lock().unwrap().insert(
-        search_intent_key(&target.query, target.aspect_ratio, target.prompt.as_deref()),
+        search_intent_key(
+            &target.query,
+            target.aspect_ratio,
+            target.prompt.as_deref(),
+            target.judge_view,
+        ),
         SearchMemoEntry::Ready("https://example.test/vase.jpg".into()),
     );
 
@@ -87,11 +92,11 @@ fn current_intents_follow_auto_toggle_but_preserve_explicit_request_modes() {
             ImageRequestMode::Auto => {}
         }
         assert_eq!(collect_targets(&state, &HashSet::new())[0].mode, mode);
-        let intents = current_intent_fingerprints(&state, None);
+        let intents = current_intent_snapshot(&state, None);
         assert!(
-            intents["photo"].starts_with(prefix),
+            intents["photo"].fingerprint.starts_with(prefix),
             "{mode:?}, toggle={enabled}: {:?}",
-            intents["photo"]
+            intents["photo"].fingerprint
         );
     }
 }

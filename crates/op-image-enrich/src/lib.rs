@@ -21,6 +21,7 @@
 
 mod apply;
 mod fallback_policy;
+mod judge_view;
 #[cfg(feature = "net")]
 pub mod net;
 #[cfg(feature = "pixels")]
@@ -35,6 +36,7 @@ pub use fallback_policy::{
     ImageFallbackBranch, ImageFallbackPatch, IMAGE_FALLBACK_NAME_SUFFIX,
     SEARCH_FAILED_PLACEHOLDER_SRC,
 };
+pub use judge_view::{ImageJudgeFit, ImageJudgeView};
 pub use targets::{
     collect_targets, collect_targets_with_scene, has_empty_image_fill, image_request_mode,
     is_frame_placeholder_still_unfilled, is_image_area_rectangle_by_heuristic, ImageAspectRatio,

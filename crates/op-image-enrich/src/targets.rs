@@ -36,6 +36,9 @@ pub struct ImageSearchTarget {
     /// Resolved numeric dimensions (for the gen provider's aspect mapping).
     pub width: Option<f64>,
     pub height: Option<f64>,
+    /// Actual centered slot view for stock judging; unknown geometry keeps
+    /// the compatibility path that judges the complete image.
+    pub judge_view: Option<crate::ImageJudgeView>,
 }
 
 /// How a slot wants its image: stock search, AI generation, or the legacy
@@ -269,6 +272,7 @@ fn image_search_target_for(
         mode,
         width,
         height,
+        judge_view: crate::judge_view::for_node(node, width, height),
     })
 }
 

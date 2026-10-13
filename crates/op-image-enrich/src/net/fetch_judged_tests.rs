@@ -64,6 +64,7 @@ fn same_artwork_cannot_win_again_with_different_resolution_bytes() {
         query: "cream",
         intent: "cream",
         judge: &judge,
+        view: None,
         deadline: None,
     };
     let mut first = candidate("preview-600", 2);
@@ -100,6 +101,7 @@ fn weak_primary_does_not_hide_on_in_a_later_tier() {
         query: "amber skincare serum bottle",
         intent: "product card",
         judge: &judge,
+        view: None,
         deadline: None,
     };
     let mut fallback = WeakFallback::new(&used, None);
@@ -142,6 +144,7 @@ fn finishing_weak_preserves_its_original_opportunity_deadline_for_delivery() {
         query: "serum",
         intent: "bottle",
         judge: &judge,
+        view: None,
         deadline: None,
     };
     let outer = Instant::now() + Duration::from_secs(120);
@@ -169,6 +172,7 @@ fn rewritten_search_is_judged_against_the_original_slot_brief() {
         query: "minimal amber skincare serum bottle on cream",
         intent: "serum product photo, not a drink",
         judge: &judge,
+        view: None,
         deadline: None,
     };
     let mut fallback = WeakFallback::new(&used, None);
@@ -191,6 +195,7 @@ fn all_weak_tiers_keep_the_first_usable_fallback_without_claiming_more() {
         query: "serum",
         intent: "product photo",
         judge: &judge,
+        view: None,
         deadline: None,
     };
     let mut fallback = WeakFallback::new(&used, None);
@@ -214,6 +219,7 @@ fn on_that_is_already_used_does_not_upgrade_a_weak_fallback() {
         query: "serum",
         intent: "product",
         judge: &judge,
+        view: None,
         deadline: None,
     };
     let mut fallback = WeakFallback::new(&used, None);
@@ -236,6 +242,7 @@ fn off_is_never_reserved_or_used_as_a_fallback() {
         query: "serum",
         intent: "product",
         judge: &judge,
+        view: None,
         deadline: None,
     };
     let mut fallback = WeakFallback::new(&used, None);
@@ -260,6 +267,7 @@ fn cancellation_releases_only_the_provisional_fallback_claims() {
         query: "serum",
         intent: "product",
         judge: &judge,
+        view: None,
         deadline: None,
     };
     {
@@ -280,6 +288,7 @@ fn a_stalled_extra_tier_delivers_the_retained_weak_before_the_outer_deadline() {
         query: "serum",
         intent: "product",
         judge: &judge,
+        view: None,
         deadline: None,
     };
     let started = Instant::now();
@@ -318,6 +327,7 @@ fn a_late_slot_does_not_restart_the_global_deadline() {
         query: "serum",
         intent: "product",
         judge: &judge,
+        view: None,
         deadline: None,
     };
     let mut fallback = WeakFallback::new(&used, Some(Instant::now() + Duration::from_millis(100)));
@@ -350,6 +360,7 @@ fn an_unbounded_judge_skips_extra_retrieval_as_soon_as_weak_is_available() {
         query: "serum",
         intent: "product",
         judge: &judge,
+        view: None,
         deadline: None,
     };
     let mut fallback = WeakFallback::new(&used, None);

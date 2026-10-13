@@ -16,6 +16,8 @@
 
 use skia_safe::{surfaces, CubicResampler, Data, EncodedImageFormat, Image, Paint, Rect};
 
+pub use super::judge_thumbnail::make_judge_thumbnail_for_view;
+
 /// Longest-edge ceiling (px) for an imported raster image. 2048 keeps
 /// crisp detail at typical canvas zoom while collapsing a 6000px photo
 /// to ~1/9th the pixels.

@@ -3,8 +3,8 @@
 //!
 //! `search_intent_key` / `canonical_search_intent_query` moved here from the
 //! `image_search_session.rs` spine; `intent_fingerprint` /
-//! `current_intent_fingerprints` moved here from the (since-relocated)
-//! `targets.rs`. Pure code motion — `current_intent_fingerprints` depends on
+//! current-intent snapshots moved here from the (since-relocated)
+//! `targets.rs`. The snapshot depends on
 //! the desktop crate's `image_panel_host` gen-profile lookup, which is why
 //! this file stays in the desktop crate while the slot predicates themselves
 //! now live in the shared `op-image-enrich` crate.
@@ -14,8 +14,8 @@ use std::collections::{HashMap, HashSet};
 use op_editor_core::agent_settings::ImageGenProfile;
 use op_editor_core::EditorState;
 use op_image_enrich::{
-    collect_targets, collect_targets_with_scene, ImageAspectRatio, ImageRequestMode,
-    ImageSearchTarget,
+    collect_targets, collect_targets_with_scene, ImageAspectRatio, ImageJudgeView,
+    ImageRequestMode, ImageSearchTarget,
 };
 
 /// Resolve the same generation profile for dispatch and stale-result checks.
@@ -54,19 +54,32 @@ pub(crate) fn intent_fingerprint(
             target.height.map(f64::to_bits)
         )
     } else {
-        let key = search_intent_key(&target.query, target.aspect_ratio, target.prompt.as_deref());
+        let key = search_intent_key(
+            &target.query,
+            target.aspect_ratio,
+            target.prompt.as_deref(),
+            target.judge_view,
+        );
         let mut fingerprint = format!("search|{}|{:?}", key.query, key.aspect_ratio);
         if let Some(prompt) = key.prompt {
             fingerprint.push_str(&format!("|prompt={prompt:?}"));
+        }
+        if let Some(view) = key.judge_view {
+            fingerprint.push_str(&format!("|view={view:?}"));
         }
         fingerprint
     }
 }
 
-pub(crate) fn current_intent_fingerprints(
+pub(super) struct ImageIntentSnapshot {
+    pub(super) fingerprint: String,
+    pub(super) judge_view: Option<ImageJudgeView>,
+}
+
+pub(super) fn current_intent_snapshot(
     state: &EditorState,
     scene: Option<&op_editor_ui::layout_scene::LayoutScene>,
-) -> HashMap<String, String> {
+) -> HashMap<String, ImageIntentSnapshot> {
     let profile = crate::image_panel_host::active_image_gen_profile(state);
     let auto_gen_active = state.editor_ui.agent_settings.image_gen_active();
     let targets = match scene {
@@ -78,7 +91,13 @@ pub(crate) fn current_intent_fingerprints(
         .map(|target| {
             let profile = generation_profile_for_request(target.mode, profile, auto_gen_active);
             let fingerprint = intent_fingerprint(&target, profile);
-            (target.node_id.as_str().to_string(), fingerprint)
+            (
+                target.node_id.as_str().to_string(),
+                ImageIntentSnapshot {
+                    fingerprint,
+                    judge_view: target.judge_view,
+                },
+            )
         })
         .collect()
 }
@@ -96,10 +115,13 @@ pub(crate) fn current_intent_fingerprints(
 /// retrieval uses the same short query. Preserve prompt wording and punctuation;
 /// only trim its edges, treating blank prompts like the query-only legacy path.
 /// Aspect remains part of intent so a square cover never reuses a wide hero.
+/// The actual view also participates: two wide slots can show different crops,
+/// and a photo judged under cover cannot stand in for a contain view.
 pub(crate) fn search_intent_key(
     query: &str,
     aspect_ratio: Option<ImageAspectRatio>,
     prompt: Option<&str>,
+    judge_view: Option<ImageJudgeView>,
 ) -> super::SearchIntentKey {
     super::SearchIntentKey {
         query: canonical_search_intent_query(query),
@@ -108,6 +130,7 @@ pub(crate) fn search_intent_key(
             .map(str::trim)
             .filter(|p| !p.is_empty())
             .map(str::to_string),
+        judge_view: judge_view.map(|view| view.cache_key()),
     }
 }
 

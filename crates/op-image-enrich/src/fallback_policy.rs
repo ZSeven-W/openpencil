@@ -226,22 +226,56 @@ pub fn icon_name_for_query(query: &str) -> String {
     let query = query.to_ascii_lowercase();
     let table = [
         (
-            &["dumbbell", "fitness", "exercise", "workout"][..],
+            &[
+                "dumbbell",
+                "dumbbells",
+                "fitness",
+                "exercise",
+                "exercises",
+                "workout",
+                "workouts",
+            ][..],
             "dumbbell",
         ),
-        (&["food", "dish", "meal"][..], "utensils"),
-        (&["coffee"][..], "coffee"),
-        (&["product", "shirt", "shoe"][..], "shopping-bag"),
-        (&["map"][..], "map"),
-        (&["user", "avatar", "portrait"][..], "user"),
-        (&["house", "hotel", "room"][..], "building"),
-        (&["car", "ride"][..], "car"),
+        (
+            &["food", "foods", "dish", "dishes", "meal", "meals"][..],
+            "utensils",
+        ),
+        (&["coffee", "coffees"][..], "coffee"),
+        (
+            &["product", "products", "shirt", "shirts", "shoe", "shoes"][..],
+            "shopping-bag",
+        ),
+        (&["map", "maps"][..], "map"),
+        (
+            &[
+                "user",
+                "users",
+                "avatar",
+                "avatars",
+                "portrait",
+                "portraits",
+            ][..],
+            "user",
+        ),
+        (
+            &["house", "houses", "hotel", "hotels", "room", "rooms"][..],
+            "building",
+        ),
+        (&["car", "cars", "ride", "rides"][..], "car"),
         (&["music"][..], "music"),
-        (&["video"][..], "play"),
+        (&["video", "videos"][..], "play"),
     ];
     table
         .iter()
-        .find(|(keywords, _)| keywords.iter().any(|keyword| query.contains(keyword)))
+        .find(|(keywords, _)| {
+            // Whole words avoid unrelated substrings (skincare/car,
+            // mushroom/room). Explicit plurals preserve common queries
+            // without applying a stemmer to arbitrary subject names.
+            query
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|word| keywords.contains(&word))
+        })
         .map(|(_, icon)| (*icon).to_string())
         .unwrap_or_else(|| "image".to_string())
 }

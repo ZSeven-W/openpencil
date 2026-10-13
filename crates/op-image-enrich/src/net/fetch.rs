@@ -15,7 +15,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::net::providers::{
-    fetch_image_and_judge_thumbnail, normalize_image_mime_header, rewrite_queries,
+    fetch_image_and_judge_thumbnail_for_view, normalize_image_mime_header, rewrite_queries,
     simplify_search_query, wikimedia_info_is_image, RawHit, WebOpenverseCredentials,
     MAX_EMBEDDED_IMAGE_BYTES,
 };
@@ -28,6 +28,13 @@ use crate::ImageAspectRatio;
 #[path = "fetch_judged.rs"]
 mod judged;
 use judged::{before_deadline, claim_ranked_image, JudgeSlot, JudgedImage, WeakFallback};
+
+#[path = "fetch_aspect.rs"]
+mod aspect;
+use aspect::{
+    earlier_deadline, hit_identity, judging_deadline, search_original_aspects, select_and_record,
+    unseen_hits,
+};
 
 pub fn fetch_first_image_url_blocking(
     query: &str,
@@ -50,107 +57,15 @@ pub async fn fetch_first_image_url(
         .map(|resolved| resolved.src)
 }
 
-/// Visual-judge variant of the desktop enrichment ladder (the no-judge
-/// ladder is `resolve::fetch_first_image_resolved`).
-pub fn fetch_first_image_url_blocking_with_judge(
-    query: &str,
-    aspect_ratio: Option<ImageAspectRatio>,
-    credentials: Option<&WebOpenverseCredentials>,
-    used_urls: &Mutex<HashSet<String>>,
-    judge: &dyn ImageRelevanceJudge,
-    intent: &str,
-) -> Option<String> {
-    fetch_first_image_url_blocking_with_judge_and_deadline(
-        query,
-        aspect_ratio,
-        credentials,
-        used_urls,
-        judge,
-        intent,
-        None,
-    )
-}
+#[path = "fetch_entry.rs"]
+mod entry;
+pub use entry::*;
 
-/// Preserve the caller's absolute deadline while seeking a better image
-/// after finding a usable Weak candidate. `None` uses the local opportunity
-/// window only; the original no-Weak search path remains unchanged.
-pub fn fetch_first_image_url_blocking_with_judge_and_deadline(
-    query: &str,
-    aspect_ratio: Option<ImageAspectRatio>,
-    credentials: Option<&WebOpenverseCredentials>,
-    used_urls: &Mutex<HashSet<String>>,
-    judge: &dyn ImageRelevanceJudge,
-    intent: &str,
-    deadline: Option<Instant>,
-) -> Option<String> {
-    fetch_first_image_resolved_blocking_with_judge_and_deadline(
-        query,
-        aspect_ratio,
-        credentials,
-        used_urls,
-        judge,
-        intent,
-        deadline,
-    )
-    .map(|resolved| resolved.src)
-}
+#[cfg(test)]
+#[path = "fetch_view_tests.rs"]
+mod view_tests;
 
-/// [`fetch_first_image_url_blocking_with_judge`] with the chosen hit's
-/// provenance (provider stage, provider query, catalogue title).
-pub fn fetch_first_image_resolved_blocking_with_judge(
-    query: &str,
-    aspect_ratio: Option<ImageAspectRatio>,
-    credentials: Option<&WebOpenverseCredentials>,
-    used_urls: &Mutex<HashSet<String>>,
-    judge: &dyn ImageRelevanceJudge,
-    intent: &str,
-) -> Option<ResolvedImage> {
-    fetch_first_image_resolved_blocking_with_judge_and_deadline(
-        query,
-        aspect_ratio,
-        credentials,
-        used_urls,
-        judge,
-        intent,
-        None,
-    )
-}
-
-pub fn fetch_first_image_resolved_blocking_with_judge_and_deadline(
-    query: &str,
-    aspect_ratio: Option<ImageAspectRatio>,
-    credentials: Option<&WebOpenverseCredentials>,
-    used_urls: &Mutex<HashSet<String>>,
-    judge: &dyn ImageRelevanceJudge,
-    intent: &str,
-    deadline: Option<Instant>,
-) -> Option<ResolvedImage> {
-    let query = query.trim();
-    if query.is_empty() {
-        return None;
-    }
-    crate::net::block_on_image_runtime(async {
-        let (selected, delivery_deadline) = fetch_first_image_url_with_judge(
-            query,
-            aspect_ratio,
-            credentials,
-            used_urls,
-            judge,
-            intent,
-            deadline,
-        )
-        .await?;
-        Some(
-            super::original_delivery::upgrade_selected_image(
-                selected,
-                used_urls,
-                delivery_deadline,
-            )
-            .await,
-        )
-    })
-}
-
+#[allow(clippy::too_many_arguments)]
 async fn fetch_first_image_url_with_judge(
     query: &str,
     aspect_ratio: Option<ImageAspectRatio>,
@@ -159,6 +74,7 @@ async fn fetch_first_image_url_with_judge(
     judge: &dyn ImageRelevanceJudge,
     intent: &str,
     deadline: Option<Instant>,
+    view: Option<crate::ImageJudgeView>,
 ) -> Option<(ResolvedImage, Option<Instant>)> {
     let client = reqwest::Client::builder()
         .use_rustls_tls()
@@ -170,51 +86,79 @@ async fn fetch_first_image_url_with_judge(
         query,
         intent,
         judge,
-        deadline: None,
+        view,
+        deadline: judging_deadline(judge, deadline),
     };
     let query = simplify_search_query(query);
     let mut fallback = WeakFallback::new(used_urls, deadline);
-    trace_line(format_args!("ladder=judged query=\"{query}\""));
-    let hits = fetch_relevant_openverse_list_with_aspect(
-        &client,
+    let seen = Mutex::new(HashSet::new());
+    trace_line(format_args!(
+        "ladder=judged query=\"{query}\" aspect={aspect_ratio:?} judge_view={view:?}"
+    ));
+    let original = search_original_aspects(
         &query,
-        intent,
         aspect_ratio,
-        credentials,
+        judge,
+        deadline,
+        &mut fallback,
+        |aspect, deadline, allow_weak| {
+            let client = &client;
+            let query = &query;
+            let seen = &seen;
+            let slot = JudgeSlot {
+                deadline: judging_deadline(judge, deadline),
+                ..slot
+            };
+            async move {
+                let hits = fetch_relevant_openverse_list_with_aspect(
+                    client,
+                    query,
+                    intent,
+                    aspect,
+                    credentials,
+                )
+                .await?
+                .hits;
+                Some(
+                    fetch_judged_openverse(
+                        client,
+                        hits,
+                        &slot,
+                        used_urls,
+                        seen,
+                        allow_weak,
+                        "openverse",
+                    )
+                    .await,
+                )
+            }
+        },
     )
-    .await
-    .map(|list| list.hits)
-    .unwrap_or_default();
-    if let Some(image) =
-        fetch_judged_openverse(&client, hits, &slot, used_urls, true, "openverse").await
-    {
-        if let Some(image) = fallback.consider("openverse", &query, image) {
-            return Some((image, fallback.delivery_deadline()));
-        }
-    }
+    .await;
+    let rewrite_aspect = match original {
+        Ok((Some(image), _)) => return Some((image, fallback.delivery_deadline())),
+        Err(_) => return fallback.finish_with_deadline(),
+        Ok((None, aspect)) => aspect,
+    };
 
-    // No unused On candidate won the primary tier (empty, all Off, or only
-    // Weak): the zero-hit two-keyword retry inside
-    // the list fetch never fires here, so rewrite the query and run each
-    // rewrite through the same judged Openverse path before the Wikimedia
-    // ladder. `rewrite_queries` returns at most two candidates, bounding
-    // the extra cost at two Openverse list calls per slot; the two-batch
-    // judge bound per call is unchanged.
+    // The existing rewrite ladder keeps its two-query / two-batch ceiling.
+    // Network deadlines remain active even for a legacy synchronous judge.
     for rewrite in rewrite_queries(&query, intent) {
         if !fallback.can_continue(judge) {
             return fallback.finish_with_deadline();
         }
         eprintln!("[ENRICH] judge-rewrite: \"{query}\" → \"{rewrite}\"");
+        let tier_deadline = earlier_deadline(deadline, fallback.deadline());
         let slot = JudgeSlot {
-            deadline: fallback.deadline(),
+            deadline: judging_deadline(judge, tier_deadline),
             ..slot
         };
-        let result = before_deadline(slot.deadline, async {
+        let result = before_deadline(tier_deadline, async {
             let hits = fetch_relevant_openverse_list_with_aspect(
                 &client,
                 &rewrite,
                 intent,
-                aspect_ratio,
+                rewrite_aspect,
                 credentials,
             )
             .await
@@ -225,6 +169,7 @@ async fn fetch_first_image_url_with_judge(
                 hits,
                 &slot,
                 used_urls,
+                &seen,
                 fallback.is_empty(),
                 "openverse-rewrite",
             )
@@ -255,12 +200,13 @@ async fn fetch_first_image_url_with_judge(
         if !fallback.can_continue(judge) {
             return fallback.finish_with_deadline();
         }
+        let tier_deadline = earlier_deadline(deadline, fallback.deadline());
         let slot = JudgeSlot {
-            deadline: fallback.deadline(),
+            deadline: judging_deadline(judge, tier_deadline),
             ..slot
         };
         let result = before_deadline(
-            slot.deadline,
+            tier_deadline,
             fetch_judged_wikimedia(&client, &truncated, &slot, used_urls, fallback.is_empty()),
         )
         .await;
@@ -276,12 +222,13 @@ async fn fetch_first_image_url_with_judge(
     if !fallback.can_continue(judge) {
         return fallback.finish_with_deadline();
     }
+    let tier_deadline = earlier_deadline(deadline, fallback.deadline());
     let slot = JudgeSlot {
-        deadline: fallback.deadline(),
+        deadline: judging_deadline(judge, tier_deadline),
         ..slot
     };
     let result = before_deadline(
-        slot.deadline,
+        tier_deadline,
         fetch_judged_wikimedia(&client, &query, &slot, used_urls, fallback.is_empty()),
     )
     .await;
@@ -310,28 +257,26 @@ async fn fetch_judged_openverse(
     hits: Vec<RawHit>,
     slot: &JudgeSlot<'_>,
     used_urls: &Mutex<HashSet<String>>,
+    seen: &Mutex<HashSet<String>>,
     allow_weak: bool,
     source: &str,
 ) -> Option<JudgedImage> {
     const ROUND_SIZE: usize = 5;
     const MAX_JUDGE_CANDIDATES: usize = ROUND_SIZE * 2;
+    let hits = unseen_hits(hits, seen);
     let taken = hits.len().min(MAX_JUDGE_CANDIDATES);
     let mut candidates = Vec::new();
     for hit in hits.into_iter().take(MAX_JUDGE_CANDIDATES) {
         let Some((data_url, thumb_jpeg)) =
-            fetch_image_and_judge_thumbnail(client, &hit.thumb_url).await
+            fetch_image_and_judge_thumbnail_for_view(client, &hit.thumb_url, slot.view).await
         else {
             continue;
         };
         candidates.push(PreparedJudgeCandidate {
+            identity: Some(hit_identity(&hit)),
             title: hit.title,
             data_url,
             thumb_jpeg,
-            identity: Some(if hit.id.trim().is_empty() {
-                format!("openverse:url:{}", hit.thumb_url)
-            } else {
-                format!("openverse:{}", hit.id)
-            }),
             attribution: hit.attribution,
             original: hit.original,
         });
@@ -355,7 +300,7 @@ async fn fetch_judged_openverse(
                 .collect()
         })
         .collect();
-    let selection = slot.select(&batches);
+    let selection = select_and_record(slot, &batches, &candidates, seen);
     eprintln!("[ENRICH] {} source={source}", format_judge_log(&selection));
     claim_ranked_image(&selection, &candidates, used_urls, allow_weak)
 }
@@ -401,7 +346,7 @@ async fn fetch_judged_wikimedia(
             continue;
         };
         let Some((data_url, thumb_jpeg)) =
-            fetch_image_and_judge_thumbnail(client, &candidate_url).await
+            fetch_image_and_judge_thumbnail_for_view(client, &candidate_url, slot.view).await
         else {
             continue;
         };

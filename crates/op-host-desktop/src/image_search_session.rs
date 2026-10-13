@@ -87,6 +87,10 @@ struct ImageSearchJob {
     /// Exact node intent at enqueue time. Production jobs always set this;
     /// hand-built unit jobs may omit it when testing unrelated bookkeeping.
     intent: Option<String>,
+    /// Stock jobs retain their view separately from a generation fallback's
+    /// authored intent. Outer None means not a stock job; inner None means
+    /// unknown geometry, which must not match a later known crop.
+    stock_view: Option<Option<op_image_enrich::ImageJudgeView>>,
     /// The slot's full target, kept by GENERATION jobs only: a degradable
     /// failure re-runs the slot as a stock search and needs the query.
     fallback_target: Option<ImageSearchTarget>,
@@ -98,6 +102,7 @@ pub(crate) struct SearchIntentKey {
     query: String,
     aspect_ratio: Option<ImageAspectRatio>,
     prompt: Option<String>,
+    judge_view: Option<String>,
 }
 
 enum SearchMemoEntry {
@@ -486,7 +491,7 @@ impl ImageSearchSession {
         // at least one such job is actually ready, then reuse it for every
         // other completion drained by this poll. Pending-only frames stay at
         // zero target walks.
-        let mut current_intents: Option<HashMap<String, String>> = None;
+        let mut current_intents: Option<HashMap<String, intent::ImageIntentSnapshot>> = None;
         while i < self.jobs.len() {
             match self.jobs[i].rx.try_recv() {
                 Ok(outcome) => {
@@ -543,6 +548,7 @@ impl ImageSearchSession {
                         // revisit it without advancing.
                         continue;
                     }
+                    let is_stock_result = matches!(outcome, JobOutcome::Search(_));
                     let is_search_hit = matches!(outcome, JobOutcome::Search(Some(_)));
                     let url = match outcome {
                         JobOutcome::Search(url) => url,
@@ -584,22 +590,40 @@ impl ImageSearchSession {
                         changed = true;
                         continue;
                     }
-                    if job.intent.is_some() && current_intents.is_none() {
+                    if (job.intent.is_some() || (is_stock_result && job.stock_view.is_some()))
+                        && current_intents.is_none()
+                    {
                         #[cfg(test)]
                         {
                             self.stale_intent_scan_count += 1;
                         }
-                        current_intents = Some(current_intent_fingerprints(state, scene));
+                        current_intents = Some(current_intent_snapshot(state, scene));
                     }
                     if job.intent.as_ref().is_some_and(|expected| {
                         current_intents
                             .as_ref()
                             .and_then(|intents| intents.get(job.node_id.as_str()))
+                            .map(|current| &current.fingerprint)
                             != Some(expected)
                     }) {
                         tracing::info!(
                             node_id = %job.node_id,
                             "discarding stale image result because the node's image intent changed"
+                        );
+                        continue;
+                    }
+                    if is_stock_result
+                        && job.stock_view.as_ref().is_some_and(|expected| {
+                            current_intents
+                                .as_ref()
+                                .and_then(|intents| intents.get(job.node_id.as_str()))
+                                .map(|current| &current.judge_view)
+                                != Some(expected)
+                        })
+                    {
+                        tracing::info!(
+                            node_id = %job.node_id,
+                            "discarding stale stock image because the slot's visible crop changed"
                         );
                         continue;
                     }
@@ -644,9 +668,10 @@ mod jobs;
 use jobs::publish_search_result;
 use jobs::{spawn_gen_job, spawn_job, spawn_unavailable_gen_job};
 
-use fetch::fetch_first_image_url_blocking_with_judge_and_deadline;
+use fetch::fetch_first_image_url_blocking_with_judge_for_view;
 pub(crate) use fetch::fetch_image_data_url;
-pub(crate) use intent::{current_intent_fingerprints, intent_fingerprint, search_intent_key};
+use intent::current_intent_snapshot;
+pub(crate) use intent::{intent_fingerprint, search_intent_key};
 
 // `apply_result` + the slot predicates + the target/mode/aspect types live in
 // the shared `op-image-enrich` crate now (see the re-export block at the top

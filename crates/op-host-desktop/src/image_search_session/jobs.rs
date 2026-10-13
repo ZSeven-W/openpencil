@@ -20,7 +20,13 @@ pub(super) fn spawn_job(
     let (tx, rx) = mpsc::channel();
     let node_id = target.node_id.clone();
     let aspect_ratio = target.aspect_ratio;
-    let key = search_intent_key(&target.query, aspect_ratio, target.prompt.as_deref());
+    let stock_view = Some(target.judge_view);
+    let key = search_intent_key(
+        &target.query,
+        aspect_ratio,
+        target.prompt.as_deref(),
+        target.judge_view,
+    );
     let intent = Some(intent);
     let judge_intent = target
         .prompt
@@ -40,6 +46,7 @@ pub(super) fn spawn_job(
                     node_id,
                     deadline,
                     intent,
+                    stock_view,
                     fallback_target: None,
                     rx,
                 };
@@ -50,6 +57,7 @@ pub(super) fn spawn_job(
                     node_id,
                     deadline,
                     intent,
+                    stock_view,
                     fallback_target: None,
                     rx,
                 };
@@ -67,7 +75,7 @@ pub(super) fn spawn_job(
     }
     std::thread::spawn(move || {
         let url = if judge_enabled {
-            fetch_first_image_url_blocking_with_judge_and_deadline(
+            fetch_first_image_url_blocking_with_judge_for_view(
                 &target.query,
                 aspect_ratio,
                 credentials.as_ref().map(OpenverseCredentials::as_web),
@@ -75,6 +83,7 @@ pub(super) fn spawn_job(
                 judge.as_ref(),
                 &judge_intent,
                 deadline,
+                target.judge_view,
             )
         } else {
             // No configured judge: the unjudged ladder, still fenced for
@@ -97,6 +106,7 @@ pub(super) fn spawn_job(
         node_id,
         deadline,
         intent,
+        stock_view,
         fallback_target: None,
         rx,
     }
@@ -165,6 +175,7 @@ pub(super) fn spawn_gen_job(
         node_id,
         deadline,
         intent,
+        stock_view: None,
         // Kept so a degradable failure can re-run the slot as a search.
         fallback_target: Some(target),
         rx,
@@ -185,6 +196,7 @@ pub(super) fn spawn_unavailable_gen_job(
         node_id,
         deadline,
         intent,
+        stock_view: None,
         fallback_target: None,
         rx,
     }

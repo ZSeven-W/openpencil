@@ -20,7 +20,7 @@ fn a_repeat_query_gets_the_same_photo_back_not_a_dedup_downgrade() {
     // The first search already answered "Bali Indonesia" and marked its photo used.
     let good = "https://example.org/bali-temple.jpg".to_string();
     resolved.lock().unwrap().insert(
-        search_intent_key("Bali, Indonesia", None, None),
+        search_intent_key("Bali, Indonesia", None, None, None),
         SearchMemoEntry::Ready(good.clone()),
     );
     used_urls.lock().unwrap().insert(good.clone());
@@ -34,6 +34,7 @@ fn a_repeat_query_gets_the_same_photo_back_not_a_dedup_downgrade() {
         aspect_ratio: None,
         width: None,
         height: None,
+        judge_view: None,
     };
     let job = spawn_job(
         target,
@@ -69,7 +70,7 @@ fn a_pending_search_intent_is_singleflight() {
     use std::collections::{HashMap, HashSet};
     use std::sync::{Arc, Mutex};
 
-    let key = search_intent_key("Bali Indonesia", None, None);
+    let key = search_intent_key("Bali Indonesia", None, None, None);
     let memo: Arc<Mutex<HashMap<SearchIntentKey, SearchMemoEntry>>> =
         Arc::new(Mutex::new(HashMap::from([(
             key.clone(),
@@ -86,6 +87,7 @@ fn a_pending_search_intent_is_singleflight() {
         aspect_ratio: None,
         width: None,
         height: None,
+        judge_view: None,
     };
     let job = spawn_job(
         target,
@@ -127,7 +129,7 @@ fn stale_pre_reset_request_cannot_publish_into_same_key_in_new_session() {
     use std::collections::HashMap;
     use std::sync::{mpsc, Arc, Mutex};
 
-    let key = search_intent_key("Bali Indonesia", None, None);
+    let key = search_intent_key("Bali Indonesia", None, None, None);
     let memo: Arc<Mutex<HashMap<SearchIntentKey, SearchMemoEntry>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let (old_tx, _old_rx) = mpsc::channel();
@@ -195,13 +197,18 @@ fn search_memo_separates_aspect_ratio_intents() {
     use super::super::{search_intent_key, ImageAspectRatio};
 
     assert_eq!(
-        search_intent_key("Bali, Indonesia", Some(ImageAspectRatio::Square), None),
-        search_intent_key("bali indonesia", Some(ImageAspectRatio::Square), None),
+        search_intent_key(
+            "Bali, Indonesia",
+            Some(ImageAspectRatio::Square),
+            None,
+            None
+        ),
+        search_intent_key("bali indonesia", Some(ImageAspectRatio::Square), None, None),
         "fetch-equivalent spelling shares one intent"
     );
     assert_ne!(
-        search_intent_key("Bali Indonesia", Some(ImageAspectRatio::Square), None),
-        search_intent_key("Bali Indonesia", Some(ImageAspectRatio::Wide), None),
+        search_intent_key("Bali Indonesia", Some(ImageAspectRatio::Square), None, None),
+        search_intent_key("Bali Indonesia", Some(ImageAspectRatio::Wide), None, None),
         "a cover and hero must not share a cached crop"
     );
 }
@@ -216,8 +223,8 @@ fn memo_identity_keeps_lossy_provider_query_collisions_separate() {
         "both authored intents intentionally adapt to the same photo-corpus query"
     );
     assert_ne!(
-        search_intent_key(album, Some(ImageAspectRatio::Square), None),
-        search_intent_key(playlist, Some(ImageAspectRatio::Square), None),
+        search_intent_key(album, Some(ImageAspectRatio::Square), None, None),
+        search_intent_key(playlist, Some(ImageAspectRatio::Square), None, None),
         "provider adaptation must not merge authored image identity"
     );
 
@@ -225,8 +232,8 @@ fn memo_identity_keeps_lossy_provider_query_collisions_separate() {
     let beach = "santorini greece white buildings sunset beach";
     assert_eq!(simplify_search_query(dome), simplify_search_query(beach));
     assert_ne!(
-        search_intent_key(dome, Some(ImageAspectRatio::Wide), None),
-        search_intent_key(beach, Some(ImageAspectRatio::Wide), None),
+        search_intent_key(dome, Some(ImageAspectRatio::Wide), None, None),
+        search_intent_key(beach, Some(ImageAspectRatio::Wide), None, None),
         "words beyond the provider's four-keyword cap remain part of identity"
     );
 }
@@ -240,6 +247,7 @@ fn directed_stock_target(prompt: Option<&str>) -> ImageSearchTarget {
         aspect_ratio: Some(ImageAspectRatio::Square),
         width: Some(240.0),
         height: Some(240.0),
+        judge_view: None,
     }
 }
 
@@ -252,12 +260,17 @@ fn ready_memo_keeps_different_art_directions_separate() {
     // Seed the legacy key too: a regression must return the wrong cached image,
     // not launch an external request during this test.
     memo.lock().unwrap().insert(
-        search_intent_key(&warm.query, warm.aspect_ratio, None),
+        search_intent_key(&warm.query, warm.aspect_ratio, None, warm.judge_view),
         SearchMemoEntry::Ready("legacy-query-only.jpg".into()),
     );
     for (target, url) in [(&warm, "warm.jpg"), (&cool, "cool.jpg")] {
         memo.lock().unwrap().insert(
-            search_intent_key(&target.query, target.aspect_ratio, target.prompt.as_deref()),
+            search_intent_key(
+                &target.query,
+                target.aspect_ratio,
+                target.prompt.as_deref(),
+                target.judge_view,
+            ),
             SearchMemoEntry::Ready(url.into()),
         );
     }
@@ -287,12 +300,22 @@ fn pending_art_direction_does_not_join_another_directions_search() {
     for old_ready in [true, false] {
         let warm = directed_stock_target(Some("Warm studio photograph on an ivory background"));
         let cool = directed_stock_target(Some("Cool outdoor photograph on dark stone"));
-        let warm_key = search_intent_key(&warm.query, warm.aspect_ratio, warm.prompt.as_deref());
-        let cool_key = search_intent_key(&cool.query, cool.aspect_ratio, cool.prompt.as_deref());
+        let warm_key = search_intent_key(
+            &warm.query,
+            warm.aspect_ratio,
+            warm.prompt.as_deref(),
+            warm.judge_view,
+        );
+        let cool_key = search_intent_key(
+            &cool.query,
+            cool.aspect_ratio,
+            cool.prompt.as_deref(),
+            cool.judge_view,
+        );
         assert_ne!(warm_key, cool_key);
         let memo = Arc::new(Mutex::new(HashMap::from([
             (
-                search_intent_key(&warm.query, warm.aspect_ratio, None),
+                search_intent_key(&warm.query, warm.aspect_ratio, None, warm.judge_view),
                 SearchMemoEntry::Ready("legacy-query-only.jpg".into()),
             ),
             (
@@ -359,7 +382,12 @@ fn pending_art_direction_does_not_join_another_directions_search() {
 #[test]
 fn blank_prompts_keep_query_only_memo_and_fingerprint_behavior() {
     let original = directed_stock_target(None);
-    let key = search_intent_key(&original.query, original.aspect_ratio, None);
+    let key = search_intent_key(
+        &original.query,
+        original.aspect_ratio,
+        None,
+        original.judge_view,
+    );
     let expected = intent_fingerprint(&original, None);
     assert_eq!(expected, "search|ceramic vase|Some(Square)");
     let memo = Arc::new(Mutex::new(HashMap::from([(
@@ -369,7 +397,12 @@ fn blank_prompts_keep_query_only_memo_and_fingerprint_behavior() {
     for prompt in [None, Some(""), Some(" \n\t ")] {
         let target = directed_stock_target(prompt);
         assert_eq!(
-            search_intent_key(&target.query, target.aspect_ratio, target.prompt.as_deref()),
+            search_intent_key(
+                &target.query,
+                target.aspect_ratio,
+                target.prompt.as_deref(),
+                target.judge_view
+            ),
             key
         );
         assert_eq!(intent_fingerprint(&target, None), expected);
@@ -393,9 +426,15 @@ fn blank_prompts_keep_query_only_memo_and_fingerprint_behavior() {
         search_intent_key(
             &original.query,
             original.aspect_ratio,
-            Some(" warm studio ")
+            Some(" warm studio "),
+            original.judge_view
         ),
-        search_intent_key(&original.query, original.aspect_ratio, Some("warm studio"))
+        search_intent_key(
+            &original.query,
+            original.aspect_ratio,
+            Some("warm studio"),
+            original.judge_view
+        )
     );
 }
 

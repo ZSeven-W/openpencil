@@ -200,6 +200,8 @@ fn image_fill(url: &str) -> PenFill {
 // module directory.
 #[path = "image_search_session_tests/collection.rs"]
 mod collection;
+#[path = "image_search_session_tests/crop.rs"]
+mod crop;
 #[path = "image_search_session_tests/deadline.rs"]
 mod deadline;
 #[path = "image_search_session_tests/fallback.rs"]

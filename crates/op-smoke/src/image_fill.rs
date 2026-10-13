@@ -109,13 +109,15 @@ pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool
             .unwrap_or(target.query.as_str());
         let hit = match &judge {
             Some(judge) => {
-                op_image_enrich::net::fetch::fetch_first_image_resolved_blocking_with_judge(
+                op_image_enrich::net::fetch::fetch_first_image_resolved_blocking_with_judge_for_view(
                     &target.query,
                     target.aspect_ratio,
                     None,
                     &used_urls,
                     judge,
                     intent,
+                    None,
+                    target.judge_view,
                 )
             }
             None => op_image_enrich::net::fetch::fetch_first_image_resolved_blocking(

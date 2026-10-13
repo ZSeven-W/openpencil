@@ -21,6 +21,7 @@ pub(super) struct JudgeSlot<'a> {
     pub intent: &'a str,
     pub judge: &'a dyn ImageRelevanceJudge,
     pub deadline: Option<Instant>,
+    pub view: Option<crate::ImageJudgeView>,
 }
 
 impl JudgeSlot<'_> {

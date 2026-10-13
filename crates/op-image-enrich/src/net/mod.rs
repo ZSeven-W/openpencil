@@ -11,6 +11,7 @@
 pub mod downscale;
 pub mod fetch;
 pub mod judge;
+mod judge_thumbnail;
 mod original_delivery;
 pub mod providers;
 pub mod resolve;

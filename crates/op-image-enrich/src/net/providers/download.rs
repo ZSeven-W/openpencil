@@ -70,9 +70,19 @@ pub async fn fetch_image_and_judge_thumbnail(
     client: &reqwest::Client,
     url: &str,
 ) -> Option<(String, Vec<u8>)> {
+    fetch_image_and_judge_thumbnail_for_view(client, url, None).await
+}
+
+pub async fn fetch_image_and_judge_thumbnail_for_view(
+    client: &reqwest::Client,
+    url: &str,
+    view: Option<crate::ImageJudgeView>,
+) -> Option<(String, Vec<u8>)> {
     let (mime, bytes) = fetch_image_bytes(client, url, MAX_EMBEDDED_IMAGE_BYTES).await?;
+    // Bound/prep the judge raster first. The renderer receives the complete
+    // source, never this potentially cropped derivative.
+    let judge_thumbnail = crate::net::downscale::make_judge_thumbnail_for_view(&bytes, view)?;
     let data_url = crate::net::fetch::renderable_image_data_url(&mime, &bytes)?;
-    let judge_thumbnail = crate::net::downscale::make_judge_thumbnail(&bytes)?;
     Some((data_url, judge_thumbnail))
 }
 

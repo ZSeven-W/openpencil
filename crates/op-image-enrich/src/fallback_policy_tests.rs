@@ -24,6 +24,57 @@ fn patch_value(patch: &ImageFallbackPatch) -> Value {
 }
 
 #[test]
+fn fallback_icon_keywords_do_not_match_inside_other_words() {
+    for query in [
+        "skincare cream jar minimal",
+        "mushroom",
+        "bride",
+        "maple leaves",
+        "perfume diffuser",
+        "αcarβ",
+        "car2",
+        "",
+    ] {
+        assert_eq!(icon_name_for_query(query), "image", "query={query:?}");
+    }
+}
+
+#[test]
+fn fallback_icon_keywords_keep_whole_words_punctuation_and_plurals() {
+    for (query, expected) in [
+        ("car", "car"),
+        ("ride", "car"),
+        ("room", "building"),
+        ("CAR-RIDE", "car"),
+        ("cars / rides", "car"),
+        ("guest rooms", "building"),
+        ("skincare in a hotel room", "building"),
+        ("bride portrait", "user"),
+        ("fitness workouts", "dumbbell"),
+        ("prepared dishes", "utensils"),
+        ("coffee", "coffee"),
+        ("shoes", "shopping-bag"),
+        ("maps", "map"),
+        ("avatars", "user"),
+        ("music", "music"),
+        ("videos", "play"),
+    ] {
+        assert_eq!(icon_name_for_query(query), expected, "query={query:?}");
+    }
+}
+
+#[test]
+fn fallback_icon_word_boundaries_reach_both_visual_branches() {
+    let query = "skincare cream jar minimal";
+    for width in [56.0, 320.0] {
+        let node = image(SEARCH_FAILED_PLACEHOLDER_SRC, query, width);
+        let patch = patch_value(&image_fallback_policy(&node, false)[0]);
+        assert_eq!(patch["children"][0]["iconFontName"], "image");
+        assert_eq!(patch["imageSearchQuery"], query);
+    }
+}
+
+#[test]
 fn keyword_width_media_caption_uses_the_resolved_slot_and_wraps() {
     let doc=jian_ops_schema::load_str(&json!({"version":"1.0.0","children":[
         {"type":"frame","id":"root","width":100,"height":120,"layout":"vertical","children":[

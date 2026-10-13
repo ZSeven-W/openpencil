@@ -159,6 +159,7 @@ fn a_busy_generation_falls_back_to_search_for_the_same_slot() {
             "kitten photo",
             Some(ImageAspectRatio::Wide),
             Some("a watercolor kitten"),
+            collect_targets(&state, &HashSet::new())[0].judge_view,
         ),
         SearchMemoEntry::Ready(seeded.clone()),
     );
@@ -216,6 +217,7 @@ fn the_fallback_happens_once_and_never_retries_generation() {
             "kitten photo",
             Some(ImageAspectRatio::Wide),
             Some("a watercolor kitten"),
+            collect_targets(&state, &HashSet::new())[0].judge_view,
         ),
         SearchMemoEntry::Ready(seeded.clone()),
     );

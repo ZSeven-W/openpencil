@@ -30,8 +30,9 @@ pub use catalog::{
     RawHit,
 };
 pub use download::{
-    fetch_image_and_judge_thumbnail, fetch_image_bytes, fetch_image_data_url,
-    fetch_judge_thumbnail, normalize_image_mime_header, read_capped, sniff_image_mime,
+    fetch_image_and_judge_thumbnail, fetch_image_and_judge_thumbnail_for_view, fetch_image_bytes,
+    fetch_image_data_url, fetch_judge_thumbnail, normalize_image_mime_header, read_capped,
+    sniff_image_mime,
 };
 pub(crate) use original_download::fetch_original_image_data_url;
 pub use relevance::simplify_search_query;
