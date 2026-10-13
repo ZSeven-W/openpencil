@@ -629,6 +629,18 @@ fn has_image_area_keyword(name: &str) -> bool {
         .filter(|character| character.is_ascii_alphanumeric())
         .flat_map(char::to_lowercase)
         .collect();
+    // A reveal/wipe cover is animation geometry, not a book/album cover.
+    // The name fallback once searched "Reveal Cover" and replaced a solid
+    // chart mask with an unrelated product photo. Explicit image intent is
+    // handled separately and does not depend on this heuristic.
+    if ["reveal", "wipe", "mask", "scrim", "overlay"]
+        .iter()
+        .any(|word| compact.contains(word))
+        || name.contains("遮罩")
+        || name.contains("蒙版")
+    {
+        return false;
+    }
     if compact.ends_with("img")
         || compact.ends_with("image")
         || compact.ends_with("photo")
