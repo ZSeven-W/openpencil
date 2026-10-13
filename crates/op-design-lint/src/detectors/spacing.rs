@@ -250,6 +250,9 @@ fn has_concrete_zero_horizontal_padding(node: &PenNode) -> bool {
 }
 
 fn is_intentional_horizontal_scroller(node: &PenNode) -> bool {
+    if crate::horizontal_scroll::is_clipped_horizontal_lane_node(node) {
+        return true;
+    }
     match node {
         PenNode::Frame(node) => {
             node.container.layout == Some(LayoutMode::Horizontal)

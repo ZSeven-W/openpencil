@@ -231,3 +231,5 @@ mod layout_fix_tests;
 mod table_scale_floor_tests;
 #[path = "geometry_table_scale_tests.rs"]
 mod table_scale_tests;
+#[path = "geometry_table_shape_tests.rs"]
+mod table_shape_tests;

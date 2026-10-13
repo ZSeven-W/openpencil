@@ -344,8 +344,9 @@ fn radial_arcs_share_wrapper_centre(node: &Value) -> bool {
 }
 
 fn is_clipping_horizontal_scroller(node: &Value) -> bool {
-    string_prop(node, "layout") == Some("horizontal")
-        && node.get("clipContent").and_then(Value::as_bool) == Some(true)
+    (string_prop(node, "layout") == Some("horizontal")
+        && node.get("clipContent").and_then(Value::as_bool) == Some(true))
+        || op_design_lint::horizontal_scroll::is_clipped_horizontal_lane_viewport(node)
 }
 
 fn is_mobile_product_row_overflow(node: &Value, canvas_width: f64) -> bool {

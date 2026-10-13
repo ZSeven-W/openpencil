@@ -10,6 +10,7 @@ pub mod color;
 pub mod design_form;
 pub mod detectors;
 pub mod fixes;
+pub mod horizontal_scroll;
 pub mod issue;
 pub mod missing_progress_ring;
 pub mod node_mut;

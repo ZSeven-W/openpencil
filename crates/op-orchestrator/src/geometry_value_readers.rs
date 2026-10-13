@@ -23,12 +23,14 @@ pub(super) fn layout_str(v: &Value) -> Option<&str> {
 /// text/layout overflow that geometry should repair.
 ///
 /// Require all three signals:
-/// - semantic intent (`scroll` / `viewport` / `rail` / `carousel`),
-/// - the canonical viewport → one horizontal lane structure,
+/// - semantic intent, or a fit-content lane with fixed-width items,
+/// - the canonical viewport → one horizontal lane structure (either viewport axis),
 /// - resolved proof that the lane's direct items exceed the viewport.
 pub(super) fn is_intentional_horizontal_scroller(v: &Value, rects: &HashMap<String, Rect>) -> bool {
-    if layout_str(v) != Some("horizontal")
-        || v.get("clipContent").and_then(Value::as_bool) != Some(true)
+    let fixed_lane = op_design_lint::horizontal_scroll::is_clipped_horizontal_lane_viewport(v);
+    if !fixed_lane
+        && (layout_str(v) != Some("horizontal")
+            || v.get("clipContent").and_then(Value::as_bool) != Some(true))
     {
         return false;
     }
@@ -38,7 +40,7 @@ pub(super) fn is_intentional_horizontal_scroller(v: &Value, rects: &HashMap<Stri
     if layout_str(lane) != Some("horizontal") || children(lane).len() < 2 {
         return false;
     }
-    if !has_scroller_semantics(v) && !has_scroller_semantics(lane) {
+    if !fixed_lane && !has_scroller_semantics(v) && !has_scroller_semantics(lane) {
         return false;
     }
     let Some(viewport) = v
@@ -137,3 +139,7 @@ pub(super) fn horizontal_padding(v: &Value) -> f64 {
         .map(|[_, right, _, left]| right + left)
         .unwrap_or(0.0)
 }
+
+#[cfg(test)]
+#[path = "geometry_carousel_viewport_tests.rs"]
+mod carousel_tests;

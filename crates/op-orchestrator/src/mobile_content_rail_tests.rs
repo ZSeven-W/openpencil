@@ -589,3 +589,6 @@ fn repair_is_idempotent_and_preserves_asymmetric_authored_padding() {
 
 #[path = "mobile_content_rail_shell_tests.rs"]
 mod shell_tests;
+
+#[path = "mobile_content_rail_carousel_tests.rs"]
+mod carousel_tests;

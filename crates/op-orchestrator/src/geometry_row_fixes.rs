@@ -215,6 +215,7 @@ fn table_row_signature(row: &Value) -> Option<Vec<TableCellWidthMode>> {
     if layout_str(row) != Some("horizontal")
         || children(row).len() < 3
         || children(row).iter().any(is_elastic_row_spacer)
+        || children(row).iter().all(is_pure_bar_track)
     {
         return None;
     }
@@ -234,6 +235,43 @@ fn table_row_signature(row: &Value) -> Option<Vec<TableCellWidthMode>> {
             })
             .collect(),
     )
+}
+
+/// A bottom-aligned rectangle inside a fixed-height track encodes a bar, not
+/// a data cell. Otherwise a plot and its label band share the same fill-width
+/// signature and reserve a full table-text floor for every short axis label.
+/// Keep this narrow: text, icons, images and nested content retain row coverage.
+fn is_pure_bar_track(cell: &Value) -> bool {
+    if cell.get("type").and_then(Value::as_str) != Some("frame")
+        || layout_str(cell) != Some("vertical")
+        || cell.get("justifyContent").and_then(Value::as_str) != Some("end")
+    {
+        return false;
+    }
+    let Some(track_height) = cell.get("height").and_then(Value::as_f64) else {
+        return false;
+    };
+    let [bar] = children(cell) else {
+        return false;
+    };
+    track_height > 0.0
+        && bar.get("type").and_then(Value::as_str) == Some("rectangle")
+        && children(bar).is_empty()
+        && bar
+            .get("height")
+            .and_then(Value::as_f64)
+            .is_some_and(|height| height > 0.0 && height <= track_height)
+        && fill_is_non_empty(bar)
+        && [cell, bar].iter().all(|node| {
+            !node
+                .get("fill")
+                .and_then(Value::as_array)
+                .is_some_and(|fills| {
+                    fills
+                        .iter()
+                        .any(|fill| fill.get("type").and_then(Value::as_str) == Some("image"))
+                })
+        })
 }
 
 /// An empty flex spacer aligns the trailing price/actions by absorbing slack;
@@ -264,8 +302,8 @@ fn is_elastic_row_spacer(cell: &Value) -> bool {
 /// business sections. Treating those bands as table rows suppresses the normal
 /// row fixers and can emit an impossible "too many columns" diagnostic.
 ///
-/// The predicate uses only layout and width-mode facts. Names and roles are
-/// deliberately irrelevant, so unnamed generated tables remain covered.
+/// The predicate uses layout, cell structure and width-mode facts. Names and
+/// roles are deliberately irrelevant, so unnamed generated tables remain covered.
 pub(super) fn table_rows(v: &Value) -> Vec<&Value> {
     if layout_str(v) == Some("horizontal") {
         return Vec::new();
