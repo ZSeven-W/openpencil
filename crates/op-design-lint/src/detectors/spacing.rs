@@ -444,6 +444,24 @@ fn walk_edge_section_padding(node: &PenNode, depth: usize, issues: &mut Vec<Issu
                 continue;
             }
 
+            // A vertical viewport transports complete sections, whose own
+            // gutters remain intact. Padding this shell a second time narrows
+            // every section (24 + 24 on a 375px phone leaves only 279px).
+            // Match the orchestrator's content-rail ownership contract.
+            if matches!(child, PenNode::Frame(frame)
+                if frame.container.layout == Some(LayoutMode::Vertical))
+                && matches!(
+                    role(child)
+                        .unwrap_or("")
+                        .trim()
+                        .to_ascii_lowercase()
+                        .as_str(),
+                    "scroll" | "scroll-area" | "scroll-viewport" | "viewport"
+                )
+            {
+                continue;
+            }
+
             // Horizontal viewports own an asymmetric rail even when their
             // contents are image-only and therefore have no text/icon nodes.
             if is_intentional_horizontal_scroller(child) {

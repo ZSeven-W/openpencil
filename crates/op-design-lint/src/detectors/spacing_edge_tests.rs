@@ -8,6 +8,30 @@ fn node(value: serde_json::Value) -> PenNode {
 }
 
 #[test]
+fn vertical_scroll_shell_does_not_duplicate_section_gutters() {
+    for viewport_role in ["scroll", "scroll-area", "scroll-viewport", "viewport"] {
+        let root = node(json!({
+            "type":"frame","id":"phone","width":375,"height":812,"layout":"vertical",
+            "children":[
+                {"type":"frame","id":"content","role":viewport_role,
+                 "width":"fill_container","height":"fill_container","layout":"vertical",
+                 "clipContent":true,"children":[
+                    {"type":"frame","id":"section","width":"fill_container",
+                     "layout":"vertical","padding":[0,24],"children":[
+                        {"type":"text","id":"title","content":"设备"}
+                     ]}
+                 ]},
+                {"type":"frame","id":"nav","role":"bottom-tab-bar","height":72}
+            ]
+        }));
+        assert!(
+            detect_edge_section_padding(&root).is_empty(),
+            "{viewport_role}"
+        );
+    }
+}
+
+#[test]
 fn flags_each_unpadded_content_section_with_default_rail() {
     let root = node(json!({
         "type": "frame", "id": "root",

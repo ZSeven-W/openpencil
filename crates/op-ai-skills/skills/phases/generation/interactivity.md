@@ -46,6 +46,13 @@ may use `$state.*`. When in doubt, prefer `$app.*`.
 
 BINDINGS — declarative reads (`bind:value`, `content`):
 
+Static `content` must be readable copy; `fill`/`stroke.color` must be literal
+colors or design-variable references. Put runtime expressions ONLY in
+`bindings`. A label has `content:"已关闭"`
+and `bindings:{content:"$app.light ? '已开启' : '已关闭'"}`. A chip has
+`fill:[{type:"solid",color:"#1A1A1A"}]` and
+`bindings:{fill:"$app.active ? '#22C55E' : '#1A1A1A'"}`.
+
 `bindings` maps a property name to an expression string, keeping node
 properties in sync with state automatically.
 
