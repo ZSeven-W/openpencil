@@ -44,7 +44,13 @@ fn test_provider(kind: BuiltinAgentKind, base_url: String) -> ConfiguredBuiltinP
         enabled: true,
     };
     let mut provider = ConfiguredBuiltinProvider::from_builtin_agent(&config).unwrap();
-    provider.http_client = Some(reqwest::Client::builder().no_proxy().build().unwrap());
+    provider.http_client = Some(
+        reqwest::Client::builder()
+            .use_rustls_tls()
+            .no_proxy()
+            .build()
+            .unwrap(),
+    );
     provider.min_gap = Duration::ZERO;
     provider.max_retries = 0;
     provider

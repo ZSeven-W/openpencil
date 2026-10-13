@@ -58,6 +58,7 @@ mod tests {
             write!(connection,"HTTP/1.1 429 Too Many Requests\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",body.len(),body).unwrap();
         });
         let client = reqwest::Client::builder()
+            .use_rustls_tls()
             .timeout(std::time::Duration::from_secs(2))
             .build()
             .unwrap();

@@ -95,7 +95,11 @@ fn cropped_judge_keeps_one_call_original_brief_deadline_and_complete_asset() {
         original: None,
     };
     let result = crate::net::block_on_image_runtime(async {
-        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let client = reqwest::Client::builder()
+            .use_rustls_tls()
+            .no_proxy()
+            .build()
+            .unwrap();
         fetch_judged_openverse(&client, vec![hit], &slot, &used, &seen, true, "test").await
     })
     .unwrap();

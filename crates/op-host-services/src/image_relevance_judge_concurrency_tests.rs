@@ -38,7 +38,11 @@ fn chat_instances_and_mixed_transports_share_the_same_request_budget() {
         let mut judges: Vec<Box<dyn ImageRelevanceJudge>> = Vec::new();
         for _ in 0..env_count {
             judges.push(Box::new(OpenAiCompatVisionJudge {
-                client: reqwest::Client::builder().no_proxy().build().unwrap(),
+                client: reqwest::Client::builder()
+                    .use_rustls_tls()
+                    .no_proxy()
+                    .build()
+                    .unwrap(),
                 endpoint: format!("http://127.0.0.1:{port}/v1/chat/completions"),
                 api_key: "test-key".into(),
                 model: "vision-model".into(),
@@ -126,7 +130,11 @@ fn concurrent_slots_share_one_http_budget_across_clones_and_instances() {
         Duration::from_millis(60),
     );
     let make_judge = || OpenAiCompatVisionJudge {
-        client: reqwest::Client::builder().no_proxy().build().unwrap(),
+        client: reqwest::Client::builder()
+            .use_rustls_tls()
+            .no_proxy()
+            .build()
+            .unwrap(),
         endpoint: format!("http://127.0.0.1:{port}/v1/chat/completions"),
         api_key: "test-key".into(),
         model: "vision-model".into(),
@@ -161,7 +169,11 @@ fn deadline_cancels_queued_http_without_opening_a_request() {
     let _transport = transport_lock();
     let (port, seen) = start_verdict_stub(&valid_reply("on", "match"));
     let judge = OpenAiCompatVisionJudge {
-        client: reqwest::Client::builder().no_proxy().build().unwrap(),
+        client: reqwest::Client::builder()
+            .use_rustls_tls()
+            .no_proxy()
+            .build()
+            .unwrap(),
         endpoint: format!("http://127.0.0.1:{port}/v1/chat/completions"),
         api_key: "test-key".into(),
         model: "vision-model".into(),
@@ -251,6 +263,7 @@ fn env_judge_deadline_keeps_completed_verdicts_and_cancels_a_silent_candidate() 
     });
     let judge = OpenAiCompatVisionJudge {
         client: reqwest::Client::builder()
+            .use_rustls_tls()
             .no_proxy()
             .timeout(REQUEST_TIMEOUT)
             .build()

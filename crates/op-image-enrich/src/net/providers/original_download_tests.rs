@@ -185,7 +185,7 @@ fn original_reader_aborts_both_declared_and_chunked_oversize_bodies() {
             stream.write_all(response.as_bytes()).unwrap();
         });
         let bytes = crate::net::block_on_image_runtime(async {
-            let response = reqwest::Client::builder().no_proxy().build().unwrap()
+            let response = reqwest::Client::builder().use_rustls_tls().no_proxy().build().unwrap()
                 .get(format!("http://{address}"))
                 .timeout(Duration::from_secs(2)).send().await.unwrap();
             read_capped(response, 16).await

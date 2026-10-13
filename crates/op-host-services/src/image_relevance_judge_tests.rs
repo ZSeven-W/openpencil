@@ -553,7 +553,11 @@ fn http_429_and_invalid_json_cannot_be_selected_as_weak_fallbacks() {
     ] {
         let (port, seen) = start_http_judge_stub(status, reply);
         let judge = OpenAiCompatVisionJudge {
-            client: reqwest::Client::builder().no_proxy().build().unwrap(),
+            client: reqwest::Client::builder()
+                .use_rustls_tls()
+                .no_proxy()
+                .build()
+                .unwrap(),
             endpoint: format!("http://127.0.0.1:{port}/v1/chat/completions"),
             api_key: "test-key".into(),
             model: "vision-model".into(),
@@ -601,7 +605,11 @@ fn both_transports_send_identical_contract_and_reject_the_same_hard_conflict() {
     let reply = r#"{"verdict":"weak","reason":"four jars instead of one","hard_conflicts":["count"],"soft_deviations":[]}"#;
     let (port, env_requests) = start_verdict_stub(reply);
     let env_judge = OpenAiCompatVisionJudge {
-        client: reqwest::Client::builder().no_proxy().build().unwrap(),
+        client: reqwest::Client::builder()
+            .use_rustls_tls()
+            .no_proxy()
+            .build()
+            .unwrap(),
         endpoint: format!("http://127.0.0.1:{port}/v1/chat/completions"),
         api_key: "test-key".into(),
         model: "glm-5.3-flash".into(),
