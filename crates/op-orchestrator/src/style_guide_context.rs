@@ -407,10 +407,10 @@ pub(crate) fn rank_style_guides_for_prompt(
     scored.into_iter().map(|(g, _)| g).collect()
 }
 
-/// 一行 guide 元数据 —— softened (user direction 2026-06-23): names only.
-/// The catalog is a menu of `styleGuideName` choices; the explicit type-tags
-/// and background color are intentionally dropped so the style guide no longer
-/// dictates "what type / what color" — the model picks palette from the prompt.
+/// Catalog choice with enough information to match the real page canvas.
+/// The planner's root-fill contract refers to `bg:`; omitting that value
+/// while generation receives exact palette tokens gives the stages different
+/// visual instructions. Only expose the background, not a forced taxonomy.
 pub(crate) fn format_guide_metadata_line(guide: &ParsedStyleGuide, _mode: PlanningMode) -> String {
     // The planner picks a guide by mood, so it has to see the mood: the
     // first "Key aesthetics" bullet rides along with the name and platform.
@@ -427,6 +427,9 @@ pub(crate) fn format_guide_metadata_line(guide: &ParsedStyleGuide, _mode: Planni
         Some(label) => format!("- {} [{}] — {}", guide.name, guide.platform.as_str(), label),
         None => format!("- {} [{}]", guide.name, guide.platform.as_str()),
     };
+    if let Some(background) = extract_style_guide_values(&guide.content).colors.background {
+        line.push_str(&format!(" bg:{background}"));
+    }
     let recipes = op_ai_skills::style_guide::signature_recipes(&guide.content, 2);
     if !recipes.is_empty() {
         line.push_str(" · recipes: ");

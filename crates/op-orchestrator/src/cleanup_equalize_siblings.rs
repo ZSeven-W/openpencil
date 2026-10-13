@@ -25,12 +25,11 @@
 //!
 //! ## Decorative-container fill alignment (DS P2-d ①)
 //!
-//! Measured 0815: after five sibling entries were made structurally
-//! isomorphic, their number-chip FILL colours kept drifting per item
-//! (black/black/red/red/pink) — same-family entries, same decorative
-//! container slot, different colours, which no author intends. Beside the
-//! same-position text votes, same-position Frame/Rectangle descendant nodes
-//! vote on their PRIMARY fill through the same 2/3 mechanism:
+//! Same-position Frame/Rectangle descendants may inherit a missing fill
+//! from a concrete family majority. An authored solid colour is never
+//! overwritten: frequency cannot distinguish drift from chart data, selected
+//! state, or intentional illustration. A retained running chart proved this
+//! pass replaced the current day's green bar with its six grey neighbours.
 //!
 //! - Only a SOLID primary fill votes; a gradient / image / shader / mesh
 //!   primary fill at any position makes that position unprovable and skips
@@ -460,8 +459,7 @@ fn plan_family_repairs(
         }
         // A CONCRETE 2/3 majority defines the norm; a majority of "no fill"
         // is never enforced (removing a fill is destructive and out of
-        // scope). Members holding a different value — or none at all — join
-        // the norm.
+        // scope). Only missing fills join the norm; authored colours carry intent.
         let Some(Some(majority)) = majority_of(&votes) else {
             continue;
         };
@@ -469,7 +467,7 @@ fn plan_family_repairs(
             FillVote::Literal(hex) | FillVote::Ref(hex) => hex.clone(),
         };
         for (i, vote) in votes.iter().enumerate() {
-            if vote.as_ref() != Some(&majority) {
+            if vote.is_none() {
                 fill_changes[i][position] = Some(hex.clone());
             }
         }

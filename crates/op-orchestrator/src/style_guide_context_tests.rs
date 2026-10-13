@@ -266,39 +266,26 @@ fn rank_industry_tag_outweighs_plain_tag() {
 }
 
 #[test]
-fn metadata_line_is_name_platform_and_lead_aesthetic_no_type_or_color() {
-    // Softened (2026-06-23): no `:: tags` (type) and no ` bg:` (color).
-    // Re-opened (2026-09-06): the planner picks by mood, so the line carries
-    // the guide's lead "Key aesthetics" label — a few words, no hex, no tags.
-    let g = style_guide_registry()
-        .iter()
-        .find(|guide| guide.platform == op_ai_skills::style_guide::Platform::Mobile)
-        .expect("a mobile style guide is embedded");
-    let line = format_guide_metadata_line(g, PlanningMode::Rich);
-    let head = format!("- {} [{}]", g.name, g.platform.as_str());
-    assert!(line.starts_with(&head), "{line}");
-    let recipes = op_ai_skills::style_guide::signature_recipes(&g.content, 2);
-    assert_eq!(recipes.len(), 2, "{line}");
-    assert!(line.ends_with(&format!(" · recipes: {} / {}", recipes[0], recipes[1])));
-    match op_ai_skills::style_guide::key_aesthetics(&g.content, 1).first() {
-        Some(lead) => {
-            let label = lead.split(':').next().unwrap_or("").trim();
-            assert_eq!(
-                line,
-                format!(
-                    "{head} — {label} · recipes: {} / {}",
-                    recipes[0], recipes[1]
-                )
-            );
-        }
-        None => assert_eq!(
-            line,
-            format!("{head} · recipes: {} / {}", recipes[0], recipes[1])
-        ),
+fn metadata_line_exposes_the_selected_guides_actual_canvas_color() {
+    for name in ["finance-clean-mobile-light", "health-minimal-mobile-dark"] {
+        let g = style_guide_registry()
+            .iter()
+            .find(|g| g.name == name)
+            .unwrap();
+        let line = format_guide_metadata_line(g, PlanningMode::Rich);
+        let background = extract_style_guide_values(&g.content)
+            .colors
+            .background
+            .unwrap();
+        assert!(line.starts_with(&format!("- {} [{}]", g.name, g.platform.as_str())));
+        assert!(line.contains(&format!(" bg:{background}")), "{line}");
+        let recipes = op_ai_skills::style_guide::signature_recipes(&g.content, 2);
+        assert!(line.ends_with(&format!(" · recipes: {}", recipes.join(" / "))));
+        assert!(
+            !line.contains(" :: "),
+            "do not reintroduce type tags: {line}"
+        );
     }
-    assert!(!line.contains(" :: "), "type tags must be dropped: {line}");
-    assert!(!line.contains(" bg:"), "bg color must be dropped: {line}");
-    assert!(!line.contains('#'), "no hex in the candidate line: {line}");
 }
 
 #[test]
@@ -516,7 +503,7 @@ fn pinned_mobile_metadata_carries_both_recipe_names() {
     );
     assert!(
         ctx.available_style_guides.contains(
-            "- wellness-green-mobile-light [mobile] — Nature-tinted canvas · recipes: \
+            "- wellness-green-mobile-light [mobile] — Nature-tinted canvas bg:#F7FDF4 · recipes: \
              Top-leading protagonist / Dim-and-highlight \"now\""
         ),
         "pinned mobile guide metadata must carry recipes:\n{}",

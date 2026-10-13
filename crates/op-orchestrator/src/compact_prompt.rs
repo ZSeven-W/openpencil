@@ -188,7 +188,7 @@ pub fn build_compact_planning_prompt(
 
     // 组装 system prompt。
     let focal_rule = if preset.type_ == DesignType::MobileScreen {
-        "For a phone screen, pick exactly ONE archetype per screen and put in the owning subtask `elements`: ARCHETYPE: <name> — protagonist <what>, first screen <x>% , <spatial relation>, display <n>px / body <n>px, imagery <rule>. Put `quiet section: tonal surfaces, no accent fills, one hairline max` first in every other subtask's `elements`, then keep its parts list."
+        "For a phone screen, pick exactly ONE archetype per screen and put in the owning subtask `elements`: ARCHETYPE: <name> — protagonist <what>, first screen <x>% , <spatial relation>, display <n>px / body <n>px, imagery <rule>. Put `quiet section: secondary visual weight; retain legible chart colors and active states` first in every other subtask's `elements`, then keep its parts list."
     } else {
         "Plan one SIGNATURE MOMENT in the first viewport: a memorable focal module with strong composition, brand personality, and restrained supporting sections."
     };

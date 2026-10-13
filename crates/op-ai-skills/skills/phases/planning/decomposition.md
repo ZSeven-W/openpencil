@@ -75,9 +75,9 @@ RULES:
 - FORM INTEGRITY: Keep a form's core elements (inputs + submit button) in the same subtask. Splitting inputs into one subtask and the button into another causes duplicate buttons.
 - Combine related elements: "Hero with title + image + CTA" = ONE subtask, not three.
 - Each subtask generates a meaningful section (~10-30 nodes). Only split if it would exceed 40 nodes.
-- REQUIRED: "styleGuideName" must ALWAYS be included. Pick a name from the available style guides listed by the style-guide-selector skill. If none fit, use the closest match. The system will load the full style specifications automatically.
+- Pick "styleGuideName" from the available guides; its full specifications reach generation. If none fit the requested visual direction, omit it to use defaults.
 - CJK FONT RULE: If the user's request is in Chinese/Japanese/Korean or the product targets CJK audiences, the styleGuide fonts MUST use CJK-compatible fonts: heading="Noto Sans SC" (Chinese) / "Noto Sans JP" (Japanese) / "Noto Sans KR" (Korean), body="Inter". NEVER use "Space Grotesk" or "Manrope" as heading font for CJK content — they have no CJK character support.
-- Root frame fill must use the background color from the selected style guide. Each guide in the list shows its bg color (e.g. bg:#0A0F1C). Use that exact hex value for the rootFrame fill color.
+- Root frame fill must use the background color from the selected style guide. Each guide in the list shows its bg color (e.g. bg:#0A0F1C). Use that hex for rootFrame.fill unless the user supplied a different palette; keep canvas, text, and surfaces coherent.
 - Root frame gap: Landing pages with distinct section backgrounds - gap=0 (sections flush). Mobile screens and dashboards - gap=16-24 (breathing room between sections). Always include "gap" in rootFrame.
 - Root frame height: Mobile default (width=375) - set height=812 (fixed viewport). Desktop default (width=1200) - set height=0 (auto-expands as sections are generated). Deck (width=1920) - set height=1080. Preserve an explicit user-requested root height.
 - Landing page height hints: nav 64-80px, hero 500-600px, feature sections 400-600px, testimonials 300-400px, CTA 200-300px, footer 200-300px.

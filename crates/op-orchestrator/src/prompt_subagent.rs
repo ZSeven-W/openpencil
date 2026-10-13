@@ -468,6 +468,7 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
         .unwrap_or_default();
     let screen_route_block = screen_route_prompt_block(screen_routes);
     let headline_block = section_headline_prompt_block(prior_outcomes, tier);
+    let composition_block = screen_composition::instruction(plan, subtask);
     let spacing_rule = if is_mobile_layout {
         "SPACING CONSISTENCY — MOBILE CONTENT RAIL: The root page may keep 0 horizontal padding for full-width status/navigation/full-bleed media. This ordinary transparent root-direct section owns padding:[0,24] exactly once; do not duplicate it on an inner wrapper. If this section is a clipped horizontal scroller, keep its section full width, inset its header 24px on both sides, and give the clipped viewport a 24px leading inset with a flush 0px trailing edge."
     } else {
@@ -508,7 +509,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
 - MEDIA CONSISTENCY: Use photographic images sparingly and keep them visually consistent in subject, crop, tone, and radius. For food/category UI, prefer cohesive icon or illustration tiles over random unrelated photos.\n\
 - ICON SCALE: Icons support content; keep most icons 16-22px inside 36-48px controls. Avoid oversized circular icon bubbles or repeated identical icon treatments unless the design brief calls for them.\n\
 - ACCENT DISCIPLINE: Reserve saturated accent color for one primary CTA or promo plus small highlights. Do not apply it to every icon, label, border, and large surface at once.\n\
-- SIGNATURE MOMENT: Give the first viewport one memorable focal module that feels custom to the brief: distinctive composition, branded surface, expressive hero image/illustration, or an editorial product moment. Supporting modules must stay quieter.\n\
+- {composition_block}\n\
 - WOW FACTOR: Make the design feel bespoke through domain-specific composition, confident cropping, custom icon rhythm, and one precise visual idea. Do not rely on generic tinted wrappers, heavy shadows, emoji, or repeated rounded boxes to look polished.\n\
 - COMPOSITIONAL CONTRAST: Create interest through scale contrast, asymmetric balance, layered depth, and one clear focal path. Do not make every card, chip, icon, and CTA the same visual weight.\n\
 - PREMIUM DETAIL: Use high-quality details such as precise alignment, consistent radii, quiet dividers, tonal badges, subtle image masks, and purposeful shadows. Prefer one polished detail over many loud decorations.\n\
@@ -701,3 +702,6 @@ fn screen_route_prompt_block(screen_routes: &[(String, String)]) -> String {
          actions; never invent another route):\n{rows}\n\n"
     )
 }
+
+#[path = "prompt_screen_composition.rs"]
+mod screen_composition;

@@ -440,9 +440,8 @@ fn insert_chip_family(sink: &mut VecDocSink, chip_fills: &[serde_json::Value]) {
 }
 
 #[test]
-fn a_drifted_chip_fill_is_aligned_to_the_majority_fill() {
-    // The 0815 positive shape: four of five entries share one chip colour,
-    // the fifth drifted — the outlier joins the family norm.
+fn an_authored_chip_highlight_is_not_a_proven_style_error() {
+    // A minority colour can encode state; the majority cannot prove drift.
     let mut sink = VecDocSink::new();
     insert_chip_family(
         &mut sink,
@@ -456,14 +455,11 @@ fn a_drifted_chip_fill_is_aligned_to_the_majority_fill() {
     );
 
     let applied = run_pass(&mut sink, "root");
-    assert_eq!(
-        applied, 1,
-        "only the drifted chip fill is repaired: {applied}"
-    );
+    assert_eq!(applied, 0, "authored highlight must survive: {applied}");
     assert_eq!(
         node_json(&sink, "c5-chip")["fill"][0]["color"],
-        json!("#111111"),
-        "the outlier chip joins the majority: {}",
+        json!("#ff0000"),
+        "the authored highlight survives: {}",
         node_json(&sink, "c5-chip")
     );
     // Majority members stay untouched.
@@ -544,10 +540,8 @@ fn a_gradient_chip_blocks_the_whole_fill_position() {
 }
 
 #[test]
-fn variable_reference_chip_fills_vote_by_reference_string() {
-    // Same reference is same value: four `$primary` chips against one
-    // `$accent` chip — the outlier joins the reference majority, and the
-    // patch writes the reference, not a resolved hex.
+fn authored_semantic_chip_colors_survive_the_majority() {
+    // Semantic references also encode authored state.
     let mut sink = VecDocSink::new();
     insert_chip_family(
         &mut sink,
@@ -561,11 +555,11 @@ fn variable_reference_chip_fills_vote_by_reference_string() {
     );
 
     let applied = run_pass(&mut sink, "root");
-    assert_eq!(applied, 1, "only the ref outlier is repaired: {applied}");
+    assert_eq!(applied, 0, "authored references survive: {applied}");
     assert_eq!(
         node_json(&sink, "c5-chip")["fill"][0]["color"],
-        json!("$primary"),
-        "the outlier joins by reference string: {}",
+        json!("$accent"),
+        "the accent reference survives: {}",
         node_json(&sink, "c5-chip")
     );
 }
@@ -596,7 +590,7 @@ fn mixed_reference_and_literal_chip_fills_are_not_touched() {
 
 #[test]
 fn text_node_fills_are_never_touched() {
-    // The chip pass fires (4/5), while the title TEXT fills differ per item
+    // Chip and title TEXT fills differ per item
     // — text colour is the contrast pass's territory, never the equalizer's.
     let mut sink = VecDocSink::new();
     insert_tree(
@@ -626,8 +620,8 @@ fn text_node_fills_are_never_touched() {
 
     let applied = run_pass(&mut sink, "root");
     assert_eq!(
-        applied, 1,
-        "only the drifted chip fill is repaired — text fills are exempt: {applied}"
+        applied, 0,
+        "authored chip and text fills are preserved: {applied}"
     );
     for (i, hex) in title_fills.iter().enumerate() {
         assert_eq!(
@@ -639,8 +633,8 @@ fn text_node_fills_are_never_touched() {
     }
     assert_eq!(
         node_json(&sink, "c5-chip")["fill"][0]["color"],
-        json!("#111111"),
-        "the chip outlier still joins the majority"
+        json!("#ff0000"),
+        "the chip highlight survives too"
     );
 }
 
@@ -680,7 +674,7 @@ fn the_fill_pass_is_idempotent() {
             solid("#111111"),
             solid("#111111"),
             solid("#111111"),
-            solid("#ff0000"),
+            json!([]),
         ],
     );
     assert!(run_pass(&mut sink, "root") > 0, "first run repairs");
@@ -689,4 +683,48 @@ fn the_fill_pass_is_idempotent() {
         0,
         "the second run has nothing left to repair"
     );
+}
+
+#[test]
+fn current_day_chart_mark_survives_full_cleanup() {
+    // Retained GLM chart: transparent equal-shaped columns, variable-height
+    // rectangles, six neutral bars and one green bar. No selection metadata.
+    for selected in [vec![6], vec![4, 6]] {
+        let mut sink = VecDocSink::new();
+        let bars = [42, 66, 3, 59, 90, 50, 55];
+        let columns: Vec<Value> = bars.iter().enumerate().map(|(i, height)| json!({
+            "type":"frame", "id":format!("col-{i}"), "name":format!("bar-col-{i}"),
+            "layout":"vertical", "width":34, "height":130,
+            "justifyContent":"end", "alignItems":"center", "gap":6,
+            "children":[
+                {"type":"rectangle", "id":format!("bar-{i}"), "name":format!("bar-{i}"),
+                 "width":20, "height":height, "cornerRadius":6,
+                 "fill":[{"type":"solid","color":if selected.contains(&i) {"#22C55E"} else {"#2A2A2A"}}]},
+                {"type":"text", "id":format!("label-{i}"), "content":format!("{i}"),
+                 "fontSize":10, "fill":[{"type":"solid","color":"#FFFFFF"}]}
+            ]
+        })).collect();
+        insert_tree(
+            &mut sink,
+            &json!({
+                "type":"frame","id":"root","name":"Weekly activity", "width":375,"height":160,
+                "layout":"horizontal", "fill":[{"type":"solid","color":"#111111"}],
+                "children": columns
+            })
+            .to_string(),
+        );
+        run_driver(&mut sink, "root");
+        for (i, height) in bars.iter().enumerate() {
+            let node = node_json(&sink, &format!("bar-{i}"));
+            assert_eq!(
+                node["fill"][0]["color"],
+                if selected.contains(&i) {
+                    "#22C55E"
+                } else {
+                    "#2A2A2A"
+                }
+            );
+            assert_eq!(node["height"].as_f64(), Some(f64::from(*height)));
+        }
+    }
 }
