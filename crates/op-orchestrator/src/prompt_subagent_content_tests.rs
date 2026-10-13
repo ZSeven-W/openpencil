@@ -26,6 +26,59 @@ fn source_facts_survive_all_subtask_complexity_levels() {
 }
 
 #[test]
+fn image_brief_contract_reaches_all_subtask_complexity_levels() {
+    // Assert the assembled prompt, not just the corpus: minimal retries keep
+    // only schema, and mobile skills can otherwise consume the prompt budget.
+    for (width, prompt) in [
+        (375.0, "A fitness app with six activity course cards"),
+        (
+            1440.0,
+            "A skincare website with product-only bottle photographs",
+        ),
+        (
+            1440.0,
+            "A travel website with place-only landscape photographs",
+        ),
+    ] {
+        let mut request = req();
+        request.model = Some("glm-5.3-flash".into());
+        request.prompt = prompt.into();
+        let mut image_plan = plan();
+        image_plan.root_frame.width = width;
+        let mut image_section = subtask();
+        image_section.region.width = width;
+        for (reduced, minimal) in [(false, false), (true, false), (true, true)] {
+            let (call, _) = bsp(
+                &image_section,
+                &image_plan,
+                &request,
+                AbortFlag::new(),
+                reduced,
+                minimal,
+            );
+            for required in [
+                "2-3 English keywords UNIQUE per image",
+                "BOTH image generation and stock-image acceptance",
+                "visible subject and identifying action or appearance before style",
+                "short query names the participant and activity",
+                "imagePrompt specifies the visible action or pose",
+                "Related equipment or an empty venue cannot replace the activity",
+                "Product-only/place-only slots: do not add people",
+                "need independent recognizable scenes",
+            ] {
+                assert!(
+                    call.system_prompt.contains(required),
+                    "image brief missing {required:?}: width={width}, reduced={reduced}, minimal={minimal}"
+                );
+            }
+            assert!(!call
+                .system_prompt
+                .contains("otherwise imageSearchQuery drives the stock-search fallback"));
+        }
+    }
+}
+
+#[test]
 fn pinned_print_style_layer_order_reaches_all_generation_complexity_levels() {
     let mut request = req();
     request.model = Some("glm-5.3-flash".into());
