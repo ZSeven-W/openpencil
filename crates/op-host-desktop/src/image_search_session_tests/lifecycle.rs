@@ -269,6 +269,55 @@ fn poll_discards_a_result_when_the_nodes_image_intent_changed() {
 }
 
 #[test]
+fn poll_discards_a_result_when_only_the_image_prompt_changed() {
+    let mut state = EditorState::default();
+    state.active_children_mut().clear();
+    let mut node = image_node("img1", "", Some("ceramic vase"));
+    let PenNode::Image(image) = &mut node else {
+        panic!("image")
+    };
+    image.image_prompt = Some("Warm studio photograph on an ivory background".into());
+    state.active_children_mut().push(node);
+    let original = collect_targets(&state, &HashSet::new()).remove(0);
+    let expected = intent_fingerprint(&original, None);
+
+    let PenNode::Image(image) = &mut state.active_children_mut()[0] else {
+        panic!("image")
+    };
+    image.image_prompt = Some("Cool outdoor photograph on dark stone".into());
+    state.mark_document_changed();
+    let current = collect_targets(&state, &HashSet::new()).remove(0);
+    assert_eq!(original.query, current.query);
+    assert_eq!(original.aspect_ratio, current.aspect_ratio);
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    tx.send(JobOutcome::Search(Some(
+        "https://stale.example/warm.jpg".into(),
+    )))
+    .unwrap();
+    let mut session = ImageSearchSession {
+        in_flight: HashSet::from(["img1".to_string()]),
+        jobs: vec![ImageSearchJob {
+            deadline: None,
+            node_id: NodeId::new("img1"),
+            intent: Some(expected),
+            fallback_target: None,
+            rx,
+        }],
+        ..Default::default()
+    };
+    assert!(!session.poll_into(&mut state));
+    let PenNode::Image(image) = &state.active_children()[0] else {
+        panic!("image")
+    };
+    assert!(image.src.is_empty(), "the old art direction must not land");
+    assert!(session.jobs.is_empty());
+    assert!(session.in_flight.is_empty());
+    assert!(!session.completed.contains("img1"));
+    assert_eq!(collect_targets(&state, &session.completed).len(), 1);
+}
+
+#[test]
 fn poll_discards_a_result_when_only_provider_truncated_words_changed() {
     let before = "santorini greece white buildings blue dome";
     let after = "santorini greece white buildings sunset beach";

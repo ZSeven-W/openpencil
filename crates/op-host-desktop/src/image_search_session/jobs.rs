@@ -20,7 +20,7 @@ pub(super) fn spawn_job(
     let (tx, rx) = mpsc::channel();
     let node_id = target.node_id.clone();
     let aspect_ratio = target.aspect_ratio;
-    let key = search_intent_key(&target.query, aspect_ratio);
+    let key = search_intent_key(&target.query, aspect_ratio, target.prompt.as_deref());
     let intent = Some(intent);
     let judge_intent = target
         .prompt
@@ -81,12 +81,13 @@ pub(super) fn spawn_job(
             // relevance. The slot's image prompt is passed as intent so a
             // product-photo slot also rejects artwork hits (a tattoo shot and
             // a graffiti mural once filled skincare product cards).
-            op_image_enrich::net::resolve::fetch_first_image_resolved_blocking(
+            op_image_enrich::net::resolve::fetch_first_image_resolved_blocking_with_deadline(
                 &target.query,
                 &judge_intent,
                 aspect_ratio,
                 credentials.as_ref().map(OpenverseCredentials::as_web),
                 &used_urls,
+                deadline,
             )
             .map(|resolved| resolved.src)
         };

@@ -17,7 +17,7 @@ fn queued_searches_keep_the_run_deadline_and_reset_clears_it() {
     // observable before the UI-thread sink consumes the result.
     let target = collect_targets(&state, &HashSet::new()).remove(0);
     session.search_memo.lock().unwrap().insert(
-        search_intent_key(&target.query, target.aspect_ratio),
+        search_intent_key(&target.query, target.aspect_ratio, target.prompt.as_deref()),
         SearchMemoEntry::Pending {
             request_id: 42,
             waiters: Vec::new(),
@@ -58,7 +58,7 @@ fn generation_fallback_keeps_its_queued_deadline() {
         ..Default::default()
     };
     session.search_memo.lock().unwrap().insert(
-        search_intent_key(&target.query, target.aspect_ratio),
+        search_intent_key(&target.query, target.aspect_ratio, target.prompt.as_deref()),
         SearchMemoEntry::Pending {
             request_id: 42,
             waiters: Vec::new(),

@@ -155,7 +155,11 @@ fn a_busy_generation_falls_back_to_search_for_the_same_slot() {
     // with no network: one Ready photo for the slot's query intent.
     let seeded = "data:image/png;base64,SEARBRA==".to_string();
     session.search_memo.lock().unwrap().insert(
-        search_intent_key("kitten photo", Some(ImageAspectRatio::Wide)),
+        search_intent_key(
+            "kitten photo",
+            Some(ImageAspectRatio::Wide),
+            Some("a watercolor kitten"),
+        ),
         SearchMemoEntry::Ready(seeded.clone()),
     );
 
@@ -208,7 +212,11 @@ fn the_fallback_happens_once_and_never_retries_generation() {
     // goes BACK to the (still-busy) generator for a second attempt.
     let seeded = "data:image/png;base64,ONCEONLY==".to_string();
     session.search_memo.lock().unwrap().insert(
-        search_intent_key("kitten photo", Some(ImageAspectRatio::Wide)),
+        search_intent_key(
+            "kitten photo",
+            Some(ImageAspectRatio::Wide),
+            Some("a watercolor kitten"),
+        ),
         SearchMemoEntry::Ready(seeded.clone()),
     );
 

@@ -210,5 +210,7 @@ mod judge;
 mod lifecycle;
 #[path = "image_search_session_tests/memo.rs"]
 mod memo;
+#[path = "image_search_session_tests/mode.rs"]
+mod mode;
 #[path = "image_search_session_tests/providers.rs"]
 mod providers;

@@ -97,6 +97,7 @@ struct ImageSearchJob {
 pub(crate) struct SearchIntentKey {
     query: String,
     aspect_ratio: Option<ImageAspectRatio>,
+    prompt: Option<String>,
 }
 
 enum SearchMemoEntry {
@@ -417,13 +418,15 @@ impl ImageSearchSession {
         let credentials = OpenverseCredentials::from_state(state);
         for target in targets {
             let id = target.node_id.as_str().to_string();
-            let search_intent = intent_fingerprint(&target, None);
+            let profile = intent::generation_profile_for_request(
+                target.mode,
+                gen_profile.as_ref(),
+                auto_gen_active,
+            );
+            let search_intent = intent_fingerprint(&target, profile);
             self.in_flight.insert(id);
-            let job = match (target.mode, &gen_profile) {
-                (ImageRequestMode::Generate, Some(profile)) => {
-                    spawn_gen_job(target, profile.clone(), self.deadline)
-                }
-                (ImageRequestMode::Auto, Some(profile)) if auto_gen_active => {
+            let job = match (target.mode, profile) {
+                (ImageRequestMode::Generate | ImageRequestMode::Auto, Some(profile)) => {
                     spawn_gen_job(target, profile.clone(), self.deadline)
                 }
                 (ImageRequestMode::Generate, None) => {

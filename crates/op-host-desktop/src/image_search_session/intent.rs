@@ -18,6 +18,20 @@ use op_image_enrich::{
     ImageSearchTarget,
 };
 
+/// Resolve the same generation profile for dispatch and stale-result checks.
+/// Explicit generation ignores the chat toggle; only Auto follows it.
+pub(super) fn generation_profile_for_request(
+    mode: ImageRequestMode,
+    profile: Option<&ImageGenProfile>,
+    auto_gen_active: bool,
+) -> Option<&ImageGenProfile> {
+    match mode {
+        ImageRequestMode::Generate => profile,
+        ImageRequestMode::Auto if auto_gen_active => profile,
+        ImageRequestMode::Auto | ImageRequestMode::Search => None,
+    }
+}
+
 pub(crate) fn intent_fingerprint(
     target: &ImageSearchTarget,
     profile: Option<&ImageGenProfile>,
@@ -40,8 +54,12 @@ pub(crate) fn intent_fingerprint(
             target.height.map(f64::to_bits)
         )
     } else {
-        let key = search_intent_key(&target.query, target.aspect_ratio);
-        format!("search|{}|{:?}", key.query, key.aspect_ratio)
+        let key = search_intent_key(&target.query, target.aspect_ratio, target.prompt.as_deref());
+        let mut fingerprint = format!("search|{}|{:?}", key.query, key.aspect_ratio);
+        if let Some(prompt) = key.prompt {
+            fingerprint.push_str(&format!("|prompt={prompt:?}"));
+        }
+        fingerprint
     }
 }
 
@@ -50,6 +68,7 @@ pub(crate) fn current_intent_fingerprints(
     scene: Option<&op_editor_ui::layout_scene::LayoutScene>,
 ) -> HashMap<String, String> {
     let profile = crate::image_panel_host::active_image_gen_profile(state);
+    let auto_gen_active = state.editor_ui.agent_settings.image_gen_active();
     let targets = match scene {
         Some(scene) => collect_targets_with_scene(state, &HashSet::new(), scene),
         None => collect_targets(state, &HashSet::new()),
@@ -57,6 +76,7 @@ pub(crate) fn current_intent_fingerprints(
     targets
         .into_iter()
         .map(|target| {
+            let profile = generation_profile_for_request(target.mode, profile, auto_gen_active);
             let fingerprint = intent_fingerprint(&target, profile);
             (target.node_id.as_str().to_string(), fingerprint)
         })
@@ -71,15 +91,23 @@ pub(crate) fn current_intent_fingerprints(
 /// photo corpus, but they must not make two distinct authored subjects share a
 /// cached image or make the stale-result guard treat a changed intent as the
 /// same intent. Case, punctuation, and repeated whitespace are canonicalized;
-/// every authored word remains part of identity. Aspect remains part of intent
-/// so a square cover never reuses a wide hero.
+/// every authored query word remains part of identity. The rich prompt is also
+/// part of identity because the judge and photo contract consume it even when
+/// retrieval uses the same short query. Preserve prompt wording and punctuation;
+/// only trim its edges, treating blank prompts like the query-only legacy path.
+/// Aspect remains part of intent so a square cover never reuses a wide hero.
 pub(crate) fn search_intent_key(
     query: &str,
     aspect_ratio: Option<ImageAspectRatio>,
+    prompt: Option<&str>,
 ) -> super::SearchIntentKey {
     super::SearchIntentKey {
         query: canonical_search_intent_query(query),
         aspect_ratio,
+        prompt: prompt
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+            .map(str::to_string),
     }
 }
 
