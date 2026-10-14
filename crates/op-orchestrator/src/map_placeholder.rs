@@ -16,10 +16,6 @@ use serde_json::{json, Value};
 const MAP_PLACEHOLDER_NAME_SUFFIX: &str = " (map placeholder)";
 const MAP_PLACEHOLDER_WIDTH: f64 = 327.0;
 const MAP_PLACEHOLDER_HEIGHT: f64 = 300.0;
-const GRID_COLUMNS: usize = 4;
-const GRID_ROWS: usize = 3;
-const STREET_WIDTH: f64 = 12.0;
-const ROAD_WIDTH: f64 = 10.0;
 
 /// One pure map-placeholder rewrite.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -188,126 +184,24 @@ fn dimensions(node: &PenNode, rects: &HashMap<String, ResolvedRect>) -> (f64, f6
     (width.max(1.0), height.max(1.0))
 }
 
-/// Build the vector-like map scene with a fixed 4-by-3 block grid.
+/// Build an editable map from a fixed scene selected by image intent.
 pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: Theme) -> Value {
-    let id = node.id_str();
-    let width = width.max(1.0);
-    let height = height.max(1.0);
-    let block_width = ((width - 5.0 * STREET_WIDTH) / GRID_COLUMNS as f64).max(1.0);
-    let block_height = ((height - 4.0 * STREET_WIDTH) / GRID_ROWS as f64).max(1.0);
-
-    let mut blocks = Vec::with_capacity(GRID_COLUMNS * GRID_ROWS + 7);
-    for index in 0..(GRID_COLUMNS * GRID_ROWS) {
-        let column = index % GRID_COLUMNS;
-        let row = index / GRID_COLUMNS;
-        let x = STREET_WIDTH + column as f64 * (block_width + STREET_WIDTH);
-        let y = STREET_WIDTH + row as f64 * (block_height + STREET_WIDTH);
-        blocks.push(json!({
-            "type": "rectangle",
-            "id": format!("{id}-map-block-{}", index + 1),
-            "name": format!("map-block-{}", index + 1),
-            "x": x,
-            "y": y,
-            "width": block_width,
-            "height": block_height,
-            "cornerRadius": 6,
-            "fill": solid_fill("$--accent")
-        }));
+    let mut hint = node.base().name.clone().unwrap_or_default();
+    if let PenNode::Image(image) = node {
+        hint.push_str(image.image_prompt.as_deref().unwrap_or_default());
+        hint.push_str(image.image_search_query.as_deref().unwrap_or_default());
     }
-
-    let road_y = STREET_WIDTH + block_height + STREET_WIDTH / 2.0;
-    let road_x = STREET_WIDTH + block_width + STREET_WIDTH / 2.0;
-    blocks.push(json!({
-        "type": "rectangle",
-        "id": format!("{id}-map-road-h"),
-        "name": "map-road-h",
-        "x": 0,
-        "y": road_y,
-        "width": width,
-        "height": ROAD_WIDTH,
-        "fill": solid_fill("$--background")
-    }));
-    blocks.push(json!({
-        "type": "rectangle",
-        "id": format!("{id}-map-road-v"),
-        "name": "map-road-v",
-        "x": road_x,
-        "y": 0,
-        "width": ROAD_WIDTH,
-        "height": height,
-        "fill": solid_fill("$--background")
-    }));
-
-    let lower_left = &blocks[(GRID_ROWS - 1) * GRID_COLUMNS];
-    // End on the middle row so the pin stays clear of the top band where
-    // models pin search bars and back buttons.
-    let upper_right = &blocks[GRID_COLUMNS * (GRID_ROWS / 2) + GRID_COLUMNS - 1];
-    let start = block_center(lower_left);
-    let end = block_center(upper_right);
-    blocks.push(json!({
-        "type": "path",
-        "id": format!("{id}-map-route"),
-        "name": "map-route",
-        "x": 0,
-        "y": 0,
-        "width": width,
-        "height": height,
-        "d": format!("M {} {} L {} {} L {} {}", start.0, start.1, end.0, start.1, end.0, end.1),
-        "stroke": {
-            "thickness": 5,
-            "cap": "round",
-            "join": "round",
-            "fill": solid_fill("$--primary")
-        }
-    }));
-
-    let pin_x = clamp(end.0 - 14.0, 0.0, (width - 28.0).max(0.0));
-    let pin_y = clamp(end.1 - 28.0, 0.0, (height - 28.0).max(0.0));
-    blocks.push(json!({
-        "type": "icon_font",
-        "id": format!("{id}-map-pin"),
-        "name": "map-pin",
-        "x": pin_x,
-        "y": pin_y,
-        "width": 28,
-        "height": 28,
-        "iconFontFamily": "lucide",
-        "iconFontName": "map-pin",
-        "fill": solid_fill("$--primary")
-    }));
-
-    let origin_x = clamp(start.0 - 7.0, 0.0, (width - 14.0).max(0.0));
-    let origin_y = clamp(start.1 - 7.0, 0.0, (height - 14.0).max(0.0));
-    let halo_x = clamp(start.0 - 14.0, 0.0, (width - 28.0).max(0.0));
-    let halo_y = clamp(start.1 - 14.0, 0.0, (height - 28.0).max(0.0));
-    blocks.push(json!({
-        "type": "ellipse",
-        "id": format!("{id}-map-origin-halo"),
-        "name": "map-origin-halo",
-        "x": halo_x,
-        "y": halo_y,
-        "width": 28,
-        "height": 28,
-        "fill": solid_fill_with_opacity("$--primary", 0.2)
-    }));
-    blocks.push(json!({
-        "type": "ellipse",
-        "id": format!("{id}-map-origin"),
-        "name": "map-origin",
-        "x": origin_x,
-        "y": origin_y,
-        "width": 14,
-        "height": 14,
-        "fill": solid_fill("$--primary")
-    }));
-
+    let kind = crate::map_templates::MapTemplate::from_hint(&hint);
+    let mut blocks = crate::map_templates::children(node.id_str(), width, height, theme, kind);
     let preserved = node
         .children()
         .into_iter()
         .flatten()
         .filter(|child| has_numeric_position(child))
         .filter_map(|child| serde_json::to_value(child).ok());
-    blocks.extend(preserved);
+    // Authored controls remain above the deterministic map composition.
+    let mut children: Vec<Value> = preserved.collect();
+    children.append(&mut blocks);
 
     let map_name = format!(
         "{}{}",
@@ -327,8 +221,8 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
         "fill": solid_fill(if theme == Theme::Dark { "$--secondary" } else { "$--muted" }),
         "imageSearchQuery": null,
         "imagePrompt": null,
-        "children": blocks,
-        "explain": "map placeholder"
+        "children": children,
+        "explain": format!("map-template:{}; illustrative, not geographic data", kind.key())
     });
     if height_needs_placeholder_size(node) {
         patch["height"] = json!(MAP_PLACEHOLDER_HEIGHT);
@@ -347,14 +241,6 @@ fn height_needs_placeholder_size(node: &PenNode) -> bool {
     }
 }
 
-fn block_center(value: &Value) -> (f64, f64) {
-    let x = value["x"].as_f64().unwrap_or(0.0);
-    let y = value["y"].as_f64().unwrap_or(0.0);
-    let width = value["width"].as_f64().unwrap_or(1.0);
-    let height = value["height"].as_f64().unwrap_or(1.0);
-    (x + width / 2.0, y + height / 2.0)
-}
-
 fn has_numeric_position(node: &PenNode) -> bool {
     node.base().x.is_some_and(|value| value.is_finite())
         && node.base().y.is_some_and(|value| value.is_finite())
@@ -362,14 +248,6 @@ fn has_numeric_position(node: &PenNode) -> bool {
 
 fn solid_fill(color: &str) -> Value {
     json!([{ "type": "solid", "color": color }])
-}
-
-fn solid_fill_with_opacity(color: &str, opacity: f64) -> Value {
-    json!([{ "type": "solid", "color": color, "opacity": opacity }])
-}
-
-fn clamp(value: f64, low: f64, high: f64) -> f64 {
-    value.max(low).min(high)
 }
 
 #[cfg(test)]

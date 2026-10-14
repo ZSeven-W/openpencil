@@ -3,6 +3,41 @@ use crate::plan::{OrchestratorPlan, Region, RootFrameSpec, Subtask};
 use crate::test_support::VecDocSink;
 use serde_json::{json, Value};
 
+#[test]
+fn map_template_uses_full_bleed_viewport_through_complete_cleanup() {
+    let mut root = evidence_root();
+    root["children"][1]["children"][0]["name"] = json!("Running map");
+    root["children"][1]["children"][0]["imageSearchQuery"] = json!("map-template:running");
+    let mut sink = sink_with(root);
+    crate::cleanup::run_cleanup_passes(&mut sink, &plan(), &["root"]);
+    let node = op_editor_core::walkers::find_node(
+        sink.state.active_children(),
+        &NodeId::new("hero-image"),
+    )
+    .expect("map survives cleanup");
+    let map = serde_json::to_value(node).unwrap();
+    let children = map["children"].as_array().unwrap();
+    let ground = children.iter().find(|n| n["name"] == "map-ground").unwrap();
+    assert_eq!(ground["width"], 375.0);
+    let layers = children
+        .iter()
+        .find(|n| n["name"] == "Map layer control")
+        .unwrap();
+    assert_eq!(layers["width"], 40.0);
+    assert_eq!(layers["height"], 40.0);
+    assert_eq!(layers["x"], 323.0);
+    let path = children.iter().find(|n| n["name"] == "map-route").unwrap();
+    assert!((path["width"].as_f64().unwrap() - 165.0).abs() < 0.01);
+    if let Ok(dir) = std::env::var("OPENPENCIL_MAP_PREVIEW_DIR") {
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            std::path::Path::new(&dir).join("full-cleanup.op"),
+            serde_json::to_string_pretty(&sink.state.doc).unwrap(),
+        )
+        .unwrap();
+    }
+}
+
 fn evidence_root() -> Value {
     json!({
         "type": "frame",
@@ -586,4 +621,14 @@ fn an_inserted_scrim_sits_directly_above_the_photo() {
     );
     assert_eq!(ids[2], "photo");
     assert_eq!(stack["children"][0]["fill"][0]["color"], "#FFFFFF");
+}
+
+#[test]
+fn map_layer_icon_button_is_not_promoted_to_full_width_media() {
+    let layers = json!({"type":"frame","id":"layers","x":280,"y":16,"width":40,"height":40,
+        "fill":[{"type":"solid","color":"#FFFFFF"}],"children":[
+            {"type":"icon_font","id":"layers-icon","iconFontName":"layers","width":20,"height":20}]});
+    let children = vec![json!({"type":"frame","layout":"none","children":[layers,
+        {"type":"frame","id":"map","width":327,"height":260,"fill":[{"type":"solid","color":"#EEEEEE"}],"children":[]} ]})];
+    assert_eq!(first_media_path(&children, 0), Some(vec![0, 1]));
 }

@@ -517,6 +517,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
 - {}\n\
 - NEVER set x or y on children inside layout frames.\n\
 - Use \"fill_container\" for children that stretch, \"fit_content\" for shrink-wrap sizing.\n\
+- MAP TEMPLATES: For an illustrative map, emit ONE image slot with name \"Map\" and imageSearchQuery \"map-template:running\", \"map-template:delivery\", or \"map-template:location\". OP builds editable streets, route, endpoint markers and a compact layer control deterministically. Do not draw extra map paths, pins, layer controls or tint overlays outside that slot. Keep statistics, search and navigation as separate siblings. These are illustrative maps, not real geographic data.\n\
 - SECTION BACKGROUND: do NOT set fill on your section root frame. Only set fill on cards, buttons, chips, badges, and other visually distinct components.\n\
 - TYPOGRAPHY HIERARCHY: Do NOT make every text bold. Use 700 only for primary headings, 600 for buttons/key labels, 500 for short chips/nav labels, and 400 for body text, placeholders, subtitles, metadata, and captions.\n\
 - ICONS: use icon_font with lucide iconFontName; never use path nodes for icons.\n\

@@ -102,81 +102,20 @@ fn city_map_becomes_a_vector_placeholder_and_clears_search_intent() {
     assert!(patch["imageSearchQuery"].is_null());
 
     let children = patch["children"].as_array().unwrap();
-    let map_blocks: Vec<&Value> = children
-        .iter()
-        .filter(|child| {
-            child["name"]
-                .as_str()
-                .is_some_and(|name| name.starts_with("map-block-"))
-        })
-        .collect();
-    assert_eq!(map_blocks.len(), 12);
-    let expected_block_width = (327.0 - 5.0 * 12.0) / 4.0;
-    assert!(map_blocks.iter().all(|block| {
-        (block["width"].as_f64().unwrap() - expected_block_width).abs() < f64::EPSILON
-    }));
     assert_eq!(
-        children
-            .iter()
-            .filter(|child| child["name"].as_str() == Some("map-road-h"))
-            .count(),
-        1
+        patch["explain"],
+        "map-template:location; illustrative, not geographic data"
     );
-    let road_h = children
+    assert!(children.iter().any(|child| child["name"] == "map-pin"));
+    assert!(!children.iter().any(|child| child["name"] == "map-route"));
+    let layers = children
         .iter()
-        .find(|child| child["name"].as_str() == Some("map-road-h"))
+        .find(|child| child["name"] == "Map layer control")
         .unwrap();
-    let road_v = children
-        .iter()
-        .find(|child| child["name"].as_str() == Some("map-road-v"))
-        .unwrap();
-    assert_eq!(road_h["height"], json!(10.0));
-    assert_eq!(road_v["width"], json!(10.0));
-    assert!(
-        road_h["y"].as_f64().unwrap()
-            > map_blocks[0]["y"].as_f64().unwrap() + map_blocks[0]["height"].as_f64().unwrap()
-    );
-    assert!(road_h["y"].as_f64().unwrap() < map_blocks[4]["y"].as_f64().unwrap());
-    assert!(
-        road_v["x"].as_f64().unwrap()
-            > map_blocks[0]["x"].as_f64().unwrap() + map_blocks[0]["width"].as_f64().unwrap()
-    );
-    assert!(road_v["x"].as_f64().unwrap() < map_blocks[1]["x"].as_f64().unwrap());
-    let route_index = children
-        .iter()
-        .position(|child| child["name"].as_str() == Some("map-route"))
-        .unwrap();
-    let road_h_index = children
-        .iter()
-        .position(|child| child["name"].as_str() == Some("map-road-h"))
-        .unwrap();
-    let road_v_index = children
-        .iter()
-        .position(|child| child["name"].as_str() == Some("map-road-v"))
-        .unwrap();
-    assert!(route_index > road_h_index && route_index > road_v_index);
-    assert_eq!(children[route_index]["stroke"]["thickness"], json!(5));
-    assert_eq!(children[route_index]["stroke"]["join"], json!("round"));
-    assert_eq!(children[route_index]["stroke"]["cap"], json!("round"));
-    assert_eq!(
-        children[route_index]["stroke"]["fill"],
-        json!([{ "type": "solid", "color": "$--primary" }])
-    );
-    let pin_index = children
-        .iter()
-        .position(|child| child["name"].as_str() == Some("map-pin"))
-        .unwrap();
-    let origin_halo_index = children
-        .iter()
-        .position(|child| child["name"].as_str() == Some("map-origin-halo"))
-        .unwrap();
-    let origin_index = children
-        .iter()
-        .position(|child| child["name"].as_str() == Some("map-origin"))
-        .unwrap();
-    assert!(pin_index > route_index);
-    assert!(origin_halo_index > route_index);
-    assert!(origin_index > route_index);
+    assert_eq!(layers["width"], 40);
+    assert_eq!(layers["height"], 40);
+    // Authored controls must paint above the map (lower index paints on top).
+    assert_eq!(children[0]["id"], "locate");
     assert!(patch.get("height").is_none());
     assert!(children.iter().any(|child| child["id"] == "locate"));
     for child in children {
@@ -287,7 +226,7 @@ fn fit_content_height_is_sized_without_overwriting_width_sizing() {
         .iter()
         .find(|child| child["name"] == "map-block-1")
         .unwrap();
-    assert_eq!(block["width"], json!((327.0 - 5.0 * 12.0) / 4.0));
+    assert_eq!(block["width"], json!(327.0 * 0.18));
 }
 
 #[test]

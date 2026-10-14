@@ -494,7 +494,6 @@ fn run_cleanup_passes_with_summary_and_policy(
         rid = apply_root_transform(sink, &rid, crate::ring_repair::wrap_ring_fragments);
         debug_probe_child_height(sink, &rid, "table_flush");
         counter.checkpoint(summary, CheckCategory::Structure, "chip+ring-extract");
-        super::cleanup_image_fallback::repair_map_placeholders(sink, &rid, summary, &mut counter);
         // Chip/badge text contrast (DS P1-a): the specific, provable chip
         // branch runs BEFORE the generic contrast repair so the chip-scoped
         // proof (solid chip fill, chip shape) wins the repair and the generic
@@ -513,6 +512,9 @@ fn run_cleanup_passes_with_summary_and_policy(
             crate::hero_bleed::enforce(sink, plan, &rid);
         }
         counter.checkpoint(summary, CheckCategory::Structure, "hero-bleed");
+        // Resolve the map after hero width is settled; fixed template coordinates
+        // must use the final viewport rather than the former inset image width.
+        super::cleanup_image_fallback::repair_map_placeholders(sink, &rid, summary, &mut counter);
         repair_category_grid_density(sink, &rid);
         counter.checkpoint(summary, CheckCategory::Structure, "category-grid-density");
         cleanup_empty_content_bar::remove_empty_content_bars(sink, &rid);

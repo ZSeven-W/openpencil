@@ -23,6 +23,7 @@ pub mod design_type;
 pub mod image_fallback_policy;
 pub mod intent;
 pub mod map_placeholder;
+pub mod map_templates;
 pub(crate) mod mobile_content_rail;
 mod mobile_reflow;
 pub mod model_profile;

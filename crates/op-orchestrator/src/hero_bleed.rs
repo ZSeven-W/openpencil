@@ -348,9 +348,12 @@ fn is_coloured_media(value: &Value) -> bool {
             .get("children")
             .and_then(Value::as_array)
             .is_some_and(|children| {
-                children
-                    .iter()
-                    .any(|child| child.get("type").and_then(Value::as_str) == Some("text"))
+                children.iter().any(|child| {
+                    matches!(
+                        child.get("type").and_then(Value::as_str),
+                        Some("text" | "icon_font")
+                    )
+                })
             })
 }
 

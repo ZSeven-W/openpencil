@@ -22,7 +22,12 @@ pub(super) fn repair_map_placeholders(
         return;
     };
     let rects = crate::image_fallback_policy::resolved_rects(sink.state());
-    let theme = crate::role_defaults::detect_theme_from_fill(first_solid_fill_hex(root));
+    let variables = sink.state().doc.variables.clone().unwrap_or_default();
+    let active_theme = op_design_lint::node_util::default_theme(sink.state().doc.themes.as_ref());
+    let fill = first_solid_fill_hex(root).and_then(|raw| {
+        op_design_lint::node_util::resolve_color_ref(raw, &variables, &active_theme)
+    });
+    let theme = crate::role_defaults::detect_theme_from_fill(fill.as_deref());
     let patches = map_placeholder(root, &rects, theme);
     for patch in patches {
         sink.apply(EditorCommand::PatchNodeData {
