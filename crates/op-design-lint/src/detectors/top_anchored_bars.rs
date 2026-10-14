@@ -108,6 +108,11 @@ fn find_bar_groups<'a>(siblings: &'a [PenNode]) -> Vec<Vec<Bar<'a>>> {
             }
             let previous = *group.last().expect("group starts with one bar");
             let gap = candidate.x - (previous.x + previous.width);
+            // A vertical stack/grid of rectangles is not a horizontal bar
+            // series. Aligning its bottoms destroys map streets and artwork.
+            if gap < -GAP_EPSILON {
+                break;
+            }
             if let Some(expected) = expected_gap {
                 if (gap - expected).abs() > GAP_EPSILON {
                     break;
@@ -371,6 +376,18 @@ fn is_transparent_color(color: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn vertically_stacked_street_blocks_are_not_bar_series() {
+        let root = node(
+            serde_json::json!({"type":"frame","id":"map","layout":"none",
+            "children":[
+                {"type":"rectangle","id":"a","x":10,"y":10,"width":70,"height":50,"fill":[{"type":"solid","color":"#DDDDEE"}]},
+                {"type":"rectangle","id":"b","x":10,"y":100,"width":70,"height":65,"fill":[{"type":"solid","color":"#DDDDEE"}]},
+                {"type":"rectangle","id":"c","x":10,"y":220,"width":70,"height":80,"fill":[{"type":"solid","color":"#DDDDEE"}]}
+            ]}),
+        );
+        assert!(detect_top_anchored_bars(&root).is_empty());
+    }
     use super::*;
     use serde_json::json;
 

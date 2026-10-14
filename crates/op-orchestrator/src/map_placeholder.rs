@@ -216,6 +216,7 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
     let mut patch = json!({
         "type": "frame",
         "name": map_name,
+        "role": "map",
         "layout": "none",
         "clipContent": true,
         "fill": solid_fill(if theme == Theme::Dark { "$--secondary" } else { "$--muted" }),

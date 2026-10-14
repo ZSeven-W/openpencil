@@ -72,7 +72,7 @@ pub fn detect_sibling_inconsistencies(root: &PenNode) -> Vec<Issue> {
 
 fn walk_sibling_inconsistencies(node: &PenNode, raw: &mut Vec<Issue>) {
     let kids = children(node);
-    if kids.len() >= 3 {
+    if kids.len() >= 3 && !is_map_canvas(node) {
         // Insertion-ordered group lists so the strict / loose passes iterate
         // groups in TS `Map` order.
         let mut strict_groups: Vec<(String, Vec<&PenNode>)> = Vec::new();
@@ -132,6 +132,13 @@ fn walk_sibling_inconsistencies(node: &PenNode, raw: &mut Vec<Issue>) {
     for child in kids {
         walk_sibling_inconsistencies(child, raw);
     }
+}
+
+fn is_map_canvas(node: &PenNode) -> bool {
+    // Streets, parks and water are different artwork, not repeated UI cards.
+    // Child control containers are still visited and checked independently.
+    role(node) == Some("map")
+        && matches!(node, PenNode::Frame(frame) if frame.container.layout == Some(LayoutMode::None))
 }
 
 /// Append `child` to the insertion-ordered group keyed by `key`.
@@ -292,7 +299,7 @@ pub fn detect_mixed_sibling_corner_radius(root: &PenNode) -> Vec<Issue> {
 
 fn walk_mixed_corner_radius(node: &PenNode, issues: &mut Vec<Issue>) {
     let kids = children(node);
-    if kids.len() >= 3 {
+    if kids.len() >= 3 && !is_map_canvas(node) {
         for (_, siblings) in role_kind_groups(kids) {
             if siblings.len() < 3 {
                 continue;
