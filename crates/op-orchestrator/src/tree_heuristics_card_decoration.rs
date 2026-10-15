@@ -84,6 +84,21 @@ pub(super) fn is_role_protected(node: &Value) -> bool {
     KEEP_DECORATION_ROLES.contains(&role_lower(node).as_str())
 }
 
+/// Authored activation is stronger evidence than a missing semantic role.
+/// The radius, border and shadow define the control's hit surface, even when
+/// it sits inside another rounded panel. Scroll/hover hooks alone do not turn
+/// a content wrapper into a control.
+fn is_action_surface(node: &Value) -> bool {
+    ["onTap", "onDoubleTap", "onLongPress", "onPressStart"]
+        .iter()
+        .any(|key| {
+            node.get("events")
+                .and_then(|events| events.get(key))
+                .and_then(Value::as_array)
+                .is_some_and(|actions| !actions.is_empty())
+        })
+}
+
 pub(super) fn is_media_clipper(node: &Value) -> bool {
     let role = role_lower(node);
     if MEDIA_CLIP_ROLES.contains(&role.as_str()) {
@@ -119,7 +134,7 @@ pub(super) fn strip_nested_card_decoration(node: &mut Value, ancestor: DecoFlags
     let mut next_ancestor = ancestor;
     if is_frame {
         let own = read_decoration(node);
-        if !is_role_protected(node) {
+        if !is_role_protected(node) && !is_action_surface(node) {
             let media = is_media_clipper(node);
             let icon_surface = is_icon_surface(node);
             if let Some(obj) = node.as_object_mut() {
@@ -181,5 +196,44 @@ mod tests {
         strip_nested_card_decoration(&mut node, DecoFlags::default());
         assert_eq!(node["children"][0]["cornerRadius"], json!(22));
         assert!(node["children"][1].get("cornerRadius").is_none());
+    }
+
+    #[test]
+    fn unroled_action_keeps_authored_decoration_and_explicit_square_shape() {
+        for radius in [json!(8), json!(0), json!([8, 8, 0, 0])] {
+            let action = json!({"type":"frame","width":120,"height":48,
+                "cornerRadius":radius,"stroke":{"thickness":1},
+                "effects":[{"type":"shadow","blur":4}],
+                "events":{"onTap":[{"toast":"Done"}]},
+                "children":[{"type":"text","content":"Finish"}]});
+            let mut root = json!({"type":"frame","cornerRadius":12,
+                "fill":[{"type":"solid","color":"#123456"}],
+                "stroke":{"thickness":1},"effects":[{"type":"shadow"}],
+                "children":[action.clone()]});
+            strip_nested_card_decoration(&mut root, DecoFlags::default());
+            assert_eq!(root["children"][0], action);
+            let once = root.clone();
+            strip_nested_card_decoration(&mut root, DecoFlags::default());
+            assert_eq!(root, once);
+        }
+    }
+
+    #[test]
+    fn empty_or_passive_hooks_do_not_protect_nested_content_panels() {
+        for events in [
+            json!({}),
+            json!({"onTap":[]}),
+            json!({"onTap":null}),
+            json!({"onScroll":[{"toast":"Scrolled"}]}),
+            json!({"onHoverEnter":[{"toast":"Hovered"}]}),
+        ] {
+            let mut root = json!({"type":"frame","cornerRadius":12,
+            "fill":[{"type":"solid","color":"#FFFFFF"}],"children":[{
+                "type":"frame","cornerRadius":8,"events":events,
+                "children":[{"type":"text","content":"Panel"}]
+            }]});
+            strip_nested_card_decoration(&mut root, DecoFlags::default());
+            assert!(root["children"][0].get("cornerRadius").is_none());
+        }
     }
 }

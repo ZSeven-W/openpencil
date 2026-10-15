@@ -93,7 +93,7 @@ fn collect_patches(
         let has_layers = !controls.is_empty();
         if has_layers {
             for control in controls {
-                let patch = compact_layer_control_patch();
+                let patch = compact_layer_control_patch(control);
                 let current = serde_json::to_value(control).unwrap_or(Value::Null);
                 if patch
                     .as_object()
@@ -249,10 +249,19 @@ fn is_visible(node: &PenNode) -> bool {
         && !matches!(&node.base().opacity, Some(NumberOrExpression::Number(value)) if *value <= 0.0)
 }
 
-fn compact_layer_control_patch() -> Value {
-    // Fixed dimensions prevent the original full-width layers-bar regression.
-    // Keep authored position, styling, icon and interactions intact.
-    json!({"width":40,"height":40,"layout":"horizontal","padding":0,
+fn compact_layer_control_patch(node: &PenNode) -> Value {
+    let compact = |size: Option<f64>| size.filter(|s| (40.0..=48.0).contains(s));
+    let width = compact(node.width_px());
+    let height = compact(node.height_px());
+    // A correctly sized authored button already belongs to its control family.
+    // Shrinking only the layer toggle made it smaller than the location button.
+    if width.is_some() && height.is_some() {
+        return json!({});
+    }
+    // Repair full-width bars and tiny/oversized controls, retaining an authored
+    // compact dimension when available. Do not touch position, paint or events.
+    let side = height.or(width).unwrap_or(40.0);
+    json!({"width":side,"height":side,"layout":"horizontal","padding":0,
         "justifyContent":"center","alignItems":"center"})
 }
 
@@ -369,7 +378,7 @@ fn build_map_placeholder_with_controls(
             if is_authored_layer_control(child) {
                 value
                     .as_object_mut()?
-                    .extend(compact_layer_control_patch().as_object()?.clone());
+                    .extend(compact_layer_control_patch(child).as_object()?.clone());
             }
             Some(value)
         });

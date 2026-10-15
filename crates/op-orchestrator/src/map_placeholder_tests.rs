@@ -395,6 +395,7 @@ fn authored_layers_button(width: Value) -> Value {
 #[test]
 fn map_with_authored_sibling_layer_control_uses_one_compact_control() {
     for width in [json!(40), json!("fill_container")] {
+        let needs_repair = width.is_string();
         let button = authored_layers_button(width);
         let source: PenNode = serde_json::from_value(json!({"type":"frame","id":"viewport",
             "name":"地图视口","layout":"none","width":327,"height":280,
@@ -403,20 +404,23 @@ fn map_with_authored_sibling_layer_control_uses_one_compact_control() {
                     "imageSearchQuery":"map-template:delivery"}]}))
         .unwrap();
         let patches = map_placeholder(&source, &HashMap::new(), Theme::Light);
-        let control = patch_value(
-            patches
-                .iter()
-                .find(|p| p.node_id == "authored-layers")
-                .unwrap(),
-        );
-        assert_eq!(control["width"], 40);
-        assert_eq!(control["height"], 40);
-        assert_eq!(control["padding"], 0);
-        assert!(
-            control.get("children").is_none(),
-            "preserve authored icon and events"
-        );
-        assert!(control.get("fill").is_none(), "preserve authored styling");
+        let control = patches.iter().find(|p| p.node_id == "authored-layers");
+        if needs_repair {
+            let control = patch_value(control.unwrap());
+            assert_eq!(control["width"], 40.0);
+            assert_eq!(control["height"], 40.0);
+            assert_eq!(control["padding"], 0);
+            assert!(
+                control.get("children").is_none(),
+                "preserve authored icon and events"
+            );
+            assert!(control.get("fill").is_none(), "preserve authored styling");
+        } else {
+            assert!(
+                control.is_none(),
+                "an already compact control stays untouched"
+            );
+        }
         let map = patch_value(patches.iter().find(|p| p.node_id == "slot").unwrap());
         assert!(!map["children"]
             .as_array()
@@ -441,11 +445,50 @@ fn map_preserves_and_compacts_its_own_authored_layer_control() {
     let map = build_map_placeholder(&source, 327.0, 280.0, Theme::Light);
     let children = map["children"].as_array().unwrap();
     assert_eq!(children[0]["id"], "authored-layers");
-    assert_eq!(children[0]["width"], 40);
-    assert_eq!(children[0]["height"], 40);
+    assert_eq!(children[0]["width"], 40.0);
+    assert_eq!(children[0]["height"], 40.0);
     assert_eq!(children[0]["children"], original_button["children"]);
     assert_eq!(children[0]["fill"], original_button["fill"]);
     assert!(!children.iter().any(|n| n["name"] == "Map layer control"));
+}
+
+#[test]
+fn compact_authored_map_controls_keep_size_shape_and_spacing() {
+    for size in [40, 44, 48] {
+        let mut button = authored_layers_button(json!(size));
+        button["height"] = json!(size);
+        button["cornerRadius"] = json!(size / 2);
+        button["padding"] = json!(8);
+        button["events"] = json!({"onTap":[{"toast":"Layers"}]});
+        let source: PenNode = serde_json::from_value(json!({"type":"frame","id":"map",
+            "name":"Map","width":327,"height":280,"layout":"none",
+            "children":[button]}))
+        .unwrap();
+        let original = serde_json::to_value(&source.children().unwrap()[0]).unwrap();
+        let map = build_map_placeholder(&source, 327.0, 280.0, Theme::Light);
+        assert_eq!(map["children"][0], original);
+
+        let viewport: PenNode = serde_json::from_value(json!({"type":"frame",
+            "id":"viewport","layout":"none","width":327,"height":280,
+            "children":[original,{"type":"image","id":"slot","name":"Map","src":"",
+                "width":327,"height":280,"imageSearchQuery":"map-template:running"}]}))
+        .unwrap();
+        let patches = map_placeholder(&viewport, &HashMap::new(), Theme::Light);
+        assert!(!patches.iter().any(|p| p.node_id == "authored-layers"));
+        assert_eq!(patches.len(), 1, "only the map placeholder needs replacing");
+    }
+}
+
+#[test]
+fn stretched_layer_bar_uses_its_existing_compact_height() {
+    let mut button = authored_layers_button(json!("fill_container"));
+    button["height"] = json!(44);
+    let source: PenNode = serde_json::from_value(json!({"type":"frame","id":"map",
+        "name":"Map","width":327,"height":280,"children":[button]}))
+    .unwrap();
+    let map = build_map_placeholder(&source, 327.0, 280.0, Theme::Light);
+    assert_eq!(map["children"][0]["width"], 44.0);
+    assert_eq!(map["children"][0]["height"], 44.0);
 }
 
 #[test]
@@ -601,7 +644,7 @@ fn layer_toggle_with_map_glyph_or_nested_toolbar_suppresses_only_its_own_default
                  "imageSearchQuery":"map-template:running"}]}))
         .unwrap();
         let patches = map_placeholder(&source, &HashMap::new(), Theme::Dark);
-        assert!(patches.iter().any(|p| p.node_id == "authored-layers"));
+        assert!(!patches.iter().any(|p| p.node_id == "authored-layers"));
         assert!(!patches
             .iter()
             .any(|p| matches!(p.node_id.as_str(), "toolbar" | "locate")));

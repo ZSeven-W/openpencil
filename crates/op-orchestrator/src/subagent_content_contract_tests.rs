@@ -1,6 +1,38 @@
 use super::*;
 
 #[test]
+fn generated_unroled_action_keeps_its_shape_inside_rounded_card() {
+    // Reduced from the GLM navigation run: the author supplied an 8px CTA
+    // inside a 12px trip card, but nested-card cleanup erased the CTA radius.
+    let script = r##"const root=I(null,{type:"frame",name:"Trip",width:375,layout:"none",height:734});
+const card=I(root,{type:"frame",name:"Trip summary",width:343,height:88,x:16,y:622,layout:"horizontal",alignItems:"center",padding:16,cornerRadius:12,fill:[{type:"solid",color:"#1A2A44"}]});
+I(card,{type:"text",content:"3.2公里",fontSize:20});
+const cta=I(card,{type:"frame",name:"结束导航按钮",layout:"horizontal",justifyContent:"center",alignItems:"center",width:120,height:48,cornerRadius:8,fill:[{type:"solid",color:"#F97316"}],events:{onTap:[{toast:"已结束导航"}]}});
+I(cta,{type:"text",content:"结束导航",fontSize:16});"##;
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script.into())]);
+    let mut sink = VecDocSink::new();
+    let outcome = block_on(run_subtask(
+        &subtask(),
+        &plan(),
+        &req(),
+        &llm,
+        &mut sink,
+        &AbortFlag::new(),
+        false,
+        false,
+    ));
+    assert!(outcome.error.is_none(), "{:?}", outcome.error);
+    let Some(EditorCommand::InsertSubtree { nodes, .. }) = sink.applied.last() else {
+        panic!("missing insertion")
+    };
+    let value = serde_json::to_value(nodes).unwrap();
+    let cta = &value[0]["children"][0]["children"][1];
+    assert_eq!(cta["name"], "结束导航按钮");
+    assert_eq!(cta["cornerRadius"], 8.0);
+    assert_eq!(cta["events"]["onTap"][0]["toast"], "已结束导航");
+}
+
+#[test]
 fn actual_empty_navigation_buttons_are_rejected_before_insert() {
     let script = r##"const sec=I(null,{type:"frame",name:"Header",layout:"horizontal",width:375});
 I(sec,{type:"frame",name:"back-button",role:"icon-button",width:40,height:40,fill:[{type:"solid",color:"#fff"}]});
