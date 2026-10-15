@@ -88,6 +88,23 @@ fn container_suffix_is_not_an_instance() {
 }
 
 #[test]
+fn chinese_button_instances_are_not_confused_with_parts_or_containers() {
+    for name in ["拿铁选择按钮", "确认按钮", "图层按钮", " 主按钮 "] {
+        assert_eq!(infer_role_from_name(&frame(name)), Some("button"), "{name}");
+    }
+    for name in [
+        "按钮组",
+        "按钮列表",
+        "按钮区域",
+        "按钮文字",
+        "按钮图标",
+        "选择按钮容器",
+    ] {
+        assert_eq!(infer_role_from_name(&frame(name)), None, "{name}");
+    }
+}
+
+#[test]
 fn role_part_word_after_keyword_is_a_piece() {
     // "Card Header" is a piece of a card, not a card.
     assert_eq!(infer_role_from_name(&frame("Card Header")), None);

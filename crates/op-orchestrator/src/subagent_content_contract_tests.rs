@@ -1,6 +1,39 @@
 use super::*;
 
 #[test]
+fn generated_chinese_named_static_button_keeps_authored_corners() {
+    // The original coffee response supplied 12px corners without a role or
+    // event. Nested-card cleanup erased them because only English button
+    // names participated in role inference.
+    let script = r##"const sec=I(null,{type:"frame",name:"饮品列表",width:375,layout:"vertical"});
+const card=I(sec,{type:"frame",name:"拿铁卡片",width:"fill_container",height:88,layout:"horizontal",cornerRadius:14,fill:[{type:"solid",color:"#FFFFFF"}]});
+I(card,{type:"text",content:"拿铁 28元",fontSize:16});
+const pick=I(card,{type:"frame",name:"拿铁选择按钮",layout:"horizontal",width:64,height:36,cornerRadius:12,fill:[{type:"solid",color:"#FF5A1F"}],alignItems:"center",justifyContent:"center"});
+I(pick,{type:"text",content:"选",fontSize:13,fill:[{type:"solid",color:"#FFFFFF"}]});"##;
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script.into())]);
+    let mut sink = VecDocSink::new();
+    let outcome = block_on(run_subtask(
+        &subtask(),
+        &plan(),
+        &req(),
+        &llm,
+        &mut sink,
+        &AbortFlag::new(),
+        false,
+        false,
+    ));
+    assert!(outcome.error.is_none(), "{:?}", outcome.error);
+    let Some(EditorCommand::InsertSubtree { nodes, .. }) = sink.applied.last() else {
+        panic!("missing insertion")
+    };
+    let value = serde_json::to_value(nodes).unwrap();
+    let button = &value[0]["children"][0]["children"][1];
+    assert_eq!(button["name"], "拿铁选择按钮");
+    assert_eq!(button["cornerRadius"], 12.0);
+    assert_eq!(button["role"], "button");
+}
+
+#[test]
 fn generated_unroled_action_keeps_its_shape_inside_rounded_card() {
     // Reduced from the GLM navigation run: the author supplied an 8px CTA
     // inside a 12px trip card, but nested-card cleanup erased the CTA radius.

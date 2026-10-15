@@ -169,6 +169,13 @@ pub(crate) fn infer_role_from_frame_name(name: &str) -> Option<&'static str> {
         return Some(role);
     }
 
+    // Chinese names do not have the word boundaries used by the English
+    // patterns. A terminal control noun identifies the instance while names
+    // such as 按钮组 / 按钮文字 / 选择按钮容器 remain containers or parts.
+    if lower.ends_with("按钮") {
+        return Some("button");
+    }
+
     for (pattern, role, skip_containers) in NAME_PATTERN_MAP.iter() {
         let Some(m) = pattern.find(lower) else {
             continue;
