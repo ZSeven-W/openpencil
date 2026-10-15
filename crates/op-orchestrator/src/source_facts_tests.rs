@@ -72,6 +72,8 @@ fn source_facts_checks_visible_labels_and_styled_copy_in_a_small_component() {
 
 #[test]
 fn source_facts_leaves_unrelated_numbers_favorites_placeholders_and_hidden_nodes_alone() {
+    // The price is requested, so this fixture isolates rating false positives.
+    let req = request(&format!("{BRIEF}保留价格字段。"));
     let mut nodes = vec![
         text("saturation", "4.9"),
         text("operating-cost", "4.9"),
@@ -93,13 +95,13 @@ fn source_facts_leaves_unrelated_numbers_favorites_placeholders_and_hidden_nodes
         )
         .unwrap(),
     );
-    assert!(rejection(&request(BRIEF), &nodes).is_none());
+    assert!(rejection(&req, &nodes).is_none());
     // A favorite star next to a price is not a rating component.
     let favorites = vec![serde_json::from_value(
         json!({"type":"frame","id":"favorites","children":nodes[..4]}),
     )
     .unwrap()];
-    assert!(rejection(&request(BRIEF), &favorites).is_none());
+    assert!(rejection(&req, &favorites).is_none());
     let count_only = vec![serde_json::from_value(json!({
         "type":"frame", "id":"rating-summary", "name":"rating-summary", "children":[{
             "type":"frame", "id":"rating-count", "name":"rating-count", "children":[{

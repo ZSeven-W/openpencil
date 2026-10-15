@@ -10,6 +10,9 @@ const REJECTION: &str = "unsupported-optional-rating";
 #[path = "source_facts_order_retry_tests.rs"]
 mod order_tests;
 
+#[path = "source_facts_delivery_retry_tests.rs"]
+mod delivery_tests;
+
 fn request() -> DesignRequest {
     DesignRequest {
         prompt: BRIEF.into(),

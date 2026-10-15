@@ -17,6 +17,26 @@ fn texts(lines: &[&str]) -> Vec<PenNode> {
 }
 
 #[test]
+fn explicit_brand_requires_visible_copy_and_is_not_doubled_in_verbatim_source() {
+    let brief = "配送追踪。品牌“晚点食堂”，深色配暖橙色。";
+    let state = EditorState::new();
+    let image: PenNode = serde_json::from_value(json!({"type":"image","id":"map",
+        "name":"晚点食堂","src":"","imageSearchQuery":"晚点食堂配送地图"}))
+    .unwrap();
+    assert_eq!(
+        SourceCopy::from_brief(brief).missing(&state, &[image]),
+        ["晚点食堂"]
+    );
+    assert!(SourceCopy::from_brief(brief)
+        .missing(&state, &texts(&["晚点食堂"]))
+        .is_empty());
+    let supplied = format!("{brief}\n保留以下原文，不删减：\n晚点食堂 · 滨江店");
+    assert!(SourceCopy::from_brief(&supplied)
+        .missing(&state, &texts(&["晚点食堂 · 滨江店"]))
+        .is_empty());
+}
+
+#[test]
 fn header_only_output_is_six_missing_lines_even_with_a_large_decorative_tree() {
     let state = EditorState::new();
     let mut nodes = texts(&["咖啡小聚", "晴日咖啡", "· 静安店"]);

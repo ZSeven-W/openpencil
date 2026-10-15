@@ -11,6 +11,9 @@ use op_editor_core::PenNodeExt;
 #[path = "source_facts_order.rs"]
 mod order;
 
+#[path = "source_facts_delivery.rs"]
+mod delivery;
+
 fn rating_terms(text: &str) -> bool {
     let lower = text.to_lowercase();
     ["rating", "ratings"]
@@ -87,11 +90,14 @@ pub(crate) fn append_section_instruction(
         prompt.push_str("\n\nTHIS SECTION — UNSUPPORTED RATING: The planner proposed a rating/review badge, but the ORIGINAL USER BRIEF does not request or supply it. Omit that entire optional rating badge, label, stars and value. Do not replace it with a made-up score or an empty rating placeholder. Preserve the requested identity, contact actions, other content and visual detail; the planner proposal is not a source.");
     }
     order::append_section_instruction(request, subtask, prompt);
+    delivery::append_section_instruction(request, subtask, prompt);
 }
 
 /// Return an actionable same-section retry reason before any nodes are inserted.
 pub(crate) fn rejection(request: &DesignRequest, nodes: &[PenNode]) -> Option<String> {
-    rating_rejection(request, nodes).or_else(|| order::rejection(request, nodes))
+    rating_rejection(request, nodes)
+        .or_else(|| order::rejection(request, nodes))
+        .or_else(|| delivery::rejection(request, nodes))
 }
 
 fn rating_rejection(request: &DesignRequest, nodes: &[PenNode]) -> Option<String> {
