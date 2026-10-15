@@ -525,3 +525,60 @@ fn hidden_authored_layers_does_not_remove_visible_template_control() {
             .any(|n| n["name"] == "Map layer control"));
     }
 }
+
+#[test]
+fn absolute_map_controls_with_default_zero_coordinates_do_not_get_a_duplicate() {
+    for missing in [vec!["x"], vec!["y"], vec!["x", "y"]] {
+        let mut button = authored_layers_button(json!(40));
+        for key in &missing {
+            button.as_object_mut().unwrap().remove(*key);
+        }
+        let source: PenNode = serde_json::from_value(json!({"type":"frame","id":"viewport",
+            "layout":"none","width":327,"height":380,"children":[button.clone(),
+                {"type":"image","id":"slot","name":"Map","src":"","width":327,"height":380,
+                "imageSearchQuery":"map-template:delivery"}]}))
+        .unwrap();
+        let patches = map_placeholder(&source, &HashMap::new(), Theme::Dark);
+        let map = patch_value(patches.iter().find(|p| p.node_id == "slot").unwrap());
+        assert!(!map["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["name"] == "Map layer control"));
+        // The same control must survive when it is directly inside the slot.
+        let slot: PenNode = serde_json::from_value(json!({"type":"frame","id":"slot",
+            "name":"Map","layout":"none","width":327,"height":380,"children":[button.clone()]}))
+        .unwrap();
+        let map = build_map_placeholder(&slot, 327.0, 380.0, Theme::Dark);
+        let original = serde_json::to_value(&slot.children().unwrap()[0]).unwrap();
+        let controls: Vec<_> = map["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|n| n["id"] == "authored-layers" || n["name"] == "Map layer control")
+            .collect();
+        assert_eq!(controls.len(), 1);
+        assert_eq!(controls[0]["id"], "authored-layers");
+        assert_eq!(controls[0]["children"], original["children"]);
+        assert_eq!(controls[0]["fill"], original["fill"]);
+    }
+}
+
+#[test]
+fn icon_only_map_toolbar_never_becomes_a_second_map() {
+    for name in [
+        "右侧地图控件",
+        "地图操作按钮",
+        "Map controls",
+        "map-toolbar",
+    ] {
+        let source: PenNode = serde_json::from_value(json!({"type":"frame","id":"tools",
+            "name":name,"layout":"vertical","width":375,"height":"fit_content",
+            "children":[authored_layers_button(json!(40))]}))
+        .unwrap();
+        assert!(
+            map_placeholder(&source, &HashMap::new(), Theme::Dark).is_empty(),
+            "{name}"
+        );
+    }
+}

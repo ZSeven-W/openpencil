@@ -659,3 +659,50 @@ fn a_delivery_status_card_with_radius_sixteen_does_not_trigger_count_retry() {
     };
     assert!(incomplete_attempt(&sink, &task, &outcome).is_none());
 }
+
+#[test]
+fn owned_map_landmarks_are_completed_by_the_template_not_a_repeated_card_family() {
+    let task = subtask(
+        "配送地图",
+        Some("标注三个节点：餐厅、骑手当前位置、送达地点"),
+    );
+    assert_eq!(expected_item_count(&task), Some(3));
+    let slot = json!({"type":"image","id":"map","name":"Map","src":"",
+        "width":375,"height":310,"imageSearchQuery":"map-template:delivery"});
+    let sink = sink_with_section(vec![slot.clone()]);
+    let outcome = SubtaskOutcome {
+        id: task.id.clone(),
+        headline: None,
+        node_count: 1,
+        inserted_root_ids: vec!["section".into()],
+        error: None,
+        subtask: Some(task.clone()),
+    };
+    assert!(incomplete_attempt(&sink, &task, &outcome).is_none());
+    for elements in [
+        "三个节点和3张骑手卡片",
+        "3个节点信息卡",
+        "标注5个节点",
+        "3–5个节点卡片",
+    ] {
+        let task = subtask("配送地图", Some(elements));
+        assert!(
+            incomplete_attempt(&sink, &task, &outcome).is_some(),
+            "{elements}"
+        );
+    }
+    for patch in [
+        json!({"imageSearchQuery":"map-template:location"}),
+        json!({"imageSearchQuery":"city map"}),
+        json!({"enabled":false}),
+    ] {
+        let mut unsupported = slot.clone();
+        unsupported
+            .as_object_mut()
+            .unwrap()
+            .extend(patch.as_object().unwrap().clone());
+        assert!(
+            incomplete_attempt(&sink_with_section(vec![unsupported]), &task, &outcome).is_some()
+        );
+    }
+}

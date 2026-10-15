@@ -148,10 +148,32 @@ fn is_map_placeholder_candidate(node: &PenNode) -> bool {
         ),
         PenNode::Frame(_) | PenNode::Rectangle(_) => {
             node.base().name.as_deref().is_some_and(has_map_name_word)
+                && !node
+                    .base()
+                    .name
+                    .as_deref()
+                    .is_some_and(is_map_control_group)
                 && !contains_protected_descendant(node)
         }
         _ => false,
     }
+}
+
+fn is_map_control_group(name: &str) -> bool {
+    // Icon-only toolbars have no protected text descendants. They are still
+    // functional controls, never empty map slots to replace with terrain.
+    let lower = name.to_lowercase();
+    ["控件", "按钮", "工具栏"]
+        .iter()
+        .any(|part| lower.contains(part))
+        || lower
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .any(|word| {
+                matches!(
+                    word,
+                    "controls" | "control" | "toolbar" | "tools" | "buttons" | "button"
+                )
+            })
 }
 
 /// Share map intent with photo-only cleanup before the image becomes a frame.
@@ -167,7 +189,10 @@ pub(crate) fn is_map_image_intent(
 }
 
 fn is_authored_layer_control(node: &PenNode) -> bool {
-    if !matches!(node, PenNode::Frame(_)) || !has_numeric_position(node) || !is_visible(node) {
+    // An absolute viewport defaults missing x/y to zero. Requiring both
+    // coordinates missed visible authored controls and added a second one.
+    // Callers must establish the shared absolute viewport or explicit position.
+    if !matches!(node, PenNode::Frame(_)) || !is_visible(node) {
         return false;
     }
     let Some([icon]) = node.children().map(Vec::as_slice) else {
@@ -279,13 +304,12 @@ fn build_map_placeholder_with_controls(
     }
     let kind = crate::map_templates::MapTemplate::from_hint(&hint);
     let mut blocks = crate::map_templates::children(node.id_str(), width, height, theme, kind);
-    if sibling_layer_control
-        || node
-            .children()
-            .into_iter()
-            .flatten()
-            .any(is_authored_layer_control)
-    {
+    let absolute_viewport = matches!(node, PenNode::Frame(frame)
+        if frame.container.layout == Some(LayoutMode::None));
+    let preserved_control = |child: &PenNode| {
+        is_authored_layer_control(child) && (absolute_viewport || has_numeric_position(child))
+    };
+    if sibling_layer_control || node.children().into_iter().flatten().any(preserved_control) {
         blocks.retain(|block| block["name"] != "Map layer control");
     }
     for block in &mut blocks {
@@ -298,7 +322,7 @@ fn build_map_placeholder_with_controls(
         .children()
         .into_iter()
         .flatten()
-        .filter(|child| has_numeric_position(child))
+        .filter(|child| has_numeric_position(child) || preserved_control(child))
         .filter_map(|child| {
             let mut value = serde_json::to_value(child).ok()?;
             if is_authored_layer_control(child) {

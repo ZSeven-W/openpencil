@@ -24,6 +24,10 @@ pub(crate) fn completeness_feedback(expected: usize, delivered: usize) -> String
 
 /// Parse the largest repeated-item count promised by a subtask label/elements pair.
 pub fn expected_item_count(subtask: &Subtask) -> Option<usize> {
+    expected_count_with_map_markers(subtask, 0)
+}
+
+fn expected_count_with_map_markers(subtask: &Subtask, map_markers: usize) -> Option<usize> {
     let mut text = subtask.label.clone();
     if let Some(elements) = &subtask.elements {
         text.push('\n');
@@ -46,6 +50,12 @@ pub fn expected_item_count(subtask: &Subtask) -> Option<usize> {
         if let Some(count) = captures.name("lower").and_then(|m| parse_count(m.as_str())) {
             if !ignored_number_context(&text, captures.name("lower").unwrap().start())
                 && !is_ignored_count(count)
+                && !template_landmark_count(
+                    &text,
+                    captures.name("unit").unwrap().end(),
+                    count,
+                    map_markers,
+                )
             {
                 counts.push(count);
             }
@@ -79,7 +89,14 @@ pub fn expected_item_count(subtask: &Subtask) -> Option<usize> {
             continue;
         }
         if let Some(value) = parse_count(count.as_str()) {
-            if !is_ignored_count(value) {
+            if !is_ignored_count(value)
+                && !template_landmark_count(
+                    &text,
+                    captures.name("unit").unwrap().end(),
+                    value,
+                    map_markers,
+                )
+            {
                 counts.push(value);
             }
         }
@@ -160,7 +177,16 @@ pub(crate) fn incomplete_attempt(
     subtask: &Subtask,
     outcome: &SubtaskOutcome,
 ) -> Option<CompletenessFailure> {
-    let expected = expected_item_count(subtask)?;
+    let map_markers = outcome
+        .inserted_root_ids
+        .iter()
+        .filter_map(|id| {
+            op_editor_core::walkers::find_node(sink.state().active_children(), &NodeId::new(id))
+        })
+        .map(template_marker_capacity)
+        .max()
+        .unwrap_or(0);
+    let expected = expected_count_with_map_markers(subtask, map_markers)?;
     if outcome.node_count == 0 || expected < 2 {
         return None;
     }
@@ -184,6 +210,44 @@ pub(crate) fn incomplete_attempt(
         delivered,
         feedback: completeness_feedback(expected, delivered),
     })
+}
+
+fn template_landmark_count(text: &str, after_unit: usize, count: usize, capacity: usize) -> bool {
+    if count > capacity {
+        return false;
+    }
+    let after = text[after_unit..].trim_start();
+    ["节点", "标记", "图钉", "定位点"].iter().any(|noun| {
+        after.strip_prefix(noun).is_some_and(|rest| {
+            // A marker's separate information cards still promise real items.
+            !["卡", "信息", "列表"]
+                .iter()
+                .any(|suffix| rest.trim_start().starts_with(suffix))
+        })
+    })
+}
+
+fn template_marker_capacity(node: &PenNode) -> usize {
+    if !is_node_visible(node) {
+        return 0;
+    }
+    // The owned template adds these landmarks after section insertion. Only
+    // explicit template slots qualify; arbitrary map images/names do not.
+    if let PenNode::Image(image) = node {
+        let query = image.image_search_query.as_deref().unwrap_or("").trim();
+        return match query {
+            "map-template:delivery" => 3,
+            "map-template:running" => 2,
+            "map-template:location" => 1,
+            _ => 0,
+        };
+    }
+    node.children()
+        .into_iter()
+        .flatten()
+        .map(template_marker_capacity)
+        .max()
+        .unwrap_or(0)
 }
 
 /// Mark the final incomplete non-empty outcome without deleting its last result.
