@@ -611,3 +611,51 @@ fn counts_outside_quotes_still_promise_items() {
     let unclosed = subtask("Grid", Some("title '热门 and 6 张卡片"));
     assert_eq!(expected_item_count(&unclosed), Some(6));
 }
+
+#[test]
+fn design_values_next_to_card_nouns_do_not_promise_repeated_items() {
+    for elements in [
+        "悬浮圆角信息卡（深色 #1A2A44 圆角16 卡片，浮于地图下缘）",
+        "圆角12–16卡片，间距24卡片布局",
+        "字号16 卡片正文",
+        "cornerRadius=16 cards, gap 24 cards",
+        "radius 12–16 cards",
+    ] {
+        assert_eq!(
+            expected_item_count(&subtask("配送状态卡", Some(elements))),
+            None,
+            "{elements}"
+        );
+    }
+    for (elements, expected) in [
+        ("圆角16 卡片，显示6张商家卡", 6),
+        ("圆角 6 张卡片", 6),
+        ("圆角 3–5 张卡片", 3),
+        ("rounded 6 cards with radius 16", 6),
+        ("radius 16; 4 cards", 4),
+    ] {
+        assert_eq!(
+            expected_item_count(&subtask("列表", Some(elements))),
+            Some(expected),
+            "{elements}"
+        );
+    }
+}
+
+#[test]
+fn a_delivery_status_card_with_radius_sixteen_does_not_trigger_count_retry() {
+    let task = subtask(
+        "配送状态卡",
+        Some("悬浮圆角信息卡（深色 #1A2A44 圆角16 卡片）：预计12分钟送达，骑手李师傅及联系按钮"),
+    );
+    let sink = sink_with_section(vec![card(0), card(1)]);
+    let outcome = SubtaskOutcome {
+        id: task.id.clone(),
+        headline: None,
+        node_count: 5,
+        inserted_root_ids: vec!["section".into()],
+        error: None,
+        subtask: Some(task.clone()),
+    };
+    assert!(incomplete_attempt(&sink, &task, &outcome).is_none());
+}

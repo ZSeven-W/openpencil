@@ -412,7 +412,25 @@ fn parse_count(raw: &str) -> Option<usize> {
 
 fn ignored_number_context(text: &str, start: usize) -> bool {
     let before = text[..start].trim_end();
-    before.ends_with(['¥', '$', '€', '£', ':', '第'])
+    if before.ends_with(['¥', '$', '€', '£', ':', '第']) {
+        return true;
+    }
+    // A unitless design value can touch an item noun: "圆角16 卡片" is a
+    // radius, not sixteen cards. Keep explicit classifiers authoritative,
+    // e.g. "圆角 6 张卡片" still promises six cards.
+    static DESIGN_VALUE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?i)(?:圆角|半径|字号|字重|行高|间距|内边距|外边距|宽度|高度|\b(?:cornerRadius|border-radius|radius|gap|padding|margin|fontSize|font-size|font-weight|line-height|width|height))\s*(?:[=：]|为)?\s*$",
+        )
+        .expect("valid design-value prefix")
+    });
+    static EXPLICIT_CLASSIFIER: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"^(?:[0-9][0-9,]*|[零〇一二两三四五六七八九十百千万亿]+)(?:\s*(?:-|–|—|至|到)\s*(?:[0-9][0-9,]*|[零〇一二两三四五六七八九十百千万亿]+))?\s*[个条张项页行位款篇栏]",
+        )
+        .expect("valid explicit item classifier")
+    });
+    DESIGN_VALUE.is_match(before) && !EXPLICIT_CLASSIFIER.is_match(&text[start..])
 }
 
 fn is_ignored_count(value: usize) -> bool {
