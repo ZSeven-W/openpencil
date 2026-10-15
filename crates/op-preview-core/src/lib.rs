@@ -85,6 +85,8 @@ mod session;
 mod session_paint;
 mod test_helpers;
 #[cfg(all(test, not(target_os = "windows")))]
+mod tests_binding_text_reflow;
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_generated_controls;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_paint_order;

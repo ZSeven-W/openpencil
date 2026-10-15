@@ -1,4 +1,4 @@
-//! Reflow only rows explicitly owned by the generated table-filter contract.
+//! Reflow generated table filters and content-bound text in the paint scene.
 
 use super::*;
 
@@ -34,7 +34,15 @@ impl BindingOverlay {
         pointer: &RuntimeValue,
         extra: &BTreeMap<(String, BindingTarget), serde_json::Value>,
     ) -> Option<jian_ops_schema::PenDocument> {
-        if self.inner.borrow().filter_row_ids.is_empty() {
+        // Engine relayout alone leaves the retained paint scene at its old
+        // text width/height. Long state labels then shrink into the initial
+        // box instead of moving their siblings. Materialize the authored
+        // layout for content bindings as well, retaining fit/fixed sizing.
+        if self.inner.borrow().filter_row_ids.is_empty()
+            && !sites
+                .iter()
+                .any(|site| site.target == BindingTarget::Content)
+        {
             return None;
         }
         let mut value = serde_json::to_value(authored).ok()?;
@@ -66,8 +74,9 @@ impl crate::session::PreviewSession {
         let active = {
             let inner = self.binding_overlay.inner.borrow();
             self.binding_sites.iter().any(|site| {
-                site.target == BindingTarget::Visible
-                    && inner.filter_row_ids.contains(&site.node_id)
+                site.target == BindingTarget::Content
+                    || (site.target == BindingTarget::Visible
+                        && inner.filter_row_ids.contains(&site.node_id))
             })
         };
         if active {
