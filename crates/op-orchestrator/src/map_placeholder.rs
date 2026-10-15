@@ -72,20 +72,27 @@ fn collect_patches(
     let map_named = inside_map_named || node.base().name.as_deref().is_some_and(has_map_name_word);
     if let Some(children) = node.children() {
         // A map image can sit behind authored controls in its owning viewport.
-        // Only coordinate direct siblings in that absolute stack, not buttons
-        // elsewhere on the page or in another map's viewport.
+        // A sibling toolbar may wrap its buttons. Never cross into another
+        // map viewport or coordinate controls when multiple maps are ambiguous.
         let shared_viewport = matches!(node, PenNode::Frame(frame)
             if frame.container.layout == Some(LayoutMode::None))
-            && children.iter().any(|child| {
-                (!map_named || matches!(child, PenNode::Image(_)))
-                    && eligible_map_dimensions(child, rects).is_some()
-            });
-        let has_layers = shared_viewport && children.iter().any(is_authored_layer_control);
-        if has_layers {
-            for control in children
+            && children
                 .iter()
-                .filter(|child| is_authored_layer_control(child))
-            {
+                .filter(|child| {
+                    (!map_named || matches!(child, PenNode::Image(_)))
+                        && eligible_map_dimensions(child, rects).is_some()
+                })
+                .count()
+                == 1;
+        let mut controls = Vec::new();
+        if shared_viewport {
+            for child in children {
+                collect_layer_controls(child, rects, &mut controls);
+            }
+        }
+        let has_layers = !controls.is_empty();
+        if has_layers {
+            for control in controls {
                 let patch = compact_layer_control_patch();
                 let current = serde_json::to_value(control).unwrap_or(Value::Null);
                 if patch
@@ -198,9 +205,43 @@ fn is_authored_layer_control(node: &PenNode) -> bool {
     let Some([icon]) = node.children().map(Vec::as_slice) else {
         return false;
     };
+    let named_layers = node.base().name.as_deref().is_some_and(|name| {
+        name.contains("图层")
+            || name
+                .to_lowercase()
+                .split(|c: char| !c.is_ascii_alphanumeric())
+                .any(|word| matches!(word, "layer" | "layers"))
+    });
     is_visible(icon)
         && matches!(icon, PenNode::IconFont(icon)
-            if icon.icon_font_name.rsplit(':').next() == Some("layers"))
+            if icon.icon_font_name.rsplit(':').next().is_some_and(|glyph|
+                glyph == "layers" || (glyph == "map" && named_layers)))
+}
+
+fn collect_layer_controls<'a>(
+    node: &'a PenNode,
+    rects: &HashMap<String, ResolvedRect>,
+    out: &mut Vec<&'a PenNode>,
+) {
+    if !is_visible(node) || eligible_map_dimensions(node, rects).is_some() {
+        return;
+    }
+    if is_authored_layer_control(node) {
+        out.push(node);
+        return;
+    }
+    let Some(children) = node.children() else {
+        return;
+    };
+    if children
+        .iter()
+        .any(|child| eligible_map_dimensions(child, rects).is_some())
+    {
+        return;
+    }
+    for child in children {
+        collect_layer_controls(child, rects, out);
+    }
 }
 
 fn is_visible(node: &PenNode) -> bool {

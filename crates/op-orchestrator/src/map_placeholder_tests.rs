@@ -582,3 +582,63 @@ fn icon_only_map_toolbar_never_becomes_a_second_map() {
         );
     }
 }
+
+#[test]
+fn layer_toggle_with_map_glyph_or_nested_toolbar_suppresses_only_its_own_default() {
+    for nested in [false, true] {
+        let mut control = authored_layers_button(json!(44));
+        control["name"] = json!("layer-toggle-button");
+        control["children"][0]["iconFontName"] = json!("map");
+        if nested {
+            control = json!({"type":"frame","id":"toolbar","layout":"vertical",
+                "width":44,"height":"fit_content","children":[control,
+                    {"type":"frame","id":"locate","width":44,"height":44,
+                     "children":[{"type":"icon_font","id":"locate-icon","iconFontName":"crosshair"}]}]});
+        }
+        let source: PenNode = serde_json::from_value(json!({"type":"frame","id":"viewport",
+            "layout":"none","width":375,"height":734,"children":[control,
+                {"type":"image","id":"map","src":"","width":375,"height":734,
+                 "imageSearchQuery":"map-template:running"}]}))
+        .unwrap();
+        let patches = map_placeholder(&source, &HashMap::new(), Theme::Dark);
+        assert!(patches.iter().any(|p| p.node_id == "authored-layers"));
+        assert!(!patches
+            .iter()
+            .any(|p| matches!(p.node_id.as_str(), "toolbar" | "locate")));
+        let map = patch_value(patches.iter().find(|p| p.node_id == "map").unwrap());
+        assert!(!map["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["name"] == "Map layer control"));
+    }
+}
+
+#[test]
+fn nested_other_map_or_hidden_toolbar_never_steals_the_maps_default_control() {
+    for other_map in [false, true] {
+        let mut toolbar = json!({"type":"frame","id":"toolbar","layout":"none","width":327,"height":300,
+            "children":[authored_layers_button(json!(44))]});
+        if other_map {
+            toolbar["children"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({"type":"image","id":"other-map",
+                "src":"","width":327,"height":300,"imageSearchQuery":"map-template:location"}));
+        } else {
+            toolbar["visible"] = json!(false);
+        }
+        let source: PenNode = serde_json::from_value(json!({"type":"frame","id":"viewport",
+            "layout":"none","width":375,"height":734,"children":[toolbar,
+                {"type":"image","id":"map","src":"","width":375,"height":734,
+                 "imageSearchQuery":"map-template:running"}]}))
+        .unwrap();
+        let patches = map_placeholder(&source, &HashMap::new(), Theme::Dark);
+        let map = patch_value(patches.iter().find(|p| p.node_id == "map").unwrap());
+        assert!(map["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["name"] == "Map layer control"));
+    }
+}

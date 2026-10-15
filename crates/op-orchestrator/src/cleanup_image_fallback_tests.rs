@@ -149,6 +149,50 @@ fn map_template_palette_prefers_readable_tokens_and_leaves_authored_controls_unt
     }
 }
 
+#[test]
+fn orange_brand_route_repairs_only_the_owned_halo_instead_of_turning_green() {
+    use crate::{map_placeholder::build_map_placeholder, role_defaults::Theme};
+    for kind in ["running", "delivery"] {
+        let source: PenNode = serde_json::from_value(json!({"type":"image","id":"map",
+            "src":"","imageSearchQuery":format!("map-template:{kind}")}))
+        .unwrap();
+        let mut patch = build_map_placeholder(&source, 375.0, 734.0, Theme::Dark);
+        let authored = json!({"type":"frame","id":"authored","name":"map-route-halo",
+            "fill":[{"type":"solid","color":"#40535D"}]});
+        patch["children"]
+            .as_array_mut()
+            .unwrap()
+            .push(authored.clone());
+        map_template_palette::adapt(&mut patch, |raw| {
+            Some(
+                match raw {
+                    "$--primary" => "#F97316",
+                    "$--accent" => "#14B8A6",
+                    "$--primary-foreground" => "#FFFFFF",
+                    other => other,
+                }
+                .into(),
+            )
+        });
+        let children = patch["children"].as_array().unwrap();
+        let route = children.iter().find(|n| n["name"] == "map-route").unwrap();
+        assert_eq!(route["stroke"]["fill"][0]["color"], "$--primary");
+        for node in children.iter().filter(|n| n["explain"].is_string()) {
+            let color = match node["name"].as_str().unwrap() {
+                "map-route-halo" => node["stroke"]["fill"][0]["color"].as_str(),
+                "map-origin-halo" | "map-destination-halo" | "map-courier" => {
+                    node["fill"][0]["color"].as_str()
+                }
+                _ => None,
+            };
+            if let Some(color) = color {
+                assert!(op_design_lint::color::color_contrast("#F97316", color) >= 3.0);
+            }
+        }
+        assert_eq!(children.last().unwrap(), &authored);
+    }
+}
+
 fn sink_with_image() -> VecDocSink {
     let mut sink = VecDocSink::new();
     let root: PenNode = serde_json::from_value(json!({

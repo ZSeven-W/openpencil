@@ -389,6 +389,9 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
     // page-bg token off inner wrappers). Pre-binding it only saw hex and missed.
     crate::role_post_pass::enforce_surface_color_discipline_with_tier(&mut nodes, &tier);
     normalize_section_roots_for_parent_layout(&mut nodes);
+    if let Err(reason) = crate::map_viewport::restore_height(&mut nodes, subtask) {
+        return fail(reason.to_string());
+    }
     if let Err(error) = crate::subagent_self_check::gate_generated_nodes(
         &mut nodes,
         canvas_width,

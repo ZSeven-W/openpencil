@@ -254,6 +254,9 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
     // Repeated item-family bundling is gated to the deepseek model family and
     // runs last so the merged subtask inherits normalized fields.
     plan_normalize_items::bundle_repeated_item_families(plan, req.model.as_deref().unwrap_or(""));
+    if is_mobile && !continuation_contract_applied {
+        crate::map_viewport::fold(plan, req);
+    }
     plan_normalize_hero::mark_bleed_hero_subtasks(plan);
     if is_mobile && !continuation_contract_applied {
         plan_map_budget::reserve_supporting_content(plan, req);

@@ -244,7 +244,9 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
     if is_mobile_layout {
         let mobile_spacing = explicit_tokens.spacing.map(format_design_number);
         let mobile_radius = explicit_tokens.radius.map(format_design_number);
-        let rhythm = if let Some(spacing) = mobile_spacing.as_deref() {
+        let rhythm = if crate::map_viewport::owns(subtask) {
+            "MOBILE NAVIGATION RHYTHM: Keep the shared map viewport at its specified fixed height with zero padding. Use compact auto-layout rows inside floating cards; do not add flow sections or blank bands below the map.".to_string()
+        } else if let Some(spacing) = mobile_spacing.as_deref() {
             format!(
                 "MOBILE VERTICAL RHYTHM: Keep every section root height=\"fit_content\" and do not insert blank spacer frames or empty bands to fill the planned region. Use {spacing}px as the default gap/spacing for header-to-search, search-to-next-section, module, grid, card, and internal component rhythm. Do not mix 16/20/24/32px gaps when the user explicitly requested {spacing}px spacing."
             )
@@ -476,7 +478,9 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
     let screen_route_block = screen_route_prompt_block(screen_routes);
     let headline_block = section_headline_prompt_block(prior_outcomes, tier);
     let composition_block = screen_composition::instruction(plan, subtask);
-    let spacing_rule = if is_mobile_layout {
+    let spacing_rule = if crate::map_viewport::owns(subtask) {
+        "SPACING CONSISTENCY — NAVIGATION VIEWPORT: The map fills the viewport at x:0,y:0 with no outer gutter. Floating controls/cards own their 16px side insets and 24px bottom safety inset."
+    } else if is_mobile_layout {
         "SPACING CONSISTENCY — MOBILE CONTENT RAIL: The root page may keep 0 horizontal padding for full-width status/navigation/full-bleed media. This ordinary transparent root-direct section owns padding:[0,24] exactly once; do not duplicate it on an inner wrapper. If this section is a clipped horizontal scroller, keep its section full width, inset its header 24px on both sides, and give the clipped viewport a 24px leading inset with a flush 0px trailing edge."
     } else {
         "SPACING CONSISTENCY: Use a single outer content gutter and consistent internal gaps. Do not create nested wrappers with conflicting padding or content touching edges."
@@ -485,7 +489,7 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
     // Two constraints differ by output protocol. The public subagent path uses
     // the script-gen branch; the raw-JSONL branch is legacy-only for direct
     // core callers.
-    let (root_rule, nesting_rule, output_rule) = if script_on {
+    let (mut root_rule, nesting_rule, output_rule) = if script_on {
         (
             format!("Create EXACTLY ONE section root frame first: const sec = I(null, {{type:\"frame\", name:\"{}\", width:\"fill_container\", height:\"fit_content\", layout:\"vertical\"}}); build everything else by calling I(parent, {{...}}) with `sec` or a returned id as parent. NEVER set a fixed pixel height on the root.", subtask.label),
             "Nest via the returned id ONLY: const row = I(sec, {...}); const cell = I(row, {...}); I(cell, {type:\"text\",...}). LOOP over a data array to emit repeated rows/cards. A cell inserted into the section/table directly renders as a full-width band, not a table cell.".to_string(),
@@ -498,6 +502,9 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
             format!("IDs prefix=\"{}-\". Output ONLY the structured nodes in the EXACT format the system prompt specifies above -- no prose, no extra wrapping.", subtask.id_prefix),
         )
     };
+    if crate::map_viewport::owns(subtask) {
+        root_rule = format!("Create EXACTLY ONE section root frame with width:fill_container, height:{:.0}, layout:none, padding:0. This fixed viewport is the explicit exception to content-height sections; every overlay and the map must be its descendants.", subtask.region.height);
+    }
     let mut user_prompt = format!(
         "PLANNER PROPOSAL — Page sections:\n{}\n\n\
 {}\
@@ -521,7 +528,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
 - PREMIUM DETAIL: Use high-quality details such as precise alignment, consistent radii, quiet dividers, tonal badges, subtle image masks, and purposeful shadows. Prefer one polished detail over many loud decorations.\n\
 - NO DECORATION SPAM: Do not add random blobs, repeated icon circles, excessive gradients, oversized badges, or unrelated photos just to make the design look busy. Every visual flourish must support the product story.\n\
 - {}\n\
-- NEVER set x or y on children inside layout frames.\n\
+- NEVER set x or y on children inside horizontal/vertical layout frames. Only absolute children of layout:none viewports use x/y.\n\
 - Use \"fill_container\" for children that stretch, \"fit_content\" for shrink-wrap sizing.\n\
 - MAP TEMPLATES: For an illustrative map, emit ONE image slot with name \"Map\" and imageSearchQuery \"map-template:running\", \"map-template:delivery\", or \"map-template:location\". OP builds editable streets, route, endpoint markers and a compact layer control deterministically. Do not draw extra map paths, pins, layer controls or tint overlays outside that slot. Keep statistics, search and navigation as separate siblings. These are illustrative maps, not real geographic data.\n\
 - SECTION BACKGROUND: do NOT set fill on your section root frame. Only set fill on cards, buttons, chips, badges, and other visually distinct components.\n\
@@ -550,6 +557,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
     if subtask.bleed_hero {
         user_prompt.push_str("\nThis section is full-bleed: give the section frame no horizontal padding and let its media span the full root width. For text or controls BELOW the media, use one inner frame with `padding: [0,24]`. For text or controls OVER the media, keep media, scrim and copy in the same `layout: none` viewport, with inset x coordinates for copy; never stack overlay layers vertically.");
     }
+    user_prompt.push_str(&crate::map_viewport::instruction(subtask));
 
     // (Mobile UI guardrails now load from the `mobile-ui` skill — see the
     // `isMobileScreen` flag + dynamic-content setup above.)

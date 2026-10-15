@@ -71,7 +71,14 @@ pub(super) fn collect_absolute_child_clamp_fixes(
         {
             if pr.w > 1.0 && pr.h > 1.0 {
                 for c in children(v) {
-                    push_clamp_command(c, pr, rects, cmds);
+                    let bottom_room = if crate::map_viewport::is_viewport(v)
+                        && !crate::map_viewport::is_map_background(c)
+                    {
+                        24.0
+                    } else {
+                        0.0
+                    };
+                    push_clamp_command(c, pr, bottom_room, rects, cmds);
                 }
             }
         }
@@ -84,6 +91,7 @@ pub(super) fn collect_absolute_child_clamp_fixes(
 fn push_clamp_command(
     c: &Value,
     pr: &Rect,
+    bottom_room: f64,
     rects: &HashMap<String, Rect>,
     cmds: &mut Vec<EditorCommand>,
 ) {
@@ -124,11 +132,11 @@ fn push_clamp_command(
     };
     // A child bigger than its parent can never be shifted inside — leave it
     // to the clip fallback untouched.
-    if cr.w > pr.w + FIT_EPS || cr.h > pr.h + FIT_EPS {
+    if cr.w > pr.w + FIT_EPS || cr.h > pr.h - bottom_room + FIT_EPS {
         return;
     }
     let overflows = cr.x + cr.w > pr.x + pr.w + CLAMP_OVERFLOW_EPS
-        || cr.y + cr.h > pr.y + pr.h + CLAMP_OVERFLOW_EPS
+        || cr.y + cr.h > pr.y + pr.h - bottom_room + CLAMP_OVERFLOW_EPS
         || cr.x < pr.x - CLAMP_OVERFLOW_EPS
         || cr.y < pr.y - CLAMP_OVERFLOW_EPS;
     if !overflows {
@@ -138,7 +146,7 @@ fn push_clamp_command(
     // box is the truth about how much room there is, so the fit position is
     // computed from resolved sizes, not the authored `fill_container` strings.
     let fit_x = x.min(pr.w - cr.w).max(0.0);
-    let fit_y = y.min(pr.h - cr.h).max(0.0);
+    let fit_y = y.min(pr.h - bottom_room - cr.h).max(0.0);
     let new_x = ((fit_x - x).abs() > FIT_EPS).then(|| fit_x.round() as i32);
     let new_y = ((fit_y - y).abs() > FIT_EPS).then(|| fit_y.round() as i32);
     if new_x.is_none() && new_y.is_none() {

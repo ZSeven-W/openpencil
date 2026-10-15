@@ -18,9 +18,7 @@ pub(super) fn adapt(patch: &mut Value, resolve: impl Fn(&str) -> Option<String>)
     let mut backgrounds = Vec::new();
     for child in children.iter().filter(|child| owned(child)) {
         let name = child["name"].as_str().unwrap_or_default();
-        let color = if name == "map-route-halo" {
-            &child["stroke"]["fill"][0]["color"]
-        } else if name == "map-ground"
+        let color = if name == "map-ground"
             || name.starts_with("map-block-")
             || matches!(name, "map-park" | "map-pond" | "map-waterfront")
         {
@@ -65,6 +63,11 @@ pub(super) fn adapt(patch: &mut Value, resolve: impl Fn(&str) -> Option<String>)
         return;
     };
     let route_color = route_color.unwrap();
+    // The halo is owned decoration, not terrain. If only its surface clashes
+    // with the brand route, change that backing instead of changing the brand.
+    let backing = backgrounds
+        .iter()
+        .max_by(|a, b| color_contrast(route_color, a).total_cmp(&color_contrast(route_color, b)));
     let foreground = resolve("$--primary-foreground");
     let ink = if foreground.as_deref().is_some_and(|color| {
         parse_hex_color(color).is_some() && color_contrast(color, route_color) >= 4.5
@@ -81,6 +84,23 @@ pub(super) fn adapt(patch: &mut Value, resolve: impl Fn(&str) -> Option<String>)
         .iter_mut()
         .filter(|child| owned(child))
     {
+        let name = child["name"].as_str().unwrap_or_default();
+        let surface = match name {
+            "map-route-halo" => Some(&mut child["stroke"]["fill"][0]["color"]),
+            "map-origin-halo" | "map-destination-halo" | "map-courier" => {
+                Some(&mut child["fill"][0]["color"])
+            }
+            _ => None,
+        };
+        if let (Some(surface), Some(backing)) = (surface, backing) {
+            if surface
+                .as_str()
+                .and_then(&resolve)
+                .is_some_and(|color| color_contrast(route_color, &color) < 3.0)
+            {
+                *surface = Value::String(backing.clone());
+            }
+        }
         replace(child, route, ink);
     }
 }

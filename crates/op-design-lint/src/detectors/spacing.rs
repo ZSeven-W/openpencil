@@ -132,6 +132,13 @@ pub(super) fn is_full_bleed_section(node: &PenNode, root_width: f64) -> bool {
 /// below do not recognise, must not be padded back by a later validator.
 fn carries_bleed_marker(node: &PenNode) -> bool {
     node_name(node).is_some_and(|name| name.trim_end().ends_with(BLEED_NAME_SUFFIX))
+        // Full-screen navigation owns a fixed absolute canvas even after its
+        // image slot is replaced with an editable map frame. Match cleanup's
+        // marker so validation cannot add a content gutter to the background.
+        || matches!(node, PenNode::Frame(frame)
+            if frame.container.layout == Some(LayoutMode::None)
+                && frame.base.explain.as_deref().is_some_and(|hint|
+                    hint.split(';').any(|part| part.trim() == "op-navigation-viewport")))
 }
 
 const BLEED_NAME_SUFFIX: &str = "(bleed)";

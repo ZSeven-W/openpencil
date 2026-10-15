@@ -182,14 +182,34 @@ fn mobile_bottom_gap_including_overflow(
     // be what actually reaches the bottom.
     let content_bottom = kids
         .iter()
-        .filter_map(|child| resolved(child, rects))
-        .map(|rect| rect.y + rect.h)
+        .filter_map(|child| content_bottom(child, rects))
         .fold(f64::NEG_INFINITY, f64::max);
     if !content_bottom.is_finite() {
         return None;
     }
     let gap = root_rect.y + root_rect.h - content_bottom;
     Some(gap)
+}
+
+fn content_bottom(child: &Value, rects: &HashMap<String, Rect>) -> Option<f64> {
+    // A full-bleed navigation map is the backdrop, not the last control. Only
+    // the pipeline-owned viewport gets this exception; keep checking overlays.
+    if crate::map_viewport::is_viewport(child)
+        && children(child)
+            .iter()
+            .any(crate::map_viewport::is_map_background)
+    {
+        let bottom = children(child)
+            .iter()
+            .filter(|node| !crate::map_viewport::is_map_background(node))
+            .filter_map(|node| resolved(node, rects))
+            .map(|rect| rect.y + rect.h)
+            .reduce(f64::max);
+        if bottom.is_some() {
+            return bottom;
+        }
+    }
+    resolved(child, rects).map(|rect| rect.y + rect.h)
 }
 
 /// Does this trailing root child close the screen with bottom navigation?

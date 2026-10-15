@@ -90,6 +90,12 @@ pub(super) fn is_mobile_chrome(node: &PenNode) -> bool {
 }
 
 pub(super) fn is_intentional_full_bleed_role(node: &PenNode) -> bool {
+    if serde_json::to_value(node)
+        .ok()
+        .is_some_and(|v| crate::map_viewport::is_viewport(&v))
+    {
+        return true;
+    }
     matches!(
         node.base()
             .role

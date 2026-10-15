@@ -16,6 +16,62 @@ use serde_json::json;
 
 const ECHO: &str = "mobile-bottom-flush";
 
+#[test]
+fn navigation_keeps_background_full_bleed_and_moves_only_flush_overlays() {
+    let root = json!({"type":"frame","id":"root","width":375,"height":812,"layout":"vertical","gap":0,
+        "children":[{"type":"frame","id":"status","height":78,"width":375},
+            {"type":"frame","id":"viewport","layout":"none","explain":"op-navigation-viewport",
+             "width":375,"height":734,"children":[
+                {"type":"frame","id":"summary","x":16,"y":574,"width":343,"height":160,
+                 "layout":"vertical","children":[{"type":"text","id":"label","content":"剩余3.2公里，预计12分钟"}]},
+                {"type":"frame","id":"map","role":"map","explain":"map-template:running",
+                 "x":0,"y":0,"width":375,"height":734}]}]});
+    let mut state = state_for(root.clone());
+    assert!(echoed(root));
+    let map_before = op_editor_core::walkers::find_node(
+        state.active_children(),
+        &op_editor_core::NodeId::new("map"),
+    )
+    .unwrap()
+    .clone();
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut state };
+    assert_eq!(
+        crate::geometry_validation::clamp_absolute_children_into_parent(&mut sink, "root"),
+        1
+    );
+    assert_eq!(
+        crate::geometry_validation::clamp_absolute_children_into_parent(&mut sink, "root"),
+        0
+    );
+    assert!(!geometry_diagnostics(&state)
+        .iter()
+        .any(|d| d.contains(ECHO)));
+    let viewport = serde_json::to_value(&state.active_children()[0]).unwrap();
+    assert_eq!(viewport["children"][1]["children"][0]["y"], 550.0);
+    assert_eq!(viewport["children"][1]["children"][0]["height"], 160.0);
+    assert_eq!(
+        op_editor_core::walkers::find_node(
+            state.active_children(),
+            &op_editor_core::NodeId::new("map")
+        )
+        .unwrap(),
+        &map_before
+    );
+    assert_eq!(
+        crate::geometry_validation::fixed_mobile_bottom_gap(&state, "root"),
+        Some(24.0)
+    );
+    let mut ordinary = viewport;
+    ordinary["children"][1]
+        .as_object_mut()
+        .unwrap()
+        .remove("explain");
+    assert!(
+        echoed(ordinary),
+        "unowned absolute content does not get the map exception"
+    );
+}
+
 fn diagnostics_for(root: serde_json::Value) -> Vec<String> {
     let doc: jian_ops_schema::PenDocument = serde_json::from_value(json!({
         "version": "1.0",

@@ -464,6 +464,29 @@ fn full_bleed_role_and_media_overlay_wrapper_are_untouched() {
 }
 
 #[test]
+fn map_template_conversion_keeps_the_same_full_bleed_rail_contract_as_its_image_slot() {
+    for map in [
+        json!({"type":"image","id":"map","width":375,"height":734,"src":"","imageSearchQuery":"map-template:running"}),
+        json!({"type":"frame","id":"map","role":"map","explain":"map-template:running",
+            "width":375,"height":734,"layout":"none","children":[]}),
+    ] {
+        let mut sink = insert(json!({"type":"frame","id":"root","width":375,"height":812,
+            "layout":"vertical","children":[
+                {"type":"frame","id":"viewport","width":"fill_container","height":734,
+                 "layout":"none","explain":"op-navigation-viewport","padding":0,"children":[text("directions","前方200米右转"),map]},
+                {"type":"frame","id":"body","padding":[0,24],"children":[text("body-t","Details")]}]}));
+        repair_mobile_content_rails_for_all_roots(&mut sink);
+        assert_eq!(node_json(&sink, "viewport")["padding"], 0.0);
+        assert_eq!(node_json(&sink, "map")["width"], 375.0);
+        assert_eq!(node_json(&sink, "body")["padding"], json!([0.0, 24.0]));
+        assert!(
+            op_design_lint::detect_edge_section_padding(&sink.state.active_children()[0])
+                .is_empty()
+        );
+    }
+}
+
+#[test]
 fn edge_spanning_rounded_card_gets_a_transparent_rail_wrapper() {
     let mut sink = insert(json!({
         "type":"frame","id":"root","width":375,"height":812,"layout":"vertical",
