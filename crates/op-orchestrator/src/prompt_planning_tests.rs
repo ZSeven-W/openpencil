@@ -57,6 +57,14 @@ fn phone_planning_prompt_uses_the_archetype_handoff_and_gate() {
         .call_request
         .system_prompt
         .contains("ARCHETYPE:"));
+    assert!(phone_prompt
+        .call_request
+        .system_prompt
+        .contains("Explicit first-screen content comes first"));
+    assert!(phone_prompt
+        .call_request
+        .system_prompt
+        .contains("Do not plan a status bar; it is pre-inserted."));
     assert!(!phone_prompt
         .call_request
         .system_prompt

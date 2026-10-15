@@ -559,6 +559,8 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
         user_prompt.push_str("\nThis section is full-bleed: give the section frame no horizontal padding and let its media span the full root width. For text or controls BELOW the media, use one inner frame with `padding: [0,24]`. For text or controls OVER the media, keep media, scrim and copy in the same `layout: none` viewport, with inset x coordinates for copy; never stack overlay layers vertically.");
     }
     user_prompt.push_str(&crate::map_viewport::instruction(subtask));
+    user_prompt.push_str(&crate::navigation_interaction::instruction(req, subtask));
+    user_prompt.push_str(&crate::first_viewport::instruction(subtask));
 
     // (Mobile UI guardrails now load from the `mobile-ui` skill — see the
     // `isMobileScreen` flag + dynamic-content setup above.)

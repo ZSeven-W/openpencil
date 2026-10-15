@@ -129,12 +129,14 @@ pub mod cleanup_image_slots {
 pub(crate) mod cleanup_layout;
 pub(crate) mod cleanup_typography;
 pub mod concurrent;
+mod first_viewport;
 pub mod geometry_validation;
 pub(crate) mod hero_bleed;
 pub mod loop_finalize;
 mod loop_finalize_palette;
 pub(crate) mod map_viewport;
 pub mod nav_issues;
+mod navigation_interaction;
 pub mod output_language;
 pub mod prompt;
 pub mod quality_audit;

@@ -21,6 +21,8 @@ op-pen-loader = { path = "../op-pen-loader" }
 op-image-enrich = { path = "../op-image-enrich", features = ["pixels"] }
 jian-scene = { path = "../../vendor/jian/crates/jian-scene" }
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+# Validate generated action chains with the same parser used by Preview/Play.
+jian-core = { path = "../../vendor/jian/crates/jian-core" }
 # Canonical hex-color parsing (dependency-free).
 op-util = { path = "../op-util" }
 serde = { workspace = true }

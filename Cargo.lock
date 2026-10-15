@@ -4884,6 +4884,7 @@ dependencies = [
  "base64",
  "futures",
  "image",
+ "jian-core",
  "jian-ops-schema",
  "jian-scene",
  "jian-skia",

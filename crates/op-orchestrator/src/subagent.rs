@@ -343,6 +343,11 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
     if let Some(reason) = empty_controls::rejection(&nodes) {
         return fail(reason);
     }
+    if let Some(reason) =
+        crate::navigation_interaction::rejection(req, subtask, &nodes, &program_state)
+    {
+        return fail(reason);
+    }
     // Promote explicitly-marked role frames to first-class widget nodes.
     // Must run AFTER post_pass_forest (which keys on `role` to set defaults)
     // and BEFORE variable binding (which resolves hex refs — widgets produced
@@ -391,6 +396,9 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
     normalize_section_roots_for_parent_layout(&mut nodes);
     if let Err(reason) = crate::map_viewport::restore_height(&mut nodes, subtask) {
         return fail(reason.to_string());
+    }
+    if let Some(reason) = crate::first_viewport::rejection(subtask, &nodes, sink.state()) {
+        return fail(reason);
     }
     if let Err(error) = crate::subagent_self_check::gate_generated_nodes(
         &mut nodes,

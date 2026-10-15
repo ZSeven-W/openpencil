@@ -260,6 +260,7 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
     plan_normalize_hero::mark_bleed_hero_subtasks(plan);
     if is_mobile && !continuation_contract_applied {
         plan_map_budget::reserve_supporting_content(plan, req);
+        crate::first_viewport::reserve(plan, req);
     }
     // Last, so the name heuristics above (home-screen detection reads the
     // root name) see the planner's own words.
