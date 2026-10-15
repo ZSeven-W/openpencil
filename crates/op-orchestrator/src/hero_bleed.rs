@@ -56,7 +56,13 @@ pub(crate) fn enforce(sink: &mut dyn DocSink, plan: &OrchestratorPlan, root_id: 
     else {
         return 0;
     };
-    let Some(media_path) = first_media_path(&children, first_index) else {
+    // Absolute siblings paint front-to-back, so the actual image can be last.
+    // A direction/summary card at the front is never the background hero.
+    let direct_image = (layout_str(&section_value) == Some("none"))
+        .then(|| children.iter().position(|c| c["type"] == "image"))
+        .flatten()
+        .map(|index| vec![index]);
+    let Some(media_path) = direct_image.or_else(|| first_media_path(&children, first_index)) else {
         return 0;
     };
 
@@ -344,17 +350,15 @@ fn is_coloured_media(value: &Value) -> bool {
         value.get("type").and_then(Value::as_str),
         Some("frame" | "rectangle")
     ) && has_solid_or_gradient_fill(value)
-        && !value
+        && !contains_copy_or_icon(value)
+}
+
+fn contains_copy_or_icon(value: &Value) -> bool {
+    matches!(value["type"].as_str(), Some("text" | "icon_font"))
+        || value
             .get("children")
             .and_then(Value::as_array)
-            .is_some_and(|children| {
-                children.iter().any(|child| {
-                    matches!(
-                        child.get("type").and_then(Value::as_str),
-                        Some("text" | "icon_font")
-                    )
-                })
-            })
+            .is_some_and(|children| children.iter().any(contains_copy_or_icon))
 }
 
 /// Add the legibility layer to the none-stack that owns an image hero. This

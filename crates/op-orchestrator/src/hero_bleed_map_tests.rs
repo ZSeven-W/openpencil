@@ -137,3 +137,50 @@ fn map_scrim_exemption_preserves_authored_wash_and_label_styles() {
         "#0F172A"
     );
 }
+
+#[test]
+fn direct_map_overlay_cards_keep_insets_through_complete_cleanup() {
+    let mut root = evidence_root();
+    root["children"][1] = json!({"type":"frame","id":"hero-section","name":"Hero",
+    "explain":"op-navigation-viewport","width":375,"height":766,
+    "layout":"none","padding":0,"clipContent":true,"children":[
+        {"type":"frame","id":"direction","name":"Direction card","x":16,"y":16,
+            "width":343,"height":80,"layout":"vertical","padding":16,"cornerRadius":14,
+            "fill":[{"type":"solid","color":"#1A2A44"}],"children":[
+                {"type":"frame","id":"direction-row","layout":"horizontal","children":[
+                    {"type":"text","id":"instruction","content":"前方200米右转","fontSize":18}]}]},
+        {"type":"frame","id":"trip","name":"Trip card","x":16,"y":678,
+            "width":343,"height":64,"layout":"horizontal","padding":16,"cornerRadius":14,
+            "fill":[{"type":"solid","color":"#1A2A44"}],"children":[
+                {"type":"frame","id":"trip-row","layout":"horizontal","children":[
+                    {"type":"text","id":"distance","content":"3.2公里 12分钟","fontSize":16}]}]},
+        {"type":"image","id":"map","name":"Map","src":"","width":375,"height":766,
+            "imageSearchQuery":"map-template:running"}
+    ]});
+    let mut sink = sink_with(root);
+    crate::cleanup::run_cleanup_passes(&mut sink, &plan(), &["root"]);
+    let rects = crate::image_fallback_policy::resolved_rects(&sink.state);
+    for id in ["direction", "trip"] {
+        assert_eq!(
+            rects[id].width, 343.0,
+            "{id} must not become background media"
+        );
+        assert_eq!(rects[id].x - rects["hero-section"].x, 16.0);
+    }
+    assert_eq!(rects["map"].width, 375.0);
+    let value = root_value(&sink);
+    assert_eq!(scrim_count(&value), 0);
+    assert_eq!(named(&value, "map-ground")["width"], 375.0);
+}
+
+#[test]
+fn painted_nested_copy_and_icon_rows_are_not_coloured_media() {
+    for leaf in [
+        json!({"type":"text","content":"Directions"}),
+        json!({"type":"icon_font","iconFontName":"layers"}),
+    ] {
+        let card = json!({"type":"frame","fill":[{"type":"solid","color":"#123456"}],
+            "children":[{"type":"frame","children":[leaf]}]});
+        assert!(!is_coloured_media(&card));
+    }
+}
