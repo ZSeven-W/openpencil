@@ -27,7 +27,10 @@ mod overlay;
 #[path = "script_runner_prelude.rs"]
 mod prelude;
 
+#[path = "script_runner_recovery.rs"]
+mod recovery;
 use prelude::PRELUDE;
+use recovery::eval_after_initial_failure;
 
 pub use error::ScriptError;
 
@@ -66,7 +69,7 @@ pub fn run_generation_script_to_program(text: &str) -> Result<String, ScriptErro
 /// and syntax-recovery ladder, but record the supplied I() node verbatim.
 pub fn run_modification_script_to_program(text: &str) -> Result<String, ScriptError> {
     const PRESERVE_NODES: &str = r#"globalThis.I = function(parent, obj) {
-        return __record(parent == null ? "null" : String(parent), JSON.stringify(obj), "", "");
+        return __record(__parentBinding(parent), JSON.stringify(obj), "", "");
     };"#;
     run_script_to_program_with_preamble(text, Some(PRESERVE_NODES))
 }
@@ -119,93 +122,6 @@ fn truncate_duplicate_script(script: &str) -> Option<String> {
     let after = first + needle.len();
     let second_rel = script[after..].find(needle)?;
     Some(script[..after + second_rel].to_string())
-}
-
-fn eval_after_initial_failure(
-    script: &str,
-    first_err: ScriptError,
-    preamble: Option<&str>,
-) -> Result<String, ScriptError> {
-    // gemini-3.6-flash writes schema property names with the separator it
-    // reads in the docs — `justify.content:` instead of `justifyContent:`.
-    // A bare dotted key is a SyntaxError at the first `.`, so QuickJS
-    // rejected an otherwise-correct slide before recording one `I(...)`.
-    // Normalize FIRST, then let the rest of the ladder work on the repaired
-    // source: a script can be both mis-keyed and truncated.
-    let script = match dotted_keys::repair_dotted_object_keys(script) {
-        Some(repaired) => match eval_to_program(&repaired, preamble) {
-            Ok(p) => {
-                tracing::warn!(
-                    original_len = script.len(),
-                    repaired_len = repaired.len(),
-                    "script failed as-is; dotted-property-key repair recovered a runnable source"
-                );
-                return Ok(p);
-            }
-            Err(_) => repaired,
-        },
-        None => script.to_string(),
-    };
-    let script = match escape_raw_newlines_in_quoted_strings(&script) {
-        Some(repaired) => match eval_to_program(&repaired, preamble) {
-            Ok(p) => {
-                tracing::warn!(
-                    original_len = script.len(),
-                    repaired_len = repaired.len(),
-                    "script failed as-is; raw newline repair recovered a quoted string"
-                );
-                return Ok(p);
-            }
-            Err(_) => repaired,
-        },
-        None => script,
-    };
-    let script = script.as_str();
-
-    // GLM-5.2 commonly drops the outer `}` when `stroke:{...}` is the final
-    // property of an I() object, so QuickJS reaches `)` with `{` still open.
-    let balanced = balance_brackets(script);
-    if balanced != script {
-        if let Ok(p) = eval_to_program(&balanced, preamble) {
-            tracing::warn!(
-                original_len = script.len(),
-                repaired_len = balanced.len(),
-                "script failed as-is; bracket balance repair recovered a runnable source"
-            );
-            return Ok(p);
-        }
-    }
-
-    // DeepSeek V4 sometimes ECHOES the whole script a second time, glued
-    // straight onto the first copy (often mid-line after a trailing
-    // comment) - the re-declared `const` bindings then throw "invalid
-    // redefinition of lexical identifier" and the whole section is lost.
-    // Detect the first declaration recurring and run the first copy alone.
-    if let Some(deduped) = truncate_duplicate_script(script) {
-        if let Ok(p) = eval_to_program(&deduped, preamble) {
-            tracing::warn!(
-                original_len = script.len(),
-                deduped_len = deduped.len(),
-                "script failed as-is; duplicate-echo truncation recovered the first copy"
-            );
-            return Ok(p);
-        }
-    }
-
-    match repair_truncated_script(script) {
-        Some(repaired) => match eval_to_program(&repaired, preamble) {
-            Ok(p) => {
-                tracing::warn!(
-                    original_len = script.len(),
-                    repaired_len = repaired.len(),
-                    "script failed as-is; truncation repair salvaged a runnable prefix"
-                );
-                Ok(p)
-            }
-            Err(_) => Err(first_err),
-        },
-        None => Err(first_err),
-    }
 }
 
 /// A normal JavaScript string cannot contain a literal line break. This shape

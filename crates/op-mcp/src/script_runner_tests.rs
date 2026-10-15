@@ -3,6 +3,48 @@
 use super::*;
 
 #[test]
+fn undefined_insertion_parent_rejects_the_whole_script_in_every_mode() {
+    for run in [
+        run_script_to_program,
+        run_generation_script_to_program,
+        run_modification_script_to_program,
+    ] {
+        let prefix = r#"const row = I(null, {type:"frame", name:"ETA"});
+I(row, {type:"text", content:"12", fontSize:34});
+const unit = {type:"text", content:"minutes"};"#;
+        for tail in ["I(row.lastChild, unit)", "K('button', row.lastChild)"] {
+            for suffix in ["", ";", "; I(row, {type:"] {
+                let error = run(&format!("{prefix}\n{tail}{suffix}")).unwrap_err();
+                assert!(
+                    error.to_string().contains("OP_SCRIPT_PARENT_UNDEFINED"),
+                    "{error}"
+                );
+            }
+        }
+        let program = run(&format!(
+            "{prefix}\nconst group = I(row, {{type:'frame'}}); I(group, unit);"
+        ))
+        .unwrap();
+        assert!(
+            program.lines().last().unwrap().starts_with("b3=I(b2, "),
+            "{program}"
+        );
+    }
+}
+
+#[test]
+fn syntax_repairs_must_not_hide_an_undefined_insertion_parent() {
+    for source in [
+        "const row=I(null,{type:'frame',align.items:'center'}); const unit={type:'text',content:'minutes'}; I(row.lastChild, unit)",
+        "const row=I(null,{type:'frame'}); const unit={type:'text',content:'min\nutes'}; I(row.lastChild, unit)",
+        "const row=I(null,{type:'frame'}); I(row.lastChild,{type:'text',content:'minutes')",
+    ] {
+        let error = run_generation_script_to_program(source).unwrap_err();
+        assert!(error.to_string().contains("OP_SCRIPT_PARENT_UNDEFINED"), "{error}");
+    }
+}
+
+#[test]
 fn generation_defers_only_foreground_repairs_until_structural_ancestry_is_known() {
     let script = r##"
         const row = I(null,{type:"frame",layout:"center",fill:[{type:"solid",color:"#FFFFFF"}]});

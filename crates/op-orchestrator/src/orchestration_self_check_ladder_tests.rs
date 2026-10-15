@@ -165,6 +165,35 @@ fn drift_still_rejects_a_non_final_attempt() {
     );
 }
 
+#[test]
+fn undefined_parent_retries_the_section_instead_of_accepting_an_orphan() {
+    let broken = r#"const row=I(null,{type:"frame",name:"ETA",layout:"horizontal"});
+I(row,{type:"text",content:"12",fontSize:34});
+const unit={type:"text",content:"minutes"};
+I(row.lastChild,unit)"#;
+    let (outcome, events) = run_ladder(375.0, vec![broken.into(), uniform_board()]);
+    let retries = retry_reasons(&events);
+    assert_eq!(retries.len(), 1, "{retries:?}");
+    assert!(
+        retries[0].1.contains("OP_SCRIPT_PARENT_UNDEFINED"),
+        "{retries:?}"
+    );
+    assert!(
+        outcome.error.is_none() && outcome.node_count > 0,
+        "{outcome:?}"
+    );
+}
+
+#[test]
+fn undefined_parent_on_every_attempt_keeps_the_section_failed() {
+    let broken = r#"const row=I(null,{type:"frame",name:"ETA"});
+I(row.lastChild,{type:"text",content:"minutes"});"#;
+    let (outcome, events) = run_ladder(375.0, vec![broken.into(); 3]);
+    assert_eq!(retry_reasons(&events).len(), 2);
+    assert_eq!(outcome.node_count, 0, "{outcome:?}");
+    assert!(outcome.error.is_some(), "{outcome:?}");
+}
+
 /// The 0815 "法则" lesion: five items, five structures — rejected on the
 /// first attempt exactly as before.
 #[test]

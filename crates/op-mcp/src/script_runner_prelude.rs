@@ -124,7 +124,14 @@ function __canonicalIconFontName(name) {
     default: return name;
   }
 }
+function __parentBinding(parent) {
+  if (parent === undefined) {
+    throw new Error("OP_SCRIPT_PARENT_UNDEFINED: insertion parent is undefined. I() and K() return a binding string, not a DOM node; .lastChild and .children are unavailable. Save the returned binding and pass it directly. Use explicit null only for a root node.");
+  }
+  return parent === null ? "null" : String(parent);
+}
 globalThis.I = function (parent, obj) {
+  var effectiveParent = __parentBinding(parent);
   var recorded = obj;
   if (obj != null && typeof obj === "object" && obj.type === "frame" && obj.layout === "center") {
     var centeredFrame = {layout: "vertical"};
@@ -150,7 +157,6 @@ globalThis.I = function (parent, obj) {
       recorded = Object.assign({}, obj, {iconFontName: canonicalIconFontName});
     }
   }
-  var effectiveParent = parent == null ? "null" : String(parent);
   var directParent = __insertBindings[effectiveParent];
   if (__isDivider(recorded) && directParent != null && directParent.layout === "horizontal") {
     effectiveParent = directParent.parent;
@@ -176,7 +182,7 @@ globalThis.I = function (parent, obj) {
   return binding;
 };
 globalThis.K = function (kitComponentId, parent, overrides) {
-  return __recordK(JSON.stringify(String(kitComponentId)), parent == null ? "null" : String(parent), JSON.stringify(overrides == null ? {} : overrides));
+  return __recordK(JSON.stringify(String(kitComponentId)), __parentBinding(parent), JSON.stringify(overrides == null ? {} : overrides));
 };
 globalThis.U = function (nodeId, patch) {
   __recordU(JSON.stringify(String(nodeId)), JSON.stringify(patch));
