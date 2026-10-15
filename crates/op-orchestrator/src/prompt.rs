@@ -44,6 +44,8 @@ mod prompt_components;
 mod prompt_design_tokens;
 #[path = "prompt_palette.rs"]
 mod prompt_palette;
+#[path = "prompt_source_facts.rs"]
+mod prompt_source_facts;
 #[path = "prompt_style_skills.rs"]
 mod prompt_style_skills;
 #[path = "prompt_subagent.rs"]
@@ -52,6 +54,7 @@ mod prompt_subagent;
 use prompt_components::*;
 use prompt_design_tokens::*;
 use prompt_palette::build_plan_palette_instruction;
+use prompt_source_facts::append_source_facts_contract;
 pub use prompt_style_skills::*;
 pub use prompt_subagent::*;
 
@@ -75,7 +78,7 @@ tabs:[{value,label}] and value. Never generate a frame/rectangle mockup with a r
 Every interactive node MUST explicitly carry design-system fill, stroke, and cornerRadius.
 fill is the active/accent paint (or field surface).
 stroke.fill is the inactive track/border paint. Do not rely on renderer defaults.
-Example (a horizontal row of two cards inside a section):
+Syntax example only, not factual source data (a horizontal row of two cards):
 {"_parent":null,"id":"<prefix>-root","type":"frame","name":"Section","width":"fill_container","height":"fit_content","layout":"vertical","gap":16}
 {"_parent":"<prefix>-root","id":"<prefix>-row","type":"frame","name":"Row","width":"fill_container","height":"fit_content","layout":"horizontal","gap":16}
 {"_parent":"<prefix>-row","id":"<prefix>-card1","type":"frame","name":"Card","width":"fill_container","height":"fit_content","layout":"vertical","cornerRadius":12}
@@ -125,7 +128,7 @@ EVERY frame with children MUST declare layout ("vertical" or "horizontal"; "none
 absolute stack). A section that holds a title and a card rail is layout:"vertical". Omitting
 layout is ambiguous and the current engine may place flow children in a row, so always choose it
 explicitly.
-Example:
+Syntax example only; its names/statuses are not source data for this design:
   const sec = I(null, {type:"frame", name:"Clients", layout:"vertical", width:"fill_container", gap:0});
   const tbl = I(sec, {type:"frame", layout:"vertical", width:"fill_container"});
   const rows = [{name:"Alice Chen", status:"Active"}, {name:"Bob Ito", status:"VIP"}];
@@ -134,7 +137,9 @@ Example:
     const c1 = I(row, {type:"frame", width:"fill_container"}); I(c1, {type:"text", content:r.name});
     const c2 = I(row, {type:"frame", width:"fill_container"}); I(c2, {type:"text", content:r.status});
   }
-Generate EVERY row/card/item with realistic values. Output ONLY the JavaScript program."#;
+Generate every requested row/card/item using supplied values, honest placeholders for
+requested fields with missing values, or demo content authorized by the SOURCE FACTS contract.
+Output ONLY the JavaScript program."#;
 
 /// Rich 模式 system prompt 末尾后缀 —— verbatim,`orchestrator.ts:1382-1383`。
 const RICH_SUFFIX: &str = "\n\n---\nCRITICAL OUTPUT FORMAT ENFORCEMENT:\n\
@@ -152,7 +157,7 @@ const PLANNING_QUALITY_GUARDRAILS: &str = r##"
 
 PLANNING QUALITY GUARDRAILS:
 - SHARED PALETTE: When the brief explicitly specifies brand colors, emit a top-level "palette" object with concrete #RRGGBB values for the requested roles: background, surface, primary, primaryForeground, text, mutedText, border. Example: navy with warm orange => {"background":"#0F1B2D","primary":"#F97316","primaryForeground":"#0F1B2D"}. Choose a readable foreground for primary. Set rootFrame.fill to the same background if supplied. These colors override conflicting catalog colors; preserve the guide's typography and composition. Every section must share this palette. Omit palette when the user does not specify colors or when design.md supplies the design system. Never put success/error/status colors into the brand palette.
-- SOURCE FACTS: preserve the user's supplied names, prices and source claims. Do not invent distances, ratings, sales, delivery/pickup times, discounts or stock. Omit unknown facts unless the user explicitly requests clearly labelled sample data. Domain examples are layout references, not facts. A single-store ordering home does not need marketplace metrics or order history.
+- A single-store ordering home does not need marketplace metrics or order history.
 - FIXED CARD COPY: for article/knowledge cards, summarize the supplied material instead of adding new explanations. Plan at most three short points per card and keep the footer inside the requested board height.
 - Do not plan the same predictable mobile stack of search + categories + orange promo + two cards unless the request explicitly asks for that exact convention.
 - Mobile top rhythm: planned header/title/search/primary-content sections should be compact; avoid allocating a huge empty band between the title and first useful module.
@@ -220,6 +225,7 @@ pub fn build_orchestrator_prompt(
                 .append_planning_instruction(&mut user_prompt);
             let mut system_prompt = cp.system;
             system_prompt.push_str(PLANNING_QUALITY_GUARDRAILS);
+            append_source_facts_contract(&mut system_prompt);
             PlanningPrompt {
                 call_request: CallRequest {
                     system_prompt,
@@ -262,6 +268,7 @@ pub fn build_orchestrator_prompt(
                 .join("\n\n");
             system_prompt.push_str(PLANNING_QUALITY_GUARDRAILS);
             system_prompt.push_str(planning_suffix(mode));
+            append_source_facts_contract(&mut system_prompt);
             let mut user_prompt = req.prompt.clone();
             append_reference_skeleton(&mut user_prompt, req);
             crate::source_copy::SourceCopy::from_brief(&req.prompt)

@@ -435,14 +435,15 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
         system_prompt
             .push_str("\nThis instruction overrides style-guide examples when they conflict.");
     }
-    // Available-components manifest LAST — recency wins, and the model should
-    // consult the concrete id list right before producing nodes. The
+    // Keep the available-components manifest after the visual instructions so
+    // the model consults the concrete id list before producing nodes. The
     // `component-composition` skill (loaded via `hasReusableComponents`) carries
     // the `ref` + `descendants` syntax; this block carries the actual ids.
     if let Some(manifest) = &component_manifest {
         system_prompt.push_str("\n\n");
         system_prompt.push_str(manifest);
     }
+    append_source_facts_contract(&mut system_prompt);
 
     let section_list = plan
         .subtasks
@@ -465,7 +466,7 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
         .elements
         .as_ref()
         .map(|items| {
-            format!("\nYOUR ELEMENTS: {items}\nDo NOT generate elements listed in other sections.")
+            format!("\nPROPOSED ELEMENTS (planner layout suggestions, not source facts): {items}\nDo NOT generate elements listed in other sections.")
         })
         .unwrap_or_default();
     let explicit_user_token_block = explicit_token_instruction
@@ -498,14 +499,13 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
         )
     };
     let mut user_prompt = format!(
-        "Page sections:\n{}\n\n\
+        "PLANNER PROPOSAL — Page sections:\n{}\n\n\
 {}\
 Generate ONLY \"{}\" (~{:.0}px of content).{}\n\
-Overall design: {}\n\n\
+ORIGINAL USER BRIEF:\n{}\nEND ORIGINAL USER BRIEF\n\n\
 {}\
 {}\
 CRITICAL LAYOUT CONSTRAINTS:\n\
-- SOURCE FACTS: preserve only supplied business facts; never add sales, ratings, distance, discounts, stock or pickup/delivery times merely to make a mockup look complete. Omit unknown facts. Explicit user requests for labelled sample data are the exception.\n\
 - {}\n\
 - Target content amount: ~{:.0}px tall. Generate enough elements to fill this area.\n\
 - DENSITY: Do NOT pack the area edge-to-edge. Prefer fewer, stronger modules with visible negative space; most sections should have 3-5 primary rows/cards at most.\n\
@@ -545,6 +545,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
     crate::source_copy::SourceCopy::from_brief(&req.prompt)
         .for_subtask(plan, subtask)
         .append_section_instruction(&mut user_prompt);
+    crate::source_facts::append_section_instruction(req, subtask, &mut user_prompt);
 
     if subtask.bleed_hero {
         user_prompt.push_str("\nThis section is full-bleed: give the section frame no horizontal padding and let its media span the full root width. For text or controls BELOW the media, use one inner frame with `padding: [0,24]`. For text or controls OVER the media, keep media, scrim and copy in the same `layout: none` viewport, with inset x coordinates for copy; never stack overlay layers vertically.");
@@ -564,7 +565,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
 - Regenerate the section addressing that reason specifically — do not change \
   anything else about the approach.\n\
 - Keep using the full skill set and design detail from your previous attempt; \
-  the rejection was a geometry/structure issue, not a signal to simplify."
+                 fix the specific rejection above without simplifying the design."
             ),
             crate::plan::RetryFeedback::Geometry(reason) => format!(
                 "\n\nGEOMETRY FIX REQUIRED: the REAL resolved layout of your previous \

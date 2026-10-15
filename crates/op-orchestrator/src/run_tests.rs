@@ -203,6 +203,8 @@ mod geometry_salvage_tests;
 mod planning_retry_tests;
 #[path = "run_tests_right_rail.rs"]
 mod right_rail_tests;
+#[path = "source_facts_retry_tests.rs"]
+mod source_facts_retry_tests;
 
 #[test]
 fn debug_plan_preview_is_one_line_and_capped() {

@@ -20,7 +20,7 @@ fn source_facts_survive_all_subtask_complexity_levels() {
             reduced,
             minimal,
         );
-        assert!(call.user_prompt.contains("SOURCE FACTS"));
+        assert!(call.system_prompt.contains("SOURCE FACTS"));
         assert!(call.user_prompt.contains(&request.prompt));
     }
 }

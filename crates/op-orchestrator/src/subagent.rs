@@ -252,6 +252,9 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
     if !missing.is_empty() {
         return fail(crate::source_copy::SourceCopy::retry_feedback(&missing));
     }
+    if let Some(reason) = crate::source_facts::rejection(req, &nodes) {
+        return fail(reason);
+    }
     // Semantic role inference + role-default injection (P2 I1/I2) on the parsed
     // subtree, BEFORE the fallback sizing normalize (semantic-before-fallback,
     // memory feedback_post_processing_order). Canvas width + theme come from the

@@ -101,6 +101,8 @@ mod planning_tests;
 mod scroll_skill_tests;
 #[path = "prompt_skill_budget_tests.rs"]
 mod skill_budget_tests;
+#[path = "prompt_source_facts_tests.rs"]
+mod source_facts_tests;
 #[path = "prompt_subagent_content_tests.rs"]
 mod subagent_content_tests;
 #[path = "prompt_timeout_feedback_tests.rs"]
