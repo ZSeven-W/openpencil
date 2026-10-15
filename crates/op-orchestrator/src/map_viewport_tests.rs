@@ -1,6 +1,9 @@
 use super::*;
 use serde_json::json;
 
+#[path = "map_viewport_cleanup_tests.rs"]
+mod cleanup_tests;
+
 fn plan() -> OrchestratorPlan {
     crate::plan::parse_plan(&json!({
         "rootFrame":{"id":"page","name":"Navigation","width":375,"height":812},

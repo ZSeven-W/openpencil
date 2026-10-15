@@ -10,10 +10,18 @@ const MARKER: &str = "OP NAVIGATION VIEWPORT:";
 const NODE_MARKER: &str = "op-navigation-viewport";
 
 pub(crate) fn is_viewport(node: &serde_json::Value) -> bool {
-    node["layout"] == "none"
-        && node["explain"]
-            .as_str()
-            .is_some_and(|s| s.split(';').any(|part| part.trim() == NODE_MARKER))
+    node["layout"] == "none" && has_viewport_marker(node["explain"].as_str())
+}
+
+pub(crate) fn is_viewport_node(node: &jian_ops_schema::node::PenNode) -> bool {
+    use jian_ops_schema::node::{container::LayoutMode, PenNode};
+    matches!(node, PenNode::Frame(frame)
+        if frame.container.layout == Some(LayoutMode::None)
+            && has_viewport_marker(frame.base.explain.as_deref()))
+}
+
+fn has_viewport_marker(hint: Option<&str>) -> bool {
+    hint.is_some_and(|s| s.split(';').any(|part| part.trim() == NODE_MARKER))
 }
 
 pub(crate) fn is_map_background(node: &serde_json::Value) -> bool {

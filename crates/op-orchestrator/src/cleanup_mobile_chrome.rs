@@ -513,6 +513,11 @@ pub(super) fn bottom_nav_surface_target(
     root_child: &PenNode,
     allow_structural: bool,
 ) -> Option<&PenNode> {
+    // A navigation viewport owns its floating trip cards. Their names can
+    // contain "bottom nav" without making them page-level destination tabs.
+    if crate::map_viewport::is_viewport_node(root_child) {
+        return None;
+    }
     if is_bottom_nav_surface(root_child, allow_structural) {
         if let Some(inner) = nested_bottom_nav_surface(root_child, allow_structural) {
             return Some(inner);
