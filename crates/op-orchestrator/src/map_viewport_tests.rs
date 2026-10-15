@@ -176,6 +176,59 @@ fn live_six_part_replan_keeps_navigation_actions_inside_the_viewport() {
 }
 
 #[test]
+fn floating_ownership_uses_the_description_not_only_the_section_name() {
+    let mut plan = plan();
+    plan.subtasks[2].label = "右侧控制按钮组".into();
+    plan.subtasks[2].elements =
+        Some("右侧小型竖排按钮组：图层切换按钮与定位按钮，两个44px控件".into());
+    let mut brand = plan.subtasks[1].clone();
+    brand.id = "brand-header".into();
+    brand.label = "顶部品牌栏".into();
+    brand.elements = Some("悬浮于地图上方的紧凑品牌条：沿途".into());
+    brand.region.height = 0.0;
+    let mut distance = brand.clone();
+    distance.id = "brief-section-1".into();
+    distance.label = "下方紧凑显示剩余3.2公里".into();
+    distance.elements = Some("剩余3.2公里".into());
+    let mut action = brand.clone();
+    action.id = "brief-section-2".into();
+    action.label = "结束导航按钮".into();
+    action.elements = Some("结束导航按钮".into());
+    plan.subtasks.extend([brand, distance, action]);
+    // Seven semantic layers are still one viewport, including brief reminders.
+    crate::plan_normalize::normalize(&mut plan, &req());
+    assert_eq!(plan.subtasks.len(), 1);
+    assert!(owns(&plan.subtasks[0]));
+    assert_eq!(plan.subtasks[0].region.height, 734.0);
+    assert!(plan.subtasks[0]
+        .elements
+        .as_deref()
+        .unwrap()
+        .contains("紧凑品牌条：沿途"));
+}
+
+#[test]
+fn floating_description_does_not_swallow_destination_tabs_or_order_content() {
+    for label in ["底部Tab栏", "订单和骑手列表"] {
+        let mut plan = plan();
+        let mut outside = plan.subtasks[3].clone();
+        outside.id = "unrelated".into();
+        outside.label = label.into();
+        outside.region.height = 64.0;
+        outside.elements = Some("floating overlay, with map controls".into());
+        plan.subtasks.push(outside.clone());
+        fold(&mut plan, &req());
+        assert_eq!(plan.subtasks.len(), 2, "{label}");
+        assert_eq!(plan.subtasks[1], outside);
+        assert!(!plan.subtasks[0]
+            .elements
+            .as_deref()
+            .unwrap()
+            .contains("floating overlay, with map controls"));
+    }
+}
+
+#[test]
 fn replanned_archetype_on_banner_and_brief_layer_reminder_do_not_split_the_map() {
     let mut plan = plan();
     plan.subtasks[0].elements = Some("城市街区全屏地图，暖橙路线".into());

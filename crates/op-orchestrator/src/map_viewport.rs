@@ -55,6 +55,13 @@ fn is_overlay(task: &Subtask) -> bool {
     {
         return false;
     }
+    // Planner labels are summaries, not an ownership schema. A generic brand
+    // header or control group can explicitly belong to the map in its brief.
+    let content = format!(
+        "{label} {} {}",
+        task.id.to_lowercase(),
+        task.elements.as_deref().unwrap_or("").to_lowercase()
+    );
     let floating = [
         "悬浮",
         "浮动",
@@ -66,7 +73,7 @@ fn is_overlay(task: &Subtask) -> bool {
         "图层",
     ]
     .iter()
-    .any(|word| label.contains(word));
+    .any(|word| content.contains(word));
     // Coverage repair can split a navigation action from its summary. Its
     // unknown region height must not turn the whole map into stacked sections.
     let navigation_action = [
@@ -88,17 +95,13 @@ fn is_overlay(task: &Subtask) -> bool {
     // Coverage repair may name a missing trip datum verbatim from the brief
     // instead of assigning it a section label. It still belongs to the map's
     // summary, never to a second full-width page band.
-    let content = format!(
-        "{label} {}",
-        task.elements.as_deref().unwrap_or("").to_lowercase()
-    );
     let trip_datum = ["剩余", "remaining", "预计", "estimated"]
         .iter()
         .any(|s| content.contains(s))
         && ["公里", "分钟", "distance", "time", "km", "minutes"]
             .iter()
             .any(|s| content.contains(s));
-    floating || is_map_control(&label) || navigation_action || trip_information || trip_datum
+    floating || is_map_control(&content) || navigation_action || trip_information || trip_datum
 }
 
 pub(crate) fn fold(plan: &mut OrchestratorPlan, req: &DesignRequest) {
@@ -177,10 +180,11 @@ pub(crate) fn fold(plan: &mut OrchestratorPlan, req: &DesignRequest) {
         // Footnotes, tab bars and unrelated content stay in normal flow. They
         // reserve real space instead of preventing ALL map overlays from
         // composing, or being silently swallowed by the viewport.
-        if layers.len() > 6
-            || outside
-                .iter()
-                .any(|&i| plan.subtasks[i].region.height <= 0.0)
+        // Coverage reminders increase the task count without adding new
+        // layout regions; semantic ownership, not a layer count, decides this.
+        if outside
+            .iter()
+            .any(|&i| plan.subtasks[i].region.height <= 0.0)
         {
             continue;
         }
@@ -239,7 +243,7 @@ pub(crate) fn instruction(task: &Subtask) -> String {
     if !owns(task) {
         return String::new();
     }
-    format!("\nNAVIGATION VIEWPORT CONTRACT: The section is a fixed {:.0}px-tall layout:none viewport with zero padding. Its ONE map image fills that viewport. Put the requested direction card at the top with 16px insets, the compact 40-48px controls at the right below the direction card, and the trip summary/action card near the bottom with 16px insets and at least 24px bottom room. ALL overlays remain inside the viewport. They use x/y ONLY under layout:none; their internal text/control rows use auto layout and real gaps. Create overlay siblings FIRST and the map image LAST (first child paints on top in OP). Here authored layer/location controls are allowed as compact siblings; do not draw extra terrain, paths or markers. Do not append a second card/toolbar below the viewport or add content just to fill its height. The map template supplies the route. No location-only template for navigation.", task.region.height)
+    format!("\nNAVIGATION VIEWPORT CONTRACT: The section is a fixed {:.0}px-tall layout:none viewport with zero padding. Its ONE map image fills that viewport. Put the requested direction card at the top with 16px insets, the compact 40-48px controls at the right below the direction card, and the trip summary/action card near the bottom with 16px insets and at least 24px bottom room. ALL overlays remain inside the viewport. Keep any requested brand legible in the direction card or a top overlay, not as a watermark tucked under the summary. They use x/y ONLY under layout:none; their internal text/control rows use auto layout and real gaps. Create overlay siblings FIRST and the map image LAST (first child paints on top in OP). Here authored layer/location controls are allowed as compact siblings; do not draw extra terrain, paths or markers. Do not append a second card/toolbar below the viewport or add content just to fill its height. The map template supplies the route. No location-only template for navigation.", task.region.height)
 }
 
 /// Ordinary section roots hug their content. An absolute map viewport must
