@@ -10,6 +10,9 @@ use op_editor_core::{first_solid_fill_hex, walkers, EditorCommand, NodeId};
 #[path = "map_template_geometry.rs"]
 mod map_template_geometry;
 
+#[path = "map_template_palette.rs"]
+mod map_template_palette;
+
 /// Template parts follow the final viewport, after rail and overflow repairs.
 pub(super) fn settle_map_geometry(
     sink: &mut dyn DocSink,
@@ -44,9 +47,14 @@ pub(super) fn repair_map_placeholders(
     let theme = crate::role_defaults::detect_theme_from_fill(fill.as_deref());
     let patches = map_placeholder(root, &rects, theme);
     for patch in patches {
+        let mut data: serde_json::Value =
+            serde_json::from_str(&patch.patch_json).expect("map builder returns valid JSON");
+        map_template_palette::adapt(&mut data, |raw| {
+            op_design_lint::node_util::resolve_color_ref(raw, &variables, &active_theme)
+        });
         sink.apply(EditorCommand::PatchNodeData {
             node_id: NodeId::new(patch.node_id),
-            patch_json: patch.patch_json,
+            patch_json: data.to_string(),
             page_id: None,
         });
     }
