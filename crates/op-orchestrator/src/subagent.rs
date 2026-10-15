@@ -19,6 +19,11 @@ use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use op_editor_core::{EditorCommand, NodeId, PenNodeExt};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[path = "subagent_empty_controls.rs"]
+mod empty_controls;
+#[path = "subagent_spacing.rs"]
+mod spacing;
+
 /// 执行一个 subtask。总是返回 [`SubtaskOutcome`];调用方据
 /// `node_count` 决定继续/停止。
 ///
@@ -151,6 +156,34 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
         // re-run this EXACT subtask later.
         subtask: Some(subtask.clone()),
     };
+
+    if let Some(node) = spacing::node(subtask, plan) {
+        if abort.is_set() {
+            return fail("aborted".into());
+        }
+        let parent = subtask
+            .parent_frame_id
+            .clone()
+            .map(NodeId::new)
+            .unwrap_or(NodeId::NONE);
+        return match apply_insert_subtree_with_reveal(
+            sink,
+            vec![node],
+            parent,
+            indicator_epoch,
+            reveal_started_ms,
+        ) {
+            Some(inserted_root_ids) => SubtaskOutcome {
+                id: subtask.id.clone(),
+                node_count: 1,
+                error: None,
+                inserted_root_ids,
+                headline: None,
+                subtask: None,
+            },
+            None => fail("InsertSubtree rejected: layout spacer parent unavailable".into()),
+        };
+    }
 
     // Snapshot document-wide prompt context before building the prompt.
     // Classic fan-out derives routes from normalized planning groups; loop
@@ -306,6 +339,9 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
     // violations into the user-visible summary.
     for echo in &deck_echoes {
         tracing::warn!(subtask = %subtask.id, echo = %echo.line(), "deck geometry left unrepaired");
+    }
+    if let Some(reason) = empty_controls::rejection(&nodes) {
+        return fail(reason);
     }
     // Promote explicitly-marked role frames to first-class widget nodes.
     // Must run AFTER post_pass_forest (which keys on `role` to set defaults)
