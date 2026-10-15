@@ -90,7 +90,16 @@ fn walk_sibling_inconsistencies(node: &PenNode, raw: &mut Vec<Issue>) {
                 child_role.as_str()
             };
             let kind = node_kind_str(child);
-            push_group(&mut strict_groups, format!("{kind}:{role_key}"), child);
+            // A display value and its surrounding labels are not repeated
+            // typography. Compare font size only within the same face/weight.
+            let strict_key = match child {
+                PenNode::Text(text) => format!(
+                    "{kind}:{role_key}:{:?}:{:?}",
+                    text.font_family, text.font_weight
+                ),
+                _ => format!("{kind}:{role_key}"),
+            };
+            push_group(&mut strict_groups, strict_key, child);
             push_group(&mut type_groups, kind.to_string(), child);
         }
 
@@ -180,6 +189,12 @@ fn check_consistency(
         let Some(raw) = node_property_value(node, property) else {
             continue;
         };
+        // Fixed dimensions and content-driven sizing serve different jobs.
+        // A 44px avatar between hugging info/actions must keep its diameter;
+        // a majority of Hug siblings is not evidence for changing its mode.
+        if property == "height" && !raw.is_number() {
+            continue;
+        }
         // TS `raw == null` skip — `node_property_value` already returns `None`
         // for an absent field; a present-but-`Null` value is still skipped.
         if raw.is_null() {

@@ -213,6 +213,41 @@ mod sibling_inconsistency_tests {
         assert_eq!(issues[0].node_id, "c");
         assert_eq!(issues[0].property, FixProperty::FontSize);
     }
+
+    #[test]
+    fn fixed_avatar_keeps_its_diameter_beside_hugging_information_and_actions() {
+        let root = node(json!({
+            "type":"frame","id":"rider","layout":"horizontal","children":[
+                {"type":"frame","id":"avatar","width":44,"height":44,"cornerRadius":22,
+                 "layout":"horizontal","children":[{"type":"icon_font","id":"icon","iconFontName":"user","width":20,"height":20}]},
+                {"type":"frame","id":"info","height":"fit_content","layout":"vertical"},
+                {"type":"frame","id":"actions","height":"fit_content","layout":"horizontal"}
+            ]
+        }));
+        assert!(detect_sibling_inconsistencies(&root)
+            .iter()
+            .all(|issue| issue.property != FixProperty::Height));
+    }
+
+    #[test]
+    fn inline_display_value_keeps_its_typographic_hierarchy() {
+        for (family, weight) in [
+            ("JetBrains Mono", 700),
+            ("Inter", 700),
+            ("JetBrains Mono", 400),
+        ] {
+            let root = node(json!({
+                "type":"frame","id":"eta","layout":"horizontal","children":[
+                    {"type":"text","id":"prefix","content":"预计","fontSize":15,"fontFamily":"Inter","fontWeight":400},
+                    {"type":"text","id":"value","content":"12","fontSize":34,"fontFamily":family,"fontWeight":weight},
+                    {"type":"text","id":"suffix","content":"分钟送达","fontSize":15,"fontFamily":"Inter","fontWeight":400}
+                ]
+            }));
+            assert!(detect_sibling_inconsistencies(&root)
+                .iter()
+                .all(|issue| issue.property != FixProperty::FontSize));
+        }
+    }
 }
 
 #[cfg(test)]
