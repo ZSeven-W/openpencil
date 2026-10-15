@@ -30,6 +30,8 @@ pub(crate) use geometry_echo::geometry_diagnostics_for_roots;
 
 #[path = "geometry_compact_status.rs"]
 mod geometry_compact_status;
+#[path = "geometry_intrinsic_rows.rs"]
+mod geometry_intrinsic_rows;
 use geometry_compact_status::{
     compact_status_header_is_damaged, compact_trailing_status_pair, is_compact_status_badge,
     is_compact_status_badge_structure, stack_compact_status_header,
@@ -339,6 +341,16 @@ pub fn geometry_validate_and_fix_for_form(
                 break;
             };
             let mut cmds = Vec::new();
+            // Reflow indivisible content groups before shrink/clip collectors
+            // inspect stale geometry. Resolve the new axes on the next round.
+            geometry_intrinsic_rows::collect_reflows(&v, &rects, &mut cmds);
+            if !cmds.is_empty() {
+                for cmd in cmds {
+                    sink.apply(cmd);
+                }
+                rounds += 1;
+                continue;
+            }
             collect_scale_ops(sink.state(), &v, &rects, &mut cmds);
             collect_collapse_fixes(&v, &rects, &mut cmds);
             collect_text_overflow_fixes(&v, &rects, &mut cmds);

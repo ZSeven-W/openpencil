@@ -130,6 +130,12 @@ fn is_card_inner_padding_offender(
     }
 
     let kids = children(v);
+    // Centered icon controls/avatars already have a complete compact sizing
+    // contract. A 44px touch target is not a card: adding 32px of horizontal
+    // padding leaves only 12px for its 18px icon and inflates its parent row.
+    if is_compact_icon_surface(v) {
+        return false;
+    }
     // A full-bleed thumbnail card is deliberate: a single image child is
     // meant to reach the painted edge.
     if kids.len() == 1 && kids[0].get("type").and_then(Value::as_str) == Some("image") {
@@ -169,6 +175,25 @@ fn is_card_inner_padding_offender(
     }
 
     true
+}
+
+fn is_compact_icon_surface(v: &Value) -> bool {
+    let (Some(width), Some(height)) = (fixed_width(v), v.get("height").and_then(number_value))
+    else {
+        return false;
+    };
+    if !(24.0..=64.0).contains(&width)
+        || !(24.0..=64.0).contains(&height)
+        || v.get("alignItems").and_then(Value::as_str) != Some("center")
+        || v.get("justifyContent").and_then(Value::as_str) != Some("center")
+    {
+        return false;
+    }
+    let [icon] = children(v) else { return false };
+    matches!(
+        icon.get("type").and_then(Value::as_str),
+        Some("icon_font" | "path")
+    ) && children(icon).is_empty()
 }
 
 fn has_edge_content_or_unpadded_chain(v: &Value) -> bool {

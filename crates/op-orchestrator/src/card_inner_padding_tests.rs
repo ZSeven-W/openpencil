@@ -182,3 +182,20 @@ fn none_layout_wrapper_chain_is_untouched() {
     collect_card_inner_padding_fixes(&card, &rects, &no_chrome(), &mut cmds);
     assert!(cmds.is_empty(), "absolute wrapper owns placement: {cmds:?}");
 }
+
+#[test]
+fn centered_touch_floor_icon_buttons_and_avatars_do_not_receive_card_insets() {
+    for size in [40, 44, 48, 64] {
+        let surface = json!({"type":"frame","id":"control","width":size,"height":size,
+            "layout":"horizontal","alignItems":"center","justifyContent":"center",
+            "cornerRadius":size/2,"fill":[{"type":"solid","color":"#F97316"}],
+            "children":[{"type":"icon_font","id":"icon","width":18,"height":18}]});
+        let rects = HashMap::from([("control".into(), rect(0.0, 0.0, size as f64, size as f64))]);
+        let mut cmds = Vec::new();
+        collect_card_inner_padding_fixes(&surface, &rects, &no_chrome(), &mut cmds);
+        assert!(
+            cmds.is_empty(),
+            "compact {size}px control must retain its content room: {cmds:?}"
+        );
+    }
+}

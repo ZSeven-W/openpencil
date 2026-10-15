@@ -63,8 +63,9 @@ pub(super) fn is_compact_status_badge(v: &Value, rects: &HashMap<String, Rect>) 
 }
 
 /// Exact two-part mobile-card header anatomy: a text-bearing title frame
-/// followed by a compact painted status badge, distributed with
-/// `space_between`.
+/// followed by a compact painted status badge, or a direct title text followed
+/// by that same badge. A direct title does not require space_between: normal
+/// gapped name/status rows have the same intrinsic width constraint.
 ///
 /// Keeping this structural gate shared across the text, frame, gap, and
 /// overfull repairers prevents those independent passes from issuing
@@ -73,19 +74,21 @@ pub(super) fn compact_trailing_status_pair<'a>(
     v: &'a Value,
     rects: &HashMap<String, Rect>,
 ) -> Option<(&'a Value, &'a Value)> {
-    if layout_str(v) != Some("horizontal")
-        || v.get("justifyContent").and_then(Value::as_str) != Some("space_between")
-    {
+    if layout_str(v) != Some("horizontal") {
         return None;
     }
     let [leading, tail] = children(v) else {
         return None;
     };
+    let direct_text = leading.get("type").and_then(Value::as_str) == Some("text");
+    if !direct_text && v.get("justifyContent").and_then(Value::as_str) != Some("space_between") {
+        return None;
+    }
     if has_authored_position(leading)
         || has_authored_position(tail)
         || !matches!(
             leading.get("type").and_then(Value::as_str),
-            Some("frame" | "group")
+            Some("frame" | "group" | "text")
         )
         || !bears_text(leading)
         || !is_compact_status_badge(tail, rects)
@@ -151,6 +154,9 @@ pub(super) fn stack_compact_status_header(
                 property: "width".to_string(),
                 value: LayoutPropValue::Keyword("fit_content".to_string()),
             });
+        }
+        if container.get("type").and_then(Value::as_str) == Some("text") {
+            restore_hug_text(container, cmds);
         }
         for child in children(container)
             .iter()
