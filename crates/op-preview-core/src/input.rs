@@ -360,7 +360,9 @@ impl PreviewSession {
             ev.buttons = MouseButtons::empty();
             ev.pressure = 0.0;
         }
-        let emitted = !self.runtime.dispatch_pointer(ev).is_empty();
+        let emitted = !self
+            .dispatch_pointer_with_painted_target(ev, hit.as_deref())
+            .is_empty();
         self.sync_toggle_progress();
         let binding_changed =
             self.finish_binding_update(&binding_before) != crate::InvalidationKind::None;
@@ -413,7 +415,7 @@ impl PreviewSession {
             event.buttons = MouseButtons::empty();
             event.pressure = 0.0;
         }
-        let events = self.runtime.dispatch_pointer(event);
+        let events = self.dispatch_pointer_with_painted_target(event, hit_node.as_deref());
         self.sync_toggle_progress();
         events
     }
@@ -552,7 +554,7 @@ impl PreviewSession {
     pub(crate) fn deepest_mapped_hit(&self, x: f32, y: f32) -> Option<(Rect, Rect, String)> {
         let scene = self.overlay_runtime_state(&self.scene);
         let page = scene.active_page()?;
-        for node in page.children.iter().rev() {
+        for node in &page.children {
             if let Some(hit) = self.deepest_mapped_in(node, x, y) {
                 return Some(hit);
             }
@@ -573,7 +575,7 @@ impl PreviewSession {
         {
             return None;
         }
-        for child in self.mapped_children(node).iter().rev() {
+        for child in self.mapped_children(node) {
             if let Some(hit) = self.deepest_mapped_in(child, x, y) {
                 return Some(hit);
             }

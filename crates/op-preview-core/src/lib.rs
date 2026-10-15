@@ -74,6 +74,7 @@ mod effects;
 mod error;
 mod input;
 mod input_event;
+mod input_paint_hit;
 mod interaction_state;
 mod invalidation;
 mod mode_transition;
@@ -83,6 +84,10 @@ mod scene_helpers;
 mod session;
 mod session_paint;
 mod test_helpers;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_generated_controls;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_paint_order;
 mod transition;
 mod ui_actions;
 

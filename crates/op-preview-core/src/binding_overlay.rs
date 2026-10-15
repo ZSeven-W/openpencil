@@ -502,9 +502,10 @@ impl BindingOverlay {
                 translate_for_scroll(child, dx, dy, &inner.pinned_nodes);
             }
         }
+        // Scene siblings are front-to-back for both painting and hit testing.
         node.children.sort_by_key(|child| {
-            inner.pinned_nodes.contains(&child.id)
-                || sticky.is_some_and(|ids| ids.contains(&child.id))
+            !(inner.pinned_nodes.contains(&child.id)
+                || sticky.is_some_and(|ids| ids.contains(&child.id)))
         });
     }
 }
