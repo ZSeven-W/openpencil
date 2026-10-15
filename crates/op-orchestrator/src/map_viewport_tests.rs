@@ -140,6 +140,42 @@ fn coverage_appended_trip_datum_folds_into_the_existing_summary_once() {
 }
 
 #[test]
+fn live_six_part_replan_keeps_navigation_actions_inside_the_viewport() {
+    for controls in ["右侧浮动控件", "右侧悬浮控件", "右侧地图操作按钮"] {
+        let mut plan = plan();
+        plan.subtasks[2].label = controls.into();
+        // Some plans give overlays the whole map's available region.
+        plan.subtasks[2].region.height = 812.0;
+        plan.subtasks[3].label = "底部导航信息栏".into();
+        let mut datum = plan.subtasks[3].clone();
+        datum.id = "brief-section-1".into();
+        datum.label = "下方紧凑显示剩余3.2公里".into();
+        datum.elements = Some("剩余3.2公里".into());
+        datum.region.height = 0.0;
+        let mut action = datum.clone();
+        action.id = "brief-section-2".into();
+        action.label = "结束导航按钮".into();
+        action.elements = Some("the brief explicitly requires: 结束导航按钮".into());
+        action.covers = Some(vec!["结束导航按钮".into()]);
+        plan.subtasks.extend([datum, action]);
+        crate::plan_normalize::normalize(&mut plan, &req());
+        assert_eq!(plan.subtasks.len(), 1, "{controls}");
+        let owner = &plan.subtasks[0];
+        assert!(owns(owner));
+        assert_eq!(owner.region.height, 734.0);
+        assert!(owner
+            .covers
+            .as_ref()
+            .unwrap()
+            .contains(&"结束导航按钮".into()));
+        let elements = owner.elements.as_deref().unwrap();
+        for copy in [controls, "结束导航按钮", "剩余3.2公里", "预计12分钟"] {
+            assert!(elements.contains(copy), "{copy}");
+        }
+    }
+}
+
+#[test]
 fn replanned_archetype_on_banner_and_brief_layer_reminder_do_not_split_the_map() {
     let mut plan = plan();
     plan.subtasks[0].elements = Some("城市街区全屏地图，暖橙路线".into());

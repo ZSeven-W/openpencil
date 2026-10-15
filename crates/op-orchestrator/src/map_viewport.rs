@@ -27,6 +27,15 @@ pub(crate) fn owns(task: &Subtask) -> bool {
     task.elements.as_deref().is_some_and(|s| s.contains(MARKER))
 }
 
+fn is_map_control(label: &str) -> bool {
+    ["地图", "map", "图层", "定位", "layers", "locate"]
+        .iter()
+        .any(|word| label.contains(word))
+        && ["按钮", "控件", "操作", "control", "toolbar"]
+            .iter()
+            .any(|word| label.contains(word))
+}
+
 fn is_overlay(task: &Subtask) -> bool {
     let label = task.label.to_lowercase();
     if matches!(
@@ -48,6 +57,7 @@ fn is_overlay(task: &Subtask) -> bool {
     }
     let floating = [
         "悬浮",
+        "浮动",
         "overlay",
         "direction",
         "方向提示",
@@ -57,12 +67,18 @@ fn is_overlay(task: &Subtask) -> bool {
     ]
     .iter()
     .any(|word| label.contains(word));
-    let map_control = ["地图", "map", "图层", "定位", "layers", "locate"]
-        .iter()
-        .any(|word| label.contains(word))
-        && ["按钮", "控件", "操作", "control", "toolbar"]
-            .iter()
-            .any(|word| label.contains(word));
+    // Coverage repair can split a navigation action from its summary. Its
+    // unknown region height must not turn the whole map into stacked sections.
+    let navigation_action = [
+        "结束导航",
+        "停止导航",
+        "退出导航",
+        "end navigation",
+        "stop navigation",
+        "exit navigation",
+    ]
+    .iter()
+    .any(|word| label.contains(word));
     // Navigation information is a trip summary. A bottom navigation/tab bar
     // with destinations is different chrome and must not be folded here.
     let trip_information = ["信息", "数据", "摘要"]
@@ -82,7 +98,7 @@ fn is_overlay(task: &Subtask) -> bool {
         && ["公里", "分钟", "distance", "time", "km", "minutes"]
             .iter()
             .any(|s| content.contains(s));
-    floating || map_control || trip_information || trip_datum
+    floating || is_map_control(&label) || navigation_action || trip_information || trip_datum
 }
 
 pub(crate) fn fold(plan: &mut OrchestratorPlan, req: &DesignRequest) {
@@ -134,6 +150,9 @@ pub(crate) fn fold(plan: &mut OrchestratorPlan, req: &DesignRequest) {
                 let task = &plan.subtasks[i];
                 let label = task.label.to_lowercase();
                 (label.contains("地图") || label.contains("map"))
+                    // A control may be allocated the whole viewport region;
+                    // that does not make it a second map background.
+                    && !is_map_control(&label)
                     && task.region.height >= 200.0
                     && task.region.width >= plan.root_frame.width * 0.65
             })
