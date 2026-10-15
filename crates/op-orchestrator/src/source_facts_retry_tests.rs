@@ -7,6 +7,9 @@ use serde_json::json;
 const BRIEF: &str = "设计一个375×812配送追踪App页面，骑手阿明，提供联系骑手按钮。";
 const REJECTION: &str = "unsupported-optional-rating";
 
+#[path = "source_facts_order_retry_tests.rs"]
+mod order_tests;
+
 fn request() -> DesignRequest {
     DesignRequest {
         prompt: BRIEF.into(),

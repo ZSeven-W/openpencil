@@ -251,3 +251,37 @@ fn source_facts_keep_requested_concept_tables_and_food_lists_populated() {
         }
     }
 }
+
+#[test]
+fn source_facts_supplied_identifiers_do_not_authorize_extra_card_metadata() {
+    let brief =
+        "配送详情，订单号 OP-20261015-088，请在页头和订单卡中展示。骑手卡包含李师傅和联系按钮。";
+    let (request, proposal, section) = delivery_fixture(brief);
+    let (call, _) = bsp(
+        &section,
+        &proposal,
+        &request,
+        AbortFlag::new(),
+        false,
+        false,
+    );
+    assert_original_brief_is_unchanged(&call, brief);
+    assert!(call
+        .system_prompt
+        .contains("copy its exact supplied value only to those locations"));
+    assert!(call
+        .system_prompt
+        .contains("does not belong in the rider/contact card"));
+    for mode in [
+        PlanningMode::Rich,
+        PlanningMode::Minimal,
+        PlanningMode::Compact,
+    ] {
+        let planning = build_orchestrator_prompt(&request, mode, AbortFlag::new());
+        assert_system_contract_is_last(&planning.call_request);
+        assert!(planning
+            .call_request
+            .system_prompt
+            .contains("does not authorize duplicating it into unrelated sections"));
+    }
+}

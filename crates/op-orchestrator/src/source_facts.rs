@@ -1,4 +1,4 @@
-//! Narrow pre-insert guard for unrequested, explicitly identifiable ratings.
+//! Narrow pre-insert guards for unrequested, explicitly identifiable facts.
 //!
 //! This is not a general fact checker. Ambiguous/reference-derived content is
 //! left alone; a rejected forest is regenerated, never edited or pruned here.
@@ -7,6 +7,9 @@ use crate::{plan::Subtask, types::DesignRequest};
 use jian_ops_schema::node::{PenNode, TextContent};
 use op_design_lint::node_util::{is_node_visible, opacity};
 use op_editor_core::PenNodeExt;
+
+#[path = "source_facts_order.rs"]
+mod order;
 
 fn rating_terms(text: &str) -> bool {
     let lower = text.to_lowercase();
@@ -32,6 +35,11 @@ fn may_check(request: &DesignRequest) -> bool {
     {
         return false;
     }
+    text_only_source(request)
+}
+
+fn text_only_source(request: &DesignRequest) -> bool {
+    let lower = request.prompt.to_lowercase();
     // The request does not carry the visible text of attachments/live source
     // documents. Do not call their content invented based on brief text alone.
     // A reference_skeleton alone is deliberately NOT a source: it is content-free.
@@ -78,10 +86,15 @@ pub(crate) fn append_section_instruction(
     {
         prompt.push_str("\n\nTHIS SECTION — UNSUPPORTED RATING: The planner proposed a rating/review badge, but the ORIGINAL USER BRIEF does not request or supply it. Omit that entire optional rating badge, label, stars and value. Do not replace it with a made-up score or an empty rating placeholder. Preserve the requested identity, contact actions, other content and visual detail; the planner proposal is not a source.");
     }
+    order::append_section_instruction(request, subtask, prompt);
 }
 
 /// Return an actionable same-section retry reason before any nodes are inserted.
 pub(crate) fn rejection(request: &DesignRequest, nodes: &[PenNode]) -> Option<String> {
+    rating_rejection(request, nodes).or_else(|| order::rejection(request, nodes))
+}
+
+fn rating_rejection(request: &DesignRequest, nodes: &[PenNode]) -> Option<String> {
     if !may_check(request) {
         return None;
     }
@@ -107,6 +120,11 @@ fn visible(node: &PenNode) -> bool {
 }
 
 fn rating_name(name: &str) -> bool {
+    let separated = semantic_name(name);
+    rating_terms(&separated) || separated.contains("评价标签")
+}
+
+fn semantic_name(name: &str) -> String {
     // Names commonly use underscores or camelCase; words still need boundaries
     // so unrelated names such as saturation and operating-cost cannot match.
     let mut separated = String::new();
@@ -124,7 +142,7 @@ fn rating_name(name: &str) -> bool {
             separated.extend(c.to_lowercase());
         }
     }
-    rating_terms(&separated) || separated.contains("评价标签")
+    separated
 }
 
 fn find_rating(node: &PenNode) -> Option<(String, String)> {
