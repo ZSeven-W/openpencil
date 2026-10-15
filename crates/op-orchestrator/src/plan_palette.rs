@@ -7,6 +7,19 @@ use op_util::hex_color::{parse_hex_rgba8, HexOptions};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
+/// A coverage retry repairs missing sections, not the established palette.
+/// Retain roles if the model omits them; an explicit revised palette wins.
+pub(crate) fn preserve_on_replan(
+    previous: &crate::plan::OrchestratorPlan,
+    revised: &mut crate::plan::OrchestratorPlan,
+    request: &crate::types::DesignRequest,
+) {
+    if revised.palette.is_none() && request.design_md.is_none() {
+        revised.palette = previous.palette.clone();
+        crate::plan_repair::finalize_plan(revised, None, None);
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlanPalette {
@@ -27,6 +40,13 @@ pub struct PlanPalette {
 }
 
 impl PlanPalette {
+    /// Canonical roles win; accept the same misplaced root palette on both
+    /// strict parsing and JSON-repair paths.
+    pub(crate) fn from_plan_value(value: &Value) -> Option<Self> {
+        Self::from_value(&value["palette"])
+            .or_else(|| Self::from_value(&value["rootFrame"]["palette"]))
+    }
+
     /// Parse supported roles independently, so one malformed value does not
     /// discard a valid brand color or make the otherwise valid plan fail.
     pub fn from_value(value: &Value) -> Option<Self> {

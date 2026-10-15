@@ -280,7 +280,7 @@ pub(crate) fn repair_plan_object(obj: &Value, request: &DesignRequest) -> Option
         root_frame,
         subtasks,
         style_guide_name,
-        palette: crate::plan_palette::PlanPalette::from_value(&obj["palette"]),
+        palette: crate::plan_palette::PlanPalette::from_plan_value(obj),
     };
 
     Some(finalize_plan(

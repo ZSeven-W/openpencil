@@ -177,8 +177,16 @@ impl std::fmt::Display for PlanParseError {
 pub fn parse_plan(text: &str) -> Result<OrchestratorPlan, PlanParseError> {
     let json =
         extract_json_object(text).ok_or_else(|| PlanParseError("no JSON object found".into()))?;
-    let plan: OrchestratorPlan =
+    let mut plan: OrchestratorPlan =
         serde_json::from_str(json).map_err(|e| PlanParseError(format!("deserialize: {e}")))?;
+    // Some otherwise valid plans put the palette beside root dimensions.
+    // Preserve those explicit role colors instead of silently seeding the
+    // style guide's unrelated accent. A valid canonical palette always wins.
+    if plan.palette.is_none() {
+        let value: serde_json::Value =
+            serde_json::from_str(json).map_err(|e| PlanParseError(format!("deserialize: {e}")))?;
+        plan.palette = PlanPalette::from_plan_value(&value);
+    }
     if plan.subtasks.is_empty() {
         return Err(PlanParseError("plan has no subtasks".into()));
     }

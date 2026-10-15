@@ -425,3 +425,39 @@ fn production_strict_parse_preserves_design_md_precedence() {
         );
     }
 }
+
+#[test]
+fn misplaced_root_palette_keeps_explicit_route_accent_but_never_overrides_canonical() {
+    let mut source = plan_json();
+    source["rootFrame"]["palette"] = source.as_object_mut().unwrap().remove("palette").unwrap();
+    let (plan, _) = parse_orchestrator_response(&source.to_string(), &request()).unwrap();
+    assert_eq!(plan.palette.unwrap().primary.as_deref(), Some("#F97316"));
+    let repaired = repair_plan_object(&source, &request()).unwrap();
+    assert_eq!(
+        repaired.palette.unwrap().primary.as_deref(),
+        Some("#F97316")
+    );
+    source["palette"] = json!({"primary":"#123456"});
+    let plan = parse_plan(&source.to_string()).unwrap();
+    assert_eq!(plan.palette.unwrap().primary.as_deref(), Some("#123456"));
+    source.as_object_mut().unwrap().remove("palette");
+    source["rootFrame"]["palette"] = json!({"primary":"not-a-color"});
+    assert!(parse_plan(&source.to_string()).unwrap().palette.is_none());
+}
+
+#[test]
+fn section_replanning_preserves_omitted_colors_and_honors_explicit_revisions() {
+    let original = delivery_plan();
+    let mut revised = original.clone();
+    revised.palette = None;
+    revised.root_frame.fill = None;
+    preserve_on_replan(&original, &mut revised, &request());
+    assert_eq!(revised.palette, original.palette);
+    assert_eq!(
+        revised.root_frame.first_solid_hex().as_deref(),
+        Some("#0F1B2D")
+    );
+    revised.palette = PlanPalette::from_value(&json!({"primary":"#123456"}));
+    preserve_on_replan(&original, &mut revised, &request());
+    assert_eq!(revised.palette.unwrap().primary.as_deref(), Some("#123456"));
+}

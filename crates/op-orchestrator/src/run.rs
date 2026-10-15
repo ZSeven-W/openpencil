@@ -382,6 +382,7 @@ async fn replan_once_for_coverage(
                 return Err(OrchestratorError::Aborted);
             }
             if let Some((mut retry_plan, _)) = parse_orchestrator_response(&raw, request) {
+                crate::plan_palette::preserve_on_replan(&plan, &mut retry_plan, request);
                 apply_plan_pins(&mut retry_plan, forced_style_guide_name, request);
                 let retry_check = crate::plan_coverage::check_coverage(required, &retry_plan);
                 if !retry_check.missing.is_empty() {

@@ -48,6 +48,7 @@ pub(super) async fn ensure(
             "source-copy-missing: could not plan all supplied text".into(),
         ));
     };
+    crate::plan_palette::preserve_on_replan(&plan, &mut revised, request);
     apply_plan_pins(&mut revised, prompt.forced_style_guide_name, request);
     let required = crate::plan_coverage::required_sections(&request.prompt);
     let details = crate::plan_coverage::required_section_details(&request.prompt);
