@@ -8,6 +8,7 @@ use crate::image_fallback_policy::ResolvedRect;
 use crate::map_templates::{children, MapTemplate};
 use crate::role_defaults::Theme;
 use crate::types::DocSink;
+use jian_ops_schema::node::container::{LayoutMode, Padding};
 use jian_ops_schema::node::PenNode;
 use op_editor_core::{walkers, EditorCommand, NodeId, PenNodeExt};
 use serde_json::{json, Value};
@@ -18,7 +19,7 @@ pub(super) fn settle(sink: &mut dyn DocSink, root_ids: &[String]) {
     let mut patches = Vec::new();
     for id in root_ids {
         if let Some(root) = walkers::find_node(sink.state().active_children(), &NodeId::new(id)) {
-            collect(root, &rects, &mut patches);
+            collect(root, None, &rects, &mut patches);
         }
     }
     for (id, patch) in patches {
@@ -32,12 +33,17 @@ pub(super) fn settle(sink: &mut dyn DocSink, root_ids: &[String]) {
 
 fn collect(
     node: &PenNode,
+    parent: Option<&PenNode>,
     rects: &HashMap<String, ResolvedRect>,
     patches: &mut Vec<(String, Value)>,
 ) {
     if let Some((kind, old_width, old_height)) = template_viewport(node) {
         if let Some(rect) = rects.get(node.id_str()) {
-            let (w, h) = (rect.width, rect.height);
+            let w = clipped_width(*rect, parent, rects).unwrap_or(rect.width);
+            let h = rect.height;
+            if w < rect.width - 0.01 {
+                patches.push((node.id_str().to_string(), json!({"width": w})));
+            }
             if w.is_finite()
                 && h.is_finite()
                 && w > 0.0
@@ -74,8 +80,38 @@ fn collect(
         return;
     }
     for child in node.children().into_iter().flatten() {
-        collect(child, rects, patches);
+        collect(child, Some(node), rects, patches);
     }
+}
+
+/// A fixed-width template inside a narrower card needs a smaller viewport,
+/// not clipped streets and a missing layer control. Only fit owned maps to
+/// an immediate clipping frame; leave panned maps and horizontal rails alone.
+fn clipped_width(
+    rect: ResolvedRect,
+    parent: Option<&PenNode>,
+    rects: &HashMap<String, ResolvedRect>,
+) -> Option<f64> {
+    let PenNode::Frame(parent) = parent? else {
+        return None;
+    };
+    let props = &parent.container;
+    if props.clip_content != Some(true) || props.layout == Some(LayoutMode::Horizontal) {
+        return None;
+    }
+    let bounds = rects.get(parent.base.id.as_str())?;
+    let (left, right) = match props.padding.as_ref() {
+        None => (0.0, 0.0),
+        Some(Padding::Uniform(n)) | Some(Padding::XY([_, n])) => (*n, *n),
+        Some(Padding::LtrB([_, right, _, left])) => (*left, *right),
+        Some(Padding::Expression(_)) => return None,
+    };
+    let available = bounds.x + bounds.width - right - rect.x;
+    (rect.x >= bounds.x + left - 0.01
+        && available.is_finite()
+        && available >= 64.0
+        && available < rect.width - 0.01)
+        .then_some(available)
 }
 
 fn template_viewport(node: &PenNode) -> Option<(MapTemplate, f64, f64)> {

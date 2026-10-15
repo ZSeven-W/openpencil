@@ -196,3 +196,71 @@ fn map_geometry_leaves_unmarked_authored_maps_untouched() {
     assert_eq!(serde_json::to_value(&sink.state.doc).unwrap(), before);
     assert!(sink.applied.is_empty());
 }
+
+#[test]
+fn fixed_width_template_fits_a_narrower_clipping_card() {
+    let slot: PenNode = serde_json::from_value(json!({"type":"image","id":"map","src":"",
+        "name":"Map","width":375,"height":430,"imageSearchQuery":"map-template:delivery"}))
+    .unwrap();
+    let mut map = build_map_placeholder(&slot, 375.0, 430.0, Theme::Dark);
+    map["id"] = json!("map");
+    let overlay = json!({"type":"text","id":"overlay","name":"Authored label",
+        "x":16,"y":20,"width":60,"height":24,"content":"餐厅"});
+    map["children"].as_array_mut().unwrap().push(overlay);
+    let mut sink = VecDocSink::new();
+    sink.state.doc.children = vec![serde_json::from_value(json!({
+        "type":"frame","id":"card","name":"Map Card","layout":"none",
+        "width":343,"height":446,"padding":[8,8],"clipContent":true,
+        "children":[map]
+    }))
+    .unwrap()];
+    let before_overlay =
+        serde_json::to_value(find(sink.state.active_children(), "Authored label")).unwrap();
+    settle(&mut sink, &["card".into()]);
+    let map = find(sink.state.active_children(), "Map (map placeholder)");
+    assert_eq!(map.width_px(), Some(327.0));
+    assert_geometry(map, 327.0, 430.0, MapTemplate::Delivery);
+    assert_nested_bounds(&sink.state, map);
+    assert_eq!(
+        serde_json::to_value(find(sink.state.active_children(), "Authored label")).unwrap(),
+        before_overlay
+    );
+    let rects = crate::image_fallback_policy::resolved_rects(&sink.state);
+    let button = find(map.children().unwrap(), "Map layer control");
+    let button_rect = rects[button.id_str()];
+    let card = rects["card"];
+    assert!(button_rect.x + button_rect.width <= card.x + card.width - 8.0);
+    assert_eq!(button.width_px(), Some(40.0));
+    let previous = serde_json::to_value(&sink.state.doc).unwrap();
+    settle(&mut sink, &["card".into()]);
+    assert_eq!(serde_json::to_value(&sink.state.doc).unwrap(), previous);
+}
+
+#[test]
+fn viewport_fit_does_not_shrink_panned_or_unclipped_maps_or_horizontal_rails() {
+    for (layout, clip, x) in [
+        ("horizontal", true, 0),
+        ("none", false, 0),
+        ("none", true, -24),
+    ] {
+        let slot: PenNode = serde_json::from_value(json!({"type":"image","id":"map","src":"",
+            "name":"Map","width":375,"height":260,"imageSearchQuery":"map-template:delivery"}))
+        .unwrap();
+        let mut map = build_map_placeholder(&slot, 375.0, 260.0, Theme::Dark);
+        map["id"] = json!("map");
+        map["x"] = json!(x);
+        let mut sink = VecDocSink::new();
+        sink.state.doc.children = vec![serde_json::from_value(json!({
+            "type":"frame","id":"card","width":327,"height":260,
+            "layout":layout,"clipContent":clip,"children":[map]
+        }))
+        .unwrap()];
+        let before = serde_json::to_value(&sink.state.doc).unwrap();
+        settle(&mut sink, &["card".into()]);
+        assert_eq!(
+            serde_json::to_value(&sink.state.doc).unwrap(),
+            before,
+            "{layout}, {clip}, {x}"
+        );
+    }
+}
