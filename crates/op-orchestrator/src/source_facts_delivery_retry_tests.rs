@@ -110,3 +110,34 @@ fn delivery_unsupported_facts_cannot_survive_final_salvage() {
     assert!(!sink.applied.iter().any(inserted_extra));
     assert!(sink.state.active_children().is_empty());
 }
+
+#[test]
+fn normal_mode_dimensions_do_not_authorize_quantity_or_a_completed_delivery_action() {
+    for extra in ["双人晚餐 ×1", "距离您约1.5公里", "确认收货"] {
+        let bad = delivery_script(false, true).replace("双人晚餐", extra);
+        let mut req = request();
+        req.prompt.push_str("预计12分钟送达，双人晚餐。");
+        let llm = ScriptedLlm::new(vec![
+            ScriptResponse::Text(plan()),
+            ScriptResponse::Text(bad),
+            ScriptResponse::Text(delivery_script(false, true)),
+        ]);
+        let mut sink = VecDocSink::new();
+        let summary = futures::executor::block_on(Orchestrator::new().run(
+            req,
+            &mut sink,
+            &llm,
+            &mut |_| {},
+            &AbortFlag::new(),
+            &stub_providers(),
+        ))
+        .unwrap();
+        assert!(summary.subtasks[0].error.is_none(), "{extra}");
+        let prompts = llm.user_prompts();
+        assert_eq!(prompts.len(), 3, "{extra}");
+        assert!(prompts[2].contains("unsupported-delivery-facts"), "{extra}");
+        assert!(!texts(sink.state.active_children())
+            .iter()
+            .any(|text| text == extra));
+    }
+}

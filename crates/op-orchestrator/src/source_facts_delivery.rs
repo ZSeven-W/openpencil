@@ -17,7 +17,17 @@ static CLOCK: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?:^|[^0-9])(?:[01]?[0-9]|2[0-3])[:：][0-5][0-9](?:$|[^0-9])").unwrap()
 });
 static QUANTITY: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?:[×✕]|(?:^|\s)[xX])\s*\d+\b").unwrap());
+    LazyLock::new(|| Regex::new(r"(?:[×✕]|(?:^|\s)[xX])\s*\d+(?:\.\d+)?").unwrap());
+static ITEM_COUNT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\d+\s*(?:份|件)").unwrap());
+static DISTANCE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)\d+(?:\.\d+)?\s*(?:公里|千米|米|(?:km|m|miles?|meters?)\b)").unwrap()
+});
+static RELATIVE_ARRIVAL: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)(?:\d+\s*分钟[^。；;\n]{0,8}送达|(?:eta|arriv\w*|delivery)[^.;\n]{0,20}\d+\s*min)",
+    )
+    .unwrap()
+});
 static NUMBER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\d+(?:\.\d{1,2})?$").unwrap());
 
 #[derive(Clone, Copy)]
@@ -25,6 +35,8 @@ struct Checks {
     price: bool,
     clock: bool,
     quantity: bool,
+    distance: bool,
+    completion: bool,
 }
 
 fn contains(text: &str, terms: &[&str]) -> bool {
@@ -62,7 +74,42 @@ fn arrival_terms(text: &str) -> bool {
 }
 
 fn quantity_terms(text: &str) -> bool {
-    contains(text, &["数量", "份数", "quantity", "quantities", "qty"])
+    contains(
+        text,
+        &["数量", "份数", "件数", "quantity", "quantities", "qty"],
+    )
+}
+
+fn quantity_value(text: &str) -> bool {
+    // Normal mode prepends a canvas size such as 375×812. It is neither an
+    // item count nor permission to invent one. Ignore a multiplication sign
+    // preceded by a dimension, including spaced/ASCII dimension notation.
+    ITEM_COUNT.is_match(text)
+        || QUANTITY.find_iter(text).any(|value| {
+            !text[..value.start()]
+                .trim_end()
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_ascii_digit())
+        })
+}
+
+fn distance_terms(text: &str) -> bool {
+    contains(text, &["距离", "里程", "distance", "mileage"])
+}
+
+fn completion_action(text: &str) -> bool {
+    contains(
+        text,
+        &[
+            "确认收货",
+            "确认送达",
+            "已收到",
+            "confirm receipt",
+            "confirm delivery",
+            "mark as delivered",
+        ],
+    )
 }
 
 fn checks(request: &DesignRequest) -> Option<Checks> {
@@ -129,7 +176,20 @@ fn checks(request: &DesignRequest) -> Option<Checks> {
                     "arrival clock",
                 ],
             ),
-        quantity: !quantity_terms(&brief) && !QUANTITY.is_match(&brief),
+        quantity: !quantity_terms(&brief) && !quantity_value(&brief),
+        distance: !distance_terms(&brief) && !DISTANCE.is_match(&brief),
+        completion: !completion_action(&brief)
+            && (RELATIVE_ARRIVAL.is_match(&brief)
+                || contains(
+                    &brief,
+                    &[
+                        "配送中",
+                        "正在配送",
+                        "尚未送达",
+                        "in transit",
+                        "out for delivery",
+                    ],
+                )),
     })
 }
 
@@ -150,8 +210,16 @@ pub(super) fn append_section_instruction(
             "absolute arrival clock (HH:MM)",
         ),
         (
-            check.quantity && (quantity_terms(&elements) || QUANTITY.is_match(&elements)),
+            check.quantity && (quantity_terms(&elements) || quantity_value(&elements)),
             "item quantity (×N)",
+        ),
+        (
+            check.distance && (distance_terms(&elements) || DISTANCE.is_match(&elements)),
+            "rider distance",
+        ),
+        (
+            check.completion && completion_action(&elements),
+            "confirmation of receipt while still in transit",
         ),
     ]
     .into_iter()
@@ -235,9 +303,12 @@ fn inspect(
     let clock =
         check.clock && CLOCK.is_match(text) && (arrival_terms(semantic) || arrival_terms(&lower));
     let quantity = check.quantity
-        && (QUANTITY.is_match(text) || (quantity_terms(semantic) && NUMBER.is_match(text.trim())));
-    if price || clock || quantity {
-        let evidence = serde_json::json!({"node":name.chars().take(80).collect::<String>(),"text":text.chars().take(160).collect::<String>(),"price":price,"arrival_clock":clock,"quantity":quantity});
+        && (quantity_value(text) || (quantity_terms(semantic) && NUMBER.is_match(text.trim())));
+    let distance = check.distance
+        && (DISTANCE.is_match(text) || (distance_terms(semantic) && NUMBER.is_match(text.trim())));
+    let completion = check.completion && completion_action(&lower);
+    if price || clock || quantity || distance || completion {
+        let evidence = serde_json::json!({"node":name.chars().take(80).collect::<String>(),"text":text.chars().take(160).collect::<String>(),"price":price,"arrival_clock":clock,"quantity":quantity,"distance":distance,"premature_completion":completion});
         if !found.contains(&evidence) {
             found.push(evidence);
         }

@@ -124,3 +124,87 @@ fn delivery_section_hint_uses_original_brief_authority() {
     );
     assert!(prompt.is_empty());
 }
+
+#[test]
+fn normal_mode_canvas_dimensions_never_authorize_item_quantities() {
+    for size in ["375×812", "375 × 812", "375 x 812", "390✕844"] {
+        let req = request(&format!(
+            "请设计手机 App（{size}）。交付1页。用户需求：{BRIEF}"
+        ));
+        for value in ["双人晚餐 ×1", "×1份", "共1件", "2份", "x 1"] {
+            assert!(
+                rejection(&req, &[text("meal", value)]).is_some(),
+                "{size}: {value}"
+            );
+        }
+        assert!(rejection(&req, &[text("canvas", size)]).is_none());
+        let subtask: Subtask = serde_json::from_value(json!({"id":"order","label":"订单", "region":{"width":375,"height":100},"elements":"双人晚餐 ×1"})).unwrap();
+        let mut prompt = String::new();
+        append_section_instruction(&req, &subtask, &mut prompt);
+        assert!(prompt.contains("item quantity"));
+    }
+    for supplied in ["双人晚餐×1", "共1件", "2份晚餐"] {
+        let req = request(&format!("375×812 配送详情，{supplied}"));
+        assert!(rejection(&req, &[text("meal", supplied)]).is_none());
+    }
+}
+
+#[test]
+fn active_delivery_omits_unsupported_distance_and_completion_actions() {
+    for value in [
+        "距离您约1.5公里",
+        "1.5km",
+        "200 m",
+        "确认收货",
+        "Confirm receipt",
+    ] {
+        assert!(
+            rejection(&request(BRIEF), &[text("line", value)]).is_some(),
+            "{value}"
+        );
+    }
+    for value in [
+        "双人晚餐",
+        "滨江路88号",
+        "12分钟",
+        "联系骑手",
+        "返回",
+        "更新位置",
+    ] {
+        assert!(
+            rejection(&request(BRIEF), &[text("line", value)]).is_none(),
+            "{value}"
+        );
+    }
+    for brief in [
+        "配送详情，预计12分钟送达，提供确认收货按钮",
+        "配送详情，已送达",
+        "Delivery tracking, out for delivery, include Confirm receipt",
+    ] {
+        assert!(
+            rejection(&request(brief), &[text("cta", "确认收货")]).is_none(),
+            "{brief}"
+        );
+    }
+    for brief in [
+        "配送追踪，距离1.5km",
+        "配送追踪，展示骑手距离",
+        "Delivery details, show remaining distance",
+    ] {
+        assert!(
+            rejection(&request(brief), &[text("distance", "1.5km")]).is_none(),
+            "{brief}"
+        );
+    }
+    // A supplied distance does not authorize a new action, or vice versa.
+    assert!(rejection(
+        &request(&format!("{BRIEF} 距离1.5km")),
+        &[text("cta", "确认收货")]
+    )
+    .is_some());
+    assert!(rejection(
+        &request(&format!("{BRIEF} 提供确认收货按钮")),
+        &[text("distance", "1.5km")]
+    )
+    .is_some());
+}
