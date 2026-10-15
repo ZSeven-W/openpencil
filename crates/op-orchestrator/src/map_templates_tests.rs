@@ -31,6 +31,26 @@ fn map_template_selection_prefers_explicit_intent() {
 }
 
 #[test]
+fn map_templates_distinguish_delivery_roles_and_location_pin() {
+    let nodes = children("map", 375.0, 430.0, Theme::Dark, MapTemplate::Delivery);
+    for (name, icon) in [
+        ("map-origin", "store"),
+        ("map-courier", "bike"),
+        ("map-pin", "house"),
+    ] {
+        let marker = nodes.iter().find(|n| n["name"] == name).unwrap();
+        assert_eq!(marker["children"][0]["iconFontName"], icon);
+        assert_eq!(marker["width"], 32.0);
+    }
+    let courier = nodes.iter().find(|n| n["name"] == "map-courier").unwrap();
+    // The courier is on the final northbound street, not inside a city block.
+    assert_eq!(courier["x"].as_f64().unwrap() + 16.0, 0.485 * 375.0);
+    let nodes = children("map", 375.0, 260.0, Theme::Light, MapTemplate::Location);
+    let pin = nodes.iter().find(|n| n["name"] == "map-pin").unwrap();
+    assert_eq!(pin["children"][0]["iconFontName"], "map-pin");
+}
+
+#[test]
 fn map_templates_have_stable_bounds_endpoints_and_topmost_controls() {
     for kind in [
         MapTemplate::Running,

@@ -135,12 +135,50 @@ pub fn children(id: &str, width: f64, height: f64, theme: Theme, kind: MapTempla
         nodes.push(route(id, "map-route-halo", points, w, h, surface, 8.0));
         nodes.push(route(id, "map-route", points, w, h, "$--primary", 4.0));
         let start = points[0];
-        nodes.push(dot(id, "map-origin-halo", start, w, h, 18.0, surface));
-        nodes.push(dot(id, "map-origin", start, w, h, 10.0, "$--primary"));
+        if kind == MapTemplate::Running {
+            nodes.push(dot(id, "map-origin-halo", start, w, h, 18.0, surface));
+            nodes.push(dot(id, "map-origin", start, w, h, 10.0, "$--primary"));
+        } else {
+            nodes.push(marker(
+                id,
+                "map-origin",
+                "store",
+                start,
+                (w, h),
+                surface,
+                ink,
+            ));
+            nodes.push(marker(
+                id,
+                "map-courier",
+                "bike",
+                (0.485, 0.40),
+                (w, h),
+                surface,
+                "$--primary",
+            ));
+        }
     }
     let end = points.last().copied().unwrap_or((0.485, 0.48));
-    nodes.push(dot(id, "map-destination-halo", end, w, h, 24.0, surface));
-    nodes.push(dot(id, "map-pin", end, w, h, 14.0, "$--primary"));
+    if kind == MapTemplate::Running {
+        nodes.push(dot(id, "map-destination-halo", end, w, h, 24.0, surface));
+        nodes.push(dot(id, "map-pin", end, w, h, 14.0, "$--primary"));
+    } else {
+        let icon = if kind == MapTemplate::Delivery {
+            "house"
+        } else {
+            "map-pin"
+        };
+        nodes.push(marker(
+            id,
+            "map-pin",
+            icon,
+            end,
+            (w, h),
+            "$--primary",
+            "#FFFFFF",
+        ));
+    }
     // Decorative preview control: no fabricated behavior or remote map service.
     if w >= 160.0 && h >= 120.0 {
         nodes.push(
@@ -155,6 +193,27 @@ pub fn children(id: &str, width: f64, height: f64, theme: Theme, kind: MapTempla
     }
     nodes.reverse();
     nodes
+}
+
+/// Symbols distinguish business roles without inventing addresses or map labels.
+fn marker(
+    id: &str,
+    name: &str,
+    icon: &str,
+    p: (f64, f64),
+    viewport: (f64, f64),
+    surface: &str,
+    ink: &str,
+) -> Value {
+    let (w, h) = viewport;
+    let size = 32.0_f64.min(w * 0.16).min(h * 0.16);
+    json!({"type":"frame","id":format!("{id}-{name}"),"name":name,
+        "x":p.0*w-size/2.0,"y":p.1*h-size/2.0,"width":size,"height":size,
+        "layout":"horizontal","justifyContent":"center","alignItems":"center",
+        "cornerRadius":size/2.0,"fill":[{"type":"solid","color":surface}],"children":[
+            {"type":"icon_font","id":format!("{id}-{name}-icon"),"name":format!("Map {icon} marker"),
+             "width":size*0.5625,"height":size*0.5625,"iconFontFamily":"lucide","iconFontName":icon,
+             "fill":[{"type":"solid","color":ink}]}]})
 }
 
 fn dot(id: &str, name: &str, p: (f64, f64), w: f64, h: f64, size: f64, color: &str) -> Value {
