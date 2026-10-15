@@ -3,7 +3,7 @@ name: interactivity
 description: State, bindings, and events so generated widgets are functional
 phase: [generation]
 trigger:
-  keywords: [interactive, interactivity, clickable, functional, prototype, stateful, motion, animation, animated, mount, inView, transition, 交互, 可交互, 原型, 可点击, 动效, 动画]
+  keywords: [interactive, interactivity, clickable, functional, prototype, stateful, motion, animation, animated, mount, inView, transition, 交互, 可交互, 原型, 可点击, 可操作, 动效, 动画]
 priority: 25
 budget: 2000
 category: domain

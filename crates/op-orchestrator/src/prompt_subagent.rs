@@ -325,6 +325,7 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
         "可交互",
         "原型",
         "可点击",
+        "可操作",
         "动效",
         "动画",
     ]

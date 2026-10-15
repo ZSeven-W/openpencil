@@ -381,6 +381,7 @@ fn base_layout_no_longer_contradicts_the_sticky_runtime() {
                 "可交互",
                 "原型",
                 "可点击",
+                "可操作",
                 "动效",
                 "动画",
             ]

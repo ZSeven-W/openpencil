@@ -7,6 +7,26 @@ use jian_ops_schema::variable::VariableDefinition;
 use std::collections::BTreeMap;
 
 #[test]
+fn operable_controls_load_interaction_guidance_in_the_actual_mobile_prompt() {
+    let mut request = req();
+    request.model = Some("glm-5.3-flash".into());
+    request.prompt = "设计一页手机骑行导航，右侧小型图层和定位按钮，按钮可操作，保持留白。".into();
+    let mut mobile = plan();
+    mobile.root_frame.width = 375.0;
+    mobile.root_frame.height = 812.0;
+    let mut section = subtask();
+    section.region.width = 375.0;
+    let (call, report) = bsp(&section, &mobile, &request, AbortFlag::new(), false, false);
+    assert!(
+        report.included.iter().any(|s| s.name == "interactivity"),
+        "{:?}",
+        report.dropped
+    );
+    assert!(call.system_prompt.contains("EVENTS — action handlers:"));
+    assert!(call.system_prompt.contains("events.onTap"));
+}
+
+#[test]
 fn source_facts_survive_all_subtask_complexity_levels() {
     for (reduced, minimal) in [(false, false), (true, false), (true, true)] {
         let mut request = req();
