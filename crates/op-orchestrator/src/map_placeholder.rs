@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use crate::image_fallback_policy::ResolvedRect;
 use crate::role_defaults::Theme;
-use jian_ops_schema::node::PenNode;
+use jian_ops_schema::node::{base::NumberOrExpression, container::LayoutMode, PenNode};
 use op_editor_core::PenNodeExt;
 use serde_json::{json, Value};
 
@@ -32,7 +32,7 @@ pub fn map_placeholder(
     theme: Theme,
 ) -> Vec<MapPlaceholderPatch> {
     let mut patches = Vec::new();
-    collect_patches(root, rects, theme, false, &mut patches);
+    collect_patches(root, rects, theme, false, false, &mut patches);
     patches
 }
 
@@ -46,6 +46,7 @@ fn collect_patches(
     rects: &HashMap<String, ResolvedRect>,
     theme: Theme,
     inside_map_named: bool,
+    sibling_layer_control: bool,
     patches: &mut Vec<MapPlaceholderPatch>,
 ) {
     if node
@@ -63,15 +64,45 @@ fn collect_patches(
     // An explicit image slot is a slot wherever it sits; only shapes are
     // demoted to decorations inside a map-named container.
     if !inside_map_named || matches!(node, PenNode::Image(_)) {
-        if let Some(patch) = map_patch(node, rects, theme) {
+        if let Some(patch) = map_patch(node, rects, theme, sibling_layer_control) {
             patches.push(patch);
             return;
         }
     }
     let map_named = inside_map_named || node.base().name.as_deref().is_some_and(has_map_name_word);
     if let Some(children) = node.children() {
+        // A map image can sit behind authored controls in its owning viewport.
+        // Only coordinate direct siblings in that absolute stack, not buttons
+        // elsewhere on the page or in another map's viewport.
+        let shared_viewport = matches!(node, PenNode::Frame(frame)
+            if frame.container.layout == Some(LayoutMode::None))
+            && children.iter().any(|child| {
+                (!map_named || matches!(child, PenNode::Image(_)))
+                    && eligible_map_dimensions(child, rects).is_some()
+            });
+        let has_layers = shared_viewport && children.iter().any(is_authored_layer_control);
+        if has_layers {
+            for control in children
+                .iter()
+                .filter(|child| is_authored_layer_control(child))
+            {
+                let patch = compact_layer_control_patch();
+                let current = serde_json::to_value(control).unwrap_or(Value::Null);
+                if patch
+                    .as_object()
+                    .unwrap()
+                    .iter()
+                    .any(|(key, value)| current[key] != *value)
+                {
+                    patches.push(MapPlaceholderPatch {
+                        node_id: control.id_str().to_string(),
+                        patch_json: patch.to_string(),
+                    });
+                }
+            }
+        }
         for child in children {
-            collect_patches(child, rects, theme, map_named, patches);
+            collect_patches(child, rects, theme, map_named, has_layers, patches);
         }
     }
 }
@@ -80,38 +111,83 @@ fn map_patch(
     node: &PenNode,
     rects: &HashMap<String, ResolvedRect>,
     theme: Theme,
+    sibling_layer_control: bool,
 ) -> Option<MapPlaceholderPatch> {
-    if !is_map_placeholder_candidate(node) {
-        return None;
-    }
-
-    let (width, height) = dimensions(node, rects);
-    if !matches!(node, PenNode::Image(_)) && width < MIN_SHAPE_MAP_WIDTH {
-        return None;
-    }
-    let patch = build_map_placeholder(node, width, height, theme);
+    let (width, height) = eligible_map_dimensions(node, rects)?;
+    let patch =
+        build_map_placeholder_with_controls(node, width, height, theme, sibling_layer_control);
     Some(MapPlaceholderPatch {
         node_id: node.id_str().to_string(),
         patch_json: patch.to_string(),
     })
 }
 
+fn eligible_map_dimensions(
+    node: &PenNode,
+    rects: &HashMap<String, ResolvedRect>,
+) -> Option<(f64, f64)> {
+    if !is_map_placeholder_candidate(node)
+        || node
+            .base()
+            .name
+            .as_deref()
+            .is_some_and(|name| name.ends_with(MAP_PLACEHOLDER_NAME_SUFFIX))
+    {
+        return None;
+    }
+    let size = dimensions(node, rects);
+    (matches!(node, PenNode::Image(_)) || size.0 >= MIN_SHAPE_MAP_WIDTH).then_some(size)
+}
+
 fn is_map_placeholder_candidate(node: &PenNode) -> bool {
     match node {
-        PenNode::Image(image) => {
-            node.base().name.as_deref().is_some_and(has_map_word)
-                || image
-                    .image_search_query
-                    .as_deref()
-                    .is_some_and(has_map_word)
-                || image.image_prompt.as_deref().is_some_and(has_map_word)
-        }
+        PenNode::Image(image) => is_map_image_intent(
+            node.base().name.as_deref(),
+            image.image_search_query.as_deref(),
+            image.image_prompt.as_deref(),
+        ),
         PenNode::Frame(_) | PenNode::Rectangle(_) => {
             node.base().name.as_deref().is_some_and(has_map_name_word)
                 && !contains_protected_descendant(node)
         }
         _ => false,
     }
+}
+
+/// Share map intent with photo-only cleanup before the image becomes a frame.
+pub(crate) fn is_map_image_intent(
+    name: Option<&str>,
+    query: Option<&str>,
+    prompt: Option<&str>,
+) -> bool {
+    [name, query, prompt]
+        .into_iter()
+        .flatten()
+        .any(has_map_word)
+}
+
+fn is_authored_layer_control(node: &PenNode) -> bool {
+    if !matches!(node, PenNode::Frame(_)) || !has_numeric_position(node) || !is_visible(node) {
+        return false;
+    }
+    let Some([icon]) = node.children().map(Vec::as_slice) else {
+        return false;
+    };
+    is_visible(icon)
+        && matches!(icon, PenNode::IconFont(icon)
+            if icon.icon_font_name.rsplit(':').next() == Some("layers"))
+}
+
+fn is_visible(node: &PenNode) -> bool {
+    op_design_lint::node_util::is_node_visible(node)
+        && !matches!(&node.base().opacity, Some(NumberOrExpression::Number(value)) if *value <= 0.0)
+}
+
+fn compact_layer_control_patch() -> Value {
+    // Fixed dimensions prevent the original full-width layers-bar regression.
+    // Keep authored position, styling, icon and interactions intact.
+    json!({"width":40,"height":40,"layout":"horizontal","padding":0,
+        "justifyContent":"center","alignItems":"center"})
 }
 
 fn contains_protected_descendant(node: &PenNode) -> bool {
@@ -186,6 +262,16 @@ fn dimensions(node: &PenNode, rects: &HashMap<String, ResolvedRect>) -> (f64, f6
 
 /// Build an editable map from a fixed scene selected by image intent.
 pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: Theme) -> Value {
+    build_map_placeholder_with_controls(node, width, height, theme, false)
+}
+
+fn build_map_placeholder_with_controls(
+    node: &PenNode,
+    width: f64,
+    height: f64,
+    theme: Theme,
+    sibling_layer_control: bool,
+) -> Value {
     let mut hint = node.base().name.clone().unwrap_or_default();
     if let PenNode::Image(image) = node {
         hint.push_str(image.image_prompt.as_deref().unwrap_or_default());
@@ -193,6 +279,15 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
     }
     let kind = crate::map_templates::MapTemplate::from_hint(&hint);
     let mut blocks = crate::map_templates::children(node.id_str(), width, height, theme, kind);
+    if sibling_layer_control
+        || node
+            .children()
+            .into_iter()
+            .flatten()
+            .any(is_authored_layer_control)
+    {
+        blocks.retain(|block| block["name"] != "Map layer control");
+    }
     for block in &mut blocks {
         block["explain"] = json!(format!(
             "map-template-part:{}",
@@ -204,7 +299,15 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
         .into_iter()
         .flatten()
         .filter(|child| has_numeric_position(child))
-        .filter_map(|child| serde_json::to_value(child).ok());
+        .filter_map(|child| {
+            let mut value = serde_json::to_value(child).ok()?;
+            if is_authored_layer_control(child) {
+                value
+                    .as_object_mut()?
+                    .extend(compact_layer_control_patch().as_object()?.clone());
+            }
+            Some(value)
+        });
     // Authored controls remain above the deterministic map composition.
     let mut children: Vec<Value> = preserved.collect();
     children.append(&mut blocks);

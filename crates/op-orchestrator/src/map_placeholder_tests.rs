@@ -383,3 +383,145 @@ fn food_words_that_start_with_map_are_not_maps() {
     .expect("valid image");
     assert!(is_map_placeholder_candidate(&real));
 }
+
+fn authored_layers_button(width: Value) -> Value {
+    json!({"type":"frame","id":"authored-layers","name":"图层切换按钮",
+        "x":275,"y":12,"width":width,"height":40,"layout":"horizontal",
+        "fill":[{"type":"solid","color":"#FFFFFF"}],"cornerRadius":20,
+        "children":[{"type":"icon_font","id":"authored-icon","iconFontName":"layers",
+            "width":18,"height":18,"fill":[{"type":"solid","color":"#284339"}]}]})
+}
+
+#[test]
+fn map_with_authored_sibling_layer_control_uses_one_compact_control() {
+    for width in [json!(40), json!("fill_container")] {
+        let button = authored_layers_button(width);
+        let source: PenNode = serde_json::from_value(json!({"type":"frame","id":"viewport",
+            "name":"地图视口","layout":"none","width":327,"height":280,
+            "children":[button,{"type":"text","id":"eta","content":"预计12分钟送达"},
+                {"type":"image","id":"slot","name":"Map","src":"","width":327,"height":280,
+                    "imageSearchQuery":"map-template:delivery"}]}))
+        .unwrap();
+        let patches = map_placeholder(&source, &HashMap::new(), Theme::Light);
+        let control = patch_value(
+            patches
+                .iter()
+                .find(|p| p.node_id == "authored-layers")
+                .unwrap(),
+        );
+        assert_eq!(control["width"], 40);
+        assert_eq!(control["height"], 40);
+        assert_eq!(control["padding"], 0);
+        assert!(
+            control.get("children").is_none(),
+            "preserve authored icon and events"
+        );
+        assert!(control.get("fill").is_none(), "preserve authored styling");
+        let map = patch_value(patches.iter().find(|p| p.node_id == "slot").unwrap());
+        assert!(!map["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["name"] == "Map layer control"));
+        assert!(map["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["name"] == "map-pin"));
+    }
+}
+
+#[test]
+fn map_preserves_and_compacts_its_own_authored_layer_control() {
+    let button = authored_layers_button(json!("fill_container"));
+    let source: PenNode = serde_json::from_value(json!({"type":"frame","id":"map",
+        "name":"Map","width":327,"height":280,"children":[button]}))
+    .unwrap();
+    let original_button = serde_json::to_value(&source.children().unwrap()[0]).unwrap();
+    let map = build_map_placeholder(&source, 327.0, 280.0, Theme::Light);
+    let children = map["children"].as_array().unwrap();
+    assert_eq!(children[0]["id"], "authored-layers");
+    assert_eq!(children[0]["width"], 40);
+    assert_eq!(children[0]["height"], 40);
+    assert_eq!(children[0]["children"], original_button["children"]);
+    assert_eq!(children[0]["fill"], original_button["fill"]);
+    assert!(!children.iter().any(|n| n["name"] == "Map layer control"));
+}
+
+#[test]
+fn layer_button_outside_map_viewport_does_not_suppress_template_control() {
+    let source: PenNode = serde_json::from_value(json!({"type":"frame","id":"root",
+        "layout":"vertical","width":375,"height":812,
+        "children":[authored_layers_button(json!("fill_container")),
+            {"type":"frame","id":"viewport","layout":"none","width":327,"height":280,
+                "children":[{"type":"image","id":"slot","name":"Map","src":"",
+                    "width":327,"height":280,"imageSearchQuery":"map-template:location"}]}]}))
+    .unwrap();
+    let patches = map_placeholder(&source, &HashMap::new(), Theme::Light);
+    assert_eq!(
+        patches.len(),
+        1,
+        "unrelated layers button must stay untouched"
+    );
+    assert_eq!(patches[0].node_id, "slot");
+    assert!(patch_value(&patches[0])["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|n| n["name"] == "Map layer control"));
+}
+
+#[test]
+fn map_decoration_does_not_trigger_layer_control_repair() {
+    let source: PenNode = serde_json::from_value(json!({"type":"frame","id":"viewport",
+        "layout":"none","width":327,"height":280,"children":[
+            authored_layers_button(json!("fill_container")),
+            {"type":"rectangle","id":"park","name":"map-park","width":40,"height":40}]}))
+    .unwrap();
+    let rects = HashMap::from([(
+        "park".into(),
+        ResolvedRect {
+            x: 0.0,
+            y: 0.0,
+            width: 40.0,
+            height: 40.0,
+        },
+    )]);
+    assert!(map_placeholder(&source, &rects, Theme::Light).is_empty());
+}
+
+#[test]
+fn hidden_authored_layers_does_not_remove_visible_template_control() {
+    for (hide_icon, hidden) in [
+        (false, json!({"visible":false})),
+        (false, json!({"opacity":0})),
+        (false, json!({"enabled":false})),
+        (true, json!({"visible":false})),
+        (true, json!({"opacity":0})),
+        (true, json!({"enabled":false})),
+    ] {
+        let mut button = authored_layers_button(json!(40));
+        let target = if hide_icon {
+            &mut button["children"][0]
+        } else {
+            &mut button
+        };
+        target
+            .as_object_mut()
+            .unwrap()
+            .extend(hidden.as_object().unwrap().clone());
+        let source: PenNode = serde_json::from_value(json!({"type":"frame","id":"viewport",
+            "layout":"none","width":327,"height":280,"children":[button,
+                {"type":"image","id":"slot","name":"Map","src":"","width":327,"height":280,
+                    "imageSearchQuery":"map-template:location"}]}))
+        .unwrap();
+        let patches = map_placeholder(&source, &HashMap::new(), Theme::Light);
+        assert_eq!(patches.len(), 1);
+        assert_eq!(patches[0].node_id, "slot");
+        assert!(patch_value(&patches[0])["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|n| n["name"] == "Map layer control"));
+    }
+}

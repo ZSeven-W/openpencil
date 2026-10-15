@@ -381,6 +381,18 @@ fn repair_image_hero_stack(
         return false;
     }
 
+    let media = &stack["children"][media_index];
+    if crate::map_placeholder::is_map_image_intent(
+        media.get("name").and_then(Value::as_str),
+        media.get("imageSearchQuery").and_then(Value::as_str),
+        media.get("imagePrompt").and_then(Value::as_str),
+    ) {
+        // Map symbols and routes already have deliberate contrast. Preserve
+        // full-bleed sizing, but never apply a photographic scrim or recolor
+        // authored map labels before the deterministic scene is materialized.
+        return false;
+    }
+
     let stack_width = stack.get("width").cloned();
     let stack_id = stack
         .get("id")

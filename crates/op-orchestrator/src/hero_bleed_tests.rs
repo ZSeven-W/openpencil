@@ -3,6 +3,9 @@ use crate::plan::{OrchestratorPlan, Region, RootFrameSpec, Subtask};
 use crate::test_support::VecDocSink;
 use serde_json::{json, Value};
 
+#[path = "hero_bleed_map_tests.rs"]
+mod map_tests;
+
 #[test]
 fn map_template_uses_full_bleed_viewport_through_complete_cleanup() {
     let mut root = evidence_root();
