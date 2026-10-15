@@ -6,6 +6,7 @@
 //! [`descendant_count`] 给 `run()` 的"零内容"判定提供基线:
 //! scaffold 之后数一次,subtask 全跑完再数一次,没涨即零内容。
 
+use crate::cleanup_image_fallback::settle_map_geometry;
 use crate::cleanup_layout::root_content_height;
 use crate::cleanup_typography::repair_overbold_text_hierarchy;
 use crate::plan::OrchestratorPlan;
@@ -396,6 +397,7 @@ fn run_cleanup_passes_with_summary_and_policy(
     let mut counter = RepairCounter::new();
     let mut counting = counter.wrap(sink);
     let sink: &mut dyn DocSink = &mut counting;
+    let mut settled_root_ids = Vec::new();
 
     let effective_root_ids: Vec<String> = if root_ids.is_empty() {
         Vec::new()
@@ -512,8 +514,7 @@ fn run_cleanup_passes_with_summary_and_policy(
             crate::hero_bleed::enforce(sink, plan, &rid);
         }
         counter.checkpoint(summary, CheckCategory::Structure, "hero-bleed");
-        // Resolve the map after hero width is settled; fixed template coordinates
-        // must use the final viewport rather than the former inset image width.
+        // Materialize map slots here; final geometry is settled after all rails.
         super::cleanup_image_fallback::repair_map_placeholders(sink, &rid, summary, &mut counter);
         repair_category_grid_density(sink, &rid);
         counter.checkpoint(summary, CheckCategory::Structure, "category-grid-density");
@@ -718,6 +719,7 @@ fn run_cleanup_passes_with_summary_and_policy(
         // Contrast reads photo pixels after final shell geometry settles.
         crate::text_contrast_repair::repair_text_contrast(sink, rid);
         counter.checkpoint(summary, CheckCategory::Layout, "text-contrast");
+        settled_root_ids.push(rid.to_string());
     }
 
     crate::avatar_repair::repair_avatar_slots_for_all_roots(sink);
@@ -785,6 +787,7 @@ fn run_cleanup_passes_with_summary_and_policy(
     counter.checkpoint(summary, CheckCategory::Structure, "shared-chrome+nav");
 
     super::cleanup_image_fallback::repair_image_fallback_policy(sink, summary, &mut counter);
+    settle_map_geometry(sink, &settled_root_ids, summary, &mut counter);
 }
 
 #[cfg(test)]

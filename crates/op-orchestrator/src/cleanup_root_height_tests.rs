@@ -771,5 +771,6 @@ fn deck_plan(root_id: &str) -> crate::plan::OrchestratorPlan {
         },
         subtasks: Vec::new(),
         style_guide_name: None,
+        palette: None,
     }
 }

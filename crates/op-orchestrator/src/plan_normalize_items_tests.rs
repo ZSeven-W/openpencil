@@ -60,6 +60,7 @@ fn five_item_plan() -> OrchestratorPlan {
             })
             .collect(),
         style_guide_name: None,
+        palette: None,
     }
 }
 
@@ -151,6 +152,7 @@ fn different_stems_do_not_merge() {
             item("case-02", "案例 02", None, 100.0),
         ],
         style_guide_name: None,
+        palette: None,
     };
     normalize(&mut plan, &req_with_model(Some("deepseek-v4-pro")));
     // 法则 (3) merges; 案例 (2) does not.
@@ -184,6 +186,7 @@ fn items_on_different_screens_never_merge() {
             item("rule-05", "法则 05", Some("S2"), 100.0),
         ],
         style_guide_name: None,
+        palette: None,
     };
     normalize(&mut plan, &req_with_model(Some("deepseek-v4-pro")));
     assert_eq!(
@@ -231,6 +234,7 @@ fn per_screen_families_merge_independently_without_crossing_screens() {
             item("rule-06", "法则 06", Some("S2"), 100.0),
         ],
         style_guide_name: None,
+        palette: None,
     };
     normalize(&mut plan, &req_with_model(Some("deepseek-v4-pro")));
     assert_eq!(plan.subtasks.len(), 2, "one merged subtask per screen");
@@ -275,6 +279,7 @@ fn deck_fallback_screens_survive_bundling() {
             })
             .collect(),
         style_guide_name: None,
+        palette: None,
     };
     normalize(&mut plan, &req_with_model(Some("deepseek-v4-pro")));
     assert_eq!(
@@ -309,6 +314,7 @@ fn ordinal_only_labels_fall_back_to_the_id_stem() {
             .map(|n| item(&format!("rule-0{n}"), &format!("0{n}"), None, 100.0))
             .collect(),
         style_guide_name: None,
+        palette: None,
     };
     normalize(&mut plan, &req_with_model(Some("deepseek-v4-pro")));
     assert_eq!(plan.subtasks.len(), 1, "id-stem family must merge");

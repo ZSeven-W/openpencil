@@ -58,6 +58,7 @@ fn plan() -> OrchestratorPlan {
         },
         subtasks: vec![],
         style_guide_name: None,
+        palette: None,
     }
 }
 
@@ -92,6 +93,8 @@ mod deck_skill_tests;
 mod food_skill_tests;
 #[path = "prompt_overlay_skill_tests.rs"]
 mod overlay_skill_tests;
+#[path = "prompt_palette_tests.rs"]
+mod palette_tests;
 #[path = "prompt_planning_tests.rs"]
 mod planning_tests;
 #[path = "prompt_scroll_skill_tests.rs"]

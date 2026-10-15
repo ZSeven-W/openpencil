@@ -280,6 +280,7 @@ pub(crate) fn repair_plan_object(obj: &Value, request: &DesignRequest) -> Option
         root_frame,
         subtasks,
         style_guide_name,
+        palette: crate::plan_palette::PlanPalette::from_value(&obj["palette"]),
     };
 
     Some(finalize_plan(
@@ -293,8 +294,8 @@ pub(crate) fn repair_plan_object(obj: &Value, request: &DesignRequest) -> Option
 ///
 /// - `design_md` present → force `style_guide_name = "design-md-custom"`,
 ///   overwrite `root_frame.fill` with the design.md background color.
-/// - otherwise → leave the plan unchanged (the Rust struct has no
-///   `style_guide` inline field; catalog-guide recovery is a no-op here).
+/// - otherwise normalize declared palette roles and synchronize the root
+///   canvas when the palette explicitly includes a background.
 ///
 /// Port of `finalizePlan` from
 /// `apps/web/src/services/ai/orchestrator-planning.ts:140-184`.
@@ -305,12 +306,28 @@ pub(crate) fn finalize_plan(
 ) -> OrchestratorPlan {
     if let Some(spec) = design_md {
         plan.style_guide_name = Some(DESIGN_MD_STYLE_GUIDE_NAME.to_owned());
+        plan.palette = None;
         let bg = infer_design_md_background(spec)
             .unwrap_or_else(|| guess_neutral_background_from_theme(spec.visual_theme.as_deref()));
         plan.root_frame.fill = Some(vec![PlanFill {
             kind: "solid".to_owned(),
             color: bg,
         }]);
+    } else {
+        plan.palette = plan
+            .palette
+            .as_ref()
+            .and_then(|palette| palette.normalized());
+        if let Some(background) = plan
+            .palette
+            .as_ref()
+            .and_then(|palette| palette.background.as_ref())
+        {
+            plan.root_frame.fill = Some(vec![PlanFill {
+                kind: "solid".to_owned(),
+                color: background.clone(),
+            }]);
+        }
     }
     plan.clone()
 }
@@ -528,7 +545,7 @@ pub(crate) fn parse_orchestrator_response(
     let trimmed = raw.trim();
 
     // Strategy 1: direct
-    if let Some(plan) = try_parse_plan_strict(trimmed) {
+    if let Some(plan) = try_parse_plan_strict(trimmed, request) {
         return Some((plan, false));
     }
     if let Some(plan) = try_repair_plan_text(trimmed, request) {
@@ -538,7 +555,7 @@ pub(crate) fn parse_orchestrator_response(
     // Strategy 2: fenced code block
     if let Some(fenced_text) = extract_fence_content(trimmed) {
         let fenced_text = fenced_text.trim();
-        if let Some(plan) = try_parse_plan_strict(fenced_text) {
+        if let Some(plan) = try_parse_plan_strict(fenced_text, request) {
             return Some((plan, false));
         }
         if let Some(plan) = try_repair_plan_text(fenced_text, request) {
@@ -548,7 +565,7 @@ pub(crate) fn parse_orchestrator_response(
 
     // Strategy 3: brace-slice
     if let Some(braced_text) = extract_brace_slice(trimmed) {
-        if let Some(plan) = try_parse_plan_strict(braced_text) {
+        if let Some(plan) = try_parse_plan_strict(braced_text, request) {
             return Some((plan, false));
         }
         if let Some(plan) = try_repair_plan_text(braced_text, request) {
@@ -560,9 +577,11 @@ pub(crate) fn parse_orchestrator_response(
 }
 
 /// Strict probe: delegate to `parse_plan` (serde deserialization + non-empty
-/// subtasks check).  Returns `None` on any parse or validation failure.
-fn try_parse_plan_strict(text: &str) -> Option<OrchestratorPlan> {
-    crate::plan::parse_plan(text).ok()
+/// subtasks check), then apply the same style/palette contract as repaired
+/// plans. Returns `None` on any parse or validation failure.
+fn try_parse_plan_strict(text: &str, request: &DesignRequest) -> Option<OrchestratorPlan> {
+    let mut plan = crate::plan::parse_plan(text).ok()?;
+    Some(finalize_plan(&mut plan, None, request.design_md.as_ref()))
 }
 
 /// Repair probe: `serde_json::from_str::<Value>` → `repair_plan_object`.

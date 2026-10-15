@@ -20,6 +20,7 @@ fn plan() -> OrchestratorPlan {
         },
         subtasks: Vec::new(),
         style_guide_name: None,
+        palette: None,
     }
 }
 

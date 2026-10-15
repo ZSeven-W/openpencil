@@ -7,6 +7,20 @@ use crate::types::DocSink;
 use jian_ops_schema::node::PenNode;
 use op_editor_core::{first_solid_fill_hex, walkers, EditorCommand, NodeId};
 
+#[path = "map_template_geometry.rs"]
+mod map_template_geometry;
+
+/// Template parts follow the final viewport, after rail and overflow repairs.
+pub(super) fn settle_map_geometry(
+    sink: &mut dyn DocSink,
+    root_ids: &[String],
+    summary: &mut RepairSummary,
+    counter: &mut RepairCounter,
+) {
+    map_template_geometry::settle(sink, root_ids);
+    counter.checkpoint(summary, CheckCategory::Layout, "map-template-geometry");
+}
+
 /// Apply map patches before image target collection and checkpoint the group.
 pub(super) fn repair_map_placeholders(
     sink: &mut dyn DocSink,

@@ -48,6 +48,7 @@ fn plan_with(width: f64, subtasks: Vec<Subtask>) -> OrchestratorPlan {
         root_frame: root(width),
         subtasks,
         style_guide_name: None,
+        palette: None,
     }
 }
 

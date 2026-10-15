@@ -104,7 +104,7 @@ fn city_map_becomes_a_vector_placeholder_and_clears_search_intent() {
     let children = patch["children"].as_array().unwrap();
     assert_eq!(
         patch["explain"],
-        "map-template:location; illustrative, not geographic data"
+        "map-template:location; illustrative, not geographic data; viewport:327x280"
     );
     assert!(children.iter().any(|child| child["name"] == "map-pin"));
     assert!(!children.iter().any(|child| child["name"] == "map-route"));

@@ -172,6 +172,7 @@ fn the_driver_attributes_card_centring_to_the_card_board_centre_checkpoint() {
         },
         subtasks: vec![],
         style_guide_name: None,
+        palette: None,
     };
     let mut summary = RepairSummary::default();
     crate::cleanup::run_cleanup_passes_with_summary(&mut sink, &plan, &["card"], &mut summary);

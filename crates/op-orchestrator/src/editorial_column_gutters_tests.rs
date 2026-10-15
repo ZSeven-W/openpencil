@@ -244,6 +244,7 @@ fn plan(id: &str) -> OrchestratorPlan {
         },
         subtasks: vec![],
         style_guide_name: None,
+        palette: None,
     }
 }
 
@@ -305,6 +306,7 @@ fn real_generated_three_page_fixture_reflows_inside_the_same_fixed_boards() {
         },
         subtasks: vec![],
         style_guide_name: None,
+        palette: None,
     };
     let mut summary = RepairSummary::default();
     run_cleanup_passes_with_summary_and_policy_for_tests(

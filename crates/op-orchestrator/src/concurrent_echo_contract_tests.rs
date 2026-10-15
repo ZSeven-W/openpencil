@@ -59,6 +59,7 @@ fn fixture(
         },
         subtasks: vec![task.clone()],
         style_guide_name: None,
+        palette: None,
     };
     let req = DesignRequest {
         prompt: if cjk {

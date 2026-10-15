@@ -776,6 +776,7 @@ fn the_driver_attributes_chip_repairs_to_the_chip_checkpoint() {
         },
         subtasks: vec![],
         style_guide_name: None,
+        palette: None,
     };
     let mut summary = RepairSummary::default();
     run_cleanup_passes_with_summary(&mut sink, &plan, &[&root_id], &mut summary);

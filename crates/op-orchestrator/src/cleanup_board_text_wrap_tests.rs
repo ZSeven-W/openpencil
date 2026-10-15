@@ -489,6 +489,7 @@ fn the_driver_attributes_the_wrap_to_the_board_text_wrap_checkpoint() {
         },
         subtasks: vec![],
         style_guide_name: None,
+        palette: None,
     };
     let mut summary = RepairSummary::default();
     run_cleanup_passes_with_summary(&mut sink, &plan, &["card"], &mut summary);

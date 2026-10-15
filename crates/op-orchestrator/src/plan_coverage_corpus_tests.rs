@@ -96,6 +96,7 @@ fn case_plan(case: &Value) -> OrchestratorPlan {
             .map(|st| subtask(st, multi_screen))
             .collect(),
         style_guide_name: None,
+        palette: None,
     }
 }
 

@@ -156,6 +156,7 @@ fn the_card_board_survives_plan_normalization() {
             retry_feedback: None,
         }],
         style_guide_name: None,
+        palette: None,
     };
     let req = crate::types::DesignRequest {
         prompt: CARD_PROMPT.to_string(),

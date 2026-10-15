@@ -590,6 +590,7 @@ pub fn synthesize_plan(forest: &[PenNode], canvas_width: f64) -> crate::plan::Or
         },
         subtasks: Vec::new(),
         style_guide_name: None,
+        palette: None,
     }
 }
 

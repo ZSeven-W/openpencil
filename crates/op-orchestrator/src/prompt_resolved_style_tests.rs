@@ -70,6 +70,7 @@ fn plan_with_style(style_name: &str) -> OrchestratorPlan {
         },
         subtasks: vec![subtask()],
         style_guide_name: Some(style_name.to_string()),
+        palette: None,
     }
 }
 

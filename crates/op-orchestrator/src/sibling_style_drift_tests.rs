@@ -78,6 +78,7 @@ fn run_driver(sink: &mut VecDocSink, root_id: &str) -> RepairSummary {
         },
         subtasks: vec![],
         style_guide_name: None,
+        palette: None,
     };
     let mut summary = RepairSummary::default();
     run_cleanup_passes_with_summary(sink, &plan, &[root_id], &mut summary);

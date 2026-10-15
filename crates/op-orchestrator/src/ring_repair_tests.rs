@@ -355,6 +355,7 @@ fn cleanup_pipeline_repairs_the_screenshot_case() {
         },
         subtasks: vec![],
         style_guide_name: None,
+        palette: None,
     };
 
     let mut summary = crate::repair_summary::RepairSummary::default();

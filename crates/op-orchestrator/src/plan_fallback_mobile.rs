@@ -92,5 +92,6 @@ pub(crate) fn build_fallback_mobile_plan(
         ]
             }),
         style_guide_name: None,
+        palette: None,
     }
 }

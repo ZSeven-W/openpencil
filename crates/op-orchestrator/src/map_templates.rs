@@ -176,7 +176,7 @@ pub fn children(id: &str, width: f64, height: f64, theme: Theme, kind: MapTempla
             end,
             (w, h),
             "$--primary",
-            "#FFFFFF",
+            "$--primary-foreground",
         ));
     }
     // Decorative preview control: no fabricated behavior or remote map service.

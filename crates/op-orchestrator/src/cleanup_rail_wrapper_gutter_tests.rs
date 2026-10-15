@@ -25,6 +25,7 @@ fn plan() -> crate::plan::OrchestratorPlan {
         },
         subtasks: vec![],
         style_guide_name: None,
+        palette: None,
     }
 }
 

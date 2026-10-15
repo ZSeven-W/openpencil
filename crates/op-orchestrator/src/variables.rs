@@ -66,15 +66,39 @@ pub fn seed_commands(plan: &OrchestratorPlan, snap: &VarSnapshot) -> Vec<EditorC
     // Harmonize the cool-slate neutral ramp to the design's temperature: a warm
     // page (cream/orange) gets warm grays so the search bar / chips / avatar
     // circle no longer read as off-palette cool gray. Neutral pages keep slate.
-    let harmonize_bg = style_values
+    let explicit_palette = plan
+        .palette
         .as_ref()
-        .and_then(|values| values.colors.background.clone())
+        .and_then(|palette| palette.normalized());
+    let harmonize_bg = explicit_palette
+        .as_ref()
+        .and_then(|palette| palette.background.clone())
+        .or_else(|| {
+            style_values
+                .as_ref()
+                .and_then(|values| values.colors.background.clone())
+        })
         .or_else(|| plan.root_frame.first_solid_hex());
     if let Some(page_bg) = harmonize_bg {
         crate::palette_harmonize::harmonize_palette_neutrals(&mut palette, &page_bg);
     }
     if let Some(values) = style_values.as_ref() {
         apply_style_guide_palette(&mut palette, values);
+    }
+    if let Some(explicit) = explicit_palette.as_ref() {
+        for (name, color) in explicit.token_overrides() {
+            // A derived on-color belongs to the declared accent. When that
+            // accent is not being seeded (an existing user token owns it),
+            // retain the normal foreground defaults rather than pairing the
+            // user's accent with an on-color derived from a different color.
+            if name == "--primary-foreground"
+                && explicit.primary_foreground.is_none()
+                && !snap.created.iter().any(|name| name == "--primary")
+            {
+                continue;
+            }
+            set_declared_color(&mut palette, name, &color);
+        }
     }
     let variables = snap
         .created
@@ -152,6 +176,23 @@ fn set_light_color(
             *existing = color.to_string();
         }
         _ => {}
+    }
+}
+
+/// A declared design color is shared by all components regardless of the
+/// editor's current theme. Only newly created variables are emitted above;
+/// existing user/brand-kit variables retain ownership of every theme slot.
+fn set_declared_color(palette: &mut BTreeMap<String, VariableDefinition>, name: &str, color: &str) {
+    let Some(def) = palette.get_mut(name) else {
+        return;
+    };
+    match &mut def.value {
+        VariableValue::Themed(values) => {
+            for value in values {
+                value.value = VariableScalar::Str(color.to_string());
+            }
+        }
+        VariableValue::Scalar(value) => *value = VariableScalar::Str(color.to_string()),
     }
 }
 

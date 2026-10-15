@@ -325,6 +325,7 @@ fn cleanup_driver_reports_density_checkpoint_once() {
         },
         subtasks: Vec::new(),
         style_guide_name: None,
+        palette: None,
     };
     let mut summary = RepairSummary::default();
 

@@ -107,6 +107,7 @@ fn plan() -> OrchestratorPlan {
             retry_feedback: None,
         }],
         style_guide_name: None,
+        palette: None,
     }
 }
 

@@ -423,6 +423,12 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
         system_prompt.push_str("\n\n");
         system_prompt.push_str(resolved);
     }
+    if !has_design_md {
+        if let Some(palette) = build_plan_palette_instruction(plan, doc_has_variables) {
+            system_prompt.push_str("\n\n");
+            system_prompt.push_str(&palette);
+        }
+    }
     if let Some(instruction) = &explicit_token_instruction {
         system_prompt.push_str("\n\n");
         system_prompt.push_str(instruction);

@@ -19,6 +19,7 @@ fn plan() -> OrchestratorPlan {
         },
         subtasks: vec![],
         style_guide_name: None,
+        palette: None,
     }
 }
 
@@ -378,6 +379,7 @@ fn a_screen_group_per_slide_emits_a_root_per_slide() {
         },
         subtasks: Vec::new(),
         style_guide_name: None,
+        palette: None,
     };
     let names = [
         "01 Cover",
@@ -465,6 +467,7 @@ fn screen_group_plan(
         },
         subtasks: Vec::new(),
         style_guide_name: None,
+        palette: None,
     };
     let mut groups = Vec::with_capacity(count);
     for i in 0..count {

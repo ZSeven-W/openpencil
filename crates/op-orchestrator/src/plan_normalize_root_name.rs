@@ -63,6 +63,7 @@ mod tests {
             },
             subtasks: Vec::new(),
             style_guide_name: None,
+            palette: None,
         }
     }
 

@@ -5,6 +5,7 @@
 //! `buildFallbackPlanFromPrompt`)。
 
 use crate::design_type::{detect_design_type, DesignType, DesignTypePreset};
+pub use crate::plan_palette::PlanPalette;
 use crate::types::DesignRequest;
 use serde::{Deserialize, Serialize};
 
@@ -146,10 +147,17 @@ pub struct OrchestratorPlan {
     #[serde(rename = "rootFrame")]
     pub root_frame: RootFrameSpec,
     pub subtasks: Vec<Subtask>,
-    /// 规划选中的 style guide 名(catalog 引用)。S3b-1a 写进 plan
-    /// 但暂无消费方(变量播种入眠、sub-agent 注入推迟)。
+    /// Catalog guide used for seeded tokens and sub-agent style guidance.
     #[serde(rename = "styleGuideName", default)]
     pub style_guide_name: Option<String>,
+    /// A user-directed palette overrides catalog colors without changing the
+    /// selected guide's typography, shape, or composition guidance.
+    #[serde(
+        default,
+        deserialize_with = "crate::plan_palette::deserialize_palette",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub palette: Option<PlanPalette>,
 }
 
 /// plan 解析错误。
@@ -274,6 +282,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
             },
             subtasks,
             style_guide_name: None,
+            palette: None,
         };
     }
 
@@ -315,6 +324,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
             },
             subtasks,
             style_guide_name: None,
+            palette: None,
         };
     }
 
@@ -365,6 +375,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
         },
         subtasks,
         style_guide_name: None,
+        palette: None,
     }
 }
 
@@ -437,6 +448,7 @@ fn build_fallback_deck_plan(req: &DesignRequest, preset: DesignTypePreset) -> Or
         },
         subtasks,
         style_guide_name: None,
+        palette: None,
     }
 }
 

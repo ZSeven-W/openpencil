@@ -143,6 +143,7 @@ pub(crate) fn build_fallback_card_plan(
         },
         subtasks,
         style_guide_name: None,
+        palette: None,
     }
 }
 

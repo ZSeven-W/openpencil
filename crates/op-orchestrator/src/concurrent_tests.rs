@@ -122,6 +122,7 @@ mod geometry_echo {
             },
             subtasks: vec![],
             style_guide_name: None,
+            palette: None,
         }
     }
 

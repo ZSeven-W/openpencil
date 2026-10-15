@@ -213,6 +213,7 @@ fn wired_into_run_cleanup_passes_end_to_end() {
         },
         subtasks: Vec::new(),
         style_guide_name: None,
+        palette: None,
     };
     crate::cleanup::run_cleanup_passes(&mut sink, &plan, &root_id_refs);
 

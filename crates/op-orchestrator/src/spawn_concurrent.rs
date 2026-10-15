@@ -156,6 +156,7 @@ fn plan_from_state(sink: &dyn DocSink, specs: &[SpawnAgentSpec]) -> Orchestrator
         },
         subtasks,
         style_guide_name: None,
+        palette: None,
     }
 }
 

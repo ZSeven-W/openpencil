@@ -414,6 +414,7 @@ fn next_panel_fixture_cleanup_keeps_white_surface_and_border() {
         },
         subtasks: Vec::new(),
         style_guide_name: None,
+        palette: None,
     };
     let mut summary = RepairSummary::default();
     run_cleanup_passes_with_summary(&mut sink, &plan, &["root"], &mut summary);

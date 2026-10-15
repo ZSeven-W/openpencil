@@ -27,6 +27,7 @@ pub mod map_templates;
 pub(crate) mod mobile_content_rail;
 mod mobile_reflow;
 pub mod model_profile;
+pub mod plan_palette;
 // Public (was pub(crate)) so `op-host-services` can reuse the drift detector
 // for `finalize_design`'s advisories — services → orchestrator is the
 // existing dependency direction (DS P2-a item ③).

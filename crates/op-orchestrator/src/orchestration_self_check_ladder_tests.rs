@@ -60,6 +60,7 @@ fn plan(task: &Subtask, width: f64) -> OrchestratorPlan {
         },
         subtasks: vec![task.clone()],
         style_guide_name: None,
+        palette: None,
     }
 }
 

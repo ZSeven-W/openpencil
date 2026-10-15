@@ -57,6 +57,7 @@ fn plan_for(root_id: &str, width: f64, height: f64) -> crate::plan::Orchestrator
         },
         subtasks: Vec::new(),
         style_guide_name: None,
+        palette: None,
     }
 }
 

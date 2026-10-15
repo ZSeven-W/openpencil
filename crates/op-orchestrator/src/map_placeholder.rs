@@ -193,6 +193,12 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
     }
     let kind = crate::map_templates::MapTemplate::from_hint(&hint);
     let mut blocks = crate::map_templates::children(node.id_str(), width, height, theme, kind);
+    for block in &mut blocks {
+        block["explain"] = json!(format!(
+            "map-template-part:{}",
+            block["name"].as_str().unwrap_or_default()
+        ));
+    }
     let preserved = node
         .children()
         .into_iter()
@@ -223,7 +229,7 @@ pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: The
         "imageSearchQuery": null,
         "imagePrompt": null,
         "children": children,
-        "explain": format!("map-template:{}; illustrative, not geographic data", kind.key())
+        "explain": format!("map-template:{}; illustrative, not geographic data; viewport:{width}x{height}", kind.key())
     });
     if height_needs_placeholder_size(node) {
         patch["height"] = json!(MAP_PLACEHOLDER_HEIGHT);

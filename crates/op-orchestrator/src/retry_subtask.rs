@@ -70,6 +70,7 @@ fn plan_for_retry(sink: &dyn DocSink, subtask: &Subtask) -> OrchestratorPlan {
         // id_prefix ride through unchanged.
         subtasks: vec![subtask.clone()],
         style_guide_name: None,
+        palette: None,
     }
 }
 

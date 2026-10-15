@@ -47,6 +47,7 @@ fn plan(width: f64, subtasks: Vec<Subtask>) -> OrchestratorPlan {
         },
         subtasks,
         style_guide_name: None,
+        palette: None,
     }
 }
 
@@ -387,6 +388,7 @@ fn dashboard_plan(root_width: f64) -> OrchestratorPlan {
         },
         subtasks: vec![st_sidebar, st_chart, st_metric],
         style_guide_name: None,
+        palette: None,
     }
 }
 
@@ -479,6 +481,7 @@ fn normalize_dashboard_height_clamped_to_max() {
             retry_feedback: None,
         }],
         style_guide_name: None,
+        palette: None,
     };
     normalize(&mut p, &dash_req("data analytics admin dashboard"));
     assert_eq!(
@@ -523,6 +526,7 @@ fn normalize_dashboard_height_clamped_to_min() {
             retry_feedback: None,
         }],
         style_guide_name: None,
+        palette: None,
     };
     normalize(&mut p, &dash_req("data analytics admin dashboard"));
     assert_eq!(

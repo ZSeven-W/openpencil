@@ -55,6 +55,7 @@ fn mobile_plan(name: &str, labels: &[(&str, &str)]) -> OrchestratorPlan {
             .map(|(id, label)| section(id, label))
             .collect(),
         style_guide_name: None,
+        palette: None,
     }
 }
 

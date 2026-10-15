@@ -174,6 +174,7 @@ fn map_templates_preview_fixtures() {
                 );
                 let doc = json!({"version":"1.0","children":[node],"variables":{
                     "--primary":{"type":"color","value":if theme==Theme::Dark {"#6EDBA6"} else {"#18966B"}},
+                    "--primary-foreground":{"type":"color","value":if theme==Theme::Dark {"#18232B"} else {"#FFFFFF"}},
                     "--muted":{"type":"color","value":"#F5F7F4"},"--secondary":{"type":"color","value":"#18232B"}}});
                 std::fs::write(
                     std::path::Path::new(&dir).join(format!("{}-{label}-{size}.op", kind.key())),

@@ -110,6 +110,7 @@ mod tests {
                 })
                 .collect(),
             style_guide_name: None,
+            palette: None,
         }
     }
 

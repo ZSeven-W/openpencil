@@ -41,6 +41,7 @@ fn plan() -> OrchestratorPlan {
         },
         subtasks: vec![subtask()],
         style_guide_name: None,
+        palette: None,
     }
 }
 
