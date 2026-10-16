@@ -255,3 +255,42 @@ fn fitting_detail_and_narrow_poster_are_not_given_scroll() {
         assert_eq!(before, sink.state().doc);
     }
 }
+
+#[test]
+fn short_phone_content_keeps_only_the_navigation_at_the_bottom() {
+    let mut draft = phone(json!({"type":"frame","id":"footer","role":"bottom-tab-bar",
+    "width":"fill_container","height":78,"layout":"horizontal","children":[
+        {"type":"text","id":"home","content":"首页","height":20},
+        {"type":"text","id":"orders","content":"订单","height":20},
+        {"type":"text","id":"profile","content":"我的","height":20}
+    ]}));
+    for (id, height) in [("first", 100), ("last", 120)] {
+        draft.apply(EditorCommand::PatchNodeData {
+            node_id: NodeId::new(id),
+            patch_json: json!({"height":height}).to_string(),
+            page_id: None,
+        });
+    }
+    let original = serde_json::to_value(&draft.doc).unwrap();
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut draft };
+    super::super::repair(&mut sink, "root");
+    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+    let page = scene.active_page().unwrap();
+    let footer = page.find("footer").unwrap().bounds;
+    assert!(
+        (footer.origin.y + footer.size.y - 812.0).abs() < 1.0,
+        "{footer:?}"
+    );
+    let body = page.find("content").unwrap().bounds;
+    assert_eq!(body.size.y, 292.0, "Do not stretch or distribute the body");
+    let after = serde_json::to_value(&sink.state().doc).unwrap();
+    let children = after["children"][0]["children"].as_array().unwrap();
+    assert_eq!(
+        children[1]["children"][0],
+        original["children"][0]["children"][1]
+    );
+    assert_eq!(children[2], original["children"][0]["children"][2]);
+    let settled = sink.state().doc.clone();
+    super::super::repair(&mut sink, "root");
+    assert_eq!(settled, sink.state().doc);
+}

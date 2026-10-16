@@ -43,10 +43,17 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) -> bool {
     let (Some(board), Some(nav_rect)) = (page.find(root_id), page.find(nav_id)) else {
         return false;
     };
-    if nav_rect.bounds.origin.y + nav_rect.bounds.size.y
-        <= board.bounds.origin.y + board.bounds.size.y + 1.0
-        || !(44.0..=128.0).contains(&nav_rect.bounds.size.y)
-    {
+    // Explicit bottom chrome stays at the viewport edge on short pages too.
+    // Otherwise a more compact, successful generation leaves a floating tab
+    // bar and an unrelated strip of page background underneath it.
+    if !(44.0..=128.0).contains(&nav_rect.bounds.size.y) {
+        return false;
+    }
+    let bottom_gap = board.bounds.origin.y + board.bounds.size.y
+        - nav_rect.bounds.origin.y
+        - nav_rect.bounds.size.y;
+    // Preserve a small authored closing inset; it is already bottom chrome.
+    if (-1.0..=8.0).contains(&bottom_gap) {
         return false;
     }
     let prefix = usize::from(
