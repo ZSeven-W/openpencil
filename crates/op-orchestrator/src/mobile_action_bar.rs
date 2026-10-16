@@ -31,7 +31,7 @@ pub(crate) fn is_action_bar(node: &PenNode) -> bool {
     node.is_container() && (action_bar || explicitly_pinned_action(&identity)) && has_action(node)
 }
 
-fn explicitly_pinned_action(identity: &str) -> bool {
+pub(crate) fn explicitly_pinned_action(identity: &str) -> bool {
     let words: Vec<_> = identity.split(|c: char| !c.is_alphanumeric()).collect();
     let pinned = words.contains(&"pinned")
         || [

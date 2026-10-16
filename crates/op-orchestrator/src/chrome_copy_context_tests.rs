@@ -64,6 +64,35 @@ fn existing_copy_is_bounded_and_injection_text_stays_quoted_as_data() {
 }
 
 #[test]
+fn pinned_action_receives_body_facts_from_the_same_root_without_inventing_new_values() {
+    let (mut state, mut task, plan, mut outcome) = setup();
+    let mut doc = serde_json::to_value(&state.doc).unwrap();
+    doc["children"][0]["children"][0]["children"][0]["content"] = json!("全身力量训练");
+    doc["children"][0]["children"][0]["children"][1]["content"] = json!("45 分钟");
+    state = EditorState::from_document(serde_json::from_value(doc).unwrap());
+    let before = state.doc.clone();
+    task.id = "startbar".into();
+    task.label = "Pinned Start Button".into();
+    let mut previous = task.clone();
+    previous.id = "workout-meta".into();
+    previous.label = "Workout title and facts".into();
+    outcome.subtask = Some(previous);
+    let block = prompt_block(&state, &task, &plan, &[outcome.clone()]);
+    assert!(block.contains("45 分钟") && block.contains("全身力量训练"));
+    assert!(block.contains("Do not invent another overall duration"));
+    assert!(block.contains("omit optional repeated metadata"));
+    assert!(block.contains("not independently verified business facts"));
+    assert!(!block.contains("Hidden private note"));
+    assert_eq!(state.doc, before);
+
+    outcome.inserted_root_ids = vec!["other-sidebar".into()];
+    assert!(prompt_block(&state, &task, &plan, &[outcome.clone()]).is_empty());
+    outcome.inserted_root_ids = vec!["sidebar".into()];
+    task.label = "Start Button".into();
+    assert!(prompt_block(&state, &task, &plan, &[outcome]).is_empty());
+}
+
+#[test]
 fn full_pipeline_passes_sidebar_copy_to_the_header_call() {
     use crate::test_support::{
         ScriptResponse, ScriptedLlm, SkippedPreValidator, SkippedScreenshotProvider,
