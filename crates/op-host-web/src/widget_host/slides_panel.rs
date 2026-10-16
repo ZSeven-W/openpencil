@@ -1,26 +1,9 @@
 //! Slides-panel arm — the web host's platform tail.
 //!
-//! The same decisions as native's
-//! `op-host-native/src/widget_host/slides_panel.rs`, because both call
-//! the same `op_editor_ui::widgets::slides_panel_flow`, with ONE
-//! difference: the rows carry no rendered thumbnail.
-//!
-//! **Why the browser shows placeholders.** Rendering a board needs a
-//! second offscreen surface driven by the native scene painter; the web
-//! bundle has no such renderer, and the CanvasKit canvas the page paints
-//! into is not one it can allocate siblings from. The capability is
-//! therefore split exactly like `deck_html_export_supported`: the tab,
-//! the cards, the number chips, the highlight, the click-to-navigate and
-//! the reorder all work here, and the thumbnail plate paints as its
-//! placeholder — a faint slide glyph, so a row reads as a slide without
-//! a preview rather than as a broken plate. Routing the render
-//! to the `--serve-web` daemon (which already rasters boards for
-//! `export_nodes`) is the follow-up that closes the gap; it is a
-//! transport question, not a design one.
-//!
-//! The capability itself is `EditorUiState::slide_thumbnails_supported`,
-//! which this host never sets — the same shape as
-//! `deck_html_export_supported`.
+//! Shares the native panel's flow, but paints visible board previews directly
+//! through the canvas scene painter. No second renderer, daemon round-trip,
+//! document serialization or stale thumbnail cache is needed. Images and fonts
+//! use the same backend resources as the main canvas.
 
 use super::WidgetHost;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
@@ -99,13 +82,48 @@ impl WidgetHost {
             &self.editor_state,
             flow::selected_slide_count(&self.editor_state, &slides.chips),
         );
-        let widget = flow::widget(slides.active, &self.editor_state, &desc, actions.labels());
+        let mut widget = flow::widget(slides.active, &self.editor_state, &desc, actions.labels());
+        widget.thumbnails_supported = true;
         let mut cx = PaintCx { backend };
         widget.paint(&mut cx, &slides.layout, &self.theme);
-        // No blit comes between the two here — the browser has no board
-        // renderer — but the pair stays adjacent so the call shape is
-        // the one native uses, with its blit in the gap.
+        self.paint_slide_thumbnails(&mut cx, slides);
         widget.paint_overlay(&mut cx, &slides.layout, &self.theme);
+    }
+
+    fn paint_slide_thumbnails(
+        &self,
+        cx: &mut op_editor_ui::widgets::PaintCx<'_>,
+        slides: &SlidesFrame,
+    ) {
+        let Some(page) = self.layout_scene.active_page() else {
+            return;
+        };
+        for (index, _) in slides.layout.visible_rows() {
+            let Some(node) = slides.chips.get(index).and_then(|chip| page.find(&chip.id)) else {
+                continue;
+            };
+            let Some(clip) = slides.layout.visible_thumb_rect(index) else {
+                continue;
+            };
+            let thumb = slides.layout.thumb_rect(index);
+            let bounds = node.bounds;
+            if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
+                continue;
+            }
+            let zoom = (thumb.size.x / bounds.size.x).min(thumb.size.y / bounds.size.y);
+            let origin = Point2D::new(
+                thumb.origin.x + (thumb.size.x - bounds.size.x * zoom) / 2.0
+                    - bounds.origin.x * zoom,
+                thumb.origin.y + (thumb.size.y - bounds.size.y * zoom) / 2.0
+                    - bounds.origin.y * zoom,
+            );
+            cx.backend.save();
+            cx.backend.clip_rect(clip);
+            cx.backend
+                .clip_round_rect(thumb, op_editor_ui::widgets::SLIDE_THUMB_RADIUS);
+            op_editor_ui::widgets::canvas_viewport_paint::paint_node(cx, node, origin, zoom, clip);
+            cx.backend.restore();
+        }
     }
 
     /// Paint just the tab row, for the frames where the layer tree owns
@@ -320,3 +338,7 @@ impl WidgetHost {
 #[cfg(test)]
 #[path = "slides_panel_tests.rs"]
 mod slides_panel_tests;
+
+#[cfg(test)]
+#[path = "slides_panel_paint_tests.rs"]
+mod slides_panel_paint_tests;

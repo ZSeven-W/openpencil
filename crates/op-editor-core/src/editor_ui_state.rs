@@ -47,11 +47,11 @@ pub struct EditorUiState {
     pub sidebar_open: bool,
     pub layer_panel_width: f32,
     pub property_panel_width: f32,
-    /// Whether this session's one-time Chat-tab width bump has run (see
-    /// `CHAT_TAB_MIN_WIDTH`). Transient by design — a fresh session gets
-    /// one bump again, and the user's own drag is never overridden after
-    /// it. Never serialized.
+    /// Whether this session's Chat-tab width bump has run (`CHAT_TAB_MIN_WIDTH`).
+    /// Transient; the user's own drag is never overridden after the first bump.
     pub chat_tab_width_bumped: bool,
+    /// Transient host ownership of chat; hides the internal Agent tab.
+    pub host_owns_chat: bool,
     /// Responsive layout: live size class, touch density (≥44pt targets,
     /// bottom dock, sheets), and the single open mobile sheet.
     pub size_class: crate::size_class::EditorSizeClass,

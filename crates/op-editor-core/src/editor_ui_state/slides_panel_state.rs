@@ -141,6 +141,11 @@ impl SlidesPanelState {
 }
 
 impl EditorUiState {
+    /// Whether the Agent conversation can own the left rail.
+    pub fn chat_tab_available(&self) -> bool {
+        !self.touch_chrome() && !self.host_owns_chat
+    }
+
     /// Show the Agent conversation in the left rail: select the Chat
     /// tab and apply the one-time width bump (see
     /// [`CHAT_TAB_MIN_WIDTH`]). Returns whether anything changed.
@@ -151,7 +156,7 @@ impl EditorUiState {
     /// Touch chrome never takes the tab: its chat is a bottom sheet,
     /// and a Chat tab with no body would blank the rail.
     pub fn enter_chat_tab(&mut self) -> bool {
-        if self.touch_chrome() {
+        if !self.chat_tab_available() {
             return false;
         }
         let mut changed = false;

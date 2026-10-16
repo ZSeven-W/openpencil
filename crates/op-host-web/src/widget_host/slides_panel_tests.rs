@@ -101,15 +101,31 @@ fn a_page_with_no_boards_has_nothing_to_list_and_shows_no_tab() {
 }
 
 #[test]
-fn the_browser_states_it_cannot_render_thumbnails() {
-    // A declared capability, not a silent gap — the rows still list,
-    // navigate and reorder; only the picture is missing, and the widget
-    // fills the box with the slide number instead.
-    let host = host_with(Some(TemplateScene::Slides));
+fn browser_supports_board_previews() {
     assert!(
-        !host.editor_state.editor_ui.slide_thumbnails_supported,
-        "the browser has no local board renderer to declare"
+        WidgetHost::new()
+            .editor_state
+            .editor_ui
+            .slide_thumbnails_supported
     );
+}
+
+#[test]
+fn host_owned_chat_hides_agent_and_recovers_a_stale_chat_selection() {
+    let mut host = host_with(None);
+    host.editor_state.editor_ui.host_owns_chat = true;
+    host.editor_state.editor_ui.slides_panel.tab = LeftPanelTab::Chat;
+    let tabs = host.slides_tab_row(VH).unwrap();
+    assert_eq!(tabs.chat.size.x, 0.0);
+    assert!(tabs.layers.size.x > 0.0 && tabs.slides.size.x > 0.0);
+    assert_eq!(tabs.active, LeftPanelTab::Layers);
+    assert!(!op_editor_ui::widgets::slides_panel_flow::chat_tab_active(
+        &host.editor_state
+    ));
+    assert!(!host.editor_state.editor_ui.enter_chat_tab());
+
+    host.editor_state.editor_ui.host_owns_chat = false;
+    assert!(host.slides_tab_row(VH).unwrap().chat.size.x > 0.0);
 }
 
 #[test]

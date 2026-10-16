@@ -114,7 +114,7 @@ pub fn slides_tab_available(state: &EditorState) -> bool {
 /// `host_canvas_geometry::pinned_chat`). Never on touch chrome: touch
 /// never offers the tab, and `enter_chat_tab` refuses to select it.
 pub fn chat_tab_active(state: &EditorState) -> bool {
-    !state.editor_ui.touch_chrome() && state.editor_ui.slides_panel.tab == LeftPanelTab::Chat
+    state.editor_ui.chat_tab_available() && state.editor_ui.slides_panel.tab == LeftPanelTab::Chat
 }
 
 /// The row's three labels plus which optional tabs exist — the ONE
@@ -127,7 +127,7 @@ pub fn tab_row_desc(state: &EditorState) -> SlidesTabRow<'static> {
         chat_label: translate(ui, "leftPanel.tab.chat"),
         layers_label: translate(ui, "layers.title"),
         slides_label: translate(ui, slides_tab_label_key(state)),
-        chat_available: !ui.touch_chrome(),
+        chat_available: ui.chat_tab_available(),
         slides_available: slides_tab_available(state),
     }
 }
@@ -151,7 +151,10 @@ pub fn tab_row(state: &EditorState, panel: Rect) -> Option<SlidesPanelTabs> {
 
 fn tabs_for_state(state: &EditorState, panel: Rect) -> SlidesPanelTabs {
     let desc = tab_row_desc(state);
-    let active = state.editor_ui.slides_panel.tab;
+    let active = match state.editor_ui.slides_panel.tab {
+        LeftPanelTab::Chat if !desc.chat_available => LeftPanelTab::Layers,
+        tab => tab,
+    };
     if state.editor_ui.touch_chrome() {
         SlidesPanelTabs::new_touch(panel, active, &desc)
     } else {

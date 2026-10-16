@@ -60,6 +60,8 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
     // never flashes in.
     let search = window.location().search().unwrap_or_default();
     host.editor_state_mut().editor_ui.embed = op_editor_core::EmbedHost::from_query(&search);
+    host.editor_state_mut().editor_ui.host_owns_chat =
+        crate::web_settings::host_owns_chat_from_query(&search);
     let credential_load = crate::web_settings::load_into(host.editor_state_mut());
     // Whether the daemon holds an opened file decides Home vs canvas below;
     // ask now so the answer overlaps the CanvasKit download.

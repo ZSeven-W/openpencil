@@ -19,6 +19,7 @@ impl Default for EditorUiState {
             layer_panel_width: 240.0,
             property_panel_width: 256.0,
             chat_tab_width_bumped: false,
+            host_owns_chat: false,
             size_class: crate::size_class::EditorSizeClass::Expanded,
             touch: false,
             keyboard_occlusion: 0.0,

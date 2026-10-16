@@ -40,6 +40,18 @@ pub(crate) fn host_locale_from_query(search: &str) -> Option<Locale> {
         .and_then(|(_, value)| op_editor_core::bridge_protocol::locale_from_wire(value.as_ref()))
 }
 
+/// Only an embedded editor can hand its conversation to the host. Older
+/// bundles safely ignore this hint while keeping their existing embed chrome.
+pub(crate) fn host_owns_chat_from_query(search: &str) -> bool {
+    op_editor_core::EmbedHost::from_query(search) != op_editor_core::EmbedHost::None
+        && url::form_urlencoded::parse(search.trim_start_matches('?').as_bytes())
+            .any(|(key, value)| key == "chat" && value == "host")
+}
+
+#[cfg(test)]
+#[path = "web_settings_host_chrome_tests.rs"]
+mod host_chrome_tests;
+
 /// Restore every setting the partition snapshot owns to its default.
 ///
 /// `apply_payload` only writes fields the stored blob actually carries, so an
