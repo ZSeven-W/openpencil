@@ -105,3 +105,71 @@ fn normalized_budget_reaches_all_generation_retry_prompts() {
         assert!(call.user_prompt.contains("~350px of content"));
     }
 }
+
+fn taxi_plan() -> OrchestratorPlan {
+    crate::plan::parse_plan(&json!({
+        "rootFrame":{"id":"page","name":"打车主页","width":375,"height":812,"layout":"vertical","gap":0},
+        "subtasks":[
+            {"id":"map-area","label":"地图占位区","elements":"ARCHETYPE: route-map — protagonist map 45% full-bleed top","region":{"width":375,"height":360}},
+            {"id":"pickup-card","label":"当前位置卡","region":{"width":375,"height":72}},
+            {"id":"destination-input","label":"目的地输入","region":{"width":375,"height":56}},
+            {"id":"ride-types","label":"车型选择卡","region":{"width":375,"height":120}},
+            {"id":"coupon-bar","label":"优惠券条","region":{"width":375,"height":44}},
+            {"id":"confirm-cta","label":"确认叫车按钮","region":{"width":375,"height":64}},
+            {"id":"bottom-nav","label":"底部导航栏","region":{"width":375,"height":80}}
+        ]
+    }).to_string()).unwrap()
+}
+
+#[test]
+fn taxi_placeholder_and_tab_navigation_do_not_disable_the_map_budget() {
+    // Original historical prompt and planner output from the clipped rerun.
+    for prompt in [
+        "打车 App 主页（375×812）：地图占位区、当前位置卡、目的地输入、车型选择三档横向卡（图标+名称+预估价）、优惠券条、确认叫车按钮、底部导航。",
+        "Ride home, map placeholder, pickup, destination, vehicles, coupon, confirm ride and bottom navigation bar",
+    ] {
+        let mut plan = taxi_plan();
+        let req = request(prompt);
+        crate::plan_normalize::normalize(&mut plan, &req);
+        assert_eq!(plan.subtasks[0].region.height, 204.0, "{prompt}");
+        assert_eq!(plan.subtasks[5].region.height, 64.0);
+        assert_eq!(plan.subtasks[6].region.height, 78.0);
+        let before = serde_json::to_value(&plan).unwrap();
+        reserve_supporting_content(&mut plan, &req);
+        assert_eq!(before, serde_json::to_value(&plan).unwrap());
+    }
+}
+
+#[test]
+fn a_reserved_map_also_checks_the_supporting_sections_actual_height() {
+    let mut plan = taxi_plan();
+    crate::plan_normalize::normalize(&mut plan, &request("打车首页，地图占位区和底部导航"));
+    for height in [132, 112] {
+        let nodes: Vec<jian_ops_schema::node::PenNode> = serde_json::from_value(json!([{
+            "type":"frame","id":"vehicles","width":"fill_container","height":"fit_content","layout":"vertical","children":[
+                {"type":"rectangle","id":"cards","width":"fill_container","height":height}
+            ]
+        }])).unwrap();
+        let reason = crate::first_viewport::rejection(
+            &plan.subtasks[3],
+            &nodes,
+            &op_editor_core::EditorState::new(),
+        );
+        assert_eq!(reason.is_some(), height > 120, "{reason:?}");
+    }
+}
+
+#[test]
+fn actual_route_navigation_and_authored_map_sizes_still_opt_out() {
+    for prompt in [
+        "打车地图占45%，有底部导航",
+        "打车地图占位区，但地图高度460px",
+        "骑行导航，底部导航栏",
+        "Turn-by-turn navigation with bottom navigation bar",
+    ] {
+        let mut plan = plan();
+        let before = serde_json::to_value(&plan).unwrap();
+        reserve_supporting_content(&mut plan, &request(prompt));
+        assert_eq!(before, serde_json::to_value(&plan).unwrap(), "{prompt}");
+    }
+}

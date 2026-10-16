@@ -131,6 +131,34 @@ fn infeasible_or_ambiguous_plan_does_not_squeeze_required_content() {
 }
 
 #[test]
+fn dense_coffee_plan_uses_compact_media_instead_of_skipping_the_contract() {
+    // Exact section heights from the next full-pipeline coffee rerun. The
+    // old 160px hard minimum missed this feasible composition by just 8px.
+    let mut plan = plan();
+    plan.subtasks[0].elements = None;
+    plan.subtasks[1].elements = Some("ARCHETYPE: image-led — latte photo".into());
+    let mut note = plan.subtasks[2].clone();
+    note.id = "pickup-note".into();
+    plan.subtasks.insert(3, note);
+    for (task, height) in plan
+        .subtasks
+        .iter_mut()
+        .zip([96.0, 240.0, 264.0, 96.0, 78.0])
+    {
+        task.region.height = height;
+    }
+    plan.root_frame.gap = Some(16.0);
+    reserve(&mut plan, &request());
+    assert_eq!(plan.root_frame.gap, Some(8.0));
+    assert_eq!(plan.subtasks[1].region.height, 152.0);
+    assert!(plan.subtasks.iter().all(owns));
+    assert_eq!(plan.subtasks[3].region.height, 96.0);
+    let before = serde_json::to_value(&plan).unwrap();
+    reserve(&mut plan, &request());
+    assert_eq!(before, serde_json::to_value(&plan).unwrap());
+}
+
+#[test]
 fn real_layout_rejects_overflow_without_clipping_or_deleting_copy() {
     let mut plan = plan();
     reserve(&mut plan, &request());

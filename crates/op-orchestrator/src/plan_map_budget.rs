@@ -7,6 +7,22 @@ const BUDGET_MARKER: &str = "OP MAP BUDGET:";
 
 pub(super) fn reserve_supporting_content(plan: &mut OrchestratorPlan, req: &DesignRequest) {
     let brief = req.prompt.to_lowercase();
+    // Tab/page navigation is app chrome, not turn-by-turn map navigation.
+    // Likewise, 地图占位区 requests a placeholder, not an authored map ratio.
+    let layout_brief = [
+        "底部导航",
+        "顶部导航",
+        "导航栏",
+        "导航菜单",
+        "bottom navigation",
+        "top navigation",
+        "navigation bar",
+        "navigation menu",
+        "tab navigation",
+        "地图占位",
+    ]
+    .iter()
+    .fold(brief.clone(), |text, chrome| text.replace(chrome, ""));
     // Navigation, authored sizing and reference-driven compositions can put
     // content over a large map instead of stacking it in the first viewport.
     // Do not turn those intentional compositions into compact tracking cards.
@@ -31,7 +47,7 @@ pub(super) fn reserve_supporting_content(plan: &mut OrchestratorPlan, req: &Desi
             "map occupies",
         ]
         .iter()
-        .any(|word| brief.contains(word))
+        .any(|word| layout_brief.contains(word))
     {
         return;
     }
@@ -71,19 +87,22 @@ pub(super) fn reserve_supporting_content(plan: &mut OrchestratorPlan, req: &Desi
             - crate::scaffold::STATUS_BAR_HEIGHT
             - gap * group.indices.len() as f64;
         let overflow = total - available;
-        let task = &mut plan.subtasks[*map_index];
-        let remaining = (task.region.height - overflow).floor();
+        let remaining = (plan.subtasks[*map_index].region.height - overflow).floor();
         // If content is too long even for a usable map, a new plan/scrolling
         // composition is needed. Never collapse a map into a decorative strip.
         if overflow <= 0.0 || remaining < 180.0 || !remaining.is_finite() {
             continue;
         }
+        let task = &mut plan.subtasks[*map_index];
         task.region.height = remaining;
         let elements = task.elements.get_or_insert_default();
         if let Some(start) = elements.find(BUDGET_MARKER) {
             elements.truncate(start);
         }
         elements.push_str(&format!("\n{BUDGET_MARKER} This section has at most {remaining:.0}px INCLUDING its padding and labels after reserving the status bar, gaps and other requested sections. This measured budget overrides earlier approximate map heights/percentages. Keep the map slot within it. Do not shrink supporting text or contact controls, add filler, or move their content onto the map."));
+        // A map-only hint cannot protect the CTA when another subagent grows
+        // beyond its reservation. Enforce every section with native text layout.
+        crate::first_viewport::mark_tasks(plan, &group.indices);
     }
 }
 

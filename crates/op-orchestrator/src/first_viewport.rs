@@ -1,5 +1,5 @@
-//! Reserve space for explicit above-the-fold content before an image-led hero.
-//! Only fresh, single phone screens with one flexible image hero are covered.
+//! Reserve explicit above-the-fold image content and check section budgets.
+//! Stacked map plans also use the same native-layout height contract.
 
 use crate::{
     plan::{OrchestratorPlan, Subtask},
@@ -67,30 +67,36 @@ pub(crate) fn reserve(plan: &mut OrchestratorPlan, req: &DesignRequest) {
         (plan.subtasks[*hero].region.height - (total - available).max(0.0)).floor()
     };
     // Decorative section spacing yields before the image or required copy.
-    // Keep the existing rhythm when it fits; compact to an 8px baseline only
-    // when it would otherwise force an unreadably small brand/photo section.
+    // Keep the existing rhythm when it fits; compact to an 8px baseline when
+    // the media would fall below the preferred 160px section height.
     let gap = if height_with_gap(original_gap) < 160.0 {
         original_gap.min(8.0)
     } else {
         original_gap
     };
     let hero_height = height_with_gap(gap);
-    // An infeasible plan needs a different composition, not unreadable text or
-    // a collapsed photo. Do not distribute the deficit across required copy.
-    if hero_height < 160.0 || !hero_height.is_finite() {
+    // A compact 128–159px media card is still usable. Do not silently skip the
+    // whole contract because a dense first screen misses the preferred size.
+    // Truly infeasible plans need a new composition, not squeezed required copy.
+    if hero_height < 128.0 || !hero_height.is_finite() {
         return;
     }
     if gap != original_gap {
         plan.root_frame.gap = Some(gap);
     }
     plan.subtasks[*hero].region.height = hero_height;
-    for task in &mut plan.subtasks {
+    mark_tasks(plan, &(0..plan.subtasks.len()).collect::<Vec<_>>());
+}
+
+pub(crate) fn mark_tasks(plan: &mut OrchestratorPlan, indices: &[usize]) {
+    for &index in indices {
+        let task = &mut plan.subtasks[index];
         let elements = task.elements.get_or_insert_default();
         if let Some(start) = elements.find(MARKER) {
             elements.truncate(start);
         }
         elements.truncate(elements.trim_end().len());
-        elements.push_str(&format!("\n{MARKER} content budget at most {:.0}px including padding, title, image and gaps. Required sections must all be visible before scrolling; this overrides earlier approximate hero percentages and type sizes.",task.region.height));
+        elements.push_str(&format!("\n{MARKER} content budget at most {:.0}px including padding, title, media and gaps. Required sections must all be visible before scrolling; this overrides earlier approximate hero percentages and type sizes.",task.region.height));
     }
 }
 
@@ -102,7 +108,7 @@ pub(crate) fn instruction(task: &Subtask) -> String {
     if !owns(task) {
         return String::new();
     }
-    format!("\n\nFIRST-VIEWPORT CONTRACT: This complete section must fit within {:.0}px including all padding and text wrapping. It is a MAXIMUM, not a quota to fill. Other required sections have reserved space. Prefer a compact crop, smaller image and less decorative whitespace; keep every supplied line and readable body text. Use a content-height section, not clipping or a forced height. Size a long/CJK brand to its actual text width: normally 28–36px, 1–2 balanced lines, never a lone final glyph. A 48px display preset is for short display copy or figures, not mandatory for a long brand. Do not add new claims or omit the pickup/supporting note to make room.",task.region.height)
+    format!("\n\nFIRST-VIEWPORT CONTRACT: This complete section must fit within {:.0}px including all padding and text wrapping. It is a MAXIMUM, not a quota to fill. Other required sections have reserved space. Prefer compact media and less decorative whitespace; keep every supplied line and readable body text. Use a content-height section, not clipping or a forced height. Size a long/CJK brand to its actual text width: normally 28–36px, 1–2 balanced lines, never a lone final glyph. A 48px display preset is for short display copy or figures, not mandatory for a long brand. Do not add new claims or omit supporting notes or actions to make room.",task.region.height)
 }
 
 pub(crate) fn rejection(
@@ -129,7 +135,7 @@ pub(crate) fn rejection(
         .map(|r| r.height)
         .sum::<f64>();
     (height > task.region.height + 2.0).then(|| format!(
-        "self-check failed: first-viewport-overflow: section {:?} measures {:.0}px but has at most {:.0}px reserved. Regenerate the complete section in its budget so all requested sections remain above the fold. Reduce photo height, decorative gaps and oversized title; preserve every supplied line and readable body text. Do not clip content or force the root height.", task.label, height, task.region.height
+        "self-check failed: first-viewport-overflow: section {:?} measures {:.0}px but has at most {:.0}px reserved. Regenerate the complete section in its budget so all requested sections remain above the fold. Reduce media height, decorative gaps and oversized title; preserve every supplied line and readable body text. Do not clip content or force the root height.", task.label, height, task.region.height
     ))
 }
 
