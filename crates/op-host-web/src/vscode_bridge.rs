@@ -58,6 +58,7 @@ use op_editor_core::bridge_protocol::{
 use op_editor_core::web_sync::WebSyncClient;
 
 use document_snapshot::BridgeDocumentSnapshot;
+pub(crate) use helpers::post_to_parent as post_host_event;
 use helpers::{
     acquire_push_busy, post_to_parent, read_triple, release_push_busy, schedule_once,
     snapshot_state,
@@ -220,6 +221,14 @@ fn route_message<C: RepaintContext + 'static>(
         } => handle_save_committed(inner, generation, revision),
         BridgeInbound::ResolveConflict { mode, request_id } => {
             handle_resolve_conflict(inner, sync, mode, request_id)
+        }
+        BridgeInbound::CodegenResponse {
+            request_id,
+            code,
+            notice,
+            error,
+        } => {
+            crate::codegen_host::receive(inner, &request_id, code, notice, error);
         }
     }
 }

@@ -42,6 +42,9 @@ pub(super) fn complete_action_row_y_in_panel(state: &CodegenState, layout: Compl
 
 pub(super) fn code_area_y(state: &CodegenState, y: f32, progress_row_h: f32) -> f32 {
     let mut y = y;
+    if state.host_notice.is_some() {
+        y += progress_row_h;
+    }
     if state.degraded {
         y += progress_row_h;
     }
@@ -93,6 +96,22 @@ pub(super) fn paint_complete_body_in_panel(
     pressed: Option<CodegenHover>,
 ) -> f32 {
     let mut y = layout.y;
+    if let Some(notice) = state.host_notice.as_deref() {
+        let notice = crate::widgets::text_metrics::fit_chrome(
+            cx.backend,
+            notice,
+            (layout.w - PAD_X * 2.0).max(0.0),
+            13.0,
+        );
+        draw_line(
+            cx,
+            &notice,
+            theme.muted_foreground,
+            layout.x + PAD_X,
+            y + 16.0,
+        );
+        y += layout.progress_row_h;
+    }
     if state.degraded {
         draw_icon(
             cx.backend,

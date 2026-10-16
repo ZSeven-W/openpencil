@@ -76,3 +76,13 @@ fn highlighted_token_origins_follow_the_painted_monospace_advance() {
         expected_x += text.chars().count() as f32 * 8.0;
     }
 }
+
+#[test]
+fn host_handoff_notice_reserves_one_row_above_the_source() {
+    let mut state = CodegenState::default();
+    assert_eq!(code_area_y(&state, 20.0, 24.0), 20.0);
+    state.host_notice = Some("Queued for Codex".into());
+    assert_eq!(code_area_y(&state, 20.0, 24.0), 44.0);
+    state.degraded = true;
+    assert_eq!(code_area_y(&state, 20.0, 24.0), 68.0);
+}

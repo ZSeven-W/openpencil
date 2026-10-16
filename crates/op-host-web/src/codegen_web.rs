@@ -188,7 +188,7 @@ thread_local! {
         };
 }
 
-fn cache_completed_result(
+pub(crate) fn cache_completed_result(
     document_identity: CodegenDocumentIdentity,
     framework: Framework,
     code: String,
@@ -356,8 +356,19 @@ pub(crate) fn drain_codegen_flags<C: RepaintContext + 'static>(inner: &Rc<RefCel
     };
     if cancel {
         cancel_active_run();
+        crate::codegen_host::cancel();
     }
     if generate {
+        if inner
+            .borrow()
+            .host()
+            .editor_state()
+            .editor_ui
+            .host_owns_chat
+        {
+            crate::codegen_host::launch(inner);
+            return;
+        }
         // A LIVE run swallows the press (desktop parity: the pending launch
         // never proceeds while a run is active; the panel only shows
         // Generate / Regenerate outside the Generating state anyway).

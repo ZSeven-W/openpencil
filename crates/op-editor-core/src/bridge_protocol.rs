@@ -49,6 +49,12 @@ pub enum BridgeInbound {
         mode: ConflictMode,
         request_id: String,
     },
+    CodegenResponse {
+        request_id: String,
+        code: Option<String>,
+        notice: Option<String>,
+        error: Option<String>,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -109,6 +115,21 @@ impl BridgeInbound {
                 let request_id = value.get("requestId")?.as_str()?.to_string();
                 Some(BridgeInbound::ResolveConflict { mode, request_id })
             }
+            "op-bridge/codegen-response" => Some(BridgeInbound::CodegenResponse {
+                request_id: value.get("requestId")?.as_str()?.to_string(),
+                code: value
+                    .get("code")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                notice: value
+                    .get("notice")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+                error: value
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
+            }),
             _ => None,
         }
     }
@@ -221,6 +242,25 @@ pub fn event_conflict_resolved(request_id: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn code_panel_response_requires_a_request_id_and_preserves_source() {
+        assert_eq!(
+            BridgeInbound::parse(
+                r#"{"type":"op-bridge/codegen-response","requestId":"host-123-1","code":"<main>Hi</main>","notice":"Queued"}"#
+            ),
+            Some(BridgeInbound::CodegenResponse {
+                request_id: "host-123-1".into(),
+                code: Some("<main>Hi</main>".into()),
+                notice: Some("Queued".into()),
+                error: None
+            })
+        );
+        assert!(
+            BridgeInbound::parse(r#"{"type":"op-bridge/codegen-response","code":"stale"}"#)
+                .is_none()
+        );
+    }
 
     #[test]
     fn parse_inbound_messages() {

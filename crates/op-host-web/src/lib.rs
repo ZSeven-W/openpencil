@@ -69,6 +69,8 @@ mod collab_sync;
 #[cfg(feature = "canvaskit")]
 mod codegen_bundle;
 #[cfg(feature = "canvaskit")]
+mod codegen_host;
+#[cfg(feature = "canvaskit")]
 mod codegen_web;
 mod daemon_base;
 #[cfg(feature = "canvaskit")]

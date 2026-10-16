@@ -232,6 +232,8 @@ pub struct CodegenState {
     /// Node ids the last generation ran against — to detect selection drift.
     pub selection_snapshot: Vec<String>,
     pub error: Option<String>,
+    /// Host-owned conversion handoff status; never persisted in the design.
+    pub host_notice: Option<String>,
     /// Frame at which "Copied" was shown, to time the transient label.
     pub copied_at: Option<u64>,
     /// Set by the Code panel's Generate action; drained by the host codegen
@@ -271,6 +273,7 @@ impl Default for CodegenState {
             assets: Vec::new(),
             selection_snapshot: Vec::new(),
             error: None,
+            host_notice: None,
             copied_at: None,
             pending_generate: false,
             pending_regenerate: false,
@@ -337,6 +340,7 @@ impl CodegenState {
         self.assets.clear();
         self.selection_snapshot.clear();
         self.error = None;
+        self.host_notice = None;
         self.copied_at = None;
         self.pending_generate = false;
         self.pending_regenerate = false;
