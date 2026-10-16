@@ -29,7 +29,8 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) -> bool {
             .is_some_and(is_bottom_chrome)
     }) else {
         if promote_nested_chrome(sink, root_id) {
-            return repair(sink, root_id);
+            repair(sink, root_id);
+            return true;
         }
         return repair_without_footer(sink, root_id, &value);
     };
@@ -222,31 +223,8 @@ fn wrap_content(
 }
 
 pub(super) fn is_bottom_chrome(node: &PenNode) -> bool {
-    if crate::cleanup::is_trailing_bottom_nav_section(node) {
-        return true;
-    }
-    // A cart/checkout bar is persistent chrome too, but an ordinary last
-    // button or card must not become a pinned footer just because it is last.
-    let identity = crate::cleanup::node_identity_haystack(node);
-    let action_bar = matches!(
-        node.base().role.as_deref(),
-        Some("bottom-action-bar" | "cart-bar" | "checkout-bar" | "submit-bar")
-    ) || [
-        "cart-bar",
-        "cartbar",
-        "cart bar",
-        "checkout-bar",
-        "bottom action",
-        "bottom-action",
-        "submit-bar",
-        "底部购物车",
-        "购物车栏",
-        "底部操作栏",
-        "底部提交",
-    ]
-    .iter()
-    .any(|name| identity.contains(name));
-    node.is_container() && action_bar && has_action(node)
+    crate::cleanup::is_trailing_bottom_nav_section(node)
+        || crate::mobile_action_bar::is_action_bar(node)
 }
 
 fn promote_nested_chrome(sink: &mut dyn DocSink, root_id: &str) -> bool {
@@ -272,6 +250,14 @@ fn promote_nested_chrome(sink: &mut dyn DocSink, root_id: &str) -> bool {
             let Ok(shell) = serde_json::to_value(tail) else {
                 return false;
             };
+            // Older saves may already have wrapped the explicitly pinned CTA
+            // into a viewport. Reuse that viewport; preserve its closing inset.
+            let pad = padding(&shell);
+            let viewport = shell.get("role").and_then(Value::as_str) == Some("scroll-area")
+                && shell.get("clipContent").and_then(Value::as_bool) == Some(true)
+                && shell.get("height").and_then(Value::as_str) == Some("fill_container")
+                && pad[1] == 0.0
+                && pad[3] == 0.0;
             if shell.get("layout").and_then(Value::as_str) != Some("vertical")
                 || shell.get("constraints").is_some()
                 || shell.get("x").is_some()
@@ -279,8 +265,10 @@ fn promote_nested_chrome(sink: &mut dyn DocSink, root_id: &str) -> bool {
                 || shell
                     .get("role")
                     .and_then(Value::as_str)
-                    .is_some_and(|role| !matches!(role, "content" | "main" | "app-content"))
-                || padding(&shell).iter().any(|p| *p != 0.0)
+                    .is_some_and(|role| {
+                        !matches!(role, "content" | "main" | "app-content") && !viewport
+                    })
+                || (!viewport && pad.iter().any(|p| *p != 0.0))
                 || !page
                     .find(tail.id_str())
                     .is_some_and(|node| (node.bounds.size.x - board.bounds.size.x).abs() < 1.0)
@@ -312,12 +300,4 @@ fn promote_nested_chrome(sink: &mut dyn DocSink, root_id: &str) -> bool {
             index: None,
         })
     })
-}
-
-fn has_action(node: &PenNode) -> bool {
-    matches!(node.base().role.as_deref(), Some("button" | "icon-button"))
-        || crate::wire_screen_navigation::node_has_events(node)
-        || node
-            .children()
-            .is_some_and(|children| children.iter().any(has_action))
 }

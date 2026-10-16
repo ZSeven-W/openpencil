@@ -17,6 +17,27 @@ use serde_json::json;
 const ECHO: &str = "mobile-bottom-flush";
 
 #[test]
+fn pinned_action_closes_the_screen_only_with_its_own_safe_inset() {
+    for (name, padding, expected) in [
+        ("Pinned Start Button", 28, false),
+        ("Pinned Start Button", 0, true),
+        ("Start Button", 28, true),
+        ("Unpinned Start Button", 28, true),
+    ] {
+        let root = json!({"type":"frame","id":"root","width":375,"height":812,
+        "layout":"vertical","children":[
+            {"type":"frame","id":"body","height":724,"width":"fill_container"},
+            {"type":"frame","id":"footer","name":name,"width":"fill_container",
+             "height":88,"layout":"vertical","padding":[12,24,padding,24],"children":[
+                {"type":"frame","id":"button","role":"button","height":48,
+                 "children":[{"type":"text","id":"label","content":"开始训练","height":24}]}
+            ]}
+        ]});
+        assert_eq!(echoed(root), expected, "{name}, bottom padding {padding}");
+    }
+}
+
+#[test]
 fn navigation_keeps_background_full_bleed_and_moves_only_flush_overlays() {
     let root = json!({"type":"frame","id":"root","width":375,"height":812,"layout":"vertical","gap":0,
         "children":[{"type":"frame","id":"status","height":78,"width":375},

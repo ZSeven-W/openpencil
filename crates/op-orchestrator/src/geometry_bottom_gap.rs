@@ -10,10 +10,12 @@
 //! preserving every authored business node. The diagnostic uses the same
 //! resolved-geometry predicate, so cleanup and echo cannot disagree.
 //!
-//! No name heuristics: the bottom-nav exception is decided from the authored
+//! The bottom-nav exception is decided from the authored
 //! `role` semantic plus resolved geometry (full-width trailing band, nav-band
 //! height, ≥3 evenly-sized tap targets in a horizontal row) — never from what
 //! the model happened to call the frame.
+//! Explicit action bars also close the screen when their full-width bounded
+//! surface retains a safe inset below the button. They share cleanup semantics.
 
 use super::*;
 use op_editor_core::PenNodeExt;
@@ -174,7 +176,10 @@ fn mobile_bottom_gap_including_overflow(
             .and_then(|e| e.get("onScroll"))
             .and_then(Value::as_array)
             .is_some_and(|events| !events.is_empty());
-    if scroll_viewport || is_bottom_nav_shape(last, &root_rect, rects) {
+    if scroll_viewport
+        || is_bottom_nav_shape(last, &root_rect, rects)
+        || is_inset_action_bar(last, &root_rect, rects)
+    {
         return None;
     }
     // The lowest resolved edge across the root's direct children — not just
@@ -189,6 +194,21 @@ fn mobile_bottom_gap_including_overflow(
     }
     let gap = root_rect.y + root_rect.h - content_bottom;
     Some(gap)
+}
+
+fn is_inset_action_bar(child: &Value, root: &Rect, rects: &HashMap<String, Rect>) -> bool {
+    let Some(rect) = resolved(child, rects) else {
+        return false;
+    };
+    if rect.w < root.w - FULL_WIDTH_EPS
+        || !(44.0..=128.0).contains(&rect.h)
+        || !numeric_padding_sides(child).is_some_and(|padding| padding[2] >= MIN_BOTTOM_GAP)
+    {
+        return false;
+    }
+    serde_json::from_value(child.clone())
+        .ok()
+        .is_some_and(|node| crate::mobile_action_bar::is_action_bar(&node))
 }
 
 fn content_bottom(child: &Value, rects: &HashMap<String, Rect>) -> Option<f64> {

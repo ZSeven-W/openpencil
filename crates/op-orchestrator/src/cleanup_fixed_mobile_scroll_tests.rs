@@ -82,8 +82,79 @@ fn cart_and_checkout_bars_are_preserved_outside_scroll_content() {
 }
 
 #[test]
+fn explicitly_pinned_cta_keeps_the_complete_action_area_outside_the_scroll() {
+    for name in [
+        "Pinned Start Button",
+        "fixed-bottom-cta",
+        "底部固定开始训练按钮",
+    ] {
+        let mut draft = phone(json!({"type":"frame","id":"footer","name":name,
+        "role":"button","width":"fill_container","height":"fit_content",
+        "layout":"vertical","padding":[12,24,28,24],"children":[
+            {"type":"frame","id":"start","role":"button","width":"fill_container",
+             "height":48,"events":{"onTap":[{"toast":"Start workout"}]},"children":[
+                {"type":"text","id":"start-label","content":"开始训练","fontSize":16}
+            ]}
+        ]}));
+        assert_preserved_and_pinned(&mut draft);
+    }
+}
+
+#[test]
+fn explicit_pinned_cta_can_recover_from_a_previously_saved_scroll_wrapper() {
+    let mut draft = phone(
+        json!({"type":"frame","id":"footer","name":"Pinned Start Button",
+        "role":"button","width":"fill_container","height":88,"children":[
+            {"type":"text","id":"start-label","content":"开始训练","height":24}
+        ]}),
+    );
+    let original = serde_json::to_value(&draft.doc).unwrap();
+    draft.apply(EditorCommand::MoveNode {
+        node_id: NodeId::new("footer"),
+        target_parent: NodeId::new("content"),
+        page_id: None,
+        index: None,
+    });
+    draft.apply(EditorCommand::PatchNodeData {
+        node_id: NodeId::new("content"),
+        patch_json: json!({"role":"scroll-area","height":"fill_container",
+            "clipContent":true,"padding":[0,0,28,0]})
+        .to_string(),
+        page_id: None,
+    });
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut draft };
+    assert!(super::super::mobile_scroll::repair(&mut sink, "root"));
+    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+    let page = scene.active_page().unwrap();
+    let footer = page.find("footer").unwrap().bounds;
+    assert!(
+        (footer.origin.y + footer.size.y - 812.0).abs() < 1.0,
+        "{footer:?}"
+    );
+    let after = serde_json::to_value(&sink.state().doc).unwrap();
+    let children = after["children"][0]["children"].as_array().unwrap();
+    assert_eq!(children.len(), 3, "Reuse the existing scroll area");
+    assert_eq!(children[1]["id"], "content");
+    assert_eq!(
+        children[1]["children"],
+        original["children"][0]["children"][1]["children"]
+    );
+    assert_eq!(children[2], original["children"][0]["children"][2]);
+    let settled = sink.state().doc.clone();
+    assert!(!super::super::mobile_scroll::repair(&mut sink, "root"));
+    assert_eq!(settled, sink.state().doc);
+}
+
+#[test]
 fn ordinary_trailing_content_is_not_misidentified_as_fixed_chrome() {
-    for (name, action) in [("Card", true), ("cart-bar", false)] {
+    for (name, action) in [
+        ("Card", true),
+        ("cart-bar", false),
+        ("Start Button", true),
+        ("Unpinned Start Button", true),
+        ("Pinned article", true),
+        ("Pinned Start Button", false),
+    ] {
         let mut footer = json!({"type":"frame","id":"footer","name":name,"height":60,"width":"fill_container","children":[
             {"type":"text","id":"tail-copy","content":"More content","fontSize":16}
         ]});

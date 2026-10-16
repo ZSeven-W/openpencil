@@ -19,13 +19,15 @@ fn replay_retained_mobile_bounds() {
     let mut state = EditorState::from_document(loaded.value);
     let before = state.doc.clone();
     let root_id = state.active_children()[0].id_str().to_owned();
-    let nav_id = state.active_children()[0]
-        .children()
-        .unwrap()
-        .last()
-        .unwrap()
-        .id_str()
-        .to_owned();
+    let nav_id = std::env::var("OPENPENCIL_QA_MOBILE_CHROME_ID").unwrap_or_else(|_| {
+        state.active_children()[0]
+            .children()
+            .unwrap()
+            .last()
+            .unwrap()
+            .id_str()
+            .to_owned()
+    });
     let issues_before = crate::geometry_validation::geometry_diagnostics(&state);
     let nav_before = bounds(&state, &nav_id);
     let patches = op_image_enrich::image_fallback_policy(&state.active_children()[0], false);
