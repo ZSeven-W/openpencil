@@ -506,16 +506,26 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
     if crate::map_viewport::owns(subtask) {
         root_rule = format!("Create EXACTLY ONE section root frame with width:fill_container, height:{:.0}, layout:none, padding:0. This fixed viewport is the explicit exception to content-height sections; every overlay and the map must be its descendants.", subtask.region.height);
     }
+    let bounded = crate::first_viewport::owns(subtask);
+    let content_amount_rule = if bounded {
+        format!("Maximum section height: {:.0}px including padding, text wrapping and gaps. Keep required content complete; do not add elements or blank space to fill this budget.", subtask.region.height)
+    } else {
+        format!(
+            "Target content amount: ~{:.0}px tall. Generate enough elements to fill this area.",
+            subtask.region.height
+        )
+    };
+    let amount_qualifier = if bounded { "at most " } else { "~" };
     let mut user_prompt = format!(
         "PLANNER PROPOSAL — Page sections:\n{}\n\n\
 {}\
-Generate ONLY \"{}\" (~{:.0}px of content).{}\n\
+Generate ONLY \"{}\" ({amount_qualifier}{:.0}px of content).{}\n\
 ORIGINAL USER BRIEF:\n{}\nEND ORIGINAL USER BRIEF\n\n\
 {}\
 {}\
 CRITICAL LAYOUT CONSTRAINTS:\n\
 - {}\n\
-- Target content amount: ~{:.0}px tall. Generate enough elements to fill this area.\n\
+- {content_amount_rule}\n\
 - DENSITY: Do NOT pack the area edge-to-edge. Prefer fewer, stronger modules with visible negative space; most sections should have 3-5 primary rows/cards at most.\n\
 - VISUAL HIERARCHY: Each section must have one clear focal element, secondary supporting text, and quieter metadata. Avoid equal-weight blocks competing for attention.\n\
 - {spacing_rule}\n\
@@ -545,7 +555,6 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
         screen_route_block,
         explicit_user_token_block,
         root_rule,
-        subtask.region.height,
         nesting_rule,
         output_rule,
     );

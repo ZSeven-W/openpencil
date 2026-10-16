@@ -48,11 +48,7 @@ pub(crate) fn reserve(plan: &mut OrchestratorPlan, req: &DesignRequest) {
             // A planner may repeat the screen's archetype on its compact
             // brand header. Only a section with room above the minimum hero
             // height is an image-budget candidate; required small copy stays.
-            (t.region.height > 160.0
-                && t.elements
-                    .as_deref()
-                    .is_some_and(|e| e.trim_start().starts_with("ARCHETYPE: image-led")))
-            .then_some(i)
+            (t.region.height > 160.0 && is_image_section(t)).then_some(i)
         })
         .collect();
     let [hero] = heroes.as_slice() else { return };
@@ -88,6 +84,26 @@ pub(crate) fn reserve(plan: &mut OrchestratorPlan, req: &DesignRequest) {
     mark_tasks(plan, &(0..plan.subtasks.len()).collect::<Vec<_>>());
 }
 
+fn is_image_section(task: &Subtask) -> bool {
+    let Some(elements) = task.elements.as_deref() else {
+        return false;
+    };
+    let elements = elements.to_lowercase();
+    if elements.contains("archetype: image-led") {
+        return true;
+    }
+    // A short brand header may carry the screen-level archetype while the
+    // actual hero is its next sibling. Require both a media-specific section
+    // identity and image content; thumbnails in ordinary lists are not heroes.
+    let identity = format!("{} {}", task.id, task.label).to_lowercase();
+    ["hero", "主图", "头图", "首图", "cover image"]
+        .iter()
+        .any(|token| identity.contains(token))
+        && ["photo", "image", "照片", "主图", "头图"]
+            .iter()
+            .any(|token| elements.contains(token))
+}
+
 pub(crate) fn mark_tasks(plan: &mut OrchestratorPlan, indices: &[usize]) {
     for &index in indices {
         let task = &mut plan.subtasks[index];
@@ -100,7 +116,7 @@ pub(crate) fn mark_tasks(plan: &mut OrchestratorPlan, indices: &[usize]) {
     }
 }
 
-fn owns(task: &Subtask) -> bool {
+pub(crate) fn owns(task: &Subtask) -> bool {
     task.elements.as_deref().is_some_and(|e| e.contains(MARKER))
 }
 
@@ -108,7 +124,7 @@ pub(crate) fn instruction(task: &Subtask) -> String {
     if !owns(task) {
         return String::new();
     }
-    format!("\n\nFIRST-VIEWPORT CONTRACT: This complete section must fit within {:.0}px including all padding and text wrapping. It is a MAXIMUM, not a quota to fill. Other required sections have reserved space. Prefer compact media and less decorative whitespace; keep every supplied line and readable body text. Use a content-height section, not clipping or a forced height. Size a long/CJK brand to its actual text width: normally 28–36px, 1–2 balanced lines, never a lone final glyph. A 48px display preset is for short display copy or figures, not mandatory for a long brand. Do not add new claims or omit supporting notes or actions to make room.",task.region.height)
+    format!("\n\nFIRST-VIEWPORT CONTRACT: This complete section must fit within {:.0}px including all padding and text wrapping. It is a MAXIMUM, not a quota to fill. Other required sections have reserved space. Compute padding + title + rows/media + all gaps before emitting the script. Prefer compact media and less decorative whitespace; keep every supplied line and readable body text. Supplied content and usable controls take priority over optional large photos, duplicate headings and repeated notes; supporting sections must not become a second photo hero. Use a content-height section, not clipping or a forced height. Size a long/CJK brand to its actual text width: normally 28–36px, 1–2 balanced lines, never a lone final glyph. A 48px display preset is for short display copy or figures, not mandatory for a long brand. Do not add new claims or omit supporting notes or actions to make room.",task.region.height)
 }
 
 pub(crate) fn rejection(
@@ -134,8 +150,25 @@ pub(crate) fn rejection(
         .filter_map(|n| rects.get(n.id_str()))
         .map(|r| r.height)
         .sum::<f64>();
-    (height > task.region.height + 2.0).then(|| format!(
-        "self-check failed: first-viewport-overflow: section {:?} measures {:.0}px but has at most {:.0}px reserved. Regenerate the complete section in its budget so all requested sections remain above the fold. Reduce media height, decorative gaps and oversized title; preserve every supplied line and readable body text. Do not clip content or force the root height.", task.label, height, task.region.height
+    if height <= task.region.height + 2.0 {
+        return None;
+    }
+    // Show the measured contributors, not just an opaque rejection. A row's
+    // native height includes padding/wrapped copy, which a guessed budget
+    // often omits. These ids describe the rejected draft, not reusable nodes.
+    let parts = nodes
+        .iter()
+        .flat_map(|node| node.children().into_iter().flatten())
+        .take(12)
+        .filter_map(|child| {
+            rects
+                .get(child.id_str())
+                .map(|rect| format!("{}={:.0}px", child.id_str(), rect.height))
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(format!(
+        "self-check failed: first-viewport-overflow: section {:?} measures {:.0}px but has at most {:.0}px reserved; recover at least {:.0}px. Measured immediate child heights (before parent padding/gaps): {}. These are diagnostics of the rejected draft; recreate the complete section. Recalculate padding + title + rows/media + all gaps. Reduce media height, decorative gaps and oversized title; preserve every supplied line and readable body text. Do not clip content or force the root height.", task.label, height, task.region.height, (height-task.region.height).ceil(), parts
     ))
 }
 

@@ -19,10 +19,7 @@ pub(super) fn instruction(plan: &OrchestratorPlan, subtask: &Subtask) -> String 
     )).unwrap_or_default();
     let mut owners = plan.subtasks.iter().filter(|candidate| {
         candidate.screen == subtask.screen
-            && candidate
-                .elements
-                .as_deref()
-                .is_some_and(|e| e.contains("ARCHETYPE:"))
+            && candidate.elements.as_deref().is_some_and(owns_protagonist)
     });
     let first_owner = owners.next();
     // Model plans can repeat the marker in a header and its hero. Treat
@@ -38,6 +35,25 @@ pub(super) fn instruction(plan: &OrchestratorPlan, subtask: &Subtask) -> String 
         None => "SIGNATURE MOMENT: give the screen one memorable focal module; follow the planned scale and content priority without assuming this section owns the hero. Supporting sections stay subordinate. Keep chart marks and selected states legible, with functional accents.".to_owned(),
     };
     format!("{canvas}{hierarchy}")
+}
+
+fn owns_protagonist(elements: &str) -> bool {
+    elements.split("ARCHETYPE:").skip(1).any(|suffix| {
+        let archetype = suffix
+            .split([';', '\n', '—', ','])
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_ascii_lowercase();
+        // GLM sometimes tags supporting content as an archetype too. It is
+        // not a second protagonist, and must not cancel the real owner's
+        // hierarchy. Keep custom creative archetypes eligible.
+        !archetype.is_empty()
+            && !matches!(
+                archetype.as_str(),
+                "quiet section" | "supporting section" | "none"
+            )
+    })
 }
 
 #[cfg(test)]
@@ -70,5 +86,28 @@ mod tests {
         assert!(!ambiguous.contains("owns the screen"));
         assert!(ambiguous.contains("planned scale"));
         assert!(instruction(&plan, &plan.subtasks[2]).contains("owns the screen"));
+    }
+
+    #[test]
+    fn quiet_archetype_in_real_coffee_plan_does_not_cancel_the_photo_owner() {
+        let plan = crate::plan::parse_plan(r##"{
+            "rootFrame":{"id":"p","name":"晴日咖啡首页","width":375,"height":812},
+            "subtasks":[
+                {"id":"brand-header","label":"品牌区","elements":"ARCHETYPE: image-led — protagonist 咖啡照片头图 40%","region":{"width":375,"height":132}},
+                {"id":"recommend","label":"推荐饮品","elements":"ARCHETYPE: quiet section; quiet section: secondary visual weight; 一张真实咖啡照片卡片作为推荐主视觉","region":{"width":375,"height":230}},
+                {"id":"drink-list","label":"饮品价格列表","elements":"quiet section: secondary visual weight","region":{"width":375,"height":196}}
+            ]
+        }"##).unwrap();
+        assert!(instruction(&plan, &plan.subtasks[0]).contains("owns the screen's protagonist"));
+        for task in &plan.subtasks[1..] {
+            let prompt = instruction(&plan, task);
+            assert!(prompt.contains("belongs to \"品牌区\""));
+            assert!(prompt.contains("do not create a second hero"));
+        }
+        assert!(owns_protagonist(
+            "ARCHETYPE: kinetic-collage — custom composition"
+        ));
+        assert!(!owns_protagonist("ARCHETYPE: quiet section — compact card"));
+        assert!(!owns_protagonist("ARCHETYPE: "));
     }
 }

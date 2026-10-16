@@ -46,6 +46,14 @@ fn real_coffee_plan_reserves_required_copy_before_photo() {
         assert!(call.user_prompt.contains("fit within 238px"));
         assert!(call.user_prompt.contains("never a lone final glyph"));
         assert!(call.user_prompt.contains("MAXIMUM, not a quota"));
+        assert!(call.user_prompt.contains("Maximum section height: 238px"));
+        assert!(call.user_prompt.contains("at most 238px of content"));
+        assert!(!call
+            .user_prompt
+            .contains("Generate enough elements to fill this area"));
+        assert!(call
+            .user_prompt
+            .contains("supporting sections must not become a second photo hero"));
     }
 }
 
@@ -64,6 +72,21 @@ fn unconstrained_long_and_multiscreen_pages_remain_unchanged() {
         };
         reserve(&mut plan, &req);
         assert_eq!(before, serde_json::to_value(&plan).unwrap());
+        let (call, _) = crate::prompt::build_subagent_prompt(
+            &plan.subtasks[0],
+            &plan,
+            &req,
+            AbortFlag::new(),
+            false,
+            false,
+            &op_editor_core::ComponentLibrary::default(),
+        );
+        assert!(call
+            .user_prompt
+            .contains("Target content amount: ~330px tall"));
+        assert!(call
+            .user_prompt
+            .contains("Generate enough elements to fill this area"));
     }
     let mut plan = plan();
     plan.subtasks[0].screen = Some("home".into());
@@ -159,6 +182,38 @@ fn dense_coffee_plan_uses_compact_media_instead_of_skipping_the_contract() {
 }
 
 #[test]
+fn screen_archetype_on_short_header_still_budgets_the_actual_photo_sibling() {
+    // Exact next full-pipeline plan: the image-led marker is on a 92px brand
+    // header; the 330px hero has only its media label and description.
+    let mut plan = crate::plan::parse_plan(&json!({
+        "rootFrame":{"id":"page","name":"晴日咖啡首页","width":375,"height":812,"layout":"vertical","gap":0},
+        "subtasks":[
+            {"id":"brand-header","label":"品牌头部","elements":"品牌名标题；ARCHETYPE: image-led — 图片主角在下方","region":{"width":375,"height":92}},
+            {"id":"hero-drink","label":"推荐饮品主图","elements":"大幅真实拿铁咖啡照片（约40%首屏高度）","region":{"width":375,"height":330}},
+            {"id":"menu-list","label":"三款饮品价格列表","elements":"三张横向卡片各含真实咖啡小图与名称价格","region":{"width":375,"height":230}},
+            {"id":"pickup-note","label":"自取说明与下单按钮","region":{"width":375,"height":160}},
+            {"id":"tabs","label":"Bottom Navigation","region":{"width":375,"height":78}}
+        ]
+    }).to_string()).unwrap();
+    reserve(&mut plan, &request());
+    assert_eq!(plan.subtasks[0].region.height, 92.0);
+    assert_eq!(plan.subtasks[1].region.height, 166.0);
+    assert_eq!(plan.subtasks[2].region.height, 230.0);
+    assert!(plan.subtasks.iter().all(owns));
+    let settled = plan.clone();
+    reserve(&mut plan, &request());
+    assert_eq!(settled, plan);
+
+    let mut plan = settled;
+    plan.subtasks[0].elements = Some("Brand title only".into());
+    plan.subtasks[1].elements = Some("quiet section; ARCHETYPE: image-led — coffee photo".into());
+    assert!(is_image_section(&plan.subtasks[1]));
+    plan.subtasks[1].elements = Some("A large account balance figure".into());
+    assert!(!is_image_section(&plan.subtasks[1]));
+    assert!(!is_image_section(&plan.subtasks[2]));
+}
+
+#[test]
 fn real_layout_rejects_overflow_without_clipping_or_deleting_copy() {
     let mut plan = plan();
     reserve(&mut plan, &request());
@@ -177,5 +232,43 @@ fn real_layout_rejects_overflow_without_clipping_or_deleting_copy() {
         if let Some(reason) = reason {
             assert!(crate::retry::is_self_check_rejection(&reason));
         }
+    }
+}
+
+#[test]
+fn price_list_retry_identifies_the_space_to_recover_without_losing_rows() {
+    let mut plan = plan();
+    reserve(&mut plan, &request());
+    let task = &mut plan.subtasks[1];
+    task.region.height = 196.0;
+    let nodes_for = |row_height| {
+        serde_json::from_value::<Vec<PenNode>>(json!([{
+            "type":"frame","id":"section","width":"fill_container","height":"fit_content","layout":"vertical","gap":12,
+            "children":[
+                {"type":"text","id":"title","content":"饮品单","height":24},
+                {"type":"frame","id":"prices","layout":"vertical","width":"fill_container","height":"fit_content","gap":8,
+                 "children":[
+                    {"type":"text","id":"latte","content":"拿铁 28元","height":row_height},
+                    {"type":"text","id":"americano","content":"美式 22元","height":row_height},
+                    {"type":"text","id":"oat","content":"燕麦拿铁 32元","height":row_height}
+                 ]}
+            ]
+        }])).unwrap()
+    };
+    let oversized = nodes_for(56);
+    let original = oversized.clone();
+    let reason = rejection(task, &oversized, &EditorState::new()).unwrap();
+    assert!(reason.contains("recover at least 24px"), "{reason}");
+    assert!(reason.contains("title=24px"), "{reason}");
+    assert!(reason.contains("prices=184px"), "{reason}");
+    assert_eq!(
+        original, oversized,
+        "Diagnostics must not rewrite the design"
+    );
+    let compact = nodes_for(48);
+    assert_eq!(rejection(task, &compact, &EditorState::new()), None);
+    let texts = serde_json::to_string(&compact).unwrap();
+    for required in ["拿铁 28元", "美式 22元", "燕麦拿铁 32元"] {
+        assert!(texts.contains(required));
     }
 }

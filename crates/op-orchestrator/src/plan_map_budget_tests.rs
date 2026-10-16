@@ -102,7 +102,11 @@ fn normalized_budget_reaches_all_generation_retry_prompts() {
             &op_editor_core::ComponentLibrary::default(),
         );
         assert!(call.user_prompt.contains("at most 350px"));
-        assert!(call.user_prompt.contains("~350px of content"));
+        assert!(call.user_prompt.contains("at most 350px of content"));
+        assert!(call.user_prompt.contains("Maximum section height: 350px"));
+        assert!(!call
+            .user_prompt
+            .contains("Generate enough elements to fill this area"));
     }
 }
 
