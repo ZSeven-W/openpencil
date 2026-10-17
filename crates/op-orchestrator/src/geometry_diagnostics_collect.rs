@@ -120,7 +120,7 @@ pub(super) fn diag_label(v: &Value) -> String {
 }
 
 pub(super) fn collect_diagnostics(v: &Value, rects: &HashMap<String, Rect>, out: &mut Vec<String>) {
-    collect_diagnostics_with_context(v, rects, out, false);
+    collect_diagnostics_with_context(v, None, rects, out, false);
 }
 
 /// A cover may crop its picture, but an absolute action must remain usable.
@@ -171,6 +171,7 @@ fn clipped_control_diagnostics(v: &Value, rects: &HashMap<String, Rect>, out: &m
 
 pub(super) fn collect_diagnostics_with_context(
     v: &Value,
+    parent: Option<&Value>,
     rects: &HashMap<String, Rect>,
     out: &mut Vec<String>,
     in_table: bool,
@@ -191,7 +192,9 @@ pub(super) fn collect_diagnostics_with_context(
             .and_then(Value::as_str)
             .and_then(|id| rects.get(id))
             .map(|r| (r.w, r.h));
-        if let Some(line) = crate::stub_repair::empty_decorated_stub_diagnostic(v, resolved_size) {
+        if let Some(line) =
+            crate::stub_repair::empty_decorated_stub_diagnostic(v, parent, resolved_size)
+        {
             out.push(line);
         }
         if let Some(line) =
@@ -299,7 +302,7 @@ pub(super) fn collect_diagnostics_with_context(
     collect_rail_width_collapse_diagnostics_with_context(v, rects, out, in_table);
     let child_in_table = in_table || is_table_shape(v);
     for c in children(v) {
-        collect_diagnostics_with_context(c, rects, out, child_in_table);
+        collect_diagnostics_with_context(c, Some(v), rects, out, child_in_table);
     }
 }
 

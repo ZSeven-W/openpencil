@@ -18,7 +18,7 @@ pub fn remove_empty_decorated_stubs(sink: &mut dyn DocSink, root_id: &str) -> bo
     };
     let sizes = resolved_sizes(sink.state());
     let mut ids = Vec::new();
-    collect_stub_ids(&v, &sizes, &mut ids);
+    collect_stub_ids(&v, None, &sizes, &mut ids);
     if ids.is_empty() {
         return false;
     }
@@ -33,9 +33,10 @@ pub fn remove_empty_decorated_stubs(sink: &mut dyn DocSink, root_id: &str) -> bo
 
 pub(crate) fn empty_decorated_stub_diagnostic(
     v: &Value,
+    parent: Option<&Value>,
     resolved_size: Option<(f64, f64)>,
 ) -> Option<String> {
-    if is_empty_decorated_stub(v, resolved_size) {
+    if is_empty_decorated_stub(v, parent, resolved_size) {
         Some(format!(
             "{}: empty decorated frame — fill in its content or remove it",
             diag_label(v)
@@ -45,24 +46,33 @@ pub(crate) fn empty_decorated_stub_diagnostic(
     }
 }
 
-fn collect_stub_ids(v: &Value, sizes: &HashMap<String, (f64, f64)>, ids: &mut Vec<String>) {
+fn collect_stub_ids(
+    v: &Value,
+    parent: Option<&Value>,
+    sizes: &HashMap<String, (f64, f64)>,
+    ids: &mut Vec<String>,
+) {
     let resolved_size = v
         .get("id")
         .and_then(Value::as_str)
         .and_then(|id| sizes.get(id))
         .copied();
-    if is_empty_decorated_stub(v, resolved_size) {
+    if is_empty_decorated_stub(v, parent, resolved_size) {
         if let Some(id) = v.get("id").and_then(Value::as_str) {
             ids.push(id.to_string());
         }
         return;
     }
     for child in children(v) {
-        collect_stub_ids(child, sizes, ids);
+        collect_stub_ids(child, Some(v), sizes, ids);
     }
 }
 
-fn is_empty_decorated_stub(v: &Value, resolved_size: Option<(f64, f64)>) -> bool {
+fn is_empty_decorated_stub(
+    v: &Value,
+    parent: Option<&Value>,
+    resolved_size: Option<(f64, f64)>,
+) -> bool {
     let width = numeric(v, "width").or_else(|| resolved_size.map(|size| size.0));
     let height = numeric(v, "height").or_else(|| resolved_size.map(|size| size.1));
     v.get("type").and_then(Value::as_str) == Some("frame")
@@ -84,10 +94,51 @@ fn is_empty_decorated_stub(v: &Value, resolved_size: Option<(f64, f64)>) -> bool
         // the radius pass makes it circular it must not be mistaken for an
         // abandoned badge shell.
         && !has_state_indicator_semantics(v)
+        && !is_circle_icon_backdrop(v, parent)
         && has_visible_paint(v)
         && (padding_positive(v) || numeric(v, "cornerRadius").is_some_and(|r| r > 0.0))
         && width.is_some_and(|w| w > 0.0 && w < 80.0)
         && height.is_some_and(|h| h > 0.0 && h < 60.0)
+}
+
+/// A sibling icon can supply the content of an absolute circular backdrop.
+/// Keep this separate from empty button shells: require a smaller, visible
+/// glyph inside the circle's bounds, without inventing its missing centering.
+fn is_circle_icon_backdrop(v: &Value, parent: Option<&Value>) -> bool {
+    let Some(parent) = parent else {
+        return false;
+    };
+    if parent.get("layout").and_then(Value::as_str) != Some("none")
+        || !crate::tree_heuristics::is_compact_solid_circle(v)
+    {
+        return false;
+    }
+    let size = numeric(v, "width").unwrap_or_default();
+    let x = numeric(v, "x").unwrap_or_default();
+    let y = numeric(v, "y").unwrap_or_default();
+    children(parent).iter().any(|icon| {
+        let (Some(w), Some(h)) = (numeric(icon, "width"), numeric(icon, "height")) else {
+            return false;
+        };
+        let ix = numeric(icon, "x").unwrap_or_default();
+        let iy = numeric(icon, "y").unwrap_or_default();
+        icon.get("type").and_then(Value::as_str) == Some("icon_font")
+            && icon.get("visible").and_then(Value::as_bool) != Some(false)
+            && numeric(icon, "opacity").is_none_or(|opacity| opacity > 0.0)
+            && icon
+                .get("iconFontName")
+                .and_then(Value::as_str)
+                .is_some_and(|name| !name.trim().is_empty())
+            && crate::tree_heuristics::has_visible_solid_fill(icon)
+            && w > 0.0
+            && h > 0.0
+            && w < size
+            && h < size
+            && ix >= x
+            && iy >= y
+            && ix + w <= x + size
+            && iy + h <= y + size
+    })
 }
 
 fn is_meaningful_media_leaf(v: &Value) -> bool {
@@ -234,3 +285,7 @@ fn diag_label(v: &Value) -> String {
     let id = v.get("id").and_then(Value::as_str).unwrap_or("?");
     format!("{name} ({id})")
 }
+
+#[cfg(test)]
+#[path = "stub_repair_circle_tests.rs"]
+mod circle_tests;

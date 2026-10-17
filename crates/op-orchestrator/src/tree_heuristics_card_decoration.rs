@@ -129,6 +129,44 @@ fn is_icon_surface(node: &Value) -> bool {
         && kids[0].get("type").and_then(Value::as_str) == Some("icon_font")
 }
 
+/// An empty filled circle can be the backdrop of a sibling icon in an absolute
+/// stack. Its radius defines the shape even though the icon is not its child.
+pub(crate) fn is_compact_solid_circle(node: &Value) -> bool {
+    let size = |key| node.get(key).and_then(Value::as_f64);
+    let (Some(w), Some(h)) = (size("width"), size("height")) else {
+        return false;
+    };
+    if w <= 0.0 || w > 80.0 || w != h || !children_of(node).is_empty() {
+        return false;
+    }
+    if !has_visible_solid_fill(node) {
+        return false;
+    }
+    let round = |radius: &Value| radius.as_f64().is_some_and(|radius| radius >= w * 0.5);
+    match node.get("cornerRadius") {
+        Some(Value::Array(corners)) => corners.len() == 4 && corners.iter().all(round),
+        Some(radius) => round(radius),
+        None => false,
+    }
+}
+
+pub(crate) fn has_visible_solid_fill(node: &Value) -> bool {
+    let Some(color) = first_solid_color(node) else {
+        return false;
+    };
+    let visible_color = color.starts_with('$')
+        || op_util::hex_color::parse_hex_rgba8(&color, op_util::hex_color::HexOptions::LENIENT)
+            .is_some_and(|rgba| rgba[3] > 0);
+    let transparent_fill = node
+        .get("fill")
+        .and_then(Value::as_array)
+        .and_then(|fills| fills.first())
+        .and_then(|fill| fill.get("opacity"))
+        .and_then(Value::as_f64)
+        .is_some_and(|opacity| opacity <= 0.0);
+    visible_color && !transparent_fill
+}
+
 pub(super) fn strip_nested_card_decoration(node: &mut Value, ancestor: DecoFlags) {
     let is_frame = node.get("type").and_then(Value::as_str) == Some("frame");
     let mut next_ancestor = ancestor;
@@ -137,11 +175,12 @@ pub(super) fn strip_nested_card_decoration(node: &mut Value, ancestor: DecoFlags
         if !is_role_protected(node) && !is_action_surface(node) {
             let media = is_media_clipper(node);
             let icon_surface = is_icon_surface(node);
+            let circle = is_compact_solid_circle(node);
             if let Some(obj) = node.as_object_mut() {
                 if own.stroke && ancestor.stroke {
                     obj.remove("stroke");
                 }
-                if own.corner && ancestor.corner && !media && !icon_surface {
+                if own.corner && ancestor.corner && !media && !icon_surface && !circle {
                     obj.remove("cornerRadius");
                 }
                 if own.shadow && ancestor.shadow {
@@ -164,6 +203,10 @@ pub(super) fn strip_nested_card_decoration(node: &mut Value, ancestor: DecoFlags
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tree_heuristics_circle_tests.rs"]
+mod circle_tests;
 
 #[cfg(test)]
 mod tests {

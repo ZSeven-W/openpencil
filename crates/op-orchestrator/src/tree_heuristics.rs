@@ -39,6 +39,7 @@ mod tree_heuristics_nav_rounding;
 mod tree_heuristics_text_band;
 
 use tree_heuristics_card_decoration::*;
+pub(crate) use tree_heuristics_card_decoration::{has_visible_solid_fill, is_compact_solid_circle};
 use tree_heuristics_fills::*;
 use tree_heuristics_image_overlay::*;
 use tree_heuristics_nav_rounding::*;
