@@ -18,14 +18,18 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) -> bool {
     {
         return false;
     }
+    if repair_intrinsic_action_inset(sink, root_id, &value) {
+        repair(sink, root_id);
+        return true;
+    }
     let Some(children) = value.get("children").and_then(Value::as_array) else {
         return false;
     };
     // Chrome normalization tags the INNER tab row, not the outer wrapper
     // containing its divider/safe area. Recognize that same whole section.
     let Some(nav) = children.last().filter(|_| {
-        root.children()
-            .and_then(|nodes| nodes.last())
+        find_root(sink.state(), root_id)
+            .and_then(|root| root.children().and_then(|nodes| nodes.last()))
             .is_some_and(is_bottom_chrome)
     }) else {
         if promote_nested_chrome(sink, root_id) {
@@ -127,6 +131,79 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) -> bool {
         });
     }
     true
+}
+
+// Intrinsic vertical action bars can grow their closing inset without
+// shrinking controls or changing the requested viewport. Fixed/positioned
+// compositions and expression-authored padding need their own reflow.
+fn repair_intrinsic_action_inset(sink: &mut dyn DocSink, root_id: &str, root: &Value) -> bool {
+    let Some(bar) = root
+        .get("children")
+        .and_then(Value::as_array)
+        .and_then(|c| c.last())
+    else {
+        return false;
+    };
+    let numeric_padding = |node: &Value| {
+        node.get("padding").is_none_or(|pad| {
+            pad.is_number()
+                || pad
+                    .as_array()
+                    .is_some_and(|v| matches!(v.len(), 2 | 4) && v.iter().all(Value::is_number))
+        })
+    };
+    if bar.get("layout").and_then(Value::as_str) != Some("vertical")
+        || bar.get("height").and_then(Value::as_str) != Some("fit_content")
+        || !numeric_padding(root)
+        || !numeric_padding(bar)
+        || ["constraints", "x", "y"]
+            .iter()
+            .any(|k| bar.get(k).is_some())
+        || !bar
+            .get("children")
+            .and_then(Value::as_array)
+            .is_some_and(|kids| {
+                !kids.is_empty()
+                    && kids.iter().all(|child| {
+                        ["constraints", "x", "y"]
+                            .iter()
+                            .all(|k| child.get(k).is_none())
+                    })
+            })
+        || !find_root(sink.state(), root_id)
+            .and_then(|r| r.children().and_then(|c| c.last()))
+            .is_some_and(crate::mobile_action_bar::is_action_bar)
+    {
+        return false;
+    }
+    let mut inset = padding(bar);
+    let outer = padding(root)[2];
+    if inset[2] + outer >= 24.0 {
+        return false;
+    }
+    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+    let Some(page) = scene.active_page() else {
+        return false;
+    };
+    let Some(id) = bar.get("id").and_then(Value::as_str) else {
+        return false;
+    };
+    let (Some(board), Some(footer)) = (page.find(root_id), page.find(id)) else {
+        return false;
+    };
+    let extra = 28.0 - outer - inset[2];
+    if (footer.bounds.size.x - board.bounds.size.x).abs() > 1.0
+        || !(44.0..=128.0).contains(&footer.bounds.size.y)
+        || footer.bounds.size.y as f64 + extra > 128.0
+    {
+        return false;
+    }
+    inset[2] += extra;
+    sink.apply(EditorCommand::PatchNodeData {
+        node_id: NodeId::new(id),
+        patch_json: json!({"padding":inset}).to_string(),
+        page_id: None,
+    })
 }
 
 // A detail screen can have status chrome without a tab bar. Recognize that

@@ -68,7 +68,7 @@ fn wrapped_nav_preserves_status_and_content_spacing() {
 fn cart_and_checkout_bars_are_preserved_outside_scroll_content() {
     for name in ["商家详情 · 底部购物车栏", "cart-bar", "底部提交区"] {
         let mut draft = phone(
-            json!({"type":"frame","id":"footer","name":name,"width":"fill_container","height":"fit_content","layout":"vertical","padding":[0,16],"children":[
+            json!({"type":"frame","id":"footer","name":name,"width":"fill_container","height":"fit_content","layout":"vertical","padding":[0,16,28,16],"children":[
                 {"type":"frame","id":"checkout","width":"fill_container","height":60,"layout":"horizontal","children":[
                     {"type":"text","id":"price","content":"¥28","fontSize":18},
                     {"type":"frame","id":"buy","role":"button","width":100,"height":44,"events":{"onTap":[{"toast":"Checkout"}]},"children":[
@@ -97,6 +97,93 @@ fn explicitly_pinned_cta_keeps_the_complete_action_area_outside_the_scroll() {
             ]}
         ]}));
         assert_preserved_and_pinned(&mut draft);
+    }
+}
+
+#[test]
+fn flush_intrinsic_pinned_action_gains_safe_room_without_changing_content() {
+    let mut draft = phone(
+        json!({"type":"frame","id":"footer","name":"Pinned Start Button",
+        "role":"button","width":"fill_container","height":"fit_content",
+        "layout":"vertical","padding":[0,24,0,24],"children":[
+            {"type":"frame","id":"start","role":"button","width":"fill_container",
+             "height":48,"events":{"onTap":[{"toast":"Start workout"}]},"children":[
+                {"type":"text","id":"start-label","content":"Start Workout","fontSize":16}
+            ]}
+        ]}),
+    );
+    let original = serde_json::to_value(&draft.doc).unwrap();
+    let mut sink = crate::loop_finalize::StateDocSink { state: &mut draft };
+    repair(&mut sink, "root");
+    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+    let page = scene.active_page().unwrap();
+    let footer = page.find("footer").unwrap().bounds;
+    let button = page.find("start").unwrap().bounds;
+    assert!((footer.origin.y + footer.size.y - 812.0).abs() < 1.0);
+    assert_eq!(button.size.y, 48.0);
+    assert!((812.0 - button.origin.y - button.size.y - 28.0).abs() < 1.0);
+    let after = serde_json::to_value(&sink.state().doc).unwrap();
+    let root = &after["children"][0];
+    assert_eq!(root["height"], 812.0);
+    assert_eq!(root["children"][1]["role"], "scroll-area");
+    assert_eq!(
+        root["children"][1]["children"][0],
+        original["children"][0]["children"][1]
+    );
+    assert_eq!(
+        root["children"][2]["children"],
+        original["children"][0]["children"][2]["children"]
+    );
+    assert!(
+        !crate::geometry_validation::geometry_diagnostics(sink.state())
+            .iter()
+            .any(|message| message.contains("mobile-bottom-flush"))
+    );
+    let settled = sink.state().doc.clone();
+    repair(&mut sink, "root");
+    assert_eq!(settled, sink.state().doc);
+}
+
+#[test]
+fn action_inset_preserves_existing_outer_room_and_authored_layout_constraints() {
+    for case in [
+        "outer-room",
+        "fixed-height",
+        "token-padding",
+        "positioned-child",
+    ] {
+        let mut footer = json!({"type":"frame","id":"footer","name":"Pinned Start Button",
+        "role":"button","width":"fill_container","height":"fit_content",
+        "layout":"vertical","padding":[0,24,0,24],"children":[
+            {"type":"frame","id":"start","role":"button","height":48,
+             "events":{"onTap":[{"toast":"Start workout"}]}}
+        ]});
+        match case {
+            "fixed-height" => footer["height"] = json!(88),
+            "token-padding" => footer["padding"] = json!("$action-padding"),
+            "positioned-child" => footer["children"][0]["x"] = json!(0),
+            _ => {}
+        }
+        let mut draft = phone(footer);
+        if case == "outer-room" {
+            draft.apply(EditorCommand::PatchNodeData {
+                node_id: NodeId::new("root"),
+                patch_json: json!({"padding":[0,0,28,0]}).to_string(),
+                page_id: None,
+            });
+        }
+        let original =
+            op_editor_core::walkers::find_node(draft.active_children(), &NodeId::new("footer"))
+                .unwrap()
+                .clone();
+        let mut sink = crate::loop_finalize::StateDocSink { state: &mut draft };
+        super::super::mobile_scroll::repair(&mut sink, "root");
+        let after = op_editor_core::walkers::find_node(
+            sink.state().active_children(),
+            &NodeId::new("footer"),
+        )
+        .unwrap();
+        assert_eq!(&original, after, "{case}");
     }
 }
 
