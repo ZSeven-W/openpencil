@@ -110,7 +110,7 @@ fn keyword_width_media_caption_uses_the_resolved_slot_and_wraps() {
 #[test]
 fn legacy_policy_caption_upgrades_its_layout_without_rewriting_copy_or_typography() {
     let node:PenNode=serde_json::from_value(json!({"type":"frame","id":"slot","name":"Media (image fallback)",
-        "explain":"image fallback: media {}","width":"fill_container","height":120,"layout":"vertical",
+        "explain":"image fallback: media {}","width":320,"height":120,"layout":"vertical",
         "children":[{"type":"text","id":"slot-image-fallback-caption","name":"Image fallback caption",
             "content":"用户修改后的说明","width":160,"height":16,"fontSize":14,"fontWeight":600,"fill":[{"type":"solid","color":"#123456"}]}]
     })).unwrap();

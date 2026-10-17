@@ -89,10 +89,16 @@ fn is_overlay_stack_with_text(node: &PenNode, children: &[PenNode]) -> bool {
 }
 
 fn has_text_descendant(node: &PenNode) -> bool {
+    // A caption created by this policy is not authored overlay content. In
+    // particular, it must not make its own parent stack become covered on the
+    // next pass. Edited captions and other authored children remain content.
+    let generated = policy_media_children(node);
     matches!(node, PenNode::Text(_))
-        || node
-            .children()
-            .is_some_and(|children| children.iter().any(has_text_descendant))
+        || node.children().is_some_and(|children| {
+            children.iter().any(|child| {
+                !is_policy_media_child(node, child, &generated) && has_text_descendant(child)
+            })
+        })
 }
 
 fn fallback_patch(
@@ -102,6 +108,11 @@ fn fallback_patch(
     covered_by_overlay: bool,
 ) -> Option<ImageFallbackPatch> {
     if is_image_fallback(node) {
+        if covered_by_overlay {
+            if let Some(patch) = cover_existing_media_fallback(node) {
+                return Some(patch);
+            }
+        }
         return normalize_legacy_media_caption(node);
     }
     if !matches!(
@@ -449,6 +460,92 @@ fn media_patch(node: &PenNode, name: &str, icon_name: &str, caption: &str) -> Va
     )
 }
 
+/// Reconstruct the exact decorations this policy owns. A matching id alone
+/// is insufficient: a user may have edited the caption or icon after failure.
+fn policy_media_children(node: &PenNode) -> Vec<PenNode> {
+    if !node
+        .base()
+        .explain
+        .as_deref()
+        .is_some_and(|explain| explain.starts_with("image fallback: media "))
+        || fallback_metadata(node).is_none()
+    {
+        return Vec::new();
+    }
+    let query = fallback_search_query_for_host(node);
+    let patch = media_patch(
+        node,
+        "",
+        &icon_name_for_query(&query),
+        &caption_for_query(&query),
+    );
+    serde_json::from_value(patch["children"].clone()).unwrap_or_default()
+}
+
+fn legacy_caption_width(node: &PenNode) -> Option<f64> {
+    // Resolved widths were not stored with legacy tiles. Without an authored
+    // numeric media width, ownership of a fixed-width caption is unprovable.
+    node.width_px()
+        .filter(|width| width.is_finite() && *width > 96.0)
+        .map(|width| width.clamp(1.0, 160.0))
+}
+
+fn is_policy_media_child(node: &PenNode, child: &PenNode, generated: &[PenNode]) -> bool {
+    if generated.is_empty() {
+        return false;
+    }
+    if generated.contains(child) {
+        return true;
+    }
+    // The earlier caption used a fixed 16px height. Recognize it in the same
+    // pass as current captions, but require every other property to match.
+    let Ok(mut value) = serde_json::to_value(child) else {
+        return false;
+    };
+    if value["type"] != "text"
+        || value["height"].as_f64() != Some(16.0)
+        || legacy_caption_width(node).is_none()
+        || value["width"].as_f64() != legacy_caption_width(node)
+        || !value["textGrowth"].is_null()
+    {
+        return false;
+    }
+    value["width"] = json!("fill_container");
+    value["height"] = json!("fit_content");
+    value["textGrowth"] = json!("fixed-width");
+    serde_json::from_value::<PenNode>(value).is_ok_and(|normalized| generated.contains(&normalized))
+}
+
+/// Repair a tile produced without its parent overlay context. Only pure,
+/// unchanged policy decorations are safe to remove. Customized tiles retain
+/// their existing content and retry behavior; this does not redefine the
+/// restoration protocol for image-filled containers with authored children.
+fn cover_existing_media_fallback(node: &PenNode) -> Option<ImageFallbackPatch> {
+    let generated = policy_media_children(node);
+    let children = node.children()?;
+    if children.is_empty()
+        || !children
+            .iter()
+            .all(|child| is_policy_media_child(node, child, &generated))
+    {
+        return None;
+    }
+    let metadata = node
+        .base()
+        .explain
+        .as_deref()?
+        .strip_prefix("image fallback: media ")?;
+    Some(ImageFallbackPatch {
+        node_id: node.id_str().to_owned(),
+        branch: ImageFallbackBranch::Covered,
+        patch_json: json!({
+            "children": [],
+            "explain": format!("image fallback: covered {metadata}")
+        })
+        .to_string(),
+    })
+}
+
 /// Upgrade only the policy-owned legacy caption layout. Keep edited copy,
 /// typography, intent metadata and node ids intact; unrelated text is not a
 /// fallback caption merely because its name resembles one.
@@ -468,7 +565,8 @@ fn normalize_legacy_media_caption(node: &PenNode) -> Option<ImageFallbackPatch> 
         .iter_mut()
         .find(|child| child["id"] == caption_id && child["type"] == "text")?;
     if caption["height"].as_f64() != Some(16.0)
-        || caption["width"].as_f64().is_none()
+        || legacy_caption_width(node).is_none()
+        || caption["width"].as_f64() != legacy_caption_width(node)
         || !caption["textGrowth"].is_null()
     {
         return None;
@@ -498,10 +596,21 @@ fn covered_patch(node: &PenNode, name: &str) -> Value {
 }
 
 pub fn apply_image_fallback_policy_to_node(state: &mut EditorState, node_id: &NodeId) -> bool {
-    let Some(node) = walkers::find_node(state.active_children(), node_id).cloned() else {
+    let children = state.active_children();
+    let Some(node) = walkers::find_node(children, node_id) else {
         return false;
     };
-    let Some(patch) = image_fallback_policy(&node, false).into_iter().next() else {
+    let covered_by_overlay = walkers::find_parent_and_index(children, node_id)
+        .and_then(|(parent, _)| parent)
+        .and_then(|parent_id| walkers::find_node(children, &parent_id))
+        .is_some_and(|parent| {
+            parent
+                .children()
+                .is_some_and(|children| is_overlay_stack_with_text(parent, children))
+        });
+    // Targeted enrichment must use the same parent context as the full-tree
+    // policy, and must never apply a descendant's patch to this target.
+    let Some(patch) = fallback_patch(node, &HashMap::new(), false, covered_by_overlay) else {
         return false;
     };
     state.apply(EditorCommand::PatchNodeData {
@@ -578,3 +687,7 @@ pub fn restore_image_fallback_node(node: &PenNode) -> Option<PenNode> {
 #[cfg(test)]
 #[path = "fallback_policy_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "fallback_policy_context_tests.rs"]
+mod context_tests;
