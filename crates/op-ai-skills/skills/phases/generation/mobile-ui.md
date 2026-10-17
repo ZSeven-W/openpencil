@@ -31,7 +31,7 @@ MOBILE SEARCH BAR: If generating search, output exactly one search control surfa
 
 MOBILE SECTION CHROME: Search, filter, and category section roots are structural wrappers only. Keep those section roots transparent: no fill, no stroke, no cornerRadius, and no shadow/effects. Put visual styling only on the actual search control, filter button, chips, cards, or promo modules.
 
-NO BLANK PLACEHOLDERS: Do not use empty gray image placeholders in app UI. If no real image asset is available, use a square colored food/icon tile with icon_font instead.
+NO BLANK PLACEHOLDERS: Emit requested photos/thumbnails as image nodes with imageSearchQuery + imagePrompt; OP fills them later. Icon tiles are for optional media only.
 
 MOBILE HORIZONTAL LISTS: Use a horizontal list only when its wrapper has width="fill_container" and clipContent=true and its inner row uses width="fit_content". Otherwise wrap into rows or a grid. Do not show random half-clipped chips/cards as a design cue.
 

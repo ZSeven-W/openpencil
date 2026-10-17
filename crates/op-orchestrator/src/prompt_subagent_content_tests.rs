@@ -76,6 +76,51 @@ fn photo_archetype_cannot_override_a_separate_title_meta_owner_on_any_retry() {
 }
 
 #[test]
+fn requested_thumbnails_cannot_be_downgraded_to_optional_icon_tiles_on_any_retry() {
+    let mut request = req();
+    request.model = Some("glm-5.3-flash".into());
+    request.prompt =
+        "Workout detail: an exercise list of six with thumbnail, name, sets and reps".into();
+    let mut mobile = plan();
+    mobile.root_frame.width = 375.0;
+    let mut section = subtask();
+    section.label = "Exercise List".into();
+    section.region.width = 375.0;
+    section.elements =
+        Some("Six rows, each with a rounded photo thumbnail, name, sets and reps".into());
+    for (reduced, minimal) in [(false, false), (true, false), (true, true)] {
+        let (call, _) = bsp(
+            &section,
+            &mobile,
+            &request,
+            AbortFlag::new(),
+            reduced,
+            minimal,
+        );
+        assert!(call
+            .user_prompt
+            .contains("requested photos/thumbnails as image nodes"));
+        assert!(call
+            .user_prompt
+            .contains("OP fills assets after generation"));
+        assert!(call
+            .user_prompt
+            .contains("Icon/illustration tiles are for optional media only"));
+        assert!(!call
+            .user_prompt
+            .contains("prefer cohesive icon or illustration tiles"));
+        if call.system_prompt.contains("NO BLANK PLACEHOLDERS:") {
+            assert!(call
+                .system_prompt
+                .contains("Icon tiles are for optional media only"));
+            assert!(!call
+                .system_prompt
+                .contains("If no real image asset is available"));
+        }
+    }
+}
+
+#[test]
 fn image_brief_contract_reaches_all_subtask_complexity_levels() {
     // Assert the assembled prompt, not just the corpus: minimal retries keep
     // only schema, and mobile skills can otherwise consume the prompt budget.
