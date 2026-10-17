@@ -15,7 +15,8 @@ use op_editor_core::{
 
 use crate::fallback_policy::apply_image_fallback_policy_to_node;
 use crate::targets::{
-    has_empty_image_fill, is_frame_placeholder_still_unfilled, is_image_area_rectangle_by_heuristic,
+    has_empty_image_fill, has_saved_image_fallback_intent, is_frame_placeholder_still_unfilled,
+    is_image_area_rectangle_by_heuristic,
 };
 
 /// Sentinel `src` written when EVERY search avenue failed (junk-only
@@ -57,6 +58,11 @@ pub fn apply_result(state: &mut EditorState, node_id: &NodeId, url: &str) -> boo
     let Some(node) = walkers::find_node_mut(state.active_children_mut(), node_id) else {
         return false;
     };
+    // An existing fallback already represents failure. A repeated failed
+    // retry must not erase its decoration or its ability to recover later.
+    if url == SEARCH_FAILED_PLACEHOLDER_SRC && has_saved_image_fallback_intent(node) {
+        return false;
+    }
     let is_unfilled_placeholder_frame = is_frame_placeholder_still_unfilled(node);
     let is_unfilled_placeholder_rectangle = is_image_area_rectangle_by_heuristic(node);
     let has_empty_image_fill = has_empty_image_fill(node);

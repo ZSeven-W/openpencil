@@ -139,6 +139,15 @@ fn fallback_patch(
     } else {
         ImageFallbackBranch::Media
     };
+    Some(fallback_patch_for_branch(node, branch))
+}
+
+/// Build the policy decoration for a known branch without reclassifying the
+/// current geometry, which may have changed since a fallback was saved.
+pub(crate) fn fallback_patch_for_branch(
+    node: &PenNode,
+    branch: ImageFallbackBranch,
+) -> ImageFallbackPatch {
     let query = search_query(node);
     let icon_name = icon_name_for_query(&query);
     let name = fallback_name(node.base().name.as_deref());
@@ -149,11 +158,11 @@ fn fallback_patch(
         }
         ImageFallbackBranch::Covered => covered_patch(node, &name),
     };
-    Some(ImageFallbackPatch {
+    ImageFallbackPatch {
         node_id: node.id_str().to_string(),
         branch,
         patch_json: patch.to_string(),
-    })
+    }
 }
 
 fn is_failed_image_slot(node: &PenNode, after_enrich: bool) -> bool {

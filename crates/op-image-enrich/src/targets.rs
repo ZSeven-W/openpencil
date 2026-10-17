@@ -10,6 +10,7 @@
 //! desktop-only plumbing (`image_panel_host`'s active gen profile) and stay
 //! in the desktop crate (`image_search_session/intent.rs`).
 
+mod fallback_intent;
 mod query;
 use std::collections::{HashMap, HashSet};
 
@@ -162,6 +163,7 @@ fn collect_from_children(
 
         if is_image_placeholder_frame(node)
             || is_unfilled_explicit_image_query_frame(node)
+            || is_unfilled_fallback_frame(node)
             || is_image_area_frame_by_heuristic(node)
             || is_image_area_rectangle_by_heuristic(node)
         {
@@ -221,7 +223,9 @@ fn image_search_target_for(
         return None;
     }
 
-    let mut query = extract_query_for_node(node, parent_names);
+    let fallback = fallback_intent::for_node(node);
+    let intent_node = fallback.as_ref().map_or(node, |intent| &intent.restored);
+    let mut query = extract_query_for_node(intent_node, parent_names);
     if bare_slot_with_context {
         // The generic name-derived fallback ("placeholder") loses to the
         // card's own text; an EXPLICIT imageSearchQuery binding still wins.
@@ -252,13 +256,13 @@ fn image_search_target_for(
         return None;
     }
 
-    // `image_prompt` is the author's AI-gen prompt (Image nodes only); placeholder
-    // frames / rectangles carry only a name-derived query.
-    let prompt = match node {
+    // A policy fallback frame retains the original Image contract in its
+    // validated envelope. Ordinary frames still carry no rich image prompt.
+    let prompt = match intent_node {
         PenNode::Image(image) => image.image_prompt.clone(),
         _ => None,
     };
-    let mode = image_request_mode(node);
+    let mode = fallback.map_or_else(|| image_request_mode(node), |intent| intent.mode);
     let (width, height) = resolved_sizes
         .get(id)
         .copied()
@@ -277,6 +281,9 @@ fn image_search_target_for(
 }
 
 pub fn image_request_mode(node: &PenNode) -> ImageRequestMode {
+    if let Some(intent) = fallback_intent::for_node(node) {
+        return intent.mode;
+    }
     match node {
         // Legacy / script-generated Image nodes intentionally carry both
         // fields: generation uses the richer prompt when a profile exists,
@@ -322,6 +329,10 @@ pub fn image_request_mode(node: &PenNode) -> ImageRequestMode {
     }
 }
 
+pub(crate) fn has_saved_image_fallback_intent(node: &PenNode) -> bool {
+    fallback_intent::for_node(node).is_some()
+}
+
 fn is_placeholder_src(src: &str) -> bool {
     src.trim().is_empty() || src.starts_with("data:image/svg+xml;charset=utf-8,%3Csvg")
 }
@@ -347,7 +358,22 @@ fn is_image_placeholder_frame(node: &PenNode) -> bool {
 pub fn is_frame_placeholder_still_unfilled(node: &PenNode) -> bool {
     is_unfilled_image_placeholder_frame(node)
         || is_unfilled_explicit_image_query_frame(node)
+        || is_unfilled_fallback_frame(node)
         || is_image_area_frame_by_heuristic(node)
+}
+
+fn is_unfilled_fallback_frame(node: &PenNode) -> bool {
+    let PenNode::Frame(frame) = node else {
+        return false;
+    };
+    if !fallback_intent::is_unchanged_tile(node) {
+        return false;
+    }
+    !frame.container.fill.as_deref().is_some_and(|fills| {
+        fills
+            .iter()
+            .any(|fill| matches!(fill, PenFill::Image(body) if !is_placeholder_src(&body.url)))
+    })
 }
 
 fn is_unfilled_image_placeholder_frame(node: &PenNode) -> bool {
