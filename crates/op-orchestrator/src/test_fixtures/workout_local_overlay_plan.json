@@ -1,0 +1,55 @@
+{
+  "rootFrame": {
+    "id": "page",
+    "name": "Workout Detail",
+    "width": 375,
+    "height": 812,
+    "layout": "vertical",
+    "gap": 0,
+    "fill": [
+      {
+        "type": "solid",
+        "color": "#FFFFFF"
+      }
+    ]
+  },
+  "styleGuideName": "wellness-green-mobile-light",
+  "subtasks": [
+    {
+      "id": "hero",
+      "label": "Hero Image with Back Button",
+      "elements": "ARCHETYPE: image-led — protagonist full-bleed workout photo, first screen 35%, photo at top under status bar, imagery single full-bleed photo only. Full-width hero photo, circular frosted-glass back button with chevron at top-left overlaid on photo, photo bottom fades into content background",
+      "region": {
+        "width": 375,
+        "height": 300
+      }
+    },
+    {
+      "id": "title-meta",
+      "label": "Title, Meta Row and Difficulty Badges",
+      "elements": "workout title (28-32px, bold), meta row with duration and calorie icons+values (single owner of all summary stats), difficulty badge group of three small pills (Beginner / Intermediate / Advanced) with active state on one badge, all on white background",
+      "region": {
+        "width": 375,
+        "height": 110
+      }
+    },
+    {
+      "id": "exercise-list",
+      "label": "Exercise List",
+      "elements": "section label 'Exercises (6)', scrollable list of six exercise rows, each row: rounded thumbnail image, exercise name, secondary text 'sets × reps', quiet section: secondary visual weight; retain legible active states, rows separated by hairline dividers",
+      "region": {
+        "width": 375,
+        "height": 322
+      }
+    },
+    {
+      "id": "start-bar",
+      "label": "Pinned Start Button",
+      "elements": "pinned bottom action bar with full-width primary 'Start Workout' button (48px height, brand green, white label), safe-area padding below",
+      "region": {
+        "width": 375,
+        "height": 80
+      }
+    }
+  ]
+}

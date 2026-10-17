@@ -568,6 +568,12 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
     if subtask.bleed_hero {
         user_prompt.push_str("\nThis section is full-bleed: give the section frame no horizontal padding and let its media span the full root width. For text or controls BELOW the media, use one inner frame with `padding: [0,24]`. For text or controls OVER the media, keep media, scrim and copy in the same `layout: none` viewport, with inset x coordinates for copy; never stack overlay layers vertically.");
     }
+    if is_mobile_layout {
+        // The prompt builder has no live status-bar snapshot, and append mode
+        // may target a chrome-free viewport. State the coordinate relationship
+        // conditionally instead of moving already-authored overlay geometry.
+        user_prompt.push_str("\nMOBILE OVERLAY COORDINATES: Absolute x/y are local to their layout:none parent. For a section in vertical flow BELOW a separate status bar, local y=0 is already below the bar; never add its height again. Place that hero's page-level back/navigation controls 16-24px from the local top unless the user's composition says otherwise. If the hero really extends BEHIND system chrome, account for its safe area once inside that viewport; with no system chrome, add none. These defaults do not reposition card controls, decorations, or explicitly placed actions.");
+    }
     user_prompt.push_str(&crate::map_viewport::instruction(subtask));
     user_prompt.push_str(&crate::navigation_interaction::instruction(req, subtask));
     user_prompt.push_str(&crate::first_viewport::instruction(subtask));

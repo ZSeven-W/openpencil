@@ -93,6 +93,8 @@ mod copy_language_tests;
 mod deck_skill_tests;
 #[path = "prompt_food_skill_tests.rs"]
 mod food_skill_tests;
+#[path = "prompt_mobile_overlay_tests.rs"]
+mod mobile_overlay_tests;
 #[path = "prompt_overlay_skill_tests.rs"]
 mod overlay_skill_tests;
 #[path = "prompt_palette_tests.rs"]
