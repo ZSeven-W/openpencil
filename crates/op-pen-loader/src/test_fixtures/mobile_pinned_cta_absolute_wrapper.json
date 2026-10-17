@@ -1,0 +1,221 @@
+{
+  "version": "1.0.0",
+  "children": [
+    {
+      "type": "frame",
+      "id": "n175",
+      "name": "Workout Detail",
+      "x": 80.0,
+      "y": 40.0,
+      "width": 375.0,
+      "height": 812.0,
+      "layout": "vertical",
+      "gap": 0.0,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#111111"
+        }
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "n176",
+          "name": "Status Bar",
+          "role": "status-bar",
+          "width": "fill_container",
+          "height": 62.0,
+          "layout": "none"
+        },
+        {
+          "type": "frame",
+          "id": "n257",
+          "name": "Scrollable content",
+          "role": "scroll-area",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 16.0,
+          "padding": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "clipContent": true,
+          "children": [
+            {
+              "type": "frame",
+              "id": "long-content",
+              "width": "fill_container",
+              "height": 1100,
+              "layout": "vertical"
+            }
+          ],
+          "state": {
+            "scrolled": {
+              "type": "bool",
+              "default": false
+            }
+          },
+          "events": {
+            "onScroll": [
+              {
+                "set": {
+                  "$state.scrolled": "true"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "type": "frame",
+          "id": "n251",
+          "name": "Pinned Start Button",
+          "role": "button",
+          "transition": {
+            "durationMs": 150,
+            "easing": "standard",
+            "properties": [
+              "fill",
+              "opacity",
+              "scaleX",
+              "scaleY"
+            ]
+          },
+          "width": "fill_container",
+          "height": "fit_content",
+          "layout": "vertical",
+          "padding": [
+            0.0,
+            24.0,
+            28.0,
+            24.0
+          ],
+          "fill": [],
+          "children": [
+            {
+              "type": "frame",
+              "id": "n252",
+              "name": "Start Fade Wrapper",
+              "width": "fill_container",
+              "height": "fit_content",
+              "layout": "none",
+              "clipContent": false,
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "n253",
+                  "name": "Top Fade",
+                  "x": 0.0,
+                  "y": 0.0,
+                  "width": 327.0,
+                  "height": 32.0,
+                  "fill": [
+                    {
+                      "type": "linear_gradient",
+                      "angle": 180.0,
+                      "stops": [
+                        {
+                          "offset": 0.0,
+                          "color": "#11111100"
+                        },
+                        {
+                          "offset": 1.0,
+                          "color": "$--background"
+                        }
+                      ]
+                    }
+                  ],
+                  "children": []
+                },
+                {
+                  "type": "frame",
+                  "id": "n254",
+                  "name": "Start Workout Button",
+                  "role": "button",
+                  "x": 0.0,
+                  "y": 20.0,
+                  "transition": {
+                    "durationMs": 150,
+                    "easing": "standard",
+                    "properties": [
+                      "fill",
+                      "opacity",
+                      "scaleX",
+                      "scaleY"
+                    ]
+                  },
+                  "width": 327.0,
+                  "height": 56.0,
+                  "layout": "horizontal",
+                  "gap": 8.0,
+                  "padding": [
+                    12.0,
+                    24.0
+                  ],
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "cornerRadius": 14.0,
+                  "fill": [
+                    {
+                      "type": "solid",
+                      "color": "$--primary"
+                    }
+                  ],
+                  "effects": [
+                    {
+                      "type": "shadow",
+                      "offsetX": 0.0,
+                      "offsetY": 6.0,
+                      "blur": 18.0,
+                      "spread": 0.0,
+                      "color": "#22C55E40"
+                    }
+                  ],
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "n255",
+                      "name": "Play Icon",
+                      "iconFontName": "play",
+                      "iconFontFamily": "lucide",
+                      "width": 18.0,
+                      "height": 18.0,
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#111111"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "n256",
+                      "name": "Start Workout Label",
+                      "width": "fit_content",
+                      "height": "fit_content",
+                      "content": "Start Workout",
+                      "fontFamily": "Inter",
+                      "fontSize": 16.0,
+                      "fontWeight": 600,
+                      "letterSpacing": 0.0,
+                      "lineHeight": 1.2,
+                      "textGrowth": "auto",
+                      "fill": [
+                        {
+                          "type": "solid",
+                          "color": "#111111"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

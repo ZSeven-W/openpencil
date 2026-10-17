@@ -17,7 +17,7 @@ OVERFLOW PREVENTION (CRITICAL):
 
 ## HORIZONTAL SCROLL ROWS (cards / chips / categories / metric tiles)
 
-When the spec says "horizontal scrolling cards", "swipeable row", "chip row", "metric tiles", or similar, use ONE of the two paths below.
+When the spec explicitly requests horizontal scrolling/swiping cards, filter chips or metric tiles, use ONE of the two paths below. A plain metadata/difficulty badge row is not a scroll request: preserve every label and its font size, pack whole Hug badges into additional horizontal lines, and let the section height grow. Never make the last badge Fill or clip its text to conceal overflow.
 
 **Preferred (MCP tool path)** — if you have MCP tools (external client: Claude Code / Codex / Cursor), call the tool matching what's in the row; all three produce the overflow-safe wrapper+clipContent+fit_content structure and cannot be malformed by schema:
 

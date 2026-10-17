@@ -12,15 +12,14 @@ category: domain
 
 MOBILE APP — MANDATORY THREE-SECTION ARCHITECTURE:
 
-Every mobile screen accounts for three logical layers: status chrome, app content,
-and optional bottom navigation. These are architectural layers, not a requirement
-to wrap every content section inside one padded App Content frame.
+Account for three logical layers: status chrome, app content, and optional bottom
+navigation; do not wrap all content in one padded frame.
 
-Screen-height contract: use numeric 390-393×844 as a temporary construction seed so an empty skeleton is visible. Before finishing, a normal content-driven mobile page switches its root to `height="fit_content"` (Hug), matching its completed flow. Keep a numeric viewport only when the user explicitly requested that viewport/device frame or the design deliberately contains one clipped viewport body that must consume remaining height.
+Screen height: seed an empty skeleton at 390-393×844. Before finishing, content-driven pages switch the root to `height="fit_content"` (Hug). Keep a numeric viewport only for an explicit viewport/device request or a deliberately clipped body consuming the remaining height.
 
 ## 0) EXPRESSION LAYER — where the look comes from
 
-Structure is the floor. Use the selected guide for mood, accent, depth, type, radii, and hero; keep support quiet. ARCHETYPE handoff: your subtask `elements` may start with `ARCHETYPE: …`; realise exactly that composition; the area percentages are of the 812px first screen; do not add a second hero. Realise the selected guide's two Signature recipes; the ARCHETYPE line says where, the recipes say how.
+Use the selected guide for mood, accent, depth, type, radii, and hero; keep support quiet. `ARCHETYPE: …` in subtask `elements` sets composition; the guide's two Signature recipes set treatment. Fit both within the measured section budget. Area percentages use the requested viewport INCLUDING chrome/pinned controls. On actionable details, reserve title/meta and readable list rows before decorative photos; explicit budgets override hero percentages. Do not add a second hero.
 
 Platform roles: use a three-size type scale — screen title 28–34px semibold, section title 20–22px, body 16–17px (labels 12–13px). Allow one display size per screen; hero numbers use 40–57px and fit one line (8+ characters → 40–44px). Keep the accent in one block/treatment; separate sections with tonal surface tiers, not accent fills or hairlines.
 
@@ -29,16 +28,16 @@ Focal idioms include a hero card in the rail, full-bleed media under the status 
 
 ## 1) STATUS BAR (OS-controlled) — PRE-INSERTED
 
-The status bar (time, signal, wifi, battery) is **automatically provided by OpenPencil on every generation path (orchestrator, design agent, and direct MCP)** as the first child of the root frame — a hand-drawn one is replaced by the canonical node. It is a fixed 62px-tall frame with hardcoded path icons.
+OpenPencil inserts the canonical 62px status bar (time, signal, wifi, battery) as the root's first child on every generation path, replacing hand-drawn bars. Its path glyphs already match the screen background.
 
 - **DO NOT generate a status bar** — it already exists
 - **DO NOT delete or modify** the pre-inserted status bar
-- **DO NOT give it a background fill** — it carries none, so it shows the screen behind it and its glyphs are already coloured for that background
+- **DO NOT give it a background fill** — it shows the screen behind it
 - Your first section should start BELOW the status bar (it occupies ~62px)
 
 ## 2) APP CONTENT (your layout)
 
-Chip rows (filter/date/guests pills): each chip HUGS (width fit_content, single-line text, height 36-44, cornerRadius=full); the ROW clips overflow (clipContent) instead of squeezing chips — never let a pill's text wrap. A badge/pill/button frame ALWAYS carries its content (text or icon) — an empty decorated frame renders as a mystery blob. Every tappable CTA/button/pill frame also carries cornerRadius (buttons 8-12, pills/chips full) — omitting it reads as an unstyled placeholder.
+Chips: width fit_content, single-line text, height 36-44, cornerRadius=full. Only explicitly scrollable filter/category lanes clip. Metadata/difficulty badges wrap as whole Hug chips into measured lines; keep the section Hug and budget every line. Never shrink or crop labels. Every badge/button/pill contains text or an icon, never an empty decorated frame. Tappable frames require cornerRadius: buttons 8-12, pills/chips full.
 
 Keep the mobile root at 0 horizontal padding so status chrome, integrated bottom
 navigation, and intentional full-bleed media can remain full width. Emit ordinary
@@ -50,9 +49,8 @@ under an explicit fixed-height root may use `height="fill_container"`; in that
 case it is the ONE named remainder consumer, not a sizing mode copied onto its
 sections.
 
-Use gap and vertical padding, not margins or empty spacers, for rhythm between
-sections. Give the last ordinary content section enough bottom padding to clear
-the following bottom navigation.
+Use gap and vertical padding, not margins or spacers, for section rhythm. Give
+the last content section bottom padding to clear the following navigation.
 
 A clipped horizontal scroller is the rail exception: its section stays full
 width, its section header gets 24px left/right padding, and its clipped

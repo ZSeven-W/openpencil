@@ -5,7 +5,7 @@ phase: [planning]
 trigger:
   keywords: [mobile, phone, ios, android, app, 移动, 手机, 应用, 375]
 priority: 8
-budget: 600
+budget: 800
 category: domain
 ---
 
@@ -15,12 +15,14 @@ Pick ONE archetype per screen; apply its style to the protagonist. In the owning
 
 Explicit first-screen content comes first: reserve 62px system chrome, navigation, gaps and every required item BEFORE imagery. Percentages are starting points; reduce the hero when needed. Long/CJK titles usually use 28–36px with balanced lines; 48px suits short display copy/figures. Do not plan a status bar; it is pre-inserted.
 
+ACTIONABLE DETAILS: when a photo introduces a repeated list and a pinned action (training exercises, itinerary stops, lesson steps), reserve the title/meta, list heading and at least three readable rows before sizing the photo. Start around 160–208px on an 812px phone; keep the rest of the list scrollable, never squeeze every row into one screenshot. Photo-led browsing, galleries and explicit large-image/reference layouts retain their requested composition. A large photograph is not mandatory merely because a page is called a detail screen.
+
 Supporting subtasks start with `quiet section: secondary visual weight; retain legible chart colors and active states`, then their parts list. Never mark the protagonist quiet.
 
 House defaults for an 812px screen (body 16px):
 
 | name | purpose | protagonist / relation | imagery |
-| image-led | detail/product/workout | photo 35–45%; overlay copy only if owned here | relevant full-bleed photo; no second hero |
+| image-led | photo-led browsing/product showcase | photo 35–45% only when imagery is the main task; actionable details use the content budget above | one relevant photo; overlay copy only if owned here |
 | ledger | banking/wallet/stats | figure card 25–30%, quiet list below | figures lead; no decorative hero |
 | route-map | ride/delivery/travel | map 40–50%, pinned controls, sheet below | map template, never photo |
 | timeline | calendar/schedule | grid/time axis 30–40%, accent now, split | no decorative hero |

@@ -1,0 +1,166 @@
+{
+  "plan": {
+    "rootFrame": {
+      "id": "page",
+      "name": "Workout Detail",
+      "width": 375,
+      "height": 812,
+      "layout": "vertical",
+      "gap": 0,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#111111"
+        }
+      ]
+    },
+    "styleGuideName": "health-minimal-mobile-dark",
+    "subtasks": [
+      {
+        "id": "hero",
+        "label": "Hero Image with Back Button",
+        "elements": "full-width workout hero photo with bottom gradient scrim, circular back button top-left, small favorite icon button top-right",
+        "region": {
+          "width": 375,
+          "height": 240
+        }
+      },
+      {
+        "id": "meta",
+        "label": "Workout Title and Meta",
+        "elements": "workout title (e.g. Full Body Strength), meta row with duration 32 min, calories 280 kcal, equipment dumbbell, difficulty badges row (Beginner / Intermediate active state)",
+        "region": {
+          "width": 375,
+          "height": 120
+        }
+      },
+      {
+        "id": "exercises",
+        "label": "Exercise List",
+        "elements": "section heading Exercises (6), scrollable list of six exercise rows each with rounded thumbnail, exercise name, sets × reps text (e.g. 3 sets × 12 reps), duration note",
+        "region": {
+          "width": 375,
+          "height": 344
+        }
+      },
+      {
+        "id": "start",
+        "label": "Start Button",
+        "elements": "pinned bottom bar with full-width primary Start Workout button, subtle top gradient blend into background",
+        "region": {
+          "width": 375,
+          "height": 108
+        }
+      }
+    ]
+  },
+  "section": {
+    "type": "frame",
+    "id": "n209",
+    "name": "Start Button",
+    "role": "button",
+    "transition": {
+      "durationMs": 150,
+      "easing": "standard",
+      "properties": [
+        "fill",
+        "opacity",
+        "scaleX",
+        "scaleY"
+      ]
+    },
+    "width": "fill_container",
+    "height": "fit_content",
+    "layout": "vertical",
+    "gap": 10.0,
+    "padding": [
+      16.0,
+      24.0,
+      28.0,
+      24.0
+    ],
+    "cornerRadius": 0.0,
+    "children": [
+      {
+        "type": "frame",
+        "id": "n210",
+        "name": "start-workout-button",
+        "role": "button",
+        "transition": {
+          "durationMs": 150,
+          "easing": "standard",
+          "properties": [
+            "fill",
+            "opacity",
+            "scaleX",
+            "scaleY"
+          ]
+        },
+        "width": "fill_container",
+        "height": 52.0,
+        "layout": "horizontal",
+        "gap": 8.0,
+        "padding": [
+          12.0,
+          16.0
+        ],
+        "justifyContent": "center",
+        "alignItems": "center",
+        "cornerRadius": 12.0,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "$--primary"
+          }
+        ],
+        "effects": [
+          {
+            "type": "shadow",
+            "offsetX": 0.0,
+            "offsetY": 6.0,
+            "blur": 18.0,
+            "spread": 0.0,
+            "color": "#22C55E30"
+          }
+        ],
+        "children": [
+          {
+            "type": "icon_font",
+            "id": "n211",
+            "name": "Play Icon",
+            "iconFontName": "play",
+            "iconFontFamily": "lucide",
+            "width": 18.0,
+            "height": 18.0,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#111111"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "id": "n212",
+            "name": "Start Workout Label",
+            "width": "fit_content",
+            "height": "fit_content",
+            "content": "Start Workout",
+            "fontFamily": "Inter",
+            "fontSize": 16.0,
+            "fontWeight": 600,
+            "letterSpacing": 0.0,
+            "lineHeight": 1.2,
+            "textGrowth": "auto",
+            "fill": [
+              {
+                "type": "solid",
+                "color": "#111111"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

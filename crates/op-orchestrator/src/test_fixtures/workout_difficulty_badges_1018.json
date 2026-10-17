@@ -1,0 +1,222 @@
+{
+  "type": "frame",
+  "id": "n200",
+  "name": "Difficulty Badges",
+  "width": "fill_container",
+  "height": "fit_content",
+  "layout": "vertical",
+  "gap": 10.0,
+  "padding": [
+    0.0,
+    24.0,
+    0.0,
+    24.0
+  ],
+  "children": [
+    {
+      "type": "frame",
+      "id": "n201",
+      "name": "Badge Row",
+      "width": "fill_container",
+      "layout": "horizontal",
+      "gap": 8.0,
+      "alignItems": "center",
+      "clipContent": true,
+      "children": [
+        {
+          "type": "frame",
+          "id": "n202",
+          "name": "badge-Intermediate",
+          "width": "fit_content",
+          "height": 32.0,
+          "layout": "horizontal",
+          "gap": 6.0,
+          "padding": [
+            0.0,
+            12.0
+          ],
+          "alignItems": "center",
+          "cornerRadius": 999.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#22C55E15"
+            }
+          ],
+          "stroke": {
+            "thickness": 1.0,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "$--primary"
+              }
+            ]
+          },
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "n203",
+              "iconFontName": "gauge",
+              "iconFontFamily": "lucide",
+              "width": 14.0,
+              "height": 14.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--primary"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "n204",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "Intermediate",
+              "fontFamily": "Inter",
+              "fontSize": 12.0,
+              "fontWeight": 500,
+              "letterSpacing": 0.5,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--color-error-foreground"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "n205",
+          "name": "badge-Full Body",
+          "width": "fit_content",
+          "height": 32.0,
+          "layout": "horizontal",
+          "gap": 6.0,
+          "padding": [
+            0.0,
+            12.0
+          ],
+          "alignItems": "center",
+          "cornerRadius": 999.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--card"
+            }
+          ],
+          "stroke": {
+            "thickness": 1.0,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "$--border"
+              }
+            ]
+          },
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "n206",
+              "iconFontName": "dumbbell",
+              "iconFontFamily": "lucide",
+              "width": 14.0,
+              "height": 14.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--muted-foreground"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "n207",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "Full Body",
+              "fontFamily": "Inter",
+              "fontSize": 12.0,
+              "fontWeight": 500,
+              "letterSpacing": 0.5,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--secondary-foreground"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "n208",
+          "name": "badge-Moderate",
+          "width": "fill_container",
+          "height": 32.0,
+          "layout": "horizontal",
+          "gap": 6.0,
+          "padding": [
+            0.0,
+            12.0
+          ],
+          "alignItems": "center",
+          "clipContent": true,
+          "cornerRadius": 999.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--card"
+            }
+          ],
+          "stroke": {
+            "thickness": 1.0,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "$--border"
+              }
+            ]
+          },
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "n209",
+              "iconFontName": "flame",
+              "iconFontFamily": "lucide",
+              "width": 14.0,
+              "height": 14.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--muted-foreground"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "n210",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "Moderate",
+              "fontFamily": "Inter",
+              "fontSize": 12.0,
+              "fontWeight": 500,
+              "letterSpacing": 0.5,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--secondary-foreground"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

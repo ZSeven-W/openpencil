@@ -25,6 +25,7 @@ pub mod intent;
 pub mod map_placeholder;
 pub mod map_templates;
 mod mobile_action_bar;
+mod mobile_action_bar_plan;
 pub(crate) mod mobile_content_rail;
 mod mobile_reflow;
 pub mod model_profile;

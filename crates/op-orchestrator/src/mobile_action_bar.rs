@@ -28,7 +28,11 @@ pub(crate) fn is_action_bar(node: &PenNode) -> bool {
     ]
     .iter()
     .any(|name| identity.contains(name));
-    node.is_container() && (action_bar || explicitly_pinned_action(&identity)) && has_action(node)
+    node.is_container()
+        && (action_bar
+            || explicitly_pinned_action(&identity)
+            || crate::mobile_action_bar_plan::is_marked(node))
+        && has_action(node)
 }
 
 pub(crate) fn explicitly_pinned_action(identity: &str) -> bool {

@@ -1,0 +1,55 @@
+{
+  "rootFrame": {
+    "id": "page",
+    "name": "Workout Detail",
+    "width": 375,
+    "height": 812,
+    "layout": "vertical",
+    "gap": 0,
+    "fill": [
+      {
+        "type": "solid",
+        "color": "#FFFFFF"
+      }
+    ]
+  },
+  "styleGuideName": "wellness-green-mobile-light",
+  "subtasks": [
+    {
+      "id": "hero",
+      "label": "Hero Image with Back Button",
+      "elements": "ARCHETYPE: image-led — protagonist full-bleed workout photo 40% of screen, first screen 40%, photo bleeds under status bar, imagery single relevant full-bleed photo, no second hero, no overlaid titles here; floating circular back button (chevron left) top-left with translucent scrim, subtle bottom gradient fade into content area",
+      "region": {
+        "width": 375,
+        "height": 330
+      }
+    },
+    {
+      "id": "titleMeta",
+      "label": "Title, Meta Row and Difficulty Badges",
+      "elements": "workout title (28px, two balanced lines), meta row with duration icon + value, calories icon + value, equipment icon + value, difficulty badges row of three pill badges (Beginner / Intermediate / Advanced) with active state on Intermediate, owned by this section only",
+      "region": {
+        "width": 375,
+        "height": 130
+      }
+    },
+    {
+      "id": "exerciseList",
+      "label": "Exercise List",
+      "elements": "quiet section: secondary visual weight; retain legible active states; section header 'Exercises' with count label (6), six exercise rows each with rounded thumbnail image, exercise name, sets × reps text on muted secondary line, thin divider between rows, list scrolls under pinned button",
+      "region": {
+        "width": 375,
+        "height": 286
+      }
+    },
+    {
+      "id": "startButton",
+      "label": "Pinned Start Button",
+      "elements": "pinned bottom bar with soft top fade, full-width primary 'Start Workout' button (48px, rounded) with play icon, safe-area padding below",
+      "region": {
+        "width": 375,
+        "height": 66
+      }
+    }
+  ]
+}

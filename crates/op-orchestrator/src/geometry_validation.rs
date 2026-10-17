@@ -32,6 +32,8 @@ pub(crate) use geometry_echo::geometry_diagnostics_for_roots;
 mod geometry_compact_status;
 #[path = "geometry_intrinsic_rows.rs"]
 mod geometry_intrinsic_rows;
+#[path = "geometry_metadata_badges.rs"]
+mod geometry_metadata_badges;
 use geometry_compact_status::{
     compact_status_header_is_damaged, compact_trailing_status_pair, is_compact_status_badge,
     is_compact_status_badge_structure, stack_compact_status_header,
@@ -291,6 +293,12 @@ pub fn fix_table_column_overflow(sink: &mut dyn DocSink, root_id: &str) -> bool 
 /// feedback, bounded so a hard-to-fix design can't spin).
 const MAX_ROUNDS: usize = 3;
 
+/// Share the same measured metadata reflow with pre-insert section budgets.
+pub(crate) fn repair_metadata_badges(sink: &mut dyn DocSink, root_id: &str) -> bool {
+    let rects = resolved_rects(sink.state());
+    geometry_metadata_badges::repair(sink, root_id, &rects)
+}
+
 /// Geometry-driven validation LOOP: recompute the REAL layout, detect + fix the
 /// structural violations the resolved rects prove (table column overflow,
 /// collapsed fill containers), and repeat until a round finds nothing to do or
@@ -330,6 +338,12 @@ pub fn geometry_validate_and_fix_for_form(
     let mut rounds = 0;
     for _ in 0..MAX_ROUNDS {
         let rects = resolved_rects(sink.state());
+        // Metadata labels must remain readable. Reflow complete badges before
+        // generic overflow fixes can turn the tail into a clipped Fill cell.
+        if geometry_metadata_badges::repair(sink, root_id, &rects) {
+            rounds += 1;
+            continue;
+        }
         let cmds = {
             let Some(root) = op_editor_core::walkers::find_node(
                 sink.state().active_children(),

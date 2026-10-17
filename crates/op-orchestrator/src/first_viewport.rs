@@ -9,6 +9,7 @@ use jian_ops_schema::node::PenNode;
 use op_editor_core::{EditorState, PenNodeExt};
 
 const MARKER: &str = "OP FIRST VIEWPORT:";
+const DETAIL_MARKER: &str = "OP DETAIL BUDGET:";
 
 pub(crate) fn reserve(plan: &mut OrchestratorPlan, req: &DesignRequest) {
     let brief = req.prompt.to_lowercase();
@@ -117,12 +118,35 @@ pub(crate) fn mark_tasks(plan: &mut OrchestratorPlan, indices: &[usize]) {
 }
 
 pub(crate) fn owns(task: &Subtask) -> bool {
-    task.elements.as_deref().is_some_and(|e| e.contains(MARKER))
+    task.elements
+        .as_deref()
+        .is_some_and(|e| e.contains(MARKER) || e.contains(DETAIL_MARKER))
+}
+
+/// Apply the native height contract only to the photo and summary. The full
+/// repeated list is deliberately not an above-the-fold section contract.
+pub(crate) fn mark_detail_tasks(plan: &mut OrchestratorPlan, indices: &[usize]) {
+    for &index in indices {
+        let task = &mut plan.subtasks[index];
+        let elements = task.elements.get_or_insert_default();
+        if let Some(start) = elements.find(DETAIL_MARKER) {
+            elements.truncate(start);
+        }
+        elements.truncate(elements.trim_end().len());
+        elements.push_str(&format!("\n{DETAIL_MARKER} This photo/summary section has at most {:.0}px including padding, wrapping and gaps. Reserve room for the list heading, at least three readable rows and the pinned bottom action. This section budget overrides the planner's approximate hero percentages. The complete list keeps every requested item and may continue below the fold; do not squeeze all rows into the first screen.", task.region.height));
+    }
 }
 
 pub(crate) fn instruction(task: &Subtask) -> String {
     if !owns(task) {
         return String::new();
+    }
+    if task
+        .elements
+        .as_deref()
+        .is_some_and(|e| e.contains(DETAIL_MARKER))
+    {
+        return format!("\n\nDETAIL-SECTION CONTRACT: This photo/summary section must fit within {:.0}px including all padding, text wrapping and gaps. This is a MAXIMUM, not a quota. Keep supplied title, metadata and badges readable and complete; do not shrink body text, clip content or force the section root height. Use a content-height section. Only this photo/summary is bounded: the full repeated list preserves every requested row and continues by scrolling, with its first three normal-size rows reserved above the fixed action. Do not add another photo hero or duplicate headings to this section.", task.region.height);
     }
     format!("\n\nFIRST-VIEWPORT CONTRACT: This complete section must fit within {:.0}px including all padding and text wrapping. It is a MAXIMUM, not a quota to fill. Other required sections have reserved space. Compute padding + title + rows/media + all gaps before emitting the script. Prefer compact media and less decorative whitespace; keep every supplied line and readable body text. Supplied content and usable controls take priority over optional large photos, duplicate headings and repeated notes; supporting sections must not become a second photo hero. Use a content-height section, not clipping or a forced height. Size a long/CJK brand to its actual text width: normally 28–36px, 1–2 balanced lines, never a lone final glyph. A 48px display preset is for short display copy or figures, not mandatory for a long brand. Do not add new claims or omit supporting notes or actions to make room.",task.region.height)
 }
@@ -144,6 +168,14 @@ pub(crate) fn rejection(
         "height":"fit_content", "layout":"vertical", "children":nodes
     }))
     .ok()?];
+    // Account for complete badge lines before judging the section's height,
+    // using the same reflow as final cleanup rather than a guessed text width.
+    crate::geometry_validation::repair_metadata_badges(
+        &mut crate::loop_finalize::StateDocSink {
+            state: &mut scratch,
+        },
+        "__first_viewport_measure",
+    );
     let rects = crate::image_fallback_policy::resolved_rects(&scratch);
     let height = nodes
         .iter()

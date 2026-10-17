@@ -32,6 +32,8 @@ mod plan_normalize_root_name;
 #[path = "plan_normalize_items.rs"]
 mod plan_normalize_items;
 
+#[path = "plan_detail_budget.rs"]
+mod plan_detail_budget;
 #[path = "plan_map_budget.rs"]
 mod plan_map_budget;
 #[path = "plan_normalize_board_labels.rs"]
@@ -261,6 +263,7 @@ pub fn normalize(plan: &mut OrchestratorPlan, req: &DesignRequest) -> NormInfo {
     if is_mobile && !continuation_contract_applied {
         plan_map_budget::reserve_supporting_content(plan, req);
         crate::first_viewport::reserve(plan, req);
+        plan_detail_budget::reserve_supporting_content(plan, req);
     }
     // Last, so the name heuristics above (home-screen detection reads the
     // root name) see the planner's own words.

@@ -17,6 +17,9 @@ use jian_ops_schema::node::PenNode;
 use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use jian_ops_schema::style::StrokeThickness;
 
+#[path = "layout_repair_scroll.rs"]
+mod scroll;
+
 pub(crate) fn repair_fit_content_layout(root: &PenNode, rects: &mut BTreeMap<String, [f32; 4]>) {
     repair_node(root, rects, true);
 }
@@ -89,6 +92,7 @@ fn repair_vertical_container(
     let gap = gap_value(props);
     let avail_w = (parent.w - padding.left - padding.right).max(0.0);
     let avail_h = (parent.h - padding.top - padding.bottom).max(0.0);
+    scroll::reserve_intrinsic_footer(node, props, kids, rects, is_root);
     let rects_now: Vec<Rect> = layout_kids
         .iter()
         .filter_map(|child| rect(child, rects))
