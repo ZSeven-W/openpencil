@@ -271,7 +271,15 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
                 raw = %text,
                 "subagent script-gen parse failed"
             );
-            return fail(e.to_string());
+            return fail(
+                if matches!(&e, crate::script_gen::ScriptGenError::ParentReference(_)) {
+                    // A proven output-structure violation needs actionable
+                    // feedback, not a skill-tier downgrade or a partial forest.
+                    format!("self-check failed: {e}")
+                } else {
+                    e.to_string()
+                },
+            );
         }
     };
     if is_blank_container_forest(&nodes) {

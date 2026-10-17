@@ -7,7 +7,7 @@ use super::{
 };
 
 fn invalid_parent(error: &ScriptError) -> bool {
-    matches!(error, ScriptError::Threw(message) if message.contains("OP_SCRIPT_PARENT_UNDEFINED"))
+    error.is_invalid_insertion_parent()
 }
 
 fn attempt(source: &str, preamble: Option<&str>) -> Result<Option<String>, ScriptError> {

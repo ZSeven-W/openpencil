@@ -82,6 +82,14 @@ impl fmt::Display for ScriptError {
 
 impl std::error::Error for ScriptError {}
 
+impl ScriptError {
+    /// Parent contract failures must not be salvaged as a successful prefix.
+    pub fn is_invalid_insertion_parent(&self) -> bool {
+        matches!(self, Self::Threw(message) if message.contains("OP_SCRIPT_PARENT_UNDEFINED")
+            || message.contains("OP_SCRIPT_PARENT_UNRESOLVED"))
+    }
+}
+
 /// Boundary bridge for the callers that still report `String` —
 /// `batch_design::expand_script_arg` forwards the message into a
 /// `ToolOutcome::Err` payload. `Display` reproduces the exact sentence, so

@@ -10,7 +10,7 @@ use crate::program_gen::ProgramGenError;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::state::StateSchema;
 
-/// Failure of [`parse_script`]. Both variants render VERBATIM (no prefix):
+/// Failure of [`parse_script`]. All variants render VERBATIM (no prefix):
 /// the sub-agent transcript shows the underlying script-runner / program
 /// message exactly as it did when this was a bare `String`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,6 +19,9 @@ pub enum ScriptGenError {
     /// JS. Carried as its display text because the runner lives in a crate
     /// this module does not own.
     ScriptRun(String),
+    /// An insertion used an undefined parent or a name/id instead of a
+    /// handle from this fresh generation script. Retry with exact feedback.
+    ParentReference(String),
     /// The recorded `batch_design` program failed to build a forest.
     Program(ProgramGenError),
 }
@@ -26,7 +29,7 @@ pub enum ScriptGenError {
 impl std::fmt::Display for ScriptGenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ScriptRun(message) => write!(f, "{message}"),
+            Self::ScriptRun(message) | Self::ParentReference(message) => write!(f, "{message}"),
             Self::Program(error) => write!(f, "{error}"),
         }
     }
@@ -52,10 +55,16 @@ impl From<ScriptGenError> for String {
 /// doc-root `state` the program's nodes hoisted (see `program_gen`'s module
 /// doc for why the caller needs this separately from the forest).
 pub fn parse_script(text: &str) -> Result<(Vec<PenNode>, StateSchema), ScriptGenError> {
-    // `to_string()` (not `?`-with-`From`) so this stays source-compatible
-    // whether the script runner returns a `String` or its own typed error.
-    let program = op_mcp::script_runner::run_generation_script_to_program(text)
-        .map_err(|error| ScriptGenError::ScriptRun(error.to_string()))?;
+    // Preserve the parent contract category so the retry ladder can feed
+    // the exact invalid reference back without accepting a partial forest.
+    let program =
+        op_mcp::script_runner::run_generation_script_to_program(text).map_err(|error| {
+            if error.is_invalid_insertion_parent() {
+                ScriptGenError::ParentReference(error.to_string())
+            } else {
+                ScriptGenError::ScriptRun(error.to_string())
+            }
+        })?;
     Ok(crate::program_gen::run_program_to_forest(&program)?)
 }
 
@@ -66,3 +75,7 @@ mod tests;
 #[cfg(test)]
 #[path = "script_gen_style_replay_tests.rs"]
 mod style_replay_tests;
+
+#[cfg(test)]
+#[path = "script_gen_parent_tests.rs"]
+mod parent_tests;

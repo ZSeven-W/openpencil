@@ -22,6 +22,8 @@ mod dotted_keys;
 
 #[path = "script_runner_fences.rs"]
 mod fences;
+#[path = "script_runner_generation.rs"]
+mod generation;
 #[path = "script_runner_overlay.rs"]
 mod overlay;
 #[path = "script_runner_prelude.rs"]
@@ -56,12 +58,11 @@ pub fn run_script_to_program(text: &str) -> Result<String, ScriptError> {
 
 /// Generation callers repair foregrounds after assembling and repairing the
 /// complete tree. Insertion-time ancestry can still be an orphan label's
-/// incorrect parent; all other recorder defaults and limits remain active.
+/// incorrect parent. Fresh generation also rejects unresolved insertion
+/// parents; K retains its existing support for earlier authored-id aliases.
+/// All other recorder defaults and limits remain active.
 pub fn run_generation_script_to_program(text: &str) -> Result<String, ScriptError> {
-    run_script_to_program_with_preamble(
-        text,
-        Some("__normalizeForegroundContrast = function(obj) { return obj; };"),
-    )
+    run_script_to_program_with_preamble(text, Some(generation::PREAMBLE))
 }
 
 /// Existing-node edits must not receive generation defaults, contrast repairs,
