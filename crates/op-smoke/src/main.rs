@@ -21,6 +21,10 @@
 //! - `OPENPENCIL_SMOKE_VALIDATION=1` — opt into the production lint
 //!   pre-validator and post-generation validation stage. The default remains
 //!   skipped so existing smoke traces are unchanged.
+//! - `OPENPENCIL_SMOKE_CHECKPOINT_OUT` — create a new, independent pre-image
+//!   document; refuses existing paths and aliases of the final output.
+//! - `OPENPENCIL_SMOKE_IMAGE_BUDGET_SECS` — optional positive whole-image-stage
+//!   deadline. Exhaustion saves final output and exits 5 when slots remain.
 //!
 //! ## What this verifies vs the desktop GUI smoke
 //!
@@ -53,6 +57,8 @@ mod llm_clients;
 mod loop_mode;
 mod loop_seed;
 mod modify_mode;
+mod smoke_post;
+mod smoke_post_error;
 mod smoke_save;
 mod smoke_support;
 mod variants_mode;
@@ -81,6 +87,13 @@ use smoke_support::{
 /// `state.doc` to `OPENPENCIL_SMOKE_OUT` using the SAME serialize path as the
 /// orchestrator mode (canonical bytes with editor metadata → file write).
 async fn run_loop_mode(prompt: String) -> std::process::ExitCode {
+    let post = match smoke_post::PostGeneration::from_env() {
+        Ok(post) => post,
+        Err(error) => {
+            eprintln!("[SMOKE] configuration error: {error}");
+            return std::process::ExitCode::from(3);
+        }
+    };
     let model =
         std::env::var("OPENPENCIL_ORCHESTRATOR_MODEL").unwrap_or_else(|_| "gpt-4o-mini".into());
     let key = match std::env::var("OPENPENCIL_LLM_API_KEY")
@@ -166,51 +179,23 @@ async fn run_loop_mode(prompt: String) -> std::process::ExitCode {
         }
     };
 
-    // Image-fill post-loop step (OPENPENCIL_SMOKE_FILL_IMAGES=1): resolve
-    // pending image-search queries to real URLs from Openverse BEFORE the `.op`
-    // is persisted so the saved document contains the filled `src` values.
-    let image_config = image_fill::ImageFillConfig::from_env();
-    // On a plain thread, never inline: the fetch bridge builds its own small
-    // runtime, which panics with "Cannot start a runtime from within a runtime"
-    // when driven from this tokio-hosted main (measured on the first benchmark
-    // run, which lost its whole image pass to the abort).
-    std::thread::scope(|scope| {
-        scope.spawn(|| {
-            let mut guard = state.lock().expect("EditorState mutex poisoned");
-            image_fill::fill_images(&mut guard, &image_config, dump);
-        });
+    // Optional independent checkpoint, real image fill, then final canonical
+    // save. Run off the tokio worker because the shared fetch bridge blocks.
+    let post_code = std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                let mut guard = state.lock().expect("EditorState mutex poisoned");
+                post.run(&mut guard, dump)
+            })
+            .join()
+            .expect("image-fill task panicked")
     });
 
     let guard = state.lock().expect("EditorState mutex poisoned");
     let total_nodes = guard.active_children().len();
     eprintln!("[LOOP] finished in {elapsed:?}; top-level node(s)={total_nodes}");
 
-    // Dump via the IDENTICAL serialize path the orchestrator mode uses.
-    let save_failed = match std::env::var("OPENPENCIL_SMOKE_OUT") {
-        Ok(out_path) if !out_path.is_empty() => match smoke_save::bytes(&guard) {
-            Ok(json) => match std::fs::write(&out_path, json) {
-                Ok(()) => {
-                    eprintln!("[SMOKE] saved doc → {out_path}");
-                    false
-                }
-                Err(e) => {
-                    eprintln!("[SMOKE] save failed ({out_path}): {e}");
-                    true
-                }
-            },
-            Err(e) => {
-                eprintln!("[SMOKE] serialize failed: {e}");
-                true
-            }
-        },
-        _ => false,
-    };
-
-    if save_failed {
-        std::process::ExitCode::from(4)
-    } else {
-        std::process::ExitCode::SUCCESS
-    }
+    std::process::ExitCode::from(post_code)
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -594,6 +579,13 @@ async fn main() -> std::process::ExitCode {
         eprintln!("[PROGRESS] {p:?}");
     };
 
+    let post = match smoke_post::PostGeneration::from_env() {
+        Ok(post) => post,
+        Err(error) => {
+            eprintln!("[SMOKE] configuration error: {error}");
+            return std::process::ExitCode::from(3);
+        }
+    };
     let started = std::time::Instant::now();
     // `--variants N`: the same side-by-side directions runner the desktop's
     // `LaunchRoute::Variants` turn drives, landing every direction here.
@@ -625,49 +617,25 @@ async fn main() -> std::process::ExitCode {
     };
     let elapsed = started.elapsed();
 
-    // Image-fill post step (OPENPENCIL_SMOKE_FILL_IMAGES=1), the same one the
-    // loop path runs: resolve pending image-search queries to real Openverse
-    // URLs BEFORE persisting, so the saved `.op` — and the render-shots pass
-    // that reads it — carries real pictures instead of grey placeholders.
-    // Scoped thread for the same reason as the loop path: the fetch bridge
-    // builds its own runtime and cannot be driven from this tokio main.
-    let image_config = image_fill::ImageFillConfig::from_env();
+    // Both routes use the same checkpoint → image fill → final save contract.
+    // Even a failed generation or expired image budget retains its final doc.
     let dump_images = std::env::var("OPENPENCIL_SMOKE_DUMP").is_ok();
-    std::thread::scope(|scope| {
-        scope.spawn(|| {
-            image_fill::fill_images(&mut sink.state, &image_config, dump_images);
-        });
+    let post_code = std::thread::scope(|scope| {
+        scope
+            .spawn(|| post.run(&mut sink.state, dump_images))
+            .join()
+            .expect("image-fill task panicked")
     });
-
-    // Persist the produced PenDocument when OPENPENCIL_SMOKE_OUT is set,
-    // so the render / screenshot step can pick it up. Canonical
-    // bytes use `persistence::save_to_path` metadata. Saved regardless of
-    // Ok/Err so a partial doc stays inspectable on failure.
-    // A requested save that FAILS forces a non-zero exit below — a
-    // benchmark driver must not read "success" when no `.op` was written.
-    let save_failed = match std::env::var("OPENPENCIL_SMOKE_OUT") {
-        Ok(out_path) if !out_path.is_empty() => match smoke_save::bytes(&sink.state) {
-            Ok(json) => match std::fs::write(&out_path, json) {
-                Ok(()) => {
-                    eprintln!("[SMOKE] saved doc → {out_path}");
-                    false
-                }
-                Err(e) => {
-                    eprintln!("[SMOKE] save failed ({out_path}): {e}");
-                    true
-                }
-            },
-            Err(e) => {
-                eprintln!("[SMOKE] serialize failed: {e}");
-                true
-            }
-        },
-        _ => false,
-    };
 
     match result {
         Ok(summary) => {
-            eprintln!("[FINAL] Ok in {elapsed:?}");
+            if post_code == 0 {
+                eprintln!("[FINAL] Ok in {elapsed:?}");
+            } else {
+                eprintln!(
+                    "[FINAL] generation completed in {elapsed:?}; post-generation incomplete"
+                );
+            }
             eprintln!("  root_frame_id = {:?}", summary.root_frame_id);
             eprintln!("  total_nodes   = {}", summary.total_nodes);
             eprintln!("  subtasks      = {}", summary.subtasks.len());
@@ -682,9 +650,11 @@ async fn main() -> std::process::ExitCode {
                         .unwrap_or_default()
                 );
             }
-            if save_failed {
-                eprintln!("[FINAL] generation OK but OPENPENCIL_SMOKE_OUT write failed");
-                std::process::ExitCode::from(4)
+            if post_code != 0 {
+                eprintln!(
+                    "[FINAL] generation OK but post-generation stage failed (exit {post_code})"
+                );
+                std::process::ExitCode::from(post_code)
             } else {
                 // motion50 fix 1: a run that produced ZERO done subtasks, or
                 // that ended with the abort flag set (the provider-limit

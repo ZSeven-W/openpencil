@@ -1,13 +1,14 @@
 //! Post-loop image-fill step for the headless agentic loop.
 //!
-//! After the design loop completes and before the `.op` is persisted, optionally
+//! After the design loop completes and before the final `.op` is persisted, optionally
 //! resolve pending image-search queries to real URLs from Openverse. Gated by
 //! `OPENPENCIL_SMOKE_FILL_IMAGES=1` (default off).
 
 use std::collections::HashSet;
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use crate::smoke_post_error::PostGenerationError;
 use op_editor_core::EditorState;
 use op_host_services::image_relevance_judge::OpenAiCompatVisionJudge;
 
@@ -20,11 +21,13 @@ pub struct ImageFillConfig {
     pub limit: usize,
     /// Milliseconds to wait between requests (default 250; OPENPENCIL_SMOKE_IMAGE_DELAY_MS).
     pub delay_ms: u64,
+    /// Optional whole-stage budget (OPENPENCIL_SMOKE_IMAGE_BUDGET_SECS).
+    pub budget: Option<Duration>,
 }
 
 impl ImageFillConfig {
     /// Parse the config from environment variables.
-    pub fn from_env() -> Self {
+    pub fn from_env() -> Result<Self, PostGenerationError> {
         let enabled = std::env::var("OPENPENCIL_SMOKE_FILL_IMAGES")
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true") || v.eq_ignore_ascii_case("on"))
             .unwrap_or(false);
@@ -36,11 +39,64 @@ impl ImageFillConfig {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(250);
-        Self {
+        let budget = parse_budget(
+            std::env::var("OPENPENCIL_SMOKE_IMAGE_BUDGET_SECS")
+                .ok()
+                .as_deref(),
+        )?;
+        Ok(Self {
             enabled,
             limit,
             delay_ms,
-        }
+            budget,
+        })
+    }
+}
+
+fn parse_budget(raw: Option<&str>) -> Result<Option<Duration>, PostGenerationError> {
+    let Some(raw) = raw else { return Ok(None) };
+    let seconds = raw.trim().parse::<u64>().ok().filter(|value| *value > 0);
+    let budget = seconds
+        .map(Duration::from_secs)
+        .filter(|duration| Instant::now().checked_add(*duration).is_some());
+    budget
+        .map(Some)
+        .ok_or(PostGenerationError::InvalidImageBudget)
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct ImageFillReport {
+    pub total: usize,
+    pub selected: usize,
+    pub attempted: usize,
+    pub unattempted: usize,
+    pub filled: usize,
+    pub no_hit: usize,
+    pub deadline_limited: usize,
+    pub unfilled: usize,
+    pub budget_exhausted: bool,
+}
+
+impl ImageFillReport {
+    pub fn deadline_incomplete(&self) -> bool {
+        self.budget_exhausted && self.unfilled > 0
+    }
+
+    fn log(&self) {
+        eprintln!(
+            "[SMOKE_IMAGE_RESULT] {}",
+            serde_json::json!({
+                "total": self.total,
+                "selected": self.selected,
+                "attempted": self.attempted,
+                "unattempted": self.unattempted,
+                "filled": self.filled,
+                "no_hit": self.no_hit,
+                "deadline_limited": self.deadline_limited,
+                "unfilled": self.unfilled,
+                "budget_exhausted": self.budget_exhausted,
+            })
+        );
     }
 }
 
@@ -56,33 +112,94 @@ fn resolve_judge() -> Option<OpenAiCompatVisionJudge> {
 ///
 /// Collects image-search targets (nodes with a query but empty `src`), fetches
 /// URLs sequentially with a delay, applies each, and logs the results. Never
-/// fails the run — a target whose search returns nothing is logged and skipped.
-/// Must be called AFTER the agent loop finishes but BEFORE the `.op` is saved.
-pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool) {
+/// treats a completed no-hit search as a fatal error. An explicit budget that
+/// expires with unfinished slots is reported separately to the caller.
+pub fn fill_images(
+    state: &mut EditorState,
+    config: &ImageFillConfig,
+    dump: bool,
+) -> ImageFillReport {
     if !config.enabled {
-        return;
+        return ImageFillReport::default();
     }
 
+    // The whole-stage budget includes judge setup and target-layout discovery;
+    // cold initialization must not silently grant extra network time.
+    let deadline = config.budget.map(|budget| Instant::now() + budget);
     let judge = resolve_judge();
     eprintln!(
         "[SMOKE] image judge: {}",
         if judge.is_some() { "env" } else { "none" }
     );
 
+    fill_images_with_fetch(
+        state,
+        config,
+        dump,
+        deadline,
+        Instant::now,
+        |target, used_urls, deadline| {
+            let intent = target
+                .prompt
+                .as_deref()
+                .filter(|prompt| !prompt.trim().is_empty())
+                .unwrap_or(target.query.as_str());
+            use op_image_enrich::net::{fetch, resolve};
+            match &judge {
+                Some(judge) => fetch::fetch_first_image_resolved_blocking_with_judge_for_view(
+                    &target.query,
+                    target.aspect_ratio,
+                    None,
+                    used_urls,
+                    judge,
+                    intent,
+                    deadline,
+                    target.judge_view,
+                ),
+                None => resolve::fetch_first_image_resolved_blocking_with_deadline(
+                    &target.query,
+                    intent,
+                    target.aspect_ratio,
+                    None,
+                    used_urls,
+                    deadline,
+                ),
+            }
+        },
+    )
+}
+
+fn fill_images_with_fetch(
+    state: &mut EditorState,
+    config: &ImageFillConfig,
+    dump: bool,
+    deadline: Option<Instant>,
+    mut now: impl FnMut() -> Instant,
+    mut fetch: impl FnMut(
+        &op_image_enrich::ImageSearchTarget,
+        &Mutex<HashSet<String>>,
+        Option<Instant>,
+    ) -> Option<op_image_enrich::net::fetch::ResolvedImage>,
+) -> ImageFillReport {
     let mut targets = op_image_enrich::collect_targets(state, &HashSet::new());
+    let mut report = ImageFillReport {
+        total: targets.len(),
+        ..ImageFillReport::default()
+    };
     if targets.is_empty() {
         if dump {
             eprintln!("[SMOKE] image fill skipped: no target(s) found");
         }
-        return;
+        report.log();
+        return report;
     }
 
     let cap = config.limit.min(targets.len());
     targets.truncate(cap);
 
     let used_urls = Mutex::new(HashSet::new());
-    let mut filled = 0usize;
     let total = targets.len();
+    report.selected = total;
 
     if dump {
         eprintln!(
@@ -92,6 +209,10 @@ pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool
     }
 
     for target in targets {
+        if deadline.is_some_and(|end| now() >= end) {
+            report.budget_exhausted = true;
+            break;
+        }
         if dump {
             eprintln!(
                 "[SMOKE] image search: node_id={} query={:?}",
@@ -99,35 +220,20 @@ pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool
             );
         }
 
-        // Same intent rule as the desktop session: the authored image prompt
-        // wins, the search query is the fallback. Both ladders read the
-        // photo contract from it.
-        let intent = target
-            .prompt
-            .as_deref()
-            .filter(|prompt| !prompt.trim().is_empty())
-            .unwrap_or(target.query.as_str());
-        let hit = match &judge {
-            Some(judge) => {
-                op_image_enrich::net::fetch::fetch_first_image_resolved_blocking_with_judge_for_view(
-                    &target.query,
-                    target.aspect_ratio,
-                    None,
-                    &used_urls,
-                    judge,
-                    intent,
-                    None,
-                    target.judge_view,
-                )
+        report.attempted += 1;
+        let hit = fetch(&target, &used_urls, deadline);
+        // The shared unjudged ladder reserves 250 ms for delivery/save; count
+        // a no-hit inside that margin as deadline-limited as well.
+        if hit.is_none() {
+            if deadline.is_some_and(|end| {
+                end.saturating_duration_since(now()) <= Duration::from_millis(250)
+            }) {
+                report.budget_exhausted = true;
+                report.deadline_limited += 1;
+            } else {
+                report.no_hit += 1;
             }
-            None => op_image_enrich::net::fetch::fetch_first_image_resolved_blocking(
-                &target.query,
-                intent,
-                target.aspect_ratio,
-                None,
-                &used_urls,
-            ),
-        };
+        }
         // Shipped nodes keep only `op-image:<hash>`; this line is the only
         // record of which catalogue hit filled the slot.
         eprintln!(
@@ -155,7 +261,7 @@ pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool
                         target.node_id
                     );
                 }
-                filled += 1;
+                report.filled += 1;
             } else if dump {
                 eprintln!(
                     "[SMOKE] image search returned nothing: query={:?}; fallback tile applied",
@@ -169,17 +275,28 @@ pub fn fill_images(state: &mut EditorState, config: &ImageFillConfig, dump: bool
             );
         }
 
-        if filled < total {
-            std::thread::sleep(Duration::from_millis(config.delay_ms));
+        if report.budget_exhausted {
+            break;
+        }
+        if report.filled < total {
+            let delay = Duration::from_millis(config.delay_ms);
+            let delay =
+                deadline.map_or(delay, |end| delay.min(end.saturating_duration_since(now())));
+            std::thread::sleep(delay);
         }
     }
 
     let remaining_targets = op_image_enrich::collect_targets(state, &HashSet::new());
     let remaining = remaining_targets.len();
+    report.unfilled = report.total.saturating_sub(report.filled);
+    report.unattempted = report.total.saturating_sub(report.attempted);
 
     eprintln!(
-        "[SMOKE] image fill done: filled {filled}/{total} target(s), {remaining} unfilled remain"
+        "[SMOKE] image fill done: filled {}/{total} target(s), {remaining} unresolved target(s), budget_exhausted={}",
+        report.filled, report.budget_exhausted
     );
+    report.log();
+    report
 }
 
 /// One-line, URL-free record of the hit that filled an image slot:
@@ -254,21 +371,160 @@ mod tests {
     fn config_defaults_are_correct() {
         let _guard = TEST_LOCK.lock();
         std::env::remove_var("OPENPENCIL_SMOKE_FILL_IMAGES");
+        std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_BUDGET_SECS");
         std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_LIMIT");
         std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_DELAY_MS");
-        let config = ImageFillConfig::from_env();
+        let config = ImageFillConfig::from_env().unwrap();
         assert_eq!(config.limit, 40);
         assert_eq!(config.delay_ms, 250);
         assert!(!config.enabled);
+        assert_eq!(config.budget, None);
+    }
+
+    #[test]
+    fn budget_is_opt_in_and_invalid_values_fail_closed() {
+        assert_eq!(parse_budget(None).unwrap(), None);
+        assert_eq!(
+            parse_budget(Some("120")).unwrap(),
+            Some(Duration::from_secs(120))
+        );
+        for invalid in ["", "0", "-1", "abc", "1.5", "18446744073709551615"] {
+            assert!(parse_budget(Some(invalid)).is_err(), "{invalid}");
+        }
+    }
+
+    fn image_slots() -> EditorState {
+        let mut state = EditorState::new();
+        for id in ["slot-1", "slot-2"] {
+            state.active_children_mut().push(
+                serde_json::from_value(serde_json::json!({
+                    "type": "image", "id": id, "src": "", "imageSearchQuery": "coffee cup",
+                    "width": 56, "height": 56
+                }))
+                .unwrap(),
+            );
+        }
+        state
+    }
+
+    fn test_config() -> ImageFillConfig {
+        ImageFillConfig {
+            enabled: true,
+            limit: 40,
+            delay_ms: 0,
+            budget: None,
+        }
+    }
+
+    #[test]
+    fn expired_budget_starts_no_fetch_and_reports_all_unfilled() {
+        let report = fill_images_with_fetch(
+            &mut image_slots(),
+            &test_config(),
+            false,
+            Some(Instant::now()),
+            Instant::now,
+            |_, _, _| panic!("expired stage must not start a request"),
+        );
+        assert_eq!(report.attempted, 0);
+        assert_eq!(report.unattempted, 2);
+        assert_eq!(report.no_hit, 0);
+        assert_eq!(report.unfilled, 2);
+        assert!(report.deadline_incomplete());
+    }
+
+    #[test]
+    fn deadline_preserves_completed_image_and_stops_the_next_slot() {
+        let mut state = image_slots();
+        let clock = std::cell::Cell::new(Instant::now());
+        let deadline = clock.get() + Duration::from_secs(10);
+        let report = fill_images_with_fetch(
+            &mut state,
+            &test_config(),
+            false,
+            Some(deadline),
+            || clock.get(),
+            |_, _, passed_deadline| {
+                assert_eq!(passed_deadline, Some(deadline));
+                clock.set(deadline);
+                Some(op_image_enrich::net::fetch::ResolvedImage {
+                    src: "https://images.example/coffee.jpg".into(),
+                    provider: "test",
+                    provider_query: "coffee cup".into(),
+                    title: "Coffee".into(),
+                    attribution: String::new(),
+                    original: None,
+                })
+            },
+        );
+        assert_eq!(report.attempted, 1);
+        assert_eq!(report.filled, 1);
+        assert_eq!(report.unfilled, 1);
+        assert_eq!(report.unattempted, 1);
+        assert_eq!(report.no_hit, 0);
+        assert!(report.deadline_incomplete());
+        let PenNode::Image(image) = &state.active_children()[0] else {
+            panic!("image survived")
+        };
+        assert_eq!(image.src, "https://images.example/coffee.jpg");
+    }
+
+    #[test]
+    fn completed_no_hit_search_is_visible_without_deadline_failure() {
+        // Layout/font initialization uses real time, while this test concerns
+        // completed no-hit searches with an unexpired stage deadline.
+        let now = Instant::now();
+        let deadline = now + Duration::from_secs(10);
+        let report = fill_images_with_fetch(
+            &mut image_slots(),
+            &test_config(),
+            false,
+            Some(deadline),
+            || now,
+            |_, _, passed_deadline| {
+                assert_eq!(passed_deadline, Some(deadline));
+                None
+            },
+        );
+        assert_eq!(report.attempted, 2);
+        assert_eq!(report.filled, 0);
+        assert_eq!(report.no_hit, 2);
+        assert_eq!(report.deadline_limited, 0);
+        assert_eq!(report.unattempted, 0);
+        assert_eq!(report.unfilled, 2);
+        assert!(!report.deadline_incomplete());
+    }
+
+    #[test]
+    fn deadline_limited_search_is_separate_from_no_hit_and_unattempted() {
+        let clock = std::cell::Cell::new(Instant::now());
+        let deadline = clock.get() + Duration::from_secs(10);
+        let report = fill_images_with_fetch(
+            &mut image_slots(),
+            &test_config(),
+            false,
+            Some(deadline),
+            || clock.get(),
+            |_, _, _| {
+                clock.set(deadline - Duration::from_millis(250));
+                None
+            },
+        );
+        assert_eq!(report.attempted, 1);
+        assert_eq!(report.deadline_limited, 1);
+        assert_eq!(report.no_hit, 0);
+        assert_eq!(report.unattempted, 1);
+        assert!(report.deadline_incomplete());
     }
 
     #[test]
     fn config_enabled_by_env() {
         let _guard = TEST_LOCK.lock();
         std::env::set_var("OPENPENCIL_SMOKE_FILL_IMAGES", "1");
+        std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_BUDGET_SECS");
         std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_LIMIT");
         std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_DELAY_MS");
-        let config = ImageFillConfig::from_env();
+        let config = ImageFillConfig::from_env().unwrap();
         assert!(config.enabled);
     }
 
@@ -276,9 +532,10 @@ mod tests {
     fn config_parses_limit_from_env() {
         let _guard = TEST_LOCK.lock();
         std::env::remove_var("OPENPENCIL_SMOKE_FILL_IMAGES");
+        std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_BUDGET_SECS");
         std::env::set_var("OPENPENCIL_SMOKE_IMAGE_LIMIT", "100");
         std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_DELAY_MS");
-        let config = ImageFillConfig::from_env();
+        let config = ImageFillConfig::from_env().unwrap();
         assert_eq!(config.limit, 100);
     }
 
@@ -286,9 +543,10 @@ mod tests {
     fn config_parses_delay_from_env() {
         let _guard = TEST_LOCK.lock();
         std::env::remove_var("OPENPENCIL_SMOKE_FILL_IMAGES");
+        std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_BUDGET_SECS");
         std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_LIMIT");
         std::env::set_var("OPENPENCIL_SMOKE_IMAGE_DELAY_MS", "500");
-        let config = ImageFillConfig::from_env();
+        let config = ImageFillConfig::from_env().unwrap();
         assert_eq!(config.delay_ms, 500);
     }
 
@@ -298,12 +556,13 @@ mod tests {
         std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_LIMIT");
         std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_DELAY_MS");
 
+        std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_BUDGET_SECS");
         std::env::set_var("OPENPENCIL_SMOKE_FILL_IMAGES", "true");
-        let config = ImageFillConfig::from_env();
+        let config = ImageFillConfig::from_env().unwrap();
         assert!(config.enabled);
 
         std::env::set_var("OPENPENCIL_SMOKE_FILL_IMAGES", "on");
-        let config = ImageFillConfig::from_env();
+        let config = ImageFillConfig::from_env().unwrap();
         assert!(config.enabled);
     }
 
@@ -311,9 +570,10 @@ mod tests {
     fn config_ignores_invalid_limit() {
         let _guard = TEST_LOCK.lock();
         std::env::remove_var("OPENPENCIL_SMOKE_FILL_IMAGES");
+        std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_BUDGET_SECS");
         std::env::set_var("OPENPENCIL_SMOKE_IMAGE_LIMIT", "not_a_number");
         std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_DELAY_MS");
-        let config = ImageFillConfig::from_env();
+        let config = ImageFillConfig::from_env().unwrap();
         assert_eq!(config.limit, 40);
     }
 
@@ -321,9 +581,10 @@ mod tests {
     fn config_ignores_invalid_delay() {
         let _guard = TEST_LOCK.lock();
         std::env::remove_var("OPENPENCIL_SMOKE_FILL_IMAGES");
+        std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_BUDGET_SECS");
         std::env::remove_var("OPENPENCIL_SMOKE_IMAGE_LIMIT");
         std::env::set_var("OPENPENCIL_SMOKE_IMAGE_DELAY_MS", "xyz");
-        let config = ImageFillConfig::from_env();
+        let config = ImageFillConfig::from_env().unwrap();
         assert_eq!(config.delay_ms, 250);
     }
 
