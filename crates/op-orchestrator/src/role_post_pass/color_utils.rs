@@ -132,8 +132,7 @@ pub(super) fn is_saturated_accent_token(color: &str) -> bool {
     let t = color.trim().trim_start_matches('$').to_ascii_lowercase();
     const ROOTS: &[&str] = &[
         "--primary",
-        "--primary",
-        "--color-error",
+        "--destructive",
         "--color-error",
         "--color-success",
     ];
