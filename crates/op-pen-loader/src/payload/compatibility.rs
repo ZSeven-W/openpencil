@@ -29,6 +29,10 @@ pub struct CanonicalLoad {
     pub compatibility: CompatibilityReport,
 }
 
+#[cfg(test)]
+#[path = "compatibility_roundtrip_tests.rs"]
+mod roundtrip_tests;
+
 /// Why the raw-preserving legacy migration writer could not produce a
 /// current-schema rewrite.
 ///

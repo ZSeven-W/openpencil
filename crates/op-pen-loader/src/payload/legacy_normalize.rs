@@ -175,7 +175,7 @@ fn collect_number_variables(root: &serde_json::Value) -> std::collections::HashM
 ///
 /// Type-less objects whose `fill` is legitimately a `String`
 /// (`StyledTextSegment`) are left untouched — the wrap is gated on the object
-/// being a PenNode (`type` key) or a stroke (`thickness` key).
+/// being a PenNode (`type` and `id` keys) or a stroke (`thickness` key).
 fn normalize_node_value(
     root: &mut serde_json::Value,
     number_vars: &std::collections::HashMap<String, f64>,
@@ -187,7 +187,11 @@ fn normalize_node_value(
     while let Some(node) = stack.pop() {
         match node {
             Value::Object(map) => {
-                let is_pen_node = map.contains_key("type");
+                // Canonical fills also have a `type` tag. In particular, an
+                // image fill uses `url`, not the image node's `src`. Treating
+                // it as a node injects a bogus empty src and falsely reports
+                // native photo saves as needing a legacy schema migration.
+                let is_pen_node = map.contains_key("type") && map.contains_key("id");
                 if is_pen_node {
                     // Copy the kind decisions to owned bools so the mutating
                     // inserts below don't conflict with the borrow on `map`.
