@@ -79,12 +79,13 @@ fn image_brief_contract_reaches_all_subtask_complexity_levels() {
             for required in [
                 "2-3 English keywords UNIQUE per image",
                 "BOTH image generation and stock-image acceptance",
-                "visible subject and identifying action or appearance before style",
-                "short query names the participant and activity",
-                "imagePrompt specifies the visible action or pose",
-                "Related equipment or an empty venue cannot replace the activity",
-                "Product-only/place-only slots: do not add people",
-                "need independent recognizable scenes",
+                "Put subject/action before style",
+                "Ground requirements in the brief or card copy",
+                "never invent a mandatory pose for a generic activity",
+                "imageSearchQuery and imagePrompt name the SAME required subject/action",
+                "show a participant doing that activity, not equipment or an empty venue",
+                "Product/place-only slots: do not add people",
+                "Sibling scenes must be independently recognizable",
             ] {
                 assert!(
                     call.system_prompt.contains(required),
