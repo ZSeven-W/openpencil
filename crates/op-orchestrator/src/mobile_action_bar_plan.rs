@@ -74,11 +74,29 @@ fn explicit_bottom_action(task: &Subtask) -> bool {
         "not pinned",
         "not fixed",
         "not sticky",
+        "not floating",
+        "not a floating",
+        "non-floating",
+        "no floating",
+        "scroll with content",
+        "scrolls with content",
+        "normal document flow",
         "不要固定",
         "不固定",
         "非固定",
-    ]) && has(&["pinned", "fixed", "sticky", "固定", "吸底"])
-        && has(&["bottom", "底部", "吸底"])
+        "不要悬浮",
+        "不悬浮",
+        "非悬浮",
+        "不要浮动",
+        "不浮动",
+        "非浮动",
+        "随内容滚动",
+        "随正文滚动",
+        "正常文档流",
+        "不含操作",
+    ]) && has(&[
+        "pinned", "fixed", "sticky", "floating", "固定", "吸底", "悬浮", "浮动",
+    ]) && has(&["bottom", "底部", "吸底"])
         && has(&["button", "cta", "action", "按钮", "操作"])
 }
 
@@ -104,3 +122,7 @@ fn is_last_on_screen(task: &Subtask, plan: &OrchestratorPlan) -> bool {
 #[cfg(test)]
 #[path = "mobile_action_bar_plan_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "mobile_action_bar_floating_tests.rs"]
+mod floating_tests;
