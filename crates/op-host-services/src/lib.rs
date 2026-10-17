@@ -117,6 +117,8 @@ pub mod public_https_client;
 pub mod quality_credential;
 pub mod reference_context;
 pub mod reference_context_error;
+#[cfg(all(test, not(target_os = "windows")))]
+mod retained_mobile_detail_flow_tests;
 pub mod run_quality;
 pub mod site_import;
 pub mod site_import_error;
