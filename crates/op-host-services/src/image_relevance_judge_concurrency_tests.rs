@@ -218,17 +218,20 @@ fn env_judge_deadline_keeps_completed_verdicts_and_cancels_a_silent_candidate() 
         while Instant::now() < server_deadline && stop_rx.try_recv().is_err() {
             match listener.accept() {
                 Ok((mut socket, _)) => {
+                    // The accept loop is nonblocking. Accepted sockets may
+                    // inherit that flag on macOS; restore blocking reads
+                    // before using read_exact and its timeout below.
+                    socket.set_nonblocking(false).unwrap();
                     socket
                         .set_read_timeout(Some(Duration::from_secs(1)))
                         .unwrap();
                     let mut head = Vec::new();
                     let mut byte = [0_u8];
                     while !head.ends_with(b"\r\n\r\n") && head.len() < 64 * 1024 {
-                        if socket.read(&mut byte).unwrap_or(0) == 0 {
-                            break;
-                        }
+                        socket.read_exact(&mut byte).expect("complete HTTP headers");
                         head.push(byte[0]);
                     }
+                    assert!(head.ends_with(b"\r\n\r\n"), "bounded complete HTTP headers");
                     let len = String::from_utf8_lossy(&head)
                         .lines()
                         .find_map(|line| {
@@ -237,9 +240,11 @@ fn env_judge_deadline_keeps_completed_verdicts_and_cancels_a_silent_candidate() 
                                 .then(|| value.trim().parse::<usize>().ok())
                                 .flatten()
                         })
-                        .unwrap_or(0);
+                        .expect("JSON request content length");
                     let mut body = vec![0; len];
-                    let _ = socket.read_exact(&mut body);
+                    socket.read_exact(&mut body).expect("complete HTTP body");
+                    let _: serde_json::Value =
+                        serde_json::from_slice(&body).expect("complete JSON request");
                     let index = server_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     if index == 0 {
                         let payload = serde_json::json!({
@@ -248,11 +253,13 @@ fn env_judge_deadline_keeps_completed_verdicts_and_cancels_a_silent_candidate() 
                         .to_string();
                         let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", payload.len(), payload);
                         socket.write_all(response.as_bytes()).unwrap();
-                    } else {
-                        // Hold the second request silent. The client must
-                        // cancel this future without waiting for 120s retries.
-                        sockets.push(socket);
+                        // Finish the response gracefully and retain the read
+                        // half until the client consumes the complete response.
+                        socket.shutdown(std::net::Shutdown::Write).unwrap();
                     }
+                    // Hold the second request silent. The client must cancel
+                    // this future without waiting for 120s retries.
+                    sockets.push(socket);
                 }
                 Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                     std::thread::sleep(Duration::from_millis(2));
