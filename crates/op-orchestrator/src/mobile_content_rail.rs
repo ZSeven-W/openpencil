@@ -186,6 +186,8 @@ pub(crate) fn repair_mobile_content_rails(sink: &mut dyn DocSink, root_id: &str)
 // walk; the duplicate page-shell merge, the header-adoption heuristics, and
 // the shared node predicates live in their own files and are re-imported here
 // so the walk sees the same flat namespace as before.
+#[path = "mobile_content_rail_action.rs"]
+mod mobile_content_rail_action;
 #[path = "mobile_content_rail_detect.rs"]
 mod mobile_content_rail_detect;
 #[path = "mobile_content_rail_header.rs"]
@@ -193,6 +195,7 @@ mod mobile_content_rail_header;
 #[path = "mobile_content_rail_shell_merge.rs"]
 mod mobile_content_rail_shell_merge;
 
+use mobile_content_rail_action::is_gutter_owned_trailing_action;
 use mobile_content_rail_detect::*;
 use mobile_content_rail_header::*;
 use mobile_content_rail_shell_merge::*;
@@ -366,10 +369,13 @@ fn collect_repairs(root: &PenNode) -> Vec<RailRepair> {
         // card itself would inset only its contents while leaving the border
         // glued to the viewport. Prefer this structural repair even when the
         // card contains a full-width cover image. Authored absolute-positioned
-        // surfaces are deliberately excluded by the predicate below.
+        // surfaces are deliberately excluded by the predicate below. A final
+        // persistent action with only a separator and its own inner rail is
+        // already full-width chrome; wrapping it would duplicate that gutter.
         if !is_transparent_surface(section) {
             if has_surface_content_descendant(section)
                 && is_edge_spanning_insettable_surface(section, root_width)
+                && !is_gutter_owned_trailing_action(section, index, sections.len(), root_width)
             {
                 let wrapper_id = unique_wrapper_id(section.id_str(), &mut known_ids);
                 repairs.push(RailRepair::WrapSurface {

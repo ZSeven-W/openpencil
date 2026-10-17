@@ -615,3 +615,6 @@ mod shell_tests;
 
 #[path = "mobile_content_rail_carousel_tests.rs"]
 mod carousel_tests;
+
+#[path = "mobile_content_rail_action_tests.rs"]
+mod action_tests;
