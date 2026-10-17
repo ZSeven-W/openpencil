@@ -11,6 +11,9 @@ use jian_ops_schema::node::PenNode;
 use op_editor_core::{EditorCommand, EditorState, NodeId};
 use serde_json::{json, Value};
 
+#[path = "subtask_completeness_metadata_tests.rs"]
+mod metadata;
+
 fn subtask(label: &str, elements: Option<&str>) -> Subtask {
     Subtask {
         id: "merchants".into(),

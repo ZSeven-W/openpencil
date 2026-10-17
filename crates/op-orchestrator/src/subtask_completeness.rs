@@ -35,7 +35,7 @@ fn expected_count_with_map_markers(subtask: &Subtask, map_markers: usize) -> Opt
     }
     // Quoted text is literal copy the section displays ("title '8 条评论'"),
     // not a promise of that many sibling items.
-    let text = mask_quoted_copy(&text);
+    let text = mask_metadata_copy(&mask_quoted_copy(&text));
 
     let mut counts = Vec::new();
     let mut ranged_spans: Vec<Range<usize>> = Vec::new();
@@ -191,11 +191,11 @@ pub(crate) fn incomplete_attempt(
         return None;
     }
     let mut delivered = delivered_item_count(sink, &outcome.inserted_root_ids);
-    let text = mask_quoted_copy(&format!(
+    let text = mask_metadata_copy(&mask_quoted_copy(&format!(
         "{}\n{}",
         subtask.label,
         subtask.elements.as_deref().unwrap_or("")
-    ));
+    )));
     if let Some((rows, columns)) = grid_dimensions(&text) {
         for id in &outcome.inserted_root_ids {
             if let Some(root) =
@@ -413,6 +413,36 @@ fn delivered_grid_cells(node: &PenNode, rows: usize, columns: usize) -> usize {
 /// Longest quoted run (in chars) treated as display copy; anything longer
 /// is more likely a stray apostrophe pairing across real content.
 const QUOTED_COPY_MAX_CHARS: usize = 40;
+
+/// A short parenthesized metadata value is display copy, not a local item
+/// promise. Keep ordinary parentheses and explicit lists inside metadata live.
+fn mask_metadata_copy(text: &str) -> String {
+    static VALUES: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\((?P<ascii>[^()（）\n]{1,160})\)|（(?P<cjk>[^()（）\n]{1,160})）")
+            .expect("valid metadata parentheses")
+    });
+    static META_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?ix)(?:\bmeta(?:data)?(?:\s+(?:row|text|label|summary))?|元信息(?:行|文字)?|元数据(?:行|文字)?|信息行)\s*[:：]?\s*$")
+            .expect("valid metadata prefix")
+    });
+    static ITEM_INSTRUCTION: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?ix)\b(?:list|grid|rows?|cards?|tiles?|entries|render|generate|include|show|display|repeat|each|with|per)\b|列表|网格|卡片|逐项|每项|每个|包含|列出|生成|显示")
+            .expect("valid repeated-item instruction")
+    });
+    let mut masked = text.as_bytes().to_vec();
+    for captures in VALUES.captures_iter(text) {
+        let whole = captures.get(0).unwrap();
+        let body = captures
+            .name("ascii")
+            .or_else(|| captures.name("cjk"))
+            .unwrap();
+        if META_PREFIX.is_match(&text[..whole.start()]) && !ITEM_INSTRUCTION.is_match(body.as_str())
+        {
+            masked[body.range()].fill(b' ');
+        }
+    }
+    String::from_utf8(masked).unwrap_or_else(|_| text.to_string())
+}
 
 /// Blank out the inside of quoted copy, keeping byte offsets stable so the
 /// span bookkeeping below still lines up with `text`.
