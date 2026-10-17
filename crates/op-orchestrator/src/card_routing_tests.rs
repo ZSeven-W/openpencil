@@ -127,6 +127,7 @@ fn the_card_board_survives_plan_normalization() {
     // A model that plans 1080x0 must still get a 3:4 board — the deck's
     // measured failure, ported to the card contract.
     let mut plan = crate::plan::OrchestratorPlan {
+        shared_context: None,
         root_frame: crate::plan::RootFrameSpec {
             id: "page".into(),
             name: "Page".into(),

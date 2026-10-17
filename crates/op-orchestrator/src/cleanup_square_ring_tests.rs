@@ -37,6 +37,7 @@ fn app08_root() -> Value {
 
 fn plan() -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "conv-root".into(),
             name: "会话列表".into(),

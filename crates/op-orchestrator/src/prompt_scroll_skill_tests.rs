@@ -9,6 +9,7 @@ use crate::plan::{Region, RootFrameSpec};
 
 fn page_plan() -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "page".into(),
             name: "Page".into(),

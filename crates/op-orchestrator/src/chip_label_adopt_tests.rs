@@ -247,6 +247,7 @@ fn the_driver_mounts_the_pass_under_the_chip_checkpoint() {
 
     let (mut sink, root_id) = sink_with(vec![m03_switcher()]);
     let plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: root_id.clone(),
             name: "持仓".into(),

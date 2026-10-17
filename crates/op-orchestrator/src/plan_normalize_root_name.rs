@@ -51,6 +51,7 @@ mod tests {
 
     fn plan(name: &str) -> OrchestratorPlan {
         OrchestratorPlan {
+            shared_context: None,
             root_frame: RootFrameSpec {
                 id: "root".into(),
                 name: name.into(),

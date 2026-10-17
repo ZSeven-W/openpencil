@@ -19,6 +19,7 @@ const DELIVERY_BRIEF: &str = "外卖 App 两屏可交互（375×812）：首页(
 
 fn phone_plan() -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "detail".into(),
             name: "商家详情".into(),

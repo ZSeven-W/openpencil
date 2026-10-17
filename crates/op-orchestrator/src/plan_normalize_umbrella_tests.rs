@@ -38,6 +38,7 @@ fn with_covers(mut st: Subtask, covers: &[&str]) -> Subtask {
 
 fn plan(subtasks: Vec<Subtask>) -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Dashboard".into(),

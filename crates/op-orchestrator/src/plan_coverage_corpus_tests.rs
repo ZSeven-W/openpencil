@@ -97,6 +97,7 @@ fn case_plan(case: &Value) -> OrchestratorPlan {
             .collect(),
         style_guide_name: None,
         palette: None,
+        shared_context: None,
     }
 }
 

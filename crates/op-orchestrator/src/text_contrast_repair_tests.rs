@@ -764,6 +764,7 @@ fn the_driver_attributes_chip_repairs_to_the_chip_checkpoint() {
 
     let (mut sink, root_id) = chip_sink();
     let plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: root_id.clone(),
             name: "Deck".into(),

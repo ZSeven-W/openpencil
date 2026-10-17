@@ -40,6 +40,7 @@ fn section(id: &str, label: &str) -> Subtask {
 
 fn mobile_plan(name: &str, labels: &[(&str, &str)]) -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: name.into(),

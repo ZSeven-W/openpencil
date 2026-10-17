@@ -48,6 +48,7 @@ fn request() -> DesignRequest {
 
 fn plan(task: &Subtask, width: f64) -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Page".into(),

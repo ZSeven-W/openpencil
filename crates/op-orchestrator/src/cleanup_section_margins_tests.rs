@@ -264,6 +264,7 @@ fn unify_section_driver_attributes_the_repair_to_the_checkpoint() {
     let mut sink = VecDocSink::new();
     insert_tree(&mut sink, &drifted_card());
     let plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "card".to_string(),
             name: "知识卡片".into(),
@@ -348,6 +349,7 @@ fn lesion_card() -> serde_json::Value {
 
 fn lesion_plan() -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "card".to_string(),
             name: "知识卡片".into(),

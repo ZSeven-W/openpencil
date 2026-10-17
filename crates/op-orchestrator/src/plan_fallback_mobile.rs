@@ -26,6 +26,7 @@ pub(crate) fn build_fallback_mobile_plan(
     let top_h = (height * 0.24).round().clamp(140.0, 220.0);
     let main_h = (height - top_h).max(320.0);
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "page".into(),
             name: "Page".into(),

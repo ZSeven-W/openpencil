@@ -759,6 +759,7 @@ fn a_deck_board_with_an_explicit_distribution_is_left_alone() {
 
 fn deck_plan(root_id: &str) -> crate::plan::OrchestratorPlan {
     crate::plan::OrchestratorPlan {
+        shared_context: None,
         root_frame: crate::plan::RootFrameSpec {
             id: root_id.to_string(),
             name: "Deck".into(),

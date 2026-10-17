@@ -45,6 +45,7 @@ fn board(width: f64, height: f64) -> jian_ops_schema::node::PenNode {
 
 fn plan_for(root_id: &str, width: f64, height: f64) -> crate::plan::OrchestratorPlan {
     crate::plan::OrchestratorPlan {
+        shared_context: None,
         root_frame: crate::plan::RootFrameSpec {
             id: root_id.to_string(),
             name: "Root".into(),

@@ -39,6 +39,7 @@ fn item(id: &str, label: &str, screen: Option<&str>, height: f64) -> Subtask {
 /// Five 法则 items, no screens — the canonical card-board family.
 fn five_item_plan() -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: crate::plan::RootFrameSpec {
             id: "card".into(),
             name: "知识卡片".into(),
@@ -134,6 +135,7 @@ fn unknown_model_keeps_the_family_unbundled() {
 #[test]
 fn different_stems_do_not_merge() {
     let mut plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: crate::plan::RootFrameSpec {
             id: "card".into(),
             name: "知识卡片".into(),
@@ -168,6 +170,7 @@ fn items_on_different_screens_never_merge() {
     // S2 pair does not, and NO subtask ever spans both screens (the
     // multi-screen fanout owns the screen dimension).
     let mut plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: crate::plan::RootFrameSpec {
             id: "card".into(),
             name: "知识卡片".into(),
@@ -215,6 +218,7 @@ fn per_screen_families_merge_independently_without_crossing_screens() {
     // Three items on S1 AND three items on S2: two merged subtasks, each
     // keeping its own screen — the deck fanout shape stays intact.
     let mut plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: crate::plan::RootFrameSpec {
             id: "card".into(),
             name: "知识卡片".into(),
@@ -258,6 +262,7 @@ fn deck_fallback_screens_survive_bundling() {
     // deepseek model — the screen protection is what keeps the multi-root
     // fanout intact.
     let mut plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: crate::plan::RootFrameSpec {
             id: "deck".into(),
             name: "Deck".into(),
@@ -300,6 +305,7 @@ fn ordinal_only_labels_fall_back_to_the_id_stem() {
     // Labels like "01".."05" leave no label stem — the id stem ("rule-")
     // carries the family instead.
     let mut plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: crate::plan::RootFrameSpec {
             id: "card".into(),
             name: "知识卡片".into(),

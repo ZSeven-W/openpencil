@@ -55,6 +55,7 @@ fn plan_for_retry(sink: &dyn DocSink, subtask: &Subtask) -> OrchestratorPlan {
         .unwrap_or((1200.0, 800.0, None));
 
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "retry-root".into(),
             name: "Page".into(),

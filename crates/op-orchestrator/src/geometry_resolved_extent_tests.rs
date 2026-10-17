@@ -8,6 +8,7 @@ use serde_json::json;
 
 fn plan() -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Wrapped Copy".into(),

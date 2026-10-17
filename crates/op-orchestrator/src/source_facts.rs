@@ -44,7 +44,7 @@ fn may_check(request: &DesignRequest) -> bool {
     text_only_source(request)
 }
 
-fn text_only_source(request: &DesignRequest) -> bool {
+pub(crate) fn text_only_source(request: &DesignRequest) -> bool {
     let lower = request.prompt.to_lowercase();
     // The request does not carry the visible text of attachments/live source
     // documents. Do not call their content invented based on brief text alone.
@@ -68,8 +68,11 @@ fn text_only_source(request: &DesignRequest) -> bool {
             "原图",
             "screenshot",
             "reference image",
+            "reference photo",
             "attached image",
+            "attached photo",
             "uploaded image",
+            "uploaded photo",
             "reference design",
             "replicate",
             "reproduce",

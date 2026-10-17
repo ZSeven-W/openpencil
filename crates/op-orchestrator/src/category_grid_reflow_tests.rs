@@ -313,6 +313,7 @@ fn cleanup_driver_reports_density_checkpoint_once() {
         .to_string();
     let root_id = sink.state.active_children()[0].id_str().to_string();
     let plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: root_id.clone(),
             name: "外卖 App 首页".into(),

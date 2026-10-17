@@ -73,6 +73,7 @@ fn explicit_mobile_viewport_contract_accepts_all_container_variants() {
 
 fn plan() -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "P".into(),

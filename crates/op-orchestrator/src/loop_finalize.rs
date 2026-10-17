@@ -578,6 +578,7 @@ pub fn synthesize_plan(forest: &[PenNode], canvas_width: f64) -> crate::plan::Or
         }]
     });
     crate::plan::OrchestratorPlan {
+        shared_context: None,
         root_frame: crate::plan::RootFrameSpec {
             id: root.map(|n| n.id_str().to_string()).unwrap_or_default(),
             name,

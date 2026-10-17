@@ -110,6 +110,7 @@ mod geometry_echo {
 
     fn plan() -> OrchestratorPlan {
         OrchestratorPlan {
+            shared_context: None,
             root_frame: RootFrameSpec {
                 id: "root".into(),
                 name: "Page".into(),

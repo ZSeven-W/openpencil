@@ -128,6 +128,7 @@ pub(crate) fn build_fallback_card_plan(
         .collect();
 
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "card".into(),
             name: "Card".into(),

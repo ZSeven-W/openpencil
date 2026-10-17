@@ -66,6 +66,7 @@ fn run_pass(sink: &mut VecDocSink, root_id: &str) -> usize {
 
 fn run_driver(sink: &mut VecDocSink, root_id: &str) -> RepairSummary {
     let plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: root_id.to_string(),
             name: "首页".into(),

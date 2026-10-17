@@ -477,6 +477,7 @@ fn the_driver_attributes_the_wrap_to_the_board_text_wrap_checkpoint() {
     let mut sink = VecDocSink::new();
     insert_tree(&mut sink, &p2c_lesion_card());
     let plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "card".to_string(),
             name: "知识卡片".into(),

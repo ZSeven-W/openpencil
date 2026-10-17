@@ -49,6 +49,7 @@ fn subtask_with_screen(id: &str, label: &str, screen: Option<&str>) -> Subtask {
 
 fn plan(width: f64, subtasks: Vec<Subtask>) -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "P".into(),

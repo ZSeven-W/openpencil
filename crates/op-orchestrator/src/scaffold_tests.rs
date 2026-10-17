@@ -4,6 +4,7 @@ use op_editor_core::PenNodeExt;
 
 fn plan() -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Design".into(),
@@ -367,6 +368,7 @@ fn a_screen_group_per_slide_emits_a_root_per_slide() {
     use crate::screen_groups::ScreenGroup;
 
     let mut plan = crate::plan::OrchestratorPlan {
+        shared_context: None,
         root_frame: crate::plan::RootFrameSpec {
             id: "page".into(),
             name: "Deck".into(),
@@ -455,6 +457,7 @@ fn screen_group_plan(
     count: usize,
 ) -> (OrchestratorPlan, Vec<crate::screen_groups::ScreenGroup>) {
     let mut plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "page".into(),
             name: "Deck".into(),

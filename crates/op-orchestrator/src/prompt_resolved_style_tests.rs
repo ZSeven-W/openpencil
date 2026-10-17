@@ -58,6 +58,7 @@ fn subtask() -> Subtask {
 
 fn plan_with_style(style_name: &str) -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "P".into(),

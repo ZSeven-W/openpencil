@@ -564,6 +564,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
         .for_subtask(plan, subtask)
         .append_section_instruction(&mut user_prompt);
     crate::source_facts::append_section_instruction(req, subtask, &mut user_prompt);
+    crate::plan_shared_context::append_instruction(plan, req, subtask, &mut user_prompt);
 
     if subtask.bleed_hero {
         user_prompt.push_str("\nThis section is full-bleed: give the section frame no horizontal padding and let its media span the full root width. For text or controls BELOW the media, use one inner frame with `padding: [0,24]`. For text or controls OVER the media, keep media, scrim and copy in the same `layout: none` viewport, with inset x coordinates for copy; never stack overlay layers vertically.");

@@ -21,6 +21,7 @@ const WORKED_EXAMPLE_MARKER: &str = "CARD ITEM TEMPLATE — WORKED EXAMPLE";
 /// one "法则" subtask.
 fn card_plan() -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "card".into(),
             name: "知识卡片".into(),
@@ -69,6 +70,7 @@ fn card_request(model: &str) -> DesignRequest {
 /// A deck subtask for the non-card-intent negative arm.
 fn deck_plan() -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "deck".into(),
             name: "Deck".into(),

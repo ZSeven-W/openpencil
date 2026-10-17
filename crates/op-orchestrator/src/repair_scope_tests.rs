@@ -69,6 +69,7 @@ fn state() -> EditorState {
 
 fn plan() -> crate::plan::OrchestratorPlan {
     crate::plan::OrchestratorPlan {
+        shared_context: None,
         root_frame: crate::plan::RootFrameSpec {
             id: "page".to_string(),
             name: "Page".to_string(),

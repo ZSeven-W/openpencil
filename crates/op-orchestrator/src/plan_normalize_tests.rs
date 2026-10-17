@@ -35,6 +35,7 @@ fn subtask(id: &str, label: &str) -> Subtask {
 
 fn plan(width: f64, subtasks: Vec<Subtask>) -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "P".into(),
@@ -376,6 +377,7 @@ fn dashboard_plan(root_width: f64) -> OrchestratorPlan {
         retry_feedback: None,
     };
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Dashboard".into(),
@@ -452,6 +454,7 @@ fn normalize_dashboard_height_clamped_to_max() {
     // so inferred = 340  →  max=round(340*1.6)=544
     // max(round(340*0.6), min(2000, 544)) = max(204, 544) = 544
     let mut p = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Dashboard".into(),
@@ -497,6 +500,7 @@ fn normalize_dashboard_height_clamped_to_min() {
     // inferred=320  →  min=round(320*0.6)=192, max=round(320*1.6)=512
     // max(192, min(50, 512)) = max(192, 50) = 192
     let mut p = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Dashboard".into(),

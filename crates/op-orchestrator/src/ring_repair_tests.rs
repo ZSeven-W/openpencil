@@ -343,6 +343,7 @@ fn cleanup_pipeline_repairs_the_screenshot_case() {
     state.active_children_mut().push(node);
 
     let plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Screen".into(),

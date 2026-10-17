@@ -10,6 +10,7 @@ fn subtask(id: &str, label: &str, width: f64) -> Subtask {
 
 fn plan(width: f64, subtasks: Vec<Subtask>) -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Workspace".into(),

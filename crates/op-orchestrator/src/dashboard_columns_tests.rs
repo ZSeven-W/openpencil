@@ -45,6 +45,7 @@ fn subtask(id: &str, label: &str, elements: Option<&str>) -> Subtask {
 
 fn plan_with(width: f64, subtasks: Vec<Subtask>) -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: root(width),
         subtasks,
         style_guide_name: None,

@@ -232,6 +232,7 @@ fn cleanup_requires_run_output_provenance_and_records_only_accepted_padding_edit
 
 fn plan(id: &str) -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: id.into(),
             name: "图文卡片".into(),
@@ -294,6 +295,7 @@ fn real_generated_three_page_fixture_reflows_inside_the_same_fixed_boards() {
     sink.state = EditorState::from_document(jian_ops_schema::load_str(source).unwrap().value);
     let before = sink.state.doc.clone();
     let plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "n199".into(),
             name: "图文卡片".into(),

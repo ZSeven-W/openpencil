@@ -4,6 +4,7 @@ use crate::test_support::VecDocSink;
 
 fn plan() -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Mobile".into(),

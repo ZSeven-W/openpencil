@@ -78,6 +78,7 @@ fn map_geometry_follows_mobile_rail_through_complete_cleanup() {
     }))
     .unwrap()];
     let plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Delivery detail".into(),

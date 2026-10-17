@@ -460,6 +460,7 @@ fn cleanup_driver_checkpoints_category_grid_density() {
     let mut sink = sink_with_root(mobile_root(json!([category_grid(1)])));
     let root_id = root_id(&sink);
     let plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: root_id.clone(),
             name: "外卖 App 首页".into(),

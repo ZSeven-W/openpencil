@@ -226,6 +226,7 @@ pub fn build_orchestrator_prompt(
                 .append_planning_instruction(&mut user_prompt);
             let mut system_prompt = cp.system;
             system_prompt.push_str(PLANNING_QUALITY_GUARDRAILS);
+            system_prompt.push_str(crate::plan_shared_context::PLANNING_INSTRUCTION);
             crate::output_language::append_copy_language_instruction(&mut system_prompt, req);
             append_source_facts_contract(&mut system_prompt);
             PlanningPrompt {
@@ -269,6 +270,7 @@ pub fn build_orchestrator_prompt(
                 .collect::<Vec<_>>()
                 .join("\n\n");
             system_prompt.push_str(PLANNING_QUALITY_GUARDRAILS);
+            system_prompt.push_str(crate::plan_shared_context::PLANNING_INSTRUCTION);
             system_prompt.push_str(planning_suffix(mode));
             crate::output_language::append_copy_language_instruction(&mut system_prompt, req);
             append_source_facts_contract(&mut system_prompt);

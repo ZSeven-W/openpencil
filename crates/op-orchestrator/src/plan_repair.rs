@@ -281,6 +281,7 @@ pub(crate) fn repair_plan_object(obj: &Value, request: &DesignRequest) -> Option
         subtasks,
         style_guide_name,
         palette: crate::plan_palette::PlanPalette::from_plan_value(obj),
+        shared_context: crate::plan_shared_context::from_plan_value(obj).ok()?,
     };
 
     Some(finalize_plan(

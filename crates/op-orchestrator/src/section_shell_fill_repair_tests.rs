@@ -201,6 +201,7 @@ fn wired_into_run_cleanup_passes_end_to_end() {
         .collect();
     let root_id_refs: Vec<&str> = root_ids.iter().map(String::as_str).collect();
     let plan = crate::plan::OrchestratorPlan {
+        shared_context: None,
         root_frame: crate::plan::RootFrameSpec {
             id: "root".into(),
             name: "Page".into(),

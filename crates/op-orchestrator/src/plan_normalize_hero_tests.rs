@@ -24,6 +24,7 @@ fn subtask(id: &str, screen: Option<&str>, elements: Option<&str>) -> Subtask {
 
 fn plan(subtasks: Vec<Subtask>) -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Root".into(),

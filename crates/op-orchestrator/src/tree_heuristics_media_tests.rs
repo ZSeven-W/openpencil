@@ -402,6 +402,7 @@ fn next_panel_fixture_cleanup_keeps_white_surface_and_border() {
         batch_depth: 0,
     };
     let plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Result screen".into(),

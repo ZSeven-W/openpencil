@@ -47,6 +47,7 @@ fn fixture(
         retry_feedback: None,
     };
     let plan = OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "page".into(),
             name: "Page".into(),

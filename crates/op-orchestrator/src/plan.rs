@@ -6,6 +6,7 @@
 
 use crate::design_type::{detect_design_type, DesignType, DesignTypePreset};
 pub use crate::plan_palette::PlanPalette;
+pub use crate::plan_shared_context::{PlanSharedContext, SharedExampleEntity};
 use crate::types::DesignRequest;
 use serde::{Deserialize, Serialize};
 
@@ -158,6 +159,14 @@ pub struct OrchestratorPlan {
         skip_serializing_if = "Option::is_none"
     )]
     pub palette: Option<PlanPalette>,
+    /// Immutable content decisions, shared before concurrent sections begin.
+    #[serde(
+        rename = "sharedContext",
+        default,
+        deserialize_with = "crate::plan_shared_context::deserialize_shared_context",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub shared_context: Option<PlanSharedContext>,
 }
 
 /// plan 解析错误。
@@ -291,6 +300,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
             subtasks,
             style_guide_name: None,
             palette: None,
+            shared_context: None,
         };
     }
 
@@ -333,6 +343,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
             subtasks,
             style_guide_name: None,
             palette: None,
+            shared_context: None,
         };
     }
 
@@ -384,6 +395,7 @@ pub fn build_fallback_plan(req: &DesignRequest) -> OrchestratorPlan {
         subtasks,
         style_guide_name: None,
         palette: None,
+        shared_context: None,
     }
 }
 
@@ -457,6 +469,7 @@ fn build_fallback_deck_plan(req: &DesignRequest, preset: DesignTypePreset) -> Or
         subtasks,
         style_guide_name: None,
         palette: None,
+        shared_context: None,
     }
 }
 

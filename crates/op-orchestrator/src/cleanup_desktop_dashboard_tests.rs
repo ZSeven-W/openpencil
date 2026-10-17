@@ -6,6 +6,7 @@ use serde_json::json;
 
 fn desktop_plan() -> OrchestratorPlan {
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "root".into(),
             name: "Dashboard".into(),

@@ -144,6 +144,7 @@ fn plan_from_state(sink: &dyn DocSink, specs: &[SpawnAgentSpec]) -> Orchestrator
         .collect();
 
     OrchestratorPlan {
+        shared_context: None,
         root_frame: RootFrameSpec {
             id: "spawn-root".into(),
             name: "Page".into(),
