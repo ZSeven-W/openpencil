@@ -67,7 +67,7 @@ pub trait DocSink: Send {
 
 /// Child ids of `parent_id` in document order (page-level children when the
 /// parent is `NodeId::NONE`); empty when the parent is missing.
-fn child_ids_under(state: &EditorState, parent_id: &NodeId) -> Vec<String> {
+pub(crate) fn child_ids_under(state: &EditorState, parent_id: &NodeId) -> Vec<String> {
     use op_editor_core::PenNodeExt;
     let children = if parent_id.is_real() {
         match op_editor_core::walkers::find_node(state.active_children(), parent_id) {
@@ -590,8 +590,8 @@ pub struct SubtaskOutcome {
     pub id: String,
     pub node_count: usize,
     pub error: Option<String>,
-    /// Post-remap ids of the roots this subtask inserted; empty on failure or
-    /// when the sink is buffered (ids unavailable until replay).
+    /// Post-remap ids of the roots this subtask inserted; empty on failure.
+    /// Buffered workers keep local staging ids until real replay replaces them.
     pub inserted_root_ids: Vec<String>,
     /// Visually dominant headline extracted from the inserted section.
     #[serde(default, skip_serializing_if = "Option::is_none")]

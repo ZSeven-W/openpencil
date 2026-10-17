@@ -45,6 +45,11 @@ fn source_facts_and_card_copy_limits_reach_every_planning_mode() {
         let pp = build_orchestrator_prompt(&request, mode, AbortFlag::new());
         assert!(pp.call_request.system_prompt.contains("SOURCE FACTS"));
         assert!(pp.call_request.system_prompt.contains("FIXED CARD COPY"));
+        assert!(pp.call_request.system_prompt.contains("SUMMARY OWNERSHIP"));
+        assert!(pp
+            .call_request
+            .system_prompt
+            .contains("Other sections must not independently invent the same summary"));
     }
 }
 

@@ -12,7 +12,7 @@
 //!   regression lock.
 //! - [`BufferDocSink`] — isolated command buffering with a local staging state;
 //!   successful commands are replayed atomically into the real sink.
-//! - [`run_subtask_retry_ladder`] — the 3-attempt tier-gated retry ladder,
+//! - [`run_subtask_retry_ladder_with_outcomes`] — the 3-attempt tier-gated retry ladder,
 //!   extracted from `run.rs`'s sequential loop so BOTH the sequential path
 //!   and each screen-group worker share the IDENTICAL retry semantics —
 //!   parallelizing groups must never let a group's retry behavior drift from
@@ -164,35 +164,6 @@ impl DocSink for BufferDocSink {
 /// happen before it's returned: the `geometry_echo` step
 /// ([`maybe_geometry_echo`]) — see that function's doc for the full
 /// contract (budget, buffered-sink no-op, replace-on-success semantics).
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn run_subtask_retry_ladder(
-    subtask: &Subtask,
-    plan: &OrchestratorPlan,
-    request: &DesignRequest,
-    llm: &dyn LlmClient,
-    sink: &mut dyn DocSink,
-    abort: &AbortFlag,
-    tier: ModelTier,
-    agent_indicator_epoch: Option<u64>,
-    geometry_echo_budget: &GeometryEchoBudget,
-    on_progress: &mut dyn FnMut(Progress),
-) -> SubtaskOutcome {
-    run_subtask_retry_ladder_with_outcomes(
-        subtask,
-        plan,
-        request,
-        llm,
-        sink,
-        abort,
-        tier,
-        agent_indicator_epoch,
-        geometry_echo_budget,
-        on_progress,
-        &[],
-    )
-    .await
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
     subtask: &Subtask,
