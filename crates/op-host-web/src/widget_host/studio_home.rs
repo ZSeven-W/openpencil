@@ -182,10 +182,7 @@ impl WidgetHost {
                 home.use_example(&example);
             }
             HomeHit::Professional => {
-                self.editor_state.tool = self
-                    .editor_state
-                    .editor_ui
-                    .enter_professional_from_home(self.editor_state.tool);
+                self.enter_professional_canvas();
             }
             HomeHit::ModeNormal => {
                 // Home IS the normal mode: the 普通 half of the switch only

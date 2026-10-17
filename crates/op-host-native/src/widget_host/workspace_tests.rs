@@ -175,6 +175,61 @@ fn pressing_professional_hides_the_workspace_and_restores_the_tool() {
 }
 
 #[test]
+fn professional_from_preview_releases_runtime_on_workspace_home_and_touch_reader() {
+    for (touch, via_home) in [(false, false), (false, true), (true, false)] {
+        let (width, height) = if touch { (390.0, 844.0) } else { (W, H) };
+        let mut host = host_with_boards_preserving(HomeFamily::AppUi, 1, |state| {
+            state.editor_ui.touch = touch;
+            if touch {
+                state.editor_ui.size_class = op_editor_core::size_class::EditorSizeClass::Compact;
+            }
+        });
+        host.editor_state_mut().editor_ui.workspace.previous_tool = Some(Tool::Rect);
+        host.editor_state_mut().editor_ui.workspace.phase = WorkspacePhase::Done;
+        assert!(host.enter_preview((width, height)));
+        host.set_now_ms(3_000);
+        host.settle_mode_transition();
+        assert!(host.preview_active());
+        let original = host.editor_state().doc.clone();
+        let history = host.editor_state().history.past.len();
+        let rect = if via_home {
+            host.editor_state_mut().editor_ui.home.visible = true;
+            host.editor_state_mut().editor_ui.entry_surface = EntrySurface::Home;
+            op_editor_ui::widgets::HomeSurface::for_editor(host.editor_state())
+                .unwrap()
+                .layout(width, height)
+                .professional
+        } else if touch {
+            op_editor_ui::widgets::WorksReader::for_editor(host.editor_state())
+                .unwrap()
+                .layout(width, height)
+                .mode_professional
+        } else {
+            op_editor_ui::widgets::WorkspaceSurface::for_editor(host.editor_state())
+                .unwrap()
+                .layout(width, height)
+                .professional
+        };
+        assert!(host.apply_press(rect.origin.x + 4.0, rect.origin.y + 4.0, width, height));
+        host.apply_release_with_viewport(width, height);
+        assert!(host.preview.is_none(), "editing owns input immediately");
+        assert!(!host.editor_state().editor_ui.preview.mode);
+        assert!(host.editor_state().editor_ui.preview.device.is_none());
+        assert!(host.preview_mode_transition.is_none());
+        assert!(!host.editor_state().editor_ui.workspace.visible);
+        assert!(!host.home_visible());
+        assert_eq!(host.editor_state().tool, Tool::Rect);
+        assert_eq!(host.editor_state().doc, original);
+        assert_eq!(host.editor_state().history.past.len(), history);
+        assert!(host.editor_state().editor_ui.workspace.active);
+        assert_eq!(
+            host.editor_state().editor_ui.workspace.phase,
+            WorkspacePhase::Done
+        );
+    }
+}
+
+#[test]
 fn pressing_back_shows_home_and_keeps_the_workspace_active() {
     let mut host = host_with_boards(HomeFamily::AppUi, 3);
     let back = {

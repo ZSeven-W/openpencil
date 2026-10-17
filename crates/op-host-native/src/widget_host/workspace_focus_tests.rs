@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::backend::{NativeBackend, NativeFrameBackend};
-use op_editor_core::{EditorState, HomeFamily};
+use op_editor_core::{EditorState, HomeFamily, Tool};
 
 const W: i32 = 1440;
 const H: i32 = 900;

@@ -13,6 +13,61 @@ use op_editor_ui::{Color, Point2D, Rect, RenderBackend, TextLayout};
 const W: f32 = 1440.0;
 const H: f32 = 900.0;
 
+#[cfg(feature = "canvaskit")]
+#[test]
+fn professional_from_preview_releases_runtime_on_workspace_and_home() {
+    use op_editor_core::{EntrySurface, Tool};
+    for via_home in [false, true] {
+        let mut host = running_host();
+        land_boards(&mut host);
+        host.editor_state.editor_ui.workspace.phase = WorkspacePhase::Done;
+        host.editor_state.editor_ui.workspace.previous_tool = Some(Tool::Rect);
+        host.preview = Some(
+            op_preview_core::PreviewSession::enter(
+                &host.editor_state.doc,
+                (W, H),
+                &host.editor_state.ui.variables.active_theme,
+                0,
+                false,
+                false,
+                jian_core::layout::measure::default_backend(),
+                0,
+            )
+            .expect("live web preview"),
+        );
+        host.editor_state.editor_ui.enter_preview();
+        let original = host.editor_state.doc.clone();
+        let history = host.editor_state.history.past.len();
+        let rect = if via_home {
+            host.editor_state.editor_ui.home.visible = true;
+            host.editor_state.editor_ui.entry_surface = EntrySurface::Home;
+            op_editor_ui::widgets::HomeSurface::for_editor(&host.editor_state)
+                .unwrap()
+                .layout(W, H)
+                .professional
+        } else {
+            WorkspaceSurface::for_editor(&host.editor_state)
+                .unwrap()
+                .layout(W, H)
+                .professional
+        };
+        assert!(host.apply_press(rect.origin.x + 4.0, rect.origin.y + 4.0, W, H));
+        assert!(host.preview.is_none(), "editing owns input immediately");
+        assert!(!host.editor_state.editor_ui.preview.mode);
+        assert!(host.preview_mode_transition.is_none());
+        assert!(!host.home_visible());
+        assert!(!host.workspace_visible());
+        assert_eq!(host.editor_state.tool, Tool::Rect);
+        assert_eq!(host.editor_state.doc, original);
+        assert_eq!(host.editor_state.history.past.len(), history);
+        assert!(host.editor_state.editor_ui.workspace.active);
+        assert_eq!(
+            host.editor_state.editor_ui.workspace.phase,
+            WorkspacePhase::Done
+        );
+    }
+}
+
 #[test]
 fn normal_history_buttons_restore_work_without_discarding_the_composer_draft() {
     use op_editor_core::{EditorCommand, EditorState, NodeId, WorkspaceHit};

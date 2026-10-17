@@ -19,7 +19,7 @@ use super::WidgetHostNative;
 use crate::backend::NativeFrameBackend;
 use op_editor_core::preview_slideshow::active_page_boards;
 use op_editor_core::size_class::MobileSheetKind;
-use op_editor_core::{reads_as_long_page, EntrySurface, NodeId, ReaderHit, Tool, Viewport};
+use op_editor_core::{reads_as_long_page, EntrySurface, NodeId, ReaderHit, Viewport};
 use op_editor_ui::widgets::{PaintCx, Widget, WorksReader};
 use op_editor_ui::{Point2D, Rect};
 
@@ -162,11 +162,7 @@ impl WidgetHostNative {
     fn reader_enter_professional(&mut self, vw: f32, vh: f32) {
         self.clear_reader_open_intent();
         let board = self.reader_current_board();
-        let ui = &mut self.editor_state.editor_ui;
-        let restore = ui.workspace.previous_tool;
-        ui.workspace.enter_professional();
-        ui.entry_surface = EntrySurface::Canvas;
-        self.editor_state.tool = restore.unwrap_or(Tool::Select);
+        self.enter_professional_canvas();
         if let Some(board) = board {
             self.refresh_layout_scene();
             op_editor_ui::widgets::host_overlay_geometry::zoom_to_fit_node(

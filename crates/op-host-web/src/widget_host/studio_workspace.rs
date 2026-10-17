@@ -10,7 +10,7 @@
 
 use super::WidgetHost;
 use op_editor_core::preview_slideshow::active_page_boards;
-use op_editor_core::{EntrySurface, Tool, WorkspaceHit, WorkspaceView};
+use op_editor_core::{EntrySurface, WorkspaceHit, WorkspaceView};
 use op_editor_ui::widgets::host_overlay_geometry::{
     status_bar_zoom, zoom_to_fit, zoom_to_fit_node,
 };
@@ -30,6 +30,15 @@ pub(in crate::widget_host) struct WorkspaceDockDrag {
 const WORKSPACE_DOCK_MIN_WIDTH: f32 = 280.0;
 
 impl WidgetHost {
+    /// Release preview input synchronously when the editing chrome changes.
+    pub(in crate::widget_host) fn enter_professional_canvas(&mut self) {
+        self.finish_exit_teardown();
+        self.editor_state.tool = self
+            .editor_state
+            .editor_ui
+            .enter_professional_from_home(self.editor_state.tool);
+    }
+
     pub(in crate::widget_host) fn refit_work_after_history(&mut self) {
         let count = active_page_boards(&self.editor_state).len();
         let workspace = &mut self.editor_state.editor_ui.workspace;
@@ -121,10 +130,7 @@ impl WidgetHost {
             // Web never enters drawer mode (the chat dock stays docked).
             WorkspaceHit::DrawerScrim => {}
             WorkspaceHit::Professional => {
-                let workspace = &mut self.editor_state.editor_ui.workspace;
-                let restore = workspace.previous_tool;
-                workspace.enter_professional();
-                self.editor_state.tool = restore.unwrap_or(Tool::Select);
+                self.enter_professional_canvas();
             }
             WorkspaceHit::ToggleDock => {
                 // The dock's collapse toggle collapses the LEFT PANEL.
