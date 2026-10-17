@@ -163,10 +163,13 @@ fn enter(state: &EditorState) -> PreviewSession {
 
 fn settle(session: &mut PreviewSession, first_ms: u64) -> bool {
     let mut switched = false;
-    // Bounded engine-clock ticks flush delayed taps and finish transitions.
+    // Sample the real scene at every bounded engine-clock tick, as paint does.
+    // Clock advancement alone never observes newly visible inView motion;
+    // the final assertion snapshot would otherwise start its first frame.
     for offset in [0, 500, 1000] {
         session.pump(first_ms + offset);
         switched |= session.reconcile(first_ms + offset).switched;
+        let _ = session.preview_scene_for_test();
     }
     switched
 }
@@ -590,6 +593,7 @@ fn retained_mobile_detail_navigation_scroll_and_roundtrip() {
         "visual_quality":"not-evaluated","business_effects":"not-tested; host capabilities disabled",
         "fonts":"existing test-process/platform fonts; no bundled-catalog or user-font-store initialization; not desktop typography parity",
         "capture_scope":"native raster of live scene; device-frame pin geometry checked separately",
+        "settle_frames":{"offsets_ms":[0,500,1000],"observe_scene_each_tick":true},
         "stages":{"config":"pending","load":"pending","preview_setup":"pending",
             "flow":if case.flow(){"pending"}else{"not-requested"},
             "scroll":if case.scroll(){"pending"}else{"not-requested"},
