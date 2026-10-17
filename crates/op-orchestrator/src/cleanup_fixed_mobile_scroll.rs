@@ -178,7 +178,10 @@ fn repair_intrinsic_action_inset(sink: &mut dyn DocSink, root_id: &str, root: &V
     }
     let mut inset = padding(bar);
     let outer = padding(root)[2];
-    if inset[2] + outer >= 24.0 {
+    let Some(closing_inset) = intrinsic_closing_inset(bar) else {
+        return false;
+    };
+    if closing_inset + outer >= 24.0 {
         return false;
     }
     let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
@@ -191,7 +194,7 @@ fn repair_intrinsic_action_inset(sink: &mut dyn DocSink, root_id: &str, root: &V
     let (Some(board), Some(footer)) = (page.find(root_id), page.find(id)) else {
         return false;
     };
-    let extra = 28.0 - outer - inset[2];
+    let extra = 28.0 - outer - closing_inset;
     if (footer.bounds.size.x - board.bounds.size.x).abs() > 1.0
         || !(44.0..=128.0).contains(&footer.bounds.size.y)
         || footer.bounds.size.y as f64 + extra > 128.0
@@ -204,6 +207,52 @@ fn repair_intrinsic_action_inset(sink: &mut dyn DocSink, root_id: &str, root: &V
         patch_json: json!({"padding":inset}).to_string(),
         page_id: None,
     })
+}
+
+// Content rails and inner bar wrappers can already own the safe area. Count
+// only trailing intrinsic vertical flow; a fixed control's internal padding
+// belongs inside its hit area and is not closing space below the control.
+fn intrinsic_closing_inset(node: &Value) -> Option<f64> {
+    if node.get("padding").is_some_and(|pad| {
+        !pad.is_number()
+            && !pad
+                .as_array()
+                .is_some_and(|v| matches!(v.len(), 2 | 4) && v.iter().all(Value::is_number))
+    }) {
+        return None;
+    }
+    if node
+        .get("children")
+        .and_then(Value::as_array)
+        .is_some_and(|children| {
+            children.iter().any(|child| {
+                ["constraints", "x", "y"]
+                    .iter()
+                    .any(|key| child.get(key).is_some())
+            })
+        })
+    {
+        return None;
+    }
+    let mut inset = padding(node)[2];
+    if let Some(child) = node
+        .get("children")
+        .and_then(Value::as_array)
+        .and_then(|children| children.last())
+        .filter(|child| {
+            child.get("layout").and_then(Value::as_str) == Some("vertical")
+                && child.get("height").and_then(Value::as_str) == Some("fit_content")
+        })
+    {
+        if ["constraints", "x", "y"]
+            .iter()
+            .any(|key| child.get(key).is_some())
+        {
+            return None;
+        }
+        inset += intrinsic_closing_inset(child)?;
+    }
+    Some(inset)
 }
 
 // A detail screen can have status chrome without a tab bar. Recognize that

@@ -145,12 +145,51 @@ fn flush_intrinsic_pinned_action_gains_safe_room_without_changing_content() {
 }
 
 #[test]
+fn action_inset_counts_nested_intrinsic_padding_once() {
+    for inner_inset in [0, 12, 24, 32] {
+        let mut draft = phone(json!({"type":"frame","id":"footer",
+            "name":"Pinned Start Button Content Rail","width":"fill_container",
+            "height":"fit_content","layout":"vertical","padding":[0,24,0,24],
+            "children":[{"type":"frame","id":"bar","name":"Pinned Start Button",
+                "role":"button","width":"fill_container","height":"fit_content",
+                "layout":"vertical","children":[{"type":"frame","id":"inner",
+                    "width":"fill_container","height":"fit_content","layout":"vertical",
+                    "padding":[12,0,inner_inset,0],"children":[{"type":"frame",
+                        "id":"start","role":"button","width":"fill_container",
+                        "height":48,"children":[{"type":"text","id":"label",
+                            "content":"Start Workout","fontSize":16}]}]}]}]}));
+        let original = serde_json::to_value(&draft.doc).unwrap();
+        let mut sink = crate::loop_finalize::StateDocSink { state: &mut draft };
+        repair(&mut sink, "root");
+        let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+        let page = scene.active_page().unwrap();
+        let button = page.find("start").unwrap().bounds;
+        let expected = if inner_inset >= 24 { inner_inset } else { 28 } as f32;
+        assert!(
+            (812.0 - button.origin.y - button.size.y - expected).abs() < 1.0,
+            "nested inset {inner_inset}: {button:?}"
+        );
+        let after = serde_json::to_value(&sink.state().doc).unwrap();
+        assert_eq!(
+            after["children"][0]["children"][2]["children"],
+            original["children"][0]["children"][2]["children"],
+            "preserve the authored nested bar and button"
+        );
+        let settled = sink.state().doc.clone();
+        repair(&mut sink, "root");
+        assert_eq!(settled, sink.state().doc);
+    }
+}
+
+#[test]
 fn action_inset_preserves_existing_outer_room_and_authored_layout_constraints() {
     for case in [
         "outer-room",
         "fixed-height",
         "token-padding",
         "positioned-child",
+        "nested-token-padding",
+        "nested-positioned-child",
     ] {
         let mut footer = json!({"type":"frame","id":"footer","name":"Pinned Start Button",
         "role":"button","width":"fill_container","height":"fit_content",
@@ -162,6 +201,16 @@ fn action_inset_preserves_existing_outer_room_and_authored_layout_constraints() 
             "fixed-height" => footer["height"] = json!(88),
             "token-padding" => footer["padding"] = json!("$action-padding"),
             "positioned-child" => footer["children"][0]["x"] = json!(0),
+            "nested-token-padding" | "nested-positioned-child" => {
+                footer["children"][0] = json!({"type":"frame","id":"inner",
+                    "layout":"vertical","height":"fit_content","children":[
+                        {"type":"frame","id":"start","role":"button","height":48}]});
+                if case == "nested-token-padding" {
+                    footer["children"][0]["padding"] = json!("$action-padding");
+                } else {
+                    footer["children"][0]["children"][0]["x"] = json!(0);
+                }
+            }
             _ => {}
         }
         let mut draft = phone(footer);
