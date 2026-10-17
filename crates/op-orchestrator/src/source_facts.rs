@@ -14,6 +14,9 @@ mod order;
 #[path = "source_facts_delivery.rs"]
 mod delivery;
 
+#[path = "source_facts_exercise.rs"]
+mod exercise;
+
 fn rating_terms(text: &str) -> bool {
     let lower = text.to_lowercase();
     ["rating", "ratings"]
@@ -91,6 +94,7 @@ pub(crate) fn append_section_instruction(
     }
     order::append_section_instruction(request, subtask, prompt);
     delivery::append_section_instruction(request, subtask, prompt);
+    exercise::append_instruction(request, prompt);
 }
 
 /// Return an actionable same-section retry reason before any nodes are inserted.
@@ -98,6 +102,7 @@ pub(crate) fn rejection(request: &DesignRequest, nodes: &[PenNode]) -> Option<St
     rating_rejection(request, nodes)
         .or_else(|| order::rejection(request, nodes))
         .or_else(|| delivery::rejection(request, nodes))
+        .or_else(|| exercise::rejection(request, nodes))
 }
 
 fn rating_rejection(request: &DesignRequest, nodes: &[PenNode]) -> Option<String> {

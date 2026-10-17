@@ -171,6 +171,7 @@ fn authored_photo_size_and_story_compositions_are_not_rewritten() {
         "主图要大",
     ] {
         unchanged(&plan(), &request(&format!("{BRIEF} {exception}")));
+        unchanged(&merged_plan(), &request(&format!("{BRIEF} {exception}")));
     }
     for prompt in [
         "Image-led product detail with a large photo and narrative story",
@@ -213,6 +214,7 @@ fn existing_canvas_and_non_mobile_roots_remain_unchanged() {
         is_mobile: true,
     });
     unchanged(&plan(), &req);
+    unchanged(&merged_plan(), &req);
     req.append_context = None;
     req.continuation_context = Some(ContinuationContext {
         screen_width: 375.0,
@@ -221,9 +223,11 @@ fn existing_canvas_and_non_mobile_roots_remain_unchanged() {
         screen_names: vec!["detail".into()],
     });
     unchanged(&plan(), &req);
+    unchanged(&merged_plan(), &req);
     req.continuation_context = None;
     req.reference_skeleton = Some(serde_json::from_value(json!({"source":"reference", "width":375, "sections":[], "navKind":"none", "heroKind":"imageLed", "columnRhythm":[]})).unwrap());
     unchanged(&plan(), &req);
+    unchanged(&merged_plan(), &req);
     for (width, height) in [
         (1440.0, 900.0),
         (375.0, 1400.0),
@@ -344,4 +348,282 @@ fn explicit_all_content_contract_takes_precedence_over_partial_row_budget() {
     let before = plan.clone();
     reserve_supporting_content(&mut plan, &req);
     assert_eq!(plan, before);
+}
+
+fn merged_plan() -> OrchestratorPlan {
+    // Exact run-4 planner output: the copy and badges share the hero owner.
+    crate::plan::parse_plan(include_str!("test_fixtures/workout_detail_1018_plan.json")).unwrap()
+}
+
+#[test]
+fn real_merged_hero_reserves_complete_copy_and_three_rows_without_rewriting_items() {
+    let mut plan = merged_plan();
+    let before = plan.clone();
+    // These words describe separate parts of the hero, not a second CTA.
+    assert!(has_pinned_action(&task_text(&plan.subtasks[0])));
+    assert!(!is_standalone_pinned_action(&plan.subtasks[0]));
+    reserve_supporting_content(&mut plan, &request(BRIEF));
+    assert_eq!(plan.subtasks[0].region.height, 280.0);
+    assert_eq!(plan.subtasks[1..], before.subtasks[1..]);
+    assert_eq!(plan.root_frame, before.root_frame);
+    assert!(plan.subtasks[0]
+        .elements
+        .as_deref()
+        .unwrap()
+        .starts_with(before.subtasks[0].elements.as_deref().unwrap()));
+    assert!(crate::first_viewport::owns(&plan.subtasks[0]));
+    assert!(!crate::first_viewport::owns(&plan.subtasks[1]));
+    assert!(!crate::first_viewport::owns(&plan.subtasks[2]));
+    // 62 system + complete merged hero + list heading + 3 normal rows +
+    // original CTA + breathing inset. The remaining rows stay scrollable.
+    assert!(
+        62.0 + plan.subtasks[0].region.height
+            + 40.0
+            + 3.0 * 72.0
+            + plan.subtasks[2].region.height
+            + 24.0
+            <= plan.root_frame.height
+    );
+    let normalized = plan.clone();
+    reserve_supporting_content(&mut plan, &request(BRIEF));
+    assert_eq!(plan, normalized);
+}
+
+#[test]
+fn merged_contract_reaches_every_retry_without_bounding_the_full_list() {
+    let mut plan = merged_plan();
+    let req = request(BRIEF);
+    crate::plan_normalize::normalize(&mut plan, &req);
+    assert_eq!(plan.subtasks[0].region.height, 280.0);
+    for (reduced, minimal) in [(false, false), (true, false), (true, true)] {
+        let (call, _) = crate::prompt::build_subagent_prompt(
+            &plan.subtasks[0],
+            &plan,
+            &req,
+            AbortFlag::new(),
+            reduced,
+            minimal,
+            &op_editor_core::ComponentLibrary::default(),
+        );
+        for instruction in [
+            "DETAIL-SECTION CONTRACT",
+            "MERGED DETAIL COMPOSITION",
+            "complete title, metadata and every difficulty badge",
+            "Recompose the photo and copy",
+            "shrinking text, deleting badges, clipping overlays or forcing the parent height",
+        ] {
+            assert!(call.user_prompt.contains(instruction), "{instruction}");
+        }
+        assert!(!crate::first_viewport::owns(&plan.subtasks[1]));
+        assert!(plan.subtasks[1]
+            .elements
+            .as_deref()
+            .unwrap()
+            .contains("six exercise rows"));
+    }
+}
+
+#[test]
+fn native_measurement_rejects_a_tall_merged_composition_without_clipping_its_nodes() {
+    let mut plan = merged_plan();
+    reserve_supporting_content(&mut plan, &request(BRIEF));
+    for (photo_height, rejected) in [(120, false), (180, true)] {
+        let nodes: Vec<jian_ops_schema::node::PenNode> = serde_json::from_value(json!([{
+            "type":"frame", "id":"merged", "layout":"vertical", "gap":12,
+            "width":"fill_container", "height":"fit_content", "children":[
+                {"type":"frame", "id":"photo", "width":"fill_container", "height":photo_height,
+                 "layout":"none", "children":[
+                    {"type":"frame", "id":"back", "name":"Back button", "x":16, "y":16,
+                     "width":40, "height":40}
+                ]},
+                {"type":"frame", "id":"summary", "layout":"vertical", "gap":8,
+                 "padding":16, "width":"fill_container", "height":"fit_content", "children":[
+                    {"type":"text", "id":"title", "content":"Full Body Strength", "fontSize":24,
+                     "width":"fill_container", "height":32},
+                    {"type":"text", "id":"meta", "content":"45 min · 320 kcal", "fontSize":14,
+                     "width":"fill_container", "height":20},
+                    {"type":"frame", "id":"badges", "name":"Difficulty Badges", "layout":"horizontal",
+                     "gap":8, "width":"fill_container", "height":32, "children":[
+                        {"type":"text", "id":"beginner", "content":"Beginner", "fontSize":14,
+                         "width":100, "height":32},
+                        {"type":"text", "id":"intermediate", "content":"Intermediate", "fontSize":14,
+                         "width":120, "height":32}
+                     ]}
+                 ]}
+            ]
+        }])).unwrap();
+        let original = serde_json::to_value(&nodes).unwrap();
+        let reason = crate::first_viewport::rejection(
+            &plan.subtasks[0],
+            &nodes,
+            &op_editor_core::EditorState::new(),
+        );
+        assert_eq!(reason.is_some(), rejected, "{reason:?}");
+        assert_eq!(serde_json::to_value(&nodes).unwrap(), original);
+        if let Some(reason) = reason {
+            assert!(reason.contains("Do not clip content or force the root height"));
+        }
+        assert!(crate::first_viewport::rejection(
+            &plan.subtasks[1],
+            &nodes,
+            &op_editor_core::EditorState::new(),
+        )
+        .is_none());
+    }
+}
+
+#[test]
+fn merged_budget_accounts_for_header_gaps_padding_and_content_floor_atomically() {
+    let req = request(BRIEF);
+    let mut compact = merged_plan();
+    compact.subtasks[0].region.height = 264.0;
+    reserve_supporting_content(&mut compact, &req);
+    assert_eq!(compact.subtasks[0].region.height, 264.0);
+    let mut minimum = merged_plan();
+    minimum.root_frame.height = 662.0;
+    reserve_supporting_content(&mut minimum, &req);
+    assert_eq!(minimum.subtasks[0].region.height, 240.0);
+    assert_eq!(62.0 + 240.0 + 40.0 + 3.0 * 72.0 + 80.0 + 24.0, 662.0);
+    let mut infeasible = merged_plan();
+    infeasible.root_frame.height = 661.0;
+    unchanged(&infeasible, &req);
+    let mut already_short = merged_plan();
+    already_short.subtasks[0].region.height = 220.0;
+    unchanged(&already_short, &req);
+
+    let mut with_header = merged_plan();
+    let mut header = plan().subtasks[1].clone();
+    header.id = "navigation".into();
+    header.label = "Navigation Header".into();
+    header.elements = Some("compact back navigation".into());
+    header.region.height = 48.0;
+    with_header.subtasks.insert(0, header.clone());
+    with_header.root_frame.gap = Some(16.0);
+    with_header.root_frame.padding = Some(12.0);
+    reserve_supporting_content(&mut with_header, &req);
+    assert_eq!(with_header.subtasks[0], header);
+    assert!(!crate::first_viewport::owns(&with_header.subtasks[0]));
+    assert_eq!(with_header.subtasks[1].region.height, 254.0);
+    assert_eq!(
+        62.0 + 48.0 + 4.0 * 16.0 + 24.0 + 254.0 + 40.0 + 216.0 + 80.0 + 24.0,
+        812.0
+    );
+}
+
+#[test]
+fn real_four_part_plan_does_not_treat_pinned_back_and_bottom_scrim_as_an_action() {
+    // Exact run-5 planner response, including its zero root gap.
+    let mut plan = crate::plan::parse_plan(r##"{"rootFrame":{"id":"page","name":"Workout Detail","width":375,"height":812,"layout":"vertical","gap":0,"fill":[{"type":"solid","color":"#0A0A0A"}]},"styleGuideName":"dark-bold-mobile","subtasks":[{"id":"hero","label":"Hero Image with Back Button","covers":["hero image","back button"],"elements":"ARCHETYPE: image-led — protagonist full-bleed hero photo, first screen ~38%, pinned back control top-left, no repeated titles or invented stats, imagery one relevant workout photo with bottom gradient scrim blending into canvas","region":{"width":375,"height":310}},{"id":"title","label":"Workout Title, Meta Row and Difficulty Badges","covers":["workout title and meta row","difficulty badges"],"elements":"workout title (2 lines max, 28-32px), meta row with duration + equipment, difficulty badge group (Beginner/Intermediate/Advanced, one active state)","region":{"width":375,"height":110}},{"id":"exercises","label":"Exercise List","covers":["exercise list"],"elements":"quiet section: secondary visual weight; retain legible active states, list heading with exercise count, 6 exercise rows each with rounded thumbnail, exercise name, sets x reps label, scrollable list","region":{"width":375,"height":328}},{"id":"start","label":"Pinned Start Button","covers":["start button"],"elements":"pinned full-width primary Start Workout button (48-52px) on subtle top gradient, safe-area padding","region":{"width":375,"height":64}}]}"##).unwrap();
+    let before = plan.clone();
+    assert!(has_pinned_action(&task_text(&plan.subtasks[0])));
+    assert!(!has_pinned_action(&task_text(&plan.subtasks[3])));
+    let list = plan.subtasks[2].clone();
+    let action = plan.subtasks[3].clone();
+    crate::plan_normalize::normalize(&mut plan, &request(BRIEF));
+    // Native normalization restores the mobile root's default 16px rhythm.
+    // The four gaps must remain reserved rather than granting them to media.
+    assert_eq!(plan.root_frame.gap, Some(16.0));
+    assert_eq!(plan.root_frame.padding, Some(0.0));
+    assert_eq!(plan.subtasks[0].region.height, 182.0);
+    assert_eq!(
+        62.0 + 4.0 * 16.0 + 182.0 + 160.0 + 40.0 + 216.0 + 64.0 + 24.0,
+        812.0
+    );
+    assert_eq!(plan.subtasks[1].region.height, 160.0);
+    assert_eq!(plan.subtasks[2].region, list.region);
+    assert_eq!(plan.subtasks[2].elements, list.elements);
+    assert_eq!(plan.subtasks[3].region, action.region);
+    assert_eq!(plan.subtasks[3].elements, action.elements);
+    assert!(crate::first_viewport::owns(&plan.subtasks[0]));
+    assert!(crate::first_viewport::owns(&plan.subtasks[1]));
+    // Every other raw-plan field is preserved apart from standard ownership
+    // metadata and the derived hero-bleed flag.
+    let mut expected = before;
+    expected.root_frame.gap = Some(16.0);
+    expected.root_frame.padding = Some(0.0);
+    for task in &mut expected.subtasks {
+        task.id_prefix = task.id.clone();
+        task.parent_frame_id = Some("page".into());
+    }
+    expected.subtasks[0].bleed_hero = true;
+    expected.subtasks[0].region.height = 182.0;
+    expected.subtasks[1].region.height = 160.0;
+    expected.subtasks[0].elements = plan.subtasks[0].elements.clone();
+    expected.subtasks[1].elements = plan.subtasks[1].elements.clone();
+    assert_eq!(plan, expected);
+}
+
+#[test]
+fn merged_budget_requires_unambiguous_ownership_and_an_independent_terminal_action() {
+    let req = request(BRIEF);
+    for elements in [
+        "Hero image with overlaid title and meta; no badges",
+        "Hero image with title and metadata; badges belong to another section",
+        "Hero photo; separate title and meta section with difficulty badges",
+        "Hero photo with title, metadata and badges",
+        "Hero photo with title and meta overlaid; difficulty badges belong to exercise list",
+        "Hero photo with title and meta overlaid; difficulty chips are owned by the list",
+        "Hero photo with title and meta overlaid; difficulty badges inside exercise list",
+        "主图照片叠层包含标题与摘要；难度标签属于训练列表",
+    ] {
+        let mut missing_owner = merged_plan();
+        missing_owner.subtasks[0].elements = Some(elements.into());
+        unchanged(&missing_owner, &req);
+    }
+    let mut no_action = merged_plan();
+    no_action.subtasks.pop();
+    unchanged(&no_action, &req);
+    for (id, label) in [
+        ("terminal", "Back Button"),
+        ("terminal", "Hero Action"),
+        ("terminal", "Photo Overlay Button"),
+        ("terminal", "Navigation Button"),
+        ("terminal", "BackButton"),
+        ("terminal", "backButton"),
+        ("terminal", "PhotoOverlayButton"),
+        ("backButton", "Button"),
+        ("photoOverlayButton", "Button"),
+    ] {
+        let mut fake_action = merged_plan();
+        fake_action.subtasks[2].id = id.into();
+        fake_action.subtasks[2].label = label.into();
+        fake_action.subtasks[2].elements = Some("pinned top-left back button".into());
+        unchanged(&fake_action, &req);
+    }
+    let mut duplicate_action = merged_plan();
+    let mut extra = duplicate_action.subtasks[2].clone();
+    extra.id = "other-action".into();
+    duplicate_action.subtasks.insert(2, extra);
+    unchanged(&duplicate_action, &req);
+    let mut nonterminal = merged_plan();
+    nonterminal.subtasks.swap(1, 2);
+    unchanged(&nonterminal, &req);
+    for action in [
+        "bottom button is not pinned",
+        "bottom button is not fixed",
+        "bottom button is not sticky",
+        "底部按钮不固定",
+        "底部按钮不要固定",
+        "底部按钮非固定",
+    ] {
+        let mut unpinned = merged_plan();
+        unpinned.subtasks[2].label = "Start Button".into();
+        unpinned.subtasks[2].elements = Some(action.into());
+        unchanged(&unpinned, &req);
+    }
+    for (label, height) in [
+        ("Navigation Header", 120.0),
+        ("Photo Header", 48.0),
+        ("Promo Header", 48.0),
+        ("Exercise List Header", 48.0),
+    ] {
+        let mut ambiguous_header = merged_plan();
+        let mut header = plan().subtasks[1].clone();
+        header.id = "leading".into();
+        header.label = label.into();
+        header.elements = None;
+        header.region.height = height;
+        ambiguous_header.subtasks.insert(0, header);
+        unchanged(&ambiguous_header, &req);
+    }
 }

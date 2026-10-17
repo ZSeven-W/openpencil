@@ -13,6 +13,9 @@ mod order_tests;
 #[path = "source_facts_delivery_retry_tests.rs"]
 mod delivery_tests;
 
+#[path = "source_facts_exercise_retry_tests.rs"]
+mod exercise_tests;
+
 fn request() -> DesignRequest {
     DesignRequest {
         prompt: BRIEF.into(),

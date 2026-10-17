@@ -124,7 +124,7 @@ fn expected_count_with_map_markers(subtask: &Subtask, map_markers: usize) -> Opt
     }
 
     static LIST: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)\blist\s+of\s+(\d[\d,]*(?:\s*(?:-|–|—|to)\s*\d[\d,]*)?)")
+        Regex::new(r"(?i)\blist\s+of\s+(\d[\d,]*(?:\s*(?:-|–|—|to)\s*\d[\d,]*)?|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b")
             .expect("valid list-count pattern")
     });
     let list = &*LIST;
@@ -501,7 +501,20 @@ fn parse_count(raw: &str) -> Option<usize> {
     if normalized.chars().all(|ch| ch.is_ascii_digit()) {
         return normalized.parse().ok();
     }
-    parse_cjk_number(&normalized)
+    match normalized.to_ascii_lowercase().as_str() {
+        "two" => Some(2),
+        "three" => Some(3),
+        "four" => Some(4),
+        "five" => Some(5),
+        "six" => Some(6),
+        "seven" => Some(7),
+        "eight" => Some(8),
+        "nine" => Some(9),
+        "ten" => Some(10),
+        "eleven" => Some(11),
+        "twelve" => Some(12),
+        _ => parse_cjk_number(&normalized),
+    }
 }
 
 fn ignored_number_context(text: &str, start: usize) -> bool {
@@ -585,3 +598,7 @@ fn parse_cjk_number(raw: &str) -> Option<usize> {
 #[cfg(test)]
 #[path = "subtask_completeness_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "subtask_completeness_word_tests.rs"]
+mod word_tests;

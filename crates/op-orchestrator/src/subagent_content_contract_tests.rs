@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "subagent_badge_contract_tests.rs"]
+mod badges;
+
 #[test]
 fn generated_chinese_named_static_button_keeps_authored_corners() {
     // The original coffee response supplied 12px corners without a role or
