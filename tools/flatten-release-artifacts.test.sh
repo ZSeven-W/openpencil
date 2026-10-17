@@ -15,6 +15,20 @@ make_fixture() {
     mkdir -p "$root/desktop" "$root/cli" "$root/sdk" "$root/vsix" "$root/android"
     printf 'desktop\n' > "$root/desktop/openpencil-desktop-linux-x86_64.tar.gz"
     printf 'cli\n' > "$root/cli/op-cli-linux-x86_64.tar.gz"
+    printf 'setup-x64\n' > "$root/desktop/OpenPencil-0.8.5-x64-win-setup.exe"
+    printf 'setup-arm64\n' > "$root/desktop/OpenPencil-0.8.5-arm64-win-setup.exe"
+    # `openpencil-daemon-<label>` artifacts also match release-draft's
+    # `openpencil-*` download pattern, so the flattener sees them.
+    for label in macos-aarch64 macos-x86_64 linux-x86_64 linux-aarch64; do
+        mkdir -p "$root/openpencil-daemon-${label}"
+        printf 'daemon-%s\n' "$label" \
+            > "$root/openpencil-daemon-${label}/op-host-web-server"
+    done
+    for label in windows-x86_64 windows-aarch64; do
+        mkdir -p "$root/openpencil-daemon-${label}"
+        printf 'daemon-%s\n' "$label" \
+            > "$root/openpencil-daemon-${label}/op-host-web-server.exe"
+    done
     for index in 1 2 3; do
         printf 'sdk-%s\n' "$index" > "$root/sdk/sdk-${index}.tgz"
     done
@@ -51,6 +65,12 @@ make_fixture "$valid"
 test -f "$temporary/release/OpenPencil-0.8.5-android.apk"
 test -f "$temporary/release/OpenPencil-0.8.5-android.aab"
 test ! -e "$temporary/release/internal-build.log"
+# The Windows installers are the `.exe` assets a release publishes.
+test -f "$temporary/release/OpenPencil-0.8.5-x64-win-setup.exe"
+test -f "$temporary/release/OpenPencil-0.8.5-arm64-win-setup.exe"
+# The vsix's bundled daemon is not one of them, on either platform.
+test ! -e "$temporary/release/op-host-web-server"
+test ! -e "$temporary/release/op-host-web-server.exe"
 
 duplicate=$temporary/duplicate
 make_fixture "$duplicate"
