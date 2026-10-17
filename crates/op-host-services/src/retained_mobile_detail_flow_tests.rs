@@ -665,3 +665,6 @@ fn retained_mobile_detail_navigation_scroll_and_roundtrip() {
         std::panic::resume_unwind(error);
     }
 }
+
+#[path = "retained_mobile_initial_state_tests.rs"]
+mod initial_state;
