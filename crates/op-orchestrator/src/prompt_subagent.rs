@@ -612,6 +612,17 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
                 "\n\nLANGUAGE FIX REQUIRED: {reason}\n\
 - Keep layout, structure, and brand/acronym tokens unchanged."
             ),
+            crate::plan::RetryFeedback::InitialBinding(reason) => format!(
+                "\n\nINITIAL BINDING FIX REQUIRED: this section has already been generated, \
+                 but its first-view bindings still read missing local UI state after ALL \
+                 sections were assembled.\n{reason}\n\
+- Return the complete same section with deliberate typed initial state matching \
+  its authored initial selection and values. Do not invent business values.\n\
+- Preserve the original layout, styling, every visible text, binding and event. \
+  Do not remove interactions to silence this check.\n\
+- Keep the full skill set and the plan's shared content. This is an initial-state \
+  correction, not a request to simplify or redesign the section."
+            ),
         };
         user_prompt.push_str(&block);
     }

@@ -57,6 +57,9 @@ mod run_orchestrator;
 #[path = "run_salvage_pass.rs"]
 mod run_salvage_pass;
 
+#[path = "run_initial_binding_feedback.rs"]
+mod run_initial_binding_feedback;
+
 #[path = "run_source_copy_plan.rs"]
 mod source_copy_plan;
 

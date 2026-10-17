@@ -19,10 +19,14 @@ Attach a `state` object to a node or to the document root. Each key is a
 variable name; the value is a `StateEntry` with a required `type` field and
 an optional `default`.
 
+Give initially visible quantities and selections their intended `default`.
+Static text or fill does not initialize a binding. Null is valid when the
+initial empty or unselected state is intentional.
+
 Primitive types: `int` / `float` / `number` / `string` / `bool` / `array`
 / `object` / `date`.
 
-Examples (grounded in `counter.op` + `form.op` + `full-jian-extensions.op`):
+Examples:
 
 ```json
 "state": {
@@ -57,7 +61,6 @@ and `bindings:{content:"$app.light ? '已开启' : '已关闭'"}`. A chip has
 properties in sync with state automatically.
 
 - Read-only bind: `"bindings": { "content": "\"Count: \" + $app.count" }`
-  (the text node displays the live count, grounded in `full-jian-extensions.op:36`)
 - Two-way bind on an input: `"bindings": { "bind:value": "$app.email" }`
   (`bind:value` writes back to the state variable when the user types)
 - Template literal (backtick syntax also accepted by the expression parser):
@@ -93,7 +96,7 @@ Action vocabulary (body shape per action):
 
 `push` / `replace` bodies compile as a Tier-1 EXPRESSION, not a literal path — an unquoted `/stats` lexes as a division token and fails to compile. Always wrap the route path in an extra pair of escaped quotes: `{ "push": "\"/stats\"" }`, never `{ "push": "/stats" }`.
 
-Examples (grounded in `full-jian-extensions.op` + `form.op`):
+Examples:
 
 ```json
 "events": {

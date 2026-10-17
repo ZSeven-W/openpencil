@@ -21,6 +21,7 @@ mod chrome_copy_context;
 pub mod design_system;
 pub mod design_type;
 pub mod image_fallback_policy;
+mod initial_binding_check;
 pub mod intent;
 pub mod map_placeholder;
 pub mod map_templates;

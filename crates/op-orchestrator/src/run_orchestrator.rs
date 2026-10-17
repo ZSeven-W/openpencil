@@ -633,6 +633,17 @@ impl Orchestrator {
             });
         }
 
+        let initial_binding_failure = super::run_initial_binding_feedback::repair_initial_bindings(
+            sink,
+            &plan,
+            &request,
+            llm,
+            abort,
+            &mut outcomes,
+            on_progress,
+        )
+        .await;
+
         // Let the reveal sweep FINISH before cleanup restructures the tree:
         // `finalize_design`'s ReplaceSubtree allocates fresh ids that were
         // never registered with the reveal overlay, so a section still
@@ -762,7 +773,7 @@ impl Orchestrator {
             subtasks: outcomes,
             total_nodes,
             unfilled_screens,
-            incomplete_subtask_failure,
+            incomplete_subtask_failure: incomplete_subtask_failure || initial_binding_failure,
         })
     }
 }

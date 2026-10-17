@@ -140,6 +140,8 @@ pub enum RetryFeedback {
     Completeness(String),
     /// Generated copy was in a different language than the brief.
     Language(String),
+    /// The assembled document leaves a local interactive binding uninitialized.
+    InitialBinding(String),
 }
 
 /// 规划阶段的完整产物。字段对齐规划语料 `decomposition.md`。
