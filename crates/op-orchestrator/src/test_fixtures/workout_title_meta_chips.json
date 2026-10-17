@@ -1,0 +1,406 @@
+{
+  "type": "frame",
+  "id": "n134",
+  "name": "Workout Title and Meta Row",
+  "width": "fill_container",
+  "height": "fit_content",
+  "layout": "vertical",
+  "gap": 14.0,
+  "padding": [
+    0.0,
+    24.0
+  ],
+  "children": [
+    {
+      "type": "text",
+      "id": "n135",
+      "name": "workout-title",
+      "width": "fill_container",
+      "height": "fit_content",
+      "content": "Full-Body Strength",
+      "fontFamily": "Outfit",
+      "fontSize": 30.0,
+      "fontWeight": 700,
+      "letterSpacing": -0.5,
+      "lineHeight": 1.1,
+      "textGrowth": "fixed-width",
+      "fill": [
+        {
+          "type": "solid",
+          "color": "$--foreground"
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "n136",
+      "name": "meta-chips-row",
+      "width": "fill_container",
+      "height": "fit_content",
+      "layout": "horizontal",
+      "gap": 8.0,
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "n137",
+          "name": "meta-chip-45 min",
+          "height": 32.0,
+          "layout": "horizontal",
+          "gap": 6.0,
+          "padding": [
+            0.0,
+            12.0
+          ],
+          "alignItems": "center",
+          "cornerRadius": 8.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--muted"
+            }
+          ],
+          "stroke": {
+            "thickness": 1.0,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "$--border"
+              }
+            ]
+          },
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "n138",
+              "iconFontName": "clock",
+              "iconFontFamily": "lucide",
+              "width": 14.0,
+              "height": 14.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--secondary-foreground"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "n139",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "45 min",
+              "fontFamily": "Outfit",
+              "fontSize": 13.0,
+              "fontWeight": 500,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--secondary-foreground"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "n140",
+          "name": "meta-chip-Dumbbells",
+          "height": 32.0,
+          "layout": "horizontal",
+          "gap": 6.0,
+          "padding": [
+            0.0,
+            12.0
+          ],
+          "alignItems": "center",
+          "cornerRadius": 8.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--muted"
+            }
+          ],
+          "stroke": {
+            "thickness": 1.0,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "$--border"
+              }
+            ]
+          },
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "n141",
+              "iconFontName": "dumbbell",
+              "iconFontFamily": "lucide",
+              "width": 14.0,
+              "height": 14.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--secondary-foreground"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "n142",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "Dumbbells",
+              "fontFamily": "Outfit",
+              "fontSize": 13.0,
+              "fontWeight": 500,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--secondary-foreground"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "n143",
+          "name": "meta-chip-420 kcal",
+          "height": 32.0,
+          "layout": "horizontal",
+          "gap": 6.0,
+          "padding": [
+            0.0,
+            12.0
+          ],
+          "alignItems": "center",
+          "cornerRadius": 8.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--muted"
+            }
+          ],
+          "stroke": {
+            "thickness": 1.0,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "$--border"
+              }
+            ]
+          },
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "n144",
+              "iconFontName": "flame",
+              "iconFontFamily": "lucide",
+              "width": 14.0,
+              "height": 14.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--secondary-foreground"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "n145",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "420 kcal",
+              "fontFamily": "Outfit",
+              "fontSize": 13.0,
+              "fontWeight": 500,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--secondary-foreground"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "n146",
+      "name": "difficulty-row",
+      "width": "fit_content",
+      "height": "fit_content",
+      "layout": "horizontal",
+      "gap": 8.0,
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "n147",
+          "name": "difficulty-pill-Beginner",
+          "height": 30.0,
+          "layout": "horizontal",
+          "gap": 6.0,
+          "padding": [
+            0.0,
+            14.0
+          ],
+          "justifyContent": "center",
+          "alignItems": "center",
+          "cornerRadius": 999.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--card"
+            }
+          ],
+          "stroke": {
+            "thickness": 1.0,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "$--border"
+              }
+            ]
+          },
+          "children": [
+            {
+              "type": "text",
+              "id": "n148",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "Beginner",
+              "fontFamily": "Outfit",
+              "fontSize": 11.0,
+              "fontWeight": 500,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--foreground"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "n149",
+          "name": "difficulty-pill-Intermediate",
+          "height": 30.0,
+          "layout": "horizontal",
+          "gap": 6.0,
+          "padding": [
+            0.0,
+            14.0
+          ],
+          "justifyContent": "center",
+          "alignItems": "center",
+          "cornerRadius": 999.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--primary"
+            }
+          ],
+          "stroke": {
+            "thickness": 1.0,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "$--primary"
+              }
+            ]
+          },
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "n150",
+              "iconFontName": "check",
+              "iconFontFamily": "lucide",
+              "width": 12.0,
+              "height": 12.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "#FFFFFF"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "n151",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "Intermediate",
+              "fontFamily": "Outfit",
+              "fontSize": 11.0,
+              "fontWeight": 600,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--foreground"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "n152",
+          "name": "difficulty-pill-Advanced",
+          "height": 30.0,
+          "layout": "horizontal",
+          "gap": 6.0,
+          "padding": [
+            0.0,
+            14.0
+          ],
+          "justifyContent": "center",
+          "alignItems": "center",
+          "cornerRadius": 999.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--card"
+            }
+          ],
+          "stroke": {
+            "thickness": 1.0,
+            "fill": [
+              {
+                "type": "solid",
+                "color": "$--border"
+              }
+            ]
+          },
+          "children": [
+            {
+              "type": "text",
+              "id": "n153",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "Advanced",
+              "fontFamily": "Outfit",
+              "fontSize": 11.0,
+              "fontWeight": 500,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--foreground"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

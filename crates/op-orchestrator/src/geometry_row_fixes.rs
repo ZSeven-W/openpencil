@@ -216,6 +216,7 @@ fn table_row_signature(row: &Value) -> Option<Vec<TableCellWidthMode>> {
         || children(row).len() < 3
         || children(row).iter().any(is_elastic_row_spacer)
         || children(row).iter().all(is_pure_bar_track)
+        || children(row).iter().all(is_intrinsic_chip)
     {
         return None;
     }
@@ -235,6 +236,41 @@ fn table_row_signature(row: &Value) -> Option<Vec<TableCellWidthMode>> {
             })
             .collect(),
     )
+}
+
+// Independently sized painted chips in adjacent bands have no shared data
+// columns. Reserving a table-text floor for each chip falsely rejects compact
+// metadata and difficulty selectors. Fixed/fill-width cells remain table-like.
+fn is_intrinsic_chip(cell: &Value) -> bool {
+    cell.get("type").and_then(Value::as_str) == Some("frame")
+        && layout_str(cell) == Some("horizontal")
+        && matches!(
+            cell.get("width").and_then(Value::as_str),
+            None | Some("fit_content")
+        )
+        && fixed_width(cell).is_none()
+        && cell
+            .get("height")
+            .and_then(Value::as_f64)
+            .is_some_and(|h| (1.0..=36.0).contains(&h))
+        && num(cell, "cornerRadius") > 0.0
+        && horizontal_padding(cell) >= 16.0
+        && cell
+            .get("fill")
+            .and_then(Value::as_array)
+            .is_some_and(|fill| !fill.is_empty())
+        && children(cell)
+            .iter()
+            .filter(|n| n.get("type").and_then(Value::as_str) == Some("text"))
+            .count()
+            == 1
+        && children(cell).len() <= 2
+        && children(cell).iter().all(|n| {
+            matches!(
+                n.get("type").and_then(Value::as_str),
+                Some("text" | "icon_font")
+            )
+        })
 }
 
 /// A bottom-aligned rectangle inside a fixed-height track encodes a bar, not

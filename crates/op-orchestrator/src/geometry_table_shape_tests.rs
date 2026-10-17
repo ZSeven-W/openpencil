@@ -2,6 +2,35 @@
 
 use super::*;
 
+#[test]
+fn retained_workout_metadata_chips_do_not_reserve_data_table_column_floors() {
+    let section: Value =
+        serde_json::from_str(include_str!("test_fixtures/workout_title_meta_chips.json")).unwrap();
+    let root = json!({"type":"frame","id":"root","width":375,
+        "height":"fit_content","layout":"vertical","children":[section]});
+    let doc = serde_json::from_value(json!({"version":"1.0","children":[root]})).unwrap();
+    let state = EditorState::from_document(doc);
+    let section = serde_json::to_value(&state.active_children()[0]).unwrap()["children"][0].clone();
+    let rects = resolved_rects(&state);
+    assert!(table_rows(&section).is_empty());
+    assert!(table_columns_exceed_width(&section, &rects).is_none());
+    assert!(table_overflow_scale(&section, &rects).is_none());
+    assert!(!geometry_diagnostics(&state)
+        .iter()
+        .any(|s| s.contains("columns cannot fit")));
+
+    // Text-bearing data cells keep their readable floor. Only intrinsic,
+    // individually painted compact chips have no shared column contract.
+    let mut data = section;
+    for row in data["children"].as_array_mut().unwrap().iter_mut().skip(1) {
+        for cell in row["children"].as_array_mut().unwrap() {
+            cell["width"] = json!("fill_container");
+        }
+    }
+    assert_eq!(table_rows(&data).len(), 2);
+    assert_eq!(table_columns_exceed_width(&data, &rects), Some((3, 327)));
+}
+
 fn bar_tracks_and_labels() -> Value {
     let tracks: Vec<Value> = [62, 40, 76, 52, 88, 30, 48]
         .into_iter()
