@@ -214,5 +214,7 @@ mod lifecycle;
 mod memo;
 #[path = "image_search_session_tests/mode.rs"]
 mod mode;
+#[path = "image_search_session_tests/progress.rs"]
+mod progress;
 #[path = "image_search_session_tests/providers.rs"]
 mod providers;

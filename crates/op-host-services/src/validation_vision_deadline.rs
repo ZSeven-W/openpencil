@@ -2,7 +2,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use super::{ChatVisionLlmClient, VisionCallRequest, VisionResponse};
 
@@ -20,15 +20,33 @@ impl ChatVisionLlmClient {
         deadline: Instant,
         max_output_tokens: u32,
     ) -> VisionResponse {
+        self.validate_before_measured(req, deadline, max_output_tokens)
+            .0
+    }
+
+    /// Keep preflight failures separate from entered provider calls. This
+    /// duration includes collect_response dropping/joining the transport.
+    pub(crate) fn validate_before_measured(
+        &self,
+        req: VisionCallRequest,
+        deadline: Instant,
+        max_output_tokens: u32,
+    ) -> (VisionResponse, Option<Duration>) {
         if !self.supports_deadline() {
-            return skipped("vision provider cannot join cancelled transport");
+            return (
+                skipped("vision provider cannot join cancelled transport"),
+                None,
+            );
         }
         if Instant::now() >= deadline {
-            return skipped("vision deadline elapsed before transport start");
+            return (
+                skipped("vision deadline elapsed before transport start"),
+                None,
+            );
         }
         let mut request = match self.chat_request(req) {
             Ok(request) => request,
-            Err(response) => return response,
+            Err(response) => return (response, None),
         };
         request.max_output_tokens = max_output_tokens;
         // An empty system field makes builtin providers inject generation
@@ -39,25 +57,34 @@ impl ChatVisionLlmClient {
                 .to_string();
         let timer = CancelAtDeadline::new(deadline);
         if Instant::now() >= deadline {
-            return skipped("vision deadline elapsed before transport start");
+            return (
+                skipped("vision deadline elapsed before transport start"),
+                None,
+            );
         }
+        let provider_started = Instant::now();
         let Some(deltas) = self
             .provider
             .send_cancellable_joined(request, Arc::clone(&timer.cancel))
         else {
-            return skipped("vision provider did not supply a joined transport");
+            return (
+                skipped("vision provider did not supply a joined transport"),
+                Some(provider_started.elapsed()),
+            );
         };
         // collect_response owns and drops the iterator before returning. A
         // joined provider therefore finishes cleanup before the caller can
         // release its permit, including early Error/Done and panic paths.
         let response = Self::collect_response(deltas);
-        if timer.cancel.load(Ordering::Acquire) || Instant::now() >= deadline {
+        let provider_elapsed = provider_started.elapsed();
+        let response = if timer.cancel.load(Ordering::Acquire) || Instant::now() >= deadline {
             // Never interpret partial JSON accumulated before cancellation as
             // a completed verdict, even when it happens to be well formed.
             skipped("vision deadline elapsed; incomplete response discarded")
         } else {
             response
-        }
+        };
+        (response, Some(provider_elapsed))
     }
 }
 

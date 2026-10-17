@@ -19,6 +19,14 @@ pub struct JudgedCandidate {
     pub reason: String,
 }
 
+impl JudgedCandidate {
+    /// Technical failures stay ineligible, but are not completed visual Off
+    /// judgments. This sentinel is owned by the host, never model prose.
+    pub fn is_unavailable(&self) -> bool {
+        self.reason.trim() == "judge unavailable"
+    }
+}
+
 /// Judge a set of thumbnails for one image slot. Implementations may issue
 /// calls concurrently, but must return one entry per input thumbnail.
 pub trait ImageRelevanceJudge: Send + Sync {
@@ -91,6 +99,11 @@ pub struct JudgeSelection {
     pub on: usize,
     pub weak: usize,
     pub off: usize,
+    /// Returned technical failures, excluded from the semantic Off count.
+    pub unavailable: usize,
+    /// Candidates submitted in a judge call without a returned outcome. This
+    /// does not imply that their transport never started.
+    pub unreported: usize,
     k: usize,
     ordered: Vec<usize>,
 }
@@ -154,6 +167,8 @@ pub(crate) fn select_with_judge_before(
         on: 0,
         weak: 0,
         off: 0,
+        unavailable: 0,
+        unreported: 0,
         k: 0,
         ordered: Vec::new(),
     };
@@ -177,10 +192,12 @@ pub(crate) fn select_with_judge_before(
         };
         let mut on = Vec::new();
         let mut weak = Vec::new();
+        let mut reported = vec![false; batch.len()];
         for candidate in judged {
             if candidate.index >= batch.len() {
                 continue;
             }
+            reported[candidate.index] = true;
             match candidate.verdict {
                 RelevanceVerdict::On => {
                     selection.on += 1;
@@ -190,9 +207,13 @@ pub(crate) fn select_with_judge_before(
                     selection.weak += 1;
                     weak.push(offset + candidate.index);
                 }
+                RelevanceVerdict::Off if candidate.is_unavailable() => {
+                    selection.unavailable += 1;
+                }
                 RelevanceVerdict::Off => selection.off += 1,
             }
         }
+        selection.unreported += reported.iter().filter(|reported| !**reported).count();
 
         if !on.is_empty() {
             selection.picked = on.first().copied();
@@ -215,10 +236,11 @@ pub(crate) fn select_with_judge_before(
 }
 
 /// Format the stable enrichment log line used by the desktop/headless
-/// callers. Verdict counts are ordered On/Weak/Off.
+/// callers. Verdict counts are ordered On/Weak/semantic Off; technical
+/// failures and missing outcomes are reported separately.
 pub fn format_judge_log(selection: &JudgeSelection) -> String {
     format!(
-        "judge: k={} verdicts={}/{}/{} picked={} rounds={}",
+        "judge: k={} verdicts={}/{}/{} picked={} rounds={} unavailable={} unreported={}",
         selection.k,
         selection.on,
         selection.weak,
@@ -226,7 +248,9 @@ pub fn format_judge_log(selection: &JudgeSelection) -> String {
         selection
             .picked
             .map_or_else(|| "none".to_string(), |index| index.to_string()),
-        selection.rounds
+        selection.rounds,
+        selection.unavailable,
+        selection.unreported
     )
 }
 
@@ -351,7 +375,11 @@ mod tests {
 
         assert_eq!(
             format_judge_log(&result),
-            "judge: k=2 verdicts=1/1/0 picked=1 rounds=1"
+            "judge: k=2 verdicts=1/1/0 picked=1 rounds=1 unavailable=0 unreported=0"
         );
     }
 }
+
+#[cfg(test)]
+#[path = "judge_diagnostics_tests.rs"]
+mod diagnostics_tests;

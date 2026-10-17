@@ -96,18 +96,27 @@ fn chat_capacity_deadline_cancels_queue_before_provider_is_called() {
             .unwrap()
     });
     let started = Instant::now();
+    let (trace, record) = JudgeTraceBatch::capture_for_test();
     let candidate = judge.judge_one(
         0,
         ("q", ""),
         &fake_jpeg(1),
         started + Duration::from_millis(40),
-        &JudgeTraceBatch::default(),
+        &trace,
     );
     let elapsed = started.elapsed();
     assert_eq!(candidate.verdict, RelevanceVerdict::Off);
     assert_eq!(candidate.reason, "judge unavailable");
     assert!(elapsed < Duration::from_secs(1), "elapsed={elapsed:?}");
     assert!(seen.lock().unwrap().is_empty());
+    let record = record();
+    assert_eq!(record["phase_timing"], "available");
+    assert_eq!(record["failure_stage"], "capacity_wait");
+    assert!(record["queue_ms"].is_u64());
+    assert!(record["provider_ms"].is_null());
+    assert!(record["budget_after_queue_ms"].is_null());
+    assert!(record["budget_before_queue_ms"].as_u64().unwrap() <= 40);
+    assert!(record["elapsed_ms"].as_u64().unwrap() >= record["queue_ms"].as_u64().unwrap());
     // Unsupported bounded judging must not enqueue any work, even while all
     // transport capacity is occupied. The synchronous provider is unchanged.
     assert!(judge
@@ -304,3 +313,6 @@ fn env_judge_deadline_keeps_completed_verdicts_and_cancels_a_silent_candidate() 
     assert_eq!(judged.len(), 1, "retain the completed result at timeout");
     assert_eq!(judged[0].verdict, RelevanceVerdict::On);
 }
+
+#[path = "image_relevance_judge_timing_tests.rs"]
+mod timing_tests;

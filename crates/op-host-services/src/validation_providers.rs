@@ -190,6 +190,22 @@ impl ChatVisionLlmClient {
 }
 
 impl ChatVisionLlmClient {
+    /// Measure only an entered provider call, including iterator cleanup.
+    /// Request validation failures have no provider duration.
+    pub(crate) fn validate_measured(
+        &self,
+        req: VisionCallRequest,
+    ) -> (VisionResponse, Option<std::time::Duration>) {
+        match self.chat_request(req) {
+            Ok(request) => {
+                let started = std::time::Instant::now();
+                let response = Self::collect_response(self.provider.send(request));
+                (response, Some(started.elapsed()))
+            }
+            Err(skipped) => (skipped, None),
+        }
+    }
+
     fn chat_request(&self, req: VisionCallRequest) -> Result<ChatRequest, VisionResponse> {
         // A malformed / empty screenshot string can't drive a vision
         // call — skip rather than send a text-only critique that would
@@ -262,10 +278,7 @@ impl ChatVisionLlmClient {
 
 impl VisionLlmClient for ChatVisionLlmClient {
     fn validate(&self, req: VisionCallRequest) -> VisionResponse {
-        match self.chat_request(req) {
-            Ok(request) => Self::collect_response(self.provider.send(request)),
-            Err(skipped) => skipped,
-        }
+        self.validate_measured(req).0
     }
 }
 

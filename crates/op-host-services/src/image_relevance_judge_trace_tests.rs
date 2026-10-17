@@ -84,6 +84,7 @@ fn response<'a>(candidate: &'a JudgedCandidate, content: Option<&'a str>) -> Tra
         reasoning: None,
         candidate,
         elapsed: Duration::from_millis(123),
+        timing: TraceTiming::default(),
         error: None,
     }
 }
@@ -158,6 +159,16 @@ fn trace_keeps_hash_candidate_identity_and_complete_small_evidence() {
     assert_eq!(record["candidate_index"], 7);
     assert_eq!(record["attempt"], 2);
     assert_eq!(record["elapsed_ms"], 123);
+    assert_eq!(record["phase_timing"], "unavailable");
+    for field in [
+        "queue_ms",
+        "provider_ms",
+        "budget_before_queue_ms",
+        "budget_after_queue_ms",
+        "failure_stage",
+    ] {
+        assert!(record[field].is_null(), "unmeasured field {field}");
+    }
     assert_eq!(record["host_verdict"], "weak");
     assert_eq!(record["host_reason"], candidate.reason);
     assert_eq!(
@@ -168,6 +179,29 @@ fn trace_keeps_hash_candidate_identity_and_complete_small_evidence() {
     assert_eq!(record["reasoning_evidence"], evidence);
     assert!(record["error_detail"].is_null());
     assert!(record.get("thumb").is_none() && record.get("raw_response").is_none());
+}
+
+#[test]
+fn trace_serializes_measured_phases_without_reinterpreting_elapsed() {
+    let (trace, record) = JudgeTraceBatch::capture_for_test();
+    let candidate = candidate(0);
+    let mut result = response(&candidate, None);
+    result.timing = TraceTiming {
+        queue: Some(Duration::from_millis(12)),
+        provider: Some(Duration::from_millis(100)),
+        budget_before_queue: Some(Duration::from_millis(1000)),
+        budget_after_queue: Some(Duration::from_millis(988)),
+        failure_stage: Some(TraceFailureStage::Provider),
+    };
+    trace.record(0, b"image", result);
+    let record = record();
+    assert_eq!(record["elapsed_ms"], 123);
+    assert_eq!(record["phase_timing"], "available");
+    assert_eq!(record["queue_ms"], 12);
+    assert_eq!(record["provider_ms"], 100);
+    assert_eq!(record["budget_before_queue_ms"], 1000);
+    assert_eq!(record["budget_after_queue_ms"], 988);
+    assert_eq!(record["failure_stage"], "provider");
 }
 
 #[test]

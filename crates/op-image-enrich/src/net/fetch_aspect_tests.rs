@@ -313,7 +313,9 @@ fn unavailable_off_stays_retryable_but_a_completed_off_is_deduplicated() {
     }];
     let batches = vec![vec![vec![1]]];
     let unavailable = select_and_record(&slot, &batches, &candidates, &seen);
-    assert_eq!(unavailable.off, 1);
+    assert_eq!(unavailable.off, 0);
+    assert_eq!(unavailable.unavailable, 1);
+    assert_eq!(unavailable.unreported, 0);
     assert!(seen.lock().unwrap().is_empty());
     let retry = select_and_record(&slot, &batches, &candidates, &seen);
     assert_eq!(retry.on, 1);

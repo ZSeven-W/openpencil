@@ -17,7 +17,7 @@ mod evidence;
 use evidence::parse_verdict_response as parse_evidence_response;
 #[path = "image_relevance_judge_trace.rs"]
 mod trace;
-use trace::{JudgeTraceBatch, TraceResponse};
+use trace::{JudgeTraceBatch, TraceFailureStage, TraceResponse, TraceTiming};
 
 const BASE_URL_ENV: &str = "OPENPENCIL_IMAGE_JUDGE_BASE_URL";
 const API_KEY_ENV: &str = "OPENPENCIL_IMAGE_JUDGE_API_KEY";
@@ -153,6 +153,7 @@ impl OpenAiCompatVisionJudge {
                             reasoning: reasoning_content.as_deref(),
                             candidate: &candidate,
                             elapsed: started.elapsed(),
+                            timing: TraceTiming::default(),
                             error: parsed
                                 .is_none()
                                 .then_some("response did not contain valid evidence JSON"),
@@ -177,6 +178,7 @@ impl OpenAiCompatVisionJudge {
                                 reason: "judge unavailable".into(),
                             },
                             elapsed: started.elapsed(),
+                            timing: TraceTiming::default(),
                             error: Some(&error),
                         },
                     );
@@ -359,7 +361,8 @@ impl ChatVisionJudge {
         trace: &JudgeTraceBatch,
     ) -> JudgedCandidate {
         let started = Instant::now();
-        let unavailable = |reason: String| {
+        let unavailable = |reason: String, mut timing: TraceTiming, stage: TraceFailureStage| {
+            timing.failure_stage = Some(stage);
             let candidate = unavailable_candidate(index, &reason);
             trace.record(
                 index,
@@ -370,6 +373,7 @@ impl ChatVisionJudge {
                     reasoning: None,
                     candidate: &candidate,
                     elapsed: started.elapsed(),
+                    timing,
                     error: Some(&reason),
                 },
             );
@@ -379,21 +383,41 @@ impl ChatVisionJudge {
         // is cancellable and must not restart the batch's original budget.
         // Acquire exactly once, outside validate; the provider does not recurse
         // into an image judge or acquire this semaphore itself.
-        let permit = crate::chat_runtime::block_on_anywhere(async {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return None;
-            }
-            tokio::time::timeout(remaining, JUDGE_REQUEST_PERMITS.acquire())
-                .await
-                .ok()
-                .and_then(Result::ok)
+        let (permit, mut timing) = crate::chat_runtime::block_on_anywhere(async {
+            let queue_started = Instant::now();
+            let remaining = deadline.saturating_duration_since(queue_started);
+            let permit = if remaining.is_zero() {
+                None
+            } else {
+                tokio::time::timeout(remaining, JUDGE_REQUEST_PERMITS.acquire())
+                    .await
+                    .ok()
+                    .and_then(Result::ok)
+            };
+            let queue_finished = Instant::now();
+            let timing = TraceTiming {
+                queue: Some(queue_finished.duration_since(queue_started)),
+                budget_before_queue: Some(remaining),
+                budget_after_queue: permit
+                    .as_ref()
+                    .map(|_| deadline.saturating_duration_since(queue_finished)),
+                ..TraceTiming::default()
+            };
+            (permit, timing)
         });
         let Some(_permit) = permit else {
-            return unavailable("judge capacity wait exceeded deadline".to_string());
+            return unavailable(
+                "judge capacity wait exceeded deadline".to_string(),
+                timing,
+                TraceFailureStage::CapacityWait,
+            );
         };
         if Instant::now() >= deadline {
-            return unavailable("judge deadline elapsed before provider start".to_string());
+            return unavailable(
+                "judge deadline elapsed before provider start".to_string(),
+                timing,
+                TraceFailureStage::BeforeProvider,
+            );
         }
         let request = VisionCallRequest {
             system: String::new(),
@@ -404,17 +428,30 @@ impl ChatVisionJudge {
             provider: None,
             timeout: deadline.saturating_duration_since(Instant::now()),
         };
-        let response = if self.client.supports_deadline() {
-            self.client.validate_before(request, deadline, MAX_TOKENS)
+        let (response, provider_elapsed) = if !trace.is_enabled() {
+            let response = if self.client.supports_deadline() {
+                self.client.validate_before(request, deadline, MAX_TOKENS)
+            } else {
+                self.client.validate(request)
+            };
+            (response, None)
+        } else if self.client.supports_deadline() {
+            self.client
+                .validate_before_measured(request, deadline, MAX_TOKENS)
         } else {
-            self.client.validate(request)
+            self.client.validate_measured(request)
         };
+        // validate_before joins cancelled transport work before returning. Keep
+        // this duration (and the permit) inclusive of that cleanup, not merely
+        // time to first text or to the deadline signal.
+        timing.provider = provider_elapsed;
         match response {
             VisionResponse::Text(text) => {
                 let parsed = parse_evidence_response(Some(text.as_str()), None, brief.0, brief.1);
                 let error = parsed
                     .is_none()
                     .then_some("response did not contain valid evidence JSON");
+                timing.failure_stage = parsed.is_none().then_some(TraceFailureStage::Parse);
                 let candidate = match parsed {
                     Some((verdict, reason)) => JudgedCandidate {
                         index,
@@ -432,6 +469,7 @@ impl ChatVisionJudge {
                         reasoning: None,
                         candidate: &candidate,
                         elapsed: started.elapsed(),
+                        timing,
                         error,
                     },
                 );
@@ -439,6 +477,12 @@ impl ChatVisionJudge {
             }
             VisionResponse::Skipped { reason } => unavailable(
                 reason.unwrap_or_else(|| "vision provider skipped the call".to_string()),
+                timing,
+                if timing.provider.is_some() {
+                    TraceFailureStage::Provider
+                } else {
+                    TraceFailureStage::BeforeProvider
+                },
             ),
         }
     }

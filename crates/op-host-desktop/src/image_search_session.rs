@@ -223,6 +223,10 @@ pub(crate) struct ImageSearchSession {
     fell_back: HashSet<String>,
     /// Session summary counters (generated / searched / fell_back).
     stats: ImageSessionStats,
+    /// Diagnostic accounting for logical slots, independent of network work.
+    progress: progress::ImageBatchProgress,
+    #[cfg(test)]
+    progress_events: Vec<progress::ProgressEvent>,
 }
 
 /// Counters for the session summary, logged as one line as it evolves.
@@ -259,6 +263,9 @@ impl ImageSearchSession {
     /// node id, not by document identity). Clearing `jobs` too drops any
     /// still-pending job outright so it can never reach `poll_into` again.
     pub(crate) fn reset(&mut self) {
+        if let Some(event) = self.progress.reset() {
+            self.log_progress(event);
+        }
         self.in_flight.clear();
         self.completed.clear();
         self.jobs.clear();
@@ -276,6 +283,28 @@ impl ImageSearchSession {
 
     pub(crate) fn is_pending(&self) -> bool {
         !self.jobs.is_empty()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn progress_snapshot(&self) -> progress::ProgressSnapshot {
+        self.progress.snapshot()
+    }
+
+    fn log_progress(&mut self, event: progress::ProgressEvent) {
+        use std::io::Write;
+        let _ = writeln!(
+            std::io::stderr().lock(),
+            "image-search progress: pid={} {event}",
+            std::process::id()
+        );
+        #[cfg(test)]
+        self.progress_events.push(event);
+    }
+
+    fn finish_progress(&mut self, node_id: &NodeId, outcome: progress::TerminalOutcome) {
+        if let Some(event) = self.progress.finish(node_id.as_str(), outcome) {
+            self.log_progress(event);
+        }
     }
 
     /// The session summary counters (generated / searched / fell_back).
@@ -458,8 +487,10 @@ impl ImageSearchSession {
                     )
                 }
             };
+            self.progress.enqueue(job.node_id.as_str());
             self.jobs.push(job);
         }
+        self.log_progress(self.progress.enqueued_event());
         true
     }
 
@@ -588,6 +619,7 @@ impl ImageSearchSession {
                     if let Err(reason) = collaboration_image_result_gate(state) {
                         state.editor_ui.collab.set_notice(reason.notice_kind(), 0);
                         changed = true;
+                        self.finish_progress(&job.node_id, progress::TerminalOutcome::Discarded);
                         continue;
                     }
                     if (job.intent.is_some() || (is_stock_result && job.stock_view.is_some()))
@@ -610,6 +642,7 @@ impl ImageSearchSession {
                             node_id = %job.node_id,
                             "discarding stale image result because the node's image intent changed"
                         );
+                        self.finish_progress(&job.node_id, progress::TerminalOutcome::Discarded);
                         continue;
                     }
                     if is_stock_result
@@ -625,6 +658,7 @@ impl ImageSearchSession {
                             node_id = %job.node_id,
                             "discarding stale stock image because the slot's visible crop changed"
                         );
+                        self.finish_progress(&job.node_id, progress::TerminalOutcome::Discarded);
                         continue;
                     }
                     // Ours: a failed search lands the theme-adaptive dashed
@@ -638,8 +672,15 @@ impl ImageSearchSession {
                         {
                             self.completed.insert(id);
                         }
+                        let outcome = if url == SEARCH_FAILED_PLACEHOLDER_SRC {
+                            progress::TerminalOutcome::Fallback
+                        } else {
+                            progress::TerminalOutcome::Applied
+                        };
+                        self.finish_progress(&job.node_id, outcome);
                     } else {
                         self.completed.insert(id);
+                        self.finish_progress(&job.node_id, progress::TerminalOutcome::Discarded);
                     }
                 }
                 Err(TryRecvError::Empty) => {
@@ -653,6 +694,7 @@ impl ImageSearchSession {
                     // Same invalidation as the Ok arm: a failed job mutated the
                     // session sets, so force one rescan.
                     self.last_scanned = None;
+                    self.finish_progress(&job.node_id, progress::TerminalOutcome::Disconnected);
                 }
             }
         }
@@ -663,6 +705,7 @@ impl ImageSearchSession {
 mod fetch;
 mod intent;
 mod jobs;
+mod progress;
 
 #[cfg(test)]
 use jobs::publish_search_result;

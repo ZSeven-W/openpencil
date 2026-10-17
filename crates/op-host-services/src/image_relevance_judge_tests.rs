@@ -352,7 +352,9 @@ fn assert_no_candidate_selected(judge: &dyn ImageRelevanceJudge) {
     );
     assert_eq!(selection.picked, None);
     assert!(selection.ordered_indices().is_empty());
-    assert_eq!(selection.off, 2);
+    assert_eq!(selection.off, 0);
+    assert_eq!(selection.unavailable, 2);
+    assert_eq!(selection.unreported, 0);
     assert_eq!(selection.weak, 0);
 }
 

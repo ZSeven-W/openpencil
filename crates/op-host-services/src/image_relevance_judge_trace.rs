@@ -56,10 +56,67 @@ pub(super) struct TraceResponse<'a> {
     pub(super) reasoning: Option<&'a str>,
     pub(super) candidate: &'a JudgedCandidate,
     pub(super) elapsed: Duration,
+    pub(super) timing: TraceTiming,
     pub(super) error: Option<&'a str>,
 }
 
+/// Measured phases for the synchronous chat adapter. The env adapter currently
+/// records attempts only, so its phase values remain absent rather than zero.
+#[derive(Clone, Copy, Default)]
+pub(super) struct TraceTiming {
+    pub(super) queue: Option<Duration>,
+    pub(super) provider: Option<Duration>,
+    pub(super) budget_before_queue: Option<Duration>,
+    pub(super) budget_after_queue: Option<Duration>,
+    pub(super) failure_stage: Option<TraceFailureStage>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum TraceFailureStage {
+    CapacityWait,
+    BeforeProvider,
+    Provider,
+    Parse,
+}
+
+impl TraceFailureStage {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::CapacityWait => "capacity_wait",
+            Self::BeforeProvider => "before_provider",
+            Self::Provider => "provider",
+            Self::Parse => "parse",
+        }
+    }
+}
+
+fn duration_ms(duration: Duration) -> u64 {
+    duration.as_millis().min(u64::MAX as u128) as u64
+}
+
 impl JudgeTraceBatch {
+    pub(super) fn is_enabled(&self) -> bool {
+        self.state.is_some()
+    }
+
+    #[cfg(test)]
+    pub(super) fn capture_for_test() -> (Self, impl Fn() -> Value) {
+        let (sender, receiver) = sync_channel(WRITE_QUEUE_CAPACITY);
+        let batch = Self::with_sender(
+            Some(PathBuf::from("unused-in-memory-trace.jsonl")),
+            "chat",
+            "q",
+            "i",
+            sender,
+        );
+        (batch, move || {
+            let record = receiver
+                .recv_timeout(Duration::from_secs(2))
+                .expect("one completed in-memory trace");
+            serde_json::from_slice(&record.line).expect("valid trace JSON")
+        })
+    }
+
     pub(super) fn from_env(route: &'static str, query: &str, intent: &str) -> Self {
         let path = std::env::var(TRACE_PATH_ENV)
             .ok()
@@ -116,6 +173,7 @@ impl JudgeTraceBatch {
             reasoning,
             candidate,
             elapsed,
+            timing,
             error,
         } = response;
         let verdict = match candidate.verdict {
@@ -133,7 +191,13 @@ impl JudgeTraceBatch {
             "candidate_index": candidate.index,
             "thumb_sha256": format!("{:x}", Sha256::digest(thumb)),
             "attempt": attempt,
-            "elapsed_ms": elapsed.as_millis().min(u64::MAX as u128) as u64,
+            "elapsed_ms": duration_ms(elapsed),
+            "phase_timing": if timing.queue.is_some() { "available" } else { "unavailable" },
+            "queue_ms": timing.queue.map(duration_ms),
+            "provider_ms": timing.provider.map(duration_ms),
+            "budget_before_queue_ms": timing.budget_before_queue.map(duration_ms),
+            "budget_after_queue_ms": timing.budget_after_queue.map(duration_ms),
+            "failure_stage": timing.failure_stage.map(TraceFailureStage::as_str),
             "host_verdict": verdict,
             "host_reason": safe_string(&candidate.reason),
             "error_detail": error.map(safe_string),

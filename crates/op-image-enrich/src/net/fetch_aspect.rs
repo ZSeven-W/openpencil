@@ -42,9 +42,7 @@ impl CompletionTrackedJudge<'_> {
         let indices: HashSet<_> = verdicts.iter().map(|verdict| verdict.index).collect();
         if indices.len() != expected
             || indices.iter().any(|index| *index >= expected)
-            || verdicts
-                .iter()
-                .any(|verdict| verdict.reason.trim() == "judge unavailable")
+            || verdicts.iter().any(JudgedCandidate::is_unavailable)
         {
             self.complete.store(false, Ordering::Relaxed);
         }
