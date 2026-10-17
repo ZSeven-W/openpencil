@@ -291,6 +291,68 @@ fn latin_brief_with_english_copy_does_not_retry() {
         .any(|event| matches!(event, Progress::SubtaskLanguageMismatch { .. })));
 }
 
+fn home_prompt(brief: &str) -> String {
+    op_editor_core::HomeFamily::AppUi
+        .generation_prompt(&op_editor_core::TaskDraft {
+            text: brief.into(),
+            device: op_editor_core::HomeDevice::Mobile,
+            ..Default::default()
+        })
+        .unwrap()
+}
+
+#[test]
+fn normal_mode_english_copy_is_not_translated_by_the_retry_gate() {
+    let prompt = home_prompt("Workout detail screen with a hero image and six exercises");
+    let (outcome, events, prompts, roots) = run_ladder(&prompt, vec![ENGLISH_COPY]);
+    assert!(outcome.error.is_none(), "{:?}", outcome.error);
+    assert_eq!(
+        prompts.len(),
+        1,
+        "Home's delivery wrapper is not the brief language"
+    );
+    assert!(copy_language_mismatch(&refs(&roots), Lang::Latin).is_none());
+    assert!(!events.iter().any(|event| matches!(
+        event,
+        Progress::SubtaskRetry { .. } | Progress::SubtaskLanguageMismatch { .. }
+    )));
+}
+
+#[test]
+fn normal_mode_chinese_brief_still_retries_english_copy() {
+    let prompt = home_prompt("短视频 App 首页");
+    let (outcome, _, prompts, roots) = run_ladder(&prompt, vec![ENGLISH_COPY, CHINESE_COPY]);
+    assert!(outcome.error.is_none());
+    assert_eq!(prompts.len(), 2);
+    assert!(copy_language_mismatch(&refs(&roots), Lang::Cjk).is_none());
+}
+
+#[test]
+fn all_home_families_use_the_authored_brief_for_language() {
+    for family in op_editor_core::HomeFamily::ALL {
+        let prompt = family
+            .generation_prompt(&op_editor_core::TaskDraft {
+                text: "Design an English home screen".into(),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(
+            expected_output_language(&request(&prompt)),
+            Some(Lang::Latin),
+            "{family:?}"
+        );
+    }
+    let bilingual = home_prompt("Design a bilingual Chinese and English screen");
+    assert_eq!(expected_output_language(&request(&bilingual)), None);
+    let explicit = home_prompt("Design a workout detail screen using Chinese UI copy");
+    assert_eq!(expected_output_language(&request(&explicit)), None);
+    assert_eq!(
+        brief_language("中文需求\n\n用户需求：Design a home screen"),
+        Some(Lang::Cjk),
+        "a marker inside an ordinary authored brief is not a Home wrapper"
+    );
+}
+
 #[test]
 fn second_language_mismatch_is_kept_and_emitted_once() {
     let (outcome, events, prompts, roots) =

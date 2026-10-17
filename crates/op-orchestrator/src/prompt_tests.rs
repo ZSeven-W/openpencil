@@ -87,6 +87,8 @@ fn subtask() -> crate::plan::Subtask {
 // mounts with `use super::*` so it sees both them and `crate::prompt`.
 #[path = "prompt_components_tests.rs"]
 mod components_tests;
+#[path = "prompt_copy_language_tests.rs"]
+mod copy_language_tests;
 #[path = "prompt_deck_skill_tests.rs"]
 mod deck_skill_tests;
 #[path = "prompt_food_skill_tests.rs"]

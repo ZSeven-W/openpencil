@@ -77,7 +77,48 @@ static BILINGUAL: LazyLock<Regex> =
 
 /// Classify the brief as CJK, Latin, or mixed (`None` → gate off).
 pub fn brief_language(brief: &str) -> Option<Lang> {
-    classify(brief)
+    classify(authored_brief(brief))
+}
+
+/// Home adds a Chinese delivery contract even when the user's copy is English.
+/// Only unwrap the known Home envelopes, not arbitrary markers in user text.
+pub(crate) fn authored_brief(prompt: &str) -> &str {
+    const HOME_PREFIXES: &[&str] = &[
+        "请设计一套可编辑的高保真手机 App 界面（mobile app，",
+        "请设计一套可编辑的高保真桌面端应用界面（desktop app，",
+        "请设计一个完整的纵向滚动网站页面（landing page，",
+        "请做一套图文卡片（card，",
+        "请做一篇截图教程图文（card，",
+        "请做活动海报（card，",
+    ];
+    let home_envelope = HOME_PREFIXES
+        .iter()
+        .any(|prefix| prompt.starts_with(prefix))
+        || (prompt.starts_with("请做一份 ") && prompt.contains(" 页的 PPT 演示文稿（slides，"))
+        || (prompt.starts_with("请做一张") && prompt.contains("信息图长图（card，"));
+    if home_envelope {
+        if let Some((_, brief)) = prompt.split_once("\n\n用户需求：") {
+            if !brief.trim().is_empty() {
+                return brief;
+            }
+        }
+    }
+    prompt
+}
+
+/// Share the routing decision with planning and every generation retry rung.
+/// This is semantic copy provenance, independent of the selected visual style.
+pub(crate) fn append_copy_language_instruction(prompt: &mut String, request: &DesignRequest) {
+    let brief = authored_brief(&request.prompt);
+    if brief.len() == request.prompt.len() {
+        return;
+    }
+    prompt.push_str("\n\nCOPY LANGUAGE: The user-authored text after 用户需求： sets the visible UI language. The Chinese delivery wrapper and planner section labels do not. Follow explicit language/bilingual requests and preserve supplied copy, brand names and acronyms.");
+    match expected_output_language(request) {
+        Some(Lang::Latin) => prompt.push_str(" Keep all generated UI copy in the original brief's Latin-script language; do not translate sections into Chinese."),
+        Some(Lang::Cjk) => prompt.push_str(" Keep all generated UI copy in the original brief's CJK language, including buttons, labels and placeholders."),
+        None => {}
+    }
 }
 
 /// Compare eligible text-node copy against `expected`. Reports when at least
@@ -141,8 +182,9 @@ pub(crate) fn language_feedback(expected: Lang, report: &MismatchReport) -> Stri
 }
 
 pub(crate) fn expected_output_language(request: &DesignRequest) -> Option<Lang> {
-    let lang = brief_language(&request.prompt)?;
-    if brief_asks_for_other_language(&request.prompt, lang) {
+    let brief = authored_brief(&request.prompt);
+    let lang = classify(brief)?;
+    if brief_asks_for_other_language(brief, lang) {
         return None;
     }
     Some(lang)

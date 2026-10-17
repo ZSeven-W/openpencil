@@ -225,6 +225,7 @@ pub fn build_orchestrator_prompt(
                 .append_planning_instruction(&mut user_prompt);
             let mut system_prompt = cp.system;
             system_prompt.push_str(PLANNING_QUALITY_GUARDRAILS);
+            crate::output_language::append_copy_language_instruction(&mut system_prompt, req);
             append_source_facts_contract(&mut system_prompt);
             PlanningPrompt {
                 call_request: CallRequest {
@@ -268,6 +269,7 @@ pub fn build_orchestrator_prompt(
                 .join("\n\n");
             system_prompt.push_str(PLANNING_QUALITY_GUARDRAILS);
             system_prompt.push_str(planning_suffix(mode));
+            crate::output_language::append_copy_language_instruction(&mut system_prompt, req);
             append_source_facts_contract(&mut system_prompt);
             let mut user_prompt = req.prompt.clone();
             append_reference_skeleton(&mut user_prompt, req);
