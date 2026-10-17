@@ -35,16 +35,40 @@
 
 ## 为什么选择 OpenPencil
 
+<table>
+<tr>
+<td width="50%" align="center" valign="middle">
+<a href="https://www.infistar.cc/register?aff=LLZC3RLG&amp;ref_source=link" title="Infistar.cc 无限星河">
+  <img src="./screenshot/infistar-sponsor-banner.png" alt="Infistar.cc 无限星河 — 一站式全球大模型 API 服务平台" width="100%" />
+</a>
+</td>
+<td width="50%" align="center" valign="middle">
 <a href="https://fluxionai.world/register?source=github&amp;campaign=github-openpencil&amp;promo=OPENPENCIL" title="Fluxion AI">
   <img src="./screenshot/fluxion-ai-sponsor-banner.png" alt="Fluxion AI — reliable, cost-efficient access to GPT, Claude, and other leading AI models through one unified API" width="100%" />
 </a>
-
-### [OpenPencil × Fluxion AI｜一个统一 API 接入 GPT、Claude 等主流模型](https://fluxionai.world/register?source=github&campaign=github-openpencil&promo=OPENPENCIL)
-
-感谢 [Fluxion AI](https://fluxionai.world/register?source=github&campaign=github-openpencil&promo=OPENPENCIL) 赞助 OpenPencil！
-
-- ⚡ **稳定、低成本接入：** 通过一个统一 API 稳定调用 GPT、Claude 等主流 AI 模型，价格最高可比官方 API 节省 70%。
-- 🎁 **OpenPencil 用户专属福利：** 通过 [此链接注册](https://fluxionai.world/register?source=github&campaign=github-openpencil&promo=OPENPENCIL) 即可获得 **1 美元 API 额度**。
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<h3><a href="https://www.infistar.cc/register?aff=LLZC3RLG&amp;ref_source=link">OpenPencil × Infistar.cc 无限星河｜全模型 API · 驱动 AI 原生设计创作</a></h3>
+<p>感谢 <a href="https://www.infistar.cc/register?aff=LLZC3RLG&amp;ref_source=link">Infistar.cc 无限星河</a> 赞助并为 OpenPencil 提供模型服务支持！</p>
+<ul>
+<li>⚡ <strong>稳定承载复杂设计任务：</strong> 提供企业级高并发通道与多节点冗余，价格低至官方渠道 1 折，稳定支持长任务、流式响应与连续工具调用。</li>
+<li>🧠 <strong>一个 API Key 接入主流模型：</strong> 全面支持 ChatGPT、Claude、Gemini、Kimi、GLM、DeepSeek 等模型，兼容 OpenAI、Anthropic 等主流接口，可在 OpenPencil 中灵活配置模型服务。</li>
+<li>🎨 <strong>赋能 AI 原生矢量设计：</strong> 适用于提示词生成设计、画布内容修改、多模型协同、图片生成及设计方案迭代，让 AI Agent 更高效地完成从创意到成稿的全过程。</li>
+<li>🎁 <strong>OpenPencil 用户专属福利：</strong> 通过 <a href="https://www.infistar.cc/register?aff=LLZC3RLG&amp;ref_source=link">专属推广链接</a> 注册并完成首次调用，即可领取 <strong>5 美元等值测试额度 / 首充专属优惠</strong>！</li>
+</ul>
+</td>
+<td width="50%" valign="top">
+<h3><a href="https://fluxionai.world/register?source=github&amp;campaign=github-openpencil&amp;promo=OPENPENCIL">OpenPencil × Fluxion AI｜一个统一 API 接入 GPT、Claude 等主流模型</a></h3>
+<p>感谢 <a href="https://fluxionai.world/register?source=github&amp;campaign=github-openpencil&amp;promo=OPENPENCIL">Fluxion AI</a> 赞助 OpenPencil！</p>
+<ul>
+<li>⚡ <strong>稳定、低成本接入：</strong> 通过一个统一 API 稳定调用 GPT、Claude 等主流 AI 模型，价格最高可比官方 API 节省 70%。</li>
+<li>🎁 <strong>OpenPencil 用户专属福利：</strong> 通过 <a href="https://fluxionai.world/register?source=github&amp;campaign=github-openpencil&amp;promo=OPENPENCIL">此链接注册</a> 即可获得 <strong>1 美元 API 额度</strong>。</li>
+</ul>
+</td>
+</tr>
+</table>
 
 <table>
 <tr>
@@ -243,8 +267,11 @@ docker run -p 3100:3100 openpencil-web-rust
 
 - **文字转设计** — 描述一个页面，实时以流式动画在画布上生成
 - **编排器** — 将复杂页面分解为空间子任务，支持并行生成
+- **Agent 团队** — 并发团队成员，具备委派工具、每位成员的画布指示器与回退策略
 - **设计修改** — 选中元素后，用自然语言描述更改
 - **视觉输入** — 附加截图或线框图作为参考进行设计
+- **风格指南** — 通过基于标签的模糊匹配应用视觉风格（glassmorphism、brutalist、retro 等）
+- **Anti-slop** — 跨代生成多样性追踪，避免重复的 AI 输出
 
 **多智能体支持**
 
@@ -267,6 +294,7 @@ docker run -p 3100:3100 openpencil-web-rust
 - 从终端进行设计自动化：通过任意 MCP 兼容的智能体读取、创建和修改 `.op` 文件
 - **分层设计工作流** — `design_skeleton` → `design_content` → `design_refine`，实现更高保真度的多区块设计
 - **分段提示词检索** — 按需加载所需的设计知识（schema、layout、roles、icons、planning 等）
+- **风格指南工具** — `get_style_guide_tags` 与 `get_style_guide`，通过 MCP 应用视觉风格
 - 多页面支持 — 通过 MCP 工具创建、重命名、重新排序和复制页面
 
 **代码生成**
@@ -280,6 +308,21 @@ docker run -p 3100:3100 openpencil-web-rust
 
 ```bash
 brew install zseven-w/openpencil/op
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | OP_PRERELEASE=1 bash
+```
+
+```powershell
+irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
+```
+
+```powershell
+$env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
+```
 ```
 
 ```bash
@@ -435,7 +478,12 @@ openpencil/
 │   ├── op-editor-core/       规范的 `.op`（PenDocument）编辑器状态 + EditorCommand + 设计变量
 │   ├── op-editor-ui/         平台无关组件 + RenderBackend 门面（wasm32 兼容）
 │   ├── op-editor-host-core/  所有宿主共用、与传输层无关的宿主状态机
+│   ├── op-collab/            开放的协同 wire 类型、规范哈希与精确文档应用
+│   ├── op-collab-transport/  原生 Noise/TCP 传输、有界准入与可选的 LAN 发现
+│   ├── op-collab-smoke/      双进程身份验证协同恢复矩阵
 │   ├── op-host-native/       原生宿主库 — winit + skia-safe GL（桌面端 + 移动端）
+│   ├── op-engine-ffi/        Player C ABI — 将画布嵌入 iOS / Android 外壳
+│   ├── op-engine-jni/        op-engine-ffi 的 Android JNI 编组层
 │   ├── op-host-web/          浏览器构建产物 — wasm32 cdylib，CanvasKit 渲染器
 │   ├── op-host-desktop/      桌面应用二进制 `openpencil-desktop`；同时也是 `--serve-web` 守护进程
 │   ├── op-host-services/     无头 serve-web / MCP 守护进程库
@@ -499,6 +547,39 @@ cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon cat
 # 版本同步（从仓库根目录运行）
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
+
+### Rust workspace 详情
+
+Rust 化已经完成 — Rust workspace 就是产品本身。启动规格：`openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md`（v7 已冻结）。
+
+```bash
+# 安装 Rust 工具链（rust-toolchain.toml 自动固定 1.94）
+rustup toolchain install 1.94
+rustup target add wasm32-unknown-unknown
+
+# build / test / lint
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo check --target wasm32-unknown-unknown -p op-collab --no-default-features
+cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web  # kickoff §1.2 wasm32 不变量
+cargo deny check && cargo deny --target wasm32-unknown-unknown check bans        # cargo-deny（native + wasm32 bans；CI 使用 cargo-deny-action@v2）
+```
+
+**入口 crates（`crates/` — 构建目标）：**
+
+| Crate           | 类别                                                                              | wasm32       |
+| --------------- | -------------------------------------------------------------------------------- | ------------ |
+| op-host-web     | 浏览器构建产物入口 — wasm32 cdylib，通过 CanvasKit 渲染                           | ✅           |
+| op-host-native  | 原生宿主库 — WidgetHostNative + skia-safe GL 后端（桌面端 + 移动端）             | ❌（仅原生） |
+| op-engine-ffi   | Player C ABI — 一个引擎、三种外壳（iOS Metal / Android EGL / host raster）        | ❌（仅原生） |
+| op-engine-jni   | op-engine-ffi 的 Android JNI 编组层（引擎线程、注册表、回调）                     | ❌（仅原生） |
+| op-host-desktop | 桌面端二进制 `openpencil-desktop`（winit + skia-safe GL）— 同时也是托管 Web 构建产物的 `--serve-web` 守护进程 | ❌（仅原生） |
+| op-cli          | `op` 命令行工具                                                                   | ❌（仅原生） |
+
+**共享库 crates：** `op-editor-core`（规范的 `.op` 状态）、`op-editor-ui`（平台无关组件 + `RenderBackend`）、`op-editor-host-core`（与传输层无关的宿主状态机）、`op-collab`（开放、与传输层无关的协同协议/哈希/精确应用）、`op-collab-transport`（原生 Noise/TCP、有界准入与可选 LAN 发现）、`op-mcp`、`op-ai`、`op-ai-skills`、`op-codegen`、`op-orchestrator`、`op-figma`、`op-git`、`op-opmerge`、`op-pen-loader`、`op-design-lint`、`op-config-store`、`op-process-io`、`op-acp`、`op-i18n`、`op-rpc-transport` — 另有 `op-collab-smoke`（双进程身份验证协同/恢复矩阵）与 `op-smoke`（无头设计回合测试运行器）。移动端播放器位于 `packaging/`（基于 `op-engine-ffi` / `op-engine-jni` 的 `ios` + `android` 外壳）。浏览器构建产物通过官方 CanvasKit skia WASM 渲染（单独加载），因此已退役的 `skia-safe-op` wasm fork 与 `wasm-libc-shim` 不再存在。
+
+**子模块：** `vendor/agent` → `github.com/ZSeven-W/agent-rs`（跨产品 Rust Agent 运行时）。
 ```
 
 ## 参与贡献
