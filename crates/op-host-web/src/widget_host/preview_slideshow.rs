@@ -198,6 +198,10 @@ impl WidgetHost {
             self.now_ms,
         ) {
             Ok(mut session) => {
+                session.bind_asset_source(
+                    self.document_epoch,
+                    self.editor_state.document_generation(),
+                );
                 let source_rect = session
                     .framed_root()
                     .map(|(_, rect)| self.framed_root_to_screen_rect(rect, viewport_w, viewport_h));

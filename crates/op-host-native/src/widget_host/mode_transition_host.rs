@@ -97,6 +97,10 @@ impl WidgetHostNative {
             op_editor_core::preview_slideshow::slideshow_for_document(&self.editor_state).is_some();
         match build(&self.editor_state, presenting, self.now_ms) {
             Ok(mut session) => {
+                session.bind_asset_source(
+                    self.document_epoch,
+                    self.editor_state.document_generation(),
+                );
                 let source_rect = session.framed_root().map(|(_, rect)| {
                     self.doc_rect_to_screen_rect(rect, canvas_size.0, canvas_size.1)
                 });

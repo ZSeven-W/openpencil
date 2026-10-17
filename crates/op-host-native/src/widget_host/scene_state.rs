@@ -43,6 +43,13 @@ impl WidgetHostNative {
             // the rebuild would be a no-op.
             if let Some(scene) = self.scene_cache.maybe_rebuild(&self.editor_state) {
                 self.layout_scene = scene;
+                if let Some(preview) = self.preview.as_mut() {
+                    preview.sync_image_assets(
+                        &self.editor_state.doc,
+                        self.document_epoch,
+                        self.editor_state.document_generation(),
+                    );
+                }
                 // A rebuilt scene invalidates the pan bitmap cache
                 // (covers the font-generation path, which bypasses
                 // `mark_dirty`).

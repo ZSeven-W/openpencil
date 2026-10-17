@@ -59,6 +59,9 @@
 
 mod animation;
 mod app_mode;
+mod asset_sync;
+#[cfg(all(test, not(target_os = "windows")))]
+mod asset_sync_tests;
 #[cfg(feature = "gl-host")]
 mod auto_wire;
 #[cfg(not(feature = "gl-host"))]

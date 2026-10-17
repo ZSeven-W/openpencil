@@ -186,6 +186,13 @@ impl WidgetHost {
             // them identical, and the scene carries no editor state.
             if let Some(scene) = self.scene_cache.maybe_rebuild(&self.editor_state) {
                 self.layout_scene = scene;
+                if let Some(preview) = self.preview.as_mut() {
+                    preview.sync_image_assets(
+                        &self.editor_state.doc,
+                        self.document_epoch,
+                        self.editor_state.document_generation(),
+                    );
+                }
             }
             self.editor_state_dirty = false;
         }

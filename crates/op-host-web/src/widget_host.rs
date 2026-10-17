@@ -96,6 +96,8 @@ mod design_md_press;
 mod design_md_press_tests;
 pub(crate) mod icon_ingest;
 #[cfg(all(test, feature = "canvaskit"))]
+mod preview_asset_sync_tests;
+#[cfg(all(test, feature = "canvaskit"))]
 mod preview_hover_tests;
 // Browser file-IO ingestion (Open / Figma import / clipboard paste)
 // — needs the codegen-gated document-pipeline deps (jian-ops-schema).

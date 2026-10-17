@@ -125,8 +125,10 @@ pub struct PreviewSession {
     pub(crate) binding_overlay: BindingOverlay,
     /// R9 bounded trace, provenance, and debugger clock state.
     pub(crate) debug: crate::debug_trace::PreviewDebugState,
-    /// Immutable source/options used to rebuild the entire session on reset.
+    /// Retained reset source/options; accepted background assets update in place.
     pub(crate) reset_seed: ResetSeed,
+    /// Host document lifetime bound at entry; asset updates cannot cross Open/New.
+    pub(crate) asset_source_identity: Option<(u64, u64)>,
     /// R7 one bounded timeline plus its injected AnimationSink queue.
     pub(crate) animation: crate::animation::PreviewAnimationState,
     /// P1 node-level motion declarations and per-screen trigger state.
@@ -537,6 +539,7 @@ impl PreviewSession {
             binding_overlay,
             debug,
             reset_seed,
+            asset_source_identity: None,
             animation,
             motion,
             host_motion_preference,
