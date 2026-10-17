@@ -21,7 +21,7 @@ use crate::types::{OrchestratorError, Progress};
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
                  "layout": "vertical", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
   "subtasks": [
@@ -42,7 +42,7 @@ fn node_json(prefix: &str) -> String {
 
 /// Multi-screen plan — triggers the concurrent path when concurrency=2.
 const MULTI_SCREEN_PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "App", "width": 390, "height": 844,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "App", "width": 390, "height": 844,
                  "layout": "vertical", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
   "subtasks": [
@@ -63,7 +63,7 @@ fn node_json_mobile(prefix: &str) -> String {
 
 /// Dashboard plan — triggers the dashboard path.
 const DASHBOARD_PLAN_JSON: &str = r##"{
-  "rootFrame": {
+  "sharedContext": {}, "rootFrame": {
     "id": "dash-root",
     "name": "Analytics Dashboard",
     "width": 1440,

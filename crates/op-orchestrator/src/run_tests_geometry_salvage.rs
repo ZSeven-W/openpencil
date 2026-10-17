@@ -6,7 +6,7 @@ use super::*;
 // ── geometry_echo end-to-end (rail-collapse fixture) ────────────────────
 
 const RAIL_PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "Page", "width": 375, "height": 800,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "Page", "width": 375, "height": 800,
                  "layout": "vertical", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
   "subtasks": [
@@ -237,7 +237,7 @@ fn subtask_partial_result_not_retried() {
 #[test]
 fn reshaped_dashboard_root_is_not_a_false_no_content() {
     const DASH_PLAN: &str = r##"{
-      "rootFrame": { "id": "root", "name": "Dashboard", "width": 1200, "height": 900,
+      "sharedContext": {}, "rootFrame": { "id": "root", "name": "Dashboard", "width": 1200, "height": 900,
                      "layout": "vertical", "gap": 24,
                      "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
       "subtasks": [

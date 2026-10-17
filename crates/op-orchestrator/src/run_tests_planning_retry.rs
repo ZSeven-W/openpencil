@@ -208,7 +208,7 @@ fn transport_failure_still_downgrades_skills_on_attempt2_for_basic_tier() {
 }
 
 const COVERING_PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
                  "layout": "vertical", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
   "subtasks": [
@@ -362,7 +362,7 @@ fn motion50_req(prompt: &str) -> DesignRequest {
 
 fn single_subtask_plan_json(label: &str) -> String {
     format!(
-        r##"{{"rootFrame": {{ "id": "root", "name": "Page", "width": 1200, "height": 800,
+        r##"{{"sharedContext": {{}}, "rootFrame": {{ "id": "root", "name": "Page", "width": 1200, "height": 800,
                  "layout": "vertical", "gap": 0,
                  "fill": [{{ "type": "solid", "color": "#FFFFFF" }}] }},
   "subtasks": [
@@ -469,7 +469,7 @@ fn a_truly_missing_section_still_triggers_the_coverage_retry() {
 // ── motion50 fix 1: provider session/usage quota circuit breaker ────────────
 
 const PLAN3_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
                  "layout": "vertical", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
   "subtasks": [
@@ -549,7 +549,7 @@ fn two_consecutive_provider_limit_failures_circuit_break_the_run() {
 const WEB11_BRIEF: &str = "设计系统文档站首页（1440 宽长页）：英雄（标题+搜索框）、组件网格九个、设计原则三条、色板与字阶展示、快速开始代码块、页脚。交互：组件卡 hover 显示描述，代码块可复制。滚动动效：组件格 inView 交错，色板 mount 逐块展开，代码块 sticky。风格由你决定，要求信息清晰、层级分明。";
 
 const WEB11_COVERS_PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "Page", "width": 1440, "height": 800,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "Page", "width": 1440, "height": 800,
                  "layout": "vertical", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
   "subtasks": [
@@ -616,7 +616,7 @@ const ARENA_M02_BRIEF: &str = "健身 App 首页（375×812）：顶部问候与
 /// The three-subtask plan the arena-m02 run shipped, returned for BOTH the
 /// first plan and the coverage re-plan (the model ignored the feedback).
 const ARENA_M02_PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "健身首页", "width": 375, "height": 812,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "健身首页", "width": 375, "height": 812,
                  "layout": "vertical", "gap": 0 },
   "subtasks": [
     { "id": "greeting", "label": "顶部问候与头像", "region": { "width": 375, "height": 96 },

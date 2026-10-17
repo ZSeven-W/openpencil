@@ -183,9 +183,11 @@ async fn fourth_attempt_salvage_after_concurrent_generation_receives_same_page_c
     };
     use crate::{Orchestrator, ValidationProviders};
     let (_, plan, request, _) = fixture();
+    let mut planner_response = serde_json::to_value(&plan).unwrap();
+    planner_response["sharedContext"] = json!({});
     let llm = SalvageLlm {
         sections: SectionLlm::default(),
-        plan: serde_json::to_string(&plan).unwrap(),
+        plan: planner_response.to_string(),
         body_b_attempts: AtomicUsize::new(0),
     };
     let providers = ValidationProviders {

@@ -5,7 +5,7 @@
 use super::*;
 
 const W01_PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "项目管理工作台", "width": 1440, "height": 900,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "项目管理工作台", "width": 1440, "height": 900,
                  "layout": "horizontal", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
   "subtasks": [

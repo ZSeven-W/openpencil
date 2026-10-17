@@ -4,7 +4,7 @@
 use super::*;
 
 const DASHBOARD_PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "Barbershop Dashboard", "width": 1200, "height": 0,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "Barbershop Dashboard", "width": 1200, "height": 0,
                  "layout": "vertical", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#0A0A0A" }] },
   "subtasks": [

@@ -77,7 +77,7 @@ fn req_basic() -> DesignRequest {
 }
 
 const PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
                  "layout": "vertical", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
   "subtasks": [
@@ -87,7 +87,7 @@ const PLAN_JSON: &str = r##"{
 }"##;
 
 const MOBILE_PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "Mobile Page", "width": 390, "height": 844,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "Mobile Page", "width": 390, "height": 844,
                  "layout": "vertical", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#FFF8F0" }] },
   "subtasks": [

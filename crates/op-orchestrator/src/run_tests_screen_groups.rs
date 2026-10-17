@@ -55,7 +55,7 @@ fn progress_event(progress: &Progress) -> &Progress {
 }
 
 const MULTI_SCREEN_PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "App", "width": 390, "height": 844,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "App", "width": 390, "height": 844,
                  "layout": "vertical", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
   "subtasks": [
@@ -282,7 +282,7 @@ fn multi_screen_plan_roots_all_get_wired_for_app_mode_preview() {
 /// generating Search/Library/Premium") — one subtask each, so each group's
 /// worker runs exactly one LLM call.
 const THREE_SCREEN_PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "App", "width": 390, "height": 844,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "App", "width": 390, "height": 844,
                  "layout": "vertical", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
   "subtasks": [

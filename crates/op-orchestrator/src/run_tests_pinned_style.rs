@@ -38,7 +38,7 @@ fn plan_json(guide: Option<&str>) -> String {
     };
     format!(
         r##"{{
-  "rootFrame": {{ "id": "root", "name": "Page", "width": 1200, "height": 800,
+  "sharedContext": {{}}, "rootFrame": {{ "id": "root", "name": "Page", "width": 1200, "height": 800,
                  "layout": "vertical", "gap": 0,
                  "fill": [{{ "type": "solid", "color": "#FFFFFF" }}] }},
   {name}

@@ -270,6 +270,7 @@ pub fn build_orchestrator_prompt(
                 .collect::<Vec<_>>()
                 .join("\n\n");
             system_prompt.push_str(PLANNING_QUALITY_GUARDRAILS);
+            system_prompt.push_str(planning_schema::OUTPUT_SHAPE);
             system_prompt.push_str(crate::plan_shared_context::PLANNING_INSTRUCTION);
             system_prompt.push_str(planning_suffix(mode));
             crate::output_language::append_copy_language_instruction(&mut system_prompt, req);
@@ -330,3 +331,10 @@ mod tests;
 #[cfg(test)]
 #[path = "prompt_reference_tests.rs"]
 mod reference_skeleton_tests;
+
+#[cfg(test)]
+#[path = "prompt_schema_tests.rs"]
+mod schema_tests;
+
+#[path = "planning_schema.rs"]
+pub(crate) mod planning_schema;

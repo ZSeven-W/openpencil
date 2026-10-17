@@ -27,6 +27,7 @@ fn request() -> DesignRequest {
 
 fn plan() -> String {
     json!({
+        "sharedContext": {},
         "rootFrame": {
             "id": "root", "name": "配送追踪", "width": 375, "height": 812,
             "layout": "vertical", "gap": 0,

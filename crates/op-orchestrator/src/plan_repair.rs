@@ -577,6 +577,43 @@ pub(crate) fn parse_orchestrator_response(
     None
 }
 
+/// Fresh model plans use the same strict/repair probes as stored plans, but
+/// every candidate must satisfy the new response protocol before acceptance.
+/// In particular, repair must not erase a missing or invalid shared contract.
+pub(crate) fn parse_fresh_orchestrator_response(
+    raw: &str,
+    request: &DesignRequest,
+) -> Result<(OrchestratorPlan, bool), crate::plan_fresh::FreshPlanError> {
+    use crate::plan_fresh::{accept, check_envelope, FreshPlanError};
+
+    let trimmed = raw.trim();
+    let candidates = [
+        Some(trimmed),
+        extract_fence_content(trimmed),
+        extract_brace_slice(trimmed),
+    ];
+    let mut failure = None;
+    for text in candidates.into_iter().flatten() {
+        let json = crate::plan::extract_json_object(text).unwrap_or(text);
+        let Ok(value) = serde_json::from_str::<Value>(json) else {
+            continue;
+        };
+        if let Err(error) = check_envelope(&value) {
+            failure.get_or_insert(error);
+            continue;
+        }
+        // Parse exactly the JSON object whose envelope was checked, not a
+        // different fenced object later in the original response.
+        let parsed = parse_orchestrator_response(json, request);
+        if let Some((mut plan, repaired)) = parsed {
+            // Validate original section ids before any normalizer folds tasks.
+            accept(&mut plan, request)?;
+            return Ok((plan, repaired));
+        }
+    }
+    Err(failure.unwrap_or(FreshPlanError::Unparseable))
+}
+
 /// Strict probe: delegate to `parse_plan` (serde deserialization + non-empty
 /// subtasks check), then apply the same style/palette contract as repaired
 /// plans. Returns `None` on any parse or validation failure.

@@ -17,7 +17,7 @@ fn stub_providers() -> ValidationProviders<'static> {
 }
 
 fn plan() -> String {
-    json!({"rootFrame":{"id":"root","name":"活动卡","width":1080,"height":1440,"layout":"vertical"},"subtasks":[{"id":"card","label":"活动卡","region":{"width":1080,"height":1440}}]}).to_string()
+    json!({"sharedContext":{},"rootFrame":{"id":"root","name":"活动卡","width":1080,"height":1440,"layout":"vertical"},"subtasks":[{"id":"card","label":"活动卡","region":{"width":1080,"height":1440}}]}).to_string()
 }
 
 fn script(complete: bool) -> String {

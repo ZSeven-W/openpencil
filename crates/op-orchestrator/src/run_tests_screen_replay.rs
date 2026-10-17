@@ -494,7 +494,7 @@ fn single_screen_run_never_announces_the_sequential_diagnostic() {
     let single_llm = ScriptedLlm::new(vec![
         ScriptResponse::Text(
             r##"{
-  "rootFrame": { "id": "root", "name": "App", "width": 1200, "height": 800,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "App", "width": 1200, "height": 800,
                  "layout": "vertical", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
   "subtasks": [

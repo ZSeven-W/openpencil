@@ -536,6 +536,7 @@ fn completeness_rollback_uses_delete_commands_for_inserted_roots() {
 #[test]
 fn orchestrator_summary_counts_a_final_incomplete_subtask() {
     const PLAN: &str = r##"{
+        "sharedContext": {},
         "rootFrame": {"id":"root","name":"Page","width":375,"height":812,"layout":"vertical"},
         "subtasks": [{"id":"merchants","label":"商家列表五个（图+名称+评分+配送费+时长）","region":{"width":375,"height":400}}]
     }"##;

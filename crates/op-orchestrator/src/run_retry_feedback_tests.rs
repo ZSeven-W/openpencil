@@ -5,7 +5,7 @@ use crate::test_support::{
 };
 
 const PARTIAL_PLAN: &str = r##"{
-  "rootFrame": {
+  "sharedContext": {}, "rootFrame": {
     "id": "root", "name": "Weather", "width": 375, "height": 812,
     "layout": "vertical", "gap": 0,
     "fill": [{ "type": "solid", "color": "#0F172A" }]

@@ -115,9 +115,9 @@ pub(crate) fn from_plan_value(
 
 pub(crate) const PLANNING_INSTRUCTION: &str = r#"
 SHARED CONTENT DECISIONS:
-When multiple sections/screens show the same subject, decide its identity ONCE before decomposing the design and INCLUDE top-level "sharedContext": {"sourceFacts":["exact excerpts from the user's brief"],"exampleEntities":[{"id":"stable-entity-id","name":"one consistent name","imageSubject":"same subject/material/color for every photo and thumbnail","attributes":{"requested field":"one value or honest placeholder"},"usedBy":["section-id"]}]}.
+When multiple sections/screens show the same subject, decide its identity ONCE before decomposing the design. Use sharedContext in the output shape above.
 Copy supplied identities/values faithfully into sourceFacts as verbatim brief excerpts. exampleEntities are explicitly fictional choices only for populated components authorized by the SOURCE FACTS contract, NOT user facts or verified business data. Omit unsupported optional claims; use placeholders for requested real fields whose values are unknown. Do not introduce example entities in reference/continuation work or when the user forbids invention. Preserve existing/supplied content instead.
-For a linked flow, identify which repeated item is the SAME entity (e.g. detail/gallery/selected options and its cart row), then choose any other requested items once as distinct entities. Keep names, photos, selected specifications, amounts and summary calculations mutually consistent. This applies equally to products, meals, courses, workouts, places and other subjects; no fixed template or category is required. Set usedBy to the matching section ids, include only requested attributes, and keep the entire context compact (at most 8 entities, 12 source excerpts and 16384 UTF-8 bytes). Omit sharedContext when no subject is shared. Never put this content into styleGuideName or palette.
+For a linked flow, use the SAME entity for detail/gallery/selected options and its list/cart row; choose other requested items once as distinct entities. Keep names, imageSubject (subject/material/color), specifications, amounts and calculations consistent. No fixed template or category is required. Include only requested attributes, at most 8 entities, 12 source excerpts and 16384 UTF-8 bytes. Never put this content into styleGuideName or palette.
 "#;
 
 pub(crate) fn append_instruction(
@@ -132,9 +132,7 @@ pub(crate) fn append_instruction(
     // The original brief is already passed intact. Do not launder an invented
     // planner claim through a misleading `sourceFacts` field name.
     let mut verified = context.clone();
-    verified
-        .source_facts
-        .retain(|fact| !fact.trim().is_empty() && request.prompt.contains(fact.as_str()));
+    crate::plan_fresh::retain_verbatim_sources(&mut verified, &request.prompt);
     if !crate::source_facts::text_only_source(request)
         || forbids_examples(&request.prompt)
         || empty_section(subtask)

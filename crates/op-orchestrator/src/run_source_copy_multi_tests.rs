@@ -22,7 +22,7 @@ fn request() -> DesignRequest {
 }
 
 fn plan(complete: bool) -> String {
-    json!({"rootFrame":{"id":"root","name":"图文卡","width":1080,"height":1440,"layout":"vertical"},
+    json!({"sharedContext":{},"rootFrame":{"id":"root","name":"图文卡","width":1080,"height":1440,"layout":"vertical"},
         "subtasks":[
             {"id":"first","label":"第一张","screen":"first","elements":if complete {FIRST} else {"先做一页"},"region":{"width":1080,"height":1440}},
             {"id":"second","label":"第二张","screen":"second","elements":SECOND,"region":{"width":1080,"height":1440}}

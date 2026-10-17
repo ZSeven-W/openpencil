@@ -3,7 +3,7 @@
 use super::*;
 
 const TWO_GROUP_MULTI_SUBTASK_PLAN_JSON: &str = r##"{
-  "rootFrame": { "id": "root", "name": "App", "width": 390, "height": 844,
+  "sharedContext": {}, "rootFrame": { "id": "root", "name": "App", "width": 390, "height": 844,
                  "layout": "vertical", "gap": 0,
                  "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
   "subtasks": [

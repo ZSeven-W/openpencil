@@ -140,7 +140,7 @@ fn append_does_not_mutate_preexisting_styled_node() {
 
     // ── append-generate one new section under the target frame ────────────────
     const PLAN_JSON: &str = r##"{
-      "rootFrame": {
+      "sharedContext": {}, "rootFrame": {
         "id": "frame-placeholder",
         "name": "App Root",
         "width": 390, "height": 844,

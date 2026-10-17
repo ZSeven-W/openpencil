@@ -100,7 +100,7 @@ fn full_pipeline_passes_sidebar_copy_to_the_header_call() {
         SkippedVisionLlmClient, VecDocSink,
     };
     use crate::{AbortFlag, DesignRequest, Orchestrator, ValidationProviders};
-    let plan = json!({"rootFrame":{"id":"root","name":"Console","width":1440,"height":900,"layout":"horizontal"},"subtasks":[
+    let plan = json!({"sharedContext":{},"rootFrame":{"id":"root","name":"Console","width":1440,"height":900,"layout":"horizontal"},"subtasks":[
         {"id":"sidebar","label":"Sidebar","region":{"width":240,"height":900}},
         {"id":"header","label":"Header","region":{"width":1200,"height":90}}
     ]});

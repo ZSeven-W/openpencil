@@ -24,9 +24,8 @@ pub struct CompactPlanningPrompt {
     pub selected_style_guide_name: String,
 }
 
-/// 固定 6 行模板头 —— verbatim 移植自 TS(`orchestrator-prompt-optimizer.ts:420-425`)。
+/// Compact planning rules; the complete JSON shape is shared with rich mode.
 const FIXED_HEAD: &str = "You are a UI planning assistant. Output ONLY one JSON object.\n\
-Schema: {\"rootFrame\":{\"id\":\"page\",\"name\":\"Page\",\"width\":375,\"height\":812,\"layout\":\"vertical\",\"gap\":20,\"fill\":[{\"type\":\"solid\",\"color\":\"#111827\"}]},\"styleGuideName\":\"guide-name\",\"subtasks\":[{\"id\":\"section-id\",\"label\":\"Section Label\",\"elements\":\"comma-separated owned UI elements\",\"region\":{\"width\":375,\"height\":240}}]}\n\
 Every subtask MUST include: id, label, elements, region.width, region.height.\n\
 Elements must not overlap between subtasks.\n\
 Keep form controls and their submit action in the same subtask.\n\
@@ -194,6 +193,7 @@ pub fn build_compact_planning_prompt(
     };
     let mut lines: Vec<String> = vec![
         FIXED_HEAD.to_string(),
+        crate::prompt::planning_schema::OUTPUT_SHAPE.to_string(),
         subtask_hint.to_string(),
         focal_rule.to_string(),
         "Plan one WOW FACTOR that is specific to the requested product/domain; avoid generic tinted wrappers, heavy shadows, or repeated rounded boxes as the main visual idea."

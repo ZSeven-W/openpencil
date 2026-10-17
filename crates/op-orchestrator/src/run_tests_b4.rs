@@ -121,7 +121,7 @@ fn append_mode_does_not_emit_scaffold_root_insert() {
     // Minimal plan whose rootFrame.id doesn't matter — apply_append_context_to_plan
     // replaces it with ctx.target_parent_id (the live id) before any scaffold call.
     const PLAN_JSON: &str = r##"{
-      "rootFrame": { "id": "frame-placeholder", "name": "Page", "width": 1200, "height": 800,
+      "sharedContext": {}, "rootFrame": { "id": "frame-placeholder", "name": "Page", "width": 1200, "height": 800,
                      "layout": "vertical", "gap": 0,
                      "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
       "subtasks": [
@@ -177,7 +177,7 @@ fn append_mode_does_not_emit_scaffold_root_insert() {
 #[test]
 fn append_mode_summary_root_equals_target_parent_id() {
     const PLAN_JSON: &str = r##"{
-      "rootFrame": { "id": "frame-placeholder", "name": "Page", "width": 1200, "height": 800,
+      "sharedContext": {}, "rootFrame": { "id": "frame-placeholder", "name": "Page", "width": 1200, "height": 800,
                      "layout": "vertical", "gap": 0,
                      "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
       "subtasks": [
@@ -218,7 +218,7 @@ fn append_mode_summary_root_equals_target_parent_id() {
 #[test]
 fn append_mode_forces_effective_concurrency_to_one() {
     const MULTISCREEN_PLAN_JSON: &str = r##"{
-      "rootFrame": { "id": "frame-placeholder", "name": "App", "width": 390, "height": 844,
+      "sharedContext": {}, "rootFrame": { "id": "frame-placeholder", "name": "App", "width": 390, "height": 844,
                      "layout": "vertical", "gap": 0,
                      "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
       "subtasks": [
@@ -278,7 +278,7 @@ fn append_mode_forces_effective_concurrency_to_one() {
 #[test]
 fn append_mode_content_lands_in_target_frame() {
     const PLAN_JSON: &str = r##"{
-      "rootFrame": { "id": "frame-placeholder", "name": "Page", "width": 1200, "height": 800,
+      "sharedContext": {}, "rootFrame": { "id": "frame-placeholder", "name": "Page", "width": 1200, "height": 800,
                      "layout": "vertical", "gap": 0,
                      "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
       "subtasks": [
@@ -327,7 +327,7 @@ fn append_mode_content_lands_in_target_frame() {
 #[test]
 fn non_append_mode_takes_normal_sequential_path() {
     const PLAN_JSON: &str = r##"{
-      "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
+      "sharedContext": {}, "rootFrame": { "id": "root", "name": "Page", "width": 1200, "height": 800,
                      "layout": "vertical", "gap": 0,
                      "fill": [{ "type": "solid", "color": "#FFFFFF" }] },
       "subtasks": [
@@ -379,7 +379,7 @@ fn non_append_mode_takes_normal_sequential_path() {
 #[test]
 fn non_append_mode_resolves_scaffold_root_when_empty_frame_is_replaced() {
     const PLAN_JSON: &str = r##"{
-      "rootFrame": { "id": "page", "name": "Food App Home", "width": 375, "height": 812,
+      "sharedContext": {}, "rootFrame": { "id": "page", "name": "Food App Home", "width": 375, "height": 812,
                      "layout": "vertical", "gap": 16,
                      "fill": [{ "type": "solid", "color": "#FFF8F0" }] },
       "subtasks": [
@@ -442,7 +442,7 @@ fn append_mode_wins_over_dashboard_branch() {
     // Dashboard-like plan: 1440 wide, sidebar + metrics subtasks, dashboard
     // keyword in subtask labels.
     const DASHBOARD_PLAN_JSON: &str = r##"{
-      "rootFrame": { "id": "frame-placeholder", "name": "Analytics Dashboard",
+      "sharedContext": {}, "rootFrame": { "id": "frame-placeholder", "name": "Analytics Dashboard",
                      "width": 1440, "height": 900,
                      "layout": "vertical", "gap": 20,
                      "fill": [{ "type": "solid", "color": "#0F172A" }] },
@@ -617,7 +617,7 @@ fn append_cleanup_leaves_preexisting_nav_surface_untouched() {
 
     // Plan: single section subtask (content, not a nav surface).
     const PLAN_JSON: &str = r##"{
-      "rootFrame": {
+      "sharedContext": {}, "rootFrame": {
         "id": "frame-placeholder", "name": "Mobile App",
         "width": 390, "height": 844,
         "layout": "vertical", "gap": 0,
@@ -709,7 +709,7 @@ fn append_cleanup_leaves_preexisting_nav_surface_untouched() {
 #[test]
 fn fresh_doc_cleanup_still_runs_over_scaffold_root() {
     const PLAN_JSON: &str = r##"{
-      "rootFrame": {
+      "sharedContext": {}, "rootFrame": {
         "id": "root", "name": "Landing Page",
         "width": 1200, "height": 800,
         "layout": "vertical", "gap": 0,

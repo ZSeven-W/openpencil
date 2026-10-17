@@ -43,11 +43,12 @@ pub(super) async fn ensure(
     if abort.is_set() {
         return Err(OrchestratorError::Aborted);
     }
-    let Some((mut revised, _)) = parse_orchestrator_response(&raw, request) else {
-        return Err(OrchestratorError::AllFailed(
-            "source-copy-missing: could not plan all supplied text".into(),
-        ));
-    };
+    let (mut revised, _) = parse_fresh_orchestrator_response(&raw, request).map_err(|error| {
+        OrchestratorError::AllFailed(format!(
+            "source-copy-missing: could not plan all supplied text; {}",
+            error.feedback().trim()
+        ))
+    })?;
     crate::plan_palette::preserve_on_replan(&plan, &mut revised, request);
     apply_plan_pins(&mut revised, prompt.forced_style_guide_name, request);
     let required = crate::plan_coverage::required_sections(&request.prompt);

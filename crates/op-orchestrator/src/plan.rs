@@ -203,7 +203,7 @@ pub fn parse_plan(text: &str) -> Result<OrchestratorPlan, PlanParseError> {
 }
 
 /// 抽第一个平衡的 `{...}`(忽略字符串内的花括号)。
-fn extract_json_object(text: &str) -> Option<&str> {
+pub(crate) fn extract_json_object(text: &str) -> Option<&str> {
     let start = text.find('{')?;
     let bytes = text.as_bytes();
     let mut depth = 0i32;

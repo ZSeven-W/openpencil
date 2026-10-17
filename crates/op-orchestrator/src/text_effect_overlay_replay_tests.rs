@@ -23,9 +23,21 @@ fn replay_retained_glm_overprint_through_the_complete_generation_pipeline() {
     let responses = (0..3)
         .filter(|i| root.join(format!("model-response-{i}.txt")).exists())
         .map(|i| {
-            ScriptResponse::Text(
-                std::fs::read_to_string(root.join(format!("model-response-{i}.txt"))).unwrap(),
-            )
+            let mut response =
+                std::fs::read_to_string(root.join(format!("model-response-{i}.txt"))).unwrap();
+            if i == 0 {
+                // Adapt only this historical planner fixture to the fresh response envelope.
+                let mut plan: serde_json::Value = serde_json::from_str(
+                    crate::plan::extract_json_object(&response).expect("retained planner JSON"),
+                )
+                .unwrap();
+                plan.as_object_mut()
+                    .unwrap()
+                    .entry("sharedContext")
+                    .or_insert_with(|| serde_json::json!({}));
+                response = plan.to_string();
+            }
+            ScriptResponse::Text(response)
         })
         .collect();
     let llm = ScriptedLlm::new(responses);

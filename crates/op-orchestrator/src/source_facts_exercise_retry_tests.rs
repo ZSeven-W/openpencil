@@ -13,6 +13,7 @@ fn exercise_request() -> DesignRequest {
 
 fn exercise_plan() -> String {
     json!({
+        "sharedContext": {},
         "rootFrame":{"id":"root","name":"Workout","width":375,"height":812,"layout":"vertical","gap":0},
         "subtasks":[{"id":"exercises","label":"Exercise List","elements":"list of six exercise rows with names, sets and reps; meta row (12 exercises)","covers":["names","sets","reps"],"region":{"width":375,"height":600}}]
     }).to_string()
