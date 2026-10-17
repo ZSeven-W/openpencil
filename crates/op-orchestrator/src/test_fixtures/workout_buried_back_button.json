@@ -1,0 +1,146 @@
+{
+  "type": "frame",
+  "id": "n105",
+  "name": "Hero Image with Back Button (bleed)",
+  "role": "button",
+  "transition": {
+    "durationMs": 150,
+    "easing": "standard",
+    "properties": [
+      "fill",
+      "opacity",
+      "scaleX",
+      "scaleY"
+    ]
+  },
+  "width": 375,
+  "height": 310,
+  "layout": "none",
+  "padding": [
+    0.0,
+    0.0
+  ],
+  "clipContent": true,
+  "cornerRadius": 0.0,
+  "children": [
+    {
+      "type": "frame",
+      "id": "n106",
+      "name": "Hero Media Viewport",
+      "width": "fill_container",
+      "height": 310.0,
+      "layout": "none",
+      "clipContent": true,
+      "children": [
+        {
+          "type": "frame",
+          "id": "n107",
+          "name": "Hero Copy Overlay",
+          "width": "fill_container",
+          "height": 310.0,
+          "layout": "vertical",
+          "padding": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "justifyContent": "end",
+          "children": []
+        },
+        {
+          "type": "rectangle",
+          "id": "n108",
+          "name": "Bottom Gradient Scrim",
+          "width": "fill_container",
+          "height": 120.0,
+          "fill": [
+            {
+              "type": "linear_gradient",
+              "angle": 180.0,
+              "stops": [
+                {
+                  "offset": 0.0,
+                  "color": "#FFFFFF00"
+                },
+                {
+                  "offset": 1.0,
+                  "color": "#0F172A66"
+                }
+              ]
+            }
+          ],
+          "children": []
+        },
+        {
+          "type": "image",
+          "id": "n109",
+          "name": "Workout Hero Image",
+          "x": 0.0,
+          "y": 0.0,
+          "src": "https://example.test/workout-hero.jpg",
+          "width": 375.0,
+          "height": 310.0,
+          "imagePrompt": "A fit woman performing a strength training exercise in a bright modern gym, dynamic full-body workout pose, natural daylight, professional fitness photography, wide crop",
+          "imageSearchQuery": "woman workout gym"
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "n110",
+      "name": "Back Button",
+      "role": "button",
+      "x": 24.0,
+      "y": 20.0,
+      "transition": {
+        "durationMs": 150,
+        "easing": "standard",
+        "properties": [
+          "fill",
+          "opacity",
+          "scaleX",
+          "scaleY"
+        ]
+      },
+      "width": 44.0,
+      "height": 44.0,
+      "layout": "horizontal",
+      "justifyContent": "center",
+      "alignItems": "center",
+      "cornerRadius": 22.0,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#FFFFFFCC"
+        }
+      ],
+      "stroke": {
+        "thickness": 1.0,
+        "fill": [
+          {
+            "type": "solid",
+            "color": "$--border"
+          }
+        ]
+      },
+      "children": [
+        {
+          "type": "icon_font",
+          "id": "n111",
+          "name": "Back Icon",
+          "iconFontName": "chevron-left",
+          "iconFontFamily": "lucide",
+          "width": 22.0,
+          "height": 22.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--foreground"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

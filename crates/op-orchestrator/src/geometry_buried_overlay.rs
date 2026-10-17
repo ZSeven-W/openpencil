@@ -195,6 +195,36 @@ fn rect_of<'a>(v: &Value, rects: &'a HashMap<String, Rect>) -> Option<&'a Rect> 
         .and_then(|id| rects.get(id))
 }
 
+// A fill-less media viewport still paints solid when its full-size opaque
+// photo does. Do not generalize opacity through arbitrary content containers:
+// partial, faded, blended, rotated or masked media must keep authored order.
+fn covers_with_opaque_photo(v: &Value, rects: &HashMap<String, Rect>) -> bool {
+    if layout_str(v) != Some("none")
+        || !composites_opaque(v)
+        || v.get("visible").and_then(Value::as_bool) == Some(false)
+        || v.get("maskType").is_some()
+        || v.get("rotation").and_then(Value::as_f64).unwrap_or(0.0) != 0.0
+        || children(v).iter().any(|child| {
+            child.get("isMask").and_then(Value::as_bool) == Some(true)
+                || child.get("maskType").is_some()
+        })
+    {
+        return false;
+    }
+    let Some(viewport) = rect_of(v, rects) else {
+        return false;
+    };
+    children(v).iter().any(|photo| {
+        is_photo(photo)
+            && paints_opaque(photo)
+            && photo.get("visible").and_then(Value::as_bool) != Some(false)
+            && photo.get("objectFit").and_then(Value::as_str) != Some("fit")
+            && photo.get("rotation").and_then(Value::as_f64).unwrap_or(0.0) == 0.0
+            && rect_of(photo, rects)
+                .is_some_and(|bounds| covered_fraction(viewport, bounds) >= 0.999)
+    })
+}
+
 /// The index of the first EMPTY opaque plate that hides an image — the offset
 /// "backdrop" a model authors after (i.e. over) the photo it was meant to sit
 /// behind. Measured on a GLM-5.3-Flash brewery page: a 744×636 cream
@@ -458,7 +488,7 @@ pub(super) fn collect_buried_overlay_fixes(
             };
             let overlay_area = overlay_rect.w * overlay_rect.h;
             let buried = kids[..index].iter().any(|cover| {
-                paints_opaque(cover)
+                (paints_opaque(cover) || covers_with_opaque_photo(cover, rects))
                     && rect_of(cover, rects).is_some_and(|c| {
                         covered_fraction(overlay_rect, c) >= MIN_BURIED_FRACTION
                             && overlay_area <= c.w * c.h * OVERLAY_MAX_AREA_RATIO
@@ -498,3 +528,7 @@ mod scrim;
 #[cfg(test)]
 #[path = "geometry_buried_overlay_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "geometry_buried_media_viewport_tests.rs"]
+mod media_viewport_tests;
