@@ -3,15 +3,17 @@
 //! Freeform creative briefs have no such contract. Formatting whitespace may
 //! change and a line may span several editable text nodes; facts may not.
 
-use jian_ops_schema::node::{PenNode, TextContent};
-use op_design_lint::node_util::{is_node_visible, opacity};
-use op_editor_core::{EditorState, PenNodeExt};
+use jian_ops_schema::node::PenNode;
+use op_editor_core::EditorState;
 
 #[path = "source_copy_plan.rs"]
 mod plan_contract;
 
 #[path = "source_copy_brand.rs"]
 mod brand;
+
+#[path = "source_copy_visible.rs"]
+mod visible;
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SourceCopy {
@@ -102,21 +104,14 @@ impl SourceCopy {
             &state.doc,
             &state.ui.variables.active_theme,
         );
-        let mut texts = Vec::new();
-        for node in &resolved {
-            collect(node, &mut texts);
-        }
-        let mut delivered = compact(&texts.join("\n"));
+        let mut delivered = visible::VisibleCopy::from_nodes(&resolved);
         // Consume each occurrence once. Check longer strings first so a
         // shorter product name cannot steal another product's source line.
         let mut required: Vec<_> = self.lines.iter().enumerate().collect();
         required.sort_by_key(|(_, line)| std::cmp::Reverse(line.len()));
         let mut missing = Vec::new();
         for (index, line) in required {
-            let needle = compact(line);
-            if let Some(offset) = delivered.find(&needle) {
-                delivered.replace_range(offset..offset + needle.len(), "\0");
-            } else {
+            if !delivered.take(line) {
                 missing.push((index, line.clone()));
             }
         }
@@ -145,23 +140,10 @@ fn positive_cue(line: &str, cue: &str) -> bool {
     })
 }
 
-fn collect(node: &PenNode, texts: &mut Vec<String>) {
-    if !is_node_visible(node) || opacity(node) <= 0.0 {
-        return;
-    }
-    if let PenNode::Text(text) = node {
-        texts.push(match &text.content {
-            TextContent::Plain(text) => text.clone(),
-            TextContent::Styled(runs) => runs.iter().map(|run| run.text.as_str()).collect(),
-        });
-    }
-    if let Some(children) = node.children() {
-        for child in children {
-            collect(child, texts);
-        }
-    }
-}
-
 #[cfg(test)]
 #[path = "source_copy_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "source_copy_price_tests.rs"]
+mod price_tests;
