@@ -46,6 +46,36 @@ fn source_facts_survive_all_subtask_complexity_levels() {
 }
 
 #[test]
+fn photo_archetype_cannot_override_a_separate_title_meta_owner_on_any_retry() {
+    let mut request = req();
+    request.model = Some("glm-5.3-flash".into());
+    request.prompt = "Workout detail: hero image and back button, then a title and meta row".into();
+    let mut mobile = plan();
+    mobile.root_frame.width = 375.0;
+    mobile.root_frame.height = 812.0;
+    let mut hero = subtask();
+    hero.id = "hero".into();
+    hero.label = "Hero Image with Back Button".into();
+    hero.region.width = 375.0;
+    hero.elements = Some("ARCHETYPE: image-led — photo, display 30px on scrim".into());
+    let mut title = hero.clone();
+    title.id = "title".into();
+    title.label = "Title and Meta Row".into();
+    title.elements = Some("Workout title, duration and equipment".into());
+    mobile.subtasks = vec![hero.clone(), title];
+    for (reduced, minimal) in [(false, false), (true, false), (true, true)] {
+        let (call, _) = bsp(&hero, &mobile, &request, AbortFlag::new(), reduced, minimal);
+        assert!(call.user_prompt.contains("Title and Meta Row"));
+        assert!(call
+            .user_prompt
+            .contains("Archetype typography is styling, not permission to add copy"));
+        assert!(call
+            .user_prompt
+            .contains("without repeated titles or invented stats"));
+    }
+}
+
+#[test]
 fn image_brief_contract_reaches_all_subtask_complexity_levels() {
     // Assert the assembled prompt, not just the corpus: minimal retries keep
     // only schema, and mobile skills can otherwise consume the prompt budget.
@@ -86,6 +116,8 @@ fn image_brief_contract_reaches_all_subtask_complexity_levels() {
                 "show a participant doing that activity, not equipment or an empty venue",
                 "Product/place-only slots: do not add people",
                 "Sibling scenes must be independently recognizable",
+                "Linear angle: 0° bottom→top, 90° left→right, 180° top→bottom",
+                "keep overlay text on its dark end",
             ] {
                 assert!(
                     call.system_prompt.contains(required),

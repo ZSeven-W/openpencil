@@ -65,6 +65,18 @@ fn phone_planning_prompt_uses_the_archetype_handoff_and_gate() {
         .call_request
         .system_prompt
         .contains("Do not plan a status bar; it is pre-inserted."));
+    assert!(phone_prompt
+        .call_request
+        .system_prompt
+        .contains("Assign each title and meta row ONE owner"));
+    assert!(phone_prompt
+        .call_request
+        .system_prompt
+        .contains("photo hero contains only media and controls"));
+    assert!(!phone_prompt
+        .call_request
+        .system_prompt
+        .contains("title on scrim"));
     assert!(!phone_prompt
         .call_request
         .system_prompt

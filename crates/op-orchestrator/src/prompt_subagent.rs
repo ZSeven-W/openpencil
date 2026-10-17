@@ -470,7 +470,7 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
         .elements
         .as_ref()
         .map(|items| {
-            format!("\nPROPOSED ELEMENTS (planner layout suggestions, not source facts): {items}\nDo NOT generate elements listed in other sections.")
+            format!("\nPROPOSED ELEMENTS (planner layout suggestions, not source facts): {items}\nDo NOT generate elements listed in other sections. Archetype typography is styling, not permission to add copy: if a separate section owns the title/meta, keep this photo hero to media and controls without repeated titles or invented stats.")
         })
         .unwrap_or_default();
     let explicit_user_token_block = explicit_token_instruction

@@ -11,7 +11,7 @@ category: domain
 
 MOBILE SCREEN ARCHETYPES (perform internally; output only plan JSON):
 
-Pick ONE archetype per screen; apply the selected style guide to its protagonist. In the owning subtask's `elements`, write `ARCHETYPE: <name> — protagonist <what>, first screen <x>%, <spatial relation>, display <n>px / body <n>px, imagery <rule>`.
+Pick ONE archetype per screen; apply its style to the protagonist. In the owning subtask's `elements`, write `ARCHETYPE: <name> — protagonist <what>, first screen <x>%, <spatial relation>, imagery <rule>`. Assign each title and meta row ONE owner; typography applies only to copy that section owns. If a separate title/meta section exists, the photo hero contains only media and controls, without repeated titles or invented stats.
 
 Explicit first-screen content comes first: reserve 62px system chrome, navigation, gaps and every required item BEFORE imagery. Percentages are starting points; reduce the hero when needed. Long/CJK titles usually use 28–36px with balanced lines; 48px suits short display copy/figures. Do not plan a status bar; it is pre-inserted.
 
@@ -20,7 +20,7 @@ Supporting subtasks start with `quiet section: secondary visual weight; retain l
 House defaults for an 812px screen (body 16px):
 
 | name | purpose | protagonist / relation | imagery |
-| image-led | detail/product/workout | photo 35–45%, title on scrim | relevant full-bleed photo; no second hero |
+| image-led | detail/product/workout | photo 35–45%; overlay copy only if owned here | relevant full-bleed photo; no second hero |
 | ledger | banking/wallet/stats | figure card 25–30%, quiet list below | figures lead; no decorative hero |
 | route-map | ride/delivery/travel | map 40–50%, pinned controls, sheet below | map template, never photo |
 | timeline | calendar/schedule | grid/time axis 30–40%, accent now, split | no decorative hero |
