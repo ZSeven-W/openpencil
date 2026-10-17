@@ -208,3 +208,82 @@ fn active_delivery_omits_unsupported_distance_and_completion_actions() {
     )
     .is_some());
 }
+
+#[test]
+fn delivery_merchant_details_keep_catalog_prices_in_prompt_and_preinsert_gate() {
+    // Exact restaurant brief that previously rejected the home-merchants
+    // section merely because the app domain and a merchant detail coexisted.
+    const RESTAURANT: &str = "外卖 App 两屏可交互（375×812）：首页(地址栏+分类九宫格+限时横幅+商家列表五条)、商家详情(头图+菜品分类横滑+菜品列表六条+购物车条)。交互：商家行 onTap 进详情。动效：限时横幅倒计时数字滚动，商家卡 inView 交错 fade-up，加入购物车按钮 pressed 态缩放。 配色与质感由你根据产品类型和使用场景决定；渐变只在合理处使用。";
+    let wrapped = format!("请设计手机 App（375×812）。交付2页完整界面。用户需求：{RESTAURANT}");
+    let nodes = vec![
+        text("商家元信息", "起送 ¥20 · 配送 ¥3"),
+        text("商家元信息", "起送 ¥25 · 配送 ¥4"),
+        text("菜品价格", "¥22"),
+        text("购物车金额", "合计 ¥48"),
+    ];
+    let before = serde_json::to_value(&nodes).unwrap();
+    let subtask: Subtask = serde_json::from_value(json!({
+        "id":"home-merchants", "label":"商家列表", "region":{"width":375,"height":400},
+        "elements":"商家名称、价格、起送 ¥20 · 配送 ¥3"
+    }))
+    .unwrap();
+    for brief in [
+        RESTAURANT,
+        wrapped.as_str(),
+        "外卖 App：餐品详情、商家列表和购物车。",
+        "外卖 App：商家详情展示食材产地追踪。",
+        "Food delivery app: restaurant details, menu prices and a cart bar.",
+        "Delivery app: product details with food provenance tracking.",
+    ] {
+        let req = request(brief);
+        assert!(rejection(&req, &nodes).is_none(), "{brief}");
+        let mut prompt = "Existing instructions".to_string();
+        append_section_instruction(&req, &subtask, &mut prompt);
+        assert_eq!(prompt, "Existing instructions", "{brief}");
+    }
+    assert_eq!(serde_json::to_value(&nodes).unwrap(), before);
+}
+
+#[test]
+fn delivery_tracking_without_destination_still_rejects_invented_transaction_facts() {
+    let subtask: Subtask = serde_json::from_value(json!({
+        "id":"delivery", "label":"配送信息", "region":{"width":375,"height":200},
+        "elements":"价格88元、预计19:32送达、距离1.5km、数量1"
+    }))
+    .unwrap();
+    for brief in [
+        "配送追踪详情，骑手李师傅，尚未送达，未提供收货地址。",
+        "Delivery tracking, out for delivery. Destination not provided.",
+        "Track my delivery. No destination supplied.",
+        "Delivery app: order tracking details, destination unknown.",
+        "外卖订单详情，骑手正在配送，尚未提供收货地址。",
+        "配送详情，不要虚构数据。",
+    ] {
+        let req = request(brief);
+        for (name, value) in [
+            ("price", "¥88.00"),
+            ("arrival", "预计19:32送达"),
+            ("distance", "1.5km"),
+            ("quantity", "×1"),
+        ] {
+            let nodes = vec![text(name, value)];
+            let before = serde_json::to_value(&nodes).unwrap();
+            assert!(
+                rejection(&req, &nodes)
+                    .is_some_and(|reason| reason.contains("unsupported-delivery-facts")),
+                "{brief}: {value}"
+            );
+            assert_eq!(serde_json::to_value(&nodes).unwrap(), before);
+        }
+        let mut prompt = String::new();
+        append_section_instruction(&req, &subtask, &mut prompt);
+        for field in [
+            "price/total",
+            "absolute arrival clock",
+            "rider distance",
+            "item quantity",
+        ] {
+            assert!(prompt.contains(field), "{brief}: {field}");
+        }
+    }
+}

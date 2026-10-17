@@ -49,6 +49,11 @@ fn expected_count_with_map_markers(subtask: &Subtask, map_markers: usize) -> Opt
     for captures in cjk_range.captures_iter(&text) {
         if let Some(count) = captures.name("lower").and_then(|m| parse_count(m.as_str())) {
             if !ignored_number_context(&text, captures.name("lower").unwrap().start())
+                && !text_line_count(
+                    &text,
+                    captures.name("lower").unwrap().start(),
+                    captures.name("unit").unwrap(),
+                )
                 && !is_ignored_count(count)
                 && !template_landmark_count(
                     &text,
@@ -85,7 +90,9 @@ fn expected_count_with_map_markers(subtask: &Subtask, map_markers: usize) -> Opt
         let Some(count) = captures.name("count") else {
             continue;
         };
-        if ignored_number_context(&text, count.start()) {
+        if ignored_number_context(&text, count.start())
+            || text_line_count(&text, count.start(), captures.name("unit").unwrap())
+        {
             continue;
         }
         if let Some(value) = parse_count(count.as_str()) {
@@ -104,7 +111,7 @@ fn expected_count_with_map_markers(subtask: &Subtask, map_markers: usize) -> Opt
 
     static ENGLISH: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(&format!(
-            r"(?ix)(?P<count>\d[\d,]*(?:\s*(?:-|–|—|to)\s*\d[\d,]*)?)\s+(?:{ENGLISH_ITEM_WORDS})\b"
+            r"(?ix)(?P<count>\d[\d,]*(?:\s*(?:-|–|—|to)\s*\d[\d,]*)?)\s+(?P<unit>{ENGLISH_ITEM_WORDS})\b"
         ))
         .expect("valid English item-count pattern")
     });
@@ -113,7 +120,9 @@ fn expected_count_with_map_markers(subtask: &Subtask, map_markers: usize) -> Opt
         let Some(count) = captures.name("count") else {
             continue;
         };
-        if ignored_number_context(&text, count.start()) {
+        if ignored_number_context(&text, count.start())
+            || text_line_count(&text, count.start(), captures.name("unit").unwrap())
+        {
             continue;
         }
         if let Some(value) = parse_range_lower_bound(count.as_str()) {
@@ -540,6 +549,44 @@ fn ignored_number_context(text: &str, start: usize) -> bool {
     DESIGN_VALUE.is_match(before) && !EXPLICIT_CLASSIFIER.is_match(&text[start..])
 }
 
+/// A title/paragraph's wrapped lines are one text block, not repeated items.
+/// Match only the local copy phrase; a later list in the same section still
+/// promises rows, and non-line classifiers (reviews/products) remain intact.
+fn text_line_count(text: &str, start: usize, unit: regex::Match<'_>) -> bool {
+    if !matches!(
+        unit.as_str().to_ascii_lowercase().as_str(),
+        "行" | "row" | "rows"
+    ) {
+        return false;
+    }
+    static BEFORE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?ix)(?:标题|正文|段落|文案|描述|说明文字|简介|摘要|\b(?:title|subtitle|headline|heading|paragraph|body(?:\s+text)?|description|caption|copy|text))
+              \s*(?:(?:最多|至多|最少|不超过|限于|限制为?|显示为?|占用?|分成?|换成?|换为)|(?:spans?|wraps?(?:\s+to)?|across|in|of|to|up\s+to|at\s+most))?
+              \s*[（(:：]?\s*$",
+        )
+        .expect("valid copy line-count prefix")
+    });
+    static AFTER: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?ix)^\s*(?:的\s*)?(?:商品标题|副标题|标题|正文|段落|文案|描述|说明文字|简介|摘要)
+              |^\s*(?:of\s+)?(?:product\s+title|title|subtitle|headline|heading|paragraph|body(?:\s+text)?|description|caption|copy|text)\b",
+        )
+        .expect("valid copy line-count suffix")
+    });
+    static LIST_SUFFIX: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(&format!(
+            r"(?ix)^\s*(?:列表|条目|项目|网格|清单|卡片?|list\b|(?:{ENGLISH_ITEM_WORDS})\b)"
+        ))
+        .expect("valid repeated-copy list suffix")
+    });
+    let after = &text[unit.end()..];
+    BEFORE.is_match(&text[..start])
+        || AFTER
+            .find(after)
+            .is_some_and(|copy| !LIST_SUFFIX.is_match(&after[copy.end()..]))
+}
+
 fn is_ignored_count(value: usize) -> bool {
     (1900..=2100).contains(&value)
 }
@@ -602,3 +649,7 @@ mod tests;
 #[cfg(test)]
 #[path = "subtask_completeness_word_tests.rs"]
 mod word_tests;
+
+#[cfg(test)]
+#[path = "subtask_completeness_text_line_tests.rs"]
+mod text_line_tests;

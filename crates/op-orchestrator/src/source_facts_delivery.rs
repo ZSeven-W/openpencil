@@ -112,18 +112,47 @@ fn completion_action(text: &str) -> bool {
     )
 }
 
+fn delivery_transaction(brief: &str) -> bool {
+    if !contains(brief, &["配送", "外卖", "delivery", "courier"]) {
+        return false;
+    }
+    // A delivery app can contain merchant/product details and menu prices.
+    // Bind detail/tracking intent to the delivery transaction, rather than
+    // combining the app's domain with an unrelated detail screen anywhere.
+    static TRANSACTION: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
+            r"(?ix)
+            (?:配送|送餐|快递|包裹)(?:的)?(?:订单|实时|位置|状态)?(?:追踪|跟踪|详情|进度|状态)
+            |(?:外卖|骑手)(?:的)?(?:订单|实时|位置)?(?:追踪|跟踪)
+            |外卖订单详情|订单(?:配送)?(?:追踪|跟踪)
+            |(?:追踪|跟踪)(?:当前|实时|我的)?(?:配送|外卖|送餐|骑手|快递|包裹)
+            |\b(?:delivery|courier|shipment|parcel)(?:[\s-]+(?:order|live|real[\s-]time))?[\s-]+(?:tracking|tracker|details?|status|progress)\b
+            |\b(?:track|tracking)[\s-]+(?:(?:my|the|this|a)[\s-]+)?(?:delivery|courier|shipment|parcel|order)\b
+            |\border[\s-]+tracking\b",
+        )
+        .expect("valid delivery transaction context")
+    });
+    TRANSACTION.is_match(brief)
+        || contains(
+            brief,
+            &[
+                "配送中",
+                "正在配送",
+                "尚未送达",
+                "in transit",
+                "out for delivery",
+            ],
+        )
+}
+
 fn checks(request: &DesignRequest) -> Option<Checks> {
     if !text_only_source(request) {
         return None;
     }
     let brief = semantic_name(&request.prompt);
-    let delivery = contains(&brief, &["配送", "外卖", "delivery", "courier"]);
-    let detail = contains(
-        &brief,
-        &[
-            "追踪", "跟踪", "详情", "tracking", "track", "detail", "details",
-        ],
-    );
+    if !delivery_transaction(&brief) {
+        return None;
+    }
     let demo = contains(
         &brief,
         &[
@@ -159,7 +188,7 @@ fn checks(request: &DesignRequest) -> Option<Checks> {
             "order table",
         ],
     );
-    if !delivery || !detail || (!no_demo && (demo || collection)) {
+    if !no_demo && (demo || collection) {
         return None;
     }
     Some(Checks {
