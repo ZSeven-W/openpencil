@@ -111,3 +111,24 @@ fn runtime_path_for_bare_binary_keeps_base_unchanged() {
     let base = std::env::join_paths([std::env::temp_dir().join("bin")]).unwrap();
     assert_eq!(runtime_path_for(Path::new("codex"), &base), base);
 }
+
+/// `npm i -g` writes three files into its bin directory: a POSIX `foo` shell
+/// script for Git Bash next to `foo.cmd` and `foo.ps1`. Windows cannot spawn
+/// the extensionless one — `CreateProcessW` returns os error 193 — so the
+/// resolver has to reach the shim, not the shell script.
+#[cfg(windows)]
+#[test]
+fn resolver_prefers_the_windows_shim_over_the_extensionless_npm_script() {
+    let temp = TestDir::new();
+    let bin = temp.0.join("npm");
+    fs::create_dir_all(&bin).unwrap();
+    fs::write(bin.join("codex"), "#!/bin/sh\n").unwrap();
+    fs::write(bin.join("codex.cmd"), "@echo off\r\n").unwrap();
+    fs::write(bin.join("codex.ps1"), "").unwrap();
+    let path_env = std::env::join_paths([&bin]).unwrap();
+
+    assert_eq!(
+        resolve_binary_from("codex", &path_env, &[]),
+        Some(bin.join("codex.cmd"))
+    );
+}
