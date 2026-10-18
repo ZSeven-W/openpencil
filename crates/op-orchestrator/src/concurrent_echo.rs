@@ -8,6 +8,9 @@ use super::*;
 #[path = "concurrent_echo_copy.rs"]
 mod copy;
 
+#[path = "concurrent_echo_interaction.rs"]
+mod interaction;
+
 /// One in-loop self-correction round for real resolved-layout violations.
 ///
 /// A no-op (zero extra LLM calls) whenever:
@@ -84,10 +87,16 @@ pub(super) async fn maybe_geometry_echo_with_outcomes(
     else {
         return outcome;
     };
+    let Some(original_interaction) =
+        interaction::InteractionSnapshot::capture(sink.state(), &outcome.inserted_root_ids)
+    else {
+        return outcome;
+    };
     let copy_feedback = original_copy.feedback();
+    let interaction_feedback = original_interaction.feedback();
     // A giant source-copy payload would consume the repair's output budget.
     // Keep the original and let deterministic layout cleanup handle it.
-    if copy_feedback.len() > 16_384 {
+    if copy_feedback.len() + interaction_feedback.len() > 16_384 {
         return outcome;
     }
     if !budget.try_consume() {
@@ -106,21 +115,25 @@ pub(super) async fn maybe_geometry_echo_with_outcomes(
 
     let echo_subtask = Subtask {
         retry_feedback: Some(crate::plan::RetryFeedback::Geometry(format!(
-            "{}\n\n{copy_feedback}",
+            "{}\n\n{copy_feedback}\n\n{interaction_feedback}",
             issues.join("\n")
         ))),
         ..subtask.clone()
     };
-    let retried = run_subtask_with_reveal_at_and_outcomes(
+    // Rejecting a rewrite must discard ALL its mutations, including app state.
+    // Never expose a speculative replacement to the live document.
+    let before = sink.state().clone();
+    let mut candidate = BufferDocSink::new(before.clone());
+    let mut retried = run_subtask_with_reveal_at_and_outcomes(
         &echo_subtask,
         plan,
         request,
         llm,
-        sink,
+        &mut candidate,
         abort,
         reduced_complexity,
         minimal_skills,
-        agent_indicator_epoch,
+        None,
         reveal_now_millis(),
         None,
         prior_outcomes,
@@ -128,7 +141,7 @@ pub(super) async fn maybe_geometry_echo_with_outcomes(
     )
     .await;
 
-    if retried.node_count == 0 {
+    if retried.node_count == 0 || retried.inserted_root_ids.is_empty() || abort.is_set() {
         // The echo retry itself failed (LLM error, parse failure, or a
         // fresh self-check rejection) — keep the ORIGINAL, still-real
         // content rather than lose it; the deterministic net in
@@ -140,31 +153,72 @@ pub(super) async fn maybe_geometry_echo_with_outcomes(
     // The normal ladder inspected the original before this echo; inspect the
     // candidate again before deleting that original subtree.
     let (completeness, language) =
-        crate::output_language::inspect_insert_gates(sink, request, subtask, &retried);
+        crate::output_language::inspect_insert_gates(&candidate, request, subtask, &retried);
     let copy_preserved = original_copy.matches_after_removal(
-        sink,
+        &candidate,
         &retried.inserted_root_ids,
         &outcome.inserted_root_ids,
     );
-    if completeness.is_some() || language.is_some() || !copy_preserved {
+    let mut commands = candidate.commands;
+    commands.extend(
+        outcome
+            .inserted_root_ids
+            .iter()
+            .map(|id| EditorCommand::DeleteNode {
+                node_id: op_editor_core::NodeId::new(id),
+                page_id: None,
+            }),
+    );
+    let batch = EditorCommand::Batch { commands };
+    // BufferDocSink reports buffering, so preflight the actual atomic replay.
+    let mut future = before.clone();
+    let replayable = future.apply(batch.clone());
+    let interaction_preserved = replayable
+        && original_interaction.matches(&future, &retried.inserted_root_ids)
+        && interaction::outside_unchanged(
+            &before,
+            &future,
+            &outcome.inserted_root_ids,
+            &retried.inserted_root_ids,
+        );
+    if completeness.is_some() || language.is_some() || !copy_preserved || !interaction_preserved {
         tracing::warn!(
             subtask = %subtask.id,
             completeness = ?completeness,
             language = ?language,
             copy_preserved,
+            interaction_preserved,
             "geometry echo candidate failed delivery gates; retaining original content"
         );
-        crate::subtask_completeness::rollback_inserted_roots(sink, &retried.inserted_root_ids);
         return outcome;
     }
 
-    // Adopt the corrected content: drop the original insert now that a
-    // real replacement has landed. Delete-then-keep-the-new-insert rather
-    // than a literal `EditorCommand::ReplaceSubtree` (which is 1-old-root-
-    // to-1-new-node only) because a subtask can produce N top-level roots
-    // on either side — this generalizes to N-old/M-new without assuming a
-    // 1:1 shape.
-    crate::subtask_completeness::rollback_inserted_roots(sink, &outcome.inserted_root_ids);
+    if abort.is_set()
+        || sink.state().document_generation() != before.document_generation()
+        || sink.state().document_revision() != before.document_revision()
+        || sink.state().ui.active_page_index != before.ui.active_page_index
+        || sink.state().doc != before.doc
+    {
+        return outcome;
+    }
+    let parent = subtask
+        .parent_frame_id
+        .as_ref()
+        .map(op_editor_core::NodeId::new)
+        .unwrap_or(op_editor_core::NodeId::NONE);
+    let roots_before = crate::types::child_ids_under(sink.state(), &parent);
+    if !crate::subagent::apply_command_with_reveal(
+        sink,
+        batch,
+        agent_indicator_epoch,
+        reveal_now_millis(),
+    ) {
+        return outcome;
+    }
+    retried.inserted_root_ids = crate::types::child_ids_under(sink.state(), &parent)
+        .into_iter()
+        .filter(|id| !roots_before.contains(id))
+        .collect();
     retried
 }
 

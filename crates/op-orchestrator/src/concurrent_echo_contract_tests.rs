@@ -208,3 +208,6 @@ fn changing_only_the_time_keeps_original_copy_and_removes_candidate() {
     assert_eq!(result.inserted_root_ids, vec!["original"]);
     assert_eq!(sink.state.active_children().len(), 2);
 }
+
+#[path = "concurrent_echo_interaction_tests.rs"]
+mod interaction_tests;
