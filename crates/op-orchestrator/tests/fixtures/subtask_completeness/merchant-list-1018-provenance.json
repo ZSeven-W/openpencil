@@ -1,0 +1,87 @@
+{
+  "source_log": "/Users/fini/Downloads/openpencil-测试图片/普通模式-固定栏与交互重试复验-1018/_过程记录/restaurant-detail/generation.log",
+  "source_encoding": "UTF-8",
+  "line_numbering": "one-based inclusive",
+  "source_prefix_lines_inclusive": [
+    1,
+    354
+  ],
+  "source_prefix_sha256": "ee1367ccb9ed20ee9e65269a4b3c685845b265bb9ef5a66ec9d37b1aee679ca7",
+  "source_prefix_byte_length": 47341,
+  "extraction": "Exact script bytes between the LLM-response and end dump markers; original newlines preserved.",
+  "subtask_id": "home-store-list",
+  "fixtures": [
+    {
+      "attempt": 1,
+      "file": "merchant-list-1018-attempt1.js",
+      "source_lines_inclusive": [
+        198,
+        249
+      ],
+      "sha256": "7483239618b13be3287020e525676e53cc87ddedf816c32608fc310f4200937e",
+      "byte_length": 5046,
+      "card_names": [
+        "老陈家 · 热汤面",
+        "咔滋炸鸡工坊",
+        "一碗盖饭食堂",
+        "甜野甜品饮品",
+        "深夜麻辣烫"
+      ],
+      "tag_counts": [
+        2,
+        2,
+        1,
+        1,
+        2
+      ]
+    },
+    {
+      "attempt": 2,
+      "file": "merchant-list-1018-attempt2.js",
+      "source_lines_inclusive": [
+        256,
+        309
+      ],
+      "sha256": "b769037a86bdb30cb239e478a7502a6009826210589f3a90294e4ac636b5a3ce",
+      "byte_length": 5215,
+      "card_names": [
+        "老陈家 · 热汤面",
+        "咔滋炸鸡工坊",
+        "川香麻辣拌",
+        "鲜果轻食沙拉",
+        "稻香盖饭食堂"
+      ],
+      "tag_counts": [
+        2,
+        2,
+        1,
+        1,
+        2
+      ]
+    },
+    {
+      "attempt": 3,
+      "file": "merchant-list-1018-attempt3.js",
+      "source_lines_inclusive": [
+        316,
+        351
+      ],
+      "sha256": "17e2bf7d6887c221136efee754601de16c86c28abab4e0b766facad4e2fce25e",
+      "byte_length": 4466,
+      "card_names": [
+        "老陈家 · 热汤面",
+        "咔滋炸鸡工坊",
+        "鲜禾轻食盖饭",
+        "甜时奶茶铺",
+        "深夜食堂小馆"
+      ],
+      "tag_counts": [
+        2,
+        2,
+        1,
+        1,
+        1
+      ]
+    }
+  ]
+}

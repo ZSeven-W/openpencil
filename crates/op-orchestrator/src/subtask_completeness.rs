@@ -206,6 +206,13 @@ pub(crate) fn incomplete_attempt(
     }
     let mut delivered = delivered_item_count(sink, &outcome.inserted_root_ids);
     let text = local_item_text(subtask);
+    if grid_dimensions(&text).is_none()
+        && media_items::has_local_media_card_contract(&text, expected)
+    {
+        delivered = delivered.max(
+            media_items::delivered_media_card_count(sink, &outcome.inserted_root_ids).unwrap_or(0),
+        );
+    }
     if let Some((rows, columns)) = grid_dimensions(&text) {
         for id in &outcome.inserted_root_ids {
             if let Some(root) =
@@ -661,3 +668,14 @@ mod scope;
 #[cfg(test)]
 #[path = "subtask_completeness_scope_tests.rs"]
 mod scope_tests;
+
+#[path = "subtask_completeness_media_items.rs"]
+mod media_items;
+
+#[cfg(test)]
+#[path = "subtask_completeness_media_items_tests.rs"]
+mod media_items_tests;
+
+#[cfg(test)]
+#[path = "subtask_completeness_media_items_boundary_tests.rs"]
+mod media_items_boundary_tests;
