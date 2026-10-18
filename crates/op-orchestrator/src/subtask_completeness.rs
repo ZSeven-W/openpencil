@@ -28,7 +28,7 @@ pub fn expected_item_count(subtask: &Subtask) -> Option<usize> {
 }
 
 fn expected_count_with_map_markers(subtask: &Subtask, map_markers: usize) -> Option<usize> {
-    let text = local_item_text(subtask);
+    let text = indicator::mask_counts(&local_item_text(subtask));
 
     let mut counts = Vec::new();
     let mut ranged_spans: Vec<Range<usize>> = Vec::new();
@@ -677,6 +677,13 @@ mod word_tests;
 #[cfg(test)]
 #[path = "subtask_completeness_text_line_tests.rs"]
 mod text_line_tests;
+
+#[path = "subtask_completeness_indicator.rs"]
+mod indicator;
+
+#[cfg(test)]
+#[path = "subtask_completeness_indicator_tests.rs"]
+mod indicator_tests;
 
 #[path = "subtask_completeness_scope.rs"]
 mod scope;

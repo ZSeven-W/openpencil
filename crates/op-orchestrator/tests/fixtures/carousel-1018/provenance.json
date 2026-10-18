@@ -1,0 +1,27 @@
+{
+  "source_sha256": "9242649910122a5267730df029475bb59ecfdb0a557077fdf6950aabf0eb2445",
+  "fixtures": [
+    {
+      "path": "crates/op-orchestrator/tests/fixtures/carousel-1018/product-hero-attempt1.js",
+      "source_log": "/Users/fini/Downloads/openpencil-测试图片/普通模式-复合底栏完整管线复验-1018/_过程记录/product-detail/generation.log",
+      "source_lines": [
+        60,
+        76
+      ],
+      "bytes": 2147,
+      "sha256": "830dc7d5ab14ed643d670b1eff8c5aee3f95f0b26f3c7d8692ada410feadce86",
+      "extraction": "Dump body without the logger-added newline preceding end marker; byte length matches response length."
+    },
+    {
+      "path": "crates/op-orchestrator/tests/fixtures/carousel-1018/product-hero-attempt2.js",
+      "source_log": "/Users/fini/Downloads/openpencil-测试图片/普通模式-复合底栏完整管线复验-1018/_过程记录/product-detail/generation.log",
+      "source_lines": [
+        83,
+        113
+      ],
+      "bytes": 2691,
+      "sha256": "9f46a0414da0825b00455e40a7fba10dc1dbed855aead63fef68079d07ecffa5",
+      "extraction": "Dump body without the logger-added newline preceding end marker; byte length matches response length."
+    }
+  ]
+}

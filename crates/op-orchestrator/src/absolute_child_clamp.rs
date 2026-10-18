@@ -223,7 +223,11 @@ pub(super) fn collect_absolute_child_shrink_fixes(
             .and_then(|id| rects.get(id))
         {
             if pr.w > 1.0 {
+                let media_lane = crate::clipped_media_strip::media_lane(v, pr.w);
                 for c in children(v) {
+                    if media_lane.is_some_and(|lane| std::ptr::eq(lane, c)) {
+                        continue;
+                    }
                     push_shrink_command(c, pr, rects, cmds);
                 }
             }

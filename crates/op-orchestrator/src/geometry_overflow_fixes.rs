@@ -262,14 +262,27 @@ pub(super) fn collect_text_overflow_fixes_with_context(
 /// the design decision, the image serves it.
 pub(super) const IMAGE_INFLATION_SLACK: f64 = 8.0;
 
-pub(super) fn collect_oversized_image_fixes(v: &Value, cmds: &mut Vec<EditorCommand>) {
+pub(super) fn collect_oversized_image_fixes(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    collect_oversized_image_fixes_in_context(v, rects, cmds, false);
+}
+
+fn collect_oversized_image_fixes_in_context(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+    protected_media_lane: bool,
+) {
     let declared_w = fixed_width(v);
     let declared_h = match v.get("height") {
         Some(Value::Number(n)) => n.as_f64(),
         Some(Value::String(s)) => s.parse::<f64>().ok(),
         _ => None,
     };
-    if declared_w.is_some() || declared_h.is_some() {
+    if !protected_media_lane && (declared_w.is_some() || declared_h.is_some()) {
         for c in children(v) {
             if c.get("type").and_then(Value::as_str) != Some("image") {
                 continue;
@@ -296,8 +309,18 @@ pub(super) fn collect_oversized_image_fixes(v: &Value, cmds: &mut Vec<EditorComm
             }
         }
     }
+    let media_lane = v
+        .get("id")
+        .and_then(Value::as_str)
+        .and_then(|id| rects.get(id))
+        .and_then(|rect| crate::clipped_media_strip::media_lane(v, rect.w));
     for c in children(v) {
-        collect_oversized_image_fixes(c, cmds);
+        collect_oversized_image_fixes_in_context(
+            c,
+            rects,
+            cmds,
+            media_lane.is_some_and(|lane| std::ptr::eq(lane, c)),
+        );
     }
 }
 

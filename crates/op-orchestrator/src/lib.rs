@@ -91,6 +91,7 @@ pub mod cleanup;
 mod cleanup_fixed_mobile_viewport_tests;
 #[path = "cleanup_image_fallback.rs"]
 mod cleanup_image_fallback;
+mod clipped_media_strip;
 /// Cheap image-slot materialization for hosts that apply one MCP write at a
 /// time. The whole-document cleanup driver uses the same underlying pass.
 pub mod cleanup_image_slots {
@@ -192,6 +193,8 @@ pub mod variants;
 pub mod variants_run;
 pub mod wire_screen_navigation;
 
+#[cfg(test)]
+mod cleanup_media_strip_tests;
 #[cfg(test)]
 mod cleanup_mobile_chrome_nav_wrapper_tests;
 #[cfg(test)]

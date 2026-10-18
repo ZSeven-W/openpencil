@@ -39,6 +39,6 @@ pub use fallback_policy::{
 pub use judge_view::{ImageJudgeFit, ImageJudgeView};
 pub use targets::{
     collect_targets, collect_targets_with_scene, has_empty_image_fill, image_request_mode,
-    is_frame_placeholder_still_unfilled, is_image_area_rectangle_by_heuristic, ImageAspectRatio,
-    ImageRequestMode, ImageSearchTarget,
+    is_frame_placeholder_still_unfilled, is_image_area_rectangle_by_heuristic,
+    is_unchanged_image_fallback, ImageAspectRatio, ImageRequestMode, ImageSearchTarget,
 };

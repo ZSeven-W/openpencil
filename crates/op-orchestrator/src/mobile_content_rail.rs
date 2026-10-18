@@ -358,6 +358,14 @@ fn collect_repairs(root: &PenNode) -> Vec<RailRepair> {
             continue;
         }
 
+        // Full-page media owns the viewport edge. A normal card scroller's
+        // leading inset would crop these pages just like a symmetric rail.
+        if is_transparent_surface(section)
+            && crate::clipped_media_strip::full_width_media_section(section, root_width)
+        {
+            continue;
+        }
+
         // A root-direct horizontal viewport owns its own asymmetric rail,
         // including image-only carousels that have no text/icon descendants.
         if is_clipped_horizontal_scroller(section) {

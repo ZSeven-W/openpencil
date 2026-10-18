@@ -333,6 +333,12 @@ pub(crate) fn has_saved_image_fallback_intent(node: &PenNode) -> bool {
     fallback_intent::for_node(node).is_some()
 }
 
+/// Whether the saved image intent and policy-owned decorations still match.
+/// Geometry consumers can preserve the slot without accepting authored cards.
+pub fn is_unchanged_image_fallback(node: &PenNode) -> bool {
+    fallback_intent::is_unchanged_tile(node)
+}
+
 fn is_placeholder_src(src: &str) -> bool {
     src.trim().is_empty() || src.starts_with("data:image/svg+xml;charset=utf-8,%3Csvg")
 }

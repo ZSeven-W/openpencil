@@ -128,6 +128,10 @@ use geometry_scale_ops::*;
 use geometry_spill_diagnostics::*;
 use geometry_value_readers::*;
 
+#[cfg(test)]
+#[path = "geometry_media_strip_tests.rs"]
+mod media_strip_tests;
+
 #[derive(Clone, Copy, Debug)]
 struct Rect {
     x: f64,
@@ -369,7 +373,7 @@ pub fn geometry_validate_and_fix_for_form(
             collect_collapse_fixes(&v, &rects, &mut cmds);
             collect_text_overflow_fixes(&v, &rects, &mut cmds);
             collect_frame_overflow_fixes(&v, &rects, &mut cmds);
-            collect_oversized_image_fixes(&v, &mut cmds);
+            collect_oversized_image_fixes(&v, &rects, &mut cmds);
             collect_absolute_fill_image_fixes(&v, &rects, &mut cmds);
             collect_grow_to_fit_fixes(&v, &rects, &mut cmds);
             // A clipped card truncating a table body / list hugs its rows —
