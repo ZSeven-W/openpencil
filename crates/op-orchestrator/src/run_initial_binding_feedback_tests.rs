@@ -74,11 +74,10 @@ fn fixture() -> (
     (sink, plan, request, outcomes)
 }
 
-fn script(change: impl FnOnce(&mut Value)) -> String {
-    let mut root = section();
-    root["state"] = json!({"units":{"type":"number","default":1}});
-    change(&mut root);
-    format!("I(null, {root});")
+fn proposal(change: impl FnOnce(&mut Value)) -> String {
+    let mut value = json!({"state":{"units":{"type":"number","default":1}}});
+    change(&mut value);
+    value.to_string()
 }
 
 fn repair(
@@ -111,9 +110,7 @@ fn text_converted_quantity_repairs_only_the_missing_default() {
         page_id: None,
     }));
     let before = sink.state.doc.children.clone();
-    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script(|root| {
-        root["children"][0]["bindings"]["content"] = json!("to_str($app.units)");
-    }))]);
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(proposal(|_| {}))]);
     let (failed, _) = repair(
         &mut sink,
         &plan,
@@ -135,7 +132,8 @@ fn text_converted_quantity_repairs_only_the_missing_default() {
 #[test]
 fn repairs_only_owner_with_full_context_and_commits_state_and_order_atomically() {
     let (mut sink, plan, request, mut outcomes) = fixture();
-    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script(|_| {}))]);
+    let before_nodes = sink.state.doc.children.clone();
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(proposal(|_| {}))]);
     let (failed, events) = repair(
         &mut sink,
         &plan,
@@ -158,9 +156,15 @@ fn repairs_only_owner_with_full_context_and_commits_state_and_order_atomically()
     }
     assert!(events
         .iter()
-        .any(|event| matches!(event, Progress::SubtaskSkills { id, .. } if id == "selector")));
+        .any(|event| matches!(event, Progress::SubtaskDone { id, .. } if id == "selector")));
     assert_eq!(sink.applied.len(), 1);
-    assert!(matches!(&sink.applied[0], EditorCommand::Batch { .. }));
+    let EditorCommand::Batch { commands } = &sink.applied[0] else {
+        panic!("expected atomic state batch")
+    };
+    assert!(commands
+        .iter()
+        .all(|command| matches!(command, EditorCommand::MergeAppState { .. })));
+    assert_eq!(sink.state.doc.children, before_nodes);
     assert_eq!(
         sink.state.doc.state.as_ref().unwrap()["units"].default,
         Some(json!(1))
@@ -176,21 +180,13 @@ fn repairs_only_owner_with_full_context_and_commits_state_and_order_atomically()
 #[test]
 fn invalid_or_unrelated_defaults_are_discarded() {
     for candidate in [
-        script(|root| root["state"]["units"]["default"] = json!(2)),
-        script(|root| root["state"]["units"]["default"] = json!("1")),
-        script(|root| root["state"]["units"]["default"] = Value::Null),
-        script(|root| {
-            root["state"]["units"]
-                .as_object_mut()
-                .unwrap()
-                .remove("default");
-        }),
-        script(|root| {
+        proposal(|root| root["state"]["units"]["default"] = json!(2)),
+        proposal(|root| root["state"]["units"]["default"] = json!("1")),
+        proposal(|root| root["state"]["units"]["default"] = Value::Null),
+        proposal(|root| {
             root["state"]["unrelated"] = json!({"type":"string","default":"extra"});
         }),
-        script(|root| {
-            root.as_object_mut().unwrap().remove("state");
-        }),
+        proposal(|root| root["state"] = json!({})),
     ] {
         let (mut sink, plan, request, mut outcomes) = fixture();
         let before = sink.state.doc.clone();
@@ -236,10 +232,11 @@ fn abort_after_model_call_never_deletes_original_or_merges_candidate_state() {
     let before = sink.state.doc.clone();
     let abort = AbortFlag::new();
     let llm = AbortAfterCall {
-        llm: ScriptedLlm::new(vec![ScriptResponse::Text(script(|_| {}))]),
+        llm: ScriptedLlm::new(vec![ScriptResponse::Text(proposal(|_| {}))]),
         abort: abort.clone(),
     };
     assert!(repair(&mut sink, &plan, &request, &mut outcomes, &llm, &abort).0);
+    assert_eq!(llm.llm.user_prompts().len(), 1);
     assert_eq!(sink.state.doc, before);
     assert!(sink.applied.is_empty());
     assert_eq!(outcomes[0].node_count, 1);
@@ -270,7 +267,7 @@ fn rejected_real_batch_restores_original_and_generation_state_ownership() {
     let (sink, plan, request, mut outcomes) = fixture();
     let before = sink.state.doc.clone();
     let mut sink = RejectFinalBatch(sink);
-    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script(|_| {}))]);
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(proposal(|_| {}))]);
     assert!(
         repair(
             &mut sink,
@@ -322,46 +319,56 @@ fn state_from_another_section_or_append_document_needs_no_model_call() {
 }
 
 #[test]
-fn proposal_nodes_are_never_published_and_existing_ids_and_references_survive() {
-    let (mut sink, plan, request, mut outcomes) = fixture();
-    let before_nodes = sink.state.doc.children.clone();
-    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script(|root| {
-        root["children"][0]["content"] = json!("Model rewrote this");
-        root["children"][0]
-            .as_object_mut()
-            .unwrap()
-            .remove("bindings");
-        root["children"][1]
-            .as_object_mut()
-            .unwrap()
-            .remove("events");
-        root["width"] = json!(900);
-    }))]);
-    assert!(
-        !repair(
+fn malformed_or_node_proposals_are_rejected_after_one_format_correction() {
+    for candidate in [
+        format!("I(null, {});", section()),
+        "[]".into(),
+        "{}".into(),
+        proposal(|value| value["nodes"] = json!([section()])),
+        proposal(|value| value["children"] = json!([])),
+        proposal(|value| value["events"] = json!({"onTap":[]})),
+        proposal(|value| value["width"] = json!(900)),
+        proposal(|value| value["state"]["units"]["extra"] = json!(true)),
+        proposal(|value| {
+            value["state"]["units"].as_object_mut().unwrap().remove("type");
+        }),
+        proposal(|value| {
+            value["state"]["units"].as_object_mut().unwrap().remove("default");
+        }),
+        r#"{"state":{},"state":{"units":{"type":"number","default":1}}}"#.into(),
+        r#"{"state":{"units":{"type":"number","default":1},"units":{"type":"number","default":1}}}"#.into(),
+        r#"{"state":{"units":{"type":"number","default":2,"default":1}}}"#.into(),
+    ] {
+        let (mut sink, plan, request, mut outcomes) = fixture();
+        let before = sink.state.doc.clone();
+        outcomes[0].error = Some("previous visible warning".into());
+        let llm = ScriptedLlm::new(vec![
+            ScriptResponse::Text(candidate.clone()),
+            ScriptResponse::Text(candidate.clone()),
+        ]);
+        let (failed, _) = repair(
             &mut sink,
             &plan,
             &request,
             &mut outcomes,
             &llm,
-            &AbortFlag::new()
-        )
-        .0
-    );
-    assert_eq!(sink.state.doc.children, before_nodes);
-    assert_eq!(outcomes[0].inserted_root_ids, vec!["original"]);
-    assert_eq!(outcomes[0].node_count, 1);
-    let EditorCommand::Batch { commands } = &sink.applied[0] else {
-        panic!("expected atomic state batch")
-    };
-    assert!(commands
-        .iter()
-        .all(|command| matches!(command, EditorCommand::MergeAppState { .. })));
+            &AbortFlag::new(),
+        );
+        assert!(failed, "{candidate}");
+        assert_eq!(llm.user_prompts().len(), 2, "{candidate}");
+        assert_eq!(sink.state.doc, before, "{candidate}");
+        assert!(sink.applied.is_empty());
+        assert_eq!(outcomes[0].inserted_root_ids, vec!["original"]);
+        assert_eq!(outcomes[0].node_count, 1);
+        assert!(outcomes[0].subtask.is_none());
+        let error = outcomes[0].error.as_deref().unwrap();
+        assert!(error.contains("previous visible warning") && error.contains(UNRESOLVED));
+    }
 }
 
 #[test]
 fn lower_owner_cannot_change_existing_state_and_equal_redeclaration_cannot_steal_ownership() {
-    for proposed_price in [99, 100] {
+    for proposed_price in [Some(99), Some(100), None] {
         let (mut sink, plan, request, mut outcomes) = fixture();
         assert!(sink.state.apply(EditorCommand::MergeAppState {
             plan_idx: 1,
@@ -369,8 +376,10 @@ fn lower_owner_cannot_change_existing_state_and_equal_redeclaration_cannot_steal
                 .unwrap(),
         }));
         let before = sink.state.doc.clone();
-        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script(|root| {
-            root["state"]["price"] = json!({"type":"number","default":proposed_price});
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(proposal(|root| {
+            if let Some(price) = proposed_price {
+                root["state"]["price"] = json!({"type":"number","default":price});
+            }
         }))]);
         let failed = repair(
             &mut sink,
@@ -381,7 +390,8 @@ fn lower_owner_cannot_change_existing_state_and_equal_redeclaration_cannot_steal
             &AbortFlag::new(),
         )
         .0;
-        assert_eq!(failed, proposed_price != 100);
+        assert_eq!(failed, proposed_price.is_some());
+        assert_eq!(llm.user_prompts().len(), 1);
         assert_eq!(
             sink.state.doc.state.as_ref().unwrap()["price"].default,
             Some(json!(100))
@@ -389,6 +399,12 @@ fn lower_owner_cannot_change_existing_state_and_equal_redeclaration_cannot_steal
         if failed {
             assert_eq!(sink.state.doc, before);
             assert!(sink.applied.is_empty());
+        } else {
+            assert_eq!(sink.state.doc.children, before.children);
+            assert_eq!(
+                sink.state.doc.state.as_ref().unwrap()["units"].default,
+                Some(json!(1))
+            );
         }
         // The state-only correction must not claim an unchanged pre-existing key.
         assert!(sink.state.apply(EditorCommand::MergeAppState {
@@ -422,7 +438,7 @@ fn false_zero_and_empty_string_remain_legitimate_explicit_defaults() {
         document["children"][0]["children"][1]["children"][0]["bindings"]["content"] =
             json!("$app.units");
         sink.state = EditorState::from_document(serde_json::from_value(document).unwrap());
-        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script(|root| {
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(proposal(|root| {
             root["state"]["units"]["type"] = json!(if value.is_boolean() {
                 "bool"
             } else if value.is_string() {
@@ -431,7 +447,6 @@ fn false_zero_and_empty_string_remain_legitimate_explicit_defaults() {
                 "number"
             });
             root["state"]["units"]["default"] = value.clone();
-            root["children"][0]["content"] = json!(authored);
         }))]);
         assert!(
             !repair(
@@ -475,8 +490,9 @@ fn selection_default_must_match_an_original_option_and_change_selected_paint() {
             2
         );
         let before = sink.state.doc.clone();
-        original["state"] = json!({"tone":{"type":"string","default":default}});
-        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(format!("I(null, {original});"))]);
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
+            json!({"state":{"tone":{"type":"string","default":default}}}).to_string(),
+        )]);
         assert_eq!(
             repair(
                 &mut sink,
@@ -522,10 +538,8 @@ fn later_owner_default_does_not_clear_an_earlier_incompatible_initial_copy_failu
     outcome.inserted_root_ids = vec!["other-original".into()];
     outcomes.push(outcome);
     let llm = ScriptedLlm::new(vec![
-        ScriptResponse::Text(script(|root| {
-            root.as_object_mut().unwrap().remove("state");
-        })),
-        ScriptResponse::Text(script(|root| {
+        ScriptResponse::Text(proposal(|root| root["state"] = json!({}))),
+        ScriptResponse::Text(proposal(|root| {
             root["state"]["units"]["default"] = json!(2);
         })),
     ]);
@@ -569,7 +583,7 @@ fn earlier_success_cannot_hide_a_later_owners_conflicting_shared_initial_value()
     outcome.id = "other-selector".into();
     outcome.inserted_root_ids = vec!["other-original".into()];
     outcomes.push(outcome);
-    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script(|_| {}))]);
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(proposal(|_| {}))]);
     let (failed, _) = repair(
         &mut sink,
         &plan,
@@ -596,7 +610,7 @@ fn styled_initial_copy_is_verified_using_the_original_segments() {
         ]);
         sink.state = EditorState::from_document(serde_json::from_value(document).unwrap());
         let before = sink.state.doc.clone();
-        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script(|root| {
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(proposal(|root| {
             root["state"]["units"]["default"] = json!(proposed);
         }))]);
         let failed = repair(
@@ -615,3 +629,166 @@ fn styled_initial_copy_is_verified_using_the_original_segments() {
         }
     }
 }
+
+fn two_quantity_fixture() -> (
+    VecDocSink,
+    OrchestratorPlan,
+    DesignRequest,
+    Vec<SubtaskOutcome>,
+) {
+    let (mut sink, plan, request, outcomes) = fixture();
+    let rows: Vec<_> = ["qty1", "qty2"].into_iter().map(|key| json!({
+        "type":"frame","id":format!("{key}-row"),"layout":"horizontal",
+        "children":[
+            {"type":"text","id":format!("{key}-value"),"content":"1",
+             "bindings":{"content":format!("to_str($app.{key})")}},
+            {"type":"frame","id":format!("{key}-increase"),
+             "events":{"onTap":[{"set":{format!("$app.{key}"):format!("$app.{key} + 1")}}]}},
+            {"type":"frame","id":format!("{key}-decrease"),
+             "events":{"onTap":[{"set":{format!("$app.{key}"):format!("$app.{key} - 1")}}]}}
+        ]
+    })).collect();
+    let mut document = serde_json::to_value(&sink.state.doc).unwrap();
+    document["children"][0]["children"][1]["children"] = json!(rows);
+    sink.state = EditorState::from_document(serde_json::from_value(document).unwrap());
+    assert_eq!(
+        missing_initial_bindings(&sink.state, &outcomes[0].inserted_root_ids).len(),
+        2
+    );
+    (sink, plan, request, outcomes)
+}
+
+fn two_quantity_proposal() -> Value {
+    json!({"state":{
+        "qty1":{"type":"number","default":1},
+        "qty2":{"type":"number","default":1}
+    }})
+}
+
+#[test]
+fn two_quantity_defaults_preserve_original_text_bindings_and_stepper_actions() {
+    let (mut sink, plan, request, mut outcomes) = two_quantity_fixture();
+    let before = sink.state.doc.children.clone();
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(
+        two_quantity_proposal().to_string(),
+    )]);
+    assert!(
+        !repair(
+            &mut sink,
+            &plan,
+            &request,
+            &mut outcomes,
+            &llm,
+            &AbortFlag::new()
+        )
+        .0
+    );
+    assert_eq!(llm.user_prompts().len(), 1);
+    assert_eq!(sink.state.doc.children, before);
+    assert_eq!(outcomes[0].inserted_root_ids, vec!["original"]);
+    assert_eq!(outcomes[0].node_count, 1);
+    assert_eq!(sink.applied.len(), 1);
+    let EditorCommand::Batch { commands } = &sink.applied[0] else {
+        panic!("expected one atomic state batch")
+    };
+    assert!(commands
+        .iter()
+        .all(|command| matches!(command, EditorCommand::MergeAppState { .. })));
+    let state = sink.state.doc.state.as_ref().unwrap();
+    assert_eq!(state.len(), 2);
+    for key in ["qty1", "qty2"] {
+        assert_eq!(state[key].default, Some(json!(1)));
+    }
+    assert!(missing_initial_bindings(&sink.state, &outcomes[0].inserted_root_ids).is_empty());
+}
+
+#[test]
+fn invalid_second_quantity_never_partially_commits_the_first_default() {
+    for second in [None, Some(json!("1")), Some(json!(2)), Some(Value::Null)] {
+        let (mut sink, plan, request, mut outcomes) = two_quantity_fixture();
+        let before = sink.state.doc.clone();
+        let mut candidate = two_quantity_proposal();
+        if let Some(value) = second {
+            candidate["state"]["qty2"]["default"] = value;
+        } else {
+            candidate["state"].as_object_mut().unwrap().remove("qty2");
+        }
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Text(candidate.to_string())]);
+        assert!(
+            repair(
+                &mut sink,
+                &plan,
+                &request,
+                &mut outcomes,
+                &llm,
+                &AbortFlag::new()
+            )
+            .0
+        );
+        assert_eq!(llm.user_prompts().len(), 1);
+        assert_eq!(sink.state.doc, before);
+        assert!(sink.applied.is_empty());
+        assert_eq!(outcomes[0].inserted_root_ids, vec!["original"]);
+        assert_eq!(outcomes[0].node_count, 1);
+        assert!(outcomes[0].subtask.is_none());
+        assert!(outcomes[0].error.as_deref().unwrap().contains(UNRESOLVED));
+    }
+}
+
+#[test]
+fn one_format_correction_can_supply_a_valid_state_only_proposal() {
+    let (mut sink, plan, request, mut outcomes) = fixture();
+    let before = sink.state.doc.children.clone();
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(proposal(|value| value["nodes"] = json!([section()]))),
+        ScriptResponse::Text(proposal(|_| {})),
+    ]);
+    assert!(
+        !repair(
+            &mut sink,
+            &plan,
+            &request,
+            &mut outcomes,
+            &llm,
+            &AbortFlag::new()
+        )
+        .0
+    );
+    assert_eq!(llm.user_prompts().len(), 2);
+    assert_eq!(sink.state.doc.children, before);
+    assert_eq!(sink.applied.len(), 1);
+    assert_eq!(
+        sink.state.doc.state.as_ref().unwrap()["units"].default,
+        Some(json!(1))
+    );
+    assert!(outcomes[0].error.is_none());
+}
+
+#[test]
+fn transport_or_abort_errors_do_not_trigger_format_correction() {
+    for aborted in [false, true] {
+        let (mut sink, plan, request, mut outcomes) = fixture();
+        let before = sink.state.doc.clone();
+        let llm = ScriptedLlm::new(vec![ScriptResponse::Fail(LlmError {
+            message: "proposal stream failed".into(),
+            aborted,
+        })]);
+        assert!(
+            repair(
+                &mut sink,
+                &plan,
+                &request,
+                &mut outcomes,
+                &llm,
+                &AbortFlag::new()
+            )
+            .0
+        );
+        assert_eq!(llm.user_prompts().len(), 1);
+        assert_eq!(sink.state.doc, before);
+        assert!(sink.applied.is_empty());
+    }
+}
+
+#[path = "run_initial_binding_feedback_guard_tests.rs"]
+mod guards;

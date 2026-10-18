@@ -3,16 +3,15 @@
 
 use crate::concurrent::BufferDocSink;
 use crate::initial_binding_check::{missing_initial_bindings, InitialBindingFinding};
-use crate::plan::{OrchestratorPlan, RetryFeedback, Subtask};
-use crate::subagent::{
-    reveal_now_millis, run_subtask_with_reveal_at_and_outcomes, IntentCheckMode,
-};
+use crate::plan::{OrchestratorPlan, Subtask};
 use crate::types::{AbortFlag, DesignRequest, DocSink, LlmClient, Progress, SubtaskOutcome};
 use op_editor_core::{EditorCommand, EditorState, NodeId};
 
 #[path = "run_initial_binding_feedback_candidate.rs"]
 mod candidate;
 use candidate::{CandidateContract, RepairFailure};
+#[path = "run_initial_binding_feedback_protocol.rs"]
+mod protocol;
 
 const UNRESOLVED: &str =
     "initial-binding-unresolved: generated content retained; initial UI state still needs repair";
@@ -76,7 +75,6 @@ pub(super) async fn repair_initial_bindings(
                 abort,
                 subtask,
                 &original,
-                outcomes,
                 &findings,
                 on_progress,
             )
@@ -182,52 +180,27 @@ async fn repair_owner(
     abort: &AbortFlag,
     subtask: &Subtask,
     original: &SubtaskOutcome,
-    outcomes: &[SubtaskOutcome],
     findings: &[InitialBindingFinding],
     on_progress: &mut dyn FnMut(Progress),
 ) -> Result<SubtaskOutcome, RepairFailure> {
     let before = sink.state().clone();
     let contract = CandidateContract::capture(&before, original, findings)?;
-    let mut corrected = subtask.clone();
-    corrected.retry_feedback = Some(RetryFeedback::InitialBinding(
-        contract.feedback(&before, original, findings)?,
-    ));
-    let mut buffer = BufferDocSink::new(before.clone());
-    let prior = outcomes
+    let feedback = contract.feedback(&before, plan, original, findings)?;
+    // The repair protocol cannot represent node edits or execute scripts. Only
+    // an explicit missing-state proposal reaches the original-view validator.
+    let proposed_state =
+        protocol::request_state(request, llm, abort, &feedback, &subtask.id, on_progress)
+            .await
+            .map_err(RepairFailure::Protocol)?;
+    let plan_idx = plan
+        .subtasks
         .iter()
-        .take_while(|outcome| outcome.id != subtask.id)
-        .cloned()
-        .collect::<Vec<_>>();
-    // Exactly one same-model, full-skills attempt. Keep the original in staging
-    // until insertion finishes so fresh ids cannot reuse its deleted ids.
-    let repaired = run_subtask_with_reveal_at_and_outcomes(
-        &corrected,
-        plan,
-        request,
-        llm,
-        &mut buffer,
-        abort,
-        false,
-        false,
-        None,
-        reveal_now_millis(),
-        Some(on_progress),
-        &prior,
-        IntentCheckMode::Reject,
-    )
-    .await;
+        .position(|owner| owner.id == subtask.id)
+        .ok_or(RepairFailure::Ownership)?;
     if abort.is_set() {
         return Err(RepairFailure::Unavailable);
     }
-    if repaired.node_count == 0 || repaired.error.is_some() {
-        return Err(RepairFailure::Candidate(
-            repaired.error.unwrap_or_else(|| "empty correction".into()),
-        ));
-    }
-    // The generated section is only a proposal source. Never publish its nodes:
-    // changing ids/layout would risk unrelated cross-section references.
-    contract.validate_proposal(&buffer, request, subtask, &repaired)?;
-    let batch = contract.state_batch(&buffer)?;
+    let batch = contract.state_batch(proposed_state, plan_idx)?;
     // A user edit/open/page switch during the model call invalidates the
     // candidate's ownership and state snapshot. Keep the user's live document.
     if sink.state().document_generation() != before.document_generation()
