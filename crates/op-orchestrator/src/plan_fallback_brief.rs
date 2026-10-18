@@ -13,6 +13,8 @@ use crate::dashboard_columns::is_strong_sidebar_subtask;
 use crate::plan::{Region, Subtask};
 use crate::plan_coverage::required_sections;
 use crate::plan_repair::make_safe_section_id;
+use regex::Regex;
+use std::sync::LazyLock;
 
 /// Fixed left-rail width, the same 260px every app-shell path uses
 /// (`scaffold::SIDEBAR_COLUMN_WIDTH`, `dashboard_columns`, `app_shell`).
@@ -125,6 +127,163 @@ fn unique_id(base: String, taken: &mut Vec<String>) -> String {
     id
 }
 
+static SCREEN_COUNT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)([0-9]+|[一二两三四五六七八九十]+)\s*(?:个\s*)?(?:屏|页|screens?\b|pages?\b)")
+        .expect("valid explicit screen-count pattern")
+});
+
+static EN_SINGLE_OR_NEGATED: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)\b(?:single[-\s]+(?:page|screen)|do\s+not|don['’]t|no\s+need)\b")
+        .expect("valid explicit English single-page or negation phrases")
+});
+
+/// Preserve byte offsets while removing quoted copy and parenthetical detail
+/// from the declaration/list grammar. Their contents are not screen counts or
+/// top-level separators (but remain intact in each worker's `elements`).
+fn screen_declaration_mask(brief: &str) -> String {
+    let mut masked = String::with_capacity(brief.len());
+    let mut depth = 0usize;
+    let mut quote_end = None;
+    for ch in brief.chars() {
+        let hidden = if let Some(end) = quote_end {
+            if ch == end {
+                quote_end = None;
+            }
+            true
+        } else {
+            match ch {
+                '"' | '`' | '“' | '「' | '『' | '‘' => {
+                    quote_end = Some(match ch {
+                        '“' => '”',
+                        '「' => '」',
+                        '『' => '』',
+                        '‘' => '’',
+                        other => other,
+                    });
+                    true
+                }
+                '(' | '（' => {
+                    depth += 1;
+                    true
+                }
+                ')' | '）' => {
+                    depth = depth.saturating_sub(1);
+                    true
+                }
+                _ => depth > 0,
+            }
+        };
+        if hidden {
+            masked.push_str(&" ".repeat(ch.len_utf8()));
+        } else {
+            masked.push(ch);
+        }
+    }
+    masked
+}
+
+fn screen_count(text: &str) -> Option<usize> {
+    text.parse().ok().or_else(|| {
+        ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"]
+            .iter()
+            .position(|digit| *digit == text)
+            .map(|index| index + 1)
+            .or_else(|| (text == "两").then_some(2))
+    })
+}
+
+fn ends_declaration(ch: char) -> bool {
+    matches!(ch, '。' | '.' | ';' | '；' | '\n' | '!' | '！' | '?' | '？')
+}
+
+/// Only upgrade an explicit N-screen declaration whose following list is
+/// exactly the already-extracted N full-page items: `App 两屏: A(...), B(...)`.
+/// A count elsewhere in the brief cannot turn ordinary sections into screens.
+fn explicit_screen_items(brief: &str, heads: &[String]) -> Option<Vec<String>> {
+    if !(2..=10).contains(&heads.len()) {
+        return None;
+    }
+    let masked = screen_declaration_mask(brief);
+    // Normal-mode's explicit delivery choice outranks page counts repeated
+    // in the user's original brief (notably Single + an old two-screen brief).
+    if SCREEN_COUNT.captures_iter(&masked).any(|captures| {
+        let before = masked[..captures.get(0).unwrap().start()].trim_end();
+        before.ends_with("交付") && screen_count(&captures[1]) != Some(heads.len())
+    }) {
+        return None;
+    }
+    for (colon, ch) in masked
+        .char_indices()
+        .filter(|(_, ch)| matches!(ch, ':' | '：'))
+    {
+        let header_start = masked[..colon]
+            .char_indices()
+            .rev()
+            .find(|(_, ch)| ends_declaration(*ch))
+            .map_or(0, |(index, ch)| index + ch.len_utf8());
+        let header = &masked[header_start..colon];
+        let lower = header.to_lowercase();
+        // A single-page instruction or a negated multi-page example is not
+        // affirmative screen ownership. Ambiguous clauses keep section mode.
+        if ["单页", "单屏", "不要", "不需要", "无需", "禁止"]
+            .iter()
+            .any(|word| header.contains(word))
+            || EN_SINGLE_OR_NEGATED.is_match(header)
+        {
+            continue;
+        }
+        if [
+            "文案", "标题", "示例", "例如", "参考", "caption", "headline", "example",
+        ]
+        .iter()
+        .any(|word| lower.contains(word))
+        {
+            continue;
+        }
+        let counts: Vec<_> = SCREEN_COUNT
+            .captures_iter(header)
+            .filter(|captures| {
+                !header[..captures.get(0).unwrap().start()]
+                    .trim_end()
+                    .ends_with('第')
+            })
+            .filter_map(|captures| screen_count(&captures[1]))
+            .collect();
+        if counts.is_empty() || counts.iter().any(|count| *count != heads.len()) {
+            continue;
+        }
+        let start = colon + ch.len_utf8();
+        let end = masked[start..]
+            .find(ends_declaration)
+            .map_or(masked.len(), |offset| start + offset);
+        let mut item_start = start;
+        let mut items = Vec::new();
+        for (offset, ch) in masked[start..end].char_indices() {
+            if matches!(ch, '、' | ',' | '，') {
+                items.push(brief[item_start..start + offset].trim());
+                item_start = start + offset + ch.len_utf8();
+            }
+        }
+        items.push(brief[item_start..end].trim());
+        if items.len() == heads.len()
+            && items.iter().zip(heads).all(|(item, head)| {
+                let Some(open) = item.find(['(', '（']) else {
+                    return false;
+                };
+                item[..open].trim() == head
+                    && item.ends_with([')', '）'])
+                    && !item[open..]
+                        .trim_matches(['(', '（', ')', '）'])
+                        .trim()
+                        .is_empty()
+            })
+        {
+            return Some(items.into_iter().map(str::to_string).collect());
+        }
+    }
+    None
+}
+
 /// One subtask per section the brief explicitly enumerates, or `None` when it
 /// enumerates none (callers then keep their generic skeleton).
 ///
@@ -136,8 +295,9 @@ fn unique_id(base: String, taken: &mut Vec<String>) -> String {
 ///   rail width and the full root height; the remaining sections take the
 ///   main-column width and share the requested height (or a default each).
 ///
-/// Returns the subtasks and the summed height of the stacked (non-rail)
-/// sections.
+/// Explicit full-page lists retain separate screen ownership and each gets
+/// the full requested viewport. Returns one viewport height in that case;
+/// otherwise returns the summed height of stacked (non-rail) sections.
 pub(crate) fn brief_section_subtasks(
     brief: &str,
     root_width: f64,
@@ -149,6 +309,7 @@ pub(crate) fn brief_section_subtasks(
     if heads.is_empty() {
         return None;
     }
+    let screen_items = explicit_screen_items(brief, &heads);
 
     let mut taken: Vec<String> = Vec::new();
     let mut subtasks: Vec<Subtask> = heads
@@ -161,7 +322,10 @@ pub(crate) fn brief_section_subtasks(
                 make_safe_section_id(head, index)
             };
             let id = unique_id(base, &mut taken);
-            let wording = section_wording(brief, head);
+            let wording = screen_items.as_ref().map_or_else(
+                || section_wording(brief, head),
+                |items| items[index].clone(),
+            );
             Subtask {
                 id: id.clone(),
                 label: head.clone(),
@@ -187,6 +351,15 @@ pub(crate) fn brief_section_subtasks(
             }
         })
         .collect();
+
+    if screen_items.is_some() {
+        let height = requested_height.unwrap_or(DESKTOP_SECTION_HEIGHT);
+        for st in &mut subtasks {
+            st.screen = Some(st.label.clone());
+            st.region.height = height;
+        }
+        return Some((subtasks, height));
+    }
 
     let is_rail = |st: &Subtask| narrow_sidebar && is_strong_sidebar_subtask(st);
     let has_rail = subtasks.iter().any(is_rail);
@@ -221,3 +394,7 @@ pub(crate) fn brief_section_subtasks(
 #[cfg(test)]
 #[path = "plan_fallback_brief_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "plan_fallback_brief_screens_tests.rs"]
+mod screens_tests;
