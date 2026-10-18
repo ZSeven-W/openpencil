@@ -42,11 +42,8 @@ Add `"persist": true` to survive app restarts:
 "state": { "token": { "type": "string", "default": "", "persist": true } }
 ```
 
-CROSS-SECTION SHARED STATE — use `$app.*` (document-root state) for values
-two or more independently-generated sections must read or write (e.g. a
-counter button in one section and a display label in another both reach
-`$app.count` without coupling their node trees). Per-section private values
-may use `$state.*`. When in doubt, prefer `$app.*`.
+CROSS-SECTION SHARED STATE — use `$app.*` (document-root state) for shared
+values. `$state.*` is an alias of `$app.*`, not private node-local state.
 
 BINDINGS — declarative reads (`bind:value`, `content`):
 
@@ -105,7 +102,7 @@ Examples:
     {
       "if": {
         "expr": "$app.count >= $app.target",
-        "then": [{ "toast": "Done!" }, { "push": "\"/stats\"" }]
+        "then": [{ "toast": "'Done!'" }, { "push": "\"/stats\"" }]
       }
     }
   ]
@@ -121,10 +118,15 @@ Examples:
 
 EXPRESSION LANGUAGE:
 
-Jian expressions use `to_str(value)`, not JavaScript `String(value)`.
+Scripts are JavaScript; stored binding/action expressions are Jian: no JS
+methods such as `.toFixed(2)`. Convert to text with `to_str(value)`, not
+JavaScript `String(value)`.
+String literals need inner quotes: `{"set":{"$app.capacity":"'450ml'"}}`,
+`{"toast":"'Added to cart'"}`. In scripts, use `JSON.stringify(value)` to
+encode a dynamic string as a literal expression.
 
 - `$app.<key>` — document-root state (cross-section, shared across pages)
-- `$state.<key>` — local state on the node that declares it (private)
+- `$state.<key>` — alias of `$app.<key>` (shared)
 - `$event.value` — the originating event's payload (e.g. the text typed in
   an `onChange` from an input node)
 - Arithmetic: `$app.count + 1`, `$app.total * 0.1`
@@ -190,6 +192,5 @@ CORRECTNESS CHECKLIST:
   bare path string and not an object — a bare `/path` fails to compile.
 - `pop` body is `null`, never a path.
 - `if` body has an `expr` string plus `then` array; `else` is optional.
-- Expression strings are plain JSON strings — no special encoding needed.
 - `screen` is a plain string on a top-level frame, never `route` — `route`
   is not consumed by the tap dispatcher.

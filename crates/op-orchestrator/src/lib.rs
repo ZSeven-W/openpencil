@@ -280,3 +280,6 @@ pub(crate) mod agent_indicator_test_support {
 #[cfg(test)]
 #[path = "card_routing_tests.rs"]
 mod card_routing_tests;
+
+#[cfg(test)]
+mod interactivity_corpus_runtime_tests;
