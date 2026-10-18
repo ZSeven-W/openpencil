@@ -16,6 +16,10 @@ struct Contract {
     heading: Option<String>,
 }
 
+#[cfg(test)]
+#[path = "subtask_completeness_prose_options_tests.rs"]
+mod prose_tests;
+
 /// Return named delivery evidence, or a precise failure before generic counts
 /// can substitute unrelated steppers, repeated labels, or empty frames.
 pub(super) fn inspect(
@@ -95,9 +99,11 @@ fn contracts(subtask: &Subtask) -> Vec<Contract> {
         )
         .expect("valid explicit option heading")
     });
-    static GRAPHIC_ONLY: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?ix)无(?:文字|文本|标签)|不(?:显示|包含|要|带)(?:文字|文本|标签)|纯色(?:板|块)|仅(?:用|显示)?色块|\b(?:unlabelled|unlabeled|swatches?)\b|\b(?:no|without)\s+(?:text|labels?)\b")
-            .expect("valid explicit graphic-only specification")
+    // Only an explicit quoted heading plus an exhaustive quoted list counts.
+    // Prose such as “color and size selection” still promises no named set.
+    static PROSE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r#"[「『“\"'‘](?P<heading>颜色|容量|尺码|尺寸|规格)[」』”\"'’]\s*[+＋:：]\s*[「『“\"'‘](?P<body>[^」』”\"'’\n;；]{1,240})[」』”\"'’]\s*(?P<kind>(?:胶囊|选项|按钮|选择项)(?:选项|按钮|组)?)"#)
+            .expect("valid quoted specification list")
     });
     let raw = format!(
         "{}\n{}",
@@ -109,90 +115,133 @@ fn contracts(subtask: &Subtask) -> Vec<Contract> {
     for captures in NAMED.captures_iter(&masked) {
         let count = captures.name("count");
         let anchor = count.unwrap_or_else(|| captures.name("kind").unwrap());
-        if anchor.start() < subtask.label.len() + 1
-            || super::ignored_number_context(&masked, anchor.start())
-        {
-            continue;
-        }
         let body = captures
             .name("cjk")
             .or_else(|| captures.name("ascii"))
             .unwrap();
-        // The option noun must survive the existing quote/metadata/ownership
-        // masks. A literal list is also a promise without a preceding count.
-        // Only then recover quoted names at the same byte spans.
-        let names = &raw[body.range()];
-        let labels: Vec<_> = names
-            .split(['/', '、', ',', '，', '|'])
-            .map(|name| {
-                name.trim()
-                    .trim_matches(['\'', '"', '「', '」', '『', '』', '“', '”', '‘', '’'])
-                    .trim()
-                    .to_owned()
-            })
-            .collect();
-        let Some(expected @ 2..=12) = count
-            .map(|count| parse_count(count.as_str()))
-            .unwrap_or(Some(labels.len()))
-        else {
-            continue;
+        let expected = match count {
+            Some(count) => match parse_count(count.as_str()) {
+                Some(expected) => Some(expected),
+                None => continue,
+            },
+            None => None,
         };
-        if labels.len() != expected
-            || labels.iter().any(|label| {
-                label.is_empty()
-                    || label.chars().count() > 32
-                    || label.contains(['(', ')', '（', '）', ':', '：', '\n'])
-                    || ["例如", "比如", "如", "e.g.", "for example", "such as"]
-                        .iter()
-                        .any(|prefix| label.to_lowercase().starts_with(prefix))
-                    || label.ends_with(['等', '…'])
-                    || label.contains("...")
-            })
-            || labels.iter().collect::<BTreeSet<_>>().len() != expected
-        {
-            continue;
-        }
-        let clause_start = raw[..anchor.start()]
-            .rfind([';', '；', '\n', '。'])
-            .map_or(0, |index| {
-                index + raw[index..].chars().next().unwrap().len_utf8()
-            });
-        let clause_end = raw[body.end()..]
-            .find([';', '；', '\n', '。'])
-            .map_or(raw.len(), |index| body.end() + index);
-        if GRAPHIC_ONLY.is_match(&raw[clause_start..clause_end]) {
-            continue;
-        }
-        // A comma may introduce a postposed owner for the same enumeration.
-        // Reuse the normal ownership/quote rules over that whole clause, with
-        // commas treated as whitespace, so a foreign owner cannot leave its
-        // preceding count exposed as a new local hard requirement.
-        let clause = &raw[clause_start..clause_end];
-        let mut bytes = clause.as_bytes().to_vec();
-        // Enumeration separators are labels here, not ownership coordinators.
-        bytes[body.start() - clause_start..body.end() - clause_start].fill(b' ');
-        for (index, ch) in clause
-            .char_indices()
-            .filter(|(_, ch)| matches!(ch, ',' | '，'))
-        {
-            bytes[index..index + ch.len_utf8()].fill(b' ');
-        }
-        let clause = String::from_utf8(bytes).expect("commas replaced with ASCII spaces");
-        let clause = super::mask_metadata_copy(&super::mask_quoted_copy(&clause));
-        let scoped = super::scope::mask_nonlocal_references(&clause, subtask);
-        if scoped[anchor.start() - clause_start..anchor.end() - clause_start]
-            .trim()
-            .is_empty()
-        {
-            continue;
-        }
         let heading = HEADING
-            .captures(&raw[clause_start..anchor.start()])
+            .captures(
+                raw[..anchor.start()]
+                    .rsplit([';', '；', '\n', '。'])
+                    .next()
+                    .unwrap_or(""),
+            )
             .and_then(|capture| capture.name("heading"))
             .map(|heading| heading.as_str().trim().to_owned());
-        out.push(Contract { labels, heading });
+        if let Some(contract) = named_contract(
+            &raw,
+            &masked,
+            subtask,
+            anchor.range(),
+            body.range(),
+            expected,
+            heading,
+        ) {
+            out.push(contract);
+        }
+    }
+    for captures in PROSE.captures_iter(&raw) {
+        if let Some(contract) = named_contract(
+            &raw,
+            &masked,
+            subtask,
+            captures.name("kind").unwrap().range(),
+            captures.name("body").unwrap().range(),
+            None,
+            Some(captures.name("heading").unwrap().as_str().to_owned()),
+        ) {
+            out.push(contract);
+        }
     }
     out
+}
+
+fn named_contract(
+    raw: &str,
+    masked: &str,
+    subtask: &Subtask,
+    anchor: std::ops::Range<usize>,
+    body: std::ops::Range<usize>,
+    expected: Option<usize>,
+    heading: Option<String>,
+) -> Option<Contract> {
+    static GRAPHIC_ONLY: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?ix)无(?:文字|文本|标签)|不(?:显示|包含|要|带)(?:文字|文本|标签)|纯色(?:板|块)|仅(?:用|显示)?色块|\b(?:unlabelled|unlabeled|swatches?)\b|\b(?:no|without)\s+(?:text|labels?)\b")
+            .expect("valid explicit graphic-only specification")
+    });
+    // The option noun must survive the quote/metadata/ownership masks before
+    // recovering literal names at the same byte spans.
+    if anchor.start < subtask.label.len() + 1
+        || masked[anchor.clone()].trim().is_empty()
+        || super::ignored_number_context(masked, anchor.start)
+    {
+        return None;
+    }
+    let labels: Vec<_> = raw[body.clone()]
+        .split(['/', '、', ',', '，', '|'])
+        .map(|name| {
+            name.trim()
+                .trim_matches(['\'', '"', '「', '」', '『', '』', '“', '”', '‘', '’'])
+                .trim()
+                .to_owned()
+        })
+        .collect();
+    let expected = expected.unwrap_or(labels.len());
+    if !(2..=12).contains(&expected)
+        || labels.len() != expected
+        || labels.iter().any(|label| {
+            label.is_empty()
+                || label.chars().count() > 32
+                || label.contains(['(', ')', '（', '）', ':', '：', '\n'])
+                || ["例如", "比如", "如", "e.g.", "for example", "such as"]
+                    .iter()
+                    .any(|prefix| label.to_lowercase().starts_with(prefix))
+                || label.ends_with(['等', '…'])
+                || label.contains("...")
+        })
+        || labels.iter().collect::<BTreeSet<_>>().len() != expected
+    {
+        return None;
+    }
+    let clause_start = raw[..anchor.start]
+        .rfind([';', '；', '\n', '。'])
+        .map_or(0, |index| {
+            index + raw[index..].chars().next().unwrap().len_utf8()
+        });
+    let clause_end = raw[anchor.end.max(body.end)..]
+        .find([';', '；', '\n', '。'])
+        .map_or(raw.len(), |index| anchor.end.max(body.end) + index);
+    let clause = &raw[clause_start..clause_end];
+    if GRAPHIC_ONLY.is_match(clause) {
+        return None;
+    }
+    // A postposed owner can scope the preceding list. Enumeration separators
+    // are labels, not ownership coordinators; reuse the normal scope rules.
+    let mut bytes = clause.as_bytes().to_vec();
+    bytes[body.start - clause_start..body.end - clause_start].fill(b' ');
+    for (index, ch) in clause
+        .char_indices()
+        .filter(|(_, ch)| matches!(ch, ',' | '，'))
+    {
+        bytes[index..index + ch.len_utf8()].fill(b' ');
+    }
+    let clause = String::from_utf8(bytes).expect("commas replaced with ASCII spaces");
+    let clause = super::mask_metadata_copy(&super::mask_quoted_copy(&clause));
+    let scoped = super::scope::mask_nonlocal_references(&clause, subtask);
+    if scoped[anchor.start - clause_start..anchor.end - clause_start]
+        .trim()
+        .is_empty()
+    {
+        return None;
+    }
+    Some(Contract { labels, heading })
 }
 
 fn visible(node: &PenNode) -> bool {

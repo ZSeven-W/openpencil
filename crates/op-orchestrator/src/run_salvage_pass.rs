@@ -91,14 +91,38 @@ pub(super) async fn run_salvage_pass(
                 subtask_index,
                 &outcome,
             );
+            // Recovery changes the retry timing, not the delivery contract.
+            // Keep a deficient final result reviewable without calling it Done.
+            let (completeness, language) = if abort.is_set() {
+                (None, None)
+            } else {
+                crate::output_language::inspect_insert_gates(sink, request, &subtask, &outcome)
+            };
+            let progress = if let Some(failure) = completeness {
+                crate::subtask_completeness::retain_incomplete_outcome(&mut outcome, &failure);
+                Progress::SubtaskIncomplete {
+                    id: subtask.id.clone(),
+                    expected: failure.expected,
+                    delivered: failure.delivered,
+                }
+            } else if let Some(failure) = language {
+                crate::output_language::retain_mismatch_outcome(&mut outcome, &failure);
+                Progress::SubtaskLanguageMismatch {
+                    id: subtask.id.clone(),
+                    checked: failure.checked,
+                    mismatched: failure.mismatched,
+                }
+            } else {
+                Progress::SubtaskDone {
+                    id: subtask.id.clone(),
+                    node_count: outcome.node_count,
+                }
+            };
             on_progress(scope_progress_for_subtask(
                 groups,
                 group_identities,
                 subtask_index,
-                Progress::SubtaskDone {
-                    id: subtask.id.clone(),
-                    node_count: outcome.node_count,
-                },
+                progress,
             ));
             outcomes[outcome_index] = outcome;
         } else {
