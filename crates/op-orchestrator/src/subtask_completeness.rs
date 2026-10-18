@@ -191,6 +191,13 @@ pub(crate) fn incomplete_attempt(
     subtask: &Subtask,
     outcome: &SubtaskOutcome,
 ) -> Option<CompletenessFailure> {
+    if outcome.node_count == 0 {
+        return None;
+    }
+    let named_delivered = match named_options::inspect(sink, subtask, outcome) {
+        Ok(delivered) => delivered,
+        Err(failure) => return Some(failure),
+    };
     let map_markers = outcome
         .inserted_root_ids
         .iter()
@@ -201,10 +208,10 @@ pub(crate) fn incomplete_attempt(
         .max()
         .unwrap_or(0);
     let expected = expected_count_with_map_markers(subtask, map_markers)?;
-    if outcome.node_count == 0 || expected < 2 {
+    if expected < 2 {
         return None;
     }
-    let mut delivered = delivered_item_count(sink, &outcome.inserted_root_ids);
+    let mut delivered = delivered_item_count(sink, &outcome.inserted_root_ids).max(named_delivered);
     let text = local_item_text(subtask);
     if grid_dimensions(&text).is_none()
         && media_items::has_local_media_card_contract(&text, expected)
@@ -679,3 +686,14 @@ mod media_items_tests;
 #[cfg(test)]
 #[path = "subtask_completeness_media_items_boundary_tests.rs"]
 mod media_items_boundary_tests;
+
+#[path = "subtask_completeness_named_options.rs"]
+mod named_options;
+
+#[cfg(test)]
+#[path = "subtask_completeness_named_options_tests.rs"]
+mod named_options_tests;
+
+#[cfg(test)]
+#[path = "subtask_completeness_named_options_boundary_tests.rs"]
+mod named_options_boundary_tests;
