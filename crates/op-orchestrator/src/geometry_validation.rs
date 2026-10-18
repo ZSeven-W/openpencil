@@ -397,7 +397,12 @@ pub fn geometry_validate_and_fix_for_form(
                 &rects,
                 &mut cmds,
             );
-            geometry_buried_overlay::collect_buried_overlay_fixes(&v, &rects, &mut cmds);
+            geometry_buried_overlay::collect_buried_overlay_fixes_in_state(
+                sink.state(),
+                &v,
+                &rects,
+                &mut cmds,
+            );
             geometry_photo_caption_flow::collect_fixes(&v, &rects, &mut cmds);
             geometry_tutorial_labels::collect_fixes(&v, &rects, &mut cmds);
             collect_row_overfull_fixes(&v, &rects, &mut cmds, false);

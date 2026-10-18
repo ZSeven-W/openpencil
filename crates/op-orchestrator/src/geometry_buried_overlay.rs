@@ -40,7 +40,7 @@
 
 use std::collections::HashMap;
 
-use op_editor_core::{EditorCommand, NodeId};
+use op_editor_core::{EditorCommand, EditorState, NodeId};
 use serde_json::Value;
 
 use super::{children, layout_str, Rect};
@@ -427,12 +427,171 @@ fn backdrop_photo_sink(
     })
 }
 
+// A verified clipped media lane is an image backdrop even though its direct
+// node is a transparent horizontal frame. Keep this proof separate from the
+// generic small-overlay rule: a full-viewport controls wrapper is not a peer
+// content card, and the lane's offscreen pages must not inflate coverage.
+fn media_lane_composites_normally(v: &Value) -> bool {
+    v.get("opacity")
+        .is_none_or(|value| value.is_null() || value.as_f64() == Some(1.0))
+        && v.get("blendMode")
+            .is_none_or(|value| value.is_null() || value.as_str() == Some("normal"))
+        && v.get("isMask").and_then(Value::as_bool) != Some(true)
+        && v.get("maskType").is_none_or(Value::is_null)
+        && v.get("effects").is_none_or(|effects| {
+            effects.is_null() || effects.as_array().is_some_and(Vec::is_empty)
+        })
+        && v.get("animations").is_none_or(|animations| {
+            animations.is_null() || animations.as_array().is_some_and(Vec::is_empty)
+        })
+        && children(v).iter().all(media_lane_composites_normally)
+}
+
+// Canonical fallback tiles use one solid fill. Resolve that colour using the
+// same variables/theme as the renderer; an unknown or transparent token is
+// not proof of coverage. Keep the legacy generic opacity heuristic unchanged.
+fn media_fill_is_opaque(v: &Value, state: Option<&EditorState>) -> bool {
+    let [fill] = fill_entries(v) else {
+        return false;
+    };
+    if fill.get("type").and_then(Value::as_str) != Some("solid")
+        || !media_lane_composites_normally(fill)
+    {
+        return false;
+    }
+    let Some(color) = fill.get("color").and_then(Value::as_str) else {
+        return false;
+    };
+    let resolved = if color.starts_with('$') {
+        let Some(state) = state else { return false };
+        let theme = op_editor_core::variables_resolve::effective_theme(
+            &state.doc,
+            &state.ui.variables.active_theme,
+        );
+        op_editor_core::variables_resolve::resolve_color_ref(
+            color,
+            state.doc.variables.as_ref(),
+            &theme,
+        )
+    } else {
+        Some(color.to_string())
+    };
+    resolved.is_some_and(|color| {
+        op_util::hex_color::parse_hex_rgba8(&color, op_util::hex_color::HexOptions::LENIENT)
+            .is_some_and(|rgba| rgba[3] == 255)
+    })
+}
+
+fn media_page_is_opaque(v: &Value, state: Option<&EditorState>) -> bool {
+    let square = v.get("cornerRadius").is_none_or(|radius| {
+        radius.is_null()
+            || radius.as_f64() == Some(0.0)
+            || radius
+                .as_array()
+                .is_some_and(|values| values.iter().all(|value| value.as_f64() == Some(0.0)))
+    });
+    (is_photo(v) || media_fill_is_opaque(v, state))
+        && square
+        && v.get("objectFit").and_then(Value::as_str) != Some("fit")
+}
+
+fn covered_overlay_glyph(v: &Value, viewport: &Rect, rects: &HashMap<String, Rect>) -> bool {
+    let glyph = matches!(
+        v.get("type").and_then(Value::as_str),
+        Some("icon_font" | "ellipse" | "path" | "line" | "polygon")
+    );
+    (glyph
+        && rect_of(v, rects).is_some_and(|r| {
+            r.w > 0.0
+                && r.h > 0.0
+                && r.w * r.h <= viewport.w * viewport.h * OVERLAY_MAX_AREA_RATIO
+                && covered_fraction(r, viewport) >= MIN_BURIED_FRACTION
+        }))
+        || children(v)
+            .iter()
+            .any(|child| covered_overlay_glyph(child, viewport, rects))
+}
+
+fn overlay_has_large_opaque_surface(
+    v: &Value,
+    viewport: &Rect,
+    rects: &HashMap<String, Rect>,
+) -> bool {
+    (paints_opaque(v)
+        && rect_of(v, rects)
+            .is_some_and(|r| r.w * r.h > viewport.w * viewport.h * OVERLAY_MAX_AREA_RATIO))
+        || children(v)
+            .iter()
+            .any(|child| overlay_has_large_opaque_surface(child, viewport, rects))
+}
+
+fn clipped_media_lane_sink(
+    state: Option<&EditorState>,
+    stack: &Value,
+    kids: &[Value],
+    rects: &HashMap<String, Rect>,
+) -> Option<(usize, usize)> {
+    let viewport = rect_of(stack, rects)?;
+    let lane = crate::clipped_media_strip::media_lane(stack, viewport.w)?;
+    if !media_lane_composites_normally(stack)
+        || !children(lane)
+            .iter()
+            .all(|page| media_page_is_opaque(page, state))
+    {
+        return None;
+    }
+    let first_page = rect_of(children(lane).first()?, rects)?;
+    if covered_fraction(viewport, first_page) < 0.999 {
+        return None;
+    }
+    // A large opaque sibling is a deliberate surface, not an icon/dot layer.
+    // The shared lane predicate already rejects text, images, dynamic fields
+    // and business-card descendants from these overlay siblings.
+    if kids
+        .iter()
+        .filter(|child| !std::ptr::eq(*child, lane))
+        .any(|child| overlay_has_large_opaque_surface(child, viewport, rects))
+    {
+        return None;
+    }
+    let index = kids.iter().position(|child| std::ptr::eq(child, lane))?;
+    let target = kids
+        .iter()
+        .enumerate()
+        .skip(index + 1)
+        .rev()
+        .find(|(_, overlay)| covered_overlay_glyph(overlay, viewport, rects))?
+        .0;
+    Some((index, target))
+}
+
 /// Emit a `MoveNode` for every content-bearing overlay buried under an opaque
 /// earlier sibling of the same `layout:none` stack: a full-bleed photo sinks
 /// behind the layers it hides, small overlays go to index 0, an image hidden
 /// by an empty plate goes just ahead of that plate (so any badge already above
 /// both stays on top).
-pub(super) fn collect_buried_overlay_fixes(
+pub(super) fn collect_buried_overlay_fixes_in_state(
+    state: &EditorState,
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    collect_with_context(Some(state), v, rects, cmds);
+}
+
+// Existing generic-rule fixtures need no document context. Token-backed media
+// proof is available only through the production entry point above.
+#[cfg(test)]
+fn collect_buried_overlay_fixes(
+    v: &Value,
+    rects: &HashMap<String, Rect>,
+    cmds: &mut Vec<EditorCommand>,
+) {
+    collect_with_context(None, v, rects, cmds);
+}
+
+fn collect_with_context(
+    state: Option<&EditorState>,
     v: &Value,
     rects: &HashMap<String, Rect>,
     cmds: &mut Vec<EditorCommand>,
@@ -440,9 +599,11 @@ pub(super) fn collect_buried_overlay_fixes(
     if layout_str(v) == Some("none") {
         let kids = children(v);
         let stack_id = v.get("id").and_then(Value::as_str);
-        if let (Some((photo_index, target)), Some(stack_id)) =
-            (backdrop_photo_sink(v, kids, rects), stack_id)
-        {
+        if let (Some((photo_index, target)), Some(stack_id)) = (
+            clipped_media_lane_sink(state, v, kids, rects)
+                .or_else(|| backdrop_photo_sink(v, kids, rects)),
+            stack_id,
+        ) {
             if let Some(photo_id) = kids[photo_index].get("id").and_then(Value::as_str) {
                 cmds.push(EditorCommand::MoveNode {
                     node_id: NodeId::new(photo_id.to_string()),
@@ -454,7 +615,7 @@ pub(super) fn collect_buried_overlay_fixes(
                 // sink is about to change: they re-run on the next geometry
                 // round against the settled order.
                 for c in kids {
-                    collect_buried_overlay_fixes(c, rects, cmds);
+                    collect_with_context(state, c, rects, cmds);
                 }
                 return;
             }
@@ -470,7 +631,7 @@ pub(super) fn collect_buried_overlay_fixes(
                     index: Some(target),
                 });
                 for c in kids {
-                    collect_buried_overlay_fixes(c, rects, cmds);
+                    collect_with_context(state, c, rects, cmds);
                 }
                 return;
             }
@@ -518,7 +679,7 @@ pub(super) fn collect_buried_overlay_fixes(
         }
     }
     for c in children(v) {
-        collect_buried_overlay_fixes(c, rects, cmds);
+        collect_with_context(state, c, rects, cmds);
     }
 }
 
@@ -532,3 +693,7 @@ mod tests;
 #[cfg(test)]
 #[path = "geometry_buried_media_viewport_tests.rs"]
 mod media_viewport_tests;
+
+#[cfg(test)]
+#[path = "geometry_buried_media_lane_tests.rs"]
+mod media_lane_tests;
