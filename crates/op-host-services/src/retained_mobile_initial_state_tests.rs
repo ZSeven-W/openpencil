@@ -612,6 +612,7 @@ fn retained_mobile_initial_state_and_clicks() {
         run_initial(&case, source.as_ref().unwrap(), &mut session, &mut receipt);
     }));
     if let Some(preview) = session.as_ref() {
+        receipt["final_mounted"] = mounted(preview);
         receipt["final_trace"] = json!(preview.trace_entries());
         receipt["final_runtime"] = json!(preview.debug_snapshot());
         receipt["effect_diagnostics"] = json!(preview.effect_diagnostics());

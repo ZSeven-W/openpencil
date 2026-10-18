@@ -112,7 +112,7 @@ impl crate::session::PreviewSession {
         ) else {
             return;
         };
-        let Some(paint) = self.binding_overlay.materialized_runtime_document(
+        let Some(mut paint) = self.binding_overlay.materialized_runtime_document(
             &self.binding_sites,
             &self.runtime.state,
             pointer,
@@ -120,6 +120,19 @@ impl crate::session::PreviewSession {
         ) else {
             return;
         };
+        // ScreenTable mounts the routed page first in the runtime document.
+        // The layout source and app.page_idx retain projection order, while
+        // the adapter pairs paint and layout pages positionally. Restore that
+        // order only for the paint clone; the runtime must stay mounted-first.
+        if let (Some(paint_pages), Some(layout_pages)) = (&mut paint.pages, &layout.pages) {
+            let order: BTreeMap<_, _> = layout_pages
+                .iter()
+                .enumerate()
+                .map(|(index, page)| (page.id.as_str(), index))
+                .collect();
+            paint_pages
+                .sort_by_key(|page| order.get(page.id.as_str()).copied().unwrap_or(usize::MAX));
+        }
         let theme = self
             .app
             .as_ref()

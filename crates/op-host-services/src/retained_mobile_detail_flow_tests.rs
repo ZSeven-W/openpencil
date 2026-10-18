@@ -188,6 +188,7 @@ fn mounted(session: &PreviewSession) -> Value {
         "mounted_route":session.current_screen_index().and_then(|i| entries.get(i)).map(|e| &e.0),
         "runtime_state":session.debug_snapshot(),
         "warnings":session.warnings(),
+        "scene_diagnostics":scene_diagnostics::snapshot(session, &scene),
     })
 }
 
@@ -230,6 +231,7 @@ fn capture(session: &PreviewSession, output: &Path, name: &str, receipt: &mut Va
     receipt["captures"].as_array_mut().unwrap().push(json!({
         "file":path,"root":root,"sha256":sha(&png),"kind":"live-preview-scene-native-raster-export"
     }));
+    scene_diagnostics::capture_other_active_roots(&scene, &root, output, name, receipt);
 }
 
 fn stage(receipt: &mut Value, name: &str) {
@@ -668,3 +670,6 @@ fn retained_mobile_detail_navigation_scroll_and_roundtrip() {
 
 #[path = "retained_mobile_initial_state_tests.rs"]
 mod initial_state;
+
+#[path = "retained_mobile_scene_diagnostics.rs"]
+mod scene_diagnostics;

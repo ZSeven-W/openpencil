@@ -93,6 +93,8 @@ mod tests_binding_text_reflow;
 mod tests_generated_controls;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_paint_order;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_routed_binding_reflow;
 mod transition;
 mod ui_actions;
 
