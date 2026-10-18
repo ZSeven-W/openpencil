@@ -614,15 +614,13 @@ pub(crate) fn repair_truncated_script(script: &str) -> Option<String> {
     Some(repaired)
 }
 
-/// Preview scopes belong inside expression strings. Other missing variables
+/// Preview scopes/builtins can indicate an unquoted expression. Other variables
 /// may be node handles from an earlier sandbox and need fresh local handles
 /// or persistent node-id strings instead.
 fn explain_reference_error(msg: &str) -> Option<ScriptError> {
     let name = msg.strip_suffix(" is not defined")?;
-    if matches!(name, "$state" | "$app") {
-        return Some(ScriptError::RuntimeBindingReference {
-            scope: name.to_string(),
-        });
+    if let Some(error) = ScriptError::runtime_reference(name) {
+        return Some(error);
     }
     Some(ScriptError::StaleReference {
         message: msg.to_string(),

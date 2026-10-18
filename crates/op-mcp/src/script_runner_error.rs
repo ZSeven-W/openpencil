@@ -2,8 +2,8 @@
 //! (`script_runner.rs`).
 //!
 //! Style follows `ProgramError` / `op_orchestrator::OrchestratorError`: a
-//! plain enum plus a hand-written `Display`, no `thiserror` and no new
-//! dependency. Every variant's `Display` reproduces the exact sentence the
+//! plain enum plus a hand-written `Display`, without `thiserror`. Existing
+//! variants retain the exact sentence the
 //! stringly-typed runner produced, because those sentences ship verbatim to
 //! the model (the `batch_design(script)` tool surfaces them as the
 //! `InvalidArgument` payload) and the orchestrator's retry ladder logs them.
@@ -14,6 +14,7 @@
 //! `BindHostFn` / `SetGlobal` — host faults, never the model's fault) from
 //! "the script threw" (`Threw` / reference failures), without matching prose.
 
+use jian_core::expression::builtins::default_builtins;
 use std::fmt;
 
 /// Everything `run_script_to_program` can refuse on.
@@ -45,6 +46,9 @@ pub enum ScriptError {
     Threw(String),
     /// A Preview expression was evaluated as generation-time JavaScript.
     RuntimeBindingReference { scope: String },
+    /// An undefined JS identifier also names a registered Preview builtin.
+    /// Name alone cannot distinguish a call from an intended local handle.
+    RuntimeBuiltinReference { name: String },
     /// The script referenced a binding that only existed in an earlier
     /// batch's sandbox. `message` is the raw `x is not defined` text and
     /// `name` the identifier, so the explanation can name it back.
@@ -60,8 +64,10 @@ impl fmt::Display for ScriptError {
             ScriptError::SourceTooLarge { bytes, max } => {
                 write!(f, "script too large: {bytes} bytes (max {max})")
             }
-            ScriptError::AmbiguousCodeBlocks { count } => write!(f,
-                "script response contains {count} code blocks without a clear final program; return one complete JavaScript program"),
+            ScriptError::AmbiguousCodeBlocks { count } => write!(
+                f,
+                "script response contains {count} code blocks without a clear final program; return one complete JavaScript program"
+            ),
             ScriptError::NoOperations => {
                 f.write_str("script emitted no I(...), K(...), or U(...) operations")
             }
@@ -80,6 +86,18 @@ impl fmt::Display for ScriptError {
                  expression strings (a string literal needs inner quotes). Preserve the requested \
                  behavior while repairing syntax."
             ),
+            ScriptError::RuntimeBuiltinReference { name } => write!(
+                f,
+                "script error: {name} is not defined. This name is also a registered Jian \
+                 Preview builtin, not an installed JavaScript global. If you intended a \
+                 binding/action expression, quote the ENTIRE expression: \
+                 bindings: {{content: \"to_str($app.qty)\"}}. Calling to_str($app.qty) or \
+                 to_str(\"$app.qty\") in the builder is still wrong; quoting only the \
+                 argument is insufficient. For generation-time conversion use JavaScript \
+                 String/Number/Boolean. If it is a JavaScript node handle or helper, \
+                 declare it in this complete script; a builtin name alone does not imply \
+                 an old node id. Preserve the requested state, bindings and events."
+            ),
             ScriptError::StaleReference { message, name } => write!(
                 f,
                 "script error: {message}. Each script runs in a FRESH sandbox — a variable \
@@ -94,6 +112,23 @@ impl fmt::Display for ScriptError {
 impl std::error::Error for ScriptError {}
 
 impl ScriptError {
+    /// Classify only exact Preview scopes or names in its actual registry.
+    /// A builtin-name collision remains ambiguous; its diagnostic covers both
+    /// expression quotation and an intended local JS handle/helper declaration.
+    pub fn runtime_reference(name: &str) -> Option<Self> {
+        if matches!(name, "$state" | "$app") {
+            Some(Self::RuntimeBindingReference {
+                scope: name.to_string(),
+            })
+        } else if default_builtins().contains_key(name) {
+            Some(Self::RuntimeBuiltinReference {
+                name: name.to_string(),
+            })
+        } else {
+            None
+        }
+    }
+
     /// Parent contract failures must not be salvaged as a successful prefix.
     pub fn is_invalid_insertion_parent(&self) -> bool {
         matches!(self, Self::Threw(message) if message.contains("OP_SCRIPT_PARENT_UNDEFINED")

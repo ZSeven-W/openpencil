@@ -4850,6 +4850,7 @@ version = "0.8.5"
 dependencies = [
  "base64",
  "image",
+ "jian-core",
  "jian-ops-schema",
  "jian-scene",
  "op-ai-skills",

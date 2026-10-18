@@ -271,3 +271,54 @@ fn minimal_interaction_prompt_fits_existing_budgets_and_keeps_script_protocol() 
         }
     }
 }
+
+#[test]
+fn retained_builtin_reference_failures_reach_retry_without_losing_interactions_or_inserting_prefixes(
+) {
+    // The retained first attempts and salvage failed before a program existed.
+    // This only verifies feedback delivery and a controlled valid response;
+    // it does not claim the retained full design passes downstream QA.
+    let corrected = INTERACTIVE_SCRIPT.replace(
+        "'Selected: ' + $app.choice",
+        "'Selected: ' + to_str($app.choice)",
+    );
+    for broken in [
+        include_str!("../../op-mcp/tests/fixtures/script_runner/product-spec-unquoted-1018.js"),
+        include_str!(
+            "../../op-mcp/tests/fixtures/script_runner/product-spec-argument-quoted-1018.js"
+        ),
+        include_str!(
+            "../../op-mcp/tests/fixtures/script_runner/product-spec-actions-batch-unquoted-1018.js"
+        ),
+    ] {
+        // The action gate cannot conceal the original runner failure or turn
+        // a recorded prefix into a successful section.
+        let error = crate::script_gen::parse_script(broken).unwrap_err();
+        assert!(
+            matches!(&error, crate::script_gen::ScriptGenError::ScriptRun(message)
+            if message.contains("registered Jian Preview builtin"))
+        );
+        let (outcome, llm, sink) = run_sequence(
+            true,
+            vec![
+                ScriptResponse::Text(broken.into()),
+                ScriptResponse::Text(corrected.clone()),
+            ],
+        );
+        assert!(outcome.error.is_none(), "{outcome:?}");
+        let prompts = llm.user_prompts();
+        assert_eq!(prompts.len(), 2);
+        assert!(prompts[1].contains("registered Jian Preview builtin"));
+        assert!(prompts[1].contains("quote the ENTIRE expression"));
+        assert!(prompts[1].contains("do not replace required events/state/bindings"));
+        assert!(prompts[1].contains("onTap changes choice"));
+        assert!(!prompts[1].contains("not I(to_str,"));
+        let state = serde_json::to_value(sink.state.doc.state.as_ref().unwrap()).unwrap();
+        assert_eq!(state["choice"]["default"], "A");
+        assert!(state.get("qty").is_none());
+        let document = serde_json::to_string(&sink.state.doc).unwrap();
+        assert!(document.contains("onTap"));
+        assert!(document.contains("'Selected: ' + to_str($app.choice)"));
+        assert!(!document.contains("qty-stepper"));
+    }
+}

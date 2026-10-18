@@ -50,13 +50,13 @@ pub(super) fn combine_retry_feedback(
 /// never copy a thrown value, provider response, or program envelope to a prompt.
 fn script_error_feedback(error: Option<&str>) -> Option<String> {
     let error = error?;
-    let diagnostic = if let Some(scope) = ["$state", "$app"].into_iter().find(|scope| {
-        error.starts_with(&format!("script error: {scope} is not defined"))
-    }) {
-        ScriptError::RuntimeBindingReference {
-            scope: scope.into(),
-        }
-        .to_string()
+    let runtime_reference = error
+        .strip_prefix("script error: ")
+        .and_then(|message| message.split_once(" is not defined"))
+        .filter(|(_, suffix)| suffix.is_empty() || suffix.starts_with(". "))
+        .and_then(|(name, _)| ScriptError::runtime_reference(name));
+    let diagnostic = if let Some(runtime_reference) = runtime_reference {
+        runtime_reference.to_string()
     } else if let Some(count) = error
         .strip_prefix("script response contains ")
         .and_then(|rest| rest.strip_suffix(" code blocks without a clear final program; return one complete JavaScript program"))
@@ -114,6 +114,43 @@ mod tests {
         }
         for prefix in ["HTTP 401: ", "provider stream failed: ", "js runtime: "] {
             assert!(script_error_feedback(Some(&format!("{prefix}{private}"))).is_none());
+        }
+    }
+
+    #[test]
+    fn builtin_retry_feedback_reconstructs_the_shared_diagnostic_without_echoing_suffixes() {
+        let diagnostic = ScriptError::runtime_reference("to_str")
+            .unwrap()
+            .to_string();
+        for error in [
+            "script error: to_str is not defined".to_string(),
+            diagnostic,
+            "script error: to_str is not defined. PRIVATE_EXCEPTION_BODY".to_string(),
+        ] {
+            let feedback = script_error_feedback(Some(&error)).unwrap();
+            assert!(feedback.contains("registered Jian Preview builtin"));
+            assert!(feedback.contains("quote the ENTIRE expression"));
+            assert!(feedback.contains(r#"bindings: {content: "to_str($app.qty)"}"#));
+            assert!(feedback.contains("do not replace required events/state/bindings"));
+            assert!(feedback.len() <= MAX_SCRIPT_FEEDBACK_BYTES);
+            assert!(!feedback.contains("PRIVATE_EXCEPTION_BODY"));
+            assert!(!feedback.contains("Declare local handles"));
+        }
+        for error in [
+            "script error: previousRow is not defined",
+            "script error: to_str_fake is not defined. PRIVATE_EXCEPTION_BODY",
+            "script error: to_str is not definedPRIVATE_EXCEPTION_BODY",
+        ] {
+            let feedback = script_error_feedback(Some(error)).unwrap();
+            assert!(feedback.contains("undefined JavaScript variable"));
+            assert!(!feedback.contains("registered Jian Preview builtin"));
+            assert!(!feedback.contains("PRIVATE_EXCEPTION_BODY"));
+        }
+        for error in [
+            "HTTP 500: to_str is not defined",
+            "stream error: script error: to_str is not defined. PRIVATE_PROVIDER_BODY",
+        ] {
+            assert!(script_error_feedback(Some(error)).is_none());
         }
     }
 
