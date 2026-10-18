@@ -11,186 +11,137 @@ category: domain
 
 INTERACTIVITY (state + bindings + events):
 
-MOTION — use a 200–500 ms `mount` fade-up for a hero or first content, and `inView` fade-up reveals for repeated cards with staggered `delayMs` (during `delayMs` the node shows keyframe 0); use the Material 3 easing tokens `standard`, `emphasized`, `emphasizedDecelerate`, or `emphasizedAccelerate`, and keep lifecycle motion separate from a scroll timeline.
+Apply only to requested interactive behavior; static/mockup-only instructions take
+priority. Preserve the design, content and layout. Do not add business services.
+A toast confirms an action; it does not implement selection, quantity or totals.
 
-STATE — declare reactive values on the node that owns them (`StateSchema`):
+MOTION — use a 200–500 ms `mount` fade-up for first content; `inView` reveals
+may stagger repeated cards with `delayMs`. Use Material 3 easing: `standard`,
+`emphasized`, `emphasizedDecelerate`, `emphasizedAccelerate`. Keep lifecycle
+motion separate from scroll timelines.
 
-Attach a `state` object to a node or to the document root. Each key is a
-variable name; the value is a `StateEntry` with a required `type` field and
-an optional `default`.
+STATE — declare reactive values on the owning node or document root. Each entry needs
+`type` (int / float / number / string / bool / array / object / date) and an
+intentional `default` for initially visible values. Static content/fill does not
+initialize bindings. Null is valid for an intentionally empty selection.
+`persist:true` is optional, only when restart persistence is requested.
+Use `$app.*` for cross-section/page state. `$state.*` is an alias of `$app.*`,
+not private node-local state. Use distinct keys for independent items/groups.
 
-Give initially visible quantities and selections their intended `default`.
-Static text or fill does not initialize a binding. Null is valid when the
-initial empty or unselected state is intentional.
-
-Primitive types: `int` / `float` / `number` / `string` / `bool` / `array`
-/ `object` / `date`.
-
-Examples:
-
-```json
-"state": {
-  "count": { "type": "int",    "default": 0  },
-  "name":  { "type": "string", "default": "" },
-  "email": { "type": "string", "default": "" }
-}
-```
-
-Add `"persist": true` to survive app restarts:
-
-```json
-"state": { "token": { "type": "string", "default": "", "persist": true } }
-```
-
-CROSS-SECTION SHARED STATE — use `$app.*` (document-root state) for shared
-values. `$state.*` is an alias of `$app.*`, not private node-local state.
-
-BINDINGS — declarative reads (`bind:value`, `content`):
-
-Static `content` must be readable copy; `fill`/`stroke.color` must be literal
-colors or design-variable references. Put runtime expressions ONLY in
-`bindings`. A label has `content:"已关闭"`
-and `bindings:{content:"$app.light ? '已开启' : '已关闭'"}`. A chip has
-`fill:[{type:"solid",color:"#1A1A1A"}]` and
-`bindings:{fill:"$app.active ? '#22C55E' : '#1A1A1A'"}`.
-
-`bindings` maps a property name to an expression string, keeping node
-properties in sync with state automatically.
-
-- Read-only bind: `"bindings": { "content": "\"Count: \" + $app.count" }`
-- Two-way bind on an input: `"bindings": { "bind:value": "$app.email" }`
-  (`bind:value` writes back to the state variable when the user types)
-- Template literal (backtick syntax also accepted by the expression parser):
-  `"bindings": { "content": "\`Count: ${$app.count}\`" }`
+BINDINGS — declarative reads: map supported property names to runtime expression strings:
+- Read-only: `bindings:{content:"'Count: ' + to_str($app.count)"}`.
+- Input two-way: `bindings:{'bind:value':'$app.email'}`. Input events can write
+  `$event.value` with `onChange`; `onSubmit` can confirm submission.
+- Selection: bind the chip's `fill` and its label's `fill` to the SAME selected
+  key that its `events.onTap` writes. `selected` and `fontWeight` are not binding
+  targets. Constants, unused state and toast-only handlers do not change selection.
+- Quantity: bind the quantity label AND every requested dependent row amount,
+  subtotal and final total to those same quantity keys. Do not hardcode a total
+  after making the counter interactive. Do not maintain a second stale total.
+- Keep static content/fill equal to the default-state rendering for exports.
+  Static `fill`/`stroke.color` are literal colors/design variables; expressions
+  belong only in `bindings`. For a transient panel use authored `visible:false`
+  plus `bindings.visible`; opacity:0 alone still intercepts input/reserves space.
 
 EVENTS — action handlers:
-
-`events` is an `EventHandlers` object. Each field maps to an `ActionList`
-(array of `Action` objects). An `Action` is exactly one key:
-
-```
-{ "<action_name>": <body> }
-```
-
-Supported event hook keys (camelCase, `#[serde(rename_all = "camelCase")]`):
-
-- **Gesture:** `onTap` / `onDoubleTap` / `onLongPress`
-- **Drag:** `onPanStart` / `onPanUpdate` / `onPanEnd`
-- **Input-node only:** `onChange` / `onSubmit` / `onFocus` / `onBlur`
-- **Scroll:** `onScroll` / `onReachEnd`
-
-Action vocabulary (body shape per action):
+`events` maps camelCase hooks to arrays of single-key action objects.
+Gesture: `onTap`, `onDoubleTap`, `onLongPress`; drag: `onPanStart`, `onPanUpdate`,
+`onPanEnd`; input: `onChange`, `onSubmit`, `onFocus`, `onBlur`; scroll:
+`onScroll`, `onReachEnd`.
 
 | Action | Body | Effect |
 |---|---|---|
-| `set` | `{ "<path>": "<expr>" }` map of assignments | Write one or more state variables |
-| `toggle` | `"<path>"` — the bool variable to flip | Toggle a bool state variable |
-| `toast` | `"<message expr>"` string or template literal | Show a transient notification |
-| `push` | `"\"<route path>\""` — a JSON string whose VALUE is itself `"<route path>"`, quotes included | Drill into a screen (back/pop can return) |
-| `replace` | `"\"<route path>\""` — same quote-literal shape as `push` | Switch to a sibling screen (tab bar / sidebar — no back entry) |
-| `pop` | `null` — no body | Return to the previous screen |
-| `if` | `{ "expr": "<condition>", "then": [...], "else": [...] }` | Conditional branch (`else` optional) |
+| `set` | `{ "<path>": "<expr>" }` | Write state; values are expression STRINGS |
+| `toggle` | `"<path>"` | Flip a bool |
+| `toast` | `"<message expr>"` | Transient feedback |
+| `push` | `"\"/details\""` | Drill into a screen; allows back |
+| `replace` | `"\"/profile\""` | Switch sibling screen/tab |
+| `pop` | `null` | Return to previous screen |
+| `if` | `{ "expr":"<condition>", "then":[...], "else":[...] }` | Branch; else optional |
 
-`push` / `replace` bodies compile as a Tier-1 EXPRESSION, not a literal path — an unquoted `/stats` lexes as a division token and fails to compile. Always wrap the route path in an extra pair of escaped quotes: `{ "push": "\"/stats\"" }`, never `{ "push": "/stats" }`.
-
-Examples:
-
+The following event snippets belong to the corresponding button/input nodes:
 ```json
 "events": {
-  "onTap": [
-    { "set": { "$app.count": "$app.count + 1" } },
-    {
-      "if": {
-        "expr": "$app.count >= $app.target",
-        "then": [{ "toast": "'Done!'" }, { "push": "\"/stats\"" }]
-      }
-    }
-  ]
+  "onTap": [{"set":{"$app.count":"$app.count + 1"}}],
+  "onChange": [{"set":{"$app.name":"$event.value"}}],
+  "onSubmit": [{"toast":"'Submitted'"}]
+}
+```
+```json
+{"events":{"onTap":[{ "replace": "\"/profile\"" }]}}
+```
+
+EXPRESSION LANGUAGE — builder scripts are JavaScript; saved action/binding
+expressions are Jian. Use `to_str(value)`, never `String(value)` or `.toFixed(2)`
+inside a Jian expression. Arithmetic, comparison, ternary, concatenation and
+backtick templates are supported. String literals need inner quotes:
+`{"set":{"$app.capacity":"'450ml'"}}`, `{"toast":"'Added to cart'"}`.
+In the outer JavaScript builder `JSON.stringify(value)` encodes a literal string.
+`set` targets need real scopes (`$app.count`, not bare `count`); bool/number RHS
+also need expression strings (`"true"`, `"1"`, never raw true/1).
+
+WORKED SELECTION — syntax example only, not supplied product data or styling.
+Adapt values, keys, colors and dimensions to the requested design. Each group
+owns a different key. Both options share it; clicking an already selected option
+may leave it unchanged. Native radio_group/select may use bind:value instead.
+
+```js
+const group = I(null,{type:'frame',name:'Specification',layout:'horizontal',gap:8,
+  state:{finish:{type:'string',default:'cream'}}});
+for (const [value,label] of [['cream','Cream'],['green','Green']]) {
+  const active = '$app.finish == ' + JSON.stringify(value);
+  const chip = I(group,{type:'frame',name:'Finish '+label,layout:'horizontal',
+    width:88,height:36,cornerRadius:18,fill:value==='cream'?'#172A24':'#F1F4F2',
+    bindings:{fill:active+" ? '#172A24' : '#F1F4F2'"},
+    events:{onTap:[{set:{'$app.finish':JSON.stringify(value)}}]}});
+  I(chip,{type:'text',name:'Finish label '+label,content:label,
+    fill:value==='cream'?'#FFFFFF':'#172A24',
+    bindings:{fill:active+" ? '#FFFFFF' : '#172A24'"}});
 }
 ```
 
-```json
-"events": {
-  "onChange": [{ "set": { "$app.name": "$event.value" } }],
-  "onSubmit": [{ "toast": "`Submitted ${$app.name} <${$app.email}>`" }]
+WORKED CART — two independently adjustable rows, each with its own quantity;
+all visible money reads the same quantities. These fictional numbers demonstrate
+syntax only. Use supplied/shared entity prices, requested discount/tax/shipping
+rules and initial quantities; do not invent fees, offers or a minimum quantity.
+This example's minimum is explicitly one. No real checkout/payment is performed.
+
+```js
+const cart = I(null,{type:'frame',name:'Cart',layout:'vertical',gap:12,
+  state:{qtyA:{type:'int',default:1},qtyB:{type:'int',default:1}}});
+const items = [['A',24],['B',36]];
+for (const [key,price] of items) {
+  const path = '$app.qty'+key;
+  const row = I(cart,{type:'frame',name:'Item '+key,layout:'horizontal',gap:8});
+  for (const [name,label,expr] of [
+    ['minus','−',path+' > 1 ? '+path+' - 1 : 1'],['plus','+',path+' + 1']]) {
+    const button = I(row,{type:'frame',name:key+' '+name,width:32,height:32,
+      events:{onTap:[{set:{[path]:expr}}]}});
+    I(button,{type:'text',content:label});
+  }
+  I(row,{type:'text',name:key+' quantity',content:'1',bindings:{content:'to_str('+path+')'}});
+  I(row,{type:'text',name:key+' amount',content:'¥'+price,
+    bindings:{content:"'¥' + to_str("+price+' * '+path+')'}});
 }
+const subtotal = '24 * $app.qtyA + 36 * $app.qtyB';
+I(cart,{type:'text',name:'Subtotal',content:'¥60',bindings:{content:"'¥' + to_str("+subtotal+')'}});
+I(cart,{type:'text',name:'Total',content:'¥60',bindings:{content:"'¥' + to_str("+subtotal+')'}});
 ```
 
-EXPRESSION LANGUAGE:
+MULTI-SCREEN NAVIGATION — only top-level frames carry `screen` route strings:
+exactly ONE entry `"screen":"/"`; other frames have unique paths. The orchestrator
+supplies exact routes; reuse them. A nested `screen` is ignored; the `route` field is schema-only and does not
+navigate. Use `push` on detail-opening cards, `replace` on tabs/sidebar, `pop`
+on back controls: `{ "pop": null }`. Routes are expression strings including literal quotes:
+`events:{onTap:[{push:'"/details"'}]}`, never `{push:'/details'}`.
 
-Scripts are JavaScript; stored binding/action expressions are Jian: no JS
-methods such as `.toFixed(2)`. Convert to text with `to_str(value)`, not
-JavaScript `String(value)`.
-String literals need inner quotes: `{"set":{"$app.capacity":"'450ml'"}}`,
-`{"toast":"'Added to cart'"}`. In scripts, use `JSON.stringify(value)` to
-encode a dynamic string as a literal expression.
-
-- `$app.<key>` — document-root state (cross-section, shared across pages)
-- `$state.<key>` — alias of `$app.<key>` (shared)
-- `$event.value` — the originating event's payload (e.g. the text typed in
-  an `onChange` from an input node)
-- Arithmetic: `$app.count + 1`, `$app.total * 0.1`
-- Comparison: `$app.count >= $app.target`, `$app.name != ""`
-- String concatenation: `"Hello " + $app.name`
-- Template literals (backtick, resolved by the expression parser):
-  `` `Count: ${$app.count}` ``
-
-MULTI-SCREEN NAVIGATION (App Mode preview) — `screen` marker + tap-to-switch:
-
-A document with 2+ screens becomes a tappable, navigable app in Preview once
-its top-level screen frames carry a `screen` route path and its nav elements
-bind `push` / `replace` / `pop` as above. Mark exactly ONE top-level frame
-`"screen": "/"` (the entry); every other screen gets a unique `/slug`, unique
-across the whole document:
-
-```json
-{ "type": "frame", "id": "home", "name": "Home", "screen": "/" }
-{ "type": "frame", "id": "profile", "name": "Profile", "screen": "/profile" }
-```
-
-Bind a bottom-tab-bar / sidebar item with `replace` (lateral move between
-sibling screens); bind a card/row that opens a detail screen with `push`
-(the user expects to come back FROM it); bind a header back-arrow with `pop`:
-
-```json
-{ "events": { "onTap": [ { "replace": "\"/profile\"" } ] } }
-```
-
-```json
-{ "events": { "onTap": [ { "pop": null } ] } }
-```
-
-`screen` is valid ONLY on a top-level frame — a nested frame's `screen` value
-is ignored by the routing projection. Never write a `route` field instead of
-`events.onTap`: `route` is schema-only surface metadata the tap dispatcher
-does not read, so a node with `route` but no `events.onTap` does nothing
-when tapped.
-
-PLACEMENT RULES:
-
-- Declare `state` on the **lowest common ancestor** node that all bindings /
-  event handlers need — the document root for cross-section designs.
-- `bindings` lives on the node whose property is driven (e.g. the `text`
-  node whose `content` reflects a counter, or the `text_input` node whose
-  `value` binds a form field).
-- `events` lives on the interactive node (button frame, input node, list
-  item) — NOT on a wrapper layout frame with no tap/change semantics.
-- Input nodes (`text_input`) use `bind:value` for two-way sync and
-  `onChange` to write `$event.value` back to state — don't manually echo
-  `$event.value` into a display node, use a `bindings.content` expression.
-
-CORRECTNESS CHECKLIST:
-
-- Every `StateEntry` MUST have a `type` key (not `kind`, not `dataType`).
-- `onTap` / `onChange` / `onSubmit` are camelCase exactly as shown.
-- An `Action` object has exactly one key — `{ "set": ... }` not
-  `{ "set": ..., "toast": ... }` (that would be two actions — put them in
-  separate array elements).
-- `set` body is an object mapping variable paths to expression strings.
-- `toggle` body is a single string (the variable path), not an object.
-- `push` / `replace` bodies are the quote-literal string `"\"<path>\""`, not a
-  bare path string and not an object — a bare `/path` fails to compile.
-- `pop` body is `null`, never a path.
-- `if` body has an `expr` string plus `then` array; `else` is optional.
-- `screen` is a plain string on a top-level frame, never `route` — `route`
-  is not consumed by the tap dispatcher.
+PLACEMENT / CORRECTNESS:
+- Declare state at the lowest common ancestor; document-root state for shared
+  sections. Declare `StateEntry.type`, not `kind`/`dataType`.
+- Bind the visible node's property, not a wrapper. Put tap actions on the actual
+  control; its label/icon can bubble to it. Do not put separate handlers on labels
+  that intercept the intended control.
+- `set`, `toast`, `push`, etc. are separate single-key objects in the action array.
+- Before returning, trace two different option taps, then plus and minus for EACH
+  cart row. All requested visible summaries must agree with the resulting state.
+  Keep unrelated items/selections unchanged. Preserve initial exported appearance.

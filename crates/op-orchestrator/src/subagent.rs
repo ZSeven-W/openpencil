@@ -215,6 +215,14 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
             plan,
             prior_outcomes,
         ));
+    call_req
+        .user_prompt
+        .push_str(&crate::interaction_handoff::prompt_block(
+            state,
+            subtask,
+            plan,
+            prior_outcomes,
+        ));
     // Surface the per-subtask skill-load report to the chat UI immediately
     // after the prompt is built (spec Component 4).
     if let Some(cb) = on_progress {

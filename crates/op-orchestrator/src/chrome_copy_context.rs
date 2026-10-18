@@ -11,7 +11,7 @@ const MAX_COPY_CHARS: usize = 1200;
 const MAX_SECTIONS: usize = 8;
 const MAX_SECTION_VALUES: usize = 16;
 
-fn owner(state: &EditorState, id: &str) -> Option<String> {
+pub(super) fn owner(state: &EditorState, id: &str) -> Option<String> {
     state
         .active_children()
         .iter()
@@ -50,7 +50,7 @@ fn copy(node: &PenNode, inherited_opacity: f64, values: &mut Vec<String>, remain
 }
 
 /// Include the visibility of wrappers above a recorded section as well.
-fn readable_node<'a>(
+pub(super) fn readable_node<'a>(
     nodes: &'a [PenNode],
     id: &str,
     inherited_opacity: f64,
