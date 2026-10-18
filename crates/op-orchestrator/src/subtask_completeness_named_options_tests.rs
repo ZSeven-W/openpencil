@@ -125,7 +125,13 @@ fn retained_complete_script_and_echo_copy_deliver_all_three_labels() {
 }
 
 fn ladder(responses: &[&str]) -> (SubtaskOutcome, Vec<Progress>, Vec<String>, Vec<PenNode>) {
-    let task = task(ELEMENTS);
+    ladder_for_task(task(ELEMENTS), responses)
+}
+
+fn ladder_for_task(
+    task: Subtask,
+    responses: &[&str],
+) -> (SubtaskOutcome, Vec<Progress>, Vec<String>, Vec<PenNode>) {
     let plan = OrchestratorPlan {
         shared_context: None,
         root_frame: RootFrameSpec {
@@ -250,3 +256,6 @@ fn exhausted_named_option_retries_retain_only_the_last_incomplete_attempt() {
         1
     );
 }
+
+#[path = "subtask_completeness_unnumbered_options_tests.rs"]
+mod unnumbered;

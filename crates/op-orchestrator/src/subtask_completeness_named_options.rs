@@ -82,10 +82,10 @@ fn contracts(subtask: &Subtask) -> Vec<Contract> {
     static NAMED: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(
             r"(?ix)
-            (?P<count>[0-9]+|[一二两三四五六七八九十]+)\s*(?:[个枚项种]\s*)?
+            (?:(?P<count>[0-9]+|[一二两三四五六七八九十]+)\s*(?:[个枚项种]\s*)?)?
             (?P<kind>(?:规格|颜色|尺码|尺寸)(?:选项|胶囊|按钮|选择项)
                 |(?:color|colour|size|variant|specification)\s+(?:options?|chips?|pills?|buttons?))
-            \s*(?:（(?P<cjk>[^（）\n;；]{1,240})）|\((?P<ascii>[^()\n;；]{1,240})\))",
+            (?:组)?\s*(?:（(?P<cjk>[^（）\n;；]{1,240})）|\((?P<ascii>[^()\n;；]{1,240})\))",
         )
         .expect("valid explicitly named specification contract")
     });
@@ -107,12 +107,10 @@ fn contracts(subtask: &Subtask) -> Vec<Contract> {
     let masked = local_item_text(subtask);
     let mut out = Vec::new();
     for captures in NAMED.captures_iter(&masked) {
-        let count = captures.name("count").unwrap();
-        let Some(expected @ 2..=12) = parse_count(count.as_str()) else {
-            continue;
-        };
-        if count.start() < subtask.label.len() + 1
-            || super::ignored_number_context(&masked, count.start())
+        let count = captures.name("count");
+        let anchor = count.unwrap_or_else(|| captures.name("kind").unwrap());
+        if anchor.start() < subtask.label.len() + 1
+            || super::ignored_number_context(&masked, anchor.start())
         {
             continue;
         }
@@ -120,8 +118,9 @@ fn contracts(subtask: &Subtask) -> Vec<Contract> {
             .name("cjk")
             .or_else(|| captures.name("ascii"))
             .unwrap();
-        // The count+noun must survive the existing quote/metadata/ownership
-        // masks. Only then recover literal quoted names at the same byte spans.
+        // The option noun must survive the existing quote/metadata/ownership
+        // masks. A literal list is also a promise without a preceding count.
+        // Only then recover quoted names at the same byte spans.
         let names = &raw[body.range()];
         let labels: Vec<_> = names
             .split(['/', '、', ',', '，', '|'])
@@ -132,6 +131,12 @@ fn contracts(subtask: &Subtask) -> Vec<Contract> {
                     .to_owned()
             })
             .collect();
+        let Some(expected @ 2..=12) = count
+            .map(|count| parse_count(count.as_str()))
+            .unwrap_or(Some(labels.len()))
+        else {
+            continue;
+        };
         if labels.len() != expected
             || labels.iter().any(|label| {
                 label.is_empty()
@@ -147,7 +152,7 @@ fn contracts(subtask: &Subtask) -> Vec<Contract> {
         {
             continue;
         }
-        let clause_start = raw[..count.start()]
+        let clause_start = raw[..anchor.start()]
             .rfind([';', '；', '\n', '。'])
             .map_or(0, |index| {
                 index + raw[index..].chars().next().unwrap().len_utf8()
@@ -175,14 +180,14 @@ fn contracts(subtask: &Subtask) -> Vec<Contract> {
         let clause = String::from_utf8(bytes).expect("commas replaced with ASCII spaces");
         let clause = super::mask_metadata_copy(&super::mask_quoted_copy(&clause));
         let scoped = super::scope::mask_nonlocal_references(&clause, subtask);
-        if scoped[count.start() - clause_start..count.end() - clause_start]
+        if scoped[anchor.start() - clause_start..anchor.end() - clause_start]
             .trim()
             .is_empty()
         {
             continue;
         }
         let heading = HEADING
-            .captures(&raw[clause_start..count.start()])
+            .captures(&raw[clause_start..anchor.start()])
             .and_then(|capture| capture.name("heading"))
             .map(|heading| heading.as_str().trim().to_owned());
         out.push(Contract { labels, heading });

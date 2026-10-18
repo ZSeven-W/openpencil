@@ -29,6 +29,14 @@ fn static_labeled_pills_require_no_events_or_state() {
         delivered(vec![section(choices())], "3 个规格胶囊（月白/燕麦/苔绿）"),
         3
     );
+    for elements in [
+        "规格胶囊组（月白 / 燕麦 / 苔绿）",
+        "颜色选项（月白、燕麦、苔绿）",
+        "variant pills (月白 / 燕麦 / 苔绿)",
+    ] {
+        assert_eq!(delivered(vec![section(choices())], elements), 3);
+        assert_eq!(delivered(vec![section(vec![])], elements), 0);
+    }
     assert_eq!(
         delivered(vec![section(choices())], "3 color options (月白/燕麦/苔绿)"),
         3
@@ -61,6 +69,14 @@ fn unnamed_foreign_quoted_example_and_graphic_only_plans_do_not_create_contracts
         "3 个颜色选项（红/白/黑），由其他区块负责；本区展示3个数量按钮",
         "3 个颜色选项（红、白、黑），由其他区块负责；本区展示3个数量按钮",
         "3 color options (Red / Blue / Green), owned by another section; show 3 items",
+        "标题文案「规格胶囊组（月白/燕麦/苔绿）」",
+        "其他区域包含规格胶囊组（月白/燕麦/苔绿）",
+        "规格胶囊组（月白/燕麦/苔绿），由其他区块负责",
+        "规格胶囊组（例如月白/燕麦/苔绿）",
+        "规格胶囊组（月白/燕麦/苔绿等）",
+        "规格胶囊组（月白/月白/苔绿）",
+        "规格胶囊组（月白/燕麦/苔绿），纯色块无文字标签",
+        "13 个规格胶囊（月白/燕麦/苔绿）",
     ] {
         assert_eq!(
             named_options::inspect(
