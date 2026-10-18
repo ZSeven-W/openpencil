@@ -182,6 +182,50 @@ fn action_inset_counts_nested_intrinsic_padding_once() {
 }
 
 #[test]
+fn horizontal_action_inset_counts_row_padding_not_shorter_control_padding() {
+    for inner_inset in [0, 12, 24, 32] {
+        let mut draft = phone(json!({"type":"frame","id":"footer",
+        "name":"Pinned Bottom Action","width":"fill_container",
+        "height":"fit_content","layout":"vertical","padding":[0,24,0,24],
+        "children":[{"type":"frame","id":"row","width":"fill_container",
+            "height":"fit_content","layout":"horizontal","alignItems":"center",
+            "padding":[12,0,inner_inset,0],"gap":12,"children":[
+                {"type":"frame","id":"primary","role":"button",
+                    "width":"fill_container","height":52,
+                    "events":{"onTap":[{"push":"\"/cart\""}]}},
+                {"type":"frame","id":"secondary","role":"button","width":48,
+                    "height":"fit_content","layout":"vertical","padding":[0,0,16,0],
+                    "children":[{"type":"icon_font","id":"secondary-icon",
+                        "iconFontFamily":"lucide","iconFontName":"heart",
+                        "width":16,"height":16}]}
+            ]}]}));
+        let original = serde_json::to_value(&draft.doc).unwrap();
+        let mut sink = crate::loop_finalize::StateDocSink { state: &mut draft };
+        repair(&mut sink, "root");
+        let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
+        let page = scene.active_page().unwrap();
+        let primary = page.find("primary").unwrap().bounds;
+        let footer = page.find("footer").unwrap().bounds;
+        let expected = if inner_inset >= 24 { inner_inset } else { 28 } as f32;
+        assert!((footer.origin.y + footer.size.y - 812.0).abs() < 1.0);
+        assert_eq!(primary.size.y, 52.0);
+        assert!(
+            (812.0 - primary.origin.y - primary.size.y - expected).abs() < 1.0,
+            "horizontal inset {inner_inset}: {primary:?}"
+        );
+        let after = serde_json::to_value(&sink.state().doc).unwrap();
+        assert_eq!(
+            after["children"][0]["children"][2]["children"],
+            original["children"][0]["children"][2]["children"],
+            "preserve horizontal controls, their padding and actions"
+        );
+        let settled = sink.state().doc.clone();
+        repair(&mut sink, "root");
+        assert_eq!(settled, sink.state().doc);
+    }
+}
+
+#[test]
 fn action_inset_preserves_existing_outer_room_and_authored_layout_constraints() {
     for case in [
         "outer-room",
@@ -190,6 +234,8 @@ fn action_inset_preserves_existing_outer_room_and_authored_layout_constraints() 
         "positioned-child",
         "nested-token-padding",
         "nested-positioned-child",
+        "nested-horizontal-token-padding",
+        "nested-horizontal-positioned-child",
     ] {
         let mut footer = json!({"type":"frame","id":"footer","name":"Pinned Start Button",
         "role":"button","width":"fill_container","height":"fit_content",
@@ -201,11 +247,17 @@ fn action_inset_preserves_existing_outer_room_and_authored_layout_constraints() 
             "fixed-height" => footer["height"] = json!(88),
             "token-padding" => footer["padding"] = json!("$action-padding"),
             "positioned-child" => footer["children"][0]["x"] = json!(0),
-            "nested-token-padding" | "nested-positioned-child" => {
+            "nested-token-padding"
+            | "nested-positioned-child"
+            | "nested-horizontal-token-padding"
+            | "nested-horizontal-positioned-child" => {
                 footer["children"][0] = json!({"type":"frame","id":"inner",
                     "layout":"vertical","height":"fit_content","children":[
                         {"type":"frame","id":"start","role":"button","height":48}]});
-                if case == "nested-token-padding" {
+                if case.contains("horizontal") {
+                    footer["children"][0]["layout"] = json!("horizontal");
+                }
+                if case.ends_with("token-padding") {
                     footer["children"][0]["padding"] = json!("$action-padding");
                 } else {
                     footer["children"][0]["children"][0]["x"] = json!(0);

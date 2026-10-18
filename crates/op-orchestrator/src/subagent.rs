@@ -417,7 +417,7 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
     ) {
         return fail(error);
     }
-    crate::mobile_action_bar_plan::preserve(&mut nodes, subtask, plan, req);
+    crate::mobile_action_bar_plan::preserve(&mut nodes, subtask, plan, req, sink.state());
     let node_count = nodes.len();
 
     // Hoist node-level `state` to one document-root MergeAppState so

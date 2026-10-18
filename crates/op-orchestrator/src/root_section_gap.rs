@@ -45,7 +45,7 @@ pub(crate) fn fix_root_section_gap(root: &mut Value) -> bool {
         .get("children")
         .and_then(Value::as_array)
         .map_or(0, Vec::len);
-    if sections < MIN_SECTIONS {
+    if sections < MIN_SECTIONS || is_mobile_scroll_chrome_shell(root) {
         return false;
     }
     let width = root.get("width").and_then(Value::as_f64);
@@ -63,6 +63,59 @@ pub(crate) fn fix_root_section_gap(root: &mut Value) -> bool {
     };
     object.insert("gap".into(), Value::from(repaired));
     true
+}
+
+fn is_mobile_scroll_chrome_shell(root: &Value) -> bool {
+    // After fixed-mobile cleanup the content viewport owns section spacing.
+    // Reintroducing a root gap separates the status/footer from that viewport
+    // on every replay, even though its fill height keeps the footer anchored.
+    if !root
+        .get("width")
+        .and_then(Value::as_f64)
+        .is_some_and(|width| (240.0..=480.0).contains(&width))
+        || !root
+            .get("height")
+            .and_then(Value::as_f64)
+            .is_some_and(|height| height >= 500.0)
+        || root.get("clipContent").and_then(Value::as_bool) == Some(false)
+    {
+        return false;
+    }
+    let Some(children) = root.get("children").and_then(Value::as_array) else {
+        return false;
+    };
+    let [status, viewport, footer] = children.as_slice() else {
+        return false;
+    };
+    let in_flow = |node: &Value| {
+        ["constraints", "x", "y"]
+            .iter()
+            .all(|key| node.get(key).is_none())
+            && node.get("width").and_then(Value::as_str) == Some("fill_container")
+    };
+    if !crate::cleanup::is_status_bar_from_json(status)
+        || !in_flow(viewport)
+        || !in_flow(footer)
+        || viewport.get("role").and_then(Value::as_str) != Some("scroll-area")
+        || viewport.get("layout").and_then(Value::as_str) != Some("vertical")
+        || viewport.get("height").and_then(Value::as_str) != Some("fill_container")
+        || viewport.get("clipContent").and_then(Value::as_bool) != Some(true)
+        || !matches!(
+            footer.get("layout").and_then(Value::as_str),
+            Some("vertical" | "horizontal")
+        )
+        || !(footer.get("height").and_then(Value::as_str) == Some("fit_content")
+            || footer
+                .get("height")
+                .and_then(Value::as_f64)
+                .is_some_and(|height| (44.0..=128.0).contains(&height)))
+    {
+        return false;
+    }
+    serde_json::from_value::<jian_ops_schema::node::PenNode>(footer.clone()).is_ok_and(|footer| {
+        crate::mobile_action_bar::is_action_bar(&footer)
+            || crate::cleanup::is_trailing_bottom_nav_section(&footer)
+    })
 }
 
 #[cfg(test)]

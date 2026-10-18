@@ -328,6 +328,7 @@ fn retained_bottom_floating_intent_marks_the_section_without_renaming_it() {
         plan.subtasks.last().unwrap(),
         &plan,
         &DesignRequest::default(),
+        &EditorState::new(),
     );
     assert!(crate::mobile_action_bar::is_action_bar(&nodes[0]));
     expected[0]["explain"] = json!(MARKER);
@@ -338,6 +339,7 @@ fn retained_bottom_floating_intent_marks_the_section_without_renaming_it() {
         plan.subtasks.last().unwrap(),
         &plan,
         &DesignRequest::default(),
+        &EditorState::new(),
     );
     assert_eq!(nodes, once);
 }
@@ -359,6 +361,7 @@ fn floating_bottom_actions_support_generic_chinese_and_english_layout_intent() {
             plan.subtasks.last().unwrap(),
             &plan,
             &DesignRequest::default(),
+            &EditorState::new(),
         );
         assert!(is_marked(&nodes[0]), "{elements}");
     }
@@ -401,6 +404,7 @@ fn negated_floating_and_ordinary_content_never_gain_pinning() {
             plan.subtasks.last().unwrap(),
             &plan,
             &DesignRequest::default(),
+            &EditorState::new(),
         );
         assert_eq!(nodes, before, "{elements}");
     }
@@ -491,7 +495,7 @@ fn floating_intent_keeps_existing_structural_and_request_boundaries() {
             .iter()
             .find(|task| task.id == "detail-cart")
             .unwrap();
-        preserve(&mut nodes, task, &plan, &req);
+        preserve(&mut nodes, task, &plan, &req, &EditorState::new());
         assert_eq!(nodes, before, "{case}");
     }
 }
@@ -508,7 +512,13 @@ fn floating_action_is_terminal_per_screen_in_a_multi_screen_plan() {
         .iter()
         .find(|task| task.id == "detail-cart")
         .unwrap();
-    preserve(&mut nodes, task, &plan, &DesignRequest::default());
+    preserve(
+        &mut nodes,
+        task,
+        &plan,
+        &DesignRequest::default(),
+        &EditorState::new(),
+    );
     assert!(is_marked(&nodes[0]));
 }
 

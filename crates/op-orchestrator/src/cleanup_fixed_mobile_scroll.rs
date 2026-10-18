@@ -210,8 +210,9 @@ fn repair_intrinsic_action_inset(sink: &mut dyn DocSink, root_id: &str, root: &V
 }
 
 // Content rails and inner bar wrappers can already own the safe area. Count
-// only trailing intrinsic vertical flow; a fixed control's internal padding
-// belongs inside its hit area and is not closing space below the control.
+// trailing intrinsic flow. A horizontal row contributes its own padding, not
+// a shorter trailing control's padding; fixed controls' internal padding stays
+// inside their hit area and is not closing space below the control.
 fn intrinsic_closing_inset(node: &Value) -> Option<f64> {
     if node.get("padding").is_some_and(|pad| {
         !pad.is_number()
@@ -235,13 +236,18 @@ fn intrinsic_closing_inset(node: &Value) -> Option<f64> {
         return None;
     }
     let mut inset = padding(node)[2];
+    if node.get("layout").and_then(Value::as_str) == Some("horizontal") {
+        return Some(inset);
+    }
     if let Some(child) = node
         .get("children")
         .and_then(Value::as_array)
         .and_then(|children| children.last())
         .filter(|child| {
-            child.get("layout").and_then(Value::as_str) == Some("vertical")
-                && child.get("height").and_then(Value::as_str) == Some("fit_content")
+            matches!(
+                child.get("layout").and_then(Value::as_str),
+                Some("vertical" | "horizontal")
+            ) && child.get("height").and_then(Value::as_str) == Some("fit_content")
         })
     {
         if ["constraints", "x", "y"]

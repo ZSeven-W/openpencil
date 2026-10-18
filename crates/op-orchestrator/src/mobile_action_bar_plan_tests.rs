@@ -20,13 +20,25 @@ fn pinned_action_plan_marker_preserves_roles_events_and_survives_save_load() {
     let (plan, mut nodes) = fixture();
     let task = plan.subtasks.last().unwrap();
     let mut original = serde_json::to_value(&nodes).unwrap();
-    preserve(&mut nodes, task, &plan, &DesignRequest::default());
+    preserve(
+        &mut nodes,
+        task,
+        &plan,
+        &DesignRequest::default(),
+        &EditorState::new(),
+    );
     assert!(is_marked(&nodes[0]));
     assert!(crate::mobile_action_bar::is_action_bar(&nodes[0]));
     original[0]["explain"] = json!(MARKER);
     assert_eq!(serde_json::to_value(&nodes).unwrap(), original);
     let once = nodes.clone();
-    preserve(&mut nodes, task, &plan, &DesignRequest::default());
+    preserve(
+        &mut nodes,
+        task,
+        &plan,
+        &DesignRequest::default(),
+        &EditorState::new(),
+    );
     assert_eq!(nodes, once, "do not duplicate the marker");
 
     crate::role_infer::resolve_forest_roles(&mut nodes, 375.0, crate::role_defaults::Theme::Dark);
@@ -65,6 +77,7 @@ fn ordinary_start_buttons_and_unrelated_sections_do_not_gain_pinning() {
             plan.subtasks.last().unwrap(),
             &plan,
             &DesignRequest::default(),
+            &EditorState::new(),
         );
         assert_eq!(nodes, before, "{elements}");
         assert!(!crate::mobile_action_bar::is_action_bar(&nodes[0]));
@@ -133,7 +146,7 @@ fn pinned_action_plan_preserves_ambiguous_and_existing_layouts() {
             .iter()
             .find(|task| task.id == "start")
             .unwrap();
-        preserve(&mut nodes, task, &plan, &req);
+        preserve(&mut nodes, task, &plan, &req, &EditorState::new());
         assert_eq!(nodes, before, "{case}");
     }
 }
@@ -153,7 +166,13 @@ fn pinned_action_plan_checks_terminal_position_per_screen() {
         .iter()
         .find(|task| task.id == "start")
         .unwrap();
-    preserve(&mut nodes, task, &plan, &DesignRequest::default());
+    preserve(
+        &mut nodes,
+        task,
+        &plan,
+        &DesignRequest::default(),
+        &EditorState::new(),
+    );
     assert!(is_marked(&nodes[0]));
     assert!(plan.subtasks.last().unwrap().id != task.id);
 }
