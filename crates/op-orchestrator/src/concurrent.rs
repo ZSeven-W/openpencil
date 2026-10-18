@@ -427,7 +427,8 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         return outcome;
     }
 
-    maybe_geometry_echo_with_outcomes(
+    // Repair snapshots must not inflate every enclosing retry/worker future.
+    Box::pin(maybe_geometry_echo_with_outcomes(
         subtask,
         plan,
         request,
@@ -441,7 +442,7 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         on_progress,
         prior_outcomes,
         outcome,
-    )
+    ))
     .await
 }
 

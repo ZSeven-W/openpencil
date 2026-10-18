@@ -35,7 +35,7 @@ pub(super) async fn maybe_geometry_echo(
     on_progress: &mut dyn FnMut(Progress),
     outcome: SubtaskOutcome,
 ) -> SubtaskOutcome {
-    maybe_geometry_echo_with_outcomes(
+    Box::pin(maybe_geometry_echo_with_outcomes(
         subtask,
         plan,
         request,
@@ -49,7 +49,7 @@ pub(super) async fn maybe_geometry_echo(
         on_progress,
         &[],
         outcome,
-    )
+    ))
     .await
 }
 
