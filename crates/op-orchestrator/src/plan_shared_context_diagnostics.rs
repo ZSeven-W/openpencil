@@ -110,29 +110,62 @@ fn property_path(parent: &str, key: &str) -> String {
 }
 
 pub(crate) fn invalid_shape(context: &Value) -> Option<SharedContextShapeError> {
+    invalid_shapes(context, 1).into_iter().next()
+}
+
+/// Bounded diagnostics for a rejected plan, never a substitute for deserialization.
+pub(crate) fn invalid_shapes(context: &Value, limit: usize) -> Vec<SharedContextShapeError> {
+    let mut errors = Vec::new();
+    collect_shapes(context, &mut |error| {
+        if errors.len() < limit {
+            errors.push(error);
+        }
+        errors.len() >= limit
+    });
+    errors
+}
+
+// A visitor returning true stops the walk. Invalid parents are not traversed.
+fn collect_shapes(context: &Value, emit: &mut impl FnMut(SharedContextShapeError) -> bool) {
     const ROOT: &str = "$.sharedContext";
     if let Some(error) = expect(ROOT, JsonKind::Object, Some(context)) {
-        return Some(error);
+        emit(error);
+        return;
     }
     if let Some(facts) = context.get("sourceFacts") {
         if let Some(error) = strings(&format!("{ROOT}.sourceFacts"), facts) {
-            return Some(error);
+            if emit(error) {
+                return;
+            }
         }
     }
-    let entities = context.get("exampleEntities")?;
+    let Some(entities) = context.get("exampleEntities") else {
+        return;
+    };
     let entities_path = format!("{ROOT}.exampleEntities");
     if let Some(error) = expect(&entities_path, JsonKind::Array, Some(entities)) {
-        return Some(error);
+        emit(error);
+        return;
     }
-    for (index, entity) in entities.as_array()?.iter().enumerate() {
+    for (index, entity) in entities
+        .as_array()
+        .expect("checked array")
+        .iter()
+        .enumerate()
+    {
         let path = format!("{entities_path}[{index}]");
         if let Some(error) = expect(&path, JsonKind::Object, Some(entity)) {
-            return Some(error);
+            if emit(error) {
+                return;
+            }
+            continue;
         }
         for key in ["id", "name"] {
             if let Some(error) = expect(&format!("{path}.{key}"), JsonKind::String, entity.get(key))
             {
-                return Some(error);
+                if emit(error) {
+                    return;
+                }
             }
         }
         // Option<String> deliberately permits null; optional/defaulted fields
@@ -143,29 +176,37 @@ pub(crate) fn invalid_shape(context: &Value) -> Option<SharedContextShapeError> 
                 JsonKind::String,
                 Some(subject),
             ) {
-                return Some(error);
+                if emit(error) {
+                    return;
+                }
             }
         }
         if let Some(attributes) = entity.get("attributes") {
             let attributes_path = format!("{path}.attributes");
             if let Some(error) = expect(&attributes_path, JsonKind::Object, Some(attributes)) {
-                return Some(error);
-            }
-            for (key, value) in attributes.as_object()? {
-                if let Some(error) = expect(
-                    &property_path(&attributes_path, key),
-                    JsonKind::String,
-                    Some(value),
-                ) {
-                    return Some(error);
+                if emit(error) {
+                    return;
+                }
+            } else {
+                for (key, value) in attributes.as_object().expect("checked object") {
+                    if let Some(error) = expect(
+                        &property_path(&attributes_path, key),
+                        JsonKind::String,
+                        Some(value),
+                    ) {
+                        if emit(error) {
+                            return;
+                        }
+                    }
                 }
             }
         }
         if let Some(used_by) = entity.get("usedBy") {
             if let Some(error) = strings(&format!("{path}.usedBy"), used_by) {
-                return Some(error);
+                if emit(error) {
+                    return;
+                }
             }
         }
     }
-    None
 }

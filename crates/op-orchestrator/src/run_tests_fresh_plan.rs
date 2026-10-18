@@ -147,6 +147,72 @@ fn fresh_plan_repeated_protocol_errors_never_accept_the_invalid_context() {
 }
 
 #[test]
+fn fresh_plan_retained_multi_error_response_is_corrected_without_reselecting_subjects() {
+    const RAW: &str =
+        include_str!("fixtures/planner_protocol_1018/product-review-count-attempt1.json");
+    let mut corrected: serde_json::Value = serde_json::from_str(RAW).unwrap();
+    let entities = corrected["sharedContext"]["exampleEntities"]
+        .as_array_mut()
+        .unwrap();
+    entities[0]["attributes"]["colors"] = json!("米白 / 燕麦 / 雾蓝");
+    entities[0]["attributes"]["sizes"] = json!("S / M / L / XL");
+    for entity in entities {
+        for id in entity["usedBy"].as_array_mut().unwrap() {
+            if id == "cart-page" {
+                *id = json!("cart-items");
+            }
+        }
+    }
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(RAW.into()),
+        ScriptResponse::Text(corrected.to_string()),
+    ]);
+    let (plan, _) = futures::executor::block_on(planning_loop(
+        &request(),
+        &llm,
+        &AbortFlag::new(),
+        &mut |_| {},
+    ))
+    .unwrap();
+    let prompts = llm.user_prompts();
+    assert_eq!(prompts.len(), 2);
+    for expected in [
+        "attributes.colors",
+        "attributes.sizes",
+        "cart-page",
+        "cart-items",
+        "Repair this plan, do not redesign it",
+    ] {
+        assert!(prompts[1].contains(expected), "missing {expected}");
+    }
+    assert_eq!(
+        serde_json::to_value(
+            plan.shared_context
+                .as_ref()
+                .unwrap()
+                .example_entities
+                .clone()
+        )
+        .unwrap(),
+        corrected["sharedContext"]["exampleEntities"]
+    );
+    for task in &plan.subtasks {
+        let mut prompt = String::new();
+        crate::plan_shared_context::append_instruction(&plan, &request(), task, &mut prompt);
+        for expected in [
+            "云感针织卫衣",
+            "复古直筒牛仔裤",
+            "¥299",
+            "¥399",
+            "米白 / 燕麦 / 雾蓝",
+            "S / M / L / XL",
+        ] {
+            assert!(prompt.contains(expected), "{} lost {expected}", task.id);
+        }
+    }
+}
+
+#[test]
 fn fresh_plan_coverage_replan_cannot_replace_an_accepted_contract_with_missing_context() {
     let request = request();
     let (original, _) =

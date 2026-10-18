@@ -18,7 +18,7 @@ mod error;
 use error::SharedContextError;
 #[path = "plan_shared_context_diagnostics.rs"]
 mod diagnostics;
-pub(crate) use diagnostics::{invalid_shape, JsonKind, SharedContextShapeError};
+pub(crate) use diagnostics::{invalid_shape, invalid_shapes, JsonKind, SharedContextShapeError};
 
 const MAX_CONTEXT_BYTES: usize = 16_384;
 

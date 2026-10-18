@@ -160,9 +160,9 @@ const STREAM_ERROR_LOG_CHARS: usize = 800;
 /// Port of `callOrchestrator` planning stage in `orchestrator.ts:1323-1503`,
 /// simplified to a SINGLE planning mode (`Rich` — the full prompt). The former
 /// tier-driven mode-rotation ladder (Rich→Minimal→Compact) was machinery around
-/// the deterministic core, not part of it: one LLM call builds the plan, and any
-/// failure (stream error / unparseable) falls straight through to the
-/// heuristic `build_fallback_plan`. The per-subtask retry ladder (the actual
+/// the deterministic core, not part of it. Two bounded attempts precede the
+/// heuristic `build_fallback_plan`; protocol retries repair the rejected plan.
+/// The per-subtask retry ladder (the actual
 /// weak-model quality lever) and `build_orchestrator_prompt`'s prompt
 /// construction are untouched.
 ///
@@ -203,10 +203,11 @@ async fn planning_loop(
                             .await;
                     }
                     Err(error) => {
-                        let feedback = error.feedback();
-                        tracing::warn!(attempt, error = %feedback, "planning protocol rejected");
-                        debug_plan_attempt_failed(attempt, "plan protocol", &feedback);
-                        protocol_feedback = Some(feedback);
+                        let diagnostic = error.feedback();
+                        tracing::warn!(attempt, error = %diagnostic, "planning protocol rejected");
+                        debug_plan_attempt_failed(attempt, "plan protocol", &diagnostic);
+                        protocol_feedback =
+                            Some(crate::plan_fresh_recovery::feedback(&raw, &error));
                     }
                 }
             }

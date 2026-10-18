@@ -48,6 +48,7 @@ mod plan_fallback_brief;
 mod plan_fallback_card;
 mod plan_fallback_mobile;
 mod plan_fresh;
+mod plan_fresh_recovery;
 pub mod plan_normalize;
 pub mod plan_repair;
 pub mod program_gen;
