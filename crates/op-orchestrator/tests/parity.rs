@@ -1,5 +1,5 @@
-//! TS-parity — Rust planner-prompt builder 必须与 TS golden 一致。
-//! golden 由 `tools/dump-planner-golden.ts` 生成。
+//! Frozen compact-planner contracts, originally imported from the retired TS product.
+//! Intentional Rust contract changes must update only their affected fixture fields.
 
 use op_orchestrator::build_compact_planning_prompt;
 use std::fs;
@@ -23,7 +23,7 @@ struct CompactGolden {
 }
 
 #[test]
-fn compact_planning_prompt_matches_ts_golden() {
+fn compact_planning_prompt_matches_frozen_contract() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/planner-golden");
     let cases: Vec<Case> =
         serde_json::from_str(&fs::read_to_string(dir.join("cases.json")).unwrap()).unwrap();
@@ -32,7 +32,7 @@ fn compact_planning_prompt_matches_ts_golden() {
         let raw = fs::read_to_string(dir.join(format!("{}.json", c.name))).unwrap_or_else(|_| {
             panic!(
                 "golden {}.json missing from tests/planner-golden/ (frozen parity \
-                 baseline; the TS dump-planner-golden.ts generator was retired)",
+                 baseline; no automatic snapshot regeneration)",
                 c.name
             )
         });
