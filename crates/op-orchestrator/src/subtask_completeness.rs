@@ -157,7 +157,7 @@ fn local_item_text(subtask: &Subtask) -> String {
         subtask.label,
         subtask.elements.as_deref().unwrap_or("")
     );
-    let text = mask_metadata_copy(&mask_quoted_copy(&text));
+    let text = statistics::mask_counts(&mask_metadata_copy(&mask_quoted_copy(&text)));
     scope::mask_nonlocal_references(&text, subtask)
 }
 
@@ -735,3 +735,10 @@ mod bottom_action_tests;
 #[cfg(test)]
 #[path = "subtask_completeness_bottom_action_boundary_tests.rs"]
 mod bottom_action_boundary_tests;
+
+#[path = "subtask_completeness_statistics.rs"]
+mod statistics;
+
+#[cfg(test)]
+#[path = "subtask_completeness_statistics_tests.rs"]
+mod statistics_tests;
