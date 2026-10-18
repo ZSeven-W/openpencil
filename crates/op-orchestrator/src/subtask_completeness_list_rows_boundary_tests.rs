@@ -2,7 +2,7 @@ use super::*;
 use crate::test_support::VecDocSink;
 use serde_json::{json, Value};
 
-const LOCAL_LIST: &str = "商家详情(头图+菜品分类横滑+菜品列表六条+购物车条) — build exactly what this names, with every count it states; do not add content that belongs to the brief's other sections";
+const LOCAL_LIST: &str = "商家详情(头图+菜品分类横滑+菜品列表六条) — build exactly what this names, with every count it states; do not add content that belongs to the brief's other sections";
 
 #[derive(Clone, Copy, Debug)]
 enum Shell {

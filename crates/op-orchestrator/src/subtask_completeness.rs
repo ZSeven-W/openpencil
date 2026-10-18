@@ -194,6 +194,9 @@ pub(crate) fn incomplete_attempt(
     if outcome.node_count == 0 {
         return None;
     }
+    if let Some(failure) = bottom_action::inspect(sink, subtask, outcome) {
+        return Some(failure);
+    }
     let named_delivered = match named_options::inspect(sink, subtask, outcome) {
         Ok(delivered) => delivered,
         Err(failure) => return Some(failure),
@@ -714,3 +717,14 @@ mod named_options_tests;
 #[cfg(test)]
 #[path = "subtask_completeness_named_options_boundary_tests.rs"]
 mod named_options_boundary_tests;
+
+#[path = "subtask_completeness_bottom_action.rs"]
+mod bottom_action;
+
+#[cfg(test)]
+#[path = "subtask_completeness_bottom_action_tests.rs"]
+mod bottom_action_tests;
+
+#[cfg(test)]
+#[path = "subtask_completeness_bottom_action_boundary_tests.rs"]
+mod bottom_action_boundary_tests;

@@ -21,8 +21,16 @@ fn task() -> Subtask {
 }
 
 fn inserted(script: &str) -> (VecDocSink, SubtaskOutcome) {
-    let (nodes, _) =
-        crate::script_gen::parse_script(script).expect("retained production script parses");
+    // Preserve the old response bytes. New expression syntax validation rejects
+    // bare toast copy; the shared builder/executor still reconstructs that tree.
+    let (nodes, _) = match crate::script_gen::parse_script(script) {
+        Ok(result) => result,
+        Err(error) => {
+            assert!(error.to_string().contains("toast"), "{error}");
+            let program = op_mcp::script_runner::run_generation_script_to_program(script).unwrap();
+            crate::program_gen::run_program_to_forest(&program).unwrap()
+        }
+    };
     let mut sink = VecDocSink::new();
     let ids = sink
         .insert_subtree_returning_root_ids(nodes, &NodeId::NONE)
@@ -142,7 +150,7 @@ fn retained_dish_response_completes_without_a_quota_retry() {
         pinned_style_guide: None,
         reference_skeleton: None,
     };
-    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(SCRIPTS[0].into())]);
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(valid_actions(SCRIPTS[0]))]);
     let mut sink = VecDocSink::new();
     let mut events = Vec::new();
     let outcome =
@@ -167,4 +175,19 @@ fn retained_dish_response_completes_without_a_quota_retry() {
         event,
         Progress::SubtaskRetry { .. } | Progress::SubtaskIncomplete { .. }
     )));
+}
+
+#[test]
+fn retained_bare_toast_is_rejected_before_the_independent_structural_check() {
+    let error = crate::script_gen::parse_script(SCRIPTS[0]).unwrap_err();
+    assert!(error.to_string().contains("toast"), "{error}");
+    crate::script_gen::parse_script(&valid_actions(SCRIPTS[0])).unwrap();
+}
+
+fn valid_actions(script: &str) -> String {
+    // Only quote historical literal toast messages as runtime string literals.
+    Regex::new(r#"toast:"([^"]*)""#)
+        .unwrap()
+        .replace_all(script, r#"toast:"'$1'""#)
+        .into_owned()
 }
