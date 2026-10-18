@@ -45,7 +45,13 @@ const card=I(root,{type:"frame",name:"Trip summary",width:343,height:88,x:16,y:6
 I(card,{type:"text",content:"3.2公里",fontSize:20});
 const cta=I(card,{type:"frame",name:"结束导航按钮",layout:"horizontal",justifyContent:"center",alignItems:"center",width:120,height:48,cornerRadius:8,fill:[{type:"solid",color:"#F97316"}],events:{onTap:[{toast:"已结束导航"}]}});
 I(cta,{type:"text",content:"结束导航",fontSize:16});"##;
-    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script.into())]);
+    assert!(matches!(
+        crate::script_gen::parse_script(script),
+        Err(crate::script_gen::ScriptGenError::RuntimeExpression(_))
+    ));
+    // Keep the retained geometry; only quote the toast expression for replay.
+    let script = script.replace(r#"toast:"已结束导航""#, r#"toast:"'已结束导航'""#);
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script)]);
     let mut sink = VecDocSink::new();
     let outcome = block_on(run_subtask(
         &subtask(),
@@ -65,7 +71,7 @@ I(cta,{type:"text",content:"结束导航",fontSize:16});"##;
     let cta = &value[0]["children"][0]["children"][1];
     assert_eq!(cta["name"], "结束导航按钮");
     assert_eq!(cta["cornerRadius"], 8.0);
-    assert_eq!(cta["events"]["onTap"][0]["toast"], "已结束导航");
+    assert_eq!(cta["events"]["onTap"][0]["toast"], "'已结束导航'");
 }
 
 #[test]

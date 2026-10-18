@@ -1,4 +1,4 @@
-//! Expanded generation output must use Jian functions only in known runtime fields.
+//! Expanded generation output must use valid Jian only in known runtime fields.
 
 use crate::script_gen::{parse_script, ScriptGenError};
 use jian_ops_schema::node::PenNode;
@@ -6,6 +6,10 @@ use op_editor_core::PenNodeExt;
 use serde_json::{json, Value};
 
 const RETAINED: &str = include_str!("test_fixtures/generated-cart-bindings-1018.js");
+const RETAINED_CART_SYNTAX: &str =
+    include_str!("test_fixtures/generated-cart-runtime-syntax-1018.js");
+const RETAINED_PRODUCT_SYNTAX: &str =
+    include_str!("test_fixtures/generated-product-runtime-syntax-1018.js");
 
 fn node_script(node: Value) -> String {
     format!("I(null, {node});")
@@ -36,6 +40,23 @@ fn assert_unknown(source: &str, name: &str) -> String {
         "{message}"
     );
     assert!(message.contains(name), "{message}");
+    message
+}
+
+fn assert_syntax(source: &str, site: &str) -> String {
+    let error = parse_script(source).expect_err("invalid known Jian expression must reject");
+    assert!(
+        matches!(&error, ScriptGenError::RuntimeExpression(_)),
+        "{error}"
+    );
+    let message = error.to_string();
+    assert!(
+        message.contains("generated-expression-syntax:"),
+        "{message}"
+    );
+    assert!(message.contains("syntaxError"), "{message}");
+    assert!(message.contains(site), "{message}");
+    assert!(!message.contains("unknownFunction"), "{message}");
     message
 }
 
@@ -260,12 +281,25 @@ fn unparseable_actions_are_deferred_to_existing_runtime_validation() {
 }
 
 #[test]
-fn compiler_failures_are_outside_the_unknown_builtin_gate() {
-    for source in ["String(", "String(1) +", "Math.max(1, 2)"] {
-        parse_script(&binding_script("content", source)).expect(source);
+fn compiler_failures_in_known_sites_are_syntax_errors_not_unknown_functions() {
+    for property in ["content", "text", "opacity", "fill[0].color", "bind:value"] {
+        for source in [
+            "String(",
+            "String(1) +",
+            "Math.max(1, 2)",
+            "$app.price.toFixed(2)",
+        ] {
+            assert_syntax(
+                &binding_script(property, source),
+                &format!("bindings.{property}"),
+            );
+        }
     }
     let action = json!([{"set":{"$app.quantity":"String(1) +"}}]);
-    parse_script(&event_script("onTap", action)).unwrap();
+    assert_syntax(
+        &event_script("onTap", action),
+        "events.onTap[0].set.$app.quantity",
+    );
 }
 
 #[test]
@@ -286,4 +320,183 @@ fn feedback_bounds_and_escapes_generated_unicode_names_and_long_sources() {
         "control characters must be JSON escaped"
     );
     assert!(message.contains("to_str"));
+}
+
+#[test]
+fn set_string_values_are_expressions_in_both_runtime_forms() {
+    for source in ["350ml", "奶油白", "String(1) +"] {
+        for action in [
+            json!({"set":{"$state.capacity":source}}),
+            json!({"set":{"target":"$state.capacity", "value":source, "note":"opaque"}}),
+        ] {
+            assert_syntax(&event_script("onTap", json!([action])), ".set.");
+        }
+    }
+    for source in ["'350ml'", "'奶油白'", "2", "false", "'String('"] {
+        parse_script(&event_script(
+            "onTap",
+            json!([{"set":{"$state.capacity":source}}]),
+        ))
+        .unwrap();
+    }
+}
+
+#[test]
+fn toast_validates_only_its_runtime_message_expression() {
+    for source in ["已加入购物车", "'unterminated", "String(1) +"] {
+        assert_syntax(
+            &event_script("onTap", json!([{"toast":source}])),
+            "events.onTap[0].toast",
+        );
+        assert_syntax(
+            &event_script("onTap", json!([{"toast":{"message":source}}])),
+            ".toast.message",
+        );
+    }
+    for action in [
+        json!({"toast":"'已加入购物车'"}),
+        json!({"toast":{"message":"to_str($app.qty)", "duration_ms":2000, "level":"success", "note":"String("}}),
+        json!({"toast":{"message":"'Ready'", "duration_ms":"String(", "level":"未解析("}}),
+    ] {
+        parse_script(&event_script("onTap", json!([action]))).unwrap();
+    }
+    for action in [
+        json!({"toast":"String(2)"}),
+        json!({"toast":{"message":"String(2)"}}),
+    ] {
+        assert_unknown(&event_script("onTap", json!([action])), "String");
+    }
+}
+
+#[test]
+fn factory_expression_errors_do_not_hide_nested_if_sites() {
+    for body in [
+        json!({"expr":"true +", "then":[]}),
+        json!({"expr":"true", "then":[{"set":{"$state.capacity":"350ml"}}]}),
+        json!({"expr":"true", "then":[], "else":[{"toast":"裸中文"}]}),
+        json!({"expr":"false", "then":[{"if":{"expr":"true", "then":[], "else":[{"toast":{"message":"裸中文"}}]}}]}),
+    ] {
+        assert_syntax(
+            &event_script("onTap", json!([{"if":body}])),
+            "events.onTap[0].if.",
+        );
+    }
+    let actions = json!([{"if":{
+        "expr":"true", "then":[{"call":{"module":"cart", "function":"custom", "args":["String("]}}],
+        "else":[{"toast":"'Ready'"}], "futureExpr":"String("
+    }}]);
+    parse_script(&event_script("onTap", actions)).unwrap();
+    let future = json!([{"if":{"expr":"true", "then":[{"futureAction":{"expr":"String("}}]}}]);
+    parse_script(&event_script("onTap", future)).unwrap();
+}
+
+#[test]
+fn unknown_sites_opaque_routes_and_nonexpression_json_are_not_compiled() {
+    for property in ["futureProperty", "bind:futureProperty"] {
+        parse_script(&binding_script(property, "String(")).unwrap();
+    }
+    parse_script(&event_script(
+        "onFutureGesture",
+        json!([{"toast":"裸中文"}]),
+    ))
+    .unwrap();
+    let actions = json!([
+        {"push":"/商品/350ml"},
+        {"push":{"path":"/商品/350ml", "note":"String("}},
+        {"futureAction":{"expr":"String(", "toast":"裸中文"}},
+        {"set":{"target":"$state.qty", "value":2}},
+        {"set":{"$state.enabled":true}},
+        {"if":{"expr":true, "then":[]}},
+        {"toast":false},
+        {"toast":{"message":2}},
+        {"set":{"target":"$state.qty", "value":"2", "note":"String("}},
+        {"set":{"$state.qty":"String("}, "futureAction":{}}
+    ]);
+    parse_script(&event_script("onTap", actions)).unwrap();
+}
+
+#[test]
+fn outer_javascript_methods_remain_valid_and_do_not_rewrite_runtime_strings() {
+    let source = r#"
+        const price = (12.3).toFixed(2);
+        const capacity = "350ml";
+        I(null, {type:"text", name:"Price", content:price,
+          bindings:{content:"to_str(round($state.price, 2))"},
+          events:{onTap:[{set:{"$state.capacity":JSON.stringify(capacity)}},{toast:"'已加入购物车'"}]}});
+    "#;
+    let (nodes, _) = parse_script(source).unwrap();
+    let value = serde_json::to_value(&nodes[0]).unwrap();
+    assert_eq!(value["content"], "12.30");
+    assert_eq!(
+        value["events"]["onTap"][0]["set"]["$state.capacity"],
+        "\"350ml\""
+    );
+    assert_eq!(
+        value["bindings"]["content"],
+        "to_str(round($state.price, 2))"
+    );
+}
+
+#[test]
+fn retained_real_scripts_reject_each_runtime_syntax_defect_without_changing_bytes() {
+    for source in [RETAINED_CART_SYNTAX, RETAINED_PRODUCT_SYNTAX] {
+        assert_syntax(source, "events.onTap");
+    }
+    // Use the same builder and executor to inspect the original forest without
+    // bypassing the gate's rejection through a rewritten fixture.
+    let expand = |source| {
+        let program = op_mcp::script_runner::run_generation_script_to_program(source).unwrap();
+        crate::program_gen::run_program_to_forest(&program)
+            .unwrap()
+            .0
+    };
+    let cart = expand(RETAINED_CART_SYNTAX);
+    let product = expand(RETAINED_PRODUCT_SYNTAX);
+    for (nodes, name, site, source) in [
+        (&cart, "管理按钮", "events.onTap[0].toast", "进入管理模式"),
+        (&cart, "汇总行-商品合计", "bindings.content", ".toFixed(2)"),
+        (&cart, "合计行", "bindings.content", ".toFixed(2)"),
+        (
+            &product,
+            "chip-capacity-350ml",
+            "events.onTap[0].set.$state.capacity",
+            "350ml",
+        ),
+        (
+            &product,
+            "chip-color-奶油白",
+            "events.onTap[0].set.$state.color",
+            "奶油白",
+        ),
+    ] {
+        let node = find_named(nodes, name).expect(name);
+        let before = serde_json::to_value(node).unwrap();
+        let error = super::validate(std::slice::from_ref(node)).unwrap_err();
+        let message = error.to_string();
+        assert!(
+            message.contains("generated-expression-syntax:"),
+            "{message}"
+        );
+        assert!(message.contains(site), "{message}");
+        assert!(message.contains(source), "{message}");
+        assert_eq!(serde_json::to_value(node).unwrap(), before);
+    }
+    assert!(RETAINED_CART_SYNTAX.contains("p.price.toFixed(2)"));
+    let price = serde_json::to_value(find_named(&cart, "价格-p1").unwrap()).unwrap();
+    assert_eq!(price["content"], "¥89.00");
+}
+
+#[test]
+fn syntax_feedback_is_bounded_escaped_and_keeps_fixed_repair_instruction() {
+    let name = "\"\n\t商品".repeat(3_000);
+    let source = format!("{}String(", " \n\t".repeat(4_000));
+    let script = node_script(
+        json!({"type":"text", "name":name, "content":"1", "bindings":{"content":source}}),
+    );
+    let message = assert_syntax(&script, "bindings.content");
+    assert!(message.len() < 4_096, "{} bytes", message.len());
+    assert!(!message.chars().any(char::is_control), "{message:?}");
+    assert!(message.contains("\\n\\t"));
+    assert!(message.contains("preserve its content, layout, state and interactions"));
+    assert!(message.contains("quotes inside the expression string"));
 }

@@ -11,13 +11,22 @@ use serde_json::json;
 
 const RETAINED: &str = include_str!("test_fixtures/product-cart-summary-parent-1018.js");
 
-fn corrected() -> String {
+fn corrected_parent_only() -> String {
     RETAINED
         .replace(
             "I(bar, {type:\"frame\", name:\"结算按钮\"",
             "const checkout = I(bar, {type:\"frame\", name:\"结算按钮\"",
         )
         .replace("I(\"结算按钮\",", "I(checkout,")
+}
+
+fn corrected() -> String {
+    // Keep the retained bytes unchanged while repairing the independent toast
+    // expression required by the successful parent-handle replay.
+    corrected_parent_only().replace(
+        r#"toast:"已提交结算 (2) 件商品""#,
+        r#"toast:"'已提交结算 (2) 件商品'""#,
+    )
 }
 
 fn find_named<'a>(nodes: &'a [PenNode], name: &str) -> Option<&'a PenNode> {
@@ -44,6 +53,9 @@ fn retained_parent_name_fails_atomically_and_corrected_handle_nests_the_label() 
     let error = parse_script(RETAINED).unwrap_err();
     assert!(matches!(&error, ScriptGenError::ParentReference(_)));
     assert!(error.to_string().contains("结算按钮"), "{error}");
+    let error = parse_script(&corrected_parent_only()).unwrap_err();
+    assert!(matches!(&error, ScriptGenError::RuntimeExpression(_)));
+    assert!(error.to_string().contains("events.onTap[0].toast"));
     let (nodes, _) = parse_script(&corrected()).unwrap();
     assert_eq!(nodes.len(), 1);
     assert_checkout_label_is_a_child(&nodes);

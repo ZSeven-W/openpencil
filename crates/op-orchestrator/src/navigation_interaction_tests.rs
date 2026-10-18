@@ -43,6 +43,23 @@ fn check(script: &str) -> Option<String> {
     rejection(&request(), &plan().subtasks[0], &nodes, &state)
 }
 
+fn check_original_navigation_gate(script: &str) -> Option<String> {
+    // Malformed originals now fail generation first. Inspect their unchanged
+    // forest separately to retain the navigation gate's own rejection coverage.
+    let program = op_mcp::script_runner::run_generation_script_to_program(script).unwrap();
+    let (nodes, state) = crate::program_gen::run_program_to_forest(&program).unwrap();
+    rejection(&request(), &plan().subtasks[0], &nodes, &state)
+}
+
+fn assert_runtime_syntax(script: &str) {
+    let error = crate::script_gen::parse_script(script).unwrap_err();
+    assert!(matches!(
+        &error,
+        crate::script_gen::ScriptGenError::RuntimeExpression(_)
+    ));
+    assert!(error.to_string().contains("generated-expression-syntax:"));
+}
+
 #[test]
 fn real_no_event_response_is_rejected_before_insertion() {
     let plan = plan();
@@ -76,7 +93,7 @@ fn nonempty_events_are_insufficient_without_declared_observable_state() {
     for (action, binding, declared) in [
         ("[]", r#""$app.active ? 'On' : 'Off'""#, true),
         (
-            r#"[{toast:"已切换"}]"#,
+            r#"[{toast:"'已切换'"}]"#,
             r#""$app.active ? 'On' : 'Off'""#,
             true,
         ),
@@ -88,11 +105,6 @@ fn nonempty_events_are_insufficient_without_declared_observable_state() {
         ),
         (
             r#"[{set:{"$app.active":true}}]"#,
-            r#""$app.active ? 'On' : 'Off'""#,
-            true,
-        ),
-        (
-            r#"[{set:{"$app.active":""}}]"#,
             r#""$app.active ? 'On' : 'Off'""#,
             true,
         ),
@@ -115,6 +127,18 @@ fn nonempty_events_are_insufficient_without_declared_observable_state() {
 }
 
 #[test]
+fn empty_set_expression_is_rejected_by_generation_and_navigation_gates() {
+    let source = script(
+        r#"[{set:{"$app.active":""}}]"#,
+        r#""$app.active ? 'On' : 'Off'""#,
+        true,
+    );
+    assert_runtime_syntax(&source);
+    let reason = check_original_navigation_gate(&source).unwrap();
+    assert!(reason.contains("invalid action chain"), "{reason}");
+}
+
+#[test]
 fn declared_state_driven_controls_and_conditional_actions_pass_structural_gate() {
     for action in [
         r#"[{toggle:"$app.active"}]"#,
@@ -133,7 +157,9 @@ fn malformed_feedback_cannot_disable_an_otherwise_valid_state_action() {
     let binding = r#""$app.active ? 'On' : 'Off'""#;
     let invalid =
         r#"[{set:{"$app.active":"true"}},{toast:"已定位到演示位置（本地示意，非实时GPS）"}]"#;
-    let reason = check(&script(invalid, binding, true)).unwrap();
+    let original = script(invalid, binding, true);
+    assert_runtime_syntax(&original);
+    let reason = check_original_navigation_gate(&original).unwrap();
     assert!(reason.contains("invalid action chain"), "{reason}");
     let valid =
         r#"[{set:{"$app.active":"true"}},{toast:"'已定位到演示位置（本地示意，非实时GPS）'"}]"#;

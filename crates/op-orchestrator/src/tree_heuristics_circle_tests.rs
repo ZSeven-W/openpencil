@@ -150,7 +150,16 @@ fn circle_protection_does_not_keep_redundant_strokes_or_shadows() {
 
 #[test]
 fn retained_circle_and_sibling_icon_survive_subtask_cleanup_and_save_reload() {
-    let (parsed, _) = crate::script_gen::parse_script(RETAINED_SCRIPT).unwrap();
+    let error = crate::script_gen::parse_script(RETAINED_SCRIPT).unwrap_err();
+    assert!(matches!(
+        &error,
+        crate::script_gen::ScriptGenError::RuntimeExpression(_)
+    ));
+    assert!(error.to_string().contains("events.onTap[0].toast"));
+    // Preserve the exact response above; only quote its toast literal for the
+    // independent geometry and save/reload regression below.
+    let corrected = RETAINED_SCRIPT.replace(r#"toast:"去结算""#, r#"toast:"'去结算'""#);
+    let (parsed, _) = crate::script_gen::parse_script(&corrected).unwrap();
     let parsed = serde_json::to_value(&parsed[0]).unwrap();
     assert_eq!(named(&parsed, "cart-disc")["cornerRadius"], 24.0);
     assert!(named(&parsed, "cart-disc")["children"]
@@ -165,7 +174,7 @@ fn retained_circle_and_sibling_icon_survive_subtask_cleanup_and_save_reload() {
             "elements":"底部购物车条，固定于底部，右侧去结算按钮","region":{"width":375,"height":68}}]
     })).unwrap();
     plan.subtasks[0].parent_frame_id = Some("page".into());
-    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(RETAINED_SCRIPT.into())]);
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(corrected)]);
     let mut sink = VecDocSink::new();
     sink.state = EditorState::from_document(serde_json::from_value(json!({
         "version":"1.0.0","children":[{
