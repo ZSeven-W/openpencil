@@ -28,6 +28,7 @@ mod editor_meta_import;
 mod editor_meta_share;
 mod editor_scene;
 mod effects;
+mod full_content_snapshot;
 mod layout_repair;
 mod layout_scene;
 mod legacy_payload_repair;
@@ -87,8 +88,10 @@ pub mod variables;
 /// directly from the layout-resolved `DocPayload` — no intermediate
 /// shell-core `Document`.
 pub use editor_scene::{
-    editor_state_to_active_page_export_layout_scene, editor_state_to_active_page_layout_scene,
-    editor_state_to_export_layout_scene, editor_state_to_layout_scene,
+    editor_state_to_active_page_export_layout_scene,
+    editor_state_to_active_page_full_content_export_layout_scene,
+    editor_state_to_active_page_layout_scene, editor_state_to_export_layout_scene,
+    editor_state_to_layout_scene,
 };
 pub use layout_scene::{
     pen_document_to_layout_scene, pen_document_to_layout_scene_for_preview,

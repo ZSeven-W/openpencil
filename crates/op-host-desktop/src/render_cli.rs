@@ -1,12 +1,15 @@
 //! Hidden `--render-shots` headless raster mode.
 //!
-//! `openpencil-desktop --render-shots <file.op> <out_dir> [scale]`
+//! `openpencil-desktop --render-shots <file.op> <out_dir> [scale] [--full-content]`
 //! loads a canonical `.op`, runs the SAME jian layout pass the editor
 //! canvas uses (`op_pen_loader::editor_state_to_layout_scene`), and
 //! writes one cropped PNG per top-level node on the active page via
 //! [`op_host_services::export::export_node_raster`] — node-only screenshots (no
 //! editor chrome) for the model-design benchmark. No GUI / GL window,
 //! so it runs headless in CI / scripts.
+//! `--full-content` instead uses a temporary static presentation with explicit
+//! vertical scroll areas expanded and footers following their complete body.
+//! It does not change the saved design or its interactive Preview viewport.
 
 use std::path::PathBuf;
 
@@ -30,7 +33,9 @@ pub fn run_cli_if_requested() -> bool {
         return false;
     };
     let (Some(file), Some(out_dir)) = (args.get(pos + 1), args.get(pos + 2)) else {
-        eprintln!("usage: openpencil-desktop --render-shots <file.op> <out_dir> [scale]");
+        eprintln!(
+            "usage: openpencil-desktop --render-shots <file.op> <out_dir> [scale] [--full-content]"
+        );
         std::process::exit(2);
     };
     let scale: f32 = args
@@ -69,7 +74,12 @@ pub fn run_cli_if_requested() -> bool {
         Ok(store) => store.rescan_and_register(),
         Err(err) => eprintln!("render-shots: skipping imported-font rescan: {err}"),
     }
-    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(&state);
+    let scene = if args.iter().skip(pos + 3).any(|arg| arg == "--full-content") {
+        eprintln!("render-shots: full-content static export (saved viewport unchanged)");
+        op_pen_loader::editor_state_to_active_page_full_content_export_layout_scene(&state)
+    } else {
+        op_pen_loader::editor_state_to_active_page_export_layout_scene(&state)
+    };
 
     let Some(page) = scene.active_page() else {
         eprintln!("render-shots: no active page");

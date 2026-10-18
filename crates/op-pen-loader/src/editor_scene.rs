@@ -89,12 +89,26 @@ fn full_scene(state: &op_editor_core::EditorState, paged: bool) -> LayoutScene {
 pub fn editor_state_to_active_page_layout_scene(
     state: &op_editor_core::EditorState,
 ) -> LayoutScene {
-    active_scene(state, state.editor_ui.workspace.visible)
+    active_scene(state, state.editor_ui.workspace.visible, false)
 }
 pub fn editor_state_to_active_page_export_layout_scene(
     state: &op_editor_core::EditorState,
 ) -> LayoutScene {
-    let scene = active_scene(state, true);
+    active_export_scene(state, false)
+}
+
+/// Build a static, full-content presentation of explicit vertical scroll areas.
+///
+/// Only an ephemeral export snapshot grows. The editable document, ordinary
+/// canvas, and Preview retain their authored viewport and fixed chrome.
+pub fn editor_state_to_active_page_full_content_export_layout_scene(
+    state: &op_editor_core::EditorState,
+) -> LayoutScene {
+    active_export_scene(state, true)
+}
+
+fn active_export_scene(state: &op_editor_core::EditorState, full_content: bool) -> LayoutScene {
+    let scene = active_scene(state, true, full_content);
     if state.selection_count() == 1
         && state.selection.anchor.is_real()
         && scene
@@ -102,12 +116,16 @@ pub fn editor_state_to_active_page_export_layout_scene(
             .is_some_and(|page| page.find(state.selection.anchor.as_str()).is_none())
     {
         // A specifically selected record remains exportable outside page one.
-        active_scene(state, false)
+        active_scene(state, false, full_content)
     } else {
         scene
     }
 }
-fn active_scene(state: &op_editor_core::EditorState, paged: bool) -> LayoutScene {
+fn active_scene(
+    state: &op_editor_core::EditorState,
+    paged: bool,
+    full_content: bool,
+) -> LayoutScene {
     let (mut pages, active_page_index, roots): (
         Vec<ScenePage>,
         usize,
@@ -186,6 +204,11 @@ fn active_scene(state: &op_editor_core::EditorState, paged: bool) -> LayoutScene
     if let Some(nodes) = crate::table_default_snapshot::roots(prepared.as_ref(), &state.doc, paged)
     {
         prepared = std::borrow::Cow::Owned(nodes);
+    }
+    if full_content && !state.editor_ui.preserve_authored_geometry {
+        if let Some(nodes) = crate::full_content_snapshot::roots(prepared.as_ref()) {
+            prepared = std::borrow::Cow::Owned(nodes);
+        }
     }
     let active_meta = &pages[active_page_index];
     let payload = crate::adapter::pen_roots_to_page_payload(
