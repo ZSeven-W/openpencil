@@ -231,3 +231,72 @@ fn bound_numeric_badge_is_supporting_copy_not_a_second_business_label() {
     badge_only["children"][1]["children"] = json!([badge]);
     missing(page(vec![badge_only]));
 }
+
+#[test]
+fn proven_business_control_keeps_price_specification_and_arbitrary_supporting_copy() {
+    for events in [false, true] {
+        let mut bar = cart();
+        let cta = &mut bar["children"][1];
+        if events {
+            cta["events"] = json!({"onTap":[{"push":"\"/cart\""}]});
+        }
+        cta["children"].as_array_mut().unwrap().extend([
+            text("price", "¥129"),
+            text("spec", "白色 · M"),
+            text("note", "明日送达 · 可退换"),
+        ]);
+        let sink = sink(vec![page(vec![bar])]);
+        assert!(bottom_action::inspect(&sink, &task("购物车条"), &outcome(&["section"])).is_none());
+    }
+    let summary = json!({"type":"frame","id":"summary","layout":"vertical","width":150,"height":56,
+        "children":[text("total", "合计 ¥129"), text("freight", "不含运费"), text("note", "到货后可申请售后")]});
+    let mut bar = cart();
+    bar["children"][0] = summary;
+    let sink = sink(vec![page(vec![bar])]);
+    assert!(bottom_action::inspect(&sink, &task("结算条"), &outcome(&["section"])).is_none());
+}
+
+#[test]
+fn supporting_copy_cannot_create_an_action_or_swallow_unrelated_content() {
+    let mut no_action = cart();
+    no_action["children"][1]["events"] = json!({"onTap":[{"push":"\"/cart\""}]});
+    no_action["children"][1]["children"] = json!([text("price", "¥129"), text("spec", "白色 · M")]);
+    missing(page(vec![no_action]));
+
+    let mut two_labels = cart();
+    two_labels["children"][1]["children"]
+        .as_array_mut()
+        .unwrap()
+        .push(text("second", "立即购买"));
+    missing(page(vec![two_labels]));
+
+    let mut outside = cart();
+    outside["children"]
+        .as_array_mut()
+        .unwrap()
+        .push(text("unowned-spec", "白色 · M"));
+    missing(page(vec![outside]));
+
+    let info = json!({"type":"frame","id":"info","layout":"vertical","children":[
+        text("product-title", "云感棉衫"), text("price", "¥129"), text("spec", "白色 · M")]});
+    let ordinary_card = json!({"type":"frame","id":"card","width":327,"height":160,"layout":"vertical",
+        "fill":[{"type":"solid","color":"#fff"}],"children":[info,control()]});
+    missing(page(vec![ordinary_card]));
+    missing(page(vec![
+        text("action-as-heading", "加入购物车"),
+        text("subcopy", "¥129 · 白色 · M"),
+    ]));
+}
+
+#[test]
+fn compact_title_first_product_rows_are_not_compound_business_controls() {
+    for interactive in [false, true] {
+        let mut row = json!({"type":"frame","id":"product-row","width":327,"height":88,
+            "layout":"horizontal","fill":[{"type":"solid","color":"#fff"}],"children":[
+                text("product-title", "云感棉衫"), text("price", "¥129"), text("action-copy", "加入购物车")]});
+        if interactive {
+            row["events"] = json!({"onTap":[{"push":"\"/product\""}]});
+        }
+        missing(page(vec![row]));
+    }
+}

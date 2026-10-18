@@ -76,14 +76,24 @@ fn bottom_action_six_delivered_dishes_cannot_substitute_for_a_missing_cart_bar()
 }
 
 fn ladder(responses: &[&str]) -> (VecDocSink, SubtaskOutcome, Vec<Progress>, Vec<String>) {
-    let task = task();
+    ladder_for(task(), responses)
+}
+
+fn ladder_for(
+    task: Subtask,
+    responses: &[&str],
+) -> (VecDocSink, SubtaskOutcome, Vec<Progress>, Vec<String>) {
     let plan = serde_json::from_value(json!({
         "rootFrame":{"id":"root","name":"商家详情","width":375,"height":812},
         "subtasks":[task]
     }))
     .unwrap();
     let request = DesignRequest {
-        prompt: "商家详情：头图、菜品分类横滑、菜品列表六条、购物车条；中文界面".into(),
+        prompt: format!(
+            "{}：{}；中文界面",
+            task.label,
+            task.elements.as_deref().unwrap_or("")
+        ),
         model: None,
         provider: None,
         design_md: None,
@@ -219,4 +229,59 @@ fn valid_actions(script: &str) -> String {
         .unwrap()
         .replace_all(script, r#"toast:"'$1'""#)
         .into_owned()
+}
+
+const PRODUCT_ADD_SCRIPTS: [&str; 3] = [
+    include_str!("../tests/fixtures/subtask_completeness/product-add-cart-1018-attempt1.js"),
+    include_str!("../tests/fixtures/subtask_completeness/product-add-cart-1018-attempt2.js"),
+    include_str!("../tests/fixtures/subtask_completeness/product-add-cart-1018-attempt3.js"),
+];
+const PRODUCT_CHECKOUT_SCRIPTS: [&str; 2] = [
+    include_str!("../tests/fixtures/subtask_completeness/product-checkout-1018-attempt1.js"),
+    include_str!("../tests/fixtures/subtask_completeness/product-checkout-1018-attempt2.js"),
+];
+
+fn product_task() -> Subtask {
+    serde_json::from_str(include_str!(
+        "../tests/fixtures/subtask_completeness/product-add-cart-1018-task.json"
+    ))
+    .unwrap()
+}
+
+#[test]
+fn retained_product_cta_price_and_spec_copy_does_not_erase_the_business_control() {
+    for script in PRODUCT_ADD_SCRIPTS {
+        crate::script_gen::parse_script(script)
+            .expect("raw retained product script must pass syntax");
+        let (sink, outcome) = inserted(script);
+        assert!(bottom_action::inspect(&sink, &product_task(), &outcome).is_none());
+        assert!(incomplete_attempt(&sink, &product_task(), &outcome).is_none());
+    }
+}
+
+#[test]
+fn retained_checkout_summary_note_does_not_erase_its_separate_control() {
+    let task: Subtask = serde_json::from_str(include_str!(
+        "../tests/fixtures/subtask_completeness/product-checkout-1018-task.json"
+    ))
+    .unwrap();
+    for script in PRODUCT_CHECKOUT_SCRIPTS {
+        crate::script_gen::parse_script(script)
+            .expect("raw retained checkout script must pass syntax");
+        let (sink, outcome) = inserted(script);
+        assert!(bottom_action::inspect(&sink, &task, &outcome).is_none());
+        assert!(incomplete_attempt(&sink, &task, &outcome).is_none());
+    }
+}
+
+#[test]
+fn original_product_cta_response_finishes_without_a_presence_retry() {
+    let (sink, outcome, events, prompts) = ladder_for(product_task(), &[PRODUCT_ADD_SCRIPTS[0]]);
+    assert!(outcome.error.is_none(), "{outcome:?}");
+    assert_eq!(prompts.len(), 1);
+    assert!(bottom_action::inspect(&sink, &product_task(), &outcome).is_none());
+    assert!(!events.iter().any(|event| matches!(
+        event,
+        Progress::SubtaskRetry { .. } | Progress::SubtaskIncomplete { .. }
+    )));
 }

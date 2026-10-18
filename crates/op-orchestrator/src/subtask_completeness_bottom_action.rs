@@ -194,17 +194,23 @@ fn bar_evidence(
             && rect.width >= rect.height * 1.5
     });
     let mut controls = Vec::new();
-    collect_controls(node, &mut controls, !(owned_root && compact));
+    collect_controls(node, rects, &mut controls, !(owned_root && compact), false);
+    if controls.is_empty() {
+        collect_controls(node, rects, &mut controls, !(owned_root && compact), true);
+    }
     if controls.is_empty() {
         return false;
     }
     let mut support = false;
     let mut ordinary_copy = false;
-    inspect_remainder(node, &controls, &mut support, &mut ordinary_copy);
+    // Reuse the planner/geometry-owned marker when present. An unmarked rail
+    // can still prove its own compact terminal grouping without a role/name.
+    let grouped = crate::mobile_action_bar_plan::is_marked(node) || (compact && terminal);
+    inspect_remainder(node, &controls, grouped, &mut support, &mut ordinary_copy);
     // Strong business grouping is independent of a particular rail size/style.
     // A single CTA additionally needs its own compact terminal wrapper (or be
     // the entire owned action section), rather than an ordinary page button.
-    !ordinary_copy && (support || controls.len() >= 2 || (compact && terminal))
+    !ordinary_copy && (support || controls.len() >= 2 || grouped)
 }
 
 fn text(node: &PenNode) -> Option<(String, bool)> {
@@ -264,44 +270,83 @@ fn surface(node: &PenNode) -> bool {
     })
 }
 
-fn collect_controls(node: &PenNode, out: &mut Vec<String>, root: bool) {
-    if !potential(node) || matches!(node, PenNode::Ref(_)) {
+fn collect_controls(
+    node: &PenNode,
+    rects: &HashMap<String, ResolvedRect>,
+    out: &mut Vec<String>,
+    root: bool,
+    allow_dynamic: bool,
+) {
+    if !potential(node) || matches!(node, PenNode::Ref(_)) || has_media(node) {
         return;
     }
-    if !root
-        && matches!(node, PenNode::Frame(_) | PenNode::Rectangle(_))
-        && (surface(node)
-            || has_stroke(node)
-            || matches!(node.base().role.as_deref(), Some("button" | "icon-button"))
-            || crate::wire_screen_navigation::node_has_events(node))
-    {
-        let mut labels = Vec::new();
-        collect_texts(node, &mut labels);
-        let business = labels
-            .iter()
-            // A bound numeric badge remains supporting copy, not a second
-            // potential action label. Unknown nonnumeric labels still defer.
-            .filter(|(label, dynamic)| action_label(label) || (*dynamic && !number_badge(label)))
-            .count();
-        if business == 1
-            && labels
-                .iter()
-                .all(|(label, dynamic)| *dynamic || action_label(label) || number_badge(label))
-        {
-            out.push(node.id_str().into());
-            return;
-        }
-    }
+    // Prefer the innermost real control over a decorated section/card around it.
+    // Explicit labels are searched before uncertain bindings, so a dynamic badge
+    // cannot steal the boundary of its enclosing labeled business button.
+    let before = out.len();
     for child in node.children().into_iter().flatten() {
-        collect_controls(child, out, false);
+        collect_controls(child, rects, out, false, allow_dynamic);
+    }
+    if root || out.len() > before || !matches!(node, PenNode::Frame(_) | PenNode::Rectangle(_)) {
+        return;
+    }
+    let interactive = matches!(node.base().role.as_deref(), Some("button" | "icon-button"))
+        || crate::wire_screen_navigation::node_has_events(node);
+    if !interactive && !surface(node) && !has_stroke(node) {
+        return;
+    }
+    let mut labels = Vec::new();
+    collect_texts(node, &mut labels);
+    let explicit = labels
+        .iter()
+        .filter(|(label, _)| action_label(label))
+        .count();
+    let compact_control = rects
+        .get(node.id_str())
+        .is_some_and(|rect| rect.width >= 64.0 && (24.0..=96.0).contains(&rect.height));
+    let action_anchor = labels
+        .iter()
+        .find(|(label, _)| !label.is_empty() && !number_badge(label))
+        .is_some_and(|(label, _)| action_label(label));
+    if explicit == 1 && action_anchor && (interactive || compact_control) {
+        // Supporting copy follows the control's action anchor. A title-first
+        // product row does not become a button merely through size or events.
+        out.push(node.id_str().into());
+        return;
+    }
+    let business = labels
+        .iter()
+        .filter(|(label, dynamic)| {
+            action_label(label) || (allow_dynamic && *dynamic && !number_badge(label))
+        })
+        .count();
+    if business == 1
+        && labels.iter().all(|(label, dynamic)| {
+            (allow_dynamic && *dynamic) || action_label(label) || number_badge(label)
+        })
+    {
+        out.push(node.id_str().into());
     }
 }
 
-fn inspect_remainder(node: &PenNode, controls: &[String], support: &mut bool, ordinary: &mut bool) {
+fn inspect_remainder(
+    node: &PenNode,
+    controls: &[String],
+    grouped: bool,
+    support: &mut bool,
+    ordinary: &mut bool,
+) {
     if !potential(node)
         || controls.iter().any(|id| id == node.id_str())
         || matches!(node, PenNode::Ref(_))
     {
+        return;
+    }
+    // The same summary branch may include arbitrary freight/specification
+    // notes. Only an already grouped rail may treat that branch as a unit;
+    // unrelated page copy or a sibling product card remains outside it.
+    if grouped && !contains_control(node, controls) && business_support(node) {
+        *support = true;
         return;
     }
     if let PenNode::IconFont(icon) = node {
@@ -326,7 +371,7 @@ fn inspect_remainder(node: &PenNode, controls: &[String], support: &mut bool, or
         }
     }
     for child in node.children().into_iter().flatten() {
-        inspect_remainder(child, controls, support, ordinary);
+        inspect_remainder(child, controls, grouped, support, ordinary);
     }
 }
 
@@ -335,4 +380,34 @@ fn meaningful(node: &PenNode) -> bool {
         && (matches!(node, PenNode::IconFont(_) | PenNode::Image(_))
             || text(node).is_some_and(|(label, dynamic)| !label.is_empty() || dynamic)
             || node.children().into_iter().flatten().any(meaningful))
+}
+
+fn contains_control(node: &PenNode, controls: &[String]) -> bool {
+    controls.iter().any(|id| id == node.id_str())
+        || node
+            .children()
+            .into_iter()
+            .flatten()
+            .any(|child| contains_control(child, controls))
+}
+
+fn business_support(node: &PenNode) -> bool {
+    if !potential(node) {
+        return false;
+    }
+    if matches!(node, PenNode::IconFont(_))
+        || text(node).is_some_and(|(value, _)| !value.is_empty())
+    {
+        let mut support = false;
+        let mut ordinary = false;
+        inspect_remainder(node, &[], false, &mut support, &mut ordinary);
+        return support;
+    }
+    // Summary ownership begins with its business anchor. A product title that
+    // merely precedes a price cannot turn the whole information card into it.
+    node.children()
+        .into_iter()
+        .flatten()
+        .find(|child| meaningful(child))
+        .is_some_and(business_support)
 }

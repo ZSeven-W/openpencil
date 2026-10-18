@@ -1,0 +1,44 @@
+{
+  "source_log_sha256_at_extraction": "be3a1c661ce2eb78267d68b206b2e32bb7ace39410c4bac6897bfe85ca5e0992",
+  "source_log_may_still_grow": true,
+  "fixtures": [
+    {
+      "file": "product-add-cart-1018-attempt1.js",
+      "source": "artifacts/tracking-contract-1015/product-add-cart-bar-presence-1018/attempt-1.js",
+      "sha256": "215cd3d39a9c0c288f2a6503a32981ee3937a39f0934fe74cfd93407bb8b389a",
+      "rewritten": false
+    },
+    {
+      "file": "product-add-cart-1018-attempt2.js",
+      "source": "artifacts/tracking-contract-1015/product-add-cart-bar-presence-1018/attempt-2.js",
+      "sha256": "3cbe1f454f2f4cc67fc12c80fec17d35a4a8b4ba61d379be25b4951d03093dcd",
+      "rewritten": false
+    },
+    {
+      "file": "product-add-cart-1018-attempt3.js",
+      "source": "artifacts/tracking-contract-1015/product-add-cart-bar-presence-1018/attempt-3.js",
+      "sha256": "1451f133f57f8de38842bffcfb2021747780b23071c20a79ffb6d1071eedb12a",
+      "rewritten": false
+    },
+    {
+      "file": "product-checkout-1018-attempt1.js",
+      "source_log": "/Users/fini/Downloads/openpencil-测试图片/普通模式-手机滚动与底栏复验-1018/_过程记录/product-detail/generation.log",
+      "source_lines_inclusive": [
+        596,
+        609
+      ],
+      "sha256": "e5b1f3d83eda389083e06ea90ad7b1a661f14593e0f25906357ccb6c0153beb8",
+      "rewritten": false
+    },
+    {
+      "file": "product-checkout-1018-attempt2.js",
+      "source_log": "/Users/fini/Downloads/openpencil-测试图片/普通模式-手机滚动与底栏复验-1018/_过程记录/product-detail/generation.log",
+      "source_lines_inclusive": [
+        617,
+        631
+      ],
+      "sha256": "b588f9f60cc6cb3834f0ee96f84f2ed09400753709a625260e2fa185edfdf460",
+      "rewritten": false
+    }
+  ]
+}
