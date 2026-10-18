@@ -243,8 +243,16 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
             Err(e) => {
                 return fail(if e.aborted {
                     "aborted".into()
-                } else {
+                } else if e
+                    .message
+                    .trim_start()
+                    .to_ascii_lowercase()
+                    .starts_with("stream error: ")
+                {
                     e.message
+                } else {
+                    // Keep provider text outside locally emitted self-check categories.
+                    format!("stream error: {}", e.message)
                 });
             }
         }

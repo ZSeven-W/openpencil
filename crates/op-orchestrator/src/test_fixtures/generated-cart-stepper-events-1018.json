@@ -1,0 +1,248 @@
+{
+  "source_sha256": "c5c248e25dd1c8fdd11efa60a6f4dac42c83985524a6b8f84ae35f22fcfadeb1",
+  "source_generation": "普通模式-轮播结构完整管线复验-1018/product-detail/generation.log:344-351",
+  "source_root_state": {
+    "color": {
+      "type": "string",
+      "default": "月白"
+    },
+    "volume": {
+      "type": "string",
+      "default": "260ml"
+    }
+  },
+  "controls": [
+    {
+      "type": "frame",
+      "id": "n340",
+      "name": "step-minus-a",
+      "width": 30.0,
+      "height": 30.0,
+      "layout": "horizontal",
+      "justifyContent": "center",
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "icon_font",
+          "id": "n341",
+          "iconFontName": "minus",
+          "iconFontFamily": "lucide",
+          "width": 14.0,
+          "height": 14.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--secondary-foreground"
+            }
+          ]
+        }
+      ],
+      "events": {
+        "onTap": [
+          {
+            "set": {
+              "cartQtyA": "$app.cartQtyA"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "frame",
+      "id": "n343",
+      "name": "step-plus-a",
+      "width": 30.0,
+      "height": 30.0,
+      "layout": "horizontal",
+      "justifyContent": "center",
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "icon_font",
+          "id": "n344",
+          "iconFontName": "plus",
+          "iconFontFamily": "lucide",
+          "width": 14.0,
+          "height": 14.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--foreground"
+            }
+          ]
+        }
+      ],
+      "events": {
+        "onTap": [
+          {
+            "set": {
+              "cartQtyA": "$app.cartQtyA + 1"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "frame",
+      "id": "n354",
+      "name": "step-minus-b",
+      "width": 30.0,
+      "height": 30.0,
+      "layout": "horizontal",
+      "justifyContent": "center",
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "icon_font",
+          "id": "n355",
+          "iconFontName": "minus",
+          "iconFontFamily": "lucide",
+          "width": 14.0,
+          "height": 14.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--secondary-foreground"
+            }
+          ]
+        }
+      ],
+      "events": {
+        "onTap": [
+          {
+            "set": {
+              "cartQtyB": "$app.cartQtyB"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "frame",
+      "id": "n357",
+      "name": "step-plus-b",
+      "width": 30.0,
+      "height": 30.0,
+      "layout": "horizontal",
+      "justifyContent": "center",
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "icon_font",
+          "id": "n358",
+          "iconFontName": "plus",
+          "iconFontFamily": "lucide",
+          "width": 14.0,
+          "height": 14.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--foreground"
+            }
+          ]
+        }
+      ],
+      "events": {
+        "onTap": [
+          {
+            "set": {
+              "cartQtyB": "$app.cartQtyB + 1"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "displays": [
+    {
+      "type": "text",
+      "id": "n342",
+      "name": "step-qty-a",
+      "width": 34.0,
+      "height": "fit_content",
+      "content": "1",
+      "fontFamily": "Plus Jakarta Sans, Noto Sans SC",
+      "fontSize": 14.0,
+      "fontWeight": 600,
+      "lineHeight": 1.5,
+      "textAlign": "center",
+      "textGrowth": "fixed-width",
+      "fill": [
+        {
+          "type": "solid",
+          "color": "$--foreground"
+        }
+      ],
+      "bindings": {
+        "content": "to_str($app.cartQtyA)"
+      }
+    },
+    {
+      "type": "text",
+      "id": "n345",
+      "name": "cart-price-a",
+      "width": "fit_content",
+      "height": "fit_content",
+      "content": "¥89",
+      "fontFamily": "Plus Jakarta Sans, Noto Sans SC",
+      "fontSize": 16.0,
+      "fontWeight": 700,
+      "letterSpacing": -0.3,
+      "lineHeight": 1.5,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "$--accent-foreground"
+        }
+      ],
+      "bindings": {
+        "content": "'¥' + to_str($app.cartQtyA * 89)"
+      }
+    },
+    {
+      "type": "text",
+      "id": "n356",
+      "name": "step-qty-b",
+      "width": 34.0,
+      "height": "fit_content",
+      "content": "1",
+      "fontFamily": "Plus Jakarta Sans, Noto Sans SC",
+      "fontSize": 14.0,
+      "fontWeight": 600,
+      "lineHeight": 1.5,
+      "textAlign": "center",
+      "textGrowth": "fixed-width",
+      "fill": [
+        {
+          "type": "solid",
+          "color": "$--foreground"
+        }
+      ],
+      "bindings": {
+        "content": "to_str($app.cartQtyB)"
+      }
+    },
+    {
+      "type": "text",
+      "id": "n359",
+      "name": "cart-price-b",
+      "width": "fit_content",
+      "height": "fit_content",
+      "content": "¥89",
+      "fontFamily": "Plus Jakarta Sans, Noto Sans SC",
+      "fontSize": 16.0,
+      "fontWeight": 700,
+      "letterSpacing": -0.3,
+      "lineHeight": 1.5,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "$--accent-foreground"
+        }
+      ],
+      "bindings": {
+        "content": "'¥' + to_str($app.cartQtyB * 89)"
+      }
+    }
+  ]
+}

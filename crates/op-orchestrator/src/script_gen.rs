@@ -26,7 +26,7 @@ pub enum ScriptGenError {
     /// An insertion used an undefined parent or a name/id instead of a
     /// handle from this fresh generation script. Retry with exact feedback.
     ParentReference(String),
-    /// Parsed nodes contain a proven unsupported runtime expression function.
+    /// Parsed nodes contain invalid runtime expressions or unparseable action chains.
     RuntimeExpression(GeneratedExpressionError),
     /// The recorded `batch_design` program failed to build a forest.
     Program(ProgramGenError),

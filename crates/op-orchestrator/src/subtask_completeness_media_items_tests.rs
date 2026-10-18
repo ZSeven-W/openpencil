@@ -23,7 +23,13 @@ fn task() -> Subtask {
 }
 
 fn inserted(script: &str) -> (VecDocSink, SubtaskOutcome) {
-    let (nodes, _) = crate::script_gen::parse_script(script).expect("retained script parses");
+    // Inspect the unchanged historical trees independently of action validity.
+    // The public generation gate rejects attempt 2's malformed push below;
+    // the real builder/executor still reconstructs its five merchant cards.
+    let program = op_mcp::script_runner::run_generation_script_to_program(script)
+        .expect("retained JavaScript builds a program");
+    let (nodes, _) = crate::program_gen::run_program_to_forest(&program)
+        .expect("retained program builds schema nodes");
     let mut sink = VecDocSink::new();
     let ids = sink
         .insert_subtree_returning_root_ids(nodes, &NodeId::NONE)
@@ -52,6 +58,24 @@ fn card_ids(nodes: &[PenNode], out: &mut Vec<String>) {
             card_ids(children, out);
         }
     }
+}
+
+#[test]
+fn retained_extra_quote_push_is_rejected_before_independent_structure_check() {
+    // Keep all three original response files byte-for-byte. Only attempt 2 has
+    // the extra quote; the two valid historical action chains still pass.
+    crate::script_gen::parse_script(SCRIPTS[0]).unwrap();
+    crate::script_gen::parse_script(SCRIPTS[2]).unwrap();
+    let error = crate::script_gen::parse_script(SCRIPTS[1]).unwrap_err();
+    assert!(matches!(
+        &error,
+        crate::script_gen::ScriptGenError::RuntimeExpression(_)
+    ));
+    let message = error.to_string();
+    assert!(message.starts_with("generated-action-body:"), "{message}");
+    assert!(message.contains("events.onTap[0]"), "{message}");
+    assert!(message.contains("push"), "{message}");
+    assert!(message.contains("unterminated string"), "{message}");
 }
 
 #[test]

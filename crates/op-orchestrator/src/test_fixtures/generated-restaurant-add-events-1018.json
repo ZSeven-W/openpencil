@@ -1,0 +1,462 @@
+{
+  "source_sha256": "a51f0d9e49dc018eeab66207e7e7d052e4cb2113db31d62ab897b20a635da7d6",
+  "source_generation": "restaurant-detail/generation.log:222-225 (2026-10-18)",
+  "buttons": [
+    {
+      "type": "frame",
+      "id": "n222",
+      "name": "add-button-宫保鸡丁",
+      "role": "button",
+      "animations": [
+        {
+          "trigger": "mount",
+          "keyframes": [
+            {
+              "offset": 0.0,
+              "values": {
+                "scaleX": 1,
+                "scaleY": 1
+              }
+            },
+            {
+              "offset": 1.0,
+              "values": {
+                "scaleX": 1,
+                "scaleY": 1
+              }
+            }
+          ],
+          "durationMs": 1,
+          "easing": "standard"
+        }
+      ],
+      "width": 30.0,
+      "height": 30.0,
+      "layout": "horizontal",
+      "justifyContent": "center",
+      "alignItems": "center",
+      "cornerRadius": 15.0,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#EA580C"
+        }
+      ],
+      "children": [
+        {
+          "type": "icon_font",
+          "id": "n223",
+          "name": "plus-icon",
+          "iconFontName": "plus",
+          "iconFontFamily": "lucide",
+          "width": 16.0,
+          "height": 16.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#FFFFFF"
+            }
+          ]
+        }
+      ],
+      "events": {
+        "onTap": [
+          {
+            "animate": {
+              "target": null,
+              "property": "scaleX",
+              "from": 0.85,
+              "to": 1,
+              "durationMs": 180,
+              "easing": "emphasizedDecelerate",
+              "fillMode": "both"
+            }
+          },
+          {
+            "toast": "'已加入购物车'"
+          }
+        ]
+      }
+    },
+    {
+      "type": "frame",
+      "id": "n233",
+      "name": "add-button-鱼香肉丝",
+      "role": "button",
+      "animations": [
+        {
+          "trigger": "mount",
+          "keyframes": [
+            {
+              "offset": 0.0,
+              "values": {
+                "scaleX": 1,
+                "scaleY": 1
+              }
+            },
+            {
+              "offset": 1.0,
+              "values": {
+                "scaleX": 1,
+                "scaleY": 1
+              }
+            }
+          ],
+          "durationMs": 1,
+          "easing": "standard"
+        }
+      ],
+      "width": 30.0,
+      "height": 30.0,
+      "layout": "horizontal",
+      "justifyContent": "center",
+      "alignItems": "center",
+      "cornerRadius": 15.0,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#EA580C"
+        }
+      ],
+      "children": [
+        {
+          "type": "icon_font",
+          "id": "n234",
+          "name": "plus-icon",
+          "iconFontName": "plus",
+          "iconFontFamily": "lucide",
+          "width": 16.0,
+          "height": 16.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#FFFFFF"
+            }
+          ]
+        }
+      ],
+      "events": {
+        "onTap": [
+          {
+            "animate": {
+              "target": null,
+              "property": "scaleX",
+              "from": 0.85,
+              "to": 1,
+              "durationMs": 180,
+              "easing": "emphasizedDecelerate",
+              "fillMode": "both"
+            }
+          },
+          {
+            "toast": "'已加入购物车'"
+          }
+        ]
+      }
+    },
+    {
+      "type": "frame",
+      "id": "n245",
+      "name": "add-button-麻婆豆腐",
+      "role": "button",
+      "animations": [
+        {
+          "trigger": "mount",
+          "keyframes": [
+            {
+              "offset": 0.0,
+              "values": {
+                "scaleX": 1,
+                "scaleY": 1
+              }
+            },
+            {
+              "offset": 1.0,
+              "values": {
+                "scaleX": 1,
+                "scaleY": 1
+              }
+            }
+          ],
+          "durationMs": 1,
+          "easing": "standard"
+        }
+      ],
+      "width": 30.0,
+      "height": 30.0,
+      "layout": "horizontal",
+      "justifyContent": "center",
+      "alignItems": "center",
+      "cornerRadius": 15.0,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#EA580C"
+        }
+      ],
+      "children": [
+        {
+          "type": "icon_font",
+          "id": "n246",
+          "name": "plus-icon",
+          "iconFontName": "plus",
+          "iconFontFamily": "lucide",
+          "width": 16.0,
+          "height": 16.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#FFFFFF"
+            }
+          ]
+        }
+      ],
+      "events": {
+        "onTap": [
+          {
+            "animate": {
+              "target": null,
+              "property": "scaleX",
+              "from": 0.85,
+              "to": 1,
+              "durationMs": 180,
+              "easing": "emphasizedDecelerate",
+              "fillMode": "both"
+            }
+          },
+          {
+            "toast": "'已加入购物车'"
+          }
+        ]
+      }
+    },
+    {
+      "type": "frame",
+      "id": "n256",
+      "name": "add-button-清炒时蔬",
+      "role": "button",
+      "animations": [
+        {
+          "trigger": "mount",
+          "keyframes": [
+            {
+              "offset": 0.0,
+              "values": {
+                "scaleX": 1,
+                "scaleY": 1
+              }
+            },
+            {
+              "offset": 1.0,
+              "values": {
+                "scaleX": 1,
+                "scaleY": 1
+              }
+            }
+          ],
+          "durationMs": 1,
+          "easing": "standard"
+        }
+      ],
+      "width": 30.0,
+      "height": 30.0,
+      "layout": "horizontal",
+      "justifyContent": "center",
+      "alignItems": "center",
+      "cornerRadius": 15.0,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#EA580C"
+        }
+      ],
+      "children": [
+        {
+          "type": "icon_font",
+          "id": "n257",
+          "name": "plus-icon",
+          "iconFontName": "plus",
+          "iconFontFamily": "lucide",
+          "width": 16.0,
+          "height": 16.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#FFFFFF"
+            }
+          ]
+        }
+      ],
+      "events": {
+        "onTap": [
+          {
+            "animate": {
+              "target": null,
+              "property": "scaleX",
+              "from": 0.85,
+              "to": 1,
+              "durationMs": 180,
+              "easing": "emphasizedDecelerate",
+              "fillMode": "both"
+            }
+          },
+          {
+            "toast": "'已加入购物车'"
+          }
+        ]
+      }
+    },
+    {
+      "type": "frame",
+      "id": "n267",
+      "name": "add-button-红烧排骨",
+      "role": "button",
+      "animations": [
+        {
+          "trigger": "mount",
+          "keyframes": [
+            {
+              "offset": 0.0,
+              "values": {
+                "scaleX": 1,
+                "scaleY": 1
+              }
+            },
+            {
+              "offset": 1.0,
+              "values": {
+                "scaleX": 1,
+                "scaleY": 1
+              }
+            }
+          ],
+          "durationMs": 1,
+          "easing": "standard"
+        }
+      ],
+      "width": 30.0,
+      "height": 30.0,
+      "layout": "horizontal",
+      "justifyContent": "center",
+      "alignItems": "center",
+      "cornerRadius": 15.0,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#EA580C"
+        }
+      ],
+      "children": [
+        {
+          "type": "icon_font",
+          "id": "n268",
+          "name": "plus-icon",
+          "iconFontName": "plus",
+          "iconFontFamily": "lucide",
+          "width": 16.0,
+          "height": 16.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#FFFFFF"
+            }
+          ]
+        }
+      ],
+      "events": {
+        "onTap": [
+          {
+            "animate": {
+              "target": null,
+              "property": "scaleX",
+              "from": 0.85,
+              "to": 1,
+              "durationMs": 180,
+              "easing": "emphasizedDecelerate",
+              "fillMode": "both"
+            }
+          },
+          {
+            "toast": "'已加入购物车'"
+          }
+        ]
+      }
+    },
+    {
+      "type": "frame",
+      "id": "n278",
+      "name": "add-button-番茄蛋汤",
+      "role": "button",
+      "animations": [
+        {
+          "trigger": "mount",
+          "keyframes": [
+            {
+              "offset": 0.0,
+              "values": {
+                "scaleX": 1,
+                "scaleY": 1
+              }
+            },
+            {
+              "offset": 1.0,
+              "values": {
+                "scaleX": 1,
+                "scaleY": 1
+              }
+            }
+          ],
+          "durationMs": 1,
+          "easing": "standard"
+        }
+      ],
+      "width": 30.0,
+      "height": 30.0,
+      "layout": "horizontal",
+      "justifyContent": "center",
+      "alignItems": "center",
+      "cornerRadius": 15.0,
+      "fill": [
+        {
+          "type": "solid",
+          "color": "#EA580C"
+        }
+      ],
+      "children": [
+        {
+          "type": "icon_font",
+          "id": "n279",
+          "name": "plus-icon",
+          "iconFontName": "plus",
+          "iconFontFamily": "lucide",
+          "width": 16.0,
+          "height": 16.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#FFFFFF"
+            }
+          ]
+        }
+      ],
+      "events": {
+        "onTap": [
+          {
+            "animate": {
+              "target": null,
+              "property": "scaleX",
+              "from": 0.85,
+              "to": 1,
+              "durationMs": 180,
+              "easing": "emphasizedDecelerate",
+              "fillMode": "both"
+            }
+          },
+          {
+            "toast": "'已加入购物车'"
+          }
+        ]
+      }
+    }
+  ]
+}

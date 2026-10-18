@@ -202,7 +202,7 @@ pub(super) fn apply_worker_event(
             let is_limit_failure = outcome
                 .error
                 .as_deref()
-                .is_some_and(crate::retry::is_provider_limit);
+                .is_some_and(crate::retry::is_outcome_provider_limit);
             let was_zero = outcome.node_count == 0;
             debug_assert_eq!(commands.is_some(), !was_zero);
             let parent_id = plan.subtasks[plan_idx]

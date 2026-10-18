@@ -27,6 +27,17 @@ fn event_script(hook: &str, actions: Value) -> String {
     node_script(node)
 }
 
+fn assert_action_body(source: &str) -> String {
+    let error = parse_script(source).expect_err("invalid action body must reject");
+    assert!(
+        matches!(&error, ScriptGenError::RuntimeExpression(_)),
+        "{error}"
+    );
+    let message = error.to_string();
+    assert!(message.starts_with("generated-action-body:"), "{message}");
+    message
+}
+
 fn assert_unknown(source: &str, name: &str) -> String {
     let error =
         parse_script(source).expect_err("unknown Jian call must reject the generated forest");
@@ -261,7 +272,6 @@ fn unknown_binding_targets_and_future_event_hooks_are_preserved_without_scanning
 fn custom_call_actions_and_unknown_action_fields_are_not_builtin_calls() {
     let actions = json!([
         {"call":{"module":"cart", "function":"String", "args":["'String($app.quantity)'"]}},
-        {"futureAction":{"expr":"String(2)", "set":{"$app.quantity":"String(2)"}}},
         {"set":{"target":"$app.quantity", "value":"to_num('2')", "note":"String(2)"}},
         {"if":{"expr":"true", "then":[], "futureExpr":"String(2)"}}
     ]);
@@ -269,14 +279,14 @@ fn custom_call_actions_and_unknown_action_fields_are_not_builtin_calls() {
 }
 
 #[test]
-fn unparseable_actions_are_deferred_to_existing_runtime_validation() {
+fn unparseable_action_bodies_are_rejected_by_the_registry_gate() {
     for action in [
         json!({"set":{"target":"$app.quantity", "value":2, "note":"String(2)"}}),
         json!({"set":{"$app.quantity":"String(2)", "$app.other":2}}),
         json!({"if":{"expr":"String(1)"}}),
         json!({"set":{"$app.quantity":"String(2)"}, "futureAction":{}}),
     ] {
-        parse_script(&event_script("onTap", json!([action]))).unwrap();
+        assert_action_body(&event_script("onTap", json!([action])));
     }
 }
 
@@ -382,16 +392,16 @@ fn factory_expression_errors_do_not_hide_nested_if_sites() {
         );
     }
     let actions = json!([{"if":{
-        "expr":"true", "then":[{"call":{"module":"cart", "function":"custom", "args":["String("]}}],
+        "expr":"true", "then":[{"call":{"module":"cart", "function":"custom", "args":["'String('"]}}],
         "else":[{"toast":"'Ready'"}], "futureExpr":"String("
     }}]);
     parse_script(&event_script("onTap", actions)).unwrap();
     let future = json!([{"if":{"expr":"true", "then":[{"futureAction":{"expr":"String("}}]}}]);
-    parse_script(&event_script("onTap", future)).unwrap();
+    assert_action_body(&event_script("onTap", future));
 }
 
 #[test]
-fn unknown_sites_opaque_routes_and_nonexpression_json_are_not_compiled() {
+fn unknown_sites_and_ignored_action_fields_remain_opaque() {
     for property in ["futureProperty", "bind:futureProperty"] {
         parse_script(&binding_script(property, "String(")).unwrap();
     }
@@ -400,19 +410,27 @@ fn unknown_sites_opaque_routes_and_nonexpression_json_are_not_compiled() {
         json!([{"toast":"裸中文"}]),
     ))
     .unwrap();
-    let actions = json!([
-        {"push":"/商品/350ml"},
-        {"push":{"path":"/商品/350ml", "note":"String("}},
-        {"futureAction":{"expr":"String(", "toast":"裸中文"}},
-        {"set":{"target":"$state.qty", "value":2}},
-        {"set":{"$state.enabled":true}},
-        {"if":{"expr":true, "then":[]}},
-        {"toast":false},
-        {"toast":{"message":2}},
-        {"set":{"target":"$state.qty", "value":"2", "note":"String("}},
-        {"set":{"$state.qty":"String("}, "futureAction":{}}
+    let valid = json!([
+        {"push":"'/商品/350ml'"},
+        {"set":{"target":"$state.qty", "value":"2", "note":"String("}}
     ]);
-    parse_script(&event_script("onTap", actions)).unwrap();
+    parse_script(&event_script("onTap", valid)).unwrap();
+    // Each body is checked independently so the first bad action cannot mask
+    // another formerly deferred shape. Unknown hooks remain distinct above.
+    for action in [
+        json!({"push":"/商品/350ml"}),
+        json!({"push":{"path":"/商品/350ml", "note":"String("}}),
+        json!({"futureAction":{"expr":"String(", "toast":"裸中文"}}),
+        json!({"set":{"target":"$state.qty", "value":2}}),
+        json!({"set":{"$state.enabled":true}}),
+        json!({"if":{"expr":true, "then":[]}}),
+        json!({"toast":false}),
+        json!({"toast":{"message":2}}),
+        json!({"set":{"$state.qty":"String("}, "futureAction":{}}),
+        json!({"call":{"module":"cart", "function":"custom", "args":["String("]}}),
+    ] {
+        assert_action_body(&event_script("onTap", json!([action])));
+    }
 }
 
 #[test]

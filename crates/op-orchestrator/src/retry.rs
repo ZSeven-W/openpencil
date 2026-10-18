@@ -22,11 +22,9 @@ const PROVIDER_LIMIT_SUBSTRINGS: &[&str] = &[
     "quota exceeded",
 ];
 
-/// True when the error reports the provider's account/session quota is
-/// exhausted until a reset time. Consumed twice: `is_non_retryable` (stop the
-/// per-subtask ladder) and the run-level circuit breaker in `run.rs`'s
-/// sequential loop / the concurrent executor (two consecutive quota failures
-/// set the `AbortFlag` so no further model calls are spent).
+/// Detect provider quota text, including raw planning LlmError messages.
+/// Outcome consumers must use `is_outcome_provider_limit` instead so local
+/// diagnostic data cannot trip the run-level provider circuit breaker.
 pub(crate) fn is_provider_limit(msg: &str) -> bool {
     let lower = msg.to_lowercase();
     // "resets <time>" on its own is too loose (a transport error can say the
@@ -35,6 +33,17 @@ pub(crate) fn is_provider_limit(msg: &str) -> bool {
         .iter()
         .any(|needle| lower.contains(needle))
         || (lower.contains("resets ") && lower.contains("limit"))
+}
+
+// Non-aborted provider messages gain a `stream error: ` envelope at the
+// subagent boundary. Only this locally emitted category may treat provider-like
+// words as diagnostic data; do not apply this exemption to raw LlmError text.
+fn is_local_action_body_rejection(msg: &str) -> bool {
+    msg.starts_with("self-check failed: generated-action-body:")
+}
+
+pub(crate) fn is_outcome_provider_limit(msg: &str) -> bool {
+    !is_local_action_body_rejection(msg) && is_provider_limit(msg)
 }
 
 pub(crate) fn is_provider_access_denied(msg: &str) -> bool {
@@ -48,7 +57,8 @@ pub(crate) fn is_provider_authentication_required(msg: &str) -> bool {
     let primary = lower
         .trim_start()
         .strip_prefix("stream error: ")
-        .unwrap_or(lower.trim_start());
+        .unwrap_or(lower.trim_start())
+        .trim_start();
     [
         "authentication failed",
         "error: authentication failed",
@@ -73,6 +83,9 @@ pub(crate) fn is_provider_authentication_required(msg: &str) -> bool {
 ///
 /// 用简单的 `to_lowercase() + contains` 替代 regex crate,语义完全等价。
 pub(crate) fn is_non_retryable(msg: &str) -> bool {
+    if is_local_action_body_rejection(msg) {
+        return false;
+    }
     let lower = msg.to_lowercase();
     lower.contains("http 400")
         || lower.contains("http 401")
@@ -130,6 +143,30 @@ mod tests {
         assert!(!is_provider_authentication_required("Antigravity returned no output — CLI log: Failed to poll ListExperiments: You are not logged into Antigravity."));
         assert!(!is_non_retryable(
             "self-check failed: source-copy-missing: Authentication required"
+        ));
+    }
+
+    #[test]
+    fn action_body_data_does_not_become_an_outcome_provider_failure() {
+        for data in ["HTTP 401", "quota exceeded", "authentication failed"] {
+            let local = format!("self-check failed: generated-action-body: {data}");
+            assert!(!is_non_retryable(&local), "{local}");
+            assert!(!is_outcome_provider_limit(&local), "{local}");
+            let provider = format!("stream error: {local}");
+            assert!(is_non_retryable(&provider), "{provider}");
+            assert!(!is_self_check_rejection(&provider));
+        }
+        let raw = "self-check failed: generated-action-body: quota exceeded";
+        assert!(
+            is_provider_limit(raw),
+            "raw planning errors have no local provenance"
+        );
+        assert!(is_outcome_provider_limit(&format!("stream error: {raw}")));
+        assert!(is_non_retryable(
+            "self-check failed: future-category: HTTP 401"
+        ));
+        assert!(is_outcome_provider_limit(
+            "self-check failed: future-category: quota exceeded"
         ));
     }
 

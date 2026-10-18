@@ -445,7 +445,7 @@ fn run_subtask_zero_node_on_llm_error() {
         false,
     ));
     assert_eq!(outcome.node_count, 0);
-    assert_eq!(outcome.error.as_deref(), Some("rate limited"));
+    assert_eq!(outcome.error.as_deref(), Some("stream error: rate limited"));
 }
 
 #[test]

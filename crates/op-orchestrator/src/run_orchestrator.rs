@@ -487,7 +487,7 @@ impl Orchestrator {
                 if !abort.is_set() {
                     if err_msg
                         .as_deref()
-                        .is_some_and(crate::retry::is_provider_limit)
+                        .is_some_and(crate::retry::is_outcome_provider_limit)
                     {
                         consecutive_provider_limit_failures += 1;
                         if consecutive_provider_limit_failures >= 2 {

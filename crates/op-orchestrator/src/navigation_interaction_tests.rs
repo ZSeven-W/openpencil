@@ -99,16 +99,6 @@ fn nonempty_events_are_insufficient_without_declared_observable_state() {
         ),
         (r#"[{toggle:"$app.active"}]"#, r#""'Off'""#, true),
         (
-            r#"[{set:{"$app.active":"true","$app.other":false}}]"#,
-            r#""$app.active ? 'On' : 'Off'""#,
-            true,
-        ),
-        (
-            r#"[{set:{"$app.active":true}}]"#,
-            r#""$app.active ? 'On' : 'Off'""#,
-            true,
-        ),
-        (
             r#"[{toggle:"$app.active"}]"#,
             r#""$app.activeExtra ? 'On' : 'Off'""#,
             true,
@@ -123,6 +113,28 @@ fn nonempty_events_are_insufficient_without_declared_observable_state() {
             check(&script(action, binding, declared)).is_some(),
             "{action} {binding}"
         );
+    }
+}
+
+#[test]
+fn literal_set_values_are_rejected_by_generation_and_navigation_gates() {
+    for action in [
+        r#"[{set:{"$app.active":"true","$app.other":false}}]"#,
+        r#"[{set:{"$app.active":true}}]"#,
+    ] {
+        let source = script(action, r#""$app.active ? 'On' : 'Off'""#, true);
+        let error = crate::script_gen::parse_script(&source).unwrap_err();
+        assert!(matches!(
+            &error,
+            crate::script_gen::ScriptGenError::RuntimeExpression(_)
+        ));
+        let message = error.to_string();
+        assert!(message.starts_with("generated-action-body:"), "{message}");
+        assert!(message.contains("must be string (expression)"), "{message}");
+        // The original invalid JSON values remain intact. Inspect their forest
+        // independently to retain the navigation gate's invalid-chain coverage.
+        let reason = check_original_navigation_gate(&source).unwrap();
+        assert!(reason.contains("invalid action chain"), "{reason}");
     }
 }
 
@@ -142,6 +154,7 @@ fn empty_set_expression_is_rejected_by_generation_and_navigation_gates() {
 fn declared_state_driven_controls_and_conditional_actions_pass_structural_gate() {
     for action in [
         r#"[{toggle:"$app.active"}]"#,
+        r#"[{set:{"$app.active":"true"}}]"#,
         r#"[{set:{"$app.active":"!$app.active"}}]"#,
         r#"[{if:{expr:"$app.active",then:[{set:{"$app.active":"false"}}],else:[{toggle:"$app.active"}]}}]"#,
     ] {
