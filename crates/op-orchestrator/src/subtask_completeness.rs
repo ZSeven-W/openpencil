@@ -28,14 +28,7 @@ pub fn expected_item_count(subtask: &Subtask) -> Option<usize> {
 }
 
 fn expected_count_with_map_markers(subtask: &Subtask, map_markers: usize) -> Option<usize> {
-    let mut text = subtask.label.clone();
-    if let Some(elements) = &subtask.elements {
-        text.push('\n');
-        text.push_str(elements);
-    }
-    // Quoted text is literal copy the section displays ("title '8 条评论'"),
-    // not a promise of that many sibling items.
-    let text = mask_metadata_copy(&mask_quoted_copy(&text));
+    let text = local_item_text(subtask);
 
     let mut counts = Vec::new();
     let mut ranged_spans: Vec<Range<usize>> = Vec::new();
@@ -156,6 +149,18 @@ fn expected_count_with_map_markers(subtask: &Subtask, map_markers: usize) -> Opt
     counts.into_iter().filter(|count| *count >= 2).max()
 }
 
+/// Quotas and grid delivery must use the same local promises. Literal copy,
+/// metadata values, and explicitly non-local references do not own items here.
+fn local_item_text(subtask: &Subtask) -> String {
+    let text = format!(
+        "{}\n{}",
+        subtask.label,
+        subtask.elements.as_deref().unwrap_or("")
+    );
+    let text = mask_metadata_copy(&mask_quoted_copy(&text));
+    scope::mask_nonlocal_references(&text, subtask)
+}
+
 /// Count the largest repeated sibling family inside the inserted subtree(s).
 pub fn delivered_item_count(sink: &dyn DocSink, inserted_root_ids: &[String]) -> usize {
     let mut largest_family = 0;
@@ -200,11 +205,7 @@ pub(crate) fn incomplete_attempt(
         return None;
     }
     let mut delivered = delivered_item_count(sink, &outcome.inserted_root_ids);
-    let text = mask_metadata_copy(&mask_quoted_copy(&format!(
-        "{}\n{}",
-        subtask.label,
-        subtask.elements.as_deref().unwrap_or("")
-    )));
+    let text = local_item_text(subtask);
     if let Some((rows, columns)) = grid_dimensions(&text) {
         for id in &outcome.inserted_root_ids {
             if let Some(root) =
@@ -653,3 +654,10 @@ mod word_tests;
 #[cfg(test)]
 #[path = "subtask_completeness_text_line_tests.rs"]
 mod text_line_tests;
+
+#[path = "subtask_completeness_scope.rs"]
+mod scope;
+
+#[cfg(test)]
+#[path = "subtask_completeness_scope_tests.rs"]
+mod scope_tests;
