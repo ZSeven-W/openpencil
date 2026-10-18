@@ -614,13 +614,16 @@ pub(crate) fn repair_truncated_script(script: &str) -> Option<String> {
     Some(repaired)
 }
 
-/// A bare "x is not defined" tells the model nothing about WHY. Every script
-/// runs in a FRESH sandbox, so a variable that held a node in an earlier batch
-/// is gone — the model must reference that node by its id STRING. Say so
-/// (measured 2026-07-12: a batch died on `header is not defined`, where
-/// `header` was a `const` from the previous batch's script).
+/// Preview scopes belong inside expression strings. Other missing variables
+/// may be node handles from an earlier sandbox and need fresh local handles
+/// or persistent node-id strings instead.
 fn explain_reference_error(msg: &str) -> Option<ScriptError> {
     let name = msg.strip_suffix(" is not defined")?;
+    if matches!(name, "$state" | "$app") {
+        return Some(ScriptError::RuntimeBindingReference {
+            scope: name.to_string(),
+        });
+    }
     Some(ScriptError::StaleReference {
         message: msg.to_string(),
         name: name.to_string(),
@@ -691,6 +694,10 @@ fn strip_fences(text: &str) -> Result<String, ScriptError> {
 #[cfg(test)]
 #[path = "script_runner_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "script_runner_reference_tests.rs"]
+mod reference_tests;
 
 #[cfg(test)]
 mod duplicate_echo_tests {

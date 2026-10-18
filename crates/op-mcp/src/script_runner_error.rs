@@ -12,7 +12,7 @@
 //! tell "the model sent nothing runnable" (`EmptySource` / `NoOperations`)
 //! from "the sandbox itself could not start" (`RuntimeInit` / `ContextInit` /
 //! `BindHostFn` / `SetGlobal` — host faults, never the model's fault) from
-//! "the script threw" (`Threw` / `StaleReference`), without matching prose.
+//! "the script threw" (`Threw` / reference failures), without matching prose.
 
 use std::fmt;
 
@@ -43,6 +43,8 @@ pub enum ScriptError {
     /// The payload is the JS exception message (or the thrown value's
     /// string form).
     Threw(String),
+    /// A Preview expression was evaluated as generation-time JavaScript.
+    RuntimeBindingReference { scope: String },
     /// The script referenced a binding that only existed in an earlier
     /// batch's sandbox. `message` is the raw `x is not defined` text and
     /// `name` the identifier, so the explanation can name it back.
@@ -69,6 +71,15 @@ impl fmt::Display for ScriptError {
             ScriptError::SetGlobal { name, detail } => write!(f, "set {name}: {detail}"),
             ScriptError::Prelude(detail) => write!(f, "prelude: {detail}"),
             ScriptError::Threw(message) => write!(f, "script error: {message}"),
+            ScriptError::RuntimeBindingReference { scope } => write!(
+                f,
+                "script error: {scope} is not defined. {scope} is a Preview runtime scope, \
+                 not a JavaScript variable in the generation sandbox. Quote the ENTIRE \
+                 runtime expression, for example bindings: {{content: \"'Selected: ' + $app.choice\"}}. \
+                 Declare typed state with an intentional default; event set values are also \
+                 expression strings (a string literal needs inner quotes). Preserve the requested \
+                 behavior while repairing syntax."
+            ),
             ScriptError::StaleReference { message, name } => write!(
                 f,
                 "script error: {message}. Each script runs in a FRESH sandbox — a variable \

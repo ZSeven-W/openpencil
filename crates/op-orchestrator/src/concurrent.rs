@@ -56,6 +56,10 @@ use replay::{apply_worker_event, run_screen_group_worker, WorkerSignal};
 mod echo;
 use echo::maybe_geometry_echo_with_outcomes;
 
+#[path = "concurrent_script_feedback.rs"]
+mod script_feedback;
+use script_feedback::combine_retry_feedback;
+
 /// Clamps a raw concurrency value to the valid range `[1, 6]`.
 ///
 /// This mirrors the store-side clamp in TS (store clamps to [1,6] before
@@ -234,13 +238,17 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
         .as_deref()
         .is_some_and(is_self_check_rejection);
     let attempt2_subtask = Subtask {
-        retry_feedback: crate::output_language::retry_feedback_for_gates(
-            completeness1.as_ref(),
-            language1.as_ref(),
-            outcome1
-                .error
-                .clone()
-                .filter(|_| attempt1_self_check_rejection),
+        retry_feedback: combine_retry_feedback(
+            crate::output_language::retry_feedback_for_gates(
+                completeness1.as_ref(),
+                language1.as_ref(),
+                outcome1
+                    .error
+                    .clone()
+                    .filter(|_| attempt1_self_check_rejection),
+            ),
+            subtask.retry_feedback.as_ref(),
+            outcome1.error.as_deref(),
         ),
         ..subtask.clone()
     };
@@ -303,25 +311,21 @@ pub(crate) async fn run_subtask_retry_ladder_with_outcomes(
     }
 
     let outcome_after2 = outcome2.as_ref().unwrap_or(&outcome1);
-    let attempt3_feedback = crate::output_language::retry_feedback_for_gates(
-        completeness2.as_ref(),
-        language2.as_ref().filter(|_| language_retry2),
-        outcome_after2
-            .error
-            .clone()
-            .filter(|error| is_self_check_rejection(error)),
+    let attempt3_feedback = combine_retry_feedback(
+        crate::output_language::retry_feedback_for_gates(
+            completeness2.as_ref(),
+            language2.as_ref().filter(|_| language_retry2),
+            outcome_after2
+                .error
+                .clone()
+                .filter(|error| is_self_check_rejection(error)),
+        ),
+        attempt2_subtask.retry_feedback.as_ref(),
+        outcome_after2.error.as_deref(),
     );
-    let attempt3_subtask = if attempt3_feedback.is_some() {
-        Subtask {
-            retry_feedback: attempt3_feedback,
-            ..subtask.clone()
-        }
-    } else if attempt2_subtask.retry_feedback.is_some() {
-        // A transient attempt-2 parse/transport failure must not erase the
-        // actionable self-check feedback learned on attempt 1.
-        attempt2_subtask.clone()
-    } else {
-        subtask.clone()
+    let attempt3_subtask = Subtask {
+        retry_feedback: attempt3_feedback,
+        ..subtask.clone()
     };
 
     // Attempt 3 — minimal skills (last-ditch fallback). Language only
@@ -666,3 +670,7 @@ use echo::maybe_geometry_echo;
 #[cfg(test)]
 #[path = "concurrent_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "concurrent_script_retry_tests.rs"]
+mod script_retry_tests;
