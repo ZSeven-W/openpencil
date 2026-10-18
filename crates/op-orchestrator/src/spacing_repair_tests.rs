@@ -71,6 +71,58 @@ fn gapped_but_unpadded_column_strips_only_vertical() {
 }
 
 #[test]
+fn canonical_bottom_nav_keeps_internal_vertical_clearance_separate_from_parent_gap() {
+    for horizontal_parent_padding in [0, 24] {
+        let mut root = node(json!({
+            "type":"frame","id":"phone","width":390,"height":844,
+            "layout":"vertical","gap":16,"padding":[0,horizontal_parent_padding,0,horizontal_parent_padding],
+            "children":[{
+                "type":"frame","id":"nav","role":"bottom-tab-bar","layout":"horizontal",
+                "width":"fill_container","height":72,"padding":[8,16,8,16],"children":[
+                    {"type":"text","id":"home","content":"Home"},
+                    {"type":"text","id":"orders","content":"Orders"},
+                    {"type":"text","id":"me","content":"Me"}
+                ]
+            }]
+        }));
+        assert_eq!(
+            strip_wrapper_double_inset(&mut root),
+            horizontal_parent_padding != 0
+        );
+        let v = serde_json::to_value(&root).unwrap();
+        let inset = if horizontal_parent_padding == 0 {
+            16.0
+        } else {
+            0.0
+        };
+        assert_eq!(v["children"][0]["padding"], json!([8.0, inset, 8.0, inset]));
+        let before = root.clone();
+        assert!(!strip_wrapper_double_inset(&mut root));
+        assert_eq!(root, before);
+    }
+}
+
+#[test]
+fn nav_names_and_ordinary_rows_do_not_bypass_vertical_inset_deduplication() {
+    for role in [None, Some("toolbar"), Some("content")] {
+        let mut row = json!({
+            "type":"frame","id":"row","name":"Bottom Tab Bar","layout":"horizontal",
+            "padding":[8,16,8,16],"children":[{"type":"text","id":"label","content":"Content"}]
+        });
+        if let Some(role) = role {
+            row["role"] = json!(role);
+        }
+        let mut root = node(json!({
+            "type":"frame","id":"phone","width":390,"height":844,
+            "layout":"vertical","gap":16,"children":[row]
+        }));
+        assert!(strip_wrapper_double_inset(&mut root));
+        let v = serde_json::to_value(root).unwrap();
+        assert_eq!(v["children"][0]["padding"], json!([0.0, 16.0, 0.0, 16.0]));
+    }
+}
+
+#[test]
 fn landing_page_sections_keep_their_own_vertical_rhythm() {
     // 0808-gm-1.op: a marketing page root (no padding, gap 20) whose eight
     // sections each carry an 80px vertical inset of their own. A 20px gap

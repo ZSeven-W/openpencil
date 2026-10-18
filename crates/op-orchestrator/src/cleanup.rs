@@ -33,6 +33,8 @@ mod cleanup_root_patches;
 mod fixed_board_backdrops;
 #[path = "cleanup_fixed_board_spacing.rs"]
 mod fixed_board_spacing;
+#[path = "cleanup_mobile_viewport.rs"]
+mod mobile_viewport;
 pub(crate) use cleanup_mobile_chrome::{
     anchor_bottom_nav_last_for_all_roots, repair_mobile_structural_chrome_for_all_roots,
 };
@@ -573,6 +575,7 @@ fn run_cleanup_passes_with_summary_and_policy(
 
         remove_duplicate_status_bars(sink, rid);
         remove_duplicate_bottom_nav_sections(sink, rid);
+        mobile_viewport::prepare_status(sink, rid, policy);
         counter.checkpoint(summary, CheckCategory::Structure, "chrome-dedupe");
         distribute_bottom_nav_tabs(sink, rid);
         collapse_nested_horizontal_padding(sink, rid);
@@ -605,7 +608,7 @@ fn run_cleanup_passes_with_summary_and_policy(
         // the wrapped card came out 279px wide against 327px siblings.
         let rid_owned = strip_wrapper_double_inset_if_intent(sink, rid);
         let rid = rid_owned.as_str();
-        crate::mobile_reflow::repair_mobile_trailing_nav_reflow_for_root_in_sink(sink, rid);
+        mobile_viewport::reflow_root(sink, rid, policy);
         cleanup_mobile_dense::repair_dense_mobile_rows(sink, rid);
         cleanup_desktop_dashboard::repair_sparse_desktop_dashboard_rows(sink, plan, rid);
         counter.checkpoint(summary, CheckCategory::Layout, "mobile-chrome+content-rail");
@@ -732,7 +735,7 @@ fn run_cleanup_passes_with_summary_and_policy(
     // where that section belongs is intent — the geometry echo handles it.
     anchor_bottom_nav_last_for_all_roots(sink);
     counter.checkpoint(summary, CheckCategory::Structure, "avatar+nav-anchor");
-    crate::mobile_reflow::repair_mobile_trailing_nav_reflow_in_sink(sink);
+    mobile_viewport::reflow_remaining(sink, &settled_root_ids, policy);
     counter.checkpoint(summary, CheckCategory::Layout, "mobile-trailing-nav-reflow");
 
     // Multi-screen root position deconfliction: screen-shaped top-level
@@ -763,12 +766,7 @@ fn run_cleanup_passes_with_summary_and_policy(
     // point, so both the classic and loop-finalize paths pick it up.
     crate::unify_shared_status_bar::unify_shared_status_bar(sink);
 
-    // Finalize-time enforcement of the OS status-bar contract: every mobile
-    // screen root must carry exactly one canonical status bar (role="status-bar"
-    // with Levels child) as its first child. Runs after unify_shared_status_bar
-    // to enforce the contract even when root-seeding was escaped (model-built
-    // bar, fit_content root, or later batches). Three cases: missing → insert,
-    // non-canonical → replace, canonical → untouched.
+    // Final status enforcement also covers escaped root-seeding and missing bars.
     finalize_enforce_status_bar::finalize_enforce_status_bar_contract(sink);
 
     // Establish final screen routes first. The cleanup-only semantic pass can

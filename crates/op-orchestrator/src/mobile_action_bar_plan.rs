@@ -9,6 +9,11 @@ use op_editor_core::{EditorState, PenNodeExt};
 
 const MARKER: &str = "OP PINNED BOTTOM ACTION v1";
 
+#[path = "mobile_action_bar_full_page.rs"]
+mod full_page;
+pub(crate) use full_page::preserve as preserve_full_page;
+pub(crate) use full_page::{full_page_wrapper_gutter, is_safe_full_page_wrapper};
+
 pub(crate) fn is_marked(node: &PenNode) -> bool {
     node.base()
         .explain
@@ -29,9 +34,11 @@ pub(crate) fn preserve(
         || !(280.0..=480.0).contains(&plan.root_frame.width)
         || !(500.0..=1000.0).contains(&plan.root_frame.height)
         || plan.root_frame.layout.as_deref() != Some("vertical")
-        || !explicit_bottom_action(task)
         || !is_last_on_screen(task, plan)
     {
+        return;
+    }
+    if preserve_full_page(nodes, task, plan, context) || !explicit_bottom_action(task) {
         return;
     }
     let [node] = nodes else { return };

@@ -1,0 +1,471 @@
+{
+  "product": {
+    "acceptedPlannerLine": 7,
+    "plannerAttempts": [
+      {
+        "line": 7,
+        "plan": {
+          "rootFrame": {
+            "fill": [
+              {
+                "color": "#FFFFFF",
+                "type": "solid"
+              }
+            ],
+            "gap": 0,
+            "height": 812,
+            "id": "shop-root",
+            "layout": "vertical",
+            "name": "电商商品详情 App",
+            "width": 375
+          },
+          "sharedContext": {
+            "exampleEntities": [
+              {
+                "attributes": {
+                  "color": "奶油白 / 燕麦灰",
+                  "price": "¥89.00",
+                  "specs": "350ml / 450ml"
+                },
+                "id": "product-1",
+                "imageSubject": "奶油白陶瓷马克杯",
+                "name": "轻氧陶瓷马克杯",
+                "usedBy": [
+                  "product-page",
+                  "cart-page"
+                ]
+              },
+              {
+                "attributes": {
+                  "price": "¥39.00"
+                },
+                "id": "product-2",
+                "imageSubject": "牛皮纸包装挂耳咖啡",
+                "name": "山野冷萃挂耳咖啡",
+                "usedBy": [
+                  "cart-page"
+                ]
+              }
+            ],
+            "sourceFacts": [
+              "电商商品详情 App 两屏可交互：商品页(大图轮播占位+价格+规格选择+评价三条+底部加购条)、购物车页(商品两条+金额汇总+结算)",
+              "规格胶囊 onTap 切换，「加入购物车」onTap 进购物车",
+              "价格数字滚动，规格切换 transition，加购按钮 pressed 缩放"
+            ]
+          },
+          "styleGuideName": "ecommerce-modern-light",
+          "subtasks": [
+            {
+              "covers": [
+                "商品页",
+                "大图轮播占位",
+                "价格",
+                "规格选择",
+                "评价三条",
+                "底部加购条"
+              ],
+              "elements": "ARCHETYPE: image-led — 大图轮播为主视觉，首屏占约 40%，下方信息卡上滑叠于图上，图片一个主商品图。内容：顶部返回/分享悬浮按钮；大图轮播占位（3 帧指示点）；价格模块（价格数字滚动动效入场，价格+划线原价+标题「轻氧陶瓷马克杯」+副标题）；规格选择区（容量 350ml/450ml、颜色 奶油白/燕麦灰 两组规格胶囊，onTap 切换选中态，规格切换 transition）；用户评价区（三条评价卡片，头像+昵称+星级+短评）；底部加购条（客服图标、加入购物车按钮 pressed 缩放 onTap → 进购物车、立即购买按钮）",
+              "id": "product-page",
+              "label": "商品页",
+              "region": {
+                "height": 812,
+                "width": 375
+              },
+              "screen": "商品页"
+            },
+            {
+              "covers": [
+                "购物车页",
+                "商品两条",
+                "金额汇总",
+                "结算"
+              ],
+              "elements": "顶部导航栏（返回 onTap → 商品页、标题「购物车」、管理）；商品列表两条（商品缩略图+名称+已选规格胶囊文字+价格+数量步进器，第一条为「轻氧陶瓷配件马克杯」沿用商品页规格与价格 ¥89.00，第二条为「山野冷萃挂耳咖啡」¥39.00，含勾选圆点）；金额汇总卡（商品合计、运费说明、优惠提示行）；底部结算条（全选勾选、合计金额数字滚动、去结算按钮 pressed 缩放）",
+              "id": "cart-page",
+              "label": "购物车页",
+              "region": {
+                "height": 812,
+                "width": 375
+              },
+              "screen": "购物车页"
+            }
+          ]
+        }
+      }
+    ],
+    "prompt": "请设计一套可编辑的高保真手机 App 界面（mobile app，375×812）。交付 2 页完整界面：用户指定页面名称时遵从需求，页面之间用 onTap 串起导航。统一的组件、变量与图层结构。\n\n用户需求：电商商品详情 App 两屏可交互（375×812）：商品页(大图轮播占位+价格+规格选择+评价三条+底部加购条)、购物车页(商品两条+金额汇总+结算)。交互：规格胶囊 onTap 切换，「加入购物车」onTap 进购物车。动效：价格数字滚动，规格切换 transition，加购按钮 pressed 缩放。 配色与质感由你根据产品类型和使用场景决定；渐变只在合理处使用。"
+  },
+  "restaurant": {
+    "allPlannerAttemptsRejected": true,
+    "fallbackLogLines": [
+      15,
+      16,
+      17,
+      18,
+      19
+    ],
+    "generationUsed": "build_fallback_plan followed by plan_normalize::normalize",
+    "plannerAttempts": [
+      {
+        "line": 7,
+        "plan": {
+          "rootFrame": {
+            "fill": [
+              {
+                "color": "#FFFCF6",
+                "type": "solid"
+              }
+            ],
+            "gap": 0,
+            "height": 812,
+            "id": "app",
+            "layout": "vertical",
+            "name": "外卖App",
+            "width": 375
+          },
+          "sharedContext": {
+            "exampleEntities": [
+              {
+                "attributes": {
+                  "品类": "川菜",
+                  "起送": "¥20",
+                  "配送": "30分钟"
+                },
+                "id": "merchant-1",
+                "imageSubject": "川菜菜品照片",
+                "name": "老王川菜馆",
+                "usedBy": [
+                  "merchant-list",
+                  "merchant-detail"
+                ]
+              },
+              {
+                "attributes": {
+                  "品类": "甜品"
+                },
+                "id": "merchant-2",
+                "imageSubject": "甜品照片",
+                "name": "鲜芋甜品屋",
+                "usedBy": [
+                  "merchant-list"
+                ]
+              },
+              {
+                "attributes": {
+                  "品类": "面食"
+                },
+                "id": "merchant-3",
+                "imageSubject": "面条照片",
+                "name": "面面俱到",
+                "usedBy": [
+                  "merchant-list"
+                ]
+              },
+              {
+                "attributes": {
+                  "品类": "轻食"
+                },
+                "id": "merchant-4",
+                "imageSubject": "沙拉照片",
+                "name": "轻食沙拉实验室",
+                "usedBy": [
+                  "merchant-list"
+                ]
+              },
+              {
+                "attributes": {
+                  "品类": "炸鸡"
+                },
+                "id": "merchant-5",
+                "imageSubject": "炸鸡照片",
+                "name": "深夜炸鸡铺",
+                "usedBy": [
+                  "merchant-list"
+                ]
+              },
+              {
+                "attributes": {
+                  "招牌菜": "麻婆豆腐、水煮鱼、宫保鸡丁、回锅肉、酸辣土豆丝、蒜泥白肉"
+                },
+                "id": "dish-set",
+                "imageSubject": "对应菜品实拍",
+                "name": "老王川菜馆菜品",
+                "usedBy": [
+                  "dish-list"
+                ]
+              }
+            ],
+            "sourceFacts": [
+              "外卖 App 两屏：首页(地址栏+分类九宫格+限时横幅+商家列表五条)、商家详情(头图+菜品分类横滑+菜品列表六条+购物车条)",
+              "交互：商家行 onTap 进详情；动效：倒计时数字滚动、inView 交错 fade-up、加入购物车 pressed 缩放"
+            ]
+          },
+          "styleGuideName": "warm-food-mobile-light",
+          "subtasks": [
+            {
+              "elements": "顶部地址栏：定位图标 + 收货地址文字 + 下拉箭头，右侧搜索图标按钮；ARCHETYPE: content-stream — 地址栏为顶部主角控件，紧凑 56px，位于首屏 8%，搜索图标右对齐",
+              "id": "home-header",
+              "label": "首页地址栏",
+              "region": {
+                "height": 56,
+                "width": 375
+              },
+              "screen": "首页"
+            },
+            {
+              "elements": "3×3 九宫格分类入口，统一插图风格的九个图标（美食、甜品、早餐、夜宵、生鲜、饮品、面食、炸鸡、轻食），每格图标+标签，点击样式统一切换",
+              "id": "home-categories",
+              "label": "分类九宫格",
+              "region": {
+                "height": 264,
+                "width": 375
+              },
+              "screen": "首页"
+            },
+            {
+              "elements": "限时抢购横幅卡：暖橙渐变底，'限时抢购'标题 + 倒计时数字滚动组件（时:分:秒翻牌数字）+ 立即抢按钮；倒计时每秒数字滚动动效",
+              "id": "home-flash-banner",
+              "label": "限时横幅",
+              "region": {
+                "height": 96,
+                "width": 375
+              },
+              "screen": "首页"
+            },
+            {
+              "elements": "'附近商家'分组标题 + 五条商家行卡（老王川菜馆/鲜芋甜品屋/面面俱到/轻食沙拉实验室/深夜炸鸡铺），每行：左方形商家实拍图、名称、品类标签、起送/配送信息、右侧收藏心形按钮在卡内；老王川菜馆行 onTap 进入商家详情页；列表 inView 交错 fade-up 入场动效",
+              "id": "merchant-list",
+              "label": "商家列表",
+              "region": {
+                "height": 352,
+                "width": 375
+              },
+              "screen": "首页"
+            },
+            {
+              "elements": "底部导航栏：首页/订单/我的三个 icon+label 标签，首页为激活态，安全区留白",
+              "id": "home-tabbar",
+              "label": "底部导航栏",
+              "region": {
+                "height": 44,
+                "width": 375
+              },
+              "screen": "首页"
+            },
+            {
+              "elements": "顶部返回按钮（点击返回首页）+ 收藏按钮悬浮于边到边商家头图上，头图底部暖色 scrim 承托商家名'老王川菜馆'、配送时长30分钟、起送¥20 等简要信息条；头图仅媒体与悬浮控件，标题信息由本区唯一拥有",
+              "id": "detail-hero",
+              "label": "商家详情头图",
+              "region": {
+                "height": 208,
+                "width": 375
+              },
+              "screen": "商家详情"
+            },
+            {
+              "elements": "横向滑动菜品分类胶囊条（招牌、热菜、凉菜、主食、饮品、优惠），激活态高亮'招牌'，可横向滚动",
+              "id": "dish-category-rail",
+              "label": "菜品分类横滑",
+              "region": {
+                "height": 52,
+                "width": 375
+              },
+              "screen": "商家详情"
+            },
+            {
+              "elements": "六条菜品行：左方形菜品实拍图、菜名、月售与价格，右侧圆形'+'加入购物车按钮（pressed 态 0.92 缩放动效，点击累加购物车数量）；菜品：麻婆豆腐、水煮鱼、宫保鸡丁、回锅肉、酸辣土豆丝、蒜泥白肉",
+              "id": "dish-list",
+              "label": "菜品列表",
+              "region": {
+                "height": 424,
+                "width": 375
+              },
+              "screen": "商家详情"
+            },
+            {
+              "elements": "底部悬浮购物车条：购物车图标+数量角标、合计金额、去结算按钮（暖橙主色），数量与金额与菜品'+'按钮联动",
+              "id": "cart-bar",
+              "label": "购物车条",
+              "region": {
+                "height": 72,
+                "width": 375
+              },
+              "screen": "商家详情"
+            }
+          ]
+        }
+      },
+      {
+        "line": 12,
+        "plan": {
+          "rootFrame": {
+            "fill": [
+              {
+                "color": "#FFFCF6",
+                "type": "solid"
+              }
+            ],
+            "gap": 16,
+            "height": 812,
+            "id": "page",
+            "layout": "vertical",
+            "name": "外卖App",
+            "width": 375
+          },
+          "sharedContext": {
+            "exampleEntities": [
+              {
+                "attributes": {
+                  "category": "家常菜",
+                  "delivery": "30分钟"
+                },
+                "id": "merchant-1",
+                "imageSubject": "中式家常菜热菜",
+                "name": "老王家常菜",
+                "usedBy": [
+                  "merchant-list",
+                  "merchant-detail"
+                ]
+              },
+              {
+                "attributes": {
+                  "category": "麻辣烫"
+                },
+                "id": "merchant-2",
+                "imageSubject": "麻辣烫小锅",
+                "name": "川香麻辣烫",
+                "usedBy": [
+                  "merchant-list"
+                ]
+              },
+              {
+                "attributes": {
+                  "category": "汉堡"
+                },
+                "id": "merchant-3",
+                "imageSubject": "汉堡薯条",
+                "name": "麦香汉堡",
+                "usedBy": [
+                  "merchant-list"
+                ]
+              },
+              {
+                "attributes": {
+                  "category": "轻食"
+                },
+                "id": "merchant-4",
+                "imageSubject": "轻食沙拉碗",
+                "name": "鲜果轻食沙拉",
+                "usedBy": [
+                  "merchant-list"
+                ]
+              },
+              {
+                "attributes": {
+                  "category": "粥品"
+                },
+                "id": "merchant-5",
+                "imageSubject": "砂锅粥",
+                "name": "深夜粥铺",
+                "usedBy": [
+                  "merchant-list"
+                ]
+              }
+            ],
+            "sourceFacts": [
+              "外卖 App 两屏可交互（375×812）：首页(地址栏+分类九宫格+限时横幅+商家列表五条)",
+              "商家详情(头图+菜品分类横滑+菜品列表六条+购物车条)",
+              "交互：商家行 onTap 进详情",
+              "动效：限时横幅倒计时数字滚动，商家卡 inView 交错 fade-up，加入购物车按钮 pressed 态缩放"
+            ]
+          },
+          "styleGuideName": "warm-food-mobile-light",
+          "subtasks": [
+            {
+              "elements": "顶部地址栏：定位图标 + 收货地址文字 + 下拉箭头 + 右侧消息铃铛（含红点）；ARCHETYPE: content-stream — 地址栏为紧凑顶栏，首页高度占比约 8%，无大图",
+              "id": "home-header",
+              "label": "首页地址栏",
+              "region": {
+                "height": 56,
+                "width": 375
+              },
+              "screen": "首页"
+            },
+            {
+              "elements": "3×3 九宫格分类入口（9 项：美食、甜品饮品、商超便利、果蔬生鲜、汉堡披萨、麻辣烫、轻食、粥品、夜宵），每项统一插画/图标 + 名称，一套一致的插画风格",
+              "id": "category-grid",
+              "label": "分类九宫格",
+              "region": {
+                "height": 300,
+                "width": 375
+              },
+              "screen": "首页"
+            },
+            {
+              "elements": "限时特惠横幅卡：柔和暖橙渐变（唯一渐变使用处）、标题「限时抢购」、副文案、倒计时数字滚动组件（时:分:秒 翻牌式数字、digit-roll 动效）+「去抢购」按钮",
+              "id": "promo-banner",
+              "label": "限时横幅",
+              "region": {
+                "height": 96,
+                "width": 375
+              },
+              "screen": "首页"
+            },
+            {
+              "elements": "列表标题「附近商家」+ 筛选排序 chips；5 条商家行卡（统一组件）：方形商家图、名称、评分与月售、起送/配送信息、满减标签、右侧收藏；卡片 inView 交错 fade-up 入场动效；merchant-1 行整体 onTap 跳转商家详情页；示例商家：老王家常菜、川香麻辣烫、麦香汉堡、鲜果轻食沙拉、深夜粥铺",
+              "id": "merchant-list",
+              "label": "商家列表",
+              "region": {
+                "height": 360,
+                "width": 375
+              },
+              "screen": "首页"
+            },
+            {
+              "elements": "顶部返回按钮 + 收藏/搜索图标悬浮于边到边商家头图之上，底部渐变遮罩上叠商家名称与配送信息（头图区域内唯一文案，标题归属此区）；merchant-1 头图，照片即主角",
+              "id": "detail-header",
+              "label": "商家详情头图",
+              "region": {
+                "height": 240,
+                "width": 375
+              },
+              "screen": "商家详情"
+            },
+            {
+              "elements": "横向滑动菜品分类 chips（招牌、热菜、凉菜、汤羹、主食、饮品），激活态高亮，quiet section: 次要视觉权重",
+              "id": "dish-categories",
+              "label": "菜品分类横滑",
+              "region": {
+                "height": 56,
+                "width": 375
+              },
+              "screen": "商家详情"
+            },
+            {
+              "elements": "6 条菜品行（统一组件）：菜品图、名称、月售、价格、「+」加入购物车按钮（pressed 态缩放动效，quiet section: 次要视觉权重；quiet section: 次要视觉权重；价格与月售归属菜品行自身）",
+              "id": "dish-list",
+              "label": "菜品列表",
+              "region": {
+                "height": 400,
+                "width": 375
+              },
+              "screen": "商家详情"
+            },
+            {
+              "elements": "底部悬浮购物车条：购物车图标（含数量角标）、合计金额、去结算按钮；固定于底部，quiet section: 次要视觉权重",
+              "id": "cart-bar",
+              "label": "购物车条",
+              "region": {
+                "height": 60,
+                "width": 375
+              },
+              "screen": "商家详情"
+            }
+          ]
+        }
+      }
+    ],
+    "prompt": "请设计一套可编辑的高保真手机 App 界面（mobile app，375×812）。交付 2 页完整界面：用户指定页面名称时遵从需求，页面之间用 onTap 串起导航。统一的组件、变量与图层结构。\n\n用户需求：外卖 App 两屏可交互（375×812）：首页(地址栏+分类九宫格+限时横幅+商家列表五条)、商家详情(头图+菜品分类横滑+菜品列表六条+购物车条)。交互：商家行 onTap 进详情。动效：限时横幅倒计时数字滚动，商家卡 inView 交错 fade-up，加入购物车按钮 pressed 态缩放。 配色与质感由你根据产品类型和使用场景决定；渐变只在合理处使用。",
+    "reflowThenScrollEvidenceLine": 703
+  }
+}

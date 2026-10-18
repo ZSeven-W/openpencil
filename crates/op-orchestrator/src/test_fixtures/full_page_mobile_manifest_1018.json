@@ -1,0 +1,50 @@
+{
+  "description": "Unmodified retained full-page mobile documents from the 2026-10-18 two-screen regression; canonical JSON copies preserve every field and geometry.",
+  "documents": [
+    {
+      "allFieldsAndGeometryPreserved": true,
+      "fixture": "full_page_mobile_product_1018.json",
+      "fixtureSha256": "abb8aa985d47439247ce0ec59d2e2edbf2ba169aac87ca8e02ae5b42d4bd55f6",
+      "rootHeights": {
+        "n180": 812.0,
+        "n270": 812.0
+      },
+      "source": "/Users/fini/Downloads/openpencil-测试图片/普通模式-双屏与初值修复复验-1018/02-商品详情与购物车/作品.op",
+      "sourceSha256": "1d6698628642f269573a29ae5c80c359df435d6ca5caa1ee245501a6345f85e1"
+    },
+    {
+      "allFieldsAndGeometryPreserved": true,
+      "fixture": "full_page_mobile_restaurant_1018.json",
+      "fixtureSha256": "91550539298dcd400e6afe11b245f9fc99dcc186aa056a32f139eb9492c46a7a",
+      "rootHeights": {
+        "n11": 1263.0,
+        "n241": 812.0
+      },
+      "source": "/Users/fini/Downloads/openpencil-测试图片/普通模式-双屏与初值修复复验-1018/01-外卖首页与商家详情/作品.op",
+      "sourceSha256": "6142095bc8b4d00794d202b93d96a253d5e01e256d4b740d3a37ba92068c578a"
+    }
+  ],
+  "logs": [
+    {
+      "plannerLines": [
+        7
+      ],
+      "sha256": "7df632af431e35cf954a2113d12de541cfd42e85267f2512645ebbaf2ea0cfd6",
+      "source": "/Users/fini/Downloads/openpencil-测试图片/普通模式-双屏与初值修复复验-1018/_过程记录/product-detail/generation.log"
+    },
+    {
+      "plannerLines": [
+        7,
+        12
+      ],
+      "sha256": "ac254a9b6777af5696152b3946663d31fbd1ce73a52cbe3e472764939d5d504f",
+      "source": "/Users/fini/Downloads/openpencil-测试图片/普通模式-双屏与初值修复复验-1018/_过程记录/restaurant-detail/generation.log"
+    }
+  ],
+  "test_reconstructions": {
+    "marker_replay": "Call production mobile_action_bar_plan::preserve on retained n181/n281 with the original product plan before complete policy cleanup. Never add a marker directly in the fixture.",
+    "product_status_late": "Move retained n260 from first to last direct child of n180; no fields or other nodes changed. Reproduces the logged final shared-chrome move back to index 0.",
+    "restaurant_pre_cleanup": "Set n11.height to requested 812 and replace only the later-added n240 scroll wrapper with its existing children between n12 status and n229 nav. All actual content, values, and geometry remain; this is an explicit reconstruction, not an original artifact.",
+    "restaurant_requested_height": "Only set retained n11.height from 1263 to requested 812."
+  }
+}

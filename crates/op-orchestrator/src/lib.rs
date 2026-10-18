@@ -87,6 +87,8 @@ mod brand_kit_binding_tests;
 pub(crate) mod chip_label_adopt;
 pub(crate) mod chip_repair;
 pub mod cleanup;
+#[cfg(test)]
+mod cleanup_fixed_mobile_viewport_tests;
 #[path = "cleanup_image_fallback.rs"]
 mod cleanup_image_fallback;
 /// Cheap image-slot materialization for hosts that apply one MCP write at a

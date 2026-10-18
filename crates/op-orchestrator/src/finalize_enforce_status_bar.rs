@@ -39,6 +39,47 @@ use crate::types::DocSink;
 use crate::unfilled_screens::list_screen_candidates;
 use crate::unify_shared_status_bar::looks_like_fit_content_mobile_root;
 
+/// Establish the direct-child order needed by fixed viewport repair without
+/// adding chrome, changing its appearance, or touching unrelated screens.
+pub(super) fn anchor_existing_status_bar_first(sink: &mut dyn DocSink, root_id: &str) {
+    let Some(root) =
+        op_editor_core::walkers::find_node(sink.state().active_children(), &NodeId::new(root_id))
+    else {
+        return;
+    };
+    let Ok(value) = serde_json::to_value(root) else {
+        return;
+    };
+    if !value["width"]
+        .as_f64()
+        .is_some_and(|w| (240.0..=480.0).contains(&w))
+        || !value["height"]
+            .as_f64()
+            .is_some_and(|h| (500.0..=1000.0).contains(&h))
+        || value["layout"].as_str() != Some("vertical")
+        || value["clipContent"].as_bool() == Some(false)
+    {
+        return;
+    }
+    let Some((index, status)) = root.children().and_then(|children| {
+        children
+            .iter()
+            .enumerate()
+            .find(|(_, child)| is_status_bar(child))
+    }) else {
+        return;
+    };
+    if index > 0 {
+        let node_id = NodeId::new(status.id_str());
+        sink.apply(EditorCommand::MoveNode {
+            node_id,
+            target_parent: NodeId::new(root_id),
+            page_id: None,
+            index: Some(0),
+        });
+    }
+}
+
 /// Entry point. Runs on every mobile screen root to enforce the status-bar contract.
 pub fn finalize_enforce_status_bar_contract(sink: &mut dyn DocSink) {
     let screens = list_finalize_status_bar_screen_candidates(sink.state());

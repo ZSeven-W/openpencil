@@ -42,20 +42,33 @@ pub fn repair_mobile_trailing_nav_reflow(state: &mut EditorState) -> bool {
 
 pub(crate) fn repair_mobile_trailing_nav_reflow_in_sink(sink: &mut dyn DocSink) -> bool {
     let candidates = collect_candidates(sink.state());
-    apply_candidates(sink, candidates)
+    apply_candidates(sink, candidates, true)
 }
 
 pub(crate) fn repair_mobile_trailing_nav_reflow_for_root_in_sink(
     sink: &mut dyn DocSink,
     root_id: &str,
 ) -> bool {
+    repair_root_in_sink(sink, root_id, true)
+}
+
+/// Preserve requested viewport height without discarding the existing
+/// temporary-wrapper and default region-gap repairs.
+pub(crate) fn repair_mobile_trailing_nav_reflow_with_fixed_root_in_sink(
+    sink: &mut dyn DocSink,
+    root_id: &str,
+) -> bool {
+    repair_root_in_sink(sink, root_id, false)
+}
+
+fn repair_root_in_sink(sink: &mut dyn DocSink, root_id: &str, allow_root_growth: bool) -> bool {
     let candidate = sink
         .state()
         .active_children()
         .iter()
         .find(|root| root.id_str() == root_id)
         .and_then(candidate_for_root);
-    apply_candidates(sink, candidate.into_iter().collect())
+    apply_candidates(sink, candidate.into_iter().collect(), allow_root_growth)
 }
 
 /// Whether `root` has the narrow structure managed by this reflow pass.
@@ -69,7 +82,11 @@ pub(crate) fn has_mobile_trailing_nav_reflow_contract(root: &PenNode) -> bool {
     candidate_for_root(root).is_some()
 }
 
-fn apply_candidates(sink: &mut dyn DocSink, candidates: Vec<ReflowCandidate>) -> bool {
+fn apply_candidates(
+    sink: &mut dyn DocSink,
+    candidates: Vec<ReflowCandidate>,
+    allow_root_growth: bool,
+) -> bool {
     let mut changed = false;
 
     for candidate in candidates {
@@ -107,7 +124,7 @@ fn apply_candidates(sink: &mut dyn DocSink, candidates: Vec<ReflowCandidate>) ->
                 crate::plan_normalize::MOBILE_DEFAULT_ROOT_GAP,
             ));
         }
-        if required_height > candidate.root_height + 0.5 {
+        if allow_root_growth && required_height > candidate.root_height + 0.5 {
             let height = required_height.ceil().min(f64::from(i32::MAX)) as i32;
             changed |= sink.apply(update_height_command(&candidate.root_id, height));
         }

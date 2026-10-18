@@ -1,6 +1,8 @@
 //! Keep a fixed phone's navigation and action bars visible while content scrolls.
 use super::*;
 use serde_json::{json, Value};
+#[path = "cleanup_fixed_mobile_rail.rs"]
+mod rail;
 
 pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) -> bool {
     let Some(root) = find_root(sink.state(), root_id) else {
@@ -32,7 +34,7 @@ pub(super) fn repair(sink: &mut dyn DocSink, root_id: &str) -> bool {
             .and_then(|root| root.children().and_then(|nodes| nodes.last()))
             .is_some_and(is_bottom_chrome)
     }) else {
-        if promote_nested_chrome(sink, root_id) {
+        if rail::promote_nested_chrome(sink, root_id) {
             repair(sink, root_id);
             return true;
         }
@@ -357,79 +359,4 @@ fn wrap_content(
 pub(super) fn is_bottom_chrome(node: &PenNode) -> bool {
     crate::cleanup::is_trailing_bottom_nav_section(node)
         || crate::mobile_action_bar::is_action_bar(node)
-}
-
-fn promote_nested_chrome(sink: &mut dyn DocSink, root_id: &str) -> bool {
-    let footer_id = {
-        let Some(root) = find_root(sink.state(), root_id) else {
-            return false;
-        };
-        let Some(mut tail) = root.children().and_then(|children| children.last()) else {
-            return false;
-        };
-        let scene = op_pen_loader::editor_state_to_active_page_layout_scene(sink.state());
-        let Some(page) = scene.active_page() else {
-            return false;
-        };
-        let Some(board) = page.find(root_id) else {
-            return false;
-        };
-        let mut candidate = None;
-        // Whole-screen generations can nest persistent chrome inside a plain
-        // full-width content shell. Move only its bounded trailing bar; never
-        // pull an action out of a card or an inset/positioned composition.
-        for _ in 0..3 {
-            let Ok(shell) = serde_json::to_value(tail) else {
-                return false;
-            };
-            // Older saves may already have wrapped the explicitly pinned CTA
-            // into a viewport. Reuse that viewport; preserve its closing inset.
-            let pad = padding(&shell);
-            let viewport = shell.get("role").and_then(Value::as_str) == Some("scroll-area")
-                && shell.get("clipContent").and_then(Value::as_bool) == Some(true)
-                && shell.get("height").and_then(Value::as_str) == Some("fill_container")
-                && pad[1] == 0.0
-                && pad[3] == 0.0;
-            if shell.get("layout").and_then(Value::as_str) != Some("vertical")
-                || shell.get("constraints").is_some()
-                || shell.get("x").is_some()
-                || shell.get("y").is_some()
-                || shell
-                    .get("role")
-                    .and_then(Value::as_str)
-                    .is_some_and(|role| {
-                        !matches!(role, "content" | "main" | "app-content") && !viewport
-                    })
-                || (!viewport && pad.iter().any(|p| *p != 0.0))
-                || !page
-                    .find(tail.id_str())
-                    .is_some_and(|node| (node.bounds.size.x - board.bounds.size.x).abs() < 1.0)
-            {
-                break;
-            }
-            let Some(last) = tail.children().and_then(|children| children.last()) else {
-                break;
-            };
-            if is_bottom_chrome(last) {
-                if page.find(last.id_str()).is_some_and(|footer| {
-                    (44.0..=128.0).contains(&footer.bounds.size.y)
-                        && footer.bounds.origin.y + footer.bounds.size.y
-                            > board.bounds.origin.y + board.bounds.size.y + 1.0
-                }) {
-                    candidate = Some(NodeId::new(last.id_str()));
-                }
-                break;
-            }
-            tail = last;
-        }
-        candidate
-    };
-    footer_id.is_some_and(|node_id| {
-        sink.apply(EditorCommand::MoveNode {
-            node_id,
-            target_parent: NodeId::new(root_id),
-            page_id: None,
-            index: None,
-        })
-    })
 }

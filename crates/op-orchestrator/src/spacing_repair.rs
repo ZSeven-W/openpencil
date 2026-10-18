@@ -121,8 +121,14 @@ fn strip_in_value(v: &mut Value, gutter_above: bool, form: DesignForm, depth: us
                     l = 0.0;
                     touched = true;
                 }
+                // Canonical bottom-nav padding is internal control clearance;
+                // the parent's gap separates chrome from content. Removing it
+                // here makes first finalize disagree with chrome normalization.
+                let owns_chrome_inset =
+                    child.get("role").and_then(Value::as_str) == Some("bottom-tab-bar");
                 if parent_gaps
                     && transparent_v
+                    && !owns_chrome_inset
                     && gap_absorbs_vertical_padding(t, b, gap)
                     && !sections_own_the_rhythm
                     && (t > 0.0 || b > 0.0)
