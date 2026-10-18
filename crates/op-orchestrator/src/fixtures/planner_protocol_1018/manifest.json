@@ -1,0 +1,44 @@
+[
+  {
+    "fixture": "product-first.txt",
+    "source": "/Users/fini/Downloads/openpencil-测试图片/普通模式-规格与数量修复复验-1018/_过程记录/product-detail/generation.log",
+    "attempt": 1,
+    "sha256": "035d45ae585a9816716419620ed07d54a127f3448c75410a6a79cdef2a1ccf47",
+    "bytes": 4048
+  },
+  {
+    "fixture": "product-second.txt",
+    "source": "/Users/fini/Downloads/openpencil-测试图片/普通模式-规格与数量修复复验-1018/_过程记录/product-detail/generation.log",
+    "attempt": 2,
+    "sha256": "c4df25dda77af1c972a6d07cfe598362fd36ab495a352a61374963c3b237f190",
+    "bytes": 1719
+  },
+  {
+    "fixture": "restaurant-old-first.txt",
+    "source": "/Users/fini/Downloads/openpencil-测试图片/普通模式-规格与数量修复复验-1018/_过程记录/restaurant-detail/generation.log",
+    "attempt": 1,
+    "sha256": "b512e8226d588421bb9604480c51a95c3ed91feca30acc7a81fba08cee7d3196",
+    "bytes": 5178
+  },
+  {
+    "fixture": "restaurant-old-second.txt",
+    "source": "/Users/fini/Downloads/openpencil-测试图片/普通模式-规格与数量修复复验-1018/_过程记录/restaurant-detail/generation.log",
+    "attempt": 2,
+    "sha256": "a0a55f59c51b68877b4418d5fc8feb9991c7d51b7ea5649068eb33c7c0575cd0",
+    "bytes": 5543
+  },
+  {
+    "fixture": "restaurant-new-first.txt",
+    "source": "/Users/fini/Downloads/openpencil-测试图片/普通模式-双屏与初值修复复验-1018/_过程记录/restaurant-detail/generation.log",
+    "attempt": 1,
+    "sha256": "463c35bc987878225200aacfbcdd165dbdcc593b9424d11d24a2919aae4b8c43",
+    "bytes": 4414
+  },
+  {
+    "fixture": "restaurant-new-second.txt",
+    "source": "/Users/fini/Downloads/openpencil-测试图片/普通模式-双屏与初值修复复验-1018/_过程记录/restaurant-detail/generation.log",
+    "attempt": 2,
+    "sha256": "693e185389b9cd2f29c2db42f94a39662b607c336774d19e8d4b5e5eba3f4672",
+    "bytes": 4036
+  }
+]

@@ -81,6 +81,49 @@ fn fresh_plan_stale_id_retries_before_sections_and_filters_sources_on_acceptance
     let prompts = llm.user_prompts();
     assert_eq!(prompts.len(), 2);
     assert!(prompts[1].contains("price-spec") && prompts[1].contains("undeclared section"));
+    for expected in [
+        "validFinalSubtaskIds",
+        "s1",
+        "s2",
+        "Check every",
+        "Correct stale usedBy references",
+        "Do not rename final subtask IDs",
+    ] {
+        assert!(prompts[1].contains(expected), "missing {expected}");
+    }
+}
+
+#[test]
+fn fresh_plan_leaf_type_failure_retries_with_path_without_replacing_context() {
+    let mut wrong = plan_value();
+    wrong["sharedContext"]["exampleEntities"][0]["attributes"]["colors"] = json!(["oat", "green"]);
+    let mut corrected = wrong.clone();
+    corrected["sharedContext"]["exampleEntities"][0]["attributes"]["colors"] = json!("oat / green");
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(wrong.to_string()),
+        ScriptResponse::Text(corrected.to_string()),
+    ]);
+    let (plan, _) = futures::executor::block_on(planning_loop(
+        &request(),
+        &llm,
+        &AbortFlag::new(),
+        &mut |_| {},
+    ))
+    .unwrap();
+    let prompts = llm.user_prompts();
+    assert_eq!(prompts.len(), 2);
+    for expected in [
+        "$.sharedContext.exampleEntities[0].attributes.colors",
+        "string",
+        "array",
+        "Keep sharedContext as an object",
+    ] {
+        assert!(prompts[1].contains(expected), "missing {expected}");
+    }
+    assert_eq!(
+        serde_json::to_value(plan.shared_context.unwrap().example_entities).unwrap(),
+        corrected["sharedContext"]["exampleEntities"]
+    );
 }
 
 #[test]

@@ -18,13 +18,25 @@ pub(crate) fn check_envelope(value: &Value) -> Result<(), FreshPlanError> {
         .get("sharedContext")
         .ok_or(FreshPlanError::MissingSharedContext)?;
     if !context.is_object() {
-        return Err(FreshPlanError::InvalidSharedContextShape);
+        return Err(FreshPlanError::InvalidSharedContextShape(
+            crate::plan_shared_context::SharedContextShapeError::new(
+                "$.sharedContext".into(),
+                crate::plan_shared_context::JsonKind::Object,
+                Some(context),
+            ),
+        ));
     }
     if context.get("subtasks").is_some() {
         return Err(FreshPlanError::NestedSubtasks);
     }
-    crate::plan_shared_context::from_plan_value(value)
-        .map_err(FreshPlanError::InvalidSharedContext)?;
+    crate::plan_shared_context::from_plan_value(value).map_err(|error| {
+        // Enrich a rejection only. Successful parsing and all acceptance rules
+        // remain authoritative; no diagnostic code coerces or drops values.
+        crate::plan_shared_context::invalid_shape(context).map_or_else(
+            || FreshPlanError::InvalidSharedContext(error),
+            FreshPlanError::InvalidSharedContextShape,
+        )
+    })?;
     Ok(())
 }
 
@@ -44,10 +56,7 @@ pub(crate) fn accept(
         }
         for id in &entity.used_by {
             if !declared.contains(id.as_str()) {
-                return Err(FreshPlanError::UnknownSection {
-                    entity_id: entity.id.clone(),
-                    section_id: id.clone(),
-                });
+                return Err(FreshPlanError::unknown_section(&entity.id, id, &declared));
             }
         }
     }

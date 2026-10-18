@@ -1,0 +1,23 @@
+```json
+{
+  "rootFrame": {"id":"page","name":"Ecommerce App","width":375,"height":812,"layout":"vertical","gap":0,"fill":[{"type":"solid","color":"#FFFFFF"}]},
+  "styleGuideName":"clean-blue-mobile-light",
+  "sharedContext":{
+    "sourceFacts":["电商商品详情 App 两屏：商品页(大图轮播占位+价格+规格选择+评价三条+底部加购条)、购物车页(商品两条+金额汇总+结算)","规格胶囊 onTap 切换，加入购物车 onTap 进购物车，价格数字滚动，规格切换 transition，加购按钮 pressed 缩放"],
+    "exampleEntities":[
+      {"id":"sku-1","name":"轻氧 AMOLED 智能手表","imageSubject":"智能手表产品照，浅灰背景","attributes":{"price":"¥899","colors":["曜石黑","月光银","雾松绿"],"sizes":"42mm / 46mm","cartQty":"1"},"usedBy":["gallery","purchase-info","sku-selector","reviews","cart-item-1"]},
+      {"id":"sku-2","name":"同品牌无线降噪耳机","imageSubject":"白色无线耳机产品照","attributes":{"price":"¥599","cartQty":"1"},"usedBy":["cart-item-2"]}
+    ]
+  },
+  "subtasks":[
+    {"id":"product-header","label":"商品页顶部导航与图库","screen":"商品详情","elements":"ARCHETYPE: image-led — 产品大图轮播为主角，首屏约占 42%，图片下缘叠页面内容卡；imagery 仅一张相关产品照片占位（含 3 个轮播页圆点指示器，当前第 1 个高亮）。顶部悬浮返回按钮、分享按钮（圆形半透明白底），右上收藏心形按钮；不含页面标题重复","region":{"width":375,"height":380}},
+    {"id":"purchase-info","label":"价格与商品信息","screen":"商品详情","elements":"商品名「轻氧 AMOLED 智能手表」、品牌小标签；价格主数字 ¥899（大号，含数字滚动动效说明，价格变化时 tween 滚动），划线原价 ¥1099；销量与发货地一行 meta；标题+价格本区唯一归属，不与图库重叠","region":{"width":375,"height":110}},
+    {"id":"sku-selector","label":"规格选择","screen":"商品详情","elements":"「颜色」标签 + 3 个规格胶囊（曜石黑/月光银/雾松绿，选中态深色填充白字，未选中浅灰描边），每个胶囊 onTap 切换并带 150ms transition（宽度/颜色平滑过渡）；「尺寸」标签 + 2 个胶囊（42mm/46mm）；右侧数量步进器（- 1 +）","region":{"width":375,"height":150}},
+    {"id":"reviews","label":"用户评价","screen":"商品详情","elements":"区块标题「用户评价 (3)」+ 查看全部链接；三条评价列表：每条含头像占位、昵称、五星评分（4-5星）、两行评语摘要，紧凑行高","region":{"width":375,"height":130}},
+    {"id":"add-to-cart-bar","label":"底部加购条","screen":"商品详情","elements":"固定底部操作条：左侧客服图标按钮 + 店铺图标按钮；主按钮「加入购物车」胶囊形主色按钮，pressed 时 scale 0.96 缩放反馈，onTap 跳转购物车页；按钮内含购物车小图标","region":{"width":375,"height":72}},
+    {"id":"cart-header","label":"购物车页顶栏","screen":"购物车","elements":"返回按钮（onTap 回商品详情）、页面标题「购物车」、右上「管理」文字按钮","region":{"width":375,"height":56}},
+    {"id":"cart-items","label":"购物车商品列表","screen":"购物车","elements":"两条商品卡片，每条含：选择圆点勾选框（选中态）、商品缩略图占位、商品名、已选规格摘要（颜色/尺寸，与商品页所选一致）、价格、数量步进器（- 1 +）；第 1 条为智能手表 ¥899，第 2 条为无线降噪耳机 ¥599；卡片白底圆角带轻阴影","region":{"width":375,"height":220}},
+    {"id":"cart-summary","label":"金额汇总与结算","screen":"购物车","elements":"汇总区：商品合计、运费（包邮标签）、优惠行；大字合计金额 ¥1498（数字滚动动效）；底部「去结算 (2)」主色胶囊按钮，pressed 缩放反馈；左侧全选勾选框 + 「全选」文字","region":{"width":375,"height":130}}
+  ]
+}
+```

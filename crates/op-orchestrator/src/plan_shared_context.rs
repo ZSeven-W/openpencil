@@ -16,6 +16,9 @@ use std::sync::LazyLock;
 #[path = "plan_shared_context_error.rs"]
 mod error;
 use error::SharedContextError;
+#[path = "plan_shared_context_diagnostics.rs"]
+mod diagnostics;
+pub(crate) use diagnostics::{invalid_shape, JsonKind, SharedContextShapeError};
 
 const MAX_CONTEXT_BYTES: usize = 16_384;
 
