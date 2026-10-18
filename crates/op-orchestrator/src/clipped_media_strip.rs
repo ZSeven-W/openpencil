@@ -146,22 +146,15 @@ pub(crate) fn media_lane(viewport: &Value, viewport_width: f64) -> Option<&Value
     find_lane(viewport, viewport_width)
 }
 
-fn full_width_viewport<N: MediaNode>(node: &N, width: f64) -> bool {
+fn find_single_page<N: MediaNode>(node: &N, width: f64) -> Option<&N> {
     if !node.shape().origin {
-        return false;
+        return None;
     }
-    if find_lane(node, width).is_some() {
-        return true;
-    }
-    let Some(shape) = viewport_shape(node, width) else {
-        return false;
-    };
-    let mut image_found = false;
+    let shape = viewport_shape(node, width)?;
+    let mut found = None;
     for child in node.children() {
         let image = child.shape();
-        let Some(height) = positive(image.height) else {
-            return false;
-        };
+        let height = positive(image.height)?;
         if image.trusted
             && image.zero_padding
             && image.gap.is_some_and(|gap| gap.is_finite() && gap >= 0.0)
@@ -170,14 +163,23 @@ fn full_width_viewport<N: MediaNode>(node: &N, width: f64) -> bool {
             && (shape.hug_height || shape.height.is_some_and(|value| equal(value, height)))
             && child.is_media()
         {
-            if std::mem::replace(&mut image_found, true) {
-                return false;
+            if found.replace(child).is_some() {
+                return None;
             }
         } else if !overlay(child) {
-            return false;
+            return None;
         }
     }
-    image_found
+    found
+}
+
+pub(crate) fn single_media_page(viewport: &Value, viewport_width: f64) -> Option<&Value> {
+    find_single_page(viewport, viewport_width)
+}
+
+fn full_width_viewport<N: MediaNode>(node: &N, width: f64) -> bool {
+    node.shape().origin
+        && (find_lane(node, width).is_some() || find_single_page(node, width).is_some())
 }
 
 /// Only the viewport itself or one unpadded, full-width wrapper owns this

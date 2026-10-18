@@ -431,19 +431,26 @@ fn backdrop_photo_sink(
 // node is a transparent horizontal frame. Keep this proof separate from the
 // generic small-overlay rule: a full-viewport controls wrapper is not a peer
 // content card, and the lane's offscreen pages must not inflate coverage.
-fn media_lane_composites_normally(v: &Value) -> bool {
+fn media_node_composites_statically(v: &Value) -> bool {
     v.get("opacity")
         .is_none_or(|value| value.is_null() || value.as_f64() == Some(1.0))
         && v.get("blendMode")
             .is_none_or(|value| value.is_null() || value.as_str() == Some("normal"))
         && v.get("isMask").and_then(Value::as_bool) != Some(true)
         && v.get("maskType").is_none_or(Value::is_null)
-        && v.get("effects").is_none_or(|effects| {
-            effects.is_null() || effects.as_array().is_some_and(Vec::is_empty)
-        })
         && v.get("animations").is_none_or(|animations| {
             animations.is_null() || animations.as_array().is_some_and(Vec::is_empty)
         })
+}
+
+fn media_has_no_effects(v: &Value) -> bool {
+    v.get("effects")
+        .is_none_or(|effects| effects.is_null() || effects.as_array().is_some_and(Vec::is_empty))
+}
+
+fn media_lane_composites_normally(v: &Value) -> bool {
+    media_node_composites_statically(v)
+        && media_has_no_effects(v)
         && children(v).iter().all(media_lane_composites_normally)
 }
 
@@ -601,6 +608,7 @@ fn collect_with_context(
         let stack_id = v.get("id").and_then(Value::as_str);
         if let (Some((photo_index, target)), Some(stack_id)) = (
             clipped_media_lane_sink(state, v, kids, rects)
+                .or_else(|| single_media::sink(state, v, kids, rects))
                 .or_else(|| backdrop_photo_sink(v, kids, rects)),
             stack_id,
         ) {
@@ -685,6 +693,9 @@ fn collect_with_context(
 
 #[path = "geometry_buried_overlay_scrim.rs"]
 mod scrim;
+
+#[path = "geometry_buried_single_media.rs"]
+mod single_media;
 
 #[cfg(test)]
 #[path = "geometry_buried_overlay_tests.rs"]
