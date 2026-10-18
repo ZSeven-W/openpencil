@@ -220,6 +220,12 @@ pub(crate) fn incomplete_attempt(
             media_items::delivered_media_card_count(sink, &outcome.inserted_root_ids).unwrap_or(0),
         );
     }
+    if grid_dimensions(&text).is_none() && list_rows::has_local_list_contract(&text, expected) {
+        delivered = delivered.max(list_rows::delivered_list_row_count(
+            sink,
+            &outcome.inserted_root_ids,
+        ));
+    }
     if let Some((rows, columns)) = grid_dimensions(&text) {
         for id in &outcome.inserted_root_ids {
             if let Some(root) =
@@ -686,6 +692,17 @@ mod media_items_tests;
 #[cfg(test)]
 #[path = "subtask_completeness_media_items_boundary_tests.rs"]
 mod media_items_boundary_tests;
+
+#[path = "subtask_completeness_list_rows.rs"]
+mod list_rows;
+
+#[cfg(test)]
+#[path = "subtask_completeness_list_rows_tests.rs"]
+mod list_rows_tests;
+
+#[cfg(test)]
+#[path = "subtask_completeness_list_rows_boundary_tests.rs"]
+mod list_rows_boundary_tests;
 
 #[path = "subtask_completeness_named_options.rs"]
 mod named_options;

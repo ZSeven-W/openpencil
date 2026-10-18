@@ -1,0 +1,65 @@
+{
+  "source_log": "/Users/fini/Downloads/openpencil-测试图片/普通模式-双屏与初值修复复验-1018/_过程记录/restaurant-detail/generation.log",
+  "source_encoding": "UTF-8",
+  "line_numbering": "one-based inclusive",
+  "source_log_sha256_at_extraction": "ac254a9b6777af5696152b3946663d31fbd1ce73a52cbe3e472764939d5d504f",
+  "source_log_byte_length_at_extraction": 114817,
+  "source_log_line_count_at_extraction": 734,
+  "source_prefix_lines_inclusive": [
+    1,
+    534
+  ],
+  "source_prefix_sha256": "b269fc3a788b56f2226eb4dcbb005a7c04dcbd0490e2e169e3c4722595bebe88",
+  "source_prefix_byte_length": 73997,
+  "subtask_id": "section-2",
+  "subtask_label": "商家详情",
+  "extraction": "The first two section-2 LLM-response bodies were extracted. Only the enclosing ```javascript and ``` fence lines were removed; dump markers are not script content. Original script bytes, line endings, whitespace, content, and syntax were preserved without formatting, rewriting, or repair.",
+  "fixtures": [
+    {
+      "attempt": 1,
+      "file": "dish-list-1018-attempt1.js",
+      "source_lines_inclusive": [
+        318,
+        430
+      ],
+      "response_fence_lines_inclusive": [
+        317,
+        431
+      ],
+      "dump_marker_lines_inclusive": [
+        316,
+        432
+      ],
+      "sha256": "f8ccb69079e3f852699319c2d9fd75b56dc412bd565e2ac3983d5c6e838b20ef",
+      "byte_length": 11339,
+      "line_count": 113,
+      "rewritten": false
+    },
+    {
+      "attempt": 2,
+      "file": "dish-list-1018-attempt2.js",
+      "source_lines_inclusive": [
+        445,
+        532
+      ],
+      "response_fence_lines_inclusive": [
+        444,
+        533
+      ],
+      "dump_marker_lines_inclusive": [
+        443,
+        534
+      ],
+      "sha256": "e8f17705acf6ce635e5567905d981512bc1c392bb877fbe034db5c8b67e6c1ff",
+      "byte_length": 11062,
+      "line_count": 88,
+      "rewritten": false,
+      "known_syntax_defect_preserved": {
+        "source_line": 487,
+        "fixture_line": 43,
+        "note": "The reported missing-bracket syntax defect is preserved exactly; no syntax repair was applied.",
+        "original_line": "    stroke: c.a ? {thickness:1, fill:[{type:\"solid\", color:\"#0F172A\"}]} : {thickness:1, fill:[{type:\"solid\", color:\"#E2E8F0\"}]});"
+      }
+    }
+  ]
+}
