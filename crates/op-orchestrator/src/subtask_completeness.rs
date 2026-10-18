@@ -229,6 +229,13 @@ pub(crate) fn incomplete_attempt(
             &outcome.inserted_root_ids,
         ));
     }
+    if grid_dimensions(&text).is_none() && reviews::has_local_review_contract(&text, expected) {
+        if let Some(proof) = reviews::delivered_reviews(sink, &outcome.inserted_root_ids) {
+            tracing::debug!(cards = ?proof.card_ids, attachments = ?proof.attachment_ids,
+                "proven sibling reviews with optional photo attachments");
+            delivered = delivered.max(proof.card_ids.len());
+        }
+    }
     if let Some((rows, columns)) = grid_dimensions(&text) {
         for id in &outcome.inserted_root_ids {
             if let Some(root) =
@@ -742,3 +749,10 @@ mod statistics;
 #[cfg(test)]
 #[path = "subtask_completeness_statistics_tests.rs"]
 mod statistics_tests;
+
+#[path = "subtask_completeness_reviews.rs"]
+mod reviews;
+
+#[cfg(test)]
+#[path = "subtask_completeness_reviews_tests.rs"]
+mod reviews_tests;
