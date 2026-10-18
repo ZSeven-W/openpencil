@@ -17,6 +17,43 @@ fn findings(document: Value) -> Vec<InitialBindingFinding> {
 }
 
 #[test]
+fn runtime_text_conversion_does_not_hide_missing_quantity_defaults() {
+    let found = findings(single_binding("to_str($app.qty)"));
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].state_key, "qty");
+    assert_eq!(found[0].initial_value, json!("null"));
+    assert_eq!(found[0].authored_value, Some(json!("1")));
+    let mut declared = single_binding("to_str($app.qty)");
+    declared["state"] = json!({"qty":{"type":"int","default":1}});
+    assert!(findings(declared).is_empty());
+    assert!(findings(single_binding("to_str($app.qty ?? 1)")).is_empty());
+    assert!(findings(single_binding(
+        "to_str($app.qty) == 'null' ? '1' : to_str($app.qty)"
+    ))
+    .is_empty());
+}
+
+#[test]
+fn hyphenated_cart_keys_remain_distinct_and_match_real_runtime_reads() {
+    let mut doc = single_binding("to_str($app.qty_product-1)");
+    doc["children"][0]["children"][1]["events"]["onTap"] =
+        json!([{"set":{"$app.qty_product-1":"$app.qty_product-1 + 1"}}]);
+    let found = findings(doc.clone());
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].state_key, "qty_product-1");
+    doc["state"] = json!({"qty_product-1":{"type":"int","default":2}});
+    assert!(findings(doc.clone()).is_empty());
+    let graph = StateGraph::new(Rc::new(Scheduler::new()));
+    graph.app_set("qty_product-1", json!(2));
+    assert_eq!(
+        expression::initial_value("to_str($app.qty_product-1)", &graph),
+        Some((json!("2"), false))
+    );
+    doc["state"] = json!({"qty_product":{"type":"int","default":2}});
+    assert_eq!(findings(doc)[0].state_key, "qty_product-1");
+}
+
+#[test]
 fn selection_and_quantity_patterns_report_actual_initial_values_without_mutation() {
     let document = json!({"version":"1.0.0","state":{"scrolled":{"type":"bool","default":false}},
     "children":[{"type":"frame","id":"section","children":[

@@ -121,6 +121,8 @@ Examples:
 
 EXPRESSION LANGUAGE:
 
+Jian expressions use `to_str(value)`, not JavaScript `String(value)`.
+
 - `$app.<key>` — document-root state (cross-section, shared across pages)
 - `$state.<key>` — local state on the node that declares it (private)
 - `$event.value` — the originating event's payload (e.g. the text typed in

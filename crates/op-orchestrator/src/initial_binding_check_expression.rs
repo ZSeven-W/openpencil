@@ -39,7 +39,22 @@ fn null_guard(op: BinaryOp, left: &Expr, right: &Expr) -> bool {
         op,
         BinaryOp::Eq | BinaryOp::NotEq | BinaryOp::EqStrict | BinaryOp::NotEqStrict
     ) && ((direct_app_key(left).is_some() && matches!(&right.kind, ExprKind::Null))
-        || (matches!(&left.kind, ExprKind::Null) && direct_app_key(right).is_some()))
+        || (matches!(&left.kind, ExprKind::Null) && direct_app_key(right).is_some())
+        || converted_null_guard(left, right)
+        || converted_null_guard(right, left))
+}
+
+fn converted_null_guard(read: &Expr, fallback: &Expr) -> bool {
+    matches!(&fallback.kind, ExprKind::String(value) if value == "null") && converted_app_read(read)
+}
+
+fn converted_app_read(expression: &Expr) -> bool {
+    let ExprKind::Call(callee, args) = &expression.kind else {
+        return false;
+    };
+    matches!(&callee.kind, ExprKind::Identifier(name) if name == "to_str")
+        && args.len() == 1
+        && (direct_app_key(&args[0]).is_some() || converted_app_read(&args[0]))
 }
 
 /// Unknown parents invalidate the entire expression. In particular, do not
@@ -82,6 +97,15 @@ fn inspect(expression: &Expr, result: &mut AppExpression) -> Option<()> {
                 inspect(value, result)?;
             }
         }
+        // This runtime builtin only converts its argument to display text. It
+        // does not initialize missing state or provide a fallback. Keep other
+        // calls deferred rather than assuming their null/guard semantics.
+        ExprKind::Call(callee, args)
+            if matches!(&callee.kind, ExprKind::Identifier(name) if name == "to_str")
+                && args.len() == 1 =>
+        {
+            inspect(&args[0], result)?;
+        }
         ExprKind::Identifier(_)
         | ExprKind::ScopeRef(_, _)
         | ExprKind::Index(_, _)
@@ -98,7 +122,8 @@ fn app_expression(source: &str) -> Option<AppExpression> {
 }
 
 /// A pure app expression may use no keys or several keys, including guards.
-/// Bare identifiers, other scopes, calls and indirect access are excluded.
+/// Bare identifiers, other scopes, non-conversion calls and indirect access
+/// are excluded. The one-argument `to_str` builtin preserves missing reads.
 pub(super) fn is_pure_app_expression(source: &str) -> bool {
     app_expression(source).is_some()
 }

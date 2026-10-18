@@ -103,6 +103,36 @@ fn repair(
 }
 
 #[test]
+fn text_converted_quantity_repairs_only_the_missing_default() {
+    let (mut sink, plan, request, mut outcomes) = fixture();
+    assert!(sink.state.apply(EditorCommand::PatchNodeData {
+        node_id: NodeId::new("quantity"),
+        patch_json: json!({"bindings":{"content":"to_str($app.units)"}}).to_string(),
+        page_id: None,
+    }));
+    let before = sink.state.doc.children.clone();
+    let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script(|root| {
+        root["children"][0]["bindings"]["content"] = json!("to_str($app.units)");
+    }))]);
+    let (failed, _) = repair(
+        &mut sink,
+        &plan,
+        &request,
+        &mut outcomes,
+        &llm,
+        &AbortFlag::new(),
+    );
+    assert!(!failed, "{outcomes:?}");
+    assert_eq!(llm.user_prompts().len(), 1);
+    assert_eq!(sink.state.doc.children, before);
+    assert_eq!(
+        sink.state.doc.state.as_ref().unwrap()["units"].default,
+        Some(json!(1))
+    );
+    assert!(missing_initial_bindings(&sink.state, &outcomes[0].inserted_root_ids).is_empty());
+}
+
+#[test]
 fn repairs_only_owner_with_full_context_and_commits_state_and_order_atomically() {
     let (mut sink, plan, request, mut outcomes) = fixture();
     let llm = ScriptedLlm::new(vec![ScriptResponse::Text(script(|_| {}))]);

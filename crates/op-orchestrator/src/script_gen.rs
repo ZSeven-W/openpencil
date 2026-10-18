@@ -10,6 +10,10 @@ use crate::program_gen::ProgramGenError;
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::state::StateSchema;
 
+#[path = "generated_expression_validation.rs"]
+mod generated_expression_validation;
+pub use generated_expression_validation::GeneratedExpressionError;
+
 /// Failure of [`parse_script`]. All variants render VERBATIM (no prefix):
 /// the sub-agent transcript shows the underlying script-runner / program
 /// message exactly as it did when this was a bare `String`.
@@ -22,6 +26,8 @@ pub enum ScriptGenError {
     /// An insertion used an undefined parent or a name/id instead of a
     /// handle from this fresh generation script. Retry with exact feedback.
     ParentReference(String),
+    /// Parsed nodes contain a proven unsupported runtime expression function.
+    RuntimeExpression(GeneratedExpressionError),
     /// The recorded `batch_design` program failed to build a forest.
     Program(ProgramGenError),
 }
@@ -30,6 +36,7 @@ impl std::fmt::Display for ScriptGenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ScriptRun(message) | Self::ParentReference(message) => write!(f, "{message}"),
+            Self::RuntimeExpression(error) => write!(f, "{error}"),
             Self::Program(error) => write!(f, "{error}"),
         }
     }
@@ -65,7 +72,9 @@ pub fn parse_script(text: &str) -> Result<(Vec<PenNode>, StateSchema), ScriptGen
                 ScriptGenError::ScriptRun(error.to_string())
             }
         })?;
-    Ok(crate::program_gen::run_program_to_forest(&program)?)
+    let (nodes, state) = crate::program_gen::run_program_to_forest(&program)?;
+    generated_expression_validation::validate(&nodes).map_err(ScriptGenError::RuntimeExpression)?;
+    Ok((nodes, state))
 }
 
 #[cfg(test)]
@@ -79,3 +88,7 @@ mod style_replay_tests;
 #[cfg(test)]
 #[path = "script_gen_parent_tests.rs"]
 mod parent_tests;
+
+#[cfg(test)]
+#[path = "generated_expression_retry_tests.rs"]
+mod generated_expression_retry_tests;

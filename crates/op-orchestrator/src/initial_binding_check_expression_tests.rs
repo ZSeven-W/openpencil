@@ -9,6 +9,49 @@ fn state() -> StateGraph {
 }
 
 #[test]
+fn text_conversion_keeps_missing_reads_and_explicit_fallbacks() {
+    for source in [
+        "to_str($app.qty)",
+        "to_str($app.qty + 1)",
+        "to_str(to_str($app.qty))",
+    ] {
+        assert_eq!(
+            unguarded_app_key(source).as_deref(),
+            Some("qty"),
+            "{source}"
+        );
+        assert!(is_pure_app_expression(source));
+    }
+    assert_eq!(
+        initial_value("to_str($app.qty)", &state()),
+        Some((json!("null"), true))
+    );
+    for source in [
+        "to_str($app.qty ?? 1)",
+        "to_str($app.qty ? $app.qty : 1)",
+        "to_str($app.qty) == 'null' ? '1' : to_str($app.qty)",
+        "'null' !== to_str($app.qty) ? to_str($app.qty) : '1'",
+        "to_str(to_str($app.qty)) === 'null' ? '1' : to_str($app.qty)",
+    ] {
+        assert_eq!(unguarded_app_key(source), None, "{source}");
+        assert!(is_pure_app_expression(source));
+    }
+    for source in [
+        "String($app.qty)",
+        "to_str()",
+        "to_str($app.qty, 1)",
+        "to_str($app['qty'])",
+        "to_str($self.qty)",
+        "to_str($app.qty + $event.value)",
+        "to_str(len($app.qty))",
+        "object.to_str($app.qty)",
+    ] {
+        assert_eq!(unguarded_app_key(source), None, "{source}");
+        assert!(!is_pure_app_expression(source), "{source}");
+    }
+}
+
+#[test]
 fn selection_comparisons_report_the_unique_app_key() {
     for source in [
         "$app.tab == 'home' ? 'selected' : 'normal'",
