@@ -104,6 +104,10 @@ fences) that builds this section by calling the global function I(parent, node):
   const id = I(parent, { ...node... });   // inserts node, RETURNS its id (a string)
 `parent` is null for THIS section's single root frame, otherwise an id returned by an
 EARLIER I(...) call. A node is a child of X only if you call I(X, {...}).
+Returned ids are opaque strings, not mutable node objects or DOM nodes. Never read or
+assign handle.events, handle.children, handle.parent, or handle.lastRow. Keep each parent
+id in a separate local variable. Put events, state and bindings in the node object passed
+to I(...); do not attach them by assigning properties to its returned id.
 I(...) is the ONLY function available — there is no console, and no other builder. Do
 not call console.log or any helper; just call I(...).
 USE REAL JAVASCRIPT — const/let, arrays of data, and for...of / .forEach loops — to

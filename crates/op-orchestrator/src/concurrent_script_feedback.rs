@@ -69,6 +69,8 @@ fn script_error_feedback(error: Option<&str>) -> Option<String> {
         "script emitted no I(...), K(...), or U(...) operations. Execute insertions; do not only define functions or return a JSON object.".into()
     } else if error.starts_with("script too large: ") {
         "script too large. Reduce repeated source with loops and local helpers while keeping the required content and behavior.".into()
+    } else if error == "script error: not an object" {
+        "script error: not an object. Check object operations: I() and K() return opaque binding strings, not mutable node objects or DOM nodes. Never read or assign handle.events, handle.children, handle.parent, or handle.lastRow. Store each parent binding in a separate local variable, pass that variable to I(parent, props), and put events/state/bindings inside props when creating the node. Do not remove the required interactions to avoid the error.".into()
     } else if error.starts_with("script error: ") {
         if error.contains(" is not defined") {
             "script error: undefined JavaScript variable. Declare local handles in this complete script. In fresh generation, I(parent, props) requires null or a parent handle returned in this script, never an existing-node id string. Use existing ids only in operations that explicitly support them, such as U. Do not reuse a variable from an earlier sandbox.".into()
@@ -222,3 +224,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "concurrent_handle_feedback_tests.rs"]
+mod handle_tests;
