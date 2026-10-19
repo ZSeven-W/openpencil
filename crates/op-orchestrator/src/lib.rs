@@ -287,6 +287,7 @@ pub(crate) mod agent_indicator_test_support {
 #[path = "card_routing_tests.rs"]
 mod card_routing_tests;
 
+mod generated_stepper_check;
 mod interaction_handoff;
 #[cfg(test)]
 mod interaction_recipe_tests;

@@ -366,3 +366,46 @@ fn repeated_bare_cart_set_remains_bounded_and_never_inserts_partial_state() {
     assert_eq!(sink.state.doc, before);
     assert!(sink.applied.is_empty());
 }
+
+#[test]
+fn inert_stepper_retries_before_insert_with_the_same_model_and_skills() {
+    let (task, plan, request) = fixture();
+    let script = |wired: bool| {
+        let mut minus = json!({"type":"text","content":"−","fontSize":16});
+        let mut count = json!({"type":"text","content":"1","fontSize":16});
+        let mut plus = json!({"type":"text","content":"+","fontSize":16});
+        if wired {
+            minus["events"] =
+                json!({"onTap":[{"set":{"$app.quantity":"max(1, $app.quantity - 1)"}}]});
+            plus["events"] = json!({"onTap":[{"set":{"$app.quantity":"$app.quantity + 1"}}]});
+            count["bindings"] = json!({"content":"to_str($app.quantity)"});
+        }
+        format!("const sec=I(null,{{type:'frame',name:'Quantity',layout:'horizontal',width:375,height:80,padding:16,gap:12,state:{{quantity:{{type:'int',default:1}}}}}});I(sec,{});I(sec,{});I(sec,{});",minus,count,plus)
+    };
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(script(false)),
+        ScriptResponse::Text(script(true)),
+    ]);
+    let mut sink = VecDocSink::new();
+    let outcome = block_on(run_subtask_retry_ladder_with_outcomes(
+        &task,
+        &plan,
+        &request,
+        &llm,
+        &mut sink,
+        &AbortFlag::new(),
+        crate::model_profile::resolve_model_profile("glm-5.3-flash").tier,
+        None,
+        &GeometryEchoBudget::new(0),
+        &mut |_| {},
+        &[],
+    ));
+    assert!(outcome.error.is_none(), "{outcome:?}");
+    assert_eq!(llm.user_prompts().len(), 2);
+    assert!(llm.user_prompts()[1].contains("interaction-inert-stepper"));
+    assert_eq!(llm.system_prompts()[0], llm.system_prompts()[1]);
+    assert_eq!(sink.state.active_children().len(), 1);
+    assert!(serde_json::to_string(&sink.state.doc)
+        .unwrap()
+        .contains("to_str($app.quantity)"));
+}

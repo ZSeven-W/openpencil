@@ -221,8 +221,8 @@ fn interaction_backfill_edits_are_counted_as_structure_repairs() {
         })
         .count();
     assert_eq!(
-        interaction_patches, 3,
-        "one back frame and two cards must be persisted"
+        interaction_patches, 1,
+        "only the proven back action is persisted; card identity must not be guessed"
     );
     assert!(
         summary.repairs_for(CheckCategory::Structure) >= interaction_patches,

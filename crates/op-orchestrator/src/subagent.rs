@@ -305,6 +305,9 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
     if is_blank_container_forest(&nodes) {
         return fail("blank container root produced no content nodes".into());
     }
+    if let Some(reason) = crate::generated_stepper_check::rejection(&req.prompt, &nodes) {
+        return fail(reason);
+    }
     // Check only this section's promised copy; multi-page runs must neither
     // lose supplied lines nor repeat every line on each page.
     let missing = crate::source_copy::SourceCopy::from_brief(&req.prompt)

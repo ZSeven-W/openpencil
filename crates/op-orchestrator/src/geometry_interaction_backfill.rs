@@ -1,9 +1,9 @@
 //! Shared facts for deterministic interaction backfill and its geometry echo.
 //!
 //! Back controls are recognized only from resolved geometry and dedicated icon
-//! data (`iconFontName` / `iconId`). Card routing requires one unambiguous
-//! detail-shaped screen and repeated image+text subtree shapes. Node names,
-//! ids, and inferred intent never participate.
+//! data (`iconFontName` / `iconId`). Repeated card shapes can identify missing
+//! interactions, but cannot prove the destination's entity identity. Card
+//! navigation is diagnostic-only; cleanup never invents a detail handoff.
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
@@ -59,15 +59,6 @@ pub(crate) fn wire_interaction_backfill(sink: &mut dyn DocSink) {
             page_id: None,
         });
     }
-    if let Some(route) = facts.detail_route {
-        for target in facts.card_targets {
-            sink.apply(EditorCommand::PatchNodeData {
-                node_id: NodeId::new(target.node_id),
-                patch_json: crate::wire_screen_navigation::navigate_patch("push", &route),
-                page_id: None,
-            });
-        }
-    }
 }
 
 /// Shape-only strict back-control fact for compatibility consumers that must
@@ -91,8 +82,8 @@ pub(crate) fn screen_has_back_control_shape(state: &EditorState, screen_id: &str
     !shapes.is_empty()
 }
 
-/// Whole-document interaction-gap echo. The repair and echo consume the exact
-/// same [`interaction_backfill_facts`] result, so their eligibility cannot drift.
+/// Whole-document interaction-gap echo. Only back controls have enough facts
+/// for automatic repair; cards require an authored entity handoff contract.
 pub(super) fn push_interaction_backfill_diagnostics(
     state: &EditorState,
     root_ids: Option<&[String]>,
@@ -131,8 +122,10 @@ pub(super) fn push_interaction_backfill_diagnostics(
         if let Some(route) = facts.detail_route {
             out.push(format!(
                 "interaction-unwired-cards: {card_count} repeated image+text card(s) have no \
-                 onTap, and the document has one detail route {route:?}; bind their onTap to \
-                 push that exact route."
+                 onTap, and the document has one detail route {route:?}. If the brief requests \
+                 these cards to open details, pass the selected entity before push and bind \
+                 the detail content to that same state. One available route alone does not \
+                 prove it represents every card; never route distinct entities to unchanged details."
             ));
         }
     }

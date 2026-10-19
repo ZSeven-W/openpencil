@@ -746,7 +746,12 @@ fn screen_route_prompt_block(screen_routes: &[(String, String)]) -> String {
 
     format!(
         "DOCUMENT SCREEN ROUTES (use these exact route values in schema-encoded navigation \
-         actions; never invent another route):\n{rows}\n\n"
+         actions; never invent another route):\n{rows}\n\n\
+         For requested list-to-detail interactions, preserve entity identity: when distinct \
+         items share one detail route, set shared selected-entity state BEFORE push, and bind \
+         the detail title, image and dependent data to that SAME state. Declare consistent \
+         defaults on both screens. Do not make every merchant/product card open unchanged \
+         first-item details. Do not add interactions to a static-only brief.\n\n"
     )
 }
 

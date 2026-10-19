@@ -293,8 +293,7 @@ fn subagent_prompt_injects_exact_json_quoted_screen_route_inventory() {
     let expected = r#"DOCUMENT SCREEN ROUTES (use these exact route values in schema-encoded navigation actions; never invent another route):
 - "Home" -> "/"
 - "Movie \"Night\"\nDetail" -> "/movie-detail"
-
-CRITICAL LAYOUT CONSTRAINTS:"#;
+"#;
     assert!(
         call.user_prompt.contains(expected),
         "route inventory must be exact and JSON-quoted:\n{}",

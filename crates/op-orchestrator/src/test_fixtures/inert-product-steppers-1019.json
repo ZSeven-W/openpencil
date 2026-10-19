@@ -1,0 +1,268 @@
+{
+  "source_sha256": "848f250dbadee8d9616779cac1b35fcde4d21265e937b54814646512e3179dad",
+  "controls": [
+    {
+      "type": "frame",
+      "id": "n510",
+      "name": "item-stepper",
+      "width": "fit_content",
+      "height": 28.0,
+      "layout": "horizontal",
+      "gap": 0.0,
+      "alignItems": "center",
+      "fill": [
+        {
+          "type": "solid",
+          "color": "$--accent"
+        }
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "n511",
+          "name": "stepper-minus",
+          "width": 28.0,
+          "height": 28.0,
+          "layout": "horizontal",
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "n512",
+              "name": "minus-icon",
+              "iconFontName": "minus",
+              "iconFontFamily": "lucide",
+              "width": 14.0,
+              "height": 14.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--secondary-foreground"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "n513",
+          "name": "stepper-qty",
+          "width": 32.0,
+          "height": 28.0,
+          "layout": "horizontal",
+          "justifyContent": "center",
+          "alignItems": "center",
+          "cornerRadius": 100.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--background"
+            }
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "n514",
+              "name": "qty-value",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "1",
+              "fontFamily": "SF Pro",
+              "fontSize": 13.0,
+              "fontWeight": 500,
+              "lineHeight": 1.5,
+              "textGrowth": "auto",
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--foreground"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "n515",
+          "name": "stepper-plus",
+          "width": 28.0,
+          "height": 28.0,
+          "layout": "horizontal",
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "icon_font",
+              "id": "n516",
+              "name": "plus-icon",
+              "iconFontName": "plus",
+              "iconFontFamily": "lucide",
+              "width": 14.0,
+              "height": 14.0,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--foreground"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "n530",
+      "name": "步进器",
+      "width": "fill_container",
+      "height": 28.0,
+      "layout": "horizontal",
+      "gap": 16.0,
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "n531",
+          "name": "减少按钮",
+          "role": "button",
+          "transition": {
+            "durationMs": 150,
+            "easing": "standard",
+            "properties": [
+              "fill",
+              "opacity",
+              "scaleX",
+              "scaleY"
+            ]
+          },
+          "width": 32.0,
+          "height": 28.0,
+          "layout": "horizontal",
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "n532",
+              "name": "减号",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "−",
+              "fontFamily": "SF Pro",
+              "fontSize": 15.0,
+              "fontWeight": 500,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--foreground"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "n533",
+          "name": "分隔线",
+          "width": 1.0,
+          "height": 28.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--border"
+            }
+          ],
+          "children": []
+        },
+        {
+          "type": "frame",
+          "id": "n534",
+          "name": "数量显示",
+          "width": 34.0,
+          "height": 28.0,
+          "layout": "horizontal",
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "n535",
+              "name": "数量",
+              "width": "fit_content",
+              "height": "fit_content",
+              "content": "1",
+              "fontFamily": "SF Pro",
+              "fontSize": 13.0,
+              "fontWeight": 500,
+              "lineHeight": 1.5,
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--foreground"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "n536",
+          "name": "分隔线2",
+          "width": 1.0,
+          "height": 28.0,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "$--border"
+            }
+          ],
+          "children": []
+        },
+        {
+          "type": "frame",
+          "id": "n537",
+          "name": "增加按钮",
+          "role": "button",
+          "transition": {
+            "durationMs": 150,
+            "easing": "standard",
+            "properties": [
+              "fill",
+              "opacity",
+              "scaleX",
+              "scaleY"
+            ]
+          },
+          "width": "fill_container",
+          "height": 28.0,
+          "layout": "horizontal",
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "n538",
+              "name": "加号",
+              "width": "fill_container",
+              "height": "fit_content",
+              "content": "+",
+              "fontFamily": "SF Pro",
+              "fontSize": 15.0,
+              "fontWeight": 500,
+              "lineHeight": 1.5,
+              "textGrowth": "fixed-width",
+              "fill": [
+                {
+                  "type": "solid",
+                  "color": "$--primary"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
