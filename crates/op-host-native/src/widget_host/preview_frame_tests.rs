@@ -86,6 +86,72 @@ fn host_with_doc(doc: jian_ops_schema::PenDocument) -> WidgetHostNative {
     host
 }
 
+#[test]
+fn normal_full_content_survives_native_preview_and_professional_mode_switches() {
+    let _lock = test_lock();
+    for touch in [false, true] {
+        let doc = load(include_str!(
+            "../../../op-pen-loader/fixtures/normal-scroll.op"
+        ));
+        let mut host = host_with_doc(doc);
+        host.editor_state_mut().editor_ui.touch = touch;
+        host.editor_state_mut().editor_ui.workspace.visible = true;
+        host.editor_state_mut().tool = op_editor_core::Tool::Hand;
+        let original = host.editor_state().doc.clone();
+        let full_height = host
+            .layout_scene()
+            .active_page()
+            .unwrap()
+            .find("phone")
+            .unwrap()
+            .bounds
+            .size
+            .y;
+        assert_eq!(full_height, 1212.0);
+        assert!(host.enter_preview((1440.0, 900.0)));
+        assert_eq!(
+            host.preview
+                .as_ref()
+                .unwrap()
+                .framed_root()
+                .unwrap()
+                .1
+                .size
+                .y,
+            812.0
+        );
+        host.exit_preview();
+        host.set_now_ms(1000);
+        host.settle_mode_transition();
+        host.mark_dirty();
+        assert_eq!(
+            host.layout_scene()
+                .active_page()
+                .unwrap()
+                .find("phone")
+                .unwrap()
+                .bounds
+                .size
+                .y,
+            full_height
+        );
+        host.enter_professional_canvas();
+        host.mark_dirty();
+        assert_eq!(
+            host.layout_scene()
+                .active_page()
+                .unwrap()
+                .find("phone")
+                .unwrap()
+                .bounds
+                .size
+                .y,
+            812.0
+        );
+        assert_eq!(host.editor_state().doc, original);
+    }
+}
+
 fn animated_opacity_doc() -> jian_ops_schema::PenDocument {
     load(
         r##"{

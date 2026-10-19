@@ -29,6 +29,7 @@ mod editor_meta_share;
 mod editor_scene;
 mod effects;
 mod full_content_snapshot;
+mod initial_text_snapshot;
 mod layout_repair;
 mod layout_scene;
 mod legacy_payload_repair;

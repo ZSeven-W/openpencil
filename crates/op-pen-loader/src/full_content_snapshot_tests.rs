@@ -51,6 +51,43 @@ fn state(value: &Value) -> EditorState {
 }
 
 #[test]
+fn normal_reading_and_exports_expand_but_preview_and_professional_restore_viewports() {
+    let mut state = state(&fixture());
+    let before = state.doc.clone();
+    let mut cache = crate::SceneBuildCache::new();
+    let height = |scene: &jian_scene::layout_scene::LayoutScene| {
+        scene
+            .active_page()
+            .unwrap()
+            .find("phone")
+            .unwrap()
+            .bounds
+            .size
+            .y
+    };
+    assert_eq!(height(&cache.maybe_rebuild(&state).unwrap()), 812.0);
+    state.editor_ui.workspace.visible = true;
+    let full = height(&cache.maybe_rebuild(&state).unwrap());
+    assert!(full > 1200.0);
+    assert!(cache.maybe_rebuild(&state).is_none());
+    assert_eq!(
+        height(&editor_state_to_active_page_export_layout_scene(&state)),
+        full
+    );
+    assert_eq!(
+        height(&crate::editor_state_to_export_layout_scene(&state)),
+        full
+    );
+    state.editor_ui.preview.mode = true;
+    assert_eq!(height(&cache.maybe_rebuild(&state).unwrap()), 812.0);
+    state.editor_ui.preview.mode = false;
+    assert_eq!(height(&cache.maybe_rebuild(&state).unwrap()), full);
+    state.editor_ui.workspace.visible = false;
+    assert_eq!(height(&cache.maybe_rebuild(&state).unwrap()), 812.0);
+    assert_eq!(state.doc, before);
+}
+
+#[test]
 fn full_content_contains_all_reviews_then_footer_without_changing_document_or_preview() {
     let state = state(&fixture());
     let original = serde_json::to_string(&state.doc).unwrap();

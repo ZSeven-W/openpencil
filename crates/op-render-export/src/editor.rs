@@ -135,6 +135,49 @@ fn render_raster(
 mod tests {
     use super::*;
 
+    #[test]
+    fn normal_export_raster_svg_and_pdf_include_full_body_without_mutating_viewport() {
+        let doc = jian_ops_schema::load_str(include_str!(
+            "../../op-pen-loader/fixtures/normal-scroll.op"
+        ))
+        .unwrap()
+        .value;
+        let mut state = EditorState::from_document(doc);
+        let before = state.doc.clone();
+        state.editor_ui.export_scale = 1.0;
+        state.editor_ui.workspace.family = HomeFamily::AppUi;
+        for (normal, height) in [(false, 812), (true, 1212)] {
+            state.editor_ui.workspace.visible = normal;
+            state.editor_ui.export_format = ExportFormat::Png;
+            let png = export_editor_state(&state, &EditorExportScope::Configured)
+                .unwrap()
+                .bytes;
+            assert_eq!(u32::from_be_bytes(png[20..24].try_into().unwrap()), height);
+            state.editor_ui.export_format = ExportFormat::Svg;
+            let svg = export_editor_state(&state, &EditorExportScope::Configured)
+                .unwrap()
+                .bytes;
+            assert!(String::from_utf8(svg).unwrap().contains(if normal {
+                "免运费"
+            } else {
+                "¥528"
+            }));
+            state.editor_ui.export_format = ExportFormat::Pdf;
+            let pdf = export_editor_state(&state, &EditorExportScope::Configured)
+                .unwrap()
+                .bytes;
+            // Professional canvas PDFs retain their existing 16-point margin.
+            let (pdf_width, pdf_height) = if normal {
+                (375, height)
+            } else {
+                (407, height + 32)
+            };
+            assert!(String::from_utf8_lossy(&pdf)
+                .contains(&format!("/MediaBox [0 0 {pdf_width} {pdf_height}]")));
+        }
+        assert_eq!(state.doc, before);
+    }
+
     fn app_boards(normal: bool) -> EditorState {
         let doc = jian_ops_schema::load_str(
             r##"{"version":"1.0.0","children":[

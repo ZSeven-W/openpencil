@@ -32,7 +32,7 @@ pub(super) fn export_raster_download(body: &str, state: &WebCanvasState) -> WebR
 
 pub(super) fn build_raster_download(body: &str, fallback: &EditorState) -> Result<RasterDownload> {
     let parsed = parse_export_body(body)?;
-    let editor = export_editor_from_value(parsed.as_ref(), fallback)?;
+    let mut editor = export_editor_from_value(parsed.as_ref(), fallback)?;
     let (format, file_name, mime, ext) = raster_format_from_export_body(parsed.as_ref())?;
     let scale = parsed
         .as_ref()
@@ -41,7 +41,11 @@ pub(super) fn build_raster_download(body: &str, fallback: &EditorState) -> Resul
         .map(|scale| scale as f32)
         .unwrap_or(editor.editor_ui.export_scale);
     let selected_node_id = selected_node_id_from_export_body(parsed.as_ref(), &editor);
-    let scene = op_pen_loader::editor_state_to_active_page_layout_scene(&editor);
+    if let Some(id) = &selected_node_id {
+        editor.selection.anchor = op_editor_core::NodeId::new(id.clone());
+        editor.selection.set = vec![editor.selection.anchor.clone()];
+    }
+    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(&editor);
     let tmp = tmp_export_path(ext);
     let result = match selected_node_id {
         Some(id) => crate::export::export_node_raster(&scene, &id, &tmp, format, scale),
@@ -166,13 +170,16 @@ pub(super) fn build_pdf_download(body: &str, fallback: &EditorState) -> Result<V
         crate::export_pdf::export_deck_pdf_boards(&editor, &tmp, &boards)?;
     } else if editor.editor_ui.scenario
         == Some(op_editor_core::scene_template_catalog::TemplateScene::Slides)
+        || (editor.editor_ui.workspace.visible
+            && editor.editor_ui.workspace.family == op_editor_core::HomeFamily::AppUi
+            && !op_editor_core::preview_slideshow::active_page_boards(&editor).is_empty())
     {
         // The scenario tag survives the round-trip through `editorMeta`, so a
         // deck posted from the browser must get the same slide-per-page file
         // the desktop writes rather than one sheet holding every board.
         crate::export_pdf::export_deck_pdf(&editor, &tmp)?;
     } else {
-        let scene = op_pen_loader::editor_state_to_layout_scene(&editor);
+        let scene = op_pen_loader::editor_state_to_export_layout_scene(&editor);
         crate::export_pdf::export_pdf(&scene, &tmp)?;
     }
     let bytes = std::fs::read(&tmp).map_err(|e| WebCanvasError::Io(e.to_string()))?;
@@ -189,8 +196,15 @@ pub(super) fn export_editor_from_value(
     body: Option<&serde_json::Value>,
     fallback: &EditorState,
 ) -> Result<EditorState> {
+    let full_content = body
+        .and_then(|body| body.get("fullContent"))
+        .and_then(|value| value.as_bool());
     let Some(doc) = body.and_then(|body| body.get("document")) else {
-        return Ok(fallback.clone());
+        let mut editor = fallback.clone();
+        if let Some(full_content) = full_content {
+            editor.editor_ui.workspace.visible = full_content;
+        }
+        return Ok(editor);
     };
     if !doc.is_object() {
         return Err(WebCanvasError::BadRequest(
@@ -218,6 +232,11 @@ pub(super) fn export_editor_from_value(
             .unwrap_or(1)
             .max(1);
         editor.ui.active_page_index = index.min(page_count - 1);
+    }
+    // Export posture travels with this request, never in the saved document.
+    editor.editor_ui.workspace.visible = full_content.unwrap_or(false);
+    if let Some(family) = editor.editor_ui.home.work_family {
+        editor.editor_ui.workspace.family = family;
     }
     Ok(editor)
 }

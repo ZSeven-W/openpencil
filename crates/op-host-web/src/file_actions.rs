@@ -121,6 +121,7 @@ pub fn export_pdf_request_body(
     let mut body = serde_json::json!({
         "document": document,
         "activePageIndex": state.ui.active_page_index,
+        "fullContent": state.editor_ui.workspace.visible,
     });
     if let Some(boards) = boards {
         body["boards"] = serde_json::json!(boards);
@@ -177,6 +178,7 @@ pub fn export_raster_request_body(state: &EditorState) -> Result<String, Documen
     let mut body = serde_json::json!({
         "document": document,
         "activePageIndex": state.ui.active_page_index,
+        "fullContent": state.editor_ui.workspace.visible,
         "format": format,
         "scale": state.editor_ui.export_scale,
     });

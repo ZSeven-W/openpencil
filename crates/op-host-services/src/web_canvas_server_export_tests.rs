@@ -7,6 +7,31 @@ use super::conn_tests::serve;
 use super::*;
 
 #[test]
+fn normal_full_content_request_exports_complete_body_and_preserves_server_document() {
+    use base64::Engine as _;
+    let mut server = fresh_state();
+    let before = server.editor.doc.clone();
+    let document: serde_json::Value = serde_json::from_str(include_str!(
+        "../../op-pen-loader/fixtures/normal-scroll.op"
+    ))
+    .unwrap();
+    for (normal, height) in [(false, 812), (true, 1212)] {
+        let body = serde_json::json!({"document":document,"format":"png","scale":1,
+            "fullContent":normal,"selectedNodeId":"phone"})
+        .to_string();
+        let response = handle_web_canvas_request("POST", "/api/export/raster", &body, &mut server);
+        assert!(response.status.starts_with("200"), "{}", response.body);
+        let response: serde_json::Value = serde_json::from_str(&response.body).unwrap();
+        let png = base64::engine::general_purpose::STANDARD
+            .decode(response["dataBase64"].as_str().unwrap())
+            .unwrap();
+        assert_eq!(u32::from_be_bytes(png[20..24].try_into().unwrap()), height);
+    }
+    assert_eq!(server.editor.doc, before);
+    assert_eq!(server.version, 0);
+}
+
+#[test]
 fn post_export_pdf_returns_base64_pdf_without_replacing_daemon_document() {
     use base64::Engine as _;
     use op_editor_core::PenNodeExt;

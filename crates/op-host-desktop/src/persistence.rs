@@ -358,45 +358,11 @@ fn export_editor_state_to_path(
     state: &EditorState,
     path: &std::path::Path,
 ) -> Result<(), op_host_services::export::ExportError> {
-    use op_editor_core::editor_ui_state::ExportFormat as Fmt;
-    use op_editor_core::scene_template_catalog::TemplateScene;
-
-    let fmt = state.editor_ui.export_format;
-    let scale = state.editor_ui.export_scale;
-    // A single selected node scopes raster and SVG exports to that
-    // subtree. PDF remains page-level.
-    let single_node = if state.selection_count() == 1 && state.selection.anchor.is_real() {
-        Some(state.selection.anchor.as_str())
-    } else {
-        None
-    };
-    if fmt == Fmt::Pdf {
-        // A deck's pages are its boards, not its canvas pages: the
-        // page-level exporter would put every slide plus the gaps
-        // between them on one sheet.
-        if state.editor_ui.scenario == Some(TemplateScene::Slides) {
-            return op_host_services::export_pdf::export_deck_pdf(state, path);
-        }
-        // PDF is intentionally multi-page; keep the full builder for it.
-        let scene = op_pen_loader::editor_state_to_export_layout_scene(state);
-        return op_host_services::export_pdf::export_pdf(&scene, path);
-    }
-
-    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(state);
-    let raster = |rf: op_host_services::export::RasterFormat| match single_node {
-        Some(id) => op_host_services::export::export_node_raster(&scene, id, path, rf, scale),
-        None => op_host_services::export::export_raster(&scene, path, rf, scale),
-    };
-    match fmt {
-        Fmt::Png => raster(op_host_services::export::RasterFormat::Png),
-        Fmt::Jpeg => raster(op_host_services::export::RasterFormat::Jpeg),
-        Fmt::Webp => raster(op_host_services::export::RasterFormat::Webp),
-        Fmt::Svg => match single_node {
-            Some(id) => op_host_services::export::export_node_svg(&scene, id, path),
-            None => op_host_services::export::export_svg(&scene, path),
-        },
-        Fmt::Pdf => unreachable!("PDF returned before active-page scene construction"),
-    }
+    op_host_services::export::export_editor_state_to_path(
+        state,
+        &op_host_services::export::EditorExportScope::Configured,
+        path,
+    )
 }
 
 /// Route a `FileAction` raised by the file-menu dispatcher to the

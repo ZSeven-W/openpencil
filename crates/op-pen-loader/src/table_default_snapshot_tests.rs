@@ -73,7 +73,7 @@ fn normal_display_and_exports_use_initial_page_without_changing_the_saved_datase
             .unwrap()
             .text
             .as_deref(),
-        Some("Authored")
+        Some("Custom 7")
     );
     state.editor_ui.workspace.visible = false;
     let expert = crate::editor_state_to_active_page_layout_scene(&state);

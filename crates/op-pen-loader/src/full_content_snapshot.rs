@@ -3,7 +3,8 @@
 //! Keep the canonical device viewport intact. Re-layout a copy with measured
 //! content heights so the footer follows the complete body instead of covering
 //! its last visible row. Ordinary clipped cards and horizontal carousels remain
-//! clipped; neither Preview nor the interactive canvas calls this projection.
+//! clipped. Preview and the professional editing canvas keep authored geometry;
+//! normal-mode reading and full-content exports use this projection.
 
 use jian_ops_schema::{
     node::{

@@ -36,6 +36,7 @@ struct BuiltInputs {
     document_revision: u64,
     preserve_authored_geometry: bool,
     normal_table_view: bool,
+    normal_presentation: bool,
     active_page_index: usize,
     var_table: VariableTable,
     /// Font-registry generation the scene was laid out against. A runtime
@@ -62,6 +63,7 @@ impl SceneBuildCache {
         let preserve_authored_geometry = state.editor_ui.preserve_authored_geometry;
         let active_page_index = state.ui.active_page_index;
         let normal_table_view = state.editor_ui.workspace.visible;
+        let normal_presentation = crate::editor_scene::normal_presentation(state);
         // Resolves the active theme + transient fill/stroke ref caches + the
         // doc-defined variables — every non-doc input the builder consumes.
         // Proportional to variable count, not node count, so cheap to rebuild
@@ -74,6 +76,7 @@ impl SceneBuildCache {
                 && last.active_page_index == active_page_index
                 && last.preserve_authored_geometry == preserve_authored_geometry
                 && last.normal_table_view == normal_table_view
+                && last.normal_presentation == normal_presentation
                 && last.font_generation == font_generation
                 && last.var_table == var_table
             {
@@ -86,6 +89,7 @@ impl SceneBuildCache {
             document_revision,
             preserve_authored_geometry,
             normal_table_view,
+            normal_presentation,
             active_page_index,
             var_table,
             font_generation,

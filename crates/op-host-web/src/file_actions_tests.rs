@@ -208,6 +208,30 @@ fn export_pdf_request_body_embeds_current_document() {
     );
 }
 
+#[test]
+fn normal_exports_send_presentation_posture_without_persisting_it() {
+    let document = op_pen_loader::load_canonical(include_str!(
+        "../../op-pen-loader/fixtures/normal-scroll.op"
+    ))
+    .unwrap()
+    .value;
+    let mut state = EditorState::from_document(document);
+    let original = state.doc.clone();
+    for normal in [true, false] {
+        state.editor_ui.workspace.visible = normal;
+        state.editor_ui.export_format = op_editor_core::ExportFormat::Png;
+        for body in [
+            export_pdf_request_body(&state, None).unwrap(),
+            export_raster_request_body(&state).unwrap(),
+        ] {
+            let value: serde_json::Value = serde_json::from_str(&body).unwrap();
+            assert_eq!(value["fullContent"], normal);
+            assert!(value["document"].get("fullContent").is_none());
+        }
+    }
+    assert_eq!(state.doc, original);
+}
+
 /// The slides rail's "Export selected slides" row travels as data: the
 /// daemon rebuilds its `EditorState` from the posted document, and that
 /// round-trip carries no selection, so the ids are the only record of it

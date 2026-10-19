@@ -1,0 +1,19 @@
+{
+  "version": "1.0.0",
+  "children": [{
+    "type": "frame", "id": "phone", "screen": "/", "x": 0, "y": 0,
+    "width": 375, "height": 812, "layout": "vertical", "fill": [{"type":"solid","color":"#ffffff"}],
+    "children": [
+      {"type": "rectangle", "id": "header", "width": "fill_container", "height": 62},
+      {"type": "frame", "id": "body", "role": "scroll-area", "layout": "vertical",
+        "width": "fill_container", "height": "fill_container", "clip": true,
+        "children": [
+          {"type": "rectangle", "id": "first", "width": "fill_container", "height": 650},
+          {"type": "rectangle", "id": "last", "width": "fill_container", "height": 400}
+        ]},
+      {"type": "frame", "id": "footer", "width": "fill_container", "height": 100,
+        "layout": "vertical", "children": [{"type": "text", "id": "fee", "content": "¥528",
+          "bindings": {"content": "'免运费'"}}]}
+    ]
+  }]
+}
