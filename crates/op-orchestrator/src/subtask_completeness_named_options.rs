@@ -186,6 +186,7 @@ fn named_contract(
     }
     let labels: Vec<_> = raw[body.clone()]
         .split(['/', '、', ',', '，', '|'])
+        .take_while(|name| !is_behavior_suffix(name))
         .map(|name| {
             name.trim()
                 .trim_matches(['\'', '"', '「', '」', '『', '』', '“', '”', '‘', '’'])
@@ -242,6 +243,20 @@ fn named_contract(
         return None;
     }
     Some(Contract { labels, heading })
+}
+
+/// Parentheses often contain a named list followed by interaction directions.
+/// Those directions do not add choices; explicitly quoted names remain literal.
+fn is_behavior_suffix(value: &str) -> bool {
+    let value = value.trim();
+    if value.starts_with(['\'', '"', '「', '『', '“', '‘']) {
+        return false;
+    }
+    static BEHAVIOR: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?ix)^(?:onTap\b|onClick\b|transition\b|pressed\b|hover\b|同交互|点击(?:切换|选中)|切换选中态)")
+            .expect("valid specification behavior suffix")
+    });
+    BEHAVIOR.is_match(value)
 }
 
 fn visible(node: &PenNode) -> bool {

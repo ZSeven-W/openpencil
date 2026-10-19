@@ -7,6 +7,9 @@ use crate::types::{AbortFlag, DesignRequest, GeometryEchoBudget, Progress};
 use op_editor_core::EditorCommand;
 use serde_json::json;
 
+#[path = "subtask_completeness_media_details_tests.rs"]
+mod details;
+
 const ELEMENTS: &str = "区块标题「附近商家」+ 筛选 tab（综合排序/销量/距离）；5 条商家行卡片：左 88px 方形美食实拍图，右侧商家名、月售与配送时长行、起送/配送费行、右侧 2 个活动小标签；商家行 onTap 导航至「商家详情」；列表卡片进入视口时交错 fade-up（每条延迟 60ms）；底部 padding 预留";
 const SCRIPTS: [&str; 3] = [
     include_str!("../tests/fixtures/subtask_completeness/merchant-list-1018-attempt1.js"),

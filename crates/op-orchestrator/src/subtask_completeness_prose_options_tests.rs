@@ -2,6 +2,47 @@ use super::*;
 use crate::subtask_completeness::named_options_tests::{outcome, pill, section, sink, task};
 use serde_json::{json, Value};
 
+#[test]
+fn retained_options_do_not_turn_interaction_directions_into_product_choices() {
+    let task: Subtask = serde_json::from_str(include_str!(
+        "../tests/fixtures/subtask_completeness/product-options-1019-task.json"
+    ))
+    .unwrap();
+    let groups = contracts(&task);
+    assert_eq!(groups.len(), 2);
+    assert_eq!(groups[0].labels, ["雾白", "燕麦", "深咖"]);
+    assert_eq!(groups[1].labels, ["S", "M", "L", "XL"]);
+    let raw =
+        include_str!("../tests/fixtures/subtask_completeness/product-options-1019-attempt1.js");
+    let program = op_mcp::script_runner::run_generation_script_to_program(raw).unwrap();
+    let (nodes, _) = crate::program_gen::run_program_to_forest(&program).unwrap();
+    let ids = nodes.iter().map(|n| n.id_str().to_owned()).collect();
+    let mut result = outcome(&[]);
+    result.inserted_root_ids = ids;
+    let saved = sink(
+        nodes
+            .iter()
+            .map(|n| serde_json::to_value(n).unwrap())
+            .collect(),
+    );
+    assert_eq!(inspect(&saved, &task, &result).unwrap(), 4);
+    let missing = sink(vec![section(vec![
+        options("颜色", &["雾白", "燕麦"]),
+        options("尺码", &["S", "M", "L", "XL"]),
+    ])]);
+    let failure = inspect(&missing, &task, &outcome(&["section"])).unwrap_err();
+    assert_eq!((failure.expected, failure.delivered), (3, 2));
+    assert!(failure.feedback.contains("深咖"));
+    assert!(!failure.feedback.contains("onTap"));
+}
+
+#[test]
+fn quoted_behavior_words_are_still_literal_option_names() {
+    let task = task("规格选项（'onTap'/'transition'/'pressed'）");
+    let groups = contracts(&task);
+    assert_eq!(groups[0].labels, ["onTap", "transition", "pressed"]);
+}
+
 const PLAN: &str = include_str!("test_fixtures/product_prose_options_1018_task.json");
 const RAW: &str = include_str!("test_fixtures/product_prose_options_1018_salvage.js");
 

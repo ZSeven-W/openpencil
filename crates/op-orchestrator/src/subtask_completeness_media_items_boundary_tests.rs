@@ -294,7 +294,8 @@ fn five_empty_frames_keep_the_legacy_generic_result() {
 fn a_proven_hero_does_not_lower_generic_wrapped_or_image_fill_card_delivery() {
     for image_fill in [false, true] {
         // The hero is itself a recognizable frame[image,text] family of one.
-        // Unsupported media representations below must retain generic delivery.
+        // Simple wrappers now also prove a media family. Unsupported image
+        // fills retain generic delivery without claiming new media evidence.
         let mut children = vec![simple_card(100, 1)];
         children.extend((0..5).map(|index| {
             let mut value = card(index, 1);
@@ -310,7 +311,7 @@ fn a_proven_hero_does_not_lower_generic_wrapped_or_image_fill_card_delivery() {
         }));
         let sink = section(children);
         assert_eq!(delivered_item_count(&sink, &["section".into()]), 5);
-        assert_media_count(&sink, &["section"], 1);
+        assert_media_count(&sink, &["section"], if image_fill { 1 } else { 5 });
     }
 }
 
