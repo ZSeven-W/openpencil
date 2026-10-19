@@ -141,9 +141,57 @@ fn fresh_plan_repeated_protocol_errors_never_accept_the_invalid_context() {
         &mut |_| {},
     ))
     .unwrap();
-    // The existing heuristic fallback remains separate from accepted LLM plans.
+    // The invalid context is dropped, never accepted; the modelled sections
+    // survive instead of being replaced by the heuristic fallback skeleton.
     assert!(plan.shared_context.is_none());
+    let ids: Vec<_> = plan.subtasks.iter().map(|task| task.id.as_str()).collect();
+    assert_eq!(ids, ["s1", "s2"]);
     assert_eq!(llm.user_prompts().len(), 2);
+}
+
+// 1019 A/B: GLM-5.3-Flash twice put a stray key into sharedContext (`usedBy`,
+// `fonts`, `note`); the heuristic fallback then lost the calendar header.
+#[test]
+fn fresh_plan_unknown_shared_context_field_keeps_the_modelled_sections() {
+    let mut wrong = plan_value();
+    wrong["sharedContext"]["fonts"] = json!(["Inter"]);
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text(wrong.to_string()),
+        ScriptResponse::Text(wrong.to_string()),
+    ]);
+    let (plan, _) = futures::executor::block_on(planning_loop(
+        &request(),
+        &llm,
+        &AbortFlag::new(),
+        &mut |_| {},
+    ))
+    .unwrap();
+    assert!(plan.shared_context.is_none());
+    let labels: Vec<_> = plan
+        .subtasks
+        .iter()
+        .map(|task| task.label.as_str())
+        .collect();
+    assert_eq!(labels, ["Gallery", "Information"]);
+    let prompts = llm.user_prompts();
+    assert_eq!(prompts.len(), 2);
+    assert!(prompts[1].contains("unknown field `fonts`"));
+}
+
+#[test]
+fn fresh_plan_unparseable_twice_still_uses_the_heuristic_fallback() {
+    let llm = ScriptedLlm::new(vec![
+        ScriptResponse::Text("not a plan".into()),
+        ScriptResponse::Text("still not a plan".into()),
+    ]);
+    let (plan, _) = futures::executor::block_on(planning_loop(
+        &request(),
+        &llm,
+        &AbortFlag::new(),
+        &mut |_| {},
+    ))
+    .unwrap();
+    assert!(plan.subtasks.iter().all(|task| task.label != "Gallery"));
 }
 
 #[test]

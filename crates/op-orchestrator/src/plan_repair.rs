@@ -614,6 +614,29 @@ pub(crate) fn parse_fresh_orchestrator_response(
     Err(failure.unwrap_or(FreshPlanError::Unparseable))
 }
 
+/// Last resort after protocol rejections: the same candidate search as the
+/// fresh parser, with the advisory `sharedContext` removed and no fresh-plan
+/// acceptance rules. Returns `None` when the plan itself does not parse.
+pub(crate) fn parse_without_shared_context(
+    raw: &str,
+    request: &DesignRequest,
+) -> Option<OrchestratorPlan> {
+    let trimmed = raw.trim();
+    let candidates = [
+        Some(trimmed),
+        extract_fence_content(trimmed),
+        extract_brace_slice(trimmed),
+    ];
+    candidates.into_iter().flatten().find_map(|text| {
+        let json = crate::plan::extract_json_object(text).unwrap_or(text);
+        let mut value = serde_json::from_str::<Value>(json).ok()?;
+        value.as_object_mut()?.remove("sharedContext");
+        let (mut plan, _) = parse_orchestrator_response(&value.to_string(), request)?;
+        plan.shared_context = None;
+        Some(plan)
+    })
+}
+
 /// Strict probe: delegate to `parse_plan` (serde deserialization + non-empty
 /// subtasks check), then apply the same style/palette contract as repaired
 /// plans. Returns `None` on any parse or validation failure.

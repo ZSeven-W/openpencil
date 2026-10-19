@@ -181,6 +181,7 @@ async fn planning_loop(
     // same prompt parsed fine on retry). The fallback plan stays as the
     // final safety net, not the first response to a hiccup.
     let mut protocol_feedback: Option<String> = None;
+    let mut rejected: Option<(String, Option<String>)> = None;
     for attempt in 1..=2u8 {
         let mut pp = build_orchestrator_prompt(request, PlanningMode::Rich, abort.clone());
         if let Some(feedback) = &protocol_feedback {
@@ -208,6 +209,7 @@ async fn planning_loop(
                         debug_plan_attempt_failed(attempt, "plan protocol", &diagnostic);
                         protocol_feedback =
                             Some(crate::plan_fresh_recovery::feedback(&raw, &error));
+                        rejected = Some((raw, forced_style_guide_name));
                     }
                 }
             }
@@ -244,6 +246,23 @@ async fn planning_loop(
         if abort.is_set() {
             return Err(OrchestratorError::Aborted);
         }
+    }
+    // sharedContext is optional advisory data. A modelled plan whose only
+    // fault is that block beats the heuristic skeleton, which drops sections
+    // the planner had laid out (calendar header lost, 1019 A/B).
+    if let Some((Some(mut plan), forced)) = rejected.map(|(raw, forced)| {
+        (
+            crate::plan_repair::parse_without_shared_context(&raw, request),
+            forced,
+        )
+    }) {
+        tracing::warn!("planning protocol rejected twice; using plan without sharedContext");
+        if debug_plan_enabled() {
+            eprintln!("[PLAN] sharedContext dropped; modelled plan kept");
+        }
+        apply_plan_pins(&mut plan, forced, request);
+        let plan = maybe_replan_for_coverage(request, llm, abort, on_progress, plan).await?;
+        return source_copy_plan::ensure(request, llm, abort, on_progress, plan).await;
     }
     tracing::warn!("planning failed twice; using fallback plan");
     if debug_plan_enabled() {
