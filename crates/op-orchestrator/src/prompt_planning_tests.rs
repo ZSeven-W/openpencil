@@ -83,7 +83,7 @@ fn phone_planning_prompt_uses_the_archetype_handoff_and_gate() {
     assert!(phone_prompt
         .call_request
         .system_prompt
-        .contains("photo hero contains only media and controls"));
+        .contains("For image-led, the hero owns the title/meta on its scrim"));
     assert!(phone_prompt
         .call_request
         .system_prompt

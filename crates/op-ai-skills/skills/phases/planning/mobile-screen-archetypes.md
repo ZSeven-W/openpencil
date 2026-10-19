@@ -11,7 +11,7 @@ category: domain
 
 MOBILE SCREEN ARCHETYPES (perform internally; output only plan JSON):
 
-Pick ONE archetype per screen; apply its style to the protagonist. In the owning subtask's `elements`, write `ARCHETYPE: <name> — protagonist <what>, first screen <x>%, <spatial relation>, display <n>px / body <n>px, imagery <rule>`, using the selected row's values. Assign each title and meta row ONE owner; typography applies only to copy that section owns. If a separate title/meta section exists, the photo hero contains only media and controls, without repeated titles or invented stats.
+Pick ONE archetype per screen; apply its style to the protagonist. In the owning subtask's `elements`, write `ARCHETYPE: <name> — protagonist <what>, first screen <x>%, <spatial relation>, display <n>px / body <n>px, imagery <rule>`, using the selected row's values. Assign each title and meta row ONE owner; typography applies only to copy that section owns. For image-led, the hero owns the title/meta on its scrim; plan a separate title/meta section only when the brief puts the title below the photo, and then the hero carries media and controls only, without repeated titles or invented stats.
 
 Explicit first-screen content comes first: reserve 62px system chrome, navigation, gaps and every required item BEFORE imagery. Percentages are starting points; reduce the hero when needed. Long/CJK titles usually use 28–36px with balanced lines; 48px suits short display copy/figures. Do not plan a status bar; it is pre-inserted.
 
