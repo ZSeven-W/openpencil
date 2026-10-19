@@ -121,7 +121,7 @@ pub fn editor_state_to_active_page_export_layout_scene(
     active_export_scene(state, state.editor_ui.workspace.visible)
 }
 
-/// Build a static, full-content presentation of explicit vertical scroll areas.
+/// Build a static, full-content presentation of vertical screens and scroll areas.
 ///
 /// Only an ephemeral export snapshot grows. The editable document, ordinary
 /// professional canvas, and Preview retain their authored viewport and fixed chrome.

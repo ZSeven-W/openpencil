@@ -1,4 +1,4 @@
-//! Expand explicit vertical scrolling surfaces in an ephemeral static export.
+//! Expand explicit vertical scroll surfaces and screens in a static projection.
 //!
 //! Keep the canonical device viewport intact. Re-layout a copy with measured
 //! content heights so the footer follows the complete body instead of covering
@@ -18,7 +18,7 @@ use op_editor_core::PenNodeExt;
 use crate::payload::NodePayload;
 
 pub(crate) fn roots(roots: &[PenNode]) -> Option<Vec<PenNode>> {
-    if !roots.iter().any(has_vertical_scroll) {
+    if !roots.iter().any(has_expanding_surface) {
         return None;
     }
     let page = crate::adapter::pen_roots_to_page_payload("export", "Export", roots, 0, false);
@@ -38,22 +38,25 @@ fn props(node: &PenNode) -> Option<&ContainerProps> {
     }
 }
 
-fn vertical_scroll(node: &PenNode) -> bool {
-    matches!(
-        node.base().role.as_deref(),
-        Some("scroll" | "scroll-area" | "scroll-viewport")
-    ) && props(node).is_some_and(|p| {
-        p.layout == Some(LayoutMode::Vertical)
-            && p.clip_content == Some(true)
-            && matches!(p.justify_content, None | Some(JustifyContent::Start))
-    })
+fn expanding_surface(node: &PenNode) -> bool {
+    let screen = matches!(node, PenNode::Frame(frame) if frame.screen.is_some());
+    (screen
+        || matches!(
+            node.base().role.as_deref(),
+            Some("scroll" | "scroll-area" | "scroll-viewport")
+        ))
+        && props(node).is_some_and(|p| {
+            p.layout == Some(LayoutMode::Vertical)
+                && (screen || p.clip_content == Some(true))
+                && matches!(p.justify_content, None | Some(JustifyContent::Start))
+        })
 }
 
-fn has_vertical_scroll(node: &PenNode) -> bool {
-    vertical_scroll(node)
+fn has_expanding_surface(node: &PenNode) -> bool {
+    expanding_surface(node)
         || node
             .children()
-            .is_some_and(|children| children.iter().any(has_vertical_scroll))
+            .is_some_and(|children| children.iter().any(has_expanding_surface))
 }
 
 fn vertical_padding(props: &ContainerProps) -> Option<(f32, f32)> {
@@ -104,7 +107,7 @@ fn expand(node: &mut PenNode, measured: &NodePayload) -> f32 {
     let Some((top_inset, bottom_inset)) = vertical_padding(container) else {
         return 0.0;
     };
-    let scroll = vertical_scroll(node);
+    let scroll = expanding_surface(node);
     let Some(children) = node.children_mut() else {
         return 0.0;
     };
@@ -132,8 +135,9 @@ fn expand(node: &mut PenNode, measured: &NodePayload) -> f32 {
             flow_growth = flow_growth.max(growth);
         }
     }
-    // Non-scroll parents only grow to carry an expanded descendant. A plain
-    // overflowing artboard/card is not permission to discard its clipping.
+    // Unmarked parents only grow to carry an expanded descendant. A plain
+    // overflowing card is not permission to discard its clipping. A declared
+    // screen can contain a complete flow without a separate scroll wrapper.
     let height = if scroll {
         (content_bottom - measured.y + bottom_inset).max(measured.h)
     } else if flow_growth <= 0.5 {

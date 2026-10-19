@@ -51,6 +51,40 @@ fn state(value: &Value) -> EditorState {
 }
 
 #[test]
+fn declared_whole_screen_flow_expands_without_a_separate_scroll_role() {
+    let mut doc = fixture();
+    let body = &mut doc["children"][0]["children"][1];
+    body.as_object_mut().unwrap().remove("role");
+    body["height"] = json!("fit_content");
+    let mut state = state(&doc);
+    let before = state.doc.clone();
+    state.editor_ui.workspace.visible = true;
+    let full = editor_state_to_active_page_layout_scene(&state);
+    let page = full.active_page().unwrap();
+    let screen = page.find("phone").unwrap().bounds;
+    assert!(screen.size.y > 1200.0);
+    assert!(
+        bottom(page.find("r3").unwrap().bounds) <= page.find("footer").unwrap().bounds.origin.y
+    );
+    assert!(bottom(page.find("footer").unwrap().bounds) <= bottom(screen) + 0.5);
+    assert!(page.find("hero").unwrap().clip_content);
+    state.editor_ui.preview.mode = true;
+    let preview = editor_state_to_active_page_layout_scene(&state);
+    assert_eq!(
+        preview
+            .active_page()
+            .unwrap()
+            .find("phone")
+            .unwrap()
+            .bounds
+            .size
+            .y,
+        812.0
+    );
+    assert_eq!(state.doc, before);
+}
+
+#[test]
 fn normal_reading_and_exports_expand_but_preview_and_professional_restore_viewports() {
     let mut state = state(&fixture());
     let before = state.doc.clone();
