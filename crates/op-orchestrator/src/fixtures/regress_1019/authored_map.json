@@ -1,0 +1,62 @@
+{
+  "type": "frame",
+  "id": "n13",
+  "name": "map-canvas",
+  "width": "fill_container",
+  "height": "fit_content",
+  "layout": "none",
+  "children": [
+    {
+      "type": "path",
+      "id": "n19",
+      "name": "route-line",
+      "d": "M206 84 C 200 118, 164 138, 166 170 C 168 198, 178 194, 178 210",
+      "width": 375.0,
+      "height": 320.0
+    },
+    {
+      "type": "ellipse",
+      "id": "n20",
+      "name": "destination-marker",
+      "x": 200.0,
+      "y": 78.0,
+      "width": 12.0,
+      "height": 12.0
+    },
+    {
+      "type": "ellipse",
+      "id": "n21",
+      "name": "current-location-dot",
+      "x": 172.0,
+      "y": 210.0,
+      "width": 12.0,
+      "height": 12.0
+    },
+    {
+      "type": "path",
+      "id": "n24",
+      "name": "road-vertical-main-a",
+      "d": "M92 0 L92 320",
+      "width": 375.0,
+      "height": 320.0
+    },
+    {
+      "type": "path",
+      "id": "n26",
+      "name": "road-horizontal-main",
+      "d": "M0 118 L375 118",
+      "width": 375.0,
+      "height": 320.0
+    },
+    {
+      "type": "rectangle",
+      "id": "n31",
+      "name": "city-block-1",
+      "x": 0.0,
+      "y": 136.0,
+      "width": "fill_container",
+      "height": 92.0,
+      "children": []
+    }
+  ]
+}

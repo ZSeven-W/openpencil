@@ -123,6 +123,7 @@ fn template_viewport(node: &PenNode) -> Option<(MapTemplate, f64, f64)> {
     let kind = match prefix.split(';').next()? {
         "map-template:running" => MapTemplate::Running,
         "map-template:delivery" => MapTemplate::Delivery,
+        "map-template:ride" => MapTemplate::Ride,
         "map-template:location" => MapTemplate::Location,
         _ => return None,
     };

@@ -10,6 +10,7 @@ mod map_tests;
 fn map_template_uses_full_bleed_viewport_through_complete_cleanup() {
     let mut root = evidence_root();
     root["children"][1]["children"][0]["name"] = json!("Running map");
+    root["children"][1]["children"][0]["src"] = json!("");
     root["children"][1]["children"][0]["imageSearchQuery"] = json!("map-template:running");
     let mut sink = sink_with(root);
     crate::cleanup::run_cleanup_passes(&mut sink, &plan(), &["root"]);

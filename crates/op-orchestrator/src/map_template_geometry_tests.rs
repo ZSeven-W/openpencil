@@ -121,6 +121,7 @@ fn map_geometry_resize_preserves_authored_overlay_styles_ids_and_layer_button_si
     for kind in [
         MapTemplate::Running,
         MapTemplate::Delivery,
+        MapTemplate::Ride,
         MapTemplate::Location,
     ] {
         let slot: PenNode = serde_json::from_value(json!({"type":"image","id":"map","src":"",

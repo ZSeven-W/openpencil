@@ -24,7 +24,7 @@ House defaults for an 812px screen (body 16px):
 | name | purpose | protagonist / relation | imagery |
 | image-led | photo-led detail/product/workout browsing | full-bleed photo 35–45%, title on scrim; overlap-with-scrim; display 48px / body 16px | one relevant photo; overlay copy only if owned here |
 | ledger | banking/wallet/stats | figure card 25–30%, quiet list below; display 48px / body 16px | figures lead; no decorative hero |
-| route-map | ride/delivery/travel | map 40–50%, pinned controls, sheet below; display 32px / body 16px | map template, never photo |
+| route-map | ride/delivery/travel | map 40–50%, pinned controls, sheet below; display 32px / body 16px | editable vector roads/route/markers; template fallback for empty map slots |
 | timeline | calendar/schedule | grid/time axis 30–40%, accent now, split; display 32px / body 16px | no decorative hero |
 | content-stream | social/feed | first card 30% larger, then two-column tiles; display 36px / body 16px | coherent hero media, restrained tiles |
 | progress | fitness/habits | ring/bar 25–35%, figure inside, plan tiles below; display 48px / body 16px | figure first; optional illustration |

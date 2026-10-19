@@ -6,11 +6,28 @@ use serde_json::{json, Value};
 pub enum MapTemplate {
     Running,
     Delivery,
+    Ride,
     Location,
 }
 
 impl MapTemplate {
     pub fn from_hint(hint: &str) -> Self {
+        Self::from_hint_with_context(hint, "")
+    }
+
+    /// Screen ownership wins over a generic location slot chosen by the model.
+    pub fn from_hint_with_context(hint: &str, context: &str) -> Self {
+        let context = format!("{hint} {context}").to_lowercase();
+        if context.contains("map-template:ride")
+            || ["打车", "叫车", "网约车"]
+                .iter()
+                .any(|word| context.contains(word))
+            || context
+                .split(|c: char| !c.is_ascii_alphanumeric())
+                .any(|word| matches!(word, "ride" | "taxi" | "rideshare"))
+        {
+            return Self::Ride;
+        }
         let hint = hint.to_lowercase();
         for (token, template) in [
             ("map-template:running", Self::Running),
@@ -50,6 +67,7 @@ impl MapTemplate {
         match self {
             Self::Running => "running",
             Self::Delivery => "delivery",
+            Self::Ride => "ride",
             Self::Location => "location",
         }
     }
@@ -103,11 +121,24 @@ pub fn children(id: &str, width: f64, height: f64, theme: Theme, kind: MapTempla
             rect("map-park", 0.25, 0.27, 0.44, 0.44, park, 24.0);
             rect("map-pond", 0.38, 0.38, 0.18, 0.16, water, 24.0);
         }
-        MapTemplate::Delivery => rect("map-park", 0.74, 0.51, 0.22, 0.20, park, 8.0),
+        MapTemplate::Delivery | MapTemplate::Ride => {
+            rect("map-park", 0.74, 0.51, 0.22, 0.20, park, 8.0)
+        }
         MapTemplate::Location => {
             rect("map-park", 0.50, 0.26, 0.20, 0.20, park, 8.0);
             rect("map-waterfront", 0.74, 0.0, 0.10, 1.0, water, 0.0);
         }
+    }
+    if kind == MapTemplate::Location {
+        let avenue = &[
+            (0.0, 0.72),
+            (0.225, 0.58),
+            (0.485, 0.48),
+            (0.72, 0.225),
+            (1.0, 0.10),
+        ];
+        nodes.push(route(id, "map-avenue-edge", avenue, w, h, block, 16.0));
+        nodes.push(route(id, "map-avenue", avenue, w, h, road, 10.0));
     }
     let points: &[(f64, f64)] = match kind {
         MapTemplate::Running => &[
@@ -121,7 +152,7 @@ pub fn children(id: &str, width: f64, height: f64, theme: Theme, kind: MapTempla
             (0.60, 0.70),
             (0.42, 0.70),
         ],
-        MapTemplate::Delivery => &[
+        MapTemplate::Delivery | MapTemplate::Ride => &[
             (0.12, 0.74),
             (0.225, 0.74),
             (0.225, 0.48),
@@ -142,7 +173,11 @@ pub fn children(id: &str, width: f64, height: f64, theme: Theme, kind: MapTempla
             nodes.push(marker(
                 id,
                 "map-origin",
-                "store",
+                if kind == MapTemplate::Ride {
+                    "circle-dot"
+                } else {
+                    "store"
+                },
                 start,
                 (w, h),
                 surface,
@@ -150,8 +185,16 @@ pub fn children(id: &str, width: f64, height: f64, theme: Theme, kind: MapTempla
             ));
             nodes.push(marker(
                 id,
-                "map-courier",
-                "bike",
+                if kind == MapTemplate::Ride {
+                    "map-vehicle"
+                } else {
+                    "map-courier"
+                },
+                if kind == MapTemplate::Ride {
+                    "car"
+                } else {
+                    "bike"
+                },
                 (0.485, 0.40),
                 (w, h),
                 surface,
@@ -164,6 +207,11 @@ pub fn children(id: &str, width: f64, height: f64, theme: Theme, kind: MapTempla
         nodes.push(dot(id, "map-destination-halo", end, w, h, 24.0, surface));
         nodes.push(dot(id, "map-pin", end, w, h, 14.0, "$--primary"));
     } else {
+        if kind == MapTemplate::Location {
+            nodes.push(dot(id, "map-location-halo", end, w, h, 64.0, "$--primary"));
+            let halo = nodes.last_mut().unwrap();
+            halo["opacity"] = json!(0.16);
+        }
         let icon = if kind == MapTemplate::Delivery {
             "house"
         } else {

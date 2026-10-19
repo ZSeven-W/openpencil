@@ -276,7 +276,7 @@ fn template_marker_capacity(node: &PenNode) -> usize {
     if let PenNode::Image(image) = node {
         let query = image.image_search_query.as_deref().unwrap_or("").trim();
         return match query {
-            "map-template:delivery" => 3,
+            "map-template:delivery" | "map-template:ride" => 3,
             "map-template:running" => 2,
             "map-template:location" => 1,
             _ => 0,

@@ -1,9 +1,8 @@
 //! Deterministic map placeholders for image slots.
 //!
-//! Maps are authored as image intent by the model, but they are not stock
-//! photography. This module turns map intent into a small vector-like scene
-//! before image targets are collected. The builder is pure and returns a
-//! shallow patch, which preserves the original node's id and geometry.
+//! Authored vector maps and resolved images remain intact. Empty map slots
+//! become an editable fallback scene before image targets are collected.
+//! The pure builder returns a shallow patch preserving the slot's id/geometry.
 
 use std::collections::HashMap;
 
@@ -32,7 +31,7 @@ pub fn map_placeholder(
     theme: Theme,
 ) -> Vec<MapPlaceholderPatch> {
     let mut patches = Vec::new();
-    collect_patches(root, rects, theme, false, false, &mut patches);
+    collect_patches(root, rects, theme, false, false, "", &mut patches);
     patches
 }
 
@@ -47,6 +46,7 @@ fn collect_patches(
     theme: Theme,
     inside_map_named: bool,
     sibling_layer_control: bool,
+    context: &str,
     patches: &mut Vec<MapPlaceholderPatch>,
 ) {
     if node
@@ -64,11 +64,15 @@ fn collect_patches(
     // An explicit image slot is a slot wherever it sits; only shapes are
     // demoted to decorations inside a map-named container.
     if !inside_map_named || matches!(node, PenNode::Image(_)) {
-        if let Some(patch) = map_patch(node, rects, theme, sibling_layer_control) {
+        if let Some(patch) = map_patch(node, rects, theme, sibling_layer_control, context) {
             patches.push(patch);
             return;
         }
     }
+    let context = format!(
+        "{context} {}",
+        node.base().name.as_deref().unwrap_or_default()
+    );
     let map_named = inside_map_named || node.base().name.as_deref().is_some_and(has_map_name_word);
     if let Some(children) = node.children() {
         // A map image can sit behind authored controls in its owning viewport.
@@ -109,7 +113,9 @@ fn collect_patches(
             }
         }
         for child in children {
-            collect_patches(child, rects, theme, map_named, has_layers, patches);
+            collect_patches(
+                child, rects, theme, map_named, has_layers, &context, patches,
+            );
         }
     }
 }
@@ -119,10 +125,17 @@ fn map_patch(
     rects: &HashMap<String, ResolvedRect>,
     theme: Theme,
     sibling_layer_control: bool,
+    context: &str,
 ) -> Option<MapPlaceholderPatch> {
     let (width, height) = eligible_map_dimensions(node, rects)?;
-    let patch =
-        build_map_placeholder_with_controls(node, width, height, theme, sibling_layer_control);
+    let patch = build_map_placeholder_with_controls(
+        node,
+        width,
+        height,
+        theme,
+        sibling_layer_control,
+        context,
+    );
     Some(MapPlaceholderPatch {
         node_id: node.id_str().to_string(),
         patch_json: patch.to_string(),
@@ -148,11 +161,14 @@ fn eligible_map_dimensions(
 
 fn is_map_placeholder_candidate(node: &PenNode) -> bool {
     match node {
-        PenNode::Image(image) => is_map_image_intent(
-            node.base().name.as_deref(),
-            image.image_search_query.as_deref(),
-            image.image_prompt.as_deref(),
-        ),
+        PenNode::Image(image) => {
+            (image.src.is_empty() || image.src.starts_with("placeholder:"))
+                && is_map_image_intent(
+                    node.base().name.as_deref(),
+                    image.image_search_query.as_deref(),
+                    image.image_prompt.as_deref(),
+                )
+        }
         PenNode::Frame(_) | PenNode::Rectangle(_) => {
             node.base().name.as_deref().is_some_and(has_map_name_word)
                 && !node
@@ -269,6 +285,7 @@ fn contains_protected_descendant(node: &PenNode) -> bool {
     node.children().is_some_and(|children| {
         children
             .iter()
+            .filter(|child| is_visible(child) && !is_authored_layer_control(child))
             .any(|child| is_protected_node(child) || contains_protected_descendant(child))
     })
 }
@@ -276,7 +293,13 @@ fn contains_protected_descendant(node: &PenNode) -> bool {
 fn is_protected_node(node: &PenNode) -> bool {
     matches!(
         node,
-        PenNode::Text(_)
+        PenNode::Path(_)
+            | PenNode::Line(_)
+            | PenNode::Ellipse(_)
+            | PenNode::Polygon(_)
+            | PenNode::Rectangle(_)
+            | PenNode::IconFont(_)
+            | PenNode::Text(_)
             | PenNode::Image(_)
             | PenNode::TextInput(_)
             | PenNode::Select(_)
@@ -337,7 +360,7 @@ fn dimensions(node: &PenNode, rects: &HashMap<String, ResolvedRect>) -> (f64, f6
 
 /// Build an editable map from a fixed scene selected by image intent.
 pub fn build_map_placeholder(node: &PenNode, width: f64, height: f64, theme: Theme) -> Value {
-    build_map_placeholder_with_controls(node, width, height, theme, false)
+    build_map_placeholder_with_controls(node, width, height, theme, false, "")
 }
 
 fn build_map_placeholder_with_controls(
@@ -346,13 +369,14 @@ fn build_map_placeholder_with_controls(
     height: f64,
     theme: Theme,
     sibling_layer_control: bool,
+    context: &str,
 ) -> Value {
     let mut hint = node.base().name.clone().unwrap_or_default();
     if let PenNode::Image(image) = node {
         hint.push_str(image.image_prompt.as_deref().unwrap_or_default());
         hint.push_str(image.image_search_query.as_deref().unwrap_or_default());
     }
-    let kind = crate::map_templates::MapTemplate::from_hint(&hint);
+    let kind = crate::map_templates::MapTemplate::from_hint_with_context(&hint, context);
     let mut blocks = crate::map_templates::children(node.id_str(), width, height, theme, kind);
     let absolute_viewport = matches!(node, PenNode::Frame(frame)
         if frame.container.layout == Some(LayoutMode::None));
@@ -437,3 +461,7 @@ fn solid_fill(color: &str) -> Value {
 #[cfg(test)]
 #[path = "map_placeholder_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "map_regression_tests.rs"]
+mod regression_tests;

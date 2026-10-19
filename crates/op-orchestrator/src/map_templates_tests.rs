@@ -55,6 +55,7 @@ fn map_templates_have_stable_bounds_endpoints_and_topmost_controls() {
     for kind in [
         MapTemplate::Running,
         MapTemplate::Delivery,
+        MapTemplate::Ride,
         MapTemplate::Location,
     ] {
         for theme in [Theme::Light, Theme::Dark] {
@@ -130,6 +131,7 @@ fn map_templates_save_reload_without_image_requests_or_repeat_rewrites() {
     for kind in [
         MapTemplate::Running,
         MapTemplate::Delivery,
+        MapTemplate::Ride,
         MapTemplate::Location,
     ] {
         let mut node = serde_json::to_value(slot(kind, 375.0, 260.0)).unwrap();
@@ -161,6 +163,7 @@ fn map_templates_preview_fixtures() {
     for kind in [
         MapTemplate::Running,
         MapTemplate::Delivery,
+        MapTemplate::Ride,
         MapTemplate::Location,
     ] {
         for (theme, label) in [(Theme::Light, "light"), (Theme::Dark, "dark")] {

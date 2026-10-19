@@ -59,7 +59,7 @@ fn real_navigation_plan_becomes_one_viewport_without_losing_content() {
             &op_editor_core::ComponentLibrary::default(),
         );
         assert!(call.user_prompt.contains("height:734, layout:none"));
-        assert!(call.user_prompt.contains("map image LAST"));
+        assert!(call.user_prompt.contains("map artwork LAST"));
         assert!(!call.user_prompt.contains("section owns padding:[0,24]"));
         assert!(!call
             .system_prompt

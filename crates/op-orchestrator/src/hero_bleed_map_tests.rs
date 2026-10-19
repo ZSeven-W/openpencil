@@ -6,6 +6,7 @@ fn overlay_root(map: bool, control_width: Value) -> Value {
         "width":327,"height":280,"src":"cafe.jpg"});
     if map {
         media["name"] = json!("Map");
+        media["src"] = json!("");
         media["imageSearchQuery"] = json!("map-template:delivery");
     }
     root["children"][1] = json!({"type":"frame","id":"hero-section","name":"Hero",

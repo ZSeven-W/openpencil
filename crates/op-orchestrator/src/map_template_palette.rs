@@ -48,7 +48,9 @@ pub(super) fn adapt(patch: &mut Value, resolve: impl Fn(&str) -> Option<String>)
     let (light, dark) = match kind {
         crate::map_templates::MapTemplate::Running => ("#86EFAC", "#166534"),
         crate::map_templates::MapTemplate::Delivery => ("#FDBA74", "#9A3412"),
-        crate::map_templates::MapTemplate::Location => ("#93C5FD", "#1E40AF"),
+        crate::map_templates::MapTemplate::Ride | crate::map_templates::MapTemplate::Location => {
+            ("#93C5FD", "#1E40AF")
+        }
     };
     let candidates = [
         ("$--primary", primary.as_deref()),
@@ -87,7 +89,7 @@ pub(super) fn adapt(patch: &mut Value, resolve: impl Fn(&str) -> Option<String>)
         let name = child["name"].as_str().unwrap_or_default();
         let surface = match name {
             "map-route-halo" => Some(&mut child["stroke"]["fill"][0]["color"]),
-            "map-origin-halo" | "map-destination-halo" | "map-courier" => {
+            "map-origin-halo" | "map-destination-halo" | "map-courier" | "map-vehicle" => {
                 Some(&mut child["fill"][0]["color"])
             }
             _ => None,

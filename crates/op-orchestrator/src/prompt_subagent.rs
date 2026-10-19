@@ -542,7 +542,7 @@ CRITICAL LAYOUT CONSTRAINTS:\n\
 - {}\n\
 - NEVER set x or y on children inside horizontal/vertical layout frames. Only absolute children of layout:none viewports use x/y.\n\
 - Use \"fill_container\" for children that stretch, \"fit_content\" for shrink-wrap sizing.\n\
-- MAP TEMPLATES: For an illustrative map, emit ONE image slot with name \"Map\" and imageSearchQuery \"map-template:running\", \"map-template:delivery\", or \"map-template:location\". OP builds editable streets, route, endpoint markers and a compact layer control deterministically. Do not draw extra map paths, pins, layer controls or tint overlays outside that slot. Keep statistics, search and navigation as separate siblings. These are illustrative maps, not real geographic data.\n\
+- MAPS: Author editable vector maps with roads, route paths, origin/destination pins and vehicle markers when requested. Keep this authored map inside one layout:none viewport. For an empty or image-placeholder map only, OP can supply a fallback: ONE image slot named \"Map\" with imageSearchQuery \"map-template:running\", \"map-template:delivery\", \"map-template:ride\" (ride-hailing), or \"map-template:location\" (location only). Keep statistics, search and navigation outside the map artwork.\n\
 - SECTION BACKGROUND: do NOT set fill on your section root frame. Only set fill on cards, buttons, chips, badges, and other visually distinct components.\n\
 - TYPOGRAPHY HIERARCHY: Do NOT make every text bold. Use 700 only for primary headings, 600 for buttons/key labels, 500 for short chips/nav labels, and 400 for body text, placeholders, subtitles, metadata, and captions.\n\
 - ICONS: use icon_font with lucide iconFontName; never use path nodes for icons.\n\
