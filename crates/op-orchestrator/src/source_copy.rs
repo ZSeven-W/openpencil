@@ -93,6 +93,10 @@ impl SourceCopy {
         Self { lines: copy }
     }
 
+    pub(crate) fn is_empty(&self) -> bool {
+        self.lines.is_empty()
+    }
+
     pub(crate) fn missing(&self, state: &EditorState, nodes: &[PenNode]) -> Vec<String> {
         if self.lines.is_empty() {
             return Vec::new();

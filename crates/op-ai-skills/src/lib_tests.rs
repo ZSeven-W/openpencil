@@ -26,6 +26,19 @@ fn first_draft_contracts_survive_real_home_prompt_resolution() {
 }
 
 #[test]
+fn copywriting_never_asks_for_sample_data_labels() {
+    // Concept drafts carry no data-export disclaimers (regress-1019 F2):
+    // the corpus must not instruct the model to label requested mock data.
+    let source = get_skill_by_name("copywriting").expect("registered contract");
+    assert!(
+        !source.content.contains("label it as sample data"),
+        "{}",
+        source.content
+    );
+    assert!(source.content.contains("needs no sample-data label"));
+}
+
+#[test]
 fn embeds_the_skill_corpus() {
     // The TS package ships ~95 skill + style-guide markdown files;
     // the full corpus must travel with the crate.

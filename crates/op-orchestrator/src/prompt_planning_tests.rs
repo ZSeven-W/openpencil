@@ -29,7 +29,9 @@ fn provider_planning_prompt_carries_quality_guardrails() {
     assert!(prompt.contains("Do not plan the same predictable mobile stack"));
     assert!(prompt.contains("Mobile top rhythm"));
     assert!(prompt.contains("signature moment"));
-    assert!(prompt.contains("SOURCE FACTS"));
+    // "a pricing page" carries no user source content, so the gated
+    // source-facts contract stays out of the system prompt.
+    assert!(!prompt.contains("SOURCE FACTS"));
     assert!(prompt.contains("FIXED CARD COPY"));
 }
 
@@ -40,8 +42,11 @@ fn source_facts_and_card_copy_limits_reach_every_planning_mode() {
         PlanningMode::Minimal,
         PlanningMode::Compact,
     ] {
+        // The source-facts contract is gated on actual source content; the
+        // supplied menu prices make this brief source-backed.
         let mut request = req();
         request.model = Some("glm-5.3-flash".into());
+        request.prompt = "晴日咖啡，静安店，到店自取；拿铁28元、美式22元、燕麦拿铁32元".into();
         let pp = build_orchestrator_prompt(&request, mode, AbortFlag::new());
         assert!(pp.call_request.system_prompt.contains("SOURCE FACTS"));
         assert!(pp.call_request.system_prompt.contains("FIXED CARD COPY"));
@@ -50,6 +55,7 @@ fn source_facts_and_card_copy_limits_reach_every_planning_mode() {
             .call_request
             .system_prompt
             .contains("Other sections must not independently invent the same summary"));
+        assert!(pp.call_request.user_prompt.contains(&request.prompt));
     }
 }
 

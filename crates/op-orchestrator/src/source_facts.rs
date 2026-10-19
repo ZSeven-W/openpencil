@@ -44,6 +44,14 @@ fn may_check(request: &DesignRequest) -> bool {
     text_only_source(request)
 }
 
+/// The brief itself supplies concrete business values (price, clock time,
+/// distance). Reuses the delivery fact shapes; grid/quantity notation does
+/// not count. The planning/generation source-facts contract is appended only
+/// for briefs like this.
+pub(crate) fn brief_supplies_source_values(brief: &str) -> bool {
+    delivery::supplies_value_shapes(brief)
+}
+
 pub(crate) fn text_only_source(request: &DesignRequest) -> bool {
     let lower = request.prompt.to_lowercase();
     // The request does not carry the visible text of attachments/live source

@@ -447,7 +447,7 @@ pub(super) fn build_subagent_prompt_core_with_outcomes(
         system_prompt.push_str(manifest);
     }
     crate::output_language::append_copy_language_instruction(&mut system_prompt, req);
-    append_source_facts_contract(&mut system_prompt);
+    append_source_facts_contract(&mut system_prompt, req);
 
     let section_list = plan
         .subtasks

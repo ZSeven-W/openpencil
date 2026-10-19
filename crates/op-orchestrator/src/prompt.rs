@@ -142,7 +142,8 @@ Syntax example only; its names/statuses are not source data for this design:
     const c2 = I(row, {type:"frame", width:"fill_container"}); I(c2, {type:"text", content:r.status});
   }
 Generate every requested row/card/item using supplied values, honest placeholders for
-requested fields with missing values, or demo content authorized by the SOURCE FACTS contract.
+requested fields with missing values, or demo content for explicitly requested populated
+components.
 Output ONLY the JavaScript program."#;
 
 /// Rich 模式 system prompt 末尾后缀 —— verbatim,`orchestrator.ts:1382-1383`。
@@ -232,7 +233,7 @@ pub fn build_orchestrator_prompt(
             system_prompt.push_str(PLANNING_QUALITY_GUARDRAILS);
             system_prompt.push_str(crate::plan_shared_context::PLANNING_INSTRUCTION);
             crate::output_language::append_copy_language_instruction(&mut system_prompt, req);
-            append_source_facts_contract(&mut system_prompt);
+            append_source_facts_contract(&mut system_prompt, req);
             PlanningPrompt {
                 call_request: CallRequest {
                     system_prompt,
@@ -278,7 +279,7 @@ pub fn build_orchestrator_prompt(
             system_prompt.push_str(crate::plan_shared_context::PLANNING_INSTRUCTION);
             system_prompt.push_str(planning_suffix(mode));
             crate::output_language::append_copy_language_instruction(&mut system_prompt, req);
-            append_source_facts_contract(&mut system_prompt);
+            append_source_facts_contract(&mut system_prompt, req);
             let mut user_prompt = req.prompt.clone();
             append_reference_skeleton(&mut user_prompt, req);
             crate::source_copy::SourceCopy::from_brief(&req.prompt)

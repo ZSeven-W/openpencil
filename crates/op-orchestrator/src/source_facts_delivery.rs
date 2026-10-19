@@ -145,6 +145,14 @@ fn delivery_transaction(brief: &str) -> bool {
         )
 }
 
+/// Concrete business value shapes in any brief: a price, a clock time or a
+/// distance. Quantities/grids are deliberately excluded — "10 rows × 6
+/// columns" is a layout spec, not user data. Shared with the planning
+/// contract gate so both sides agree on what counts as supplied values.
+pub(super) fn supplies_value_shapes(brief: &str) -> bool {
+    MONEY.is_match(brief) || CLOCK.is_match(brief) || DISTANCE.is_match(brief)
+}
+
 fn checks(request: &DesignRequest) -> Option<Checks> {
     if !text_only_source(request) {
         return None;

@@ -38,6 +38,17 @@ fn assert_system_contract_is_last(call: &CallRequest) {
     assert!(!call
         .system_prompt
         .contains("Generate EVERY row/card/item with realistic values"));
+    assert!(!call.system_prompt.contains("quiet group/page note"));
+}
+
+fn assert_no_contract(call: &CallRequest) {
+    assert!(
+        !call
+            .system_prompt
+            .contains("SOURCE FACTS — CONTENT AUTHORITY:"),
+        "{}",
+        call.system_prompt
+    );
 }
 
 fn assert_original_brief_is_unchanged(call: &CallRequest, brief: &str) {
@@ -126,7 +137,7 @@ fn source_facts_outrank_poisoned_elements_on_every_tier_and_retry_path() {
                 .contains("omit the entire extra label/badge/value"));
             assert!(call
                 .system_prompt
-                .contains("or demo content authorized by the SOURCE FACTS contract"));
+                .contains("or demo content for explicitly requested populated"));
             if matches!(section.retry_feedback, Some(RetryFeedback::Completeness(_))) {
                 assert!(call.user_prompt.contains("COMPLETENESS FIX REQUIRED"));
             }
@@ -138,16 +149,8 @@ fn source_facts_outrank_poisoned_elements_on_every_tier_and_retry_path() {
 fn source_facts_preserve_supplied_samples_and_requested_missing_fields() {
     for (brief, required_contract) in [
         (
-            "岸边咖啡地点详情，评分4.8，地址滨江路128号。",
-            "Preserve business names, values and claims supplied",
-        ),
-        (
             "按我提供的参考稿文案复刻：\n岸边咖啡\n评分 4.8\n08:00–21:00",
             "user-provided source/reference content the user asks to reproduce",
-        ),
-        (
-            "做骑手资料示例，姓名李师傅；其余明确使用虚构示例数据，并标注示例。",
-            "Explicit requests for sample/fictional data allow it",
         ),
         (
             "骑手资料保留姓名和评分字段。姓名李师傅，评分还没填写；不要示例数据。",
@@ -196,6 +199,41 @@ fn source_facts_preserve_supplied_samples_and_requested_missing_fields() {
 }
 
 #[test]
+fn briefs_without_detectable_source_content_skip_the_contract() {
+    // Supplied-looking values with no reusable detection (no brand label, no
+    // reference cue, no money/clock/distance value, no no-invention wording)
+    // no longer carry the contract; the original brief still reaches the
+    // model unchanged and the SHARED CONTENT DECISIONS instruction still
+    // demands verbatim sourceFacts excerpts.
+    for brief in [
+        "岸边咖啡地点详情，评分4.8，地址滨江路128号。",
+        "做骑手资料示例，姓名李师傅；其余明确使用虚构示例数据。",
+        "a pricing page",
+    ] {
+        let (request, proposal, section) = delivery_fixture(brief);
+        let (call, _) = bsp(
+            &section,
+            &proposal,
+            &request,
+            AbortFlag::new(),
+            false,
+            false,
+        );
+        assert_no_contract(&call);
+        assert_original_brief_is_unchanged(&call, brief);
+        for mode in [
+            PlanningMode::Rich,
+            PlanningMode::Minimal,
+            PlanningMode::Compact,
+        ] {
+            let planning = build_orchestrator_prompt(&request, mode, AbortFlag::new());
+            assert_no_contract(&planning.call_request);
+            assert!(planning.call_request.user_prompt.contains(brief));
+        }
+    }
+}
+
+#[test]
 fn source_facts_contract_also_covers_legacy_node_protocol() {
     let (request, proposal, section) = delivery_fixture(DELIVERY_BRIEF);
     let (call, _) = prompt_subagent::build_subagent_prompt_core(
@@ -221,39 +259,68 @@ fn source_facts_contract_also_covers_legacy_node_protocol() {
 }
 
 #[test]
-fn source_facts_keep_requested_concept_tables_and_food_lists_populated() {
-    // Original arena briefs request populated structures without the word
-    // "sample". The contract must allow illustrative content within that scope.
+fn conceptual_ui_briefs_get_no_sample_data_contract_or_notes() {
+    // Exact October regression briefs: conceptual screens with requested
+    // populated structures but zero user source content. The unconditional
+    // contract made these render "Sample data" / "Sample workout data for
+    // preview" captions (ab/codex-regress-1019 app-03, app-18).
     for (width, brief) in [
         (1440.0, "Admin console (1440×900): sidebar with grouped nav, header with search and avatar, filter bar with three selects, a users table of 10 rows × 6 columns (status pills, row actions), pagination footer."),
+        (375.0, "Mobile banking home (375×812): a balance card with gradient, four quick actions, a spending donut chart with legend, a transaction list of six items, bottom tab bar."),
+        (375.0, "Workout detail screen (375×812): hero image with a back button, workout title and meta row, difficulty badges, an exercise list of six with thumbnail, name, sets and reps, a start button pinned at the bottom."),
         (375.0, "外卖 App 三个页面（各 375×812，每页一个独立屏幕）：首页（地址+搜索+分类九宫格+商家列表五个）、商家详情页（头图+评分行+菜品列表六个带价格与加购按钮+底部购物车栏）、订单确认页（地址卡+商品清单+费用明细+提交按钮）。三页必须齐全。"),
     ] {
-        let (request, mut proposal, mut section) = delivery_fixture(brief);
+        let (request, mut proposal, section) = delivery_fixture(brief);
         proposal.root_frame.width = width;
-        section.region.width = width;
         let (call, _) = bsp(&section, &proposal, &request, AbortFlag::new(), false, false);
-        assert_system_contract_is_last(&call);
+        assert_no_contract(&call);
         assert_original_brief_is_unchanged(&call, brief);
-        for required in [
-            "authorizes representative demo content for those requested components",
-            "even without the word \"sample\"",
-            "one quiet group/page note, not a badge on every item",
-            "This never authorizes extra unrequested metadata",
-            "these override demo-content permission",
+        for mode in [PlanningMode::Rich, PlanningMode::Minimal, PlanningMode::Compact] {
+            let planning = build_orchestrator_prompt(&request, mode, AbortFlag::new());
+            assert_no_contract(&planning.call_request);
+            assert!(planning.call_request.user_prompt.contains(brief));
+        }
+    }
+}
+
+#[test]
+fn supplied_business_values_append_the_contract() {
+    // Prices/clock times reuse the delivery value shapes: the brief itself
+    // supplies data the design must preserve verbatim.
+    for brief in [
+        "晴日咖啡，静安店，到店自取；拿铁28元、美式22元、燕麦拿铁32元",
+        "Coffee shop detail, open 08:00–21:00, 1.2km away",
+        "预约课程：私教课￥199/节，场馆3.5公里内免费接送",
+    ] {
+        let (request, proposal, section) = delivery_fixture(brief);
+        let (call, _) = bsp(
+            &section,
+            &proposal,
+            &request,
+            AbortFlag::new(),
+            false,
+            false,
+        );
+        assert!(call
+            .system_prompt
+            .contains("Preserve business names, values and claims supplied"));
+        for mode in [
+            PlanningMode::Rich,
+            PlanningMode::Minimal,
+            PlanningMode::Compact,
         ] {
-            assert!(call.system_prompt.contains(required));
-            for mode in [PlanningMode::Rich, PlanningMode::Minimal, PlanningMode::Compact] {
-                let planning = build_orchestrator_prompt(&request, mode, AbortFlag::new());
-                assert_system_contract_is_last(&planning.call_request);
-                assert!(planning.call_request.system_prompt.contains(required));
-                assert!(planning.call_request.user_prompt.contains(brief));
-            }
+            let planning = build_orchestrator_prompt(&request, mode, AbortFlag::new());
+            assert!(planning
+                .call_request
+                .system_prompt
+                .contains("SOURCE FACTS — CONTENT AUTHORITY:"));
         }
     }
 }
 
 #[test]
 fn source_facts_supplied_identifiers_do_not_authorize_extra_card_metadata() {
+    // Bare identifier/name mentions carry no detectable source: no contract.
     let brief =
         "配送详情，订单号 OP-20261015-088，请在页头和订单卡中展示。骑手卡包含李师傅和联系按钮。";
     let (request, proposal, section) = delivery_fixture(brief);
@@ -265,7 +332,21 @@ fn source_facts_supplied_identifiers_do_not_authorize_extra_card_metadata() {
         false,
         false,
     );
+    assert_no_contract(&call);
     assert_original_brief_is_unchanged(&call, brief);
+    // Once a brand makes the brief source-backed, the identifier clauses
+    // still forbid borrowing the order number into unrelated cards.
+    let branded =
+        "配送详情，品牌“晚点食堂”，订单号 OP-20261015-088，请在页头和订单卡中展示。骑手卡包含李师傅和联系按钮。";
+    let (request, proposal, section) = delivery_fixture(branded);
+    let (call, _) = bsp(
+        &section,
+        &proposal,
+        &request,
+        AbortFlag::new(),
+        false,
+        false,
+    );
     assert!(call
         .system_prompt
         .contains("copy its exact supplied value only to those locations"));
