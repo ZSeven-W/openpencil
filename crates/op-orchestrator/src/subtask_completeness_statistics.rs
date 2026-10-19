@@ -10,6 +10,7 @@ pub(super) fn mask_counts(text: &str) -> String {
             (?:(?:销量(?:[与和/、]?评分)?|评分(?:[与和/、]?销量)?|评价统计|评论统计|统计信息|元数据|元信息)
               (?:行|文字|标签|摘要)
               |\b(?:meta(?:data)?|statistics?|rating(?:[\x20\t]+and[\x20\t]+sales)?)[\x20\t]+(?:row|text|label|summary))
+            (?:[\x20\t]+of[\x20\t]+[^()（）\n;；:：]{1,48})?
             [\x20\t]*[:：][\x20\t]*")
         .expect("valid explicit statistics field")
     });
@@ -94,7 +95,7 @@ fn mask_value(value: &str, offset: usize, masked: &mut [u8]) {
         let number = r"(?:[0-9]+(?:,[\x20\t]*[0-9]{3})*|[零〇一二两三四五六七八九十百千万亿]+)";
         Regex::new(&format!(r"(?ix)(?P<count>{number})[\x20\t]*
             (?:(?:条|个|项|款)[\x20\t]*(?:评价|评论|反馈|订单)
-              |(?:reviews?|comments?|ratings?|orders?|(?:products?|items?|entries)[\x20\t]+(?:sold|total))\b)"))
+              |(?:reviews?|comments?|ratings?|orders?|exercises?|(?:products?|items?|entries)[\x20\t]+(?:sold|total))\b)"))
             .expect("valid statistics display value")
     });
     for captures in VALUE.captures_iter(value) {

@@ -66,6 +66,13 @@ pub(super) fn sibling_structure_drift_hit(node: &Value) -> Option<DriftHit> {
     groups.extend(role_list_runs(&members));
 
     for group in groups {
+        // Calendar dates share slots, not event indicators. Selected dates and
+        // per-day dots legitimately change the subtree on every week row.
+        if group.iter().all(|member| calendar_week(member))
+            || (group.len() == 7 && group.iter().all(|member| calendar_day(member)))
+        {
+            continue;
+        }
         let signatures: Vec<String> = group
             .iter()
             .map(|member| value_structure_signature(member))
@@ -102,6 +109,44 @@ pub(super) fn sibling_structure_drift_hit(node: &Value) -> Option<DriftHit> {
         });
     }
     None
+}
+
+fn calendar_week(node: &Value) -> bool {
+    string_prop(node, "layout") == Some("horizontal")
+        && children(node).is_some_and(|days| days.len() == 7 && days.iter().all(calendar_day))
+}
+
+fn calendar_day(node: &Value) -> bool {
+    if string_prop(node, "type") != Some("frame") {
+        return false;
+    }
+    fn date_parts(node: &Value, dates: &mut usize) -> bool {
+        match string_prop(node, "type") {
+            Some("text") => {
+                let valid = string_prop(node, "content")
+                    .and_then(|text| text.parse::<u8>().ok())
+                    .is_some_and(|day| (1..=31).contains(&day));
+                *dates += usize::from(valid);
+                valid
+            }
+            Some("ellipse" | "rectangle") => {
+                // Only small schedule dots / selection decoration are optional.
+                node.get("width")
+                    .and_then(Value::as_f64)
+                    .is_some_and(|n| n <= 40.0)
+                    && node
+                        .get("height")
+                        .and_then(Value::as_f64)
+                        .is_some_and(|n| n <= 40.0)
+            }
+            Some("frame") => {
+                children(node).is_none_or(|parts| parts.iter().all(|part| date_parts(part, dates)))
+            }
+            _ => false,
+        }
+    }
+    let mut dates = 0;
+    date_parts(node, &mut dates) && dates == 1
 }
 
 /// Role groups — only where the role marks ONE LIST of like items.
@@ -254,3 +299,7 @@ pub(super) fn value_structure_signature(node: &Value) -> String {
     signature.push(')');
     signature
 }
+
+#[cfg(test)]
+#[path = "orchestration_self_check_calendar_tests.rs"]
+mod calendar_tests;

@@ -216,6 +216,11 @@ pub(crate) fn incomplete_attempt(
     }
     let mut delivered = delivered_item_count(sink, &outcome.inserted_root_ids).max(named_delivered);
     let text = local_item_text(subtask);
+    delivered = delivered.max(semantic_items::delivered_count(
+        sink,
+        &outcome.inserted_root_ids,
+        &text,
+    ));
     if grid_dimensions(&text).is_none()
         && media_items::has_local_media_card_contract(&text, expected)
     {
@@ -756,3 +761,10 @@ mod reviews;
 #[cfg(test)]
 #[path = "subtask_completeness_reviews_tests.rs"]
 mod reviews_tests;
+
+#[path = "subtask_completeness_semantic_items.rs"]
+mod semantic_items;
+
+#[cfg(test)]
+#[path = "subtask_completeness_regression_tests.rs"]
+mod regression_tests;
