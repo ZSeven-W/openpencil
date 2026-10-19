@@ -86,7 +86,15 @@ fn phone_planning_prompt_uses_the_archetype_handoff_and_gate() {
         .call_request
         .system_prompt
         .contains("keep the rest of the list scrollable"));
-    assert!(!phone_prompt
+    assert!(phone_prompt
+        .call_request
+        .system_prompt
+        .contains("display <n>px / body <n>px"));
+    assert!(phone_prompt
+        .call_request
+        .system_prompt
+        .contains("overlap-with-scrim"));
+    assert!(phone_prompt
         .call_request
         .system_prompt
         .contains("title on scrim"));

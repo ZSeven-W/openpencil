@@ -3,6 +3,10 @@ use crate::types::{AbortFlag, AppendContext, ContinuationContext};
 use serde_json::json;
 
 const BRIEF: &str = "Workout detail screen (375×812): hero image with a back button, workout title and meta row, difficulty badges, an exercise list of six with thumbnail, name, sets and reps, a start button pinned at the bottom.";
+// The row-budget rewrite is an explicit-compact contract: the brief itself
+// must ask for a compact/small photo before hero area is traded for list
+// rows. A plain "hero image" detail keeps the archetype's authored hero.
+const COMPACT_BRIEF: &str = "Workout detail screen (375×812): compact hero image with a back button, workout title and meta row, difficulty badges, an exercise list of six with thumbnail, name, sets and reps, a start button pinned at the bottom.";
 
 fn plan() -> OrchestratorPlan {
     // Exact planner output from the 09 full-pipeline workout regression.
@@ -27,11 +31,71 @@ fn unchanged(plan: &OrchestratorPlan, req: &DesignRequest) {
 }
 
 #[test]
-fn real_workout_plan_reserves_three_readable_rows_and_keeps_all_six() {
+fn plain_hero_detail_keeps_the_planner_composition() {
+    // No compact/small-photo cue: the authored 330px hero (~40% of 812) and
+    // the 130px summary survive both the reserve pass and full normalization.
+    let req = request(BRIEF);
+    let mut plan = plan();
+    let before = plan.clone();
+    reserve_supporting_content(&mut plan, &req);
+    assert_eq!(plan, before);
+    crate::plan_normalize::normalize(&mut plan, &req);
+    assert_eq!(plan.subtasks[0].region.height, 330.0);
+    assert_eq!(plan.subtasks[1].region.height, 130.0);
+    assert_eq!(plan.subtasks[2].region.height, 286.0);
+    assert_eq!(plan.subtasks[3].region.height, 66.0);
+    for task in &plan.subtasks {
+        assert!(!crate::first_viewport::owns(task));
+    }
+    let (call, _) = crate::prompt::build_subagent_prompt(
+        &plan.subtasks[0],
+        &plan,
+        &req,
+        AbortFlag::new(),
+        false,
+        false,
+        &op_editor_core::ComponentLibrary::default(),
+    );
+    assert!(!call.user_prompt.contains("DETAIL-SECTION CONTRACT"));
+    let mut merged = merged_plan();
+    let merged_before = merged.clone();
+    reserve_supporting_content(&mut merged, &req);
+    assert_eq!(merged, merged_before);
+}
+
+#[test]
+fn only_explicit_compact_or_small_photo_cues_arm_the_row_budget() {
+    for cue in [
+        "compact",
+        "compact hero image",
+        "small photo at the top",
+        "thumbnail header",
+        "紧凑",
+        "小图",
+    ] {
+        let brief = format!("{BRIEF} {cue}");
+        let mut plan = plan();
+        reserve_supporting_content(&mut plan, &request(&brief));
+        assert!(
+            plan.subtasks[0].region.height < 330.0,
+            "cue {cue:?} must arm the budget"
+        );
+    }
+    for prompt in [
+        "Workout detail screen with hero image, six exercise list rows and a pinned start button",
+        "健身详情页，主图头图加返回按钮，六个动作列表，底部固定开始按钮",
+    ] {
+        unchanged(&plan(), &request(prompt));
+    }
+}
+
+#[test]
+fn explicit_compact_brief_reserves_three_readable_rows_and_keeps_all_six() {
     let mut plan = plan();
     let list = plan.subtasks[2].clone();
     let cta = plan.subtasks[3].clone();
-    reserve_supporting_content(&mut plan, &request(BRIEF));
+    let req = request(COMPACT_BRIEF);
+    reserve_supporting_content(&mut plan, &req);
     assert_eq!(plan.subtasks[0].region.height, 180.0);
     assert_eq!(plan.subtasks[1].region.height, 160.0);
     assert_eq!(plan.subtasks[2], list);
@@ -46,7 +110,7 @@ fn real_workout_plan_reserves_three_readable_rows_and_keeps_all_six() {
     assert!(!crate::first_viewport::owns(&plan.subtasks[2]));
     assert!(!crate::first_viewport::owns(&plan.subtasks[3]));
     let before = plan.clone();
-    reserve_supporting_content(&mut plan, &request(BRIEF));
+    reserve_supporting_content(&mut plan, &req);
     assert_eq!(plan, before);
 }
 
@@ -58,7 +122,8 @@ fn real_taller_action_plan_keeps_usable_photo_budget_instead_of_skipping() {
     }
     let list = plan.subtasks[2].clone();
     let cta = plan.subtasks[3].clone();
-    reserve_supporting_content(&mut plan, &request(BRIEF));
+    let req = request(COMPACT_BRIEF);
+    reserve_supporting_content(&mut plan, &req);
     assert_eq!(plan.subtasks[0].region.height, 138.0);
     assert_eq!(plan.subtasks[1].region.height, 160.0);
     assert_eq!(plan.subtasks[2], list);
@@ -66,14 +131,14 @@ fn real_taller_action_plan_keeps_usable_photo_budget_instead_of_skipping() {
     assert!(crate::first_viewport::owns(&plan.subtasks[0]));
     assert!(!crate::first_viewport::owns(&plan.subtasks[2]));
     let before = plan.clone();
-    reserve_supporting_content(&mut plan, &request(BRIEF));
+    reserve_supporting_content(&mut plan, &req);
     assert_eq!(plan, before);
 }
 
 #[test]
 fn normalized_contract_reaches_all_retry_prompts_without_bounding_the_list() {
     let mut plan = plan();
-    let req = request(BRIEF);
+    let req = request(COMPACT_BRIEF);
     crate::plan_normalize::normalize(&mut plan, &req);
     assert_eq!(plan.subtasks[0].region.height, 180.0);
     assert_eq!(plan.subtasks[1].region.height, 160.0);
@@ -117,7 +182,7 @@ fn normalized_contract_reaches_all_retry_prompts_without_bounding_the_list() {
 #[test]
 fn native_measurement_rejects_overgrown_hero_and_summary_but_not_full_list() {
     let mut plan = plan();
-    reserve_supporting_content(&mut plan, &request(BRIEF));
+    reserve_supporting_content(&mut plan, &request(COMPACT_BRIEF));
     for (index, height, rejected) in [
         (0, 180, false),
         (0, 208, true),
@@ -172,6 +237,11 @@ fn authored_photo_size_and_story_compositions_are_not_rewritten() {
     ] {
         unchanged(&plan(), &request(&format!("{BRIEF} {exception}")));
         unchanged(&merged_plan(), &request(&format!("{BRIEF} {exception}")));
+        unchanged(&plan(), &request(&format!("{COMPACT_BRIEF} {exception}")));
+        unchanged(
+            &merged_plan(),
+            &request(&format!("{COMPACT_BRIEF} {exception}")),
+        );
     }
     for prompt in [
         "Image-led product detail with a large photo and narrative story",
@@ -193,20 +263,20 @@ fn negated_pinning_in_brief_or_plan_preserves_the_original_detail_composition() 
         "底部按钮，不要固定，随正文滚动",
         "底部按钮，非固定，随正文滚动",
     ] {
-        let brief = BRIEF.replace("a start button pinned at the bottom", action);
+        let brief = COMPACT_BRIEF.replace("a start button pinned at the bottom", action);
         // Either source can override a stale positive pinning instruction.
         unchanged(&plan(), &request(&brief));
         let mut unpinned = plan();
         unpinned.subtasks[3].label = "Start Button".into();
         unpinned.subtasks[3].elements = Some(action.into());
-        unchanged(&unpinned, &request(BRIEF));
+        unchanged(&unpinned, &request(COMPACT_BRIEF));
         unchanged(&unpinned, &request(&brief));
     }
 }
 
 #[test]
 fn existing_canvas_and_non_mobile_roots_remain_unchanged() {
-    let mut req = request(BRIEF);
+    let mut req = request(COMPACT_BRIEF);
     req.append_context = Some(AppendContext {
         target_parent_id: "existing".into(),
         target_width: 375.0,
@@ -237,13 +307,13 @@ fn existing_canvas_and_non_mobile_roots_remain_unchanged() {
         let mut plan = plan();
         plan.root_frame.width = width;
         plan.root_frame.height = height;
-        unchanged(&plan, &request(BRIEF));
+        unchanged(&plan, &request(COMPACT_BRIEF));
     }
 }
 
 #[test]
 fn feasibility_is_atomic_and_usable_existing_sizes_are_preserved() {
-    let req = request(BRIEF);
+    let req = request(COMPACT_BRIEF);
     let mut too_small = plan();
     too_small.root_frame.height = 740.0;
     unchanged(&too_small, &req);
@@ -259,6 +329,11 @@ fn feasibility_is_atomic_and_usable_existing_sizes_are_preserved() {
     reserve_supporting_content(&mut roomy, &req);
     assert_eq!(roomy.subtasks[0].region.height, 208.0);
     assert_eq!(roomy.subtasks[1].region.height, 180.0);
+    // Without the compact cue the same roomy plan is not rewritten.
+    let mut plain_roomy = plan();
+    plain_roomy.root_frame.height = 900.0;
+    plain_roomy.subtasks[1].region.height = 180.0;
+    unchanged(&plain_roomy, &request(BRIEF));
     let mut compact = plan();
     compact.subtasks[0].region.height = 168.0;
     reserve_supporting_content(&mut compact, &req);
@@ -267,7 +342,7 @@ fn feasibility_is_atomic_and_usable_existing_sizes_are_preserved() {
 
 #[test]
 fn ambiguous_or_combined_sections_do_not_trigger_an_automatic_budget() {
-    let req = request(BRIEF);
+    let req = request(COMPACT_BRIEF);
     let mut combined = plan();
     combined.subtasks[1].label = "Hero title and meta".into();
     unchanged(&combined, &req);
@@ -307,7 +382,7 @@ fn mobile_screen_groups_receive_independent_budgets() {
     unrelated.screen = Some("profile".into());
     unrelated.region.height = 700.0;
     plan.subtasks.push(unrelated.clone());
-    reserve_supporting_content(&mut plan, &request(BRIEF));
+    reserve_supporting_content(&mut plan, &request(COMPACT_BRIEF));
     assert_eq!(plan.subtasks[0].region.height, 180.0);
     assert_eq!(plan.subtasks[4].region.height, 164.0);
     assert_eq!(plan.subtasks[5].region.height, 176.0);
@@ -324,7 +399,7 @@ fn a_compact_header_is_reserved_without_becoming_a_measured_section() {
     header.elements = None;
     header.region.height = 48.0;
     plan.subtasks.insert(0, header.clone());
-    reserve_supporting_content(&mut plan, &request(BRIEF));
+    reserve_supporting_content(&mut plan, &request(COMPACT_BRIEF));
     assert_eq!(plan.subtasks[0], header);
     assert_eq!(plan.subtasks[1].region.height, 204.0);
     assert!(!crate::first_viewport::owns(&plan.subtasks[0]));
@@ -334,7 +409,7 @@ fn a_compact_header_is_reserved_without_becoming_a_measured_section() {
 fn explicit_all_content_contract_takes_precedence_over_partial_row_budget() {
     let mut plan = plan();
     let req = request(&format!(
-        "{BRIEF} First screen must include all six exercise rows."
+        "{COMPACT_BRIEF} First screen must include all six exercise rows."
     ));
     crate::plan_normalize::normalize(&mut plan, &req);
     assert_eq!(plan.subtasks[1].region.height, 130.0);
@@ -362,7 +437,8 @@ fn real_merged_hero_reserves_complete_copy_and_three_rows_without_rewriting_item
     // These words describe separate parts of the hero, not a second CTA.
     assert!(has_pinned_action(&task_text(&plan.subtasks[0])));
     assert!(!is_standalone_pinned_action(&plan.subtasks[0]));
-    reserve_supporting_content(&mut plan, &request(BRIEF));
+    let req = request(COMPACT_BRIEF);
+    reserve_supporting_content(&mut plan, &req);
     assert_eq!(plan.subtasks[0].region.height, 280.0);
     assert_eq!(plan.subtasks[1..], before.subtasks[1..]);
     assert_eq!(plan.root_frame, before.root_frame);
@@ -385,14 +461,14 @@ fn real_merged_hero_reserves_complete_copy_and_three_rows_without_rewriting_item
             <= plan.root_frame.height
     );
     let normalized = plan.clone();
-    reserve_supporting_content(&mut plan, &request(BRIEF));
+    reserve_supporting_content(&mut plan, &req);
     assert_eq!(plan, normalized);
 }
 
 #[test]
 fn merged_contract_reaches_every_retry_without_bounding_the_full_list() {
     let mut plan = merged_plan();
-    let req = request(BRIEF);
+    let req = request(COMPACT_BRIEF);
     crate::plan_normalize::normalize(&mut plan, &req);
     assert_eq!(plan.subtasks[0].region.height, 280.0);
     for (reduced, minimal) in [(false, false), (true, false), (true, true)] {
@@ -426,7 +502,7 @@ fn merged_contract_reaches_every_retry_without_bounding_the_full_list() {
 #[test]
 fn native_measurement_rejects_a_tall_merged_composition_without_clipping_its_nodes() {
     let mut plan = merged_plan();
-    reserve_supporting_content(&mut plan, &request(BRIEF));
+    reserve_supporting_content(&mut plan, &request(COMPACT_BRIEF));
     for (photo_height, rejected) in [(120, false), (180, true)] {
         let nodes: Vec<jian_ops_schema::node::PenNode> = serde_json::from_value(json!([{
             "type":"frame", "id":"merged", "layout":"vertical", "gap":12,
@@ -474,7 +550,7 @@ fn native_measurement_rejects_a_tall_merged_composition_without_clipping_its_nod
 
 #[test]
 fn merged_budget_accounts_for_header_gaps_padding_and_content_floor_atomically() {
-    let req = request(BRIEF);
+    let req = request(COMPACT_BRIEF);
     let mut compact = merged_plan();
     compact.subtasks[0].region.height = 264.0;
     reserve_supporting_content(&mut compact, &req);
@@ -517,25 +593,17 @@ fn real_four_part_plan_does_not_treat_pinned_back_and_bottom_scrim_as_an_action(
     let before = plan.clone();
     assert!(has_pinned_action(&task_text(&plan.subtasks[0])));
     assert!(!has_pinned_action(&task_text(&plan.subtasks[3])));
-    let list = plan.subtasks[2].clone();
-    let action = plan.subtasks[3].clone();
+    // A plain hero brief preserves the authored composition end to end.
     crate::plan_normalize::normalize(&mut plan, &request(BRIEF));
-    // Native normalization restores the mobile root's default 16px rhythm.
-    // The four gaps must remain reserved rather than granting them to media.
     assert_eq!(plan.root_frame.gap, Some(16.0));
     assert_eq!(plan.root_frame.padding, Some(0.0));
-    assert_eq!(plan.subtasks[0].region.height, 182.0);
-    assert_eq!(
-        62.0 + 4.0 * 16.0 + 182.0 + 160.0 + 40.0 + 216.0 + 64.0 + 24.0,
-        812.0
-    );
-    assert_eq!(plan.subtasks[1].region.height, 160.0);
-    assert_eq!(plan.subtasks[2].region, list.region);
-    assert_eq!(plan.subtasks[2].elements, list.elements);
-    assert_eq!(plan.subtasks[3].region, action.region);
-    assert_eq!(plan.subtasks[3].elements, action.elements);
-    assert!(crate::first_viewport::owns(&plan.subtasks[0]));
-    assert!(crate::first_viewport::owns(&plan.subtasks[1]));
+    assert_eq!(plan.subtasks[0].region.height, 310.0);
+    assert_eq!(plan.subtasks[1].region.height, 110.0);
+    assert_eq!(plan.subtasks[2].region.height, 328.0);
+    assert_eq!(plan.subtasks[3].region.height, 64.0);
+    for task in &plan.subtasks {
+        assert!(!crate::first_viewport::owns(task));
+    }
     // Every other raw-plan field is preserved apart from standard ownership
     // metadata and the derived hero-bleed flag.
     let mut expected = before;
@@ -546,16 +614,31 @@ fn real_four_part_plan_does_not_treat_pinned_back_and_bottom_scrim_as_an_action(
         task.parent_frame_id = Some("page".into());
     }
     expected.subtasks[0].bleed_hero = true;
-    expected.subtasks[0].region.height = 182.0;
-    expected.subtasks[1].region.height = 160.0;
-    expected.subtasks[0].elements = plan.subtasks[0].elements.clone();
-    expected.subtasks[1].elements = plan.subtasks[1].elements.clone();
     assert_eq!(plan, expected);
+
+    // Under an explicit compact cue the same plan gets the row budget: the
+    // hero's pinned back control and scrim still do not count as the action.
+    let mut compact = crate::plan::parse_plan(r##"{"rootFrame":{"id":"page","name":"Workout Detail","width":375,"height":812,"layout":"vertical","gap":0,"fill":[{"type":"solid","color":"#0A0A0A"}]},"styleGuideName":"dark-bold-mobile","subtasks":[{"id":"hero","label":"Hero Image with Back Button","covers":["hero image","back button"],"elements":"ARCHETYPE: image-led — protagonist full-bleed hero photo, first screen ~38%, pinned back control top-left, no repeated titles or invented stats, imagery one relevant workout photo with bottom gradient scrim blending into canvas","region":{"width":375,"height":310}},{"id":"title","label":"Workout Title, Meta Row and Difficulty Badges","covers":["workout title and meta row","difficulty badges"],"elements":"workout title (2 lines max, 28-32px), meta row with duration + equipment, difficulty badge group (Beginner/Intermediate/Advanced, one active state)","region":{"width":375,"height":110}},{"id":"exercises","label":"Exercise List","covers":["exercise list"],"elements":"quiet section: secondary visual weight; retain legible active states, list heading with exercise count, 6 exercise rows each with rounded thumbnail, exercise name, sets x reps label, scrollable list","region":{"width":375,"height":328}},{"id":"start","label":"Pinned Start Button","covers":["start button"],"elements":"pinned full-width primary Start Workout button (48-52px) on subtle top gradient, safe-area padding","region":{"width":375,"height":64}}]}"##).unwrap();
+    crate::plan_normalize::normalize(&mut compact, &request(COMPACT_BRIEF));
+    // Native normalization restores the mobile root's default 16px rhythm.
+    // The four gaps must remain reserved rather than granting them to media.
+    assert_eq!(compact.root_frame.gap, Some(16.0));
+    assert_eq!(compact.root_frame.padding, Some(0.0));
+    assert_eq!(compact.subtasks[0].region.height, 182.0);
+    assert_eq!(
+        62.0 + 4.0 * 16.0 + 182.0 + 160.0 + 40.0 + 216.0 + 64.0 + 24.0,
+        812.0
+    );
+    assert_eq!(compact.subtasks[1].region.height, 160.0);
+    assert_eq!(compact.subtasks[2].region.height, 328.0);
+    assert_eq!(compact.subtasks[3].region.height, 64.0);
+    assert!(crate::first_viewport::owns(&compact.subtasks[0]));
+    assert!(crate::first_viewport::owns(&compact.subtasks[1]));
 }
 
 #[test]
 fn merged_budget_requires_unambiguous_ownership_and_an_independent_terminal_action() {
-    let req = request(BRIEF);
+    let req = request(COMPACT_BRIEF);
     for elements in [
         "Hero image with overlaid title and meta; no badges",
         "Hero image with title and metadata; badges belong to another section",

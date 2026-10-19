@@ -19,7 +19,7 @@ Screen height: seed an empty skeleton at 390-393×844. Before finishing, content
 
 ## 0) EXPRESSION LAYER — where the look comes from
 
-Use the selected guide for mood, accent, depth, type, radii, and hero; keep support quiet. `ARCHETYPE: …` in subtask `elements` sets composition; the guide's two Signature recipes set treatment. Fit both within the measured section budget. Area percentages use the requested viewport INCLUDING chrome/pinned controls. On actionable details, reserve title/meta and readable list rows before decorative photos; explicit budgets override hero percentages. Do not add a second hero.
+Use the selected guide for mood, accent, depth, type, radii, and hero; keep support quiet. `ARCHETYPE: …` in subtask `elements` sets composition; the guide's two Signature recipes set treatment. Fit both within the measured section budget. Area percentages use the requested viewport INCLUDING chrome/pinned controls. Explicit budgets override hero percentages. Do not add a second hero.
 
 Platform roles: use a three-size type scale — screen title 28–34px semibold, section title 20–22px, body 16–17px (labels 12–13px). Allow one display size per screen; hero numbers use 40–57px and fit one line (8+ characters → 40–44px). Keep the accent in one block/treatment; separate sections with tonal surface tiers, not accent fills or hairlines.
 

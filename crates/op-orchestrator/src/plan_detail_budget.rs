@@ -39,6 +39,7 @@ pub(super) fn reserve_supporting_content(plan: &mut OrchestratorPlan, req: &Desi
         || !has_list_identity(&brief)
         || !has_pinned_action(&brief)
         || preserves_photo_composition(&brief)
+        || !requests_compact_photo(&brief)
     {
         return;
     }
@@ -391,6 +392,25 @@ fn is_repeated_list(task: &Subtask) -> bool {
     count_task.label = normalized.into_owned();
     count_task.elements = None;
     crate::subtask_completeness::expected_item_count(&count_task).is_some_and(|count| count >= 3)
+}
+
+fn requests_compact_photo(brief: &str) -> bool {
+    // The three-row budget is an explicit-compact contract. A plain "hero
+    // image" detail brief keeps the planner's authored composition (the
+    // archetype's 35–45% hero with scrim title); only a brief that itself
+    // asks for a compact or small photo may trade hero area for rows.
+    has_any(
+        brief,
+        &[
+            "compact",
+            "small hero",
+            "small photo",
+            "small image",
+            "thumbnail header",
+            "小图",
+            "紧凑",
+        ],
+    )
 }
 
 fn preserves_photo_composition(brief: &str) -> bool {
