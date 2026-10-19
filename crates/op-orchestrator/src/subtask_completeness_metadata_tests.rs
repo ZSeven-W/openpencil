@@ -83,3 +83,23 @@ fn metadata_copy_requires_a_local_metadata_prefix() {
         );
     }
 }
+
+// Exact header elements from the 1019 fix-arm app-18 rep-1 planning response:
+// the meta row's "6 exercises" is copy describing the list section below.
+#[test]
+fn metadata_row_with_descriptor_tail_is_copy_not_an_item_promise() {
+    let elements = "workout title 'Full-Body Strength Builder' 28px semibold two-line balanced, meta row of three inline items with 16px icons (32 min duration, 6 exercises, ~280 kcal), difficulty badges";
+    let task = subtask("Workout Title, Meta and Difficulty Badges", Some(elements));
+    assert_eq!(expected_item_count(&task), None);
+    for elements in [
+        "metadata then exercise section (12 exercises)",
+        "meta row of stats; (12 exercises)",
+        "meta row with icons (list of 12 exercises)",
+    ] {
+        assert_eq!(
+            expected_item_count(&subtask("Hero", Some(elements))),
+            Some(12),
+            "{elements}"
+        );
+    }
+}

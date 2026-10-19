@@ -467,7 +467,7 @@ fn mask_metadata_copy(text: &str) -> String {
             .expect("valid metadata parentheses")
     });
     static META_PREFIX: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?ix)(?:\bmeta(?:data)?(?:\s+(?:row|text|label|summary))?|元信息(?:行|文字)?|元数据(?:行|文字)?|信息行)\s*[:：]?\s*$")
+        Regex::new(r"(?ix)(?:\bmeta(?:data)?(?:\s+(?:row|text|label|summary))?(?:\s+(?:of|with)\b[^,;.()\n]{0,60})?|元信息(?:行|文字)?|元数据(?:行|文字)?|信息行)\s*[:：]?\s*$")
             .expect("valid metadata prefix")
     });
     static ITEM_INSTRUCTION: LazyLock<Regex> = LazyLock::new(|| {
