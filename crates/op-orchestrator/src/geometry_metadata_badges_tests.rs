@@ -35,6 +35,31 @@ fn tree(sink: &VecDocSink) -> Value {
     serde_json::to_value(&sink.state.doc).unwrap()
 }
 
+fn estimated_rects(sink: &VecDocSink, width: f32) -> HashMap<String, Rect> {
+    let mut tree = jian_core::document::NodeTree::new();
+    tree.insert_subtree(sink.state().active_children()[0].clone(), None);
+    let mut engine = jian_core::layout::LayoutEngine::with_backend(
+        jian_core::layout::measure::default_backend(),
+    );
+    let roots = engine.build(&tree).unwrap();
+    engine.compute(roots[0], (width, 900.0)).unwrap();
+    tree.by_id
+        .iter()
+        .map(|(id, key)| {
+            let rect = engine.node_rect(*key).unwrap();
+            (
+                id.clone(),
+                Rect {
+                    x: f64::from(rect.origin.x),
+                    y: f64::from(rect.origin.y),
+                    w: f64::from(rect.size.width),
+                    h: f64::from(rect.size.height),
+                },
+            )
+        })
+        .collect()
+}
+
 fn by_id<'a>(v: &'a Value, id: &str) -> Option<&'a Value> {
     if v.get("id").and_then(Value::as_str) == Some(id) {
         return Some(v);
@@ -188,8 +213,29 @@ fn metadata_badges_do_not_rewrite_tables_absolute_stacks_or_oversized_individual
             }
             _ => unreachable!(),
         }
-        let mut sink = sink(input, 375.0);
+        // Keep the label within the 32-character candidate limit. A 232px
+        // rail is narrower than this badge even with estimated text metrics.
+        let width = if kind == "one-too-wide" { 280.0 } else { 375.0 };
+        let mut sink = sink(input, width);
         let before = tree(&sink);
+        if kind == "one-too-wide" {
+            for (backend, rects) in [
+                ("native", resolved_rects(sink.state())),
+                ("estimate", estimated_rects(&sink, width as f32)),
+            ] {
+                let row = by_id(&before, "n201").unwrap();
+                let badge = by_id(&before, "n202").unwrap();
+                let inner = rects["n201"].w - horizontal_padding(row);
+                let required = intrinsic_badge_width(badge, &rects)
+                    .expect("the fixture must remain an eligible short metadata badge");
+                assert!(
+                    required > inner,
+                    "the individual badge must overflow with {backend}: {required} <= {inner}"
+                );
+                assert!(!repair(&mut sink, "root", &rects), "{backend}");
+                assert_eq!(tree(&sink), before);
+            }
+        }
         assert!(!repair_metadata_badges(&mut sink, "root"), "{kind}");
         assert_eq!(tree(&sink), before);
     }
