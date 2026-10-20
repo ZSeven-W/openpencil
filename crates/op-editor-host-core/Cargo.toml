@@ -54,4 +54,4 @@ settings-io = [
 
 [dev-dependencies]
 serde_json = { workspace = true }
-zip = "2"
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }

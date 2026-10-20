@@ -97,7 +97,7 @@ sha2 = "0.10"
 tracing = { workspace = true }
 signal-hook = "0.3"
 
-zip = "2"
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 memmap2 = "0.9"
 dirs = "5"
 # Raster + PDF Skia shared with `op-render-export`, plus chat image processing

@@ -49,9 +49,15 @@ fn image_deck() -> EditorState {
 
 /// Every part name in the package, in zip order.
 fn part_names(bytes: &[u8]) -> Vec<String> {
-    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes.to_vec())).expect("valid zip");
+    let zip = zip::ZipArchive::new(std::io::Cursor::new(bytes.to_vec())).expect("valid zip");
     (0..zip.len())
-        .map(|i| zip.by_index(i).expect("entry").name().to_string())
+        .map(|i| {
+            zip.by_index_data(i)
+                .expect("entry")
+                .name()
+                .expect("valid entry name")
+                .into_owned()
+        })
         .collect()
 }
 

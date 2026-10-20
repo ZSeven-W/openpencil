@@ -294,7 +294,10 @@ mod tests {
 
     fn entry_names(bytes: &[u8]) -> Vec<String> {
         let archive = zip::ZipArchive::new(Cursor::new(bytes.to_vec())).expect("valid zip");
-        archive.file_names().map(str::to_string).collect()
+        archive
+            .file_names()
+            .map(|name| name.expect("valid entry name").into_owned())
+            .collect()
     }
 
     fn entry_bytes(bytes: &[u8], name: &str) -> Vec<u8> {

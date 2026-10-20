@@ -232,7 +232,7 @@ base64 = "0.22"
 # Packs generated code + extracted assets into a downloadable bundle for
 # the Code panel's Export Bundle action. Only store/deflate is needed for
 # small text + image payloads.
-zip = "2"
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 # 2D affine transforms used by PNG export's bounds walker so nested
 # rotated containers don't clip their children. Pinned to the same
 # version shell-core uses for `Point2D = glam::Vec2`.
