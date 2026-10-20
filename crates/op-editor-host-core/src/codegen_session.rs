@@ -58,6 +58,7 @@ pub struct CodegenSession {
     pub model: Option<String>,
     pub cancel: Arc<AtomicBool>,
     pub run_epoch: u64,
+    pub hosted_session_epoch: Option<u64>,
 }
 
 impl CodegenSession {
@@ -144,6 +145,7 @@ impl CodegenSession {
     where
         F: FnOnce(CodegenWorker) -> std::io::Result<()>,
     {
+        let hosted_session_epoch = provider.hosted_session_epoch();
         let (tx, rx) = std::sync::mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = Arc::clone(&cancel);
@@ -175,6 +177,7 @@ impl CodegenSession {
             model,
             cancel,
             run_epoch: NEXT_RUN_EPOCH.fetch_add(1, Ordering::Relaxed),
+            hosted_session_epoch,
         })
     }
 
@@ -214,6 +217,7 @@ impl CodegenSession {
             model: None,
             cancel: Arc::new(AtomicBool::new(false)),
             run_epoch: NEXT_RUN_EPOCH.fetch_add(1, Ordering::Relaxed),
+            hosted_session_epoch: None,
         }
     }
 
@@ -234,6 +238,7 @@ impl CodegenSession {
             model,
             cancel: Arc::new(AtomicBool::new(false)),
             run_epoch: NEXT_RUN_EPOCH.fetch_add(1, Ordering::Relaxed),
+            hosted_session_epoch: None,
         }
     }
 }

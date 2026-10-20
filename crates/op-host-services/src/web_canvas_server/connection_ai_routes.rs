@@ -41,6 +41,20 @@ pub(super) fn serve_ai_route<S: Read + Write>(
     ctx: &ConnCtx<'_>,
     cors_origin: Option<&str>,
 ) -> Result<Option<bool>> {
+    if req.method == "GET" && req.path == "/api/ai/hosted/models" {
+        let body = if ctx.mode.is_online() {
+            r#"{"status":"unavailable","revision":0,"routes":[]}"#.to_string()
+        } else {
+            crate::hosted_models::catalog_json()
+        };
+        crate::mcp_serve::write_mcp_http_response_with_origin(
+            stream,
+            "200 OK",
+            &body,
+            cors_origin,
+        )?;
+        return Ok(Some(false));
+    }
     if req.method != "POST" {
         return Ok(None);
     }
@@ -119,6 +133,17 @@ pub(super) fn serve_ai_route<S: Read + Write>(
                 .map(|()| Some(false));
             };
             let provider = {
+                if ctx.mode.is_online() && ai_req.hosted_route_id.is_some() {
+                    crate::ai_proxy::write_sse_error(
+                        stream,
+                        "Hosted models are unavailable on this deployment",
+                        cors_origin,
+                    )
+                    .map_err(|error| {
+                        WebCanvasError::Transport(format!("ai stream error: {error}"))
+                    })?;
+                    return Ok(Some(false));
+                }
                 let guard = state.lock().unwrap_or_else(|p| p.into_inner());
                 crate::ai_proxy::proxy_provider_for_request(
                     &guard.editor,

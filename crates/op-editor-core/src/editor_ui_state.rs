@@ -361,6 +361,8 @@ pub struct EditorUiState {
     pub chat_style_chip_hover_since_ms: Option<u64>,
     /// Index into `AgentProvider::ALL` of the agent driving the chat.
     pub chat_selected_agent: usize,
+    /// Account-scoped model routes; never part of saved provider settings.
+    pub hosted_model_catalog: crate::hosted_model_catalog::HostedModelCatalog,
     /// Whether the Parallel Agents picker dropdown is open.
     /// Set by `toggle_parallel_agents_picker`; cleared on outside-click or row select.
     pub parallel_agents_picker_open: bool,

@@ -32,7 +32,7 @@ pub(crate) fn available() -> bool {
     static ABI_OK: OnceLock<bool> = OnceLock::new();
     *ABI_OK.get_or_init(|| {
         let version = linked_abi_version();
-        let supported = supports_base_abi(version);
+        let supported = supports_linked_abi(version);
         if !supported {
             eprintln!(
                 "op-auth-bridge: prebuilt library ABI {version} is outside \
@@ -42,6 +42,22 @@ pub(crate) fn available() -> bool {
         }
         supported
     })
+}
+
+fn supports_linked_abi(version: u32) -> bool {
+    // An explicit developer declaration must match the actual linked archive.
+    // The production base-ABI range and signed artifact policy remain unchanged.
+    #[cfg(op_auth_development_prebuilt)]
+    if option_env!("OP_AUTH_PREBUILT_ABI_VERSION").and_then(|declared| declared.parse::<u32>().ok())
+        != Some(version)
+    {
+        return false;
+    }
+    #[cfg(all(op_auth_development_prebuilt, op_auth_hosted_access_prebuilt))]
+    if version == crate::HOSTED_ACCESS_ABI_VERSION {
+        return true;
+    }
+    supports_base_abi(version)
 }
 
 fn linked_abi_version() -> u32 {
@@ -72,6 +88,14 @@ pub(crate) fn collab_ticket_provider() -> &'static dyn CollabTicketProvider {
     {
         &UNAVAILABLE_COLLAB_TICKET_PROVIDER
     }
+}
+
+pub(crate) fn hosted_access_provider() -> &'static dyn crate::HostedAccessProvider {
+    #[cfg(op_auth_hosted_access_prebuilt)]
+    if available() && linked_abi_version() == crate::HOSTED_ACCESS_ABI_VERSION {
+        return crate::real_hosted_access::provider();
+    }
+    &crate::UNAVAILABLE_HOSTED_ACCESS_PROVIDER
 }
 
 pub(crate) fn init(config: &AuthInitConfig) -> bool {
@@ -141,5 +165,30 @@ pub(crate) fn sign_out() {
     if available() {
         // SAFETY: no pointer arguments.
         unsafe { op_auth_sign_out() };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::supports_linked_abi;
+
+    #[test]
+    fn runtime_abi_handshake_rejects_unknown_and_misdeclared_archives() {
+        assert!(!supports_linked_abi(0));
+        assert!(!supports_linked_abi(5));
+        #[cfg(op_auth_development_prebuilt)]
+        {
+            let declared = env!("OP_AUTH_PREBUILT_ABI_VERSION").parse::<u32>().unwrap();
+            for version in 1..=4 {
+                assert_eq!(supports_linked_abi(version), version == declared);
+            }
+        }
+        #[cfg(not(op_auth_development_prebuilt))]
+        {
+            for version in 1..=3 {
+                assert!(supports_linked_abi(version));
+            }
+            assert!(!supports_linked_abi(4));
+        }
     }
 }

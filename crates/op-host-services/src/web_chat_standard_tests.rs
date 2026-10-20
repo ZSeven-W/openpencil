@@ -221,6 +221,9 @@ fn stream_chat_route_passes_history_and_attachments_to_provider() {
     }];
     let req = WebStandardTurnRequest {
         ai: AiStreamRequest {
+            hosted_route_id: None,
+            history: Vec::new(),
+            attachments: Vec::new(),
             provider: None,
             builtin_provider_id: None,
             model: "claude-sonnet".into(),
@@ -481,14 +484,11 @@ fn standard_body_with_document() -> String {
 
 #[test]
 fn a_closed_write_barrier_skips_the_editor_metadata_write() {
-    // `EditorMeta::from_state` serialises `active_page_index` and
-    // `preserve_authored_geometry` into the tenant's persisted snapshot, so
-    // both are document writes for admission purposes even when the document
-    // itself is unchanged. A turn arriving after the flush snapshotted the
-    // document must not move them.
+    // `EditorMeta::from_state` persists `active_page_index` and
+    // `preserve_authored_geometry`, so both need admission even when the
+    // document is unchanged. Shutdown must leave the flushed snapshot intact.
     //
-    // Skipped, not refused: a plain chat turn carries this metadata
-    // incidentally, so it still gets its reply.
+    // Skip incidental metadata writes so plain chat can still reply.
     use crate::web_canvas_server::WriteBarrier;
 
     let body = serde_json::json!({

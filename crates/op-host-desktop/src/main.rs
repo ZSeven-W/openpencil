@@ -613,6 +613,15 @@ fn main() {
     // blocklist forbids passing PATH per-request, so the process env is the
     // only correct carrier.
     op_host_services::chat_spawn::repair_gui_process_env();
+    // Local integration runs can isolate settings and device sessions without
+    // changing HOME or the production profile. Release builds ignore this.
+    #[cfg(debug_assertions)]
+    if let Some(root) = std::env::var_os("OPENPENCIL_DEV_PROFILE_DIR") {
+        if let Err(error) = op_config_store::configure_user_root(PathBuf::from(root)) {
+            eprintln!("openpencil-desktop: invalid development profile: {error}");
+            std::process::exit(1);
+        }
+    }
     // Register the brand-logo catalog (omitted from the wasm bundle, embedded in
     // this binary) BEFORE any path that can render natively — the GUI app, the
     // headless `--render-shots` rasterizer below, MCP — so they resolve

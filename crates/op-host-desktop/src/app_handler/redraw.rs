@@ -41,6 +41,11 @@ impl DesktopApp {
             self.redraw_dirty = true;
             return false;
         }
+        // Auth and catalog invalidation must precede every queued AI launch
+        // and result pump so an expired Hosted selection cannot adopt fallback.
+        if self.poll_auth_flow() {
+            self.redraw_dirty = true;
+        }
         if self.collab_runtime.refresh_availability(&mut self.host) {
             self.redraw_dirty = true;
         }
@@ -466,11 +471,6 @@ impl DesktopApp {
         }
         // Drain the background auto-update probe.
         if self.poll_update_probe() {
-            self.redraw_dirty = true;
-        }
-        // Drain the browser device-login flow (status + browser
-        // opens land here).
-        if self.poll_auth_flow() {
             self.redraw_dirty = true;
         }
         // Drain a finished background `git pull`.

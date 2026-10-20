@@ -16,6 +16,9 @@ use op_orchestrator::{AppendContext, ContinuationContext, DesignRequest};
 /// with (op-smoke has always passed `OPENPENCIL_ORCHESTRATOR_MODEL` through).
 fn selected_orchestrator_model(state: &EditorState) -> Option<String> {
     let entry = state.chat.selected_model_entry()?;
+    if let Some(route) = entry.hosted.as_ref() {
+        return Some(route.model_id().to_string());
+    }
     if entry.acp_agent_id().is_some() {
         return Some(entry.value.clone());
     }

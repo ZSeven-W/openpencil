@@ -72,6 +72,40 @@ fn content_height_counts_groups_and_rows() {
 }
 
 #[test]
+fn hosted_models_share_a_searchable_group_distinct_from_local_protocol_peers() {
+    let hosted = |id: &str, protocol| {
+        ModelEntry::hosted(
+            op_editor_core::HostedModelRoute::new(
+                id,
+                id,
+                id,
+                protocol,
+                op_editor_core::HostedModelCapabilities::default(),
+            )
+            .unwrap(),
+        )
+    };
+    let models = vec![
+        hosted(
+            "hosted-chat",
+            op_editor_core::HostedProtocol::OpenAiCompatible,
+        ),
+        entry(AgentProvider::CodexCli, "local-openai"),
+        hosted(
+            "hosted-messages",
+            op_editor_core::HostedProtocol::AnthropicMessages,
+        ),
+    ];
+    let expected = MODEL_SEARCH_H
+        + 2.0 * MODEL_GROUP_H
+        + 3.0 * MODEL_ROW_H
+        + MODEL_PICKER_PAD_Y * 2.0
+        + MODEL_FOOTER_H;
+    assert!((picker_content_height(&models, "") - expected).abs() < 0.01);
+    assert_eq!(visible_model_indices(&models, "OpenPencil Hosted"), [0, 2]);
+}
+
+#[test]
 fn content_height_groups_noncontiguous_models_by_provider_like_ts_model_groups() {
     let models = vec![
         entry(AgentProvider::ClaudeCode, "claude-a"),

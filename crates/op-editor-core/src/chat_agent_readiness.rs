@@ -54,10 +54,11 @@ impl crate::EditorState {
     /// send fail silently.
     pub fn has_usable_chat_agent(&self) -> bool {
         let settings = &self.editor_ui.agent_settings;
-        settings
-            .builtin_agents
-            .iter()
-            .any(|agent| agent.enabled && !agent.api_key.trim().is_empty())
+        (self.editor_ui.account.is_signed_in() && !self.editor_ui.hosted_model_routes().is_empty())
+            || settings
+                .builtin_agents
+                .iter()
+                .any(|agent| agent.enabled && !agent.api_key.trim().is_empty())
             || settings.connected.iter().any(|connected| *connected)
             || settings.acp_agents.iter().any(|agent| agent.enabled)
             || settings.web_served_models

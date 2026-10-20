@@ -226,10 +226,13 @@ pub(crate) fn builtin_provider_with_design_tools(
 /// thinking productively without starving content.
 pub(crate) fn design_turn_thinking_mode(host: &WidgetHostNative) -> ThinkingMode {
     let state = host.editor_state();
-    let model = state
-        .chat
-        .selected_model_entry()
-        .and_then(op_editor_core::ModelEntry::builtin_model_id);
+    let model = state.chat.selected_model_entry().and_then(|entry| {
+        entry
+            .hosted
+            .as_ref()
+            .map(|route| route.model_id())
+            .or_else(|| entry.builtin_model_id())
+    });
     resolve_design_thinking(model, state.chat.thinking_mode)
 }
 

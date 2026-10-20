@@ -115,6 +115,7 @@ mod host_support_tests;
 pub mod host_ui_transitions;
 pub mod host_variables_commit;
 pub mod host_variables_transitions;
+pub mod hosted_model_catalog;
 pub mod html_import_diagnostics;
 pub mod icon_path_normalize;
 pub mod icon_picker_state;
@@ -418,6 +419,11 @@ pub use git_button_state::GitButton;
 pub use history::{EditorSnapshot, History, HISTORY_CAP};
 pub use history_snapshot::{SharedComponents, SharedDoc};
 pub use hoist_app_state::{hoist_app_state, UNPLANNED_APP_STATE_IDX};
+pub use hosted_model_catalog::{
+    HostedCatalogError, HostedCatalogField, HostedModelCapabilities, HostedModelCatalog,
+    HostedModelRoute, HostedProtocol, MAX_HOSTED_MODEL_DISPLAY_BYTES, MAX_HOSTED_MODEL_ID_BYTES,
+    MAX_HOSTED_MODEL_ROUTES, MAX_HOSTED_ROUTE_ID_BYTES,
+};
 pub use icon_picker_state::{IconPickerRemoteIcon, IconPickerRemoteState, IconifyLoadMoreRequest};
 pub use id_allocator::{
     collect_document_ids, next_namespaced_counter, next_sequential_counter, DocumentIdAllocator,

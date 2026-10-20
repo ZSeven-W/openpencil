@@ -543,6 +543,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "generator.failed" => "Thất bại: {error}",
         "generator.starterCardGrid" => "Trình tạo lưới thẻ",
         "generator.starterCalendar" => "Trình tạo lịch",
+        "ai.hostedTransportUnavailable" => "OpenPencil Hosted không khả dụng trong phiên này. Hãy đăng nhập lại hoặc chọn mô hình khác.",
         _ => return None,
     })
 }

@@ -104,6 +104,8 @@ pub struct ModelEntry {
     /// `MiniMax`). Kept separate from `display_name`, which is the
     /// model row label.
     pub builtin_provider_display_name: Option<String>,
+    /// Authenticated runtime route, independent from BYOK and CLI identities.
+    pub hosted: Option<crate::hosted_model_catalog::HostedModelRoute>,
 }
 
 impl ModelEntry {
@@ -118,6 +120,7 @@ impl ModelEntry {
             display_name: display_name.into(),
             builtin_provider_id: None,
             builtin_provider_display_name: None,
+            hosted: None,
         }
     }
 
@@ -133,6 +136,7 @@ impl ModelEntry {
             display_name: display_name.into(),
             builtin_provider_id: Some(builtin_provider_id.into()),
             builtin_provider_display_name: None,
+            hosted: None,
         }
     }
 
@@ -149,6 +153,7 @@ impl ModelEntry {
             display_name: display_name.into(),
             builtin_provider_id: Some(builtin_provider_id.into()),
             builtin_provider_display_name: Some(builtin_provider_display_name.into()),
+            hosted: None,
         }
     }
 
@@ -160,11 +165,30 @@ impl ModelEntry {
             display_name: display_name.into(),
             builtin_provider_id: None,
             builtin_provider_display_name: None,
+            hosted: None,
         }
     }
 
     pub fn acp_agent_id(&self) -> Option<&str> {
+        if self.hosted.is_some() {
+            return None;
+        }
         self.value.strip_prefix("acp:")
+    }
+
+    pub fn hosted(route: crate::hosted_model_catalog::HostedModelRoute) -> Self {
+        Self {
+            provider: route.protocol().agent_provider_hint(),
+            value: format!("hosted:{}", route.route_id()),
+            display_name: route.display_name().to_string(),
+            builtin_provider_id: None,
+            builtin_provider_display_name: None,
+            hosted: Some(route),
+        }
+    }
+
+    pub fn hosted_route_id(&self) -> Option<&str> {
+        self.hosted.as_ref().map(|route| route.route_id())
     }
 
     /// Concrete wire model carried by a built-in catalog row.
@@ -172,6 +196,9 @@ impl ModelEntry {
     /// The provider id and model may both contain `:`, so parsing must strip
     /// the exact prefix built from the already-structured provider identity.
     pub fn builtin_model_id(&self) -> Option<&str> {
+        if self.hosted.is_some() {
+            return None;
+        }
         let id = self.builtin_provider_id.as_deref()?;
         let prefix = format!("builtin:{id}:");
         self.value

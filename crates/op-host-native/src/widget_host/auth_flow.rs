@@ -145,6 +145,7 @@ impl WidgetHostNative {
         let account = AccountState::signed_in_profile(display_name, username);
         let account_changed = self.editor_state.editor_ui.account != account;
         if account_changed {
+            self.editor_state.clear_hosted_model_catalog();
             self.editor_state.editor_ui.account = account;
         }
 
@@ -250,6 +251,7 @@ impl WidgetHostNative {
                     self.editor_state.editor_ui.account != AccountState::Anonymous;
                 let avatar_changed = self.auth_account_avatar_revision.take().is_some();
                 if account_changed {
+                    self.editor_state.clear_hosted_model_catalog();
                     self.editor_state.editor_ui.account = AccountState::Anonymous;
                 }
                 if avatar_changed {
@@ -306,6 +308,7 @@ impl WidgetHostNative {
 
     /// Forget host-local comparison state after either native sign-out path.
     pub(in crate::widget_host) fn forget_auth_session_profile(&mut self) {
+        self.editor_state.clear_hosted_model_catalog();
         self.auth_session_refresh_deadline = None;
         self.auth_account_avatar_revision = None;
         let _ = op_editor_ui::collab_avatar_runtime::register_account_avatar_url(None);
@@ -391,5 +394,36 @@ mod tests {
 
         assert_eq!(canceled, vec![42]);
         assert!(host.auth_login_handle.is_none());
+    }
+
+    #[test]
+    fn forgetting_session_removes_hosted_selection_and_queued_send() {
+        let mut host = WidgetHostNative::new();
+        host.editor_state.editor_ui.account =
+            AccountState::signed_in_profile("Test".into(), Some("test".into()));
+        let route = op_editor_core::HostedModelRoute::new(
+            "opaque-session-route",
+            "model",
+            "Hosted model",
+            op_editor_core::HostedProtocol::OpenAiCompatible,
+            op_editor_core::HostedModelCapabilities::default(),
+        )
+        .unwrap();
+        host.editor_state
+            .replace_hosted_model_catalog(vec![route])
+            .unwrap();
+        host.editor_state.chat.selected_model = 0;
+        host.editor_state.chat.pending_send = Some("queued before logout".into());
+
+        host.forget_auth_session_profile();
+
+        assert!(host.editor_state.editor_ui.hosted_model_routes().is_empty());
+        assert!(host.editor_state.chat.pending_send.is_none());
+        assert!(!host
+            .editor_state
+            .chat
+            .available_models
+            .iter()
+            .any(|entry| entry.hosted_route_id().is_some()));
     }
 }

@@ -535,6 +535,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "generator.failed" => "विफल: {error}",
         "generator.starterCardGrid" => "कार्ड ग्रिड जनरेटर",
         "generator.starterCalendar" => "कैलेंडर जनरेटर",
+        "ai.hostedTransportUnavailable" => "इस सत्र में OpenPencil Hosted उपलब्ध नहीं है। फिर से साइन इन करें या कोई अन्य मॉडल चुनें।",
         _ => return None,
     })
 }

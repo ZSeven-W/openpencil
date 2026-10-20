@@ -162,7 +162,11 @@ fn launch_if_pending_inner(
         .editor_state()
         .chat
         .selected_model_entry()
-        .map(|entry| entry.builtin_provider_id.is_some() || entry.acp_agent_id().is_some())
+        .map(|entry| {
+            entry.hosted_route_id().is_some()
+                || entry.builtin_provider_id.is_some()
+                || entry.acp_agent_id().is_some()
+        })
         .unwrap_or(false);
     if !is_builtin_or_acp {
         if launch_cli_standard_turn(host, &effective_user_text, current_chat, current_design) {
@@ -212,6 +216,7 @@ fn launch_if_pending_inner(
         // design provider is available. The append context the TS tool path
         // detects (agent-tool-executor.ts:234) rides the request here.
         if let Some(provider) = provider_for_selected_model(host) {
+            let hosted_session_epoch = provider.hosted_session_epoch();
             super::finalize_design_session_if_needed(host, current_chat, "teardown-backstop");
             *current_chat = None;
             // Share one provider Arc between the design LLM and the
@@ -250,13 +255,16 @@ fn launch_if_pending_inner(
             // design.md/skeleton extraction. Taking them here also keeps
             // them from leaking into the next chat send.
             let attachments = std::mem::take(&mut host.editor_state_mut().chat.pending_attachments);
-            *current_design = Some(op_host_services::design_session::start(
-                llm,
-                request,
-                initial_state,
-                Some(provider_arc),
-                attachments,
-            ));
+            *current_design = Some(
+                op_host_services::design_session::start(
+                    llm,
+                    request,
+                    initial_state,
+                    Some(provider_arc),
+                    attachments,
+                )
+                .with_hosted_session_epoch(hosted_session_epoch),
+            );
             return true;
         }
         // Design intent but the selected agent has no ChatProvider
@@ -746,3 +754,7 @@ mod tests;
 #[cfg(test)]
 #[path = "chat_session_launch_selection_tests.rs"]
 mod selection_tests;
+
+#[cfg(test)]
+#[path = "chat_session_launch_hosted_tests.rs"]
+mod hosted_tests;

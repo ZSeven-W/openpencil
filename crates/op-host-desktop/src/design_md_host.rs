@@ -42,10 +42,12 @@ enum McpDesignMdFailure {
 
 pub(crate) struct DesignMdSession {
     rx: Receiver<Result<String, DesignMdError>>,
+    hosted_session_epoch: Option<u64>,
 }
 
 impl DesignMdSession {
     fn start(provider: Box<dyn ChatProvider>, model: Option<String>, state: &EditorState) -> Self {
+        let hosted_session_epoch = provider.hosted_session_epoch();
         let request = build_design_md_chat_request(state, model);
         let (tx, rx) = mpsc::channel();
         let worker_tx = tx.clone();
@@ -60,7 +62,10 @@ impl DesignMdSession {
             eprintln!("openpencil-desktop: spawn op-design-md thread failed: {err}");
             let _ = tx.send(Err(DesignMdError::WorkerSpawn(err.to_string())));
         }
-        Self { rx }
+        Self {
+            rx,
+            hosted_session_epoch,
+        }
     }
 }
 
@@ -454,6 +459,16 @@ impl DesktopApp {
         let Some(session) = self.current_design_md.as_ref() else {
             return false;
         };
+        if !crate::chat_session::hosted_epoch_is_current(session.hosted_session_epoch) {
+            self.current_design_md = None;
+            self.host
+                .editor_state_mut()
+                .editor_ui
+                .design_md_panel
+                .generating = false;
+            self.host.mark_editor_state_dirty();
+            return true;
+        }
         let outcome = match session.rx.try_recv() {
             Ok(outcome) => outcome,
             Err(TryRecvError::Empty) => return false,

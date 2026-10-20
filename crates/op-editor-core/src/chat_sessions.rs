@@ -77,6 +77,11 @@ impl ChatSessions {
         &self.tabs
     }
 
+    /// Mutable access for account-scoped catalog and pending-action cleanup.
+    pub fn tabs_mut(&mut self) -> &mut [ChatState] {
+        &mut self.tabs
+    }
+
     /// Push a fresh `ChatState`, set it as active, and return its index.
     ///
     /// The new tab starts with a blank TRANSCRIPT but inherits the model

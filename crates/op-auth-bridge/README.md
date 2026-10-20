@@ -88,6 +88,28 @@ closed. Mobile shells use the narrower `mobile-auth-dev` forwarding feature
 and [`scripts/build-mobile-auth-dev.sh`](../../scripts/build-mobile-auth-dev.sh),
 which has no release mode and isolates Android output in the Debug source set.
 
+## Local Hosted ABI-v4 development
+
+Hosted model access requires a separate opt-in and a private ABI-v4 archive:
+
+```sh
+OPENPENCIL_DEV_OP_AUTH_ARCHIVE=/absolute/path/to/libop_auth.a \
+OPENPENCIL_DEV_OP_AUTH_ABI_VERSION=4 \
+cargo build -p op-host-desktop --features dev-op-auth-hosted
+```
+
+The bridge feature is `op-auth-bridge/dev-hosted`; the existing `dev-prebuilt`
+feature alone rejects ABI v4. The same debug profile, target debug assertion,
+absolute regular-file path, and runtime ABI checks apply. A developer's declared
+ABI must equal the linked archive's actual ABI. Enabling the feature without
+override variables continues to use the signed production artifact.
+
+Hosted access is unavailable on ABI v1–v3; their login and collaboration APIs
+continue to work. ABI v4 adds independent begin/poll/cancel operations and a
+session epoch for short-lived, non-persistent Hosted credentials. The production
+release matrix and provenance policy remain ABI v3. This override does not
+authorize shipping an unsigned archive.
+
 ## Regional login and collaboration trust
 
 The credential-bearing login/ticket origin and the public collaboration trust

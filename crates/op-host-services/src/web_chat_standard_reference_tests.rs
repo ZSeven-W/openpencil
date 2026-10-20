@@ -64,6 +64,9 @@ impl ChatProvider for QueuedProvider {
 fn new_design_request(user: &str, attachments: Vec<ChatAttachment>) -> WebStandardTurnRequest {
     WebStandardTurnRequest {
         ai: AiStreamRequest {
+            hosted_route_id: None,
+            history: Vec::new(),
+            attachments: Vec::new(),
             provider: None,
             builtin_provider_id: None,
             model: "test-model".into(),

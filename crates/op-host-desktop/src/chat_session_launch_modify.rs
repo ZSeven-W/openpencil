@@ -12,6 +12,7 @@ pub(super) fn launch_direct_modify_turn(
     let Some(provider) = provider_for_selected_model(host) else {
         return false;
     };
+    let hosted_session_epoch = provider.hosted_session_epoch();
     let Some(plan) = op_host_services::chat_intent::build_modify_plan_for_route(
         host.editor_state(),
         user_text,
@@ -37,11 +38,10 @@ pub(super) fn launch_direct_modify_turn(
     let cancel = Arc::new(std::sync::atomic::AtomicBool::new(false));
     *current_design = None;
     super::super::finalize_design_session_if_needed(host, current_chat, "teardown-backstop");
-    *current_chat = Some(ChatSession::from_channels_with_cancel(
-        chat_rx,
-        Some(tool_rx),
-        Arc::clone(&cancel),
-    ));
+    *current_chat = Some(
+        ChatSession::from_channels_with_cancel(chat_rx, Some(tool_rx), Arc::clone(&cancel))
+            .with_hosted_session_epoch(hosted_session_epoch),
+    );
     let spawned = thread::Builder::new()
         .name("op-chat-modify".into())
         .spawn(move || {

@@ -22,8 +22,11 @@ use op_orchestrator::Progress;
 
 use op_host_services::design_session::fit_design_viewport_to_content;
 
+#[path = "design_session_lifecycle.rs"]
+mod lifecycle;
 #[path = "design_session_workers.rs"]
 mod workers;
+pub(crate) use lifecycle::stop_design_transcript;
 
 #[path = "design_session_quality.rs"]
 mod quality;
@@ -45,6 +48,9 @@ pub fn pump_commands(
     let Some(session) = current.as_mut() else {
         return false;
     };
+    if lifecycle::discard_stale_commands(session) {
+        return false;
+    }
     let reqs = session.drain_cmd_requests();
     if reqs.is_empty() {
         return false;
@@ -147,6 +153,9 @@ pub fn pump_progress(
     current: &mut Option<DesignSession>,
     running_tab: Option<usize>,
 ) -> bool {
+    if lifecycle::retire_stale_session(host, current, running_tab) {
+        return true;
+    }
     let Some(session) = current.as_mut() else {
         return false;
     };
@@ -194,22 +203,6 @@ pub fn pump_progress(
     }
     if poll.finished {
         *current = None;
-    }
-    changed
-}
-
-/// Finalize transcript rows for an explicit Stop before the design session is
-/// dropped. The widget already cleared every `streaming` bit, so worker
-/// metadata and active activities — not streaming state — identify the turn.
-pub(crate) fn stop_design_transcript(
-    host: &mut WidgetHostNative,
-    running_tab: Option<usize>,
-) -> bool {
-    let locale = host.editor_state().editor_ui.locale;
-    let chat = host.editor_state_mut().chat.run_tab_mut(running_tab);
-    let changed = workers::stop_design_messages(&mut chat.messages, locale);
-    if changed {
-        host.mark_editor_state_dirty();
     }
     changed
 }
@@ -293,18 +286,17 @@ pub fn launch_subtask_retry_if_pending(
         );
         return true;
     };
+    let hosted_session_epoch = provider.hosted_session_epoch();
     let provider_arc: std::sync::Arc<dyn op_ai::chat_provider::ChatProvider> =
         std::sync::Arc::from(provider);
     let llm = op_host_services::chat_provider_llm::ChatProviderLlmClient::new(provider_arc)
         .with_model(crate::chat_session::selected_cli_model_id(host));
     let initial_state =
         op_editor_core::request_snapshot::narrowed_snapshot(host.editor_state_mut());
-    *current_design = Some(op_host_services::design_session::start_subtask_retry(
-        llm,
-        request,
-        subtask,
-        initial_state,
-    ));
+    *current_design = Some(
+        op_host_services::design_session::start_subtask_retry(llm, request, subtask, initial_state)
+            .with_hosted_session_epoch(hosted_session_epoch),
+    );
     // Reuse the exact message that owns the failed activity row. This also
     // makes a non-primary worker bubble the explicit target for the retry's
     // unscoped SubtaskStarted/Done/Failed events until its channel closes.

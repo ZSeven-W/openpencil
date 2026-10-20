@@ -17,12 +17,14 @@ mod prebuilt_provenance;
 const DEV_ARCHIVE_ENV: &str = "OPENPENCIL_DEV_OP_AUTH_ARCHIVE";
 const DEV_ABI_VERSION_ENV: &str = "OPENPENCIL_DEV_OP_AUTH_ABI_VERSION";
 const DEV_FEATURE_ENV: &str = "CARGO_FEATURE_DEV_PREBUILT";
+const DEV_HOSTED_FEATURE_ENV: &str = "CARGO_FEATURE_DEV_HOSTED";
 
 fn main() {
     println!("cargo:rustc-check-cfg=cfg(op_auth_prebuilt)");
     println!("cargo:rustc-check-cfg=cfg(op_auth_collab_ticket_prebuilt)");
     println!("cargo:rustc-check-cfg=cfg(op_auth_collab_relay_token_prebuilt)");
     println!("cargo:rustc-check-cfg=cfg(op_auth_development_prebuilt)");
+    println!("cargo:rustc-check-cfg=cfg(op_auth_hosted_access_prebuilt)");
     println!("cargo:rerun-if-changed=prebuilt");
     println!("cargo:rerun-if-changed=AUTH-RELEASE-POLICY");
     println!("cargo:rerun-if-changed=prebuilt_link_compat.rs");
@@ -86,6 +88,10 @@ fn main() {
     }
     if abi_version >= 3 {
         println!("cargo:rustc-cfg=op_auth_collab_relay_token_prebuilt");
+    }
+    if abi_version == 4 {
+        assert!(development_override, "Hosted ABI-v4 is development-only");
+        println!("cargo:rustc-cfg=op_auth_hosted_access_prebuilt");
     }
     println!("cargo:rustc-env=OP_AUTH_PREBUILT_ABI_VERSION={abi_version}");
     let link_dir = rust_host_link_directory(&target, &prebuilt_dir, artifact, expected_sha256);
@@ -193,6 +199,11 @@ fn development_prebuilt(artifact: &str) -> Option<(PathBuf, u32)> {
                 dev_prebuilt_policy::MAX_DEVELOPMENT_ABI_VERSION
             )
         });
+    dev_prebuilt_policy::require_hosted_opt_in(
+        abi_version,
+        env::var_os(DEV_HOSTED_FEATURE_ENV).is_some(),
+    )
+    .unwrap_or_else(|error| panic!("{DEV_ABI_VERSION_ENV}: {error}"));
     let directory = PathBuf::from(
         env::var("OUT_DIR").expect("Cargo provides OUT_DIR to the op-auth build script"),
     );

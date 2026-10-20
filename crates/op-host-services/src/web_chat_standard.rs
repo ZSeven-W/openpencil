@@ -80,8 +80,7 @@ pub struct WebStandardTurnRequest {
     history: Vec<(ChatHistoryRole, String)>,
     attachments: Vec<ChatAttachment>,
     transient_builtin: Option<BuiltinAgentConfig>,
-    /// The route the browser pinned on the turn (Studio Home / draft
-    /// refine); `Auto` classifies as before.
+    /// Browser-pinned route (Studio Home / draft refine); `Auto` classifies as before.
     launch_route: op_editor_core::LaunchRoute,
     /// The browser's UI locale (`"locale"`, BCP-47): a variants run stamps
     /// localized direction names (`方案 A`) on the boards it lands.
@@ -90,6 +89,9 @@ pub struct WebStandardTurnRequest {
 
 pub fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
     let ai = crate::ai_proxy::parse_ai_stream_body(body)?;
+    if ai.hosted_route_id.is_some() {
+        return None;
+    }
     let value: Value = serde_json::from_str(body).ok()?;
     let obj = value.as_object()?;
     let document_json = obj.get("document").map(Value::to_string);
@@ -151,7 +153,7 @@ pub fn parse_standard_turn_body(body: &str) -> Option<WebStandardTurnRequest> {
     })
 }
 
-fn parse_chat_history(value: Option<&Value>) -> Vec<(ChatHistoryRole, String)> {
+pub(crate) fn parse_chat_history(value: Option<&Value>) -> Vec<(ChatHistoryRole, String)> {
     value
         .and_then(Value::as_array)
         .into_iter()
@@ -172,7 +174,7 @@ fn parse_chat_history(value: Option<&Value>) -> Vec<(ChatHistoryRole, String)> {
         .collect()
 }
 
-fn parse_chat_attachments(value: Option<&Value>) -> Vec<ChatAttachment> {
+pub(crate) fn parse_chat_attachments(value: Option<&Value>) -> Vec<ChatAttachment> {
     value
         .and_then(Value::as_array)
         .into_iter()

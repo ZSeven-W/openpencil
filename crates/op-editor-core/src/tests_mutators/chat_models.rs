@@ -230,6 +230,44 @@ fn rebuilding_unavailable_builtin_falls_back_to_a_ready_model() {
 }
 
 #[test]
+fn rebuilding_models_keeps_background_provider_and_active_hosted_selection() {
+    let (mut state, _, selected) = state_with_selected_builtin();
+    state.editor_ui.account = crate::AccountState::signed_in_profile("test".into(), None);
+    let route = crate::HostedModelRoute::new(
+        "hosted-route",
+        "hosted-model",
+        "Hosted model",
+        crate::HostedProtocol::OpenAiCompatible,
+        crate::HostedModelCapabilities::default(),
+    )
+    .unwrap();
+    state.replace_hosted_model_catalog(vec![route]).unwrap();
+    state.chat.new_tab();
+    let index = state
+        .chat
+        .available_models
+        .iter()
+        .position(|entry| entry.hosted_route_id() == Some("hosted-route"))
+        .unwrap();
+    state.select_chat_model(index);
+    state.editor_ui.agent_settings.builtin_agents[1].set_models(["replacement-model"]);
+
+    state.rebuild_chat_models();
+
+    let background = state.chat.tabs()[0].selected_model_entry().unwrap();
+    assert_eq!(
+        background.builtin_provider_id.as_deref(),
+        Some(selected.as_str())
+    );
+    assert_eq!(background.builtin_model_id(), Some("replacement-model"));
+    assert_eq!(state.chat.active_index(), 1);
+    assert_eq!(
+        state.chat.selected_model_entry().unwrap().hosted_route_id(),
+        Some("hosted-route")
+    );
+}
+
+#[test]
 fn rebuild_chat_models_flattens_saved_models_and_ignores_runtime_options() {
     let mut state = sample();
     let id = state.editor_ui.agent_settings.add_builtin_agent_config(

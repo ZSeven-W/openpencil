@@ -12,12 +12,12 @@ use op_editor_core::{EditorCommand, EditorState};
 use op_orchestrator::DocSink;
 
 use super::admit_document_write;
-use crate::web_canvas_server::{SseHub, WebCanvasState};
+use crate::web_canvas_server::{SseHub, WebCanvasState, WriteBarrier};
 
 pub(super) struct WebDesignDocSink<'a> {
     state: &'a Mutex<WebCanvasState>,
     hub: &'a SseHub,
-    write_barrier: Option<&'a crate::web_canvas_server::WriteBarrier>,
+    write_barrier: Option<&'a WriteBarrier>,
     mirror: EditorState,
 }
 
@@ -25,7 +25,7 @@ impl<'a> WebDesignDocSink<'a> {
     pub(super) fn new(
         state: &'a Mutex<WebCanvasState>,
         hub: &'a SseHub,
-        write_barrier: Option<&'a crate::web_canvas_server::WriteBarrier>,
+        write_barrier: Option<&'a WriteBarrier>,
         mirror: EditorState,
     ) -> Self {
         Self {

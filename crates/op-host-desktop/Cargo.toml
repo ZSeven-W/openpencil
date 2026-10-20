@@ -24,6 +24,9 @@ harness = false
 
 [features]
 default = []
+# Debug-only Hosted integration with the private ABI-v4 archive.
+# Production continues to require the signed release matrix.
+dev-op-auth-hosted = ["op-auth-bridge/dev-hosted"]
 mcp-debug-tools = ["op-mcp/debug-tools"]
 # Production release lane: a missing reviewed binary cache must fail instead
 # of silently compiling or downloading an unreviewed Skia build.

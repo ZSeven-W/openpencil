@@ -52,6 +52,23 @@ fn a_ready_agent_pays_no_row_at_all() {
 }
 
 #[test]
+fn hosted_model_does_not_inherit_the_previous_cli_mcp_notice() {
+    let mut state = state_with_antigravity(false);
+    let route = op_editor_core::HostedModelRoute::new(
+        "session-route",
+        "model",
+        "Hosted model",
+        op_editor_core::HostedProtocol::OpenAiCompatible,
+        op_editor_core::HostedModelCapabilities::default(),
+    )
+    .unwrap();
+    state.chat.available_models = vec![op_editor_core::ModelEntry::hosted(route)];
+    let panel = AIChatPlaceholder::from_editor(&state);
+    assert!(panel.mcp_notice.is_none());
+    assert_eq!(panel.mcp_notice_row_h(), 0.0);
+}
+
+#[test]
 fn the_notice_pushes_the_input_rows_down_by_exactly_its_height() {
     // The rows below must not shift by anything other than the notice — a
     // drift here shows up as a caret that no longer lands where it is drawn.

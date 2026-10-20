@@ -27,6 +27,7 @@ fn session(
             model: None,
             cancel: Arc::new(AtomicBool::new(false)),
             run_epoch: 1,
+            hosted_session_epoch: None,
         },
         tx,
     )

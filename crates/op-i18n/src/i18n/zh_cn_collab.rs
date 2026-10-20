@@ -531,6 +531,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "generator.failed" => "失败：{error}",
         "generator.starterCardGrid" => "卡片网格生成器",
         "generator.starterCalendar" => "月历生成器",
+        "ai.hostedTransportUnavailable" => "当前会话无法使用 OpenPencil Hosted。请重新登录或选择其他模型。",
         _ => return None,
     })
 }

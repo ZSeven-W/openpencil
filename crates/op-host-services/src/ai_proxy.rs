@@ -11,7 +11,10 @@
 
 use std::io::Write;
 
-use op_ai::chat_provider::{ChatDelta, ChatProvider, ChatRequest, EffortLevel, ThinkingMode};
+use op_ai::chat_provider::{
+    ChatAttachment, ChatDelta, ChatHistoryRole, ChatProvider, ChatRequest, EffortLevel,
+    ThinkingMode,
+};
 use op_editor_core::{AgentProvider, BuiltinAgentConfig, EditorState};
 use serde_json::{json, Value};
 
@@ -22,6 +25,9 @@ use crate::chat_builtin_http::ConfiguredBuiltinProvider;
 /// (not the corpus) plus the per-turn knobs; the proxy expands the
 /// names server-side.
 pub struct AiStreamRequest {
+    pub hosted_route_id: Option<String>,
+    pub history: Vec<(ChatHistoryRole, String)>,
+    pub attachments: Vec<ChatAttachment>,
     /// Explicit provider identity from the structured model catalog. Older
     /// clients omit it and use the ambiguity-safe legacy resolver.
     pub provider: Option<AgentProvider>,
@@ -46,6 +52,11 @@ pub struct AiStreamRequest {
 pub fn parse_ai_stream_body(body: &str) -> Option<AiStreamRequest> {
     let value: Value = serde_json::from_str(body).ok()?;
     let obj = value.as_object()?;
+    let hosted_route_id = if obj.contains_key("hosted_route_id") {
+        Some(crate::hosted_models::request::route_id(body)?)
+    } else {
+        None
+    };
     let model = obj
         .get("model")
         .and_then(Value::as_str)
@@ -99,6 +110,9 @@ pub fn parse_ai_stream_body(body: &str) -> Option<AiStreamRequest> {
         Some(value) => Some(crate::web_credentials::parse_transient_builtin(value)?),
     };
     Some(AiStreamRequest {
+        hosted_route_id,
+        history: crate::web_chat_standard::parse_chat_history(obj.get("history")),
+        attachments: crate::web_chat_standard::parse_chat_attachments(obj.get("attachments")),
         provider,
         builtin_provider_id,
         model,
@@ -172,15 +186,23 @@ pub fn stream_ai_response<W: Write>(
     let chat_req = ChatRequest {
         system_prompt: system,
         user_message: req.user,
-        // Proxy requests are self-contained — no chat history wire yet.
-        history: Vec::new(),
+        history: req.history,
         max_output_tokens: req.max_output_tokens,
         thinking: req.thinking,
         effort: req.effort,
-        attachments: vec![],
+        attachments: req.attachments,
         model: request_model_id(&req.model),
     };
     for delta in provider.send(chat_req) {
+        if !crate::hosted_models::session_epoch_is_current(provider.hosted_session_epoch()) {
+            out.write_all(
+                delta_to_sse(&ChatDelta::Error(
+                    crate::hosted_models::HostedRuntimeError::SessionChanged.to_string(),
+                ))
+                .as_bytes(),
+            )?;
+            return out.flush();
+        }
         out.write_all(delta_to_sse(&delta).as_bytes())?;
         out.flush()?;
         if matches!(delta, ChatDelta::Done { .. } | ChatDelta::Error(_)) {
@@ -266,6 +288,11 @@ pub fn proxy_provider_for_request_with_chat_session(
     _chat_session: bool,
     _policy: crate::web_credential_policy::WebCredentialPersistence,
 ) -> Result<Option<Box<dyn ChatProvider>>, ProxyProviderError> {
+    if let Some(route_id) = request.hosted_route_id.as_deref() {
+        return crate::hosted_models::provider_for_route(route_id)
+            .map(Some)
+            .map_err(ProxyProviderError::Hosted);
+    }
     if let Some(agent) = request.transient_builtin.as_ref() {
         if !agent.has_model(request.model.trim()) {
             return Err(ProxyProviderError::TransientModelMismatch);

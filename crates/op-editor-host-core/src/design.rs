@@ -12,6 +12,7 @@ pub struct DesignSession {
     abort: AbortFlag,
     finished: bool,
     indicator_epoch: u64,
+    hosted_session_epoch: Option<u64>,
 }
 
 impl Drop for DesignSession {
@@ -103,7 +104,17 @@ impl DesignSession {
             abort,
             finished: false,
             indicator_epoch,
+            hosted_session_epoch: None,
         }
+    }
+
+    pub fn with_hosted_session_epoch(mut self, epoch: Option<u64>) -> Self {
+        self.hosted_session_epoch = epoch;
+        self
+    }
+
+    pub fn hosted_session_epoch(&self) -> Option<u64> {
+        self.hosted_session_epoch
     }
 
     /// Explicitly request cancellation before the session is dropped.

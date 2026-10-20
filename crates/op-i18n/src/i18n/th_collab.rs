@@ -533,6 +533,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "generator.failed" => "ล้มเหลว: {error}",
         "generator.starterCardGrid" => "ตัวสร้างกริดการ์ด",
         "generator.starterCalendar" => "ตัวสร้างปฏิทิน",
+        "ai.hostedTransportUnavailable" => "เซสชันนี้ไม่สามารถใช้ OpenPencil Hosted ได้ โปรดลงชื่อเข้าใช้อีกครั้งหรือเลือกรุ่นอื่น",
         _ => return None,
     })
 }

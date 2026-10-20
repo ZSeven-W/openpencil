@@ -270,7 +270,15 @@ impl<'a> AIChatPlaceholder<'a> {
             examples: workspace_copy
                 .map(|c| c.examples)
                 .unwrap_or_else(|| example_cards(ui.effective_locale())),
-            mcp_notice: mcp_notice_label(ui),
+            mcp_notice: if state
+                .chat
+                .selected_model_entry()
+                .is_some_and(|entry| entry.hosted.is_some())
+            {
+                None
+            } else {
+                mcp_notice_label(ui)
+            },
             locale: ui.effective_locale(),
             tabs_snapshot,
             active_tab_index,

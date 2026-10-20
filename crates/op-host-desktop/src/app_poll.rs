@@ -9,7 +9,11 @@ impl DesktopApp {
     /// into UI state and open the verification page (exactly once per
     /// flow) in the system browser.
     pub(crate) fn poll_auth_flow(&mut self) -> bool {
-        let changed = self.host.poll_auth();
+        let mut changed = self.host.poll_auth();
+        if op_host_services::hosted_models::sync_editor(self.host.editor_state_mut()) {
+            self.host.mark_editor_state_dirty();
+            changed = true;
+        }
         if let Some(url) = self.host.take_pending_browser_url() {
             update_check::open_url(&url);
         }

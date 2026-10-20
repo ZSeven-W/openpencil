@@ -39,6 +39,7 @@ pub(super) fn launch_variants_turn(
     let Some(provider) = provider_for_selected_model(host) else {
         return false;
     };
+    let hosted_session_epoch = provider.hosted_session_epoch();
     stamp_design_turn_scenario(host.editor_state_mut(), user_text);
     crate::chat_session::finalize_design_session_if_needed(host, current_chat, "teardown-backstop");
     *current_chat = None;
@@ -75,12 +76,15 @@ pub(super) fn launch_variants_turn(
         }
     }
     host.mark_editor_state_dirty();
-    *current_design = Some(op_host_services::design_variants::start_variants(
-        llm,
-        request,
-        plans,
-        initial_state,
-        Some(provider_arc),
-    ));
+    *current_design = Some(
+        op_host_services::design_variants::start_variants(
+            llm,
+            request,
+            plans,
+            initial_state,
+            Some(provider_arc),
+        )
+        .with_hosted_session_epoch(hosted_session_epoch),
+    );
     true
 }

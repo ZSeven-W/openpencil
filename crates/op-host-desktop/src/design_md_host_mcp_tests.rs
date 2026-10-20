@@ -23,6 +23,28 @@ struct UncancellableProvider {
     send_called: Arc<AtomicBool>,
 }
 
+#[test]
+fn invalidated_hosted_design_md_drops_queued_document_mutation() {
+    let mut app = crate::DesktopApp::new(None);
+    let (tx, rx) = std::sync::mpsc::channel();
+    tx.send(Ok("# Design System: Stale account result".to_string()))
+        .unwrap();
+    app.current_design_md = Some(super::DesignMdSession {
+        rx,
+        hosted_session_epoch: Some(0),
+    });
+    app.host
+        .editor_state_mut()
+        .editor_ui
+        .design_md_panel
+        .generating = true;
+
+    assert!(app.poll_design_md_generation());
+    assert!(app.current_design_md.is_none());
+    assert!(app.host.editor_state().doc.design_md.is_none());
+    assert!(!app.host.editor_state().editor_ui.design_md_panel.generating);
+}
+
 impl ChatProvider for UncancellableProvider {
     fn provider_label(&self) -> &str {
         "uncancellable-mcp-design-md-test"

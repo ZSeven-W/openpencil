@@ -43,6 +43,17 @@ fn unfinalized_design_loop_session() -> ChatSession {
 }
 
 #[test]
+fn invalidated_hosted_session_skips_structural_finalize_at_teardown() {
+    let mut host = WidgetHostNative::new();
+    insert_roleless_header(&mut host);
+    let session = Some(unfinalized_design_loop_session().with_hosted_session_epoch(Some(0)));
+
+    finalize_design_session_if_needed(&mut host, &session, "hosted-auth-test");
+
+    assert_eq!(header_role(&host), None);
+}
+
+#[test]
 fn drain_new_chat_request_runs_the_teardown_backstop_before_dropping_the_session() {
     let _guard = crate::agent_indicator_test_lock::LOCK
         .lock()

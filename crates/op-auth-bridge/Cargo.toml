@@ -20,6 +20,9 @@ test-issuer = []
 # in local debug builds. `build.rs` still requires the absolute archive path
 # and ABI version, and rejects this feature outside Cargo's debug profile.
 dev-prebuilt = []
+# Additional explicit opt-in for the ABI-v4 Hosted capability, debug only.
+# Production signed artifacts continue to use the ABI-v3 release policy.
+dev-hosted = ["dev-prebuilt"]
 # Compatibility alias for existing desktop development commands. New mobile
 # integrations use `dev-prebuilt` through their `mobile-auth-dev` feature.
 dev-abi-v2 = ["dev-prebuilt"]
@@ -30,6 +33,7 @@ ed25519-dalek = { version = "2.2", default-features = false, features = ["std", 
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+url = "2"
 zeroize = "1"
 
 [build-dependencies]

@@ -29,10 +29,11 @@ impl ChatState {
             .discovered_models
             .iter()
             .filter(|m| {
-                AgentProvider::ALL
-                    .iter()
-                    .position(|p| *p == m.provider)
-                    .is_some_and(|i| connected[i])
+                m.hosted.is_none()
+                    && AgentProvider::ALL
+                        .iter()
+                        .position(|p| *p == m.provider)
+                        .is_some_and(|i| connected[i])
             })
             .cloned()
             .collect();
@@ -42,6 +43,7 @@ impl ChatState {
                     m.provider == p.provider
                         && m.value == p.value
                         && m.builtin_provider_id == p.builtin_provider_id
+                        && m.hosted == p.hosted
                 })
             })
             .unwrap_or(0);
@@ -79,6 +81,9 @@ impl ChatState {
         // (measured, user report 2026-07-12). Design runs later restamp
         // this with the run's agent persona (canvas cursor parity).
         let agent_name = self.selected_model_entry().map(|entry| {
+            if entry.hosted.is_some() {
+                return "OpenPencil".to_string();
+            }
             entry
                 .builtin_provider_display_name
                 .clone()

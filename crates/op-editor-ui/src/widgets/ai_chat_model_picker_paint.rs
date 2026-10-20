@@ -11,9 +11,9 @@
 //! so dark mode derives each value from the closest `Theme` field.
 
 use super::{
-    is_acp, is_builtin, model_list_rect, model_row_pill_rect, normalized_query,
-    paint_provider_logo, search_field_rect, visible_model_indices, walk_rows, Row, MODEL_EMPTY_H,
-    MODEL_FOOTER_H, MODEL_GROUP_H, MODEL_PICKER_PAD_Y, MODEL_ROW_H,
+    is_acp, is_builtin, model_list_rect, model_row_pill_rect, normalized_query, paint_model_logo,
+    search_field_rect, visible_model_indices, walk_rows, Row, MODEL_EMPTY_H, MODEL_FOOTER_H,
+    MODEL_GROUP_H, MODEL_PICKER_PAD_Y, MODEL_ROW_H,
 };
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
@@ -197,6 +197,9 @@ fn row_qualifier(
     locale: Locale,
 ) -> Option<String> {
     let entry = entry?;
+    if entry.hosted_route_id().is_some() {
+        return Some("Hosted".to_string());
+    }
     if is_builtin(entry) {
         return Some(op_i18n::translate(locale, "builtin.apiKeyBadge").to_string());
     }
@@ -399,9 +402,9 @@ fn paint_model_row(
     // provider's mark.
     let logo_y = y + (MODEL_ROW_H - ROW_LOGO) / 2.0;
     if let Some(entry) = entry {
-        paint_provider_logo(
+        paint_model_logo(
             cx,
-            entry.provider,
+            entry,
             Point2D::new(rect.origin.x + ROW_INSET_X, logo_y),
             ROW_LOGO,
             tokens.muted,

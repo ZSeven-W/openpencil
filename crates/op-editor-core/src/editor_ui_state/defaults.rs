@@ -111,6 +111,7 @@ impl Default for EditorUiState {
             chat_tab_hover: None,
             chat_style_chip_hover_since_ms: None,
             chat_selected_agent: 0,
+            hosted_model_catalog: crate::hosted_model_catalog::HostedModelCatalog::default(),
             parallel_agents_picker_open: false,
             parallel_agents_picker_hover: None,
             pressed_button: None,

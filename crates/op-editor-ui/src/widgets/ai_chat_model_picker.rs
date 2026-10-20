@@ -89,6 +89,9 @@ fn is_acp(entry: &ModelEntry) -> bool {
 }
 
 fn same_group(a: &ModelEntry, b: &ModelEntry) -> bool {
+    if a.hosted_route_id().is_some() || b.hosted_route_id().is_some() {
+        return a.hosted_route_id().is_some() && b.hosted_route_id().is_some();
+    }
     if is_acp(a) || is_acp(b) {
         return is_acp(a) && is_acp(b) && a.value == b.value;
     }
@@ -103,6 +106,9 @@ fn model_matches(entry: &ModelEntry, q: &str) -> bool {
 }
 
 fn searchable_group_label(entry: &ModelEntry) -> Option<String> {
+    if entry.hosted_route_id().is_some() {
+        return Some(group_label_for_entry(entry));
+    }
     if is_acp(entry) {
         return Some(group_label_for_entry(entry));
     }
@@ -377,6 +383,28 @@ pub fn paint_provider_logo(
     }
 }
 
+/// Runtime Hosted routes carry the product mark rather than their protocol hint.
+pub fn paint_model_logo(
+    cx: &mut PaintCx<'_>,
+    entry: &ModelEntry,
+    top_left: Point2D,
+    size: f32,
+    color: Color,
+) {
+    if entry.hosted_route_id().is_some() {
+        crate::widgets::icons::draw_icon(
+            cx.backend,
+            crate::widgets::icons::Icon::Sparkles,
+            top_left,
+            size,
+            color,
+            1.4,
+        );
+    } else {
+        paint_provider_logo(cx, entry.provider, top_left, size, color);
+    }
+}
+
 /// Uppercase provider name for the group header (matches the TS
 /// dropdown's `providerName` styling).
 pub(super) fn provider_label(provider: AgentProvider) -> &'static str {
@@ -408,6 +436,9 @@ fn group_label(provider: AgentProvider, builtin: bool) -> &'static str {
 }
 
 pub(super) fn group_label_for_entry(entry: &ModelEntry) -> String {
+    if entry.hosted_route_id().is_some() {
+        return "OPENPENCIL HOSTED".to_string();
+    }
     if is_acp(entry) {
         let name = entry.display_name.trim();
         if name.is_empty() {

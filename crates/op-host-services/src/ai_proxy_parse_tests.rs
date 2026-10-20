@@ -202,6 +202,9 @@ fn delta_to_sse_frames_error() {
 #[test]
 fn stream_ai_response_writes_headers_and_deltas() {
     let req = AiStreamRequest {
+        hosted_route_id: None,
+        history: Vec::new(),
+        attachments: Vec::new(),
         provider: None,
         builtin_provider_id: None,
         model: "m".into(),
@@ -233,6 +236,9 @@ fn stream_ai_response_writes_headers_and_deltas() {
 #[test]
 fn stream_ai_response_forwards_requested_model_to_provider() {
     let req = AiStreamRequest {
+        hosted_route_id: None,
+        history: Vec::new(),
+        attachments: Vec::new(),
         provider: None,
         builtin_provider_id: None,
         model: "claude-sonnet-4-6".into(),
@@ -262,6 +268,9 @@ fn stream_ai_response_stops_after_error() {
     // An Error delta is terminal — nothing written after it even if
     // the script has trailing deltas.
     let req = AiStreamRequest {
+        hosted_route_id: None,
+        history: Vec::new(),
+        attachments: Vec::new(),
         provider: None,
         builtin_provider_id: None,
         model: "m".into(),

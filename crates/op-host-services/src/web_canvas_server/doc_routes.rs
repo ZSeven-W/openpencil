@@ -119,17 +119,23 @@ pub(super) fn preserve_web_canvas_preferences(previous: &EditorState, next: &mut
     next.editor_ui.agent_settings = previous.editor_ui.agent_settings.clone();
     next.editor_ui.chat_selected_agent = previous.editor_ui.chat_selected_agent;
     next.chat.discovered_models = previous.chat.discovered_models.clone();
+    let _ = next.replace_hosted_model_catalog(previous.editor_ui.hosted_model_routes().to_vec());
     next.rebuild_chat_models();
     if let Some(prev) = previous_selected_model {
         if let Some(idx) = next.chat.available_models.iter().position(|m| {
             m.provider == prev.provider
                 && m.value == prev.value
                 && m.builtin_provider_id == prev.builtin_provider_id
+                && m.hosted_route_id() == prev.hosted_route_id()
         }) {
             next.select_chat_model(idx);
         }
     }
 }
+
+#[cfg(test)]
+#[path = "doc_routes_hosted_tests.rs"]
+mod hosted_tests;
 
 pub(super) fn set_file_name_display(state: &mut EditorState, path: &std::path::Path) {
     state.editor_ui.file_name_display = path.file_name().map(|n| n.to_string_lossy().into_owned());

@@ -42,6 +42,8 @@ mod clean_copy;
 #[cfg(test)]
 mod editor_meta_roundtrip_tests;
 mod error;
+#[cfg(test)]
+mod hosted_catalog_tests;
 mod load;
 mod load_report;
 #[cfg(test)]
@@ -250,6 +252,8 @@ pub fn set_file_name_display(state: &mut EditorState, path: Option<&std::path::P
 pub fn preserve_app_preferences(previous: &EditorState, next: &mut EditorState) {
     let previous_selected_model = previous.chat.selected_model_entry().cloned();
     next.editor_ui.theme_mode = previous.editor_ui.theme_mode;
+    next.editor_ui.account_ui_available = previous.editor_ui.account_ui_available;
+    next.editor_ui.account = previous.editor_ui.account.clone();
     next.editor_ui.locale = previous.editor_ui.locale;
     next.editor_ui.entry_surface = previous.editor_ui.entry_surface;
     next.editor_ui.recent_files = previous.editor_ui.recent_files.clone();
@@ -290,12 +294,14 @@ pub fn preserve_app_preferences(previous: &EditorState, next: &mut EditorState) 
     next.editor_ui.agent_settings = previous.editor_ui.agent_settings.clone();
     next.editor_ui.chat_selected_agent = previous.editor_ui.chat_selected_agent;
     next.chat.discovered_models = previous.chat.discovered_models.clone();
+    let _ = next.replace_hosted_model_catalog(previous.editor_ui.hosted_model_routes().to_vec());
     next.rebuild_chat_models();
     if let Some(prev) = previous_selected_model {
         if let Some(idx) = next.chat.available_models.iter().position(|m| {
             m.provider == prev.provider
                 && m.value == prev.value
                 && m.builtin_provider_id == prev.builtin_provider_id
+                && m.hosted_route_id() == prev.hosted_route_id()
         }) {
             next.select_chat_model(idx);
         }

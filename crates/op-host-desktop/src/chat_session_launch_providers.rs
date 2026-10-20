@@ -86,6 +86,11 @@ fn provider_for_selected_model_impl(
     chat_session: bool,
 ) -> Option<Box<dyn ChatProvider>> {
     if let Some(entry) = host.editor_state().chat.selected_model_entry() {
+        if entry.hosted_route_id().is_some() {
+            return provider_for_hosted_selection_with(host.editor_state(), entry, |route_id| {
+                op_host_services::hosted_models::provider_for_route(route_id).ok()
+            });
+        }
         if entry.builtin_provider_id.is_some() {
             return provider_for_builtin(host.editor_state(), entry);
         }
@@ -97,6 +102,22 @@ fn provider_for_selected_model_impl(
         host.editor_state().editor_ui.chat_selected_agent,
         chat_session,
     )
+}
+
+/// Require the complete current catalog row before resolving its opaque route.
+/// Hosted metadata is never interpreted as a local agent or BYOK configuration.
+pub(super) fn provider_for_hosted_selection_with(
+    state: &EditorState,
+    entry: &ModelEntry,
+    resolve: impl FnOnce(&str) -> Option<Box<dyn ChatProvider>>,
+) -> Option<Box<dyn ChatProvider>> {
+    let route = entry.hosted.as_ref()?;
+    if !state.editor_ui.account.is_signed_in()
+        || !state.editor_ui.hosted_model_routes().contains(route)
+    {
+        return None;
+    }
+    resolve(route.route_id())
 }
 
 /// When the selected chat model is a ready builtin (API-key) entry,
@@ -140,7 +161,10 @@ pub(crate) fn builtin_provider_with_tools(
 pub(crate) fn selected_cli_model_id(host: &WidgetHostNative) -> Option<String> {
     let state = host.editor_state();
     let entry = state.chat.selected_model_entry()?;
-    if entry.builtin_provider_id.is_some() || entry.acp_agent_id().is_some() {
+    if entry.hosted_route_id().is_some()
+        || entry.builtin_provider_id.is_some()
+        || entry.acp_agent_id().is_some()
+    {
         return None;
     }
     let routed = op_editor_core::AgentProvider::ALL.get(state.editor_ui.chat_selected_agent)?;
@@ -219,6 +243,9 @@ fn acp_config_for_provider(agent: &op_editor_core::AcpAgentConfig) -> op_acp::Ac
 
 pub(super) fn selected_provider_label(host: &WidgetHostNative) -> String {
     if let Some(entry) = host.editor_state().chat.selected_model_entry() {
+        if entry.hosted_route_id().is_some() {
+            return "OpenPencil Hosted".into();
+        }
         if let Some(id) = entry.builtin_provider_id.as_deref() {
             if let Some(agent) = host
                 .editor_state()

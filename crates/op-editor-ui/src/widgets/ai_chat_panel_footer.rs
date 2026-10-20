@@ -400,9 +400,9 @@ pub(crate) fn paint_bottom_toolbar(
                 chip_color,
             )
         }
-        Some(entry) => crate::widgets::ai_chat_model_picker::paint_provider_logo(
+        Some(entry) => crate::widgets::ai_chat_model_picker::paint_model_logo(
             cx,
-            entry.provider,
+            entry,
             Point2D::new(logo_x, logo_y),
             14.0,
             chip_color,

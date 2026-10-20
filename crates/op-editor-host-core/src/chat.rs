@@ -241,6 +241,7 @@ pub struct ChatSession {
     is_design_loop: bool,
     loop_finalized: bool,
     viewport_fitted: bool,
+    hosted_session_epoch: Option<u64>,
 }
 
 /// Result of a single non-blocking [`ChatSession::poll`].
@@ -493,6 +494,7 @@ impl ChatSession {
         req: ChatRequest,
         tool_rx: Option<Receiver<ChatToolRequest>>,
     ) -> Self {
+        let hosted_session_epoch = provider.hosted_session_epoch();
         let (tx, rx) = mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
         let worker_cancel = Arc::clone(&cancel);
@@ -515,6 +517,7 @@ impl ChatSession {
             is_design_loop: false,
             loop_finalized: false,
             viewport_fitted: false,
+            hosted_session_epoch,
         }
     }
 
@@ -529,6 +532,15 @@ impl ChatSession {
     /// True when this turn is a design-agent loop.
     pub fn is_design_loop(&self) -> bool {
         self.is_design_loop
+    }
+
+    pub fn with_hosted_session_epoch(mut self, epoch: Option<u64>) -> Self {
+        self.hosted_session_epoch = epoch;
+        self
+    }
+
+    pub fn hosted_session_epoch(&self) -> Option<u64> {
+        self.hosted_session_epoch
     }
 
     /// Record that the loop's structural finalize pass ran for this turn.
@@ -590,6 +602,7 @@ impl ChatSession {
             is_design_loop: false,
             loop_finalized: false,
             viewport_fitted: false,
+            hosted_session_epoch: None,
         }
     }
 

@@ -316,6 +316,11 @@ impl ChatRequest {
 /// `HttpServerProvider` / `AcpProvider` each own their transport.
 /// shell-core only carries the trait + the test double.
 pub trait ChatProvider: Send + Sync {
+    /// Account epoch for Hosted transports; account-independent providers use `None`.
+    fn hosted_session_epoch(&self) -> Option<u64> {
+        None
+    }
+
     fn provider_label(&self) -> &str;
     fn send(&self, request: ChatRequest) -> Box<dyn Iterator<Item = ChatDelta> + Send>;
 

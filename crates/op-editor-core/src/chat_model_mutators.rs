@@ -9,7 +9,9 @@ impl EditorState {
         let update = self.chat.available_models.get(idx).map(|entry| {
             (
                 entry.provider,
-                entry.builtin_provider_id.is_none() && entry.acp_agent_id().is_none(),
+                entry.builtin_provider_id.is_none()
+                    && entry.acp_agent_id().is_none()
+                    && entry.hosted.is_none(),
             )
         });
         if let Some((provider, use_native_agent)) = update {
@@ -26,15 +28,16 @@ impl EditorState {
         self.editor_ui.close_chat_model_picker();
     }
 
-    /// Recompute the active chat tab's selectable catalog. Every ready
+    /// Recompute every chat tab's selectable catalog. Every ready
     /// built-in contributes only its explicitly saved models. Runtime provider
     /// discovery is deliberately confined to provider settings.
     pub fn rebuild_chat_models(&mut self) {
-        let previous = self
-            .chat
-            .available_models
-            .get(self.chat.selected_model)
-            .cloned();
+        if !self.editor_ui.account.is_signed_in()
+            && !self.editor_ui.hosted_model_routes().is_empty()
+        {
+            self.clear_hosted_model_catalog();
+            return;
+        }
         // Platforms that cannot spawn subprocess CLIs (mobile shells) keep
         // every external-CLI model out of the catalog; built-in API-key
         // providers below are unaffected.
@@ -43,9 +46,7 @@ impl EditorState {
         } else {
             [false; 7]
         };
-        self.chat.rebuild_available_models(&connected);
-
-        let builtin_entries = self
+        let mut runtime_entries = self
             .editor_ui
             .agent_settings
             .builtin_agents
@@ -63,43 +64,59 @@ impl EditorState {
                 })
             })
             .collect::<Vec<_>>();
-        self.chat.available_models.extend(builtin_entries);
-
         let settings = &self.editor_ui.agent_settings;
-        self.chat.available_models.extend(
+        runtime_entries.extend(
             settings
                 .acp_agents
                 .iter()
                 .filter(|agent| agent.ready() && settings.acp_agent_verified_connected(&agent.id))
                 .map(|agent| crate::ModelEntry::acp(agent.id.clone(), agent.display_name.clone())),
         );
-        if let Some(previous) = previous {
-            let index = self
-                .chat
-                .available_models
-                .iter()
-                .position(|entry| {
-                    entry.provider == previous.provider
-                        && entry.value == previous.value
-                        && entry.builtin_provider_id == previous.builtin_provider_id
-                })
-                .or_else(|| {
-                    // Editing the selected provider's saved models may remove
-                    // the old model. Keep that provider selected using its
-                    // first saved model instead of switching to an unrelated
-                    // provider at index zero.
-                    let id = previous.builtin_provider_id.as_deref()?;
-                    self.chat
-                        .available_models
-                        .iter()
-                        .position(|entry| entry.builtin_provider_id.as_deref() == Some(id))
-                });
-            if let Some(index) = index {
-                self.chat.selected_model = index;
+        if self.editor_ui.account.is_signed_in() {
+            runtime_entries.extend(
+                self.editor_ui
+                    .hosted_model_routes()
+                    .iter()
+                    .cloned()
+                    .map(crate::ModelEntry::hosted),
+            );
+        }
+        // Catalogs are shared runtime state, while every tab retains its own
+        // selection. Remove stale Hosted identities from background tabs too.
+        for tab in self.chat.tabs_mut() {
+            let previous = tab.selected_model_entry().cloned();
+            tab.rebuild_available_models(&connected);
+            tab.available_models.extend(runtime_entries.iter().cloned());
+            if let Some(previous) = previous {
+                let index = tab
+                    .available_models
+                    .iter()
+                    .position(|entry| {
+                        entry.provider == previous.provider
+                            && entry.value == previous.value
+                            && entry.builtin_provider_id == previous.builtin_provider_id
+                            && entry.hosted == previous.hosted
+                    })
+                    .or_else(|| {
+                        // Editing the selected provider's saved models may remove
+                        // the old model. Keep that provider selected using its
+                        // first saved model instead of switching to an unrelated
+                        // provider at index zero.
+                        let id = previous.builtin_provider_id.as_deref()?;
+                        tab.available_models
+                            .iter()
+                            .position(|entry| entry.builtin_provider_id.as_deref() == Some(id))
+                    });
+                if let Some(index) = index {
+                    tab.selected_model = index;
+                }
             }
         }
         if let Some(entry) = self.chat.selected_model_entry() {
-            if entry.builtin_provider_id.is_none() && entry.acp_agent_id().is_none() {
+            if entry.builtin_provider_id.is_none()
+                && entry.acp_agent_id().is_none()
+                && entry.hosted.is_none()
+            {
                 if let Some(index) = crate::AgentProvider::ALL
                     .iter()
                     .position(|candidate| *candidate == entry.provider)
