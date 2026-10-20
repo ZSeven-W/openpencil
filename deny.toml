@@ -60,6 +60,25 @@ ignore = [
   # zbus_xml bump their quick-xml requirement to >= 0.41.
   "RUSTSEC-2026-0194",
   "RUSTSEC-2026-0195",
+  # zvariant 4/5 is unmaintained, with no patched standalone release. Linux
+  # paths: rfd -> ashpd and keyring -> secret-service require zbus 4;
+  # accesskit_unix -> atspi requires zbus 5 and zvariant 5 directly.
+  # zbus 6 absorbs the wire types, but these upstream major constraints
+  # prevent a lockfile-only migration. Recheck by 2027-01-20, or sooner when
+  # ashpd, keyring/secret-service and accesskit/atspi support zbus 6.
+  "RUSTSEC-2026-0370",
+  # zbus_names 3/4 is unmaintained and has no patched standalone release.
+  # It comes through the same Linux rfd/ashpd, keyring/secret-service and
+  # accesskit/atspi -> zbus 4/5 chains. zbus 6 merges it into `names`, but
+  # the upstream constraints above exclude 6. Recheck by 2027-01-20, or
+  # when those consumers adopt zbus 6.
+  "RUSTSEC-2026-0371",
+  # zvariant_derive 4/5 is the unmaintained derive dependency of zvariant
+  # in the Linux chains above; atspi also uses zbus_xml/zbus-lockstep with
+  # zvariant 5. No patched standalone version exists; replacing zbus alone
+  # cannot remove these direct requirements. Recheck by 2027-01-20, or
+  # when ashpd, keyring/secret-service and accesskit/atspi adopt zbus 6.
+  "RUSTSEC-2026-0372",
 ]
 
 [bans]
