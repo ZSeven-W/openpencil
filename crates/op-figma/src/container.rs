@@ -95,7 +95,7 @@ fn decompress_chunk(bytes: &[u8]) -> Vec<u8> {
 }
 
 fn zstd_decompress(bytes: &[u8]) -> Option<Vec<u8>> {
-    let mut decoder = ruzstd::StreamingDecoder::new(bytes).ok()?;
+    let mut decoder = ruzstd::decoding::StreamingDecoder::new(bytes).ok()?;
     let mut out = Vec::new();
     decoder
         .by_ref()
@@ -194,13 +194,33 @@ mod tests {
 
     #[test]
     fn deflate_chunk_round_trips() {
-        // Chunks are deflate-compressed here (no zstd encoder in the
-        // dev-deps); the zstd decode path is covered by `ruzstd`'s own
-        // test suite and the magic-detection branch in decompress_chunk.
         let fig = make_fig_container(&[b"only-one"]);
         let result = fig_to_binary_parts(&fig).expect("parses");
         assert_eq!(result.parts.len(), 1);
         assert_eq!(result.parts[0], b"only-one");
+    }
+
+    #[test]
+    fn zstd_chunk_round_trips() {
+        // Single-segment Zstandard frames containing a raw block and an RLE
+        // block. Keep the decoder path covered without a native encoder dep.
+        let frames: &[(&[u8], &[u8])] = &[
+            (b"\x28\xb5\x2f\xfd\x20\x05\x29\x00\x00hello", b"hello"),
+            (b"\x28\xb5\x2f\xfd\x20\x05\x2b\x00\x00a", b"aaaaa"),
+        ];
+        for (frame, expected) in frames {
+            let mut fig = FIG_KIWI_MAGIC.to_vec();
+            fig.extend_from_slice(&[0; 4]);
+            fig.extend_from_slice(&(frame.len() as u32).to_le_bytes());
+            fig.extend_from_slice(frame);
+            let result = fig_to_binary_parts(&fig).expect("zstd container parses");
+            assert_eq!(result.parts, vec![expected.to_vec()]);
+        }
+    }
+
+    #[test]
+    fn rejects_truncated_zstd_chunk() {
+        assert!(zstd_decompress(b"\x28\xb5\x2f\xfd\x20\x05\x29\x00\x00he").is_none());
     }
 
     #[test]
