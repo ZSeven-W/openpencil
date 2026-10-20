@@ -133,9 +133,8 @@ fn intrinsic_groups_preserve_fitting_wide_rows_scrollers_and_tables() {
     }
 }
 
-#[test]
-fn direct_name_and_status_reflow_before_badge_clip_with_actions_preserved() {
-    let v = json!({"type":"frame","id":"root","width":303,"height":"fit_content","layout":"horizontal","gap":12,
+fn name_and_status_fixture(width: f64) -> Value {
+    json!({"type":"frame","id":"root","width":width,"height":"fit_content","layout":"horizontal","gap":12,
       "children":[
         {"type":"frame","id":"avatar","name":"avatar","width":48,"height":48,"layout":"horizontal","alignItems":"center","justifyContent":"center","cornerRadius":24,"fill":[{"type":"solid","color":"#2A3B55"}],"children":[{"type":"icon_font","id":"avatar-icon","width":22,"height":22,"iconFontName":"user"}]},
         {"type":"frame","id":"info","width":"fill_container","height":"fit_content","layout":"vertical","children":[
@@ -146,9 +145,27 @@ fn direct_name_and_status_reflow_before_badge_clip_with_actions_preserved() {
               {"type":"text","id":"status","name":"status","content":"正在为您配送","fontSize":11,"width":"fit_content"}]}]}]},
         {"type":"frame","id":"actions","name":"actions","width":"fit_content","height":"fit_content","layout":"horizontal","gap":10,"children":[
           {"type":"frame","id":"call","name":"call","width":44,"height":44,"layout":"horizontal","alignItems":"center","justifyContent":"center","cornerRadius":22,"fill":[{"type":"solid","color":"#F97316"}],"children":[{"type":"icon_font","id":"phone","width":18,"height":18,"iconFontName":"phone"}]},
-          {"type":"frame","id":"message","name":"message","width":44,"height":44,"layout":"horizontal","alignItems":"center","justifyContent":"center","cornerRadius":22,"fill":[{"type":"solid","color":"#1A2A42"}],"children":[{"type":"icon_font","id":"message-icon","width":18,"height":18,"iconFontName":"message-circle"}]}]}]});
-    let (mut sink, id) = sink(v);
+          {"type":"frame","id":"message","name":"message","width":44,"height":44,"layout":"horizontal","alignItems":"center","justifyContent":"center","cornerRadius":22,"fill":[{"type":"solid","color":"#1A2A42"}],"children":[{"type":"icon_font","id":"message-icon","width":18,"height":18,"iconFontName":"message-circle"}]}]}]})
+}
+
+#[test]
+fn direct_name_and_status_reflow_before_badge_clip_with_actions_preserved() {
+    // Reserve 93px for the header: each child fits alone, but even the
+    // estimate backend's 28px name + 64px badge + 8px gap must overflow.
+    let (mut sink, id) = sink(name_and_status_fixture(263.0));
     repair_card_inner_padding(&mut sink, &id);
+    let before = doc(&sink);
+    let before_rects = resolved_rects(sink.state());
+    let row = by_name(&before, "name-line");
+    let inner = bounds(row, &before_rects).w - horizontal_padding(row);
+    let name_width = bounds(by_name(&before, "name"), &before_rects).w;
+    let badge_width = bounds(by_name(&before, "badge"), &before_rects).w;
+    assert_eq!(inner, 93.0);
+    assert!(name_width <= inner && badge_width <= inner);
+    assert!(
+        name_width + num(row, "gap") + badge_width > inner + OVERFLOW_EPS,
+        "fixture must be crowded with either text backend: {name_width} + {badge_width} in {inner}"
+    );
     geometry_validate_and_fix(&mut sink, &id);
     let v = doc(&sink);
     let rects = resolved_rects(sink.state());
@@ -170,4 +187,30 @@ fn direct_name_and_status_reflow_before_badge_clip_with_actions_preserved() {
     }
     assert_eq!(bounds(by_name(&v, "call"), &rects).w, 44.0);
     assert_eq!(bounds(by_name(&v, "actions"), &rects).w, 98.0);
+}
+
+#[test]
+fn direct_name_and_status_preserve_fitting_rows() {
+    let (mut sink, id) = sink(name_and_status_fixture(360.0));
+    repair_card_inner_padding(&mut sink, &id);
+    let before = doc(&sink);
+    let rects = resolved_rects(sink.state());
+    let row = by_name(&before, "name-line");
+    let required = bounds(by_name(&before, "name"), &rects).w
+        + num(row, "gap")
+        + bounds(by_name(&before, "badge"), &rects).w;
+    assert!(required <= bounds(row, &rects).w - horizontal_padding(row));
+
+    geometry_validate_and_fix(&mut sink, &id);
+    let after = doc(&sink);
+    assert_eq!(layout_str(by_name(&after, "name-line")), Some("horizontal"));
+    assert_eq!(layout_str(by_name(&after, "badge")), Some("horizontal"));
+    assert_ne!(
+        by_name(&after, "badge").get("clipContent"),
+        Some(&json!(true))
+    );
+    assert_eq!(
+        bounds(by_name(&after, "actions"), &resolved_rects(sink.state())).w,
+        98.0
+    );
 }
