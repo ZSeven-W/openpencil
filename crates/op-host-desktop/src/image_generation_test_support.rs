@@ -24,6 +24,8 @@ pub(crate) fn capture_provider() -> (ImageGenProfile, Receiver<serde_json::Value
                 Err(error) => panic!("provider accept: {error}"),
             }
         };
+        // Windows sockets inherit the listener's non-blocking mode on accept.
+        stream.set_nonblocking(false).unwrap();
         stream
             .set_read_timeout(Some(Duration::from_secs(10)))
             .unwrap();
