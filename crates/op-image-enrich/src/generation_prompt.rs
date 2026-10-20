@@ -17,5 +17,5 @@ pub fn compose_generation_prompt(target: &ImageSearchTarget) -> String {
     let prompt = authored_prompt
         .or(target.generation_subject.as_deref())
         .unwrap_or(&target.query);
-    format!("{prompt}. Context: this image appears in {context}. Match the page's subject and art direction.")
+    format!("{prompt}. Context: this image appears in {context}. Match the page's subject and art direction. Use this context only for subject and mood; do not write its words into the image.")
 }

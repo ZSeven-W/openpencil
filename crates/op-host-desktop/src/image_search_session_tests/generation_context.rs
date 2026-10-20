@@ -78,7 +78,7 @@ fn velra_generation_sends_derived_subject_but_keeps_authored_prompt() {
         assert_eq!(target.query, "velra-image");
         target.prompt = authored.map(str::to_string);
         let subject = authored.unwrap_or("Velra Type — Typeface microsite");
-        let expected = format!("{subject}. Context: this image appears in Studio Portfolio — Landing > card-velra > velra-image-frame > Velra Type — Typeface microsite. Match the page's subject and art direction.");
+        let expected = format!("{subject}. Context: this image appears in Studio Portfolio — Landing > card-velra > velra-image-frame > Velra Type — Typeface microsite. Match the page's subject and art direction. Use this context only for subject and mood; do not write its words into the image.");
         let (profile, request) = capture_provider();
         let job = spawn_gen_job(target, profile, None);
         let body = request.recv_timeout(Duration::from_secs(10)).unwrap();

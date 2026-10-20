@@ -73,7 +73,7 @@ fn portfolio_context_has_screen_section_and_nearest_card_title() {
     assert_eq!(target.query, "Velra Type");
     assert_eq!(target.prompt.as_deref(), Some("Velra Type"));
     let prompt = compose_generation_prompt(&target);
-    assert_eq!(prompt, "Velra Type. Context: this image appears in Studio Landing > Selected Work > Velra Type — Typography project > Brand Design Portfolio. Match the page's subject and art direction.");
+    assert_eq!(prompt, "Velra Type. Context: this image appears in Studio Landing > Selected Work > Velra Type — Typography project > Brand Design Portfolio. Match the page's subject and art direction. Use this context only for subject and mood; do not write its words into the image.");
     assert!(!prompt.contains("Frame 12"));
     assert!(!prompt.contains("Group"));
     assert!(!prompt.contains("09:41"));
@@ -386,7 +386,7 @@ fn velra_name_fallback_uses_title_and_auxiliary_as_generation_subject() {
         target.generation_subject.as_deref(),
         Some("Velra Type — Typeface microsite")
     );
-    let expected = "Velra Type — Typeface microsite. Context: this image appears in Studio Portfolio — Landing > card-velra > velra-image-frame > Velra Type — Typeface microsite. Match the page's subject and art direction.";
+    let expected = "Velra Type — Typeface microsite. Context: this image appears in Studio Portfolio — Landing > card-velra > velra-image-frame > Velra Type — Typeface microsite. Match the page's subject and art direction. Use this context only for subject and mood; do not write its words into the image.";
     assert_eq!(compose_generation_prompt(&target), expected);
     println!("Velra 1021: {expected}");
     assert!(!expected.contains("2024"));
