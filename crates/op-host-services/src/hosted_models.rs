@@ -335,6 +335,7 @@ fn now_unix() -> u64 {
 
 fn client() -> Result<reqwest::Client, HostedRuntimeError> {
     reqwest::Client::builder()
+        .use_rustls_tls()
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(120))
