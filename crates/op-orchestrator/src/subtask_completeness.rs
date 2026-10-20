@@ -2,6 +2,7 @@
 
 use crate::plan::Subtask;
 use crate::types::{DocSink, SubtaskOutcome};
+use grid::grid_dimensions;
 use jian_ops_schema::node::container::LayoutMode;
 use jian_ops_schema::node::PenNode;
 use op_design_lint::node_util::is_node_visible;
@@ -391,27 +392,6 @@ fn is_item_node(node: &PenNode) -> bool {
     )
 }
 
-fn grid_dimensions(text: &str) -> Option<(usize, usize)> {
-    if text.contains("九宫格") {
-        return Some((3, 3));
-    }
-    if !text.to_ascii_lowercase().contains("grid") && !text.contains("网格") {
-        return None;
-    }
-    static GRID: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)(\d[\d,]*)\s*[x×]\s*(\d[\d,]*)").expect("valid grid-count pattern")
-    });
-    GRID.captures_iter(text)
-        .filter_map(|c| {
-            Some((
-                parse_count(c.get(1)?.as_str())?,
-                parse_count(c.get(2)?.as_str())?,
-            ))
-        })
-        .filter(|&(r, c)| (1..=50).contains(&r) && (1..=50).contains(&c))
-        .max_by_key(|&(r, c)| r * c)
-}
-
 /// Grid cells may be grouped by rows or columns. Sum cells only for the
 /// explicitly promised shape; list metadata must not multiply the item count.
 fn delivered_grid_cells(node: &PenNode, rows: usize, columns: usize) -> usize {
@@ -768,3 +748,10 @@ mod semantic_items;
 #[cfg(test)]
 #[path = "subtask_completeness_regression_tests.rs"]
 mod regression_tests;
+
+#[path = "subtask_completeness_grid.rs"]
+mod grid;
+
+#[cfg(test)]
+#[path = "subtask_completeness_grid_tests.rs"]
+mod grid_tests;
