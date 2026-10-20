@@ -3,6 +3,7 @@
 //! Split out of the `editor_ui_state` spine (800-line file ceiling).
 
 use super::*;
+use crate::tool::Tool;
 
 #[test]
 fn default_editor_ui_is_quiescent() {

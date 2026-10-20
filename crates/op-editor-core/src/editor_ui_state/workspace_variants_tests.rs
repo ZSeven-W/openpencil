@@ -1,7 +1,7 @@
 //! Tests for side-by-side design directions on the workspace.
 
 use super::*;
-use crate::{HomeFamily, LaunchRoute, TaskDraft, WorkspacePhase, WorkspaceView};
+use crate::{HomeFamily, LaunchRoute, NodeId, TaskDraft, WorkspacePhase, WorkspaceView};
 use jian_ops_schema::node::PenNode;
 use serde_json::json;
 
