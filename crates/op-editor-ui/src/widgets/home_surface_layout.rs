@@ -576,11 +576,10 @@ pub(crate) fn wide_layout_for_scrolled(
     );
 
     // ── explore + recent ───────────────────────────────────────────
-    // The panel rects are already scroll-translated; the rows below add
-    // the scroll themselves, so the bottom is taken back to page space
-    // (adding it twice slid explore + recent up over the panels).
+    // Everything below derives from the already scroll-translated
+    // panel rects; applying `scroll` again would collapse the section gaps.
     let panels_bottom =
-        (preview.origin.y + preview.size.y).max(composer.origin.y + composer.size.y) - scroll;
+        (preview.origin.y + preview.size.y).max(composer.origin.y + composer.size.y);
     let explore_card_h = if stacked {
         EXPLORE_CARD_H_STACKED
     } else if width <= EXPLORE_NARROW_MAX_W {
@@ -596,20 +595,20 @@ pub(crate) fn wide_layout_for_scrolled(
         } else {
             EXPLORE_TOP_GAP
         };
-    let explore_heading = Rect::xywh(content_x, explore_y + scroll, content_w, EXPLORE_HEADING_H);
+    let explore_heading = Rect::xywh(content_x, explore_y, content_w, EXPLORE_HEADING_H);
     let cards_y = explore_y + EXPLORE_HEADING_H + EXPLORE_HEADING_GAP;
     let card_w = ((content_w - EXPLORE_CARD_GAP * 2.0) / 3.0).max(120.0);
     let explore_cards = [
-        Rect::xywh(content_x, cards_y + scroll, card_w, explore_card_h),
+        Rect::xywh(content_x, cards_y, card_w, explore_card_h),
         Rect::xywh(
             content_x + card_w + EXPLORE_CARD_GAP,
-            cards_y + scroll,
+            cards_y,
             card_w,
             explore_card_h,
         ),
         Rect::xywh(
             content_x + (card_w + EXPLORE_CARD_GAP) * 2.0,
-            cards_y + scroll,
+            cards_y,
             card_w,
             explore_card_h,
         ),
@@ -623,8 +622,7 @@ pub(crate) fn wide_layout_for_scrolled(
             } else {
                 RECENT_TOP_GAP
             }
-            + RECENT_PAD_TOP
-            + scroll,
+            + RECENT_PAD_TOP,
         content_w,
         RECENT_H,
     );

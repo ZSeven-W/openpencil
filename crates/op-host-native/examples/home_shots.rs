@@ -1,8 +1,10 @@
 //! Offscreen Studio Home screenshots through the production paint path.
 //!
-//! Renders the Home surface at the two reference viewports into raster
-//! surfaces and writes PNGs, so the design can be compared against the
-//! approved prototype captures without opening a window. Multi-frame
+//! Renders the Home surface at the two reference viewports, plus top,
+//! mid-scroll, and bottom captures at short desktop and stacked viewports.
+//! Includes the compact phone composition and both light and dark themes.
+//! Writes PNGs so the design can be compared against the approved
+//! prototype captures without opening a window. Multi-frame
 //! painting lets the lazy image decodes (brand mark, template previews)
 //! resolve before the capture frame.
 //!
@@ -11,16 +13,23 @@
 //! cargo run -p op-host-native --features gl-host --example home_shots -- <out_dir>
 //! ```
 
+use op_editor_ui::widgets::home_surface::{model_chip_label, model_chip_width, HomeSurface};
 use op_host_native::backend::{NativeBackend, NativeFrameBackend};
 use op_host_native::widget_host::WidgetHostNative;
 
-/// `(width, height, name, compact)` — `compact` is the phone
-/// composition (touch chrome + Compact size class), the same predicate
-/// `EditorUiState::compact_layout()` gates the layout branch on.
-const VIEWPORTS: [(f32, f32, &str, bool); 3] = [
-    (1440.0, 900.0, "home-1440x900", false),
-    (1180.0, 820.0, "home-1180x820", false),
-    (390.0, 844.0, "home-390x844-phone", true),
+/// `(width, height, name, compact, scroll_fraction)` — `compact` is the
+/// phone composition (touch chrome + Compact size class), the same
+/// predicate `EditorUiState::compact_layout()` gates the layout branch on.
+const VIEWPORTS: [(f32, f32, &str, bool, f32); 9] = [
+    (1440.0, 900.0, "home-1440x900", false, 0.0),
+    (1180.0, 820.0, "home-1180x820", false, 0.0),
+    (1180.0, 620.0, "home-1180x620-top", false, 0.0),
+    (1180.0, 620.0, "home-1180x620-mid", false, 0.5),
+    (1180.0, 620.0, "home-1180x620-bottom", false, 1.0),
+    (840.0, 900.0, "home-840x900-top", false, 0.0),
+    (840.0, 900.0, "home-840x900-mid", false, 0.5),
+    (840.0, 900.0, "home-840x900-bottom", false, 1.0),
+    (390.0, 844.0, "home-390x844-phone", true, 0.0),
 ];
 
 /// Both themes, so the pair can be compared at the same viewport.
@@ -34,14 +43,14 @@ fn main() {
         .nth(1)
         .unwrap_or_else(|| "/tmp/home-shots".into());
     std::fs::create_dir_all(&out_dir).expect("create out dir");
-    for ((w, h, base_name, compact), (theme, theme_name)) in VIEWPORTS
+    for ((w, h, base_name, compact, scroll_fraction), (theme, theme_name)) in VIEWPORTS
         .into_iter()
         .flat_map(|vp| THEMES.into_iter().map(move |t| (vp, t)))
     {
         let name: &str = &format!("{base_name}-{theme_name}");
         let mut host = WidgetHostNative::new();
-        // The approved prototype capture's state: light theme, a usable
-        // chat model selected (the primary button reads 开始设计).
+        // The approved prototype capture's state, with a usable chat
+        // model selected in each theme.
         host.editor_state_mut().editor_ui.theme_mode = theme;
         host.editor_state_mut().editor_ui.home.visible = true;
         if compact {
@@ -65,6 +74,13 @@ fn main() {
             "GLM 5.3 Flash",
         )];
         host.editor_state_mut().chat.selected_model = 0;
+        let max_scroll = HomeSurface::max_scroll_for(
+            w,
+            h,
+            host.editor_state().editor_ui.home.task,
+            model_chip_width(&model_chip_label(host.editor_state())),
+        );
+        host.editor_state_mut().editor_ui.home.scroll_y = max_scroll * scroll_fraction;
         host.set_now_ms(1_000);
         let mut backend = NativeBackend::with_dpi(2.0);
         let mut surface = skia_safe::surfaces::raster_n32_premul((w as i32, h as i32))
@@ -133,7 +149,7 @@ fn main() {
             write_png(
                 &surface.image_snapshot(),
                 &out_dir,
-                "home-390x844-professional",
+                &format!("home-390x844-professional-{theme_name}"),
             );
         }
     }

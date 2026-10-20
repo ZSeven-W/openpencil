@@ -292,7 +292,76 @@ fn the_stack_reports_scroll_when_the_viewport_is_short() {
     // The top bar rect is pinned; the recent row scrolls up.
     assert_eq!(scrolled.open_file, unscrolled.open_file);
     assert!(scrolled.recent.origin.y < unscrolled.recent.origin.y);
-    assert!(scrolled.recent.origin.y + scrolled.recent.size.y <= 620.0);
+    assert_close(
+        scrolled.recent.origin.y + scrolled.recent.size.y,
+        600.0,
+        0.01,
+    );
+}
+
+#[test]
+fn scrolling_preserves_section_spacing_and_sizes_across_viewports() {
+    for (width, height) in [
+        (1440.0, 1000.0),
+        (1440.0, 900.0),
+        (1180.0, 620.0),
+        (840.0, 900.0),
+        (700.0, 900.0),
+    ] {
+        for task in HomeFamily::ALL {
+            let unscrolled = layout(width, height, task);
+            let max_scroll = HomeSurface::max_scroll_for(width, height, task, CHIP_W);
+            // Cover both directions as well as the bottom boundary.
+            for scroll in [max_scroll * 0.5, max_scroll, max_scroll * 0.25, 0.0] {
+                let scrolled =
+                    HomeSurface::layout_for_scrolled(width, height, task, scroll, CHIP_W);
+                assert_eq!(scrolled.account, unscrolled.account);
+                assert_eq!(scrolled.open_file, unscrolled.open_file);
+                assert_eq!(scrolled.professional, unscrolled.professional);
+                for (before, after) in [
+                    (unscrolled.welcome, scrolled.welcome),
+                    (unscrolled.welcome_sub, scrolled.welcome_sub),
+                    (unscrolled.tabs_row, scrolled.tabs_row),
+                    (unscrolled.composer, scrolled.composer),
+                    (unscrolled.preview, scrolled.preview),
+                    (unscrolled.model_chip, scrolled.model_chip),
+                    (unscrolled.send, scrolled.send),
+                    (unscrolled.use_example, scrolled.use_example),
+                    (unscrolled.explore_heading, scrolled.explore_heading),
+                    (unscrolled.recent, scrolled.recent),
+                    (unscrolled.new_canvas, scrolled.new_canvas),
+                ]
+                .into_iter()
+                .chain(
+                    unscrolled
+                        .explore_cards
+                        .into_iter()
+                        .zip(scrolled.explore_cards),
+                )
+                .chain(
+                    unscrolled
+                        .recent_chips
+                        .into_iter()
+                        .zip(scrolled.recent_chips),
+                ) {
+                    assert_eq!(after.size, before.size);
+                    assert_close(after.origin.x, before.origin.x, 0.01);
+                    assert_close(after.origin.y, before.origin.y - scroll, 0.01);
+                }
+                let panels_bottom = (scrolled.composer.origin.y + scrolled.composer.size.y)
+                    .max(scrolled.preview.origin.y + scrolled.preview.size.y);
+                assert!(scrolled.explore_heading.origin.y > panels_bottom);
+                assert!(
+                    scrolled.explore_cards[0].origin.y
+                        > scrolled.explore_heading.origin.y + scrolled.explore_heading.size.y
+                );
+                assert!(
+                    scrolled.recent.origin.y
+                        > scrolled.explore_cards[0].origin.y + scrolled.explore_cards[0].size.y
+                );
+            }
+        }
+    }
 }
 
 /// Home is where a first-run user lands, so the account entry has to be
