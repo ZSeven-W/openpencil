@@ -1,5 +1,6 @@
-//! Explicit icon buttons and label badges need content before reaching canvas.
-//! Run after orphan adoption, so a recoverable sibling icon is not rejected.
+//! Explicit icon buttons, text buttons and label badges need content before
+//! reaching canvas. Run after orphan adoption, so a recoverable sibling icon
+//! is not rejected.
 
 use jian_ops_schema::node::PenNode;
 use serde_json::Value;
@@ -97,6 +98,7 @@ pub(super) fn rejection(nodes: &[PenNode]) -> Option<String> {
         node: &Value,
         inside_complete_badge: bool,
         icons: &mut Vec<String>,
+        buttons: &mut Vec<String>,
         badges: &mut Vec<String>,
     ) {
         if !visible(node) {
@@ -107,6 +109,8 @@ pub(super) fn rejection(nodes: &[PenNode]) -> Option<String> {
         if node["type"] == "frame" && !has_content {
             if node["role"] == "icon-button" {
                 icons.push(node["name"].as_str().unwrap_or("icon-button").to_string());
+            } else if node["role"] == "button" {
+                buttons.push(node["name"].as_str().unwrap_or("button").to_string());
             } else if is_badge && !(inside_complete_badge && badge_drawing_layer(node)) {
                 badges.push(node["name"].as_str().unwrap_or("badge").to_string());
             }
@@ -120,18 +124,21 @@ pub(super) fn rejection(nodes: &[PenNode]) -> Option<String> {
                     child,
                     inside_complete_badge || (is_badge && has_content),
                     icons,
+                    buttons,
                     badges,
                 );
             }
         }
     }
     let mut icons = Vec::new();
+    let mut buttons = Vec::new();
     let mut badges = Vec::new();
     for node in nodes {
         collect(
             &serde_json::to_value(node).ok()?,
             false,
             &mut icons,
+            &mut buttons,
             &mut badges,
         );
     }
@@ -139,6 +146,12 @@ pub(super) fn rejection(nodes: &[PenNode]) -> Option<String> {
         return Some(format!(
         "self-check failed: empty-icon-button: {}. Regenerate this section with a visible icon or label INSIDE each named control. Empty rounded frames are not buttons; preserve the other content and layout.",
         icons.join(", ")
+    ));
+    }
+    if !buttons.is_empty() {
+        return Some(format!(
+        "self-check failed: empty-button: {}. Regenerate this section with the planned text label or icon INSIDE each named button. Restore the original plan's copy, do not invent replacement text; preserve the other content and layout.",
+        buttons.join(", ")
     ));
     }
     (!badges.is_empty()).then(|| format!(

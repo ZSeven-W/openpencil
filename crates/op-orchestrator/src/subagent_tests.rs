@@ -144,5 +144,7 @@ fn rejected_subtree_summary_truncates_beyond_twelve_children() {
 mod coalesce_tests;
 #[path = "subagent_content_contract_tests.rs"]
 mod content_contract_tests;
+#[path = "subagent_empty_button_tests.rs"]
+mod empty_button_tests;
 #[path = "subagent_run_subtask_tests.rs"]
 mod run_subtask_tests;
