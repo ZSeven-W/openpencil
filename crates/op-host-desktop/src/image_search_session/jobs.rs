@@ -159,11 +159,7 @@ pub(super) fn spawn_gen_job(
     let (tx, rx) = mpsc::channel();
     let node_id = target.node_id.clone();
     let intent = Some(intent_fingerprint(&target, Some(&profile)));
-    let prompt = target
-        .prompt
-        .clone()
-        .filter(|p: &String| !p.trim().is_empty())
-        .unwrap_or_else(|| target.query.clone());
+    let prompt = op_image_enrich::compose_generation_prompt(&target);
     let width = target.width;
     let height = target.height;
     std::thread::spawn(move || {

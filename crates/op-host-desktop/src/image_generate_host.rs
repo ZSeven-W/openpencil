@@ -101,3 +101,7 @@ async fn run_generate(
         .await
         .ok_or(ImageGenerateError::DownloadFailed)
 }
+
+#[cfg(test)]
+#[path = "image_generation_test_support.rs"]
+pub(crate) mod test_support;

@@ -11,6 +11,7 @@
 //! in the desktop crate (`image_search_session/intent.rs`).
 
 mod fallback_intent;
+mod page_context;
 mod query;
 use std::collections::{HashMap, HashSet};
 
@@ -30,8 +31,15 @@ pub struct ImageSearchTarget {
     pub query: String,
     pub aspect_ratio: Option<ImageAspectRatio>,
     /// AI-generation prompt bound to the node (`image_prompt`), if any. Used when
-    /// an image-gen model is configured; falls back to `query`.
+    /// an image-gen model is configured; falls back to `generation_subject`
+    /// or `query` for automatic generation.
     pub prompt: Option<String>,
+    /// Derived page/section art direction for automatic generation only.
+    /// Never used as a search keyword or as authored intent identity.
+    pub page_context: Option<String>,
+    /// Nearest heading and auxiliary text, only for a node-name query fallback.
+    /// Advisory generation subject; never changes search or intent identity.
+    pub generation_subject: Option<String>,
     /// Explicit `G()` acquisition mode, or Auto for legacy/heuristic slots.
     pub mode: ImageRequestMode,
     /// Resolved numeric dimensions (for the gen provider's aspect mapping).
@@ -92,6 +100,8 @@ pub fn collect_targets_with_scene(
         &resolved_sizes,
         &mut targets,
         &[],
+        &[],
+        state.doc.name.as_deref(),
     );
     targets
 }
@@ -132,6 +142,8 @@ fn collect_from_children(
     resolved_sizes: &HashMap<String, (f64, f64)>,
     targets: &mut Vec<ImageSearchTarget>,
     parent_names: &[String],
+    ancestors: &[&PenNode],
+    document_name: Option<&str>,
 ) {
     // Direct sibling text of a bare anonymous slot may name its subject
     // ("Blinding Lights" next to a nameless 120px square = that track's
@@ -155,9 +167,15 @@ fn collect_from_children(
             .take(2)
             .collect();
 
-        if let Some(target) =
-            image_search_target_for(node, known_node_ids, resolved_sizes, parent_names, &context)
-        {
+        if let Some(target) = image_search_target_for(
+            node,
+            known_node_ids,
+            resolved_sizes,
+            parent_names,
+            &context,
+            ancestors,
+            document_name,
+        ) {
             targets.push(target);
         }
 
@@ -173,12 +191,16 @@ fn collect_from_children(
             let mut child_parent_names = Vec::with_capacity(parent_names.len() + 1);
             child_parent_names.push(node.base().name.clone().unwrap_or_default());
             child_parent_names.extend(parent_names.iter().cloned());
+            let mut child_ancestors = ancestors.to_vec();
+            child_ancestors.push(node);
             collect_from_children(
                 grand,
                 known_node_ids,
                 resolved_sizes,
                 targets,
                 &child_parent_names,
+                &child_ancestors,
+                document_name,
             );
         }
     }
@@ -190,6 +212,8 @@ fn image_search_target_for(
     resolved_sizes: &HashMap<String, (f64, f64)>,
     parent_names: &[String],
     sibling_text: &[String],
+    ancestors: &[&PenNode],
+    document_name: Option<&str>,
 ) -> Option<ImageSearchTarget> {
     let id = node.base().id.as_str();
     if known_node_ids.contains(id) {
@@ -244,15 +268,15 @@ fn image_search_target_for(
         // it can only ever come from siblings — and a card with no words of its
         // own would otherwise borrow its neighbour's ("Santorini" on the Bali
         // card, measured while fixing this).
-        query = if !explicit.is_empty() {
+        query = query::ExtractedQuery::subject(if !explicit.is_empty() {
             explicit
         } else if let Some(name) = parent_semantic_name(parent_names) {
             name
         } else {
             sibling_text.join(" ")
-        };
+        });
     }
-    if query.is_empty() {
+    if query.text.is_empty() {
         return None;
     }
 
@@ -268,11 +292,14 @@ fn image_search_target_for(
         .copied()
         .map(|(width, height)| (Some(width), Some(height)))
         .unwrap_or_else(|| (node.width_px(), node.height_px()));
+    let context = page_context::derive(ancestors, document_name);
     Some(ImageSearchTarget {
         node_id: NodeId::new(id),
-        query,
+        query: query.text,
         aspect_ratio: infer_aspect_ratio(width, height),
         prompt,
+        page_context: context.context,
+        generation_subject: context.subject.filter(|_| query.from_node_name),
         mode,
         width,
         height,

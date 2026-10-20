@@ -323,6 +323,9 @@ fn subagent_prompt_carries_ts_layout_contract() {
         );
     }
     let combined = format!("{}\n{}", cr.system_prompt, cr.user_prompt);
+    assert!(combined.contains(
+        "imagePrompt must describe actual objects/scenes, not just a project or brand name"
+    ));
     for required in [
         "root page may keep 0 horizontal padding",
         "ordinary transparent root-direct content section",

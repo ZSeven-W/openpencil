@@ -635,6 +635,23 @@ mod tests {
     }
 
     #[test]
+    fn manual_web_generation_does_not_inherit_document_context() {
+        let mut state = state_with_profile("persisted", "test-key");
+        state.doc.name = Some("Brand Design Portfolio".into());
+        state.active_children_mut().push(
+            serde_json::from_value(serde_json::json!({
+                "type":"frame", "id":"screen", "name":"Studio Landing", "children":[
+                    {"type":"text", "id":"title", "content":"Selected Work", "fontSize":32}
+                ]
+            }))
+            .unwrap(),
+        );
+        let request =
+            parse_generate_request(r#"{"prompt":"My hand-written prompt"}"#, &state).unwrap();
+        assert_eq!(request.prompt, "My hand-written prompt");
+    }
+
+    #[test]
     fn parse_generate_request_prefers_the_request_profile() {
         let state = state_with_profile("persisted", "sk-persisted");
         let req = parse_generate_request(

@@ -36,6 +36,9 @@ pub(crate) fn intent_fingerprint(
     target: &ImageSearchTarget,
     profile: Option<&ImageGenProfile>,
 ) -> String {
+    // Derived context and generation_subject are advisory, not authored
+    // intent: late titles/renames must not invalidate a completed image or
+    // an in-flight generation job. Keep using the original prompt/query.
     let generate = target.mode == ImageRequestMode::Generate
         || (target.mode == ImageRequestMode::Auto && profile.is_some());
     if generate {

@@ -10,6 +10,8 @@ fn stock_target(width: f64, height: f64, fit: ImageJudgeFit) -> ImageSearchTarge
         node_id: NodeId::new("photo"),
         query: "outdoor jogging".into(),
         prompt: Some("A runner jogging on a tree-lined park path".into()),
+        page_context: None,
+        generation_subject: None,
         mode: ImageRequestMode::Search,
         aspect_ratio: Some(ImageAspectRatio::Wide),
         width: Some(width),

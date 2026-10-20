@@ -21,6 +21,7 @@
 
 mod apply;
 mod fallback_policy;
+mod generation_prompt;
 mod judge_view;
 #[cfg(feature = "net")]
 pub mod net;
@@ -36,6 +37,7 @@ pub use fallback_policy::{
     ImageFallbackBranch, ImageFallbackPatch, IMAGE_FALLBACK_NAME_SUFFIX,
     SEARCH_FAILED_PLACEHOLDER_SRC,
 };
+pub use generation_prompt::compose_generation_prompt;
 pub use judge_view::{ImageJudgeFit, ImageJudgeView};
 pub use targets::{
     collect_targets, collect_targets_with_scene, has_empty_image_fill, image_request_mode,

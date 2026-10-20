@@ -350,6 +350,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn manual_panel_generation_sends_user_prompt_without_page_context() {
+        let (profile, request) = crate::image_generate_host::test_support::capture_provider();
+        let mut host = WidgetHostNative::new();
+        let state = host.editor_state_mut();
+        state.doc.name = Some("Brand Design Portfolio".into());
+        state.editor_ui.agent_settings.image_gen_profiles = vec![profile.clone()];
+        state.editor_ui.agent_settings.active_image_gen_profile_id = Some(profile.id);
+        let prompt = "  My exact hand-written image prompt.\n Keep this wording.  ";
+        let panel = &mut state.editor_ui.image_panel;
+        panel.generate_prompt.set_text(prompt);
+        panel.generate_phase = ImageGeneratePhase::Loading;
+        panel.generate_epoch = 1;
+        let mut jobs = ImagePanelJobs::new();
+        assert!(!jobs.spawn_generate_if_requested(&mut host));
+        let body = request.recv_timeout(Duration::from_secs(10)).unwrap();
+        assert_eq!(body["prompt"], prompt);
+        assert!(jobs
+            .generate_job
+            .take()
+            .unwrap()
+            .recv_timeout(Duration::from_secs(10))
+            .unwrap()
+            .is_ok());
+    }
+
+    #[test]
     fn asset_status_classifies_like_the_ts_resolver() {
         // Remote / data URLs never warn.
         assert_eq!(

@@ -218,3 +218,6 @@ mod mode;
 mod progress;
 #[path = "image_search_session_tests/providers.rs"]
 mod providers;
+
+#[path = "image_search_session_tests/generation_context.rs"]
+mod generation_context;
