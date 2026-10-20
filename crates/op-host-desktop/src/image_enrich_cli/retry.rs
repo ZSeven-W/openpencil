@@ -120,14 +120,17 @@ pub(super) fn enrich_state_with_session<S: EnrichSession>(
             .into_iter()
             .map(|target| target.node_id)
             .collect();
-        unresolved += records
-            .keys()
-            .filter(|node_id| remaining_ids.contains(*node_id))
-            .count();
-        failed += records
+        // A failed Generate slot keeps its prompt and so still collects as a
+        // target; count it once, as failed, not also as unresolved.
+        let failed_ids: HashSet<&NodeId> = records
             .keys()
             .filter(|node_id| node_has_failure_sentinel(state, node_id))
+            .collect();
+        unresolved += records
+            .keys()
+            .filter(|node_id| remaining_ids.contains(*node_id) && !failed_ids.contains(node_id))
             .count();
+        failed += failed_ids.len();
     }
 
     Ok(EnrichSummary {
