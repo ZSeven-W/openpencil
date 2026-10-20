@@ -636,7 +636,7 @@ Calm and focused.
             }
         }
 
-        let plan = r#"{"rootFrame":{"id":"root","name":"Page","width":375,"height":200,"layout":"vertical"},"subtasks":[{"id":"hero","label":"Hero","elements":"headline","region":{"width":375,"height":200}}]}"#;
+        let plan = r#"{"sharedContext":{},"rootFrame":{"id":"root","name":"Page","width":375,"height":200,"layout":"vertical"},"subtasks":[{"id":"hero","label":"Hero","elements":"headline","region":{"width":375,"height":200}}]}"#;
         let subtask = r#"I(null,{"type":"frame","name":"Hero","x":0,"y":0,"width":375,"height":200,"children":[{"type":"text","content":"Home","fontSize":18}]});"#;
         let seen = Arc::new(Mutex::new(Vec::new()));
         let provider: Arc<dyn ChatProvider> = Arc::new(QueuedProvider {

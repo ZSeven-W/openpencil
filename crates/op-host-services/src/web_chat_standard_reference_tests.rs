@@ -96,7 +96,7 @@ fn rejected_reference_is_reported_and_new_design_still_runs() {
     let hub = SseHub::default();
     let snapshot = state.lock().expect("state").editor.clone();
     let provider = QueuedProvider::new(&[
-        r#"{"rootFrame":{"id":"root","name":"Page","width":375,"height":200,"layout":"vertical"},"subtasks":[{"id":"hero","label":"Hero","elements":"headline","region":{"width":375,"height":200}}]}"#,
+        r#"{"sharedContext":{},"rootFrame":{"id":"root","name":"Page","width":375,"height":200,"layout":"vertical"},"subtasks":[{"id":"hero","label":"Hero","elements":"headline","region":{"width":375,"height":200}}]}"#,
         r#"I(null,{"type":"frame","name":"Hero","x":0,"y":0,"width":375,"height":200,"children":[{"type":"text","content":"Home","fontSize":18}]});"#,
     ]);
     let mut out = Vec::new();
@@ -148,7 +148,7 @@ Calm and focused.
 - **Blue** (#2563EB) — Primary action
 <<<SKELETON>>>
 {"source":"screenshot","width":1440,"sections":[{"role":"navbar","heightRatio":0.05,"childCount":3,"layout":"horizontal","hasImage":false}],"navKind":"topBar","heroKind":"split","columnRhythm":[3]}"#;
-    let root = r#"{"rootFrame":{"id":"root","name":"Page","width":375,"height":200,"layout":"vertical"},"subtasks":[{"id":"hero","label":"Hero","elements":"headline","region":{"width":375,"height":200}}]}"#;
+    let root = r#"{"sharedContext":{},"rootFrame":{"id":"root","name":"Page","width":375,"height":200,"layout":"vertical"},"subtasks":[{"id":"hero","label":"Hero","elements":"headline","region":{"width":375,"height":200}}]}"#;
     let subtask = r#"I(null,{"type":"frame","name":"Hero","x":0,"y":0,"width":375,"height":200,"children":[{"type":"text","content":"Home","fontSize":18}]});"#;
     let (provider, seen) = QueuedProvider::with_seen(&[vision_response, root, subtask]);
     let state = Mutex::new(WebCanvasState::new(EditorState::new(), 3100));
@@ -202,7 +202,7 @@ fn url_reference_is_attempted_before_screenshot_fallback() {
     let vision_response = r#"# Design System: Screenshot App
 <<<SKELETON>>>
 {"source":"screenshot","width":1440,"sections":[],"navKind":"none","heroKind":"none","columnRhythm":[]}"#;
-    let root = r#"{"rootFrame":{"id":"root","name":"Page","width":375,"height":200,"layout":"vertical"},"subtasks":[{"id":"hero","label":"Hero","elements":"headline","region":{"width":375,"height":200}}]}"#;
+    let root = r#"{"sharedContext":{},"rootFrame":{"id":"root","name":"Page","width":375,"height":200,"layout":"vertical"},"subtasks":[{"id":"hero","label":"Hero","elements":"headline","region":{"width":375,"height":200}}]}"#;
     let subtask = r#"I(null,{"type":"frame","name":"Hero","x":0,"y":0,"width":375,"height":200,"children":[]});"#;
     let (provider, seen) = QueuedProvider::with_seen(&[vision_response, root, subtask]);
     let state = Mutex::new(WebCanvasState::new(EditorState::new(), 3100));
