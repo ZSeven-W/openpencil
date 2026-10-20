@@ -164,9 +164,15 @@ fn joined_chat_keeps_completed_weak_but_discards_partial_and_silent_responses() 
 #[test]
 fn multiple_joined_chat_slots_never_exceed_transport_capacity() {
     let _transport = transport_lock();
+    // Runtime initialization and slot-thread rendezvous are fixture setup,
+    // not part of the transport deadline. Leave time for async workers to
+    // actually start on a busy CI runner before testing joined cancellation.
+    crate::chat_runtime::block_on_anywhere(async {
+        tokio::spawn(async {}).await.unwrap();
+    });
     let state = Arc::new(WorkState::default());
     let barrier = std::sync::Barrier::new(3);
-    let deadline = Instant::now() + Duration::from_millis(160);
+    let shared_deadline = OnceLock::new();
     std::thread::scope(|scope| {
         let handles: Vec<_> = (0..3)
             .map(|_| {
@@ -174,8 +180,11 @@ fn multiple_joined_chat_slots_never_exceed_transport_capacity() {
                     state: Arc::clone(&state),
                 }));
                 let barrier = &barrier;
+                let shared_deadline = &shared_deadline;
                 scope.spawn(move || {
                     barrier.wait();
+                    let deadline =
+                        *shared_deadline.get_or_init(|| Instant::now() + Duration::from_secs(2));
                     judge.judge_before(
                         "q",
                         "i",
@@ -186,9 +195,9 @@ fn multiple_joined_chat_slots_never_exceed_transport_capacity() {
             })
             .collect();
         for handle in handles {
-            assert!(handle
-                .join()
-                .unwrap()
+            let judged = handle.join().unwrap();
+            assert_eq!(judged.len(), MAX_CONCURRENT_CALLS);
+            assert!(judged
                 .iter()
                 .all(|candidate| candidate.verdict == RelevanceVerdict::Off));
         }
@@ -235,6 +244,7 @@ fn joined_chat_expired_and_capacity_queued_work_never_starts_provider() {
 
 #[test]
 fn cancellation_flag_alone_does_not_claim_joined_deadline_support() {
+    let _transport = transport_lock();
     struct CancelOnlyProvider;
     impl ChatProvider for CancelOnlyProvider {
         fn provider_label(&self) -> &str {

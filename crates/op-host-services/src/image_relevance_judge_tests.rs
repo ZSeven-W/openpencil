@@ -48,16 +48,16 @@ fn env_lock() -> MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
         .lock()
-        .expect("env lock")
+        .unwrap_or_else(|error| error.into_inner())
 }
 
-// Deadline tests must not spend their small budgets behind another test's
-// intentionally delayed HTTP server on the production-wide semaphore.
+// Every test that uses a judge must take this lock, including immediate chat
+// fixtures: all transports consume the same production-wide semaphore.
 pub(crate) fn transport_lock() -> MutexGuard<'static, ()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
         .lock()
-        .expect("transport lock")
+        .unwrap_or_else(|error| error.into_inner())
 }
 
 struct JudgeEnvGuard {
@@ -312,6 +312,7 @@ fn fake_jpeg(seed: u8) -> Vec<u8> {
 
 #[test]
 fn chat_vision_judge_maps_off_verdict_and_sends_shared_prompt() {
+    let _transport = transport_lock();
     let (judge, seen) = scripted_judge(r#"{"verdict":"off","reason":"different subject"}"#);
     let judged = judge.judge("kyoto temple", "a photo of a kyoto temple", &[fake_jpeg(1)]);
 
@@ -335,6 +336,7 @@ fn chat_vision_judge_maps_off_verdict_and_sends_shared_prompt() {
 
 #[test]
 fn chat_vision_judge_excludes_unparseable_reply_from_selection() {
+    let _transport = transport_lock();
     let (judge, _seen) = scripted_judge("no JSON in this reply");
     let judged = judge.judge("q", "i", &[fake_jpeg(1)]);
     assert_eq!(judged.len(), 1);
@@ -360,6 +362,7 @@ fn assert_no_candidate_selected(judge: &dyn ImageRelevanceJudge) {
 
 #[test]
 fn chat_provider_error_excludes_unverified_candidates_but_no_judge_still_works() {
+    let _transport = transport_lock();
     struct ErrorProvider;
     impl ChatProvider for ErrorProvider {
         fn provider_label(&self) -> &str {
@@ -386,6 +389,7 @@ fn chat_provider_error_excludes_unverified_candidates_but_no_judge_still_works()
 
 #[test]
 fn unavailable_candidates_never_displace_confirmed_on_or_weak_matches() {
+    let _transport = transport_lock();
     struct MixedProvider;
     impl ChatProvider for MixedProvider {
         fn provider_label(&self) -> &str {
@@ -429,6 +433,7 @@ fn unavailable_candidates_never_displace_confirmed_on_or_weak_matches() {
 
 #[test]
 fn chat_vision_judge_returns_one_verdict_per_thumb_index_aligned() {
+    let _transport = transport_lock();
     let (judge, _seen) = scripted_judge(&valid_reply("on", "clear subject match"));
     let thumbs = vec![fake_jpeg(1), fake_jpeg(2), fake_jpeg(3)];
     let judged = judge.judge("q", "i", &thumbs);
@@ -637,6 +642,7 @@ fn both_transports_send_identical_contract_and_reject_the_same_hard_conflict() {
 
 #[test]
 fn chat_judge_does_not_start_unbounded_followup_calls() {
+    let _transport = transport_lock();
     let (judge, seen) = scripted_judge(&valid_reply("on", "match"));
     assert!(!judge.supports_deadline_judging());
     assert!(judge
