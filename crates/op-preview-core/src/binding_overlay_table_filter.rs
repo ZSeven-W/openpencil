@@ -139,12 +139,13 @@ impl crate::session::PreviewSession {
             .map(|app| app.theme.clone())
             .unwrap_or_default();
         let page = self.app.as_ref().map_or(0, |app| app.page_idx);
-        self.scene = op_pen_loader::pen_document_to_layout_scene_for_preview(
+        self.scene = op_pen_loader::pen_document_to_layout_scene_for_preview_with_measure(
             &paint,
             &layout,
             self.preserve_authored_geometry,
             &theme,
             page,
+            self.measure.clone(),
         );
         self.binding_overlay.clamp_scroll_after_filter(&self.scene);
     }

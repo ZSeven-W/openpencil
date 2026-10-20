@@ -133,10 +133,30 @@ pub fn pen_document_to_layout_scene_for_preview(
     active_theme: &std::collections::BTreeMap<String, String>,
     active_page_index: usize,
 ) -> LayoutScene {
+    pen_document_to_layout_scene_for_preview_with_measure(
+        paint_doc,
+        layout_doc,
+        preserve_authored_geometry,
+        active_theme,
+        active_page_index,
+        crate::adapter::pages::layout_measure_backend(),
+    )
+}
+
+/// Build preview paint geometry with the exact backend used for runtime hits.
+pub fn pen_document_to_layout_scene_for_preview_with_measure(
+    paint_doc: &jian_ops_schema::PenDocument,
+    layout_doc: &jian_ops_schema::PenDocument,
+    preserve_authored_geometry: bool,
+    active_theme: &std::collections::BTreeMap<String, String>,
+    active_page_index: usize,
+    measure: std::rc::Rc<dyn jian_core::layout::measure::MeasureBackend>,
+) -> LayoutScene {
     let payload: DocPayload = crate::adapter::pen_documents_to_payload_for_preview(
         paint_doc,
         layout_doc,
         preserve_authored_geometry,
+        measure,
     )
     .payload;
     let mut var_table = crate::adapter::build_var_table(paint_doc);

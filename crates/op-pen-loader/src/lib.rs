@@ -96,17 +96,20 @@ pub use editor_scene::{
 };
 pub use layout_scene::{
     pen_document_to_layout_scene, pen_document_to_layout_scene_for_preview,
+    pen_document_to_layout_scene_for_preview_with_measure,
     pen_document_to_layout_scene_with_geometry_mode,
 };
 /// Skips the layout-scene rebuild when the document / active theme / active page
 /// are unchanged — the hosts hold one and drive `refresh_layout_scene` through it.
 pub use scene_cache::SceneBuildCache;
 
+pub use adapter::pages::layout_measure_backend;
+
 // Re-exports so `openpencil-desktop`'s existing call sites change
 // minimally.
 pub use adapter::{
     build_var_table, pen_document_to_payload, pen_document_to_payload_preserving_geometry,
-    root_authored_origin, root_available_size, LoadedDoc,
+    pen_document_to_payload_with_measure, root_authored_origin, root_available_size, LoadedDoc,
 };
 pub use editor_meta::{
     apply_editor_meta, apply_editor_meta_or_legacy_fallback, extract_editor_meta,

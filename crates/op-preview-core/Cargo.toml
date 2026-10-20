@@ -45,12 +45,10 @@ op-orchestrator = { path = "../op-orchestrator", optional = true }
 
 [dev-dependencies]
 # jian-skia ships `SkiaMeasure` — a real skia paragraph-shaper `MeasureBackend`
-# plugged into the layout engine. Only used by the test_measure() helper.
+# plugged into the layout engine. Used by explicit two-backend regressions.
 jian-skia = { path = "../../vendor/jian/crates/jian-skia", features = ["textlayout"] }
-# Tests inject `SkiaMeasure` into the preview runtime, so the design-canvas
-# side must measure with skia too — otherwise `preview_layout_matches_design_
-# canvas` compares skia metrics against jian-core's estimate backend and fails
-# on text height. Test-only: the non-test graph stays skia-free for wasm.
+# Let parity tests share the native canvas backend selection (including the
+# Windows CI estimator). Test-only: the non-test graph stays skia-free for wasm.
 op-pen-loader = { path = "../op-pen-loader", features = ["skia-measure"] }
 
 [features]

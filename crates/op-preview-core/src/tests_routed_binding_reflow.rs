@@ -26,6 +26,14 @@ fn fixture() -> jian_ops_schema::PenDocument {
 }
 
 fn enter(doc: &jian_ops_schema::PenDocument, preserve: bool) -> PreviewSession {
+    enter_with_measure(doc, preserve, test_measure())
+}
+
+fn enter_with_measure(
+    doc: &jian_ops_schema::PenDocument,
+    preserve: bool,
+    measure: std::rc::Rc<dyn jian_core::layout::measure::MeasureBackend>,
+) -> PreviewSession {
     PreviewSession::enter(
         doc,
         (1200.0, 900.0),
@@ -33,7 +41,7 @@ fn enter(doc: &jian_ops_schema::PenDocument, preserve: bool) -> PreviewSession {
         0,
         preserve,
         false,
-        test_measure(),
+        measure,
         0,
     )
     .unwrap()
@@ -81,21 +89,41 @@ fn assert_mounted(session: &PreviewSession, index: usize, expanded: bool) {
     assert_eq!(runtime.size, rect.size);
 }
 
+fn assert_text_geometry(session: &PreviewSession, index: usize, backend: &str) {
+    let id = format!("label-{index}");
+    let scene = session.preview_scene_for_test();
+    let painted = scene.active_page().unwrap().find(&id).unwrap().bounds;
+    let (x, y, w, h) = session.node_rect(&id).unwrap();
+    assert!(
+        (painted.origin.x - x).abs() <= 1.0
+            && (painted.origin.y - y).abs() <= 1.0
+            && (painted.size.x - w).abs() <= 1.0
+            && (painted.size.y - h).abs() <= 1.0,
+        "{backend} {id}: paint={painted:?}, runtime=({x},{y},{w},{h})"
+    );
+}
+
 #[test]
 fn routed_bound_text_keeps_all_page_geometry_after_switch_and_updates() {
     let doc = fixture();
     let original = serde_json::to_value(&doc).unwrap();
-    let mut session = enter(&doc, false);
-    assert_mounted(&session, 0, false);
-    for (step, index) in [1, 2, 0, 2, 1].into_iter().enumerate() {
-        let path = ["/", "/cart", "/receipt"][index];
-        session.navigate_to_screen(path);
-        assert!(session.reconcile(1000 * (step as u64 + 1)).switched);
-        assert_mounted(&session, index, false);
-        session.set_state("expanded", json!(true));
-        assert_mounted(&session, index, true);
-        session.set_state("expanded", json!(false));
-        assert_mounted(&session, index, false);
+    for (backend, measure) in crate::tests::measure_backends() {
+        let mut session = enter_with_measure(&doc, false, measure);
+        assert_mounted(&session, 0, false);
+        assert_text_geometry(&session, 0, backend);
+        for (step, index) in [1, 2, 0, 2, 1].into_iter().enumerate() {
+            let path = ["/", "/cart", "/receipt"][index];
+            session.navigate_to_screen(path);
+            assert!(session.reconcile(1000 * (step as u64 + 1)).switched);
+            assert_mounted(&session, index, false);
+            assert_text_geometry(&session, index, backend);
+            session.set_state("expanded", json!(true));
+            assert_mounted(&session, index, true);
+            assert_text_geometry(&session, index, backend);
+            session.set_state("expanded", json!(false));
+            assert_mounted(&session, index, false);
+            assert_text_geometry(&session, index, backend);
+        }
     }
     assert_eq!(serde_json::to_value(&doc).unwrap(), original);
 }

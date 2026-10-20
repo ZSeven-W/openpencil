@@ -116,12 +116,13 @@ impl PreviewSession {
             .map(|app| &app.promoted_doc)
             .or_else(|| self.runtime.document.as_ref().map(|doc| &doc.schema));
         if let Some(promoted) = promoted {
-            let fresh = op_pen_loader::pen_document_to_layout_scene_for_preview(
+            let fresh = op_pen_loader::pen_document_to_layout_scene_for_preview_with_measure(
                 promoted,
                 &self.layout_doc,
                 self.preserve_authored_geometry,
                 &self.reset_seed.active_theme,
                 self.app.as_ref().map_or(0, |app| app.page_idx),
+                self.measure.clone(),
             );
             if let (Some(current), Some(fresh)) = (
                 self.scene.pages.get_mut(self.scene.active_page_index),

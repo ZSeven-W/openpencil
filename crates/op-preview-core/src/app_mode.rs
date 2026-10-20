@@ -335,12 +335,13 @@ impl PreviewSession {
         // mapping across the switch).
         self.gesture_mappings.clear();
         app.page_idx = app.table.page_index(&app.current_path).unwrap_or(0);
-        self.scene = op_pen_loader::pen_document_to_layout_scene_for_preview(
+        self.scene = op_pen_loader::pen_document_to_layout_scene_for_preview_with_measure(
             &app.promoted_doc,
             &self.layout_doc,
             self.preserve_authored_geometry,
             &app.theme,
             app.page_idx,
+            self.measure.clone(),
         );
         self.binding_sites.clear();
         let children: &[jian_ops_schema::node::PenNode] = app

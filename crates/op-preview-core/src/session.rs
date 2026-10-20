@@ -498,12 +498,13 @@ impl PreviewSession {
         // by construction. The active page was projected to the top
         // level in `enter`, so it is page index 0. APP MODE: page 0 is
         // the entry screen (the `project_screens` convention) either way.
-        let scene = op_pen_loader::pen_document_to_layout_scene_for_preview(
+        let scene = op_pen_loader::pen_document_to_layout_scene_for_preview_with_measure(
             &promoted_doc,
             &layout_doc,
             preserve_authored_geometry,
             active_theme,
             0,
+            Rc::clone(&measure),
         );
 
         // R3: install the effect queue adapter (mapped through the
@@ -777,12 +778,11 @@ impl PreviewSession {
     }
 }
 
-/// The measurement backend preview tests solve layout against the same skia
-/// backend the native host injects, so test geometry matches
-/// production. Kept in one place so the 45 call sites don't each spell
+/// Share the canvas backend so parity tests compare the same metrics, including
+/// the Windows CI estimator. Font-specific tests inject SkiaMeasure explicitly.
 #[cfg(all(test, not(target_os = "windows")))]
 pub(crate) fn test_measure() -> Rc<dyn MeasureBackend> {
-    Rc::new(jian_skia::SkiaMeasure::new())
+    op_pen_loader::layout_measure_backend()
 }
 
 #[cfg(all(test, not(target_os = "windows")))]

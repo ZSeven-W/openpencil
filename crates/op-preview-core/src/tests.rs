@@ -16,6 +16,16 @@ use super::{test_measure, PreviewSession};
 use jian_core::widget_state::WidgetState;
 use op_editor_ui::layout_scene::{LayoutScene, SceneNode};
 
+pub(super) fn measure_backends() -> [(
+    &'static str,
+    std::rc::Rc<dyn jian_core::layout::measure::MeasureBackend>,
+); 2] {
+    [
+        ("skia", std::rc::Rc::new(jian_skia::SkiaMeasure::new())),
+        ("estimate", jian_core::layout::measure::default_backend()),
+    ]
+}
+
 /// The default (empty) active-theme map — every test enters preview with
 /// no transient axis selection, so resolution falls back to the
 /// document's default theme (first value per axis).
@@ -409,67 +419,78 @@ fn preview_layout_matches_design_canvas() {
     // root authored at the origin, runtime rects == design rects.
     let doc = food_app_doc();
 
-    let loaded = op_pen_loader::pen_document_to_payload(&doc);
-    let mut design: std::collections::BTreeMap<String, (f32, f32, f32, f32)> =
-        std::collections::BTreeMap::new();
-    fn harvest(
-        p: &op_pen_loader::NodePayload,
-        out: &mut std::collections::BTreeMap<String, (f32, f32, f32, f32)>,
-    ) {
-        out.insert(p.schema_id.clone(), (p.x, p.y, p.w, p.h));
-        for c in &p.children {
-            harvest(c, out);
+    for (backend, measure) in measure_backends() {
+        let loaded = op_pen_loader::pen_document_to_payload_with_measure(&doc, measure.clone());
+        let mut design: std::collections::BTreeMap<String, (f32, f32, f32, f32)> =
+            std::collections::BTreeMap::new();
+        fn harvest(
+            p: &op_pen_loader::NodePayload,
+            out: &mut std::collections::BTreeMap<String, (f32, f32, f32, f32)>,
+        ) {
+            out.insert(p.schema_id.clone(), (p.x, p.y, p.w, p.h));
+            for c in &p.children {
+                harvest(c, out);
+            }
         }
-    }
-    for page in &loaded.payload.pages {
-        for root in &page.children {
-            harvest(root, &mut design);
+        for page in &loaded.payload.pages {
+            for root in &page.children {
+                harvest(root, &mut design);
+            }
         }
-    }
 
-    // A deliberately HUGE canvas region — the old code laid the doc out
-    // against this and scattered. The fix ignores it (per-root).
-    let session = PreviewSession::enter(
-        &doc,
-        (1600.0, 1200.0),
-        &default_theme(),
-        0,
-        false,
-        false,
-        test_measure(),
-        0,
-    )
-    .expect("enter preview");
+        // A deliberately HUGE canvas region — the old code laid the doc out
+        // against this and scattered. The fix ignores it (per-root).
+        let session = PreviewSession::enter(
+            &doc,
+            (1600.0, 1200.0),
+            &default_theme(),
+            0,
+            false,
+            false,
+            measure,
+            0,
+        )
+        .expect("enter preview");
 
-    let (aw, _ah) = session.available();
-    assert!(
-        (aw - 390.0).abs() < 0.5,
-        "preview available width should be the root's authored 390, got {aw}"
-    );
-
-    const TOL: f32 = 1.0;
-    for id in [
-        "screen",
-        "cats",
-        "cat-pizza",
-        "cat-burger",
-        "cat-sushi",
-        "cat-seeall",
-        "heading",
-    ] {
-        let (dx, dy, dw, dh) = *design
-            .get(id)
-            .unwrap_or_else(|| panic!("design rect for {id}"));
-        let (px, py, pw, ph) = session
-            .node_rect(id)
-            .unwrap_or_else(|| panic!("preview rect for {id}"));
+        let (aw, _ah) = session.available();
         assert!(
-            (px - dx).abs() <= TOL
-                && (py - dy).abs() <= TOL
-                && (pw - dw).abs() <= TOL
-                && (ph - dh).abs() <= TOL,
-            "rect mismatch for {id}: design=({dx},{dy},{dw},{dh}) preview=({px},{py},{pw},{ph})"
+            (aw - 390.0).abs() < 0.5,
+            "preview available width should be the root's authored 390, got {aw}"
         );
+
+        let scene = session.preview_scene_for_test();
+        const TOL: f32 = 1.0;
+        for id in [
+            "screen",
+            "cats",
+            "cat-pizza",
+            "cat-burger",
+            "cat-sushi",
+            "cat-seeall",
+            "heading",
+        ] {
+            let (dx, dy, dw, dh) = *design
+                .get(id)
+                .unwrap_or_else(|| panic!("design rect for {id}"));
+            let (px, py, pw, ph) = session
+                .node_rect(id)
+                .unwrap_or_else(|| panic!("preview rect for {id}"));
+            let painted = find(&scene, id).unwrap().bounds;
+            assert!(
+                (painted.origin.x - dx).abs() <= TOL
+                    && (painted.origin.y - dy).abs() <= TOL
+                    && (painted.size.x - dw).abs() <= TOL
+                    && (painted.size.y - dh).abs() <= TOL,
+                "{backend} painted rect mismatch for {id}: design=({dx},{dy},{dw},{dh}) paint={painted:?}"
+            );
+            assert!(
+                (px - dx).abs() <= TOL
+                    && (py - dy).abs() <= TOL
+                    && (pw - dw).abs() <= TOL
+                    && (ph - dh).abs() <= TOL,
+                "{backend} rect mismatch for {id}: design=({dx},{dy},{dw},{dh}) preview=({px},{py},{pw},{ph})"
+            );
+        }
     }
 }
 
