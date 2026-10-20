@@ -77,27 +77,30 @@ deny = [
   # tools/check-wasm-bundle.sh.
   "pen-agent-cli",
   "pen-server",
-  # github-copilot-sdk 1.0.11 currently enables native-tls unconditionally
-  # for its build downloader plus HTTP/WebSocket handler transports. Permit
-  # exactly the audited version and direct wrapper set; all other versions
-  # remain banned.
+  # github-copilot-sdk 1.0.23 still enables native-tls for its build
+  # downloader. Runtime network forwarding is disabled below. Permit exactly
+  # the audited native-tls version and remaining build wrappers; all other
+  # versions remain banned.
   "native-tls:<0.2.18",
   { crate = "native-tls@0.2.18", wrappers = [
     "github-copilot-sdk",
-    "hyper-tls",
-    "reqwest",
-    "tokio-native-tls",
-    "tokio-tungstenite",
-    "tungstenite",
     "ureq",
-  ], reason = "required by the official GitHub Copilot SDK 1.0.11" },
+  ], reason = "required by the official GitHub Copilot SDK 1.0.23" },
   "native-tls:>0.2.18",
 ]
 
 [[bans.features]]
 name = "github-copilot-sdk"
-version = "=1.0.11"
-deny = ["default", "bundled-cli", "bundled-in-process"]
+version = "=1.0.23"
+deny = [
+  "default",
+  "bundled-cli",
+  "bundled-in-process",
+  "runtime",
+  "in-process",
+  "local-runtime",
+  "network-forwarding",
+]
 exact = true
 reason = "OpenPencil must use the separately installed CLI without embedding SDK runtime artifacts"
 
