@@ -2,6 +2,39 @@ use super::*;
 use crate::test_support::VecDocSink;
 use serde_json::json;
 
+fn actual_font_rects(state: &EditorState) -> HashMap<String, Rect> {
+    // These fixtures exercise bundled serif glyphs, independent of the CI
+    // estimator. All repair probes use this same explicit backend.
+    let loaded = op_pen_loader::pen_document_to_payload_with_measure(
+        &state.doc,
+        std::rc::Rc::new(jian_skia::SkiaMeasure::new()),
+    );
+    fn collect(nodes: &[op_pen_loader::NodePayload], out: &mut HashMap<String, Rect>) {
+        for node in nodes {
+            out.insert(
+                node.schema_id.clone(),
+                Rect {
+                    x: node.x.into(),
+                    y: node.y.into(),
+                    w: node.w.into(),
+                    h: node.h.into(),
+                },
+            );
+            collect(&node.children, out);
+        }
+    }
+    let mut rects = HashMap::new();
+    collect(
+        &loaded.payload.pages[state.ui.active_page_index].children,
+        &mut rects,
+    );
+    rects
+}
+
+fn repair_with_actual_fonts(sink: &mut dyn DocSink, root_id: &str) -> usize {
+    repair_headline_tails_measured(sink, root_id, actual_font_rects)
+}
+
 fn isolated(test: &str) -> bool {
     const CHILD: &str = "OPENPENCIL_HEADLINE_FONT_TEST";
     if std::env::var(CHILD).as_deref() == Ok(test) {
@@ -21,7 +54,7 @@ fn isolated(test: &str) -> bool {
         .1
         .to_string();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", &full, "--nocapture"])
+        .args(["--exact", &full, "--nocapture", "--test-threads=1"])
         .env(CHILD, test)
         .output()
         .unwrap();
@@ -57,9 +90,9 @@ fn actual_serif_heading_repair_is_small_complete_and_idempotent() {
     }
     let mut sink = work("第一步 · 准备资料", 880.0, "heading");
     let before = sink.state.doc.clone();
-    let original = resolved_rects(&sink.state)["heading"];
-    assert_eq!(repair_headline_tails(&mut sink, "card"), 1);
-    let fixed = resolved_rects(&sink.state)["heading"];
+    let original = actual_font_rects(&sink.state)["heading"];
+    assert_eq!(repair_with_actual_fonts(&mut sink, "card"), 1);
+    let fixed = actual_font_rects(&sink.state)["heading"];
     assert!(fixed.h < original.h * 0.6);
     let Some(EditorCommand::SetNodeFontSize { font_size, .. }) = sink.applied.last() else {
         panic!("one font-size repair")
@@ -73,7 +106,7 @@ fn actual_serif_heading_repair_is_small_complete_and_idempotent() {
         text.font_size = Some(120.0);
     }
     assert_eq!(restored, before, "no other property or content changes");
-    assert_eq!(repair_headline_tails(&mut sink, "card"), 0);
+    assert_eq!(repair_with_actual_fonts(&mut sink, "card"), 0);
 }
 
 #[test]
@@ -88,7 +121,7 @@ fn authored_breaks_narrow_compositions_body_and_imports_are_preserved() {
     ] {
         let mut sink = work(content, width, role);
         let before = sink.state.doc.clone();
-        assert_eq!(repair_headline_tails(&mut sink, "card"), 0);
+        assert_eq!(repair_with_actual_fonts(&mut sink, "card"), 0);
         assert_eq!(sink.state.doc, before);
     }
     for preserve in [true, false] {
@@ -97,7 +130,7 @@ fn authored_breaks_narrow_compositions_body_and_imports_are_preserved() {
         if !preserve {
             sink.state.editor_ui.home.imported_from = Some("https://example.test/reference".into());
         }
-        assert_eq!(repair_headline_tails(&mut sink, "card"), 0);
+        assert_eq!(repair_with_actual_fonts(&mut sink, "card"), 0);
     }
 }
 
@@ -113,7 +146,7 @@ fn two_character_tail_uses_the_same_bounded_fit() {
         font_size: 40.0,
     });
     sink.applied.clear();
-    let original = resolved_rects(&sink.state)["heading"].h;
-    assert_eq!(repair_headline_tails(&mut sink, "card"), 1);
-    assert!(resolved_rects(&sink.state)["heading"].h < original * 0.6);
+    let original = actual_font_rects(&sink.state)["heading"].h;
+    assert_eq!(repair_with_actual_fonts(&mut sink, "card"), 1);
+    assert!(actual_font_rects(&sink.state)["heading"].h < original * 0.6);
 }

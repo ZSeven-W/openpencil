@@ -98,6 +98,14 @@ fn collect(
 }
 
 pub(crate) fn repair_headline_tails(sink: &mut dyn DocSink, root_id: &str) -> usize {
+    repair_headline_tails_measured(sink, root_id, resolved_rects)
+}
+
+fn repair_headline_tails_measured(
+    sink: &mut dyn DocSink,
+    root_id: &str,
+    resolve_rects: impl Fn(&EditorState) -> HashMap<String, Rect>,
+) -> usize {
     if sink.state().editor_ui.preserve_authored_geometry
         || sink.state().editor_ui.home.imported_from.is_some()
         || !matches!(
@@ -107,7 +115,7 @@ pub(crate) fn repair_headline_tails(sink: &mut dyn DocSink, root_id: &str) -> us
     {
         return 0;
     }
-    let rects = resolved_rects(sink.state());
+    let rects = resolve_rects(sink.state());
     let Some(root) =
         op_editor_core::walkers::find_node(sink.state().active_children(), &NodeId::new(root_id))
     else {
@@ -130,7 +138,7 @@ pub(crate) fn repair_headline_tails(sink: &mut dyn DocSink, root_id: &str) -> us
             page_id: None,
         });
     }
-    let single = resolved_rects(&natural);
+    let single = resolve_rects(&natural);
     let mut fixes = Vec::new();
     for c in candidates {
         let (Some(full), Some(one)) = (rects.get(&c.id), single.get(&c.id)) else {
@@ -153,7 +161,7 @@ pub(crate) fn repair_headline_tails(sink: &mut dyn DocSink, root_id: &str) -> us
                 node_id: NodeId::new(&c.id),
                 text: chars[..chars.len() - tail].iter().collect(),
             });
-            resolved_rects(&prefix)
+            resolve_rects(&prefix)
                 .get(&c.id)
                 .is_some_and(|r| (r.h - one.h).abs() <= EPS)
         });
@@ -174,8 +182,8 @@ pub(crate) fn repair_headline_tails(sink: &mut dyn DocSink, root_id: &str) -> us
                     font_size: size as f32,
                 });
             }
-            let fixed = resolved_rects(&authored);
-            let auto = resolved_rects(&natural);
+            let fixed = resolve_rects(&authored);
+            let auto = resolve_rects(&natural);
             if let (Some(f), Some(n)) = (fixed.get(&c.id), auto.get(&c.id)) {
                 if (f.h - n.h).abs() <= EPS && n.w <= c.available + EPS {
                     verified = true;
