@@ -69,6 +69,8 @@ struct RecordingBackend {
     dots: usize,
     mesh_fills: usize,
     shader_fills: usize,
+    /// The `(name, values)` uniforms of each shader fill, in op order.
+    shader_uniforms: Vec<Vec<(String, Vec<f32>)>>,
     /// One `(radians, pivot)` per [`Op::Rotate`], in op order.
     rotations: Vec<(f32, Point2D)>,
     /// One `(scale, pivot)` per [`Op::Scale`], in op order.
@@ -179,11 +181,17 @@ impl crate::RenderBackend for RecordingBackend {
         _: Rect,
         _: f32,
         _: &str,
-        _: &[(&str, &[f32])],
+        uniforms: &[(&str, &[f32])],
         _: f32,
         _: Color,
     ) {
         self.shader_fills += 1;
+        self.shader_uniforms.push(
+            uniforms
+                .iter()
+                .map(|(name, values)| (name.to_string(), values.to_vec()))
+                .collect(),
+        );
         self.ops.push(Op::Fill);
     }
     fn resize(&mut self, _: u32, _: u32) {}

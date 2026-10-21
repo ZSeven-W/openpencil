@@ -397,6 +397,9 @@ pub(crate) fn paint_gradient_rect(
 /// Uniforms are flattened into `(name, values)` slices because the
 /// backend trait stays free of scene-specific types. Native Skia and the
 /// CanvasKit web host run the program; other backends paint `fallback` solid.
+/// A shader that declares `uniform float time;` also gets the canvas clock
+/// (see [`super::canvas_shader_clock`]), overriding any authored `time` the
+/// same way the loader overrides `size`.
 pub(crate) fn paint_shader_rect(
     cx: &mut PaintCx<'_>,
     shader: &SceneShader,
@@ -404,11 +407,17 @@ pub(crate) fn paint_shader_rect(
     corner_radius: f32,
     corner_radii: Option<[f32; 4]>,
 ) {
-    let uniforms: Vec<(&str, &[f32])> = shader
+    use super::canvas_shader_clock::{time_uniform_value, TIME_UNIFORM};
+    let time = time_uniform_value(&shader.sksl).map(|seconds| [seconds]);
+    let mut uniforms: Vec<(&str, &[f32])> = shader
         .uniforms
         .iter()
+        .filter(|u| time.is_none() || u.name != TIME_UNIFORM)
         .map(|u| (u.name.as_str(), u.values.as_slice()))
         .collect();
+    if let Some(time) = time.as_ref() {
+        uniforms.push((TIME_UNIFORM, time.as_slice()));
+    }
     if let Some(radii) = corner_radii {
         cx.backend.fill_round_rect_shader_per_corner(
             rect,
