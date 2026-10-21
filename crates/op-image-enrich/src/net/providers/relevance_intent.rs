@@ -33,7 +33,10 @@ pub(super) const INTENT_STYLE_WORDS: &[&str] = &[
 /// zero-hit response, so judge-rejected slots used to fall straight to the
 /// Wikimedia ladder.
 ///
-/// 1. The last two content words of the query.
+/// 1. The query's subject words with style words ([`INTENT_STYLE_WORDS`])
+///    and generic framing nouns ([`GENERIC_FRAMING_WORDS`]) dropped — or
+///    nothing at all when three or more subject words remain, per the 0930
+///    three-word rule (see [`two_keyword_rewrite`]).
 /// 2. Subject words from the intent anchored to the original query, with
 ///    nearby concrete context when useful, capped at four words.
 ///
@@ -54,13 +57,62 @@ pub(crate) fn rewrite_queries(query: &str, intent: &str) -> Vec<String> {
     rewrites
 }
 
-/// The last two content words of the query — tighter than
-/// [`two_keyword_retry`]'s three-word tail, which equals the primary query
-/// for the common three-word subject phrase and therefore never fires there.
+/// Genre/framing/occasion nouns: they name the kind of picture wanted, not
+/// the subject in it, so the two-keyword rewrite drops them ("kettlebell
+/// swing workout" → "kettlebell swing", not "swing workout"). They only
+/// leave while at least two subject words survive, and they never license
+/// shortening an already concrete three-word subject.
+const GENERIC_FRAMING_WORDS: &[&str] = &[
+    "workout",
+    "exercise",
+    "routine",
+    "session",
+    "training",
+    "portrait",
+    "scene",
+    "lifestyle",
+    "concept",
+    "setup",
+    "view",
+    "detail",
+    "texture",
+    "illustration",
+    "banner",
+    "hero",
+    "shot",
+    "moment",
+    "vibe",
+    "aesthetic",
+];
+
+/// At most two surviving subject words of the query, or `None`. Style words
+/// ([`INTENT_STYLE_WORDS`], canonicalized like [`two_keyword_retry`]) and
+/// generic framing nouns ([`GENERIC_FRAMING_WORDS`]) are dropped first;
+/// framing nouns only while at least two subject words remain ("workout
+/// routine" keeps both words). Three or more surviving subject words return
+/// no rewrite, per the rule measured 2026-09-30 in [`two_keyword_retry`]:
+/// "No shorter retry for a three-word subject: dropping its leading word
+/// loses the domain (rose serum bottle → 1960s medical serum, camellia
+/// cream jar → cake in a jar). An empty slot is better than a wrong
+/// picture."
 fn two_keyword_rewrite(query: &str) -> Option<String> {
-    let core = concrete_query_words(query);
-    let tail = &core[core.len().saturating_sub(2)..];
-    (!tail.is_empty()).then(|| tail.join(" "))
+    let core: Vec<String> = concrete_query_words(query)
+        .into_iter()
+        .filter(|word| !INTENT_STYLE_WORDS.contains(&canonicalize_word(word).as_str()))
+        .collect();
+    let stripped: Vec<&str> = core
+        .iter()
+        .filter(|word| !GENERIC_FRAMING_WORDS.contains(&canonicalize_word(word).as_str()))
+        .map(|word| word.as_str())
+        .collect();
+    // Stripping must not eat the whole subject: an all-framing phrase such
+    // as "workout routine" retries with its framing words kept.
+    let subject: Vec<&str> = if stripped.len() >= 2 {
+        stripped
+    } else {
+        core.iter().map(|word| word.as_str()).collect()
+    };
+    (!subject.is_empty() && subject.len() <= 2).then(|| subject.join(" "))
 }
 
 /// Find the authored subject before selecting a short retrieval phrase. Rich

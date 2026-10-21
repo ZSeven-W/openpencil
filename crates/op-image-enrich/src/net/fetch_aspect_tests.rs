@@ -473,11 +473,10 @@ fn existing_subject_rewrites_keep_any_aspect_and_the_original_judgment_contract(
                 vec![
                     (QUERY, Some(ImageAspectRatio::Square)),
                     (QUERY, None),
-                    ("serum bottle", None),
                     ("glass serum bottle", None),
                 ]
             );
-            assert_eq!(calls.len(), 4, "geometry does not add more rewrite tiers");
+            assert_eq!(calls.len(), 3, "geometry does not add more rewrite tiers");
             for call in &calls[2..] {
                 assert_eq!(
                     call.2, tier_deadline,

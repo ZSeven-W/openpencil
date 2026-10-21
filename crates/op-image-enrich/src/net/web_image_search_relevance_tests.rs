@@ -307,10 +307,12 @@ fn isolated_query_requires_positive_isolation_metadata() {
 fn hyphenated_compound_survives_the_two_keyword_rewrite() {
     // The two-word tail equals the query itself, so no rewrite is offered.
     assert!(rewrite_queries("push-up exercise", "").is_empty());
-    let rewrites = rewrite_queries("dark gym push-up exercise", "");
-    assert_eq!(rewrites[0], "push-up exercise");
-    let rewrites = rewrite_queries("fresh - salad bowl", "");
-    assert_eq!(rewrites[0], "salad bowl");
+    // Three surviving subject words: no shorter retry at all (0930 rule).
+    assert!(rewrite_queries("dark gym push-up exercise", "").is_empty());
+    let rewrites = rewrite_queries("gym push-up exercise", "");
+    assert_eq!(rewrites[0], "gym push-up");
+    let rewrites = rewrite_queries("fresh - salad", "");
+    assert_eq!(rewrites[0], "fresh salad");
 }
 
 fn raw(id: &str, title: &str, tags: &str) -> RawHit {

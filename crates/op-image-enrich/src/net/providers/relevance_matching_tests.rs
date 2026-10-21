@@ -299,10 +299,10 @@ fn provider_query_generation_is_not_stemmed_or_split() {
             "athlete push-up exercise",
             "photo of an athlete performing a push-up exercise"
         ),
-        ["push-up exercise"]
+        ["athlete push-up"]
     );
     assert_eq!(
-        rewrite_queries("blue cotton t-shirt", ""),
+        rewrite_queries("cotton t-shirt photo", ""),
         ["cotton t-shirt"]
     );
     assert_eq!(
