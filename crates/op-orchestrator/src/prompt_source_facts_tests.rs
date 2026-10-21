@@ -135,9 +135,9 @@ fn source_facts_outrank_poisoned_elements_on_every_tier_and_retry_path() {
             assert!(call
                 .system_prompt
                 .contains("omit the entire extra label/badge/value"));
-            assert!(call
-                .system_prompt
-                .contains("or demo content for explicitly requested populated"));
+            assert!(call.system_prompt.contains(
+                "use honest placeholders only where the SOURCE FACTS contract requires them"
+            ));
             if matches!(section.retry_feedback, Some(RetryFeedback::Completeness(_))) {
                 assert!(call.user_prompt.contains("COMPLETENESS FIX REQUIRED"));
             }
@@ -364,5 +364,33 @@ fn source_facts_supplied_identifiers_do_not_authorize_extra_card_metadata() {
             .call_request
             .system_prompt
             .contains("does not authorize duplicating it into unrelated sections"));
+    }
+}
+
+#[test]
+fn source_facts_fill_requested_concept_fields_instead_of_placeholders() {
+    // A concept brief that supplies a few display values still asks for a
+    // designed screen: unsupplied requested fields (schedules, kiln times,
+    // forecast rows) get demo content, not "待补充" placeholders.
+    let brief = "陶艺工坊 App 两屏（各 375×812）：首页「本周开窑」卡片带倒计时，课程列表三门课（拉坯入门 2 小时 ¥180），我的作品横滑；详情页烧制记录四步时间线。";
+    let (request, proposal, section) = delivery_fixture(brief);
+    let (call, _) = bsp(
+        &section,
+        &proposal,
+        &request,
+        AbortFlag::new(),
+        false,
+        false,
+    );
+    assert_system_contract_is_last(&call);
+    for required in [
+        "screens to design, not real content to reproduce",
+        "schedules, timelines, lists or detail fields",
+        "consistent with any supplied values",
+        "Only when the user forbids sample/demo data",
+        "never renders as \"—\", \"待补充\", \"待填写\" or \"TBD\"",
+        "prices, durations, dates, counts and remaining seats/stock",
+    ] {
+        assert!(call.system_prompt.contains(required), "{required}");
     }
 }

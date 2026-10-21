@@ -256,7 +256,7 @@ fn shared_context_planner_contract_reaches_every_planning_mode() {
             .contains("NOT user facts or verified business data"));
         assert!(call
             .system_prompt
-            .contains("placeholders for requested real fields whose values are unknown"));
+            .contains("never plan \"待填写\"/\"待补充\"/\"—\" placeholders for them"));
         assert!(call.user_prompt.contains(BRIEF));
     }
 }

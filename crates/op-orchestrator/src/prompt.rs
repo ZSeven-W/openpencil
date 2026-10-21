@@ -141,9 +141,8 @@ Syntax example only; its names/statuses are not source data for this design:
     const c1 = I(row, {type:"frame", width:"fill_container"}); I(c1, {type:"text", content:r.name});
     const c2 = I(row, {type:"frame", width:"fill_container"}); I(c2, {type:"text", content:r.status});
   }
-Generate every requested row/card/item using supplied values, honest placeholders for
-requested fields with missing values, or demo content for explicitly requested populated
-components.
+Generate every requested row/card/item using supplied values or demo content for requested
+components; use honest placeholders only where the SOURCE FACTS contract requires them.
 Output ONLY the JavaScript program."#;
 
 /// Rich 模式 system prompt 末尾后缀 —— verbatim,`orchestrator.ts:1382-1383`。
