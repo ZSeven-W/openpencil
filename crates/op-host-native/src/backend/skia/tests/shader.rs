@@ -158,3 +158,37 @@ fn shader_pixels_stay_node_local_across_viewport_translation() {
         }
     }
 }
+
+#[test]
+fn a_time_uniform_binds_and_changes_pixels_in_real_skia() {
+    let sksl =
+        "uniform float time; half4 main(float2 p){ return half4(fract(time), 0.0, 0.0, 1.0); }";
+    skia_safe::RuntimeEffect::make_for_shader(sksl, None)
+        .unwrap_or_else(|error| panic!("time-driven SkSL must compile: {error}"));
+    let red_at = |seconds: f32| {
+        let time = [seconds];
+        let uniforms = [("time", time.as_slice())];
+        raster_bytes(8, 8, |backend, canvas| {
+            backend.fill_round_rect_shader(
+                canvas,
+                Rect::xywh(0.0, 0.0, 8.0, 8.0),
+                0.0,
+                sksl,
+                &uniforms,
+                1.0,
+                Color::GREEN,
+            );
+        })
+        .chunks_exact(4)
+        // N32 is BGRA or RGBA by platform; only red is non-zero here.
+        .map(|pixel| pixel[0].max(pixel[2]))
+        .max()
+        .expect("pixels")
+    };
+    let early = red_at(0.25);
+    let late = red_at(0.75);
+    assert!(
+        late > early + 64,
+        "the bound time must reach the shader: red {early} at 0.25 s vs {late} at 0.75 s"
+    );
+}

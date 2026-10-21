@@ -82,3 +82,52 @@ fn mesh_gradient_dispatches_through_the_mesh_backend_method() {
         "no flat first-vertex fill at the dispatch layer"
     );
 }
+
+#[test]
+fn a_shader_declaring_time_receives_the_frame_clock_over_an_authored_value() {
+    use crate::layout_scene::{SceneShader, SceneShaderUniform};
+    let mut node = SceneNode::leaf("t1", NodeKind::Rect);
+    node.bounds = Rect::xywh(0.0, 0.0, 100.0, 100.0);
+    node.fill = Some(Color::WHITE);
+    node.fill_type = SceneFillType::Shader;
+    node.shader = Some(SceneShader {
+        sksl: "uniform float time; uniform half4 tint; half4 main(float2 p){ return tint; }"
+            .to_string(),
+        uniforms: vec![
+            SceneShaderUniform {
+                name: "time".to_string(),
+                values: vec![99.0],
+            },
+            SceneShaderUniform {
+                name: "tint".to_string(),
+                values: vec![1.0, 0.0, 0.0, 1.0],
+            },
+        ],
+        opacity: 1.0,
+        fallback: Color::WHITE,
+    });
+
+    crate::widgets::canvas_shader_clock::begin_frame(1_500);
+    let mut backend = RecordingBackend::default();
+    {
+        let mut cx = PaintCx {
+            backend: &mut backend,
+        };
+        crate::widgets::canvas_viewport_overlay::paint_fill_then_stroke(
+            &mut cx,
+            &node,
+            node.bounds,
+            1.0,
+            node.fill,
+        );
+    }
+    assert_eq!(
+        backend.shader_uniforms,
+        vec![vec![
+            ("tint".to_string(), vec![1.0, 0.0, 0.0, 1.0]),
+            ("time".to_string(), vec![1.5]),
+        ]],
+        "the frame clock replaces the authored `time` and is bound exactly once"
+    );
+    assert!(crate::widgets::canvas_shader_clock::animated_shader_painted());
+}

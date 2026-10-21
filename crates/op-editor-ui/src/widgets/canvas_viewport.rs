@@ -166,6 +166,8 @@ impl<'a> Widget for CanvasViewport<'a> {
         if rect.size.x <= 0.0 || rect.size.y <= 0.0 {
             return;
         }
+        // Time-driven shader fills read this frame's clock while painting.
+        super::canvas_shader_clock::begin_frame(self.now_ms);
         cx.backend.save();
         cx.backend.clip_rect(rect);
 

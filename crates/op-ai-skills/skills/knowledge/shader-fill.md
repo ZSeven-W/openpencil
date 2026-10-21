@@ -73,3 +73,6 @@ RULES:
 - Pass the node's pixel size as a `float2 size` uniform when you need to
   normalise `fragCoord` (SkSL has no built-in resolution).
 - No external textures / images in v1 — colours + math only.
+- To animate, declare `uniform float time;` — the canvas binds elapsed
+  seconds every frame (exports render at `time = 0`). Never put `time` in
+  `uniforms`; keep motion slow, e.g. `sin(time * 0.5)`.

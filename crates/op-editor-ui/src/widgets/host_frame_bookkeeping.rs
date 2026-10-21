@@ -185,12 +185,29 @@ pub fn base_animation_deadline_ms(
     if let Some(deadline) = state.editor_ui.home.art_deadline_ms(now_ms) {
         next = earliest(next, deadline);
     }
+    // A time-driven shader fill on screen animates without any input, so
+    // the scheduler keeps frames coming for as long as one is painted.
+    if let Some(deadline) = crate::widgets::canvas_shader_clock::next_deadline_ms(now_ms) {
+        next = earliest(next, deadline);
+    }
     next
 }
 
 #[cfg(test)]
 mod tests {
-    use super::fold_preview_deadline;
+    use super::{base_animation_deadline_ms, fold_preview_deadline};
+    use crate::widgets::canvas_shader_clock;
+
+    #[test]
+    fn a_painted_time_shader_keeps_the_frame_loop_alive() {
+        let state = op_editor_core::EditorState::default();
+        canvas_shader_clock::begin_frame(1_000);
+        canvas_shader_clock::time_uniform_value("uniform float time;");
+        assert_eq!(
+            base_animation_deadline_ms(&state, None, 1_000),
+            Some(1_000 + canvas_shader_clock::FRAME_INTERVAL_MS)
+        );
+    }
 
     #[test]
     fn preview_deadline_is_folded_and_clamped_only_when_present() {

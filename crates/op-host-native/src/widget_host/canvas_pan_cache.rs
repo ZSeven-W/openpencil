@@ -81,6 +81,7 @@ impl WidgetHostNative {
                 .as_ref()
                 .is_none_or(|transition| !transition.is_active(self.now_ms))
             && op_editor_core::agent_indicators::snapshot_at_if_active(self.now_ms).is_none()
+            && !op_editor_ui::widgets::canvas_shader_clock::animated_shader_painted()
             && self.node_drag.is_none()
             && self.marquee_drag.is_none()
             && self.editor_state.editor_ui.starter_ghost.is_none()

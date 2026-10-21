@@ -609,6 +609,12 @@ impl WidgetHost {
             ) {
                 crate::repaint_coalescer::request();
             }
+            // A time-driven shader fill animates without any input, and this
+            // host has no deadline scheduler to carry the next frame, so ask
+            // for it here while one is on screen.
+            if op_editor_ui::widgets::canvas_shader_clock::animated_shader_painted() {
+                crate::repaint_coalescer::request();
+            }
         }
     }
 }
