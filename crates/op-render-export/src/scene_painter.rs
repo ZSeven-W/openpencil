@@ -58,7 +58,17 @@ pub fn paint_node(canvas: &Canvas, node: &SceneNode) {
 /// Paint top-level page nodes in live-canvas z-order. Scene children
 /// are ordered topmost-first (layer-panel order), so the painter walks
 /// them in reverse — same as `canvas_viewport.rs`'s paint loop.
+///
+/// Time-driven shader fills are pinned to `time = 0`: a live screenshot runs
+/// on the UI thread between canvas frames, and its pixels must not depend on
+/// when it was taken.
 pub fn paint_nodes(canvas: &Canvas, nodes: &[SceneNode]) {
+    op_editor_ui::widgets::canvas_shader_clock::with_fixed_clock(0.0, || {
+        paint_nodes_unpinned(canvas, nodes)
+    });
+}
+
+fn paint_nodes_unpinned(canvas: &Canvas, nodes: &[SceneNode]) {
     EXPORT_BACKEND.with(|cell| {
         let mut backend = cell.borrow_mut();
         ensure_images_decoded(&mut backend, nodes);

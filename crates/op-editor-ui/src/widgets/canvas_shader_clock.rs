@@ -2,10 +2,9 @@
 //!
 //! A shader fill whose SkSL declares `uniform float time;` (or `half time`)
 //! receives the canvas clock in seconds, bound next to its authored uniforms
-//! the same way the loader binds `size`. The clock is per thread: the canvas
-//! viewport sets it once per painted frame, so an export or screenshot painted
-//! on another thread never calls [`begin_frame`] and renders deterministically
-//! at `time = 0`.
+//! the same way the loader binds `size`. The canvas viewport sets the clock
+//! once per painted frame; exports and screenshots pin it to `0` through
+//! [`with_fixed_clock`], so their pixels never depend on when they ran.
 //!
 //! Painting such a shader marks the frame as animated. Both hosts repaint only
 //! on demand, so the shared deadline chain folds in [`next_deadline_ms`] and the
@@ -64,6 +63,19 @@ pub fn time_uniform_value(sksl: &str) -> Option<f32> {
     }
     ANIMATED_PAINTED.with(|animated| animated.set(true));
     Some(FRAME_SECONDS.with(Cell::get))
+}
+
+/// Run `paint` with the clock pinned to `seconds`, then restore the canvas
+/// frame's clock and animated flag. Exports and screenshots can run on the
+/// UI thread between canvas frames; pinning keeps their pixels independent
+/// of when they were taken and keeps them from touching the canvas loop.
+pub fn with_fixed_clock<R>(seconds: f32, paint: impl FnOnce() -> R) -> R {
+    let saved_seconds = FRAME_SECONDS.with(|clock| clock.replace(seconds));
+    let saved_animated = ANIMATED_PAINTED.with(Cell::get);
+    let result = paint();
+    FRAME_SECONDS.with(|clock| clock.set(saved_seconds));
+    ANIMATED_PAINTED.with(|animated| animated.set(saved_animated));
+    result
 }
 
 /// Whether a time-driven shader was painted since the last [`begin_frame`].

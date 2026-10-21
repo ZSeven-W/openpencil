@@ -58,3 +58,15 @@ fn begin_frame_clears_the_animated_flag() {
     begin_frame(16);
     assert!(!animated_shader_painted());
 }
+
+#[test]
+fn with_fixed_clock_pins_time_and_restores_the_canvas_frame() {
+    begin_frame(7_000);
+    let pinned = with_fixed_clock(0.0, || time_uniform_value("uniform float time;"));
+    assert_eq!(pinned, Some(0.0));
+    assert!(
+        !animated_shader_painted(),
+        "a pinned export must not mark the canvas frame as animated"
+    );
+    assert_eq!(time_uniform_value("uniform float time;"), Some(7.0));
+}
