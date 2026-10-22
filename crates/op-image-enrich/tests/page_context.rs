@@ -578,3 +578,55 @@ fn auxiliary_is_short_and_combined_context_remains_bounded() {
     assert!(target.page_context.as_ref().unwrap().chars().count() <= 240);
     assert!(!target.page_context.as_ref().unwrap().contains('字'));
 }
+
+fn dream_state(prompt: &str) -> EditorState {
+    state(
+        vec![frame(
+            "screen",
+            "梦境详情",
+            vec![frame(
+                "hero",
+                "月光云海",
+                vec![
+                    json!({"type":"image", "id":"slot", "name":"dream-stairway-hero", "src":"",
+                        "width":375, "height":240, "imagePrompt":prompt}),
+                    text("title", json!("沿着月光， 走进云海"), 28.0),
+                ],
+            )],
+        )],
+        None,
+    )
+}
+
+#[test]
+fn described_scenes_are_sent_without_page_words_the_model_would_paint() {
+    // Prompts whose generated photos showed "梦境详情 / 月光云海 / 沿着月光，
+    // 走进云海" and "1.4–1.8m 良好" painted in after the context was appended.
+    for prompt in [
+        "A surreal landscape of suspended stone steps without railings extending into a vast sea of clouds under midnight moonlight.",
+        "一名冲浪者正在蓝绿色浪管内部冲浪，弧形海浪包围人物，浪花与水壁清晰可见。",
+        "芦苇荡与木栈道晨雾实景，远处水面反光",
+    ] {
+        let target = target(&dream_state(prompt));
+        assert!(target.page_context.as_deref().unwrap().contains("月光云海"));
+        assert_eq!(compose_generation_prompt(&target), prompt);
+    }
+}
+
+#[test]
+fn bare_subjects_below_the_scene_weight_still_get_page_context() {
+    for prompt in [
+        "Velra Type",
+        "Harbour Editions",
+        "a quiet stone stairway into clouds",
+        "云海阶梯",
+    ] {
+        let target = target(&dream_state(prompt));
+        assert_eq!(
+            compose_generation_prompt(&target),
+            format!("{prompt}. Context: this image appears in {}. Match the page's subject and art direction. Use this context only for subject and mood; do not write its words into the image.", target.page_context.as_deref().unwrap()),
+        );
+    }
+    let derived = target(&velra("velra-image", None, None, velra_metadata()));
+    assert!(compose_generation_prompt(&derived).contains(". Context: "));
+}
