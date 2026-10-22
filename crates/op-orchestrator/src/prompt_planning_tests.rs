@@ -326,6 +326,10 @@ fn subagent_prompt_carries_ts_layout_contract() {
     assert!(combined.contains(
         "imagePrompt must describe actual objects/scenes, not just a project or brand name"
     ));
+    // Unspecified label lettering came back as invented glyphs on generated
+    // product photos; the rule asks for the exact text or a blank label.
+    assert!(combined.contains("a label reading \"雨庭\""));
+    assert!(combined.contains("never ask for unspecified lettering, writing or logos"));
     for required in [
         "root page may keep 0 horizontal padding",
         "ordinary transparent root-direct content section",
