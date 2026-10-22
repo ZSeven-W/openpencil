@@ -195,8 +195,9 @@ enum FillKind {
     Transparent,
     /// A usable colour whose source is not a solid or linear/radial gradient.
     Unprovable,
-    /// A usable solid colour (unresolved — may still be a `$ref`).
-    Solid(String),
+    /// A usable solid colour (unresolved — may still be a `$ref`) and the
+    /// fill's own opacity, which scales the colour's alpha.
+    Solid(String, f32),
     /// Gradient stop colours (unresolved — may still be `$ref`s).
     Gradient(GradientSource),
     /// Mesh vertex colours (unresolved); provable only when near-uniform.
@@ -233,7 +234,7 @@ fn first_usable_fill_kind(fills: Option<&Vec<PenFill>>) -> FillKind {
                 if body.color.is_empty() {
                     continue;
                 }
-                return FillKind::Solid(body.color.clone());
+                return FillKind::Solid(body.color.clone(), body.opacity.unwrap_or(1.0));
             }
             PenFill::Image(body) => {
                 if body.opacity == Some(0.0) {
@@ -294,13 +295,16 @@ fn resolve_fill_kind(
     match first_usable_fill_kind(fills) {
         FillKind::Transparent => ResolvedFill::Transparent,
         FillKind::Unprovable => ResolvedFill::Unprovable,
-        FillKind::Solid(raw) => {
+        FillKind::Solid(raw, fill_opacity) => {
             let Some(resolved) = resolve_color_ref(&raw, variables, theme) else {
                 return ResolvedFill::Transparent;
             };
-            let Some(rgba) = parse_color_rgba(&resolved) else {
+            let Some(mut rgba) = parse_color_rgba(&resolved) else {
                 return ResolvedFill::Transparent;
             };
+            // A tinted card (`$--primary` at 8%) paints mostly the surface
+            // beneath it, so the fill opacity must reach the composite.
+            rgba[3] = (f32::from(rgba[3]) * fill_opacity.clamp(0.0, 1.0)).round() as u8;
             if rgba[3] == 0 {
                 ResolvedFill::Transparent
             } else {
@@ -441,7 +445,7 @@ fn background_colors_at_text(
 /// gradient text fill is unprovable and skipped, mirroring the chip rule.
 fn first_usable_solid_fill(fills: Option<&Vec<PenFill>>) -> Option<String> {
     match first_usable_fill_kind(fills) {
-        FillKind::Solid(color) => Some(color),
+        FillKind::Solid(color, _) => Some(color),
         _ => None,
     }
 }

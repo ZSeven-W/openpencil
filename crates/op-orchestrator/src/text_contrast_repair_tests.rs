@@ -48,6 +48,8 @@ fn light_theme() -> op_design_lint::node_util::Theme {
     op_design_lint::node_util::default_theme(Some(&themes))
 }
 
+#[path = "text_contrast_fill_opacity_tests.rs"]
+mod fill_opacity;
 #[path = "text_contrast_overprint_tests.rs"]
 mod overprint;
 

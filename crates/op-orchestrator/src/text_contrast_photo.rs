@@ -449,9 +449,12 @@ impl FillKind {
         theme: &op_design_lint::node_util::Theme,
     ) -> bool {
         match self {
-            Self::Solid(raw) => resolve_color_ref(raw, variables, theme)
-                .and_then(|c| parse_color_rgba(&c))
-                .is_some_and(|c| c[3] == 255),
+            Self::Solid(raw, fill_opacity) => {
+                *fill_opacity >= 1.0
+                    && resolve_color_ref(raw, variables, theme)
+                        .and_then(|c| parse_color_rgba(&c))
+                        .is_some_and(|c| c[3] == 255)
+            }
             _ => false,
         }
     }
