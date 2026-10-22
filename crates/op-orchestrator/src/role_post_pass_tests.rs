@@ -144,6 +144,25 @@ fn text_heights_removed_unless_fixed_width_height() {
 }
 
 #[test]
+fn pinned_text_height_shorter_than_its_explicit_lines_is_released() {
+    let mut root = json!({
+        "type":"frame","layout":"vertical","children":[
+            {"type":"text","content":"早安，\n还记得昨晚的梦吗？","height":52,
+             "fontSize":24,"lineHeight":1.5,"textGrowth":"fixed-width-height"},
+            {"type":"text","content":"Pinned\nbadge","height":40,
+             "fontSize":12,"lineHeight":1.5,"textGrowth":"fixed-width-height"},
+            {"type":"text","content":"土星","height":44,
+             "fontSize":40,"lineHeight":1.2,"textGrowth":"fixed-width-height"}
+        ]
+    });
+    fix_text_heights(&mut root);
+    assert!(root["children"][0].get("height").is_none());
+    assert_eq!(root["children"][0]["textGrowth"], json!("fixed-width"));
+    assert_eq!(root["children"][1]["height"], json!(40));
+    assert_eq!(root["children"][2]["height"], json!(44));
+}
+
+#[test]
 fn clip_content_set_for_rounded_image_frame() {
     let mut card = json!({
         "type":"frame","cornerRadius":12,"children":[{"type":"image","id":"img"}]

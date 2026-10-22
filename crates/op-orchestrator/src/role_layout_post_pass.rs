@@ -325,12 +325,53 @@ pub(crate) fn fix_text_heights(node: &mut Value) {
         let explicit_height = child.get("height").and_then(Value::as_f64).is_some();
         let fixed_height =
             child.get("textGrowth").and_then(Value::as_str) == Some("fixed-width-height");
-        if explicit_height && !fixed_height {
+        // A pinned height that cannot hold the text's own explicit lines
+        // paints a whole line over the next sibling (measured 2026-10-22: a
+        // two-line 24px greeting pinned at 52px covered its streak caption).
+        // A single line pinned a few px under its line box only loses
+        // leading, so it keeps its authored height.
+        let too_short_for_lines = fixed_height
+            && child
+                .get("height")
+                .and_then(Value::as_f64)
+                .is_some_and(|height| {
+                    explicit_lines_height(child).is_some_and(|needed| needed > height + 1.0)
+                });
+        if (explicit_height && !fixed_height) || too_short_for_lines {
             if let Some(obj) = child.as_object_mut() {
                 obj.remove("height");
+                if too_short_for_lines {
+                    obj.insert("textGrowth".to_string(), Value::from("fixed-width"));
+                }
             }
         }
     }
+}
+
+/// Height a multi-line text's explicit line breaks need, ignoring soft
+/// wrapping; `None` for single-line content.
+fn explicit_lines_height(text: &Value) -> Option<f64> {
+    let font_size = text
+        .get("fontSize")
+        .and_then(Value::as_f64)
+        .unwrap_or(14.0)
+        .max(1.0);
+    let line_height = match text.get("lineHeight").and_then(Value::as_f64) {
+        Some(value) if value > 4.0 => value,
+        Some(value) if value > 0.0 => font_size * value,
+        _ => font_size * 1.25,
+    };
+    let lines = match text.get("content") {
+        Some(Value::String(content)) => content.lines().count(),
+        Some(Value::Array(segments)) => segments
+            .iter()
+            .filter_map(|segment| segment.get("text").and_then(Value::as_str))
+            .collect::<String>()
+            .lines()
+            .count(),
+        _ => 1,
+    };
+    (lines >= 2).then_some(line_height * lines as f64)
 }
 
 #[cfg(test)]
