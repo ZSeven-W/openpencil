@@ -163,7 +163,14 @@ impl SubprocessProvider {
             // (`chat_copilot.rs`); the old `gh-copilot suggest`
             // template was a stale dead end. OpenCode chats over its
             // local HTTP server (`chat_http_server.rs`).
-            CliName::Copilot | CliName::OpenCode => return None,
+            CliName::Kimi if turn_purpose == safety::TurnPurpose::Generation => (
+                crate::chat_subprocess_kimi::kimi_args(),
+                PromptMode::FlagArg("-p"),
+                Some("-m"),
+                Vec::new(),
+            ),
+            // Kimi has no canvas-agent MCP wiring yet: generation only.
+            CliName::Copilot | CliName::OpenCode | CliName::Kimi => return None,
         };
         let binary = find_binary(cli.default_binary());
         if cli == CliName::Codex {
@@ -241,7 +248,10 @@ impl SubprocessProvider {
                 && matches!(self.cli, Some(CliName::Antigravity | CliName::GrokBuild));
             if !provider_default {
                 args.push(flag.into());
-                args.push(model.into());
+                args.push(match self.cli {
+                    Some(CliName::Kimi) => crate::chat_subprocess_kimi::model_alias(model),
+                    _ => model.into(),
+                });
             }
         }
         if self.native_effort_config {
@@ -414,6 +424,7 @@ impl SubprocessProvider {
             Some(CliName::Antigravity) => Some(safety::antigravity_timeout()),
             Some(CliName::GrokBuild) => Some(safety::GROK_TIMEOUT),
             Some(CliName::Dsh) => Some(crate::chat_subprocess_dsh::DSH_TIMEOUT),
+            Some(CliName::Kimi) => Some(crate::chat_subprocess_kimi::KIMI_TIMEOUT),
             _ => None,
         };
         let label = self.label.clone();
@@ -427,6 +438,8 @@ impl SubprocessProvider {
             let mut cmd = build_command(&binary, &args);
             if let Some(turn) = &_isolation {
                 cmd.current_dir(turn.cwd());
+            } else if cli == Some(CliName::Kimi) {
+                cmd.current_dir(crate::chat_subprocess_kimi::workspace_dir());
             }
             // Set the child's env from the per-CLI policy. We
             // env_clear first because tokio::process Command
@@ -598,26 +611,7 @@ impl SubprocessProvider {
                                 let _ = child.start_kill();
                                 break;
                             }
-                            // Per-CLI parse: Codex skips unparsed
-                            // lines (TS parity); generic
-                            // CLIs degrade them to raw text.
-                            let delta = match cli {
-                                Some(CliName::Codex) => quirks::parse_codex_line(&line),
-                                Some(CliName::GrokBuild) => {
-                                    crate::chat_grok_stream::parse_grok_stream_line(&line)
-                                }
-                                // dsh's whole stdout is the answer: every
-                                // line is text, never an event envelope.
-                                Some(CliName::Dsh) => {
-                                    Some(crate::chat_subprocess_dsh::parse_dsh_line(&line))
-                                }
-                                Some(CliName::ClaudeCode) => {
-                                    crate::chat_subprocess_claude_stream::parse_claude_stream_line(
-                                        &line,
-                                    )
-                                }
-                                _ => Some(parse_line(&line)),
-                            };
+                            let delta = crate::chat_subprocess_parse::parse_cli_line(cli, &line);
                             let Some(delta) = delta else { continue };
                             match &delta {
                                 ChatDelta::TextDelta(_) => emitted_text = true,

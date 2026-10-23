@@ -1,6 +1,6 @@
 //! Generic stdout event parser for subprocess chat providers.
 
-use op_ai::chat_provider::{ChatDelta, StopReason};
+use op_ai::chat_provider::{ChatDelta, CliName, StopReason};
 
 /// Parse a single CLI stdout line into a `ChatDelta`.
 ///
@@ -70,5 +70,22 @@ fn map_stop_reason(value: Option<&str>) -> StopReason {
         "tool_use" => StopReason::ToolUse,
         "aborted" | "user_abort" => StopReason::Aborted,
         _ => StopReason::EndTurn,
+    }
+}
+
+/// Per-CLI stdout parse: Codex skips unparsed lines (TS parity); generic
+/// CLIs degrade them to raw text.
+pub(crate) fn parse_cli_line(cli: Option<CliName>, line: &str) -> Option<ChatDelta> {
+    match cli {
+        Some(CliName::Codex) => crate::chat_subprocess_quirks::parse_codex_line(line),
+        Some(CliName::GrokBuild) => crate::chat_grok_stream::parse_grok_stream_line(line),
+        // dsh's whole stdout is the answer: every line is text, never an
+        // event envelope.
+        Some(CliName::Dsh) => Some(crate::chat_subprocess_dsh::parse_dsh_line(line)),
+        Some(CliName::ClaudeCode) => {
+            crate::chat_subprocess_claude_stream::parse_claude_stream_line(line)
+        }
+        Some(CliName::Kimi) => crate::chat_subprocess_kimi::parse_kimi_line(line),
+        _ => Some(parse_line(line)),
     }
 }

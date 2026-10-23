@@ -433,6 +433,7 @@ fn well_known_install_paths(name: &str) -> Vec<PathBuf> {
                 ".pnpm-global/bin",
                 ".cargo/bin",
                 ".opencode/bin",
+                ".kimi-code/bin",
                 ".npm-global/bin",
                 "node_modules/.bin",
                 ".yarn/bin",

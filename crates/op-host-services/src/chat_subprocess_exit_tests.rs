@@ -542,3 +542,48 @@ fn a_nonzero_exit_on_the_unfinished_path_is_a_failure() {
         Some(&bad)
     ));
 }
+
+#[test]
+fn kimi_generation_turn_runs_tool_free_and_reads_the_assistant_message() {
+    assert!(SubprocessProvider::for_cli(CliName::Kimi).is_none());
+    let version = r#"{"role":"meta","type":"system.version","version":"2.3.1"}"#;
+    let answer = r#"{"role":"assistant","content":"done"}"#;
+    let resume = r#"{"role":"meta","type":"session.resume_hint","content":"To resume this session: kimi -r s1"}"#;
+    let body = format!(
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$(dirname \"$0\")/argv.txt\"\npwd > \"$(dirname \"$0\")/cwd.txt\"\nprintf '%s\\n' '{version}' '{answer}' '{resume}'\n"
+    );
+    let (dir, binary) = stub_cli(&body);
+    let provider = SubprocessProvider::for_cli_generation(CliName::Kimi)
+        .expect("kimi generation template")
+        .with_test_binary(binary.to_string_lossy().into_owned());
+    let deltas: Vec<_> = provider
+        .send(ChatRequest {
+            user_message: "plan the page".into(),
+            model: Some("k3.1-pro".into()),
+            ..Default::default()
+        })
+        .collect();
+    let argv = std::fs::read_to_string(dir.join("argv.txt")).unwrap();
+    let cwd = std::fs::read_to_string(dir.join("cwd.txt")).unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+
+    assert_eq!(
+        deltas,
+        vec![
+            ChatDelta::TextDelta("done".into()),
+            ChatDelta::Done {
+                stop_reason: StopReason::EndTurn
+            }
+        ]
+    );
+    let argv: Vec<_> = argv.lines().collect();
+    let flag = |name: &str| argv[argv.iter().position(|arg| *arg == name).unwrap() + 1];
+    assert_eq!(flag("--output-format"), "stream-json");
+    assert!(flag("--agent-file").ends_with("generation-agent.md"));
+    assert_eq!(flag("-m"), "kimi-code/k3.1-pro");
+    assert!(flag("-p").contains("plan the page"));
+    assert!(
+        cwd.trim_end().ends_with("kimi-generation/workspace"),
+        "{cwd}"
+    );
+}

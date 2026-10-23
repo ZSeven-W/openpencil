@@ -21,6 +21,7 @@ pub(crate) enum SmokeProviderKind {
     Antigravity,
     ClaudeCode,
     Codex,
+    Kimi,
 }
 
 impl SmokeProviderKind {
@@ -31,6 +32,7 @@ impl SmokeProviderKind {
             "antigravity" | "agy" => Some(Self::Antigravity),
             "claude" | "claude-code" => Some(Self::ClaudeCode),
             "codex" => Some(Self::Codex),
+            "kimi" | "kimi-code" => Some(Self::Kimi),
             _ => None,
         }
     }
@@ -42,6 +44,7 @@ impl SmokeProviderKind {
             Self::Antigravity => "antigravity",
             Self::ClaudeCode => "claude-code",
             Self::Codex => "codex",
+            Self::Kimi => "kimi",
         }
     }
 }
@@ -69,6 +72,14 @@ pub(crate) fn claude_code_llm(model: &str) -> Box<dyn LlmClient> {
 pub(crate) fn antigravity_llm(model: &str) -> Box<dyn LlmClient> {
     let provider = SubprocessProvider::for_cli_generation(CliName::Antigravity)
         .expect("Antigravity has a production subprocess transport");
+    let provider: Arc<dyn ChatProvider> = Arc::new(provider);
+    Box::new(ChatProviderLlmClient::new(provider).with_model(Some(model.to_string())))
+}
+
+/// The logged-in Kimi Code CLI through its tool-free generation transport.
+pub(crate) fn kimi_llm(model: &str) -> Box<dyn LlmClient> {
+    let provider = SubprocessProvider::for_cli_generation(CliName::Kimi)
+        .expect("Kimi has a production subprocess transport");
     let provider: Arc<dyn ChatProvider> = Arc::new(provider);
     Box::new(ChatProviderLlmClient::new(provider).with_model(Some(model.to_string())))
 }
@@ -232,5 +243,19 @@ mod provider_tests {
         );
         assert_eq!(SmokeProviderKind::Codex.label(), "codex");
         let _ = codex_llm("gpt-6.1-sol");
+    }
+
+    #[test]
+    fn kimi_selection_uses_the_kimi_generation_transport() {
+        assert_eq!(
+            SmokeProviderKind::parse("kimi"),
+            Some(SmokeProviderKind::Kimi)
+        );
+        assert_eq!(
+            SmokeProviderKind::parse("Kimi-Code"),
+            Some(SmokeProviderKind::Kimi)
+        );
+        assert_eq!(SmokeProviderKind::Kimi.label(), "kimi");
+        let _ = kimi_llm("k3.1-pro");
     }
 }

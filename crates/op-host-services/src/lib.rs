@@ -43,6 +43,7 @@ mod chat_subprocess_antigravity_log;
 mod chat_subprocess_claude_stream;
 mod chat_subprocess_dsh;
 mod chat_subprocess_exit;
+mod chat_subprocess_kimi;
 mod chat_subprocess_lifecycle;
 mod chat_subprocess_parse;
 pub mod chat_subprocess_quirks;
