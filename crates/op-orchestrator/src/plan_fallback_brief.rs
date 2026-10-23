@@ -116,7 +116,7 @@ fn is_cjk_sidebar_head(head: &str) -> bool {
     head.contains("侧栏") || head.contains("侧边") || head.contains("边栏")
 }
 
-fn unique_id(base: String, taken: &mut Vec<String>) -> String {
+pub(crate) fn unique_id(base: String, taken: &mut Vec<String>) -> String {
     let mut id = base.clone();
     let mut n = 2usize;
     while taken.contains(&id) {
@@ -140,7 +140,7 @@ static EN_SINGLE_OR_NEGATED: LazyLock<Regex> = LazyLock::new(|| {
 /// Preserve byte offsets while removing quoted copy and parenthetical detail
 /// from the declaration/list grammar. Their contents are not screen counts or
 /// top-level separators (but remain intact in each worker's `elements`).
-fn screen_declaration_mask(brief: &str) -> String {
+pub(crate) fn screen_declaration_mask(brief: &str) -> String {
     let mut masked = String::with_capacity(brief.len());
     let mut depth = 0usize;
     let mut quote_end = None;
@@ -196,6 +196,51 @@ fn ends_declaration(ch: char) -> bool {
     matches!(ch, '。' | '.' | ';' | '；' | '\n' | '!' | '！' | '?' | '？')
 }
 
+/// The screen counts an affirmative declaration header states ("App 两屏"),
+/// or `None` when it states none or is not affirmative screen ownership: a
+/// single-page instruction, a negated multi-page example, or copy/examples.
+/// `header` is already masked (`screen_declaration_mask`).
+pub(crate) fn header_screen_counts(header: &str) -> Option<Vec<usize>> {
+    let lower = header.to_lowercase();
+    // A single-page instruction or a negated multi-page example is not
+    // affirmative screen ownership. Ambiguous clauses keep section mode.
+    if ["单页", "单屏", "不要", "不需要", "无需", "禁止"]
+        .iter()
+        .any(|word| header.contains(word))
+        || EN_SINGLE_OR_NEGATED.is_match(header)
+    {
+        return None;
+    }
+    if [
+        "文案", "标题", "示例", "例如", "参考", "caption", "headline", "example",
+    ]
+    .iter()
+    .any(|word| lower.contains(word))
+    {
+        return None;
+    }
+    let counts: Vec<_> = SCREEN_COUNT
+        .captures_iter(header)
+        .filter(|captures| {
+            !header[..captures.get(0).unwrap().start()]
+                .trim_end()
+                .ends_with('第')
+        })
+        .filter_map(|captures| screen_count(&captures[1]))
+        .collect();
+    (!counts.is_empty()).then_some(counts)
+}
+
+/// Normal-mode's explicit delivery choice ("交付 1 页界面") outranks page
+/// counts repeated in the user's original brief (notably Single + an old
+/// two-screen brief). `masked` comes from `screen_declaration_mask`.
+pub(crate) fn delivery_count_conflicts(masked: &str, count: usize) -> bool {
+    SCREEN_COUNT.captures_iter(masked).any(|captures| {
+        let before = masked[..captures.get(0).unwrap().start()].trim_end();
+        before.ends_with("交付") && screen_count(&captures[1]) != Some(count)
+    })
+}
+
 /// Only upgrade an explicit N-screen declaration whose following list is
 /// exactly the already-extracted N full-page items: `App 两屏: A(...), B(...)`.
 /// A count elsewhere in the brief cannot turn ordinary sections into screens.
@@ -204,12 +249,7 @@ fn explicit_screen_items(brief: &str, heads: &[String]) -> Option<Vec<String>> {
         return None;
     }
     let masked = screen_declaration_mask(brief);
-    // Normal-mode's explicit delivery choice outranks page counts repeated
-    // in the user's original brief (notably Single + an old two-screen brief).
-    if SCREEN_COUNT.captures_iter(&masked).any(|captures| {
-        let before = masked[..captures.get(0).unwrap().start()].trim_end();
-        before.ends_with("交付") && screen_count(&captures[1]) != Some(heads.len())
-    }) {
+    if delivery_count_conflicts(&masked, heads.len()) {
         return None;
     }
     for (colon, ch) in masked
@@ -222,34 +262,10 @@ fn explicit_screen_items(brief: &str, heads: &[String]) -> Option<Vec<String>> {
             .find(|(_, ch)| ends_declaration(*ch))
             .map_or(0, |(index, ch)| index + ch.len_utf8());
         let header = &masked[header_start..colon];
-        let lower = header.to_lowercase();
-        // A single-page instruction or a negated multi-page example is not
-        // affirmative screen ownership. Ambiguous clauses keep section mode.
-        if ["单页", "单屏", "不要", "不需要", "无需", "禁止"]
-            .iter()
-            .any(|word| header.contains(word))
-            || EN_SINGLE_OR_NEGATED.is_match(header)
-        {
+        let Some(counts) = header_screen_counts(header) else {
             continue;
-        }
-        if [
-            "文案", "标题", "示例", "例如", "参考", "caption", "headline", "example",
-        ]
-        .iter()
-        .any(|word| lower.contains(word))
-        {
-            continue;
-        }
-        let counts: Vec<_> = SCREEN_COUNT
-            .captures_iter(header)
-            .filter(|captures| {
-                !header[..captures.get(0).unwrap().start()]
-                    .trim_end()
-                    .ends_with('第')
-            })
-            .filter_map(|captures| screen_count(&captures[1]))
-            .collect();
-        if counts.is_empty() || counts.iter().any(|count| *count != heads.len()) {
+        };
+        if counts.iter().any(|count| *count != heads.len()) {
             continue;
         }
         let start = colon + ch.len_utf8();
@@ -306,10 +322,20 @@ pub(crate) fn brief_section_subtasks(
     parent_frame_id: Option<&str>,
 ) -> Option<(Vec<Subtask>, f64)> {
     let heads = required_sections(brief);
+    let screen_items = explicit_screen_items(brief, &heads);
+    if screen_items.is_none() {
+        if let Some(screens) = crate::plan_fallback_screens::declared_screens(brief) {
+            return Some(crate::plan_fallback_screens::screen_subtasks(
+                &screens,
+                root_width,
+                requested_height.unwrap_or(DESKTOP_SECTION_HEIGHT),
+                parent_frame_id,
+            ));
+        }
+    }
     if heads.is_empty() {
         return None;
     }
-    let screen_items = explicit_screen_items(brief, &heads);
 
     let mut taken: Vec<String> = Vec::new();
     let mut subtasks: Vec<Subtask> = heads

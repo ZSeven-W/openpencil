@@ -47,6 +47,7 @@ mod plan_coverage_text;
 mod plan_fallback_brief;
 mod plan_fallback_card;
 mod plan_fallback_mobile;
+mod plan_fallback_screens;
 mod plan_fresh;
 mod plan_fresh_recovery;
 pub mod plan_normalize;
