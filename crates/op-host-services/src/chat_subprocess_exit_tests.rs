@@ -345,6 +345,38 @@ fn codex_terminal_error_events_finish_the_turn_as_aborted() {
 }
 
 #[test]
+fn codex_reconnect_notice_does_not_end_a_turn_that_recovers() {
+    let notice = r#"{"type":"error","message":"Reconnecting... 2/5 (stream disconnected before completion: tls handshake eof)"}"#;
+    let answer = r#"{"type":"item.completed","item":{"type":"agent_message","text":"recovered"}}"#;
+    let done = r#"{"type":"turn.completed","usage":{}}"#;
+    let body =
+        format!("#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '{notice}' '{answer}' '{done}'\n");
+    let (dir, binary) = stub_cli(&body);
+    let provider = SubprocessProvider::for_cli(CliName::Codex)
+        .expect("codex subprocess template")
+        .with_test_binary(binary.to_string_lossy().into_owned());
+    let deltas: Vec<_> = provider
+        .send(ChatRequest {
+            user_message: "inspect the canvas".into(),
+            ..Default::default()
+        })
+        .collect();
+    let _ = std::fs::remove_dir_all(dir);
+
+    assert!(
+        !deltas.iter().any(|d| matches!(d, ChatDelta::Error(_))),
+        "{deltas:?}"
+    );
+    assert!(deltas.contains(&ChatDelta::TextDelta("recovered".into())));
+    assert!(matches!(
+        deltas.last(),
+        Some(ChatDelta::Done {
+            stop_reason: StopReason::EndTurn
+        })
+    ));
+}
+
+#[test]
 fn cancelling_a_silent_subprocess_reaps_its_descendant() {
     let body = r#"#!/bin/sh
 sleep 30 &

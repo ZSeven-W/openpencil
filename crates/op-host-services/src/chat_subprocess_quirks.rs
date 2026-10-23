@@ -247,6 +247,7 @@ pub fn parse_codex_line(line: &str) -> Option<ChatDelta> {
         // `codex exec --json` exposes both unrecoverable stream errors and
         // failed turns as terminal events. The former carries `message` at
         // the top level; the latter nests the same shape under `error`.
+        "error" if is_codex_reconnect_notice(&val) => None,
         "error" | "turn.failed" => {
             let error = if ty == "turn.failed" {
                 val.get("error").unwrap_or(&val)
@@ -297,10 +298,22 @@ pub fn is_codex_terminal_error(line: &str) -> bool {
     let Ok(val) = serde_json::from_str::<serde_json::Value>(line.trim()) else {
         return false;
     };
-    matches!(
-        val.get("type").and_then(|value| value.as_str()),
-        Some("error" | "turn.failed")
-    )
+    match val.get("type").and_then(|value| value.as_str()) {
+        Some("error") => !is_codex_reconnect_notice(&val),
+        Some("turn.failed") => true,
+        _ => false,
+    }
+}
+
+/// Codex reports its own stream retries ("Reconnecting... 2/5 (stream
+/// disconnected before completion: tls handshake eof)") as `error` events
+/// while it keeps reconnecting; a turn it gives up on still ends with
+/// `turn.failed`. Treating the notice as terminal killed that recovery on
+/// the first proxy hiccup and shipped designs with whole sections missing.
+fn is_codex_reconnect_notice(val: &serde_json::Value) -> bool {
+    val.get("message")
+        .and_then(|v| v.as_str())
+        .is_some_and(|message| message.trim_start().starts_with("Reconnecting..."))
 }
 
 /// Extract a human-readable error from Codex stderr (TS
@@ -605,6 +618,23 @@ env_key = not_quoted
         ));
         assert!(!is_codex_terminal_error(
             r#"{"type":"turn.completed","usage":{}}"#
+        ));
+    }
+
+    #[test]
+    fn codex_reconnect_notices_let_the_cli_keep_retrying() {
+        for notice in [
+            r#"{"type":"error","message":"Reconnecting... 2/5 (stream disconnected before completion: tls handshake eof)"}"#,
+            r#"{"type":"error","message":"Reconnecting... 2/5 (workspace routing discovery failed)"}"#,
+        ] {
+            assert_eq!(parse_codex_line(notice), None);
+            assert!(!is_codex_terminal_error(notice));
+        }
+        let gave_up = r#"{"type":"turn.failed","error":{"message":"Reconnecting... 5/5 (stream disconnected before completion)"}}"#;
+        assert!(is_codex_terminal_error(gave_up));
+        assert!(matches!(
+            parse_codex_line(gave_up),
+            Some(ChatDelta::Error(_))
         ));
     }
 
