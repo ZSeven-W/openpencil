@@ -672,7 +672,19 @@ async fn main() -> std::process::ExitCode {
                         );
                         std::process::ExitCode::from(code)
                     }
-                    None => std::process::ExitCode::SUCCESS,
+                    None => {
+                        let failed = smoke_support::failed_subtask_count(&summary);
+                        match smoke_support::failed_subtasks_exit_code(failed) {
+                            Some(code) => {
+                                eprintln!(
+                                    "[FINAL] {failed} subtask(s) delivered nothing; the saved \
+                                     doc has gaps — failing with exit {code}"
+                                );
+                                std::process::ExitCode::from(code)
+                            }
+                            None => std::process::ExitCode::SUCCESS,
+                        }
+                    }
                 }
             }
         }

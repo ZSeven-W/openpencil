@@ -195,9 +195,34 @@ pub(crate) fn loop_thinking_mode() -> op_ai::chat_provider::ThinkingMode {
     }
 }
 
+/// Subtasks that landed no content. In the editor each keeps its empty board
+/// as the target of a Retry row; headless runs have no such row, so these
+/// drafts must not read as clean successes.
+pub(crate) fn failed_subtask_count(summary: &op_orchestrator::RunSummary) -> usize {
+    summary
+        .subtasks
+        .iter()
+        .filter(|s| s.node_count == 0)
+        .count()
+}
+
+/// Exit 5: the run delivered work but at least one subtask landed nothing
+/// (measured: a flaky proxy left a blank card in a four-card set and a
+/// poster without its hero, both exiting 0).
+pub(crate) fn failed_subtasks_exit_code(failed_count: usize) -> Option<u8> {
+    (failed_count > 0).then_some(5)
+}
+
 #[cfg(test)]
 mod provider_tests {
     use super::*;
+
+    #[test]
+    fn a_run_with_an_empty_subtask_exits_five_and_a_clean_run_zero() {
+        assert_eq!(failed_subtasks_exit_code(1), Some(5));
+        assert_eq!(failed_subtasks_exit_code(3), Some(5));
+        assert_eq!(failed_subtasks_exit_code(0), None);
+    }
 
     #[test]
     fn codex_selection_stays_on_its_existing_generation_transport() {
