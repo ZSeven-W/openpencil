@@ -287,6 +287,39 @@ fn text_highlighter_cover(
     })
 }
 
+// An empty primitive that paints over a glyph hides it from the author too.
+// Models that author a stack back-to-front put every shape before its label:
+// a booking calendar's range band and endpoint circle over the day numbers,
+// a knowledge card's ink bar over its caption, a map's road over its pin.
+// The overlay rule's size gate cannot see these (the band is the number's own
+// size), but it only guards deck peers, and a deck's front card carries
+// content while these covers carry nothing. A glyph is hidden once the shape
+// covers most of its box or its centre, where centred glyphs sit.
+fn empty_shape_cover(kids: &[Value], index: usize, rects: &HashMap<String, Rect>) -> Option<usize> {
+    if !matches!(
+        kids[index].get("type").and_then(Value::as_str),
+        Some("text" | "icon_font")
+    ) {
+        return None;
+    }
+    let glyph = rect_of(&kids[index], rects)?;
+    let (cx, cy) = (glyph.x + glyph.w / 2.0, glyph.y + glyph.h / 2.0);
+    kids[..index].iter().position(|cover| {
+        let name = cover.get("name").and_then(Value::as_str).unwrap_or("");
+        matches!(
+            cover.get("type").and_then(Value::as_str),
+            Some("rectangle" | "ellipse" | "line" | "polygon" | "path")
+        ) && children(cover).is_empty()
+            && !name.to_ascii_lowercase().contains("strike")
+            && !name.contains("删除线")
+            && paints_opaque(cover)
+            && rect_of(cover, rects).is_some_and(|c| {
+                covered_fraction(glyph, c) >= MIN_BURIED_FRACTION
+                    || (c.x <= cx && cx <= c.x + c.w && c.y <= cy && cy <= c.y + c.h)
+            })
+    })
+}
+
 /// Is this node a SCRIM — a fill that deliberately lets what is behind it
 /// through? Every colour in its first fill must carry a low alpha
 /// (`#RRGGBBAA` under ~0.8), whether a solid or each stop of a gradient.
@@ -669,6 +702,8 @@ fn collect_with_context(
                 plate_index
             } else if let Some(band_index) = text_highlighter_cover(v, kids, index, rects) {
                 band_index
+            } else if let Some(shape_index) = empty_shape_cover(kids, index, rects) {
+                shape_index
             } else {
                 continue;
             };
@@ -708,3 +743,7 @@ mod media_viewport_tests;
 #[cfg(test)]
 #[path = "geometry_buried_media_lane_tests.rs"]
 mod media_lane_tests;
+
+#[cfg(test)]
+#[path = "geometry_buried_empty_shape_tests.rs"]
+mod empty_shape_tests;
