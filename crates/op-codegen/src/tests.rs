@@ -244,6 +244,24 @@ fn html_emits_div_per_node_with_position_and_fill() {
     assert!(html.contains("rgb(255,0,0)"));
 }
 
+#[test]
+fn markup_targets_emit_text_fill_as_color() {
+    let mut node = text("n12", 0.0, 0.0, 100.0, 24.0, "White");
+    if let PenNode::Text(t) = &mut node {
+        t.fill = Some(solid("#ffffff"));
+    }
+    let doc = doc_with_nodes(vec![node]);
+    let html = Html.generate(&doc);
+    assert!(html.contains(";color:rgb(255,255,255)"), "{html}");
+    assert!(!html.contains("background:"), "{html}");
+    let react = React.generate(&doc);
+    assert!(react.contains(", color: 'rgb(255,255,255)'"), "{react}");
+    assert!(!react.contains("background:"), "{react}");
+    let rn = ReactNative.generate(&doc);
+    assert!(rn.contains(", color: 'rgb(255,255,255)'"), "{rn}");
+    assert!(!rn.contains("backgroundColor:"), "{rn}");
+}
+
 fn html_style_block(html: &str) -> &str {
     let start = html.find("<style>\n").expect("motion style block") + "<style>\n".len();
     let end = html[start..].find("</style>").expect("style close") + start;
