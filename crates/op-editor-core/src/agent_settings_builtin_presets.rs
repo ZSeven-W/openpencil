@@ -22,6 +22,7 @@ pub enum BuiltinAgentPresetKey {
     StepFun,
     StepFunCoding,
     Nvidia,
+    Requesty,
     Custom,
 }
 
@@ -46,6 +47,7 @@ impl BuiltinAgentPresetKey {
             BuiltinAgentPresetKey::StepFun => "stepfun",
             BuiltinAgentPresetKey::StepFunCoding => "stepfun-coding",
             BuiltinAgentPresetKey::Nvidia => "nvidia",
+            BuiltinAgentPresetKey::Requesty => "requesty",
             BuiltinAgentPresetKey::Custom => "custom",
         }
     }
@@ -71,6 +73,7 @@ impl BuiltinAgentPresetKey {
             "stepfun" => BuiltinAgentPresetKey::StepFun,
             "stepfun-coding" => BuiltinAgentPresetKey::StepFunCoding,
             "nvidia" => BuiltinAgentPresetKey::Nvidia,
+            "requesty" => BuiltinAgentPresetKey::Requesty,
             "custom" => BuiltinAgentPresetKey::Custom,
             _ => return None,
         })
@@ -106,7 +109,7 @@ impl BuiltinAgentPreset {
 /// add-with-defaults paths can't drift.
 pub const DEFAULT_ANTHROPIC_MODEL: &str = "claude-sonnet-5";
 
-pub const BUILTIN_AGENT_PRESETS: [BuiltinAgentPreset; 19] = [
+pub const BUILTIN_AGENT_PRESETS: [BuiltinAgentPreset; 20] = [
     BuiltinAgentPreset {
         key: BuiltinAgentPresetKey::Anthropic,
         display_name: "Anthropic",
@@ -268,6 +271,15 @@ pub const BUILTIN_AGENT_PRESETS: [BuiltinAgentPreset; 19] = [
         base_url: "https://integrate.api.nvidia.com/v1",
         alt_kind: None,
         alt_base_url: None,
+    },
+    BuiltinAgentPreset {
+        key: BuiltinAgentPresetKey::Requesty,
+        display_name: "Requesty",
+        kind: BuiltinAgentKind::OpenAiCompat,
+        model: "claude-sonnet-4-6",
+        base_url: "https://router.requesty.ai/v1",
+        alt_kind: Some(BuiltinAgentKind::Anthropic),
+        alt_base_url: Some("https://router.requesty.ai"),
     },
     BuiltinAgentPreset {
         key: BuiltinAgentPresetKey::Custom,
