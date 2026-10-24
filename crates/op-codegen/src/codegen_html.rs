@@ -53,7 +53,13 @@ pub(super) fn emit_node_html(out: &mut String, node: &PenNode, depth: usize) {
         fmt_num(h),
     );
     if let Some(fill) = node_fill_css(node) {
-        style.push_str(&format!(";background:{}", color_to_css(&fill)));
+        // A text node's fill is its glyph color.
+        let property = if node_is_text(node) {
+            "color"
+        } else {
+            "background"
+        };
+        style.push_str(&format!(";{property}:{}", color_to_css(&fill)));
     }
     if let Some((color, width)) = node_stroke_css(node) {
         style.push_str(&format!(
