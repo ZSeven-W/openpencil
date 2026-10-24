@@ -308,7 +308,14 @@ fn emit_node_jsx(out: &mut String, node: &PenNode, depth: usize) {
         fmt_num(w),
         fmt_num(h),
         node_fill_css(node)
-            .map(|c| format!(", background: '{}'", color_to_css(&c)))
+            .map(|c| {
+                let property = if node_is_text(node) {
+                    "color"
+                } else {
+                    "background"
+                };
+                format!(", {property}: '{}'", color_to_css(&c))
+            })
             .unwrap_or_default(),
         node_stroke_css(node)
             .map(|(c, sw)| format!(", border: '{}px solid {}'", sw, color_to_css(&c)))
@@ -625,7 +632,14 @@ fn emit_node_rn(out: &mut String, node: &PenNode, depth: usize) {
         fmt_num(w),
         fmt_num(h),
         node_fill_css(node)
-            .map(|c| format!(", backgroundColor: '{}'", color_to_css(&c)))
+            .map(|c| {
+                let property = if node_is_text(node) {
+                    "color"
+                } else {
+                    "backgroundColor"
+                };
+                format!(", {property}: '{}'", color_to_css(&c))
+            })
             .unwrap_or_default(),
         if radius > 0.0 {
             format!(", borderRadius: {}", fmt_num(radius))
