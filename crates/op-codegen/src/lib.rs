@@ -373,8 +373,12 @@ pub(crate) fn color_to_css(s: &str) -> String {
     }
 }
 
+/// Escape text and attribute values for every markup target. Braces become
+/// entities too, since JSX, Svelte and Vue read `{` / `{{` as expressions.
 pub(crate) fn html_escape(s: &str) -> String {
     op_util::xml_escape::escape_html(s)
+        .replace('{', "&#123;")
+        .replace('}', "&#125;")
 }
 
 fn scalar_to_css(s: &VariableScalar) -> String {
