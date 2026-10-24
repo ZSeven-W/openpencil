@@ -98,6 +98,8 @@ mod geometry_card_rail_fixes;
 mod geometry_clipped_rows;
 #[path = "geometry_diagnostics_collect.rs"]
 mod geometry_diagnostics_collect;
+#[path = "geometry_grid_row_fit.rs"]
+mod geometry_grid_row_fit;
 #[path = "geometry_grow_fit_fixes.rs"]
 mod geometry_grow_fit_fixes;
 #[path = "geometry_overflow_fixes.rs"]
@@ -382,6 +384,9 @@ pub fn geometry_validate_and_fix_for_form(
             // A clipped pane hiding its bottom composer (reply box, chat
             // input) scrolls its body instead.
             geometry_pinned_composer::collect_pinned_composer_fixes(&v, &rects, &mut cmds);
+            // BEFORE the jam gap: a calendar week that cannot seat its
+            // identical cells gets the shared width and a narrower gap.
+            geometry_grid_row_fit::collect_grid_row_fit_fixes(&v, &rects, &mut cmds);
             collect_row_gap_fixes(&v, &rects, &mut cmds);
             collect_card_row_height_fixes(&v, &rects, &mut cmds, false);
             // BEFORE the inside-out overfull repair: a rigid row starved by

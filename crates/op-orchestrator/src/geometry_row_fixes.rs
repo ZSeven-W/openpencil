@@ -37,7 +37,10 @@ pub(super) fn collect_row_gap_fixes(
     // `< 8.0`, not `<= 0.0`: a 1-7px authored gap still resolves as touching
     // (the jam proof below requires <3px breathing anyway), and an
     // exactly-1.0 hairline gap slipped through every gate (measured).
-    } else if layout_str(v) == Some("horizontal") && num(v, "gap") < 8.0 {
+    } else if layout_str(v) == Some("horizontal")
+        && num(v, "gap") < 8.0
+        && !super::geometry_grid_row_fit::is_centered_grid_row(v)
+    {
         let kids = children(v);
         let frame_kids: Vec<&Value> = kids
             .iter()

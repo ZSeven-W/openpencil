@@ -227,6 +227,7 @@ pub(super) fn collect_sibling_jam_diagnostics(
         } else if layout == "horizontal"
             && breathing < SIBLING_JAM_GAP
             && !all_fill_cells
+            && !super::geometry_grid_row_fit::is_centered_grid_row(v)
             && ra.h.min(rb.h) <= ROW_CELL_MAX_H
             && is_cell_like(a)
             && is_cell_like(b)
