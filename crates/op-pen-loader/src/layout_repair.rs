@@ -5,7 +5,7 @@
 //! container's cross-axis contribution. The child text rects are
 //! correct, but following siblings start from the too-small parent
 //! bottom. Before converting to paint payloads, reconcile those
-//! container rects and reflow start-aligned in-flow siblings.
+//! container rects and reflow in-flow siblings using the authored alignment.
 
 use std::collections::BTreeMap;
 
@@ -17,6 +17,9 @@ use jian_ops_schema::node::PenNode;
 use jian_ops_schema::sizing::{SizingBehavior, SizingKeyword};
 use jian_ops_schema::style::StrokeThickness;
 
+#[path = "layout_repair_horizontal.rs"]
+mod horizontal;
+pub(crate) use horizontal::normalize_fill_row_coordinates;
 #[path = "layout_repair_scroll.rs"]
 mod scroll;
 
@@ -58,6 +61,9 @@ fn repair_node(node: &PenNode, rects: &mut BTreeMap<String, [f32; 4]>, is_root: 
         }
         Some(LayoutMode::Horizontal) if start_justified(props) => {
             repair_horizontal_container(node, props, kids, rects);
+        }
+        Some(LayoutMode::Horizontal) => {
+            horizontal::repair_justified_horizontal_container(node, props, kids, rects);
         }
         // An ABSENT `layout` field is legacy flow debris: jian still solves it
         // as a flex row, so the inference below is the only thing that applies

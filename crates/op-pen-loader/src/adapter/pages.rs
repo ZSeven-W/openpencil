@@ -104,7 +104,9 @@ pub(super) fn compute_layout_with_measure(
 ) {
     let (root_w, root_h) = root_available_size(root);
     let mut tree = NodeTree::new();
-    tree.insert_subtree(root.clone(), None);
+    let mut layout_root = root.clone();
+    crate::layout_repair::normalize_fill_row_coordinates(&mut layout_root);
+    tree.insert_subtree(layout_root, None);
     // Preview must use its injected runtime backend for paint geometry too.
     let mut engine = LayoutEngine::with_backend(measure);
     let Ok(taffy_roots) = engine.build(&tree) else {

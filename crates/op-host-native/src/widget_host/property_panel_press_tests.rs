@@ -255,6 +255,57 @@ fn disabling_fill_height_freezes_resolved_height_then_numeric_input_resizes_scen
 }
 
 #[test]
+fn clicking_space_between_reflows_generated_coordinates_and_supports_undo_redo() {
+    use op_editor_ui::widgets::property_panel_action::LayoutJustifyValue;
+
+    let mut host = WidgetHostNative::new();
+    seed(
+        &mut host,
+        r#"{"version":"1.0","children":[{
+            "type":"frame","id":"header","width":400,"height":44,
+            "layout":"horizontal","justifyContent":"start","alignItems":"center",
+            "children":[
+                {"type":"frame","id":"brand","x":0,"y":0,"width":120,"height":24},
+                {"type":"frame","id":"theme-switch","x":0,"y":0,"width":40,"height":20}
+            ]
+        }]}"#,
+    );
+    host.editor_state_mut()
+        .set_single_selection(NodeId::new("header"));
+    let switch_x = |host: &mut WidgetHostNative| {
+        host.layout_scene()
+            .active_page()
+            .expect("page")
+            .find("theme-switch")
+            .expect("switch")
+            .bounds
+            .origin
+            .x
+    };
+    assert_eq!(switch_x(&mut host), 120.0);
+    let before = host.editor_state().history.past.len();
+    let point = point_for_action(&host, |action| {
+        matches!(
+            action,
+            PropertyPanelAction::SetLayoutJustify(LayoutJustifyValue::SpaceBetween)
+        )
+    });
+    assert!(host.apply_press(point.x, point.y, VIEWPORT_W, VIEWPORT_H));
+    host.apply_release_with_viewport(VIEWPORT_W, VIEWPORT_H);
+
+    assert_eq!(switch_x(&mut host), 360.0);
+    assert_eq!(host.editor_state().history.past.len(), before + 1);
+    let header = serde_json::to_value(host.editor_state().selected_node().expect("header"))
+        .expect("header serializes");
+    assert_eq!(header["justifyContent"], "space_between");
+    assert_eq!(header["children"][1]["x"].as_f64(), Some(0.0));
+    assert!(host.apply_undo());
+    assert_eq!(switch_x(&mut host), 120.0);
+    assert!(host.apply_redo());
+    assert_eq!(switch_x(&mut host), 360.0);
+}
+
+#[test]
 fn property_panel_background_consumes_clicks() {
     let mut host = WidgetHostNative::new();
     seed(

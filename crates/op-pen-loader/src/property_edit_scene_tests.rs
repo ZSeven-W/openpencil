@@ -149,3 +149,22 @@ fn instance_icon_child_fill_edit_reaches_the_scene() {
         "instance icon scene fill must be the edited red, got {fill:?}"
     );
 }
+
+#[test]
+fn horizontal_space_between_reflows_ai_authored_child_coordinates() {
+    let state = state_with(serde_json::json!([{
+        "type": "frame", "id": "header", "width": 400, "height": 44,
+        "layout": "horizontal", "justifyContent": "space_between", "alignItems": "center",
+        "children": [
+            {"type": "frame", "id": "brand", "x": 0, "y": 0, "width": 120, "height": 24},
+            {"type": "frame", "id": "theme-switch", "x": 0, "y": 0, "width": 40, "height": 20}
+        ]
+    }]));
+    let scene = crate::editor_state_to_layout_scene(&state);
+    let brand = scene_node(&scene, "brand");
+    let switch = scene_node(&scene, "theme-switch");
+    assert_eq!(brand.bounds.origin.x, 0.0);
+    assert_eq!(switch.bounds.origin.x, 360.0);
+    assert_eq!(brand.bounds.origin.y, 10.0);
+    assert_eq!(switch.bounds.origin.y, 12.0);
+}
