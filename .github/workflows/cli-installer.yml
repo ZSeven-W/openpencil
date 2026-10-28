@@ -42,5 +42,9 @@ jobs:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           persist-credentials: false
-      - shell: ${{ matrix.shell }}
+      - if: matrix.shell == 'powershell'
+        shell: powershell
+        run: ./tools/install-op.test.ps1
+      - if: matrix.shell == 'pwsh'
+        shell: pwsh
         run: ./tools/install-op.test.ps1
