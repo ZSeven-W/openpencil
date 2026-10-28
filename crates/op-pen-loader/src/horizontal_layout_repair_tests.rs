@@ -254,3 +254,59 @@ fn hug_height_row_resolves_its_height_before_aligning_stale_children() {
         assert_position(&scene, "tall", 360.0, 0.0);
     }
 }
+
+#[test]
+fn nested_fixed_rows_keep_overflow_visible_without_expanding_their_width() {
+    for justify in ["center", "end", "space_between", "space_around"] {
+        let state = state(json!({
+            "type": "frame", "id": "root", "width": 400, "height": 200,
+            "layout": "vertical", "children": [{
+                "type": "frame", "id": "row", "width": 100, "height": "fit_content",
+                "layout": "horizontal", "justifyContent": justify, "gap": 10,
+                "children": [
+                    {"type": "rectangle", "id": "first", "x": 0, "y": 0, "width": 80, "height": 12},
+                    {"type": "rectangle", "id": "second", "x": 0, "y": 0, "width": 60, "height": 12}
+                ]
+            }]
+        }));
+        let scene = crate::editor_state_to_layout_scene(&state);
+        assert_eq!(node(&scene, "row").bounds.size.x, 100.0);
+        assert_eq!(node(&scene, "row").bounds.size.y, 12.0);
+        assert_position(&scene, "first", 0.0, 0.0);
+        assert_position(&scene, "second", 90.0, 0.0);
+        let second = node(&scene, "second").bounds;
+        let row = node(&scene, "row").bounds;
+        assert!(second.origin.x + second.size.x > row.origin.x + row.size.x);
+    }
+}
+
+#[test]
+fn direct_fill_text_wraps_in_the_space_after_a_fixed_sibling() {
+    for row_width in [json!(116), json!("fill_container")] {
+        for justify in ["center", "end", "space_between", "space_around"] {
+            let root_width = if row_width.is_number() { 400 } else { 116 };
+            let state = state(json!({
+                "type": "frame", "id": "root", "width": root_width, "height": 200,
+                "layout": "vertical", "children": [{
+                    "type": "frame", "id": "row", "width": row_width, "height": "fit_content",
+                    "layout": "horizontal", "justifyContent": justify, "alignItems": "center",
+                    "children": [
+                        {"type": "ellipse", "id": "avatar", "width": 36, "height": 36},
+                        {"type": "text", "id": "name", "width": "fill_container", "height": "fit_content",
+                         "textGrowth": "fixed-width", "fontSize": 14, "content": "Personalize your workspace"}
+                    ]
+                }]
+            }));
+            let authored = serde_json::to_value(&state.doc).expect("authored document");
+            let scene = crate::editor_state_to_layout_scene(&state);
+            assert_eq!(node(&scene, "row").bounds.size.x, 116.0);
+            assert_eq!(node(&scene, "name").bounds.origin.x, 36.0);
+            assert_eq!(node(&scene, "name").bounds.size.x, 80.0);
+            assert!(node(&scene, "name").bounds.size.y > 20.0);
+            assert_eq!(
+                serde_json::to_value(&state.doc).expect("unchanged document"),
+                authored
+            );
+        }
+    }
+}

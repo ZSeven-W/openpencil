@@ -101,5 +101,10 @@ pub(super) fn repair_justified_horizontal_container(
         }
         cursor += child_rect.w + gap + distributed_gap;
     }
-    repair_container_to_child_bounds(node, props, kids, rects);
+    // Explicit fixed/fill rows remain bounds for overflow validation. The
+    // legacy/start-row expansion heuristic would hide overflowing text by
+    // widening a bare numeric-width row instead of allowing it to wrap.
+    if can_follow_content(props.width.as_ref()) {
+        repair_container_to_child_bounds(node, props, kids, rects);
+    }
 }
