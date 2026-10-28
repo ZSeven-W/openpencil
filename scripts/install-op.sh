@@ -49,6 +49,10 @@ detect_label() {
   printf '%s-%s' "$os" "$arch"
 }
 
+release_tag() {
+  curl -fsSL "$1" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed 's/.*"\(v\{0,1\}[^"]*\)"$/\1/'
+}
+
 resolve_version() {
   if [ -n "${OP_VERSION:-}" ]; then
     printf '%s' "$OP_VERSION"
@@ -59,13 +63,24 @@ resolve_version() {
     return
   fi
 
-  local api tag
+  local api tag prerelease=0
   if [ "${OP_PRERELEASE:-}" = "1" ] || [ "${OP_PRERELEASE:-}" = "true" ]; then
     api="https://api.github.com/repos/${OWNER}/${REPO}/releases"
+    prerelease=1
   else
     api="https://api.github.com/repos/${OWNER}/${REPO}/releases/latest"
   fi
-  tag="$(curl -fsSL "$api" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed 's/.*"\(v\{0,1\}[^"]*\)"$/\1/')"
+  tag="$(release_tag "$api")"
+  if [ -z "$tag" ] && [ "$prerelease" -eq 0 ]; then
+    # /releases/latest is a 404 while every published tag is still a pre-release, which is the
+    # case for the whole pre-1.0 line. Fall back to the newest release instead of failing the
+    # documented default install command; OP_VERSION still pins an exact tag.
+    tag="$(release_tag "https://api.github.com/repos/${OWNER}/${REPO}/releases")"
+    if [ -n "$tag" ]; then
+      echo "note: no stable release is published yet; installing the newest pre-release ${tag#v}" >&2
+      echo "      set OP_VERSION=X.Y.Z to pin a version" >&2
+    fi
+  fi
   if [ -z "$tag" ]; then
     echo "error: could not resolve the latest release tag from GitHub" >&2
     echo "       set OP_VERSION explicitly, e.g. OP_VERSION=X.Y.Z $0" >&2
