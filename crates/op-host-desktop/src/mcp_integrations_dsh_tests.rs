@@ -176,7 +176,10 @@ fn dsh_disable_refuses_hand_written_entries_and_keeps_detection() {
         );
         let message = error.to_string();
         assert!(message.contains("manually"), "{message}");
-        assert!(message.contains(path.to_str().expect("utf8 path")), "{message}");
+        assert!(
+            message.contains(path.to_str().expect("utf8 path")),
+            "{message}"
+        );
         assert_eq!(
             fs::read_to_string(&path).expect("read untouched"),
             manual,
@@ -228,5 +231,70 @@ fn dsh_reenable_rewrites_url_without_duplicating_the_block() {
     );
     assert!(!text.contains("4500"), "stale port must be gone: {text}");
 
+    let _ = fs::remove_dir_all(home);
+}
+
+#[test]
+fn dsh_settings_entry_points_target_and_detect_existing_profiles() {
+    let home = temp_home("dsh-profile-settings");
+    let profile = home.join(".dsh/profiles/desktop");
+    fs::create_dir_all(&profile).expect("profile directory");
+    fs::write(profile.join("package.json"), "{}").expect("profile manifest");
+
+    let path = set_cli_profile_at_home(McpCli::Dsh, true, 4800, true, &home)
+        .expect("enable from settings");
+    assert_eq!(path, profile.join("cordis.patch.yml"));
+    assert!(fs::read_to_string(&path).unwrap().contains("4800/mcp/lean"));
+    assert!(detect_enabled_clis_at_home(&home)[cli_index(McpCli::Dsh)]);
+    assert!(!dsh_patch_path(&home).exists());
+
+    set_cli_enabled_at_home(McpCli::Dsh, false, 4800, &home).expect("disable from settings");
+    assert!(!detect_enabled_clis_at_home(&home)[cli_index(McpCli::Dsh)]);
+    assert_eq!(fs::read_to_string(path).unwrap().trim(), "[]");
+    let _ = fs::remove_dir_all(home);
+}
+
+#[test]
+fn dsh_enable_does_not_replace_an_empty_array_inside_user_plugin_config() {
+    let home = temp_home("dsh-nested-empty-array");
+    let path = dsh_patch_path(&home);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let user = "- insert:\n    - id: user-plugin\n      name: '@example/plugin'\n      config:\n        []\n";
+    fs::write(&path, user).unwrap();
+    set_cli_enabled_at_home(McpCli::Dsh, true, 4900, &home).expect("enable");
+    assert!(fs::read_to_string(path).unwrap().starts_with(user));
+    let _ = fs::remove_dir_all(home);
+}
+
+#[test]
+fn dsh_manual_flow_and_quoted_yaml_entries_are_never_duplicated() {
+    for (name, manual) in [
+        ("flow", "- insert: [{id: mcp-openpencil, name: '@deepseek-ai/dsh-mcp-client'}]\n"),
+        ("quoted", "- insert:\n    - \"id\": 'custom'\n      config:\n        'serverName': \"openpencil\"\n"),
+    ] {
+        let home = temp_home(&format!("dsh-manual-{name}"));
+        let path = dsh_patch_path(&home);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, manual).unwrap();
+        for enabled in [true, false] {
+            assert!(matches!(
+                set_cli_enabled_at_home(McpCli::Dsh, enabled, 4900, &home),
+                Err(McpConfigError::DshManualEntry { .. })
+            ));
+            assert_eq!(fs::read_to_string(&path).unwrap(), manual);
+        }
+        let _ = fs::remove_dir_all(home);
+    }
+}
+
+#[test]
+fn dsh_commented_manual_example_does_not_block_installation() {
+    let home = temp_home("dsh-commented-example");
+    let path = dsh_patch_path(&home);
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let before = "# Example: - insert: [{id: mcp-openpencil}]\n[]\n";
+    fs::write(&path, before).unwrap();
+    set_cli_enabled_at_home(McpCli::Dsh, true, 4900, &home).expect("comment is not a manual entry");
+    assert!(fs::read_to_string(path).unwrap().starts_with("# Example:"));
     let _ = fs::remove_dir_all(home);
 }

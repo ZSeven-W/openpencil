@@ -15,6 +15,7 @@ use crate::mcp_config_io::{
     atomic_write, grok_config_has_openpencil, update_grok_config, FileSnapshot,
 };
 use crate::mcp_integrations_dsh::{dsh_config_has_openpencil, update_dsh_patch_config};
+use crate::mcp_integrations_dsh_profiles::{dsh_root, dsh_root_has_openpencil, set_dsh_enabled};
 
 const SERVER_NAME: &str = "openpencil";
 const ANTIGRAVITY_MCP_PERMISSION: &str = "mcp(openpencil/*)";
@@ -32,6 +33,9 @@ pub(crate) fn set_cli_enabled(
     let url = endpoint_url(port, lean);
     if cli == McpCli::Antigravity {
         return set_antigravity_enabled_at_home(enabled, &url, &home);
+    }
+    if cli == McpCli::Dsh {
+        return set_dsh_enabled(&dsh_root_for_home(&home, true), enabled, &url);
     }
     let path = config_path(cli, &home, true);
     set_cli_enabled_at_path(cli, enabled, &url, path)
@@ -70,6 +74,9 @@ pub(crate) fn set_cli_profile_at_home(
     if cli == McpCli::Antigravity {
         return set_antigravity_enabled_at_home(enabled, &url, home);
     }
+    if cli == McpCli::Dsh {
+        return set_dsh_enabled(&dsh_root_for_home(home, false), enabled, &url);
+    }
     let path = config_path(cli, home, false);
     set_cli_enabled_at_path(cli, enabled, &url, path)
 }
@@ -85,6 +92,8 @@ fn detect_enabled_clis_for_home(home: &Path, use_env: bool) -> [bool; 13] {
         flags[idx] = if cli == McpCli::Antigravity {
             antigravity_config_has_openpencil(&config_path(cli, home, use_env))
                 && antigravity_permission_is_present(&antigravity_permissions_path(home))
+        } else if cli == McpCli::Dsh {
+            dsh_root_has_openpencil(&dsh_root_for_home(home, use_env))
         } else {
             let path = config_path(cli, home, use_env);
             cli_config_has_openpencil(cli, &path)
@@ -140,6 +149,11 @@ fn cli_config_has_openpencil(cli: McpCli, path: &Path) -> bool {
     }
 }
 
+fn dsh_root_for_home(home: &Path, use_env: bool) -> PathBuf {
+    let override_root = use_env.then(|| std::env::var_os("DSH_HOME")).flatten();
+    dsh_root(home, override_root.as_deref())
+}
+
 fn config_path(cli: McpCli, home: &Path, use_env: bool) -> PathBuf {
     match cli {
         McpCli::ClaudeCode => home.join(".claude.json"),
@@ -183,20 +197,9 @@ fn config_path(cli: McpCli, home: &Path, use_env: bool) -> PathBuf {
         // this toggle; a dedicated "cross-agent standard" integration would
         // be the place for it.
         McpCli::ZCode => home.join(".zcode").join("cli").join("config.json"),
-        // DeepSeek Harness reads its home-level patch layer — one file
-        // that applies across all profiles, so a single write covers every
-        // profile. `DSH_HOME` overrides the data root, mirroring Codex's
-        // `CODEX_HOME` handling.
-        McpCli::Dsh => {
-            if use_env {
-                std::env::var_os("DSH_HOME")
-                    .map(PathBuf::from)
-                    .unwrap_or_else(|| home.join(".dsh"))
-                    .join("cordis.patch.yml")
-            } else {
-                home.join(".dsh").join("cordis.patch.yml")
-            }
-        }
+        // Legacy/global fallback. Production DSH writes and detection use
+        // the root-aware path above to cover existing profiles and migration.
+        McpCli::Dsh => dsh_root_for_home(home, use_env).join("cordis.patch.yml"),
         McpCli::GrokBuild => {
             if use_env {
                 std::env::var_os("GROK_HOME")

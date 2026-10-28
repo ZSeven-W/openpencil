@@ -95,6 +95,13 @@ pub fn tool_text(response: &str) -> String {
 
 /// Load a `.op` file into an `EditorState` via the schema compat layer.
 pub fn load_editor_state(path: &Path) -> Result<EditorState, McpServeError> {
+    if matches!(path.try_exists(), Ok(false)) {
+        return Err(McpServeError::Document(format!(
+            "load {}: document does not exist; file-backed MCP requires an existing .op document. \
+             Create and save it in OpenPencil (File > Save As), then retry with that path.",
+            path.display()
+        )));
+    }
     crate::doc_io::load_editor_state(path, op_editor_core::Locale::EnUs)
         .map_err(|error| McpServeError::Document(format!("load {}: {error}", path.display())))
 }

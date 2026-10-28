@@ -41,6 +41,49 @@ fn write_named_doc(path: &std::path::Path, node_id: &str, name: &str) {
 }
 
 #[test]
+fn missing_mcp_document_explains_how_to_create_it_without_writing_files() {
+    let (dir, _, _) = temp_doc_paths("missing-document-guidance");
+    let path = dir.join("not-created").join("design.op");
+    let error = run(path.clone(), tool_catalog::McpToolCatalog::Full)
+        .expect_err("stdio MCP requires an existing document");
+    assert!(matches!(error, McpServeError::Document(_)), "{error:?}");
+    let message = error.to_string();
+    assert!(message.contains(&path.display().to_string()), "{message}");
+    assert!(message.contains("document does not exist"), "{message}");
+    assert!(message.contains("existing .op document"), "{message}");
+    assert!(message.contains("File > Save As"), "{message}");
+    assert!(message.contains("retry with that path"), "{message}");
+    assert!(!path.exists());
+    assert!(!path.parent().expect("parent").exists());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn invalid_existing_mcp_document_keeps_its_parse_error_and_bytes() {
+    let (dir, path, _) = temp_doc_paths("invalid-document-guidance");
+    let source = "{not valid JSON";
+    std::fs::write(&path, source).expect("write invalid document");
+    let Err(expected) = crate::doc_io::load_editor_state(&path, op_editor_core::Locale::EnUs)
+    else {
+        panic!("invalid document loaded successfully");
+    };
+    let Err(error) = load_editor_state(&path) else {
+        panic!("MCP document load must fail");
+    };
+    assert!(matches!(error, McpServeError::Document(_)), "{error:?}");
+    assert_eq!(
+        error.to_string(),
+        format!("load {}: {expected}", path.display())
+    );
+    assert!(!error.to_string().contains("document does not exist"));
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("unchanged document"),
+        source
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn load_editor_state_accepts_ts_future_version_files() {
     let (dir, primary_path, _) = temp_doc_paths("future-version-load");
     std::fs::write(

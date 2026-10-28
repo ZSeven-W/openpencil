@@ -379,6 +379,118 @@ fn startup_mcp_bootstrap_starts_live_server_for_enabled_cli() {
 }
 
 #[test]
+fn startup_mcp_bootstrap_migrates_dsh_home_to_profile_with_bound_lean_endpoint() {
+    crate::test_config_root::guard_user_config();
+    let home = std::env::temp_dir().join(format!(
+        "openpencil-mcp-bootstrap-dsh-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&home);
+    let legacy = mcp_integrations::set_cli_enabled_at_home(
+        op_editor_core::agent_settings::McpCli::Dsh,
+        true,
+        4500,
+        &home,
+    )
+    .expect("seed legacy home integration before a profile exists");
+    let legacy_text = std::fs::read_to_string(&legacy).expect("legacy patch");
+    std::fs::write(&legacy, format!("# keep this user comment\n{legacy_text}"))
+        .expect("seed user comment");
+    let profile = home.join(".dsh/profiles/desktop");
+    std::fs::create_dir_all(&profile).expect("create DSH desktop profile");
+    std::fs::write(profile.join("package.json"), "{}").expect("profile manifest");
+    std::fs::write(profile.join("cordis.patch.yml"), "[]\n").expect("profile patch");
+
+    let mut app = DesktopApp::new(None);
+    app.mcp_integrations_home = Some(home.clone());
+    let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
+    settings.mcp_server.port = 0;
+    settings.mcp_server.running = false;
+    settings.mcp_lean_profile = true;
+
+    assert!(app.bootstrap_mcp_runtime_from_settings());
+    let port = app.mcp_server.as_ref().expect("live MCP server").port();
+    assert_ne!(port, 0);
+    let dsh_index = op_editor_core::agent_settings::McpCli::ALL
+        .iter()
+        .position(|cli| *cli == op_editor_core::agent_settings::McpCli::Dsh)
+        .expect("DSH index");
+    assert!(
+        app.host
+            .editor_state()
+            .editor_ui
+            .agent_settings
+            .mcp_cli_enabled[dsh_index]
+    );
+    let configured =
+        std::fs::read_to_string(profile.join("cordis.patch.yml")).expect("migrated profile patch");
+    assert!(
+        configured.contains(&mcp_integrations::endpoint_url(port, true)),
+        "{configured}"
+    );
+    assert!(!configured.contains("127.0.0.1:4500/"), "{configured}");
+    assert_eq!(configured.matches("id: mcp-openpencil").count(), 1);
+    assert_eq!(
+        std::fs::read_to_string(&legacy).expect("valid empty home layer"),
+        "# keep this user comment\n[]\n"
+    );
+    drop(app);
+    let _ = std::fs::remove_dir_all(home);
+}
+
+#[test]
+fn startup_mcp_bootstrap_keeps_detected_dsh_enabled_when_refresh_fails() {
+    crate::test_config_root::guard_user_config();
+    let home = std::env::temp_dir().join(format!(
+        "openpencil-mcp-bootstrap-dsh-refresh-error-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&home);
+    let profiles = home.join(".dsh/profiles");
+    let desktop = profiles.join("desktop");
+    std::fs::create_dir_all(&desktop).expect("create desktop profile");
+    std::fs::write(desktop.join("package.json"), "{}").expect("desktop manifest");
+    let configured = mcp_integrations::set_cli_enabled_at_home(
+        op_editor_core::agent_settings::McpCli::Dsh,
+        true,
+        4500,
+        &home,
+    )
+    .expect("seed valid integration");
+    let original = std::fs::read(&configured).expect("existing integration");
+    let broken = profiles.join("unreadable");
+    std::fs::create_dir_all(&broken).expect("create unrelated profile");
+    std::fs::write(broken.join("package.json"), [0xff, 0xfe]).expect("unreadable UTF-8 manifest");
+
+    let mut app = DesktopApp::new(None);
+    app.mcp_integrations_home = Some(home.clone());
+    let settings = &mut app.host.editor_state_mut().editor_ui.agent_settings;
+    settings.mcp_server.port = 0;
+    settings.mcp_server.running = false;
+    assert!(app.bootstrap_mcp_runtime_from_settings());
+
+    let dsh_index = op_editor_core::agent_settings::McpCli::ALL
+        .iter()
+        .position(|cli| *cli == op_editor_core::agent_settings::McpCli::Dsh)
+        .expect("DSH index");
+    assert!(
+        app.host
+            .editor_state()
+            .editor_ui
+            .agent_settings
+            .mcp_cli_enabled[dsh_index]
+    );
+    assert!(app.mcp_server_active());
+    assert_eq!(
+        std::fs::read(&configured).expect("untouched integration"),
+        original
+    );
+    assert!(!home.join(".dsh/cordis.patch.yml").exists());
+    drop(app);
+    let _ = std::fs::remove_dir_all(home);
+}
+
+#[test]
 fn startup_mcp_bootstrap_updates_cli_config_after_port_fallback() {
     use std::net::TcpListener;
 

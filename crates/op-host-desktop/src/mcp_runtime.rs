@@ -35,15 +35,19 @@ impl DesktopApp {
         }
         changed |= self.reconcile_mcp_server_from_settings();
         if any_cli_enabled {
-            // `before` = nothing enabled forces a rewrite of every enabled
-            // CLI with the current endpoint (full or lean profile).
+            // Refresh every detected integration with the current endpoint.
+            // A refresh failure must not undo the state read from the actual
+            // config files as though the user had just flipped a toggle.
             let lean = self
                 .host
                 .editor_state()
                 .editor_ui
                 .agent_settings
                 .mcp_lean_profile;
-            changed |= self.reconcile_mcp_cli_integrations(Some(([false; 13], port, lean)));
+            changed |= self.reconcile_mcp_cli_integrations_with_refresh(
+                Some((detected_flags, port, lean)),
+                true,
+            );
         }
         if self.mcp_server_active() {
             changed |= self.request_redraw(false);
@@ -249,6 +253,14 @@ impl DesktopApp {
         &mut self,
         before: Option<([bool; 13], u16, bool)>,
     ) -> bool {
+        self.reconcile_mcp_cli_integrations_with_refresh(before, false)
+    }
+
+    fn reconcile_mcp_cli_integrations_with_refresh(
+        &mut self,
+        before: Option<([bool; 13], u16, bool)>,
+        force_refresh: bool,
+    ) -> bool {
         let Some((before_flags, before_port, before_lean)) = before else {
             return false;
         };
@@ -257,7 +269,7 @@ impl DesktopApp {
         let port = settings.mcp_server.port;
         let lean = settings.mcp_lean_profile;
         let endpoint_changed = before_port != port || before_lean != lean;
-        if before_flags == after_flags && !endpoint_changed {
+        if before_flags == after_flags && !endpoint_changed && !force_refresh {
             return false;
         }
 
@@ -269,7 +281,7 @@ impl DesktopApp {
             .enumerate()
         {
             let flag_changed = before_flags[idx] != after_flags[idx];
-            let enabled_endpoint_changed = endpoint_changed && after_flags[idx];
+            let enabled_endpoint_changed = (endpoint_changed || force_refresh) && after_flags[idx];
             if !flag_changed && !enabled_endpoint_changed {
                 continue;
             }

@@ -332,6 +332,7 @@ docker run -p 3100:3100 openpencil-web-rust
 
 - Built-in MCP server (`op-mcp` crate) — one-click install into Claude Code / Codex / OpenCode / Kiro / Copilot CLIs
 - No Node.js required — stdio transport via the desktop binary (`--mcp <path>`), plus a live HTTP endpoint (`127.0.0.1:<port>/mcp`) from the running app
+- [DeepSeek Harness setup](./docs/dsh-mcp.md) — profile configuration, live HTTP, and file-backed stdio
 - Design automation from terminal: read, create, and modify `.op` files via any MCP-compatible agent
 - **Layered design workflow** — `design_skeleton` → `design_content` → `design_refine` for higher-fidelity multi-section designs
 - **Segmented prompt retrieval** — load only the design knowledge you need (schema, layout, roles, icons, planning, etc.)

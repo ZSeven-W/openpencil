@@ -21,6 +21,8 @@ docs/
 # collaboration security contract with the open implementation.
 !/docs/
 /docs/*
+# Public setup guide for the DSH MCP integration.
+!/docs/dsh-mcp.md
 !/docs/security/
 /docs/security/*
 !/docs/security/p2p-collaboration-threat-model.md
