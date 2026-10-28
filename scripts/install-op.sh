@@ -11,6 +11,9 @@
 #   OP_PRERELEASE=1 ./install-op.sh         # allow the newest pre-release
 #   INSTALL_DIR=$HOME/.local/bin ./install-op.sh
 #
+# Current releases are pre-releases; use OP_PRERELEASE=1 unless pinning a version.
+# Without that opt-in, the source installer only selects stable releases.
+#
 # The release workflow stamps DEFAULT_OP_VERSION and DEFAULT_SHA_* in the copy
 # uploaded to GitHub Releases, so the release asset installs that exact tag and
 # verifies the CLI archive checksum.
@@ -49,6 +52,11 @@ detect_label() {
   printf '%s-%s' "$os" "$arch"
 }
 
+version_help() {
+  echo "       set OP_PRERELEASE=1 to allow pre-release tags, or set OP_VERSION=X.Y.Z to pin a version" >&2
+  echo "       curl -fsSL https://raw.githubusercontent.com/${OWNER}/${REPO}/main/scripts/install-op.sh | OP_PRERELEASE=1 bash" >&2
+}
+
 resolve_version() {
   if [ -n "${OP_VERSION:-}" ]; then
     printf '%s' "$OP_VERSION"
@@ -59,18 +67,34 @@ resolve_version() {
     return
   fi
 
-  local api tag
+  local api tag response status body allow_prerelease=false
   if [ "${OP_PRERELEASE:-}" = "1" ] || [ "${OP_PRERELEASE:-}" = "true" ]; then
+    allow_prerelease=true
     api="https://api.github.com/repos/${OWNER}/${REPO}/releases"
   else
     api="https://api.github.com/repos/${OWNER}/${REPO}/releases/latest"
   fi
-  tag="$(curl -fsSL "$api" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed 's/.*"\(v\{0,1\}[^"]*\)"$/\1/')"
+  if ! response="$(curl -sSL --write-out '\n%{http_code}' "$api")"; then
+    echo "error: could not query GitHub releases; check your network connection and retry" >&2
+    return 1
+  fi
+  status=${response##*$'\n'}
+  body=${response%$'\n'*}
+  if [ "$status" != "200" ]; then
+    if [ "$status" = "404" ] && [ "$allow_prerelease" = false ]; then
+      echo "error: no stable OpenPencil release is available; current releases are pre-releases" >&2
+      version_help
+    else
+      echo "error: GitHub releases request failed (HTTP ${status}): ${api}" >&2
+    fi
+    return 1
+  fi
+  # Consume every match to avoid a SIGPIPE from `head` on a long release list.
+  tag="$(printf '%s\n' "$body" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -n '1s/.*"\([^"]*\)"$/\1/p' || true)"
   if [ -z "$tag" ]; then
-    echo "error: could not resolve the latest release tag from GitHub" >&2
-    echo "       set OP_VERSION explicitly, e.g. OP_VERSION=X.Y.Z $0" >&2
-    echo "       or set OP_PRERELEASE=1 to allow pre-release tags" >&2
-    exit 1
+    echo "error: GitHub returned no release tag" >&2
+    version_help
+    return 1
   fi
   printf '%s' "${tag#v}"
 }

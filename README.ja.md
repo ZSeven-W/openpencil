@@ -155,23 +155,13 @@ brew install zseven-w/openpencil/op
 
 またはインストールスクリプトを使用します（macOS / Linux）：
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
-```
-
-最新のプレリリースを許可する場合：
+OpenPencil は現在、プレリリースのみを公開しています。以下のコマンドでは `OP_PRERELEASE=1` でプレリリースのインストールを許可します。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | OP_PRERELEASE=1 bash
 ```
 
 Windows PowerShell：
-
-```powershell
-irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
-```
-
-最新のプレリリースを許可する場合：
 
 ```powershell
 $env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex

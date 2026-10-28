@@ -1,0 +1,46 @@
+name: CLI installer checks
+
+on:
+  pull_request:
+    paths:
+      - "scripts/install-op.*"
+      - "tools/install-op.test.*"
+      - ".github/workflows/cli-installer.yml"
+  push:
+    paths:
+      - "scripts/install-op.*"
+      - "tools/install-op.test.*"
+      - ".github/workflows/cli-installer.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  bash:
+    name: Bash installer (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - run: python3 tools/install-op.test.py
+
+  powershell:
+    name: Release resolver (${{ matrix.shell }})
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - shell: ${{ matrix.shell }}
+        run: ./tools/install-op.test.ps1

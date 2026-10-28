@@ -155,23 +155,13 @@ brew install zseven-w/openpencil/op
 
 Ya da kurulum betiğini kullanın (macOS / Linux):
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
-```
-
-En yeni ön sürüme izin vermek için:
+OpenPencil şu anda yalnızca ön sürümler yayımlıyor. Aşağıdaki komutlar `OP_PRERELEASE=1` ile bu sürümlerin kurulumuna izin verir.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | OP_PRERELEASE=1 bash
 ```
 
 Windows PowerShell:
-
-```powershell
-irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
-```
-
-En yeni ön sürüme izin vermek için:
 
 ```powershell
 $env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex

@@ -156,23 +156,13 @@ brew install zseven-w/openpencil/op
 
 Oder verwenden Sie das Installationsskript (macOS / Linux):
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
-```
-
-So erlauben Sie das neueste Pre-Release:
+OpenPencil veröffentlicht derzeit ausschließlich Vorabversionen. Die folgenden Befehle erlauben deren Installation mit `OP_PRERELEASE=1`.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | OP_PRERELEASE=1 bash
 ```
 
 Windows PowerShell:
-
-```powershell
-irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
-```
-
-So erlauben Sie das neueste Pre-Release:
 
 ```powershell
 $env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex

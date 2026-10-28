@@ -162,17 +162,26 @@ function Resolve-Version {
   }
 
   $AllowPreRelease = $PreRelease.IsPresent -or $env:OP_PRERELEASE -in @("1", "true", "TRUE", "yes", "YES")
-  if ($AllowPreRelease) {
-    # Invoke-RestMethod emits a JSON array as a single pipeline object, so
-    # `| Select-Object -First 1` yields the whole array and `.tag_name` then
-    # member-enumerates every tag. Assign first, then index.
-    $Releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Owner/$Repo/releases"
-    $Latest = @($Releases)[0]
-  } else {
-    $Latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$Owner/$Repo/releases/latest"
+  $VersionHint = 'Set $env:OP_PRERELEASE = "1" and rerun the installer to allow pre-release tags, or set $env:OP_VERSION = "X.Y.Z" to pin a version.'
+  try {
+    if ($AllowPreRelease) {
+      # Invoke-RestMethod emits a JSON array as a single pipeline object, so
+      # `| Select-Object -First 1` yields the whole array and `.tag_name` then
+      # member-enumerates every tag. Assign first, then index.
+      $Releases = Invoke-RestMethod -Uri "https://api.github.com/repos/$Owner/$Repo/releases"
+      $Latest = @($Releases)[0]
+    } else {
+      $Latest = Invoke-RestMethod -Uri "https://api.github.com/repos/$Owner/$Repo/releases/latest"
+    }
+  } catch {
+    $Response = $_.Exception.Response
+    if (-not $AllowPreRelease -and $null -ne $Response -and [int]$Response.StatusCode -eq 404) {
+      throw "install-op: no stable OpenPencil release is available; current releases are pre-releases. $VersionHint"
+    }
+    throw "install-op: could not query GitHub releases: $($_.Exception.Message)"
   }
   if (-not $Latest.tag_name) {
-    throw "install-op: could not resolve latest release tag; set OP_VERSION explicitly or OP_PRERELEASE=1 to allow pre-release tags"
+    throw "install-op: GitHub returned no release tag. $VersionHint"
   }
   return $Latest.tag_name.TrimStart("v")
 }
