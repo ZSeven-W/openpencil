@@ -244,6 +244,65 @@ fn html_emits_div_per_node_with_position_and_fill() {
     assert!(html.contains("rgb(255,0,0)"));
 }
 
+#[test]
+fn markup_targets_emit_text_fill_as_color() {
+    let mut node = text("n12", 0.0, 0.0, 100.0, 24.0, "White");
+    if let PenNode::Text(t) = &mut node {
+        t.fill = Some(solid("#ffffff"));
+    }
+    let doc = doc_with_nodes(vec![
+        rect("background", 0.0, 0.0, 100.0, 24.0, Some("#111827")),
+        node,
+    ]);
+    for (target, output) in [
+        ("HTML", Html.generate(&doc)),
+        ("Vue", Vue.generate(&doc)),
+        ("Svelte", Svelte.generate(&doc)),
+    ] {
+        assert!(
+            output.contains(";color:rgb(255,255,255)"),
+            "{target}: {output}"
+        );
+        assert!(
+            output.contains(";background:rgb(17,24,39)"),
+            "{target}: {output}"
+        );
+        assert!(
+            !output.contains(";background:rgb(255,255,255)"),
+            "{target}: {output}"
+        );
+        assert!(
+            !output.contains(";color:rgb(17,24,39)"),
+            "{target}: {output}"
+        );
+    }
+    for (target, output, background) in [
+        ("React", React.generate(&doc), "background"),
+        (
+            "React Native",
+            ReactNative.generate(&doc),
+            "backgroundColor",
+        ),
+    ] {
+        assert!(
+            output.contains(", color: 'rgb(255,255,255)'"),
+            "{target}: {output}"
+        );
+        assert!(
+            output.contains(&format!(", {background}: 'rgb(17,24,39)'")),
+            "{target}: {output}"
+        );
+        assert!(
+            !output.contains(&format!(", {background}: 'rgb(255,255,255)'")),
+            "{target}: {output}"
+        );
+        assert!(
+            !output.contains(", color: 'rgb(17,24,39)'"),
+            "{target}: {output}"
+        );
+    }
+}
+
 fn html_style_block(html: &str) -> &str {
     let start = html.find("<style>\n").expect("motion style block") + "<style>\n".len();
     let end = html[start..].find("</style>").expect("style close") + start;
