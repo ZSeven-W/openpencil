@@ -1,0 +1,23 @@
+{
+  "schema": "op-auth-windows-runtime-input-v1",
+  "abi": 4,
+  "private_source_sha": "2f1d5cf8272defed02c7ca9a1636e544b8ca82a2",
+  "public_source_sha": "0cccb1cd36a0f93dee14aa0655fe59a2f6895634",
+  "harness_source_sha256": "42abf9282355484dafa2166ab4642fe235ba65afc1fc5b18fd0e6e09a6d05650",
+  "targets": [
+    {
+      "target": "aarch64-pc-windows-msvc",
+      "archive": "aarch64-pc-windows-msvc/op_auth.lib",
+      "archive_sha256": "4676350a3a274865bcbce9a321434febcbaeb75f2fe86548096acac9cf38157d",
+      "harness": "aarch64-pc-windows-msvc/FINAL-LINK-BINARY.exe",
+      "harness_sha256": "3533b58a19c1338f2bf5eb53955dff47c4157b19f7980069f994cf1cf220ff97"
+    },
+    {
+      "target": "x86_64-pc-windows-msvc",
+      "archive": "x86_64-pc-windows-msvc/op_auth.lib",
+      "archive_sha256": "66e2eece17db5379a0645049f74c29263689e29704da1a698eb46528033cab08",
+      "harness": "x86_64-pc-windows-msvc/FINAL-LINK-BINARY.exe",
+      "harness_sha256": "a891fb81ec89ee2ff65066b122f5b60ed0ddbfa6975e16004a7a60037111796c"
+    }
+  ]
+}
