@@ -102,6 +102,7 @@ pub(crate) fn init(config: &AuthInitConfig) -> bool {
         "device_name": config.device_name,
         "platform": crate::platform_id(),
         "app_version": config.app_version,
+        "hosted_product": "openpencil",
     })
     .to_string();
     // SAFETY: pointer/length describe the live `json` buffer.

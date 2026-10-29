@@ -36,7 +36,8 @@ final class DocumentSaveCoordinator: NSObject {
     private var stagedFilename: String?
     private var hasPendingEngineRequest = false
     private var saveErrorPending = false
-    private let writeQueue = DispatchQueue(label: "tech.zseven.openpencil.save", qos: .userInitiated)
+    private var isTornDown = false
+    private let writeQueue = DocumentSaveWorkQueue()
 
     init(host: OpEngineHost) {
         self.host = host
@@ -65,7 +66,7 @@ final class DocumentSaveCoordinator: NSObject {
     /// Shell action 11: stage the document, then rewrite or prompt.
     func beginSave() {
         precondition(Thread.isMainThread)
-        guard let host, let engine = host.engine else { return }
+        guard !isTornDown, let host, let engine = host.engine else { return }
 
         // A second shell action must not replace a staged file the picker is
         // still placing. Discard only the newly staged engine request.
@@ -125,7 +126,12 @@ final class DocumentSaveCoordinator: NSObject {
 
     /// Teardown: never leave the engine believing a save is still in flight.
     func cancelForTeardown() {
+        quiesceForAccountDeletion(completion: {})
+    }
+
+    func quiesceForAccountDeletion(completion: @escaping () -> Void) {
         precondition(Thread.isMainThread)
+        isTornDown = true
         saveErrorPending = false
         cancelPendingEngineRequest(failed: false)
         if let picker = activePicker {
@@ -134,7 +140,12 @@ final class DocumentSaveCoordinator: NSObject {
             picker.dismiss(animated: false)
         }
         activePicker = nil
-        cleanupStagingDirectory()
+        // A Files provider can be slow. Wait asynchronously while keeping new
+        // admissions closed and suppressing every late result below.
+        writeQueue.quiesce { [self] in
+            cleanupStagingDirectory()
+            completion()
+        }
     }
 
     // MARK: - Writing
@@ -152,14 +163,14 @@ final class DocumentSaveCoordinator: NSObject {
         handle: String,
         filename: String
     ) {
-        writeQueue.async { [weak self] in
+        writeQueue.submit { [weak self] in
             let result = Result {
                 try DocumentSaveBinding.writeStaged(staged, into: destination.url)
             }
             let name = destination.url.lastPathComponent
             destination.release()
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard let self, !self.isTornDown else { return }
                 switch result {
                 case .success:
                     self.commit(handle: handle, displayName: name.isEmpty ? filename : name)

@@ -163,6 +163,21 @@ raise "user region override must suppress detection" unless region_source.includ
   "guard !hasUserOverride() else { return }"
 )
 
+# Region changes are next-launch preferences; the current session and its
+# account links must stay on the active region until then.
+raise "region selection must not terminate the app" if login_source.match?(/\bexit\s*\(/)
+account_source = File.read(File.expand_path("../Sources/AccountCenterViewController.swift", __dir__))
+auth_source = File.read(File.expand_path("../Sources/OpEngineHost+Auth.swift", __dir__))
+raise "successful auth setup must remember its active region" unless auth_source.include?(
+  "authConfigured = true\n            activeAuthRegion = region"
+)
+raise "account presentation must use the active session region" unless view_source.include?(
+  "let region = host.activeAuthRegion"
+) && view_source.include?("makeAccountCenterPresentation(snapshot: snapshot, region: region)")
+raise "account management must not use the pending region preference" unless account_source.include?(
+  'region.origin.appendingPathComponent("account")'
+) && !account_source.include?('SsoRegionStore.resolved().origin')
+
 # Third-party methods are region-accurate: fetched from the pairing origin,
 # never hardcoded per region in the login screen.
 raise "provider list must come from the pairing origin" unless login_source.include?(

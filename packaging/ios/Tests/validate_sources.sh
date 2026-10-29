@@ -46,6 +46,12 @@ required=(
   "$player_dir/Sources/RegisterViewController.swift"
   "$player_dir/Sources/AuthTheme.swift"
   "$player_dir/Sources/AccountCenterViewController.swift"
+  "$player_dir/Sources/AccountDeletionState.swift"
+  "$player_dir/Sources/AccountDeletionCoordinator.swift"
+  "$player_dir/Sources/AccountDeletionViewController.swift"
+  "$player_dir/Sources/AccountDeletionRecoveryView.swift"
+  "$player_dir/Sources/AccountDeletionText.swift"
+  "$player_dir/Sources/OpPlayerView+AccountDeletion.swift"
   "$player_dir/Sources/SsoAuthClient.swift"
   "$player_dir/Sources/SsoProviderList.swift"
   "$player_dir/Sources/SsoRegion.swift"
@@ -622,6 +628,19 @@ xcrun swiftc \
 "$reader_test"
 
 keyboard_test="$reader_test_dir/keyboard-occlusion-runner"
+deletion_test="$reader_test_dir/account-deletion-state-runner"
+xcrun swiftc -warnings-as-errors -parse-as-library \
+  "$player_dir/Sources/AccountDeletionState.swift" \
+  "$player_dir/Tests/AccountDeletionStateTests.swift" \
+  -o "$deletion_test"
+"$deletion_test"
+save_queue_test="$reader_test_dir/document-save-work-queue-runner"
+xcrun swiftc -warnings-as-errors -parse-as-library \
+  "$player_dir/Sources/DocumentSaveWorkQueue.swift" \
+  "$player_dir/Tests/DocumentSaveWorkQueueTests.swift" \
+  -o "$save_queue_test"
+"$save_queue_test"
+
 xcrun swiftc \
   -warnings-as-errors \
   -parse-as-library \

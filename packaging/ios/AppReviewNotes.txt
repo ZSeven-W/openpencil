@@ -1,0 +1,35 @@
+DRAFT — DO NOT SUBMIT YET. Fill and verify every bracketed field. Deletion is implemented in source; service deployment, a new signed auth matrix/build, physical-device QA, video, reviewer credentials, commercial details and rights evidence remain required. This draft is not a completion claim.
+
+Hello App Review,
+
+Here are the six items requested under Guideline 2.1, also provided in App Review Information > Notes.
+
+1. Recording and physical-device QA
+Video: [ACCESSIBLE URL / ATTACHMENT]
+App version/build: [VERSION (BUILD)]
+Device, latest OS and test date: [IPHONE MODEL / OS / DATE]
+Other supported-device testing: [IPAD RESULTS]
+The video begins with launch and demonstrates editing, save/reopen/export, registration/login, deletion, AI and applicable sharing/paid-feature flows. [ADD VERIFIED TIMESTAMPS.]
+
+2. Purpose and audience
+OpenPencil is a vector design app for designers, developers and visual-document creators. It provides editable layouts, text, shapes, templates and exports. Optional AI helps create or revise designs. Local editing does not require an account; online features require sign-in.
+
+3. Access and main features
+Use More > New File or Open File. Save the attached [SAMPLE FILENAME] to Files, open it, edit text/shapes, then Save/Save As or Export to PNG, JPEG, SVG or PDF.
+Sign in through More > Sign In with the demo credentials in the private review fields. Region/account type: [DETAILS]. Other account types: [ACCESS DETAILS IF ANY].
+More > AI: select [VERIFIED MODEL], enter [PROMPT]; the demo account has [VERIFIED QUOTA/ENTITLEMENT]. Paid access/purchase method: [ACTUAL BUSINESS MODEL AND IAP IDS IF APPLICABLE].
+More > Account > Delete OpenPencil Account opens identity verification and confirmation. Both service regions are cleaned before verified local erasure. A 16-minute credential drain and any service outage can delay completion. Shared ZSeven identity, other products, shared billing/usage records and externally saved copies remain. [CONFIRM DEPLOYED BUILD AND DEVICE TEST.]
+Private collaboration uses invitations/addresses and owner-approved editor/viewer access. [DESCRIBE THE BUILD'S SHARING/REPORT/BLOCK CONTROLS; REPORT/BLOCK UI IS CURRENTLY MISSING.]
+
+4. External services
+ZSeven SSO provides authentication. Regional OpenPencil Hub services provide service discovery and collaboration support; Hosted AI uses a ZSeven gateway. Optional image search uses Openverse and Wikimedia.
+AI upstreams/models, collaboration infrastructure and payment/entitlement providers: [VERIFIED LIST AND ROLES]. Sign-in providers are listed below. [CONFIRM IMAGE ATTRIBUTION.]
+
+5. Regional differences
+The local editor is shared across regions. Mainland China uses sso.zseven.cn with WeChat, Alipay and Douyin; Global uses sso.zseven.tech with Apple, GitHub and Google. Saved choice or network/locale detection selects the region; changes apply on the next launch. Hosted models/entitlements depend on the regional service. [CONFIRM AI/CONTENT/COMMERCIAL DIFFERENCES.]
+
+6. Regulated services and protected material
+[CONFIRM REGULATED-SERVICE APPLICABILITY; ATTACH AUTHORIZATION IF APPLICABLE.]
+[LIST APPLICABLE FONT/ICON/TEMPLATE/SDK/OTHER MATERIAL LICENSES AND AUTHORIZATION ATTACHMENTS.]
+
+Thank you.

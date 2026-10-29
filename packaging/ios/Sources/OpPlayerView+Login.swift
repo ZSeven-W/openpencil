@@ -45,13 +45,14 @@ extension OpPlayerView {
         precondition(Thread.isMainThread)
         guard
             !didTearDown,
+            let region = host.activeAuthRegion,
             let presenter = nearestViewController(),
             presenter.presentedViewController == nil
         else { return }
         if imeTextView.isFirstResponder {
             imeTextView.resignFirstResponder()
         }
-        let navigation = makeAccountCenterPresentation(snapshot: snapshot) { [weak self] in
+        let navigation = makeAccountCenterPresentation(snapshot: snapshot, region: region) { [weak self] in
             self?.host.signOutAccount()
         }
         presenter.present(navigation, animated: true)

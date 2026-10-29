@@ -20,6 +20,7 @@ fn fixture() -> Value {
         "issued_at_unix": NOW,
         "expires_at_unix": NOW + 300,
         "gateway_base_url": "https://gateway.example.test/v1",
+        "product": "openpencil",
     })
 }
 
@@ -236,4 +237,13 @@ fn development_v4_exports_fail_closed_before_runtime_initialization() {
         Err(HostedAccessError::RequestNotFound)
     ));
     provider.cancel(id);
+}
+
+#[test]
+fn legacy_or_other_product_access_cannot_bypass_product_deletion() {
+    let mut payload = fixture();
+    payload.as_object_mut().unwrap().remove("product");
+    assert!(decode(payload.to_string().as_bytes(), NOW).is_err());
+    payload["product"] = json!("another-product");
+    assert!(decode(payload.to_string().as_bytes(), NOW).is_err());
 }
