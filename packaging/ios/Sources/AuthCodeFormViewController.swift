@@ -264,6 +264,14 @@ class AuthCodeFormViewController: UIViewController {
             contentStack.setCustomSpacing(20, after: statusLabel)
             contentStack.addArrangedSubview(row)
         }
+        contentStack.addArrangedSubview(AppPrivacy.makeLink(
+            target: self,
+            action: #selector(openPrivacyPolicy)
+        ))
+    }
+
+    @objc private func openPrivacyPolicy() {
+        login.presentPrivacyPolicy(from: self)
     }
 
     private func addLabeledField(_ label: String, _ box: UIView) {

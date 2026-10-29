@@ -182,6 +182,7 @@ extension OpEngineHost {
         }
         if status == OpStatus_Ok {
             authConfigured = true
+            activeAuthRegion = region
         } else if status != OpStatus_NotReady {
             reportFailure(status, operation: "op_editor_configure_auth", engine: engine)
         }

@@ -280,7 +280,7 @@ impl op_auth_bridge::HostedAccessProvider for ReadyAfterSwitch {
             "issuer":"https://sso.example.test", "subject":"01234567-89ab-cdef-0123-456789abcdef",
             "audience":"llm-gateway", "scopes":["llm:models","llm:invoke"],
             "issued_at_unix":now, "expires_at_unix":now+300,
-            "gateway_base_url":"https://gateway.example.test/v1"})
+            "gateway_base_url":"https://gateway.example.test/v1", "product":"openpencil"})
         .to_string()
         .into_bytes();
         Ok(HostedAccessPoll::Ready(HostedAccess::from_provider_json(

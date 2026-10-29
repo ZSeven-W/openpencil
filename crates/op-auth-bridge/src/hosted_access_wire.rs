@@ -16,6 +16,9 @@ struct AccessWire<'a> {
     token_type: &'a str,
     issuer: &'a str,
     subject: &'a str,
+    // Mandatory for this consumer: an older signed runtime must not silently
+    // fall back to shared credentials when product deletion is enforced.
+    product: &'a str,
     audience: &'a str,
     scopes: [&'a str; 2],
     issued_at_unix: u64,
@@ -37,6 +40,7 @@ pub(crate) fn decode(bytes: &[u8], now: u64) -> Result<HostedAccess, HostedAcces
         serde_json::from_slice(bytes).map_err(|_| HostedAccessError::InvalidPayload)?;
     let lifetime = wire.expires_at_unix.checked_sub(wire.issued_at_unix);
     if wire.version != 1
+        || wire.product != "openpencil"
         || wire.token_type != "Bearer"
         || wire.audience != "llm-gateway"
         || wire.scopes != ["llm:models", "llm:invoke"]
