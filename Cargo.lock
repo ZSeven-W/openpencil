@@ -4024,7 +4024,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "op-acp"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "agent-client-protocol",
  "futures-util",
@@ -4044,14 +4044,14 @@ dependencies = [
 
 [[package]]
 name = "op-ai"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "op-ai-skills"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "include_dir",
  "jian-core",
@@ -4062,7 +4062,7 @@ dependencies = [
 
 [[package]]
 name = "op-auth-bridge"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
@@ -4076,7 +4076,7 @@ dependencies = [
 
 [[package]]
 name = "op-brand"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "image",
  "jian-ops-schema",
@@ -4086,7 +4086,7 @@ dependencies = [
 
 [[package]]
 name = "op-builtin-model-discovery"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "futures",
  "op-editor-core",
@@ -4097,7 +4097,7 @@ dependencies = [
 
 [[package]]
 name = "op-chat-agent"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "futures",
@@ -4120,7 +4120,7 @@ dependencies = [
 
 [[package]]
 name = "op-chrome-extension-core"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "jian-ops-schema",
  "op-html",
@@ -4132,7 +4132,7 @@ dependencies = [
 
 [[package]]
 name = "op-cli"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "jian-ops-schema",
@@ -4151,7 +4151,7 @@ dependencies = [
 
 [[package]]
 name = "op-codegen"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "jian-ops-schema",
@@ -4165,7 +4165,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "blake3",
  "jian-ops-schema",
@@ -4179,7 +4179,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-host"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
@@ -4210,7 +4210,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-policy-file"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -4226,7 +4226,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-relay-client"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "futures-util",
  "op-collab-relay-protocol",
@@ -4242,7 +4242,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-relay-control-plane"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.3.4",
@@ -4257,7 +4257,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-relay-locator-hsm"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "cryptoki",
@@ -4275,7 +4275,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-relay-locator-server"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -4304,7 +4304,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-relay-protocol"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -4319,7 +4319,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-relay-server"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -4345,7 +4345,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-smoke"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -4358,7 +4358,7 @@ dependencies = [
 
 [[package]]
 name = "op-collab-transport"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "core-foundation 0.9.4",
@@ -4384,7 +4384,7 @@ dependencies = [
 
 [[package]]
 name = "op-config-store"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "serde",
  "serde_json",
@@ -4392,7 +4392,7 @@ dependencies = [
 
 [[package]]
 name = "op-design-lint"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "jian-ops-schema",
  "op-util",
@@ -4402,7 +4402,7 @@ dependencies = [
 
 [[package]]
 name = "op-editor-core"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "glam",
@@ -4420,7 +4420,7 @@ dependencies = [
 
 [[package]]
 name = "op-editor-host-core"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "dirs 5.0.1",
  "jian-ops-schema",
@@ -4441,7 +4441,7 @@ dependencies = [
 
 [[package]]
 name = "op-editor-ui"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "accesskit",
  "base64 0.22.1",
@@ -4462,7 +4462,7 @@ dependencies = [
 
 [[package]]
 name = "op-engine-ffi"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "futures",
  "jian-core",
@@ -4495,7 +4495,7 @@ dependencies = [
 
 [[package]]
 name = "op-engine-jni"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "jni 0.21.1",
  "ndk-sys",
@@ -4505,7 +4505,7 @@ dependencies = [
 
 [[package]]
 name = "op-engine-napi"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "napi-derive-ohos",
  "napi-ohos",
@@ -4515,7 +4515,7 @@ dependencies = [
 
 [[package]]
 name = "op-figma"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "flate2",
@@ -4530,7 +4530,7 @@ dependencies = [
 
 [[package]]
 name = "op-git"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "git2",
  "op-config-store",
@@ -4541,7 +4541,7 @@ dependencies = [
 
 [[package]]
 name = "op-host-desktop"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -4615,7 +4615,7 @@ dependencies = [
 
 [[package]]
 name = "op-host-native"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "accesskit",
  "casement",
@@ -4649,7 +4649,7 @@ dependencies = [
 
 [[package]]
 name = "op-host-services"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "agent",
  "anthropic-agent-sdk",
@@ -4703,7 +4703,7 @@ dependencies = [
 
 [[package]]
 name = "op-host-web"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "accesskit",
  "base64 0.22.1",
@@ -4735,7 +4735,7 @@ dependencies = [
 
 [[package]]
 name = "op-host-web-server"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "op-host-services",
  "serde_json",
@@ -4743,7 +4743,7 @@ dependencies = [
 
 [[package]]
 name = "op-hosted-models"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "futures",
  "getrandom 0.3.4",
@@ -4761,7 +4761,7 @@ dependencies = [
 
 [[package]]
 name = "op-html"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "encoding_rs",
@@ -4777,14 +4777,14 @@ dependencies = [
 
 [[package]]
 name = "op-i18n"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "op-html",
 ]
 
 [[package]]
 name = "op-image-enrich"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "image",
@@ -4800,7 +4800,7 @@ dependencies = [
 
 [[package]]
 name = "op-mcp"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "image",
@@ -4825,7 +4825,7 @@ dependencies = [
 
 [[package]]
 name = "op-opmerge"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "jian-ops-schema",
  "serde_json",
@@ -4834,7 +4834,7 @@ dependencies = [
 
 [[package]]
 name = "op-orchestrator"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "futures",
@@ -4861,7 +4861,7 @@ dependencies = [
 
 [[package]]
 name = "op-pen-loader"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "jian-core",
  "jian-ops-schema",
@@ -4877,7 +4877,7 @@ dependencies = [
 
 [[package]]
 name = "op-preview-contracts"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "serde",
  "serde_json",
@@ -4886,7 +4886,7 @@ dependencies = [
 
 [[package]]
 name = "op-preview-core"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "jian-core",
  "jian-ops-schema",
@@ -4903,7 +4903,7 @@ dependencies = [
 
 [[package]]
 name = "op-process-io"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "libc",
  "tokio",
@@ -4911,7 +4911,7 @@ dependencies = [
 
 [[package]]
 name = "op-render-export"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
  "glam",
@@ -4925,7 +4925,7 @@ dependencies = [
 
 [[package]]
 name = "op-rpc-transport"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "serde",
  "serde_json",
@@ -4933,7 +4933,7 @@ dependencies = [
 
 [[package]]
 name = "op-smoke"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "agent",
  "futures",
@@ -4956,11 +4956,11 @@ dependencies = [
 
 [[package]]
 name = "op-util"
-version = "0.8.5"
+version = "0.8.6"
 
 [[package]]
 name = "op-web-sdk"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "console_error_panic_hook",
  "jian-ops-schema",

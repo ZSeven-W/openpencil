@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/op-web-sdk-react",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "description": "React adapter for the OpenPencil read-only web viewer SDK",
   "license": "MIT",
   "type": "module",
