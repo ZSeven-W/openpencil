@@ -56,12 +56,17 @@ pub(crate) fn apply_entry_hit(
                 .get_mut(index)
             {
                 // Workbench is the one provider without a preset host: its
-                // endpoint is a required field, and its probe is a real
-                // status request the host must run (raised as a seam here —
-                // the editor layer never dials).
-                let workbench = matches!(
+                // endpoint is a required field. Workbench and the
+                // OpenAI-compatible providers have a real probe the host
+                // must run (raised as a seam here — the editor layer never
+                // dials).
+                use op_editor_core::agent_settings::ImageGenProvider;
+                let workbench = matches!(profile.provider, ImageGenProvider::Workbench);
+                let probed = matches!(
                     profile.provider,
-                    op_editor_core::agent_settings::ImageGenProvider::Workbench
+                    ImageGenProvider::Workbench
+                        | ImageGenProvider::OpenAi
+                        | ImageGenProvider::Custom
                 );
                 let has_endpoint = profile
                     .base_url
@@ -69,7 +74,7 @@ pub(crate) fn apply_entry_hit(
                     .is_some_and(|base| !base.trim().is_empty());
                 let ready = !profile.api_key.trim().is_empty() && (!workbench || has_endpoint);
                 profile.test_status = if ready {
-                    if workbench {
+                    if probed {
                         state.editor_ui.agent_settings.pending_image_gen_test =
                             Some(profile.id.clone());
                     }
