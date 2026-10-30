@@ -1,6 +1,6 @@
 format=op-auth-release-policy-v1
 abi=4
 public_key=07e073b30d6de0df7343f8a11c4dccaf69aa87518d94917375eda6e63cc506e1
-release_manifest_sha256=ce5bb822badb193976a222196eb2f130680ec5003994cbf578fd2bd5d60a9e47
-source_revision=53a787614102a7bff7f8b92662efd559a11ae686
-build_id=local-full-v0.8.5-20261027-r2
+release_manifest_sha256=39224f5fcac450de77d220fbab2c26f77ded3dc5dfcc1c0f1585224131da6d66
+source_revision=2f1d5cf8272defed02c7ca9a1636e544b8ca82a2
+build_id=local-full-v0.8.5-20261029-account-deletion
