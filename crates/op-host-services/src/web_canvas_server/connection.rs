@@ -557,16 +557,17 @@ pub(super) fn dispatch<S: Read + Write>(
             &mut guard.editor,
             &req.body,
             mcp_profile,
-            |_tool_name, editor, cmd| {
+            |tool_name, editor, cmd| {
                 if let Err(reason) =
                     policy.check_command(cmd, op_editor_core::CollabEditSource::Mcp)
                 {
                     refused = Some(reason);
                     return false;
                 }
+                let repair_scope = crate::mcp_serve::mobile_repair_scope(tool_name, editor);
                 let ok = editor.apply(cmd.clone());
                 if ok {
-                    crate::mcp_serve::run_write_repairs_after_apply(editor);
+                    crate::mcp_serve::run_write_repairs_after_apply(editor, &repair_scope);
                 }
                 applied_any |= ok;
                 ok

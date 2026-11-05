@@ -222,7 +222,7 @@ pub fn execute_design_tool_with_root_seed_guard(
         // repairs them in-process, instead of piling defects up for the loop-end
         // finalize. Deterministic analogue of Pencil's per-batch
         // snapshot_layout feedback.
-        let dup_bars_removed = remove_nested_duplicate_status_bars(state);
+        let dup_bars_removed = remove_nested_duplicate_status_bars(state, &|_| true);
         let icon_path_report = op_editor_core::icon_path_normalize::normalize_icon_paths(
             state,
             op_editor_ui::widgets::icons::lucide_name_for_path_d,

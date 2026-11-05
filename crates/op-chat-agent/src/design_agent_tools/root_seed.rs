@@ -121,12 +121,32 @@ pub fn root_seed_prompt_is_mobile(prompt: &str) -> bool {
 /// Bring every mobile-sized top-level screen in `state` to the product's
 /// canonical shape, whatever path produced it.
 pub fn normalize_mobile_screens(state: &mut EditorState) -> MobileNormalizeReport {
+    normalize_mobile_screens_where(state, |_| true)
+}
+
+/// [`normalize_mobile_screens`] restricted to top-level screens whose id is
+/// NOT in `existing_roots` — the roots a write just created. Screens that
+/// already existed are left exactly as authored, so deleting, moving or
+/// hiding their status bar sticks (issue #274).
+pub fn normalize_new_mobile_screens(
+    state: &mut EditorState,
+    existing_roots: &std::collections::HashSet<String>,
+) -> MobileNormalizeReport {
+    normalize_mobile_screens_where(state, |id| !existing_roots.contains(id))
+}
+
+fn normalize_mobile_screens_where(
+    state: &mut EditorState,
+    in_scope: impl Fn(&str) -> bool,
+) -> MobileNormalizeReport {
     let mut report = MobileNormalizeReport::default();
     let mobile_root_indices = state
         .active_children()
         .iter()
         .enumerate()
-        .filter_map(|(index, node)| is_mobile_sized_root(node).then_some(index))
+        .filter_map(|(index, node)| {
+            (is_mobile_sized_root(node) && in_scope(node.id_str())).then_some(index)
+        })
         .collect::<Vec<_>>();
 
     for index in mobile_root_indices {
@@ -151,7 +171,7 @@ pub fn normalize_mobile_screens(state: &mut EditorState) -> MobileNormalizeRepor
     // Run this after replacement/insertion as well as for bars that were
     // already canonical, so a root with several hand-drawn bars is fully
     // canonical in this same pass and the next pass is idempotent.
-    report.duplicate_status_bars_removed = remove_nested_duplicate_status_bars(state);
+    report.duplicate_status_bars_removed = remove_nested_duplicate_status_bars(state, &in_scope);
     report
 }
 
@@ -391,9 +411,15 @@ pub(super) fn is_status_bar_node(node: &PenNode) -> bool {
 /// second "21:30" bar inside the Header several batches in, which then sat
 /// on screen until finalize. OS chrome is a contract, so the duplicate is
 /// removed deterministically rather than echoed.
-pub(super) fn remove_nested_duplicate_status_bars(state: &mut EditorState) -> usize {
+pub(super) fn remove_nested_duplicate_status_bars(
+    state: &mut EditorState,
+    in_scope: &dyn Fn(&str) -> bool,
+) -> usize {
     let mut removed = 0;
     for root in state.active_children_mut() {
+        if !in_scope(root.id_str()) {
+            continue;
+        }
         let has_canonical = root
             .children()
             .into_iter()

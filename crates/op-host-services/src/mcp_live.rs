@@ -281,9 +281,11 @@ impl McpLiveServer {
                     // is a targeted property tweak, not a "generation").
                     let ids_before = (tool_name == "batch_design")
                         .then(|| crate::design_agent_tools::collect_active_node_ids(state));
+                    let repair_scope = crate::mcp_serve::mobile_repair_scope(&tool_name, state);
                     let applied = state.apply(cmd);
                     if applied {
-                        let write_repairs = crate::mcp_serve::run_write_repairs_after_apply(state);
+                        let write_repairs =
+                            crate::mcp_serve::run_write_repairs_after_apply(state, &repair_scope);
                         if let Some(ids_before) = ids_before {
                             self.register_mcp_generation(&ids_before, state);
                         }

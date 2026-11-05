@@ -133,7 +133,7 @@ fn nested_hand_built_status_bar_is_removed_once_canonical_exists() {
     )
     .expect("doc");
     let mut state = op_editor_core::EditorState::from_document(doc);
-    let removed = remove_nested_duplicate_status_bars(&mut state);
+    let removed = remove_nested_duplicate_status_bars(&mut state, &|_| true);
     assert_eq!(removed, 1, "the nested hand-built bar is swept");
     let root = &state.active_children()[0];
     fn find<'a>(

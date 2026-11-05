@@ -35,11 +35,12 @@ pub fn process_message_for_file_path_arg(
         &mut target_state,
         line,
         profile,
-        |_tool_name, state, cmd| {
+        |tool_name, state, cmd| {
+            let repair_scope = super::mobile_repair_scope(tool_name, state);
             if !state.apply(cmd.clone()) {
                 return false;
             }
-            super::run_write_repairs_after_apply(state);
+            super::run_write_repairs_after_apply(state, &repair_scope);
             if let Err(e) = super::save_editor_state(state, &target.path) {
                 applier_failed = Some(format!("save {} failed: {e}", target.path.display()));
                 return false;

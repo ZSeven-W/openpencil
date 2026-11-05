@@ -34,7 +34,9 @@ pub mod screen_sets;
 pub mod tool_schemas;
 pub mod workspace_edit;
 
-pub use design_agent_tools::{normalize_mobile_screens, MobileNormalizeReport};
+pub use design_agent_tools::{
+    normalize_mobile_screens, normalize_new_mobile_screens, MobileNormalizeReport,
+};
 
 /// Path-compat alias for `crate::chat_intent::listed_whole_screen_names`
 /// used by `design_agent_tools/root_seed.rs` — only the pure listed-screen
