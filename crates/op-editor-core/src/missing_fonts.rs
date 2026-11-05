@@ -82,6 +82,14 @@ fn add_missing_stack(
 /// that register font bytes must include this list in addition to walking
 /// normal text nodes. Keeping the scanner shared with missing-font detection
 /// prevents an override from being declared available without being loaded.
+/// Resolve a `$variable` font-family stack to the family it names, so the
+/// prompt never asks for a font literally called `$pc-font` (issue #278).
+/// `None` when the ref does not resolve to a string.
+fn resolved_stack(state: &EditorState, stack: &str) -> Option<String> {
+    let theme = crate::variables_resolve::effective_theme(&state.doc, &BTreeMap::new());
+    crate::variables_resolve::resolve_font_family_ref(stack, state.doc.variables.as_ref(), &theme)
+}
+
 pub fn component_override_font_family_stacks(state: &EditorState) -> Vec<String> {
     fn scan_json(value: &serde_json::Value, stacks: &mut Vec<String>) {
         match value {
@@ -153,10 +161,14 @@ pub fn document_concrete_font_families(state: &EditorState) -> Vec<String> {
     let plan = FontPlan::scan(&state.doc);
     let mut families = Vec::new();
     for (stack, _) in plan.families().filter(|(family, _)| !family.is_empty()) {
-        add_stack(&mut families, stack);
+        if let Some(stack) = resolved_stack(state, stack) {
+            add_stack(&mut families, &stack);
+        }
     }
     for stack in component_override_font_family_stacks(state) {
-        add_stack(&mut families, &stack);
+        if let Some(stack) = resolved_stack(state, &stack) {
+            add_stack(&mut families, &stack);
+        }
     }
     families
 }
@@ -174,10 +186,14 @@ pub fn detect_missing_fonts(state: &EditorState) -> Option<MissingFontsPrompt> {
     let plan = FontPlan::scan(&state.doc);
     let mut missing = BTreeMap::<String, MissingFontEntry>::new();
     for (stack, usage) in plan.families().filter(|(family, _)| !family.is_empty()) {
-        add_missing_stack(&mut missing, stack, usage.run_count, &state.editor_ui);
+        if let Some(stack) = resolved_stack(state, stack) {
+            add_missing_stack(&mut missing, &stack, usage.run_count, &state.editor_ui);
+        }
     }
     for stack in component_override_font_family_stacks(state) {
-        add_missing_stack(&mut missing, &stack, 1, &state.editor_ui);
+        if let Some(stack) = resolved_stack(state, &stack) {
+            add_missing_stack(&mut missing, &stack, 1, &state.editor_ui);
+        }
     }
     let entries = missing.into_values().collect::<Vec<_>>();
 
@@ -230,6 +246,28 @@ mod tests {
         assert_eq!(prompt.entries.len(), 1);
         assert_eq!(prompt.entries[0].family, "Katibeh");
         assert!(prompt.entries[0].run_count >= 1);
+    }
+
+    #[test]
+    fn variable_font_families_report_the_resolved_family() {
+        let mut state = state_with_text("$pc-font");
+        let mut vars = std::collections::BTreeMap::new();
+        vars.insert(
+            "pc-font".to_string(),
+            serde_json::from_value(serde_json::json!({"type":"string","value":"Katibeh"}))
+                .expect("variable"),
+        );
+        state.doc.variables = Some(vars);
+        state.editor_ui.system_fonts_loaded = true;
+        state.editor_ui.system_font_families = std::sync::Arc::new(vec!["Arial".into()]);
+
+        let prompt = detect_missing_fonts(&state).expect("prompt");
+        let families: Vec<&str> = prompt.entries.iter().map(|e| e.family.as_str()).collect();
+        assert_eq!(families, vec!["Katibeh"]);
+        assert_eq!(
+            document_concrete_font_families(&state),
+            vec!["Katibeh".to_string()]
+        );
     }
 
     #[test]

@@ -334,3 +334,23 @@ fn replace_refs_renames_mesh_and_shader_tokens() {
         ShaderUniformValue::Color("$accent".into())
     );
 }
+
+#[test]
+fn string_variable_font_family_resolves_for_canvas() {
+    let doc = doc_from(
+        r##"{"version":"1.0.0","variables":{"pc-font":{"type":"string","value":"Noto Sans SC"}},
+            "children":[{"type":"text","id":"t","content":"hi","fontFamily":"$pc-font"},
+                        {"type":"text","id":"u","content":"hi","fontFamily":"$missing-font"}]}"##,
+    );
+    assert!(document_has_tokens(&doc));
+    let resolved = resolve_document_for_canvas(&doc, &Theme::new());
+    let families: Vec<Option<String>> = resolved
+        .children
+        .iter()
+        .map(|node| match node {
+            PenNode::Text(text) => text.font_family.clone(),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(families, vec![Some("Noto Sans SC".to_string()), None]);
+}

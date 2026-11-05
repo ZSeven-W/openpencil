@@ -178,6 +178,34 @@ pub fn resolve_color_ref(color: &str, vars: Option<&Vars>, theme: &Theme) -> Opt
     }
 }
 
+/// Resolve a `fontFamily` that may be a string `$ref`; non-refs pass
+/// through unchanged. An unresolvable ref yields `None` so callers can
+/// fall back to the default family instead of asking for a font named
+/// after the variable (issue #278).
+pub fn resolve_font_family_ref(family: &str, vars: Option<&Vars>, theme: &Theme) -> Option<String> {
+    if !is_variable_ref(family.trim()) {
+        return Some(family.to_string());
+    }
+    match resolve_variable_ref(family.trim(), vars, theme)? {
+        VariableScalar::Str(s) if !s.trim().is_empty() => Some(s),
+        _ => None,
+    }
+}
+
+/// Resolve a `$ref` font family in place: a resolved value replaces it, an
+/// unresolvable ref is cleared so text measures + paints in the default
+/// family rather than looking up a font literally named `$token`.
+fn resolve_font_family_slot(slot: &mut Option<String>, vars: Option<&Vars>, theme: &Theme) -> bool {
+    let Some(family) = slot.as_deref() else {
+        return false;
+    };
+    if !is_variable_ref(family.trim()) {
+        return false;
+    }
+    *slot = resolve_font_family_ref(family, vars, theme);
+    true
+}
+
 /// Resolve a numeric `$ref` to f64 (TS `resolveNumericRef`).
 pub fn resolve_numeric_ref(reference: &str, vars: Option<&Vars>, theme: &Theme) -> Option<f64> {
     match resolve_variable_ref(reference, vars, theme)? {
@@ -320,6 +348,7 @@ pub fn resolve_node_for_canvas(node: &mut PenNode, vars: Option<&Vars>, theme: &
             }
             TextContent::Styled(segments) => {
                 for segment in segments {
+                    changed |= resolve_font_family_slot(&mut segment.font_family, vars, theme);
                     if let Some(fill) = segment.fill.as_mut() {
                         if is_variable_ref(fill) {
                             *fill = resolve_color_ref(fill, vars, theme)
@@ -330,6 +359,7 @@ pub fn resolve_node_for_canvas(node: &mut PenNode, vars: Option<&Vars>, theme: &
                 }
             }
         }
+        changed |= resolve_font_family_slot(&mut text.font_family, vars, theme);
         if let Some(FontWeight::Keyword(keyword)) = text.font_weight.as_ref() {
             if is_variable_ref(keyword) {
                 if let Some(weight) = resolve_numeric_ref(keyword, vars, theme) {
@@ -410,11 +440,13 @@ pub fn roots_have_tokens(nodes: &[PenNode]) -> bool {
         if let PenNode::Text(text) = node {
             let content_token = match &text.content {
                 TextContent::Plain(content) => is_variable_ref(content),
-                TextContent::Styled(segments) => segments
-                    .iter()
-                    .any(|s| s.fill.as_deref().is_some_and(is_variable_ref)),
+                TextContent::Styled(segments) => segments.iter().any(|s| {
+                    s.fill.as_deref().is_some_and(is_variable_ref)
+                        || s.font_family.as_deref().is_some_and(is_variable_ref)
+                }),
             };
             if content_token
+                || text.font_family.as_deref().is_some_and(is_variable_ref)
                 || matches!(&text.font_weight, Some(FontWeight::Keyword(k)) if is_variable_ref(k))
             {
                 return true;
