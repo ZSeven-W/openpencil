@@ -220,6 +220,14 @@ pub(super) fn run_http(
         }
         match listener.accept() {
             Ok((mut stream, _)) => {
+                // BSD/macOS `accept` inherits the listener's non-blocking
+                // flag. A non-blocking stream fails `write_all` with
+                // `WouldBlock` once the send buffer fills, truncating any
+                // large reply (a 2x PNG export) mid-body — issue #279.
+                if let Err(error) = stream.set_nonblocking(false) {
+                    eprintln!("openpencil-desktop --mcp-http: set blocking stream: {error}");
+                    continue;
+                }
                 let _ = stream.set_read_timeout(Some(HTTP_IO_TIMEOUT));
                 let _ = stream.set_write_timeout(Some(HTTP_IO_TIMEOUT));
                 match serve_http_connection(
