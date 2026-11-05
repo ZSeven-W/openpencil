@@ -71,16 +71,40 @@ pub(crate) fn apply_layout_positioning(
 /// coordinates and feeds children to flex layout, so it must emit flow order.
 /// Preserve mode keeps authored coordinates and bypasses flex layout; retaining
 /// topmost-first order is therefore required for canonical canvas z-order.
+///
+/// The `.op` children array is BOTH flow order and paint order (first =
+/// topmost), so only the flow children are reversed: an ABSOLUTE child (the
+/// only kind that keeps `constraints` in OpenPencil mode) stays in its
+/// topmost-first slot. Reversing everything sank a mask or action sheet that
+/// was topmost in Figma beneath the content it overlays (issue #276).
 pub(crate) fn order_children(
     children: Vec<PenNode>,
     has_auto_layout: bool,
     layout_mode: FigLayoutMode,
 ) -> Vec<PenNode> {
-    if layout_mode == FigLayoutMode::OpenPencil && has_auto_layout && children.len() > 1 {
-        children.into_iter().rev().collect()
-    } else {
-        children
+    if layout_mode != FigLayoutMode::OpenPencil || !has_auto_layout || children.len() < 2 {
+        return children;
     }
+    let mut children = children;
+    let absolute: Vec<bool> = children
+        .iter_mut()
+        .map(|child| base_mut(child).constraints.is_some())
+        .collect();
+    let mut slots: Vec<Option<PenNode>> = children.into_iter().map(Some).collect();
+    // Flow children, topmost-first → reversed into flow order.
+    let mut flow: Vec<PenNode> = slots
+        .iter_mut()
+        .zip(&absolute)
+        .filter(|(_, abs)| !**abs)
+        .filter_map(|(slot, _)| slot.take())
+        .collect();
+    flow.reverse();
+    let mut flow = flow.into_iter();
+    slots
+        .into_iter()
+        .zip(absolute)
+        .filter_map(|(slot, abs)| if abs { slot } else { flow.next() })
+        .collect()
 }
 
 fn map_figma_constraints(figma: &FigValue) -> Constraints {

@@ -779,3 +779,35 @@ fn preserve_plain_frame_keeps_disabled_mask_as_explicit_open_content() {
     };
     assert_eq!(frame.container.clip_content, Some(false));
 }
+
+/// Issue #276: overlays that were topmost in Figma stay topmost (first)
+/// while the flow children still come out in flow order.
+#[test]
+fn openpencil_mode_keeps_topmost_absolute_overlays_on_top() {
+    let absolute = |name: &str, id: u32, pos: &str| {
+        let mut node = rect_child(name, id, pos);
+        add_fields(
+            &mut node,
+            vec![
+                ("transform", transform(0.0, 0.0)),
+                ("stackPositioning", FigValue::Str("ABSOLUTE".into())),
+            ],
+        );
+        node
+    };
+    // Descending (topmost-first) tree order of [topNav, body, mask, sheet].
+    let tree = auto_layout_frame(vec![
+        absolute("actionSheet", 4, "$"),
+        absolute("mask", 3, "#"),
+        rect_child("body", 2, "\""),
+        rect_child("topNav", 1, "!"),
+    ]);
+    let mut ctx = fresh_ctx();
+    let node = convert_frame(&tree, None, &mut ctx);
+    assert_eq!(
+        child_names(&node),
+        ["actionSheet", "mask", "topNav", "body"]
+            .map(String::from)
+            .to_vec()
+    );
+}
