@@ -31,6 +31,10 @@ pub use error::ImageGenerateError;
 mod atlas;
 pub use atlas::generate_atlas;
 
+#[path = "web_image_generate_openai.rs"]
+mod openai;
+pub use openai::{generate_openai, test_openai_compatible};
+
 #[path = "web_image_generate_workbench.rs"]
 mod workbench;
 pub use workbench::{bypasses_proxy, generate_workbench, test_workbench, WorkbenchPolling};
@@ -300,21 +304,6 @@ pub(crate) fn generate_ok_json(url: &str) -> String {
     serde_json::json!({ "ok": true, "url": url }).to_string()
 }
 
-/// TS `mapToOpenAISize`.
-fn openai_size(width: Option<f64>, height: Option<f64>) -> &'static str {
-    let (Some(w), Some(h)) = (width, height) else {
-        return "1024x1024";
-    };
-    let ratio = w / h;
-    if ratio > 1.3 {
-        "1792x1024"
-    } else if ratio < 0.77 {
-        "1024x1792"
-    } else {
-        "1024x1024"
-    }
-}
-
 /// TS `mapToGeminiAspectRatio`.
 fn gemini_aspect_ratio(width: Option<f64>, height: Option<f64>) -> Option<&'static str> {
     let (Some(w), Some(h)) = (width, height) else {
@@ -353,66 +342,6 @@ pub(crate) fn provider_error(provider: &str, status: reqwest::StatusCode, body: 
         msg.push_str(&body.chars().take(150).collect::<String>());
     }
     msg
-}
-
-/// OpenAI / OpenAI-compatible `images/generations` request. Shared verbatim
-/// by the desktop Generate popover (its own client/UA) and the web daemon
-/// route.
-pub async fn generate_openai(
-    client: &reqwest::Client,
-    prompt: &str,
-    profile: &ImageGenProfile,
-    width: Option<f64>,
-    height: Option<f64>,
-) -> Result<String, ImageGenerateError> {
-    let base = profile
-        .base_url
-        .as_deref()
-        .filter(|b| !b.trim().is_empty())
-        .unwrap_or("https://api.openai.com");
-    let endpoint = format!("{}/v1/images/generations", base.trim_end_matches('/'));
-    let resp = client
-        .post(endpoint)
-        .bearer_auth(profile.api_key.trim())
-        .json(&serde_json::json!({
-            "model": profile.model,
-            "prompt": prompt,
-            "n": 1,
-            "size": openai_size(width, height),
-            "response_format": "url",
-        }))
-        .send()
-        .await
-        .map_err(|e| ImageGenerateError::Request {
-            provider: "OpenAI",
-            message: e.to_string(),
-        })?;
-    let (status, body) = read_provider_body("OpenAI", resp).await?;
-    if !status.is_success() {
-        return Err(ImageGenerateError::Provider(provider_error(
-            "OpenAI", status, &body,
-        )));
-    }
-    let json: serde_json::Value =
-        serde_json::from_str(&body).map_err(|e| ImageGenerateError::ResponseParse {
-            provider: "OpenAI",
-            message: e.to_string(),
-        })?;
-    json.get("data")
-        .and_then(|d| d.as_array())
-        .and_then(|d| d.first())
-        .and_then(|d| {
-            d.get("url")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string)
-                .or_else(|| {
-                    // Some OpenAI-compatible providers return b64_json.
-                    d.get("b64_json")
-                        .and_then(serde_json::Value::as_str)
-                        .map(|b64| format!("data:image/png;base64,{b64}"))
-                })
-        })
-        .ok_or(ImageGenerateError::MissingImageUrl)
 }
 
 /// Gemini `generateContent` inline-image request (shared desktop + web).
@@ -718,9 +647,9 @@ mod tests {
 
     #[test]
     fn size_mappers_mirror_ts() {
-        assert_eq!(openai_size(None, None), "1024x1024");
-        assert_eq!(openai_size(Some(1600.0), Some(900.0)), "1792x1024");
-        assert_eq!(openai_size(Some(900.0), Some(1600.0)), "1024x1792");
+        assert_eq!(openai::openai_size(None, None), "1024x1024");
+        assert_eq!(openai::openai_size(Some(1600.0), Some(900.0)), "1792x1024");
+        assert_eq!(openai::openai_size(Some(900.0), Some(1600.0)), "1024x1792");
         assert_eq!(gemini_aspect_ratio(None, None), None);
         assert_eq!(
             gemini_aspect_ratio(Some(1920.0), Some(1080.0)),

@@ -1,18 +1,20 @@
-//! Host pump for the Workbench image-gen profile "Test" button.
+//! Host pump for the image-gen profile "Test" button (Workbench status
+//! probe, OpenAI-compatible zero-cost endpoint probe).
 //!
 //! Same session pattern as `provider_probe_host.rs`: the settings press
 //! raises `agent_settings.pending_image_gen_test` (the request seam in
 //! op-editor-core), the redraw pump drains it onto a worker thread running
-//! `op_host_services::web_image_generate::test_workbench`, and a later
+//! `op_host_services::web_image_generate::test_workbench` (or
+//! `test_openai_compatible` for OpenAI / Custom profiles), and a later
 //! frame lands the outcome in the profile's `test_status`.
 
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use op_editor_core::agent_settings::{ImageGenProfile, ImageTestStatus};
+use op_editor_core::agent_settings::{ImageGenProfile, ImageGenProvider, ImageTestStatus};
 
 use crate::DesktopApp;
 
-/// One in-flight Workbench status probe.
+/// One in-flight image-gen profile probe.
 pub(crate) struct ImageGenTestJob {
     profile_id: String,
     rx: Receiver<ImageTestStatus>,
@@ -33,7 +35,18 @@ impl ImageGenTestJob {
                     Ok(client) => client,
                     Err(_) => return ImageTestStatus::Invalid,
                 };
-                op_host_services::web_image_generate::test_workbench(&client, &profile).await
+                match profile.provider {
+                    ImageGenProvider::OpenAi | ImageGenProvider::Custom => {
+                        op_host_services::web_image_generate::test_openai_compatible(
+                            &client, &profile,
+                        )
+                        .await
+                    }
+                    _ => {
+                        op_host_services::web_image_generate::test_workbench(&client, &profile)
+                            .await
+                    }
+                }
             });
             let _ = tx.send(status);
         });
