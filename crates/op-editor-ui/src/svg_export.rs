@@ -13,6 +13,7 @@ mod composite_tests;
 mod image_metadata;
 #[path = "svg_export_rect.rs"]
 mod rect;
+mod text_anchor;
 mod transform;
 
 use rect::{emit_rect, emit_rect_fill, emit_rect_stroke_overlay, emit_widget_frame_background};
@@ -484,10 +485,10 @@ fn emit_text(out: &mut String, n: &SceneNode) {
     let _ = write!(out, r#"<g id="{}">"#, xml_escape(&n.id));
     let mut baseline_y = r.origin.y + base_size + 1.0;
     for line in text.split('\n') {
+        let (x, placement_attrs) = text_anchor::line_placement(line, n.text_align, r);
         let _ = write!(
             out,
-            r#"<text x="{}" y="{baseline_y}" font-family="{}" font-size="{base_size}"{weight_attr}{fill_attr}{}{}>{}</text>"#,
-            r.origin.x,
+            r#"<text x="{x}" y="{baseline_y}"{placement_attrs} font-family="{}" font-size="{base_size}"{weight_attr}{fill_attr}{}{}>{}</text>"#,
             xml_escape(if n.font_family.is_empty() {
                 "system-ui, sans-serif"
             } else {
