@@ -515,7 +515,7 @@ pub use slides_panel_actions::{
 };
 pub use status_bar::{StatusBar, STATUS_BAR_HEIGHT, STATUS_BAR_WIDTH};
 pub use top_bar::{TopBar, TopBarHit, TOP_BAR_HEIGHT};
-pub use top_bar_window_control::WindowControl;
+pub use top_bar_window_control::{paint_window_control_dots, WindowControl};
 // Re-export panel/toolbar width constants + hit enums so the host
 // can size them consistently and route hits.
 pub use layer_panel::{DropPosition, DropTarget, LayerPanelHit, LAYER_PANEL_WIDTH};

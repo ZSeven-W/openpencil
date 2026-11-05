@@ -3,7 +3,8 @@
 //! repo's 800-line cap (same rationale as the `top_bar_paint` sibling).
 
 use crate::widgets::top_bar::*;
-use crate::{Point2D, Rect};
+use crate::widgets::PaintCx;
+use crate::{Color, Point2D, Rect};
 
 /// A window-control dot in the TopBar's left cluster. Resolved by
 /// [`TopBar::window_control_at`]; the desktop runner maps each onto
@@ -85,5 +86,96 @@ impl TopBar {
             }
         }
         None
+    }
+}
+
+/// Paint the Windows / Linux window-control dots at the left edge of
+/// `bar_rect`, vertically centred on it, matching
+/// [`TopBar::window_control_at`]'s hit zones for the same rect. Shared by
+/// the canvas TopBar and Home's own header, so the borderless window keeps
+/// its close / minimise / maximise controls on every screen (issue #268).
+pub fn paint_window_control_dots(cx: &mut PaintCx<'_>, bar_rect: Rect, hover: bool) {
+    let rect = bar_rect;
+    let center_y = rect.origin.y + rect.size.y / 2.0;
+    let traffic = [
+        Color {
+            r: 1.0,
+            g: 0.373,
+            b: 0.341,
+            a: 1.0,
+        }, // #FF5F57
+        Color {
+            r: 0.996,
+            g: 0.737,
+            b: 0.18,
+            a: 1.0,
+        }, // #FEBC2E
+        Color {
+            r: 0.157,
+            g: 0.784,
+            b: 0.251,
+            a: 1.0,
+        }, // #28C840
+    ];
+    let first_dot_cx = rect.origin.x + PAD + TRAFFIC_DOT / 2.0;
+    for (i, color) in traffic.into_iter().enumerate() {
+        let dot_cx = first_dot_cx + i as f32 * TRAFFIC_STEP;
+        cx.backend.fill_oval(
+            Rect {
+                origin: Point2D::new(dot_cx - TRAFFIC_DOT / 2.0, center_y - TRAFFIC_DOT / 2.0),
+                size: Point2D::new(TRAFFIC_DOT, TRAFFIC_DOT),
+            },
+            color,
+        );
+        // Hovering the cluster reveals each dot's glyph
+        // (macOS-style): ✕ close, − minimise, + maximise.
+        if hover {
+            let glyph = Color {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.55,
+            };
+            let r = 3.0_f32;
+            let lw = 1.3_f32;
+            match i {
+                0 => {
+                    cx.backend.stroke_line(
+                        Point2D::new(dot_cx - r, center_y - r),
+                        Point2D::new(dot_cx + r, center_y + r),
+                        glyph,
+                        lw,
+                    );
+                    cx.backend.stroke_line(
+                        Point2D::new(dot_cx - r, center_y + r),
+                        Point2D::new(dot_cx + r, center_y - r),
+                        glyph,
+                        lw,
+                    );
+                }
+                1 => {
+                    cx.backend.stroke_line(
+                        Point2D::new(dot_cx - r, center_y),
+                        Point2D::new(dot_cx + r, center_y),
+                        glyph,
+                        lw,
+                    );
+                }
+                _ => {
+                    cx.backend.stroke_line(
+                        Point2D::new(dot_cx - r, center_y),
+                        Point2D::new(dot_cx + r, center_y),
+                        glyph,
+                        lw,
+                    );
+                    cx.backend.stroke_line(
+                        Point2D::new(dot_cx, center_y - r),
+                        Point2D::new(dot_cx, center_y + r),
+                        glyph,
+                        lw,
+                    );
+                }
+            }
+        }
     }
 }

@@ -9,6 +9,7 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::text_metrics;
 use crate::widgets::top_bar::*;
+use crate::widgets::top_bar_window_control::paint_window_control_dots;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::TopBarButton;
@@ -33,90 +34,7 @@ impl TopBar {
         // `decorations(false)` window ships none. The desktop
         // runner wires custom-dot clicks via `window_control_at`.
         if self.show_traffic_controls && !cfg!(target_os = "macos") {
-            let traffic = [
-                Color {
-                    r: 1.0,
-                    g: 0.373,
-                    b: 0.341,
-                    a: 1.0,
-                }, // #FF5F57
-                Color {
-                    r: 0.996,
-                    g: 0.737,
-                    b: 0.18,
-                    a: 1.0,
-                }, // #FEBC2E
-                Color {
-                    r: 0.157,
-                    g: 0.784,
-                    b: 0.251,
-                    a: 1.0,
-                }, // #28C840
-            ];
-            let first_dot_cx = rect.origin.x + PAD + TRAFFIC_DOT / 2.0;
-            for (i, color) in traffic.into_iter().enumerate() {
-                let dot_cx = first_dot_cx + i as f32 * TRAFFIC_STEP;
-                cx.backend.fill_oval(
-                    Rect {
-                        origin: Point2D::new(
-                            dot_cx - TRAFFIC_DOT / 2.0,
-                            center_y - TRAFFIC_DOT / 2.0,
-                        ),
-                        size: Point2D::new(TRAFFIC_DOT, TRAFFIC_DOT),
-                    },
-                    color,
-                );
-                // Hovering the cluster reveals each dot's glyph
-                // (macOS-style): ✕ close, − minimise, + maximise.
-                if self.traffic_hover {
-                    let glyph = Color {
-                        r: 0.0,
-                        g: 0.0,
-                        b: 0.0,
-                        a: 0.55,
-                    };
-                    let r = 3.0_f32;
-                    let lw = 1.3_f32;
-                    match i {
-                        0 => {
-                            cx.backend.stroke_line(
-                                Point2D::new(dot_cx - r, center_y - r),
-                                Point2D::new(dot_cx + r, center_y + r),
-                                glyph,
-                                lw,
-                            );
-                            cx.backend.stroke_line(
-                                Point2D::new(dot_cx - r, center_y + r),
-                                Point2D::new(dot_cx + r, center_y - r),
-                                glyph,
-                                lw,
-                            );
-                        }
-                        1 => {
-                            cx.backend.stroke_line(
-                                Point2D::new(dot_cx - r, center_y),
-                                Point2D::new(dot_cx + r, center_y),
-                                glyph,
-                                lw,
-                            );
-                        }
-                        _ => {
-                            cx.backend.stroke_line(
-                                Point2D::new(dot_cx - r, center_y),
-                                Point2D::new(dot_cx + r, center_y),
-                                glyph,
-                                lw,
-                            );
-                            cx.backend.stroke_line(
-                                Point2D::new(dot_cx, center_y - r),
-                                Point2D::new(dot_cx, center_y + r),
-                                glyph,
-                                lw,
-                            );
-                        }
-                    }
-                }
-            }
+            paint_window_control_dots(cx, rect, self.traffic_hover);
         }
         // ── Left cluster ───────────────────────────────────────
         // sidebar toggle │ file-menu │ Figma │ Home — each group split

@@ -134,16 +134,26 @@ impl DesktopApp {
         // hidden, so a press on the TopBar's window-control
         // dots drives the window, and a press on the bar's
         // blank area starts a window drag.
-        if self.cursor_y < op_editor_ui::widgets::TOP_BAR_HEIGHT {
+        // Home paints the same dots, centred on its own taller header.
+        let controls_bar_h = if self.host.editor_state().editor_ui.home.visible {
+            op_editor_ui::widgets::HOME_TOPBAR_H
+        } else {
+            op_editor_ui::widgets::TOP_BAR_HEIGHT
+        };
+        if self.cursor_y < controls_bar_h {
             use op_editor_ui::widgets::{TopBar, WindowControl};
             use op_editor_ui::{Point2D, Rect};
             let tb_rect = Rect {
                 origin: Point2D::new(0.0, 0.0),
                 size: Point2D::new(self.viewport_width, op_editor_ui::widgets::TOP_BAR_HEIGHT),
             };
+            let controls_rect = Rect {
+                origin: Point2D::new(0.0, 0.0),
+                size: Point2D::new(self.viewport_width, controls_bar_h),
+            };
             let tb = TopBar::for_editor_ui(&self.host.editor_state().editor_ui);
             let p = Point2D::new(self.cursor_x, self.cursor_y);
-            if let Some(ctl) = tb.window_control_at(tb_rect, p) {
+            if let Some(ctl) = tb.window_control_at(controls_rect, p) {
                 match ctl {
                     WindowControl::Close => {
                         // Mirror `WindowEvent::CloseRequested`:
@@ -178,7 +188,9 @@ impl DesktopApp {
             }
             // A press on the bar that hits none of the app's
             // own buttons is a window-drag grab.
-            if tb.hit_test(tb_rect, p).is_none() {
+            if self.cursor_y < op_editor_ui::widgets::TOP_BAR_HEIGHT
+                && tb.hit_test(tb_rect, p).is_none()
+            {
                 if let Some(w) = self.window.as_ref() {
                     let _ = w.drag_window();
                 }
