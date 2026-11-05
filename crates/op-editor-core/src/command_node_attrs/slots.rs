@@ -61,7 +61,8 @@ pub(super) fn write_corner_radius_at(node: &mut PenNode, index: usize, radius: f
     let mut values = match slot.as_ref() {
         Some(CornerRadius::Uniform(value)) => [*value; 4],
         Some(CornerRadius::PerCorner(values)) => *values,
-        None => [0.0; 4],
+        // Editing one corner of a `$variable` radius detaches it.
+        Some(CornerRadius::Expression(_)) | None => [0.0; 4],
     };
     let Some(value) = values.get_mut(index) else {
         return false;

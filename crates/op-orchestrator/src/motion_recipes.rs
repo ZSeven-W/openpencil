@@ -231,7 +231,7 @@ fn has_solid_fill(node: &PenNode) -> bool {
 fn find_display_id(root: &PenNode, first_screen_height: f64) -> Option<String> {
     if let PenNode::Text(text) = root {
         let y = root.base().y.unwrap_or(0.0);
-        if text.font_size.is_some_and(|size| size >= 32.0)
+        if text.font_size_px().is_some_and(|size| size >= 32.0)
             && y.is_finite()
             && y <= first_screen_height
         {

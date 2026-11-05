@@ -105,7 +105,7 @@ pub fn set_stroke_from_json(node: &mut PenNode, suggested: &Value) -> bool {
 pub fn set_font_size(node: &mut PenNode, font_size: f32) -> bool {
     match node {
         PenNode::Text(n) => {
-            n.font_size = Some(font_size as f64);
+            n.font_size = Some((font_size as f64).into());
             true
         }
         _ => false,
@@ -301,7 +301,7 @@ mod tests {
         let mut n = node(json!({"type": "text", "id": "t", "content": "hi"}));
         assert!(set_font_size(&mut n, 14.0));
         match n {
-            PenNode::Text(t) => assert_eq!(t.font_size, Some(14.0)),
+            PenNode::Text(t) => assert_eq!(t.font_size_px(), Some(14.0)),
             _ => panic!("expected text"),
         }
     }

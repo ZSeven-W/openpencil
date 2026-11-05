@@ -493,7 +493,10 @@ pub fn node_property_value(node: &PenNode, property: &str) -> Option<Value> {
         "height" => sizing_value(height_sizing(node)?),
         "cornerRadius" => corner_radius_value(node),
         "fontSize" => match node {
-            PenNode::Text(t) => t.font_size.map(json_number),
+            PenNode::Text(t) => t.font_size.as_ref().map(|size| match size {
+                NumberOrExpression::Number(n) => json_number(*n),
+                NumberOrExpression::Expression(e) => Value::String(e.clone()),
+            }),
             _ => None,
         },
         _ => None,
@@ -544,6 +547,7 @@ fn corner_radius_json(radius: &CornerRadius) -> Value {
         CornerRadius::PerCorner(corners) => {
             Value::Array(corners.iter().map(|c| json_number(*c)).collect())
         }
+        CornerRadius::Expression(e) => Value::String(e.clone()),
     }
 }
 
@@ -565,7 +569,7 @@ pub fn corner_radius_numeric(node: &PenNode) -> f64 {
     match radius {
         Some(CornerRadius::Uniform(v)) => *v,
         // `PerCorner` is `typeof !== 'number'` in TS — counts as 0.
-        Some(CornerRadius::PerCorner(_)) | None => 0.0,
+        Some(CornerRadius::PerCorner(_) | CornerRadius::Expression(_)) | None => 0.0,
     }
 }
 

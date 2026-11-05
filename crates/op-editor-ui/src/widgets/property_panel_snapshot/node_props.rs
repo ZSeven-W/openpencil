@@ -288,6 +288,7 @@ pub(super) fn container_corner_radius(node: &PenNode) -> f32 {
     match cr {
         Some(CornerRadius::Uniform(r)) => *r as f32,
         Some(CornerRadius::PerCorner(c)) => c[0] as f32,
+        Some(CornerRadius::Expression(_)) => 0.0,
         None => match node {
             PenNode::Ellipse(n) => n.corner_radius.unwrap_or(0.0) as f32,
             PenNode::Polygon(n) => n.corner_radius.unwrap_or(0.0) as f32,
@@ -308,6 +309,6 @@ pub(super) fn container_corner_radii(node: &PenNode) -> Option<[f32; 4]> {
     Some(match radius {
         Some(CornerRadius::Uniform(value)) => [*value as f32; 4],
         Some(CornerRadius::PerCorner(values)) => values.map(|value| value as f32),
-        None => [0.0; 4],
+        Some(CornerRadius::Expression(_)) | None => [0.0; 4],
     })
 }

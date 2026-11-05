@@ -82,6 +82,43 @@ fn replace_in_node(
             }
         }
     }
+    // `$variable` corner radii (containers + images) and text font size /
+    // family — rename keeps the link, delete bakes in the current value.
+    let replace_radius = |radius: &mut Option<jian_ops_schema::node::CornerRadius>| {
+        use jian_ops_schema::node::CornerRadius;
+        if let Some(CornerRadius::Expression(expr)) = radius.as_mut() {
+            if expr == token {
+                match new {
+                    Some(new) => *expr = format!("${new}"),
+                    None => {
+                        if let Some(n) = resolve_numeric_ref(token, vars, theme) {
+                            *radius = Some(CornerRadius::Uniform(n));
+                        }
+                    }
+                }
+            }
+        }
+    };
+    if let Some(container) = node_container_mut(node) {
+        replace_radius(&mut container.corner_radius);
+    }
+    if let PenNode::Image(image) = node {
+        replace_radius(&mut image.corner_radius);
+    }
+    if let PenNode::Text(text) = node {
+        if let Some(size) = text.font_size.as_mut() {
+            replace_expr(size);
+        }
+        if text.font_family.as_deref() == Some(token) {
+            text.font_family = match new {
+                Some(new) => Some(format!("${new}")),
+                None => match resolve_variable_ref(token, vars, theme) {
+                    Some(VariableScalar::Str(family)) => Some(family),
+                    _ => None,
+                },
+            };
+        }
+    }
     // Fills + stroke fills + shadow colours.
     if let Some(fills) = node_fills_opt_mut(node) {
         for fill in fills {

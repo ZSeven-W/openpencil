@@ -71,7 +71,7 @@ fn document_root_styles_inherit_through_body_and_ancestor_selectors_match() {
     let PenNode::Text(text) = &paragraph.children.as_ref().unwrap()[0] else {
         panic!()
     };
-    assert_eq!(text.font_size, Some(40.0));
+    assert_eq!(text.font_size_px(), Some(40.0));
     assert!(matches!(
         text.fill.as_deref(),
         Some([PenFill::Solid(fill)]) if fill.color == "#123456"

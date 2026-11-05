@@ -390,12 +390,12 @@ fn commit_property_edit_clamps_font_size() {
     let PenNode::Text(t) = find_node(s.active_children(), &id("t1")).unwrap() else {
         panic!("text node");
     };
-    assert_eq!(t.font_size, Some(999.0), "over-max clamps to 999");
+    assert_eq!(t.font_size_px(), Some(999.0), "over-max clamps to 999");
     assert!(s.commit_property_edit(crate::ui_draft::PropertyFocus::FontSize, 0.4));
     let PenNode::Text(t) = find_node(s.active_children(), &id("t1")).unwrap() else {
         panic!("text node");
     };
-    assert_eq!(t.font_size, Some(1.0), "under-min clamps to 1");
+    assert_eq!(t.font_size_px(), Some(1.0), "under-min clamps to 1");
 }
 
 #[test]

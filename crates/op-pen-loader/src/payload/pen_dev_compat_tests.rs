@@ -68,7 +68,8 @@ fn pen_dev_document_loads_with_op_paint_order() {
     let value = serde_json::to_value(screen).expect("serialize");
     assert_eq!(value["height"], "fit_content");
     assert_eq!(value["clipContent"], true);
-    assert_eq!(value["cornerRadius"], 12.0);
+    // Variable links survive the load (issue #270).
+    assert_eq!(value["cornerRadius"], "$radius-md");
     assert_eq!(value["fill"][0]["color"], "$surface-background");
     let child = |name: &str| {
         value["children"]
@@ -87,7 +88,7 @@ fn pen_dev_document_loads_with_op_paint_order() {
     assert_eq!(body["effects"][0]["offsetY"], 4.0);
     let label = child("label");
     assert_eq!(label["type"], "text");
-    assert_eq!(label["fontSize"], 15.0);
+    assert_eq!(label["fontSize"], "$font-body");
     assert_eq!(label["content"], "");
     assert_eq!(child("memo")["type"], "text");
 }
@@ -97,4 +98,29 @@ fn pen_dev_linear_gradient_rotation_maps_to_op_angle() {
     let mut fill = json!([{ "type": "gradient", "gradientType": "linear", "rotation": 90 }]);
     assert!(convert_paints(&mut fill));
     assert_eq!(fill[0]["rotation"], 270.0);
+}
+
+/// Issue #270: linked font sizes and radii render at the variable's value
+/// and keep the link, so editing the token reaches every node.
+#[test]
+fn variable_font_size_and_radius_resolve_for_canvas_and_round_trip() {
+    let doc = load_canonical(PEN_DEV_DOC).expect("loads").value;
+    let resolved =
+        op_editor_core::variables_resolve::resolve_document_for_canvas(&doc, &Default::default());
+    let screen = serde_json::to_value(&resolved.children[0]).expect("serialize");
+    assert_eq!(screen["cornerRadius"], 12.0);
+    let label = screen["children"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "label")
+        .cloned()
+        .unwrap();
+    assert_eq!(label["fontSize"], 15.0);
+    // The stored document keeps the refs through a save / reload.
+    let saved = serde_json::to_string(&doc).expect("save");
+    assert!(saved.contains(r#""fontSize":"$font-body""#), "{saved}");
+    assert!(saved.contains(r#""cornerRadius":"$radius-md""#), "{saved}");
+    let reloaded = load_canonical(&saved).expect("reload").value;
+    assert_eq!(reloaded, doc);
 }

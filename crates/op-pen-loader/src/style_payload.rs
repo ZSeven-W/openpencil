@@ -112,7 +112,7 @@ pub(crate) fn apply_container_style(
         Some(CornerRadius::PerCorner(corners)) => {
             corners.iter().copied().fold(0.0_f64, f64::max) as f32
         }
-        None => 0.0,
+        Some(CornerRadius::Expression(_)) | None => 0.0,
     };
 }
 

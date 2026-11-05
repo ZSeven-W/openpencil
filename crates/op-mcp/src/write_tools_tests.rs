@@ -399,7 +399,7 @@ fn insert_node_preserves_ts_leaf_data_with_extra_fields_as_subtree() {
         panic!("expected one text node, got {nodes:?}");
     };
     assert_eq!(text.base.name.as_deref(), Some("Hero"));
-    assert_eq!(text.font_size, Some(24.0));
+    assert_eq!(text.font_size_px(), Some(24.0));
 }
 
 #[test]

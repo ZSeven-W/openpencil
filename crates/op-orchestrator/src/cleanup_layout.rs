@@ -109,7 +109,7 @@ fn number_value(value: &NumberOrExpression) -> Option<f64> {
 }
 
 fn estimated_text_height(text: &TextNode) -> f64 {
-    let font_size = text.font_size.unwrap_or(14.0).max(1.0);
+    let font_size = text.font_size_px().unwrap_or(14.0).max(1.0);
     let line_height = match text.line_height {
         Some(value) if value > 4.0 => value,
         Some(value) if value > 0.0 => font_size * value,

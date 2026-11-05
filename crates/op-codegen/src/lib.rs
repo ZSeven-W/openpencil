@@ -201,7 +201,7 @@ pub(crate) fn node_corner_radius(node: &PenNode) -> f64 {
     let uniform = |c: &Option<CornerRadius>| match c {
         Some(CornerRadius::Uniform(r)) => *r,
         Some(CornerRadius::PerCorner(arr)) => arr.first().copied().unwrap_or(0.0),
-        None => 0.0,
+        Some(CornerRadius::Expression(_)) | None => 0.0,
     };
     match node {
         PenNode::Frame(n) => uniform(&n.container.corner_radius),

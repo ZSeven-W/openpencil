@@ -329,7 +329,7 @@ mod tests {
         let mut n = node(json!({"type": "text", "id": "t", "content": "hi", "fontSize": 24}));
         assert!(set_property(&mut n, FixProperty::FontSize, &json!(14)));
         match n {
-            PenNode::Text(t) => assert_eq!(t.font_size, Some(14.0)),
+            PenNode::Text(t) => assert_eq!(t.font_size_px(), Some(14.0)),
             _ => panic!("expected text"),
         }
     }

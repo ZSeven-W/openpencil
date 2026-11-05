@@ -346,7 +346,7 @@ fn build_text_node(
         height,
         content,
         font_family: None,
-        font_size,
+        font_size: font_size.map(Into::into),
         font_weight,
         font_style: None,
         letter_spacing: None,

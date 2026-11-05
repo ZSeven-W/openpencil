@@ -50,6 +50,7 @@ fn has_zero_corner_radius(radius: Option<&CornerRadius>) -> bool {
         None => true,
         Some(CornerRadius::Uniform(radius)) => *radius == 0.0,
         Some(CornerRadius::PerCorner(radii)) => radii.iter().all(|radius| *radius == 0.0),
+        Some(CornerRadius::Expression(_)) => false,
     }
 }
 

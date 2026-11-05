@@ -655,7 +655,7 @@ fn enrich_text(t: &mut TextNode, hints: &HashMap<String, HtmlStyleHint>) {
     }
     if t.font_size.is_none() {
         if let Some(size) = hint.font_size {
-            t.font_size = Some(size);
+            t.font_size = Some(size.into());
         }
     }
     if t.font_weight.is_none() {

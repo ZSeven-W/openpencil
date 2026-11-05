@@ -585,7 +585,7 @@ fn collect_copy_group_triggers(
         let group = CopyGroup {
             parent_id: parent_id.to_string(),
             content: text_content_string(&text.content),
-            font_size: text.font_size.unwrap_or(0.0),
+            font_size: text.font_size_px().unwrap_or(0.0),
         };
         if !groups.iter().any(|existing| {
             existing.parent_id == group.parent_id
@@ -639,7 +639,7 @@ fn patch_copy_group(sink: &mut dyn DocSink, root_id: &str, group: &CopyGroup) ->
                 continue;
             };
             if text_content_string(&text.content) != group.content
-                || text.font_size.unwrap_or(0.0) != group.font_size
+                || text.font_size_px().unwrap_or(0.0) != group.font_size
             {
                 continue;
             }

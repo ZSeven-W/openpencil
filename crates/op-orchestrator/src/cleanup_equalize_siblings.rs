@@ -368,7 +368,7 @@ fn plan_family_repairs(
         let font_sizes: Vec<Option<f64>> = voters
             .iter()
             .map(|&i| match family[i].text_nodes.get(position) {
-                Some(PenNode::Text(text)) => text.font_size,
+                Some(PenNode::Text(text)) => text.font_size_px(),
                 _ => None,
             })
             .collect();

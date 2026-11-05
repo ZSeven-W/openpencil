@@ -103,7 +103,7 @@ fn actual_serif_heading_repair_is_small_complete_and_idempotent() {
         op_editor_core::walkers::find_node_mut(&mut restored.children, &NodeId::new("heading"))
             .unwrap();
     if let jian_ops_schema::node::PenNode::Text(text) = text {
-        text.font_size = Some(120.0);
+        text.font_size = Some(120.0.into());
     }
     assert_eq!(restored, before, "no other property or content changes");
     assert_eq!(repair_with_actual_fonts(&mut sink, "card"), 0);

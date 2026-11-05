@@ -368,7 +368,7 @@ fn convert_rectangle(
                 Some([*radius; 4])
             }
             Some(jian_ops_schema::node::container::CornerRadius::PerCorner(radii)) => Some(*radii),
-            None => None,
+            Some(jian_ops_schema::node::container::CornerRadius::Expression(_)) | None => None,
         };
         if let Some(path_d) =
             radii.and_then(|radii| smoothed_rect_path(width_px, height_px, radii, smoothing))

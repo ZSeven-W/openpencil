@@ -740,7 +740,6 @@ impl EditorState {
 }
 
 fn node_corner_radii(node: &PenNode) -> Option<[f64; 4]> {
-    use jian_ops_schema::node::container::CornerRadius;
     let radius = match node {
         PenNode::Frame(node) => node.container.corner_radius.as_ref(),
         PenNode::Group(node) => node.container.corner_radius.as_ref(),
@@ -748,10 +747,7 @@ fn node_corner_radii(node: &PenNode) -> Option<[f64; 4]> {
         PenNode::Image(node) => node.corner_radius.as_ref(),
         _ => None,
     }?;
-    Some(match radius {
-        CornerRadius::Uniform(value) => [*value; 4],
-        CornerRadius::PerCorner(values) => *values,
-    })
+    radius.corners_px()
 }
 
 fn corner_radii_uniform(values: [f64; 4]) -> bool {

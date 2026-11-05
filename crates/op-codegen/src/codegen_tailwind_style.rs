@@ -657,7 +657,8 @@ fn radius(ctx: &mut Ctx, node: &PenNode, classes: &mut Classes) {
                 }
             }
         }
-        None => {}
+        // An unresolved `$variable` radius has no fixed utility class.
+        Some(CornerRadius::Expression(_)) | None => {}
     }
 }
 
@@ -702,7 +703,7 @@ pub(super) fn typography(ctx: &mut Ctx, text: &TextNode, node: &PenNode, classes
     if let Some(family) = text.font_family.as_deref() {
         classes.push_opt(font_family(ctx, family));
     }
-    if let Some(size) = text.font_size.filter(|s| s.is_finite() && *s > 0.0) {
+    if let Some(size) = text.font_size_px().filter(|s| s.is_finite() && *s > 0.0) {
         classes.push(scale::font_size(size));
     }
     match &text.font_weight {

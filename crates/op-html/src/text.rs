@@ -228,7 +228,7 @@ fn build_text_node_in_path(
         height: text_box.height,
         content,
         font_family: block_style.get("font-family").map(str::to_string),
-        font_size: Some(block_style.font_size),
+        font_size: Some(block_style.font_size.into()),
         font_weight: parse_weight(block_style.get("font-weight")).map(FontWeight::Number),
         font_style: parse_text_font_style(block_style.get("font-style")),
         letter_spacing: block_style
@@ -609,7 +609,7 @@ mod tests {
         assert_eq!(segments[3].href.as_deref(), Some("https://x.dev"));
         assert_eq!(segments[3].underline, Some(true));
         assert_eq!(segments[3].fill.as_deref(), Some("#0066cc"));
-        assert_eq!(text.font_size, Some(18.0));
+        assert_eq!(text.font_size_px(), Some(18.0));
         assert!(matches!(text.font_weight, Some(FontWeight::Number(500))));
     }
 
@@ -622,7 +622,7 @@ mod tests {
         let PenNode::Text(text) = &heading.children.as_ref().unwrap()[0] else {
             panic!()
         };
-        assert_eq!(text.font_size, Some(32.0));
+        assert_eq!(text.font_size_px(), Some(32.0));
         use jian_ops_schema::node::text::FontWeight;
         assert!(matches!(text.font_weight, Some(FontWeight::Number(700))));
     }
@@ -726,7 +726,7 @@ mod tests {
         };
         assert_eq!(segments.len(), 1);
         assert_eq!(text.font_family.as_deref(), Some("monospace"));
-        assert_eq!(text.font_size, Some(12.0));
+        assert_eq!(text.font_size_px(), Some(12.0));
         assert!(matches!(text.font_weight, Some(FontWeight::Number(700))));
         assert_eq!(text.font_style, Some(TextFontStyle::Italic));
         assert_eq!(text.underline, Some(true));

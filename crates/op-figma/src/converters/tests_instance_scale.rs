@@ -280,7 +280,7 @@ fn derived_instance_scales_geometry_and_visual_metrics_into_40px_frame() {
     // Text metrics stay as authored: resizing an instance reflows the
     // text box in Figma, it does not restyle the type. Only the box
     // (x/y/width/height above) follows the instance scale.
-    assert_eq!(text.font_size, Some(18.0));
+    assert_eq!(text.font_size_px(), Some(18.0));
     assert_eq!(text.line_height, Some(1.333));
     assert_eq!(text.letter_spacing, Some(3.0));
     let TextContent::Styled(runs) = &text.content else {

@@ -439,7 +439,7 @@ fn wrap_smaller_inline_run_with_strut(
     let [PenNode::Text(text)] = inline_nodes.as_slice() else {
         return None;
     };
-    let font_size = text.font_size?;
+    let font_size = text.font_size_px()?;
     let line_height = text.layout_line_height_multiplier()?;
     let content_has_break = match &text.content {
         TextContent::Plain(value) => value.contains('\n'),
@@ -589,7 +589,7 @@ mod tests {
         };
         assert_eq!(strut.container.width, Some(SizingBehavior::Number(0.0)));
         assert_eq!(strut.container.height, Some(SizingBehavior::Number(22.5)));
-        assert_eq!(text.font_size, Some(12.0));
+        assert_eq!(text.font_size_px(), Some(12.0));
         assert_eq!(text.line_height, Some(1.5));
         assert_eq!(text.text_growth, Some(TextGrowth::Auto));
     }

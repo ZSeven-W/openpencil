@@ -547,7 +547,7 @@ mod tests {
         let PenNode::Text(text) = &item.children.as_ref().unwrap()[0] else {
             panic!("the marker shares the item's text node")
         };
-        assert_eq!(text.font_size, Some(24.0));
+        assert_eq!(text.font_size_px(), Some(24.0));
         assert!(matches!(&text.content, TextContent::Plain(value) if value == "\u{2022} ITEM"));
     }
 }

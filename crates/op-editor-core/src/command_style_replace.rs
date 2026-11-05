@@ -363,7 +363,10 @@ fn replace_text_number(
     let PenNode::Text(text) = node else {
         return false;
     };
-    let Some(current) = text.font_size.and_then(|v| finite_number_value(v).ok()) else {
+    let Some(current) = text
+        .font_size_px()
+        .and_then(|v| finite_number_value(v).ok())
+    else {
         return false;
     };
     if !style_value_equal(&current, &replacement.from) {
@@ -372,7 +375,7 @@ fn replace_text_number(
     let Ok(to) = number_from_value(&replacement.to, property) else {
         return false;
     };
-    text.font_size = Some(to);
+    text.font_size = Some(to.into());
     true
 }
 
@@ -499,6 +502,7 @@ fn corner_radius_value(radius: &CornerRadius) -> StylePropValue {
     match radius {
         CornerRadius::Uniform(v) => StylePropValue::Number(*v),
         CornerRadius::PerCorner(v) => StylePropValue::NumberArray(v.to_vec()),
+        CornerRadius::Expression(e) => StylePropValue::String(e.clone()),
     }
 }
 

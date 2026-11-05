@@ -45,13 +45,15 @@ fn collect_headline(node: &PenNode, in_chrome: bool, best: &mut Option<(f64, Str
 }
 
 fn effective_font_size(text_node: &jian_ops_schema::node::TextNode) -> Option<f64> {
-    text_node.font_size.or_else(|| match &text_node.content {
-        TextContent::Plain(_) => None,
-        TextContent::Styled(segments) => segments
-            .iter()
-            .filter_map(|segment| segment.font_size.map(f64::from))
-            .max_by(f64::total_cmp),
-    })
+    text_node
+        .font_size_px()
+        .or_else(|| match &text_node.content {
+            TextContent::Plain(_) => None,
+            TextContent::Styled(segments) => segments
+                .iter()
+                .filter_map(|segment| segment.font_size.map(f64::from))
+                .max_by(f64::total_cmp),
+        })
 }
 
 fn text_content(text_node: &jian_ops_schema::node::TextNode) -> String {

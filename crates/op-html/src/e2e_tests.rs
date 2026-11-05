@@ -293,7 +293,7 @@ fn html_font_and_color_inherit_through_unstyled_body_and_text() {
     );
     let text = descendant_text_with_exact_content(feature_root(&result), "Inherited")
         .expect("inherited text");
-    assert_eq!(text.font_size, Some(20.0));
+    assert_eq!(text.font_size_px(), Some(20.0));
     assert!(matches!(
         text.fill.as_deref(),
         Some([PenFill::Solid(fill)]) if fill.color == "#123456"
@@ -466,7 +466,7 @@ fn css_feature_matrix_maps_variables_functions_and_flex_items() {
 
     let title = descendant_text_with_exact_content(main, "Responsive parser")
         .expect("title text should be imported");
-    assert_eq!(title.font_size, Some(72.0));
+    assert_eq!(title.font_size_px(), Some(72.0));
     assert!(matches!(
         title.fill.as_deref(),
         Some([PenFill::Solid(solid)]) if solid.color == "#172033"
@@ -545,7 +545,7 @@ fn css_feature_matrix_applies_max_width_media_query_at_720px() {
     assert_grid_rows(cards, &[2, 2]);
     let title = descendant_text_with_exact_content(main, "Responsive parser")
         .expect("title text should be imported");
-    assert_eq!(title.font_size, Some(40.0));
+    assert_eq!(title.font_size_px(), Some(40.0));
 }
 
 #[test]
@@ -621,7 +621,7 @@ fn nova_store_desktop_preserves_cascade_geometry_layers_and_grid() {
     assert_eq!(heading.container.limits.max_width, Some(470.0));
     let heading_text =
         descendant_text_with_exact_content(hero, "把未来，握在手里。").expect("heading text");
-    assert_eq!(heading_text.font_size, Some(72.0));
+    assert_eq!(heading_text.font_size_px(), Some(72.0));
     assert_eq!(heading_text.width, Some(SizingBehavior::Number(470.0)));
     let cta = descendant_frame_named(hero, "button").expect("CTA frame");
     assert_eq!(node_text(&PenNode::Frame(cta.clone())), "探索新品→");
@@ -629,7 +629,7 @@ fn nova_store_desktop_preserves_cascade_geometry_layers_and_grid() {
     assert!(cta.container.stroke.is_none());
     let cta_label = descendant_text_with_exact_content(cta, "探索新品").expect("CTA label");
     assert_eq!(cta_label.font_family.as_deref(), Some("Arial"));
-    assert!((cta_label.font_size.unwrap_or_default() - 13.3333).abs() < 1e-6);
+    assert!((cta_label.font_size_px().unwrap_or_default() - 13.3333).abs() < 1e-6);
     assert_eq!(cta_label.font_weight, Some(FontWeight::Number(400)));
     assert_eq!(cta_label.line_height, None);
 
@@ -637,7 +637,7 @@ fn nova_store_desktop_preserves_cascade_geometry_layers_and_grid() {
     let search_label =
         descendant_text_with_exact_content(search_button, "⌕").expect("search icon label");
     assert_eq!(search_label.font_family.as_deref(), Some("Arial"));
-    assert_eq!(search_label.font_size, Some(17.0));
+    assert_eq!(search_label.font_size_px(), Some(17.0));
     assert_eq!(search_label.font_weight, Some(FontWeight::Number(400)));
     assert_eq!(search_label.line_height, None);
 
@@ -693,7 +693,7 @@ fn nova_store_mobile_applies_media_query_and_single_column_products() {
     assert_eq!(hero.container.limits.min_height, Some(580.0));
     let heading = descendant_text_with_exact_content(hero, "把未来，握在手里。")
         .expect("mobile heading text");
-    assert_eq!(heading.font_size, Some(42.0));
+    assert_eq!(heading.font_size_px(), Some(42.0));
     assert_eq!(heading.width, Some(SizingBehavior::Number(470.0)));
     let overlay = descendant_frame_named(hero, "::after").expect("mobile gradient overlay");
     assert!(matches!(

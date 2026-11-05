@@ -200,7 +200,7 @@ pub(super) fn emitted_corner_radius(node: &PenNode) -> f64 {
     match &image.corner_radius {
         Some(CornerRadius::Uniform(radius)) => *radius,
         Some(CornerRadius::PerCorner(radii)) => radii.first().copied().unwrap_or(0.0),
-        None => 0.0,
+        Some(CornerRadius::Expression(_)) | None => 0.0,
     }
 }
 

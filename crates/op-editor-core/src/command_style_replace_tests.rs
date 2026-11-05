@@ -44,7 +44,7 @@ fn styled_state() -> crate::EditorState {
     if let PenNode::Text(t) = &mut title {
         t.fill = Some(vec![solid_fill("#111111")]);
         t.font_family = Some("Inter".into());
-        t.font_size = Some(16.0);
+        t.font_size = Some(16.0.into());
         t.font_weight = Some(FontWeight::Number(700));
     }
 
@@ -147,6 +147,6 @@ fn replace_all_matching_properties_updates_descendants_in_one_command() {
         PenFill::Solid(body) if body.color == "#202020"
     ));
     assert_eq!(title.font_family.as_deref(), Some("Geist"));
-    assert_eq!(title.font_size, Some(18.0));
+    assert_eq!(title.font_size_px(), Some(18.0));
     assert_eq!(title.font_weight, Some(FontWeight::Keyword("bold".into())));
 }

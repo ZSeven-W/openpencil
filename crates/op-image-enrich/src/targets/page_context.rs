@@ -130,7 +130,7 @@ fn heading_description(container: &PenNode, excluded: Option<&str>) -> Option<St
                             .collect(),
                     };
                     let mut size = text
-                        .font_size
+                        .font_size_px()
                         .filter(|size| size.is_finite())
                         .unwrap_or(0.0);
                     if let TextContent::Styled(segments) = &text.content {

@@ -85,7 +85,8 @@ fn is_brand_title(node: &PenNode) -> bool {
     let PenNode::Text(text) = node else {
         return false;
     };
-    if has_authored_position(node) || !(18.0..=40.0).contains(&text.font_size.unwrap_or(16.0)) {
+    if has_authored_position(node) || !(18.0..=40.0).contains(&text.font_size_px().unwrap_or(16.0))
+    {
         return false;
     }
     semantic_has_any(&semantic_label(node), &["brand", "logo", "wordmark"])

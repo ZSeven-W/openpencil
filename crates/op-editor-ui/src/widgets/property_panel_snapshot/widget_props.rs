@@ -146,7 +146,7 @@ pub(super) fn text_summary_of(node: &PenNode) -> Option<TextSummary> {
             .font_family
             .clone()
             .unwrap_or_else(|| "Inter, sans-serif".to_string()),
-        font_size: t.font_size.unwrap_or(16.0) as f32,
+        font_size: t.font_size_px().unwrap_or(16.0) as f32,
         font_weight: font_weight_value(t.font_weight.as_ref()),
         line_height_percent: (t.line_height.unwrap_or(1.2) * 100.0) as f32,
         letter_spacing: t.letter_spacing.unwrap_or(0.0) as f32,

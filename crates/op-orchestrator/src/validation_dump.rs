@@ -152,7 +152,7 @@ fn walk_dump(node: &PenNode, depth: usize, lines: &mut Vec<String>) {
 
     // text-specific fields
     if let PenNode::Text(t) = node {
-        if let Some(fs) = t.font_size {
+        if let Some(fs) = t.font_size_px() {
             props.push(format!("fontSize={fs}"));
         }
         if let Some(fw) = &t.font_weight {
@@ -535,6 +535,7 @@ fn format_corner_radius(cr: &jian_ops_schema::node::container::CornerRadius) -> 
             format_f64(*c),
             format_f64(*d)
         ),
+        CornerRadius::Expression(e) => e.clone(),
     }
 }
 

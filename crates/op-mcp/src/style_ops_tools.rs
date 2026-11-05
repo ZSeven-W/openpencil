@@ -415,7 +415,7 @@ fn property_value(node: &PenNode, property: StyleProperty) -> Option<Value> {
             .and_then(|c| c.gap.as_ref())
             .and_then(number_or_expression_value),
         StyleProperty::FontSize => match node {
-            PenNode::Text(t) => t.font_size.and_then(number_value),
+            PenNode::Text(t) => t.font_size.as_ref().and_then(number_or_expression_value),
             _ => None,
         },
         StyleProperty::FontFamily => match node {
@@ -536,6 +536,7 @@ fn corner_radius_value(radius: &CornerRadius) -> Value {
         CornerRadius::PerCorner(v) => {
             Value::Array(v.iter().filter_map(|n| number_value(*n)).collect())
         }
+        CornerRadius::Expression(e) => Value::String(e.clone()),
     }
 }
 

@@ -85,7 +85,7 @@ fn collect_text_candidates(
             let content = text_content(&text.content);
             out.push(TextCandidate {
                 node_id: NodeId::new(node.id_str().to_string()),
-                font_size: text.font_size.unwrap_or(14.0),
+                font_size: text.font_size_px().unwrap_or(14.0),
                 font_weight,
                 haystack: format!("{} {}", combined, content.to_lowercase()),
                 content_len: content.chars().count(),

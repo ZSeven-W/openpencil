@@ -189,7 +189,7 @@ pub fn text_node(
         height: Some(height),
         content: props.content,
         font_family: props.font_family,
-        font_size: props.font_size,
+        font_size: props.font_size.map(Into::into),
         font_weight: props.font_weight.map(FontWeight::Number),
         font_style,
         letter_spacing: props.letter_spacing,

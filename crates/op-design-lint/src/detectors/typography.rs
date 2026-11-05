@@ -337,7 +337,7 @@ fn is_transparent_hex(color: &str) -> bool {
 /// Only the numeric path is large-eligible — a `Keyword` weight cannot
 /// `parseInt` to a finite number, matching the TS `NaN` result.
 fn is_large_text(text: &TextNode) -> bool {
-    let Some(font_size) = text.font_size else {
+    let Some(font_size) = text.font_size_px() else {
         return false;
     };
     if font_size >= 24.0 {

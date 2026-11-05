@@ -648,6 +648,7 @@ fn has_corner_radius(container: &ContainerProps) -> bool {
     match &container.corner_radius {
         Some(CornerRadius::Uniform(radius)) => *radius != 0.0,
         Some(CornerRadius::PerCorner(radii)) => radii.iter().any(|radius| *radius != 0.0),
+        Some(CornerRadius::Expression(_)) => true,
         None => false,
     }
 }

@@ -338,6 +338,7 @@ fn min_corner_radius(node: &PenNode) -> Option<f64> {
     match radius {
         CornerRadius::Uniform(value) => Some(*value),
         CornerRadius::PerCorner(corners) => corners.iter().copied().reduce(f64::min),
+        CornerRadius::Expression(_) => None,
     }
 }
 

@@ -306,6 +306,8 @@ fn radius_fact(node: &PenNode) -> RadiusFact {
         None => RadiusFact::Absent,
         Some(CornerRadius::Uniform(radius)) => RadiusFact::Uniform(radius.to_bits()),
         Some(CornerRadius::PerCorner(corners)) => RadiusFact::PerCorner(corners.map(f64::to_bits)),
+        // A `$variable` radius is authored intent; never report it as drift.
+        Some(CornerRadius::Expression(_)) => RadiusFact::Absent,
     }
 }
 

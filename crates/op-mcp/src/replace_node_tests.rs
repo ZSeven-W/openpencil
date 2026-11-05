@@ -208,7 +208,7 @@ fn replace_node_preserves_ts_leaf_data_with_extra_fields_as_subtree() {
         panic!("expected text node, got {node:?}");
     };
     assert_eq!(text.base.name.as_deref(), Some("Hero"));
-    assert_eq!(text.font_size, Some(24.0));
+    assert_eq!(text.font_size_px(), Some(24.0));
 }
 
 #[test]

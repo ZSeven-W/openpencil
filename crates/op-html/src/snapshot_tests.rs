@@ -116,7 +116,7 @@ fn sample_snapshot_converts_to_absolute_tree() {
         panic!("text run")
     };
     assert_eq!(text.base.x, Some(16.0));
-    assert_eq!(text.font_size, Some(16.0));
+    assert_eq!(text.font_size_px(), Some(16.0));
     assert_eq!(text.line_height, Some(1.5));
     let PenNode::Image(image) = &children[0] else {
         panic!("image")

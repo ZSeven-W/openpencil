@@ -199,6 +199,7 @@ pub(crate) fn is_safe_full_page_wrapper(node: &PenNode, allow_fixed_root: bool) 
             None => true,
             Some(CornerRadius::Uniform(radius)) => radius == 0.0,
             Some(CornerRadius::PerCorner(radii)) => radii.iter().all(|radius| *radius == 0.0),
+            Some(CornerRadius::Expression(_)) => false,
         }
         && !crate::wire_screen_navigation::node_has_events(node)
         && !has_geometry_bindings(node)

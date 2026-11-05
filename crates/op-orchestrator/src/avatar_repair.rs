@@ -121,7 +121,7 @@ fn avatar_slot_repair(
     let radius = match frame.container.corner_radius.as_ref() {
         Some(CornerRadius::Uniform(radius)) => *radius,
         Some(CornerRadius::PerCorner(corners)) => corners.iter().copied().fold(f64::MAX, f64::min),
-        None => 0.0,
+        Some(CornerRadius::Expression(_)) | None => 0.0,
     };
     let absolute_slot = matches!(frame.container.layout.as_ref(), Some(LayoutMode::None));
     // Explicit-avatar branch: the slot ITSELF may carry no numeric

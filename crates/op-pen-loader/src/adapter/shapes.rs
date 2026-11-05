@@ -213,7 +213,7 @@ pub(super) fn text_to_payload(n: &TextNode) -> NodePayload {
     crate::text_style::apply_text_content(&mut p, n);
     assign_first_fill(&mut p, n.fill.as_deref());
     p.font_family = n.font_family.clone().unwrap_or_default();
-    p.font_size = n.font_size.unwrap_or(0.0) as f32;
+    p.font_size = n.font_size_px().unwrap_or(0.0) as f32;
     p.font_weight = resolve_font_weight(n.font_weight.as_ref());
     // Keep paint on the same canonical multiplier used by layout measurement.
     // In particular, text carrying a pixel-like lineHeight must not measure

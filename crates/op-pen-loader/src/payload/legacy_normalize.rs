@@ -264,17 +264,6 @@ fn normalize_node_value(
                     // `cornerRadius` as a `$ref` string / array of them →
                     // resolve to the number(s) the `CornerRadius` enum holds.
                     normalize_corner_radius(map, number_vars, changed);
-                    // `fontSize` as a `$ref` string → its number (issue #270).
-                    // The schema holds a plain number, so the link itself is
-                    // resolved on load rather than kept.
-                    if let Some(Value::String(reference)) = map.get("fontSize") {
-                        if let Some(size) = number_vars.get(reference).copied() {
-                            map.insert("fontSize".to_string(), serde_json::json!(size));
-                        } else {
-                            map.remove("fontSize");
-                        }
-                        *changed = true;
-                    }
                     // A `stroke` written as a bare color string → wrap into a
                     // minimal `PenStroke { thickness: 1, fill: [...] }`.
                     if let Some(color) = map.get("stroke").and_then(|s| match s {
@@ -495,11 +484,10 @@ fn normalize_corner_radius(
         }
     };
     match map.get("cornerRadius") {
-        Some(Value::String(s)) => {
-            let n = number_vars.get(s).copied().unwrap_or(0.0);
-            map.insert("cornerRadius".to_string(), serde_json::json!(n));
-            *changed = true;
-        }
+        // A scalar `$ref` is kept as a link: the schema's
+        // `CornerRadius::Expression` holds it and the canvas resolver
+        // substitutes the value at render time (issue #270).
+        Some(Value::String(_)) => {}
         Some(Value::Array(entries)) => {
             // Only rewrite if at least one entry is a `$ref` string (a plain
             // numeric `[f64; 4]` is already valid; leave it alone).

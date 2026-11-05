@@ -124,7 +124,7 @@ fn patch_node_data_shallow_merges_ts_text_fields() {
         panic!("expected text node");
     };
     assert_eq!(text.content, TextContent::Plain("New".into()));
-    assert_eq!(text.font_size, Some(24.0));
+    assert_eq!(text.font_size_px(), Some(24.0));
 }
 
 #[test]

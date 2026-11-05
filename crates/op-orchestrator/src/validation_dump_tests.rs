@@ -394,7 +394,7 @@ fn dump_text_fields() {
         height: None,
         content: TextContent::Plain("Hello World".to_string()),
         font_family: None,
-        font_size: Some(24.0),
+        font_size: Some(24.0.into()),
         font_weight: Some(FontWeight::Number(700)),
         font_style: None,
         letter_spacing: None,

@@ -45,7 +45,7 @@ fn style_ops_state() -> op_editor_core::EditorState {
     if let PenNode::Text(t) = &mut title {
         t.fill = Some(vec![solid_fill("#111111")]);
         t.font_family = Some("Inter".into());
-        t.font_size = Some(16.0);
+        t.font_size = Some(16.0.into());
         t.font_weight = Some(FontWeight::Number(700));
     }
 

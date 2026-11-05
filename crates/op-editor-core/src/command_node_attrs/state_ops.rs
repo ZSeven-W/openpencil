@@ -112,7 +112,7 @@ impl EditorState {
         };
         match node {
             PenNode::Text(t) => {
-                t.font_size = Some(font_size as f64);
+                t.font_size = Some((font_size as f64).into());
                 true
             }
             _ => false,

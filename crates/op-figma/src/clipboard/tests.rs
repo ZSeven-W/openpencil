@@ -357,7 +357,7 @@ fn enrich_nodes_from_html_hints_fills_missing_text_props() {
     enrich_nodes_from_html_hints(&mut nodes, &hints);
     if let PenNode::Text(t) = &nodes[0] {
         assert_eq!(t.font_family.as_deref(), Some("Inter"));
-        assert_eq!(t.font_size, Some(18.0));
+        assert_eq!(t.font_size_px(), Some(18.0));
         assert!(t.font_weight.is_some());
         let fill = t.fill.as_ref().unwrap();
         match &fill[0] {
