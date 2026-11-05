@@ -99,3 +99,18 @@ fn direct_update_keeps_non_numeric_field_strings_uncoerced() {
         other => panic!("text fields must not coerce, got {other:?}"),
     }
 }
+
+#[test]
+fn direct_ops_reject_an_empty_node_ref_instead_of_panicking() {
+    for op in [
+        r#"U("", {"width":320})"#,
+        r#"D("")"#,
+        r#"U('', {"width":320})"#,
+    ] {
+        let result = parse_single_direct_operation(op);
+        assert!(
+            result.is_err(),
+            "{op} must be a typed error, got {result:?}"
+        );
+    }
+}

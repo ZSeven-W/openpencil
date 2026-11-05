@@ -533,6 +533,17 @@ impl ToolRegistry {
     }
 }
 
+/// Best-effort text of a caught panic payload.
+fn panic_message(payload: &Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        (*s).to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "internal panic".to_string()
+    }
+}
+
 /// Read line-delimited JSON-RPC from `reader`, dispatch each request
 /// through `registry`, write each response (followed by `\n`) to
 /// `writer`. Loops until EOF or a write error. Pure stdlib I/O.
@@ -610,7 +621,20 @@ where
         // Captured BEFORE `dispatch(call)` moves `call` — the only way to
         // still name the tool once the command is ready to apply.
         let tool_name = call.tool.clone();
-        let mut response = registry.dispatch(call);
+        let call_id = call.id.clone();
+        // A panicking tool (or applier) must fail only its own call —
+        // never take the whole server process, and every connected
+        // client, down with it.
+        let mut response = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            registry.dispatch(call)
+        })) {
+            Ok(response) => response,
+            Err(payload) => ToolResponse::Err {
+                id: call_id.clone(),
+                code: ToolErrorCode::Internal,
+                message: format!("tool {tool_name} failed: {}", panic_message(&payload)),
+            },
+        };
         // Apply any queued command before reporting success. If
         // application fails (applier returns false), demote the
         // ToolResponse::Ok to a typed Err so the client sees the
@@ -621,13 +645,29 @@ where
             ..
         } = &response
         {
-            if !apply(&tool_name, cmd) {
-                let id = id.clone();
-                response = ToolResponse::Err {
-                    id,
-                    code: ToolErrorCode::Internal,
-                    message: format!("host rejected command: {cmd:?}"),
-                };
+            let applied =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| apply(&tool_name, cmd)));
+            match applied {
+                Ok(true) => {}
+                Ok(false) => {
+                    let id = id.clone();
+                    response = ToolResponse::Err {
+                        id,
+                        code: ToolErrorCode::Internal,
+                        message: format!("host rejected command: {cmd:?}"),
+                    };
+                }
+                Err(payload) => {
+                    let id = id.clone();
+                    response = ToolResponse::Err {
+                        id,
+                        code: ToolErrorCode::Internal,
+                        message: format!(
+                            "host failed to apply {tool_name}: {}",
+                            panic_message(&payload)
+                        ),
+                    };
+                }
             }
         }
         // Tool results use the MCP-spec `content[]` envelope (with

@@ -29,7 +29,7 @@ pub(crate) fn parse_single_direct_operation(line: &str) -> Result<Option<EditorC
             return match op {
                 "U" => parse_update_operation(body).map(Some),
                 "D" => Ok(Some(EditorCommand::DeleteNode {
-                    node_id: NodeId::new(&parse_ref_token(body)?),
+                    node_id: parse_node_ref(body)?,
                     page_id: None,
                 })),
                 "M" => parse_move_operation(body).map(Some),
@@ -77,7 +77,7 @@ fn parse_update_operation(body: &str) -> Result<EditorCommand> {
             "U() requires node id and update JSON".into(),
         ));
     };
-    let node_id = NodeId::new(&parse_ref_token(body[..comma].trim())?);
+    let node_id = parse_node_ref(body[..comma].trim())?;
     let mut value: serde_json::Value = serde_json::from_str(body[comma + 1..].trim())
         .map_err(|e| ProgramError::Json(format!("invalid U JSON: {e}")))?;
     normalize_node_shape(&mut value);
@@ -170,7 +170,7 @@ fn parse_move_operation(body: &str) -> Result<EditorCommand> {
         (rest, None)
     };
     Ok(EditorCommand::MoveNode {
-        node_id: NodeId::new(&parse_ref_token(body[..comma].trim())?),
+        node_id: parse_node_ref(body[..comma].trim())?,
         target_parent: parse_parent_node_id(parent_raw)?,
         page_id: None,
         index,
@@ -199,7 +199,7 @@ fn parse_copy_operation(body: &str) -> Result<EditorCommand> {
         (rest, None)
     };
     Ok(EditorCommand::CopyNode {
-        node_id: NodeId::new(&parse_ref_token(body[..comma].trim())?),
+        node_id: parse_node_ref(body[..comma].trim())?,
         target_parent: parse_parent_node_id(parent_raw)?,
         overrides_json,
         page_id: None,
@@ -212,7 +212,7 @@ fn parse_replace_operation(body: &str) -> Result<EditorCommand> {
             "R() requires node id and node JSON".into(),
         ));
     };
-    let node_id = NodeId::new(&parse_ref_token(body[..comma].trim())?);
+    let node_id = parse_node_ref(body[..comma].trim())?;
     let raw_data = body[comma + 1..].trim();
     let mut args = BTreeMap::new();
     args.insert("data".into(), raw_data.to_string());
@@ -300,7 +300,15 @@ fn parse_parent_node_id(raw: &str) -> Result<NodeId> {
     if matches!(raw, "null" | "undefined" | "\"\"" | "''" | "0" | "\"0\"") {
         return Ok(NodeId::NONE);
     }
-    Ok(NodeId::new(&parse_ref_token(raw)?))
+    parse_node_ref(raw)
+}
+
+/// Parse a node-ref token into a real `NodeId`, rejecting an empty
+/// ref with a typed error instead of panicking in `NodeId::new`.
+fn parse_node_ref(raw: &str) -> Result<NodeId> {
+    let token = parse_ref_token(raw)?;
+    NodeId::new_opt(token.trim())
+        .ok_or_else(|| ProgramError::InvalidValue("node id must not be empty".into()))
 }
 
 fn parse_ref_token(raw: &str) -> Result<String> {

@@ -424,3 +424,37 @@ fn json_escape_handles_special_chars() {
     assert!(j.contains(r#""x\"y""#));
     assert!(j.contains(r#""line1\nline2""#));
 }
+
+#[test]
+fn run_stdio_with_applier_contains_a_panicking_tool_and_keeps_serving() {
+    use std::io::{BufReader, Cursor};
+    struct Panics;
+    impl McpTool for Panics {
+        fn name(&self) -> &str {
+            "panics"
+        }
+        fn call(&self, _args: &BTreeMap<String, String>) -> ToolOutcome {
+            let _ = op_editor_core::NodeId::new("");
+            ToolOutcome::Ok(BTreeMap::new())
+        }
+    }
+    let s = state_with(vec![]);
+    let mut r = ToolRegistry::default();
+    r.register(Box::new(Panics));
+    r.register(Box::new(document_info_snapshot(&s)));
+    let input = b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"panics\",\"params\":{}}\n{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"get_document_info\",\"params\":{}}\n";
+    let mut reader = BufReader::new(Cursor::new(input.as_ref()));
+    let mut writer: Vec<u8> = Vec::new();
+    run_stdio_with_applier(&r, &mut reader, &mut writer, |_, _| true).unwrap();
+    let out = String::from_utf8(writer).unwrap();
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(lines.len(), 2, "both calls answered: {out}");
+    assert!(
+        lines[0].contains("isError") && lines[0].contains("empty id"),
+        "{out}"
+    );
+    assert!(
+        lines[1].contains(r#""id":2"#) && !lines[1].contains("isError"),
+        "{out}"
+    );
+}
