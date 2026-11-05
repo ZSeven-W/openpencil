@@ -168,6 +168,7 @@ pub fn build_kit_document(
         design_md: None,
         conversion: None,
         motion: None,
+        comments: None,
         // A component-kit export bundle never opts into the responsive schema.
         responsive: None,
     };
@@ -482,6 +483,7 @@ mod tests {
             design_md: None,
             conversion: None,
             motion: None,
+            comments: None,
             responsive: None,
         }
     }

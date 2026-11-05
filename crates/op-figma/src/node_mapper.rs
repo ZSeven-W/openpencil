@@ -61,6 +61,7 @@ pub(crate) fn empty_document(name: &str) -> PenDocument {
         design_md: None,
         conversion: None,
         motion: None,
+        comments: None,
         // Figma import never authors the responsive schema opt-in.
         responsive: None,
     }

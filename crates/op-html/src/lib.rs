@@ -480,6 +480,7 @@ pub(crate) fn wrap_imported_document(imported: HtmlImportResult) -> HtmlDocument
             design_md: None,
             conversion: None,
             motion: None,
+            comments: None,
         },
         imported.diagnostics,
     )
