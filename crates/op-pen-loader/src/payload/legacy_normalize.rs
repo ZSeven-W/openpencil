@@ -8,7 +8,11 @@
 /// asking jian-ops-schema to parse it again used to build two full DOMs for
 /// every canonical document.
 pub(super) fn normalize_legacy_value(value: &mut serde_json::Value) -> bool {
-    let mut changed = super::normalize_video_alias(value);
+    // Native pen.dev documents first: reorder + reshape into `.op` form so
+    // the general repairs below see canonical field names (issue #272).
+    let mut changed = super::pen_dev_compat::is_pen_dev_document(value)
+        && super::pen_dev_compat::convert_pen_dev_document(value);
+    changed |= super::normalize_video_alias(value);
     let repair_legacy_figma_child_order = is_legacy_figma_child_order_candidate(value)
         && auto_layout_order_evidence(value).strongly_indicates_flow_order();
     // Pencil design-kit `.pen` files reference `$--radius-*` number variables

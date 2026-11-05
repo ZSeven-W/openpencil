@@ -18,6 +18,7 @@ mod compatibility;
 mod fast_load;
 mod legacy_normalize;
 mod paint_payloads;
+mod pen_dev_compat;
 mod video_alias;
 
 // Re-exported so every `crate::payload::…` import path stays stable across
