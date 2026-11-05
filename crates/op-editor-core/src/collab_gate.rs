@@ -436,9 +436,10 @@ impl EditorCommand {
             | C::ReplaceAllMatchingProperties { .. }
             | C::PromoteLegacyWidgets => A::Document(D::Unsupported(U::BulkWrite)),
 
-            C::MergeAppState { .. } | C::SetDesignMd { .. } | C::UpsertScreen { .. } => {
-                A::Document(D::Unsupported(U::RootMetadata))
-            }
+            C::MergeAppState { .. }
+            | C::SetDesignMd { .. }
+            | C::UpsertScreen { .. }
+            | C::Comment(_) => A::Document(D::Unsupported(U::RootMetadata)),
             C::UpsertComponent { .. }
             | C::InstantiateComponent { .. }
             | C::CreateComponent { .. }
