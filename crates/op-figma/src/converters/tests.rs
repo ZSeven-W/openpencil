@@ -6,6 +6,7 @@
 use super::*;
 use crate::common::{clear_icon_lookup, set_icon_lookup, IconLookupResult, IconStyle};
 use crate::figma_types::BlobOrString;
+use crate::vector_decoder::compute_svg_path_bounds;
 use jian_ops_schema::constraints::{HConstraint, VConstraint};
 use jian_ops_schema::node::{MaskType, PenNode};
 use std::collections::HashMap;

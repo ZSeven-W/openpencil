@@ -25,7 +25,7 @@ use crate::node_build::{
 };
 use crate::text_mapper::map_figma_text_props;
 use crate::tree::{guid_to_string, TreeNode};
-use crate::vector_decoder::{compute_svg_path_bounds, decode_figma_vector_path, DecodedVectorPath};
+use crate::vector_decoder::{decode_figma_vector_path, DecodedVectorPath};
 use crate::vector_fallback::decode_single_child_boolean;
 use jian_ops_schema::node::base::NumberOrExpression;
 use jian_ops_schema::node::container::ContainerProps;
@@ -588,32 +588,13 @@ fn convert_vector(
         let mut width = resolve_width(figma, parent_stack_mode, ctx);
         let mut height = resolve_height(figma, parent_stack_mode, ctx);
 
-        // Zero-size vectors: derive extent from the path bounds.
-        let size_x = figma
-            .get("size")
-            .and_then(|s| s.get_f64("x"))
-            .unwrap_or(0.0);
-        let size_y = figma
-            .get("size")
-            .and_then(|s| s.get_f64("y"))
-            .unwrap_or(0.0);
-        if (size_x < 0.01 || size_y < 0.01)
-            && matches!(width, SizingBehavior::Number(_))
-            && matches!(height, SizingBehavior::Number(_))
-        {
-            if let Some(bounds) = compute_svg_path_bounds(&path_d) {
-                let path_w = bounds.max_x - bounds.min_x;
-                let path_h = bounds.max_y - bounds.min_y;
-                if size_x < 0.01 && path_w > 0.01 {
-                    width = SizingBehavior::Number(round2(path_w));
-                    base.x = Some(round2(base.x.unwrap_or(0.0) + bounds.min_x));
-                }
-                if size_y < 0.01 && path_h > 0.01 {
-                    height = SizingBehavior::Number(round2(path_h));
-                    base.y = Some(round2(base.y.unwrap_or(0.0) + bounds.min_y));
-                }
-            }
-        }
+        let size = figma.get("size");
+        let size = (
+            size.and_then(|s| s.get_f64("x")).unwrap_or(0.0),
+            size.and_then(|s| s.get_f64("y")).unwrap_or(0.0),
+        );
+        let mut path_d = path_d;
+        crate::vector_box::fit_box_to_path(&mut base, &mut width, &mut height, &mut path_d, size);
 
         // Stroke-only outline: Figma strokeGeometry is an expanded
         // outline, so treat the stroke paints as the fill.

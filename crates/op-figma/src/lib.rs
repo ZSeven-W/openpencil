@@ -28,6 +28,7 @@ mod prepared;
 mod text_cache;
 mod text_mapper;
 mod tree;
+mod vector_box;
 mod vector_decoder;
 mod vector_fallback;
 mod zip_reader;

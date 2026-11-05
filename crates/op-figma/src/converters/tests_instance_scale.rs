@@ -6,6 +6,7 @@ use super::tests::{captured_bytes, fresh_ctx, obj, solid_paint, LOOKUP_GUARD};
 use super::*;
 use crate::common::{clear_icon_lookup, set_icon_lookup};
 use crate::figma_types::BlobOrString;
+use crate::vector_decoder::compute_svg_path_bounds;
 use jian_ops_schema::node::container::CornerRadius;
 use jian_ops_schema::node::text::TextContent;
 use jian_ops_schema::node::PenNode;
