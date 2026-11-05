@@ -202,7 +202,8 @@ fn normalize_node_value(
                     let kind = map.get("type").and_then(Value::as_str);
                     let is_image = kind == Some("image");
                     let is_icon = kind == Some("icon");
-                    let is_prompt = kind == Some("prompt");
+                    // pen.dev's `note` is the same kind of annotation card.
+                    let is_prompt = matches!(kind, Some("prompt" | "note"));
                     let is_path = kind == Some("path");
                     let reverse_auto_layout_children = repair_legacy_figma_child_order
                         && kind == Some("frame")
@@ -263,6 +264,17 @@ fn normalize_node_value(
                     // `cornerRadius` as a `$ref` string / array of them →
                     // resolve to the number(s) the `CornerRadius` enum holds.
                     normalize_corner_radius(map, number_vars, changed);
+                    // `fontSize` as a `$ref` string → its number (issue #270).
+                    // The schema holds a plain number, so the link itself is
+                    // resolved on load rather than kept.
+                    if let Some(Value::String(reference)) = map.get("fontSize") {
+                        if let Some(size) = number_vars.get(reference).copied() {
+                            map.insert("fontSize".to_string(), serde_json::json!(size));
+                        } else {
+                            map.remove("fontSize");
+                        }
+                        *changed = true;
+                    }
                     // A `stroke` written as a bare color string → wrap into a
                     // minimal `PenStroke { thickness: 1, fill: [...] }`.
                     if let Some(color) = map.get("stroke").and_then(|s| match s {

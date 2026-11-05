@@ -36,7 +36,8 @@ const PEN_DEV_DOC: &str = r##"{
         { "type": "frame", "id": "sheet", "name": "actionSheet", "layoutPosition": "absolute",
           "x": 0, "y": 500, "width": 375, "height": 312,
           "fill": [{ "type": "image", "url": "sheet.png", "mode": "contain" }] },
-        { "type": "text", "id": "label", "name": "label", "fontFamily": "$pc-font" }
+        { "type": "text", "id": "label", "name": "label", "fontSize": "$font-body", "fontFamily": "$pc-font" },
+        { "type": "note", "id": "memo", "name": "memo", "content": "Check copy" }
       ] }
   ]
 }"##;
@@ -62,7 +63,7 @@ fn pen_dev_document_loads_with_op_paint_order() {
     // Overlays stay topmost; flow children keep their flow order.
     assert_eq!(
         names(screen.children().expect("screen children")),
-        ["topNav", "actionSheet", "mask", "body", "label"]
+        ["topNav", "body", "actionSheet", "mask", "label", "memo"]
     );
     let value = serde_json::to_value(screen).expect("serialize");
     assert_eq!(value["height"], "fit_content");
@@ -86,7 +87,9 @@ fn pen_dev_document_loads_with_op_paint_order() {
     assert_eq!(body["effects"][0]["offsetY"], 4.0);
     let label = child("label");
     assert_eq!(label["type"], "text");
+    assert_eq!(label["fontSize"], 15.0);
     assert_eq!(label["content"], "");
+    assert_eq!(child("memo")["type"], "text");
 }
 
 #[test]
