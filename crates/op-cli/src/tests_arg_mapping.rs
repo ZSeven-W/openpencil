@@ -460,3 +460,32 @@ fn parse_args_help_version_and_empty() {
         Command::Version
     ));
 }
+
+#[test]
+fn comment_tools_reach_the_server_through_the_generic_tool_call() {
+    let args: Vec<String> = ["list_comments", "--include_archived"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    assert_eq!(
+        parse_args(&args).expect("parse").command,
+        Command::ToolCall {
+            tool: "list_comments".to_string(),
+            args: vec![("include_archived".to_string(), "true".to_string())],
+        }
+    );
+    let args: Vec<String> = ["reply_comment", "comment_id=cm_1", "text=Done"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    assert_eq!(
+        parse_args(&args).expect("parse").command,
+        Command::ToolCall {
+            tool: "reply_comment".to_string(),
+            args: vec![
+                ("comment_id".to_string(), "cm_1".to_string()),
+                ("text".to_string(), "Done".to_string()),
+            ],
+        }
+    );
+}
