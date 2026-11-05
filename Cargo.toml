@@ -24,7 +24,7 @@ exclude = [
 default-members = ["crates/op-host-desktop", "crates/op-cli", "crates/op-host-web-server"]
 
 [workspace.package]
-version = "0.8.5"
+version = "0.8.6"
 edition = "2021"
 # 1.94 floor: the official github-copilot-sdk (including its former 0.1
 # release) requires Rust 1.94. Release builders and CI already use it.
