@@ -348,6 +348,20 @@ fn html_emits_span_for_text_and_escapes_body() {
 }
 
 #[test]
+fn markup_targets_escape_braces_in_text() {
+    let doc = doc_with_nodes(vec![text("n11", 0.0, 0.0, 100.0, 24.0, "Hi {user}, use }")]);
+    for out in [
+        Html.generate(&doc),
+        Vue.generate(&doc),
+        Svelte.generate(&doc),
+        React.generate(&doc),
+        ReactNative.generate(&doc),
+    ] {
+        assert!(out.contains("Hi &#123;user&#125;, use &#125;"), "{out}");
+    }
+}
+
+#[test]
 fn vue_emits_template_script_style_blocks() {
     let doc = empty_doc();
     let s = Vue.generate(&doc);
