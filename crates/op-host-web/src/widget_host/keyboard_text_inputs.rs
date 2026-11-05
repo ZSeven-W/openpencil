@@ -10,6 +10,7 @@ impl WidgetHost {
         let ui = &self.editor_state.ui;
         // Studio Home's composer owns the keyboard while Home is up.
         self.editor_state.editor_ui.home.visible
+            || self.editor_state.editor_ui.comments.owns_keyboard()
             || self.editor_state.editor_ui.collab_join_input_active()
             || ui.layer_rename.is_some()
             || ui.text_editing.is_some()
@@ -59,6 +60,7 @@ impl WidgetHost {
     pub(crate) fn non_chat_input_owns_keyboard(&self) -> bool {
         let editor_ui = &self.editor_state.editor_ui;
         if editor_ui.collab_join_input_active()
+            || editor_ui.comments.owns_keyboard()
             || editor_ui.font_picker.open
             || editor_ui.image_panel.search_open
             || editor_ui.image_panel.generate_open

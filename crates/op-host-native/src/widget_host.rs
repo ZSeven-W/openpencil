@@ -268,6 +268,9 @@ mod studio_focus;
 mod text_edit_press;
 // Windows CI DirectWrite/Skia text layout aborts inside these text-edit
 // fixtures before Rust can report an assertion. macOS + Linux keep coverage.
+mod comments;
+#[cfg(test)]
+mod comments_tests;
 #[cfg(all(test, not(target_os = "windows")))]
 mod text_edit_press_tests;
 #[cfg(test)]

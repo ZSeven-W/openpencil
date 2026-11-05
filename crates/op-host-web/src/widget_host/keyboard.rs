@@ -48,6 +48,16 @@ impl WidgetHost {
             }
             return true;
         }
+        // The comment popover paints above every panel input (top-most
+        // overlay band), so it owns the keyboard while open.
+        if let Some(changed) =
+            op_editor_core::comment_ui::comment_text(&mut self.editor_state, c, self.now_ms)
+        {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
         if self.apply_image_panel_text(c) {
             return true;
         }
@@ -152,6 +162,16 @@ impl WidgetHost {
                 self.now_ms,
             )
             .unwrap_or(false);
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
+        // The comment popover paints above every panel input (top-most
+        // overlay band), so it owns the keyboard while open.
+        if let Some(changed) =
+            op_editor_core::comment_ui::comment_backspace(&mut self.editor_state, self.now_ms)
+        {
             if changed {
                 self.mark_dirty();
             }
@@ -275,6 +295,16 @@ impl WidgetHost {
         }
         // The image popover is painted above every editor input. Submit or
         // swallow Enter before consulting any independently stale focus below.
+        // The comment popover paints above every panel input (top-most
+        // overlay band), so it owns the keyboard while open.
+        if let Some(changed) =
+            op_editor_core::comment_ui::comment_enter(&mut self.editor_state, self.now_ms)
+        {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
         if self.apply_image_panel_send() {
             return true;
         }
@@ -367,6 +397,16 @@ impl WidgetHost {
         }
         if let Some(changed) =
             shared::prompt_center_delete_forward(&mut self.editor_state, self.now_ms)
+        {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
+        // The comment popover paints above every panel input (top-most
+        // overlay band), so it owns the keyboard while open.
+        if let Some(changed) =
+            op_editor_core::comment_ui::comment_delete_forward(&mut self.editor_state, self.now_ms)
         {
             if changed {
                 self.mark_dirty();

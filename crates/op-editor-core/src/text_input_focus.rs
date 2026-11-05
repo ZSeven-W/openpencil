@@ -31,6 +31,10 @@ impl EditorState {
         // Image popovers paint above every editor surface. Resolve their
         // visible field first so stale focus underneath cannot split keyboard,
         // clipboard, and IME ownership across different inputs.
+        // The comment popover paints above them in the top-most band.
+        if self.editor_ui.comments.owns_keyboard() {
+            return Some(&self.editor_ui.comments.input);
+        }
         let generate_configured = self.editor_ui.agent_settings.image_generation_configured();
         if self.editor_ui.image_panel.search_open || self.editor_ui.image_panel.generate_open {
             return self.editor_ui.image_panel.active_input(generate_configured);
@@ -136,6 +140,9 @@ impl EditorState {
                 .then_some(&mut self.editor_ui.chat_model_picker_input);
         }
         let generate_configured = self.editor_ui.agent_settings.image_generation_configured();
+        if self.editor_ui.comments.owns_keyboard() {
+            return Some(&mut self.editor_ui.comments.input);
+        }
         if self.editor_ui.image_panel.search_open || self.editor_ui.image_panel.generate_open {
             return self
                 .editor_ui

@@ -387,6 +387,9 @@ impl WidgetHost {
             }
         }
 
+        if !workspace_visible {
+            self.paint_comment_pins_layer(&mut *backend, viewport_width, viewport_height);
+        }
         let property_panel = PropertyPanel::for_selection_at_with_scene(
             &self.editor_state,
             &self.layout_scene,

@@ -378,6 +378,9 @@ impl DesktopApp {
                     "p" => self.host.apply_set_tool(op_editor_core::Tool::Pen),
                     "y" => self.host.apply_set_tool(op_editor_core::Tool::Polygon),
                     "h" => self.host.apply_set_tool(op_editor_core::Tool::Hand),
+                    "c" => {
+                        self.host.apply_toggle_comment_mode();
+                    }
                     "[" => {
                         consumed = self.host.apply_reorder(ReorderDirection::Down);
                         handled = false;

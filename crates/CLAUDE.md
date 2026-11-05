@@ -472,6 +472,14 @@ Outside the widget hosts the same rule applies: settings payload serde lives in 
 
 `request_snapshot::narrowed_snapshot(&mut EditorState)` is the sanctioned way to hand editor state to a worker thread. The MCP request path, the chat-launch path, and the desktop design pump's per-apply-ack all use it: it drops `chat` / `codegen` / `theme_presets`, which grow with session length and are read by no consumer on the worker side. A full `EditorState::clone()` on a request path is a bug.
 
+## Canvas comments
+
+Review threads live in the document (`PenDocument.comments`, jian schema `comment.rs`): each pins to a node (`anchor.nodeId`, `x`/`y` = offset from its top-left) or a page point, carries a message log (author kind `user`/`agent` + name, epoch-ms timestamps) and a `pending → addressed → archived` status (`addressed → pending` continues, `archived → pending` reopens). Background saves serialize `SharedDoc`, so a new top-level field must also be written in `history_snapshot.rs`.
+
+- **Commands:** `EditorCommand::Comment(CommentCommand)` (`op-editor-core/src/comments.rs`). Validation lives on the `CommentLookup` trait, implemented by `EditorState` and the detached `CommentSnapshot` MCP tools capture. Producers supply id + time (wasm has no clock). Comment edits are ordinary undo steps.
+- **MCP:** `list_comments` (archived hidden unless `include_archived` / `status`), `get_comment`, `add_comment`, `reply_comment`, `set_comment_status` in `op-mcp/src/comment_tools.rs`; the CLI reaches them through the generic `op <tool> key=value`.
+- **GUI:** shared state/transitions in `op-editor-core/src/comment_ui.rs`, widgets `comment_pins.rs` / `comment_popover.rs` / `comment_flow.rs`, host arms `widget_host/comments.rs`. Toolbar button or `C` arms comment mode. Pins paint right after the canvas and hit-test first in the canvas tier; the popover paints at the bottom of the top-most overlay band and hit-tests right after the HTML-import diagnostics notice. The popover input sits in `active_text_input` above the image popovers. In a collaboration session comment edits are refused (`RootMetadata`).
+
 ## Canonical `.op` / `.pen` loader (v0.8.0+)
 
 `openpencil-desktop/src/pen_doc_adapter.rs` bridges the canonical `jian_ops_schema::PenDocument` into the desktop's private `DocPayload` so files saved by the TS editor, Jian apps, or any other tool emitting the canonical schema load through the shared parser. Adapter responsibilities:

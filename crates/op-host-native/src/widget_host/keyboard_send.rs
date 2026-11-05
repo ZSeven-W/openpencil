@@ -92,6 +92,16 @@ impl WidgetHostNative {
         }
         // The image popover is painted above every editor input. Submit or
         // swallow Enter before consulting any independently stale focus below.
+        // The comment popover paints above every panel input (top-most
+        // overlay band), so it owns the keyboard while open.
+        if let Some(changed) =
+            op_editor_core::comment_ui::comment_enter(&mut self.editor_state, self.now_ms)
+        {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
         if self.apply_image_panel_send() {
             return true;
         }

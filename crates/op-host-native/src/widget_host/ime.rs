@@ -231,6 +231,16 @@ impl WidgetHostNative {
             }
             return consumed;
         }
+        if let Some(changed) = op_editor_core::comment_ui::comment_insert_str(
+            &mut self.editor_state,
+            text,
+            self.now_ms,
+        ) {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
         if self.editor_state.editor_ui.image_panel.search_open
             || self.editor_state.editor_ui.image_panel.generate_open
         {

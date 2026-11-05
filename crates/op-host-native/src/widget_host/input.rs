@@ -31,6 +31,7 @@ impl WidgetHostNative {
         }
         let ui = &self.editor_state.ui;
         self.editor_state.editor_ui.save_name_dialog.open
+            || self.editor_state.editor_ui.comments.owns_keyboard()
             || self.editor_state.editor_ui.collab_join_input_active()
             || ui.layer_rename.is_some()
             || ui.text_editing.is_some()
@@ -597,6 +598,8 @@ impl WidgetHostNative {
         {
             return consumed;
         }
+        // Comment popover button wash — non-consuming, so drags still run.
+        self.hover_comment_popover(x, y);
         // A drag on the phone reader's stage scrolls / swipes the work.
         if let Some(consumed) = self.cursor_move_works_reader(x, y) {
             return consumed;

@@ -54,6 +54,11 @@ impl WidgetHostNative {
             });
             return Some(blurred || rename_committed || text_edit_committed);
         }
+        // Comment pins sit above node content, and comment mode owns the
+        // press over every drawing tool.
+        if self.press_comment_canvas(x, y, viewport_width, viewport_height) {
+            return Some(true);
+        }
         let (cx0, cy0, cw, ch) = self.canvas_region(viewport_width, viewport_height);
         let canvas_rect = Rect {
             origin: Point2D::new(cx0, cy0),

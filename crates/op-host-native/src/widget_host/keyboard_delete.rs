@@ -69,6 +69,16 @@ impl WidgetHostNative {
             }
             return true;
         }
+        // The comment popover paints above every panel input (top-most
+        // overlay band), so it owns the keyboard while open.
+        if let Some(changed) =
+            op_editor_core::comment_ui::comment_backspace(&mut self.editor_state, self.now_ms)
+        {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
         if self.apply_image_panel_backspace() {
             return true;
         }
@@ -318,6 +328,16 @@ impl WidgetHostNative {
         // the editor selection.
         if self.preview.is_some() {
             return self.preview_dispatch_key("Delete", false);
+        }
+        // The comment popover paints above every panel input (top-most
+        // overlay band), so it owns the keyboard while open.
+        if let Some(changed) =
+            op_editor_core::comment_ui::comment_delete_forward(&mut self.editor_state, self.now_ms)
+        {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
         }
         if self.apply_image_panel_delete() {
             return true;

@@ -48,6 +48,10 @@ impl WidgetHost {
         if self.input_active() {
             return false;
         }
+        if key.eq_ignore_ascii_case("c") {
+            return self
+                .dispatch_toolbar_action(op_editor_ui::widgets::ToolbarAction::ToggleComments);
+        }
         let tool = match key.to_ascii_lowercase().as_str() {
             "v" => op_editor_core::Tool::Select,
             "r" => op_editor_core::Tool::Rect,

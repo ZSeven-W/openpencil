@@ -68,6 +68,7 @@ pub mod command_promote;
 pub mod command_refine;
 mod command_root_replace;
 pub mod command_style_replace;
+pub mod comment_ui;
 pub mod comments;
 mod component_backing;
 pub mod component_browser_state;

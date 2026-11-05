@@ -13,6 +13,7 @@ impl WidgetHostNative {
         let editor_ui = &self.editor_state.editor_ui;
         if editor_ui.home.visible
             || self.preview.is_some()
+            || editor_ui.comments.owns_keyboard()
             || editor_ui.collab_join_input_active()
             || editor_ui.font_picker.open
             || editor_ui.image_panel.search_open

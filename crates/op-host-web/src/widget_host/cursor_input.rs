@@ -34,6 +34,8 @@ impl WidgetHost {
         {
             return consumed;
         }
+        // Comment popover button wash — non-consuming (native parity).
+        self.hover_comment_popover(x, y);
         // Route canvas moves to preview when preview mode is active
         #[cfg(feature = "canvaskit")]
         if self.editor_state.editor_ui.preview.mode && self.preview.is_some() {

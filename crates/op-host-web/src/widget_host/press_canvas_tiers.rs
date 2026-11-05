@@ -54,6 +54,11 @@ impl WidgetHost {
             });
             return Some(rename_committed || text_edit_committed || property_focus_committed);
         }
+        // Comment pins sit above node content, and comment mode owns the
+        // press over every drawing tool (native parity).
+        if self.press_comment_canvas(x, y, viewport_width, viewport_height) {
+            return Some(true);
+        }
         if matches!(self.editor_state.tool, op_editor_core::Tool::Select) {
             return Some(self.press_canvas_select_tier(&CanvasPressCtx {
                 x,

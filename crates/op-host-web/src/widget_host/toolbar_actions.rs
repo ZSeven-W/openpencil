@@ -36,6 +36,11 @@ impl WidgetHost {
                 self.mark_dirty();
                 true
             }
+            ToolbarAction::ToggleComments => {
+                op_editor_core::comment_ui::toggle_comment_mode(&mut self.editor_state);
+                self.mark_dirty();
+                true
+            }
         }
     }
 }

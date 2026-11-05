@@ -775,4 +775,6 @@ pub struct EditorUiState {
     /// A queued component-instantiate request — `(kit_id, comp_id)`, set by a card click,
     /// drained by the desktop host so it can run the instantiate against the viewport's centre.
     pub component_browser_pending_insert: Option<(String, String)>,
+    /// Canvas comment mode, open popover, and its input.
+    pub comments: crate::comment_ui::CommentUiState,
 }

@@ -323,6 +323,9 @@ impl WidgetHostNative {
             }
         }
 
+        if !presenting && !workspace_visible {
+            self.paint_comment_pins_layer(&mut *frame, viewport_width, viewport_height);
+        }
         // The phone reader's chrome frames the canvas it just painted
         // into the stage; the chat sheet and its scrim paint above it.
         self.paint_works_reader(frame, viewport_width, viewport_height);

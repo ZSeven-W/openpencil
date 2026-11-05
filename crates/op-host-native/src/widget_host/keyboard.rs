@@ -78,6 +78,16 @@ impl WidgetHostNative {
         }
         // This popover is painted above every other editor input, so it wins
         // even if a lower surface retained stale focus.
+        // The comment popover paints above every panel input (top-most
+        // overlay band), so it owns the keyboard while open.
+        if let Some(changed) =
+            op_editor_core::comment_ui::comment_text(&mut self.editor_state, c, self.now_ms)
+        {
+            if changed {
+                self.mark_dirty();
+            }
+            return true;
+        }
         if self.apply_image_panel_text(c) {
             return true;
         }

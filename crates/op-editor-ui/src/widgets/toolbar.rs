@@ -58,6 +58,8 @@ pub enum ToolbarAction {
     Redo,
     ToggleVariablesPanel,
     ToggleDesignPanel,
+    /// Arm / disarm comment mode (canvas presses place comment pins).
+    ToggleComments,
 }
 
 /// Hit-test result for a mouse click inside the toolbar rect.
@@ -84,6 +86,8 @@ pub struct Toolbar {
     /// active item where the active fill already reads).
     pub hover: Option<op_editor_core::ToolbarHover>,
     pub pressed: Option<op_editor_core::ToolbarHover>,
+    /// Comment mode is armed — the comments button paints active.
+    pub comment_mode: bool,
 }
 
 impl Toolbar {
@@ -113,6 +117,7 @@ impl Toolbar {
             ToolbarItem::Separator,
             ToolbarItem::Action(ToolbarAction::ToggleVariablesPanel, Icon::Braces),
             ToolbarItem::Action(ToolbarAction::ToggleDesignPanel, Icon::BookOpen),
+            ToolbarItem::Action(ToolbarAction::ToggleComments, Icon::MessageCircle),
         ];
         Self {
             id: WidgetId::new(3000),
@@ -121,6 +126,7 @@ impl Toolbar {
             theme: theme_for(&state.editor_ui),
             shape_tool: state.editor_ui.shape_tool,
             hover: state.editor_ui.toolbar_hover,
+            comment_mode: state.editor_ui.comments.mode,
             pressed: match state.editor_ui.pressed_button {
                 Some(op_editor_core::ButtonPressTarget::Toolbar(button)) => Some(button),
                 _ => None,
@@ -384,13 +390,23 @@ impl Widget for Toolbar {
                     y += BUTTON_SIZE;
                     prev_was_item = true;
                 }
-                ToolbarItem::Action(_, icon) => {
+                ToolbarItem::Action(action, icon) => {
                     if prev_was_item {
                         y += BUTTON_GAP;
                     }
+                    let active = *action == ToolbarAction::ToggleComments && self.comment_mode;
                     let hovered = self.item_hovered(item);
                     let pressed = self.item_pressed(item);
-                    paint_button(cx, &self.theme, button_x, y, *icon, false, hovered, pressed);
+                    paint_button(
+                        cx,
+                        &self.theme,
+                        button_x,
+                        y,
+                        *icon,
+                        active,
+                        hovered,
+                        pressed,
+                    );
                     y += BUTTON_SIZE;
                     prev_was_item = true;
                 }
@@ -504,7 +520,8 @@ mod tests {
         assert_eq!(tool_count, 4);
         assert_eq!(widget_tool_count, 0);
         assert_eq!(shape_slot_count, 1);
-        assert_eq!(action_count, 4);
+        // Undo / Redo / Variables / Design / Comments.
+        assert_eq!(action_count, 5);
         assert_eq!(toolbar.active, Tool::Select);
     }
 
@@ -512,9 +529,9 @@ mod tests {
     fn intrinsic_height_accommodates_all_items() {
         let toolbar = Toolbar::default_set();
         let h = toolbar.intrinsic_height();
-        // 4 direct tools + shape slot + 4 action buttons = 9 button
-        // slots; total is at least 9 * BUTTON_SIZE plus padding + gaps.
-        let buttons = 9.0;
+        // 4 direct tools + shape slot + 5 action buttons = 10 button
+        // slots; total is at least 10 * BUTTON_SIZE plus padding + gaps.
+        let buttons = 10.0;
         assert!(
             h > buttons * BUTTON_SIZE,
             "toolbar shorter than its buttons"

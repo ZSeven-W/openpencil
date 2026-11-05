@@ -67,6 +67,12 @@ impl WidgetHost {
             self.close_image_popovers_for_higher_overlay();
             return Some(true);
         }
+        // Comment popover — painted at the bottom of the top-most band, so
+        // it hit-tests right after the notices above it. Only presses on the
+        // card are consumed.
+        if self.press_comment_popover(x, y) {
+            return Some(true);
+        }
         // Floating Design-MD panel — painted top-most, so it
         // hit-tests first: a click on its rect is the panel's before
         // any lower layer can claim it (mirrors native press order).

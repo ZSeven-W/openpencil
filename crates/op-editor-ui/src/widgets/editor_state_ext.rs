@@ -88,6 +88,7 @@ pub fn toolbar_action(a: crate::widgets::toolbar::ToolbarAction) -> op_editor_co
         W::Redo => O::Redo,
         W::ToggleVariablesPanel => O::ToggleVariablesPanel,
         W::ToggleDesignPanel => O::ToggleDesignPanel,
+        W::ToggleComments => O::ToggleComments,
     }
 }
 

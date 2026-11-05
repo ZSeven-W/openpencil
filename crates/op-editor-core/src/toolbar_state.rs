@@ -18,6 +18,7 @@ pub enum ToolbarAction {
     Redo,
     ToggleVariablesPanel,
     ToggleDesignPanel,
+    ToggleComments,
 }
 
 /// Which toolbar item the cursor is over. `None` on

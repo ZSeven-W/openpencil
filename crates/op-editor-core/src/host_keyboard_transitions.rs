@@ -733,6 +733,10 @@ pub fn set_active_tool(state: &mut EditorState, tool: Tool) {
     // Leaving Select must drop the hover outline immediately — cursor
     // moves stop updating it for other tools.
     state.editor_ui.canvas_hover_node = None;
+    // Picking a tool leaves comment mode (an open thread stays open).
+    if state.editor_ui.comments.mode {
+        crate::comment_ui::toggle_comment_mode(state);
+    }
     state.tool = tool;
     if matches!(
         tool,

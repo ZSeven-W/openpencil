@@ -18,6 +18,10 @@ impl WidgetHostNative {
         viewport_width: f32,
         viewport_height: f32,
     ) {
+        // Comment popover — above every panel, below the notices and modals
+        // that follow; its press tier sits right after theirs.
+        self.paint_comment_popover_layer(&mut *frame, viewport_width, viewport_height);
+
         // Post-import HTML diagnostics notice — painted above every panel
         // but under the missing-font modal, mirroring its press tier.
         if let Some(panel) =

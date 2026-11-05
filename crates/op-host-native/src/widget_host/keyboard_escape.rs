@@ -311,6 +311,11 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // Comment popover, then comment mode — one layer per press.
+        if op_editor_core::comment_ui::comment_escape(&mut self.editor_state) {
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.editor_ui.image_panel.search_open
             || self.editor_state.editor_ui.image_panel.generate_open
         {
