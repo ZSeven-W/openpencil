@@ -206,32 +206,33 @@ fn process_message_with_auto_finalize(
     // File-backed mode has no live canvas for any tool call to animate —
     // the tool name is accepted (shared signature with the live-MCP path)
     // and deliberately ignored here.
-    let response = process_message_with_applier_profiled(state, line, profile, |_, state, cmd| {
-        // `EditorState::apply` runs the pre-validate-then-mutate
-        // discipline; `false` means the command rejected and the
-        // document was NOT changed.
-        if !state.apply(cmd.clone()) {
-            apply_rejected = true;
-            return false;
-        }
-        if !annotation_only {
-            run_write_repairs_after_apply(state);
-        }
-        if let Err(e) = save_editor_state(state, path) {
-            applier_failed = Some(format!("save failed: {e}"));
-            return false;
-        }
-        if annotation_only {
-            if let Some(auto_finalize) = auto_finalize.as_deref_mut() {
-                auto_finalize.note_scoped_annotation(state.document_revision());
+    let response =
+        process_message_with_applier_profiled(state, line, profile, |tool, state, cmd| {
+            // `EditorState::apply` runs the pre-validate-then-mutate
+            // discipline; `false` means the command rejected and the
+            // document was NOT changed.
+            if !state.apply(cmd.clone()) {
+                apply_rejected = true;
+                return false;
             }
-        } else {
-            if let Some(auto_finalize) = auto_finalize.as_deref_mut() {
-                auto_finalize.note_write(Instant::now());
+            if !annotation_only {
+                run_write_repairs_after_apply(state);
             }
-        }
-        true
-    })?;
+            if let Err(e) = save_editor_state(state, path) {
+                applier_failed = Some(format!("save failed: {e}"));
+                return false;
+            }
+            if annotation_only {
+                if let Some(auto_finalize) = auto_finalize.as_deref_mut() {
+                    auto_finalize.note_scoped_annotation(state.document_revision());
+                }
+            } else if auto_finalize::arms_auto_finalize(tool) {
+                if let Some(auto_finalize) = auto_finalize.as_deref_mut() {
+                    auto_finalize.note_write(Instant::now());
+                }
+            }
+            true
+        })?;
     if let Some(ref msg) = applier_failed {
         eprintln!("openpencil-desktop mcp: {msg}");
     }

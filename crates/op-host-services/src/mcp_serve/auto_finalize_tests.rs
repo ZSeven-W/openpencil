@@ -179,3 +179,57 @@ fn disabled_env_keeps_stdio_eof_from_finalizing() {
     assert!(!auto.due(Instant::now(), state.document_revision()));
     let _ = std::fs::remove_file(path);
 }
+
+/// Issue #269: plain node edits must not arm the session-end finalize —
+/// `op stop` after `op insert` / `op update` leaves the file exactly as
+/// the last edit saved it, variable links and all.
+#[test]
+fn plain_node_edits_do_not_finalize_on_session_end() {
+    let _lock = env_lock();
+    let _enable = EnvGuard::unset(AUTO_FINALIZE_ENV);
+    let _idle = EnvGuard::set(AUTO_FINALIZE_IDLE_SECS_ENV, "0");
+    let path = std::env::temp_dir().join(format!(
+        "openpencil-mcp-plain-edit-{}-{}.op",
+        std::process::id(),
+        Instant::now().elapsed().as_nanos()
+    ));
+    std::fs::write(
+        &path,
+        r##"{"version":"1.0.0","variables":{"space-md":{"type":"number","value":16}},"children":[]}"##,
+    )
+    .expect("seed document");
+    let mut state = super::super::load_editor_state(&path).expect("load document");
+    let insert = r##"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"insert_node","arguments":{"data":{"type":"frame","id":"s","name":"Screen","x":0,"y":0,"width":390,"height":844,"layout":"vertical","gap":"$space-md","children":[{"type":"text","id":"t","name":"Title","content":"Hello","fontSize":28}]}}}}"##;
+    let mut input = std::io::Cursor::new(format!("{insert}\n").into_bytes());
+    let mut output = Vec::new();
+    let mut auto = AutoFinalize::from_env();
+    let shutdown = std::sync::atomic::AtomicBool::new(false);
+    run_stdio_session(
+        &mut input,
+        &mut output,
+        &mut state,
+        &path,
+        &mut auto,
+        &shutdown,
+        super::super::tool_profile::McpAccessProfile::UNRESTRICTED,
+    )
+    .expect("stdio session");
+    let replies = String::from_utf8_lossy(&output).to_string();
+    assert!(!replies.contains("isError"), "edits applied: {replies}");
+    let saved = std::fs::read_to_string(&path).expect("saved file");
+    let _ = std::fs::remove_file(&path);
+    assert!(saved.contains("Hello"), "{saved}");
+    assert!(
+        saved.contains("\"$space-md\""),
+        "variable link kept: {saved}"
+    );
+    assert!(
+        !saved.contains("content_rail"),
+        "no finalize wrappers: {saved}"
+    );
+    assert_eq!(
+        auto.last_finalized_revision(),
+        None,
+        "finalize must not run"
+    );
+}
