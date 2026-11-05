@@ -40,6 +40,7 @@ use crate::role_layout_post_pass::{fix_horizontal_overflow, fix_text_heights, si
 mod color_utils;
 mod contrast;
 mod deferred_foreground;
+pub use deferred_foreground::ForegroundContrast;
 mod layout_props;
 mod micro_surface_radius;
 mod mobile_cards;
@@ -141,6 +142,7 @@ pub fn post_pass_forest(nodes: &mut [PenNode], canvas_width: f64) {
         canvas_width,
         &crate::repair_tier::RepairTierPolicy::all(),
         DesignForm::Unknown,
+        ForegroundContrast::Generated,
     );
 }
 
@@ -163,6 +165,7 @@ pub fn post_pass_forest_with_tier(
     canvas_width: f64,
     policy: &crate::repair_tier::RepairTierPolicy,
     form: DesignForm,
+    foreground: ForegroundContrast,
 ) -> Vec<DeckEcho> {
     let run_intent =
         policy.runs_pass(crate::repair_tier::TieredPass::StructuralWrapperTransparency);
@@ -172,7 +175,7 @@ pub fn post_pass_forest_with_tier(
             continue;
         };
         repair_orphan_controls(&mut v);
-        deferred_foreground::repair(&mut v, None);
+        deferred_foreground::repair(&mut v, None, foreground);
         post_pass_value(&mut v, None, canvas_width, run_intent, form, &mut echoes);
         if let Ok(new_node) = serde_json::from_value::<PenNode>(v) {
             *node = new_node;

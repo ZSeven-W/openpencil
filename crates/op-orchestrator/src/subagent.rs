@@ -363,6 +363,7 @@ pub(crate) async fn run_subtask_with_reveal_at_and_outcomes(
         canvas_width,
         &tier,
         root_form,
+        crate::role_post_pass::ForegroundContrast::Generated,
     );
     // A subtask has no `RepairSummary` to note against (it reports through
     // `SubtaskOutcome`, which counts nodes, not repairs), so the log is the

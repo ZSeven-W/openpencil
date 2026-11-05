@@ -266,22 +266,25 @@ fn a_complete_offset_copy_keeps_its_ink_in_both_insert_orders() {
         );
         let program = run_script_to_program(&script).unwrap();
         assert!(program.contains("#B74A37"), "{program}");
-        assert!(
-            program.find(r#""name":"ink""#).unwrap() < program.find(r#""name":"red""#).unwrap(),
-            "{program}"
-        );
+        assert!(program.contains("#1E1A16"), "{program}");
+        // Nothing was repaired, so the authored layer order stands.
+        let ink_first =
+            program.find(r#""name":"ink""#).unwrap() < program.find(r#""name":"red""#).unwrap();
+        assert_eq!(ink_first, reading_first, "{program}");
     }
 }
 
 #[test]
 fn independent_copy_or_explicit_updates_do_not_claim_the_recorded_effect() {
-    let script = r##"const p=I(null,{type:"frame",fill:[{type:"solid",color:"#F1EDE1"}]});const w=I(p,{type:"frame",layout:"none",width:920,height:340});I(w,{type:"text",content:"咖啡小聚",x:0,y:0,width:920,fontSize:170,fill:[{type:"solid",color:"#1E1A16"}]});I(w,{type:"text",content:"独立文案",x:3,y:3,width:920,fontSize:170,fill:[{type:"solid",color:"#B74A37"}]});"##;
-    assert!(!run_script_to_program(script).unwrap().contains("#B74A37"));
+    // Near-invisible ink (#EFEBDF on #F1EDE1) is repaired; an independent
+    // copy or an explicit update must not restore it as decoration.
+    let script = r##"const p=I(null,{type:"frame",fill:[{type:"solid",color:"#F1EDE1"}]});const w=I(p,{type:"frame",layout:"none",width:920,height:340});I(w,{type:"text",content:"咖啡小聚",x:0,y:0,width:920,fontSize:170,fill:[{type:"solid",color:"#1E1A16"}]});I(w,{type:"text",content:"独立文案",x:3,y:3,width:920,fontSize:170,fill:[{type:"solid",color:"#EFEBDF"}]});"##;
+    assert!(!run_script_to_program(script).unwrap().contains("#EFEBDF"));
     let with_update =
         script.replace("独立文案", "咖啡小聚") + r#"U("existing",{name:"authorized update"});"#;
     assert!(!run_script_to_program(&with_update)
         .unwrap()
-        .contains("#B74A37"));
+        .contains("#EFEBDF"));
 }
 
 #[test]
@@ -754,4 +757,23 @@ fn a_cjk_declaration_line_does_not_panic_the_duplicate_scan() {
 
     let program = run_script_to_program(script).expect("a clean script still runs");
     assert!(program.contains("折射规律"), "{program}");
+}
+
+/// Issue #273: authored brand colours below WCAG AA are design decisions —
+/// a blue link on white, white on a primary button, a grey placeholder.
+#[test]
+fn insert_keeps_authored_brand_colors_below_aa() {
+    let program = run_script_to_program(
+        r##"const page = I(null, {type: "frame", fill: [{type: "solid", color: "#FFFFFF"}]});
+I(page, {type: "text", content: "Link", fill: [{type: "solid", color: "#2196F3"}]});
+I(page, {type: "icon_font", name: "Link icon", fill: [{type: "solid", color: "#2196F3"}]});
+I(page, {type: "text", content: "Placeholder", fill: [{type: "solid", color: "#A0A4AB"}]});
+const button = I(page, {type: "frame", fill: [{type: "solid", color: "#2196F3"}]});
+I(button, {type: "text", content: "Buy", fill: [{type: "solid", color: "#FFFFFF"}]});"##,
+    )
+    .expect("authored colours are kept");
+    assert!(!program.contains("#17191D"), "{program}");
+    assert!(!program.contains("#FAF8F3"), "{program}");
+    assert_eq!(program.matches("#2196F3").count(), 3, "{program}");
+    assert!(program.contains("#A0A4AB"), "{program}");
 }

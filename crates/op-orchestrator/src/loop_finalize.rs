@@ -466,6 +466,7 @@ fn run_loop_finalize_direct_passes(state: &mut EditorState, summary: &mut Repair
             canvas_width,
             &tier,
             root_form,
+            crate::role_post_pass::ForegroundContrast::Authored,
         );
         jian_ops_schema::promote::promote_forest(forest);
         // The remaining three are intent-tier in full (`crate::repair_tier`):

@@ -90,7 +90,10 @@ function __replaceSolidFill(fill, color) {
 }
 function __normalizeForegroundContrast(obj, background) {
   if (background == null || obj == null || typeof obj !== "object") return obj;
-  var threshold = obj.type === "text" ? 4.5 : (obj.type === "icon_font" ? 3.0 : null);
+  // Authored scripts keep their explicit colours: only ink no author could
+  // have meant (near-invisible, below 1.5:1) is repaired. A brand-blue link or
+  // white label on a primary button is a design decision (issue #273).
+  var threshold = (obj.type === "text" || obj.type === "icon_font") ? 1.5 : null;
   if (threshold == null || !__hasOwn(obj, "fill")) return obj;
   var foreground = __opaqueSolidFill(obj.fill, obj.opacity);
   if (foreground == null) return obj;

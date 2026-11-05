@@ -46,10 +46,27 @@ fn replace_color(node: &mut Value, color: &str) {
     }
 }
 
-pub(super) fn repair(node: &mut Value, inherited: Option<&str>) {
-    let threshold = match node.get("type").and_then(Value::as_str) {
-        Some("text") => Some(4.5),
-        Some("icon_font") => Some(3.0),
+/// Whose colours the forest carries, which decides how much contrast repair
+/// may claim.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForegroundContrast {
+    /// Model-generated sections: hold text to WCAG AA (4.5:1, icons 3:1).
+    Generated,
+    /// A document whose colours an author set explicitly (MCP edits, the
+    /// agentic loop's finalize): repair only ink no author could have meant —
+    /// near-invisible text or icons. A brand-blue link (~3.1:1) or white on a
+    /// primary button is a design decision and is kept (issue #273).
+    Authored,
+}
+
+/// Below this ratio foreground ink is effectively invisible on its surface.
+pub const INVISIBLE_INK_RATIO: f64 = 1.5;
+
+pub(super) fn repair(node: &mut Value, inherited: Option<&str>, mode: ForegroundContrast) {
+    let threshold = match (node.get("type").and_then(Value::as_str), mode) {
+        (Some("text"), ForegroundContrast::Generated) => Some(4.5),
+        (Some("icon_font"), ForegroundContrast::Generated) => Some(3.0),
+        (Some("text" | "icon_font"), ForegroundContrast::Authored) => Some(INVISIBLE_INK_RATIO),
         _ => None,
     };
     if let (Some(threshold), Some(bg), Some(fg)) = (threshold, inherited, opaque_color(node)) {
@@ -90,7 +107,7 @@ pub(super) fn repair(node: &mut Value, inherited: Option<&str>) {
     if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
         for (index, child) in children.iter_mut().enumerate() {
             if protected != Some(index) {
-                repair(child, background.as_deref());
+                repair(child, background.as_deref(), mode);
             }
         }
     }
