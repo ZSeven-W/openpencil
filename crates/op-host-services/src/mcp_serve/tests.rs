@@ -24,7 +24,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        142,
+        147,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -93,6 +93,11 @@ fn tools_list_response_includes_all_registered_tools() {
         "get_design_md",
         "set_design_md",
         "export_design_md",
+        "list_comments",
+        "get_comment",
+        "add_comment",
+        "reply_comment",
+        "set_comment_status",
         "get_style_guide_tags",
         "get_style_guide",
         "get_guidelines",
@@ -347,6 +352,15 @@ fn tools_list_schemas_advertise_ts_file_path_args() {
         ("get_design_md", vec!["filePath"]),
         ("set_design_md", vec!["filePath", "markdown", "autoExtract"]),
         ("export_design_md", vec!["filePath"]),
+        (
+            "list_comments",
+            vec!["filePath", "include_archived", "status"],
+        ),
+        ("add_comment", vec!["filePath", "text", "node_id", "x", "y"]),
+        (
+            "set_comment_status",
+            vec!["filePath", "comment_id", "status"],
+        ),
         ("design_content", vec!["filePath", "sectionId", "children"]),
     ] {
         let tool = tools

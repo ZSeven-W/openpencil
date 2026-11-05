@@ -368,7 +368,16 @@ fn access_of(name: &str) -> ToolAccess {
 pub const TOOL_PROFILES: &[ToolProfile] = &[
     ToolProfile::new("ToolSearch", ToolAccess::Read, ToolSurface::InMemory),
     ToolProfile::new("add_node_effect", ToolAccess::Write, ToolSurface::InMemory),
+    ToolProfile::new("add_comment", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new("add_page", ToolAccess::Write, ToolSurface::InMemory),
+    ToolProfile::new("get_comment", ToolAccess::Read, ToolSurface::InMemory),
+    ToolProfile::new("list_comments", ToolAccess::Read, ToolSurface::InMemory),
+    ToolProfile::new("reply_comment", ToolAccess::Write, ToolSurface::InMemory),
+    ToolProfile::new(
+        "set_comment_status",
+        ToolAccess::Write,
+        ToolSurface::InMemory,
+    ),
     ToolProfile::new("align_selected", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new(
         "apply_design_system",

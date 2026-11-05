@@ -151,3 +151,40 @@ fn undo_reverts_a_comment_like_any_document_edit() {
     assert!(s.undo());
     assert!(s.comments().is_empty());
 }
+
+#[test]
+fn detached_snapshot_validates_like_the_live_state() {
+    let mut s = state_with(vec![rect("n1", "Card", 0.0, 0.0, 10.0, 10.0)]);
+    assert!(add(&mut s, "c1", node_anchor("n1"), "hi"));
+    let snap = CommentSnapshot::capture(&s);
+    for cmd in [
+        CommentCommand::Add {
+            id: "c2".into(),
+            anchor: node_anchor("n1"),
+            author: agent(),
+            text: "ok".into(),
+            at_ms: 1,
+        },
+        CommentCommand::Add {
+            id: "c2".into(),
+            anchor: node_anchor("nope"),
+            author: agent(),
+            text: "ok".into(),
+            at_ms: 1,
+        },
+        CommentCommand::SetStatus {
+            comment_id: "c1".into(),
+            status: CommentStatus::Archived,
+            at_ms: 1,
+        },
+        CommentCommand::Delete {
+            comment_id: "zz".into(),
+        },
+    ] {
+        assert_eq!(
+            snap.check_comment_command(&cmd),
+            s.check_comment_command(&cmd)
+        );
+    }
+    assert_eq!(snap.next_comment_id(10), s.next_comment_id(10));
+}

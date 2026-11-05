@@ -60,6 +60,14 @@ pub(super) fn rebuild_registry(
     );
     register_tool!("set_design_md", set_design_md_snapshot(doc));
     register_tool!("export_design_md", export_design_md_snapshot(doc));
+    register_tool!("list_comments", op_mcp::list_comments_snapshot(doc));
+    register_tool!("get_comment", op_mcp::get_comment_snapshot(doc));
+    register_tool!("add_comment", op_mcp::add_comment_snapshot(doc));
+    register_tool!("reply_comment", op_mcp::reply_comment_snapshot(doc));
+    register_tool!(
+        "set_comment_status",
+        op_mcp::set_comment_status_snapshot(doc)
+    );
     register_tool!("get_style_guide_tags", get_style_guide_tags_snapshot());
     register_tool!("get_style_guide", get_style_guide_snapshot());
     register_tool!("list_style_guides", list_style_guides_snapshot());

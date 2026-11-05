@@ -83,6 +83,7 @@ mod codegen_plan_store;
 pub mod codegen_tools;
 #[cfg(test)]
 mod codegen_tools_tests;
+pub mod comment_tools;
 pub mod component_tools;
 #[cfg(test)]
 mod component_tools_tests;
@@ -234,6 +235,10 @@ pub use debug_tools::{
 pub fn debug_tools_enabled() -> bool {
     false
 }
+pub use comment_tools::{
+    add_comment_snapshot, get_comment_snapshot, list_comments_snapshot, reply_comment_snapshot,
+    set_comment_status_snapshot,
+};
 pub use design_agent_prompt_tool::{get_design_agent_prompt_snapshot, GetDesignAgentPrompt};
 pub use design_md_tools::{
     export_design_md_snapshot, get_design_md_snapshot, set_design_md_snapshot, ExportDesignMd,

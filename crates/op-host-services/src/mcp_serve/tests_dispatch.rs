@@ -436,3 +436,42 @@ fn export_frames_writes_one_image_per_top_level_frame() {
     }
     let _ = std::fs::remove_dir_all(&directory);
 }
+
+#[test]
+fn comment_tools_round_trip_over_mcp_and_hide_archived_by_default() {
+    let mut state = op_editor_core::EditorState::new();
+    let call = |state: &mut op_editor_core::EditorState, id: u32, name: &str, args: &str| {
+        let line = format!(
+            r#"{{"jsonrpc":"2.0","id":{id},"method":"tools/call","params":{{"name":"{name}","arguments":{args}}}}}"#
+        );
+        let response =
+            process_message_with_applier(state, &line, |_, state, cmd| state.apply(cmd.clone()))
+                .expect("dispatch")
+                .expect("response");
+        crate::mcp_serve::tool_text(&response)
+    };
+    let added = call(
+        &mut state,
+        1,
+        "add_comment",
+        r#"{"x":12,"y":-4.5,"text":"Logo feels small","author":"Claude"}"#,
+    );
+    assert!(added.contains(r#""wrote":true"#), "{added}");
+    let id = state.comments()[0].id.clone();
+    call(
+        &mut state,
+        2,
+        "set_comment_status",
+        &format!(r#"{{"comment_id":"{id}","status":"archived"}}"#),
+    );
+    let listed = call(&mut state, 3, "list_comments", "{}");
+    assert!(listed.contains(r#""count":0"#), "{listed}");
+    let history = call(
+        &mut state,
+        4,
+        "list_comments",
+        r#"{"include_archived":true}"#,
+    );
+    assert!(history.contains(r#""count":1"#), "{history}");
+    assert!(history.contains("Logo feels small"), "{history}");
+}
