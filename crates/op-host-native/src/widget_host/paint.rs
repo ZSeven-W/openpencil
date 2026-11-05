@@ -23,6 +23,7 @@ impl WidgetHostNative {
         viewport_height: f32,
     ) {
         self.image_input_geometry = None;
+        self.degraded_canvas_on_screen = false;
         self.publish_viewport_geometry(viewport_width, viewport_height);
         // Rotate the transcript-cache owner if the active chat session changed
         // since the last frame, BEFORE any resolve stores under it — the new
@@ -243,7 +244,10 @@ impl WidgetHostNative {
                     self.paint_preview_switcher(&mut *frame, canvas_rect);
                     self.paint_screen_switcher(&mut *frame, canvas_rect);
                 }
-            } else if !self.serve_canvas_from_pan_cache(frame, canvas_rect) {
+            } else if self.serve_canvas_from_pan_cache(frame, canvas_rect) {
+                self.degraded_canvas_on_screen = self.pan_cache.as_ref().is_none_or(|c| !c.sharp);
+            } else {
+                self.degraded_canvas_on_screen = self.fast_interaction_active();
                 // PAINT path — the canvas reads editor state + the
                 // layout-resolved render scene (`refresh_layout_scene`).
                 // During a live pan gesture the frame is rendered once

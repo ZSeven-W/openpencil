@@ -257,8 +257,13 @@ impl WidgetHostNative {
             next = bookkeeping::earliest(next, self.interaction_hot_until_ms.div_ceil(50) * 50);
         }
         // Progressive quality restore: one tile per frame until the
-        // visible region is sharp again.
-        if self.pan_cache_restore.is_some() {
+        // visible region is sharp again. A degraded frame left on screen
+        // once the hot window has closed needs the same wake: the
+        // gesture-end deadline above retires the instant it elapses, so
+        // without this the restore never starts until the next input.
+        if self.pan_cache_restore.is_some()
+            || (self.degraded_canvas_on_screen && !self.fast_interaction_active())
+        {
             next = bookkeeping::earliest(next, self.now_ms.saturating_add(16));
         }
         // Home's 加链接 hint erases itself: wake once when it expires.

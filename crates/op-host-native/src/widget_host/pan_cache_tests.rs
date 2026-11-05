@@ -419,3 +419,34 @@ fn collaboration_dirty_invalidates_the_pan_cache() {
         "presence/participant projection must not leave a stale canvas layer"
     );
 }
+
+/// Issue #271: the gesture-end deadline retires the instant it elapses,
+/// so a degraded (blur-skipped) frame left on screen must keep its own
+/// wake pending until the quality restore paints it sharp again.
+#[test]
+fn degraded_frame_keeps_a_wake_pending_until_restored() {
+    let _indicator_guard = crate::agent_indicator_test_support::read();
+    let mut host = WidgetHostNative::new();
+    seed_red_rect(&mut host);
+    let mut backend = NativeBackend::with_dpi(1.0);
+    host.set_now_ms(1_000);
+    paint_frame(&mut host, &mut backend);
+    assert!(host.apply_pan_gesture(350.0, 150.0, 40.0, 0.0, W as f32, H as f32));
+    paint_frame(&mut host, &mut backend);
+    // Hot window closed with no frame painted since: the runner's timed
+    // wake must still find a deadline to repaint for.
+    host.set_now_ms(10_000);
+    assert!(!host.fast_interaction_active());
+    assert!(
+        host.next_animation_deadline_ms().is_some(),
+        "a degraded frame on screen must schedule its restore"
+    );
+    // Restore frames converge: the wake retires once the canvas is sharp.
+    for _ in 0..32 {
+        if !host.degraded_canvas_on_screen {
+            break;
+        }
+        paint_frame(&mut host, &mut backend);
+    }
+    assert!(!host.degraded_canvas_on_screen, "restore must converge");
+}

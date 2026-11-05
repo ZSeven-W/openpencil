@@ -500,6 +500,10 @@ pub struct WidgetHostNative {
     /// skip); the animation scheduler wakes at the deadline so the
     /// gesture-end frame repaints at full quality.
     pub(in crate::widget_host) interaction_hot_until_ms: u64,
+    /// The last painted canvas still shows interactive-degrade output
+    /// (no layer blur): the scheduler keeps a wake pending until a
+    /// full-quality frame replaces it (issue #271).
+    pub(in crate::widget_host) degraded_canvas_on_screen: bool,
     /// Offscreen canvas layer serving pure-pan frames during a live
     /// gesture. See `widget_host/canvas_pan_cache.rs`.
     pub(in crate::widget_host) pan_cache: Option<canvas_pan_cache::CanvasPanCache>,

@@ -70,6 +70,7 @@ impl WidgetHostNative {
             collab_id_allocator: None,
             now_ms: 0,
             interaction_hot_until_ms: 0,
+            degraded_canvas_on_screen: false,
             pan_cache: None,
             pan_cache_restore: None,
             pan_cache_blits: 0,
