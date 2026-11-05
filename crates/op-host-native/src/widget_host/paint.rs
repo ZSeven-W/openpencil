@@ -24,6 +24,7 @@ impl WidgetHostNative {
     ) {
         self.image_input_geometry = None;
         self.degraded_canvas_on_screen = false;
+        let _shader_frame = op_editor_ui::shader_clock::begin_frame(self.now_ms);
         self.publish_viewport_geometry(viewport_width, viewport_height);
         // Rotate the transcript-cache owner if the active chat session changed
         // since the last frame, BEFORE any resolve stores under it — the new

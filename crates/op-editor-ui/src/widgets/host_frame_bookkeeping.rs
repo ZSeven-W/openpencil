@@ -171,6 +171,14 @@ pub fn base_animation_deadline_ms(
     if let Some(deadline) = state.editor_ui.workspace.entrance_deadline_ms(now_ms) {
         next = earliest(next, deadline);
     }
+    // An animated shader fill (a `time` uniform) changes every frame with
+    // no input behind it; keep frames coming while one is on screen.
+    if crate::shader_clock::animated_shader_on_screen() {
+        next = earliest(
+            next,
+            now_ms.saturating_add(crate::shader_clock::ANIMATED_SHADER_FRAME_MS),
+        );
+    }
     // The narrow-window chat drawer's slide, likewise.
     if let Some(deadline) = state.editor_ui.workspace_drawer_deadline_ms(now_ms) {
         next = earliest(next, deadline);

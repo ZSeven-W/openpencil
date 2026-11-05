@@ -48,6 +48,7 @@ pub mod image_runtime;
 pub use jian_scene::{layout_scene, layout_scene_hit};
 pub use op_editor_core::scene_vars;
 pub mod scene_bounds;
+pub mod shader_clock;
 pub mod svg_export;
 pub mod theme;
 pub mod util;

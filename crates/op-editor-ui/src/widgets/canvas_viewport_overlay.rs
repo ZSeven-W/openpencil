@@ -405,11 +405,18 @@ pub(crate) fn paint_shader_rect(
     corner_radius: f32,
     corner_radii: Option<[f32; 4]>,
 ) {
-    let uniforms: Vec<(&str, &[f32])> = shader
+    // A `time` uniform reads the frame clock (0 for exports), overriding
+    // any authored value — see `crate::shader_clock`.
+    let time = crate::shader_clock::bind_time(&shader.sksl).map(|t| [t]);
+    let mut uniforms: Vec<(&str, &[f32])> = shader
         .uniforms
         .iter()
+        .filter(|u| time.is_none() || u.name != "time")
         .map(|u| (u.name.as_str(), u.values.as_slice()))
         .collect();
+    if let Some(time) = time.as_ref() {
+        uniforms.push(("time", time.as_slice()));
+    }
     if let Some(radii) = corner_radii {
         cx.backend.fill_round_rect_shader_per_corner(
             rect,

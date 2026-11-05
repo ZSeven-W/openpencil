@@ -53,6 +53,7 @@ impl WidgetHost {
         viewport_height: f32,
     ) {
         self.image_input_geometry = None;
+        let _shader_frame = op_editor_ui::shader_clock::begin_frame(self.now_ms);
         // Rotate the transcript-cache owner if the active chat session changed,
         // BEFORE any resolve stores under it (mirrors native paint).
         self.rotate_chat_owner_if_session_changed();

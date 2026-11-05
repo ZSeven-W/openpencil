@@ -91,6 +91,11 @@ impl CkInner {
         self.backend.begin_frame();
         self.host.paint_dyn(&mut self.backend, w, h);
         self.backend.end_frame();
+        // The web shell paints on events only; an animated shader fill (a
+        // `time` uniform) on screen needs the next frame requested here.
+        if op_editor_ui::shader_clock::animated_shader_on_screen() {
+            crate::repaint_coalescer::request();
+        }
         let placements = self.host.preview_video_overlay_placements(w, h);
         self.video_overlay.sync(&self.canvas, w, h, &placements);
         self.sync_a11y();

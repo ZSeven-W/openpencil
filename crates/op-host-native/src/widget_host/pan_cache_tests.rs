@@ -450,3 +450,34 @@ fn degraded_frame_keeps_a_wake_pending_until_restored() {
     }
     assert!(!host.degraded_canvas_on_screen, "restore must converge");
 }
+
+/// Issue #255: an on-screen shader with a `time` uniform keeps frames
+/// coming and keeps the pan cache from freezing it.
+#[test]
+fn animated_shader_requests_frames_and_bypasses_the_pan_cache() {
+    let _indicator_guard = crate::agent_indicator_test_support::read();
+    let json = r##"{"version":"1.0.0","children":[{"type":"rectangle","id":"s1","x":200,"y":200,"width":120,"height":120,"fill":[{"type":"shader","sksl":"uniform half time; half4 main(float2 p){ return half4(fract(time), 0.2, 0.4, 1.0); }"}]}]}"##;
+    let doc = jian_ops_schema::load_str(json)
+        .expect("fixture JSON parses")
+        .value;
+    let mut state = op_editor_core::EditorState::from_document(doc);
+    state.chat.minimize();
+    let mut host = WidgetHostNative::new();
+    *host.editor_state_mut() = state;
+    host.mark_paint_dirty_for_test();
+    let mut backend = NativeBackend::with_dpi(1.0);
+    host.set_now_ms(1_000);
+    let first = paint_frame(&mut host, &mut backend);
+    assert!(op_editor_ui::shader_clock::animated_shader_on_screen());
+    assert!(
+        host.next_animation_deadline_ms().is_some(),
+        "an animated shader on screen must schedule the next frame"
+    );
+    // A pan gesture must not blit a frozen layer of the shader.
+    assert!(host.apply_pan_gesture(350.0, 150.0, 20.0, 0.0, W as f32, H as f32));
+    assert!(!host.pan_cache_usable());
+    // Half a second later the shader has visibly moved on.
+    host.set_now_ms(1_500);
+    let later = paint_frame(&mut host, &mut backend);
+    assert_ne!(first, later, "the time uniform must advance between frames");
+}
