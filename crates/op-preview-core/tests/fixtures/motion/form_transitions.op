@@ -1,0 +1,37 @@
+{
+  "version": "1.1",
+  "formatVersion": "1.1",
+  "children": [
+    {
+      "type": "switch",
+      "id": "button",
+      "x": 0,
+      "y": 0,
+      "width": 100,
+      "height": 40,
+      "fill": [{ "type": "solid", "color": "#ff0000" }],
+      "states": { "hover": { "fill": [{ "type": "solid", "color": "#0000ff" }] } },
+      "transition": { "durationMs": 200, "easing": "linear", "properties": ["fill"] }
+    },
+    {
+      "type": "switch",
+      "id": "toggle",
+      "x": 0,
+      "y": 100,
+      "width": 60,
+      "height": 32
+    },
+    {
+      "type": "switch",
+      "id": "fader",
+      "x": 0,
+      "y": 200,
+      "width": 100,
+      "height": 40,
+      "opacity": 1,
+      "fill": [{ "type": "solid", "color": "#336699" }],
+      "states": { "hover": { "opacity": 0.4 } },
+      "transition": { "durationMs": 300, "easing": "standard", "properties": ["opacity"] }
+    }
+  ]
+}

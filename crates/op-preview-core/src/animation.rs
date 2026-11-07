@@ -714,3 +714,46 @@ impl PreviewSession {
         true
     }
 }
+
+/// Read-only access to the private sampling path for the motion golden-vector
+/// generator (`tests_motion_golden.rs`). It forwards to the production
+/// functions unchanged, so the recorded vectors are today's behaviour.
+#[cfg(all(test, not(target_os = "windows")))]
+pub(crate) mod golden_access {
+    use super::{
+        ease as runtime_ease, sample_track, AnimationRequest, Easing, PreviewAnimationState, Track,
+    };
+
+    pub(crate) fn ease(easing: Easing, progress: f32) -> f32 {
+        runtime_ease(easing, progress)
+    }
+
+    /// Sample one request the way `tick` samples an admitted track.
+    pub(crate) fn sample(
+        request: &AnimationRequest,
+        now_ms: u64,
+    ) -> (Option<serde_json::Value>, bool) {
+        let track = Track {
+            request: request.clone(),
+            from: request.from.clone().unwrap_or(serde_json::Value::Null),
+            base: None,
+        };
+        let sample = sample_track(&track, now_ms);
+        (sample.value, sample.finished)
+    }
+
+    /// Every live override as `(target, property name, value)`.
+    pub(crate) fn overrides(
+        state: &PreviewAnimationState,
+    ) -> Vec<(String, String, serde_json::Value)> {
+        state
+            .inner
+            .borrow()
+            .overrides
+            .iter()
+            .map(|((target, property), value)| {
+                (target.clone(), property.name().to_owned(), value.clone())
+            })
+            .collect()
+    }
+}

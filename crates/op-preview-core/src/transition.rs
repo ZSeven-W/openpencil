@@ -187,6 +187,12 @@ impl ScreenTransition {
         Some((now_ms.saturating_add(16)).min(self.started_at_ms + self.duration_ms))
     }
 
+    /// `(linear, eased)` progress, read by the motion golden-vector generator.
+    #[cfg(all(test, not(target_os = "windows")))]
+    pub(crate) fn progress_for_golden(&self, now_ms: u64) -> (f32, f32) {
+        (self.linear_t(now_ms), self.eased_t(now_ms))
+    }
+
     fn linear_t(&self, now_ms: u64) -> f32 {
         let elapsed = now_ms.saturating_sub(self.started_at_ms);
         (elapsed as f32 / self.duration_ms.max(1) as f32).clamp(0.0, 1.0)

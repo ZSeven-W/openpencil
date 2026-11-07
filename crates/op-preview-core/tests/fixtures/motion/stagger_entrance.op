@@ -1,0 +1,170 @@
+{
+  "version": "1.1",
+  "formatVersion": "1.1",
+  "children": [
+    {
+      "type": "frame",
+      "id": "screen",
+      "width": 360,
+      "height": 640,
+      "fill": [{ "type": "solid", "color": "#ffffff" }],
+      "children": [
+        {
+          "type": "rectangle",
+          "id": "title",
+          "x": 24,
+          "y": 40,
+          "width": 312,
+          "height": 48,
+          "opacity": 1,
+          "fill": [{ "type": "solid", "color": "#111111" }],
+          "animations": [
+            {
+              "trigger": "mount",
+              "durationMs": 400,
+              "easing": "emphasizedDecelerate",
+              "keyframes": [
+                { "offset": 0, "values": { "opacity": 0, "translateY": 16 } },
+                { "offset": 1, "values": { "opacity": 1, "translateY": 0 } }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "card_1",
+          "x": 24,
+          "y": 120,
+          "width": 312,
+          "height": 96,
+          "cornerRadius": 12,
+          "opacity": 1,
+          "fill": [{ "type": "solid", "color": "#f2f2f2" }],
+          "animations": [
+            {
+              "trigger": "mount",
+              "durationMs": 480,
+              "delayMs": 60,
+              "easing": "standard",
+              "keyframes": [
+                { "offset": 0, "values": { "opacity": 0, "scaleX": 0.8, "scaleY": 0.8 } },
+                { "offset": 0.6, "values": { "opacity": 1, "scaleX": 1.05, "scaleY": 1.05 } },
+                { "offset": 1, "values": { "scaleX": 1, "scaleY": 1 } }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "card_2",
+          "x": 24,
+          "y": 240,
+          "width": 312,
+          "height": 96,
+          "cornerRadius": 12,
+          "opacity": 1,
+          "fill": [{ "type": "solid", "color": "#f2f2f2" }],
+          "animations": [
+            {
+              "trigger": "mount",
+              "durationMs": 480,
+              "delayMs": 120,
+              "easing": "standard",
+              "keyframes": [
+                { "offset": 0, "values": { "opacity": 0, "scaleX": 0.8, "scaleY": 0.8 } },
+                { "offset": 0.6, "values": { "opacity": 1, "scaleX": 1.05, "scaleY": 1.05 } },
+                { "offset": 1, "values": { "scaleX": 1, "scaleY": 1 } }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "card_3",
+          "x": 24,
+          "y": 360,
+          "width": 312,
+          "height": 96,
+          "cornerRadius": 12,
+          "opacity": 1,
+          "fill": [{ "type": "solid", "color": "#f2f2f2" }],
+          "animations": [
+            {
+              "trigger": "mount",
+              "durationMs": 480,
+              "delayMs": 180,
+              "easing": "standard",
+              "keyframes": [
+                { "offset": 0, "values": { "opacity": 0, "scaleX": 0.8, "scaleY": 0.8 } },
+                { "offset": 0.6, "values": { "opacity": 1, "scaleX": 1.05, "scaleY": 1.05 } },
+                { "offset": 1, "values": { "scaleX": 1, "scaleY": 1 } }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "cta",
+          "x": 24,
+          "y": 500,
+          "width": 312,
+          "height": 56,
+          "cornerRadius": 4,
+          "opacity": 1,
+          "fill": [{ "type": "solid", "color": "#ff0000" }],
+          "animations": [
+            {
+              "trigger": "mount",
+              "durationMs": 600,
+              "delayMs": 200,
+              "easing": "ease",
+              "iterations": 3,
+              "fillMode": "none",
+              "keyframes": [
+                { "offset": 0, "values": { "fill": "#ff0000", "rotation": 0, "cornerRadius": 4 } },
+                { "offset": 0.5, "values": { "fill": "#0000ff", "rotation": 6, "cornerRadius": 20 } },
+                { "offset": 1, "values": { "fill": "#ff0000", "rotation": 0, "cornerRadius": 4 } }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "badge",
+          "x": 280,
+          "y": 576,
+          "width": 56,
+          "height": 24,
+          "cornerRadius": 12,
+          "opacity": 1,
+          "fill": [{ "type": "solid", "color": "#00aa55" }],
+          "animations": [
+            {
+              "trigger": "mount",
+              "durationMs": 500,
+              "delayMs": 300,
+              "easing": { "cubicBezier": [0.34, 1.56, 0.64, 1] },
+              "keyframes": [
+                { "offset": 0, "values": { "translateX": -40, "opacity": 0 } },
+                { "offset": 1, "values": { "translateX": 0, "opacity": 1 } }
+              ]
+            },
+            {
+              "trigger": "mount",
+              "durationMs": 800,
+              "delayMs": 900,
+              "easing": "easeInOut",
+              "keyframes": [
+                { "offset": 0, "values": { "translateY": 0 } },
+                { "offset": 0.25, "values": { "translateY": -6 } },
+                { "offset": 0.5, "values": { "translateY": 0 } },
+                { "offset": 0.75, "values": { "translateY": -3 } },
+                { "offset": 1, "values": { "translateY": 0 } }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

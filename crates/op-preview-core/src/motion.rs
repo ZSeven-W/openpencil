@@ -711,7 +711,7 @@ fn scene_color(color: op_editor_ui::Color) -> String {
     }
 }
 
-fn easing_from_schema(easing: &jian_ops_schema::motion::Easing) -> Easing {
+pub(crate) fn easing_from_schema(easing: &jian_ops_schema::motion::Easing) -> Easing {
     match easing {
         jian_ops_schema::motion::Easing::Linear => Easing::Linear,
         jian_ops_schema::motion::Easing::Ease => Easing::Ease,

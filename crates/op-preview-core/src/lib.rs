@@ -196,6 +196,8 @@ mod tests_local_pagination;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_motion;
 #[cfg(all(test, not(target_os = "windows")))]
+mod tests_motion_golden;
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_multi_pointer;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_page_scroll;

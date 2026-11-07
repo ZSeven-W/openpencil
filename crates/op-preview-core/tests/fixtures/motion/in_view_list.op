@@ -1,0 +1,135 @@
+{
+  "version": "1.1",
+  "formatVersion": "1.1",
+  "children": [
+    {
+      "type": "frame",
+      "id": "screen",
+      "width": 400,
+      "height": 400,
+      "clipContent": false,
+      "children": [
+        {
+          "type": "rectangle",
+          "id": "row_once",
+          "x": 0,
+          "y": 440,
+          "width": 100,
+          "height": 40,
+          "opacity": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#ffffff"
+            }
+          ],
+          "animations": [
+            {
+              "trigger": "inView",
+              "durationMs": 300,
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "values": {
+                    "opacity": 0,
+                    "translateY": 12
+                  }
+                },
+                {
+                  "offset": 1,
+                  "values": {
+                    "opacity": 1,
+                    "translateY": 0
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "row_repeat",
+          "x": 0,
+          "y": 520,
+          "width": 100,
+          "height": 40,
+          "opacity": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#ffffff"
+            }
+          ],
+          "animations": [
+            {
+              "trigger": "inView",
+              "durationMs": 300,
+              "delayMs": 100,
+              "once": false,
+              "fillMode": "none",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "values": {
+                    "opacity": 0
+                  }
+                },
+                {
+                  "offset": 1,
+                  "values": {
+                    "opacity": 1
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "row_scale",
+          "x": 0,
+          "y": 760,
+          "width": 100,
+          "height": 40,
+          "opacity": 1,
+          "fill": [
+            {
+              "type": "solid",
+              "color": "#ffffff"
+            }
+          ],
+          "animations": [
+            {
+              "trigger": "inView",
+              "durationMs": 400,
+              "easing": "emphasizedDecelerate",
+              "keyframes": [
+                {
+                  "offset": 0,
+                  "values": {
+                    "scaleX": 0.9,
+                    "scaleY": 0.9,
+                    "opacity": 0
+                  }
+                },
+                {
+                  "offset": 0.4,
+                  "values": {
+                    "opacity": 1
+                  }
+                },
+                {
+                  "offset": 1,
+                  "values": {
+                    "scaleX": 1,
+                    "scaleY": 1
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
