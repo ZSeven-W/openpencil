@@ -481,11 +481,12 @@ impl PropertyPanel {
                 self.effect_param_focus
                     .map(|focus| op_editor_core::PropertyFocus::EffectRadius(focus.effect))
             })?;
-            crate::widgets::property_panel_sections::editable_input_rects(
+            crate::widgets::property_panel_sections::editable_input_rects_with_interactions(
                 scrolled,
                 self.visible_sections(),
                 &self.snapshot.fills,
                 &self.snapshot.effects,
+                &self.snapshot.interactions,
             )
             .into_iter()
             .find_map(|(candidate, rect)| (candidate == focus).then_some(rect))

@@ -708,9 +708,9 @@ pub fn apply_property_action(
                 Some(op_editor_core::editor_ui_state::FileAction::PickFillImage);
             Handled
         }
-        A::ToggleInteractionMenu => {
+        A::ToggleInteractionMenu(target) => {
             let ui = &mut state.editor_ui;
-            ui.toggle_interaction_menu();
+            ui.toggle_interaction_menu(target.clone());
             ui.close_fill_type_picker();
             ui.image_fill_popover_open = false;
             ui.close_font_picker();
@@ -720,62 +720,12 @@ pub fn apply_property_action(
             ui.close_color_variable_picker();
             Handled
         }
-        A::SetInteractionNavigate { path } => {
-            let node_id = state.selection.anchor.clone();
-            if node_id.is_real() {
-                state.commit_history();
-                let patch_json =
-                    crate::widgets::property_panel_interactions::navigate_patch_json(path.as_str());
-                let _ = state.apply(op_editor_core::EditorCommand::PatchNodeData {
-                    node_id,
-                    patch_json,
-                    page_id: None,
-                });
-            }
+        A::CloseInteractionMenu => {
             state.editor_ui.close_interaction_menu();
             Handled
         }
-        A::SetInteractionPop => {
-            let node_id = state.selection.anchor.clone();
-            if node_id.is_real() {
-                state.commit_history();
-                let _ = state.apply(op_editor_core::EditorCommand::PatchNodeData {
-                    node_id,
-                    patch_json: crate::widgets::property_panel_interactions::POP_PATCH_JSON
-                        .to_string(),
-                    page_id: None,
-                });
-            }
-            state.editor_ui.close_interaction_menu();
-            Handled
-        }
-        A::RemoveInteraction => {
-            let node_id = state.selection.anchor.clone();
-            if node_id.is_real() {
-                // Clear only `onTap` — if the node's `events` block
-                // carries no other handler afterward, drop the whole
-                // field (no `"events":{}` shell left behind); else
-                // re-serialize the trimmed block so any sibling handler
-                // (`onChange`, …) survives untouched.
-                use op_editor_core::pen_node_ext::PenNodeExt;
-                let mut handlers = state
-                    .selected_node()
-                    .and_then(|n| n.events().cloned())
-                    .unwrap_or_default();
-                handlers.on_tap = None;
-                let patch_json = if handlers == jian_ops_schema::events::EventHandlers::default() {
-                    r#"{"events":null}"#.to_string()
-                } else {
-                    let value = serde_json::to_value(&handlers).unwrap_or(serde_json::Value::Null);
-                    format!(r#"{{"events":{value}}}"#)
-                };
-                state.commit_history();
-                let _ = state.apply(op_editor_core::EditorCommand::PatchNodeData {
-                    node_id,
-                    patch_json,
-                    page_id: None,
-                });
-            }
+        A::EditInteraction(edit) => {
+            let _ = state.apply_selected_interaction_edit(edit);
             state.editor_ui.close_interaction_menu();
             Handled
         }

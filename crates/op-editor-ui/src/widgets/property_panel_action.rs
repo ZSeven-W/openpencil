@@ -157,9 +157,8 @@ pub enum CodegenAction {
 /// after the text-input hit-test misses.
 ///
 /// `PartialEq` only (not `Eq`) — `AdjustEffectParam` carries an `f32`.
-/// No longer `Copy` — `SetInteractionNavigate` carries a `String`
-/// (an owned route path); every call site now clones or moves rather
-/// than relying on an implicit bitwise copy.
+/// Not `Copy` — the Interactions actions carry owned trigger keys /
+/// parameter strings.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PropertyPanelAction {
     /// User clicked a tab in the pinned Design / Code strip — the host
@@ -412,23 +411,16 @@ pub enum PropertyPanelAction {
     /// / Checkbox node — host flips the literal `checked` bool to
     /// `new_value`.
     ToggleWidgetChecked(bool),
-    /// User clicked the Interactions section's tap row (or its
-    /// "+ Add interaction" empty state) — host toggles the small
-    /// Navigate/Back/Remove popover open (`editor_ui.interaction_menu_open`).
-    ToggleInteractionMenu,
-    /// User picked "Navigate to <path>" in the popover — host writes
-    /// `events.onTap = [{"replace": "\"<path>\""}]` via
-    /// `PatchNodeData` (see `property_panel_interactions::navigate_patch_json`).
-    SetInteractionNavigate {
-        path: String,
-    },
-    /// User picked "Back (pop)" in the popover — host writes
-    /// `events.onTap = [{"pop": null}]`.
-    SetInteractionPop,
-    /// User picked "Remove" in the popover, or the multi-action row's
-    /// "Remove all" — host clears the node's `onTap` handler (and the
-    /// whole `events` field when nothing else is left in it).
-    RemoveInteraction,
+    /// User clicked an Interactions-section dropdown (trigger / action /
+    /// parameter row, or "+ Add interaction") — toggles that popover
+    /// (`editor_ui.interaction_menu_{open,target}`).
+    ToggleInteractionMenu(op_editor_core::interaction_edit_apply::InteractionMenuTarget),
+    /// An inert informational menu row ("No screens on this page") —
+    /// just closes the popover.
+    CloseInteractionMenu,
+    /// Apply one structured edit to the selected node's `events` block
+    /// (see `op_editor_core::interaction_edit_apply`), one undo step.
+    EditInteraction(op_editor_core::interaction_edit_apply::InteractionEdit),
     /// Code panel action — see `CodegenAction`.
     Codegen(CodegenAction),
     /// Generator section: flip boolean parameter `index` and regenerate.

@@ -515,6 +515,7 @@ impl PreviewSession {
         let effects = crate::effects::PreviewEffectQueue::new();
         effects.set_trace(debug.trace.clone());
         crate::effects::install_on_runtime(&mut runtime, &effects, &host_capabilities);
+        crate::effect_delivery::grant_host_capabilities(&mut runtime, &host_capabilities);
         let ui_actions = crate::ui_actions::PreviewUiActions::default();
         runtime.set_ui_mutation_sink(Rc::new(ui_actions.clone()));
         let animation = crate::animation::PreviewAnimationState::default();

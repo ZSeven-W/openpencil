@@ -391,8 +391,28 @@ pub fn apply_loop_finalize_counted(state: &mut EditorState) -> RepairSummary {
     run_loop_finalize_text_fill(state);
     // Last: the passes above may paint palette tokens this loop never seeded.
     crate::loop_finalize_palette::seed_referenced_palette_tokens(state);
+    note_interaction_issues(state, &mut summary);
 
     summary
+}
+
+/// Cap on per-issue notes; the rest collapse into one count line.
+const MAX_INTERACTION_NOTES: usize = 8;
+
+/// Report (never repair) broken interaction wiring: the visual passes
+/// above cannot tell a working prototype from one whose quantity reads
+/// `null`. Runs after the app-state hoist so generated declarations count.
+pub(crate) fn note_interaction_issues(state: &EditorState, summary: &mut RepairSummary) {
+    let issues = crate::interaction_integrity::check_interactions(&state.doc);
+    for issue in issues.iter().take(MAX_INTERACTION_NOTES) {
+        summary.note(issue.to_string());
+    }
+    if issues.len() > MAX_INTERACTION_NOTES {
+        summary.note(format!(
+            "interaction: {} more wiring issues not listed",
+            issues.len() - MAX_INTERACTION_NOTES
+        ));
+    }
 }
 
 fn run_loop_finalize_prelude(base: &mut dyn crate::types::DocSink, summary: &mut RepairSummary) {

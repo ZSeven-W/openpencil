@@ -26,7 +26,11 @@ pub struct MissingFontsNotice<'a> {
 impl<'a> MissingFontsNotice<'a> {
     pub fn for_editor(state: &'a EditorState) -> Option<Self> {
         let ui = &state.editor_ui;
+        // Preview owns the canvas top for its device / screen switchers; the
+        // notice would cover them and swallow their clicks. It is an editing
+        // concern and returns as soon as Preview exits.
         (ui.workspace.visible
+            && !ui.preview.mode
             && !ui.missing_fonts_modal_open
             && !ui.missing_fonts_notice_dismissed
             && !ui.agent_settings_open

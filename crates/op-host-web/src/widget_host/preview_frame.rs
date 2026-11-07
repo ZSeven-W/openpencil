@@ -120,6 +120,13 @@ impl super::WidgetHost {
             self.preview_device_frame = None;
             return;
         };
+        // Fit the frame BELOW the floating switcher rows and clear of the
+        // floating chat, instead of under them (shared with native).
+        let canvas = op_editor_ui::widgets::preview_frame_area(
+            canvas,
+            session.is_app_mode(),
+            self.ai_chat_rect(viewport_w, viewport_h),
+        );
         let Some((_root_id, root_rect)) = session.framed_root() else {
             // No framed root yet: keep an empty silhouette so the bezel
             // still paints rather than flashing raw canvas.
@@ -248,10 +255,20 @@ impl super::WidgetHost {
         let Some((_id, rect)) = self.preview.as_ref().and_then(|p| p.framed_root()) else {
             return;
         };
-        let (_cx0, _cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let canvas = Rect::xywh(cx0, cy0, cw, ch);
+        // Frame the screen below the Preview switchers (shared with native).
+        let app_mode = self.preview.as_ref().is_some_and(|p| p.is_app_mode());
+        let area = op_editor_ui::widgets::preview_frame_area(
+            canvas,
+            app_mode,
+            self.ai_chat_rect(viewport_w, viewport_h),
+        );
+        let zoom = self.editor_state.viewport.zoom;
+        let (pan_x, pan_y) = op_editor_ui::widgets::canvas_preview_pan(canvas, area, rect, zoom);
         let vp = &mut self.editor_state.viewport;
-        vp.pan_x = cw / 2.0 - (rect.origin.x + rect.size.x / 2.0) * vp.zoom;
-        vp.pan_y = ch / 2.0 - (rect.origin.y + rect.size.y / 2.0) * vp.zoom;
+        vp.pan_x = pan_x;
+        vp.pan_y = pan_y;
         self.mark_dirty();
     }
 

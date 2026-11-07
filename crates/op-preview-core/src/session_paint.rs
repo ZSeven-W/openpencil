@@ -225,12 +225,27 @@ impl PreviewSession {
         if let Some(widget) = node.widget.as_mut() {
             if let Some(state) = self.runtime.widget_states.get(&node.id) {
                 apply_widget_state(widget, state);
+            } else if let Some(seed) = self.unmounted_widget_seed(&node.id) {
+                // Not instantiated yet (first frame of a screen, or after
+                // navigating back): paint what the widget WILL hold — its
+                // bound app-state value — instead of the authored
+                // placeholder. Read-only: no state is created, no onChange.
+                apply_widget_state(widget, &seed);
             }
             self.apply_widget_visual_state(node, focused_id, state_variables);
         }
         for child in node.children.iter_mut() {
             self.overlay_node(child, focused_id, state_variables);
         }
+    }
+
+    /// The seed jian would create for widget `id` right now, without
+    /// creating it (`jian_core::widget_state::seed_widget_state`).
+    fn unmounted_widget_seed(&self, id: &str) -> Option<jian_core::widget_state::WidgetState> {
+        let document = self.runtime.document.as_ref()?;
+        let key = document.tree.by_id.get(id).copied()?;
+        let schema = &document.tree.nodes.get(key)?.schema;
+        jian_core::widget_state::seed_widget_state(schema, &self.runtime.state)
     }
 
     /// Resolve and apply the preview-only state visual for one widget. The

@@ -128,6 +128,9 @@ impl McpTool for FinalizeDesignTool {
                 clipped_content:
                     &op_orchestrator::geometry_validation::fixed_board_content_diagnostics(&state),
                 changed_board_sizes: &fixed_board_size_changes(&self.state, &state),
+                interaction: &op_orchestrator::interaction_integrity::check_interactions(
+                    &state.doc,
+                ),
             },
         );
         if commands.is_empty() {
@@ -217,6 +220,7 @@ struct RenderFindings<'a> {
     shader_informational: &'a [op_design_lint::Issue],
     clipped_content: &'a [String],
     changed_board_sizes: &'a [String],
+    interaction: &'a [op_orchestrator::interaction_integrity::InteractionIssue],
 }
 
 fn fixed_board_size_changes(before: &EditorState, after: &EditorState) -> Vec<String> {
@@ -314,6 +318,17 @@ fn finalize_result_json(
             .iter()
             .map(|message| render("fixed-board-content-outside", &[], message)),
     );
+    // Broken interaction wiring blocks completion like any other blocking
+    // advisory: a prototype whose state is undeclared or whose input binds
+    // an unwritable target is not a finished design. Typed issues, not
+    // note-string matching.
+    advisories_json.extend(findings.interaction.iter().map(|issue| {
+        render(
+            issue.kind.code(),
+            std::slice::from_ref(&issue.node_id),
+            &issue.to_string(),
+        )
+    }));
     let complete = advisories_json.is_empty();
     let blocking_advisory_count = advisories_json.len();
     // Shader-budget (informational) advisories ride a separate always-present
@@ -361,6 +376,7 @@ mod delivery_tests {
                 shader_informational: &[],
                 clipped_content: &issues,
                 changed_board_sizes: &[],
+                interaction: &[],
             },
         );
         let result: serde_json::Value = serde_json::from_str(&result).unwrap();
@@ -396,6 +412,7 @@ mod delivery_tests {
                 shader_informational: &[],
                 clipped_content: &[],
                 changed_board_sizes: &issues,
+                interaction: &[],
             },
         );
         let result: serde_json::Value = serde_json::from_str(&result).unwrap();

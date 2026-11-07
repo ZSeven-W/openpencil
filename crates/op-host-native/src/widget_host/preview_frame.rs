@@ -105,7 +105,7 @@ impl super::WidgetHostNative {
             self.preview_device_frame = None;
             return;
         }
-        let canvas = Rect {
+        let full_canvas = Rect {
             origin: Point2D::new(canvas_x, canvas_y),
             size: Point2D::new(canvas_w, canvas_h),
         };
@@ -113,6 +113,13 @@ impl super::WidgetHostNative {
             self.preview_device_frame = None;
             return;
         };
+        // Fit the frame BELOW the floating switcher rows and clear of the
+        // floating chat, instead of under them (shared with web/native).
+        let canvas = op_editor_ui::widgets::preview_frame_area(
+            full_canvas,
+            session.is_app_mode(),
+            self.preview_chat_obstacle(viewport_w, viewport_h),
+        );
         let Some((_root_id, root_rect)) = session.framed_root() else {
             self.preview_device_frame = Some(compute_frame_geometry(
                 kind,

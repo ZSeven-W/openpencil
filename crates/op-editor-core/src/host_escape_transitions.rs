@@ -301,6 +301,7 @@ impl EditorUiState {
         self.effect_add_picker_open = false;
         self.effect_add_menu_hover = None;
         self.interaction_menu_open = false;
+        self.interaction_menu_target = None;
         self.interaction_menu_hover = None;
         self.close_color_variable_picker();
         self.image_fill_popover_open = false;

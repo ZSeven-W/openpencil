@@ -171,6 +171,8 @@ pub fn record_loop_finalize_counted(
         {
             commands.push(command);
         }
+        // Same report as the App path (`apply_loop_finalize_counted`).
+        note_interaction_issues(&state, &mut summary);
     }
 
     let mut replay = input.clone();

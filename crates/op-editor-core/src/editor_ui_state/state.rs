@@ -457,6 +457,9 @@ pub struct EditorUiState {
     /// Whether the Interactions section's Navigate/Back/Remove popover
     /// is open. `false` = closed.
     pub interaction_menu_open: bool,
+    /// Which Interactions dropdown is open (`Some` iff
+    /// `interaction_menu_open`).
+    pub interaction_menu_target: Option<crate::interaction_edit_apply::InteractionMenuTarget>,
     /// Row index hovered in the open Interactions popover (`None` =
     /// none).
     pub interaction_menu_hover: Option<usize>,

@@ -34,6 +34,25 @@ impl WidgetHostNative {
         (self.ai_chat_panel_width(), height)
     }
 
+    /// The chat rect exactly when paint draws it over the canvas — the
+    /// obstacle the Preview device frame keeps clear of (same gate as the
+    /// chat branch of `paint.rs`).
+    pub(in crate::widget_host) fn preview_chat_obstacle(
+        &self,
+        viewport_w: f32,
+        viewport_h: f32,
+    ) -> Option<Rect> {
+        let touch_layout = self.editor_state.editor_ui.touch_chrome();
+        let chat_open = !touch_layout
+            || self.editor_state.editor_ui.mobile_sheet
+                == Some(op_editor_core::size_class::MobileSheetKind::Ai);
+        self.ai_chat_rect(viewport_w, viewport_h).filter(|_| {
+            !self.preview_slideshow_active()
+                && chat_open
+                && !self.editor_state.editor_ui.workspace_drawer_active()
+        })
+    }
+
     pub(in crate::widget_host) fn ai_chat_rect(
         &self,
         viewport_w: f32,

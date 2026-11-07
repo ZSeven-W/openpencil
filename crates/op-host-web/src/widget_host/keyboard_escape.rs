@@ -210,6 +210,13 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        // Same tier as native's `keyboard_escape.rs`: one Escape closes
+        // the open Interactions dropdown and nothing else.
+        if self.editor_state.editor_ui.interaction_menu_open {
+            self.editor_state.editor_ui.close_interaction_menu();
+            self.mark_dirty();
+            return true;
+        }
         if self.editor_state.editor_ui.escape_image_fill_popover() {
             self.mark_dirty();
             return true;

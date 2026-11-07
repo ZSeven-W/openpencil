@@ -120,6 +120,7 @@ pub mod property_panel_instance;
 #[cfg(test)]
 mod property_panel_instance_tests;
 pub mod property_panel_interactions;
+pub mod property_panel_interactions_menu;
 pub mod property_panel_layer;
 pub mod property_panel_layout;
 pub mod property_panel_layout_ops;
@@ -214,6 +215,7 @@ mod canvas_viewport_paint_pop_tests;
 mod canvas_viewport_text;
 pub(crate) mod canvas_viewport_widget;
 pub mod preview_device_switcher;
+pub mod preview_frame_area;
 pub mod scene_paint_options;
 pub mod screen_switcher_pills;
 
@@ -469,6 +471,7 @@ pub use canvas_viewport::{
 pub use canvas_viewport_paint::{paint_scene_page, paint_scene_page_without_video_badge};
 pub use canvas_viewport_widget::widget_text_inset_left;
 pub use preview_device_switcher::PreviewDeviceSwitcher;
+pub use preview_frame_area::{canvas_preview_pan, preview_frame_area};
 pub use scene_paint_options::{paint_scene_page_with, paint_scene_subtree, PaintSceneOptions};
 pub use screen_switcher_pills::ScreenSwitcherPills;
 pub use slideshow_toolbar::SlideshowToolbar;

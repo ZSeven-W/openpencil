@@ -18,7 +18,7 @@
 //! (the executor pattern proven by op-smoke's headless loop mode), and the
 //! finished clone lands as ONE `EditorCommand::Batch`: delete the original
 //! top-level frames, insert the authored roots id-stably, and carry the
-//! variables/themes the loop set. A pre-flight failure, timeout, or empty
+//! variables/themes and the document `$app` state the loop set. A pre-flight failure, timeout, or empty
 //! result therefore leaves the live document byte-identical.
 //!
 //! ## Blocking + timeout
@@ -415,7 +415,38 @@ fn landing_batch(original: &EditorState, finished: &EditorState) -> Option<Edito
             replace: true,
         });
     }
+    if let Some(state) = generated_app_state(original, finished) {
+        commands.push(EditorCommand::MergeAppState {
+            plan_idx: op_editor_core::UNPLANNED_APP_STATE_IDX,
+            state,
+        });
+    }
     Some(EditorCommand::Batch { commands })
+}
+
+/// The document-root `$app` state the loop declared: generated nodes'
+/// `state` is hoisted into the CLONE's `doc.state` (`MergeAppState`), so
+/// landing only the visual tree used to drop every declaration and the
+/// design previewed with `null` quantities and empty totals.
+///
+/// Rule: keys the live document already owns are never overwritten (the
+/// same additive contract `MergeAppState` enforces); keys the loop added
+/// land. The clone started from the original, so the delta is exactly
+/// the generated declarations. `routes` / `app` / `lifecycle` /
+/// `logicModules` / `motion` are not written by any design-loop tool, so
+/// they stay the live document's.
+fn generated_app_state(
+    original: &EditorState,
+    finished: &EditorState,
+) -> Option<std::collections::BTreeMap<String, jian_ops_schema::state::StateEntry>> {
+    let finished_state = finished.doc.state.as_ref()?;
+    let owned = original.doc.state.as_ref();
+    let added: std::collections::BTreeMap<_, _> = finished_state
+        .iter()
+        .filter(|(key, _)| owned.is_none_or(|owned| !owned.contains_key(*key)))
+        .map(|(key, entry)| (key.clone(), entry.clone()))
+        .collect();
+    (!added.is_empty()).then_some(added)
 }
 
 impl McpTool for RunDesignAgentTool {
@@ -486,6 +517,18 @@ impl McpTool for RunDesignAgentTool {
         };
 
         let landed_roots = finished.active_children().len();
+        // A MaxTokens stop or a script auto-repair can still leave a usable
+        // design, so completeness is judged from the product, not the stop
+        // reason: screens delivered AND interaction wiring intact.
+        let interaction_issues: Vec<String> =
+            op_orchestrator::interaction_integrity::check_interactions(&finished.doc)
+                .iter()
+                .map(ToString::to_string)
+                .collect();
+        let screens_complete = finalize
+            .as_ref()
+            .is_none_or(|report| report.screens.unfilled.is_empty());
+        let complete = landed_roots > 0 && screens_complete && interaction_issues.is_empty();
         let finalize_json = finalize.as_ref().map(|report| {
             serde_json::json!({
                 "committedScreens": report.screens.committed,
@@ -506,6 +549,8 @@ impl McpTool for RunDesignAgentTool {
             "stopReason": stats.stop_reason.map(|reason| format!("{reason:?}")),
             "landedRoots": landed_roots,
             "finalize": finalize_json,
+            "interactionIssues": interaction_issues,
+            "complete": complete,
             "loopError": stats.last_error,
         })
         .to_string();

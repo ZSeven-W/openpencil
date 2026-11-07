@@ -142,10 +142,13 @@ pub struct PropertyPanel {
     /// Row index hovered in the open Interactions popover (`None` =
     /// none).
     pub interaction_menu_hover: Option<usize>,
-    /// Every `screen` route path authored on the active page's
-    /// top-level frames — the Interactions popover's "Navigate to…"
-    /// row source (see `property_panel_interactions::document_screen_paths`).
-    pub screen_paths: Vec<String>,
+    /// Which Interactions dropdown is open (`Some` iff
+    /// `interaction_menu_open`).
+    pub interaction_menu_target:
+        Option<op_editor_core::interaction_edit_apply::InteractionMenuTarget>,
+    /// Picker sources for the Interactions menus — the page's screens
+    /// and the layers of the selection's screen.
+    pub interaction_ctx: op_editor_core::interaction_edit_apply::InteractionContext,
     pub color_variable_picker_open: Option<op_editor_core::ColorTarget>,
     /// Scroll offset (px, ≥ 0) of the open colour-variable popup's own
     /// list. The popup is height-capped, so a long variable set scrolls

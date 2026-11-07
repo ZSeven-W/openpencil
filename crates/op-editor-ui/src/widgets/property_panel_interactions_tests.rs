@@ -4,6 +4,7 @@
 use super::*;
 use crate::widgets::property_panel_visibility::SectionCapabilities;
 use jian_ops_schema::node::PenNode;
+use op_editor_core::interaction_edit::InteractionActionKind;
 
 fn node_from(json: &str) -> PenNode {
     serde_json::from_str(json).expect("test fixture parses")
@@ -40,77 +41,30 @@ fn interactions_capability_is_off_for_multi_select() {
     assert!(!SectionCapabilities::for_multi().interactions);
 }
 
-// ── events.onTap parsing ─────────────────────────────────────────────
+// ── Summary ─────────────────────────────────────────────────────────
 
 #[test]
-fn interactions_of_parses_replace_navigate() {
-    let node =
-        node_from(r#"{"type":"frame","id":"f1","events":{"onTap":[{"replace":"\"/profile\""}]}}"#);
-    let summary = interactions_of(&node, false);
-    assert_eq!(summary.on_tap.len(), 1);
-    assert_eq!(
-        summary.on_tap[0],
-        TapActionSummary::Navigate {
-            verb: NavigateVerb::Replace,
-            path: "/profile".to_string(),
-        }
-    );
-}
-
-#[test]
-fn interactions_of_parses_push_navigate() {
-    let node =
-        node_from(r#"{"type":"frame","id":"f1","events":{"onTap":[{"push":"\"/detail\""}]}}"#);
-    let summary = interactions_of(&node, false);
-    assert_eq!(
-        summary.on_tap[0],
-        TapActionSummary::Navigate {
-            verb: NavigateVerb::Push,
-            path: "/detail".to_string(),
-        }
-    );
-}
-
-#[test]
-fn interactions_of_parses_pop() {
-    let node = node_from(r#"{"type":"frame","id":"f1","events":{"onTap":[{"pop":null}]}}"#);
-    let summary = interactions_of(&node, false);
-    assert_eq!(summary.on_tap[0], TapActionSummary::Pop);
-}
-
-#[test]
-fn interactions_of_parses_unknown_key_as_other() {
-    let node =
-        node_from(r#"{"type":"frame","id":"f1","events":{"onTap":[{"set":{"$state.x":"1"}}]}}"#);
-    let summary = interactions_of(&node, false);
-    assert_eq!(
-        summary.on_tap[0],
-        TapActionSummary::Other("set".to_string())
-    );
-}
-
-#[test]
-fn interactions_of_carries_multiple_actions_in_order() {
+fn interactions_of_summarizes_every_trigger() {
     let node = node_from(
-        r#"{"type":"frame","id":"f1","events":{"onTap":[{"pop":null},{"replace":"\"/a\""}]}}"#,
+        r#"{"type":"frame","id":"f1","events":{
+            "onTap":[{"push":"\"/a\""},{"pop":null}],
+            "onHoverEnter":[{"show":"tip"}]}}"#,
     );
     let summary = interactions_of(&node, false);
-    assert_eq!(summary.on_tap.len(), 2);
-    assert_eq!(summary.on_tap[0], TapActionSummary::Pop);
+    assert_eq!(summary.triggers.len(), 2);
+    assert_eq!(summary.param(InteractionTrigger::Tap, 0), Some("/a"));
+    assert_eq!(summary.action_count(InteractionTrigger::Tap), 2);
     assert_eq!(
-        summary.on_tap[1],
-        TapActionSummary::Navigate {
-            verb: NavigateVerb::Replace,
-            path: "/a".to_string(),
-        }
+        summary.param(InteractionTrigger::HoverEnter, 0),
+        Some("tip")
     );
 }
 
 #[test]
-fn interactions_of_reports_no_actions_for_bare_node() {
+fn interactions_of_reports_no_triggers_for_bare_node() {
     let node = node_from(r#"{"type":"frame","id":"f1"}"#);
     let summary = interactions_of(&node, false);
-    assert!(summary.on_tap.is_empty());
+    assert!(summary.triggers.is_empty());
     assert_eq!(summary.screen, None);
 }
 
@@ -134,153 +88,207 @@ fn interactions_of_never_shows_screen_for_non_frame() {
     assert_eq!(interactions_of(&node, true).screen, None);
 }
 
-// ── Navigate/pop patch JSON (the write path) ────────────────────────
+// ── Geometry ────────────────────────────────────────────────────────
 
-#[test]
-fn navigate_patch_json_double_encodes_the_path_literal() {
-    // The body must be the JSON string VALUE `"\"/profile\""` — quote
-    // characters included — so it compiles as a Tier-1 string-literal
-    // expression (see `wire_screen_navigation`'s contract).
-    let patch = navigate_patch_json("/profile");
-    assert_eq!(
-        patch,
-        r#"{"events":{"onTap":[{"replace":"\"/profile\""}]}}"#
-    );
+fn summary_of(json: &str) -> InteractionSummary {
+    interactions_of(&node_from(json), true)
+}
+
+fn actions(summary: &InteractionSummary) -> Vec<(PropertyPanelAction, Rect)> {
+    let mut out = Vec::new();
+    push_interaction_action_rects(&mut out, summary, 0.0, 0.0, 280.0);
+    out
 }
 
 #[test]
-fn navigate_patch_json_round_trips_through_interactions_of() {
-    let path = "/settings/account";
-    let patch = navigate_patch_json(path);
-    let patched_node = format!(
-        r#"{{"type":"frame","id":"f1",{}}}"#,
-        &patch[1..patch.len() - 1]
-    );
-    let node = node_from(&patched_node);
-    let summary = interactions_of(&node, false);
-    assert_eq!(
-        summary.on_tap[0],
-        TapActionSummary::Navigate {
-            verb: NavigateVerb::Replace,
-            path: path.to_string(),
-        }
-    );
-}
-
-#[test]
-fn pop_patch_json_matches_wire_screen_navigation_shape() {
-    assert_eq!(POP_PATCH_JSON, r#"{"events":{"onTap":[{"pop":null}]}}"#);
-}
-
-// ── Section height + action-rect row math stay aligned ──────────────
-
-#[test]
-fn empty_state_has_one_clickable_row() {
+fn empty_state_has_only_the_add_row() {
     let summary = InteractionSummary::default();
-    let mut out = Vec::new();
-    push_interaction_action_rects(&mut out, &summary, 0.0, 0.0, 280.0);
-    assert_eq!(out.len(), 1);
-    assert!(matches!(
-        out[0].0,
-        PropertyPanelAction::ToggleInteractionMenu
-    ));
+    let rects = actions(&summary);
+    assert_eq!(rects.len(), 1);
+    assert_eq!(
+        rects[0].0,
+        PropertyPanelAction::ToggleInteractionMenu(InteractionMenuTarget::AddTrigger)
+    );
+    assert_eq!(
+        interactions_section_height(&summary),
+        SECTION_HEADER_HEIGHT + ROW_STEP + 6.0 + SECTION_GAP
+    );
 }
 
 #[test]
-fn single_action_has_one_clickable_toggle_row() {
-    let summary = InteractionSummary {
-        screen: None,
-        on_tap: vec![TapActionSummary::Pop],
-    };
-    let mut out = Vec::new();
-    push_interaction_action_rects(&mut out, &summary, 0.0, 0.0, 280.0);
-    assert_eq!(out.len(), 1);
-    assert!(matches!(
-        out[0].0,
-        PropertyPanelAction::ToggleInteractionMenu
-    ));
+fn rows_cover_trigger_action_param_and_add() {
+    let summary = summary_of(
+        r#"{"type":"frame","id":"f1","screen":"/home",
+            "events":{"onTap":[{"push":"\"/a\""},{"toast":"\"hi\""},{"pop":null}]}}"#,
+    );
+    let rects = actions(&summary);
+    let kinds: Vec<_> = rects.iter().map(|(a, _)| a.clone()).collect();
+    use InteractionMenuTarget as T;
+    let tap = InteractionTrigger::Tap;
+    assert_eq!(
+        kinds,
+        vec![
+            PropertyPanelAction::ToggleInteractionMenu(T::Trigger("onTap".into())),
+            PropertyPanelAction::EditInteraction(InteractionEdit::AddAction(tap)),
+            PropertyPanelAction::ToggleInteractionMenu(T::Action {
+                trigger: tap,
+                index: 0
+            }),
+            PropertyPanelAction::EditInteraction(InteractionEdit::RemoveAction {
+                trigger: tap,
+                index: 0
+            }),
+            PropertyPanelAction::ToggleInteractionMenu(T::Param {
+                trigger: tap,
+                index: 0
+            }),
+            PropertyPanelAction::ToggleInteractionMenu(T::Action {
+                trigger: tap,
+                index: 1
+            }),
+            PropertyPanelAction::EditInteraction(InteractionEdit::RemoveAction {
+                trigger: tap,
+                index: 1
+            }),
+            PropertyPanelAction::ToggleInteractionMenu(T::Action {
+                trigger: tap,
+                index: 2
+            }),
+            PropertyPanelAction::EditInteraction(InteractionEdit::RemoveAction {
+                trigger: tap,
+                index: 2
+            }),
+            PropertyPanelAction::ToggleInteractionMenu(T::AddTrigger),
+        ]
+    );
+    // Screen + trigger + 3 actions + 2 params + add = 8 rows.
+    assert_eq!(
+        interactions_section_height(&summary),
+        SECTION_HEADER_HEIGHT + 8.0 * ROW_STEP + 6.0 + SECTION_GAP
+    );
+    // The toast's text param is an input, not an action.
+    let mut inputs = Vec::new();
+    push_interaction_input_rects(&mut inputs, &summary, 0.0, 0.0, 280.0);
+    assert_eq!(inputs.len(), 1);
+    assert_eq!(inputs[0].0, PropertyFocus::InteractionParam(tap, 1));
+    let add = rects.last().unwrap().1;
+    assert!(inputs[0].1.origin.y < add.origin.y);
 }
 
 #[test]
-fn multi_action_has_only_a_remove_all_row() {
-    let summary = InteractionSummary {
-        screen: None,
-        on_tap: vec![
-            TapActionSummary::Pop,
-            TapActionSummary::Navigate {
-                verb: NavigateVerb::Replace,
-                path: "/a".to_string(),
+fn unknown_trigger_is_read_only_but_removable() {
+    let summary = summary_of(
+        r#"{"type":"frame","id":"f1","events":{"onPanStart":[{"set":{"$app.x":"1"}}]}}"#,
+    );
+    let rects = actions(&summary);
+    assert!(rects.iter().any(|(a, _)| *a
+        == PropertyPanelAction::EditInteraction(InteractionEdit::RemoveTrigger(
+            "onPanStart".into()
+        ))));
+    assert!(!rects.iter().any(|(a, _)| matches!(
+        a,
+        PropertyPanelAction::ToggleInteractionMenu(InteractionMenuTarget::Action { .. })
+    )));
+}
+
+// ── Menus ───────────────────────────────────────────────────────────
+
+fn ctx() -> InteractionContext {
+    InteractionContext {
+        screens: vec!["/home".into(), "/detail".into()],
+        own_screen: Some("/home".into()),
+        nodes: vec![
+            op_editor_core::interaction_edit_apply::InteractionTargetNode {
+                id: "sheet".into(),
+                name: "Sheet".into(),
+                hidden: true,
             },
         ],
-    };
-    let mut out = Vec::new();
-    push_interaction_action_rects(&mut out, &summary, 0.0, 0.0, 280.0);
-    assert_eq!(out.len(), 1);
-    assert!(matches!(out[0].0, PropertyPanelAction::RemoveInteraction));
+    }
 }
 
 #[test]
-fn screen_row_adds_height_but_no_click_rect() {
-    let with_screen = InteractionSummary {
-        screen: Some("/home".to_string()),
-        on_tap: Vec::new(),
-    };
-    let without_screen = InteractionSummary::default();
-    assert!(
-        interactions_section_height(&with_screen) > interactions_section_height(&without_screen)
-    );
-    let mut out = Vec::new();
-    push_interaction_action_rects(&mut out, &with_screen, 0.0, 0.0, 280.0);
-    // Still exactly one clickable row (the empty-state Add row) — the
-    // Screen row contributes height only.
-    assert_eq!(out.len(), 1);
-}
-
-// ── Navigate/Back/Remove popover rows ────────────────────────────────
-
-#[test]
-fn menu_rows_list_every_screen_path_then_back_then_remove() {
+fn add_trigger_menu_skips_present_triggers() {
+    let summary = summary_of(r#"{"type":"frame","id":"f1","events":{"onTap":[{"pop":null}]}}"#);
     let rows = interaction_menu_rows(
         op_editor_core::Locale::EnUs,
-        &["/".to_string(), "/profile".to_string()],
-        true,
+        &InteractionMenuTarget::AddTrigger,
+        &summary,
+        &ctx(),
     );
-    assert_eq!(rows.len(), 4);
-    assert_eq!(
-        rows[0].0,
-        PropertyPanelAction::SetInteractionNavigate {
-            path: "/".to_string()
-        }
-    );
-    assert_eq!(
-        rows[1].0,
-        PropertyPanelAction::SetInteractionNavigate {
-            path: "/profile".to_string()
-        }
-    );
-    assert_eq!(rows[2].0, PropertyPanelAction::SetInteractionPop);
-    assert_eq!(rows[3].0, PropertyPanelAction::RemoveInteraction);
+    assert_eq!(rows.len(), InteractionTrigger::ALL.len() - 1);
+    assert!(!rows.iter().any(|(a, _)| *a
+        == PropertyPanelAction::EditInteraction(InteractionEdit::AddTrigger(
+            InteractionTrigger::Tap
+        ))));
 }
 
 #[test]
-fn menu_rows_omit_remove_when_not_removable() {
-    let rows = interaction_menu_rows(op_editor_core::Locale::EnUs, &[], false);
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].0, PropertyPanelAction::SetInteractionPop);
-}
-
-#[test]
-fn menu_row_rects_are_stacked_and_click_target_matches_row() {
-    let rows = interaction_menu_rows(op_editor_core::Locale::EnUs, &["/a".to_string()], true);
-    let anchor = Rect {
-        origin: Point2D::new(20.0, 100.0),
-        size: Point2D::new(240.0, 30.0),
+fn action_menu_lists_kinds_then_reorder_then_remove() {
+    let summary =
+        summary_of(r#"{"type":"frame","id":"f1","events":{"onTap":[{"pop":null},{"pop":null}]}}"#);
+    let target = InteractionMenuTarget::Action {
+        trigger: InteractionTrigger::Tap,
+        index: 0,
     };
-    let menu = interaction_menu_rect(anchor, rows.len());
+    let rows = interaction_menu_rows(op_editor_core::Locale::EnUs, &target, &summary, &ctx());
+    // 13 kinds + Move down + Remove (first row has no Move up).
+    assert_eq!(rows.len(), InteractionActionKind::ALL.len() + 2);
+    assert!(
+        rows[1].1.starts_with("✓ "),
+        "Back is current: {:?}",
+        rows[1]
+    );
+    assert_eq!(rows.last().unwrap().1.trim(), "Remove");
+}
+
+#[test]
+fn param_menus_list_screens_and_layers() {
+    let summary = summary_of(
+        r#"{"type":"frame","id":"f1","events":{"onTap":[{"push":"\"/detail\""},{"show":"sheet"}]}}"#,
+    );
+    let screen_rows = interaction_menu_rows(
+        op_editor_core::Locale::EnUs,
+        &InteractionMenuTarget::Param {
+            trigger: InteractionTrigger::Tap,
+            index: 0,
+        },
+        &summary,
+        &ctx(),
+    );
+    assert_eq!(screen_rows.len(), 2);
+    assert!(screen_rows[1].1.contains("✓ /detail"));
+    let layer_rows = interaction_menu_rows(
+        op_editor_core::Locale::EnUs,
+        &InteractionMenuTarget::Param {
+            trigger: InteractionTrigger::Tap,
+            index: 1,
+        },
+        &summary,
+        &ctx(),
+    );
+    assert_eq!(layer_rows.len(), 1);
+    assert!(layer_rows[0].1.contains("Sheet (hidden)"));
+}
+
+#[test]
+fn menu_flips_above_when_it_would_overflow() {
+    let bounds = Rect::xywh(0.0, 0.0, 300.0, 400.0);
+    let anchor = Rect::xywh(20.0, 350.0, 240.0, 32.0);
+    let menu = interaction_menu_rect(anchor, 6, bounds);
+    assert!(menu.origin.y + menu.size.y <= anchor.origin.y + 0.01);
+    let below = interaction_menu_rect(Rect::xywh(20.0, 20.0, 240.0, 32.0), 3, bounds);
+    assert_eq!(below.origin.y, 52.0);
+}
+
+#[test]
+fn menu_row_rects_stack_from_the_menu_top() {
+    let rows = vec![
+        (PropertyPanelAction::CloseInteractionMenu, "a".to_string()),
+        (PropertyPanelAction::CloseInteractionMenu, "b".to_string()),
+    ];
+    let menu = Rect::xywh(0.0, 100.0, 200.0, 64.0);
     let rects = interaction_menu_row_rects(menu, &rows);
-    assert_eq!(rects.len(), rows.len());
-    // Rows stack downward with no overlap.
-    for pair in rects.windows(2) {
-        assert!(pair[1].1.origin.y >= pair[0].1.origin.y + pair[0].1.size.y);
-    }
+    assert_eq!(rects[0].1.origin.y, 104.0);
+    assert_eq!(rects[1].1.origin.y, 104.0 + 28.0);
 }

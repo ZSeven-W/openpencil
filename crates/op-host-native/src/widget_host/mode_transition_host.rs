@@ -54,7 +54,7 @@ impl WidgetHostNative {
                 state.editor_ui.preserve_authored_geometry,
                 presenting,
                 std::rc::Rc::new(jian_skia::SkiaMeasure::new()),
-                op_preview_core::PreviewHostCapabilities::none(),
+                op_preview_core::EDITOR_PREVIEW_CAPABILITIES,
                 host_motion_preference(state.editor_ui.reduced_motion),
                 now_ms,
             )

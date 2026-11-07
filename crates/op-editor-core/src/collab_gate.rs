@@ -254,7 +254,8 @@ impl PropertyFocus {
             | P::WidgetMax
             | P::WidgetStep
             | P::VideoSrc
-            | P::GeneratorParam(_) => D::Unsupported(U::UnsupportedNodeProperty),
+            | P::GeneratorParam(_)
+            | P::InteractionParam(..) => D::Unsupported(U::UnsupportedNodeProperty),
         }
     }
 }

@@ -56,6 +56,24 @@ pub fn editable_input_rects(
     fills: &[FillSummary],
     effects: &[EffectSummary],
 ) -> Vec<(PropertyFocus, Rect)> {
+    editable_input_rects_with_interactions(
+        panel_rect,
+        visible,
+        fills,
+        effects,
+        &crate::widgets::property_panel_interactions::InteractionSummary::default(),
+    )
+}
+
+/// [`editable_input_rects`] plus the Interactions section's free-text
+/// parameter inputs, which depend on the authored `events` rows.
+pub fn editable_input_rects_with_interactions(
+    panel_rect: Rect,
+    visible: VisibleSections,
+    fills: &[FillSummary],
+    effects: &[EffectSummary],
+    interactions: &crate::widgets::property_panel_interactions::InteractionSummary,
+) -> Vec<(PropertyFocus, Rect)> {
     let x0 = panel_rect.origin.x;
     let w = panel_rect.size.x;
     let usable_w = w - PAD_X * 2.0;
@@ -365,6 +383,19 @@ pub fn editable_input_rects(
             y += crate::widgets::property_panel_effects::EFFECT_ROW_HEIGHT
                 + crate::widgets::property_panel_effects::EFFECT_ROW_GAP;
         }
+        if effects.is_empty() {
+            y += 8.0;
+        }
+        y += SECTION_GAP;
+    }
+    if visible.interactions {
+        crate::widgets::property_panel_interactions::push_interaction_input_rects(
+            &mut rects,
+            interactions,
+            x0,
+            y,
+            w,
+        );
     }
     rects
 }

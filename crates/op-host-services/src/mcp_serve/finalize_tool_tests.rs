@@ -286,3 +286,51 @@ pub(super) fn load_fixture(source: &str) -> EditorState {
     crate::doc_io::load_editor_state_from_source(source, op_editor_core::Locale::EnUs)
         .expect("load drift fixture")
 }
+
+fn finalize_json(source: &str) -> serde_json::Value {
+    let state = crate::doc_io::load_editor_state_from_source(source, op_editor_core::Locale::EnUs)
+        .expect("fixture loads");
+    let json = match finalize_design_snapshot(&state).call(&BTreeMap::new()) {
+        ToolOutcome::OkJson(json) | ToolOutcome::OkJsonWithCommand(json, _) => json,
+        other => panic!("finalize_design failed: {other:?}"),
+    };
+    serde_json::from_str(&json).expect("result json")
+}
+
+/// The QA's minimal bad sample: a text input bound two-way to `$route`,
+/// which the runtime cannot write.
+#[test]
+fn unsupported_input_bind_blocks_completion_with_a_typed_advisory() {
+    let result = finalize_json(
+        r##"{"version":"1.0","children":[{"type":"frame","id":"root","name":"Form",
+          "width":390,"height":844,"layout":"vertical","children":[
+            {"type":"text_input","id":"name","name":"Name","width":300,"height":44,
+             "bindings":{"bind:value":"$route.name"}}]}]}"##,
+    );
+    assert_eq!(result["complete"], false, "{result}");
+    let advisories = result["advisories"].as_array().expect("advisories");
+    let hit = advisories
+        .iter()
+        .find(|a| a["code"] == "interaction-unsupported-bind-target")
+        .unwrap_or_else(|| panic!("typed advisory missing: {result}"));
+    assert_eq!(hit["nodeIds"], serde_json::json!(["name"]));
+    assert!(result["blockingAdvisoryCount"].as_u64().unwrap() >= 1);
+}
+
+#[test]
+fn valid_interactive_design_is_not_blocked_by_the_interaction_check() {
+    let result = finalize_json(
+        r##"{"version":"1.0","state":{"name":{"type":"string","default":""}},
+          "children":[{"type":"frame","id":"root","name":"Form",
+          "width":390,"height":844,"layout":"vertical","children":[
+            {"type":"text_input","id":"name","name":"Name","width":300,"height":44,
+             "bindings":{"bind:value":"$app.name"}}]}]}"##,
+    );
+    let advisories = result["advisories"].as_array().expect("advisories");
+    assert!(
+        !advisories
+            .iter()
+            .any(|a| a["code"].as_str().unwrap_or("").starts_with("interaction-")),
+        "{result}"
+    );
+}

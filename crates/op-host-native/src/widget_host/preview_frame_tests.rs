@@ -534,3 +534,57 @@ fn tab_switch_animates_across_real_frames_through_the_production_paint_path() {
         "the settled opaque fill stack no longer needs an opacity layer"
     );
 }
+
+/// The Preview device / screen switchers float at the canvas top; the
+/// device frame must sit fully below them (and inside the canvas) for
+/// Phone and Desktop, single- and multi-screen, at normal, narrow and
+/// short window sizes — paint, hit-testing and pointer mapping all read
+/// this same frame.
+#[test]
+fn device_frame_sits_below_the_preview_switchers_at_every_size() {
+    use op_editor_ui::widgets::{PreviewDeviceSwitcher, ScreenSwitcherPills};
+    let _guard = test_lock();
+    let sizes = [
+        (1440.0, 900.0),
+        (800.0, 900.0),
+        (560.0, 900.0),
+        (1440.0, 420.0),
+    ];
+    let docs = [
+        ("single", phone_doc(1200)),
+        ("multi", two_screen_tabbed_doc()),
+    ];
+    for (label, doc) in docs {
+        for kind in [PreviewDeviceKind::Phone, PreviewDeviceKind::Desktop] {
+            for (w, h) in sizes {
+                let mut host = host_with_doc(doc.clone());
+                host.last_viewport_w = w;
+                host.last_viewport_h = h;
+                assert!(host.enter_preview((w, h)), "{label} enter");
+                host.set_preview_device(kind, w, h);
+                host.recompute_device_frame(w, h);
+                let (cx, cy, cw, ch) = host.canvas_region(w, h);
+                let canvas = op_editor_ui::Rect::xywh(cx, cy, cw, ch);
+                let frame = host
+                    .preview_device_frame
+                    .as_ref()
+                    .unwrap_or_else(|| panic!("{label} {kind:?} {w}x{h}: frame"))
+                    .frame;
+                let mut band = PreviewDeviceSwitcher::pill_rect(canvas);
+                if host.preview.as_ref().unwrap().is_app_mode() {
+                    band = ScreenSwitcherPills::row_rect(canvas, 2);
+                }
+                let band_bottom = band.origin.y + band.size.y;
+                assert!(
+                    frame.origin.y >= band_bottom,
+                    "{label} {kind:?} {w}x{h}: frame top {} under switchers ending at {band_bottom}",
+                    frame.origin.y
+                );
+                assert!(
+                    frame.origin.y + frame.size.y <= cy + ch + 0.5,
+                    "{label} {kind:?} {w}x{h}: frame bottom clipped by the canvas"
+                );
+            }
+        }
+    }
+}

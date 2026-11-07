@@ -1,6 +1,5 @@
 //! Floating-menu geometry + hit-testing for the `PropertyPanel` —
-//! the Effects "+" add-menu and the Interactions Navigate/Back/Remove
-//! popover.
+//! the Effects "+" add-menu and the Interactions dropdown menus.
 //!
 //! Split out of `property_panel.rs` to keep both files under the
 //! openpencil 800-line cap.
@@ -99,17 +98,41 @@ impl PropertyPanel {
         .map(|(_, r)| r)
     }
 
-    /// Whether the Interactions popover's "Remove" row shows — only
-    /// when there is an existing single `onTap` action to remove (the
-    /// empty "+ Add interaction" state has nothing to remove; a
-    /// multi-action `onTap` doesn't open this popover at all — see
-    /// `interaction_menu_anchor_rect`).
-    pub(super) fn interaction_menu_removable(&self) -> bool {
-        self.snapshot.interactions.on_tap.len() == 1
+    /// Rows of the open Interactions menu (empty when closed).
+    pub(crate) fn interaction_menu_rows(&self) -> Vec<(PropertyPanelAction, String)> {
+        match &self.interaction_menu_target {
+            Some(target) if self.interaction_menu_open => {
+                crate::widgets::property_panel_interactions::interaction_menu_rows(
+                    self.locale,
+                    target,
+                    &self.snapshot.interactions,
+                    &self.interaction_ctx,
+                )
+            }
+            _ => Vec::new(),
+        }
     }
 
-    /// Hit-test the Interactions section's Navigate/Back/Remove popover
-    /// against `point` (panel space). Mirrors [`Self::effect_add_menu_hit`].
+    /// The open Interactions menu's rect (logical, scrolled panel
+    /// space) plus its rows, or `None` when closed / unanchored.
+    pub(crate) fn interaction_menu_layout(
+        &self,
+        panel_rect: Rect,
+    ) -> Option<(Rect, Vec<(PropertyPanelAction, String)>)> {
+        let anchor = self.interaction_menu_anchor_rect(self.scrolled_rect(panel_rect))?;
+        let rows = self.interaction_menu_rows();
+        if rows.is_empty() {
+            return None;
+        }
+        let menu = crate::widgets::property_panel_interactions::interaction_menu_rect(
+            anchor,
+            rows.len(),
+            panel_rect,
+        );
+        Some((menu, rows))
+    }
+
+    /// Hit-test the open Interactions menu against `point` (panel space).
     pub fn interaction_menu_hit(&self, panel_rect: Rect, point: Point2D) -> InteractionMenuHit {
         self.interaction_menu_hit_logical(
             self.logical_rect(panel_rect),
@@ -122,16 +145,9 @@ impl PropertyPanel {
         panel_rect: Rect,
         point: Point2D,
     ) -> InteractionMenuHit {
-        let Some(anchor) = self.interaction_menu_anchor_rect(self.scrolled_rect(panel_rect)) else {
+        let Some((menu, rows)) = self.interaction_menu_layout(panel_rect) else {
             return InteractionMenuHit::Outside;
         };
-        let rows = crate::widgets::property_panel_interactions::interaction_menu_rows(
-            self.locale,
-            &self.screen_paths,
-            self.interaction_menu_removable(),
-        );
-        let menu =
-            crate::widgets::property_panel_interactions::interaction_menu_rect(anchor, rows.len());
         for (action, row) in
             crate::widgets::property_panel_interactions::interaction_menu_row_rects(menu, &rows)
         {
@@ -146,29 +162,20 @@ impl PropertyPanel {
         }
     }
 
-    /// Row index under `point` in the open Interactions popover — drives
-    /// the hover highlight (mirrors [`Self::effect_add_menu_row_at`]).
+    /// Row index under `point` in the open Interactions menu — drives
+    /// the hover highlight.
     pub fn interaction_menu_row_at(&self, panel_rect: Rect, point: Point2D) -> Option<usize> {
         let point = self.logical_point(panel_rect, point);
         let panel_rect = self.logical_rect(panel_rect);
-        let anchor = self.interaction_menu_anchor_rect(self.scrolled_rect(panel_rect))?;
-        let rows = crate::widgets::property_panel_interactions::interaction_menu_rows(
-            self.locale,
-            &self.screen_paths,
-            self.interaction_menu_removable(),
-        );
-        let menu =
-            crate::widgets::property_panel_interactions::interaction_menu_rect(anchor, rows.len());
+        let (menu, rows) = self.interaction_menu_layout(panel_rect)?;
         crate::widgets::property_panel_interactions::interaction_menu_row_rects(menu, &rows)
             .into_iter()
             .position(|(_, row)| row.contains(point))
     }
 
-    /// The Interactions section's clickable tap-row rect
-    /// (`ToggleInteractionMenu`'s rect) — the popover drops from here.
-    /// `None` when the current `onTap` list has more than one action
-    /// (only "Remove all" is clickable then — no popover).
+    /// The rect of the dropdown row that opened the current menu.
     pub(crate) fn interaction_menu_anchor_rect(&self, scrolled: Rect) -> Option<Rect> {
+        let target = self.interaction_menu_target.as_ref()?;
         sections::action_button_rects_with_fill_picker(
             scrolled,
             self.visible_sections(),
@@ -184,7 +191,7 @@ impl PropertyPanel {
             self.padding_mode_popover_open,
         )
         .into_iter()
-        .find(|(a, _)| matches!(a, PropertyPanelAction::ToggleInteractionMenu))
+        .find(|(a, _)| matches!(a, PropertyPanelAction::ToggleInteractionMenu(t) if t == target))
         .map(|(_, r)| r)
     }
 }

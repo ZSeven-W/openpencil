@@ -474,6 +474,9 @@ impl WidgetHost {
                 self.now_ms,
             );
         }
+        // Deliver inside the mouseup handler: browsers only let
+        // `window.open` / clipboard writes through during the gesture.
+        self.deliver_preview_effects();
         self.mark_dirty();
         true
     }

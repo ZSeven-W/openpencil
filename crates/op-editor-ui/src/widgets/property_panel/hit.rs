@@ -413,11 +413,12 @@ impl PropertyPanel {
         if !self.point_in_section_viewport(panel_rect, point) {
             return None;
         }
-        for (focus, rect) in sections::editable_input_rects(
+        for (focus, rect) in sections::editable_input_rects_with_interactions(
             self.scrolled_rect(panel_rect),
             self.visible_sections(),
             &self.snapshot.fills,
             &self.snapshot.effects,
+            &self.snapshot.interactions,
         ) {
             if (rect).contains(point) {
                 return Some(focus);

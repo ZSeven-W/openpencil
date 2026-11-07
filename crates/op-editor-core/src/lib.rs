@@ -131,6 +131,8 @@ pub mod image_panel_state;
 pub mod ime_state;
 mod instance_child_override;
 pub mod instance_override;
+pub mod interaction_edit;
+pub mod interaction_edit_apply;
 pub mod missing_fonts;
 pub mod mutators;
 pub mod node_defaults;

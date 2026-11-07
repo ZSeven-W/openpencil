@@ -334,9 +334,18 @@ impl EditorUiState {
         was
     }
 
-    /// Toggle the Interactions section's Navigate/Back/Remove popover.
-    pub fn toggle_interaction_menu(&mut self) {
-        self.interaction_menu_open = !self.interaction_menu_open;
+    /// Toggle one of the Interactions section's dropdowns: re-clicking
+    /// the open one closes it, any other target swaps in.
+    pub fn toggle_interaction_menu(
+        &mut self,
+        target: crate::interaction_edit_apply::InteractionMenuTarget,
+    ) {
+        if self.interaction_menu_open && self.interaction_menu_target.as_ref() == Some(&target) {
+            self.close_interaction_menu();
+            return;
+        }
+        self.interaction_menu_open = true;
+        self.interaction_menu_target = Some(target);
         self.interaction_menu_hover = None;
     }
 
@@ -344,6 +353,7 @@ impl EditorUiState {
     pub fn close_interaction_menu(&mut self) -> bool {
         let was = self.interaction_menu_open;
         self.interaction_menu_open = false;
+        self.interaction_menu_target = None;
         self.interaction_menu_hover = None;
         was
     }

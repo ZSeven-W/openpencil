@@ -194,3 +194,138 @@ fn a_provider_error_with_no_authored_result_is_terminal_and_unchanged() {
     assert_eq!(code, ToolErrorCode::ToolFailed);
     assert!(message.contains("401 Unauthorized"), "{message}");
 }
+
+/// A driver whose generated root declares `$app` state, the way the
+/// generation skills author quantity steppers and bound inputs.
+struct StatefulDriver {
+    executor: Arc<HeadlessDesignExecutor>,
+}
+
+impl DesignLoopDriver for StatefulDriver {
+    fn run(
+        &self,
+        _request: ChatRequest,
+        _cancel: Arc<AtomicBool>,
+    ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+        let program = serde_json::json!({
+            "operations": "I(null, {type:'frame', name:'Home', width:390, height:844, layout:'vertical', state:{qty:{type:'int', default:1}, finish:{type:'string', default:'cream'}, owned:{type:'int', default:7}}, children:[{type:'text', name:'Quantity value', content:'1', bindings:{content:'`${$app.qty}`'}}]});"
+        });
+        let result = self.executor.execute("batch_design", &program.to_string());
+        assert!(!result.is_error, "batch_design: {}", result.content);
+        let _ = self.executor.finalize();
+        Box::new(
+            [ChatDelta::Done {
+                stop_reason: StopReason::MaxTokens,
+            }]
+            .into_iter(),
+        )
+    }
+}
+
+#[test]
+fn landing_carries_generated_app_state_and_keeps_owned_keys() {
+    use jian_ops_schema::state::{PrimitiveType, StateEntry, StateType};
+    let mut state = EditorState::new();
+    let mut owned = std::collections::BTreeMap::new();
+    owned.insert(
+        "owned".to_string(),
+        StateEntry {
+            kind: StateType::Primitive(PrimitiveType::Int),
+            default: Some(serde_json::json!(42)),
+            description: None,
+            persist: None,
+        },
+    );
+    state.doc.state = Some(owned);
+    let tool = RunDesignAgentTool::for_test(
+        &state,
+        Box::new(|executor| Box::new(StatefulDriver { executor })),
+    );
+    let ToolOutcome::OkJsonWithCommand(json, command) =
+        tool.call(&args(&[("brief", "coffee product page")]))
+    else {
+        panic!("expected a landing command");
+    };
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed["interactionIssues"], serde_json::json!([]), "{json}");
+    assert_eq!(
+        parsed["complete"], true,
+        "MaxTokens alone is not incomplete: {json}"
+    );
+    let mut landed = state.clone();
+    assert!(landed.apply(command), "landing batch applies");
+    let doc_state = landed.doc.state.as_ref().expect("state landed");
+    assert_eq!(doc_state["qty"].default, Some(serde_json::json!(1)));
+    assert_eq!(
+        doc_state["finish"].default,
+        Some(serde_json::json!("cream"))
+    );
+    assert_eq!(
+        doc_state["owned"].default,
+        Some(serde_json::json!(42)),
+        "a key the live document owns is never overwritten"
+    );
+
+    // Saved and reopened, the state survives.
+    let json = serde_json::to_string(&landed.doc).unwrap();
+    let reopened: jian_ops_schema::PenDocument = serde_json::from_str(&json).unwrap();
+    assert!(reopened.state.as_ref().unwrap().contains_key("qty"));
+}
+
+/// Same loop, but the binding reads a key nothing declares.
+struct UndeclaredDriver {
+    executor: Arc<HeadlessDesignExecutor>,
+}
+
+impl DesignLoopDriver for UndeclaredDriver {
+    fn run(
+        &self,
+        _request: ChatRequest,
+        _cancel: Arc<AtomicBool>,
+    ) -> Box<dyn Iterator<Item = ChatDelta> + Send> {
+        let program = serde_json::json!({
+            "operations": "I(null, {type:'frame', name:'Home', width:390, height:844, layout:'vertical', children:[{type:'text', name:'Quantity value', content:'1', bindings:{content:'to_str($app.qty)'}}]});"
+        });
+        let result = self.executor.execute("batch_design", &program.to_string());
+        assert!(!result.is_error, "batch_design: {}", result.content);
+        let _ = self.executor.finalize();
+        Box::new(
+            [ChatDelta::Done {
+                stop_reason: StopReason::EndTurn,
+            }]
+            .into_iter(),
+        )
+    }
+}
+
+#[test]
+fn undeclared_state_is_reported_and_marks_the_result_incomplete() {
+    let state = EditorState::new();
+    let tool = RunDesignAgentTool::for_test(
+        &state,
+        Box::new(|executor| Box::new(UndeclaredDriver { executor })),
+    );
+    let ToolOutcome::OkJsonWithCommand(json, _) = tool.call(&args(&[("brief", "stepper")])) else {
+        panic!("expected a landing command");
+    };
+    let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let issues = parsed["interactionIssues"]
+        .as_array()
+        .expect("issues array");
+    assert!(
+        issues
+            .iter()
+            .any(|i| i.as_str().unwrap_or("").contains("$app.qty")),
+        "{json}"
+    );
+    assert_eq!(parsed["complete"], false);
+    let notes = parsed["finalize"]["qualityNotes"]
+        .as_array()
+        .expect("notes");
+    assert!(
+        notes
+            .iter()
+            .any(|n| n.as_str().unwrap_or("").contains("$app.qty")),
+        "finalize notes carry the interaction issue: {json}"
+    );
+}

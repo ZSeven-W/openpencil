@@ -120,6 +120,7 @@ impl WidgetHostNative {
         // conflict with `ui`'s borrow of `self.editor_state.editor_ui`.
         let mut preview_switched = false;
         let mut switched_screen_rect = None;
+        self.deliver_preview_effects();
         if let Some(preview) = self.preview.as_mut() {
             let outcome = preview.reconcile(self.now_ms);
             if outcome.repaint {

@@ -124,6 +124,9 @@ pub enum PropertyFocus {
     /// generator's declared `params` list. Free text for every kind; the
     /// commit parses it against the parameter's kind.
     GeneratorParam(usize),
+    /// Interactions-section free-text parameter (toast text, URL, copy
+    /// text, state key, delay ms) of action `index` under `trigger`.
+    InteractionParam(crate::interaction_edit::InteractionTrigger, usize),
 }
 
 impl PropertyFocus {
@@ -161,6 +164,7 @@ impl PropertyFocus {
                 | PropertyFocus::WidgetBindKey
                 | PropertyFocus::VideoSrc
                 | PropertyFocus::GeneratorParam(_)
+                | PropertyFocus::InteractionParam(..)
         )
     }
 

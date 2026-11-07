@@ -34,6 +34,11 @@ impl DesktopApp {
     /// epilogue, exactly as the inlined `return` did.
     pub(super) fn on_redraw_requested(&mut self, event_loop: &ActiveEventLoop) -> bool {
         crate::prompt_center_store::flush_user_prompts_if_dirty(&mut self.host);
+        // Preview `copy` effects delivered during the previous paint (a
+        // chained copy after a toast, say) land here.
+        if let Some(text) = self.host.editor_state_mut().chat.pending_copy_text.take() {
+            crate::clipboard::set_text(&text);
+        }
         if (self.ctx.is_none() || self.backend.is_none())
             && !self.try_init_render_context(event_loop)
         {

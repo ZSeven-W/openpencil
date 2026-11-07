@@ -44,6 +44,16 @@ impl WidgetHostNative {
         self.preview.as_ref()?.app_state_value_for_test(key)
     }
 
+    /// The device frame the host actually paints and hit-tests through
+    /// (fitted below the switcher rows), for replay harnesses that must
+    /// click where the user would. `testing` builds only.
+    #[cfg(feature = "testing")]
+    pub fn preview_device_frame_for_test(
+        &self,
+    ) -> Option<op_preview_core::device_frame::DeviceFrame> {
+        self.preview_device_frame.clone()
+    }
+
     /// Center the canvas viewport on a scene-space `rect`, keeping zoom
     /// unchanged. Used by APP MODE preview to keep the mounted screen
     /// framed on entry and after a screen-switch reconcile. `viewport_w`
@@ -57,10 +67,21 @@ impl WidgetHostNative {
         viewport_w: f32,
         viewport_h: f32,
     ) {
-        let (_cx0, _cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let (cx0, cy0, cw, ch) = self.canvas_region(viewport_w, viewport_h);
+        let canvas = op_editor_ui::Rect::xywh(cx0, cy0, cw, ch);
+        // Frame the screen in the area left below the Preview switchers
+        // (and clear of the floating chat), not under them.
+        let app_mode = self.preview.as_ref().is_some_and(|p| p.is_app_mode());
+        let area = op_editor_ui::widgets::preview_frame_area(
+            canvas,
+            app_mode,
+            self.preview_chat_obstacle(viewport_w, viewport_h),
+        );
+        let zoom = self.editor_state.viewport.zoom;
+        let (pan_x, pan_y) = op_editor_ui::widgets::canvas_preview_pan(canvas, area, rect, zoom);
         let vp = &mut self.editor_state.viewport;
-        vp.pan_x = cw / 2.0 - (rect.origin.x + rect.size.x / 2.0) * vp.zoom;
-        vp.pan_y = ch / 2.0 - (rect.origin.y + rect.size.y / 2.0) * vp.zoom;
+        vp.pan_x = pan_x;
+        vp.pan_y = pan_y;
         self.mark_dirty();
     }
 
@@ -346,6 +367,10 @@ impl WidgetHostNative {
                 );
             }
         }
+        // A tap completes on Up: deliver its effects now so a `copy`
+        // reaches `pending_copy_text` while the runner still drains it
+        // for this pointer event.
+        self.deliver_preview_effects();
         self.mark_dirty();
         true
     }

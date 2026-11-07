@@ -60,7 +60,7 @@ pub fn enter_preview(
         false, // preserve_authored_geometry: web preview does not preserve hand-drawn bounds
         presenting,
         measure_backend,
-        op_preview_core::PreviewHostCapabilities::none(),
+        op_preview_core::EDITOR_PREVIEW_CAPABILITIES,
         host_motion_preference(),
         now_ms,
     )

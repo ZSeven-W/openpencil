@@ -196,7 +196,7 @@ pub(in crate::widget_host) use op_editor_ui::widgets::property_panel_dispatch_su
 /// URL launcher detached and ignores any error — opening a help link
 /// must never block or panic the editor. Used by the agent-settings
 /// "Register at Openverse" link.
-fn open_external_url(url: &str) {
+pub(in crate::widget_host) fn open_external_url(url: &str) {
     #[cfg(target_os = "macos")]
     let _ = std::process::Command::new("open").arg(url).spawn();
     #[cfg(target_os = "windows")]

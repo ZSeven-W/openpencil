@@ -87,7 +87,8 @@ fn effects_add_menu_owns_feedback_above_the_covered_interaction_row() {
         .iter()
         .enumerate()
         .find_map(|(index, (action, rect))| {
-            matches!(action, PropertyPanelAction::ToggleInteractionMenu).then_some((index, *rect))
+            matches!(action, PropertyPanelAction::ToggleInteractionMenu(_))
+                .then_some((index, *rect))
         })
         .expect("frame panel has an Add interaction action");
 

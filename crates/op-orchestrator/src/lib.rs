@@ -143,6 +143,7 @@ pub mod concurrent;
 mod first_viewport;
 pub mod geometry_validation;
 pub(crate) mod hero_bleed;
+pub mod interaction_integrity;
 pub mod loop_finalize;
 mod loop_finalize_palette;
 pub(crate) mod map_viewport;

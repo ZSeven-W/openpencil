@@ -203,6 +203,7 @@ mod preview_asset_sync_tests;
 mod preview_edge_swipe;
 #[cfg(all(test, not(target_os = "windows")))]
 mod preview_edge_swipe_tests;
+mod preview_effects;
 mod preview_frame;
 #[cfg(test)]
 #[cfg(all(test, not(target_os = "windows")))]

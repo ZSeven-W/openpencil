@@ -186,3 +186,17 @@ fn transient_toast_is_placed_below_the_font_notice() {
     .unwrap();
     assert!(toast.origin.y > notice.origin.y + notice.size.y);
 }
+
+#[test]
+fn notice_steps_aside_while_previewing_and_returns_after() {
+    let mut state = missing_work();
+    assert!(MissingFontsNotice::for_editor(&state).is_some());
+    state.editor_ui.enter_preview();
+    assert!(
+        MissingFontsNotice::for_editor(&state).is_none(),
+        "the Preview switchers own the canvas top"
+    );
+    assert!(!press(&mut state, Point2D::new(195.0, 40.0), 390.0, 844.0));
+    state.editor_ui.exit_preview();
+    assert!(MissingFontsNotice::for_editor(&state).is_some());
+}

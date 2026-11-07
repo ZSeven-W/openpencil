@@ -106,6 +106,9 @@ impl WidgetHost {
                 // silently dropped.
                 preview.set_now_ms(self.now_ms);
                 let _ = preview.pump(self.now_ms);
+            }
+            self.deliver_preview_effects();
+            if let Some(preview) = self.preview.as_mut() {
                 let outcome = preview.reconcile(self.now_ms);
                 if outcome.repaint {
                     let warnings = preview.warnings().to_vec();

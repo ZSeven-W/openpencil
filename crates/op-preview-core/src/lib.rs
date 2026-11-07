@@ -73,6 +73,7 @@ mod debug_trace;
 pub mod device_frame;
 #[cfg(all(test, not(target_os = "windows")))]
 mod device_frame_tests;
+mod effect_delivery;
 mod effects;
 mod error;
 mod input;
@@ -100,6 +101,7 @@ mod ui_actions;
 
 /// R3 effect queue — the bounded FIFO between the engine's effect sink
 /// and the host.
+pub use effect_delivery::{PreviewPlatformRequest, EDITOR_PREVIEW_CAPABILITIES, PREVIEW_TOAST_KEY};
 pub use effects::PreviewEffectQueue;
 /// R4 Canonical PreviewInput — the unified input envelope, dispatch
 /// outcome, and lifecycle phases behind
@@ -198,6 +200,8 @@ mod tests_multi_pointer;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_page_scroll;
 #[cfg(all(test, not(target_os = "windows")))]
+mod tests_panel_authored;
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests_pointer_bindings;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_retained_console_scroll;
@@ -215,6 +219,8 @@ mod tests_tabs;
 mod tests_transition;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_ui_actions;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_undeclared_state;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_widget_states;
 // Same platform gate as `tests_app_mode` / `tests_transition`, whose

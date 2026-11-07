@@ -17,6 +17,7 @@ use op_editor_ui::{Point2D, Rect};
 /// Pinned-strip geometry in the device frame's screen space — shared by
 /// the bottom nav and the top status bar (the two are otherwise
 /// symmetric: one node id, one screen-space strip, one paint origin).
+#[derive(Debug, Clone)]
 pub struct PinnedGeom {
     pub node_id: String,
     /// Strip node's scene rect (root-relative document space).
@@ -28,6 +29,7 @@ pub struct PinnedGeom {
 }
 
 /// Device-frame geometry shared by paint and hit-testing.
+#[derive(Debug, Clone)]
 pub struct DeviceFrame {
     pub kind: PreviewDeviceKind,
     /// Screen-space frame rect after fit and centering.
