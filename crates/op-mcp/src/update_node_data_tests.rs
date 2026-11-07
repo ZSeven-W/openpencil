@@ -75,3 +75,41 @@ fn update_node_data_with_token_fill_emits_patch_command_and_preserves_token() {
     let value = serde_json::to_value(node).expect("updated node json");
     assert_eq!(value["fill"][0]["color"], "$--primary");
 }
+
+#[test]
+fn update_node_data_with_fractional_geometry_emits_patch_command_and_applies() {
+    let mut state = sample();
+    let mut args = BTreeMap::new();
+    args.insert("nodeId".into(), "n10".into());
+    args.insert(
+        "data".into(),
+        r##"{"x":10.5,"y":20.25,"width":100.5,"height":60.25}"##.into(),
+    );
+
+    let ToolOutcome::OkWithCommand(_, command @ EditorCommand::PatchNodeData { .. }) =
+        update_node_snapshot().call(&args)
+    else {
+        panic!("expected PatchNodeData command for fractional geometry");
+    };
+    assert!(state.apply(command), "fractional geometry patch must apply");
+    let node = op_editor_core::walkers::find_node(state.active_children(), &NodeId::new("n10"))
+        .expect("updated frame");
+    let value = serde_json::to_value(node).expect("updated node json");
+    assert_eq!(value["x"].as_f64(), Some(10.5));
+    assert_eq!(value["y"].as_f64(), Some(20.25));
+    assert_eq!(value["width"].as_f64(), Some(100.5));
+    assert_eq!(value["height"].as_f64(), Some(60.25));
+}
+
+#[test]
+fn update_node_data_with_integer_geometry_keeps_update_node_command() {
+    let mut args = BTreeMap::new();
+    args.insert("nodeId".into(), "n10".into());
+    args.insert("data".into(), r##"{"x":10,"width":100}"##.into());
+
+    let ToolOutcome::OkWithCommand(_, EditorCommand::UpdateNode { .. }) =
+        update_node_snapshot().call(&args)
+    else {
+        panic!("expected UpdateNode command for integer geometry");
+    };
+}

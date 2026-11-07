@@ -60,6 +60,7 @@ pub(super) fn ts_update_patch_json_value(value: &Value) -> Result<Option<String>
     let is_rich = obj.is_empty()
         || obj.keys().any(|key| !is_flat_update_data_key(key))
         || uses_sizing_keyword(obj)
+        || uses_fractional_geometry(obj)
         || fill_requires_rich_patch(obj);
     if !is_rich {
         return Ok(None);
@@ -85,6 +86,15 @@ fn uses_sizing_keyword(obj: &serde_json::Map<String, Value>) -> bool {
                 if matches!(value.as_str(), "fit_content" | "fill_container")
         )
     })
+}
+
+/// `UpdateNode` also stores x and y as integers, so it rejects a fractional
+/// number for any of the four geometry fields. Canonical node data stores
+/// them as floats; route such values through the rich shallow patch.
+fn uses_fractional_geometry(obj: &serde_json::Map<String, Value>) -> bool {
+    ["x", "y", "width", "height"]
+        .into_iter()
+        .any(|key| matches!(obj.get(key), Some(Value::Number(value)) if value.is_f64()))
 }
 
 /// The lightweight command can faithfully carry one concrete solid color.

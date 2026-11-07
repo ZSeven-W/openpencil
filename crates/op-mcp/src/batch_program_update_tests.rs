@@ -74,3 +74,32 @@ fn batch_program_transaction_applies_token_only_fill_patch() {
     assert_eq!(value["x"].as_f64(), Some(48.0));
     assert_eq!(value["fill"][0]["color"], "$--primary");
 }
+
+#[test]
+fn batch_program_applies_fractional_geometry_without_other_fields() {
+    let mut state = sample();
+    let tool = batch_design_snapshot(&state);
+    let mut args = BTreeMap::new();
+    args.insert(
+        "operations".into(),
+        "U(\"n10\", {\"x\":10.5,\"y\":20.25,\"width\":100.5,\"height\":60.25})".into(),
+    );
+
+    let outcome = tool.call(&args);
+    let ToolOutcome::OkWithCommand(_, command @ EditorCommand::PatchNodeData { .. }) = outcome
+    else {
+        panic!("fractional geometry update must emit PatchNodeData, got {outcome:?}");
+    };
+
+    assert!(
+        state.apply(command),
+        "fractional geometry update must apply"
+    );
+    let node = op_editor_core::walkers::find_node(state.active_children(), &NodeId::new("n10"))
+        .expect("updated frame");
+    let value = serde_json::to_value(node).expect("updated node json");
+    assert_eq!(value["x"].as_f64(), Some(10.5));
+    assert_eq!(value["y"].as_f64(), Some(20.25));
+    assert_eq!(value["width"].as_f64(), Some(100.5));
+    assert_eq!(value["height"].as_f64(), Some(60.25));
+}
