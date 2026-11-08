@@ -1,7 +1,7 @@
 //! Kinematics tests for the generation cursor's waypoint and idle motion.
 
 use crate::widgets::canvas_agent_cursor_motion::{
-    cursor_kinematics, ease_out_cubic, parked_cursor_position, ParkedWindow, Waypoint,
+    cursor_kinematics, parked_cursor_position, ParkedWindow, Waypoint,
 };
 use crate::{Point2D, Rect};
 
@@ -131,11 +131,4 @@ fn equal_start_waypoints_coalesce_on_the_last_placement() {
     assert!((at_shared_start.pos.x - 200.0).abs() < 0.01);
     let mid_flight = cursor_kinematics(&wps, 1_200).unwrap();
     assert!(mid_flight.pos.x > 200.0);
-}
-
-#[test]
-fn ease_out_cubic_hits_endpoints() {
-    assert!(ease_out_cubic(0.0).abs() < 1e-6);
-    assert!((ease_out_cubic(1.0) - 1.0).abs() < 1e-6);
-    assert!(ease_out_cubic(0.5) > 0.5);
 }

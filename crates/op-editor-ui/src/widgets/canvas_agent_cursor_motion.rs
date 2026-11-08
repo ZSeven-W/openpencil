@@ -1,6 +1,7 @@
 //! Pure waypoint and idle-motion derivation for the generation cursor.
 
 use crate::{Point2D, Rect};
+use jian_core::motion::{ease_in_out_cubic, ease_out_cubic};
 
 /// Longest single flight; longer waypoint gaps depart late, arrive on time.
 const MAX_FLIGHT_MS: u64 = 350;
@@ -50,24 +51,6 @@ pub(crate) struct Kinematics {
     pub current: Option<usize>,
     /// Present only while waiting at an already-reached waypoint.
     pub parked: Option<ParkedWindow>,
-}
-
-pub(crate) fn ease_out_cubic(t: f32) -> f32 {
-    let u = 1.0 - t.clamp(0.0, 1.0);
-    1.0 - u * u * u
-}
-
-/// Smoothstep-style ease for flights: slow out of the park, fast
-/// mid-flight, soft landing. Chained short hops read as deliberate
-/// dart-dart-dart instead of a constant-speed crawl.
-pub(crate) fn ease_in_out_cubic(t: f32) -> f32 {
-    let t = t.clamp(0.0, 1.0);
-    if t < 0.5 {
-        4.0 * t * t * t
-    } else {
-        let u = -2.0 * t + 2.0;
-        1.0 - u * u * u / 2.0
-    }
 }
 
 fn lerp(a: Point2D, b: Point2D, t: f32) -> Point2D {

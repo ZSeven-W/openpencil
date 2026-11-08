@@ -27,6 +27,7 @@ use op_editor_core::{
 
 pub use super::home_surface::StudioPalette;
 use super::workspace_quality::{quality_chip_rect, quality_panel_layout, QualityPanelLayout};
+use jian_core::motion::ease_out_cubic;
 
 /// Back circle button (36 px) inset.
 /// Left inset of the header's back circle. The desktop window is
@@ -86,11 +87,6 @@ const DRAFT_BUTTON_W: f32 = 132.0;
 const MAKE_SAME_BUTTON_W: f32 = 184.0;
 /// Gap between the header's outline buttons.
 const HEADER_BUTTON_GAP: f32 = 8.0;
-
-/// ease-out-cubic — the settle curve the entrance choreography uses.
-fn ease_out_cubic(t: f32) -> f32 {
-    1.0 - (1.0 - t).powi(3)
-}
 
 /// The chrome's entrance phase at `now_ms`: `(rise_offset_y, alpha)`.
 /// A `shown_at_ms` of 0 paints settled.

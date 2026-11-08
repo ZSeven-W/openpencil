@@ -1,5 +1,6 @@
 use crate::layout_scene::{LayoutScene, SceneNode};
 use crate::Rect;
+use jian_core::motion::ease_out_cubic;
 use std::collections::HashMap;
 
 pub const CANVAS_LAYOUT_TRANSITION_MS: u64 = 160;
@@ -132,10 +133,6 @@ fn apply_node_transition(
     for child in &mut node.children {
         apply_node_transition(child, start_bounds, progress);
     }
-}
-
-fn ease_out_cubic(t: f32) -> f32 {
-    1.0 - (1.0 - t).powi(3)
 }
 
 pub(crate) fn translate_scene_subtree(node: &mut SceneNode, dx: f32, dy: f32) {

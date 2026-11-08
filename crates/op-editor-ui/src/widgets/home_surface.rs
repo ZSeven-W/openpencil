@@ -9,6 +9,7 @@ use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Point2D, Rect};
+use jian_core::motion::ease_out_cubic;
 use op_editor_core::{EditorState, HomeFamily, HomeHit, HomeState};
 
 #[path = "home_surface_palette.rs"]
@@ -60,11 +61,6 @@ pub use works::{works_list_layout, CurrentWork, WorksListLayout, WORKS_RECENT_CA
 
 /// Top bar height; the page content scrolls under it.
 pub const HOME_TOPBAR_H: f32 = 56.0;
-
-/// ease-out-cubic — the settle curve the entrance choreography uses.
-fn ease_out_cubic(t: f32) -> f32 {
-    1.0 - (1.0 - t).powi(3)
-}
 
 /// One block of the Home entrance choreography (welcome, tabs, panels,
 /// explore cards stagger 0/60/120/180 ms over 220 ms, rise 8 px).
