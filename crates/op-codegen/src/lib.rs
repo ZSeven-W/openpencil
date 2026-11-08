@@ -19,6 +19,8 @@
 pub mod ai;
 
 #[cfg(test)]
+mod codegen_motion_css_parity_tests;
+#[cfg(test)]
 mod codegen_motion_css_tests;
 mod codegen_tailwind;
 mod codegen_targets;
