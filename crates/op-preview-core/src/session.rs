@@ -527,7 +527,8 @@ impl PreviewSession {
         runtime.set_animation_sink(Rc::new(animation.clone()));
         runtime.enable_action_reporting();
         let motion = crate::motion::PreviewMotionState::default();
-        let has_switch_widgets = crate::motion::runtime_has_switch_widgets(&runtime);
+        let has_switch_widgets =
+            jian_core::motion::declarations::runtime_has_switch_widgets(&runtime);
         let mut session = Self {
             runtime,
             measure,

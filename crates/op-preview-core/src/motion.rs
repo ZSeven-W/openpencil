@@ -568,16 +568,6 @@ impl crate::session::PreviewSession {
     }
 }
 
-pub(crate) fn runtime_has_switch_widgets(runtime: &jian_core::Runtime) -> bool {
-    runtime.document.as_ref().is_some_and(|document| {
-        document
-            .tree
-            .nodes
-            .values()
-            .any(|node| matches!(node.schema, jian_ops_schema::node::PenNode::Switch(_)))
-    })
-}
-
 fn collect_switches(nodes: &[SceneNode], out: &mut Vec<(String, bool)>) {
     for node in nodes {
         if node
