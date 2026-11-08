@@ -61,7 +61,7 @@ impl WorkspaceState {
         }
         let t = (now_ms.saturating_sub(moved_at_ms) as f32 / WORKSPACE_DRAWER_SLIDE_MS as f32)
             .clamp(0.0, 1.0);
-        let eased = 1.0 - (1.0 - t).powi(3);
+        let eased = jian_core::motion::ease_out_cubic(t);
         if self.drawer_open {
             eased
         } else {
