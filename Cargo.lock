@@ -4892,6 +4892,7 @@ version = "0.8.6"
 dependencies = [
  "jian-core",
  "jian-ops-schema",
+ "jian-scene",
  "jian-skia",
  "op-editor-core",
  "op-editor-ui",

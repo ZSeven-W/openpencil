@@ -49,7 +49,7 @@ pub(in crate::run::run_initial_binding_feedback) fn validate_initial_values(
             ));
         }
         if finding.property == "content" {
-            // Mirrors op-preview-core::scene_helpers::display_string: numbers and
+            // Mirrors jian_scene::layout_scene_binding::display_string: numbers and
             // booleans display as JSON text; compare display text, not JSON types.
             let displayed = value
                 .0

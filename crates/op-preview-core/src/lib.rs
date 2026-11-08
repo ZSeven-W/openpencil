@@ -53,7 +53,7 @@
 //! [`AppMode`] + the per-root `solve_roots` + the app-mode query methods
 //! live in `app_mode.rs`, keyboard/focus/pointer dispatch + the
 //! scene→runtime coordinate mapping live in `input.rs`, and the leaf
-//! formatter helpers (`apply_widget_state` / `display_string` /
+//! formatter helpers (`apply_widget_state` /
 //! `format_warning`) live in `scene_helpers.rs`. The crate root keeps
 //! only module declarations and stable re-exports.
 
@@ -67,7 +67,6 @@ mod auto_wire;
 #[cfg(not(feature = "gl-host"))]
 mod auto_wire_stub;
 mod binding_overlay;
-mod binding_overlay_apply;
 mod binding_sites;
 mod debug_trace;
 pub mod device_frame;

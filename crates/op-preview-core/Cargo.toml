@@ -17,6 +17,9 @@ jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
 # jian-core ships the taffy-backed `LayoutEngine` + `Runtime` for preview
 # widget state + routing.
 jian-core = { path = "../../vendor/jian/crates/jian-core" }
+# The scene-side motion and binding application (overrides, the
+# BindingTarget -> scene-field table) that Preview shares with Jian hosts.
+jian-scene = { path = "../../vendor/jian/crates/jian-scene" }
 # The canonical render scene this crate builds INTO (`LayoutScene` +
 # scene types) lives in jian-scene; scene_vars + the render-backend facade
 # (Color/Point2D/Rect) come from op-editor-ui.

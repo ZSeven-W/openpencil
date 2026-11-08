@@ -1,6 +1,5 @@
 //! One bounded animation timeline owned by a Preview session.
 
-use crate::binding_overlay_apply::apply_value;
 use crate::invalidation::InvalidationKind;
 use crate::session::PreviewSession;
 use jian_core::action::animation_registry::{animatable_property_registry, AnimationInterpolate};
@@ -10,6 +9,7 @@ use jian_core::action::services::{
 };
 use jian_core::binding::BindingTarget;
 use jian_core::value::RuntimeValue;
+use jian_scene::layout_scene_binding::apply_value;
 use op_editor_ui::layout_scene::{LayoutScene, SceneNode};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};

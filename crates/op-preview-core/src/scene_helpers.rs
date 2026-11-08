@@ -37,17 +37,6 @@ pub(super) fn apply_widget_state(widget: &mut SceneWidget, state: &WidgetState) 
     }
 }
 
-/// Human-readable form of an expression result for scene text: strings
-/// verbatim, null → empty, everything else via JSON rendering (ints
-/// print without a trailing `.0`).
-pub(super) fn display_string(value: &jian_core::value::RuntimeValue) -> String {
-    match &value.0 {
-        serde_json::Value::String(s) => s.clone(),
-        serde_json::Value::Null => String::new(),
-        other => other.to_string(),
-    }
-}
-
 /// Format a load warning for the editor's diagnostics surface. Only
 /// surfaces the actionable ones (legacy promotions, future versions,
 /// skipped logic) — generic unknown-field noise is dropped.

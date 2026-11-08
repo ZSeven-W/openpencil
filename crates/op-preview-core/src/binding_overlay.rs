@@ -1,6 +1,5 @@
 //! Typed Preview binding overlay with read-only scroll and pointer locals.
 
-use crate::binding_overlay_apply::apply_value;
 use crate::binding_sites::BindingSite;
 use crate::input_event::ScrollPhase;
 use crate::invalidation::InvalidationKind;
@@ -9,6 +8,7 @@ use jian_core::action::services::ScrollAlignment;
 use jian_core::binding::BindingTarget;
 use jian_core::value::RuntimeValue;
 use jian_ops_schema::node::PenNode;
+use jian_scene::layout_scene_binding::apply_value;
 use op_editor_ui::layout_scene::{LayoutScene, SceneNode};
 use op_editor_ui::Rect;
 use std::cell::RefCell;
