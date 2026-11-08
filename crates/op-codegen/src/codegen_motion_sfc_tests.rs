@@ -141,3 +141,75 @@ fn svelte_without_motion_declares_no_keyframes() {
     assert!(!svelte.contains("@keyframes"), "{svelte}");
     assert!(!svelte.contains(":global("), "{svelte}");
 }
+
+/// A document whose only motion plays on mount, so nothing needs observing.
+fn mount_only_doc() -> PenDocument {
+    jian_ops_schema::load_str(
+        r#"{"version":"1.0","children":[
+          {"type":"rectangle","id":"n1","animations":[
+            {"trigger":"mount","keyframes":[{"offset":0,"values":{"opacity":0}},
+            {"offset":1,"values":{"opacity":1}}],"durationMs":300}
+          ]}
+        ]}"#,
+    )
+    .expect("mount motion document")
+    .value
+}
+
+/// The paused in-view element and the observer that starts it like
+/// Preview: at 10% visible, once for `once` motion, otherwise again on
+/// every re-entry after rewinding on leave.
+fn assert_in_view_motion_starts(output: &str, script: &str) {
+    assert!(
+        output.contains("animation:op-card-0 320ms linear 60ms 1 both paused"),
+        "{output}"
+    );
+    assert!(
+        output.contains("data-op-in-view=\"op-card-0:once\""),
+        "{output}"
+    );
+    for needle in [
+        "function observeInViewMotion() {",
+        "document.querySelectorAll(\"[data-op-in-view]\")",
+        "element.getAttribute(\"data-op-in-view\")",
+        "entry.isIntersecting && entry.intersectionRatio >= 0.1",
+        "{ threshold: 0.1 }",
+        "item instanceof CSSAnimation && item.animationName === name",
+        "animation.play();",
+        "!visible && once !== \"once\" && done.has(name)",
+        "animation.currentTime = 0;",
+    ] {
+        assert!(script.contains(needle), "{needle}: {script}");
+    }
+    // The page-level IIFE belongs to the HTML export only.
+    assert!(!output.contains("})();"), "{output}");
+}
+
+#[test]
+fn vue_starts_in_view_motion_when_mounted() {
+    let vue = Vue.generate(&motion_doc());
+    let script = block(&vue, "<script setup lang=\"ts\">\n", "</script>");
+    assert!(
+        script.starts_with("// generated\nimport { onBeforeUnmount, onMounted } from \"vue\";\n"),
+        "{script}"
+    );
+    assert_in_view_motion_starts(&vue, script);
+    assert!(
+        script.contains("onMounted(() => {\n  inViewObserver = observeInViewMotion();\n});\n"),
+        "{script}"
+    );
+    assert!(
+        script.contains("onBeforeUnmount(() => inViewObserver?.disconnect());"),
+        "{script}"
+    );
+}
+
+#[test]
+fn vue_mount_motion_needs_no_observer() {
+    let vue = Vue.generate(&mount_only_doc());
+    assert!(
+        vue.contains("<script setup lang=\"ts\">\n// generated\n</script>"),
+        "{vue}"
+    );
+    assert!(!vue.contains("data-op-in-view"), "{vue}");
+}

@@ -219,8 +219,8 @@ pub(super) fn image_object_fit(node: &PenNode) -> Option<&'static str> {
 }
 
 /// Vue 3 Single File Component generator. Wraps the node tree in a
-/// `<template>` block (HTML-like) + an empty `<script setup>`
-/// placeholder + a `<style>` block carrying any
+/// `<template>` block (HTML-like) + a `<script setup>` that starts
+/// in-view motion on mount + a `<style>` block carrying any
 /// design-variables-derived custom properties, plus an unscoped
 /// `<style>` block for document motion. Mirrors TS
 /// `pen-codegen::vue-generator`.
@@ -238,7 +238,9 @@ impl Codegen for Vue {
             emit_node_html(&mut out, n, 1);
         }
         out.push_str("</template>\n\n");
-        out.push_str("<script setup lang=\"ts\">\n// generated\n</script>\n\n");
+        out.push_str("<script setup lang=\"ts\">\n// generated\n");
+        out.push_str(&codegen_motion_script::vue_setup(doc));
+        out.push_str("</script>\n\n");
         out.push_str("<style scoped>\n");
         out.push_str(&CssVariables.generate(doc));
         out.push_str("</style>\n");

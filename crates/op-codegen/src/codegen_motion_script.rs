@@ -28,6 +28,22 @@ pub(super) fn render(doc: &PenDocument) -> String {
     format!("<script>\n(() => {{\n{observer}  observeInViewMotion();\n}})();\n</script>\n")
 }
 
+/// `<script setup>` statements that start in-view motion once the Vue
+/// component is mounted and stop observing when it unmounts, or an empty
+/// string when nothing animates in view.
+pub(super) fn vue_setup(doc: &PenDocument) -> String {
+    if !has_in_view_motion(doc) {
+        return String::new();
+    }
+    format!(
+        "import {{ onBeforeUnmount, onMounted }} from \"vue\";\n\n\
+         {OBSERVE_IN_VIEW_MOTION}\n\
+         let inViewObserver: IntersectionObserver | undefined;\n\
+         onMounted(() => {{\n  inViewObserver = observeInViewMotion();\n}});\n\
+         onBeforeUnmount(() => inViewObserver?.disconnect());\n"
+    )
+}
+
 /// Observes every `data-op-in-view` element and plays, or rewinds, the CSS
 /// animations its attribute names. Returns the observer so a component can
 /// disconnect it.
