@@ -134,6 +134,8 @@ pub mod instance_override;
 pub mod interaction_edit;
 pub mod interaction_edit_apply;
 pub mod missing_fonts;
+pub mod motion_edit;
+pub mod motion_edit_apply;
 pub mod motion_presets;
 pub mod motion_timeline_edit;
 pub mod motion_timeline_projection;

@@ -91,6 +91,7 @@ fn batchable(cmd: &EditorCommand) -> bool {
         | C::MergeThemePreset { .. }
         | C::SetDesignMd { .. }
         | C::Comment(_)
+        | C::Motion(_)
         | C::UpsertComponent { .. }
         | C::UpsertScreen { .. }
         | C::InstantiateComponent { .. }

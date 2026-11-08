@@ -790,6 +790,7 @@ impl EditorState {
             EditorCommand::AddImageVideo { node_id } => self.apply_add_video(&node_id),
             EditorCommand::RemoveImageVideo { node_id } => self.apply_remove_video(&node_id),
             EditorCommand::Comment(cmd) => self.apply_comment_command(cmd),
+            EditorCommand::Motion(cmd) => self.apply_motion_command(cmd),
         };
         if changed && marks_document_dirty && self.revision == revision_before {
             self.mark_document_changed();

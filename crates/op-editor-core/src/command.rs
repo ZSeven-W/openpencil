@@ -600,4 +600,7 @@ pub enum EditorCommand {
     /// Add, reply to, change the status of, or delete a canvas comment
     /// thread. Shared by the GUI and the MCP comment tools.
     Comment(crate::comments::CommentCommand),
+    /// Edit node motion (`animations`, `transition`) for the Motion section
+    /// and the timeline panel; see [`crate::motion_edit`].
+    Motion(crate::motion_edit::MotionCommand),
 }

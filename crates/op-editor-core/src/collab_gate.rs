@@ -441,6 +441,9 @@ impl EditorCommand {
             | C::SetDesignMd { .. }
             | C::UpsertScreen { .. }
             | C::Comment(_) => A::Document(D::Unsupported(U::RootMetadata)),
+            // Like interaction parameters, motion is a node field the M1
+            // protocol does not carry yet.
+            C::Motion(_) => A::Document(D::Unsupported(U::UnsupportedNodeProperty)),
             C::UpsertComponent { .. }
             | C::InstantiateComponent { .. }
             | C::CreateComponent { .. }
