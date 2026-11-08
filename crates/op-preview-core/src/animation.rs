@@ -32,18 +32,23 @@ impl AnimationSink for PreviewAnimationState {
     }
 }
 
-/// Records accepted animation requests in the Preview debug trace.
-struct TraceObserver(crate::debug_trace::PreviewDebugTrace);
+/// Records accepted animation requests in the Preview debug trace and logs
+/// the motion declarations the triggers had to skip.
+struct SessionObserver(crate::debug_trace::PreviewDebugTrace);
 
-impl MotionObserver for TraceObserver {
+impl MotionObserver for SessionObserver {
     fn animation_requested(&self, target: &str, property: &str, at_ms: u64) {
         self.0.record_animation(target, property, at_ms, "request");
+    }
+
+    fn motion_warning(&self, message: &str) {
+        tracing::warn!("preview: {message}");
     }
 }
 
 impl PreviewAnimationState {
     pub(crate) fn set_trace(&self, trace: crate::debug_trace::PreviewDebugTrace) {
-        self.timeline.set_observer(Rc::new(TraceObserver(trace)));
+        self.timeline.set_observer(Rc::new(SessionObserver(trace)));
     }
 
     pub(crate) fn apply_to_scene(&self, scene: &mut LayoutScene) {

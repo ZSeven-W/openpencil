@@ -13,59 +13,22 @@
 
 use crate::device_frame::DeviceFrame;
 use crate::session::PreviewSession;
-use op_editor_ui::layout_scene::ScenePage;
-use op_editor_ui::{Point2D, Rect};
+use jian_core::motion::InViewWindow;
 
-/// The visible window of a framed root, relative to the root, so it stays
-/// valid when an app-mode screen switch replaces the root.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct InViewViewport {
-    scroll_y: f32,
-    top_inset: f32,
-    height: f32,
-    pinned: Vec<String>,
-}
-
-impl InViewViewport {
-    pub(crate) fn from_device_frame(frame: &DeviceFrame, scroll_y: f32) -> Self {
-        let top_inset = frame
-            .pinned_top
-            .as_ref()
-            .map_or(0.0, |strip| strip.node_scene.size.y);
-        let pinned = [frame.pinned_top.as_ref(), frame.pinned.as_ref()]
-            .into_iter()
-            .flatten()
-            .map(|strip| strip.node_id.clone())
-            .filter(|id| !id.is_empty())
-            .collect();
-        Self {
-            scroll_y: scroll_y.max(0.0),
-            top_inset,
-            height: frame.viewport_h.max(0.0),
-            pinned,
-        }
-    }
-
-    /// The visible window in scene space for a framed root at `root`.
-    pub(crate) fn rect_for_root(&self, root: Rect) -> Rect {
-        Rect {
-            origin: Point2D::new(
-                root.origin.x,
-                root.origin.y + self.scroll_y + self.top_inset,
-            ),
-            size: Point2D::new(root.size.x, self.height),
-        }
-    }
-
-    /// Whether `target` is a pinned node or sits inside one.
-    pub(crate) fn is_pinned(&self, page: &ScenePage, target: &str) -> bool {
-        self.pinned.iter().any(|id| {
-            id == target
-                || page
-                    .find(id)
-                    .is_some_and(|node| node.find(target).is_some())
-        })
-    }
+/// The visible window a device frame shows at `scroll_y`, relative to the
+/// framed root so it stays valid when an app-mode screen switch replaces
+/// the root.
+pub(crate) fn in_view_window(frame: &DeviceFrame, scroll_y: f32) -> InViewWindow {
+    let top_inset = frame
+        .pinned_top
+        .as_ref()
+        .map_or(0.0, |strip| strip.node_scene.size.y);
+    let pinned = [frame.pinned_top.as_ref(), frame.pinned.as_ref()]
+        .into_iter()
+        .flatten()
+        .map(|strip| strip.node_id.clone())
+        .collect();
+    InViewWindow::new(scroll_y, top_inset, frame.viewport_h, pinned)
 }
 
 impl PreviewSession {
@@ -74,7 +37,7 @@ impl PreviewSession {
     /// viewport. Returns whether the window changed, so the host can
     /// repaint and let observation run against the new window.
     pub fn sync_in_view_viewport(&mut self, frame: Option<&DeviceFrame>, scroll_y: f32) -> bool {
-        let viewport = frame.map(|frame| InViewViewport::from_device_frame(frame, scroll_y));
-        self.motion.set_in_view_viewport(viewport)
+        let window = frame.map(|frame| in_view_window(frame, scroll_y));
+        self.motion.set_in_view_window(window)
     }
 }

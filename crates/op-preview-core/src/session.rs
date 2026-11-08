@@ -132,7 +132,7 @@ pub struct PreviewSession {
     /// R7 one bounded timeline plus its injected AnimationSink queue.
     pub(crate) animation: crate::animation::PreviewAnimationState,
     /// P1 node-level motion declarations and per-screen trigger state.
-    pub(crate) motion: crate::motion::PreviewMotionState,
+    pub(crate) motion: jian_core::motion::MotionTriggers,
     /// Host reduced-motion preference; document preference can only reduce it.
     pub(crate) host_motion_preference: jian_ops_schema::motion::MotionPreference,
     /// APP MODE state (routed multi-screen doc), or `None` for the
@@ -526,7 +526,7 @@ impl PreviewSession {
         animation.set_trace(debug.trace.clone());
         runtime.set_animation_sink(Rc::new(animation.clone()));
         runtime.enable_action_reporting();
-        let motion = crate::motion::PreviewMotionState::default();
+        let motion = jian_core::motion::MotionTriggers::default();
         let has_switch_widgets =
             jian_core::motion::declarations::runtime_has_switch_widgets(&runtime);
         let mut session = Self {
