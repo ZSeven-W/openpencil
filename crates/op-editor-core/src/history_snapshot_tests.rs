@@ -524,3 +524,52 @@ fn batch_collapse_resets_pre_batch_revision_before_the_bump() {
     assert_eq!(state.document_revision(), saved);
     assert!(!state.is_dirty());
 }
+
+#[test]
+fn motion_fields_survive_snapshots_and_anchored_recaptures() {
+    let doc = jian_ops_schema::load_str(
+        &serde_json::json!({
+            "version": "1.0",
+            "children": [{
+                "type": "frame", "id": "screen", "width": 390, "height": 844,
+                "children": [{
+                    "type": "rectangle", "id": "card", "width": 10, "height": 10,
+                    "transition": {"durationMs": 150, "easing": "standard"},
+                    "animations": [{
+                        "trigger": "manual", "id": "pulse", "iterations": "infinite",
+                        "durationMs": 1200, "easing": "linear",
+                        "keyframes": [
+                            {"offset": 0, "values": {"scaleX": 1}},
+                            {"offset": 0.5, "values": {"scaleX": 1.04}},
+                            {"offset": 1, "values": {"scaleX": 1}}
+                        ]
+                    }]
+                }]
+            }]
+        })
+        .to_string(),
+    )
+    .expect("motion document")
+    .value;
+    let mut state = EditorState::from_document(doc);
+    let first = SharedDoc::capture(&state.doc, None);
+    assert_eq!(first.materialize(), state.doc);
+
+    // A motion edit deep in the tree is seen by an anchored re-capture.
+    let edit = crate::motion_edit::MotionCommand::Stagger {
+        container_id: crate::NodeId::new("screen"),
+        preset: crate::motion_presets::MotionPreset::FadeIn,
+        trigger: jian_ops_schema::motion::MotionTrigger::Mount,
+        id: None,
+        base_delay_ms: 0,
+        step_ms: 60,
+    };
+    assert_eq!(state.apply_motion_edits(vec![edit]), Ok(true));
+    let second = SharedDoc::capture(&state.doc, Some(&first));
+    assert_eq!(second.materialize(), state.doc);
+    let card = second
+        .snapshot_find_node(0, &crate::NodeId::new("card"))
+        .expect("card");
+    assert_eq!(card.motion_declarations().1.map(Vec::len), Some(2));
+    assert!(card.motion_declarations().0.is_some());
+}
