@@ -213,3 +213,32 @@ fn vue_mount_motion_needs_no_observer() {
     );
     assert!(!vue.contains("data-op-in-view"), "{vue}");
 }
+
+#[test]
+fn svelte_starts_in_view_motion_when_mounted() {
+    let svelte = Svelte.generate(&motion_doc());
+    let script = block(&svelte, "<script lang=\"ts\">\n", "</script>");
+    assert!(
+        script.starts_with("// generated\nimport { onMount } from \"svelte\";\n"),
+        "{script}"
+    );
+    assert_in_view_motion_starts(&svelte, script);
+    // The cleanup onMount returns runs when the component is destroyed.
+    assert!(
+        script.contains(
+            "onMount(() => {\n  const observer = observeInViewMotion();\n  \
+             return () => observer.disconnect();\n});\n"
+        ),
+        "{script}"
+    );
+}
+
+#[test]
+fn svelte_mount_motion_needs_no_observer() {
+    let svelte = Svelte.generate(&mount_only_doc());
+    assert!(
+        svelte.contains("<script lang=\"ts\">\n// generated\n</script>"),
+        "{svelte}"
+    );
+    assert!(!svelte.contains("data-op-in-view"), "{svelte}");
+}

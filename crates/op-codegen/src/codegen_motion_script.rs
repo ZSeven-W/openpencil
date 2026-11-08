@@ -1,4 +1,4 @@
-//! The script that starts in-view motion in the exports.
+//! The script that starts in-view motion in the HTML, Vue and Svelte exports.
 //!
 //! Preview starts an in-view animation when at least 10% of its node is
 //! inside the visible window: once when the declaration says `once`,
@@ -41,6 +41,21 @@ pub(super) fn vue_setup(doc: &PenDocument) -> String {
          let inViewObserver: IntersectionObserver | undefined;\n\
          onMounted(() => {{\n  inViewObserver = observeInViewMotion();\n}});\n\
          onBeforeUnmount(() => inViewObserver?.disconnect());\n"
+    )
+}
+
+/// Instance-script statements that start in-view motion once the Svelte
+/// component is mounted and stop observing when it is destroyed, or an
+/// empty string when nothing animates in view.
+pub(super) fn svelte_setup(doc: &PenDocument) -> String {
+    if !has_in_view_motion(doc) {
+        return String::new();
+    }
+    format!(
+        "import {{ onMount }} from \"svelte\";\n\n\
+         {OBSERVE_IN_VIEW_MOTION}\n\
+         onMount(() => {{\n  const observer = observeInViewMotion();\n  \
+         return () => observer.disconnect();\n}});\n"
     )
 }
 
