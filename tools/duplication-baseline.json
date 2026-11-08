@@ -3,7 +3,7 @@
   "metrics": {
     "host_twin_lines": 3778,
     "cross_crate_block_lines": 3943,
-    "cross_crate_identical_functions": 305
+    "cross_crate_identical_functions": 304
   },
   "pairs": {
     "jian-asp <-> jian-host-desktop": 22,
@@ -155,7 +155,6 @@
     "28ba59f221bd8c87": 2,
     "28e4dc9bcd104c68": 2,
     "2b4b46ef46996d56": 2,
-    "2c8ddcf650cb6fcb": 2,
     "2d710e286a7980b9": 2,
     "2e3cea93425eccd3": 2,
     "2e772bf76e75feb7": 2,
