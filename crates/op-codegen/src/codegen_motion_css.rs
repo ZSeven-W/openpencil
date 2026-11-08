@@ -2,7 +2,9 @@
 
 use super::{node_children, node_hidden, root_nodes};
 use crate::{fmt_num, html_escape};
-use jian_ops_schema::motion::{Easing, Iterations, MotionTrigger, NodeAnimation};
+use jian_ops_schema::motion::{
+    Easing, Iterations, MotionTrigger, NodeAnimation, NodeAnimationFillMode,
+};
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::PenDocument;
 use op_editor_core::PenNodeExt;
@@ -103,12 +105,13 @@ pub(super) fn inline_style(node: &PenNode) -> String {
             .enumerate()
             .map(|(index, animation)| {
                 format!(
-                    "{} {}ms {} {}ms {} both",
+                    "{} {}ms {} {}ms {} {}",
                     animation_name(node.id_str(), index),
                     animation.duration_ms,
                     easing_to_css(&animation.easing),
                     animation.delay_ms,
-                    iteration_count(&animation.iterations)
+                    iteration_count(&animation.iterations),
+                    fill_mode(animation.fill_mode)
                 )
             })
             .collect::<Vec<_>>()
@@ -238,6 +241,15 @@ fn iteration_count(iterations: &Iterations) -> String {
     }
 }
 
+/// `animation-fill-mode` matching Preview: the first keyframe always holds
+/// through the delay, and only `forwards` keeps the last one afterwards.
+fn fill_mode(fill: NodeAnimationFillMode) -> &'static str {
+    match fill {
+        NodeAnimationFillMode::Forwards => "both",
+        NodeAnimationFillMode::None => "backwards",
+    }
+}
+
 fn animation_name(node_id: &str, index: usize) -> String {
     format!("op-{}-{index}", css_identifier(node_id))
 }
@@ -273,5 +285,11 @@ mod tests {
         assert_eq!(iteration_count(&Iterations::Count(3)), "3");
         assert_eq!(iteration_count(&Iterations::Count(0)), "1");
         assert_eq!(iteration_count(&Iterations::Infinite), "infinite");
+    }
+
+    #[test]
+    fn fill_modes_hold_the_first_keyframe_through_the_delay() {
+        assert_eq!(fill_mode(NodeAnimationFillMode::Forwards), "both");
+        assert_eq!(fill_mode(NodeAnimationFillMode::None), "backwards");
     }
 }
