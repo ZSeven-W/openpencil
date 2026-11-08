@@ -228,10 +228,12 @@ fn easing_to_css(easing: &Easing) -> String {
     }
 }
 
-/// `animation-iteration-count`: the authored count, or `infinite`.
+/// `animation-iteration-count`: the authored count, or `infinite`. Preview
+/// plays at least one pass (an authored `0` plays once), so the export does
+/// too.
 fn iteration_count(iterations: &Iterations) -> String {
     match iterations {
-        Iterations::Count(count) => count.to_string(),
+        Iterations::Count(count) => (*count).max(1).to_string(),
         Iterations::Infinite => "infinite".to_owned(),
     }
 }
@@ -269,7 +271,7 @@ mod tests {
     #[test]
     fn iteration_counts_cover_infinite_motion() {
         assert_eq!(iteration_count(&Iterations::Count(3)), "3");
-        assert_eq!(iteration_count(&Iterations::Count(0)), "0");
+        assert_eq!(iteration_count(&Iterations::Count(0)), "1");
         assert_eq!(iteration_count(&Iterations::Infinite), "infinite");
     }
 }
