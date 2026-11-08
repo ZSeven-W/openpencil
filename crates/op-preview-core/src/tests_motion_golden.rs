@@ -12,8 +12,9 @@
 //! ```
 //!
 //! It writes `curves.json`, `tracks.json`, `sessions.json` and
-//! `transitions.json` into `<dir>`. The non-ignored test below keeps the
-//! generator compiling and its fixtures loadable on every test run.
+//! `transitions.json` into `<dir>`. The non-ignored tests below check that
+//! Preview still reproduces the vectors pinned in Jian and keep the
+//! fixtures loadable on every test run.
 
 #![cfg(test)]
 
@@ -61,6 +62,37 @@ fn tests_motion_golden_generate() {
     ] {
         let text = serde_json::to_string_pretty(&value).expect("serialize golden vectors");
         std::fs::write(out.join(name), text + "\n").expect("write golden vectors");
+    }
+}
+
+/// Motion plan W1 parity: the runtime now lives in Jian, and Preview must
+/// still produce, byte for byte, the vectors recorded before the move
+/// (pinned in `vendor/jian/crates/jian-core/tests/golden/motion/`). The
+/// sessions file is the end-to-end check: it drives real Preview sessions.
+#[test]
+fn tests_motion_golden_matches_the_jian_vectors() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../vendor/jian/crates/jian-core/tests/golden/motion");
+    for (name, value) in [
+        ("curves.json", curves()),
+        ("tracks.json", tracks()),
+        ("sessions.json", sessions()),
+        ("transitions.json", transitions()),
+    ] {
+        let computed = serde_json::to_string_pretty(&value).expect("serialize") + "\n";
+        let recorded = std::fs::read_to_string(dir.join(name)).expect("read golden vectors");
+        if let Some((line, (ours, theirs))) = computed
+            .lines()
+            .zip(recorded.lines())
+            .enumerate()
+            .find(|(_, (ours, theirs))| ours != theirs)
+        {
+            panic!(
+                "{name} differs at line {}: {ours:?} vs {theirs:?}",
+                line + 1
+            );
+        }
+        assert_eq!(computed.len(), recorded.len(), "{name} length differs");
     }
 }
 
