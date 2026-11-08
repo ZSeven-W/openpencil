@@ -162,25 +162,25 @@ pub(super) fn inline_style(node: &PenNode) -> String {
             .iter()
             .enumerate()
             .map(|(index, animation)| {
-                // The curve lives in the keyframes' timing functions.
+                // The curve lives in the keyframes' timing functions. In-view
+                // motion waits on its first keyframe for the observer script.
                 format!(
-                    "{} {}ms linear {}ms {} {}",
+                    "{} {}ms linear {}ms {} {}{}",
                     animation_name(node.id_str(), index),
                     animation.duration_ms,
                     animation.delay_ms,
                     iteration_count(&animation.iterations),
-                    fill_mode(animation.fill_mode)
+                    fill_mode(animation.fill_mode),
+                    if animation.trigger == MotionTrigger::InView {
+                        " paused"
+                    } else {
+                        ""
+                    }
                 )
             })
             .collect::<Vec<_>>()
             .join(", ");
         style.push_str(&format!(";animation:{declarations}"));
-        if animations
-            .iter()
-            .any(|animation| animation.trigger == MotionTrigger::InView)
-        {
-            style.push_str(";animation-timeline:view();animation-range:entry 0% entry 40%");
-        }
     }
     style
 }
@@ -191,10 +191,43 @@ pub(super) fn data_attribute(node: &PenNode) -> String {
     if transition.is_none() && animations.is_none_or(Vec::is_empty) {
         return String::new();
     }
-    format!(
+    let mut attributes = format!(
         " data-op-motion-node=\"{}\"",
         html_escape(&css_identifier(node.id_str()))
-    )
+    );
+    let in_view: Vec<String> = animations
+        .into_iter()
+        .flatten()
+        .enumerate()
+        .filter(|(_, animation)| animation.trigger == MotionTrigger::InView)
+        .map(|(index, animation)| {
+            let name = animation_name(node.id_str(), index);
+            if animation.once {
+                format!("{name}:once")
+            } else {
+                name
+            }
+        })
+        .collect();
+    if !in_view.is_empty() {
+        attributes.push_str(&format!(" data-op-in-view=\"{}\"", in_view.join(" ")));
+    }
+    attributes
+}
+
+/// Whether any visible node starts an animation when it scrolls into view.
+pub(super) fn has_in_view_motion(doc: &PenDocument) -> bool {
+    let mut animated = Vec::new();
+    for node in root_nodes(doc) {
+        collect_animated_nodes(node, &mut animated);
+    }
+    animated.iter().any(|node| {
+        node.motion_declarations().1.is_some_and(|animations| {
+            animations
+                .iter()
+                .any(|a| a.trigger == MotionTrigger::InView)
+        })
+    })
 }
 
 fn keyframe_declarations(values: &BTreeMap<String, Value>) -> Vec<(String, String)> {

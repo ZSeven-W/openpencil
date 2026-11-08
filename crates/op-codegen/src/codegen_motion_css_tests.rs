@@ -72,7 +72,13 @@ fn html_motion_export_matches_the_golden_css() {
     // The curve lives in the keyframes, so the shorthand times linearly.
     assert!(html.contains("animation:op-hero-0 400ms linear 0ms 1 both"));
     assert!(html.contains("transition:opacity 150ms cubic-bezier(0.2,0,0,1)"));
-    assert!(html.contains("animation-timeline:view();animation-range:entry 0% entry 40%"));
+    // In-view motion waits on its first keyframe; an IntersectionObserver
+    // starts it like Preview, instead of a scroll-driven timeline.
+    assert!(!html.contains("animation-timeline"));
+    assert!(html.contains("animation:op-card-0 320ms linear 60ms 1 both paused"));
+    assert!(html.contains("data-op-in-view=\"op-card-0:once\""));
+    assert!(html.contains("new IntersectionObserver("));
+    assert!(html.contains("{ threshold: 0.1 }"));
 }
 
 #[test]
@@ -93,6 +99,24 @@ fn html_motion_export_honours_authored_reduced_preference() {
     assert!(
         css.contains("[data-op-motion-node=\"n1\"] {\n  animation: none;\n  transition: none;\n}")
     );
+}
+
+#[test]
+fn html_mount_motion_needs_no_observer() {
+    let doc = jian_ops_schema::load_str(
+        r#"{"version":"1.0","children":[
+          {"type":"rectangle","id":"n1","animations":[
+            {"trigger":"mount","once":false,"keyframes":[{"offset":0,"values":{"opacity":0}},
+            {"offset":1,"values":{"opacity":1}}],"durationMs":300}
+          ]}
+        ]}"#,
+    )
+    .expect("mount motion document")
+    .value;
+    let html = Html.generate(&doc);
+    assert!(!html.contains("<script>"));
+    assert!(!html.contains("data-op-in-view"));
+    assert!(!html.contains("paused"));
 }
 
 #[test]

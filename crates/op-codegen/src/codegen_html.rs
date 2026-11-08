@@ -1,7 +1,8 @@
 //! HTML target with inline layout and motion declarations.
 
 use super::{
-    codegen_motion_css, emitted_corner_radius, image_object_fit, tabs_nav_markup, widget_markup,
+    codegen_motion_css, codegen_motion_script, emitted_corner_radius, image_object_fit,
+    tabs_nav_markup, widget_markup,
 };
 use crate::{
     color_to_css, fmt_num, html_escape, node_children, node_fill_css, node_hidden, node_is_ellipse,
@@ -32,6 +33,7 @@ impl Codegen for Html {
         for node in root_nodes(doc) {
             emit_node_html(&mut out, node, 1);
         }
+        out.push_str(&codegen_motion_script::render(doc));
         out.push_str("</body></html>\n");
         out
     }

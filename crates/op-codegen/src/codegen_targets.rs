@@ -21,6 +21,8 @@ use jian_ops_schema::PenDocument;
 mod codegen_html;
 #[path = "codegen_motion_css.rs"]
 mod codegen_motion_css;
+#[path = "codegen_motion_script.rs"]
+mod codegen_motion_script;
 use codegen_html::emit_node_html;
 pub use codegen_html::Html;
 
