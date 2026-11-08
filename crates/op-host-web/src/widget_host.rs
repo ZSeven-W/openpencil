@@ -172,8 +172,11 @@ mod press_ctx;
 mod press_overlay_tiers;
 mod press_property_tiers;
 mod press_surface_tiers;
+mod preview_edge_swipe;
 mod preview_frame;
 mod preview_frame_teardown;
+#[cfg(all(test, feature = "canvaskit"))]
+mod preview_frame_tests;
 mod preview_slideshow;
 #[cfg(feature = "canvaskit")]
 mod preview_video;

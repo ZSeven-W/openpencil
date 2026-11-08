@@ -164,24 +164,10 @@ impl super::WidgetHost {
             self.preview_scroll_y = 0.0;
             return;
         };
-        let is_phone = kind == PreviewDeviceKind::Phone;
-        let nav = session.pinned_nav_candidate(is_phone);
-        let status = session.pinned_status_bar_candidate(is_phone);
-        let mut frame = compute_frame_geometry(
-            kind,
-            canvas,
-            root_rect,
-            nav.as_ref().map(|(_, rect)| *rect),
-            status.as_ref().map(|(_, rect)| *rect),
-        );
-        if let (Some(pinned), Some((node_id, _))) = (frame.pinned.as_mut(), nav) {
-            pinned.node_id = node_id;
-        }
-        if let (Some(pinned_top), Some((node_id, _))) = (frame.pinned_top.as_mut(), status) {
-            pinned_top.node_id = node_id;
-        }
+        let frame = session.device_frame_geometry(kind, canvas, root_rect);
         self.preview_scroll_y = self.preview_scroll_y.clamp(0.0, scroll_max(&frame));
         self.preview_device_frame = Some(frame);
+        self.sync_page_scroll(0.0);
     }
 
     /// Screen -> scene through the device frame. Honours a gesture's
@@ -216,20 +202,44 @@ impl super::WidgetHost {
     }
 
     /// Apply a screen-pixel wheel delta to the framed content's logical
-    /// scroll offset.
+    /// scroll offset. Returns whether anything needs a repaint: the
+    /// offset moved, or a `$scroll` binding changed without it (the
+    /// direction flips at a clamp).
     pub(in crate::widget_host) fn apply_device_scroll(&mut self, screen_delta_y: f32) -> bool {
         let Some(frame) = self.preview_device_frame.as_ref() else {
             return false;
         };
         let next =
             (self.preview_scroll_y - screen_delta_y / frame.fit).clamp(0.0, scroll_max(frame));
-        if (next - self.preview_scroll_y).abs() > f32::EPSILON {
+        let moved = (next - self.preview_scroll_y).abs() > f32::EPSILON;
+        if moved {
             self.preview_scroll_y = next;
             self.mark_dirty();
-            self.sync_in_view_viewport();
-            return true;
         }
-        false
+        let bound_changed = self.sync_page_scroll(screen_delta_y);
+        if moved {
+            self.sync_in_view_viewport();
+        }
+        moved || bound_changed
+    }
+
+    /// Feed the device frame's scroll position into the session so
+    /// `$scroll` bindings under the framed root track the page scroll
+    /// (page-scroll contract; the offset/extent derivation is shared
+    /// with native via `PreviewSession::set_device_page_scroll`).
+    /// Repaints when a bound value moved even if the offset did not.
+    fn sync_page_scroll(&mut self, delta_y: f32) -> bool {
+        let scroll_y = self.preview_scroll_y;
+        let changed = match (self.preview.as_mut(), self.preview_device_frame.as_ref()) {
+            (Some(session), Some(frame)) => {
+                session.set_device_page_scroll(frame, scroll_y, delta_y)
+            }
+            _ => false,
+        };
+        if changed {
+            self.mark_dirty();
+        }
+        changed
     }
 
     /// Activate one switcher segment and rebuild its presentation.
@@ -347,29 +357,15 @@ impl super::WidgetHost {
         let (device_frame, chrome_blend): (&op_preview_core::device_frame::DeviceFrame, f32) =
             match active_mode_transition {
                 Some(transition) => {
-                    let is_phone = steady_frame.kind == op_editor_core::PreviewDeviceKind::Phone;
-                    let nav = session.pinned_nav_candidate(is_phone);
-                    let status = session.pinned_status_bar_candidate(is_phone);
                     let root_rect = session
                         .framed_root()
                         .map(|(_, rect)| rect)
                         .unwrap_or(steady_frame.frame);
-                    let mut frame = compute_frame_geometry(
+                    interpolated = session.device_frame_geometry(
                         steady_frame.kind,
                         transition.canvas_rect_for_frame(self.now_ms),
                         root_rect,
-                        nav.as_ref().map(|(_, rect)| *rect),
-                        status.as_ref().map(|(_, rect)| *rect),
                     );
-                    if let (Some(pinned), Some((node_id, _))) = (frame.pinned.as_mut(), nav) {
-                        pinned.node_id = node_id;
-                    }
-                    if let (Some(pinned_top), Some((node_id, _))) =
-                        (frame.pinned_top.as_mut(), status)
-                    {
-                        pinned_top.node_id = node_id;
-                    }
-                    interpolated = frame;
                     (&interpolated, transition.chrome_blend(self.now_ms))
                 }
                 None => (steady_frame, 1.0),
@@ -715,72 +711,5 @@ impl super::WidgetHost {
             self.mark_dirty();
         }
         handled
-    }
-
-    /// Screen-space distance from the framed content's left edge a press
-    /// must start within to arm an edge-swipe candidate.
-    const EDGE_ZONE_PX: f32 = 24.0;
-    /// Cumulative rightward drag distance that fires the pop.
-    const POP_THRESHOLD_PX: f32 = 60.0;
-
-    /// Arm (or clear) an edge-swipe candidate for a fresh press at
-    /// `screen_x`. Called from preview press right after the
-    /// underlying pointer Down is forwarded.
-    pub(in crate::widget_host) fn arm_edge_swipe_candidate(&mut self, screen_x: f32) {
-        // Clear FIRST, exactly as native does: a fresh press outside the
-        // edge zone must disarm any stale candidate, or a leftover armed
-        // value from an undisarmed gesture fires a pop on an ordinary drag.
-        self.preview_edge_swipe_start_x = None;
-        // Edge swipe only works in device-frame preview with a pop-capable stack
-        if !self.device_mode_active() {
-            return;
-        }
-        let Some(frame) = self.preview_device_frame.as_ref() else {
-            return;
-        };
-        let edge = frame.content_span_x.0;
-        if screen_x < edge || screen_x - edge >= Self::EDGE_ZONE_PX {
-            return;
-        }
-        if !self.preview.as_ref().is_some_and(|p| p.can_pop()) {
-            return;
-        }
-        self.preview_edge_swipe_start_x = Some(screen_x);
-    }
-
-    /// Check an armed candidate against the held drag's current `screen_x`.
-    /// Returns `true` exactly once per gesture when the threshold is crossed
-    /// and fires the pop.
-    pub(in crate::widget_host) fn maybe_fire_edge_swipe(&mut self, screen_x: f32) -> bool {
-        if self.preview_edge_swipe_start_x.is_none() {
-            return false;
-        }
-        if screen_x - self.preview_edge_swipe_start_x.unwrap() < Self::POP_THRESHOLD_PX {
-            return false;
-        }
-        self.preview_edge_swipe_start_x = None;
-        if let Some(preview) = self.preview.as_ref() {
-            preview.pop_screen();
-            self.on_preview_screen_switched(self.last_viewport_w, self.last_viewport_h);
-        }
-        true
-    }
-
-    /// Clear any armed candidate — called on release so a gesture that
-    /// never crossed the threshold doesn't leak into the NEXT press.
-    pub(in crate::widget_host) fn disarm_edge_swipe(&mut self) {
-        self.preview_edge_swipe_start_x = None;
-    }
-
-    /// Cancel the in-flight preview pointer gesture after an edge-swipe
-    /// fires. Per-pointer (R4): every held id's arena timers settle and
-    /// its capture anchor releases.
-    pub(in crate::widget_host) fn cancel_preview_gesture_for_edge_swipe(&mut self) {
-        let pids = std::mem::take(&mut self.preview_pressed_pids);
-        for pid in pids {
-            if let Some(p) = self.preview.as_mut() {
-                p.cancel_pointer(pid, self.now_ms);
-            }
-        }
     }
 }

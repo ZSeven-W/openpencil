@@ -5,8 +5,9 @@
 //! the 800-line cap.
 
 use super::PreviewSession;
+use crate::device_frame::{compute_frame_geometry, scroll_max, DeviceFrame};
 
-use op_editor_core::PenNodeExt;
+use op_editor_core::{PenNodeExt, PreviewDeviceKind};
 use op_editor_ui::layout_scene::SceneNode;
 use op_editor_ui::widgets::{
     paint_scene_page_with, paint_scene_subtree, PaintCx, PaintSceneOptions,
@@ -77,6 +78,52 @@ impl PreviewSession {
         };
         self.binding_overlay
             .set_page_scroll(&root_id, offset, max_offset, delta_y)
+    }
+
+    /// Mirror a device frame's scroll into the page-scroll contract.
+    /// `scroll_y` is the frame's logical offset (`preview_scroll_y`) and
+    /// the extent is the frame's own [`scroll_max`], so every host feeds
+    /// `$scroll` the same numbers. Hosts call this whenever the frame is
+    /// rebuilt (`delta_y = 0`, publishing `max_offset` before any scroll)
+    /// and on every device scroll (the screen-pixel wheel delta).
+    /// Returns whether a bound value can have changed (repaint).
+    pub fn set_device_page_scroll(
+        &mut self,
+        frame: &DeviceFrame,
+        scroll_y: f32,
+        delta_y: f32,
+    ) -> bool {
+        self.set_page_scroll(scroll_y, scroll_max(frame), delta_y)
+    }
+
+    /// Fit `kind`'s device frame into `canvas` around `root_rect`, with
+    /// this session's pinned bottom nav and top status bar resolved to
+    /// their node ids. Both hosts build every frame through this (the
+    /// settled rebuild and the canvas <-> frame merge animation's
+    /// interpolated paint), so paint and hit-testing see one geometry.
+    pub fn device_frame_geometry(
+        &self,
+        kind: PreviewDeviceKind,
+        canvas: Rect,
+        root_rect: Rect,
+    ) -> DeviceFrame {
+        let is_phone = kind == PreviewDeviceKind::Phone;
+        let nav = self.pinned_nav_candidate(is_phone);
+        let status = self.pinned_status_bar_candidate(is_phone);
+        let mut frame = compute_frame_geometry(
+            kind,
+            canvas,
+            root_rect,
+            nav.as_ref().map(|(_, rect)| *rect),
+            status.as_ref().map(|(_, rect)| *rect),
+        );
+        if let (Some(pinned), Some((node_id, _))) = (frame.pinned.as_mut(), nav) {
+            pinned.node_id = node_id;
+        }
+        if let (Some(pinned_top), Some((node_id, _))) = (frame.pinned_top.as_mut(), status) {
+            pinned_top.node_id = node_id;
+        }
+        frame
     }
 
     /// The framed root's mirrored page scroll as `(offset, max_offset)`
