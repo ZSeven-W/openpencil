@@ -2,7 +2,8 @@
 
 use super::{node_children, node_hidden, root_nodes};
 use crate::{fmt_num, html_escape};
-use jian_core::motion::compile;
+use jian_core::action::services::Easing as RuntimeEasing;
+use jian_core::motion::{as_cubic, compile, CubicPiece};
 use jian_ops_schema::motion::{
     Easing, Iterations, MotionTrigger, NodeAnimation, NodeAnimationFillMode,
 };
@@ -153,7 +154,7 @@ pub(super) fn inline_style(node: &PenNode) -> String {
         style.push_str(&format!(
             ";transition:{properties} {}ms {}",
             transition.duration_ms,
-            easing_to_css(&transition.easing)
+            transition_timing(&transition.easing)
         ));
     }
     if let Some(animations) = animations.filter(|items| !items.is_empty()) {
@@ -274,18 +275,42 @@ fn css_number(value: &Value, suffix: &str) -> String {
     }
 }
 
-fn easing_to_css(easing: &Easing) -> String {
-    match easing {
-        Easing::Linear => "linear".to_string(),
-        Easing::Ease => "ease".to_string(),
-        Easing::EaseIn => "ease-in".to_string(),
-        Easing::EaseOut => "ease-out".to_string(),
-        Easing::EaseInOut => "ease-in-out".to_string(),
-        Easing::Standard | Easing::Emphasized => "cubic-bezier(0.2,0,0,1)".to_string(),
-        Easing::EmphasizedDecelerate => "cubic-bezier(0.05,0.7,0.1,1)".to_string(),
-        Easing::EmphasizedAccelerate => "cubic-bezier(0.3,0,0.8,0.15)".to_string(),
-        Easing::CubicBezier(x1, y1, x2, y2) => format!("cubic-bezier({},{},{},{})", x1, y1, x2, y2),
+/// Preview's transition curve as a CSS easing function. Preview applies its
+/// whole curve to the transition, clamped to [0, 1]: one cubic piece that
+/// stays inside that range is an exact `cubic-bezier`, while `easeInOut`
+/// (two pieces) and curves Preview clamps become a sampled `linear()`.
+fn transition_timing(easing: &Easing) -> String {
+    if matches!(easing, Easing::Linear) {
+        return "linear".to_owned();
     }
+    let pieces = as_cubic(RuntimeEasing::from(easing));
+    let samples: Vec<f32> = (0..=TIMING_SAMPLES)
+        .map(|step| curve_at(&pieces, step as f32 / TIMING_SAMPLES as f32))
+        .collect();
+    let inside = samples
+        .iter()
+        .all(|value| (-1e-6..=1.0 + 1e-6).contains(value));
+    if let ([piece], true) = (pieces.as_slice(), inside) {
+        let [x1, y1, x2, y2] = piece.control.map(|value| rounded(f64::from(value)));
+        return format!("cubic-bezier({x1},{y1},{x2},{y2})");
+    }
+    let points: Vec<String> = samples
+        .iter()
+        .map(|value| rounded(f64::from(value.clamp(0.0, 1.0))))
+        .collect();
+    format!("linear({})", points.join(","))
+}
+
+/// Evenly spaced points for a sampled `linear()` curve: 41 points keep the
+/// worst case (easeInOut, overshoot curves) well under half a percent.
+const TIMING_SAMPLES: usize = 40;
+
+fn curve_at(pieces: &[CubicPiece], progress: f32) -> f32 {
+    pieces
+        .iter()
+        .find(|piece| progress <= piece.x1)
+        .or(pieces.last())
+        .map_or(progress, |piece| piece.eval(progress))
 }
 
 /// `animation-iteration-count`: the authored count, or `infinite`. Preview
@@ -342,6 +367,26 @@ mod tests {
         assert_eq!(iteration_count(&Iterations::Count(3)), "3");
         assert_eq!(iteration_count(&Iterations::Count(0)), "1");
         assert_eq!(iteration_count(&Iterations::Infinite), "infinite");
+    }
+
+    #[test]
+    fn transitions_time_with_preview_curves() {
+        assert_eq!(transition_timing(&Easing::Linear), "linear");
+        assert_eq!(
+            transition_timing(&Easing::Ease),
+            "cubic-bezier(0.3333,0,0.6667,1)"
+        );
+        assert_eq!(
+            transition_timing(&Easing::Standard),
+            "cubic-bezier(0.2,0,0,1)"
+        );
+        let in_out = transition_timing(&Easing::EaseInOut);
+        assert!(in_out.starts_with("linear(0,"), "{in_out}");
+        assert_eq!(in_out.matches(',').count(), TIMING_SAMPLES, "{in_out}");
+        // Preview clamps an overshooting curve at 1.
+        let overshoot = transition_timing(&Easing::CubicBezier(0.34, 1.56, 0.64, 1.0));
+        assert!(overshoot.starts_with("linear("), "{overshoot}");
+        assert!(!overshoot.contains("1."), "{overshoot}");
     }
 
     #[test]
