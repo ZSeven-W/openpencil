@@ -185,12 +185,7 @@ impl RenderBackend for VisualBackend {
                 }),
                 run.font_size,
                 run.font_weight,
-                fill(Color::rgba_u8(
-                    run.color.r(),
-                    run.color.g(),
-                    run.color.b(),
-                    f32::from(run.color.a()) / 255.0
-                )),
+                fill(Color::from_jian(run.color)),
                 xml_escape(&run.content)
             );
         }

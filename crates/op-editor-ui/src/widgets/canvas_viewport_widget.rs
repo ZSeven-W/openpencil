@@ -110,15 +110,6 @@ fn authored_widget_visual(node: &SceneNode, widget: &SceneWidget) -> AuthoredWid
     visual
 }
 
-fn ui_color(color: jian_core::scene::Color) -> Color {
-    Color::rgba_u8(
-        color.r(),
-        color.g(),
-        color.b(),
-        f32::from(color.a()) / 255.0,
-    )
-}
-
 fn lerp_u8(from: u8, to: u8, t: f32) -> u8 {
     (f32::from(from) + (f32::from(to) - f32::from(from)) * t)
         .round()
@@ -157,14 +148,18 @@ fn paint_switch(
     let track = lerp_jian_color(visual.inactive, visual.active, p);
     let foreground = lerp_jian_color(visual.inactive_foreground, visual.active_foreground, p);
     let radius = authored_radius_or(node, w, h / 2.0, zoom);
-    cx.backend.fill_round_rect(r, radius, ui_color(track));
+    cx.backend
+        .fill_round_rect(r, radius, Color::from_jian(track));
     let pad = 2.0;
     let d = (h - pad * 2.0).max(2.0);
     let off_x = x + pad;
     let on_x = x + ww - d - pad;
     let kx = off_x + (on_x - off_x) * p;
-    cx.backend
-        .fill_round_rect(Rect::xywh(kx, y + pad, d, d), d / 2.0, ui_color(foreground));
+    cx.backend.fill_round_rect(
+        Rect::xywh(kx, y + pad, d, d),
+        d / 2.0,
+        Color::from_jian(foreground),
+    );
 }
 
 /// Checkbox: authored active fill with a contrast-derived check when on,
@@ -194,10 +189,14 @@ fn paint_checkbox(
     let stroke_w = node.stroke.map(|s| s.width).unwrap_or(1.5) * zoom;
     if on {
         cx.backend
-            .fill_round_rect(box_rect, radius, ui_color(visual.active));
+            .fill_round_rect(box_rect, radius, Color::from_jian(visual.active));
     }
-    cx.backend
-        .stroke_round_rect(box_rect, radius, ui_color(visual.inactive), stroke_w);
+    cx.backend.stroke_round_rect(
+        box_rect,
+        radius,
+        Color::from_jian(visual.inactive),
+        stroke_w,
+    );
     if on {
         // White check (✓) as a 3-point polyline, fractions matching the
         // jian-core visual: (0.24,0.52) → (0.42,0.70) → (0.76,0.30).
@@ -205,7 +204,7 @@ fn paint_checkbox(
         let p1 = Point2D::new(box_x + box_w * 0.42, box_y + box_h * 0.70);
         let p2 = Point2D::new(box_x + box_w * 0.76, box_y + box_h * 0.30);
         let cw = (2.0 * zoom).max(1.0);
-        let check = ui_color(visual.active_foreground);
+        let check = Color::from_jian(visual.active_foreground);
         cx.backend.stroke_line(p0, p1, check, cw);
         cx.backend.stroke_line(p1, p2, check, cw);
     }
@@ -219,7 +218,7 @@ fn paint_checkbox(
             draw_label(
                 cx,
                 label,
-                ui_color(visual.label_foreground),
+                Color::from_jian(visual.label_foreground),
                 label_x,
                 y + (h - fs) / 2.0,
                 fs,
@@ -247,13 +246,13 @@ fn paint_slider(
     cx.backend.fill_round_rect(
         Rect::xywh(x, cy - track_h / 2.0, ww, track_h),
         track_radius,
-        ui_color(visual.inactive),
+        Color::from_jian(visual.inactive),
     );
     if frac > 0.0 {
         cx.backend.fill_round_rect(
             Rect::xywh(x, cy - track_h / 2.0, ww * frac, track_h),
             track_radius,
-            ui_color(visual.active),
+            Color::from_jian(visual.active),
         );
     }
     let d = h.clamp(10.0 * zoom, 16.0 * zoom);
@@ -265,11 +264,15 @@ fn paint_slider(
         visual.inactive_foreground
     };
     cx.backend
-        .fill_round_rect(knob, d / 2.0, ui_color(knob_color));
+        .fill_round_rect(knob, d / 2.0, Color::from_jian(knob_color));
     let knob_stroke_width = node.stroke.map(|stroke| stroke.width).unwrap_or(1.0) * zoom;
     if knob_stroke_width > 0.0 {
-        cx.backend
-            .stroke_round_rect(knob, d / 2.0, ui_color(visual.inactive), knob_stroke_width);
+        cx.backend.stroke_round_rect(
+            knob,
+            d / 2.0,
+            Color::from_jian(visual.inactive),
+            knob_stroke_width,
+        );
     }
 }
 
@@ -291,7 +294,7 @@ fn paint_progress(
     };
     let radius = authored_radius_or(node, w, h / 2.0, zoom);
     cx.backend
-        .fill_round_rect(r, radius, ui_color(visual.inactive));
+        .fill_round_rect(r, radius, Color::from_jian(visual.inactive));
     let (segment_x, segment_width) = if w.indeterminate {
         (x + ww * 0.325, ww * 0.35)
     } else {
@@ -301,7 +304,7 @@ fn paint_progress(
         cx.backend.fill_round_rect(
             Rect::xywh(segment_x, y, segment_width, h),
             radius,
-            ui_color(visual.active),
+            Color::from_jian(visual.active),
         );
     }
 }
@@ -319,12 +322,13 @@ fn paint_select(
     let (x, y, ww, h) = rect_parts(r);
     let radius = authored_radius_or(node, w, 6.0 * zoom, zoom);
     if let Some(fill) = visual.surface {
-        cx.backend.fill_round_rect(r, radius, ui_color(fill));
+        cx.backend
+            .fill_round_rect(r, radius, Color::from_jian(fill));
     }
     if let (Some(border), Some(stroke)) = (visual.border, node.stroke) {
         if stroke.width > 0.0 {
             cx.backend
-                .stroke_round_rect(r, radius, ui_color(border), stroke.width * zoom);
+                .stroke_round_rect(r, radius, Color::from_jian(border), stroke.width * zoom);
         }
     }
 
@@ -347,7 +351,7 @@ fn paint_select(
         draw_label(
             cx,
             text,
-            ui_color(color),
+            Color::from_jian(color),
             x + 8.0 * zoom,
             y + (h - fs) / 2.0,
             fs,
@@ -357,7 +361,7 @@ fn paint_select(
         cx,
         x + ww - 20.0 * zoom,
         y + h / 2.0,
-        ui_color(visual.muted_foreground),
+        Color::from_jian(visual.muted_foreground),
         zoom,
     );
 }
@@ -388,10 +392,14 @@ fn paint_radio_group(
         let circle = Rect::xywh(x + 2.0 * zoom, ry, d, d);
         if on {
             cx.backend
-                .fill_round_rect(circle, d / 2.0, ui_color(visual.active));
+                .fill_round_rect(circle, d / 2.0, Color::from_jian(visual.active));
         }
-        cx.backend
-            .stroke_round_rect(circle, d / 2.0, ui_color(visual.inactive), stroke_width);
+        cx.backend.stroke_round_rect(
+            circle,
+            d / 2.0,
+            Color::from_jian(visual.inactive),
+            stroke_width,
+        );
         if on {
             let inner = d * 0.4;
             cx.backend.fill_round_rect(
@@ -402,7 +410,7 @@ fn paint_radio_group(
                     inner,
                 ),
                 inner / 2.0,
-                ui_color(visual.active_foreground),
+                Color::from_jian(visual.active_foreground),
             );
         }
         let label = if opt.label.is_empty() {
@@ -415,7 +423,7 @@ fn paint_radio_group(
         draw_label(
             cx,
             label,
-            ui_color(visual.label_foreground),
+            Color::from_jian(visual.label_foreground),
             lx,
             ry + (d - fs) / 2.0,
             fs,
@@ -439,12 +447,13 @@ fn paint_text_field(
     // intrinsic input radius. No fill means no box; no stroke means no border.
     let radius = authored_radius_or(node, w, 6.0 * zoom, zoom);
     if let Some(fill) = visual.surface {
-        cx.backend.fill_round_rect(r, radius, ui_color(fill));
+        cx.backend
+            .fill_round_rect(r, radius, Color::from_jian(fill));
     }
     if let (Some(border), Some(stroke)) = (visual.border, node.stroke) {
         if stroke.width > 0.0 {
             cx.backend
-                .stroke_round_rect(r, radius, ui_color(border), stroke.width * zoom);
+                .stroke_round_rect(r, radius, Color::from_jian(border), stroke.width * zoom);
         }
     }
 
@@ -459,7 +468,7 @@ fn paint_text_field(
             "",
             name,
             Rect::xywh(x + INPUT_PAD_X * zoom, iy, icon, icon),
-            Some(ui_color(visual.muted_foreground)),
+            Some(Color::from_jian(visual.muted_foreground)),
         );
     }
     if let Some(name) = w.trailing_icon.as_deref() {
@@ -473,12 +482,12 @@ fn paint_text_field(
                 icon,
                 icon,
             ),
-            Some(ui_color(visual.muted_foreground)),
+            Some(Color::from_jian(visual.muted_foreground)),
         );
     }
 
     if let Some((text, is_placeholder)) = text_field_display_text(w) {
-        let color = ui_color(if is_placeholder {
+        let color = Color::from_jian(if is_placeholder {
             visual.muted_foreground
         } else {
             visual.foreground
@@ -520,7 +529,7 @@ fn paint_tabs(
     let bar = Rect::xywh(x, y, ww, bar_h);
     let bar_radius = authored_radius_or(node, w, 6.0 * zoom, zoom);
     cx.backend
-        .fill_round_rect(bar, bar_radius, ui_color(visual.inactive));
+        .fill_round_rect(bar, bar_radius, Color::from_jian(visual.inactive));
     // `width > 0.0` gate, same as select / text_field: Skia reads a 0-width
     // stroke as a hairline, not as a no-op, so an authored `thickness: 0`
     // would still outline the bar.
@@ -528,7 +537,7 @@ fn paint_tabs(
         cx.backend.stroke_round_rect(
             bar,
             bar_radius,
-            ui_color(visual.border.unwrap_or(visual.inactive)),
+            Color::from_jian(visual.border.unwrap_or(visual.inactive)),
             stroke.width * zoom,
         );
     }
@@ -547,7 +556,7 @@ fn paint_tabs(
                 active_h,
             ),
             active_h.min(active_w) / 2.0,
-            ui_color(visual.active),
+            Color::from_jian(visual.active),
         );
     }
     let fs = 14.0 * zoom;
@@ -560,9 +569,9 @@ fn paint_tabs(
             opt.label.as_str()
         };
         let color = if on {
-            ui_color(visual.active_foreground)
+            Color::from_jian(visual.active_foreground)
         } else {
-            ui_color(visual.muted_track_foreground)
+            Color::from_jian(visual.muted_track_foreground)
         };
         let label_w = cx.backend.measure_text_weighted(label, fs, 400);
         draw_label(
