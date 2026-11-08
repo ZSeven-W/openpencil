@@ -22,6 +22,9 @@ pub use super::home::{
     AppPages, EntrySurface, HomeDevice, HomeFamily, HomeHit, HomeState, InfoKind, SlideRatio,
     TaskDraft,
 };
+pub use super::motion_timeline::{
+    MotionTimelineDrag, MotionTimelineState, MotionTimelineTab, TimelineKeyframeRef,
+};
 pub use super::pickers::{
     CanvasDropIndicator, CanvasOverlayLine, CanvasOverlayRect, CompositingPickerTarget,
     EffectParamFocus, FontPickerPurpose, LayerContextMenuState, MissingFontSurface,

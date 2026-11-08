@@ -20,6 +20,7 @@ pub mod groups;
 pub mod home;
 pub mod home_example_draft;
 mod methods;
+pub mod motion_timeline;
 pub mod pickers;
 pub mod slides_panel_state;
 mod state;

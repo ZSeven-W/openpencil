@@ -236,6 +236,8 @@ pub struct EditorUiState {
     // --- Canvas preview (Play) mode -------------------------------
     /// Preview (Play) mode flag + device / screen switcher state.
     pub preview: PreviewState,
+    /// Motion timeline panel: scope, tab, playhead, selection, drag draft.
+    pub motion_timeline: super::MotionTimelineState,
     /// Left-rail tab selection plus the slides tab's hover / press /
     /// drag bookkeeping. The tab row itself only appears for scenario
     /// documents that have a page navigator to offer.

@@ -1,0 +1,173 @@
+//! UI state of the motion timeline panel: whether it is open, which screen
+//! and trigger it projects, the playhead, the keyframe selection and the
+//! gesture in flight.
+//!
+//! None of it is saved. A drag edits [`MotionTimelineState::drag`] only;
+//! releasing it submits one motion command, so every gesture is one undo
+//! step and an abandoned drag leaves the document untouched.
+
+use jian_core::motion::ClipTrigger;
+
+/// Which trigger's animations the timeline lays out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MotionTimelineTab {
+    #[default]
+    Mount,
+    InView,
+    /// Manual animations sharing [`MotionTimelineState::manual_id`].
+    Manual,
+}
+
+/// One keyframe on the timeline: node, animation index, keyframe index.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineKeyframeRef {
+    pub node_id: String,
+    pub animation: usize,
+    pub keyframe: usize,
+}
+
+/// The gesture in flight, as a draft the panel paints until release.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MotionTimelineDrag {
+    /// Moving a whole strip by `delta_ms`.
+    Strip {
+        node_id: String,
+        animation: usize,
+        delta_ms: f64,
+    },
+    /// Dragging a strip's first-iteration end to `end_ms`.
+    StripEnd {
+        node_id: String,
+        animation: usize,
+        end_ms: f64,
+    },
+    /// Moving the selected keyframes by `delta_ms`.
+    Keyframes {
+        keys: Vec<TimelineKeyframeRef>,
+        delta_ms: f64,
+    },
+    /// Scrubbing the playhead.
+    Playhead,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MotionTimelineState {
+    pub open: bool,
+    /// Panel height in logical pixels.
+    pub height: f32,
+    /// Node whose subtree the timeline projects; `None` follows the active
+    /// screen.
+    pub scope_root: Option<String>,
+    pub tab: MotionTimelineTab,
+    /// The manual animation id the manual tab shows.
+    pub manual_id: Option<String>,
+    pub playhead_ms: f64,
+    pub playing: bool,
+    pub looping: bool,
+    /// Horizontal scale in pixels per millisecond.
+    pub zoom: f32,
+    pub selection: Vec<TimelineKeyframeRef>,
+    pub drag: Option<MotionTimelineDrag>,
+}
+
+impl MotionTimelineState {
+    pub const DEFAULT_HEIGHT: f32 = 220.0;
+    pub const MIN_HEIGHT: f32 = 120.0;
+    pub const MAX_HEIGHT: f32 = 480.0;
+    /// One second spans 250 px by default.
+    pub const DEFAULT_ZOOM: f32 = 0.25;
+    pub const MIN_ZOOM: f32 = 0.02;
+    pub const MAX_ZOOM: f32 = 2.0;
+
+    /// The trigger the current tab projects; `None` on the manual tab
+    /// before an id is chosen.
+    pub fn clip_trigger(&self) -> Option<ClipTrigger> {
+        match self.tab {
+            MotionTimelineTab::Mount => Some(ClipTrigger::Mount),
+            MotionTimelineTab::InView => Some(ClipTrigger::InView),
+            MotionTimelineTab::Manual => self.manual_id.clone().map(ClipTrigger::Manual),
+        }
+    }
+
+    pub fn set_height(&mut self, height: f32) {
+        self.height = height.clamp(Self::MIN_HEIGHT, Self::MAX_HEIGHT);
+    }
+
+    pub fn set_zoom(&mut self, zoom: f32) {
+        self.zoom = zoom.clamp(Self::MIN_ZOOM, Self::MAX_ZOOM);
+    }
+
+    /// Switching what the timeline shows drops the selection and any drag,
+    /// which refer to the previous projection, and rewinds the playhead.
+    pub fn show(&mut self, tab: MotionTimelineTab, manual_id: Option<String>) {
+        self.tab = tab;
+        self.manual_id = manual_id;
+        self.selection.clear();
+        self.drag = None;
+        self.playhead_ms = 0.0;
+        self.playing = false;
+    }
+}
+
+impl Default for MotionTimelineState {
+    fn default() -> Self {
+        Self {
+            open: false,
+            height: Self::DEFAULT_HEIGHT,
+            scope_root: None,
+            tab: MotionTimelineTab::default(),
+            manual_id: None,
+            playhead_ms: 0.0,
+            playing: false,
+            looping: false,
+            zoom: Self::DEFAULT_ZOOM,
+            selection: Vec::new(),
+            drag: None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tabs_map_to_the_trigger_they_project() {
+        let mut state = MotionTimelineState::default();
+        assert_eq!(state.clip_trigger(), Some(ClipTrigger::Mount));
+        state.show(MotionTimelineTab::Manual, None);
+        assert_eq!(state.clip_trigger(), None);
+        state.show(MotionTimelineTab::Manual, Some("intro".into()));
+        assert_eq!(
+            state.clip_trigger(),
+            Some(ClipTrigger::Manual("intro".into()))
+        );
+    }
+
+    #[test]
+    fn switching_tabs_drops_the_old_selection_and_drag() {
+        let mut state = MotionTimelineState {
+            playhead_ms: 300.0,
+            playing: true,
+            selection: vec![TimelineKeyframeRef {
+                node_id: "a".into(),
+                animation: 0,
+                keyframe: 1,
+            }],
+            drag: Some(MotionTimelineDrag::Playhead),
+            ..MotionTimelineState::default()
+        };
+        state.show(MotionTimelineTab::InView, None);
+        assert!(state.selection.is_empty() && state.drag.is_none());
+        assert_eq!((state.playhead_ms, state.playing), (0.0, false));
+    }
+
+    #[test]
+    fn height_and_zoom_stay_in_range() {
+        let mut state = MotionTimelineState::default();
+        state.set_height(10.0);
+        state.set_zoom(99.0);
+        assert_eq!(state.height, MotionTimelineState::MIN_HEIGHT);
+        assert_eq!(state.zoom, MotionTimelineState::MAX_ZOOM);
+    }
+}
