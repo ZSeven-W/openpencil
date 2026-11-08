@@ -25,50 +25,6 @@ const MOTION_TRACK_BUDGET: usize = 32;
 /// and https://m3.material.io/components/switch/specs
 const SWITCH_TOGGLE_DURATION_MS: u64 = 150;
 
-pub(crate) fn load_warnings(document: &jian_ops_schema::PenDocument) -> Vec<String> {
-    let mut warnings = Vec::new();
-    collect_load_warnings(&document.children, &mut warnings);
-    if let Some(pages) = &document.pages {
-        for page in pages {
-            collect_load_warnings(&page.children, &mut warnings);
-        }
-    }
-    warnings
-}
-
-fn collect_load_warnings(nodes: &[jian_ops_schema::node::PenNode], warnings: &mut Vec<String>) {
-    for node in nodes {
-        let (transition, animations) = node.motion_declarations();
-        if let Some(transition) = transition {
-            for property in transition.properties.as_deref().into_iter().flatten() {
-                if !P1_MOTION_PROPERTIES.contains(&property.as_str()) {
-                    warnings.push(format!(
-                        "preview: motion property {property} on node {} is ignored for transition",
-                        jian_core::document::tree::node_schema_id(node)
-                    ));
-                }
-            }
-        }
-        if let Some(animations) = animations {
-            for animation in animations {
-                for keyframe in &animation.keyframes {
-                    for property in keyframe.values.keys() {
-                        if !P1_MOTION_PROPERTIES.contains(&property.as_str()) {
-                            warnings.push(format!(
-                                "preview: motion property {property} on node {} is ignored for animation",
-                                jian_core::document::tree::node_schema_id(node)
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-        if let Some(children) = node.children_ref() {
-            collect_load_warnings(children, warnings);
-        }
-    }
-}
-
 #[derive(Default)]
 struct MotionInner {
     lifecycle_started: bool,

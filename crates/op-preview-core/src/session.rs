@@ -427,7 +427,11 @@ impl PreviewSession {
             .iter()
             .filter_map(format_warning)
             .collect::<Vec<_>>();
-        warnings.extend(crate::motion::load_warnings(&layout_doc));
+        warnings.extend(
+            jian_core::motion::declarations::load_warnings(&layout_doc)
+                .into_iter()
+                .map(|warning| format!("preview: {warning}")),
+        );
 
         // Clone the prepared + promoted document BEFORE the runtime
         // consumes it: this is the exact tree (refs/tokens resolved,
