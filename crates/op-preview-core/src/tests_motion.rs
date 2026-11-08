@@ -312,10 +312,15 @@ fn non_compositor_motion_properties_are_reported_during_session_load() {
                 {"offset":1,"values":{"x":20}}
             ],"durationMs":200}]}]
     }));
-    assert!(session
-        .warnings()
-        .iter()
-        .any(|warning| warning.contains("x") && warning.contains("ignored")));
+    assert!(
+        session
+            .warnings()
+            .iter()
+            .any(|warning| warning
+                == "preview: motion property x on node hero is ignored for animation"),
+        "{:?}",
+        session.warnings()
+    );
 }
 
 #[test]
