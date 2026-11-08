@@ -315,7 +315,7 @@ impl<'a> Widget for CanvasViewport<'a> {
                 if let Some(node) = page.find(overlay.node_id.as_str()) {
                     let mut floating = node.clone();
                     let current = floating.aggregate_bounds();
-                    super::canvas_layout_transition::translate_scene_subtree(
+                    jian_scene::layout_scene_binding::translate_subtree(
                         &mut floating,
                         overlay.target_origin_doc.x - current.origin.x,
                         overlay.target_origin_doc.y - current.origin.y,

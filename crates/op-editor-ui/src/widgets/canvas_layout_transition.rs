@@ -1,6 +1,7 @@
 use crate::layout_scene::{LayoutScene, SceneNode};
 use crate::Rect;
 use jian_core::motion::ease_out_cubic;
+use jian_scene::layout_scene_binding::translate_subtree;
 use std::collections::HashMap;
 
 pub const CANVAS_LAYOUT_TRANSITION_MS: u64 = 160;
@@ -123,7 +124,7 @@ fn apply_node_transition(
     if let Some(start) = start_bounds.get(&node.id) {
         let current = node.aggregate_bounds();
         let remaining = 1.0 - progress;
-        translate_scene_subtree(
+        translate_subtree(
             node,
             (start.origin.x - current.origin.x) * remaining,
             (start.origin.y - current.origin.y) * remaining,
@@ -132,34 +133,6 @@ fn apply_node_transition(
     }
     for child in &mut node.children {
         apply_node_transition(child, start_bounds, progress);
-    }
-}
-
-pub(crate) fn translate_scene_subtree(node: &mut SceneNode, dx: f32, dy: f32) {
-    node.bounds.origin.x += dx;
-    node.bounds.origin.y += dy;
-    if node.aggregate_bounds_cache.size.x > 0.0 || node.aggregate_bounds_cache.size.y > 0.0 {
-        node.aggregate_bounds_cache.origin.x += dx;
-        node.aggregate_bounds_cache.origin.y += dy;
-    }
-    for point in &mut node.points {
-        point.x += dx;
-        point.y += dy;
-    }
-    for anchor in &mut node.path_anchors {
-        anchor.pos.x += dx;
-        anchor.pos.y += dy;
-        if let Some(handle) = anchor.handle_in.as_mut() {
-            handle.x += dx;
-            handle.y += dy;
-        }
-        if let Some(handle) = anchor.handle_out.as_mut() {
-            handle.x += dx;
-            handle.y += dy;
-        }
-    }
-    for child in &mut node.children {
-        translate_scene_subtree(child, dx, dy);
     }
 }
 

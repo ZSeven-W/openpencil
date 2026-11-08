@@ -198,14 +198,8 @@ impl ScreenTransition {
         (elapsed as f32 / self.duration_ms.max(1) as f32).clamp(0.0, 1.0)
     }
 
-    /// Ease-out-cubic progress for the push/pop slide — the same formula
-    /// `op_editor_ui::widgets::CanvasLayoutTransition` uses, copied rather
-    /// than imported: that helper's `translate_scene_subtree` diffs ONE
-    /// scene's nodes by id across a layout change (a per-node problem);
-    /// sliding two independent whole pages by a viewport-origin offset
-    /// (see `paint_framed_animated`) only needs this one-line formula, not
-    /// the subtree walker, so there's nothing else worth reusing across
-    /// the crate boundary.
+    /// Ease-out-cubic progress for the push/pop slide: jian-core's curve,
+    /// the same one the canvas layout transition uses.
     fn eased_t(&self, now_ms: u64) -> f32 {
         jian_core::motion::ease_out_cubic(self.linear_t(now_ms))
     }
