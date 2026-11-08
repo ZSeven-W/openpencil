@@ -270,7 +270,7 @@ impl PreviewSession {
         if let Some(style) = authored {
             self.apply_style_override(node, style, state_variables);
         } else if let Some(overlay) = derived_overlay(&WidgetTheme::default(), interaction, false) {
-            let overlay = color_from_jian(overlay);
+            let overlay = Color::from_jian(overlay);
             if let Some(fill) = node.fill {
                 node.fill = Some(composite_over(fill, overlay));
             }
@@ -645,15 +645,6 @@ fn parse_state_color(
     })
 }
 
-fn color_from_jian(color: jian_core::scene::Color) -> Color {
-    Color::rgba_u8(
-        color.r(),
-        color.g(),
-        color.b(),
-        f32::from(color.a()) / 255.0,
-    )
-}
-
 fn multiply_color_alpha(color: Color, factor: f32) -> Color {
     Color {
         r: color.r,
@@ -726,11 +717,5 @@ fn widget_field_foreground(node: &SceneNode) -> Color {
     );
     // Scene fill/stroke already carry direct-paint opacity; the contrast-derived
     // caret does not, so fold it exactly once through the shared widget policy.
-    let color = with_visual_opacity(visual.foreground, node.opacity);
-    Color::rgba_u8(
-        color.r(),
-        color.g(),
-        color.b(),
-        f32::from(color.a()) / 255.0,
-    )
+    Color::from_jian(with_visual_opacity(visual.foreground, node.opacity))
 }
