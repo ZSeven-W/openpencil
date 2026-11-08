@@ -173,6 +173,8 @@ fn is_recipe_animation(animation: &NodeAnimation) -> bool {
                     | (DISPLAY_DURATION_MS, Easing::Standard)
             )
         }
+        // Recipes never emit manually played motion, so it is always authored.
+        MotionTrigger::Manual => false,
     }
 }
 

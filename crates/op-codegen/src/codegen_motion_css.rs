@@ -2,7 +2,7 @@
 
 use super::{node_children, node_hidden, root_nodes};
 use crate::{fmt_num, html_escape};
-use jian_ops_schema::motion::{Easing, MotionTrigger, NodeAnimation};
+use jian_ops_schema::motion::{Easing, Iterations, MotionTrigger, NodeAnimation};
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::PenDocument;
 use op_editor_core::PenNodeExt;
@@ -108,7 +108,7 @@ pub(super) fn inline_style(node: &PenNode) -> String {
                     animation.duration_ms,
                     easing_to_css(&animation.easing),
                     animation.delay_ms,
-                    animation.iterations
+                    iteration_count(&animation.iterations)
                 )
             })
             .collect::<Vec<_>>()
@@ -228,6 +228,14 @@ fn easing_to_css(easing: &Easing) -> String {
     }
 }
 
+/// `animation-iteration-count`: the authored count, or `infinite`.
+fn iteration_count(iterations: &Iterations) -> String {
+    match iterations {
+        Iterations::Count(count) => count.to_string(),
+        Iterations::Infinite => "infinite".to_owned(),
+    }
+}
+
 fn animation_name(node_id: &str, index: usize) -> String {
     format!("op-{}-{index}", css_identifier(node_id))
 }
@@ -251,5 +259,17 @@ fn css_identifier(value: &str) -> String {
         "node".to_string()
     } else {
         sanitized
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn iteration_counts_cover_infinite_motion() {
+        assert_eq!(iteration_count(&Iterations::Count(3)), "3");
+        assert_eq!(iteration_count(&Iterations::Count(0)), "0");
+        assert_eq!(iteration_count(&Iterations::Infinite), "infinite");
     }
 }

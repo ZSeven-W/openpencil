@@ -2875,8 +2875,10 @@ dependencies = [
 name = "jian-scene"
 version = "0.0.1"
 dependencies = [
+ "jian-core",
  "jian-ops-schema",
  "jian-widgets",
+ "serde_json",
 ]
 
 [[package]]

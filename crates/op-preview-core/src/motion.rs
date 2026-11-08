@@ -491,7 +491,7 @@ impl PreviewMotionState {
                 duration_ms: declaration.duration_ms,
                 delay_ms: 0,
                 easing: easing_from_schema(&declaration.easing),
-                iterations: declaration.iterations.max(1),
+                iterations: declaration.iterations.count_or(u32::MAX).max(1),
                 direction: AnimationDirection::Normal,
                 // Lifecycle keyframe 0 is the pre-reveal look. Schema P1 only
                 // has forwards|none, so map those onto Both|Backwards to hold
