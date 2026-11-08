@@ -161,6 +161,10 @@ pub(super) fn inline_style(node: &PenNode) -> String {
         let declarations = animations
             .iter()
             .enumerate()
+            // Manual motion plays only through a play_motion interaction,
+            // which the export does not carry yet; like Preview before such
+            // an interaction, the node keeps its authored look.
+            .filter(|(_, animation)| animation.trigger != MotionTrigger::Manual)
             .map(|(index, animation)| {
                 // The curve lives in the keyframes' timing functions. In-view
                 // motion waits on its first keyframe for the observer script.
@@ -180,7 +184,9 @@ pub(super) fn inline_style(node: &PenNode) -> String {
             })
             .collect::<Vec<_>>()
             .join(", ");
-        style.push_str(&format!(";animation:{declarations}"));
+        if !declarations.is_empty() {
+            style.push_str(&format!(";animation:{declarations}"));
+        }
     }
     style
 }

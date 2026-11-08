@@ -149,3 +149,31 @@ fn html_motion_keyframes_sit_where_preview_reaches_them() {
     assert!(!css.contains("  25% {"), "{css}");
     assert_eq!(css.matches("animation-timing-function").count(), 2, "{css}");
 }
+
+#[test]
+fn html_manual_motion_waits_for_an_interaction() {
+    let doc = jian_ops_schema::load_str(
+        r#"{"version":"1.0","children":[
+          {"type":"rectangle","id":"card","animations":[
+            {"trigger":"manual","id":"pulse","keyframes":[{"offset":0,"values":{"scaleX":1}},
+            {"offset":1,"values":{"scaleX":1.1}}],"durationMs":200},
+            {"trigger":"mount","keyframes":[{"offset":0,"values":{"opacity":0}},
+            {"offset":1,"values":{"opacity":1}}],"durationMs":300}
+          ]},
+          {"type":"rectangle","id":"only","animations":[
+            {"trigger":"manual","id":"shake","keyframes":[{"offset":0,"values":{"translateX":0}},
+            {"offset":1,"values":{"translateX":8}}],"durationMs":200}
+          ]}
+        ]}"#,
+    )
+    .expect("manual motion document")
+    .value;
+    let html = Html.generate(&doc);
+    // The keyframes keep their declaration-index names for a later trigger,
+    // but only the mount animation plays.
+    assert!(html.contains("@keyframes op-card-0 {"));
+    assert!(html.contains("animation:op-card-1 300ms linear 0ms 1 both\""));
+    assert!(!html.contains("animation:op-card-0"));
+    assert!(!html.contains("animation:op-only-0"));
+    assert!(!html.contains(";animation:\""));
+}
