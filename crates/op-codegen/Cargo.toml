@@ -27,8 +27,10 @@ base64 = { version = "0.22", optional = true }
 
 [dev-dependencies]
 # Round-trip validation for the hand-rolled STORED zip encoder
-# (test-only; never reaches the wasm build).
-zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
+# (test-only; never reaches the wasm build). STORED entries need no
+# compression feature, and naming deflate-flate2 without a flate2 backend
+# broke `cargo test -p op-codegen` outside a full workspace build.
+zip = { version = "9", default-features = false }
 
 [features]
 # Gates the AI code-generation pipeline (src/ai/). Off by default.
