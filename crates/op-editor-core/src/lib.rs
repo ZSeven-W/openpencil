@@ -134,6 +134,7 @@ pub mod instance_override;
 pub mod interaction_edit;
 pub mod interaction_edit_apply;
 pub mod missing_fonts;
+pub mod motion_presets;
 pub mod mutators;
 pub mod node_defaults;
 pub mod node_id;
