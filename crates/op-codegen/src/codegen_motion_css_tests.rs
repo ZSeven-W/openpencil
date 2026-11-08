@@ -38,6 +38,7 @@ fn html_motion_export_matches_the_golden_css() {
         "  0% {\n",
         "    opacity: 0;\n",
         "    transform: translate(0px, 16px);\n",
+        "    animation-timing-function: cubic-bezier(0.05,0.7,0.1,1);\n",
         "  }\n",
         "  100% {\n",
         "    opacity: 1;\n",
@@ -48,6 +49,7 @@ fn html_motion_export_matches_the_golden_css() {
         "  0% {\n",
         "    opacity: 0;\n",
         "    transform: translate(0px, 12px);\n",
+        "    animation-timing-function: cubic-bezier(0.2,0,0,1);\n",
         "  }\n",
         "  100% {\n",
         "    opacity: 1;\n",
@@ -67,6 +69,8 @@ fn html_motion_export_matches_the_golden_css() {
     );
     assert_eq!(html_style_block(&html), expected);
     assert!(html.contains("data-op-motion-node=\"hero\""));
+    // The curve lives in the keyframes, so the shorthand times linearly.
+    assert!(html.contains("animation:op-hero-0 400ms linear 0ms 1 both"));
     assert!(html.contains("transition:opacity 150ms cubic-bezier(0.2,0,0,1)"));
     assert!(html.contains("animation-timeline:view();animation-range:entry 0% entry 40%"));
 }
@@ -97,4 +101,27 @@ fn html_without_motion_has_no_extra_css() {
     assert!(!html.contains("<style>"));
     assert!(!html.contains("data-op-motion-node"));
     assert!(!html.contains("@keyframes"));
+}
+
+#[test]
+fn html_motion_keyframes_sit_where_preview_reaches_them() {
+    // Preview eases the whole animation, so with easeIn (p²) the keyframe
+    // at offset 0.25 is reached half way through, not a quarter of the way.
+    let doc = jian_ops_schema::load_str(
+        r#"{"version":"1.0","children":[
+          {"type":"rectangle","id":"dot","animations":[
+            {"trigger":"mount","keyframes":[
+              {"offset":0,"values":{"opacity":0}},
+              {"offset":0.25,"values":{"opacity":1}},
+              {"offset":1,"values":{"opacity":0.5}}
+            ],"durationMs":400,"easing":"easeIn"}
+          ]}
+        ]}"#,
+    )
+    .expect("three-stop document")
+    .value;
+    let css = html_style_block(&Html.generate(&doc)).to_owned();
+    assert!(css.contains("  50% {\n    opacity: 1;\n"), "{css}");
+    assert!(!css.contains("  25% {"), "{css}");
+    assert_eq!(css.matches("animation-timing-function").count(), 2, "{css}");
 }

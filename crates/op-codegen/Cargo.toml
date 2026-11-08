@@ -12,6 +12,9 @@ path = "src/lib.rs"
 
 [dependencies]
 jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+# The motion curve compiler: exports Preview's whole-span easing as exact
+# per-keyframe cubic-beziers.
+jian-core = { path = "../../vendor/jian/crates/jian-core" }
 op-editor-core = { path = "../op-editor-core" }
 # Canonical HTML escaping (dependency-free, wasm-clean).
 op-util = { path = "../op-util" }

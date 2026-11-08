@@ -2,6 +2,7 @@
 
 use super::{node_children, node_hidden, root_nodes};
 use crate::{fmt_num, html_escape};
+use jian_core::motion::compile;
 use jian_ops_schema::motion::{
     Easing, Iterations, MotionTrigger, NodeAnimation, NodeAnimationFillMode,
 };
@@ -51,20 +52,76 @@ fn collect_animated_nodes<'a>(node: &'a PenNode, out: &mut Vec<&'a PenNode>) {
     }
 }
 
+/// Keyframes that replay Preview exactly. Preview eases the whole iteration
+/// and then interpolates the authored keyframes linearly, while CSS eases
+/// each keyframe interval, so the curve compiler cuts the iteration into
+/// intervals that each carry the exact slice of Preview's curve.
 fn render_keyframes(out: &mut String, node_id: &str, index: usize, animation: &NodeAnimation) {
     let name = animation_name(node_id, index);
+    let compiled = compile(animation);
     out.push_str(&format!("@keyframes {name} {{\n"));
-    for keyframe in &animation.keyframes {
-        out.push_str(&format!(
-            "  {}% {{\n",
-            fmt_num(f64::from(keyframe.offset) * 100.0)
-        ));
-        for (property, value) in keyframe_declarations(&keyframe.values) {
-            out.push_str(&format!("    {property}: {value};\n"));
-        }
-        out.push_str("  }\n");
+    if compiled.degraded {
+        out.push_str(
+            "  /* Approximated with 60 linear steps: the exact curve needs more than 64 segments. */\n",
+        );
+    }
+    for segment in &compiled.segments {
+        push_keyframe(out, segment.t0, &segment.from, Some(segment.bezier));
+    }
+    if let Some(last) = compiled.segments.last() {
+        push_keyframe(out, last.t1, &last.to, None);
     }
     out.push_str("}\n");
+}
+
+fn push_keyframe(
+    out: &mut String,
+    at: f32,
+    values: &BTreeMap<String, Value>,
+    timing: Option<[f32; 4]>,
+) {
+    out.push_str(&format!("  {}% {{\n", rounded(f64::from(at) * 100.0)));
+    for (property, value) in keyframe_declarations(&rounded_values(values)) {
+        out.push_str(&format!("    {property}: {value};\n"));
+    }
+    if let Some(bezier) = timing {
+        out.push_str(&format!(
+            "    animation-timing-function: {};\n",
+            timing_function(bezier)
+        ));
+    }
+    out.push_str("  }\n");
+}
+
+/// A compiled interval's timing function.
+fn timing_function(bezier: [f32; 4]) -> String {
+    if bezier == [0.0, 0.0, 1.0, 1.0] {
+        return "linear".to_owned();
+    }
+    let [x1, y1, x2, y2] = bezier.map(|value| rounded(f64::from(value)));
+    format!("cubic-bezier({x1},{y1},{x2},{y2})")
+}
+
+/// Four decimals: compiled offsets and sampled values carry f32 noise.
+fn rounded(value: f64) -> String {
+    let value = (value * 10_000.0).round() / 10_000.0;
+    fmt_num(if value == 0.0 { 0.0 } else { value })
+}
+
+fn rounded_values(values: &BTreeMap<String, Value>) -> BTreeMap<String, Value> {
+    values
+        .iter()
+        .map(|(property, value)| {
+            let value = match value.as_f64() {
+                Some(number) => {
+                    serde_json::Number::from_f64((number * 10_000.0).round() / 10_000.0)
+                        .map_or_else(|| value.clone(), Value::Number)
+                }
+                None => value.clone(),
+            };
+            (property.clone(), value)
+        })
+        .collect()
 }
 
 fn render_reduced_block(out: &mut String, nodes: &[&PenNode], media: bool) {
@@ -104,11 +161,11 @@ pub(super) fn inline_style(node: &PenNode) -> String {
             .iter()
             .enumerate()
             .map(|(index, animation)| {
+                // The curve lives in the keyframes' timing functions.
                 format!(
-                    "{} {}ms {} {}ms {} {}",
+                    "{} {}ms linear {}ms {} {}",
                     animation_name(node.id_str(), index),
                     animation.duration_ms,
-                    easing_to_css(&animation.easing),
                     animation.delay_ms,
                     iteration_count(&animation.iterations),
                     fill_mode(animation.fill_mode)
@@ -149,7 +206,7 @@ fn keyframe_declarations(values: &BTreeMap<String, Value>) -> Vec<(String, Strin
             "scaleX" => transforms.scale_x = Some(css_number(value, "")),
             "scaleY" => transforms.scale_y = Some(css_number(value, "")),
             "rotation" => transforms.rotation = Some(css_number(value, "deg")),
-            "opacity" => declarations.push(("opacity".to_string(), css_value(value))),
+            "opacity" => declarations.push(("opacity".to_string(), css_number(value, ""))),
             "fill" => declarations.push(("background-color".to_string(), css_value(value))),
             "stroke" => declarations.push(("border-color".to_string(), css_value(value))),
             "cornerRadius" => {

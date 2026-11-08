@@ -4156,6 +4156,7 @@ name = "op-codegen"
 version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
+ "jian-core",
  "jian-ops-schema",
  "op-ai",
  "op-editor-core",
