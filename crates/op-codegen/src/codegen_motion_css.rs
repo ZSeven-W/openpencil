@@ -158,16 +158,32 @@ fn rounded_values(values: &BTreeMap<String, Value>) -> BTreeMap<String, Value> {
         .collect()
 }
 
+/// Zero-length, undelayed, single-pass animations end the moment they start
+/// and then fill by their own fill mode.
+const REDUCED_DECLARATIONS: [&str; 4] = [
+    "animation-duration: 0s !important;",
+    "animation-delay: 0s !important;",
+    "animation-iteration-count: 1 !important;",
+    "transition: none !important;",
+];
+
+/// Reduced motion the way Preview does it: every animation lands at once,
+/// so one with `fillMode: forwards` shows its last keyframe and one with
+/// `none` (exported as `backwards`) shows the authored look; transitions
+/// switch instantly. The declarations are `!important` because the
+/// animation itself is an inline `style`, which outranks any stylesheet rule
+/// that is not.
 fn render_reduced_block(out: &mut String, nodes: &[&PenNode], media: bool, scope: MotionCssScope) {
     if media {
         out.push_str("@media (prefers-reduced-motion: reduce) {\n");
     }
+    let indent = if media { "  " } else { "" };
     for node in nodes {
-        let indent = if media { "  " } else { "" };
-        out.push_str(&format!(
-            "{indent}{} {{\n{indent}  animation: none;\n{indent}  transition: none;\n{indent}}}\n",
-            selector(node.id_str(), scope)
-        ));
+        out.push_str(&format!("{indent}{} {{\n", selector(node.id_str(), scope)));
+        for declaration in REDUCED_DECLARATIONS {
+            out.push_str(&format!("{indent}  {declaration}\n"));
+        }
+        out.push_str(&format!("{indent}}}\n"));
     }
     if media {
         out.push_str("}\n");

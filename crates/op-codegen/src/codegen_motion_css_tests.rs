@@ -58,12 +58,16 @@ fn html_motion_export_matches_the_golden_css() {
         "}\n",
         "@media (prefers-reduced-motion: reduce) {\n",
         "  [data-op-motion-node=\"hero\"] {\n",
-        "    animation: none;\n",
-        "    transition: none;\n",
+        "    animation-duration: 0s !important;\n",
+        "    animation-delay: 0s !important;\n",
+        "    animation-iteration-count: 1 !important;\n",
+        "    transition: none !important;\n",
         "  }\n",
         "  [data-op-motion-node=\"card\"] {\n",
-        "    animation: none;\n",
-        "    transition: none;\n",
+        "    animation-duration: 0s !important;\n",
+        "    animation-delay: 0s !important;\n",
+        "    animation-iteration-count: 1 !important;\n",
+        "    transition: none !important;\n",
         "  }\n",
         "}\n"
     );
@@ -96,9 +100,14 @@ fn html_motion_export_honours_authored_reduced_preference() {
     let html = Html.generate(&doc);
     let css = html_style_block(&html);
     assert!(css.contains("/* Authored motion preference: reduced */"));
-    assert!(
-        css.contains("[data-op-motion-node=\"n1\"] {\n  animation: none;\n  transition: none;\n}")
-    );
+    assert!(css.contains(concat!(
+        "[data-op-motion-node=\"n1\"] {\n",
+        "  animation-duration: 0s !important;\n",
+        "  animation-delay: 0s !important;\n",
+        "  animation-iteration-count: 1 !important;\n",
+        "  transition: none !important;\n",
+        "}"
+    )));
 }
 
 #[test]
