@@ -296,6 +296,52 @@ fn device_scroll_divides_by_fit_and_clamps() {
     assert_eq!(host.preview_scroll_y, 0.0);
 }
 
+/// In-view motion follows the device frame's visible window: a row below
+/// the fold waits until the page scrolls it into the frame.
+#[test]
+fn device_scroll_reveals_in_view_motion_below_the_fold() {
+    let _guard = test_lock();
+    let mut host = host_with_doc(load(
+        r##"{
+            "version": "1.1", "formatVersion": "1.1",
+            "children": [{
+                "type": "frame", "id": "screen", "x": 0, "y": 0,
+                "width": 390, "height": 2000,
+                "fill": [{"type":"solid","color":"#ffffff"}],
+                "children": [{
+                    "type": "rectangle", "id": "row", "x": 0, "y": 1500,
+                    "width": 390, "height": 80, "opacity": 1,
+                    "fill": [{"type":"solid","color":"#222222"}],
+                    "animations": [{"trigger":"inView","durationMs":300,"keyframes":[
+                        {"offset":0,"values":{"opacity":0}},
+                        {"offset":1,"values":{"opacity":1}}
+                    ]}]
+                }]
+            }]
+        }"##,
+    ));
+    host.last_viewport_w = 800.0;
+    host.last_viewport_h = 400.0;
+    assert!(host.enter_preview((800.0, 400.0)));
+    host.recompute_device_frame(800.0, 400.0);
+    let session = host.preview.as_mut().unwrap();
+    session.begin_lifecycle(0);
+    let _ = session.preview_scene_for_test();
+    assert_eq!(
+        session.active_animation_track_count(),
+        0,
+        "the row is below the first screen of the frame"
+    );
+    host.apply_device_scroll(-1e6);
+    let session = host.preview.as_ref().unwrap();
+    let _ = session.preview_scene_for_test();
+    assert_eq!(
+        session.active_animation_track_count(),
+        1,
+        "scrolling to the bottom brings the row into the frame"
+    );
+}
+
 /// Page-scroll contract: the device frame's scroll position is mirrored
 /// into the session so `$scroll` under the framed root tracks it.
 #[test]

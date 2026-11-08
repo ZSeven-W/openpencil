@@ -83,6 +83,7 @@ mod interaction_state;
 mod invalidation;
 mod mode_transition;
 mod motion;
+mod motion_viewport;
 mod present;
 mod scene_helpers;
 mod session;
@@ -197,6 +198,8 @@ mod tests_local_pagination;
 mod tests_motion;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_motion_golden;
+#[cfg(all(test, not(target_os = "windows")))]
+mod tests_motion_viewport;
 #[cfg(all(test, not(target_os = "windows")))]
 mod tests_multi_pointer;
 #[cfg(all(test, not(target_os = "windows")))]

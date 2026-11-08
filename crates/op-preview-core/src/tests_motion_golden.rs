@@ -19,6 +19,7 @@
 
 use super::{test_measure, PreviewSession};
 use crate::animation::golden_access;
+use crate::device_frame::{compute_frame_geometry, DeviceFrame};
 use crate::transition::{
     ScreenTransition, TransitionKind, PUSH_POP_DURATION_MS, REPLACE_DURATION_MS,
 };
@@ -28,7 +29,9 @@ use jian_core::action::services::{
 };
 use jian_core::gesture::pointer::{PointerKind, PointerPhase};
 use jian_ops_schema::motion::Easing as SchemaEasing;
+use op_editor_core::PreviewDeviceKind;
 use op_editor_ui::layout_scene::{LayoutScene, SceneNode, ScenePage};
+use op_editor_ui::{Point2D, Rect};
 use serde_json::{json, Value};
 
 const SOURCE_BASELINE: &str = "openpencil@742bc1433 (op-preview-core)";
@@ -411,10 +414,9 @@ fn tracks() -> Value {
 
 #[derive(Clone, Copy)]
 enum EventKind {
-    PageScroll {
-        offset: f32,
-        max_offset: f32,
-        delta_y: f32,
+    /// Scroll the phone frame's visible window (in-view triggers).
+    DeviceScroll {
+        scroll_y: f32,
     },
     Hover {
         x: f32,
@@ -435,17 +437,16 @@ struct SessionEvent {
 struct Fixture {
     text: &'static str,
     canvas: (f32, f32),
+    /// Present the root in a phone frame and feed its visible window to
+    /// in-view triggers, the way the native and web hosts do.
+    phone_window: bool,
     events: Vec<SessionEvent>,
 }
 
 fn fixtures() -> Vec<(&'static str, Fixture)> {
-    let scroll = |at_ms, offset, delta_y| SessionEvent {
+    let scroll = |at_ms, scroll_y| SessionEvent {
         at_ms,
-        kind: EventKind::PageScroll {
-            offset,
-            max_offset: 500.0,
-            delta_y,
-        },
+        kind: EventKind::DeviceScroll { scroll_y },
     };
     let hover = |at_ms, x, y| SessionEvent {
         at_ms,
@@ -457,6 +458,7 @@ fn fixtures() -> Vec<(&'static str, Fixture)> {
             Fixture {
                 text: STAGGER_ENTRANCE,
                 canvas: (400.0, 800.0),
+                phone_window: false,
                 events: Vec::new(),
             },
         ),
@@ -465,11 +467,8 @@ fn fixtures() -> Vec<(&'static str, Fixture)> {
             Fixture {
                 text: IN_VIEW_LIST,
                 canvas: (400.0, 400.0),
-                events: vec![
-                    scroll(208, 140.0, -140.0),
-                    scroll(800, 0.0, 140.0),
-                    scroll(1200, 420.0, -420.0),
-                ],
+                phone_window: true,
+                events: vec![scroll(208, 300.0), scroll(800, 0.0), scroll(1200, 700.0)],
             },
         ),
         (
@@ -477,6 +476,7 @@ fn fixtures() -> Vec<(&'static str, Fixture)> {
             Fixture {
                 text: FORM_TRANSITIONS,
                 canvas: (400.0, 400.0),
+                phone_window: false,
                 events: vec![
                     hover(96, 20.0, 20.0),
                     hover(192, 300.0, 300.0),
@@ -511,14 +511,21 @@ fn enter(name: &str, text: &str, canvas: (f32, f32)) -> PreviewSession {
     session
 }
 
+/// The phone frame a host would build around the session's framed root.
+fn phone_frame(session: &PreviewSession) -> DeviceFrame {
+    let (_, root) = session.framed_root().expect("framed root");
+    let canvas = Rect {
+        origin: Point2D::new(0.0, 0.0),
+        size: Point2D::new(1000.0, 1000.0),
+    };
+    compute_frame_geometry(PreviewDeviceKind::Phone, canvas, root, None, None)
+}
+
 fn apply_event(session: &mut PreviewSession, event: &SessionEvent, now_ms: u64) {
     match event.kind {
-        EventKind::PageScroll {
-            offset,
-            max_offset,
-            delta_y,
-        } => {
-            let _ = session.set_page_scroll(offset, max_offset, delta_y);
+        EventKind::DeviceScroll { scroll_y } => {
+            let frame = phone_frame(session);
+            let _ = session.sync_in_view_viewport(Some(&frame), scroll_y);
         }
         EventKind::Hover { x, y } => {
             let _ = session.dispatch_pointer_for_id_at(
@@ -541,14 +548,9 @@ fn apply_event(session: &mut PreviewSession, event: &SessionEvent, now_ms: u64) 
 
 fn event_json(event: &SessionEvent) -> Value {
     match event.kind {
-        EventKind::PageScroll {
-            offset,
-            max_offset,
-            delta_y,
-        } => json!({
-            "atMs": event.at_ms, "kind": "pageScroll",
-            "offset": offset, "maxOffset": max_offset, "deltaY": delta_y,
-        }),
+        EventKind::DeviceScroll { scroll_y } => {
+            json!({ "atMs": event.at_ms, "kind": "deviceScroll", "scrollY": scroll_y })
+        }
         EventKind::Hover { x, y } => {
             json!({ "atMs": event.at_ms, "kind": "hover", "x": x, "y": y })
         }
@@ -606,6 +608,11 @@ fn overrides_json(session: &PreviewSession) -> Value {
 
 fn run_session(name: &str, fixture: &Fixture) -> Value {
     let mut session = enter(name, fixture.text, fixture.canvas);
+    let window = fixture.phone_window.then(|| {
+        let frame = phone_frame(&session);
+        let _ = session.sync_in_view_viewport(Some(&frame), 0.0);
+        json!({ "device": "phone", "topInset": 0.0, "height": frame.viewport_h, "pinned": [] })
+    });
     let mut steps = Vec::new();
     let mut now_ms = 0;
     while now_ms <= SESSION_END_MS {
@@ -628,6 +635,7 @@ fn run_session(name: &str, fixture: &Fixture) -> Value {
         "name": name,
         "canvas": [fixture.canvas.0, fixture.canvas.1],
         "document": document,
+        "inViewWindow": window,
         "events": fixture.events.iter().map(event_json).collect::<Vec<_>>(),
         "steps": steps,
     })
@@ -641,7 +649,7 @@ fn sessions() -> Value {
     let mut map = envelope("sessions");
     map.insert(
         "protocol".into(),
-        json!("PreviewSession::enter(doc, canvas, {}, 0, false, false, test_measure(), 0); begin_lifecycle(0); then for t in 0..=2000 step 16: pump(t); apply the events scheduled at t in order; read preview_scene_for_test(); record trackCount, nextDeadlineMs, overrides (target, property, value) and the overlaid scene nodes"),
+        json!("PreviewSession::enter(doc, canvas, {}, 0, false, false, test_measure(), 0); begin_lifecycle(0); when inViewWindow is set, sync_in_view_viewport(phone frame, 0) (deviceScroll events re-sync it with scrollY); then for t in 0..=2000 step 16: pump(t); apply the events scheduled at t in order; read preview_scene_for_test(); record trackCount, nextDeadlineMs, overrides (target, property, value) and the overlaid scene nodes"),
     );
     map.insert("sessions".into(), Value::Array(sessions));
     Value::Object(map)

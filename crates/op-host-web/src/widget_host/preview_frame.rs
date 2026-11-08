@@ -85,6 +85,7 @@ impl super::WidgetHost {
     pub(in crate::widget_host) fn clear_device_preview_state(&mut self) {
         self.preview_device_frame = None;
         self.preview_scroll_y = 0.0;
+        self.sync_in_view_viewport();
         self.preview_manual_pick = None;
         self.preview_surface_capture = None;
         self.preview_edge_swipe_start_x = None;
@@ -103,6 +104,26 @@ impl super::WidgetHost {
         viewport_w: f32,
         viewport_h: f32,
     ) {
+        self.recompute_device_frame_geometry(viewport_w, viewport_h);
+        self.sync_in_view_viewport();
+    }
+
+    /// Hand the device frame's visible window to in-view motion triggers,
+    /// which otherwise treat the whole grown page root as visible.
+    fn sync_in_view_viewport(&mut self) {
+        let scroll_y = self.preview_scroll_y;
+        let changed = match self.preview.as_mut() {
+            Some(session) => {
+                session.sync_in_view_viewport(self.preview_device_frame.as_ref(), scroll_y)
+            }
+            None => false,
+        };
+        if changed {
+            self.mark_dirty();
+        }
+    }
+
+    fn recompute_device_frame_geometry(&mut self, viewport_w: f32, viewport_h: f32) {
         if !self.device_mode_active() {
             self.preview_device_frame = None;
             return;
@@ -205,6 +226,7 @@ impl super::WidgetHost {
         if (next - self.preview_scroll_y).abs() > f32::EPSILON {
             self.preview_scroll_y = next;
             self.mark_dirty();
+            self.sync_in_view_viewport();
             return true;
         }
         false

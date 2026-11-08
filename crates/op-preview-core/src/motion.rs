@@ -1,6 +1,7 @@
 //! P1 document-motion declarations layered on the existing preview timeline.
 
 use crate::animation::{sample_scene_property, PreviewAnimationState};
+use crate::motion_viewport::InViewViewport;
 use jian_core::action::animation_registry::animatable_property_registry;
 use jian_core::action::services::{
     AnimationDirection, AnimationFillMode, AnimationProperty, AnimationRequest, Easing,
@@ -79,11 +80,23 @@ struct MotionInner {
 #[derive(Clone, Default)]
 pub(crate) struct PreviewMotionState {
     inner: Rc<RefCell<MotionInner>>,
+    /// Host presentation state, so it survives `reset_screen`.
+    in_view_viewport: Rc<RefCell<Option<InViewViewport>>>,
 }
 
 impl PreviewMotionState {
     pub(crate) fn reset_screen(&self) {
         *self.inner.borrow_mut() = MotionInner::default();
+    }
+
+    /// Returns whether the window changed.
+    pub(crate) fn set_in_view_viewport(&self, viewport: Option<InViewViewport>) -> bool {
+        let mut current = self.in_view_viewport.borrow_mut();
+        if *current == viewport {
+            return false;
+        }
+        *current = viewport;
+        true
     }
 
     pub(crate) fn begin_lifecycle(&self) -> bool {
@@ -291,16 +304,24 @@ impl PreviewMotionState {
         let Some(page) = scene.active_page() else {
             return;
         };
-        let Some(viewport) = page.children.first().map(|node| node.bounds) else {
+        let Some(root) = page.children.first().map(|node| node.bounds) else {
             return;
         };
+        let window = self.in_view_viewport.borrow().clone();
+        let viewport = window
+            .as_ref()
+            .map_or(root, |window| window.rect_for_root(root));
         let declarations = node_declarations(runtime, false);
         let mut visible_now = BTreeSet::new();
         for (target, _, animations) in declarations {
             let Some(node) = page.find(&target) else {
                 continue;
             };
-            if !intersects_viewport(node.bounds, viewport) {
+            let visible = intersects_viewport(node.bounds, viewport)
+                || window
+                    .as_ref()
+                    .is_some_and(|window| window.is_pinned(page, &target));
+            if !visible {
                 continue;
             }
             for (index, declaration) in animations.iter().enumerate() {
