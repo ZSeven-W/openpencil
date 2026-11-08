@@ -221,7 +221,8 @@ pub(super) fn image_object_fit(node: &PenNode) -> Option<&'static str> {
 /// Vue 3 Single File Component generator. Wraps the node tree in a
 /// `<template>` block (HTML-like) + an empty `<script setup>`
 /// placeholder + a `<style>` block carrying any
-/// design-variables-derived custom properties. Mirrors TS
+/// design-variables-derived custom properties, plus an unscoped
+/// `<style>` block for document motion. Mirrors TS
 /// `pen-codegen::vue-generator`.
 pub struct Vue;
 
@@ -241,6 +242,13 @@ impl Codegen for Vue {
         out.push_str("<style scoped>\n");
         out.push_str(&CssVariables.generate(doc));
         out.push_str("</style>\n");
+        // A scoped block would hash the `@keyframes` names, but the inline
+        // `animation:` shorthand in the template keeps the plain ones, so
+        // motion gets a block of its own that Vue leaves untouched.
+        let motion_css = codegen_motion_css::render(doc);
+        if !motion_css.is_empty() {
+            out.push_str(&format!("\n<style>\n{motion_css}</style>\n"));
+        }
         out
     }
 }
