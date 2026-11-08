@@ -1,6 +1,6 @@
 //! P1 document-motion declarations layered on the existing preview timeline.
 
-use crate::animation::{sample_scene_property, PreviewAnimationState};
+use crate::animation::PreviewAnimationState;
 use crate::motion_viewport::InViewViewport;
 use jian_core::action::animation_registry::animatable_property_registry;
 use jian_core::action::services::{
@@ -9,6 +9,7 @@ use jian_core::action::services::{
 use jian_ops_schema::motion::{
     MotionPreference, MotionTrigger, NodeAnimation, NodeAnimationFillMode, P1_MOTION_PROPERTIES,
 };
+use jian_scene::layout_scene_motion::sample_scene_property;
 use op_editor_ui::layout_scene::{LayoutScene, SceneNode};
 use op_editor_ui::Rect;
 use serde_json::Value;

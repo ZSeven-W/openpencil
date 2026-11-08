@@ -8,9 +8,8 @@ use jian_core::action::services::{
     AnimationSink, Easing,
 };
 use jian_core::binding::BindingTarget;
-use jian_core::value::RuntimeValue;
-use jian_scene::layout_scene_binding::apply_value;
-use op_editor_ui::layout_scene::{LayoutScene, SceneNode};
+use jian_scene::layout_scene_motion::{apply_motion_overrides, sample_scene_property};
+use op_editor_ui::layout_scene::LayoutScene;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::rc::Rc;
@@ -211,12 +210,7 @@ impl PreviewAnimationState {
 
     pub(crate) fn apply_to_scene(&self, scene: &mut LayoutScene) {
         let overrides = self.inner.borrow().overrides.clone();
-        let Some(page) = scene.pages.get_mut(scene.active_page_index) else {
-            return;
-        };
-        for node in &mut page.children {
-            apply_overrides(node, &overrides);
-        }
+        apply_motion_overrides(scene, &overrides);
     }
 
     pub(crate) fn has_visual_state(&self) -> bool {
@@ -561,77 +555,6 @@ fn request_key(request: &AnimationRequest) -> TrackKey {
 
 fn track_key(track: &Track) -> TrackKey {
     request_key(&track.request)
-}
-
-fn apply_overrides(node: &mut SceneNode, overrides: &BTreeMap<TrackKey, serde_json::Value>) {
-    for ((target, property), value) in overrides {
-        if target == &node.id && *property == AnimationProperty::ToggleProgress {
-            if let (Some(widget), Some(progress)) = (node.widget.as_mut(), value.as_f64()) {
-                widget.toggle_progress = Some(progress as f32);
-            }
-            break;
-        }
-    }
-    let mut node_overrides: Vec<_> = overrides
-        .iter()
-        .filter(|((target, _), _)| target == &node.id)
-        .filter_map(|((_, property), value)| {
-            property
-                .binding_target()
-                .map(|target| (target, RuntimeValue(value.clone())))
-        })
-        .collect();
-    node_overrides.sort_by_key(|(target, _)| target.application_order());
-    for (target, value) in node_overrides {
-        apply_value(node, target, &value);
-    }
-    for child in &mut node.children {
-        apply_overrides(child, overrides);
-    }
-}
-
-pub(crate) fn sample_scene_property(
-    scene: &LayoutScene,
-    target: &str,
-    property: &AnimationProperty,
-) -> Option<serde_json::Value> {
-    let node = scene.active_page()?.find(target)?;
-    Some(match property {
-        AnimationProperty::Opacity => serde_json::json!(node.opacity),
-        AnimationProperty::X => serde_json::json!(node.bounds.origin.x),
-        AnimationProperty::Y => serde_json::json!(node.bounds.origin.y),
-        AnimationProperty::Rotation => serde_json::json!(node.rotation.to_degrees()),
-        AnimationProperty::ScaleX | AnimationProperty::ScaleY => serde_json::json!(1.0),
-        // A visual offset is applied on top of the solved rect and never
-        // stored on the scene node, so the sampled baseline is always 0.
-        AnimationProperty::TranslateX | AnimationProperty::TranslateY => serde_json::json!(0.0),
-        AnimationProperty::Fill => serde_json::Value::String(scene_color(node.fill?)),
-        AnimationProperty::Stroke => serde_json::Value::String(scene_color(node.stroke?.color)),
-        AnimationProperty::CornerRadius => serde_json::json!(node.corner_radius),
-        AnimationProperty::Width => serde_json::json!(node.bounds.size.x),
-        AnimationProperty::Height => serde_json::json!(node.bounds.size.y),
-        AnimationProperty::ToggleProgress => {
-            let widget = node.widget.as_ref()?;
-            serde_json::json!(widget.toggle_progress.unwrap_or(
-                if widget.checked.unwrap_or(false) {
-                    1.0
-                } else {
-                    0.0
-                }
-            ))
-        }
-        AnimationProperty::ShaderUniform(_) | AnimationProperty::Custom(_) => return None,
-    })
-}
-
-fn scene_color(color: op_editor_ui::Color) -> String {
-    let channel = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
-    color_hex(jian_core::scene::Color::rgba(
-        channel(color.r),
-        channel(color.g),
-        channel(color.b),
-        channel(color.a),
-    ))
 }
 
 impl PreviewSession {
