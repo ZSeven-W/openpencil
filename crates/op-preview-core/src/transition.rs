@@ -207,8 +207,7 @@ impl ScreenTransition {
     /// the subtree walker, so there's nothing else worth reusing across
     /// the crate boundary.
     fn eased_t(&self, now_ms: u64) -> f32 {
-        let t = self.linear_t(now_ms);
-        1.0 - (1.0 - t).powi(3)
+        jian_core::motion::ease_out_cubic(self.linear_t(now_ms))
     }
 }
 

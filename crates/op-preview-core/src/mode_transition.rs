@@ -114,7 +114,7 @@ impl ModeTransition {
     fn eased_t(&self, now_ms: u64) -> f32 {
         let elapsed = now_ms.saturating_sub(self.started_at_ms);
         let t = (elapsed as f32 / MODE_TRANSITION_DURATION_MS as f32).clamp(0.0, 1.0);
-        1.0 - (1.0 - t).powi(3)
+        jian_core::motion::ease_out_cubic(t)
     }
 
     /// Progress toward the DEVICE-FRAME (settled preview) end: Enter
