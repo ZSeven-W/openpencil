@@ -18,6 +18,8 @@
 #[cfg(feature = "ai")]
 pub mod ai;
 
+#[cfg(test)]
+mod codegen_motion_css_tests;
 mod codegen_tailwind;
 mod codegen_targets;
 #[cfg(test)]
