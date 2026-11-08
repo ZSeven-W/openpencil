@@ -4,7 +4,7 @@
 //! those names through each framework's style scoping.
 
 use crate::tests::empty_doc;
-use crate::{Codegen, Vue};
+use crate::{Codegen, Svelte, Vue};
 use jian_ops_schema::PenDocument;
 
 /// A mount animation, an in-view animation that plays once, and a manual
@@ -98,4 +98,46 @@ fn vue_without_motion_keeps_a_single_style_block() {
     let vue = Vue.generate(&empty_doc());
     assert_eq!(vue.matches("<style").count(), 1, "{vue}");
     assert!(!vue.contains("@keyframes"), "{vue}");
+}
+
+#[test]
+fn svelte_motion_keyframes_keep_the_names_the_markup_references() {
+    let svelte = Svelte.generate(&motion_doc());
+    let markup = block(&svelte, "</script>\n", "\n<style>\n");
+    let referenced = inline_animation_names(markup);
+    assert_eq!(referenced, ["op-hero-0", "op-card-0"], "{svelte}");
+
+    // Svelte hashes component keyframe names unless they carry `-global-`,
+    // which it strips, leaving exactly the names the markup references.
+    assert_eq!(svelte.matches("<style").count(), 1, "{svelte}");
+    let style = block(&svelte, "\n<style>\n", "</style>");
+    let declared = keyframe_names(style);
+    assert_eq!(
+        declared,
+        [
+            "-global-op-hero-0",
+            "-global-op-card-0",
+            "-global-op-badge-0"
+        ],
+        "{svelte}"
+    );
+    for name in &referenced {
+        assert!(
+            declared.contains(&format!("-global-{name}")),
+            "{name} has no global keyframes: {svelte}"
+        );
+    }
+    // Selectors opt out of scoping too, so they need no compile-time match.
+    assert!(
+        style.contains(":global([data-op-motion-node=\"hero\"]) {"),
+        "{svelte}"
+    );
+    assert!(!style.contains("\n  [data-op-motion-node"), "{svelte}");
+}
+
+#[test]
+fn svelte_without_motion_declares_no_keyframes() {
+    let svelte = Svelte.generate(&empty_doc());
+    assert!(!svelte.contains("@keyframes"), "{svelte}");
+    assert!(!svelte.contains(":global("), "{svelte}");
 }

@@ -1,4 +1,5 @@
-//! Minimal HTML/CSS export for document-level motion declarations.
+//! Minimal CSS export for document-level motion declarations, shared by the
+//! HTML, Vue and Svelte targets.
 
 use super::{node_children, node_hidden, root_nodes};
 use crate::{fmt_num, html_escape};
@@ -13,9 +14,30 @@ use op_editor_core::PenNodeExt;
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-/// Render all motion CSS for the HTML target. An empty string means the
-/// document has no visible node with a transition or animation declaration.
+/// Where the motion CSS lands. Component frameworks rename keyframes and
+/// scope selectors inside their own `<style>`, while the inline `animation:`
+/// shorthand and the `data-op-motion-node` attributes keep the plain names,
+/// so each scope opts its rules out of that renaming the way it needs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum MotionCssScope {
+    /// A document-level stylesheet, which renames nothing: the HTML page's
+    /// `<style>` and the unscoped `<style>` block of a Vue component.
+    Document,
+    /// A Svelte component `<style>`, which hashes keyframe names and scopes
+    /// selectors unless they opt out with `-global-` and `:global(...)`.
+    SvelteComponent,
+}
+
+/// Render all motion CSS for a document-level stylesheet. An empty string
+/// means the document has no visible node with a transition or animation
+/// declaration.
 pub(super) fn render(doc: &PenDocument) -> String {
+    render_in(doc, MotionCssScope::Document)
+}
+
+/// Render all motion CSS for the given stylesheet scope, keeping keyframe
+/// names and selectors equal to the ones the inline markup references.
+pub(super) fn render_in(doc: &PenDocument, scope: MotionCssScope) -> String {
     let mut animated = Vec::new();
     for node in root_nodes(doc) {
         collect_animated_nodes(node, &mut animated);
@@ -28,15 +50,15 @@ pub(super) fn render(doc: &PenDocument) -> String {
     for node in &animated {
         if let Some(animations) = node.motion_declarations().1 {
             for (index, animation) in animations.iter().enumerate() {
-                render_keyframes(&mut out, node.id_str(), index, animation);
+                render_keyframes(&mut out, node.id_str(), index, animation, scope);
             }
         }
     }
     if doc.motion == Some(jian_ops_schema::motion::MotionPreference::Reduced) {
         out.push_str("/* Authored motion preference: reduced */\n");
-        render_reduced_block(&mut out, &animated, false);
+        render_reduced_block(&mut out, &animated, false, scope);
     }
-    render_reduced_block(&mut out, &animated, true);
+    render_reduced_block(&mut out, &animated, true, scope);
     out
 }
 
@@ -57,10 +79,21 @@ fn collect_animated_nodes<'a>(node: &'a PenNode, out: &mut Vec<&'a PenNode>) {
 /// and then interpolates the authored keyframes linearly, while CSS eases
 /// each keyframe interval, so the curve compiler cuts the iteration into
 /// intervals that each carry the exact slice of Preview's curve.
-fn render_keyframes(out: &mut String, node_id: &str, index: usize, animation: &NodeAnimation) {
+fn render_keyframes(
+    out: &mut String,
+    node_id: &str,
+    index: usize,
+    animation: &NodeAnimation,
+    scope: MotionCssScope,
+) {
     let name = animation_name(node_id, index);
     let compiled = compile(animation);
-    out.push_str(&format!("@keyframes {name} {{\n"));
+    // Svelte drops the `-global-` prefix and leaves the name unhashed.
+    let global = match scope {
+        MotionCssScope::Document => "",
+        MotionCssScope::SvelteComponent => "-global-",
+    };
+    out.push_str(&format!("@keyframes {global}{name} {{\n"));
     if compiled.degraded {
         out.push_str(
             "  /* Approximated with 60 linear steps: the exact curve needs more than 64 segments. */\n",
@@ -125,7 +158,7 @@ fn rounded_values(values: &BTreeMap<String, Value>) -> BTreeMap<String, Value> {
         .collect()
 }
 
-fn render_reduced_block(out: &mut String, nodes: &[&PenNode], media: bool) {
+fn render_reduced_block(out: &mut String, nodes: &[&PenNode], media: bool, scope: MotionCssScope) {
     if media {
         out.push_str("@media (prefers-reduced-motion: reduce) {\n");
     }
@@ -133,7 +166,7 @@ fn render_reduced_block(out: &mut String, nodes: &[&PenNode], media: bool) {
         let indent = if media { "  " } else { "" };
         out.push_str(&format!(
             "{indent}{} {{\n{indent}  animation: none;\n{indent}  transition: none;\n{indent}}}\n",
-            selector(node.id_str())
+            selector(node.id_str(), scope)
         ));
     }
     if media {
@@ -375,8 +408,12 @@ fn animation_name(node_id: &str, index: usize) -> String {
     format!("op-{}-{index}", css_identifier(node_id))
 }
 
-fn selector(node_id: &str) -> String {
-    format!("[data-op-motion-node=\"{}\"]", css_identifier(node_id))
+fn selector(node_id: &str, scope: MotionCssScope) -> String {
+    let selector = format!("[data-op-motion-node=\"{}\"]", css_identifier(node_id));
+    match scope {
+        MotionCssScope::Document => selector,
+        MotionCssScope::SvelteComponent => format!(":global({selector})"),
+    }
 }
 
 fn css_identifier(value: &str) -> String {
