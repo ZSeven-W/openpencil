@@ -144,7 +144,7 @@ fn curves() -> Value {
     let curves: Vec<Value> = easings()
         .iter()
         .map(|easing| {
-            let runtime = crate::motion::easing_from_schema(easing);
+            let runtime = jian_core::action::services::Easing::from(easing);
             let values: Vec<f32> = (0..CURVE_SAMPLES)
                 .map(|index| golden_access::ease(runtime, progress_at(index)))
                 .collect();
@@ -241,7 +241,7 @@ impl TrackCase {
             stops: self.stops.clone(),
             duration_ms: self.duration_ms,
             delay_ms: self.delay_ms,
-            easing: crate::motion::easing_from_schema(&self.easing),
+            easing: jian_core::action::services::Easing::from(&self.easing),
             iterations: self.iterations,
             direction: self.direction,
             fill_mode: self.fill_mode,

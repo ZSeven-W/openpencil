@@ -157,7 +157,7 @@ impl PreviewMotionState {
                         transition.duration_ms
                     },
                     delay_ms: 0,
-                    easing: easing_from_schema(&transition.easing),
+                    easing: Easing::from(&transition.easing),
                     iterations: 1,
                     direction: AnimationDirection::Normal,
                     fill_mode: AnimationFillMode::Forwards,
@@ -447,7 +447,7 @@ impl PreviewMotionState {
                 stops: Some(stops),
                 duration_ms: declaration.duration_ms,
                 delay_ms: 0,
-                easing: easing_from_schema(&declaration.easing),
+                easing: Easing::from(&declaration.easing),
                 iterations: declaration.iterations.count_or(u32::MAX).max(1),
                 direction: AnimationDirection::Normal,
                 // Lifecycle keyframe 0 is the pre-reveal look. Schema P1 only
@@ -598,10 +598,7 @@ fn document_transition(
 
 fn toggle_timing(runtime: &jian_core::Runtime, target: &str) -> (u64, Easing) {
     match document_transition(runtime, target) {
-        Some(transition) => (
-            transition.duration_ms,
-            easing_from_schema(&transition.easing),
-        ),
+        Some(transition) => (transition.duration_ms, Easing::from(&transition.easing)),
         None => (SWITCH_TOGGLE_DURATION_MS, Easing::Standard),
     }
 }
@@ -676,23 +673,6 @@ fn scene_color(color: op_editor_ui::Color) -> String {
             channel(color.b),
             channel(color.a)
         )
-    }
-}
-
-pub(crate) fn easing_from_schema(easing: &jian_ops_schema::motion::Easing) -> Easing {
-    match easing {
-        jian_ops_schema::motion::Easing::Linear => Easing::Linear,
-        jian_ops_schema::motion::Easing::Ease => Easing::Ease,
-        jian_ops_schema::motion::Easing::EaseIn => Easing::EaseIn,
-        jian_ops_schema::motion::Easing::EaseOut => Easing::EaseOut,
-        jian_ops_schema::motion::Easing::EaseInOut => Easing::EaseInOut,
-        jian_ops_schema::motion::Easing::Standard => Easing::Standard,
-        jian_ops_schema::motion::Easing::Emphasized => Easing::Emphasized,
-        jian_ops_schema::motion::Easing::EmphasizedDecelerate => Easing::EmphasizedDecelerate,
-        jian_ops_schema::motion::Easing::EmphasizedAccelerate => Easing::EmphasizedAccelerate,
-        jian_ops_schema::motion::Easing::CubicBezier(a, b, c, d) => {
-            Easing::CubicBezier(*a, *b, *c, *d)
-        }
     }
 }
 
