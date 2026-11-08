@@ -20,6 +20,9 @@ on:
       - 'tools/check-text-measure.sh'
       - 'tools/check-rustls-client-policy.sh'
       - 'tools/check-file-line-cap.sh'
+      - 'tools/check-duplication.py'
+      - 'tools/check-duplication.test.py'
+      - 'tools/duplication-baseline.json'
       - '.github/workflows/rust-release.yml'
       - '.github/workflows/rust-check.yml'
   push:
@@ -39,6 +42,9 @@ on:
       - 'tools/check-text-measure.sh'
       - 'tools/check-rustls-client-policy.sh'
       - 'tools/check-file-line-cap.sh'
+      - 'tools/check-duplication.py'
+      - 'tools/check-duplication.test.py'
+      - 'tools/duplication-baseline.json'
       - '.github/workflows/rust-release.yml'
       - '.github/workflows/rust-check.yml'
 
@@ -117,6 +123,13 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: tools/check-rustls-client-policy.sh
       - run: tools/check-file-line-cap.sh
+      # Cross-crate copy-paste only ratchets down (crates/CLAUDE.md). The
+      # scan is platform-independent, so one runner is enough.
+      - name: Duplication ratchet
+        if: runner.os == 'Linux'
+        run: |
+          python3 tools/check-duplication.test.py
+          python3 tools/check-duplication.py
       - run: cargo build --workspace
       # GitHub-hosted runners are headless with no reliable Mesa software
       # EGL, so STEP1A_REQUIRE_GPU is left unset: the op-host-native GPU
