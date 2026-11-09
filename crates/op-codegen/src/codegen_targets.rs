@@ -220,10 +220,9 @@ pub(super) fn image_object_fit(node: &PenNode) -> Option<&'static str> {
 
 /// Vue 3 Single File Component generator. Wraps the node tree in a
 /// `<template>` block (HTML-like) + a `<script setup>` that starts
-/// in-view motion on mount + a `<style>` block carrying any
-/// design-variables-derived custom properties, plus an unscoped
-/// `<style>` block for document motion. Mirrors TS
-/// `pen-codegen::vue-generator`.
+/// in-view motion on mount + an unscoped `<style>` block carrying any
+/// design-variables-derived custom properties and the document motion.
+/// Mirrors TS `pen-codegen::vue-generator`.
 pub struct Vue;
 
 impl Codegen for Vue {
@@ -241,16 +240,14 @@ impl Codegen for Vue {
         out.push_str("<script setup lang=\"ts\">\n// generated\n");
         out.push_str(&codegen_motion_script::vue_setup(doc));
         out.push_str("</script>\n\n");
-        out.push_str("<style scoped>\n");
+        // Every rule here is document-wide: the `:root` design variables
+        // and the keyframes the template's inline `animation:` names. A
+        // scoped block would rewrite `:root` into a selector that never
+        // matches and hash the keyframe names, so the block stays unscoped.
+        out.push_str("<style>\n");
         out.push_str(&CssVariables.generate(doc));
+        out.push_str(&codegen_motion_css::render(doc));
         out.push_str("</style>\n");
-        // A scoped block would hash the `@keyframes` names, but the inline
-        // `animation:` shorthand in the template keeps the plain ones, so
-        // motion gets a block of its own that Vue leaves untouched.
-        let motion_css = codegen_motion_css::render(doc);
-        if !motion_css.is_empty() {
-            out.push_str(&format!("\n<style>\n{motion_css}</style>\n"));
-        }
         out
     }
 }

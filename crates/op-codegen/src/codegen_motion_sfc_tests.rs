@@ -81,9 +81,10 @@ fn vue_motion_keyframes_keep_the_names_the_template_references() {
     let referenced = inline_animation_names(block(&vue, "<template>\n", "</template>"));
     assert_eq!(referenced, ["op-hero-0", "op-card-0"], "{vue}");
 
-    // The scoped block would hash keyframe names, so it holds none; the
-    // motion lives in an unscoped block, where Vue keeps them as written.
-    assert!(!block(&vue, "<style scoped>\n", "</style>").contains("@keyframes"));
+    // A scoped block would hash keyframe names; the only block is unscoped,
+    // where Vue keeps them as written.
+    assert_eq!(vue.matches("<style").count(), 1, "{vue}");
+    assert!(!vue.contains("scoped"), "{vue}");
     let motion = block(&vue, "\n<style>\n", "</style>");
     let declared = keyframe_names(motion);
     assert_eq!(declared, ["op-hero-0", "op-card-0", "op-badge-0"], "{vue}");
@@ -94,7 +95,7 @@ fn vue_motion_keyframes_keep_the_names_the_template_references() {
 }
 
 #[test]
-fn vue_without_motion_keeps_a_single_style_block() {
+fn vue_without_motion_declares_no_keyframes() {
     let vue = Vue.generate(&empty_doc());
     assert_eq!(vue.matches("<style").count(), 1, "{vue}");
     assert!(!vue.contains("@keyframes"), "{vue}");
