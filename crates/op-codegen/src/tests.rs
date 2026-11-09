@@ -345,6 +345,43 @@ fn vue_includes_variable_css_in_style_block() {
 }
 
 #[test]
+fn svelte_keeps_variable_selectors_global() {
+    let mut doc = empty_doc();
+    let mut vars = BTreeMap::new();
+    vars.insert("primary".to_string(), color_def("#abc"));
+    vars.insert(
+        "bg".to_string(),
+        VariableDefinition {
+            kind: VariableKind::Color,
+            value: VariableValue::Themed(vec![
+                ThemedValue {
+                    value: VariableScalar::Str("#ffffff".into()),
+                    theme: Some(axis("mode", "light")),
+                },
+                ThemedValue {
+                    value: VariableScalar::Str("#000000".into()),
+                    theme: Some(axis("mode", "dark")),
+                },
+            ]),
+        },
+    );
+    doc.variables = Some(vars);
+    let s = Svelte.generate(&doc);
+    // Svelte would scope `:root` and drop `.dark`, which matches no element
+    // of the component, so every selector opts out of the scoping.
+    assert!(s.contains(":global(:root) {\n  --primary: #abc;\n}"), "{s}");
+    assert!(
+        s.contains(":global(:root[data-mode=\"light\"]) {\n  --bg: #ffffff;\n}"),
+        "{s}"
+    );
+    assert!(
+        s.contains(":global(:root[data-mode=\"dark\"]), :global(.dark) {\n  --bg: #000000;\n}"),
+        "{s}"
+    );
+    assert!(!s.contains("\n:root"), "{s}");
+}
+
+#[test]
 fn react_emits_functional_component_with_jsx_fragment() {
     let doc = empty_doc();
     let s = React.generate(&doc);

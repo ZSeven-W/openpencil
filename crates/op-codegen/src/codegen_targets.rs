@@ -255,8 +255,8 @@ impl Codegen for Vue {
 /// Svelte component generator. A `<script>` that starts in-view
 /// motion on mount + markup + `<style>` block — Svelte allows
 /// top-level markup without a wrapping template tag. Same
-/// design-variables-as-CSS-vars pattern as Vue, followed by the
-/// document motion opted out of Svelte's style scoping.
+/// design-variables-as-CSS-vars pattern as Vue and the document
+/// motion, both opted out of Svelte's style scoping.
 pub struct Svelte;
 
 impl Codegen for Svelte {
@@ -273,10 +273,11 @@ impl Codegen for Svelte {
             emit_node_html(&mut out, n, 0);
         }
         out.push_str("\n<style>\n");
-        out.push_str(&CssVariables.generate(doc));
-        // Svelte allows one component `<style>` and hashes the keyframe
-        // names in it, while the inline `animation:` shorthand keeps the
-        // plain ones, so the motion rules opt out of the scoping.
+        // Svelte allows one component `<style>`, scopes its selectors and
+        // hashes its keyframe names, but every rule here is document-wide:
+        // the `:root` / `.dark` design variables and the keyframes the
+        // inline `animation:` shorthand names. So all of it opts out.
+        out.push_str(&CssVariables.generate_svelte_global(doc));
         out.push_str(&codegen_motion_css::render_in(
             doc,
             codegen_motion_css::MotionCssScope::SvelteComponent,
