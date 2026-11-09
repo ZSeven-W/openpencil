@@ -35,6 +35,7 @@ use super::ai_chat_transcript_paint_parts::{paint_action_step, paint_collapsible
 use super::ai_chat_transcript_richtext::{layout_rich, paint_rich, rich_height, rich_line_width};
 use super::ai_chat_transcript_selection::paint_user_bubble_selection;
 pub(crate) use super::ai_chat_transcript_selection::transcript_text_offset_at;
+pub(crate) use super::ai_chat_transcript_steps::action_step_height;
 use super::ai_chat_transcript_steps::{
     activity_step, extract_step_blocks, split_design_progress, step_state, strip_tool_call_xml,
     ParsedStep,
@@ -511,14 +512,6 @@ pub(crate) fn build_item(
         },
         y,
     )
-}
-
-pub(crate) fn action_step_height(expanded: bool, detail_count: usize) -> f32 {
-    if !expanded || detail_count == 0 {
-        ACTION_STEP_H
-    } else {
-        ACTION_STEP_H + ACTION_DETAIL_GAP + detail_count as f32 * ACTION_DETAIL_LINE_H
-    }
 }
 
 /// Total height (px) of the full transcript laid out from the body top.

@@ -21,6 +21,17 @@ pub(crate) struct StepExtraction {
     pub visible_text: String,
 }
 
+/// Height of one step row: the header alone when collapsed (or with nothing
+/// to reveal), plus one line per detail row when expanded.
+pub(crate) fn action_step_height(expanded: bool, detail_count: usize) -> f32 {
+    use super::ai_chat_transcript::{ACTION_DETAIL_GAP, ACTION_DETAIL_LINE_H, ACTION_STEP_H};
+    if !expanded || detail_count == 0 {
+        ACTION_STEP_H
+    } else {
+        ACTION_STEP_H + ACTION_DETAIL_GAP + detail_count as f32 * ACTION_DETAIL_LINE_H
+    }
+}
+
 pub(crate) fn activity_step(activity: &ChatActivity) -> ParsedStep {
     let status = match activity.status {
         ChatActivityStatus::Pending => ParsedStepStatus::Pending,
