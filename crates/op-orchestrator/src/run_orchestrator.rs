@@ -29,6 +29,15 @@ impl Orchestrator {
         abort: &AbortFlag,
         providers: &ValidationProviders<'_>,
     ) -> Result<RunSummary, OrchestratorError> {
+        // `OPENPENCIL_DEBUG_TIMING=1` timeline (`timing_log`); pass-through otherwise.
+        let timing = crate::timing_log::RunTiming::from_env();
+        let (timed_llm, mut timed_sink) = (timing.llm(llm), timing.sink(sink));
+        let (llm, sink): (&dyn LlmClient, &mut dyn DocSink) = (&timed_llm, &mut timed_sink);
+        let mut timed_progress = |event: Progress| {
+            timing.progress(&event);
+            on_progress(event)
+        };
+        let on_progress: &mut dyn FnMut(Progress) = &mut timed_progress;
         // -- 阶段 1:规划(单档 Rich + 规范化)--
         // `planning_loop` 内部已 normalize 并回传 `NormInfo`,此处不再二次规范化。
         on_progress(Progress::Planning);
