@@ -116,7 +116,7 @@ pub(crate) fn paint_action_step(
                 line,
                 step.rect.origin.x + 12.0,
                 baseline,
-                10.0,
+                super::ai_chat_transcript_steps::DETAIL_FONT,
                 theme.muted_foreground,
             );
             baseline += ACTION_DETAIL_LINE_H;

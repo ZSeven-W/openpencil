@@ -12,8 +12,7 @@
 //! the message body, where the loop appended them.
 
 use super::ai_chat_transcript::{action_step_height, ActionStep, ACTION_STEP_GAP};
-use super::ai_chat_transcript_steps::{ParsedStep, ParsedStepStatus};
-use super::ai_chat_transcript_text::wrap_units;
+use super::ai_chat_transcript_steps::{wrap_detail, ParsedStep, ParsedStepStatus};
 use crate::widgets::ai_chat_workspace_copy::progress_label;
 use crate::Rect;
 use op_editor_core::chat::ChatMessage;
@@ -77,7 +76,7 @@ pub(crate) fn layout_receipts(
         let details: Vec<String> = receipt
             .details
             .iter()
-            .flat_map(|line| wrap_units(&progress_label(locale, line), budget.saturating_sub(4)))
+            .flat_map(|line| wrap_detail(&progress_label(locale, line), budget))
             .collect();
         let expanded = msg
             .action_step_expanded_overrides

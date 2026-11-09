@@ -22,7 +22,7 @@ use super::ai_chat_transcript_design::extract_design_json_blocks;
 use super::ai_chat_transcript_receipts::split_receipts;
 use super::ai_chat_transcript_richtext::{layout_rich, paint_rich, rich_height, rich_line_width};
 use super::ai_chat_transcript_steps::{
-    activity_step, extract_step_blocks, step_state, strip_tool_call_xml,
+    activity_step, extract_step_blocks, step_state, strip_tool_call_xml, wrap_detail,
 };
 use super::ai_chat_transcript_text::wrap_units;
 use super::ai_chat_transcript_tools::{
@@ -94,7 +94,7 @@ pub(crate) fn build_activity_flow(
             let details: Vec<String> = parsed
                 .details
                 .iter()
-                .flat_map(|line| wrap_units(line, budget.saturating_sub(4)))
+                .flat_map(|line| wrap_detail(line, budget))
                 .collect();
             let (done, active, failed) =
                 step_state(&parsed, msg.streaming, index, msg.activities.len());

@@ -39,7 +39,7 @@ pub(crate) use super::ai_chat_transcript_selection::transcript_text_offset_at;
 pub(crate) use super::ai_chat_transcript_steps::action_step_height;
 use super::ai_chat_transcript_steps::{
     activity_step, extract_step_blocks, split_design_progress, step_state, strip_tool_call_xml,
-    ParsedStep,
+    wrap_detail, ParsedStep,
 };
 use super::ai_chat_transcript_text::char_display_units;
 pub(crate) use super::ai_chat_transcript_text::wrap_units;
@@ -321,7 +321,7 @@ pub(crate) fn build_item(
         let details: Vec<String> = step
             .details
             .iter()
-            .flat_map(|line| wrap_units(&progress_label(locale, line), budget.saturating_sub(4)))
+            .flat_map(|line| wrap_detail(&progress_label(locale, line), budget))
             .collect();
         // Active work and failures default open so a terminal error exposes
         // its concrete diagnostic. A user click still records an override.

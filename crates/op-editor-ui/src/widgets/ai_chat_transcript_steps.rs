@@ -21,6 +21,37 @@ pub(crate) struct StepExtraction {
     pub visible_text: String,
 }
 
+/// The font size step detail rows paint at, smaller than the body text.
+pub(crate) const DETAIL_FONT: f32 = 10.0;
+
+/// Wrap a step's detail text into rows. Each `\n`-separated line is one
+/// item (a quality pass reports one repair per line): it wraps at the detail
+/// font's own width, which holds more than the body-text `budget` it is
+/// derived from, and its continuation rows hang under the first so the
+/// items stay apart.
+pub(crate) fn wrap_detail(text: &str, budget: u32) -> Vec<String> {
+    use super::ai_chat_transcript::BODY_FONT;
+    use super::ai_chat_transcript_text::wrap_units;
+    const HANG: &str = "   ";
+    let width = ((budget as f32 * BODY_FONT / DETAIL_FONT) as u32)
+        .saturating_sub(4)
+        .max(12);
+    text.split('\n')
+        .flat_map(|line| {
+            wrap_units(line, width)
+                .into_iter()
+                .enumerate()
+                .map(|(index, row)| {
+                    if index == 0 {
+                        row
+                    } else {
+                        format!("{HANG}{row}")
+                    }
+                })
+        })
+        .collect()
+}
+
 /// Height of one step row: the header alone when collapsed (or with nothing
 /// to reveal), plus one line per detail row when expanded.
 pub(crate) fn action_step_height(expanded: bool, detail_count: usize) -> f32 {
