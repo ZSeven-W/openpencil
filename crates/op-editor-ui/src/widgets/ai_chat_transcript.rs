@@ -32,6 +32,7 @@ use super::ai_chat_transcript_identity::{
     layout_agent_identity, paint_agent_identity, AgentIdentityHeader,
 };
 use super::ai_chat_transcript_paint_parts::{paint_action_step, paint_collapsible};
+use super::ai_chat_transcript_receipts::{layout_receipts, split_receipts};
 use super::ai_chat_transcript_richtext::{layout_rich, paint_rich, rich_height, rich_line_width};
 use super::ai_chat_transcript_selection::paint_user_bubble_selection;
 pub(crate) use super::ai_chat_transcript_selection::transcript_text_offset_at;
@@ -210,10 +211,13 @@ pub(crate) fn build_item(
     } else {
         msg.activities.iter().map(activity_step).collect()
     };
+    let mut receipts = Vec::new();
     let raw_visible_content = if is_user {
         msg.content.clone()
     } else {
-        let display_content = strip_tool_call_xml(failure_copy(locale, &msg.content));
+        let (display_content, found) =
+            split_receipts(&strip_tool_call_xml(failure_copy(locale, &msg.content)));
+        receipts = found;
         let extracted = extract_step_blocks(&display_content, msg.streaming);
         progress_steps.extend(extracted.steps);
         extracted.visible_text
@@ -423,7 +427,8 @@ pub(crate) fn build_item(
         && thinking.is_none()
         && tools.is_none()
         && !activity_interleave
-        && !tool_interleave;
+        && !tool_interleave
+        && receipts.is_empty();
     let bubble = if typing {
         let r = Rect::xywh(
             x,
@@ -475,6 +480,10 @@ pub(crate) fn build_item(
         None
     };
 
+    let base = steps.len();
+    steps.extend(layout_receipts(
+        &receipts, msg, locale, x, &mut y, bubble_w, budget, base,
+    ));
     let mut images = Vec::new();
     if !msg.images.is_empty() {
         if bubble.is_some() {

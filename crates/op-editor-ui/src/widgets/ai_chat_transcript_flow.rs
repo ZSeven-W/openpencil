@@ -19,6 +19,7 @@ use super::ai_chat_transcript::{
     ACTION_STEP_GAP, LINE_H,
 };
 use super::ai_chat_transcript_design::extract_design_json_blocks;
+use super::ai_chat_transcript_receipts::split_receipts;
 use super::ai_chat_transcript_richtext::{layout_rich, paint_rich, rich_height, rich_line_width};
 use super::ai_chat_transcript_steps::{
     activity_step, extract_step_blocks, step_state, strip_tool_call_xml,
@@ -259,7 +260,8 @@ fn push_prose(
     // Keep byte offsets anchored to the original content, then apply the
     // same presentation filtering as the non-interleaved transcript. The
     // enclosing item already renders extracted steps and design cards.
-    let display = strip_tool_call_xml(raw);
+    // Receipts are laid out as steps after the whole message body.
+    let (display, _) = split_receipts(&strip_tool_call_xml(raw));
     let steps = extract_step_blocks(&display, streaming);
     let design = extract_design_json_blocks(&steps.visible_text, streaming);
     let visible = normalize_narration_markdown(&design.visible_text);
