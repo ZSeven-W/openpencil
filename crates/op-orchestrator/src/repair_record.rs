@@ -712,11 +712,45 @@ fn render_value(value: &Value) -> String {
         // Padding / radii arrive as number arrays; rendering them through
         // `to_string` would print `[32.0,32.0,32.0,32.0]` for what the user
         // authored as `[32,32,32,32]`.
-        Value::Array(items) => elide(&format!(
+        Value::Array(items) if items.iter().all(|item| !item.is_object()) => elide(&format!(
             "[{}]",
             items.iter().map(render_value).collect::<Vec<_>>().join(",")
         )),
-        other => elide(&other.to_string()),
+        // Lists of objects (fills, animations, effects) read as what each
+        // entry is, not as serialized JSON the reader has to decode.
+        Value::Array(items) => elide(&format!(
+            "[{}]",
+            items
+                .iter()
+                .map(render_value)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+        Value::Object(map) => elide(&render_object(map)),
+    }
+}
+
+/// A one-glance name for an object value: a motion declaration by its
+/// trigger and length, a paint by its colour, anything else by its `type`,
+/// falling back to how many fields it has.
+fn render_object(map: &serde_json::Map<String, Value>) -> String {
+    if let Some(trigger) = map.get("trigger").and_then(Value::as_str) {
+        let duration = map
+            .get("durationMs")
+            .and_then(Value::as_f64)
+            .map(|ms| format!(" {}ms", trim_num(ms)))
+            .unwrap_or_default();
+        return format!("{trigger} animation{duration}");
+    }
+    if let Some(color) = map.get("color").and_then(Value::as_str) {
+        return color.to_string();
+    }
+    if let Some(kind) = map.get("type").and_then(Value::as_str) {
+        return kind.to_string();
+    }
+    match map.len() {
+        1 => "{1 field}".to_string(),
+        count => format!("{{{count} fields}}"),
     }
 }
 

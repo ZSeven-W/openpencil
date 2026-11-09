@@ -228,3 +228,26 @@ fn record_line_degrades_without_a_node_name() {
         "palette · theme-variable-polarity · variable surface → #FFFFFF"
     );
 }
+
+#[test]
+fn compound_values_read_as_what_they_are_not_as_json() {
+    let animations = serde_json::json!([{
+        "trigger": "inView", "durationMs": 320,
+        "keyframes": [{"offset": 0, "values": {"opacity": 0}}, {"offset": 1, "values": {"opacity": 1}}]
+    }]);
+    assert_eq!(super::render_value(&animations), "[inView animation 320ms]");
+    let fills = serde_json::json!([
+        {"type": "solid", "color": "#F8FAFC"},
+        {"type": "linear_gradient", "stops": []}
+    ]);
+    assert_eq!(super::render_value(&fills), "[#F8FAFC, linear_gradient]");
+    assert_eq!(
+        super::render_value(&serde_json::json!({"a": 1, "b": 2})),
+        "{2 fields}"
+    );
+    // Number lists keep their compact form.
+    assert_eq!(
+        super::render_value(&serde_json::json!([8, 16, 8, 16])),
+        "[8,16,8,16]"
+    );
+}
