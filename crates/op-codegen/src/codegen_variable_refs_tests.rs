@@ -1,0 +1,64 @@
+//! Design-variable reference tests for the markup targets. The fixture's
+//! nodes paint only through `$token`s: a scalar `primary` and a `bg`
+//! themed per `mode`, whose default (first) theme value is `light`.
+
+use crate::{Codegen, Compose, Flutter, ReactNative, SwiftUi};
+use jian_ops_schema::PenDocument;
+
+fn token_doc() -> PenDocument {
+    jian_ops_schema::load_str(
+        r##"{
+          "version":"1.0",
+          "themes":{"mode":["light","dark"]},
+          "variables":{
+            "primary":{"type":"color","value":"#3366ff"},
+            "bg":{"type":"color","value":[
+              {"value":"#ffffff","theme":{"mode":"light"}},
+              {"value":"#111111","theme":{"mode":"dark"}}
+            ]}
+          },
+          "children":[
+            {"type":"frame","id":"card","width":200,"height":100,
+             "fill":[{"type":"solid","color":"$bg"}],
+             "stroke":{"thickness":2,"fill":[{"type":"solid","color":"$primary"}]},
+             "children":[
+               {"type":"text","id":"title","x":10,"y":10,"width":100,"height":20,
+                "content":"Hi","fill":[{"type":"solid","color":"$primary"}]}
+             ]}
+          ]
+        }"##,
+    )
+    .expect("token document")
+    .value
+}
+
+#[test]
+fn react_native_resolves_tokens_to_default_theme_colours() {
+    let rn = ReactNative.generate(&token_doc());
+    assert!(rn.contains("backgroundColor: 'rgb(255,255,255)'"), "{rn}");
+    assert!(rn.contains("color: 'rgb(51,102,255)'"), "{rn}");
+    assert!(!rn.contains('$'), "{rn}");
+}
+
+#[test]
+fn native_targets_keep_token_colours() {
+    let doc = token_doc();
+    // An unparsed `$token` used to drop the colour entirely.
+    let flutter = Flutter.generate(&doc);
+    assert!(
+        flutter.contains("BoxDecoration(color: Color.fromARGB(255,255,255,255))"),
+        "{flutter}"
+    );
+    let swiftui = SwiftUi.generate(&doc);
+    assert!(
+        swiftui.contains(
+            "Text(\"Hi\").foregroundColor(Color(red: 0.200, green: 0.400, blue: 1.000, opacity: 1.000))"
+        ),
+        "{swiftui}"
+    );
+    let compose = Compose.generate(&doc);
+    assert!(
+        compose.contains(".background(Color(255, 255, 255, 255))"),
+        "{compose}"
+    );
+}

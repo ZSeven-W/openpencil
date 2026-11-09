@@ -26,6 +26,9 @@ mod codegen_motion_css_tests;
 mod codegen_motion_sfc_tests;
 mod codegen_tailwind;
 mod codegen_targets;
+mod codegen_variable_refs;
+#[cfg(test)]
+mod codegen_variable_refs_tests;
 #[cfg(test)]
 mod tailwind_tests;
 #[cfg(test)]
