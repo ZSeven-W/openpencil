@@ -35,6 +35,25 @@ pub const MOTION_EASINGS: [Easing; 9] = [
     Easing::EaseInOut,
 ];
 
+/// Which Motion-section dropdown is open. The section shares the
+/// Interactions popover (`InteractionMenuTarget::Motion`), so only one
+/// property-panel menu is ever open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MotionMenuTarget {
+    /// "+ Add motion": pick a preset.
+    AddPreset,
+    /// "Stagger children": pick a preset for the direct children.
+    StaggerPreset,
+    /// An animation row: change trigger, reorder.
+    Animation(usize),
+    /// An expanded row's easing dropdown.
+    Easing(usize),
+    /// An expanded row's fill-mode dropdown.
+    Fill(usize),
+    /// The transition row's easing dropdown.
+    TransitionEasing,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MotionRow {
     pub trigger: MotionTrigger,
