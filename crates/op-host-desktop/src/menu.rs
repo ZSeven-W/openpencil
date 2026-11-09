@@ -56,6 +56,9 @@ pub enum MenuAction {
 #[path = "menu_native_edit.rs"]
 mod native_edit;
 
+#[cfg(target_os = "macos")]
+pub(crate) use native_edit::set_wake_proxy;
+
 // --------------------------------------------------------------------
 // macOS — the real `muda` backend.
 // --------------------------------------------------------------------

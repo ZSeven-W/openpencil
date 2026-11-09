@@ -76,8 +76,8 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
             self.request_redraw(true);
         }
         // Native-menu selections arrive on `muda`'s global channel.
-        // A menu click wakes the event loop, so draining here — at
-        // the top of each loop iteration — picks them up promptly.
+        // Callbacks explicitly wake the loop after enqueueing: AppKit can
+        // consume both menu clicks and accelerators without a window event.
         while let Some(action) = menu::poll() {
             self.handle_menu_action(action, event_loop);
         }
@@ -383,6 +383,12 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: DesktopEvent) {
         match event {
+            #[cfg(target_os = "macos")]
+            DesktopEvent::MenuWake => {
+                while let Some(action) = menu::poll() {
+                    self.handle_menu_action(action, event_loop);
+                }
+            }
             DesktopEvent::McpWake => {
                 if self.poll_mcp_server() {
                     self.request_redraw(true);

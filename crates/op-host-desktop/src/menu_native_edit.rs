@@ -21,6 +21,12 @@ struct Events {
 }
 
 static EVENTS: OnceLock<Events> = OnceLock::new();
+static WAKE_PROXY: OnceLock<winit::event_loop::EventLoopProxy<crate::DesktopEvent>> =
+    OnceLock::new();
+
+pub(crate) fn set_wake_proxy(proxy: winit::event_loop::EventLoopProxy<crate::DesktopEvent>) {
+    let _ = WAKE_PROXY.set(proxy);
+}
 
 pub(super) fn install(resolve: fn(&str) -> Option<MenuAction>) {
     EVENTS.get_or_init(|| {
@@ -43,7 +49,11 @@ pub(super) fn poll() -> Option<MenuAction> {
 
 fn enqueue(action: MenuAction) {
     if let Some(events) = EVENTS.get() {
-        let _ = events.sender.send(action);
+        if events.sender.send(action).is_ok() {
+            if let Some(proxy) = WAKE_PROXY.get() {
+                let _ = proxy.send_event(crate::DesktopEvent::MenuWake);
+            }
+        }
     }
 }
 

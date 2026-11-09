@@ -140,6 +140,9 @@ type PendingHtmlPaste = (u64, std::sync::mpsc::Receiver<HtmlPasteResult>);
 
 #[derive(Clone, Copy, Debug)]
 enum DesktopEvent {
+    /// A native menu callback queued an action after the loop began waiting.
+    #[cfg(target_os = "macos")]
+    MenuWake,
     McpWake,
     /// A bounded collaboration network worker queued typed input for the
     /// GUI-owned session/editor actor.
@@ -696,6 +699,8 @@ fn main() {
     };
     event_loop.set_control_flow(ControlFlow::Wait);
     let mcp_wake_proxy = event_loop.create_proxy();
+    #[cfg(target_os = "macos")]
+    menu::set_wake_proxy(mcp_wake_proxy.clone());
     // Give the non-bundled binary a proper Dock name + icon.
     macos_app::apply();
     // The collaboration runtime drives async relay/JWKS work from sync code;
