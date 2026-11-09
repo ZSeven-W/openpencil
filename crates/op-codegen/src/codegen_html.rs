@@ -12,6 +12,8 @@ use crate::{
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::PenDocument;
 
+use crate::codegen_variable_refs::css_markup_doc;
+
 /// HTML + inline-CSS generator. Walks the document's node tree and emits
 /// absolutely positioned elements with optional motion declarations.
 pub struct Html;
@@ -36,7 +38,8 @@ impl Codegen for Html {
             out.push_str(&format!("<style>\n{css}</style>\n"));
         }
         out.push_str("</head>\n<body>\n");
-        for node in root_nodes(doc) {
+        let markup = css_markup_doc(doc);
+        for node in root_nodes(&markup) {
             emit_node_html(&mut out, node, 1);
         }
         out.push_str(&codegen_motion_script::render(doc));
