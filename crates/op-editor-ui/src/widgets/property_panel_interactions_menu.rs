@@ -54,6 +54,13 @@ pub fn interaction_menu_rows(
 ) -> Vec<(PropertyPanelAction, String)> {
     let mut rows = Vec::new();
     match target {
+        InteractionMenuTarget::Motion(motion) => {
+            return crate::widgets::property_panel_motion::motion_menu_rows(
+                locale,
+                *motion,
+                &summary.motion,
+            );
+        }
         InteractionMenuTarget::AddTrigger => {
             for trigger in InteractionTrigger::ALL {
                 if !present(summary, trigger) {

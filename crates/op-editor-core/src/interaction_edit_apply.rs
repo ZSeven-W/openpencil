@@ -66,6 +66,8 @@ pub enum InteractionMenuTarget {
         trigger: InteractionTrigger,
         index: usize,
     },
+    /// A Motion-section dropdown; the section shares this popover.
+    Motion(crate::motion_summary::MotionMenuTarget),
 }
 
 /// A layer a Show/Hide/Scroll action can target.

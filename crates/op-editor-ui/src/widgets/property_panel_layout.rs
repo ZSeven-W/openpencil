@@ -521,6 +521,15 @@ pub fn action_button_rects_with_fill_picker(
         y += SECTION_GAP;
     }
     if visible.interactions {
+        // The Motion section sits directly above Interactions.
+        crate::widgets::property_panel_motion::push_motion_action_rects(
+            &mut out,
+            &interactions.motion,
+            x0,
+            y,
+            w,
+        );
+        y += crate::widgets::property_panel_motion::motion_section_height(&interactions.motion);
         push_interaction_action_rects(&mut out, interactions, x0, y, w);
         y += interactions_section_height(interactions);
     }

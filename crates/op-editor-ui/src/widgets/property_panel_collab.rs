@@ -40,7 +40,8 @@ pub fn collab_gate_action(action: &PropertyPanelAction) -> op_editor_core::Colla
         | A::AddGradientStop
         | A::RemoveGradientStop(_)
         | A::ToggleWidgetChecked(_)
-        | A::EditInteraction(_) => G::Document(D::Unsupported(U::UnsupportedNodeProperty)),
+        | A::EditInteraction(_)
+        | A::EditMotion(_) => G::Document(D::Unsupported(U::UnsupportedNodeProperty)),
         A::BindColorVariable { .. } | A::UnbindColorVariable(_) => {
             G::Document(D::Unsupported(U::VariablesThemes))
         }

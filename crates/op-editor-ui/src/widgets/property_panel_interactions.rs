@@ -50,10 +50,16 @@ pub use crate::widgets::property_panel_interactions_menu::{
 /// when nothing is authored) so the section can paint its "+ Add
 /// interaction" empty state. `screen` is `Some` only for a top-level
 /// Frame carrying an authored `screen` route.
+///
+/// The Motion section rides along: it describes the same node, has the
+/// same visibility and paints directly above, so its summary travels with
+/// this one through the layout walkers instead of adding a parameter to
+/// each of them.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct InteractionSummary {
     pub screen: Option<String>,
     pub triggers: Vec<InteractionTriggerView>,
+    pub motion: op_editor_core::motion_summary::MotionSummary,
 }
 
 impl InteractionSummary {
@@ -90,6 +96,7 @@ pub(crate) fn interactions_of(node: &PenNode, is_top_level: bool) -> Interaction
             .flatten()
             .map(str::to_string),
         triggers: summarize_events(node.events()),
+        motion: op_editor_core::motion_summary::MotionSummary::of(node),
     }
 }
 

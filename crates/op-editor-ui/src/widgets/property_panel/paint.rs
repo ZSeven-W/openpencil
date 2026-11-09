@@ -317,6 +317,15 @@ impl Widget for PropertyPanel {
             );
         }
         if caps.interactions {
+            y = crate::widgets::property_panel_motion::paint_motion_section(
+                cx,
+                &self.theme,
+                &self.snapshot.interactions.motion,
+                self.locale,
+                x,
+                y,
+                w,
+            );
             y = sections::paint_interactions_section(
                 cx,
                 &self.theme,

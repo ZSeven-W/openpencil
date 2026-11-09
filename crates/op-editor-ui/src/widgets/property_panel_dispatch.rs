@@ -729,6 +729,11 @@ pub fn apply_property_action(
             state.editor_ui.close_interaction_menu();
             Handled
         }
+        A::EditMotion(edit) => {
+            let _ = state.apply_selected_motion_edit(edit);
+            state.editor_ui.close_interaction_menu();
+            Handled
+        }
         // Image Search / Generate popovers ride host-owned selection
         // drag + input-blur glue.
         A::ToggleImageSearchPopover

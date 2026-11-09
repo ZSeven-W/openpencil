@@ -421,6 +421,9 @@ pub enum PropertyPanelAction {
     /// Apply one structured edit to the selected node's `events` block
     /// (see `op_editor_core::interaction_edit_apply`), one undo step.
     EditInteraction(op_editor_core::interaction_edit_apply::InteractionEdit),
+    /// Apply one Motion-section edit to the selected node (see
+    /// `op_editor_core::motion_panel_edit`), one undo step.
+    EditMotion(op_editor_core::motion_panel_edit::MotionPanelEdit),
     /// Code panel action — see `CodegenAction`.
     Codegen(CodegenAction),
     /// Generator section: flip boolean parameter `index` and regenerate.
