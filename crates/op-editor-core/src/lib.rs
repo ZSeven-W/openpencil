@@ -139,6 +139,7 @@ pub mod motion_edit_apply;
 pub mod motion_panel_edit;
 pub mod motion_presets;
 pub mod motion_summary;
+pub mod motion_timeline_drag;
 pub mod motion_timeline_edit;
 pub mod motion_timeline_projection;
 pub mod motion_timeline_transitions;
