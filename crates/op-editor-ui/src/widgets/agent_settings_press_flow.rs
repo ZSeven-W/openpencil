@@ -242,6 +242,10 @@ pub fn apply_agent_settings_hit(
             state.editor_ui.pencil_cursor_style = style;
             SettingsPressOutcome::handled()
         }
+        AgentSettingsHit::ToggleAgentSwarm => {
+            state.editor_ui.agent_swarm_enabled ^= true;
+            SettingsPressOutcome::handled()
+        }
         AgentSettingsHit::ToggleExperimental => {
             let settings = &mut state.editor_ui.agent_settings;
             settings.experimental_features_enabled ^= true;

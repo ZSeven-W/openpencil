@@ -1,9 +1,10 @@
 //! System tab of the settings modal.
 //!
 //! Appearance, the auto-update preference plus its live release-probe
-//! status, the experimental-features opt-in, and the pencil-cursor
-//! picker — each on one borderless row in the modal's shared row
-//! language (`agent_settings_rows`), separated by hairlines.
+//! status, the experimental-features opt-in, the pencil-cursor picker,
+//! and the cursor-swarm switch — each on one borderless row in the
+//! modal's shared row language (`agent_settings_rows`), separated by
+//! hairlines.
 
 use crate::theme::Theme;
 use crate::widgets::agent_settings_i18n::t as t_settings;
@@ -39,6 +40,7 @@ pub enum SystemHit {
     ToggleExperimental,
     /// Click on one of the pencil-cursor swatches.
     SelectPencilCursor(op_editor_core::PencilCursorStyle),
+    ToggleAgentSwarm,
     None,
 }
 
@@ -57,6 +59,7 @@ enum SystemRow {
     AutoUpdate,
     Experimental,
     PencilCursor,
+    AgentSwarm,
 }
 
 fn visible_rows() -> &'static [SystemRow] {
@@ -66,23 +69,27 @@ fn visible_rows() -> &'static [SystemRow] {
             SystemRow::AutoUpdate,
             SystemRow::Experimental,
             SystemRow::PencilCursor,
+            SystemRow::AgentSwarm,
         ]
     } else {
         &[
             SystemRow::Appearance,
             SystemRow::Experimental,
             SystemRow::PencilCursor,
+            SystemRow::AgentSwarm,
         ]
     }
 }
 
 impl SystemRow {
     /// How many lines the row carries — and therefore how tall its box
-    /// is. Auto-update rides a probe-status line and Experimental a
-    /// description; the other two are label-only.
+    /// is. Auto-update rides a probe-status line, Experimental and the
+    /// cursor swarm a description; the other two are label-only.
     fn lines(self) -> RowLines {
         match self {
-            SystemRow::AutoUpdate | SystemRow::Experimental => RowLines::Two,
+            SystemRow::AutoUpdate | SystemRow::Experimental | SystemRow::AgentSwarm => {
+                RowLines::Two
+            }
             SystemRow::Appearance | SystemRow::PencilCursor => RowLines::One,
         }
     }
@@ -181,6 +188,9 @@ pub fn hit_test(content: Rect, scrolled: Point2D) -> SystemHit {
             return SystemHit::SelectPencilCursor(*style);
         }
     }
+    if switch_rect_for(content, SystemRow::AgentSwarm).contains(scrolled) {
+        return SystemHit::ToggleAgentSwarm;
+    }
     SystemHit::None
 }
 
@@ -226,6 +236,22 @@ pub(super) fn paint_system_tab(
                 );
             }
             SystemRow::PencilCursor => paint_cursor_row(cx, theme, ui, content, rect),
+            SystemRow::AgentSwarm => {
+                paint_row_label(
+                    cx,
+                    theme,
+                    rect,
+                    t_settings(ui, "settings.system.agentSwarm"),
+                    Some(t_settings(ui, "settings.system.agentSwarmDesc")),
+                    SETTINGS_SWITCH_W + 16.0,
+                );
+                paint_settings_switch(
+                    cx,
+                    theme,
+                    switch_rect_for(content, SystemRow::AgentSwarm),
+                    ui.agent_swarm_enabled,
+                );
+            }
         }
         if index != last {
             paint_row_hairline(cx, theme, rect);

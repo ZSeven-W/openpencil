@@ -704,6 +704,9 @@ pub struct EditorUiState {
     /// Which pencil-cursor silhouette the generation overlay draws.
     /// User-selectable in Settings > System; persisted across launches.
     pub pencil_cursor_style: PencilCursorStyle,
+    /// Cursor swarm: extra named cursors and skeleton placeholders around a
+    /// running generation. Presentation only; off by default.
+    pub agent_swarm_enabled: bool,
     /// Ghost of the blank starter frame `(x, y, w, h)` in doc px. Set when a
     /// design prompt clears the pristine starter; the canvas keeps painting
     /// it until the generated design's sized root lands (or the turn ends),

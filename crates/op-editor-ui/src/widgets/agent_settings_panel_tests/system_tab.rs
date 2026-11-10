@@ -8,8 +8,15 @@ use crate::widgets::agent_settings_metrics::CONTENT_TAIL_PAD;
 use crate::widgets::agent_settings_rows::{row_height, tab_intro_height, RowLines, FOOTNOTE_H};
 
 /// Row order and shape on the System tab: Appearance (one line),
-/// Auto-update (two), Experimental (two), Pencil cursor (one).
-const SYSTEM_ROWS: [RowLines; 4] = [RowLines::One, RowLines::Two, RowLines::Two, RowLines::One];
+/// Auto-update (two), Experimental (two), Pencil cursor (one),
+/// Cursor swarm (two).
+const SYSTEM_ROWS: [RowLines; 5] = [
+    RowLines::One,
+    RowLines::Two,
+    RowLines::Two,
+    RowLines::One,
+    RowLines::Two,
+];
 
 /// Centre-y of System row `index`, below the tab's compact heading.
 fn system_row_mid_y(rect: Rect, index: usize) -> f32 {
@@ -31,7 +38,8 @@ fn system_auto_update_switch_has_click_target() {
     let panel = AgentSettingsPanel::for_editor(&state);
     let rect = panel.rect(1200.0, 800.0);
     let content = crate::widgets::agent_settings_panel::content_viewport(rect);
-    // Row order is Appearance, Auto-update, Experimental, Pencil cursor.
+    // Row order is Appearance, Auto-update, Experimental, Pencil cursor,
+    // Cursor swarm.
     let point = crate::Point2D::new(
         content.origin.x + content.size.x - 18.0,
         system_row_mid_y(rect, 1),
@@ -41,6 +49,35 @@ fn system_auto_update_switch_has_click_target() {
         panel.hit_test(rect, point),
         AgentSettingsHit::ToggleAutoUpdate
     );
+}
+
+#[test]
+fn system_agent_swarm_switch_toggles_the_flag() {
+    let mut state = EditorState::default();
+    state.editor_ui.agent_settings.tab = AgentSettingsTab::System;
+    assert!(
+        !state.editor_ui.agent_swarm_enabled,
+        "the cursor swarm ships off"
+    );
+    let panel = AgentSettingsPanel::for_editor(&state);
+    let rect = panel.rect(1200.0, 800.0);
+    let content = crate::widgets::agent_settings_panel::content_viewport(rect);
+    let point = crate::Point2D::new(
+        content.origin.x + content.size.x - 18.0,
+        system_row_mid_y(rect, 4),
+    );
+    let hit = panel.hit_test(rect, point);
+    assert_eq!(hit, AgentSettingsHit::ToggleAgentSwarm);
+
+    for expected in [true, false] {
+        crate::widgets::agent_settings_press_flow::apply_agent_settings_hit(
+            &mut state,
+            hit,
+            op_editor_core::host_settings_commit::SettingsCommitScope::Operator,
+            0,
+        );
+        assert_eq!(state.editor_ui.agent_swarm_enabled, expected);
+    }
 }
 
 #[test]
@@ -55,8 +92,8 @@ fn system_tab_reserves_space_for_update_status() {
             + SYSTEM_ROWS.iter().copied().map(row_height).sum::<f32>()
             + FOOTNOTE_H
             + CONTENT_TAIL_PAD,
-        "System tab = heading + Appearance/Auto-update/Experimental/Pencil-cursor rows \
-         + version footnote + bottom pad"
+        "System tab = heading + Appearance/Auto-update/Experimental/Pencil-cursor/\
+         Cursor-swarm rows + version footnote + bottom pad"
     );
 }
 

@@ -286,6 +286,7 @@ impl AgentSettingsPanel<'_> {
                 SystemHit::SelectPencilCursor(style) => {
                     return AgentSettingsHit::SelectPencilCursor(style)
                 }
+                SystemHit::ToggleAgentSwarm => return AgentSettingsHit::ToggleAgentSwarm,
                 SystemHit::None => {}
             },
             AgentSettingsTab::Account => {
