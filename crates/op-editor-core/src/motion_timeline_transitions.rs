@@ -3,10 +3,11 @@
 //! hosts call these; they only add hit-testing and paint.
 
 use crate::editor_ui_state::{MotionTimelineState, MotionTimelineTab};
-use crate::motion_timeline_projection::{project, TimelineProjection};
+use crate::motion_timeline_projection::{manual_ids, project, TimelineProjection};
 use crate::pen_node_ext::PenNodeExt;
 use crate::walkers::find_node;
 use crate::{EditorState, NodeId};
+use jian_core::motion::ClipTrigger;
 use jian_ops_schema::node::PenNode;
 
 /// Frame interval the playing timeline asks the host for.
@@ -45,13 +46,40 @@ impl EditorState {
         }
     }
 
+    /// Open or close the panel. Opening on a tab with nothing to show
+    /// moves to the first tab that has motion (on load, in view, then the
+    /// first manual id), so the panel never opens empty beside motion.
     pub fn toggle_motion_timeline(&mut self) {
-        let timeline = &mut self.editor_ui.motion_timeline;
-        timeline.open = !timeline.open;
-        if !timeline.open {
+        let opening = !self.editor_ui.motion_timeline.open;
+        self.editor_ui.motion_timeline.open = opening;
+        if !opening {
+            let timeline = &mut self.editor_ui.motion_timeline;
             stop(timeline);
             timeline.drag = None;
+            return;
         }
+        if self.motion_timeline_projection().strips.is_empty() {
+            if let Some((tab, manual_id)) = self.first_motion_timeline_tab() {
+                self.editor_ui.motion_timeline.show(tab, manual_id);
+            }
+        }
+    }
+
+    fn first_motion_timeline_tab(&self) -> Option<(MotionTimelineTab, Option<String>)> {
+        let root = self.motion_timeline_scope()?;
+        [
+            (MotionTimelineTab::Mount, ClipTrigger::Mount),
+            (MotionTimelineTab::InView, ClipTrigger::InView),
+        ]
+        .into_iter()
+        .find(|(_, trigger)| !project(root, trigger).strips.is_empty())
+        .map(|(tab, _)| (tab, None))
+        .or_else(|| {
+            manual_ids(root)
+                .into_iter()
+                .next()
+                .map(|id| (MotionTimelineTab::Manual, Some(id)))
+        })
     }
 
     pub fn set_motion_timeline_tab(&mut self, tab: MotionTimelineTab, manual_id: Option<String>) {

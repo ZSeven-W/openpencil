@@ -106,3 +106,37 @@ fn scrubbing_clamps_and_closing_stops() {
     state.toggle_motion_playback(0);
     assert!(!state.editor_ui.motion_timeline.playing);
 }
+
+#[test]
+fn opening_moves_to_the_first_tab_with_motion() {
+    let doc = jian_ops_schema::load_str(
+        &json!({
+            "version": "1.0",
+            "children": [{"type": "frame", "id": "home", "width": 390, "height": 844, "children": [
+                {"type": "rectangle", "id": "a", "width": 10, "height": 10, "animations": [{
+                    "trigger": "manual", "id": "pulse", "durationMs": 300, "easing": "linear",
+                    "keyframes": [
+                        {"offset": 0, "values": {"opacity": 0}},
+                        {"offset": 1, "values": {"opacity": 1}}
+                    ]
+                }]}
+            ]}]
+        })
+        .to_string(),
+    )
+    .expect("document")
+    .value;
+    let mut manual_only = EditorState::from_document(doc);
+    manual_only.toggle_motion_timeline();
+    let timeline = &manual_only.editor_ui.motion_timeline;
+    assert_eq!(timeline.tab, MotionTimelineTab::Manual);
+    assert_eq!(timeline.manual_id.as_deref(), Some("pulse"));
+    // A tab that already has motion is kept.
+    let mut on_load = state();
+    on_load.set_motion_timeline_tab(MotionTimelineTab::Mount, None);
+    on_load.toggle_motion_timeline();
+    assert_eq!(
+        on_load.editor_ui.motion_timeline.tab,
+        MotionTimelineTab::Mount
+    );
+}
