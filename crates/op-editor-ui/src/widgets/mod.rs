@@ -198,6 +198,7 @@ mod canvas_generation_scan_tests;
 mod canvas_generator_badge;
 pub mod canvas_layout_transition;
 pub mod canvas_overlay_transform;
+pub mod canvas_paint_scene;
 mod canvas_path_overlay;
 mod canvas_selection_overlay;
 pub mod canvas_text_edit;
