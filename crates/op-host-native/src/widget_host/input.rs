@@ -655,6 +655,10 @@ impl WidgetHostNative {
         if let Some(consumed) = self.cursor_move_panel_resize_tier(x) {
             return consumed;
         }
+        // Tier 3b — a motion timeline drag holds the pointer until release.
+        if self.drag_motion_timeline(x, y) {
+            return true;
+        }
         // Tier 3 — in-flight property / text-selection / crop / node / pen
         // drags. Pointer capture: these own the cursor until release.
         if let Some(consumed) =

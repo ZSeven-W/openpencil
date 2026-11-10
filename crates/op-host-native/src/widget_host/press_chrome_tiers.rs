@@ -91,6 +91,12 @@ impl WidgetHostNative {
             }
         }
 
+        // Motion timeline, docked under the canvas between the rails. After
+        // the resize gutter, whose band overlaps the panel's edges.
+        if !in_git_panel && self.press_motion_timeline(x, y, viewport_width, viewport_height) {
+            return Some(true);
+        }
+
         // Chat paints after the TopBar. A short/top-anchored chat can lift the
         // upward model dropdown across the bar, so its visible overlap must be
         // routed before the lower TopBar surface. Other dropdowns/modals above

@@ -89,6 +89,9 @@ impl WidgetHostNative {
         if self.panel_resize.take().is_some() {
             return true;
         }
+        if self.release_motion_timeline() {
+            return true;
+        }
         if self.variables_resize.take().is_some() {
             return true;
         }
@@ -262,6 +265,9 @@ impl WidgetHostNative {
             return true;
         }
         if self.panel_resize.take().is_some() {
+            return true;
+        }
+        if self.release_motion_timeline() {
             return true;
         }
         if self.variables_resize.take().is_some() {

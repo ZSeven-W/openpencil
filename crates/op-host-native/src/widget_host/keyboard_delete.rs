@@ -283,6 +283,10 @@ impl WidgetHostNative {
         if self.apply_pen_backspace() {
             return true;
         }
+        // Selected timeline keyframes take Delete before the canvas.
+        if self.delete_motion_keyframes() {
+            return true;
+        }
         if !self.collab_allows_document_mutation(op_editor_core::CollabDocumentMutation::NodeDelete)
         {
             return true;
@@ -439,6 +443,9 @@ impl WidgetHostNative {
         // silently drop the node behind the focused field.
         if shared::delete_owned_by_chrome_input(&self.editor_state) {
             return false;
+        }
+        if self.delete_motion_keyframes() {
+            return true;
         }
         if !self.collab_allows_document_mutation(op_editor_core::CollabDocumentMutation::NodeDelete)
         {
