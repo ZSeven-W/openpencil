@@ -122,6 +122,12 @@ pub fn property_focus_initial(focus: PropertyFocus, panel: &PropertyPanel) -> St
         F::GeneratorParam(index) => {
             crate::widgets::property_panel_generator::param_initial(&panel.snapshot, index)
         }
+        F::MotionField(..) | F::TransitionDuration => {
+            crate::widgets::property_panel_motion::field_initial(
+                focus,
+                &panel.snapshot.interactions.motion,
+            )
+        }
         F::InteractionParam(trigger, index) => panel
             .snapshot
             .interactions
@@ -398,6 +404,9 @@ pub fn commit_property_focus(state: &mut EditorState) -> bool {
         }
         PropertyFocus::VideoSrc => {
             let _ = state.set_selected_video_src(draft.trim());
+        }
+        PropertyFocus::MotionField(..) | PropertyFocus::TransitionDuration => {
+            crate::widgets::property_panel_motion::commit_field(state, focus, &draft);
         }
         PropertyFocus::InteractionParam(trigger, index) => {
             let _ = state.apply_selected_interaction_edit_untracked(

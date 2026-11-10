@@ -255,7 +255,9 @@ impl PropertyFocus {
             | P::WidgetStep
             | P::VideoSrc
             | P::GeneratorParam(_)
-            | P::InteractionParam(..) => D::Unsupported(U::UnsupportedNodeProperty),
+            | P::InteractionParam(..)
+            | P::MotionField(..)
+            | P::TransitionDuration => D::Unsupported(U::UnsupportedNodeProperty),
         }
     }
 }

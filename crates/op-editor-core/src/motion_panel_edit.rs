@@ -31,14 +31,31 @@ pub enum MotionPanelEdit {
     /// Loop forever, or back to one pass.
     ToggleLoop(usize),
     ToggleOnce(usize),
+    SetDuration(usize, u64),
+    SetDelay(usize, u64),
+    /// Passes per run; at least one.
+    SetRepeat(usize, u32),
+    /// The id `play_motion` addresses; blank clears it.
+    SetId(usize, String),
     AddTransition,
     RemoveTransition,
     SetTransitionEasing(Easing),
+    SetTransitionDuration(u64),
 }
 
 impl EditorState {
     /// Apply one Motion-section edit to the selected node as one undo step.
     pub fn apply_selected_motion_edit(&mut self, edit: &MotionPanelEdit) -> bool {
+        self.apply_selected_motion_edit_inner(edit, true)
+    }
+
+    /// [`Self::apply_selected_motion_edit`] without its own undo step, for
+    /// the property-draft commit, which brackets its write already.
+    pub fn apply_selected_motion_edit_untracked(&mut self, edit: &MotionPanelEdit) -> bool {
+        self.apply_selected_motion_edit_inner(edit, false)
+    }
+
+    fn apply_selected_motion_edit_inner(&mut self, edit: &MotionPanelEdit, track: bool) -> bool {
         let node_id = self.selection.anchor.clone();
         if !node_id.is_real() {
             return false;
@@ -46,7 +63,11 @@ impl EditorState {
         let Some(commands) = self.motion_panel_commands(&node_id, edit) else {
             return false;
         };
-        self.apply_motion_edits(commands).unwrap_or(false)
+        if track {
+            self.apply_motion_edits(commands).unwrap_or(false)
+        } else {
+            self.apply_motion_edits_untracked(commands).unwrap_or(false)
+        }
     }
 
     fn motion_panel_commands(
@@ -121,6 +142,27 @@ impl EditorState {
             })?,
             MotionPanelEdit::ToggleOnce(index) => {
                 update(*index, &|animation| animation.once = !animation.once)?
+            }
+            MotionPanelEdit::SetDuration(index, ms) => {
+                update(*index, &|animation| animation.duration_ms = *ms)?
+            }
+            MotionPanelEdit::SetDelay(index, ms) => {
+                update(*index, &|animation| animation.delay_ms = *ms)?
+            }
+            MotionPanelEdit::SetRepeat(index, count) => update(*index, &|animation| {
+                animation.iterations = Iterations::Count((*count).max(1));
+            })?,
+            MotionPanelEdit::SetId(index, id) => update(*index, &|animation| {
+                let id = id.trim();
+                animation.id = (!id.is_empty()).then(|| id.to_owned());
+            })?,
+            MotionPanelEdit::SetTransitionDuration(ms) => {
+                let mut transition = transition?.clone();
+                transition.duration_ms = *ms;
+                vec![MotionCommand::SetTransition {
+                    node_id: node_id.clone(),
+                    transition: Some(transition),
+                }]
             }
             MotionPanelEdit::AddTransition => vec![MotionCommand::SetTransition {
                 node_id: node_id.clone(),

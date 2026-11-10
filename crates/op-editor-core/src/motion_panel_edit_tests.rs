@@ -118,3 +118,41 @@ fn stagger_and_transition_edits_write_the_selected_container() {
         .0
         .is_some());
 }
+
+#[test]
+fn text_fields_write_timing_repeat_and_id() {
+    let mut state = state_with_selected("a");
+    state.apply_selected_motion_edit(&MotionPanelEdit::AddPreset(MotionPreset::FadeIn));
+    state.apply_selected_motion_edit(&MotionPanelEdit::SetDuration(0, 640));
+    state.apply_selected_motion_edit(&MotionPanelEdit::SetDelay(0, 90));
+    state.apply_selected_motion_edit(&MotionPanelEdit::SetRepeat(0, 0));
+    let animation = &animations(&state)[0];
+    assert_eq!((animation.duration_ms, animation.delay_ms), (640, 90));
+    assert_eq!(animation.iterations, Iterations::Count(1));
+
+    state.apply_selected_motion_edit(&MotionPanelEdit::SetId(0, " intro ".into()));
+    assert_eq!(animations(&state)[0].id.as_deref(), Some("intro"));
+    state.apply_selected_motion_edit(&MotionPanelEdit::SetTrigger(0, MotionTrigger::Manual));
+    // A manual animation cannot lose its id: the edit is refused.
+    assert!(!state.apply_selected_motion_edit(&MotionPanelEdit::SetId(0, "  ".into())));
+    assert_eq!(animations(&state)[0].id.as_deref(), Some("intro"));
+
+    state.apply_selected_motion_edit(&MotionPanelEdit::AddTransition);
+    assert!(
+        state.apply_selected_motion_edit_untracked(&MotionPanelEdit::SetTransitionDuration(220))
+    );
+    let transition = state
+        .selected_node()
+        .and_then(|node| node.motion_declarations().0.cloned())
+        .expect("transition");
+    assert_eq!(transition.duration_ms, 220);
+    // The untracked write added no undo step of its own: one undo removes
+    // the transition the tracked edit added.
+    assert!(state.undo());
+    assert!(state
+        .selected_node()
+        .unwrap()
+        .motion_declarations()
+        .0
+        .is_none());
+}

@@ -79,6 +79,7 @@ impl Default for EditorUiState {
             scenario: None,
             preview: PreviewState::default(),
             motion_timeline: super::MotionTimelineState::default(),
+            motion_expanded: None,
             slides_panel: super::SlidesPanelState::default(),
             agent_settings_open: false,
             agent_settings: crate::agent_settings::AgentSettings::default(),

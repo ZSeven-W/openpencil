@@ -238,6 +238,8 @@ pub struct EditorUiState {
     pub preview: PreviewState,
     /// Motion timeline panel: scope, tab, playhead, selection, drag draft.
     pub motion_timeline: super::MotionTimelineState,
+    /// The Motion-section row whose fields are open: `(node id, index)`.
+    pub motion_expanded: Option<(String, usize)>,
     /// Left-rail tab selection plus the slides tab's hover / press /
     /// drag bookkeeping. The tab row itself only appears for scenario
     /// documents that have a page navigator to offer.

@@ -54,6 +54,15 @@ pub enum MotionMenuTarget {
     TransitionEasing,
 }
 
+/// A text field of an expanded Motion row (`PropertyFocus::MotionField`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MotionField {
+    Duration,
+    Delay,
+    Repeat,
+    Id,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MotionRow {
     pub trigger: MotionTrigger,
@@ -96,6 +105,9 @@ pub struct MotionSummary {
     pub transition: Option<Transition>,
     /// The node has direct children, so it can stagger a preset over them.
     pub can_stagger: bool,
+    /// The row whose fields the inspector shows. UI state: [`Self::of`]
+    /// leaves it `None` and the panel fills it in.
+    pub expanded: Option<usize>,
 }
 
 impl MotionSummary {
@@ -109,6 +121,7 @@ impl MotionSummary {
                 .collect(),
             transition: transition.cloned(),
             can_stagger: node.children().is_some_and(|children| !children.is_empty()),
+            expanded: None,
         }
     }
 }

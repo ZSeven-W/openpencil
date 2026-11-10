@@ -38,11 +38,30 @@ impl EditorState {
         &mut self,
         commands: Vec<MotionCommand>,
     ) -> Result<bool, MotionEditError> {
+        self.apply_motion_edits_inner(commands, true)
+    }
+
+    /// [`Self::apply_motion_edits`] without its own undo step, for callers
+    /// that already bracket the write (the property-draft commit).
+    pub fn apply_motion_edits_untracked(
+        &mut self,
+        commands: Vec<MotionCommand>,
+    ) -> Result<bool, MotionEditError> {
+        self.apply_motion_edits_inner(commands, false)
+    }
+
+    fn apply_motion_edits_inner(
+        &mut self,
+        commands: Vec<MotionCommand>,
+        track: bool,
+    ) -> Result<bool, MotionEditError> {
         let plan = self.plan_motion(&commands)?;
         if !self.motion_plan_changes(&plan) {
             return Ok(false);
         }
-        self.commit_history();
+        if track {
+            self.commit_history();
+        }
         let mut changed = false;
         for cmd in commands {
             changed |= self.apply(EditorCommand::Motion(cmd));

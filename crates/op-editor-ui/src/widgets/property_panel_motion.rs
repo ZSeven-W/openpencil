@@ -28,9 +28,10 @@ use op_editor_core::interaction_edit_apply::InteractionMenuTarget;
 use op_editor_core::motion_panel_edit::MotionPanelEdit;
 use op_editor_core::motion_presets::MotionPreset;
 use op_editor_core::motion_summary::{
-    easing_label, fill_label, trigger_label, MotionMenuTarget, MotionRow, MotionSummary,
-    MOTION_EASINGS, MOTION_TRIGGERS,
+    easing_label, fill_label, trigger_label, MotionField, MotionMenuTarget, MotionRow,
+    MotionSummary, MOTION_EASINGS, MOTION_TRIGGERS,
 };
+use op_editor_core::{EditorState, PropertyFocus};
 
 pub(crate) const ROW_STEP: f32 = INPUT_HEIGHT + 6.0;
 const ICON_BUTTON_W: f32 = 26.0;
@@ -322,6 +323,60 @@ pub fn paint_motion_section(
     let bottom = y + motion_section_height(summary) - SECTION_GAP;
     paint_section_divider(cx, theme, x, bottom, width);
     bottom + SECTION_GAP
+}
+
+/// The draft a freshly focused Motion text field starts from.
+pub(crate) fn field_initial(focus: PropertyFocus, summary: &MotionSummary) -> String {
+    match focus {
+        PropertyFocus::MotionField(index, field) => {
+            let Some(row) = summary.rows.get(index) else {
+                return String::new();
+            };
+            match field {
+                MotionField::Duration => row.duration_ms.to_string(),
+                MotionField::Delay => row.delay_ms.to_string(),
+                MotionField::Repeat => row.iterations.count_or(1).to_string(),
+                MotionField::Id => row.id.clone().unwrap_or_default(),
+            }
+        }
+        PropertyFocus::TransitionDuration => summary
+            .transition
+            .as_ref()
+            .map(|transition| transition.duration_ms.to_string())
+            .unwrap_or_default(),
+        _ => String::new(),
+    }
+}
+
+/// Write a committed Motion text field. Unparsable numbers are dropped,
+/// like every other numeric panel field.
+pub(crate) fn commit_field(state: &mut EditorState, focus: PropertyFocus, draft: &str) {
+    let draft = draft.trim();
+    let edit = match focus {
+        PropertyFocus::MotionField(index, MotionField::Id) => {
+            Some(MotionPanelEdit::SetId(index, draft.to_owned()))
+        }
+        PropertyFocus::MotionField(index, MotionField::Repeat) => draft
+            .parse::<u32>()
+            .ok()
+            .map(|count| MotionPanelEdit::SetRepeat(index, count)),
+        PropertyFocus::MotionField(index, MotionField::Duration) => draft
+            .parse::<u64>()
+            .ok()
+            .map(|ms| MotionPanelEdit::SetDuration(index, ms)),
+        PropertyFocus::MotionField(index, MotionField::Delay) => draft
+            .parse::<u64>()
+            .ok()
+            .map(|ms| MotionPanelEdit::SetDelay(index, ms)),
+        PropertyFocus::TransitionDuration => draft
+            .parse::<u64>()
+            .ok()
+            .map(MotionPanelEdit::SetTransitionDuration),
+        _ => None,
+    };
+    if let Some(edit) = edit {
+        let _ = state.apply_selected_motion_edit_untracked(&edit);
+    }
 }
 
 #[cfg(test)]
