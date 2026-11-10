@@ -7,7 +7,8 @@
 //! crate stays wasm32-clean — same discipline as `topbar_state`.
 
 /// Which status-bar control the cursor is over / clicked. The pill
-/// hosts a search-to-fit button and a `[- N% +]` zoom cluster.
+/// hosts a search-to-fit button, a `[- N% +]` zoom cluster and, in the
+/// desktop editor, the motion timeline toggle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusBarButton {
     /// Magnifier — frames the page content within the viewport.
@@ -16,4 +17,6 @@ pub enum StatusBarButton {
     ZoomOut,
     /// Plus — zooms the canvas in one step.
     ZoomIn,
+    /// Film — opens or closes the motion timeline.
+    Timeline,
 }

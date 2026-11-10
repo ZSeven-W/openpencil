@@ -63,6 +63,7 @@ impl WidgetHostNative {
                     StatusBarButton::ZoomIn => {
                         self.status_bar_zoom(true, viewport_width, viewport_height)
                     }
+                    StatusBarButton::Timeline => self.editor_state.toggle_motion_timeline(),
                 }
                 self.mark_dirty();
                 return Some(true);

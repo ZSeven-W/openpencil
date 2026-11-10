@@ -4,9 +4,10 @@
 //! Mirrors the TS app's `StatusBar` (apps/web/src/components/editor/
 //! status-bar.tsx): a pill-shape with Search / Minus / "100%" / Plus.
 //! Search frames the page content; the `[-]` / `[+]` glyphs step the
-//! zoom. [`StatusBar::control_at`] resolves a pointer to a control for
-//! both the click dispatch and the per-control `theme.button_hover`
-//! hover wash.
+//! zoom. Where the motion timeline can show, a film glyph at the pill's
+//! right end toggles it. [`StatusBar::control_at`] resolves a pointer to
+//! a control for both the click dispatch and the per-control
+//! `theme.button_hover` hover wash.
 
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
@@ -14,6 +15,7 @@ use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
 use crate::{Color, Point2D, Rect, TextLayout};
 use op_editor_core::StatusBarButton;
 
+/// Width of the pill without the timeline toggle.
 pub const STATUS_BAR_WIDTH: f32 = 134.0;
 pub const STATUS_BAR_HEIGHT: f32 = 32.0;
 const ICON_SIZE: f32 = 14.0;
@@ -31,6 +33,18 @@ const SEARCH_SECTION_W: f32 = 38.0;
 /// Half-side of the square click + hover target around the zoom
 /// minus / plus glyphs.
 const ZOOM_HIT_HALF: f32 = 12.0;
+/// What the timeline toggle adds to the pill: a section gap and its glyph.
+const TIMELINE_SECTION_W: f32 = SECTION_GAP + ICON_SIZE;
+
+/// The pill's width for this editor: wider by the timeline toggle where
+/// the timeline can show.
+pub fn status_bar_width(state: &op_editor_core::EditorState) -> f32 {
+    if crate::widgets::host_canvas_geometry::motion_timeline_available(state) {
+        STATUS_BAR_WIDTH + TIMELINE_SECTION_W
+    } else {
+        STATUS_BAR_WIDTH
+    }
+}
 
 pub struct StatusBar {
     pub id: WidgetId,
@@ -40,6 +54,8 @@ pub struct StatusBar {
     /// `theme.button_hover` wash. `None` = no hover.
     pub hover: Option<StatusBarButton>,
     pub pressed: Option<StatusBarButton>,
+    /// `Some(open)` when the pill carries the timeline toggle.
+    pub timeline: Option<bool>,
 }
 
 impl StatusBar {
@@ -50,6 +66,7 @@ impl StatusBar {
             theme: Theme::dark(),
             hover: None,
             pressed: None,
+            timeline: None,
         }
     }
 
@@ -72,7 +89,15 @@ impl StatusBar {
                 Some(op_editor_core::ButtonPressTarget::StatusBar(button)) => Some(button),
                 _ => None,
             },
+            timeline: crate::widgets::host_canvas_geometry::motion_timeline_available(state)
+                .then_some(state.editor_ui.motion_timeline.open),
         }
+    }
+
+    /// Top-left x of the timeline glyph, pinned to the pill's right end so
+    /// the zoom label's width never moves it.
+    fn timeline_x(rect: Rect) -> f32 {
+        rect.origin.x + rect.size.x - SIDE_PAD - ICON_SIZE
     }
 
     /// Top-left x of the search / minus / plus glyphs for a pill at
@@ -109,6 +134,10 @@ impl StatusBar {
         }
         if zoom_hit(plus_x + ICON_SIZE / 2.0, cy, point) {
             return Some(StatusBarButton::ZoomIn);
+        }
+        if self.timeline.is_some() && zoom_hit(Self::timeline_x(rect) + ICON_SIZE / 2.0, cy, point)
+        {
+            return Some(StatusBarButton::Timeline);
         }
         None
     }
@@ -209,6 +238,28 @@ impl Widget for StatusBar {
             plus_color,
             1.4,
         );
+        if let Some(open) = self.timeline {
+            let timeline_x = Self::timeline_x(rect);
+            let idle_color = paint_control_bg(
+                cx,
+                &self.theme,
+                timeline_x,
+                center_y,
+                StatusBarButton::Timeline,
+                self.hover,
+                self.pressed,
+            );
+            // An open timeline reads as a lit toggle.
+            let color = if open { self.theme.primary } else { idle_color };
+            draw_icon(
+                cx.backend,
+                Icon::Film,
+                Point2D::new(timeline_x, icon_y),
+                ICON_SIZE,
+                color,
+                1.4,
+            );
+        }
     }
 
     fn access_node(&self) -> accesskit::Node {
@@ -289,6 +340,28 @@ mod tests {
             bar.control_at(rect, Point2D::new(plus_x + ICON_SIZE / 2.0, cy)),
             Some(StatusBarButton::ZoomIn)
         );
+    }
+
+    #[test]
+    fn the_timeline_toggle_sits_at_the_right_end_where_it_can_show() {
+        let mut state = op_editor_core::EditorState::new();
+        let width = status_bar_width(&state);
+        assert_eq!(width, STATUS_BAR_WIDTH + TIMELINE_SECTION_W);
+        let rect = Rect {
+            origin: Point2D::new(0.0, 0.0),
+            size: Point2D::new(width, STATUS_BAR_HEIGHT),
+        };
+        let film = Point2D::new(
+            StatusBar::timeline_x(rect) + ICON_SIZE / 2.0,
+            STATUS_BAR_HEIGHT / 2.0,
+        );
+        let bar = StatusBar::for_editor(&state);
+        assert_eq!(bar.timeline, Some(false));
+        assert_eq!(bar.control_at(rect, film), Some(StatusBarButton::Timeline));
+        // Not in Preview: no toggle, and the pill keeps its old width.
+        state.editor_ui.preview.mode = true;
+        assert_eq!(status_bar_width(&state), STATUS_BAR_WIDTH);
+        assert_eq!(StatusBar::for_editor(&state).timeline, None);
     }
 
     #[test]
