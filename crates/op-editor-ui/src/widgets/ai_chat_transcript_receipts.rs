@@ -12,7 +12,7 @@
 //! the message body, where the loop appended them.
 
 use super::ai_chat_transcript::{step_height, ActionStep, ACTION_STEP_GAP};
-use super::ai_chat_transcript_receipt_body::receipt_body;
+use super::ai_chat_transcript_detail_body::detail_body;
 use super::ai_chat_transcript_steps::{wrap_detail, ParsedStep, ParsedStepStatus};
 use crate::widgets::ai_chat_workspace_copy::progress_label;
 use crate::Rect;
@@ -85,7 +85,7 @@ pub(crate) fn layout_receipts(
             .copied()
             .flatten()
             .unwrap_or(false);
-        let body = receipt_body(&receipt.details, budget);
+        let body = detail_body(&receipt.details, budget);
         let height = step_height(expanded, details.len(), body.as_ref());
         steps.push(ActionStep {
             rect: Rect::xywh(x, *y, width, height),
@@ -97,7 +97,7 @@ pub(crate) fn layout_receipts(
             active: false,
             failed: false,
             retryable: false,
-            receipt: body,
+            detail_body: body,
         });
         *y += height + ACTION_STEP_GAP;
     }

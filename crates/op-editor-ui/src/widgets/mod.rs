@@ -344,13 +344,13 @@ pub(crate) mod ai_chat_transcript_activity;
 mod ai_chat_transcript_apply_tests;
 pub(crate) mod ai_chat_transcript_cache;
 pub(crate) mod ai_chat_transcript_design;
+pub(crate) mod ai_chat_transcript_detail_body;
 pub(crate) mod ai_chat_transcript_flow;
 pub(crate) mod ai_chat_transcript_hit;
 pub(crate) mod ai_chat_transcript_identity;
 #[cfg(test)]
 mod ai_chat_transcript_identity_tests;
 pub(crate) mod ai_chat_transcript_paint_parts;
-pub(crate) mod ai_chat_transcript_receipt_body;
 pub(crate) mod ai_chat_transcript_receipts;
 pub(crate) mod ai_chat_transcript_richtext;
 pub(crate) mod ai_chat_transcript_selection;

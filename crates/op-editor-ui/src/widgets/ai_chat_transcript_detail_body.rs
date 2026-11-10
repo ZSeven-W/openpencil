@@ -35,7 +35,7 @@ const FAMILY: &str = "system-ui";
 
 /// One line of a step's details, as the repair body understands it.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum ReceiptLine {
+pub(crate) enum DetailLine {
     Repair(Repair),
     /// `repairs: layout 3, structure 7`.
     Counts(Vec<(String, usize)>),
@@ -57,15 +57,15 @@ pub(crate) struct Repair {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ReceiptBody {
-    pub lines: Vec<ReceiptLine>,
+pub(crate) struct DetailBody {
+    pub lines: Vec<DetailLine>,
     pub height: f32,
 }
 
 /// The structured body for `details`, or `None` when they hold no repair
 /// record (every other step keeps its plain detail rows).
-pub(crate) fn receipt_body(details: &[String], budget: u32) -> Option<ReceiptBody> {
-    let lines: Vec<ReceiptLine> = details
+pub(crate) fn detail_body(details: &[String], budget: u32) -> Option<DetailBody> {
+    let lines: Vec<DetailLine> = details
         .iter()
         .flat_map(|detail| detail.split('\n'))
         .map(str::trim)
@@ -74,22 +74,22 @@ pub(crate) fn receipt_body(details: &[String], budget: u32) -> Option<ReceiptBod
         .collect();
     if !lines
         .iter()
-        .any(|line| matches!(line, ReceiptLine::Repair(_)))
+        .any(|line| matches!(line, DetailLine::Repair(_)))
     {
         return None;
     }
     let height = lines.iter().map(line_height).sum::<f32>() + 4.0;
-    Some(ReceiptBody { lines, height })
+    Some(DetailBody { lines, height })
 }
 
-fn parse_line(line: &str, budget: u32) -> ReceiptLine {
+fn parse_line(line: &str, budget: u32) -> DetailLine {
     if let Some(repair) = parse_repair(line) {
-        return ReceiptLine::Repair(repair);
+        return DetailLine::Repair(repair);
     }
     if let Some(counts) = parse_counts(line) {
-        return ReceiptLine::Counts(counts);
+        return DetailLine::Counts(counts);
     }
-    ReceiptLine::Text(wrap_detail(
+    DetailLine::Text(wrap_detail(
         &super::ai_chat_transcript_receipts::pluralized(line),
         budget,
     ))
@@ -145,11 +145,11 @@ fn parse_counts(line: &str) -> Option<Vec<(String, usize)>> {
         .collect()
 }
 
-fn line_height(line: &ReceiptLine) -> f32 {
+fn line_height(line: &DetailLine) -> f32 {
     match line {
-        ReceiptLine::Repair(_) => REPAIR_ROW_H,
-        ReceiptLine::Counts(_) => CHIP_ROW_H,
-        ReceiptLine::Text(rows) => rows.len() as f32 * ACTION_DETAIL_LINE_H,
+        DetailLine::Repair(_) => REPAIR_ROW_H,
+        DetailLine::Counts(_) => CHIP_ROW_H,
+        DetailLine::Text(rows) => rows.len() as f32 * ACTION_DETAIL_LINE_H,
     }
 }
 
@@ -167,17 +167,17 @@ fn category_color(category: &str) -> Color {
 }
 
 /// Paint `body` with its top-left at (`x`, `y`) inside `width`.
-pub(crate) fn paint_receipt_body(
+pub(crate) fn paint_detail_body(
     cx: &mut PaintCx<'_>,
     theme: &Theme,
-    body: &ReceiptBody,
+    body: &DetailBody,
     x: f32,
     mut y: f32,
     width: f32,
 ) {
     for line in &body.lines {
         match line {
-            ReceiptLine::Text(rows) => {
+            DetailLine::Text(rows) => {
                 let mut baseline = y + 10.0;
                 for row in rows {
                     text(
@@ -192,8 +192,8 @@ pub(crate) fn paint_receipt_body(
                     baseline += ACTION_DETAIL_LINE_H;
                 }
             }
-            ReceiptLine::Counts(counts) => paint_chips(cx, theme, counts, x, y + 3.0, width),
-            ReceiptLine::Repair(repair) => paint_repair(cx, theme, repair, x, y, width),
+            DetailLine::Counts(counts) => paint_chips(cx, theme, counts, x, y + 3.0, width),
+            DetailLine::Repair(repair) => paint_repair(cx, theme, repair, x, y, width),
         }
         y += line_height(line);
     }
@@ -388,5 +388,5 @@ fn fit(cx: &mut PaintCx<'_>, text: &str, size: f32, weight: u16, max_w: f32) -> 
 }
 
 #[cfg(test)]
-#[path = "ai_chat_transcript_receipt_body_tests.rs"]
+#[path = "ai_chat_transcript_detail_body_tests.rs"]
 mod tests;

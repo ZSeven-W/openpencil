@@ -14,12 +14,12 @@ fn details() -> Vec<String> {
 
 #[test]
 fn repair_records_parse_into_who_what_and_the_change() {
-    let body = receipt_body(&details(), 60).expect("records present");
+    let body = detail_body(&details(), 60).expect("records present");
     let repairs: Vec<&Repair> = body
         .lines
         .iter()
         .filter_map(|line| match line {
-            ReceiptLine::Repair(repair) => Some(repair),
+            DetailLine::Repair(repair) => Some(repair),
             _ => None,
         })
         .collect();
@@ -38,10 +38,10 @@ fn repair_records_parse_into_who_what_and_the_change() {
     assert_eq!(repairs[1].node, Some(("n28".to_owned(), None)));
     assert_eq!(repairs[2].node, None);
     assert_eq!(repairs[2].before, "height (unset)");
-    assert!(matches!(&body.lines[1], ReceiptLine::Counts(counts)
+    assert!(matches!(&body.lines[1], DetailLine::Counts(counts)
         if counts == &[("layout".to_owned(), 3), ("structure".to_owned(), 7)]));
-    assert!(matches!(&body.lines[0], ReceiptLine::Text(_)));
-    assert!(matches!(body.lines.last(), Some(ReceiptLine::Text(_))));
+    assert!(matches!(&body.lines[0], DetailLine::Text(_)));
+    assert!(matches!(body.lines.last(), Some(DetailLine::Text(_))));
 }
 
 #[test]
@@ -50,14 +50,14 @@ fn details_without_records_keep_their_plain_rows() {
         "skills: cjk-typography".to_owned(),
         "retry #1: timeout".to_owned(),
     ];
-    assert_eq!(receipt_body(&plain, 60), None);
+    assert_eq!(detail_body(&plain, 60), None);
 }
 
 #[test]
 fn an_activity_detail_splits_its_lines_and_sizes_the_body() {
     // The desktop "Polishing the layout" row carries one newline-joined detail.
     let joined = vec![details().join("\n")];
-    let body = receipt_body(&joined, 60).expect("records present");
+    let body = detail_body(&joined, 60).expect("records present");
     assert_eq!(body.lines.len(), 6);
     let expected = 3.0 * REPAIR_ROW_H + CHIP_ROW_H + 2.0 * ACTION_DETAIL_LINE_H + 4.0;
     assert!((body.height - expected).abs() < 0.01, "{}", body.height);

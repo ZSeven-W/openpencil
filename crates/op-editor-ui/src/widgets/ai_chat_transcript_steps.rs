@@ -43,7 +43,7 @@ pub(crate) struct ActionStep {
     pub retryable: bool,
     /// The structured body painted instead of `details` when they are
     /// quality-repair records.
-    pub receipt: Option<super::ai_chat_transcript_receipt_body::ReceiptBody>,
+    pub detail_body: Option<super::ai_chat_transcript_detail_body::DetailBody>,
 }
 
 /// The font size step detail rows paint at, smaller than the body text.
@@ -81,10 +81,10 @@ pub(crate) fn wrap_detail(text: &str, budget: u32) -> Vec<String> {
 pub(crate) fn step_height(
     expanded: bool,
     detail_count: usize,
-    receipt: Option<&super::ai_chat_transcript_receipt_body::ReceiptBody>,
+    body: Option<&super::ai_chat_transcript_detail_body::DetailBody>,
 ) -> f32 {
     use super::ai_chat_transcript::{ACTION_DETAIL_GAP, ACTION_STEP_H};
-    match receipt {
+    match body {
         Some(body) if expanded => ACTION_STEP_H + ACTION_DETAIL_GAP + body.height,
         _ => action_step_height(expanded, detail_count),
     }

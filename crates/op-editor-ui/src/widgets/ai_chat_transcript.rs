@@ -23,6 +23,7 @@ use super::ai_chat_transcript_design::{
     applied_design_block_label, extract_design_json_blocks, paint_design_block,
     place_design_blocks, DesignBlock,
 };
+use super::ai_chat_transcript_detail_body::detail_body;
 pub(crate) use super::ai_chat_transcript_flow::normalize_narration_markdown;
 use super::ai_chat_transcript_flow::{
     build_activity_flow, build_flow, paint_flow, should_interleave, should_interleave_activities,
@@ -32,7 +33,6 @@ use super::ai_chat_transcript_identity::{
     layout_agent_identity, paint_agent_identity, AgentIdentityHeader,
 };
 use super::ai_chat_transcript_paint_parts::{paint_action_step, paint_collapsible};
-use super::ai_chat_transcript_receipt_body::receipt_body;
 use super::ai_chat_transcript_receipts::{layout_receipts, split_receipts};
 use super::ai_chat_transcript_richtext::{layout_rich, paint_rich, rich_height, rich_line_width};
 use super::ai_chat_transcript_selection::paint_user_bubble_selection;
@@ -311,8 +311,8 @@ pub(crate) fn build_item(
             .copied()
             .flatten()
             .unwrap_or(active || failed);
-        let receipt = receipt_body(&step.details, budget);
-        let step_h = step_height(expanded, details.len(), receipt.as_ref());
+        let body = detail_body(&step.details, budget);
+        let step_h = step_height(expanded, details.len(), body.as_ref());
         // `i` only aligns with `msg.activities`' own index when the
         // structured (non-interleaved) path built `progress_steps` directly
         // from `msg.activities` (see the `activity_step` map above) — the
@@ -334,7 +334,7 @@ pub(crate) fn build_item(
             active,
             failed,
             retryable,
-            receipt,
+            detail_body: body,
         });
         y += step_h + ACTION_STEP_GAP;
     }

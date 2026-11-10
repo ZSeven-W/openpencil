@@ -109,8 +109,8 @@ pub(crate) fn paint_action_step(
         );
         cx.backend.save();
         cx.backend.clip_rect(step.rect);
-        if let Some(body) = &step.receipt {
-            super::ai_chat_transcript_receipt_body::paint_receipt_body(
+        if let Some(body) = &step.detail_body {
+            super::ai_chat_transcript_detail_body::paint_detail_body(
                 cx,
                 theme,
                 body,
