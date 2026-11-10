@@ -91,6 +91,8 @@ pub struct CanvasViewport<'a> {
     /// design's sized root arrives, so the canvas never flashes empty.
     /// User-selected pencil-cursor silhouette (Settings > System).
     pub(super) pencil_cursor_style: op_editor_core::PencilCursorStyle,
+    /// Settings > System "Cursor swarm" switch.
+    pub(super) agent_swarm: bool,
     pub(super) starter_ghost: Option<[f32; 4]>,
     pub(super) pen_cursor_doc: Option<Point2D>,
     /// True while the Pen press-drag is minting handles — hides the
@@ -335,6 +337,22 @@ impl<'a> Widget for CanvasViewport<'a> {
                 }
             }
             if let Some(indicators) = indicators.as_ref() {
+                let swarm = super::canvas_agent_swarm::swarm_frame(
+                    self.agent_swarm,
+                    roots,
+                    indicators,
+                    viewport_origin,
+                    viewport.zoom,
+                    rect,
+                    self.starter_ghost,
+                    self.now_ms,
+                );
+                super::canvas_agent_swarm::paint_swarm(
+                    cx,
+                    &swarm,
+                    self.now_ms,
+                    self.pencil_cursor_style,
+                );
                 super::canvas_agent_cursor::paint_agent_cursors(
                     cx,
                     roots,

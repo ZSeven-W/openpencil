@@ -190,6 +190,7 @@ mod canvas_agent_cursor_motion_tests;
 mod canvas_agent_cursor_presence_tests;
 #[cfg(test)]
 mod canvas_agent_cursor_tests;
+mod canvas_agent_swarm;
 mod canvas_collab_presence;
 mod canvas_frame_labels;
 mod canvas_generation_scan;
