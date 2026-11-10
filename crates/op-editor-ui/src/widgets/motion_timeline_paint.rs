@@ -78,6 +78,19 @@ fn paint_header(
             color,
         );
     }
+    if let Some(hint) = view.static_hint() {
+        // Only where the whole sentence fits; a narrow panel drops it.
+        if cx.backend.measure_text(hint, 12.0) <= layout.hint.size.x {
+            text(
+                cx,
+                hint,
+                layout.hint.origin.x,
+                layout.hint,
+                12.0,
+                theme.muted_foreground,
+            );
+        }
+    }
     let time = format!(
         "{:.2} s / {:.2} s",
         view.playhead_ms / 1000.0,

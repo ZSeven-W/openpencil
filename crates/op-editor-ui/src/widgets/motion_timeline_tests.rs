@@ -176,3 +176,18 @@ fn ruler_labels_keep_only_the_decimals_they_need() {
     assert_eq!(seconds_label(500.0), "0.5 s");
     assert_eq!(seconds_label(2000.0), "2 s");
 }
+
+#[test]
+fn the_static_hint_shows_once_the_playhead_leaves_zero() {
+    let mut state = state();
+    assert_eq!(MotionTimelineView::for_editor(&state).static_hint(), None);
+    state.scrub_motion_playhead(150.0, 0);
+    let view = MotionTimelineView::for_editor(&state);
+    assert_eq!(view.static_hint(), Some("Editing the static layout"));
+    let layout = TimelineLayout::new(PANEL, &view);
+    let tabs_end = layout.tabs[2].1.origin.x + layout.tabs[2].1.size.x;
+    assert!(
+        layout.hint.origin.x > tabs_end
+            && layout.hint.origin.x + layout.hint.size.x < layout.time.origin.x
+    );
+}

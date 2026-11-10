@@ -82,6 +82,8 @@ pub struct TimelineLayout {
     pub header: Rect,
     pub scope: Rect,
     pub tabs: Vec<(MotionTimelineTab, Rect)>,
+    /// The free header span between the tabs and the time readout.
+    pub hint: Rect,
     pub time: Rect,
     pub play: Rect,
     pub looping: Rect,
@@ -112,6 +114,13 @@ impl TimelineLayout {
         let looping = Rect::xywh(zoom_out.origin.x - BUTTON_W - 8.0, button_y, BUTTON_W, 24.0);
         let play = Rect::xywh(looping.origin.x - BUTTON_W, button_y, BUTTON_W, 24.0);
         let time = Rect::xywh(play.origin.x - TIME_W, button_y, TIME_W, 24.0);
+        let tabs_end = track_x + 8.0 + TABS.len() as f32 * TAB_W;
+        let hint = Rect::xywh(
+            tabs_end + 8.0,
+            button_y,
+            (time.origin.x - tabs_end - 16.0).max(0.0),
+            24.0,
+        );
         let tabs = TABS
             .iter()
             .enumerate()
@@ -139,6 +148,7 @@ impl TimelineLayout {
             header,
             scope: Rect::xywh(x, y, LABEL_W, HEADER_H),
             tabs,
+            hint,
             time,
             play,
             looping,

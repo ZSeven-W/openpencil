@@ -119,6 +119,17 @@ impl MotionTimelineView {
         }
     }
 
+    /// Shown while the playhead is past zero: the canvas shows the frame
+    /// under it, but canvas edits still change the static layout.
+    pub fn static_hint(&self) -> Option<&'static str> {
+        (self.playhead_ms > 0.0 && !self.rows.is_empty()).then(|| {
+            tr(
+                self.locale,
+                ("motion.timeline.staticHint", "Editing the static layout"),
+            )
+        })
+    }
+
     /// Why the lanes are empty, if they are.
     pub fn empty_message(&self) -> Option<&'static str> {
         if !self.rows.is_empty() {
