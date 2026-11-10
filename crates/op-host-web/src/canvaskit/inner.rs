@@ -95,9 +95,7 @@ impl CkInner {
         // `time` uniform) on screen, or a playing motion timeline, needs the
         // next frame requested here.
         if op_editor_ui::shader_clock::animated_shader_on_screen()
-            || op_editor_ui::widgets::canvas_paint_scene::motion_timeline_playing(
-                self.host.editor_state(),
-            )
+            || self.host.motion_timeline_playing()
         {
             crate::repaint_coalescer::request();
         }

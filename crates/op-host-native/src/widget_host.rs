@@ -171,8 +171,6 @@ mod mobile_touch_tests;
 mod mode_transition_host;
 mod motion_timeline_host;
 #[cfg(test)]
-mod motion_timeline_host_tests;
-#[cfg(test)]
 mod overlay_cursor_tests;
 mod overlay_rects;
 #[cfg(test)]

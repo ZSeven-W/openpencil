@@ -38,7 +38,16 @@ impl WidgetHost {
             return Some(true);
         }
         // A motion timeline drag holds the pointer until release.
-        if self.drag_motion_timeline(x, y) {
+        let (vw, vh) = (self.last_viewport_w, self.last_viewport_h);
+        let point = Point2D::new(x, y);
+        if op_editor_ui::widgets::motion_timeline_flow::drag(
+            &mut self.editor_state,
+            point,
+            vw,
+            vh,
+            self.now_ms,
+        ) {
+            self.mark_dirty();
             return Some(true);
         }
         // Missing-fonts modal — owns the cursor while open. Hover the

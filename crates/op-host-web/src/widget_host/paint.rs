@@ -12,8 +12,8 @@ use super::WidgetHost;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
 use op_editor_ui::widgets::variables_panel::VariablesPanel;
 use op_editor_ui::widgets::{
-    AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, LocalePicker, PaintCx, PropertyPanel,
-    ShapePicker, StatusBar, Toolbar, Widget, TOOLBAR_WIDTH,
+    motion_timeline, AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, LocalePicker,
+    PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar, Widget, TOOLBAR_WIDTH,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -470,7 +470,7 @@ impl WidgetHost {
         }
 
         // Motion timeline, docked under the canvas region (native §7.9).
-        self.paint_motion_timeline(&mut *backend, viewport_width, viewport_height);
+        motion_timeline::paint(backend, &self.editor_state, viewport_width, viewport_height);
 
         if let Some(status_rect) =
             canvas_geometry::status_bar_rect(&self.editor_state, viewport_width, viewport_height)

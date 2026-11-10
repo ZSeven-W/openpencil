@@ -19,10 +19,10 @@ use op_editor_core::{EditorState, Locale, NodeId};
 pub use crate::widgets::motion_timeline_layout::{TimelineHit, TimelineLayout};
 pub use crate::widgets::motion_timeline_paint::paint_motion_timeline;
 
-/// Paint the panel when it is shown: each host's whole paint arm.
-pub fn paint_for_editor(
-    cx: &mut crate::widgets::PaintCx<'_>,
-    theme: &crate::theme::Theme,
+/// Paint the panel when it is shown: each host's whole paint arm, in the
+/// editor's theme (as the StatusBar reads it).
+pub fn paint(
+    backend: &mut dyn crate::RenderBackend,
     state: &EditorState,
     viewport_w: f32,
     viewport_h: f32,
@@ -30,7 +30,14 @@ pub fn paint_for_editor(
     if let Some(rect) =
         crate::widgets::host_canvas_geometry::motion_timeline_rect(state, viewport_w, viewport_h)
     {
-        paint_motion_timeline(cx, theme, rect, &MotionTimelineView::for_editor(state));
+        let theme = crate::widgets::editor_state_ext::theme_for(&state.editor_ui);
+        let view = MotionTimelineView::for_editor(state);
+        paint_motion_timeline(
+            &mut crate::widgets::PaintCx { backend },
+            &theme,
+            rect,
+            &view,
+        );
     }
 }
 

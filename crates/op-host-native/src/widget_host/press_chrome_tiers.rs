@@ -94,7 +94,17 @@ impl WidgetHostNative {
 
         // Motion timeline, docked under the canvas between the rails. After
         // the resize gutter, whose band overlaps the panel's edges.
-        if !in_git_panel && self.press_motion_timeline(x, y, viewport_width, viewport_height) {
+        if !in_git_panel
+            && op_editor_ui::widgets::motion_timeline_flow::press(
+                &mut self.editor_state,
+                Point2D::new(x, y),
+                viewport_width,
+                viewport_height,
+                self.now_ms,
+                self.shift_held,
+            )
+        {
+            self.mark_dirty();
             return Some(true);
         }
 

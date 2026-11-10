@@ -8,9 +8,9 @@ use crate::backend::NativeFrameBackend;
 use op_editor_ui::widgets::editor_state_ext::theme_for;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
 use op_editor_ui::widgets::{
-    variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar, CanvasViewport, GitPanel,
-    HomeSurface, LayoutCx, LocalePicker, PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar,
-    TopBar, Widget, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    motion_timeline, variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar,
+    CanvasViewport, GitPanel, HomeSurface, LayoutCx, LocalePicker, PaintCx, PropertyPanel,
+    ShapePicker, StatusBar, Toolbar, TopBar, Widget, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -456,7 +456,7 @@ impl WidgetHostNative {
         }
 
         // 7.9. Motion timeline, docked under the canvas region.
-        self.paint_motion_timeline(&mut *frame, viewport_width, viewport_height);
+        motion_timeline::paint(frame, &self.editor_state, viewport_width, viewport_height);
 
         // 8. StatusBar — floating bottom-right.
         if let Some(status_rect) =

@@ -8,7 +8,7 @@
 use super::cursor_move_ctx::CursorMoveCtx;
 use super::WidgetHostNative;
 use op_editor_core::codegen::CodeSelection;
-use op_editor_ui::widgets::{AIChatHit, AIChatPlaceholder, PropertyPanel};
+use op_editor_ui::widgets::{motion_timeline_flow, AIChatHit, AIChatPlaceholder, PropertyPanel};
 use op_editor_ui::{Point2D, Rect};
 
 /// Minimum cursor travel (logical px) from the node-drag press point
@@ -656,7 +656,9 @@ impl WidgetHostNative {
             return consumed;
         }
         // Tier 3b — a motion timeline drag holds the pointer until release.
-        if self.drag_motion_timeline(x, y) {
+        let (vw, vh) = (self.last_viewport_w, self.last_viewport_h);
+        if motion_timeline_flow::drag(&mut self.editor_state, point, vw, vh, self.now_ms) {
+            self.mark_dirty();
             return true;
         }
         // Tier 3 — in-flight property / text-selection / crop / node / pen

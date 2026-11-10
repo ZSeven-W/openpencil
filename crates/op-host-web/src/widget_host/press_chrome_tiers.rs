@@ -83,7 +83,15 @@ impl WidgetHost {
         }
 
         // Motion timeline, docked under the canvas between the rails.
-        if self.press_motion_timeline(x, y, viewport_width, viewport_height) {
+        if op_editor_ui::widgets::motion_timeline_flow::press(
+            &mut self.editor_state,
+            Point2D::new(x, y),
+            viewport_width,
+            viewport_height,
+            self.now_ms,
+            self.shift_held,
+        ) {
+            self.mark_dirty();
             return Some(true);
         }
 
