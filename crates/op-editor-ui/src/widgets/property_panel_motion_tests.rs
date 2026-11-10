@@ -1,5 +1,6 @@
 use super::*;
 use jian_ops_schema::node::PenNode;
+use op_editor_core::motion_presets::MotionPreset;
 use op_editor_core::Locale;
 
 fn summary(json: serde_json::Value) -> MotionSummary {

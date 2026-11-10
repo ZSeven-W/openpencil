@@ -126,6 +126,7 @@ pub mod property_panel_layout;
 pub mod property_panel_layout_ops;
 pub(crate) mod property_panel_mode_popover;
 pub mod property_panel_motion;
+pub mod property_panel_motion_menu;
 #[cfg(test)]
 mod property_panel_multi_select_tests;
 mod property_panel_overlay_hit;
