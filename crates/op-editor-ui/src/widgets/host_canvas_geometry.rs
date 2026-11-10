@@ -343,6 +343,50 @@ pub fn canvas_region(
     viewport_w: f32,
     viewport_h: f32,
 ) -> (f32, f32, f32, f32) {
+    let (x, y, w, h) = canvas_region_with_timeline(state, viewport_w, viewport_h);
+    (x, y, w, h - motion_timeline_height(state, h))
+}
+
+/// The motion timeline panel, docked along the bottom of the canvas area;
+/// `None` while it is closed or the editor is not showing the canvas.
+/// [`canvas_region`] already leaves this strip out.
+pub fn motion_timeline_rect(state: &EditorState, viewport_w: f32, viewport_h: f32) -> Option<Rect> {
+    let (x, y, w, h) = canvas_region_with_timeline(state, viewport_w, viewport_h);
+    let panel_h = motion_timeline_height(state, h);
+    (panel_h > 0.0).then(|| Rect::xywh(x, y + h - panel_h, w, panel_h))
+}
+
+/// Whether the timeline panel takes its strip: open, in the desktop
+/// editor, not in Preview.
+pub fn motion_timeline_shown(state: &EditorState) -> bool {
+    let ui = &state.editor_ui;
+    ui.motion_timeline.open
+        && !ui.preview.mode
+        && !ui.touch_chrome()
+        && !ui.works_reader_visible()
+        && !workspace_docked(state)
+}
+
+/// The panel's height inside a canvas area `full_h` tall: its own height,
+/// but never more than 60% of the area, so the canvas stays usable.
+fn motion_timeline_height(state: &EditorState, full_h: f32) -> f32 {
+    if !motion_timeline_shown(state) {
+        return 0.0;
+    }
+    state
+        .editor_ui
+        .motion_timeline
+        .height
+        .min(full_h * 0.6)
+        .max(0.0)
+}
+
+/// The canvas area before the timeline panel takes its strip.
+fn canvas_region_with_timeline(
+    state: &EditorState,
+    viewport_w: f32,
+    viewport_h: f32,
+) -> (f32, f32, f32, f32) {
     if state.editor_ui.works_reader_visible() {
         use crate::widgets::works_reader::{
             reader_chat_open, reader_paged_for, reader_stage_rect_for, ReaderForm,
@@ -690,3 +734,7 @@ pub fn path_anchor_hit(
     }
     None
 }
+
+#[cfg(test)]
+#[path = "host_canvas_geometry_timeline_tests.rs"]
+mod timeline_tests;
