@@ -63,6 +63,9 @@ pub struct MotionTimelineState {
     pub manual_id: Option<String>,
     pub playhead_ms: f64,
     pub playing: bool,
+    /// While playing: the host time and playhead playback started from, so
+    /// the playhead follows the clock instead of accumulating frame steps.
+    pub play_clock: Option<(u64, f64)>,
     pub looping: bool,
     /// Horizontal scale in pixels per millisecond.
     pub zoom: f32,
@@ -106,6 +109,7 @@ impl MotionTimelineState {
         self.drag = None;
         self.playhead_ms = 0.0;
         self.playing = false;
+        self.play_clock = None;
     }
 }
 
@@ -119,6 +123,7 @@ impl Default for MotionTimelineState {
             manual_id: None,
             playhead_ms: 0.0,
             playing: false,
+            play_clock: None,
             looping: false,
             zoom: Self::DEFAULT_ZOOM,
             selection: Vec::new(),

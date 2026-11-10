@@ -141,6 +141,7 @@ pub mod motion_presets;
 pub mod motion_summary;
 pub mod motion_timeline_edit;
 pub mod motion_timeline_projection;
+pub mod motion_timeline_transitions;
 pub mod mutators;
 pub mod node_defaults;
 pub mod node_id;
