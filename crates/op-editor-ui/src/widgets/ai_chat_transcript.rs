@@ -36,7 +36,7 @@ use super::ai_chat_transcript_receipts::{layout_receipts, split_receipts};
 use super::ai_chat_transcript_richtext::{layout_rich, paint_rich, rich_height, rich_line_width};
 use super::ai_chat_transcript_selection::paint_user_bubble_selection;
 pub(crate) use super::ai_chat_transcript_selection::transcript_text_offset_at;
-pub(crate) use super::ai_chat_transcript_steps::action_step_height;
+pub(crate) use super::ai_chat_transcript_steps::{action_step_height, ActionStep};
 use super::ai_chat_transcript_steps::{
     activity_step, extract_step_blocks, split_design_progress, step_state, strip_tool_call_xml,
     wrap_detail, ParsedStep,
@@ -104,27 +104,6 @@ pub(crate) struct Collapsible {
     pub collapsed: bool,
     pub body: Rect,
     pub lines: Vec<String>,
-}
-
-/// One compact design-progress row, matching the TS chat's action
-/// step treatment rather than dumping progress into reasoning text.
-pub(crate) struct ActionStep {
-    pub rect: Rect,
-    /// Stable slot in the message's combined legacy/activity override list.
-    pub source_index: usize,
-    pub label: String,
-    pub details: Vec<String>,
-    pub expanded: bool,
-    pub done: bool,
-    pub active: bool,
-    pub failed: bool,
-    /// True only for a failed row backed by a persisted
-    /// `ChatMessage::failed_subtasks` entry — gates the row's "Retry" icon
-    /// so it never paints a dead button for a failure with nothing to
-    /// replay (e.g. every activity flipped to `Error` by a whole-run
-    /// catastrophic failure, which produces no `RunSummary` and therefore
-    /// no persisted subtask spec).
-    pub retryable: bool,
 }
 
 /// The answer-text bubble of a message. `typing` is set on an

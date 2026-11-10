@@ -1,3 +1,4 @@
+use crate::Rect;
 use op_editor_core::{ChatActivity, ChatActivityStatus};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -19,6 +20,27 @@ pub(crate) struct ParsedStep {
 pub(crate) struct StepExtraction {
     pub steps: Vec<ParsedStep>,
     pub visible_text: String,
+}
+
+/// One compact design-progress row, matching the TS chat's action
+/// step treatment rather than dumping progress into reasoning text.
+pub(crate) struct ActionStep {
+    pub rect: Rect,
+    /// Stable slot in the message's combined legacy/activity override list.
+    pub source_index: usize,
+    pub label: String,
+    pub details: Vec<String>,
+    pub expanded: bool,
+    pub done: bool,
+    pub active: bool,
+    pub failed: bool,
+    /// True only for a failed row backed by a persisted
+    /// `ChatMessage::failed_subtasks` entry — gates the row's "Retry" icon
+    /// so it never paints a dead button for a failure with nothing to
+    /// replay (e.g. every activity flipped to `Error` by a whole-run
+    /// catastrophic failure, which produces no `RunSummary` and therefore
+    /// no persisted subtask spec).
+    pub retryable: bool,
 }
 
 /// The font size step detail rows paint at, smaller than the body text.
