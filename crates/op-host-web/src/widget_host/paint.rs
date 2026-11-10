@@ -168,6 +168,8 @@ impl WidgetHost {
             return;
         }
 
+        // Advance a playing motion timeline to this frame's time.
+        self.editor_state.tick_motion_timeline(self.now_ms);
         // Rebuild the layout-resolved render scene ONCE for the whole
         // paint pass. Every widget builder below reads `editor_state`
         // directly; the canvas reads `self.layout_scene`.
@@ -348,14 +350,14 @@ impl WidgetHost {
             } else {
                 // NORMAL PAINT path — the canvas reads editor state + the
                 // layout-resolved render scene (`refresh_layout_scene`).
-                let mut transition_scene = None;
-                if let Some(transition) = self.layout_transition.as_ref() {
-                    if transition.is_active(self.now_ms) {
-                        let mut scene = self.layout_scene.clone();
-                        transition.apply_to_scene(&mut scene, self.now_ms);
-                        transition_scene = Some(scene);
-                    }
-                }
+                // Mid layout transition and/or at the timeline playhead.
+                let transition_scene =
+                    op_editor_ui::widgets::canvas_paint_scene::canvas_paint_scene(
+                        &self.editor_state,
+                        &self.layout_scene,
+                        self.layout_transition.as_ref(),
+                        self.now_ms,
+                    );
                 let canvas_scene = transition_scene.as_ref().unwrap_or(&self.layout_scene);
                 let mut canvas = CanvasViewport::from_editor(&self.editor_state, canvas_scene);
                 canvas.now_ms = self.now_ms;
@@ -370,14 +372,14 @@ impl WidgetHost {
             #[cfg(not(feature = "canvaskit"))]
             {
                 // NORMAL PAINT path (non-canvaskit build)
-                let mut transition_scene = None;
-                if let Some(transition) = self.layout_transition.as_ref() {
-                    if transition.is_active(self.now_ms) {
-                        let mut scene = self.layout_scene.clone();
-                        transition.apply_to_scene(&mut scene, self.now_ms);
-                        transition_scene = Some(scene);
-                    }
-                }
+                // Mid layout transition and/or at the timeline playhead.
+                let transition_scene =
+                    op_editor_ui::widgets::canvas_paint_scene::canvas_paint_scene(
+                        &self.editor_state,
+                        &self.layout_scene,
+                        self.layout_transition.as_ref(),
+                        self.now_ms,
+                    );
                 let canvas_scene = transition_scene.as_ref().unwrap_or(&self.layout_scene);
                 let mut canvas = CanvasViewport::from_editor(&self.editor_state, canvas_scene);
                 canvas.now_ms = self.now_ms;
