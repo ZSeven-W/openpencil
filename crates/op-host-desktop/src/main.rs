@@ -367,7 +367,7 @@ struct DesktopApp {
     /// Startup reconnect replay queue (see `agent_connect_store`).
     provider_reconnect_queue: Vec<op_editor_core::AgentProvider>,
     /// Last persisted pencil-cursor style (see `ui_prefs`).
-    last_saved_pencil_cursor: Option<op_editor_core::PencilCursorStyle>,
+    last_saved_ui_prefs: Option<crate::ui_prefs::UiPrefsSnapshot>,
     /// Providers the store remembers as LAST KNOWN GOOD — seeded from
     /// `agents.json` at startup, extended when a probe succeeds, cleared
     /// only when the user explicitly disconnects. Deliberately not a

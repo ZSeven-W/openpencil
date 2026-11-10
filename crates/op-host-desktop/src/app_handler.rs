@@ -198,8 +198,13 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
         // time) so the user isn't greeted by five "Connect" buttons on
         // every launch.
         self.restore_remembered_connections();
-        if let Some(style) = crate::ui_prefs::load_pencil_cursor() {
-            self.host.editor_state_mut().editor_ui.pencil_cursor_style = style;
+        let (pencil_cursor, agent_swarm) = crate::ui_prefs::load();
+        let ui = &mut self.host.editor_state_mut().editor_ui;
+        if let Some(style) = pencil_cursor {
+            ui.pencil_cursor_style = style;
+        }
+        if let Some(enabled) = agent_swarm {
+            ui.agent_swarm_enabled = enabled;
         }
 
         if let Some(window) = self.window.as_ref() {

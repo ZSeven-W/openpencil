@@ -204,7 +204,7 @@ impl DesktopApp {
             last_seen_provider_phase: Default::default(),
             hovered_image_drop: false,
             drop_cursor: None,
-            last_saved_pencil_cursor: None,
+            last_saved_ui_prefs: None,
             acp_agent_connect_job: None,
             initial_file,
             app_menu: None,

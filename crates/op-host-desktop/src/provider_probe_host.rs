@@ -185,16 +185,20 @@ impl DesktopApp {
     /// as the connection store — the picker mutates state in the widget
     /// layer, which cannot reach the store).
     pub(crate) fn persist_ui_pref_changes(&mut self) {
-        let style = self.host.editor_state().editor_ui.pencil_cursor_style;
-        if self.last_saved_pencil_cursor == Some(style) {
+        let ui = &self.host.editor_state().editor_ui;
+        let snapshot = crate::ui_prefs::UiPrefsSnapshot {
+            pencil_cursor: ui.pencil_cursor_style,
+            agent_swarm: ui.agent_swarm_enabled,
+        };
+        if self.last_saved_ui_prefs == Some(snapshot) {
             return;
         }
-        if self.last_saved_pencil_cursor.is_none() {
-            self.last_saved_pencil_cursor = Some(style);
+        if self.last_saved_ui_prefs.is_none() {
+            self.last_saved_ui_prefs = Some(snapshot);
             return;
         }
-        crate::ui_prefs::save_pencil_cursor(style);
-        self.last_saved_pencil_cursor = Some(style);
+        crate::ui_prefs::save(snapshot);
+        self.last_saved_ui_prefs = Some(snapshot);
     }
 
     /// Begin the startup reconnect replay for providers remembered as
