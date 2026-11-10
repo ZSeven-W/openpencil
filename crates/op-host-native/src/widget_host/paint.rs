@@ -453,6 +453,9 @@ impl WidgetHostNative {
             self.paint_rail_canvas_edge(frame, viewport_height);
         }
 
+        // 7.9. Motion timeline, docked under the canvas region.
+        self.paint_motion_timeline(&mut *frame, viewport_width, viewport_height);
+
         // 8. StatusBar — floating bottom-right.
         if let Some(status_rect) =
             canvas_geometry::status_bar_rect(&self.editor_state, viewport_width, viewport_height)

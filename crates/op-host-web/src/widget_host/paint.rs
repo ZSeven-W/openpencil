@@ -467,6 +467,9 @@ impl WidgetHost {
             chat.paint(&mut cx, chat_rect);
         }
 
+        // Motion timeline, docked under the canvas region (native §7.9).
+        self.paint_motion_timeline(&mut *backend, viewport_width, viewport_height);
+
         if let Some(status_rect) =
             canvas_geometry::status_bar_rect(&self.editor_state, viewport_width, viewport_height)
         {
