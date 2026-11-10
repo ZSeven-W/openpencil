@@ -262,3 +262,54 @@ fn wireframe_layout_stays_inside_the_stage_and_is_capped() {
         }
     }
 }
+
+fn decoy(pos: Point2D, ping: Option<(Point2D, f32)>) -> SwarmCursor {
+    SwarmCursor {
+        pos,
+        color: SKELETON_BLUE,
+        name: "Test",
+        trail: [pos; TRAIL_DOTS],
+        ping,
+    }
+}
+
+#[test]
+fn landing_on_a_skeleton_block_flashes_that_block_and_fades() {
+    let block = Rect::xywh(100.0, 300.0, 200.0, 80.0);
+    let inside = Point2D::new(150.0, 340.0);
+    let frame = SwarmFrame {
+        stage: Some(Rect::xywh(0.0, 0.0, 400.0, 800.0)),
+        skeleton: vec![block],
+        cursors: vec![
+            decoy(inside, Some((inside, 0.0))),
+            decoy(inside, Some((inside, 0.5))),
+            // Landed on finished content, not on a placeholder.
+            decoy(inside, Some((Point2D::new(150.0, 100.0), 0.0))),
+            decoy(inside, None),
+        ],
+    };
+    let flashes = block_flashes(&frame);
+    assert_eq!(flashes.len(), 2);
+    assert_eq!(flashes[0].0, block);
+    assert_eq!(flashes[0].2, 1.0);
+    assert_eq!(flashes[1].2, 0.25);
+}
+
+#[test]
+fn only_nearby_decoys_are_linked_and_closer_pairs_are_stronger() {
+    let at = |x: f32| decoy(Point2D::new(x, 100.0), None);
+    let frame = SwarmFrame {
+        stage: Some(Rect::xywh(0.0, 0.0, 400.0, 800.0)),
+        skeleton: Vec::new(),
+        // Reach is 0.3 * 800 = 240px.
+        cursors: vec![at(0.0), at(60.0), at(200.0), at(700.0)],
+    };
+    let links = cursor_links(&frame);
+    assert_eq!(
+        links.len(),
+        3,
+        "0-60, 0-200 and 60-200; nothing reaches 700"
+    );
+    assert!(links[0].3 > links[1].3);
+    assert!(links.iter().all(|link| link.3 > 0.0 && link.3 <= 1.0));
+}

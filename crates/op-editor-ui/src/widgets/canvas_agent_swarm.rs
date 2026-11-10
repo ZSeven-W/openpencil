@@ -50,6 +50,8 @@ const FLIGHT_FRACTION: f32 = 0.55;
 /// Afterimages behind a flying decoy, and their spacing in time.
 const TRAIL_DOTS: usize = 5;
 const TRAIL_STEP_MS: u64 = 22;
+/// Decoys closer than this share of the stage's longer side get linked.
+const LINK_REACH_FRACTION: f32 = 0.3;
 /// Landing ping: an expanding ring where a decoy touches down.
 const PING_MS: u64 = 300;
 /// Skeleton shimmer cycle.
@@ -368,6 +370,40 @@ fn decoy_position(index: u64, blocks: &[Rect], stage: Rect, now_ms: u64) -> Poin
     )
 }
 
+/// Skeleton blocks a decoy has just landed on: `(block, colour, 1..0 fade)`.
+/// The block lights up in that decoy's colour and settles back.
+fn block_flashes(frame: &SwarmFrame) -> Vec<(Rect, Color, f32)> {
+    frame
+        .cursors
+        .iter()
+        .filter_map(|cursor| {
+            let (centre, progress) = cursor.ping?;
+            let block = frame.skeleton.iter().find(|b| b.contains(centre))?;
+            Some((*block, cursor.color, (1.0 - progress).powi(2)))
+        })
+        .collect()
+}
+
+/// Constellation lines between decoys that are close to each other:
+/// `(from, to, colour, 0..1 strength)`, stronger the closer the pair.
+fn cursor_links(frame: &SwarmFrame) -> Vec<(Point2D, Point2D, Color, f32)> {
+    let Some(stage) = frame.stage else {
+        return Vec::new();
+    };
+    let reach = (stage.size.x.max(stage.size.y) * LINK_REACH_FRACTION).clamp(80.0, 420.0);
+    let mut links = Vec::new();
+    for (i, a) in frame.cursors.iter().enumerate() {
+        for b in &frame.cursors[i + 1..] {
+            let (dx, dy) = (a.pos.x - b.pos.x, a.pos.y - b.pos.y);
+            let distance = (dx * dx + dy * dy).sqrt();
+            if distance < reach {
+                links.push((a.pos, b.pos, a.color, 1.0 - distance / reach));
+            }
+        }
+    }
+    links
+}
+
 /// Paint the skeleton blocks and decoy cursors. Called right before the real
 /// agent cursor so that one stays on top.
 pub(crate) fn paint_swarm(
@@ -391,7 +427,18 @@ pub(crate) fn paint_swarm(
             cx.backend
                 .stroke_round_rect(*block, radius, SKELETON_BLUE.with_alpha(0.28), 1.0);
         }
+        for (block, color, fade) in block_flashes(frame) {
+            let radius = (block.size.y * 0.18).min(8.0);
+            cx.backend
+                .fill_round_rect(block, radius, color.with_alpha(0.38 * fade));
+            cx.backend
+                .stroke_round_rect(block, radius, color.with_alpha(0.9 * fade), 1.5);
+        }
         cx.backend.restore();
+    }
+    for (from, to, color, strength) in cursor_links(frame) {
+        cx.backend
+            .stroke_line(from, to, color.with_alpha(0.42 * strength), 1.0);
     }
     let dot = |centre: Point2D, r: f32| Rect {
         origin: Point2D::new(centre.x - r, centre.y - r),
