@@ -23,7 +23,8 @@ pub use super::home::{
     TaskDraft,
 };
 pub use super::motion_timeline::{
-    MotionTimelineDrag, MotionTimelineState, MotionTimelineTab, TimelineKeyframeRef,
+    MotionTimelineDrag, MotionTimelineState, MotionTimelineTab, TimelineDragAnchor,
+    TimelineKeyframeRef,
 };
 pub use super::pickers::{
     CanvasDropIndicator, CanvasOverlayLine, CanvasOverlayRect, CompositingPickerTarget,

@@ -5,7 +5,7 @@
 //! `motion_timeline_edit` and applies them as one undo step, so an
 //! abandoned drag leaves the document untouched.
 
-use crate::editor_ui_state::{MotionTimelineDrag, TimelineKeyframeRef};
+use crate::editor_ui_state::{MotionTimelineDrag, TimelineDragAnchor, TimelineKeyframeRef};
 use crate::motion_edit::MotionCommand;
 use crate::motion_timeline_edit::{delete_keyframe, move_strip, resize_strip, shift_keyframes};
 use crate::walkers::find_node;
@@ -66,6 +66,76 @@ impl EditorState {
 
     pub fn begin_motion_timeline_drag(&mut self, drag: MotionTimelineDrag) {
         self.editor_ui.motion_timeline.drag = Some(drag);
+        self.editor_ui.motion_timeline.drag_anchor = None;
+    }
+
+    /// Start a drag that [`Self::drag_motion_timeline_to`] follows from
+    /// `anchor`.
+    pub fn begin_motion_timeline_drag_at(
+        &mut self,
+        drag: MotionTimelineDrag,
+        anchor: TimelineDragAnchor,
+    ) {
+        self.begin_motion_timeline_drag(drag);
+        self.editor_ui.motion_timeline.drag_anchor = Some(anchor);
+    }
+
+    /// Follow the pointer to `pointer_ms`. The held time moves by the
+    /// pointer's travel since the anchor and snaps to another keyframe or
+    /// the playhead within `snap_ms`, else to the grid; a scrub moves the
+    /// playhead to the pointer.
+    pub fn drag_motion_timeline_to(&mut self, pointer_ms: f64, snap_ms: f64, now_ms: u64) {
+        let timeline = &self.editor_ui.motion_timeline;
+        let Some(drag) = timeline.drag.clone() else {
+            return;
+        };
+        let Some(anchor) = timeline.drag_anchor else {
+            if drag == MotionTimelineDrag::Playhead {
+                self.update_motion_timeline_drag(pointer_ms, now_ms);
+            }
+            return;
+        };
+        let held = (anchor.held_ms + pointer_ms - anchor.pointer_ms).max(0.0);
+        let snapped = snap_time(
+            held,
+            &self.motion_snap_targets(&self.held_keys(&drag)),
+            snap_ms,
+        );
+        let value = match drag {
+            MotionTimelineDrag::StripEnd { .. } | MotionTimelineDrag::Playhead => snapped,
+            MotionTimelineDrag::Strip { .. } | MotionTimelineDrag::Keyframes { .. } => {
+                snapped - anchor.held_ms
+            }
+        };
+        self.update_motion_timeline_drag(value, now_ms);
+    }
+
+    /// Keyframes a drag carries, left out of its own snap targets: the
+    /// dragged ones, or every keyframe of a moved or stretched strip.
+    fn held_keys(&self, drag: &MotionTimelineDrag) -> Vec<TimelineKeyframeRef> {
+        let (node_id, animation) = match drag {
+            MotionTimelineDrag::Keyframes { keys, .. } => return keys.clone(),
+            MotionTimelineDrag::Playhead => return Vec::new(),
+            MotionTimelineDrag::Strip {
+                node_id, animation, ..
+            }
+            | MotionTimelineDrag::StripEnd {
+                node_id, animation, ..
+            } => (node_id, *animation),
+        };
+        let count = self
+            .motion_timeline_projection()
+            .strips
+            .iter()
+            .find(|strip| strip.node_id == *node_id && strip.animation == animation)
+            .map_or(0, |strip| strip.keyframe_ms.len());
+        (0..count)
+            .map(|keyframe| TimelineKeyframeRef {
+                node_id: node_id.clone(),
+                animation,
+                keyframe,
+            })
+            .collect()
     }
 
     /// Feed the pointer: a delta for strip and keyframe drags, the new end
@@ -85,11 +155,13 @@ impl EditorState {
     /// Drop the drag without writing anything.
     pub fn cancel_motion_timeline_drag(&mut self) {
         self.editor_ui.motion_timeline.drag = None;
+        self.editor_ui.motion_timeline.drag_anchor = None;
     }
 
     /// Release the drag: write its draft as one undo step. Returns whether
     /// the document changed.
     pub fn finish_motion_timeline_drag(&mut self) -> bool {
+        self.editor_ui.motion_timeline.drag_anchor = None;
         let Some(drag) = self.editor_ui.motion_timeline.drag.take() else {
             return false;
         };

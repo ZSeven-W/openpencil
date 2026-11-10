@@ -50,6 +50,15 @@ pub enum MotionTimelineDrag {
     Playhead,
 }
 
+/// Where a drag started: the pointer's time and the time of what it
+/// holds (a strip's start, a keyframe, an end). The held time follows the
+/// pointer's travel, so grabbing a strip off-centre does not jump it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TimelineDragAnchor {
+    pub pointer_ms: f64,
+    pub held_ms: f64,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MotionTimelineState {
     pub open: bool,
@@ -71,6 +80,7 @@ pub struct MotionTimelineState {
     pub zoom: f32,
     pub selection: Vec<TimelineKeyframeRef>,
     pub drag: Option<MotionTimelineDrag>,
+    pub drag_anchor: Option<TimelineDragAnchor>,
 }
 
 impl MotionTimelineState {
@@ -128,6 +138,7 @@ impl Default for MotionTimelineState {
             zoom: Self::DEFAULT_ZOOM,
             selection: Vec::new(),
             drag: None,
+            drag_anchor: None,
         }
     }
 }

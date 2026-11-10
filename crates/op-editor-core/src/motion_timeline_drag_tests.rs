@@ -150,3 +150,56 @@ fn a_playhead_drag_scrubs_without_writing() {
     assert_eq!(state.editor_ui.motion_timeline.playhead_ms, 250.0);
     assert!(!state.finish_motion_timeline_drag());
 }
+
+#[test]
+fn a_followed_drag_moves_by_the_pointer_travel_and_snaps() {
+    let mut state = state();
+    // b runs 100..500 ms; grab it 150 ms in, at 250 ms.
+    let anchor = |held_ms| TimelineDragAnchor {
+        pointer_ms: 250.0,
+        held_ms,
+    };
+    state.begin_motion_timeline_drag_at(
+        MotionTimelineDrag::Strip {
+            node_id: "b".into(),
+            animation: 0,
+            delta_ms: 0.0,
+        },
+        anchor(100.0),
+    );
+    // 33 ms of travel lands the start on the grid at 130 ms...
+    state.drag_motion_timeline_to(283.0, 8.0, 0);
+    assert_eq!(drag_delta(&state), Some(30.0));
+    // ...and 96 ms puts it 4 ms from a's 200 ms keyframe, which wins.
+    state.drag_motion_timeline_to(346.0, 8.0, 0);
+    assert_eq!(drag_delta(&state), Some(100.0));
+    assert!(state.finish_motion_timeline_drag());
+    assert_eq!(animation(&state, "b", 0).unwrap().delay_ms, 200);
+    assert!(state.editor_ui.motion_timeline.drag_anchor.is_none());
+
+    // An end drag reports the snapped end itself.
+    state.begin_motion_timeline_drag_at(
+        MotionTimelineDrag::StripEnd {
+            node_id: "b".into(),
+            animation: 0,
+            end_ms: 600.0,
+        },
+        anchor(600.0),
+    );
+    state.drag_motion_timeline_to(452.0, 8.0, 0);
+    assert_eq!(
+        state.editor_ui.motion_timeline.drag,
+        Some(MotionTimelineDrag::StripEnd {
+            node_id: "b".into(),
+            animation: 0,
+            end_ms: 800.0,
+        })
+    );
+}
+
+fn drag_delta(state: &EditorState) -> Option<f64> {
+    match state.editor_ui.motion_timeline.drag {
+        Some(MotionTimelineDrag::Strip { delta_ms, .. }) => Some(delta_ms),
+        _ => None,
+    }
+}
