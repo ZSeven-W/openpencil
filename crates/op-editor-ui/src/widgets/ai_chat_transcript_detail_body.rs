@@ -1,45 +1,93 @@
-//! The expanded body of a step whose details are quality-repair records.
+//! The structured body every expandable chat detail paints: a step's
+//! progress details, a quality run's repairs, a tool call's arguments and
+//! result.
 //!
-//! The quality passes report each applied repair as one
-//! `category · pass · node · field before → after` line. Painted as plain
-//! grey text, a dozen of them read as one undifferentiated block. A step
-//! whose details hold such records shows them here instead:
+//! Details arrive as plain text lines. Painted as grey rows they read as one
+//! undifferentiated block, and tool calls showed their raw JSON. Each line
+//! is classified instead and painted for what it is:
 //!
 //! ```text
-//! Checked layout, overflow, hierarchy, structure, palette
-//! (● layout 3) (● structure 7)                          ← one chip per category
-//! ● Home  n1 · hero-bleed                               ← node, then the pass
-//!   gap 0 → 16                                          ← the new value stands out
+//! Checked layout, overflow, hierarchy        Text: a muted row
+//! (● layout 3) (● structure 7)               Counts: one chip per category
+//! ● Home  n1 · hero-bleed                    Repair: node, then the pass,
+//!   gap 0 → 16                                 the new value emphasised
+//! (3 screens) (41 elements)                  Stats: facts as neutral chips
+//! skills    (cjk-typography) (icon-buttons)  Field: key column, value as chips,
+//! retry #1  geometry echo → retry              a change,
+//! Args                                         or a JSON object's fields
+//!   nodeId  n1
 //! ```
 //!
-//! Every row has a fixed height, so the step's height is known when the
-//! transcript is laid out; only horizontal fitting is measured at paint.
-//! Lines that are not records (the checked scope, notes, the "… and N
-//! more" notice) stay plain muted rows.
+//! Every row kind has a fixed height, so a step's height is known when the
+//! transcript is laid out; only horizontal fitting is measured at paint
+//! time (`ai_chat_transcript_detail_paint`).
 
 use super::ai_chat_transcript::ACTION_DETAIL_LINE_H;
-use super::ai_chat_transcript_steps::{wrap_detail, DETAIL_FONT};
-use crate::theme::Theme;
-use crate::widgets::PaintCx;
-use crate::{Color, Point2D, Rect, TextLayout};
+use super::ai_chat_transcript_receipts::pluralized;
+use super::ai_chat_transcript_steps::wrap_detail;
+use super::ai_chat_transcript_text::wrap_units;
+use serde_json::Value;
+
+pub(crate) use super::ai_chat_transcript_detail_paint::paint_detail_body;
 
 /// The repair families the quality passes report, in their display order.
-const CATEGORIES: [&str; 5] = ["layout", "overflow", "hierarchy", "structure", "palette"];
-const CHIP_H: f32 = 18.0;
-const CHIP_ROW_H: f32 = CHIP_H + 8.0;
-const REPAIR_ROW_H: f32 = 34.0;
-const DOT: f32 = 6.0;
-/// Where a repair row's text starts, past its category dot.
-const TEXT_INDENT: f32 = 13.0;
-const FAMILY: &str = "system-ui";
+pub(crate) const CATEGORIES: [&str; 5] =
+    ["layout", "overflow", "hierarchy", "structure", "palette"];
+pub(crate) const CHIP_H: f32 = 18.0;
+pub(crate) const CHIP_ROW_H: f32 = CHIP_H + 8.0;
+pub(crate) const REPAIR_ROW_H: f32 = 34.0;
+pub(crate) const CHANGE_ROW_H: f32 = 16.0;
+/// Width of a field's key column.
+pub(crate) const KEY_W: f32 = 66.0;
+/// A JSON value shows at most this many fields before summarizing the rest.
+const MAX_FIELDS: usize = 8;
+/// A free-text field value shows at most this many rows.
+const MAX_VALUE_ROWS: usize = 4;
+/// Values longer than this are shortened when a JSON field is summarized.
+const SUMMARY_CHARS: usize = 44;
+/// Chip-list items longer than this make the value plain text instead.
+const CHIP_MAX_CHARS: usize = 32;
 
-/// One line of a step's details, as the repair body understands it.
+/// One line of a detail body.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum DetailLine {
     Repair(Repair),
     /// `repairs: layout 3, structure 7`.
     Counts(Vec<(String, usize)>),
+    /// Two or more short `·`-separated facts: `3 screens · 41 elements`.
+    Stats(Vec<String>),
+    /// `key: value`.
+    Field {
+        key: String,
+        value: FieldValue,
+        alert: bool,
+    },
+    /// `before → after` with no key.
+    Change {
+        before: String,
+        after: String,
+    },
     /// Anything else, pre-wrapped into rows.
+    Text {
+        rows: Vec<String>,
+        alert: bool,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum FieldValue {
+    /// A list (`a, b, c`) or a single short token.
+    Chips(Vec<String>),
+    Change {
+        before: String,
+        after: String,
+    },
+    /// A JSON object's top-level fields with summarized values, and how many
+    /// were left out.
+    Fields {
+        fields: Vec<(String, String)>,
+        more: usize,
+    },
     Text(Vec<String>),
 }
 
@@ -62,37 +110,63 @@ pub(crate) struct DetailBody {
     pub height: f32,
 }
 
-/// The structured body for `details`, or `None` when they hold no repair
-/// record (every other step keeps its plain detail rows).
-pub(crate) fn detail_body(details: &[String], budget: u32) -> Option<DetailBody> {
-    let lines: Vec<DetailLine> = details
+/// The body for a step's `details` (each entry may hold several
+/// `\n`-separated lines). `alert` tints its text, for a failed step. `None`
+/// when there is nothing to show.
+pub(crate) fn detail_body(details: &[String], budget: u32, alert: bool) -> Option<DetailBody> {
+    let lines: Vec<(&str, bool)> = details
         .iter()
         .flat_map(|detail| detail.split('\n'))
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(|line| parse_line(line, budget))
+        .map(|line| (line, alert))
         .collect();
-    if !lines
+    detail_body_lines(&lines, budget)
+}
+
+/// [`detail_body`] with a tint per line (a tool call's failed result).
+pub(crate) fn detail_body_lines(lines: &[(&str, bool)], budget: u32) -> Option<DetailBody> {
+    let lines: Vec<DetailLine> = lines
         .iter()
-        .any(|line| matches!(line, DetailLine::Repair(_)))
-    {
+        .map(|(line, alert)| (line.trim(), *alert))
+        .filter(|(line, _)| !line.is_empty())
+        .map(|(line, alert)| parse_line(line, budget, alert))
+        .collect();
+    if lines.is_empty() {
         return None;
     }
     let height = lines.iter().map(line_height).sum::<f32>() + 4.0;
     Some(DetailBody { lines, height })
 }
 
-fn parse_line(line: &str, budget: u32) -> DetailLine {
+fn parse_line(line: &str, budget: u32, alert: bool) -> DetailLine {
     if let Some(repair) = parse_repair(line) {
         return DetailLine::Repair(repair);
     }
     if let Some(counts) = parse_counts(line) {
         return DetailLine::Counts(counts);
     }
-    DetailLine::Text(wrap_detail(
-        &super::ai_chat_transcript_receipts::pluralized(line),
-        budget,
-    ))
+    let line = pluralized(line);
+    if let Some((key, value)) = split_field(&line) {
+        return DetailLine::Field {
+            key: key.to_owned(),
+            value: parse_value(value, budget),
+            alert,
+        };
+    }
+    if !alert {
+        if let Some((before, after)) = line.split_once(" → ") {
+            return DetailLine::Change {
+                before: before.to_owned(),
+                after: after.to_owned(),
+            };
+        }
+        if let Some(stats) = parse_stats(&line) {
+            return DetailLine::Stats(stats);
+        }
+    }
+    DetailLine::Text {
+        rows: wrap_detail(&line, budget),
+        alert,
+    }
 }
 
 fn parse_repair(line: &str) -> Option<Repair> {
@@ -145,246 +219,141 @@ fn parse_counts(line: &str) -> Option<Vec<(String, usize)>> {
         .collect()
 }
 
-fn line_height(line: &DetailLine) -> f32 {
+/// `key: value` with a short, word-like key (`skills`, `retry #1`, `Args`);
+/// a URL or prose with a colon later in it is not a field.
+fn split_field(line: &str) -> Option<(&str, &str)> {
+    let (key, value) = line.split_once(": ")?;
+    let mut chars = key.chars();
+    let word_like = chars.next().is_some_and(char::is_alphabetic)
+        && chars.all(|c| c.is_alphanumeric() || matches!(c, ' ' | '#' | '-' | '_'));
+    (word_like && key.chars().count() <= 20 && !value.trim().is_empty())
+        .then(|| (key, value.trim()))
+}
+
+fn parse_value(value: &str, budget: u32) -> FieldValue {
+    if value.starts_with('{') || value.starts_with('[') {
+        if let Ok(json) = serde_json::from_str::<Value>(value) {
+            return json_value(&json, budget);
+        }
+    }
+    if let Some((before, after)) = value.split_once(" → ") {
+        return FieldValue::Change {
+            before: before.to_owned(),
+            after: after.to_owned(),
+        };
+    }
+    let items: Vec<&str> = value.split(", ").map(str::trim).collect();
+    let chip_like = |item: &&str| {
+        !item.is_empty() && item.chars().count() <= CHIP_MAX_CHARS && !item.contains(": ")
+    };
+    let single_token = items.len() == 1 && !value.contains(' ');
+    if (items.len() > 1 || single_token) && items.iter().all(chip_like) {
+        return FieldValue::Chips(items.into_iter().map(str::to_owned).collect());
+    }
+    FieldValue::Text(value_rows(value, budget))
+}
+
+fn json_value(json: &Value, budget: u32) -> FieldValue {
+    match json {
+        Value::Object(map) => FieldValue::Fields {
+            fields: map
+                .iter()
+                .take(MAX_FIELDS)
+                .map(|(key, value)| (key.clone(), summarize(value)))
+                .collect(),
+            more: map.len().saturating_sub(MAX_FIELDS),
+        },
+        Value::Array(items)
+            if items
+                .iter()
+                .all(|item| !item.is_object() && !item.is_array()) =>
+        {
+            FieldValue::Chips(items.iter().take(MAX_FIELDS).map(summarize).collect())
+        }
+        other => FieldValue::Text(value_rows(&summarize(other), budget)),
+    }
+}
+
+/// A one-glance rendering of a JSON value: strings unquoted, containers by
+/// what they are or how big they are.
+pub(crate) fn summarize(value: &Value) -> String {
+    let text = match value {
+        Value::Null => "(unset)".to_owned(),
+        Value::String(text) => text.replace('\n', " "),
+        Value::Number(number) => number.to_string(),
+        Value::Bool(flag) => flag.to_string(),
+        Value::Array(items)
+            if items
+                .iter()
+                .all(|item| !item.is_object() && !item.is_array()) =>
+        {
+            format!(
+                "[{}]",
+                items.iter().map(summarize).collect::<Vec<_>>().join(", ")
+            )
+        }
+        Value::Array(items) => match items.len() {
+            1 => "1 item".to_owned(),
+            count => format!("{count} items"),
+        },
+        Value::Object(map) => map
+            .get("type")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .unwrap_or_else(|| match map.len() {
+                1 => "1 field".to_owned(),
+                count => format!("{count} fields"),
+            }),
+    };
+    if text.chars().count() <= SUMMARY_CHARS {
+        return text;
+    }
+    text.chars().take(SUMMARY_CHARS).collect::<String>() + "…"
+}
+
+/// Two or more short facts separated by middle dots.
+fn parse_stats(line: &str) -> Option<Vec<String>> {
+    let parts: Vec<&str> = line.split(" · ").map(str::trim).collect();
+    (parts.len() >= 2
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.chars().count() <= 28))
+    .then(|| parts.into_iter().map(str::to_owned).collect())
+}
+
+/// A free-text value wrapped to the column beside the key.
+fn value_rows(value: &str, budget: u32) -> Vec<String> {
+    let full = ((budget as f32 * 1.2) as u32).saturating_sub(4);
+    let key_units = ((KEY_W + 6.0) / 5.5) as u32;
+    let mut rows = wrap_units(value, full.saturating_sub(key_units).max(8));
+    if rows.len() > MAX_VALUE_ROWS {
+        rows.truncate(MAX_VALUE_ROWS);
+        if let Some(last) = rows.last_mut() {
+            last.push('…');
+        }
+    }
+    rows
+}
+
+pub(crate) fn line_height(line: &DetailLine) -> f32 {
+    let rows = |count: usize| count.max(1) as f32 * ACTION_DETAIL_LINE_H;
     match line {
         DetailLine::Repair(_) => REPAIR_ROW_H,
-        DetailLine::Counts(_) => CHIP_ROW_H,
-        DetailLine::Text(rows) => rows.len() as f32 * ACTION_DETAIL_LINE_H,
-    }
-}
-
-/// A category's colour: a fixed hue per family so the dot under a repair
-/// matches its chip, legible on both themes.
-fn category_color(category: &str) -> Color {
-    match category {
-        "layout" => Color::rgb_u8(0x3B, 0x82, 0xF6),
-        "overflow" => Color::rgb_u8(0xEF, 0x44, 0x44),
-        "hierarchy" => Color::rgb_u8(0xF5, 0x9E, 0x0B),
-        "structure" => Color::rgb_u8(0x8B, 0x5C, 0xF6),
-        "palette" => Color::rgb_u8(0xEC, 0x48, 0x99),
-        _ => Color::rgb_u8(0x94, 0xA3, 0xB8),
-    }
-}
-
-/// Paint `body` with its top-left at (`x`, `y`) inside `width`.
-pub(crate) fn paint_detail_body(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    body: &DetailBody,
-    x: f32,
-    mut y: f32,
-    width: f32,
-) {
-    for line in &body.lines {
-        match line {
-            DetailLine::Text(rows) => {
-                let mut baseline = y + 10.0;
-                for row in rows {
-                    text(
-                        cx,
-                        row,
-                        x,
-                        baseline,
-                        DETAIL_FONT,
-                        400,
-                        theme.muted_foreground,
-                    );
-                    baseline += ACTION_DETAIL_LINE_H;
-                }
+        DetailLine::Counts(_) | DetailLine::Stats(_) => CHIP_ROW_H,
+        DetailLine::Change { .. } => CHANGE_ROW_H,
+        DetailLine::Text { rows: lines, .. } => rows(lines.len()),
+        DetailLine::Field { value, .. } => match value {
+            FieldValue::Chips(_) => CHIP_ROW_H,
+            FieldValue::Change { .. } => CHANGE_ROW_H,
+            FieldValue::Text(lines) => rows(lines.len()) + 2.0,
+            FieldValue::Fields { fields, more } => {
+                rows(1)
+                    + fields.len() as f32 * ACTION_DETAIL_LINE_H
+                    + if *more > 0 { ACTION_DETAIL_LINE_H } else { 0.0 }
+                    + 2.0
             }
-            DetailLine::Counts(counts) => paint_chips(cx, theme, counts, x, y + 3.0, width),
-            DetailLine::Repair(repair) => paint_repair(cx, theme, repair, x, y, width),
-        }
-        y += line_height(line);
+        },
     }
-}
-
-fn paint_chips(
-    cx: &mut PaintCx<'_>,
-    theme: &Theme,
-    counts: &[(String, usize)],
-    x: f32,
-    y: f32,
-    width: f32,
-) {
-    let mut chip_x = x;
-    for (category, count) in counts {
-        let label = format!("{category} {count}");
-        let label_w = text_width(cx, &label, DETAIL_FONT, 500);
-        let chip_w = label_w + DOT + 18.0;
-        if chip_x + chip_w > x + width {
-            break;
-        }
-        let hue = category_color(category);
-        cx.backend.fill_round_rect(
-            Rect::xywh(chip_x, y, chip_w, CHIP_H),
-            CHIP_H / 2.0,
-            Color { a: 0.14, ..hue },
-        );
-        dot(cx, hue, chip_x + 7.0, y + CHIP_H / 2.0);
-        text(
-            cx,
-            &label,
-            chip_x + 11.0 + DOT,
-            y + 12.5,
-            DETAIL_FONT,
-            500,
-            theme.foreground,
-        );
-        chip_x += chip_w + 6.0;
-    }
-}
-
-fn paint_repair(cx: &mut PaintCx<'_>, theme: &Theme, repair: &Repair, x: f32, y: f32, width: f32) {
-    let text_x = x + TEXT_INDENT;
-    let text_w = (width - TEXT_INDENT).max(1.0);
-    let top = y + 12.0;
-    dot(
-        cx,
-        category_color(&repair.category),
-        x + DOT / 2.0,
-        top - 4.0,
-    );
-
-    // Line one: who was repaired, then by which pass.
-    let mut line_x = text_x;
-    if let Some((name, id)) = &repair.node {
-        let name = fit(cx, name, 11.0, 600, text_w * 0.6);
-        text(cx, &name, line_x, top, 11.0, 600, theme.foreground);
-        line_x += text_width(cx, &name, 11.0, 600) + 5.0;
-        if let Some(id) = id {
-            text(
-                cx,
-                id,
-                line_x,
-                top,
-                DETAIL_FONT,
-                400,
-                theme.muted_foreground,
-            );
-            line_x += text_width(cx, id, DETAIL_FONT, 400) + 4.0;
-        }
-        text(
-            cx,
-            "·",
-            line_x,
-            top,
-            DETAIL_FONT,
-            400,
-            theme.muted_foreground,
-        );
-        line_x += text_width(cx, "·", DETAIL_FONT, 400) + 4.0;
-    }
-    let pass_w = (text_x + text_w - line_x).max(1.0);
-    let pass = fit(cx, &repair.pass, DETAIL_FONT, 400, pass_w);
-    text(
-        cx,
-        &pass,
-        line_x,
-        top,
-        DETAIL_FONT,
-        400,
-        theme.muted_foreground,
-    );
-
-    // Line two: the change, the new value emphasised.
-    let second = top + 15.0;
-    let after_w = repair.after.as_ref().map_or(0.0, |after| {
-        text_width(cx, &format!(" → {after}"), DETAIL_FONT, 600)
-    });
-    let before_budget = if after_w > 0.0 {
-        (text_w - after_w.min(text_w * 0.6)).max(text_w * 0.4)
-    } else {
-        text_w
-    };
-    let before = fit(cx, &repair.before, DETAIL_FONT, 400, before_budget);
-    text(
-        cx,
-        &before,
-        text_x,
-        second,
-        DETAIL_FONT,
-        400,
-        theme.muted_foreground,
-    );
-    if let Some(after) = &repair.after {
-        let mut after_x = text_x + text_width(cx, &before, DETAIL_FONT, 400) + 4.0;
-        text(
-            cx,
-            "→",
-            after_x,
-            second,
-            DETAIL_FONT,
-            400,
-            theme.muted_foreground,
-        );
-        after_x += text_width(cx, "→", DETAIL_FONT, 400) + 4.0;
-        let after = fit(
-            cx,
-            after,
-            DETAIL_FONT,
-            600,
-            (text_x + text_w - after_x).max(1.0),
-        );
-        text(
-            cx,
-            &after,
-            after_x,
-            second,
-            DETAIL_FONT,
-            600,
-            theme.foreground,
-        );
-    }
-}
-
-/// Width of `text` in the family it paints in (the family-blind measure
-/// resolves a different default font on native, which made the arrow
-/// overlap long values).
-fn text_width(cx: &mut PaintCx<'_>, text: &str, size: f32, weight: u16) -> f32 {
-    cx.backend
-        .measure_text_family_styled(text, size, FAMILY, weight, false)
-}
-
-fn dot(cx: &mut PaintCx<'_>, color: Color, center_x: f32, center_y: f32) {
-    cx.backend.fill_oval(
-        Rect::xywh(center_x - DOT / 2.0, center_y - DOT / 2.0, DOT, DOT),
-        color,
-    );
-}
-
-fn text(
-    cx: &mut PaintCx<'_>,
-    text: &str,
-    x: f32,
-    baseline: f32,
-    size: f32,
-    weight: u16,
-    color: Color,
-) {
-    let layout =
-        TextLayout::single_run(text, FAMILY, size, color.to_jian(), Point2D::new(0.0, 0.0))
-            .with_font_weight(weight);
-    cx.backend.draw_text(&layout, Point2D::new(x, baseline));
-}
-
-/// `text` shortened with an ellipsis until it measures at most `max_w`.
-fn fit(cx: &mut PaintCx<'_>, text: &str, size: f32, weight: u16, max_w: f32) -> String {
-    if text_width(cx, text, size, weight) <= max_w {
-        return text.to_owned();
-    }
-    let chars: Vec<char> = text.chars().collect();
-    let (mut low, mut high) = (0usize, chars.len());
-    while low < high {
-        let mid = (low + high).div_ceil(2);
-        let candidate: String = chars[..mid].iter().collect::<String>() + "…";
-        if text_width(cx, &candidate, size, weight) <= max_w {
-            low = mid;
-        } else {
-            high = mid - 1;
-        }
-    }
-    chars[..low].iter().collect::<String>() + "…"
 }
 
 #[cfg(test)]

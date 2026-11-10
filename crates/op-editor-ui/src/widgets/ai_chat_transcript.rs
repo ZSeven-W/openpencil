@@ -311,7 +311,7 @@ pub(crate) fn build_item(
             .copied()
             .flatten()
             .unwrap_or(active || failed);
-        let body = detail_body(&step.details, budget);
+        let body = detail_body(&step.details, budget, failed);
         let step_h = step_height(expanded, details.len(), body.as_ref());
         // `i` only aligns with `msg.activities`' own index when the
         // structured (non-interleaved) path built `progress_steps` directly

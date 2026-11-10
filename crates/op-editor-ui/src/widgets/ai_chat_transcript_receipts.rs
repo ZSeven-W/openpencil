@@ -85,7 +85,7 @@ pub(crate) fn layout_receipts(
             .copied()
             .flatten()
             .unwrap_or(false);
-        let body = detail_body(&receipt.details, budget);
+        let body = detail_body(&receipt.details, budget, false);
         let height = step_height(expanded, details.len(), body.as_ref());
         steps.push(ActionStep {
             rect: Rect::xywh(x, *y, width, height),

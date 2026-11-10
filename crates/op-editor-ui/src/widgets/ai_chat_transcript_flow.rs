@@ -104,7 +104,7 @@ pub(crate) fn build_activity_flow(
                 .flatten()
                 .unwrap_or(active || failed);
             let detail_body =
-                super::ai_chat_transcript_detail_body::detail_body(&parsed.details, budget);
+                super::ai_chat_transcript_detail_body::detail_body(&parsed.details, budget, failed);
             let height = super::ai_chat_transcript::step_height(
                 expanded,
                 details.len(),

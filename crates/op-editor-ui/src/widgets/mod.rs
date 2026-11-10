@@ -345,6 +345,7 @@ mod ai_chat_transcript_apply_tests;
 pub(crate) mod ai_chat_transcript_cache;
 pub(crate) mod ai_chat_transcript_design;
 pub(crate) mod ai_chat_transcript_detail_body;
+pub(crate) mod ai_chat_transcript_detail_paint;
 pub(crate) mod ai_chat_transcript_flow;
 pub(crate) mod ai_chat_transcript_hit;
 pub(crate) mod ai_chat_transcript_identity;
