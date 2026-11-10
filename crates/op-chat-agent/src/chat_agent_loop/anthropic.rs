@@ -131,6 +131,7 @@ pub(super) async fn run_anthropic_agent_loop_inner(
     let turn_cap = cfg.max_turns.max(1);
     let mut turn = 0usize;
     let mut timing = crate::loop_timing::LoopTiming::from_env("anthropic");
+    let cache_prompt = crate::prompt_cache::enabled_for(&cfg.url);
     loop {
         // A failed design write gets one model-authored correction request,
         // even when that failure consumed the final ordinary turn. This is a
@@ -204,6 +205,9 @@ pub(super) async fn run_anthropic_agent_loop_inner(
             &cfg.model,
             cfg.disable_thinking,
         );
+        if cache_prompt {
+            crate::prompt_cache::apply(&mut body);
+        }
         timing.request(&body);
         let client = crate::provider_dial::client_for(cfg.dial_policy, &cfg.url).await?;
         let (max_retries, min_gap) = crate::chat_builtin_http::default_backoff_knobs();

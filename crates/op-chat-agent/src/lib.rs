@@ -28,6 +28,7 @@ pub mod design_context;
 pub mod ip_screen;
 pub mod loop_blocker_ledger;
 mod loop_timing;
+mod prompt_cache;
 pub mod provider_dial;
 pub mod quality_credential;
 pub mod runtime;
