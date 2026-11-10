@@ -207,7 +207,10 @@ impl WidgetHostNative {
             && self.marquee_drag.is_none()
             && self.editor_state.editor_ui.starter_ghost.is_none()
             && self.editor_state.ui.text_editing.is_none()
-            && !op_editor_ui::shader_clock::animated_shader_on_screen();
+            && !op_editor_ui::shader_clock::animated_shader_on_screen()
+            && !op_editor_ui::widgets::canvas_paint_scene::motion_timeline_playing(
+                &self.editor_state,
+            );
         if !rest_usable {
             self.pan_cache_restore = None;
             return false;

@@ -99,3 +99,21 @@ fn delete_takes_selected_keyframes_before_the_canvas_selection() {
         .selection
         .is_empty());
 }
+
+#[test]
+fn a_playing_timeline_asks_for_frames_and_keeps_the_pan_cache_aside() {
+    let mut host = host();
+    host.set_now_ms(1_000);
+    let before = host.next_animation_deadline_ms();
+    host.editor_state_mut().toggle_motion_playback(1_000);
+    assert!(
+        host.next_animation_deadline_ms()
+            .is_some_and(|deadline| deadline
+                <= 1_000 + op_editor_core::motion_timeline_transitions::MOTION_TIMELINE_FRAME_MS),
+        "playback wakes the host every frame (was {before:?})"
+    );
+    assert!(!host.pan_cache_usable());
+    // Pausing hands the frame clock back.
+    host.editor_state_mut().toggle_motion_playback(1_100);
+    assert_eq!(host.next_animation_deadline_ms(), before);
+}

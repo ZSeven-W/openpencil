@@ -84,8 +84,12 @@ impl WidgetHostNative {
             && self.node_drag.is_none()
             && self.marquee_drag.is_none()
             && self.editor_state.editor_ui.starter_ghost.is_none()
-            // A blitted layer would freeze an animated shader fill.
+            // A blitted layer would freeze an animated shader fill, or the
+            // canvas under a playing motion timeline.
             && !op_editor_ui::shader_clock::animated_shader_on_screen()
+            && !op_editor_ui::widgets::canvas_paint_scene::motion_timeline_playing(
+                &self.editor_state,
+            )
     }
 
     /// Blit offset for a cache hit: the pan delta since capture, if the
