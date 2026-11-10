@@ -637,6 +637,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "หน้าจอนี้ไม่มีโมชัน",
         "motion.timeline.staticHint" => "กำลังแก้ไขเลย์เอาต์แบบคงที่",
         "motion.timeline.pickId" => "เลือกไอดีโมชัน",
+        "settings.system.agentSwarm" => "ฝูงเคอร์เซอร์",
+        "settings.system.agentSwarmDesc" => "แสดงเคอร์เซอร์เอเจนต์และโครงร่างระหว่างสร้างดีไซน์",
         _ => return None,
     })
 }

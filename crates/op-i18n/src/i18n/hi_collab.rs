@@ -639,6 +639,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "इस स्क्रीन पर कोई मोशन नहीं",
         "motion.timeline.staticHint" => "स्टैटिक लेआउट संपादित हो रहा है",
         "motion.timeline.pickId" => "मोशन आईडी चुनें",
+        "settings.system.agentSwarm" => "कर्सर झुंड",
+        "settings.system.agentSwarmDesc" => "डिज़ाइन बनते समय एजेंट कर्सर और स्केलेटन प्लेसहोल्डर दिखाता है।",
         _ => return None,
     })
 }

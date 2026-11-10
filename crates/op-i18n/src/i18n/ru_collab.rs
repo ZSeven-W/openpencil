@@ -665,6 +665,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "На этом экране нет анимаций",
         "motion.timeline.staticHint" => "Редактируется статический макет",
         "motion.timeline.pickId" => "Выберите ID анимации",
+        "settings.system.agentSwarm" => "Рой курсоров",
+        "settings.system.agentSwarmDesc" => "Курсоры агентов и каркасные заглушки во время генерации дизайна.",
         _ => return None,
     })
 }

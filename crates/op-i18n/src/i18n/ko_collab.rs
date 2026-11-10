@@ -651,6 +651,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "이 화면에는 모션이 없습니다",
         "motion.timeline.staticHint" => "정적 레이아웃 편집 중",
         "motion.timeline.pickId" => "모션 ID 선택",
+        "settings.system.agentSwarm" => "커서 스웜",
+        "settings.system.agentSwarmDesc" => "디자인 생성 중 에이전트 커서와 스켈레톤 자리표시자를 표시합니다.",
         _ => return None,
     })
 }

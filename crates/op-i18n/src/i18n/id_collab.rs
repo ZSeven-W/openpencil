@@ -635,6 +635,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "Tidak ada gerak di layar ini",
         "motion.timeline.staticHint" => "Mengedit tata letak statis",
         "motion.timeline.pickId" => "Pilih ID gerak",
+        "settings.system.agentSwarm" => "Kawanan kursor",
+        "settings.system.agentSwarmDesc" => "Kursor agen dan placeholder kerangka saat desain dibuat.",
         _ => return None,
     })
 }

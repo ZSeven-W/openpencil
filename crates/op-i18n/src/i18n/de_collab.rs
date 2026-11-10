@@ -635,6 +635,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "Keine Animationen auf diesem Bildschirm",
         "motion.timeline.staticHint" => "Statisches Layout wird bearbeitet",
         "motion.timeline.pickId" => "Animations-ID wählen",
+        "settings.system.agentSwarm" => "Zeiger-Schwarm",
+        "settings.system.agentSwarmDesc" => "Agenten-Zeiger und Skelett-Platzhalter während der Designgenerierung.",
         _ => return None,
     })
 }

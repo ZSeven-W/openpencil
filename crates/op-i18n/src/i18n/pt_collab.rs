@@ -635,6 +635,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "Nenhuma animação nesta tela",
         "motion.timeline.staticHint" => "Editando o layout estático",
         "motion.timeline.pickId" => "Escolha um ID de animação",
+        "settings.system.agentSwarm" => "Enxame de cursores",
+        "settings.system.agentSwarmDesc" => "Cursores de agentes e placeholders de esqueleto enquanto o design é gerado.",
         _ => return None,
     })
 }

@@ -675,6 +675,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "No motion on this screen",
         "motion.timeline.staticHint" => "Editing the static layout",
         "motion.timeline.pickId" => "Choose a motion id",
+        "settings.system.agentSwarm" => "Cursor swarm",
+        "settings.system.agentSwarmDesc" => "Agent cursors and skeleton placeholders while a design generates.",
         _ => return None,
     })
 }

@@ -651,6 +651,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "この画面にモーションはありません",
         "motion.timeline.staticHint" => "静的レイアウトを編集中",
         "motion.timeline.pickId" => "モーション ID を選択",
+        "settings.system.agentSwarm" => "カーソルスウォーム",
+        "settings.system.agentSwarmDesc" => "デザイン生成中にエージェントカーソルとスケルトンを表示します。",
         _ => return None,
     })
 }

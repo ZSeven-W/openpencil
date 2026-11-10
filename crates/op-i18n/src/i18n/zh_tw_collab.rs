@@ -635,6 +635,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "此畫面沒有動效",
         "motion.timeline.staticHint" => "正在編輯靜態版面",
         "motion.timeline.pickId" => "選擇動效 ID",
+        "settings.system.agentSwarm" => "游標蜂群",
+        "settings.system.agentSwarmDesc" => "生成設計時顯示一群智能體游標與骨架佔位。",
         _ => return None,
     })
 }
