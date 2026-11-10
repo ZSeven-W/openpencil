@@ -350,6 +350,7 @@ pub(crate) mod ai_chat_transcript_identity;
 #[cfg(test)]
 mod ai_chat_transcript_identity_tests;
 pub(crate) mod ai_chat_transcript_paint_parts;
+pub(crate) mod ai_chat_transcript_receipt_body;
 pub(crate) mod ai_chat_transcript_receipts;
 pub(crate) mod ai_chat_transcript_richtext;
 pub(crate) mod ai_chat_transcript_selection;

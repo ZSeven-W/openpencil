@@ -32,15 +32,16 @@ use super::ai_chat_transcript_identity::{
     layout_agent_identity, paint_agent_identity, AgentIdentityHeader,
 };
 use super::ai_chat_transcript_paint_parts::{paint_action_step, paint_collapsible};
+use super::ai_chat_transcript_receipt_body::receipt_body;
 use super::ai_chat_transcript_receipts::{layout_receipts, split_receipts};
 use super::ai_chat_transcript_richtext::{layout_rich, paint_rich, rich_height, rich_line_width};
 use super::ai_chat_transcript_selection::paint_user_bubble_selection;
 pub(crate) use super::ai_chat_transcript_selection::transcript_text_offset_at;
-pub(crate) use super::ai_chat_transcript_steps::{action_step_height, ActionStep};
 use super::ai_chat_transcript_steps::{
     activity_step, extract_step_blocks, split_design_progress, step_state, strip_tool_call_xml,
     wrap_detail, ParsedStep,
 };
+pub(crate) use super::ai_chat_transcript_steps::{step_height, ActionStep};
 use super::ai_chat_transcript_text::char_display_units;
 pub(crate) use super::ai_chat_transcript_text::wrap_units;
 use super::ai_chat_transcript_tools::{
@@ -310,7 +311,8 @@ pub(crate) fn build_item(
             .copied()
             .flatten()
             .unwrap_or(active || failed);
-        let step_h = action_step_height(expanded, details.len());
+        let receipt = receipt_body(&step.details, budget);
+        let step_h = step_height(expanded, details.len(), receipt.as_ref());
         // `i` only aligns with `msg.activities`' own index when the
         // structured (non-interleaved) path built `progress_steps` directly
         // from `msg.activities` (see the `activity_step` map above) — the
@@ -332,6 +334,7 @@ pub(crate) fn build_item(
             active,
             failed,
             retryable,
+            receipt,
         });
         y += step_h + ACTION_STEP_GAP;
     }

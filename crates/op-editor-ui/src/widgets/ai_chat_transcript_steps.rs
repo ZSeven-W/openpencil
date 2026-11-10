@@ -41,6 +41,9 @@ pub(crate) struct ActionStep {
     /// catastrophic failure, which produces no `RunSummary` and therefore
     /// no persisted subtask spec).
     pub retryable: bool,
+    /// The structured body painted instead of `details` when they are
+    /// quality-repair records.
+    pub receipt: Option<super::ai_chat_transcript_receipt_body::ReceiptBody>,
 }
 
 /// The font size step detail rows paint at, smaller than the body text.
@@ -72,6 +75,19 @@ pub(crate) fn wrap_detail(text: &str, budget: u32) -> Vec<String> {
                 })
         })
         .collect()
+}
+
+/// [`action_step_height`] for a row that may carry a structured repair body.
+pub(crate) fn step_height(
+    expanded: bool,
+    detail_count: usize,
+    receipt: Option<&super::ai_chat_transcript_receipt_body::ReceiptBody>,
+) -> f32 {
+    use super::ai_chat_transcript::{ACTION_DETAIL_GAP, ACTION_STEP_H};
+    match receipt {
+        Some(body) if expanded => ACTION_STEP_H + ACTION_DETAIL_GAP + body.height,
+        _ => action_step_height(expanded, detail_count),
+    }
 }
 
 /// Height of one step row: the header alone when collapsed (or with nothing

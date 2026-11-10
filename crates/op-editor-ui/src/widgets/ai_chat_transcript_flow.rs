@@ -15,8 +15,7 @@ use op_editor_core::ChatActivity;
 use crate::Rect;
 
 use super::ai_chat_transcript::{
-    action_step_height, streaming_caret_visible, ActionStep, TextBubble, TranscriptItem,
-    ACTION_STEP_GAP, LINE_H,
+    streaming_caret_visible, ActionStep, TextBubble, TranscriptItem, ACTION_STEP_GAP, LINE_H,
 };
 use super::ai_chat_transcript_design::extract_design_json_blocks;
 use super::ai_chat_transcript_receipts::split_receipts;
@@ -104,7 +103,10 @@ pub(crate) fn build_activity_flow(
                 .copied()
                 .flatten()
                 .unwrap_or(active || failed);
-            let height = action_step_height(expanded, details.len());
+            let receipt =
+                super::ai_chat_transcript_receipt_body::receipt_body(&parsed.details, budget);
+            let height =
+                super::ai_chat_transcript::step_height(expanded, details.len(), receipt.as_ref());
             // `index` is a direct `msg.activities` index here (unlike the
             // legacy thinking-text-derived steps in `build_item`), so the
             // retry lookup is exact — this is the path a real design-turn
@@ -126,6 +128,7 @@ pub(crate) fn build_activity_flow(
                 active,
                 failed,
                 retryable,
+                receipt,
             });
             y += height + ACTION_STEP_GAP;
         }

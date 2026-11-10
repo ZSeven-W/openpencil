@@ -11,7 +11,7 @@ fn a_credential_becomes_a_receipt_that_leads_with_its_result() {
     assert_eq!(prose, "Done.");
     assert_eq!(receipts.len(), 1);
     let receipt = &receipts[0];
-    assert_eq!(receipt.title, "10 auto-repair(s) applied, no issues left");
+    assert_eq!(receipt.title, "10 auto-repairs applied · no issues left");
     assert_eq!(receipt.status, Some(ParsedStepStatus::Done));
     assert_eq!(
         receipt.details,
@@ -114,7 +114,7 @@ fn the_credential_trails_a_plain_reply_as_a_collapsed_step() {
         "{text}"
     );
     let receipt = item.steps.last().expect("receipt step");
-    assert_eq!(receipt.label, "10 auto-repair(s) applied, no issues left");
+    assert_eq!(receipt.label, "10 auto-repairs applied · no issues left");
     assert!(receipt.done && !receipt.expanded);
     let bubble = item.bubble.as_ref().expect("prose bubble");
     assert!(receipt.rect.origin.y >= bubble.rect.origin.y + bubble.rect.size.y);
@@ -144,7 +144,7 @@ fn the_credential_trails_an_interleaved_tool_flow_too() {
         "{text}"
     );
     let receipt = item.steps.last().expect("receipt step");
-    assert_eq!(receipt.label, "10 auto-repair(s) applied, no issues left");
+    assert_eq!(receipt.label, "10 auto-repairs applied · no issues left");
     let flow_bottom = item
         .flow_bubbles
         .iter()
@@ -154,4 +154,24 @@ fn the_credential_trails_an_interleaved_tool_flow_too() {
         receipt.rect.origin.y >= flow_bottom,
         "receipt sits below the flow"
     );
+}
+
+#[test]
+fn counts_read_naturally() {
+    assert_eq!(
+        pluralized("10 auto-repair(s) applied"),
+        "10 auto-repairs applied"
+    );
+    assert_eq!(pluralized("1 issue(s) still open"), "1 issue still open");
+    assert_eq!(
+        pluralized("… and 5 more repair(s) — full list"),
+        "… and 5 more repairs — full list"
+    );
+    let (_, receipts) =
+        split_receipts("• Checked a, b — 1 auto-repair(s) applied, 2 issue(s) still open\n  ▸ x");
+    assert_eq!(
+        receipts[0].title,
+        "1 auto-repair applied · 2 issues still open"
+    );
+    assert_eq!(receipts[0].details[0], "Checked a, b");
 }

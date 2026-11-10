@@ -109,6 +109,18 @@ pub(crate) fn paint_action_step(
         );
         cx.backend.save();
         cx.backend.clip_rect(step.rect);
+        if let Some(body) = &step.receipt {
+            super::ai_chat_transcript_receipt_body::paint_receipt_body(
+                cx,
+                theme,
+                body,
+                step.rect.origin.x + 12.0,
+                step.rect.origin.y + ACTION_STEP_H + ACTION_DETAIL_GAP,
+                step.rect.size.x - 24.0,
+            );
+            cx.backend.restore();
+            return;
+        }
         let mut baseline = step.rect.origin.y + ACTION_STEP_H + ACTION_DETAIL_GAP + 9.0;
         for line in &step.details {
             draw_line(
