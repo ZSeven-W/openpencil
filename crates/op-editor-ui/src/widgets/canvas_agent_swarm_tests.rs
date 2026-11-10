@@ -208,13 +208,41 @@ fn decoy_motion_is_deterministic_continuous_and_stays_on_stage() {
         for (now, before) in frame.cursors.iter().zip(&previous.cursors) {
             let (dx, dy) = (now.pos.x - before.pos.x, now.pos.y - before.pos.y);
             let moved = (dx * dx + dy * dy).sqrt();
-            assert!(moved < 120.0, "{} jumped {moved}px in one frame", now.name);
+            assert!(moved < 300.0, "{} jumped {moved}px in one frame", now.name);
             assert!(stage.contains(now.pos), "{:?} left the board", now.pos);
             travelled += moved;
         }
         previous = frame;
     }
-    assert!(travelled > 1_000.0, "decoys barely moved: {travelled}px");
+    assert!(travelled > 20_000.0, "decoys barely moved: {travelled}px");
+}
+
+#[test]
+fn landing_ping_appears_only_right_after_touchdown() {
+    let stage = Rect::xywh(0.0, 0.0, 400.0, 800.0);
+    let blocks = layout_blocks(stage);
+    let (period, _, _, _, flight) = hop_clock(0, 0);
+    assert!(landing_ping(0, &blocks, stage, flight - 1).is_none());
+    let (centre, progress) = landing_ping(0, &blocks, stage, flight).expect("just landed");
+    assert_eq!(progress, 0.0);
+    assert_eq!(centre, hop_target(0, 0, &blocks, stage));
+    // The next hop's flight has no ring.
+    assert!(landing_ping(0, &blocks, stage, period).is_none());
+}
+
+#[test]
+fn trail_follows_the_decoy_newest_first() {
+    let roots = board();
+    let mut indicators = live("Kiki");
+    indicators
+        .frames
+        .insert("root".into(), tag("#111111", "Kiki"));
+    let now = 5_000;
+    let frame = frame_at(&roots, &indicators, now);
+    let earlier = frame_at(&roots, &indicators, now - TRAIL_STEP_MS);
+    for (cursor, past) in frame.cursors.iter().zip(&earlier.cursors) {
+        assert_eq!(cursor.trail[0], past.pos);
+    }
 }
 
 #[test]

@@ -21,23 +21,37 @@ use jian_core::motion::ease_in_out_cubic;
 use op_editor_core::agent_indicators::AgentIndicators;
 use std::collections::HashSet;
 
-/// Decoy cursors shown next to the real one.
-const DECOYS: usize = 4;
+/// Decoy cursors shown next to the real one — enough to read as a crowd.
+const DECOYS: usize = 12;
 /// Candidate identities; the real agent's own name is skipped.
-const ROSTER: [(&str, &str); 6] = [
+const ROSTER: [(&str, &str); 14] = [
     ("Pixel", "#FF6B6B"),
     ("Nova", "#4ECDC4"),
     ("Juno", "#FFB84D"),
     ("Echo", "#A78BFA"),
     ("Miso", "#F472B6"),
     ("Tofu", "#34D399"),
+    ("Zest", "#60A5FA"),
+    ("Luma", "#FB923C"),
+    ("Orbit", "#22D3EE"),
+    ("Pico", "#E879F9"),
+    ("Volt", "#FACC15"),
+    ("Rune", "#818CF8"),
+    ("Dash", "#F87171"),
+    ("Kite", "#2DD4BF"),
 ];
-/// One hop (flight + dwell) of the first decoy; later ones run slower so the
-/// group never moves in step.
-const HOP_BASE_MS: u64 = 1_100;
-const HOP_STEP_MS: u64 = 230;
+/// One hop (flight + dwell) of the first decoy; later ones run slightly
+/// slower so the group never moves in step. Short on purpose: the swarm
+/// should look busy, not contemplative.
+const HOP_BASE_MS: u64 = 380;
+const HOP_STEP_MS: u64 = 45;
 /// Share of a hop spent flying; the rest is dwell with the idle sway.
-const FLIGHT_FRACTION: f32 = 0.42;
+const FLIGHT_FRACTION: f32 = 0.55;
+/// Afterimages behind a flying decoy, and their spacing in time.
+const TRAIL_DOTS: usize = 5;
+const TRAIL_STEP_MS: u64 = 22;
+/// Landing ping: an expanding ring where a decoy touches down.
+const PING_MS: u64 = 300;
 /// Skeleton shimmer cycle.
 const SHIMMER_MS: u64 = 1_600;
 /// Most blocks laid out on one board.
@@ -51,6 +65,10 @@ pub(crate) struct SwarmCursor {
     pub pos: Point2D,
     pub color: Color,
     pub name: &'static str,
+    /// Recent positions, newest first — the motion streak.
+    pub trail: [Point2D; TRAIL_DOTS],
+    /// Landing ring: centre and 0..1 progress, right after touchdown.
+    pub ping: Option<(Point2D, f32)>,
 }
 
 /// Everything the swarm paints this frame, in screen coordinates.
@@ -148,10 +166,18 @@ pub(crate) fn swarm_frame(
         .filter(|(name, _)| !name.eq_ignore_ascii_case(&primary.name))
         .take(DECOYS)
         .enumerate()
-        .map(|(index, (name, hex))| SwarmCursor {
-            pos: decoy_position(index as u64, &blocks, stage.rect, now_ms),
-            color: parse_hex(hex).unwrap_or(SKELETON_BLUE),
-            name,
+        .map(|(index, (name, hex))| {
+            let index = index as u64;
+            let at = |ms: u64| decoy_position(index, &blocks, stage.rect, ms);
+            SwarmCursor {
+                pos: at(now_ms),
+                color: parse_hex(hex).unwrap_or(SKELETON_BLUE),
+                name,
+                trail: std::array::from_fn(|k| {
+                    at(now_ms.saturating_sub((k as u64 + 1) * TRAIL_STEP_MS))
+                }),
+                ping: landing_ping(index, &blocks, stage.rect, now_ms),
+            }
         })
         .collect();
     SwarmFrame {
@@ -301,13 +327,28 @@ fn hop_target(index: u64, hop: u64, blocks: &[Rect], stage: Rect) -> Point2D {
     )
 }
 
+/// `(period, clock, hop number, ms into the hop, flight ms)` for a decoy.
+fn hop_clock(index: u64, now_ms: u64) -> (u64, u64, u64, u64, u64) {
+    let period = HOP_BASE_MS + HOP_STEP_MS * index;
+    let clock = now_ms + index * 137;
+    let flight = (period as f32 * FLIGHT_FRACTION) as u64;
+    (period, clock, clock / period, clock % period, flight)
+}
+
+/// The ring a decoy leaves where it has just landed.
+fn landing_ping(index: u64, blocks: &[Rect], stage: Rect, now_ms: u64) -> Option<(Point2D, f32)> {
+    let (_, _, hop, into, flight) = hop_clock(index, now_ms);
+    let since = into.checked_sub(flight).filter(|ms| *ms < PING_MS)?;
+    Some((
+        hop_target(index, hop, blocks, stage),
+        since as f32 / PING_MS as f32,
+    ))
+}
+
 /// Decoy pose: fly to this hop's target, then dwell there with the same idle
 /// sway the real cursor uses, enveloped to zero before the next departure.
 fn decoy_position(index: u64, blocks: &[Rect], stage: Rect, now_ms: u64) -> Point2D {
-    let period = HOP_BASE_MS + HOP_STEP_MS * index;
-    let clock = now_ms + index * 370;
-    let (hop, into) = (clock / period, clock % period);
-    let flight = (period as f32 * FLIGHT_FRACTION) as u64;
+    let (period, clock, hop, into, flight) = hop_clock(index, now_ms);
     let to = hop_target(index, hop, blocks, stage);
     if into < flight {
         let from = hop_target(index, hop.wrapping_sub(1), blocks, stage);
@@ -351,6 +392,33 @@ pub(crate) fn paint_swarm(
                 .stroke_round_rect(*block, radius, SKELETON_BLUE.with_alpha(0.28), 1.0);
         }
         cx.backend.restore();
+    }
+    let dot = |centre: Point2D, r: f32| Rect {
+        origin: Point2D::new(centre.x - r, centre.y - r),
+        size: Point2D::new(r * 2.0, r * 2.0),
+    };
+    for cursor in &frame.cursors {
+        if let Some((centre, progress)) = cursor.ping {
+            let r = 5.0 + 22.0 * progress;
+            let fade = (1.0 - progress).powi(2);
+            cx.backend
+                .fill_round_rect(dot(centre, r), r, cursor.color.with_alpha(0.16 * fade));
+            cx.backend.stroke_round_rect(
+                dot(centre, r),
+                r,
+                cursor.color.with_alpha(0.8 * fade),
+                1.5,
+            );
+        }
+        for (k, point) in cursor.trail.iter().enumerate().rev() {
+            let age = (k + 1) as f32 / (TRAIL_DOTS + 1) as f32;
+            let r = 4.0 * (1.0 - age) + 1.0;
+            cx.backend.fill_round_rect(
+                dot(*point, r),
+                r,
+                cursor.color.with_alpha(0.5 * (1.0 - age)),
+            );
+        }
     }
     for cursor in &frame.cursors {
         super::canvas_agent_cursor::paint_presence_cursor(
