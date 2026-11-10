@@ -31,7 +31,9 @@ fn layout(
 }
 
 /// Route a press. Returns whether it landed on the panel (and so is
-/// consumed); `additive` (Shift) toggles keyframes in the selection.
+/// consumed); `additive` (Shift) toggles keyframes in the selection. A
+/// press elsewhere drops the keyframe selection, so Delete goes back to
+/// the canvas.
 pub fn press(
     state: &mut EditorState,
     point: Point2D,
@@ -40,10 +42,10 @@ pub fn press(
     now_ms: u64,
     additive: bool,
 ) -> bool {
-    let Some((view, layout)) = layout(state, viewport_w, viewport_h) else {
-        return false;
-    };
-    let Some(hit) = layout.hit(point, &view) else {
+    let hit = layout(state, viewport_w, viewport_h)
+        .and_then(|(view, layout)| Some((layout.hit(point, &view)?, view, layout)));
+    let Some((hit, view, layout)) = hit else {
+        state.clear_motion_keyframe_selection();
         return false;
     };
     let pointer_ms = layout.ms_for_x(point.x);
@@ -175,10 +177,27 @@ pub fn release(state: &mut EditorState) -> bool {
     true
 }
 
+/// Whether releasing the in-flight drag writes to the document (a scrub
+/// does not), so hosts can gate it.
+pub fn drag_writes(state: &EditorState) -> bool {
+    state
+        .editor_ui
+        .motion_timeline
+        .drag
+        .as_ref()
+        .is_some_and(|drag| *drag != MotionTimelineDrag::Playhead)
+}
+
+/// Whether Delete / Backspace belongs to the timeline: it shows and has
+/// keyframes selected.
+pub fn has_keyframe_selection(state: &EditorState) -> bool {
+    motion_timeline_shown(state) && !state.editor_ui.motion_timeline.selection.is_empty()
+}
+
 /// Delete / Backspace while timeline keyframes are selected: delete them
 /// instead of the canvas selection. Returns whether it did.
 pub fn delete_keyframes(state: &mut EditorState) -> bool {
-    if !motion_timeline_shown(state) || state.editor_ui.motion_timeline.selection.is_empty() {
+    if !has_keyframe_selection(state) {
         return false;
     }
     state.delete_selected_motion_keyframes();

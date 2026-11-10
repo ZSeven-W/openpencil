@@ -180,3 +180,21 @@ fn the_ruler_scrubs_and_the_end_grip_stretches() {
     .map(|animations| animations[0].duration_ms);
     assert_eq!(b, Some(800));
 }
+
+#[test]
+fn a_press_outside_the_panel_hands_delete_back_to_the_canvas() {
+    let mut state = state();
+    let (_, layout) = layout_of(&state);
+    press(&mut state, layout.rows[0].keyframes[1], VW, VH, 0, false);
+    release(&mut state);
+    assert!(has_keyframe_selection(&state));
+    assert!(!press(
+        &mut state,
+        Point2D::new(700.0, 300.0),
+        VW,
+        VH,
+        0,
+        false
+    ));
+    assert!(!has_keyframe_selection(&state));
+}
