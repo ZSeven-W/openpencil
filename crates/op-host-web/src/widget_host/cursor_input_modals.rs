@@ -37,6 +37,10 @@ impl WidgetHost {
         {
             return Some(true);
         }
+        // A motion timeline drag holds the pointer until release.
+        if self.drag_motion_timeline(x, y) {
+            return Some(true);
+        }
         // Missing-fonts modal — owns the cursor while open. Hover the
         // per-row choose-file buttons + the dismiss action.
         if self.editor_state.editor_ui.missing_fonts_modal_open {

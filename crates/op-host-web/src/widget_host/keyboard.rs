@@ -269,6 +269,10 @@ impl WidgetHost {
             }
             return changed;
         }
+        // Selected timeline keyframes take Delete before the canvas.
+        if self.delete_motion_keyframes() {
+            return true;
+        }
         if shared::delete_selection_with_history(&mut self.editor_state) {
             self.mark_dirty();
             return true;
@@ -506,6 +510,10 @@ impl WidgetHost {
                 return true;
             }
             return false;
+        }
+        // Selected timeline keyframes take Delete before the canvas.
+        if self.delete_motion_keyframes() {
+            return true;
         }
         if shared::delete_selection_with_history(&mut self.editor_state) {
             self.mark_dirty();

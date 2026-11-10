@@ -68,6 +68,9 @@ impl WidgetHost {
         if self.variables_resize.take().is_some() {
             return true;
         }
+        if self.release_motion_timeline() {
+            return true;
+        }
         if self.release_selection_handle_drag() {
             return true;
         }
@@ -149,6 +152,9 @@ impl WidgetHost {
             return true;
         }
         if self.variables_resize.take().is_some() {
+            return true;
+        }
+        if self.release_motion_timeline() {
             return true;
         }
         if self.release_selection_handle_drag() {

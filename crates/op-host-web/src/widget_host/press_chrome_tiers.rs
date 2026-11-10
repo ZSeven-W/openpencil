@@ -81,6 +81,11 @@ impl WidgetHost {
             }
         }
 
+        // Motion timeline, docked under the canvas between the rails.
+        if self.press_motion_timeline(x, y, viewport_width, viewport_height) {
+            return Some(true);
+        }
+
         // Chat paints after the TopBar. In a short maximized viewport the
         // upward model dropdown can cover the bar, so route that visible slice
         // before the lower TopBar surface. Higher dropdowns/modals already ran.
