@@ -93,6 +93,7 @@ pub(super) async fn run_openai_agent_loop_inner(
     let mut write_retry = CorrectiveWriteRetry::default();
     let turn_cap = cfg.max_turns.max(1);
     let mut turn = 0usize;
+    let mut timing = crate::loop_timing::LoopTiming::from_env("openai-compatible");
     loop {
         // See the Anthropic path above: this one-shot request is model-authored
         // correction, not a blind replay, and owns its own hard budget.
@@ -160,6 +161,7 @@ pub(super) async fn run_openai_agent_loop_inner(
         // to post raw, so a provider rate limit killed the design run with
         // no retries and a raw JSON error (measured: glm-5.2, 429
         // AccountRateLimitExceeded, 2026-07-12).
+        timing.request(&body);
         let client = crate::provider_dial::client_for(cfg.dial_policy, &cfg.url).await?;
         let (max_retries, min_gap) = crate::chat_builtin_http::default_backoff_knobs();
         let resp = crate::chat_builtin_http::send_with_backoff(
@@ -170,6 +172,7 @@ pub(super) async fn run_openai_agent_loop_inner(
             || client.post(&cfg.url).bearer_auth(&cfg.api_key).json(&body),
         )
         .await?;
+        timing.headers();
         let mut collector = OpenAiCollector::default();
         pump_sse(resp, tx, &mut collector).await?;
         if tx.is_closed() {
@@ -181,6 +184,7 @@ pub(super) async fn run_openai_agent_loop_inner(
             return Err(BuiltinHttpError::StreamReported(err));
         }
         let calls = collector.pending_calls();
+        timing.response(calls.iter().map(|call| call.1.name.as_str()));
         if calls.is_empty() {
             if corrective_write_round {
                 let _ = tx
@@ -300,7 +304,14 @@ pub(super) async fn run_openai_agent_loop_inner(
                     args: tool_card_envelope(&level, &call.args_json),
                 })
                 .await;
+            let tool_started = std::time::Instant::now();
             let result = execute_tool(&cfg.executor, &call.name, &call.args_json).await;
+            timing.tool(
+                &call.name,
+                tool_started.elapsed(),
+                is_write_level(&level) && !result.is_error,
+                result.is_error,
+            );
             if is_write_level(&level) && !result.is_error {
                 wrote = true;
             }

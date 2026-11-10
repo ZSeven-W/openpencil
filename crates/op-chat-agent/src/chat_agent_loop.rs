@@ -450,6 +450,7 @@ async fn dispatch_event<C: SseCollector>(
         event_data.clear();
         return;
     }
+    crate::loop_timing::note_usage(data);
     let deltas = collector.handle(data);
     event_data.clear();
     for delta in deltas {
