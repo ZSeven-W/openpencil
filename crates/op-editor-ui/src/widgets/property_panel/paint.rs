@@ -321,6 +321,7 @@ impl Widget for PropertyPanel {
                 cx,
                 &self.theme,
                 &self.snapshot.interactions.motion,
+                &edit_ctx,
                 self.locale,
                 x,
                 y,

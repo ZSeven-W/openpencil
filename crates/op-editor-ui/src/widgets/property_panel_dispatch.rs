@@ -734,6 +734,12 @@ pub fn apply_property_action(
             state.editor_ui.close_interaction_menu();
             Handled
         }
+        A::ToggleMotionRow(index) => {
+            let node_id = state.selection.anchor.as_str().to_owned();
+            state.editor_ui.toggle_motion_row(&node_id, *index);
+            state.editor_ui.close_interaction_menu();
+            Handled
+        }
         // Image Search / Generate popovers ride host-owned selection
         // drag + input-blur glue.
         A::ToggleImageSearchPopover

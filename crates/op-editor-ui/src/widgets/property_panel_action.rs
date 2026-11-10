@@ -424,6 +424,9 @@ pub enum PropertyPanelAction {
     /// Apply one Motion-section edit to the selected node (see
     /// `op_editor_core::motion_panel_edit`), one undo step.
     EditMotion(op_editor_core::motion_panel_edit::MotionPanelEdit),
+    /// Open or close the fields of Motion-section animation row `index`
+    /// (`editor_ui.motion_expanded`). UI state only.
+    ToggleMotionRow(usize),
     /// Code panel action — see `CodegenAction`.
     Codegen(CodegenAction),
     /// Generator section: flip boolean parameter `index` and regenerate.

@@ -2,6 +2,7 @@ use super::*;
 use jian_ops_schema::node::PenNode;
 use op_editor_core::motion_presets::MotionPreset;
 use op_editor_core::Locale;
+use op_editor_core::{EditorState, PropertyFocus};
 
 fn summary(json: serde_json::Value) -> MotionSummary {
     let node: PenNode = serde_json::from_value(json).expect("node");
@@ -49,11 +50,12 @@ fn animations_stagger_and_a_transition_add_rows_and_remove_buttons() {
             MotionRowKind::Add,
             MotionRowKind::Stagger,
             MotionRowKind::Transition,
+            MotionRowKind::TransitionTiming,
         ]
     );
     let geometry = row_geometry(&summary, 0.0, 0.0, 280.0);
     let buttons: Vec<bool> = geometry.iter().map(|row| row.button.is_some()).collect();
-    assert_eq!(buttons, [true, true, false, false, true]);
+    assert_eq!(buttons, [true, true, false, false, true, false]);
     // Rows are stacked one step apart under the header.
     assert_eq!(
         geometry[1].main.origin.y - geometry[0].main.origin.y,
@@ -76,7 +78,7 @@ fn labels_name_trigger_preset_duration_and_loops() {
     }));
     assert_eq!(
         animation_label(Locale::EnUs, &summary.rows[0]),
-        "In view · Pulse · 1200 ms · ∞"
+        "In view · Pulse ∞ · 1200 ms"
     );
     assert_eq!(
         transition_label(Locale::EnUs, &summary),
@@ -84,7 +86,7 @@ fn labels_name_trigger_preset_duration_and_loops() {
     );
     assert_eq!(
         animation_label(Locale::ZhCn, &summary.rows[0]),
-        "进入视口时 · 脉冲 · 1200 ms · ∞"
+        "进入视口时 · 脉冲 ∞ · 1200 ms"
     );
 }
 
@@ -103,7 +105,7 @@ fn rows_open_menus_and_buttons_remove() {
     assert_eq!(
         actions(&with_animation),
         [
-            menu(MotionMenuTarget::Animation(0)),
+            PropertyPanelAction::ToggleMotionRow(0),
             edit(MotionPanelEdit::Remove(0)),
             menu(MotionMenuTarget::AddPreset),
             edit(MotionPanelEdit::AddTransition),
@@ -193,4 +195,105 @@ fn the_interactions_section_moves_down_by_the_motion_rows() {
         add_interaction_y(two) - add_interaction_y(empty),
         2.0 * ROW_STEP
     );
+}
+
+fn expanded(mut summary: MotionSummary, index: usize) -> MotionSummary {
+    summary.expanded = Some(index);
+    summary
+}
+
+#[test]
+fn an_open_row_shows_its_fields() {
+    let mut manual_loop = serde_json::to_value(
+        op_editor_core::motion_presets::MotionPreset::Spin
+            .animation(jian_ops_schema::motion::MotionTrigger::Manual),
+    )
+    .expect("animation json");
+    manual_loop["id"] = serde_json::json!("spin");
+    let base = summary(serde_json::json!({
+        "type": "rectangle", "id": "r", "width": 10, "height": 10,
+        "animations": [fade(), manual_loop]
+    }));
+    // A finite mount animation: options, timing, curve and repeat.
+    let open = expanded(base.clone(), 0);
+    assert_eq!(
+        rows(&open)[..6],
+        [
+            MotionRowKind::Animation(0),
+            MotionRowKind::Options(0),
+            MotionRowKind::Timing(0),
+            MotionRowKind::Easing(0),
+            MotionRowKind::Fill(0),
+            MotionRowKind::Repeat(0),
+        ]
+    );
+    let mut inputs = Vec::new();
+    push_motion_input_rects(&mut inputs, &open, 0.0, 0.0, 280.0);
+    let focuses: Vec<PropertyFocus> = inputs.iter().map(|(focus, _)| *focus).collect();
+    assert_eq!(
+        focuses,
+        [
+            PropertyFocus::MotionField(0, MotionField::Duration),
+            PropertyFocus::MotionField(0, MotionField::Delay),
+            PropertyFocus::MotionField(0, MotionField::Repeat),
+        ]
+    );
+    // Duration and delay share a row, side by side and indented.
+    assert_eq!(inputs[0].1.origin.y, inputs[1].1.origin.y);
+    assert!(inputs[1].1.origin.x > inputs[0].1.origin.x + inputs[0].1.size.x);
+    let actions: Vec<PropertyPanelAction> = actions(&open);
+    assert!(actions.contains(&menu(MotionMenuTarget::Animation(0))));
+    assert!(actions.contains(&menu(MotionMenuTarget::Easing(0))));
+    assert!(actions.contains(&menu(MotionMenuTarget::Fill(0))));
+
+    // An endless manual loop has no repeat count but needs its id.
+    let open = expanded(base, 1);
+    let rows = rows(&open);
+    assert!(rows.contains(&MotionRowKind::Id(1)));
+    assert!(!rows.contains(&MotionRowKind::Repeat(1)));
+    assert_eq!(
+        motion_section_height(&open),
+        SECTION_HEADER_HEIGHT + rows.len() as f32 * ROW_STEP + 6.0 + SECTION_GAP
+    );
+}
+
+#[test]
+fn fields_seed_from_the_row_and_commit_through_motion_edits() {
+    let doc = jian_ops_schema::load_str(
+        &serde_json::json!({
+            "version": "1.0",
+            "children": [{
+                "type": "rectangle", "id": "r", "width": 10, "height": 10,
+                "animations": [fade()],
+                "transition": {"durationMs": 150, "easing": "standard"}
+            }]
+        })
+        .to_string(),
+    )
+    .expect("document")
+    .value;
+    let mut state = EditorState::from_document(doc);
+    assert!(state.apply(op_editor_core::EditorCommand::SetSelection {
+        node_id: op_editor_core::NodeId::new("r"),
+    }));
+    let summary_now = |state: &EditorState| MotionSummary::of(state.selected_node().unwrap());
+    let duration = PropertyFocus::MotionField(0, MotionField::Duration);
+    assert_eq!(field_initial(duration, &summary_now(&state)), "300");
+    assert_eq!(
+        field_initial(PropertyFocus::TransitionDuration, &summary_now(&state)),
+        "150"
+    );
+    commit_field(&mut state, duration, " 640 ");
+    commit_field(
+        &mut state,
+        PropertyFocus::MotionField(0, MotionField::Delay),
+        "oops",
+    );
+    commit_field(&mut state, PropertyFocus::TransitionDuration, "90");
+    let summary = summary_now(&state);
+    assert_eq!(
+        (summary.rows[0].duration_ms, summary.rows[0].delay_ms),
+        (640, 0)
+    );
+    assert_eq!(summary.transition.map(|t| t.duration_ms), Some(90));
 }

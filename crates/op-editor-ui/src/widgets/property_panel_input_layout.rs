@@ -390,6 +390,13 @@ pub fn editable_input_rects_with_interactions(
     }
     if visible.interactions {
         // The Motion section sits directly above Interactions.
+        crate::widgets::property_panel_motion::push_motion_input_rects(
+            &mut rects,
+            &interactions.motion,
+            x0,
+            y,
+            w,
+        );
         let y =
             y + crate::widgets::property_panel_motion::motion_section_height(&interactions.motion);
         crate::widgets::property_panel_interactions::push_interaction_input_rects(
