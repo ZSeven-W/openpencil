@@ -280,6 +280,8 @@ pub enum Icon {
     Palette,
     /// Custom stacked plates — the left rail's Layers tab, icon mode.
     LayersStack,
+    /// Lucide `film.svg` — the motion timeline toggle.
+    Film,
     /// Custom presentation screen — the left rail's Slides tab, icon mode.
     PresentationScreen,
     /// Layers — touch-first entry to the document layer hierarchy.
@@ -442,6 +444,7 @@ impl Icon {
             Icon::PresentationScreen => PRESENTATION_SCREEN,
             Icon::Layers => LAYERS,
             Icon::Palette => PALETTE,
+            Icon::Film => FILM,
         }
     }
 
@@ -602,6 +605,7 @@ impl Icon {
                 Icon::DistributeV
             }
             "palette" | "color-palette" => Icon::Palette,
+            "film" => Icon::Film,
             _ => return None,
         })
     }

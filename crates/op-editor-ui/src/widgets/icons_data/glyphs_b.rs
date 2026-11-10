@@ -465,3 +465,16 @@ pub(crate) const BRAIN: &[&str] = &[
     "M6 18a4 4 0 0 1-2-7.464",
     "M6.003 5.125a4 4 0 0 0-2.526 5.77",
 ];
+
+pub(crate) const FILM: &[&str] = &[
+    // Lucide ships <rect x=3 y=3 w=18 h=18 rx=2/>; expanded to a
+    // round-rect path so stroke_svg_path can render it uniformly.
+    "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
+    "M7 3v18",
+    "M3 7.5h4",
+    "M3 12h18",
+    "M3 16.5h4",
+    "M17 3v18",
+    "M17 7.5h4",
+    "M17 16.5h4",
+];

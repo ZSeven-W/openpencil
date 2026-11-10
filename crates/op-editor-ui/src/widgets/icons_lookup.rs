@@ -167,6 +167,7 @@ const FIRST_PARTY_ICONS: &[(&str, Icon)] = &[
     ("squares-intersect", Icon::SquaresIntersect),
     ("squares-exclude", Icon::SquaresExclude),
     ("palette", Icon::Palette),
+    ("film", Icon::Film),
     ("layers", Icon::Layers),
 ];
 
