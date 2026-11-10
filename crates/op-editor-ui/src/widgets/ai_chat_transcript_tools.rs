@@ -17,7 +17,6 @@ const CARD_HEADER_H: f32 = 28.0;
 pub(crate) const CARD_GAP: f32 = 4.0;
 const CARD_PAD_X: f32 = 8.0;
 const CARD_PAD_Y: f32 = 6.0;
-const CARD_LINE_H: f32 = 14.0;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ToolLevel {
     Read,
@@ -73,6 +72,9 @@ pub(crate) struct ToolCallCard {
     result_failed: bool,
     arg_lines: Vec<String>,
     result_lines: Vec<String>,
+    /// The structured body painted when the card is open: the arguments'
+    /// and result's fields instead of their raw JSON.
+    detail: Option<super::ai_chat_transcript_detail_body::DetailBody>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -274,12 +276,26 @@ fn layout_tool_card(
     } else {
         Vec::new()
     };
-    let body_lines = arg_lines.len() + result_lines.len();
-    let body_h = if body_lines == 0 {
-        0.0
+    let detail = if expanded {
+        let mut lines = Vec::new();
+        let args_line = (!fields.args.is_empty()).then(|| format!("Args: {}", fields.args));
+        let result_line = fields
+            .result
+            .as_deref()
+            .map(|result| format!("Result: {result}"));
+        if let Some(line) = &args_line {
+            lines.push((line.as_str(), false));
+        }
+        if let Some(line) = &result_line {
+            lines.push((line.as_str(), result_failed));
+        }
+        super::ai_chat_transcript_detail_body::detail_body_lines(&lines, budget)
     } else {
-        body_lines as f32 * CARD_LINE_H + 2.0 * CARD_PAD_Y
+        None
     };
+    let body_h = detail
+        .as_ref()
+        .map_or(0.0, |detail| detail.height + 2.0 * CARD_PAD_Y);
     let rect = Rect::xywh(x, y, width, CARD_HEADER_H + body_h);
     let header = Rect::xywh(x, y, width, CARD_HEADER_H);
     let body = Rect::xywh(x, y + CARD_HEADER_H, width, body_h);
@@ -297,6 +313,7 @@ fn layout_tool_card(
             result_failed,
             arg_lines,
             result_lines,
+            detail,
         },
         y + rect.size.y,
     )
@@ -470,22 +487,15 @@ fn paint_tool_card(cx: &mut PaintCx<'_>, theme: &Theme, card: &ToolCallCard, now
         );
         cx.backend.save();
         cx.backend.clip_rect(card.body);
-        let mut baseline = card.body.origin.y + CARD_PAD_Y + 9.0;
-        for line in card.arg_lines.iter().chain(card.result_lines.iter()) {
-            let color = if card.result_failed && line.starts_with("Result:") {
-                theme.destructive
-            } else {
-                theme.muted_foreground
-            };
-            draw_line(
+        if let Some(detail) = &card.detail {
+            super::ai_chat_transcript_detail_body::paint_detail_body(
                 cx,
-                line,
+                theme,
+                detail,
                 card.body.origin.x + CARD_PAD_X,
-                baseline,
-                10.0,
-                color,
+                card.body.origin.y + CARD_PAD_Y,
+                card.body.size.x - 2.0 * CARD_PAD_X,
             );
-            baseline += CARD_LINE_H;
         }
         cx.backend.restore();
     }
@@ -653,6 +663,7 @@ mod tests {
             result_failed,
             arg_lines: Vec::new(),
             result_lines: Vec::new(),
+            detail: None,
         }
     }
 
@@ -670,6 +681,10 @@ mod tests {
             result_failed: false,
             arg_lines: vec!["Args: {}".into()],
             result_lines: Vec::new(),
+            detail: super::super::ai_chat_transcript_detail_body::detail_body_lines(
+                &[("Args: {}", false)],
+                60,
+            ),
         }
     }
 
