@@ -217,12 +217,13 @@ fn an_open_row_shows_its_fields() {
     // A finite mount animation: options, timing, curve and repeat.
     let open = expanded(base.clone(), 0);
     assert_eq!(
-        rows(&open)[..6],
+        rows(&open)[..7],
         [
             MotionRowKind::Animation(0),
             MotionRowKind::Options(0),
             MotionRowKind::Timing(0),
             MotionRowKind::Easing(0),
+            MotionRowKind::Curve(0),
             MotionRowKind::Fill(0),
             MotionRowKind::Repeat(0),
         ]
@@ -235,9 +236,18 @@ fn an_open_row_shows_its_fields() {
         [
             PropertyFocus::MotionField(0, MotionField::Duration),
             PropertyFocus::MotionField(0, MotionField::Delay),
+            PropertyFocus::MotionField(0, MotionField::Curve(0)),
+            PropertyFocus::MotionField(0, MotionField::Curve(1)),
+            PropertyFocus::MotionField(0, MotionField::Curve(2)),
+            PropertyFocus::MotionField(0, MotionField::Curve(3)),
             PropertyFocus::MotionField(0, MotionField::Repeat),
         ]
     );
+    // The four controls share one row after the thumbnail.
+    assert!(inputs[2..6]
+        .windows(2)
+        .all(|pair| pair[0].1.origin.y == pair[1].1.origin.y
+            && pair[1].1.origin.x > pair[0].1.origin.x + pair[0].1.size.x));
     // Duration and delay share a row, side by side and indented.
     assert_eq!(inputs[0].1.origin.y, inputs[1].1.origin.y);
     assert!(inputs[1].1.origin.x > inputs[0].1.origin.x + inputs[0].1.size.x);
@@ -283,17 +293,138 @@ fn fields_seed_from_the_row_and_commit_through_motion_edits() {
         field_initial(PropertyFocus::TransitionDuration, &summary_now(&state)),
         "150"
     );
-    commit_field(&mut state, duration, " 640 ");
+    let summary = summary_now(&state);
+    commit_field(&mut state, &summary, duration, " 640 ");
     commit_field(
         &mut state,
+        &summary,
         PropertyFocus::MotionField(0, MotionField::Delay),
         "oops",
     );
-    commit_field(&mut state, PropertyFocus::TransitionDuration, "90");
+    commit_field(
+        &mut state,
+        &summary,
+        PropertyFocus::TransitionDuration,
+        "90",
+    );
     let summary = summary_now(&state);
     assert_eq!(
         (summary.rows[0].duration_ms, summary.rows[0].delay_ms),
         (640, 0)
     );
     assert_eq!(summary.transition.map(|t| t.duration_ms), Some(90));
+}
+
+#[test]
+fn curve_fields_show_the_runtime_controls_and_write_a_bezier() {
+    let doc = jian_ops_schema::load_str(
+        &serde_json::json!({
+            "version": "1.0",
+            "children": [{
+                "type": "rectangle", "id": "r", "width": 10, "height": 10,
+                "animations": [{"trigger": "mount", "durationMs": 400, "easing": "standard", "keyframes": [
+                    {"offset": 0, "values": {"opacity": 0}},
+                    {"offset": 1, "values": {"opacity": 1}}
+                ]}]
+            }]
+        })
+        .to_string(),
+    )
+    .expect("document")
+    .value;
+    let mut state = EditorState::from_document(doc);
+    assert!(state.apply(op_editor_core::EditorCommand::SetSelection {
+        node_id: op_editor_core::NodeId::new("r"),
+    }));
+    let summary = MotionSummary::of(state.selected_node().unwrap());
+    let x1 = PropertyFocus::MotionField(0, MotionField::Curve(0));
+    let y2 = PropertyFocus::MotionField(0, MotionField::Curve(3));
+    assert_eq!(field_initial(x1, &summary), "0.2");
+    assert_eq!(field_initial(y2, &summary), "1");
+    commit_field(&mut state, &summary, y2, "1.25");
+    let easing = MotionSummary::of(state.selected_node().unwrap()).rows[0]
+        .easing
+        .clone();
+    assert_eq!(
+        easing,
+        jian_ops_schema::motion::Easing::CubicBezier(0.2, 0.0, 0.0, 1.25)
+    );
+}
+
+#[test]
+fn a_selected_keyframe_turns_the_section_into_its_values() {
+    let mut summary = summary(serde_json::json!({
+        "type": "rectangle", "id": "r", "width": 10, "height": 10, "animations": [fade()]
+    }));
+    summary.keyframe = Some(op_editor_core::motion_summary::KeyframeSummary {
+        animation: 0,
+        keyframe: 1,
+        count: 2,
+        time_ms: 300.0,
+        values: vec![("opacity".into(), serde_json::json!(1))],
+        addable: vec!["translateY"],
+    });
+    assert_eq!(
+        rows(&summary),
+        [
+            MotionRowKind::KeyframeHeader,
+            MotionRowKind::KeyframeValue(0),
+            MotionRowKind::KeyframeAdd,
+        ]
+    );
+    let actions = actions(&summary);
+    assert!(actions.contains(&PropertyPanelAction::LeaveMotionKeyframe));
+    assert!(actions.contains(&menu(MotionMenuTarget::KeyframeProperty)));
+    assert!(
+        actions.contains(&edit(MotionPanelEdit::RemoveKeyframeValue {
+            animation: 0,
+            keyframe: 1,
+            property: "opacity".into(),
+        }))
+    );
+    let mut inputs = Vec::new();
+    push_motion_input_rects(&mut inputs, &summary, 0.0, 0.0, 280.0);
+    assert_eq!(inputs[0].0, PropertyFocus::MotionKeyframeValue(0));
+    assert_eq!(field_initial(inputs[0].0, &summary), "1");
+    let menu_rows = motion_menu_rows(
+        op_editor_core::Locale::EnUs,
+        MotionMenuTarget::KeyframeProperty,
+        &summary,
+    );
+    assert_eq!(menu_rows.len(), 1);
+    assert_eq!(menu_rows[0].1, "translateY");
+    assert_eq!(
+        crate::widgets::property_panel_motion_curve::keyframe_title(
+            op_editor_core::Locale::EnUs,
+            summary.keyframe.as_ref().unwrap()
+        ),
+        "Keyframe 2 of 2 · 0.30 s"
+    );
+}
+
+#[test]
+fn a_manual_row_offers_the_screens_ids() {
+    let mut manual = serde_json::to_value(
+        op_editor_core::motion_presets::MotionPreset::FadeIn
+            .animation(jian_ops_schema::motion::MotionTrigger::Manual),
+    )
+    .expect("animation json");
+    manual["id"] = serde_json::json!("intro");
+    let mut open = expanded(
+        summary(serde_json::json!({
+            "type": "rectangle", "id": "r", "width": 10, "height": 10, "animations": [manual]
+        })),
+        0,
+    );
+    assert!(!actions(&open).contains(&menu(MotionMenuTarget::ManualId(0))));
+    open.manual_ids = vec!["intro".into(), "outro".into()];
+    assert!(actions(&open).contains(&menu(MotionMenuTarget::ManualId(0))));
+    let rows = motion_menu_rows(
+        op_editor_core::Locale::EnUs,
+        MotionMenuTarget::ManualId(0),
+        &open,
+    );
+    let labels: Vec<&str> = rows.iter().map(|(_, label)| label.as_str()).collect();
+    assert_eq!(labels, ["✓ intro", "outro"]);
+    assert_eq!(rows[1].0, edit(MotionPanelEdit::SetId(0, "outro".into())));
 }

@@ -6,6 +6,9 @@
 //! schema checks there guard every panel write.
 
 use crate::motion_edit::MotionCommand;
+use crate::motion_keyframe_edit::{
+    add_keyframe_value, remove_keyframe_value, set_keyframe_value, with_bezier_control,
+};
 use crate::motion_presets::{MotionPreset, STAGGER_STEP_MS};
 use crate::{EditorState, NodeId};
 use jian_ops_schema::events::ExtraJson;
@@ -41,6 +44,27 @@ pub enum MotionPanelEdit {
     RemoveTransition,
     SetTransitionEasing(Easing),
     SetTransitionDuration(u64),
+    /// Set control `slot` (x1, y1, x2, y2) of the curve, which becomes a
+    /// cubic-bezier; keyframes keep their times.
+    SetCurveControl(usize, usize, f32),
+    /// Keyframe-values mode: add a whitelisted property to keyframe
+    /// `keyframe` of animation `animation`.
+    AddKeyframeValue {
+        animation: usize,
+        keyframe: usize,
+        property: String,
+    },
+    SetKeyframeValue {
+        animation: usize,
+        keyframe: usize,
+        property: String,
+        value: serde_json::Value,
+    },
+    RemoveKeyframeValue {
+        animation: usize,
+        keyframe: usize,
+        property: String,
+    },
 }
 
 impl EditorState {
@@ -75,7 +99,8 @@ impl EditorState {
         node_id: &NodeId,
         edit: &MotionPanelEdit,
     ) -> Option<Vec<MotionCommand>> {
-        let (transition, animations) = self.selected_node()?.motion_declarations();
+        let node = self.selected_node()?;
+        let (transition, animations) = node.motion_declarations();
         let animations = animations.cloned().unwrap_or_default();
         let update = |index: usize, change: &dyn Fn(&mut NodeAnimation)| {
             let mut animation = animations.get(index)?.clone();
@@ -177,6 +202,36 @@ impl EditorState {
                 node_id: node_id.clone(),
                 transition: None,
             }],
+            MotionPanelEdit::SetCurveControl(index, slot, value) => {
+                let current = &animations.get(*index)?.easing;
+                vec![MotionCommand::SetEasingKeepTimes {
+                    node_id: node_id.clone(),
+                    index: *index,
+                    easing: with_bezier_control(current, *slot, *value),
+                }]
+            }
+            MotionPanelEdit::AddKeyframeValue {
+                animation,
+                keyframe,
+                property,
+            } => update(*animation, &|edited| {
+                *edited = add_keyframe_value(edited, *keyframe, property, node);
+            })?,
+            MotionPanelEdit::SetKeyframeValue {
+                animation,
+                keyframe,
+                property,
+                value,
+            } => update(*animation, &|edited| {
+                *edited = set_keyframe_value(edited, *keyframe, property, value.clone());
+            })?,
+            MotionPanelEdit::RemoveKeyframeValue {
+                animation,
+                keyframe,
+                property,
+            } => update(*animation, &|edited| {
+                *edited = remove_keyframe_value(edited, *keyframe, property);
+            })?,
             MotionPanelEdit::SetTransitionEasing(easing) => {
                 let mut transition = transition?.clone();
                 transition.easing = easing.clone();

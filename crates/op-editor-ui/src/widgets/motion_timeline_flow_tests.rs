@@ -358,3 +358,15 @@ fn without_snapping_a_drag_lands_off_grid() {
     release(&mut state);
     assert_eq!(delay(&state, "b"), 113);
 }
+
+#[test]
+fn presses_in_the_inspector_keep_the_keyframe_being_edited() {
+    let mut state = state();
+    let (_, layout) = layout_of(&state);
+    press(&mut state, layout.rows[0].keyframes[1].1, VW, VH, 0, false);
+    release(&mut state);
+    let inspector = crate::widgets::host_canvas_geometry::property_panel_rect(&state, VW, VH);
+    assert!(state.property_panel_visible());
+    assert!(!press(&mut state, center(inspector), VW, VH, 0, false));
+    assert!(has_keyframe_selection(&state));
+}

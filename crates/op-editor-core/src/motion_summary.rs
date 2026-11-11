@@ -52,6 +52,10 @@ pub enum MotionMenuTarget {
     Fill(usize),
     /// The transition row's easing dropdown.
     TransitionEasing,
+    /// A manual row's id dropdown: the ids used on the same screen.
+    ManualId(usize),
+    /// Keyframe-values mode: "+ Add property".
+    KeyframeProperty,
 }
 
 /// A text field of an expanded Motion row (`PropertyFocus::MotionField`).
@@ -61,6 +65,23 @@ pub enum MotionField {
     Delay,
     Repeat,
     Id,
+    /// Cubic-bezier control `0..4` (x1, y1, x2, y2).
+    Curve(usize),
+}
+
+/// The keyframe the Motion section edits while it is selected on the
+/// timeline: where it sits and the values it holds.
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeyframeSummary {
+    pub animation: usize,
+    pub keyframe: usize,
+    /// How many keyframes the animation has.
+    pub count: usize,
+    pub time_ms: f64,
+    /// Property → value, in property order.
+    pub values: Vec<(String, Value)>,
+    /// Whitelisted properties the keyframe can still add.
+    pub addable: Vec<&'static str>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -108,6 +129,12 @@ pub struct MotionSummary {
     /// The row whose fields the inspector shows. UI state: [`Self::of`]
     /// leaves it `None` and the panel fills it in.
     pub expanded: Option<usize>,
+    /// Manual ids used on the node's screen, for the id dropdown. Filled
+    /// in by `EditorState::fill_motion_summary`.
+    pub manual_ids: Vec<String>,
+    /// The timeline keyframe being edited, which turns the section into
+    /// keyframe-values mode. Filled in like `manual_ids`.
+    pub keyframe: Option<KeyframeSummary>,
 }
 
 impl MotionSummary {
@@ -122,6 +149,8 @@ impl MotionSummary {
             transition: transition.cloned(),
             can_stagger: node.children().is_some_and(|children| !children.is_empty()),
             expanded: None,
+            manual_ids: Vec::new(),
+            keyframe: None,
         }
     }
 }

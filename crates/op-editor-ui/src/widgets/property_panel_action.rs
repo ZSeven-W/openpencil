@@ -427,6 +427,8 @@ pub enum PropertyPanelAction {
     /// Open or close the fields of Motion-section animation row `index`
     /// (`editor_ui.motion_expanded`). UI state only.
     ToggleMotionRow(usize),
+    /// Leave keyframe-values mode: drop the timeline keyframe selection.
+    LeaveMotionKeyframe,
     /// Code panel action — see `CodegenAction`.
     Codegen(CodegenAction),
     /// Generator section: flip boolean parameter `index` and regenerate.

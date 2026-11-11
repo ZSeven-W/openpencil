@@ -1,7 +1,13 @@
 //! Timeline → Inspector. Pressing a lane selects its node, so the
-//! Inspector shows what the timeline holds, and double-clicking a strip
-//! opens that animation's row in the Motion section.
+//! Inspector shows what the timeline holds; double-clicking a strip opens
+//! that animation's row in the Motion section; and while a keyframe of the
+//! selected node is selected on the timeline, the Motion section edits
+//! that keyframe's values.
 
+use crate::editor_ui_state::TimelineKeyframeRef;
+use crate::motion_keyframe_edit::addable_properties;
+use crate::motion_summary::{KeyframeSummary, MotionSummary};
+use crate::motion_timeline_projection::{keyframe_ms, manual_ids};
 use crate::{EditorState, NodeId, PropertyTab};
 
 /// Two presses on one strip this close together are a double-click.
@@ -39,6 +45,43 @@ impl EditorState {
         self.editor_ui.property_tab = PropertyTab::Design;
         self.editor_ui.motion_expanded = Some((node_id.to_owned(), index));
         self.editor_ui.motion_timeline.selection.clear();
+    }
+
+    /// The keyframe the Motion section edits: the last one selected on an
+    /// open timeline, when it belongs to the selected node.
+    pub fn motion_keyframe_focus(&self) -> Option<&TimelineKeyframeRef> {
+        let timeline = &self.editor_ui.motion_timeline;
+        let key = timeline.selection.last().filter(|_| timeline.open)?;
+        (key.node_id == self.selection.anchor.as_str()).then_some(key)
+    }
+
+    /// Fill in what the Motion section needs beyond the node itself: the
+    /// open row, the manual ids used on the node's screen, and the
+    /// keyframe being edited.
+    pub fn fill_motion_summary(&self, summary: &mut MotionSummary) {
+        let anchor = &self.selection.anchor;
+        summary.expanded = self.editor_ui.motion_row_expanded(anchor.as_str());
+        summary.manual_ids = self
+            .motion_screen_of(anchor)
+            .map(manual_ids)
+            .unwrap_or_default();
+        summary.keyframe = self.motion_keyframe_focus().and_then(|key| {
+            let node = self.selected_node()?;
+            let animation = node.motion_declarations().1?.get(key.animation)?;
+            let frame = animation.keyframes.get(key.keyframe)?;
+            Some(KeyframeSummary {
+                animation: key.animation,
+                keyframe: key.keyframe,
+                count: animation.keyframes.len(),
+                time_ms: keyframe_ms(animation, frame.offset),
+                values: frame
+                    .values
+                    .iter()
+                    .map(|(property, value)| (property.clone(), value.clone()))
+                    .collect(),
+                addable: addable_properties(animation, key.keyframe),
+            })
+        });
     }
 }
 

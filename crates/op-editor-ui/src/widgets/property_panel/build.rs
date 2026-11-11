@@ -177,9 +177,7 @@ impl PropertyPanel {
                 .iter()
                 .any(|n| n.id_str() == state.selection.anchor.as_str());
             let mut snapshot = NodeSnapshot::from_node(node, is_top_level);
-            snapshot.interactions.motion.expanded = state
-                .editor_ui
-                .motion_row_expanded(state.selection.anchor.as_str());
+            state.fill_motion_summary(&mut snapshot.interactions.motion);
             if !state.editor_ui.agent_settings.experimental_features_enabled {
                 // The Widget section is an experimental surface. Hide it
                 // unless opted in — the section's paint AND height both key

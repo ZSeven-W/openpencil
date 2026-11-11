@@ -1,6 +1,7 @@
 //! Dropdown menus of the Motion section: presets to add or stagger, an
-//! animation row's trigger / loop / order menu, and the easing and fill
-//! pickers. They open in the Interactions popover
+//! animation row's trigger / loop / order menu, the easing and fill
+//! pickers, the manual id picker (ids already used on the screen, so a
+//! pick joins that clip) and keyframe-values mode's "+ Add property". They open in the Interactions popover
 //! (`InteractionMenuTarget::Motion`), so one property-panel menu is ever open.
 
 use crate::widgets::property_panel::PropertyPanelAction;
@@ -116,6 +117,36 @@ pub fn motion_menu_rows(
                     (
                         edit(MotionPanelEdit::SetFill(index, fill)),
                         choice(row.fill_mode == fill, tr(locale, fill_label(fill))),
+                    )
+                })
+                .collect(),
+            None => Vec::new(),
+        },
+        MotionMenuTarget::ManualId(index) => {
+            let current = summary.rows.get(index).and_then(|row| row.id.as_deref());
+            summary
+                .manual_ids
+                .iter()
+                .map(|id| {
+                    (
+                        edit(MotionPanelEdit::SetId(index, id.clone())),
+                        choice(current == Some(id.as_str()), id),
+                    )
+                })
+                .collect()
+        }
+        MotionMenuTarget::KeyframeProperty => match &summary.keyframe {
+            Some(keyframe) => keyframe
+                .addable
+                .iter()
+                .map(|property| {
+                    (
+                        edit(MotionPanelEdit::AddKeyframeValue {
+                            animation: keyframe.animation,
+                            keyframe: keyframe.keyframe,
+                            property: (*property).to_owned(),
+                        }),
+                        (*property).to_owned(),
                     )
                 })
                 .collect(),

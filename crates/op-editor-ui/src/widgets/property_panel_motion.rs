@@ -8,13 +8,24 @@
 //!   [On load                        ▾]       opens its fields:
 //!   [Duration 400  ] [Delay 0        ]       trigger / loop / once / order,
 //!   [Standard                       ▾]       timing, curve,
+//!   [╭╯][0.2 ][0   ][0   ][1   ]             cubic-bezier x1 y1 x2 y2,
 //!   [Keep last frame                ▾]       fill,
 //!   [Repeat 1      ]                         repeat (finite runs),
-//!   [Motion id intro                 ]       id (manual runs)
+//!   [Motion id intro            ] [▾]        id (manual runs) + the
+//!                                            screen's other ids
 //! [+ Add motion                     ▾]       → preset menu
 //! [Stagger children                 ▾]       containers only
 //! [Transition · 150 ms · Standard    ] [×]   or "+ Add transition"
 //!   [Duration 150                    ]
+//! ```
+//!
+//! While a keyframe of the node is selected on the timeline the section
+//! edits that keyframe instead:
+//!
+//! ```text
+//! [◆ Keyframe 2 of 3 · 0.20 s        ] [×]   × leaves keyframe mode
+//!   [opacity      0.5                ] [×]   one input per property
+//! [+ Add property                   ▾]       whitelisted properties
 //! ```
 //!
 //! The model lives in `op_editor_core::motion_summary`; writes go through
@@ -41,7 +52,11 @@ use op_editor_core::motion_summary::{
 };
 use op_editor_core::{EditorState, PropertyFocus};
 
+use crate::widgets::property_panel_motion_curve as curve;
 pub use crate::widgets::property_panel_motion_menu::motion_menu_rows;
+use op_editor_core::motion_keyframe_edit::{
+    bezier_controls, format_keyframe_value, parse_keyframe_value,
+};
 
 pub(crate) const ROW_STEP: f32 = INPUT_HEIGHT + 6.0;
 const ICON_BUTTON_W: f32 = 26.0;
@@ -59,6 +74,8 @@ pub(crate) enum MotionRowKind {
     Timing(usize),
     /// Easing dropdown.
     Easing(usize),
+    /// The curve as four cubic-bezier inputs beside its thumbnail.
+    Curve(usize),
     /// Fill-mode dropdown. Full width like the easing row: fill labels
     /// are long in several locales.
     Fill(usize),
@@ -71,6 +88,12 @@ pub(crate) enum MotionRowKind {
     Transition,
     /// The transition's duration input.
     TransitionTiming,
+    /// Keyframe-values mode: which keyframe, and a button leaving it.
+    KeyframeHeader,
+    /// One property of the keyframe, index into `keyframe.values`.
+    KeyframeValue(usize),
+    /// "+ Add property".
+    KeyframeAdd,
 }
 
 impl MotionRowKind {
@@ -80,6 +103,8 @@ impl MotionRowKind {
             Self::Options(_)
                 | Self::Timing(_)
                 | Self::Easing(_)
+                | Self::Curve(_)
+                | Self::KeyframeValue(_)
                 | Self::Fill(_)
                 | Self::Repeat(_)
                 | Self::Id(_)
@@ -94,6 +119,14 @@ impl MotionRowKind {
 
 pub(crate) fn rows(summary: &MotionSummary) -> Vec<MotionRowKind> {
     let mut out = Vec::new();
+    if let Some(keyframe) = &summary.keyframe {
+        out.push(MotionRowKind::KeyframeHeader);
+        out.extend((0..keyframe.values.len()).map(MotionRowKind::KeyframeValue));
+        if !keyframe.addable.is_empty() {
+            out.push(MotionRowKind::KeyframeAdd);
+        }
+        return out;
+    }
     for (index, row) in summary.rows.iter().enumerate() {
         out.push(MotionRowKind::Animation(index));
         if summary.expanded == Some(index) {
@@ -101,6 +134,7 @@ pub(crate) fn rows(summary: &MotionSummary) -> Vec<MotionRowKind> {
                 MotionRowKind::Options(index),
                 MotionRowKind::Timing(index),
                 MotionRowKind::Easing(index),
+                MotionRowKind::Curve(index),
                 MotionRowKind::Fill(index),
             ]);
             if !row.iterations.is_infinite() {
@@ -148,8 +182,11 @@ pub(crate) fn row_geometry(
     let mut out = Vec::new();
     for row in rows(summary) {
         let has_button = match row {
-            MotionRowKind::Animation(_) => true,
+            MotionRowKind::Animation(_)
+            | MotionRowKind::KeyframeHeader
+            | MotionRowKind::KeyframeValue(_) => true,
             MotionRowKind::Transition => summary.transition.is_some(),
+            MotionRowKind::Id(_) => !summary.manual_ids.is_empty(),
             _ => false,
         };
         let indent = if row.is_field() { FIELD_INDENT } else { 0.0 };
@@ -220,6 +257,24 @@ pub fn push_motion_action_rects(
                 (Some(menu(MotionMenuTarget::Easing(index))), None, None)
             }
             MotionRowKind::Fill(index) => (Some(menu(MotionMenuTarget::Fill(index))), None, None),
+            MotionRowKind::Id(index) => (None, None, Some(menu(MotionMenuTarget::ManualId(index)))),
+            MotionRowKind::KeyframeHeader => {
+                (None, None, Some(PropertyPanelAction::LeaveMotionKeyframe))
+            }
+            MotionRowKind::KeyframeValue(property) => (
+                None,
+                None,
+                keyframe_edit(summary, property, |animation, keyframe, property| {
+                    MotionPanelEdit::RemoveKeyframeValue {
+                        animation,
+                        keyframe,
+                        property,
+                    }
+                }),
+            ),
+            MotionRowKind::KeyframeAdd => {
+                (Some(menu(MotionMenuTarget::KeyframeProperty)), None, None)
+            }
             MotionRowKind::Add => (Some(menu(MotionMenuTarget::AddPreset)), None, None),
             MotionRowKind::Stagger => (Some(menu(MotionMenuTarget::StaggerPreset)), None, None),
             MotionRowKind::Transition if summary.transition.is_some() => (
@@ -231,7 +286,7 @@ pub fn push_motion_action_rects(
             // Text inputs: see `push_motion_input_rects`.
             MotionRowKind::Timing(_)
             | MotionRowKind::Repeat(_)
-            | MotionRowKind::Id(_)
+            | MotionRowKind::Curve(_)
             | MotionRowKind::TransitionTiming => (None, None, None),
         };
         for (action, rect) in [
@@ -246,6 +301,22 @@ pub fn push_motion_action_rects(
     }
 }
 
+/// An edit of keyframe-values row `property`, for the keyframe being
+/// edited.
+fn keyframe_edit(
+    summary: &MotionSummary,
+    property: usize,
+    make: impl Fn(usize, usize, String) -> MotionPanelEdit,
+) -> Option<PropertyPanelAction> {
+    let keyframe = summary.keyframe.as_ref()?;
+    let (name, _) = keyframe.values.get(property)?;
+    Some(edit(make(
+        keyframe.animation,
+        keyframe.keyframe,
+        name.clone(),
+    )))
+}
+
 /// Emit the section's text inputs.
 pub fn push_motion_input_rects(
     out: &mut Vec<(PropertyFocus, Rect)>,
@@ -255,6 +326,16 @@ pub fn push_motion_input_rects(
     width: f32,
 ) {
     for geometry in row_geometry(summary, x, y, width) {
+        if let MotionRowKind::Curve(index) = geometry.row {
+            let (_, cells) = curve::cells(geometry.main);
+            out.extend(cells.into_iter().enumerate().map(|(slot, rect)| {
+                (
+                    PropertyFocus::MotionField(index, MotionField::Curve(slot)),
+                    rect,
+                )
+            }));
+            continue;
+        }
         let fields = match geometry.row {
             MotionRowKind::Timing(index) => [
                 Some(PropertyFocus::MotionField(index, MotionField::Duration)),
@@ -269,6 +350,9 @@ pub fn push_motion_input_rects(
                 None,
             ],
             MotionRowKind::TransitionTiming => [Some(PropertyFocus::TransitionDuration), None],
+            MotionRowKind::KeyframeValue(property) => {
+                [Some(PropertyFocus::MotionKeyframeValue(property)), None]
+            }
             _ => [None, None],
         };
         for (focus, rect) in fields
@@ -310,9 +394,21 @@ pub(crate) fn transition_label(locale: op_editor_core::Locale, summary: &MotionS
     }
 }
 
-/// The prefix label of a text field.
-fn field_prefix(locale: op_editor_core::Locale, focus: PropertyFocus) -> &'static str {
+/// The prefix label of a text field. Curve inputs have none (they read
+/// x1 y1 x2 y2, as CSS writes them); a keyframe value is labelled by its
+/// property.
+fn field_prefix(
+    locale: op_editor_core::Locale,
+    focus: PropertyFocus,
+    summary: &MotionSummary,
+) -> &str {
     match focus {
+        PropertyFocus::MotionField(_, MotionField::Curve(_)) => "",
+        PropertyFocus::MotionKeyframeValue(property) => summary
+            .keyframe
+            .as_ref()
+            .and_then(|keyframe| keyframe.values.get(property))
+            .map_or("", |(name, _)| name.as_str()),
         PropertyFocus::MotionField(_, MotionField::Delay) => {
             tr(locale, ("motion.field.delay", "Delay"))
         }
@@ -353,7 +449,7 @@ pub fn paint_motion_section(
             cx,
             theme,
             rect,
-            field_prefix(locale, focus),
+            field_prefix(locale, focus, summary),
             edit.value_for(focus, &initial),
             edit.focus == Some(focus),
             edit.caret_at(focus),
@@ -363,6 +459,18 @@ pub fn paint_motion_section(
         );
     }
     for geometry in row_geometry(summary, x, y, width) {
+        match geometry.row {
+            MotionRowKind::Curve(index) => {
+                let (thumb, _) = curve::cells(geometry.main);
+                curve::paint_thumbnail(cx, theme, thumb, &summary.rows[index].easing);
+            }
+            MotionRowKind::KeyframeHeader => {
+                if let Some(keyframe) = &summary.keyframe {
+                    curve::paint_keyframe_header(cx, theme, geometry.main, locale, keyframe);
+                }
+            }
+            _ => {}
+        }
         let labels: [Option<String>; 2] = match geometry.row {
             MotionRowKind::Animation(index) => {
                 [Some(animation_label(locale, &summary.rows[index])), None]
@@ -388,10 +496,17 @@ pub fn paint_motion_section(
                 None,
             ],
             MotionRowKind::Transition => [Some(transition_label(locale, summary)), None],
-            // Painted above as text inputs.
+            MotionRowKind::KeyframeAdd => [
+                Some(tr(locale, ("motion.keyframe.addProperty", "+ Add property")).to_owned()),
+                None,
+            ],
+            // Painted above as text inputs, or just now.
             MotionRowKind::Timing(_)
             | MotionRowKind::Repeat(_)
             | MotionRowKind::Id(_)
+            | MotionRowKind::Curve(_)
+            | MotionRowKind::KeyframeHeader
+            | MotionRowKind::KeyframeValue(_)
             | MotionRowKind::TransitionTiming => [None, None],
         };
         for (label, rect) in labels
@@ -408,9 +523,14 @@ pub fn paint_motion_section(
             }
         }
         if let Some(button) = geometry.button {
+            // The id row's button opens its dropdown; the rest remove.
+            let glyph = match geometry.row {
+                MotionRowKind::Id(_) => Icon::ChevronDown,
+                _ => Icon::Close,
+            };
             draw_icon(
                 cx.backend,
-                Icon::Close,
+                glyph,
                 Point2D::new(
                     button.origin.x + (button.size.x - 14.0) / 2.0,
                     button.origin.y + (button.size.y - 14.0) / 2.0,
@@ -438,8 +558,20 @@ pub(crate) fn field_initial(focus: PropertyFocus, summary: &MotionSummary) -> St
                 MotionField::Delay => row.delay_ms.to_string(),
                 MotionField::Repeat => row.iterations.count_or(1).to_string(),
                 MotionField::Id => row.id.clone().unwrap_or_default(),
+                MotionField::Curve(slot) => curve::format_control(
+                    bezier_controls(&row.easing)
+                        .get(slot)
+                        .copied()
+                        .unwrap_or(0.0),
+                ),
             }
         }
+        PropertyFocus::MotionKeyframeValue(property) => summary
+            .keyframe
+            .as_ref()
+            .and_then(|keyframe| keyframe.values.get(property))
+            .map(|(_, value)| format_keyframe_value(value))
+            .unwrap_or_default(),
         PropertyFocus::TransitionDuration => summary
             .transition
             .as_ref()
@@ -451,9 +583,30 @@ pub(crate) fn field_initial(focus: PropertyFocus, summary: &MotionSummary) -> St
 
 /// Write a committed Motion text field. Unparsable numbers are dropped,
 /// like every other numeric panel field.
-pub(crate) fn commit_field(state: &mut EditorState, focus: PropertyFocus, draft: &str) {
+pub(crate) fn commit_field(
+    state: &mut EditorState,
+    summary: &MotionSummary,
+    focus: PropertyFocus,
+    draft: &str,
+) {
     let draft = draft.trim();
     let edit = match focus {
+        PropertyFocus::MotionField(index, MotionField::Curve(slot)) => draft
+            .parse::<f32>()
+            .ok()
+            .filter(|value| value.is_finite())
+            .map(|value| MotionPanelEdit::SetCurveControl(index, slot, value)),
+        PropertyFocus::MotionKeyframeValue(property) => {
+            summary.keyframe.as_ref().and_then(|keyframe| {
+                let (name, _) = keyframe.values.get(property)?;
+                Some(MotionPanelEdit::SetKeyframeValue {
+                    animation: keyframe.animation,
+                    keyframe: keyframe.keyframe,
+                    property: name.clone(),
+                    value: parse_keyframe_value(name, draft)?,
+                })
+            })
+        }
         PropertyFocus::MotionField(index, MotionField::Id) => {
             Some(MotionPanelEdit::SetId(index, draft.to_owned()))
         }

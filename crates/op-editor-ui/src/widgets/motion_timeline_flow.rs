@@ -36,7 +36,9 @@ fn layout(
 /// Route a press. Returns whether it landed on the panel (and so is
 /// consumed); `additive` (Shift) toggles keyframes in the selection. A
 /// press elsewhere drops the keyframe selection, so Delete goes back to
-/// the canvas. An open screen dropdown closes on any press off its rows.
+/// the canvas, except in the Inspector, which edits the selected
+/// keyframe's values. An open screen dropdown closes on any press off its
+/// rows.
 pub fn press(
     state: &mut EditorState,
     point: Point2D,
@@ -49,7 +51,11 @@ pub fn press(
         .and_then(|(view, layout)| Some((layout.hit(point, &view)?, view, layout)));
     let menu_was_open = std::mem::take(&mut state.editor_ui.motion_timeline.scope_menu_open);
     let Some((hit, view, layout)) = hit else {
-        state.clear_motion_keyframe_selection();
+        let in_inspector = state.property_panel_visible()
+            && property_panel_rect(state, viewport_w, viewport_h).contains(point);
+        if !in_inspector {
+            state.clear_motion_keyframe_selection();
+        }
         return false;
     };
     let pointer_ms = layout.ms_for_x(point.x);

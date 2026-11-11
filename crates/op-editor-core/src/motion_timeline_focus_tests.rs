@@ -60,3 +60,27 @@ fn focusing_an_animation_selects_its_node_and_opens_its_row() {
     assert_eq!(state.editor_ui.motion_row_expanded("a"), Some(0));
     assert!(state.editor_ui.motion_timeline.selection.is_empty());
 }
+
+#[test]
+fn the_section_edits_the_selected_nodes_keyframe_only() {
+    let mut state = state();
+    state.select_motion_lane("a");
+    state.editor_ui.motion_timeline.selection.push(key("b", 0));
+    assert!(state.motion_keyframe_focus().is_none());
+    state.editor_ui.motion_timeline.selection.push(key("a", 1));
+    assert_eq!(state.motion_keyframe_focus(), Some(&key("a", 1)));
+
+    let mut summary = MotionSummary::default();
+    state.fill_motion_summary(&mut summary);
+    let keyframe = summary.keyframe.expect("keyframe mode");
+    assert_eq!((keyframe.keyframe, keyframe.count), (1, 3));
+    assert_eq!(keyframe.time_ms, 200.0);
+    assert_eq!(keyframe.values, [("translateY".to_owned(), json!(4))]);
+    assert!(keyframe.addable.contains(&"opacity"));
+    // The screen's manual ids feed the id dropdown.
+    assert_eq!(summary.manual_ids, ["close", "open"]);
+
+    // A closed timeline leaves keyframe mode.
+    state.editor_ui.motion_timeline.open = false;
+    assert!(state.motion_keyframe_focus().is_none());
+}

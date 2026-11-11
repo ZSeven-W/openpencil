@@ -390,6 +390,7 @@ impl EditorState {
             | PropertyFocus::GeneratorParam(_)
             | PropertyFocus::InteractionParam(..)
             | PropertyFocus::MotionField(..)
+            | PropertyFocus::MotionKeyframeValue(_)
             | PropertyFocus::TransitionDuration => {}
             PropertyFocus::FillOpacity(index) => {
                 // The primary fill (index 0) keeps `set_selected_fill_opacity`

@@ -108,6 +108,7 @@ pub fn collab_gate_action(action: &PropertyPanelAction) -> op_editor_core::Colla
         | A::ToggleStrokeModePopover
         | A::ToggleInteractionMenu(_)
         | A::ToggleMotionRow(_)
+        | A::LeaveMotionKeyframe
         | A::CloseInteractionMenu
         | A::Codegen(_) => G::LocalUi,
     }
