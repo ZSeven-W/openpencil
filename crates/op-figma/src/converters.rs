@@ -772,6 +772,8 @@ fn build_icon_path_node(
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_auto_layout_order;
+#[cfg(test)]
 mod tests_boolean_fallback;
 #[cfg(test)]
 mod tests_instance_scale;
