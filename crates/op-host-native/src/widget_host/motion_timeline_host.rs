@@ -2,7 +2,8 @@
 //! state change are shared (`op_editor_ui::widgets::motion_timeline*`,
 //! `op_editor_core::motion_timeline_*`); paint, press and drag call them
 //! straight from their ladders. What stays here is native-only: writes are
-//! gated on the collaboration policy.
+//! gated on the collaboration policy, and the desktop key router reaches
+//! the M shortcut through a host method.
 
 use super::WidgetHostNative;
 use op_editor_core::{CollabDocumentMutation, CollabUnsupportedFeature};
@@ -27,6 +28,15 @@ impl WidgetHostNative {
             self.mark_dirty();
         }
         consumed
+    }
+
+    /// The timeline shortcut (M), where the panel can show.
+    pub fn apply_toggle_motion_timeline(&mut self) -> bool {
+        let toggled = flow::toggle(&mut self.editor_state);
+        if toggled {
+            self.mark_dirty();
+        }
+        toggled
     }
 
     /// Delete / Backspace on selected timeline keyframes.

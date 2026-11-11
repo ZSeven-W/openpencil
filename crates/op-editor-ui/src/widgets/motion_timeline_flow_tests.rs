@@ -379,3 +379,13 @@ fn presses_in_the_inspector_keep_the_keyframe_being_edited() {
     assert!(!press(&mut state, center(inspector), VW, VH, 0, false));
     assert!(has_keyframe_selection(&state));
 }
+
+#[test]
+fn the_shortcut_toggles_the_panel_only_where_it_can_show() {
+    let mut state = state();
+    assert!(toggle(&mut state));
+    assert!(!state.editor_ui.motion_timeline.open);
+    state.editor_ui.preview.mode = true;
+    assert!(!toggle(&mut state));
+    assert!(!state.editor_ui.motion_timeline.open);
+}

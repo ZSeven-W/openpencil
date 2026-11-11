@@ -147,3 +147,15 @@ fn home_vertical_arrow_keys_reach_the_prompt_caret_and_shift_selection() {
         .highlight_range()
         .is_none());
 }
+
+#[test]
+fn bare_m_toggles_the_motion_timeline_and_h_stays_the_hand() {
+    let mut app = DesktopApp::new(None);
+    app.handle_key_pressed(&Key::Character("m".into()), Some("m"));
+    assert!(app.host.editor_state().editor_ui.motion_timeline.open);
+    app.handle_key_pressed(&Key::Character("h".into()), Some("h"));
+    assert_eq!(app.host.editor_state().tool, op_editor_core::Tool::Hand);
+    assert!(app.host.editor_state().editor_ui.motion_timeline.open);
+    app.handle_key_pressed(&Key::Character("M".into()), Some("M"));
+    assert!(!app.host.editor_state().editor_ui.motion_timeline.open);
+}

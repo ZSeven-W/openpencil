@@ -136,3 +136,12 @@ fn the_timeline_edges_show_resize_cursors() {
         CursorHint::ResizeEw
     );
 }
+
+#[test]
+fn m_toggles_the_timeline() {
+    let mut host = host();
+    assert!(host.apply_toggle_motion_timeline());
+    assert!(!host.editor_state().editor_ui.motion_timeline.open);
+    assert!(host.apply_toggle_motion_timeline());
+    assert!(host.editor_state().editor_ui.motion_timeline.open);
+}

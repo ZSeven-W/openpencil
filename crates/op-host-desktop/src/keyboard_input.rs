@@ -381,6 +381,8 @@ impl DesktopApp {
                     "c" => {
                         self.host.apply_toggle_comment_mode();
                     }
+                    // M — the motion timeline (H / Space stay pan).
+                    "m" => handled = self.host.apply_toggle_motion_timeline(),
                     "[" => {
                         consumed = self.host.apply_reorder(ReorderDirection::Down);
                         handled = false;

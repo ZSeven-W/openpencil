@@ -5,7 +5,8 @@
 //! here and repaint.
 
 use crate::widgets::host_canvas_geometry::{
-    canvas_region, motion_timeline_rect, motion_timeline_shown, property_panel_rect,
+    canvas_region, motion_timeline_available, motion_timeline_rect, motion_timeline_shown,
+    property_panel_rect,
 };
 use crate::widgets::motion_timeline::{MotionTimelineView, TimelineHit, TimelineLayout};
 use crate::Point2D;
@@ -256,6 +257,16 @@ pub fn drag_writes(state: &EditorState) -> bool {
                 MotionTimelineDrag::Playhead | MotionTimelineDrag::Height { .. }
             )
         })
+}
+
+/// The timeline shortcut (M): open or close the panel where it can show.
+/// Returns whether it acted.
+pub fn toggle(state: &mut EditorState) -> bool {
+    if !motion_timeline_available(state) {
+        return false;
+    }
+    state.toggle_motion_timeline();
+    true
 }
 
 /// Whether Delete / Backspace belongs to the timeline: it shows and has
