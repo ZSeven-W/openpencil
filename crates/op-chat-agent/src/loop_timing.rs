@@ -13,6 +13,7 @@
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+use op_orchestrator::timing_log::secs;
 use serde_json::Value;
 
 fn enabled() -> bool {
@@ -154,10 +155,6 @@ fn usage_of(event_data: &str) -> Option<String> {
         .or_else(|| value.get("message").and_then(|m| m.get("usage")))
         .filter(|usage| usage.is_object())?;
     Some(usage.to_string())
-}
-
-fn secs(duration: Duration) -> String {
-    format!("{:.1}s", duration.as_secs_f64())
 }
 
 fn kb(bytes: usize) -> String {

@@ -395,7 +395,8 @@ fn count_nodes(nodes: &[PenNode]) -> usize {
         .sum()
 }
 
-fn secs(duration: Duration) -> String {
+/// `12.3s` — the one duration format every `[TIMING]` line uses.
+pub fn secs(duration: Duration) -> String {
     format!("{:.1}s", duration.as_secs_f64())
 }
 
