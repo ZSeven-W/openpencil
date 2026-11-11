@@ -1,5 +1,5 @@
 //! The motion timeline through the web ladders: its resize grips set the
-//! canvas cursor.
+//! canvas cursor and M toggles it.
 
 use super::WidgetHost;
 use op_editor_core::EditorState;
@@ -57,4 +57,13 @@ fn the_resize_grips_set_the_canvas_cursor() {
         "ew-resize"
     );
     assert_eq!(host.motion_timeline_cursor_css(700.0, 300.0), "");
+}
+
+#[test]
+fn m_toggles_the_timeline() {
+    let mut host = host();
+    assert!(host.apply_tool_shortcut("m"));
+    assert!(!host.editor_state.editor_ui.motion_timeline.open);
+    assert!(host.apply_tool_shortcut("M"));
+    assert!(host.editor_state.editor_ui.motion_timeline.open);
 }
