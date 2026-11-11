@@ -61,7 +61,7 @@ fn a_drag_previews_where_the_release_would_put_the_strip() {
     });
     state.update_motion_timeline_drag(300.0, 0);
     let view = MotionTimelineView::for_editor(&state);
-    let b = &view.rows[2].strip;
+    let b = view.rows[2].strip().unwrap();
     assert_eq!((b.start_ms, b.end_ms), (400.0, Some(800.0)));
     // The clip stretches to show it.
     assert_eq!(view.clip_ms, 800.0);
@@ -75,7 +75,10 @@ fn a_drag_previews_where_the_release_would_put_the_strip() {
         end_ms: 500.0,
     });
     state.update_motion_timeline_drag(900.0, 0);
-    let b = MotionTimelineView::for_editor(&state).rows[2].strip.clone();
+    let b = MotionTimelineView::for_editor(&state).rows[2]
+        .strip()
+        .unwrap()
+        .clone();
     assert_eq!(b.keyframe_ms, [100.0, 900.0]);
 }
 
@@ -114,7 +117,7 @@ fn hits_resolve_controls_keyframes_handles_and_strips() {
     );
     let b = &layout.rows[2];
     assert_eq!(
-        layout.hit(b.keyframes[0], &view),
+        layout.hit(b.keyframes[0].1, &view),
         Some(TimelineHit::Keyframe(TimelineKeyframeRef {
             node_id: "b".into(),
             animation: 0,
@@ -123,8 +126,8 @@ fn hits_resolve_controls_keyframes_handles_and_strips() {
     );
     // Away from the keyframes: the middle of the strip, then its end grip.
     let middle = Point2D::new(
-        (b.keyframes[0].x + b.keyframes[1].x) / 2.0,
-        b.keyframes[0].y,
+        (b.keyframes[0].1.x + b.keyframes[1].1.x) / 2.0,
+        b.keyframes[0].1.y,
     );
     assert_eq!(
         layout.hit(middle, &view),
@@ -135,7 +138,7 @@ fn hits_resolve_controls_keyframes_handles_and_strips() {
     );
     // The grip sits just past the last keyframe's diamond.
     let end = center(b.end_handle);
-    assert!(end.x > b.keyframes[1].x + KEYFRAME_R);
+    assert!(end.x > b.keyframes[1].1.x + KEYFRAME_R);
     assert_eq!(
         layout.hit(end, &view),
         Some(TimelineHit::StripEnd {
@@ -145,7 +148,7 @@ fn hits_resolve_controls_keyframes_handles_and_strips() {
     );
     assert_eq!(
         layout.hit(
-            Point2D::new(PANEL.origin.x + 900.0, b.keyframes[0].y),
+            Point2D::new(PANEL.origin.x + 900.0, b.keyframes[0].1.y),
             &view
         ),
         Some(TimelineHit::Background)

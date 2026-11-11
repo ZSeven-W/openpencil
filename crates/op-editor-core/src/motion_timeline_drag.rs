@@ -82,9 +82,10 @@ impl EditorState {
 
     /// Follow the pointer to `pointer_ms`. The held time moves by the
     /// pointer's travel since the anchor and snaps to another keyframe or
-    /// the playhead within `snap_ms`, else to the grid; a scrub moves the
-    /// playhead to the pointer.
-    pub fn drag_motion_timeline_to(&mut self, pointer_ms: f64, snap_ms: f64, now_ms: u64) {
+    /// the playhead within `snap_ms`, else to the grid; `None` (the
+    /// modifier held) leaves it where the pointer puts it. A scrub moves
+    /// the playhead to the pointer.
+    pub fn drag_motion_timeline_to(&mut self, pointer_ms: f64, snap_ms: Option<f64>, now_ms: u64) {
         let timeline = &self.editor_ui.motion_timeline;
         let Some(drag) = timeline.drag.clone() else {
             return;
@@ -96,18 +97,37 @@ impl EditorState {
             return;
         };
         let held = (anchor.held_ms + pointer_ms - anchor.pointer_ms).max(0.0);
-        let snapped = snap_time(
-            held,
-            &self.motion_snap_targets(&self.held_keys(&drag)),
-            snap_ms,
-        );
+        let snapped = match snap_ms {
+            Some(snap_ms) => snap_time(
+                held,
+                &self.motion_snap_targets(&self.held_keys(&drag)),
+                snap_ms,
+            ),
+            None => held,
+        };
         let value = match drag {
             MotionTimelineDrag::StripEnd { .. } | MotionTimelineDrag::Playhead => snapped,
             MotionTimelineDrag::Strip { .. } | MotionTimelineDrag::Keyframes { .. } => {
                 snapped - anchor.held_ms
             }
+            MotionTimelineDrag::Height { .. } => return,
         };
         self.update_motion_timeline_drag(value, now_ms);
+    }
+
+    /// Follow a top-edge resize to `pointer_y`: dragging up grows the
+    /// panel, never past `max_height` (the share of the canvas area it
+    /// may take) nor out of the design's range.
+    pub fn resize_motion_timeline_to(&mut self, pointer_y: f32, max_height: f32) {
+        let timeline = &mut self.editor_ui.motion_timeline;
+        let Some(MotionTimelineDrag::Height {
+            pointer_y: from,
+            height,
+        }) = timeline.drag
+        else {
+            return;
+        };
+        timeline.set_height((height + from - pointer_y).min(max_height));
     }
 
     /// Keyframes a drag carries, left out of its own snap targets: the
@@ -115,7 +135,7 @@ impl EditorState {
     fn held_keys(&self, drag: &MotionTimelineDrag) -> Vec<TimelineKeyframeRef> {
         let (node_id, animation) = match drag {
             MotionTimelineDrag::Keyframes { keys, .. } => return keys.clone(),
-            MotionTimelineDrag::Playhead => return Vec::new(),
+            MotionTimelineDrag::Playhead | MotionTimelineDrag::Height { .. } => return Vec::new(),
             MotionTimelineDrag::Strip {
                 node_id, animation, ..
             }
@@ -149,13 +169,23 @@ impl EditorState {
             | MotionTimelineDrag::Keyframes { delta_ms, .. } => *delta_ms = value_ms,
             MotionTimelineDrag::StripEnd { end_ms, .. } => *end_ms = value_ms,
             MotionTimelineDrag::Playhead => self.scrub_motion_playhead(value_ms, now_ms),
+            MotionTimelineDrag::Height { .. } => {}
         }
     }
 
-    /// Drop the drag without writing anything.
-    pub fn cancel_motion_timeline_drag(&mut self) {
-        self.editor_ui.motion_timeline.drag = None;
-        self.editor_ui.motion_timeline.drag_anchor = None;
+    /// Drop the drag without writing anything; a resize goes back to the
+    /// height it started from. Returns whether a drag was in flight.
+    pub fn cancel_motion_timeline_drag(&mut self) -> bool {
+        let timeline = &mut self.editor_ui.motion_timeline;
+        timeline.drag_anchor = None;
+        match timeline.drag.take() {
+            Some(MotionTimelineDrag::Height { height, .. }) => {
+                timeline.set_height(height);
+                true
+            }
+            Some(_) => true,
+            None => false,
+        }
     }
 
     /// Release the drag: write its draft as one undo step. Returns whether
@@ -197,7 +227,7 @@ impl EditorState {
                     }
                 }
             }
-            MotionTimelineDrag::Playhead => return false,
+            MotionTimelineDrag::Playhead | MotionTimelineDrag::Height { .. } => return false,
         }
         self.apply_motion_edits(commands).unwrap_or(false)
     }

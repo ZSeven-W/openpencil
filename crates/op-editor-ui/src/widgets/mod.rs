@@ -426,6 +426,7 @@ pub mod motion_timeline;
 pub mod motion_timeline_flow;
 pub mod motion_timeline_layout;
 pub mod motion_timeline_paint;
+pub(crate) mod motion_timeline_rows;
 pub mod property_panel_color_variables;
 #[cfg(test)]
 mod property_panel_color_variables_tests;

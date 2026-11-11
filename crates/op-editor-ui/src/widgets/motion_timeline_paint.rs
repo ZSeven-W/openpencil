@@ -2,8 +2,8 @@
 
 use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
-use crate::widgets::motion_timeline::MotionTimelineView;
-use crate::widgets::motion_timeline_layout::{TimelineLayout, KEYFRAME_R};
+use crate::widgets::motion_timeline::{MotionTimelineView, TimelineLane, TimelineRow};
+use crate::widgets::motion_timeline_layout::{RowLayout, TimelineLayout, KEYFRAME_R, ROW_H};
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, TextLayout};
 
@@ -41,6 +41,36 @@ pub fn paint_motion_timeline(
     paint_lanes(cx, theme, &layout, view);
     paint_playhead(cx, theme, &layout, view);
     cx.backend.restore();
+    // The screen dropdown rises over the canvas, outside the panel's clip.
+    paint_scope_menu(cx, theme, &layout, view);
+}
+
+fn paint_scope_menu(
+    cx: &mut PaintCx<'_>,
+    theme: &Theme,
+    layout: &TimelineLayout,
+    view: &MotionTimelineView,
+) {
+    let (Some((frame, rows)), Some(screens)) = (&layout.scope_menu, &view.scope_menu) else {
+        return;
+    };
+    cx.backend.fill_round_rect(*frame, 8.0, theme.popover);
+    cx.backend.stroke_round_rect(*frame, 8.0, theme.border, 1.0);
+    for ((id, rect), screen) in rows.iter().zip(screens) {
+        let current = view.scope_id.as_deref() == Some(id.as_str());
+        if current {
+            cx.backend.fill_round_rect(*rect, 6.0, theme.muted);
+        }
+        let color = if screen.animates {
+            theme.foreground
+        } else {
+            theme.muted_foreground
+        };
+        if current {
+            icon_at(cx, Icon::Check, rect.origin.x + 6.0, *rect, color);
+        }
+        text(cx, &screen.label, rect.origin.x + 26.0, *rect, 12.0, color);
+    }
 }
 
 fn paint_header(
@@ -50,13 +80,27 @@ fn paint_header(
     view: &MotionTimelineView,
 ) {
     if let Some(scope) = &view.scope_label {
+        // The name, then the dropdown chevron at the column's end.
+        let chevron_x = layout.scope.origin.x + layout.scope.size.x - 24.0;
+        let name = crate::util::ellipsize_to_width(
+            scope,
+            chevron_x - layout.scope.origin.x - 16.0,
+            |value| cx.backend.measure_text(value, 12.0),
+        );
         text(
             cx,
-            scope,
+            &name,
             layout.scope.origin.x + 12.0,
             layout.scope,
             12.0,
             theme.foreground,
+        );
+        icon_at(
+            cx,
+            Icon::ChevronDown,
+            chevron_x,
+            layout.scope,
+            theme.muted_foreground,
         );
     }
     for (tab, rect) in &layout.tabs {
@@ -166,20 +210,16 @@ fn paint_lanes(
     view: &MotionTimelineView,
 ) {
     if let Some(message) = view.empty_message() {
+        // Below any row (the selected node's empty lane), not over it.
+        let top = layout.lanes.origin.y + layout.rows.len() as f32 * ROW_H;
         text(
             cx,
             message,
             layout.lanes.origin.x + 16.0,
-            Rect::xywh(
-                layout.lanes.origin.x,
-                layout.lanes.origin.y,
-                layout.lanes.size.x,
-                32.0,
-            ),
+            Rect::xywh(layout.lanes.origin.x, top, layout.lanes.size.x, 32.0),
             12.0,
             theme.muted_foreground,
         );
-        return;
     }
     let run = Color {
         a: 0.18,
@@ -199,22 +239,30 @@ fn paint_lanes(
                 },
             );
         }
-        text(
-            cx,
-            &row.label,
-            row_layout.label.origin.x + 12.0,
-            row_layout.label,
-            12.0,
-            theme.foreground,
-        );
-        cx.backend.fill_round_rect(row_layout.strip, 4.0, run);
-        cx.backend
-            .fill_round_rect(row_layout.iteration, 4.0, iteration);
-        for (keyframe, center) in row_layout.keyframes.iter().enumerate() {
+        paint_label(cx, theme, row, row_layout);
+        let Some(strip) = row.strip() else {
+            continue;
+        };
+        match &row.lane {
+            TimelineLane::Strip { .. } => {
+                cx.backend.fill_round_rect(row_layout.strip, 4.0, run);
+                cx.backend
+                    .fill_round_rect(row_layout.iteration, 4.0, iteration);
+            }
+            // A sub-track joins its first and last keyframe with a hairline.
+            _ => {
+                if let (Some((_, first)), Some((_, last))) =
+                    (row_layout.keyframes.first(), row_layout.keyframes.last())
+                {
+                    line(cx, iteration, *first, *last);
+                }
+            }
+        }
+        for (keyframe, center) in &row_layout.keyframes {
             let key = op_editor_core::editor_ui_state::TimelineKeyframeRef {
-                node_id: row.strip.node_id.clone(),
-                animation: row.strip.animation,
-                keyframe,
+                node_id: strip.node_id.clone(),
+                animation: strip.animation,
+                keyframe: *keyframe,
             };
             let color = if view.is_selected(&key) {
                 theme.primary
@@ -224,6 +272,28 @@ fn paint_lanes(
             diamond(cx, *center, KEYFRAME_R, color);
         }
     }
+}
+
+/// A row's label after its indent; a lane with sub-tracks leads with its
+/// chevron, a sub-track reads quieter than its lane.
+fn paint_label(cx: &mut PaintCx<'_>, theme: &Theme, row: &TimelineRow, layout: &RowLayout) {
+    if let (Some(chevron), TimelineLane::Strip { expanded, .. }) = (layout.chevron, &row.lane) {
+        let glyph = if *expanded {
+            Icon::ChevronDown
+        } else {
+            Icon::ChevronRight
+        };
+        icon_at(cx, glyph, chevron.origin.x, chevron, theme.muted_foreground);
+    }
+    let color = match row.lane {
+        TimelineLane::Strip { .. } => theme.foreground,
+        _ => theme.muted_foreground,
+    };
+    let right = layout.label.origin.x + layout.label.size.x - 8.0;
+    let label = crate::util::ellipsize_to_width(&row.label, right - layout.label_x, |value| {
+        cx.backend.measure_text(value, 12.0)
+    });
+    text(cx, &label, layout.label_x, layout.label, 12.0, color);
 }
 
 fn paint_playhead(
@@ -277,6 +347,18 @@ fn icon(cx: &mut PaintCx<'_>, icon: Icon, rect: Rect, color: Color) {
             rect.origin.y + (rect.size.y - 14.0) / 2.0,
         ),
         14.0,
+        color,
+        1.4,
+    );
+}
+
+/// A 12 px glyph at `x`, vertically centred in `row`.
+fn icon_at(cx: &mut PaintCx<'_>, icon: Icon, x: f32, row: Rect, color: Color) {
+    draw_icon(
+        cx.backend,
+        icon,
+        Point2D::new(x, row.origin.y + (row.size.y - 12.0) / 2.0),
+        12.0,
         color,
         1.4,
     );

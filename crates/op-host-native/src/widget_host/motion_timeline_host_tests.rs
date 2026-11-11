@@ -61,8 +61,8 @@ fn a_strip_drag_moves_the_delay_in_one_undo_step() {
     let mut host = host();
     let row = layout(&host).rows[0].clone();
     let grab = op_editor_ui::Point2D::new(
-        (row.keyframes[0].x + row.keyframes[1].x) / 2.0,
-        row.keyframes[0].y,
+        (row.keyframes[0].1.x + row.keyframes[1].1.x) / 2.0,
+        row.keyframes[0].1.y,
     );
     assert!(host.apply_press(grab.x, grab.y, VW, VH));
     let zoom = host.editor_state().editor_ui.motion_timeline.zoom;
@@ -84,7 +84,7 @@ fn delete_takes_selected_keyframes_before_the_canvas_selection() {
         .apply(op_editor_core::EditorCommand::SetSelection {
             node_id: op_editor_core::NodeId::new("card"),
         });
-    let middle = layout(&host).rows[0].keyframes[1];
+    let middle = layout(&host).rows[0].keyframes[1].1;
     host.apply_press(middle.x, middle.y, VW, VH);
     host.apply_release_with_viewport(VW, VH);
     assert!(host.apply_delete());

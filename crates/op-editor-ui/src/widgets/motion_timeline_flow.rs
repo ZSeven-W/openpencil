@@ -4,12 +4,15 @@
 //! release writes the draft as one undo step. Hosts only route events
 //! here and repaint.
 
-use crate::widgets::host_canvas_geometry::{motion_timeline_rect, motion_timeline_shown};
+use crate::widgets::host_canvas_geometry::{
+    canvas_region, motion_timeline_rect, motion_timeline_shown,
+};
 use crate::widgets::motion_timeline::{MotionTimelineView, TimelineHit, TimelineLayout};
 use crate::Point2D;
 use op_editor_core::editor_ui_state::{
     MotionTimelineDrag, MotionTimelineTab, TimelineDragAnchor, TimelineKeyframeRef,
 };
+use op_editor_core::motion_timeline_projection::TimelineStrip;
 use op_editor_core::EditorState;
 
 /// How close, in pixels, a dragged time must come to a keyframe or the
@@ -33,7 +36,7 @@ fn layout(
 /// Route a press. Returns whether it landed on the panel (and so is
 /// consumed); `additive` (Shift) toggles keyframes in the selection. A
 /// press elsewhere drops the keyframe selection, so Delete goes back to
-/// the canvas.
+/// the canvas. An open screen dropdown closes on any press off its rows.
 pub fn press(
     state: &mut EditorState,
     point: Point2D,
@@ -44,12 +47,30 @@ pub fn press(
 ) -> bool {
     let hit = layout(state, viewport_w, viewport_h)
         .and_then(|(view, layout)| Some((layout.hit(point, &view)?, view, layout)));
+    let menu_was_open = std::mem::take(&mut state.editor_ui.motion_timeline.scope_menu_open);
     let Some((hit, view, layout)) = hit else {
         state.clear_motion_keyframe_selection();
         return false;
     };
     let pointer_ms = layout.ms_for_x(point.x);
     match hit {
+        TimelineHit::ResizeEdge => {
+            state.begin_motion_timeline_drag(MotionTimelineDrag::Height {
+                pointer_y: point.y,
+                height: layout.rect.size.y,
+            });
+        }
+        TimelineHit::Scope => {
+            state.editor_ui.motion_timeline.scope_menu_open = !menu_was_open;
+        }
+        TimelineHit::ScopeItem(id) => state.pick_motion_timeline_scope(&id),
+        TimelineHit::Expand { node_id, animation } => {
+            state
+                .editor_ui
+                .motion_timeline
+                .toggle_expanded(&node_id, animation);
+        }
+        TimelineHit::Label(node_id) => state.select_motion_lane(&node_id),
         TimelineHit::Tab(MotionTimelineTab::Manual) => {
             let next = next_manual_id(&view);
             state.set_motion_timeline_tab(MotionTimelineTab::Manual, next);
@@ -69,6 +90,7 @@ pub fn press(
         }
         TimelineHit::Keyframe(key) => press_keyframe(state, &view, key, pointer_ms, additive),
         TimelineHit::StripEnd { node_id, animation } => {
+            state.select_motion_lane(&node_id);
             if let Some(strip) = strip(&view, &node_id, animation) {
                 let end_ms = strip.start_ms + strip.iteration_ms;
                 state.begin_motion_timeline_drag_at(
@@ -85,6 +107,7 @@ pub fn press(
             }
         }
         TimelineHit::Strip { node_id, animation } => {
+            state.select_motion_lane(&node_id);
             if let Some(strip) = strip(&view, &node_id, animation) {
                 let held_ms = strip.start_ms;
                 state.begin_motion_timeline_drag_at(
@@ -123,6 +146,8 @@ fn press_keyframe(
     if additive || !view.is_selected(&key) {
         state.select_motion_keyframe(key.clone(), additive);
     }
+    // The Inspector shows the keyframe's node (and so its values).
+    state.select_motion_lane(&key.node_id);
     let keys = state.editor_ui.motion_timeline.selection.clone();
     if !keys.contains(&key) {
         return;
@@ -146,23 +171,33 @@ fn press_keyframe(
 
 /// Follow a pointer move while a timeline drag is in flight. Returns
 /// whether a drag consumed it (pointer capture: it holds even when the
-/// pointer leaves the panel).
+/// pointer leaves the panel). `snap` is off while the modifier (Alt) is
+/// held: the dragged time then follows the pointer exactly.
 pub fn drag(
     state: &mut EditorState,
     point: Point2D,
     viewport_w: f32,
     viewport_h: f32,
     now_ms: u64,
+    snap: bool,
 ) -> bool {
-    if state.editor_ui.motion_timeline.drag.is_none() {
+    let Some(drag) = &state.editor_ui.motion_timeline.drag else {
         return false;
-    }
+    };
+    let resizing = matches!(drag, MotionTimelineDrag::Height { .. });
     let Some((_, layout)) = layout(state, viewport_w, viewport_h) else {
         // The panel went away under the drag.
         state.cancel_motion_timeline_drag();
         return true;
     };
-    let snap_ms = f64::from(SNAP_PX) * layout.ms_per_px();
+    if resizing {
+        // The panel may take 60% of the canvas area it docks in.
+        let (_, _, _, canvas_h) = canvas_region(state, viewport_w, viewport_h);
+        let max_height = (canvas_h + layout.rect.size.y) * 0.6;
+        state.resize_motion_timeline_to(point.y, max_height);
+        return true;
+    }
+    let snap_ms = snap.then(|| f64::from(SNAP_PX) * layout.ms_per_px());
     state.drag_motion_timeline_to(layout.ms_for_x(point.x), snap_ms, now_ms);
     true
 }
@@ -178,14 +213,19 @@ pub fn release(state: &mut EditorState) -> bool {
 }
 
 /// Whether releasing the in-flight drag writes to the document (a scrub
-/// does not), so hosts can gate it.
+/// or a resize does not), so hosts can gate it.
 pub fn drag_writes(state: &EditorState) -> bool {
     state
         .editor_ui
         .motion_timeline
         .drag
         .as_ref()
-        .is_some_and(|drag| *drag != MotionTimelineDrag::Playhead)
+        .is_some_and(|drag| {
+            !matches!(
+                drag,
+                MotionTimelineDrag::Playhead | MotionTimelineDrag::Height { .. }
+            )
+        })
 }
 
 /// Whether Delete / Backspace belongs to the timeline: it shows and has
@@ -245,10 +285,9 @@ fn strip<'a>(
     view: &'a MotionTimelineView,
     node_id: &str,
     animation: usize,
-) -> Option<&'a op_editor_core::motion_timeline_projection::TimelineStrip> {
-    view.rows
+) -> Option<&'a TimelineStrip> {
+    view.strips
         .iter()
-        .map(|row| &row.strip)
         .find(|strip| strip.node_id == node_id && strip.animation == animation)
 }
 

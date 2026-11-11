@@ -48,6 +48,9 @@ pub enum MotionTimelineDrag {
     },
     /// Scrubbing the playhead.
     Playhead,
+    /// Resizing the panel from its top edge: the pointer's y and the
+    /// panel height when the drag started.
+    Height { pointer_y: f32, height: f32 },
 }
 
 /// Where a drag started: the pointer's time and the time of what it
@@ -67,6 +70,13 @@ pub struct MotionTimelineState {
     /// Node whose subtree the timeline projects; `None` follows the active
     /// screen.
     pub scope_root: Option<String>,
+    /// The selection anchor when `scope_root` was picked: selecting a node
+    /// in another screen afterwards follows the selection again.
+    pub scope_anchor: Option<String>,
+    /// The header's screen dropdown is open.
+    pub scope_menu_open: bool,
+    /// Lanes (node id, animation index) showing their property sub-tracks.
+    pub expanded: Vec<(String, usize)>,
     pub tab: MotionTimelineTab,
     /// The manual animation id the manual tab shows.
     pub manual_id: Option<String>,
@@ -85,8 +95,9 @@ pub struct MotionTimelineState {
 
 impl MotionTimelineState {
     pub const DEFAULT_HEIGHT: f32 = 220.0;
-    pub const MIN_HEIGHT: f32 = 120.0;
-    pub const MAX_HEIGHT: f32 = 480.0;
+    /// The design's drag range (§5.3: 160–360 px).
+    pub const MIN_HEIGHT: f32 = 160.0;
+    pub const MAX_HEIGHT: f32 = 360.0;
     /// One second spans 250 px by default.
     pub const DEFAULT_ZOOM: f32 = 0.25;
     pub const MIN_ZOOM: f32 = 0.02;
@@ -104,6 +115,23 @@ impl MotionTimelineState {
 
     pub fn set_height(&mut self, height: f32) {
         self.height = height.clamp(Self::MIN_HEIGHT, Self::MAX_HEIGHT);
+    }
+
+    /// Show or hide the property sub-tracks of one lane.
+    pub fn toggle_expanded(&mut self, node_id: &str, animation: usize) {
+        let lane = (node_id.to_owned(), animation);
+        match self.expanded.iter().position(|open| *open == lane) {
+            Some(at) => {
+                self.expanded.remove(at);
+            }
+            None => self.expanded.push(lane),
+        }
+    }
+
+    pub fn is_expanded(&self, node_id: &str, animation: usize) -> bool {
+        self.expanded
+            .iter()
+            .any(|(id, index)| id == node_id && *index == animation)
     }
 
     pub fn set_zoom(&mut self, zoom: f32) {
@@ -129,6 +157,9 @@ impl Default for MotionTimelineState {
             open: false,
             height: Self::DEFAULT_HEIGHT,
             scope_root: None,
+            scope_anchor: None,
+            scope_menu_open: false,
+            expanded: Vec::new(),
             tab: MotionTimelineTab::default(),
             manual_id: None,
             playhead_ms: 0.0,
@@ -179,11 +210,23 @@ mod tests {
     }
 
     #[test]
+    fn lanes_expand_and_collapse() {
+        let mut state = MotionTimelineState::default();
+        state.toggle_expanded("a", 1);
+        assert!(state.is_expanded("a", 1) && !state.is_expanded("a", 0));
+        state.toggle_expanded("a", 1);
+        assert!(!state.is_expanded("a", 1));
+    }
+
+    #[test]
     fn height_and_zoom_stay_in_range() {
         let mut state = MotionTimelineState::default();
         state.set_height(10.0);
         state.set_zoom(99.0);
         assert_eq!(state.height, MotionTimelineState::MIN_HEIGHT);
         assert_eq!(state.zoom, MotionTimelineState::MAX_ZOOM);
+        state.set_height(900.0);
+        assert_eq!(state.height, 360.0);
+        assert!((160.0..=360.0).contains(&MotionTimelineState::DEFAULT_HEIGHT));
     }
 }

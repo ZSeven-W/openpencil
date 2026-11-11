@@ -655,9 +655,11 @@ impl WidgetHostNative {
         if let Some(consumed) = self.cursor_move_panel_resize_tier(x) {
             return consumed;
         }
-        // Tier 3b — a motion timeline drag holds the pointer until release.
+        // Tier 3b — a motion timeline drag holds the pointer until release;
+        // Alt turns snapping off.
         let (vw, vh) = (self.last_viewport_w, self.last_viewport_h);
-        if motion_timeline_flow::drag(&mut self.editor_state, point, vw, vh, self.now_ms) {
+        let snap = !self.alt_held;
+        if motion_timeline_flow::drag(&mut self.editor_state, point, vw, vh, self.now_ms, snap) {
             self.mark_dirty();
             return true;
         }

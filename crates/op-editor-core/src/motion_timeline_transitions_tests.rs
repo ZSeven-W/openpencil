@@ -50,8 +50,8 @@ fn the_scope_follows_the_selection_then_the_first_animating_screen() {
         state.motion_timeline_scope().map(PenNodeExt::id_str),
         Some("still")
     );
-    // An explicit scope wins; a stale one falls back.
-    state.editor_ui.motion_timeline.scope_root = Some("home".into());
+    // A picked scope wins; a stale one falls back.
+    state.pick_motion_timeline_scope("home");
     assert_eq!(
         state.motion_timeline_scope().map(PenNodeExt::id_str),
         Some("home")
@@ -61,6 +61,47 @@ fn the_scope_follows_the_selection_then_the_first_animating_screen() {
         state.motion_timeline_scope().map(PenNodeExt::id_str),
         Some("still")
     );
+}
+
+#[test]
+fn a_picked_screen_holds_until_the_selection_moves_to_another_screen() {
+    let mut state = state();
+    state.pick_motion_timeline_scope("still");
+    let scope = |state: &EditorState| {
+        state
+            .motion_timeline_scope()
+            .map(|node| node.id_str().to_owned())
+    };
+    // Nothing selected: the pick wins over the first animating screen.
+    assert_eq!(scope(&state).as_deref(), Some("still"));
+    // Selecting inside the picked screen keeps it...
+    state.apply(EditorCommand::SetSelection {
+        node_id: NodeId::new("plain"),
+    });
+    assert_eq!(scope(&state).as_deref(), Some("still"));
+    // ...selecting in another screen follows the selection again.
+    state.apply(EditorCommand::SetSelection {
+        node_id: NodeId::new("a"),
+    });
+    assert_eq!(scope(&state).as_deref(), Some("home"));
+}
+
+#[test]
+fn closing_the_panel_drops_the_keyframe_selection_and_menu() {
+    let mut state = state();
+    state.toggle_motion_timeline();
+    let timeline = &mut state.editor_ui.motion_timeline;
+    timeline.scope_menu_open = true;
+    timeline
+        .selection
+        .push(crate::editor_ui_state::TimelineKeyframeRef {
+            node_id: "a".into(),
+            animation: 0,
+            keyframe: 0,
+        });
+    state.toggle_motion_timeline();
+    let timeline = &state.editor_ui.motion_timeline;
+    assert!(timeline.selection.is_empty() && !timeline.scope_menu_open);
 }
 
 #[test]

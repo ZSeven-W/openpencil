@@ -14,26 +14,38 @@ use jian_ops_schema::node::PenNode;
 pub const MOTION_TIMELINE_FRAME_MS: u64 = 16;
 
 impl EditorState {
-    /// The root the timeline projects: the panel's explicit scope, else the
-    /// top-level node holding the selection, else the first top-level node
-    /// on the page that animates.
+    /// The root the timeline projects: the screen picked in the header
+    /// (until the selection moves to another screen), else the top-level
+    /// node holding the selection, else the first top-level node on the
+    /// page that animates.
     pub fn motion_timeline_scope(&self) -> Option<&PenNode> {
         let children = self.active_children();
-        if let Some(root) = self.editor_ui.motion_timeline.scope_root.as_deref() {
+        let anchor = &self.selection.anchor;
+        let timeline = &self.editor_ui.motion_timeline;
+        if let Some(root) = timeline.scope_root.as_deref() {
             if let Some(node) = find_node(children, &NodeId::new(root)) {
-                return Some(node);
+                let held = !anchor.is_real()
+                    || timeline.scope_anchor.as_deref() == Some(anchor.as_str())
+                    || node.id_str() == anchor.as_str()
+                    || find_node(std::slice::from_ref(node), anchor).is_some();
+                if held {
+                    return Some(node);
+                }
             }
         }
-        let anchor = &self.selection.anchor;
         if anchor.is_real() {
-            if let Some(root) = children.iter().find(|root| {
-                root.id_str() == anchor.as_str()
-                    || find_node(std::slice::from_ref(*root), anchor).is_some()
-            }) {
+            if let Some(root) = self.motion_screen_of(anchor) {
                 return Some(root);
             }
         }
         children.iter().find(|root| animates(root))
+    }
+
+    /// The top-level node (screen) holding `id`, itself included.
+    pub fn motion_screen_of(&self, id: &NodeId) -> Option<&PenNode> {
+        self.active_children().iter().find(|root| {
+            root.id_str() == id.as_str() || find_node(std::slice::from_ref(*root), id).is_some()
+        })
     }
 
     /// The current tab's projection of the scope, empty when there is
@@ -56,6 +68,9 @@ impl EditorState {
             let timeline = &mut self.editor_ui.motion_timeline;
             stop(timeline);
             timeline.drag = None;
+            timeline.scope_menu_open = false;
+            // Nothing stays picked on a closed panel.
+            timeline.selection.clear();
             return;
         }
         if self.motion_timeline_projection().strips.is_empty() {
@@ -65,7 +80,7 @@ impl EditorState {
         }
     }
 
-    fn first_motion_timeline_tab(&self) -> Option<(MotionTimelineTab, Option<String>)> {
+    pub(crate) fn first_motion_timeline_tab(&self) -> Option<(MotionTimelineTab, Option<String>)> {
         let root = self.motion_timeline_scope()?;
         [
             (MotionTimelineTab::Mount, ClipTrigger::Mount),
@@ -158,7 +173,7 @@ fn stop(timeline: &mut MotionTimelineState) {
     timeline.play_clock = None;
 }
 
-fn animates(node: &PenNode) -> bool {
+pub(crate) fn animates(node: &PenNode) -> bool {
     node.motion_declarations()
         .1
         .is_some_and(|animations| !animations.is_empty())

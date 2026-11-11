@@ -414,6 +414,15 @@ pub fn close_preview_owned_overlays(state: &mut EditorState, now_ms: u64) {
     state.editor_ui.close_preview_owned_overlays();
 }
 
+/// Cancel an in-flight motion timeline drag (nothing is written; a
+/// resize snaps back), else close its screen dropdown.
+pub fn escape_motion_timeline(state: &mut EditorState) -> bool {
+    if state.cancel_motion_timeline_drag() {
+        return true;
+    }
+    std::mem::take(&mut state.editor_ui.motion_timeline.scope_menu_open)
+}
+
 /// Discard the focused property-panel draft.
 pub fn escape_property_focus(state: &mut EditorState) -> bool {
     if state.ui.property_focus.take().is_none() {

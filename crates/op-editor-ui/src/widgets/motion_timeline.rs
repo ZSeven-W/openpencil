@@ -9,12 +9,13 @@
 //! Every state change goes through `op_editor_core`'s shared timeline
 //! transitions, so the hosts only add input plumbing.
 
+use crate::widgets::motion_timeline_rows;
 use crate::widgets::property_panel_interactions::tr;
 use op_editor_core::editor_ui_state::{MotionTimelineDrag, MotionTimelineTab, TimelineKeyframeRef};
 use op_editor_core::motion_timeline_projection::{manual_ids, TimelineStrip};
+use op_editor_core::motion_timeline_scope::{motion_node_label, MotionScreen};
 use op_editor_core::pen_node_ext::PenNodeExt;
-use op_editor_core::walkers::find_node;
-use op_editor_core::{EditorState, Locale, NodeId};
+use op_editor_core::{EditorState, Locale};
 
 pub use crate::widgets::motion_timeline_layout::{TimelineHit, TimelineLayout};
 pub use crate::widgets::motion_timeline_paint::paint_motion_timeline;
@@ -41,11 +42,54 @@ pub fn paint(
     }
 }
 
-/// One lane: its label and its (drag-previewed) strip.
+/// What a lane shows.
+#[derive(Debug, Clone, PartialEq)]
+pub enum TimelineLane {
+    /// One animation, drag-previewed; `expanded` shows its property
+    /// sub-tracks below it.
+    Strip {
+        strip: TimelineStrip,
+        expanded: bool,
+        /// It animates at least one property, so it can expand.
+        expandable: bool,
+    },
+    /// One property of an expanded animation: diamonds only at the
+    /// keyframes that hold it.
+    Property {
+        strip: TimelineStrip,
+        keyframes: Vec<usize>,
+    },
+    /// The selected node, which has no motion on this tab yet.
+    Empty { node_id: String },
+}
+
+/// One row: its label, its depth in the scope's tree, and its lane.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TimelineRow {
     pub label: String,
-    pub strip: TimelineStrip,
+    /// Tree depth below the scope root, for the label indent.
+    pub depth: usize,
+    pub lane: TimelineLane,
+}
+
+impl TimelineRow {
+    /// The animation the row belongs to, if any.
+    pub fn strip(&self) -> Option<&TimelineStrip> {
+        match &self.lane {
+            TimelineLane::Strip { strip, .. } | TimelineLane::Property { strip, .. } => Some(strip),
+            TimelineLane::Empty { .. } => None,
+        }
+    }
+
+    /// The node the row belongs to.
+    pub fn node_id(&self) -> &str {
+        match &self.lane {
+            TimelineLane::Strip { strip, .. } | TimelineLane::Property { strip, .. } => {
+                &strip.node_id
+            }
+            TimelineLane::Empty { node_id } => node_id,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -53,6 +97,11 @@ pub struct MotionTimelineView {
     pub locale: Locale,
     /// Name of the projected root.
     pub scope_label: Option<String>,
+    pub scope_id: Option<String>,
+    /// The screens the header dropdown lists, when it is open.
+    pub scope_menu: Option<Vec<MotionScreen>>,
+    /// Every strip of the tab, drag-previewed, in document order.
+    pub strips: Vec<TimelineStrip>,
     pub rows: Vec<TimelineRow>,
     /// The clip's length, stretched to cover a strip being dragged past it.
     pub clip_ms: f64,
@@ -80,16 +129,17 @@ impl MotionTimelineView {
             .iter()
             .filter_map(|strip| strip.end_ms)
             .fold(projection.clip_ms, f64::max);
-        let rows = strips
-            .iter()
-            .map(|strip| TimelineRow {
-                label: row_label(state, &strips, strip),
-                strip: strip.clone(),
-            })
-            .collect();
+        let rows = scope
+            .map(|root| motion_timeline_rows::rows(state, root, &strips))
+            .unwrap_or_default();
         Self {
             locale: state.editor_ui.locale,
-            scope_label: scope.map(node_label),
+            scope_label: scope.map(motion_node_label),
+            scope_id: scope.map(|root| root.id_str().to_owned()),
+            scope_menu: timeline
+                .scope_menu_open
+                .then(|| state.motion_timeline_screens()),
+            strips,
             rows,
             clip_ms,
             playhead_ms: timeline.playhead_ms,
@@ -129,7 +179,7 @@ impl MotionTimelineView {
     /// Shown while the playhead is past zero: the canvas shows the frame
     /// under it, but canvas edits still change the static layout.
     pub fn static_hint(&self) -> Option<&'static str> {
-        (self.playhead_ms > 0.0 && !self.rows.is_empty()).then(|| {
+        (self.playhead_ms > 0.0 && !self.strips.is_empty()).then(|| {
             tr(
                 self.locale,
                 ("motion.timeline.staticHint", "Editing the static layout"),
@@ -139,7 +189,7 @@ impl MotionTimelineView {
 
     /// Why the lanes are empty, if they are.
     pub fn empty_message(&self) -> Option<&'static str> {
-        if !self.rows.is_empty() {
+        if !self.strips.is_empty() {
             return None;
         }
         Some(
@@ -155,31 +205,6 @@ impl MotionTimelineView {
                 )
             },
         )
-    }
-}
-
-fn node_label(node: &jian_ops_schema::node::PenNode) -> String {
-    node.base()
-        .name
-        .clone()
-        .filter(|name| !name.trim().is_empty())
-        .unwrap_or_else(|| node.id_str().to_owned())
-}
-
-/// The node's name, with the animation's number when the node has more
-/// than one strip on this tab.
-fn row_label(state: &EditorState, strips: &[TimelineStrip], strip: &TimelineStrip) -> String {
-    let name = find_node(state.active_children(), &NodeId::new(strip.node_id.clone()))
-        .map(node_label)
-        .unwrap_or_else(|| strip.node_id.clone());
-    let siblings = strips
-        .iter()
-        .filter(|other| other.node_id == strip.node_id)
-        .count();
-    if siblings > 1 {
-        format!("{name} · {}", strip.animation + 1)
-    } else {
-        name
     }
 }
 
@@ -227,7 +252,7 @@ fn preview_drag(strips: &mut [TimelineStrip], drag: &MotionTimelineDrag) {
                 }
             }
         }
-        MotionTimelineDrag::Playhead => {}
+        MotionTimelineDrag::Playhead | MotionTimelineDrag::Height { .. } => {}
     }
 }
 

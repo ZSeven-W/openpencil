@@ -168,10 +168,10 @@ fn a_followed_drag_moves_by_the_pointer_travel_and_snaps() {
         anchor(100.0),
     );
     // 33 ms of travel lands the start on the grid at 130 ms...
-    state.drag_motion_timeline_to(283.0, 8.0, 0);
+    state.drag_motion_timeline_to(283.0, Some(8.0), 0);
     assert_eq!(drag_delta(&state), Some(30.0));
     // ...and 96 ms puts it 4 ms from a's 200 ms keyframe, which wins.
-    state.drag_motion_timeline_to(346.0, 8.0, 0);
+    state.drag_motion_timeline_to(346.0, Some(8.0), 0);
     assert_eq!(drag_delta(&state), Some(100.0));
     assert!(state.finish_motion_timeline_drag());
     assert_eq!(animation(&state, "b", 0).unwrap().delay_ms, 200);
@@ -186,7 +186,7 @@ fn a_followed_drag_moves_by_the_pointer_travel_and_snaps() {
         },
         anchor(600.0),
     );
-    state.drag_motion_timeline_to(452.0, 8.0, 0);
+    state.drag_motion_timeline_to(452.0, Some(8.0), 0);
     assert_eq!(
         state.editor_ui.motion_timeline.drag,
         Some(MotionTimelineDrag::StripEnd {
@@ -202,4 +202,44 @@ fn drag_delta(state: &EditorState) -> Option<f64> {
         Some(MotionTimelineDrag::Strip { delta_ms, .. }) => Some(delta_ms),
         _ => None,
     }
+}
+
+#[test]
+fn without_snapping_the_held_time_follows_the_pointer_exactly() {
+    let mut state = state();
+    state.begin_motion_timeline_drag_at(
+        MotionTimelineDrag::Strip {
+            node_id: "b".into(),
+            animation: 0,
+            delta_ms: 0.0,
+        },
+        TimelineDragAnchor {
+            pointer_ms: 250.0,
+            held_ms: 100.0,
+        },
+    );
+    // 96 ms of travel would snap to a's keyframe; free, it stays at 96.
+    state.drag_motion_timeline_to(346.0, None, 0);
+    assert_eq!(drag_delta(&state), Some(96.0));
+}
+
+#[test]
+fn a_height_drag_follows_the_pointer_and_cancels_back() {
+    let mut state = state();
+    state.editor_ui.motion_timeline.height = 220.0;
+    state.begin_motion_timeline_drag(MotionTimelineDrag::Height {
+        pointer_y: 700.0,
+        height: 220.0,
+    });
+    state.resize_motion_timeline_to(650.0, 1000.0);
+    assert_eq!(state.editor_ui.motion_timeline.height, 270.0);
+    // Capped by the share of the canvas area, then by the design range.
+    state.resize_motion_timeline_to(600.0, 300.0);
+    assert_eq!(state.editor_ui.motion_timeline.height, 300.0);
+    state.resize_motion_timeline_to(100.0, 1000.0);
+    assert_eq!(state.editor_ui.motion_timeline.height, 360.0);
+    // Releasing writes nothing; cancelling restores the start height.
+    assert!(state.cancel_motion_timeline_drag());
+    assert_eq!(state.editor_ui.motion_timeline.height, 220.0);
+    assert!(!state.cancel_motion_timeline_drag());
 }
