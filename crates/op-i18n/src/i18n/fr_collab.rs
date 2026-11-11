@@ -635,6 +635,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "Aucune animation sur cet écran",
         "motion.timeline.staticHint" => "Modification de la mise en page statique",
         "motion.timeline.pickId" => "Choisir un ID d'animation",
+        "motion.keyframe.title" => "Image clé {{index}} sur {{count}}",
+        "motion.keyframe.addProperty" => "+ Ajouter une propriété",
         "settings.system.agentSwarm" => "Essaim de curseurs",
         "settings.system.agentSwarmDesc" => "Curseurs d'agents et squelettes de chargement pendant la génération.",
         _ => return None,

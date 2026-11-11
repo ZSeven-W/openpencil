@@ -647,6 +647,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "Màn hình này không có chuyển động",
         "motion.timeline.staticHint" => "Đang sửa bố cục tĩnh",
         "motion.timeline.pickId" => "Chọn ID chuyển động",
+        "motion.keyframe.title" => "Khung hình chính {{index}}/{{count}}",
+        "motion.keyframe.addProperty" => "+ Thêm thuộc tính",
         "settings.system.agentSwarm" => "Bầy con trỏ",
         "settings.system.agentSwarmDesc" => "Con trỏ tác tử và khung giữ chỗ trong lúc tạo thiết kế.",
         _ => return None,

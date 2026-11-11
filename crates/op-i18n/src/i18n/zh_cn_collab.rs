@@ -635,6 +635,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "此屏没有动效",
         "motion.timeline.staticHint" => "正在编辑静态布局",
         "motion.timeline.pickId" => "选择动效 ID",
+        "motion.keyframe.title" => "关键帧 {{index}}/{{count}}",
+        "motion.keyframe.addProperty" => "+ 添加属性",
         "settings.system.agentSwarm" => "光标蜂群",
         "settings.system.agentSwarmDesc" => "生成设计时显示一群智能体光标和骨架占位。",
         _ => return None,

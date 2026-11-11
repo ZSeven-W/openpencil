@@ -635,6 +635,8 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "motion.timeline.empty" => "Bu ekranda hareket yok",
         "motion.timeline.staticHint" => "Statik düzen düzenleniyor",
         "motion.timeline.pickId" => "Hareket kimliği seç",
+        "motion.keyframe.title" => "Anahtar kare {{index}} / {{count}}",
+        "motion.keyframe.addProperty" => "+ Özellik ekle",
         "settings.system.agentSwarm" => "İmleç sürüsü",
         "settings.system.agentSwarmDesc" => "Tasarım oluşturulurken ajan imleçleri ve iskelet yer tutucuları.",
         _ => return None,
