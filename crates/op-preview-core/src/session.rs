@@ -4,11 +4,12 @@
 //! Split out of `preview/mod.rs` (the crate spine) to keep every file under
 //! the repo's 800-line-per-file cap. Holds [`RootFrame`] (the per-root
 //! scene↔runtime coordinate mapping), [`PreviewSession`] with its retained
-//! source/session fields, [`PreviewSession::enter`], and the accessor +
-//! test-helper surface. The scene overlay / paint impls live in the sibling
-//! `session_paint.rs`; app-mode routing, input dispatch, device-frame
-//! presentation, and screen transitions live in their own siblings
-//! (`app_mode.rs` / `input.rs` / `present.rs` / `transition.rs`).
+//! source/session fields, [`PreviewSession::enter`], and the accessor
+//! surface; the test-only accessors live in `test_helpers.rs`. The scene
+//! overlay / paint impls live in the sibling `session_paint.rs`; app-mode
+//! routing, input dispatch, device-frame presentation, and screen
+//! transitions live in their own siblings (`app_mode.rs` / `input.rs` /
+//! `present.rs` / `transition.rs`).
 //!
 //! All fields are `pub(crate)` because those sibling modules read and write
 //! them from their own `impl PreviewSession` blocks (`app_mode::reconcile`
@@ -701,103 +702,5 @@ impl PreviewSession {
     /// compatibility with the host call site.
     pub fn resize(&mut self, canvas_size: (f32, f32)) {
         let _ = canvas_size;
-    }
-
-    /// Test-only read access to the live runtime so the crate's own
-    /// tests can assert injected text reached the widget state graph.
-    #[cfg(all(test, not(target_os = "windows")))]
-    pub(crate) fn runtime(&self) -> &Runtime {
-        &self.runtime
-    }
-
-    /// Test-only mutable access (e.g. `focused_editable_snapshot` for
-    /// the R4 IME trace assertions). Same `!Send` caveat as `runtime`.
-    #[cfg(all(test, not(target_os = "windows")))]
-    pub(crate) fn runtime_mut(&mut self) -> &mut Runtime {
-        &mut self.runtime
-    }
-
-    /// Narrow test-only snapshot of one `$app` state value, CLONED out
-    /// of the runtime. `Runtime.state` is interior-mutable, so it must
-    /// never be handed out in production — cross-crate tests read this
-    /// cloned seam instead (op-host-native's test builds enable the
-    /// `testing` feature; see its Cargo.toml dev-dependency).
-    #[cfg(any(all(test, not(target_os = "windows")), feature = "testing"))]
-    pub fn app_state_value_for_test(&self, key: &str) -> Option<jian_core::value::RuntimeValue> {
-        self.runtime.state.app_get(key)
-    }
-
-    /// Test-only: the absolute layout rect `(x, y, w, h)` the runtime
-    /// resolved for the node with schema `id`, or `None` if unknown.
-    /// In the runtime's root-relative space (no scene offset).
-    #[cfg(all(test, not(target_os = "windows")))]
-    pub(crate) fn node_rect(&self, id: &str) -> Option<(f32, f32, f32, f32)> {
-        let r = self.runtime_rect(id)?;
-        Some((r.origin.x, r.origin.y, r.size.x, r.size.y))
-    }
-
-    /// Test-only: the available size the runtime's primary root was laid
-    /// out against (the root's authored size).
-    #[cfg(all(test, not(target_os = "windows")))]
-    pub(crate) fn available(&self) -> (f32, f32) {
-        self.available
-    }
-
-    /// Test-only: number of compiled binding sites.
-    #[cfg(all(test, not(target_os = "windows")))]
-    pub(crate) fn binding_sites_len_for_test(&self) -> usize {
-        self.binding_sites.len()
-    }
-
-    /// Test-only: number of currently-mounted page-roots (1 in APP MODE
-    /// — the entry screen only; N for an unmarked doc's top-level
-    /// frames).
-    #[cfg(all(test, not(target_os = "windows")))]
-    pub(crate) fn root_frames_len_for_test(&self) -> usize {
-        self.root_frames.len()
-    }
-
-    /// Test-only: the current text value of the text-input-family
-    /// widget with schema `id`, forcing the same lazy
-    /// `WidgetStateStore::get_or_init` seed a live interaction would
-    /// (mirrors `seed_focused_widget_state`'s borrow pattern) — so a
-    /// bound input re-mounted after a screen switch reads back its
-    /// persisted `$state.*` value even without an intervening focus
-    /// call. Empty string for any other widget kind or an unknown id.
-    #[cfg(all(test, not(target_os = "windows")))]
-    pub(crate) fn widget_text_for_test(&mut self, id: &str) -> String {
-        let schema = self.runtime.document.as_ref().and_then(|d| {
-            let key = d.tree.by_id.get(id).copied()?;
-            d.tree.nodes.get(key).map(|n| n.schema.clone())
-        });
-        let Some(schema) = schema else {
-            return String::new();
-        };
-        match self
-            .runtime
-            .widget_states
-            .get_or_init(&schema, &self.runtime.state)
-        {
-            Some(jian_core::widget_state::WidgetState::TextInput(st)) => st.text().to_string(),
-            _ => String::new(),
-        }
-    }
-}
-
-/// Share the canvas backend so parity tests compare the same metrics, including
-/// the Windows CI estimator. Font-specific tests inject SkiaMeasure explicitly.
-#[cfg(all(test, not(target_os = "windows")))]
-pub(crate) fn test_measure() -> Rc<dyn MeasureBackend> {
-    op_pen_loader::layout_measure_backend()
-}
-
-#[cfg(all(test, not(target_os = "windows")))]
-pub(crate) mod font_registry_test_support {
-    use std::sync::{LazyLock, Mutex, MutexGuard};
-
-    static LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-
-    pub(crate) fn lock() -> MutexGuard<'static, ()> {
-        LOCK.lock().unwrap_or_else(|e| e.into_inner())
     }
 }

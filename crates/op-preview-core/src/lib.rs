@@ -151,7 +151,7 @@ pub(crate) use session::RootFrame;
 /// Test-only layout backend + font-registry lock, shared by every
 /// preview test module.
 #[cfg(all(test, not(target_os = "windows")))]
-pub(crate) use session::{font_registry_test_support, test_measure};
+pub(crate) use test_helpers::{font_registry_test_support, test_measure};
 
 // Gated off Windows: preview tests exercise runtime layout through
 // `jian_skia::SkiaMeasure`, which hits DirectWrite in Windows CI and aborts
