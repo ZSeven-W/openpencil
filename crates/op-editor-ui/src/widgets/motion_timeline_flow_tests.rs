@@ -314,6 +314,29 @@ fn the_selected_node_gets_a_row_before_it_animates() {
 }
 
 #[test]
+fn double_clicking_a_strip_focuses_the_inspector_on_it() {
+    let mut state = state();
+    state.editor_ui.property_tab = op_editor_core::PropertyTab::Code;
+    let (_, layout) = layout_of(&state);
+    let b = &layout.rows[1];
+    let grab = Point2D::new(
+        (b.keyframes[0].1.x + b.keyframes[1].1.x) / 2.0,
+        b.keyframes[0].1.y,
+    );
+    assert!(press(&mut state, grab, VW, VH, 1000, false));
+    release(&mut state);
+    assert_eq!(state.editor_ui.motion_row_expanded("b"), None);
+    assert!(press(&mut state, grab, VW, VH, 1200, false));
+    assert_eq!(state.selection.anchor.as_str(), "b");
+    assert_eq!(state.editor_ui.motion_row_expanded("b"), Some(0));
+    assert_eq!(
+        state.editor_ui.property_tab,
+        op_editor_core::PropertyTab::Design
+    );
+    assert!(state.editor_ui.motion_timeline.drag.is_none());
+}
+
+#[test]
 fn without_snapping_a_drag_lands_off_grid() {
     let mut state = state();
     let (_, layout) = layout_of(&state);

@@ -77,6 +77,8 @@ pub struct MotionTimelineState {
     pub scope_menu_open: bool,
     /// Lanes (node id, animation index) showing their property sub-tracks.
     pub expanded: Vec<(String, usize)>,
+    /// The last strip press and when, to tell a double-click.
+    pub last_strip_press: Option<(String, usize, u64)>,
     pub tab: MotionTimelineTab,
     /// The manual animation id the manual tab shows.
     pub manual_id: Option<String>,
@@ -160,6 +162,7 @@ impl Default for MotionTimelineState {
             scope_anchor: None,
             scope_menu_open: false,
             expanded: Vec::new(),
+            last_strip_press: None,
             tab: MotionTimelineTab::default(),
             manual_id: None,
             playhead_ms: 0.0,

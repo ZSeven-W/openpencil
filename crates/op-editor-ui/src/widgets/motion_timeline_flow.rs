@@ -5,7 +5,7 @@
 //! here and repaint.
 
 use crate::widgets::host_canvas_geometry::{
-    canvas_region, motion_timeline_rect, motion_timeline_shown,
+    canvas_region, motion_timeline_rect, motion_timeline_shown, property_panel_rect,
 };
 use crate::widgets::motion_timeline::{MotionTimelineView, TimelineHit, TimelineLayout};
 use crate::Point2D;
@@ -107,6 +107,10 @@ pub fn press(
             }
         }
         TimelineHit::Strip { node_id, animation } => {
+            if state.press_motion_strip(&node_id, animation, now_ms) {
+                focus_inspector(state, &node_id, animation, viewport_w, viewport_h);
+                return true;
+            }
             state.select_motion_lane(&node_id);
             if let Some(strip) = strip(&view, &node_id, animation) {
                 let held_ms = strip.start_ms;
@@ -167,6 +171,25 @@ fn press_keyframe(
             held_ms,
         },
     );
+}
+
+/// Double-clicking a strip shows its animation in the Inspector: the node
+/// selected, its Motion row open and scrolled into view.
+fn focus_inspector(
+    state: &mut EditorState,
+    node_id: &str,
+    animation: usize,
+    viewport_w: f32,
+    viewport_h: f32,
+) {
+    state.cancel_motion_timeline_drag();
+    state.focus_motion_animation(node_id, animation);
+    let rect = property_panel_rect(state, viewport_w, viewport_h);
+    if let Some(offset) = crate::widgets::PropertyPanel::for_selection(state)
+        .and_then(|panel| panel.motion_row_scroll(rect, animation))
+    {
+        state.editor_ui.property_panel_scroll.offset = offset;
+    }
 }
 
 /// Follow a pointer move while a timeline drag is in flight. Returns

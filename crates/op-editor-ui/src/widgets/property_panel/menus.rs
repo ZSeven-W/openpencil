@@ -75,6 +75,34 @@ impl PropertyPanel {
             .position(|(_, row)| row.contains(point))
     }
 
+    /// The scroll offset that brings Motion row `index` to the top of the
+    /// section viewport (just under the tab strip), clamped to the
+    /// content. `None` when the row is not laid out.
+    pub(crate) fn motion_row_scroll(&self, panel_rect: Rect, index: usize) -> Option<f32> {
+        let logical = self.logical_rect(panel_rect);
+        let row = sections::action_button_rects_with_fill_picker(
+            logical,
+            self.visible_sections(),
+            &self.snapshot.effects,
+            &self.snapshot.fills,
+            &self.snapshot.interactions,
+            self.fill_type_picker.open,
+            self.fill_type_picker_index,
+            self.font_picker.open,
+            self.font_weight_picker_open,
+            self.export_scale_picker_open,
+            self.export_format_picker_open,
+            self.padding_mode_popover_open,
+        )
+        .into_iter()
+        .find(|(action, _)| *action == PropertyPanelAction::ToggleMotionRow(index))?
+        .1;
+        let top = crate::widgets::property_panel_inputs::TAB_HEIGHT + 8.0;
+        let max = (self.logical_content_height(logical) - logical.size.y).max(0.0);
+        let offset = (row.origin.y - logical.origin.y - top).clamp(0.0, max);
+        Some(self.physical_length(offset))
+    }
+
     /// The Effects section "+" button rect — `scrolled` is the already
     /// scroll-adjusted panel rect (`scrolled_rect`). The anchor the
     /// add-menu popover drops from.
