@@ -9,6 +9,7 @@ use crate::widgets::host_canvas_geometry::{
 };
 use crate::widgets::motion_timeline::{MotionTimelineView, TimelineHit, TimelineLayout};
 use crate::Point2D;
+use jian_core::CursorHint;
 use op_editor_core::editor_ui_state::{
     MotionTimelineDrag, MotionTimelineTab, TimelineDragAnchor, TimelineKeyframeRef,
 };
@@ -273,22 +274,41 @@ pub fn delete_keyframes(state: &mut EditorState) -> bool {
     true
 }
 
-/// Whether the point is over the strip-end grab zone, for a resize cursor.
-pub fn over_strip_end(
+/// The pointer shape an in-flight timeline drag holds wherever the
+/// pointer goes: north-south while resizing the panel, east-west while
+/// stretching a strip.
+pub fn drag_cursor(state: &EditorState) -> Option<CursorHint> {
+    match state.editor_ui.motion_timeline.drag.as_ref()? {
+        MotionTimelineDrag::Height { .. } => Some(CursorHint::ResizeNs),
+        MotionTimelineDrag::StripEnd { .. } => Some(CursorHint::ResizeEw),
+        _ => None,
+    }
+}
+
+/// The pointer shape over the panel: the resize cursors over its top edge
+/// and over a strip's end grip, from the layout walk the press uses.
+pub fn hover_cursor(
     state: &EditorState,
     point: Point2D,
     viewport_w: f32,
     viewport_h: f32,
-) -> bool {
-    if matches!(
-        state.editor_ui.motion_timeline.drag,
-        Some(MotionTimelineDrag::StripEnd { .. })
-    ) {
-        return true;
+) -> Option<CursorHint> {
+    let (view, layout) = layout(state, viewport_w, viewport_h)?;
+    match layout.hit(point, &view)? {
+        TimelineHit::ResizeEdge => Some(CursorHint::ResizeNs),
+        TimelineHit::StripEnd { .. } => Some(CursorHint::ResizeEw),
+        _ => None,
     }
-    layout(state, viewport_w, viewport_h).is_some_and(|(view, layout)| {
-        matches!(layout.hit(point, &view), Some(TimelineHit::StripEnd { .. }))
-    })
+}
+
+/// [`drag_cursor`], else [`hover_cursor`].
+pub fn cursor(
+    state: &EditorState,
+    point: Point2D,
+    viewport_w: f32,
+    viewport_h: f32,
+) -> Option<CursorHint> {
+    drag_cursor(state).or_else(|| hover_cursor(state, point, viewport_w, viewport_h))
 }
 
 /// The manual tab cycles through the scope's manual ids, one per press.

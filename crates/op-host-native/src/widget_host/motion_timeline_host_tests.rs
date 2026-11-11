@@ -117,3 +117,22 @@ fn a_playing_timeline_asks_for_frames_and_keeps_the_pan_cache_aside() {
     host.editor_state_mut().toggle_motion_playback(1_100);
     assert_eq!(host.next_animation_deadline_ms(), before);
 }
+
+#[test]
+fn the_timeline_edges_show_resize_cursors() {
+    use jian_core::CursorHint;
+    let host = host();
+    let layout = layout(&host);
+    let top = layout.rect.origin.y;
+    assert_eq!(host.cursor_hint(700.0, top, VW, VH), CursorHint::ResizeNs);
+    let grip = layout.rows[0].end_handle;
+    assert_eq!(
+        host.cursor_hint(
+            grip.origin.x + grip.size.x / 2.0,
+            grip.origin.y + grip.size.y / 2.0,
+            VW,
+            VH
+        ),
+        CursorHint::ResizeEw
+    );
+}

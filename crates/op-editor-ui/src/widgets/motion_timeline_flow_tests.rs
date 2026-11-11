@@ -161,7 +161,10 @@ fn the_ruler_scrubs_and_the_end_grip_stretches() {
     release(&mut state);
 
     let grip = center(layout.rows[1].end_handle);
-    assert!(over_strip_end(&state, grip, VW, VH));
+    assert_eq!(
+        hover_cursor(&state, grip, VW, VH),
+        Some(CursorHint::ResizeEw)
+    );
     press(&mut state, grip, VW, VH, 0, false);
     let zoom = state.editor_ui.motion_timeline.zoom;
     drag(
@@ -205,6 +208,10 @@ fn the_top_edge_resizes_the_panel_and_holds_its_cursor() {
     let mut state = state();
     let (_, layout) = layout_of(&state);
     let edge = Point2D::new(center(layout.rect).x, layout.rect.origin.y);
+    assert_eq!(
+        hover_cursor(&state, edge, VW, VH),
+        Some(CursorHint::ResizeNs)
+    );
     assert!(press(&mut state, edge, VW, VH, 0, false));
     assert!(!drag_writes(&state), "a resize writes nothing");
     assert!(drag(
@@ -219,6 +226,8 @@ fn the_top_edge_resizes_the_panel_and_holds_its_cursor() {
         state.editor_ui.motion_timeline.height,
         layout.rect.size.y + 60.0
     );
+    // The cursor stays while the pointer wanders off the edge.
+    assert_eq!(drag_cursor(&state), Some(CursorHint::ResizeNs));
     assert!(release(&mut state));
     let (_, resized) = layout_of(&state);
     assert_eq!(resized.rect.size.y, layout.rect.size.y + 60.0);

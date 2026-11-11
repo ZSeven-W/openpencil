@@ -10,8 +10,8 @@
 
 use super::{cursor_for_handle, CursorHint, WidgetHostNative};
 use op_editor_ui::widgets::{
-    rotation_corner_at_point, selection_handle_at_point, AIChatHit, AIChatPlaceholder,
-    ChatResizeEdge, PromptCenterPanel,
+    motion_timeline_flow, rotation_corner_at_point, selection_handle_at_point, AIChatHit,
+    AIChatPlaceholder, ChatResizeEdge, PromptCenterPanel,
 };
 use op_editor_ui::{Point2D, Rect};
 
@@ -42,6 +42,11 @@ impl WidgetHostNative {
         }
         if let Some(resize) = self.chat_resize {
             return Self::chat_resize_cursor(resize.edge);
+        }
+        // A timeline resize or strip stretch keeps its cursor wherever the
+        // pointer goes.
+        if let Some(hint) = motion_timeline_flow::drag_cursor(&self.editor_state) {
+            return hint;
         }
         // The workspace dock's drag handle resizes the dock — an
         // in-flight drag or a hover on the handle both read as EW.
@@ -158,6 +163,15 @@ impl WidgetHostNative {
         // bleeding through from a node underneath.
         if self.over_floating_overlay(x, y, viewport_w, viewport_h) {
             return CursorHint::Default;
+        }
+        // The timeline's top edge and strip-end grips.
+        if let Some(hint) = motion_timeline_flow::hover_cursor(
+            &self.editor_state,
+            Point2D::new(x, y),
+            viewport_w,
+            viewport_h,
+        ) {
+            return hint;
         }
         // The floating Git panel paints on top of the right-rail
         // resize gutter (and in diff mode is wide enough to cover
