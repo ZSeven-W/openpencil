@@ -21,6 +21,12 @@ impl WidgetHostNative {
             self.mark_dirty();
             return true;
         }
+        // A timeline drag in flight (nothing is written), then the
+        // timeline's screen dropdown.
+        if escape::escape_motion_timeline(&mut self.editor_state) {
+            self.mark_dirty();
+            return true;
+        }
         // The result view is retired; the workspace is not a takeover,
         // so Escape in it walks the ordinary ladder (chat focus first,
         // then selection).
