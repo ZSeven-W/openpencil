@@ -12,7 +12,7 @@ use crate::widgets::layer_panel_metrics::{
     layer_drag_target, layer_node_icon_x, LayerPanelMetrics,
 };
 use crate::widgets::layer_panel_walkers::{
-    apply_layer_rename, icon_for_node, kind_label, layer_regions, layers_content_width,
+    animated, apply_layer_rename, icon_for_node, kind_label, layer_regions, layers_content_width,
     pages_content_width, pages_from_state, visible_row_range, walk, walk_excluding,
     LayerRegionInput, LayerRegions, LayerScrollSnapshot, RenameView, WalkCx,
 };
@@ -38,7 +38,7 @@ fn t(ui: &EditorUiState, key: &'static str) -> &'static str {
 pub(crate) const ROW_PAD_X: f32 = 12.0;
 use crate::widgets::layer_panel_paint::{
     layer_content_clip_rect_with_metrics, layer_label_available_width_with_metrics,
-    paint_drag_ghost, paint_layer_action_backing, paint_layer_drag_handle,
+    paint_drag_ghost, paint_layer_action_backing, paint_layer_drag_handle, paint_motion_mark,
     paint_rename_input_with_metrics, paint_section_header_with_metrics, truncate_to_fit,
     truncate_to_fit_measured,
 };
@@ -64,6 +64,8 @@ pub struct LayerItem {
     pub is_reusable: bool,
     /// Component INSTANCE (`Ref`) — Diamond icon + #9281f7 tint.
     pub is_instance: bool,
+    /// The node has animations: a film mark at the row's end.
+    pub animated: bool,
 }
 
 /// Pages-section row.
@@ -225,6 +227,7 @@ impl LayerPanel {
             renaming: false,
             is_reusable: matches!(node, PenNode::Frame(f) if f.reusable == Some(true)),
             is_instance: matches!(node, PenNode::Ref(_)),
+            animated: animated(node),
         })
     }
 
@@ -748,6 +751,7 @@ impl Widget for LayerPanel {
                     trailing_stroke,
                 );
             }
+            paint_motion_mark(cx, item, lock_glyph, show_lock, trailing_default);
         }
 
         // Drop-indicator — paints AFTER row chrome so it sits on top.

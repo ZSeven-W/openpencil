@@ -403,3 +403,25 @@ fn hovered_renaming_layer_action_points_fall_back_to_layer_hit() {
         );
     }
 }
+
+#[test]
+fn animated_rows_carry_the_motion_mark() {
+    let source = r#"{"version":"1.0.0","children":[
+        {"type":"rectangle","id":"still","width":10,"height":10},
+        {"type":"rectangle","id":"moving","width":10,"height":10,"animations":[
+            {"trigger":"mount","durationMs":300,"keyframes":[
+                {"offset":0,"values":{"opacity":0}},{"offset":1,"values":{"opacity":1}}]}]}]}"#;
+    let doc = jian_ops_schema::load_str(source)
+        .expect("motion fixture parses")
+        .value;
+    let state = EditorState::from_document(doc);
+    let panel = LayerPanel::from_editor(&state);
+    let marks: Vec<(&str, bool)> = panel
+        .items
+        .iter()
+        .map(|item| (item.node_id.as_str(), item.animated))
+        .collect();
+    assert!(marks.contains(&("moving", true)) && marks.contains(&("still", false)));
+    let ghost = LayerPanel::ghost_item_for(&state, &NodeId::new("moving")).expect("ghost");
+    assert!(ghost.animated);
+}

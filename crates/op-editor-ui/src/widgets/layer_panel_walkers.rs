@@ -118,6 +118,13 @@ fn to_doc_id(id: &str) -> NodeId {
     NodeId::new(id.to_string())
 }
 
+/// Whether the node declares animations (the row's motion mark).
+pub(super) fn animated(node: &PenNode) -> bool {
+    node.motion_declarations()
+        .1
+        .is_some_and(|animations| !animations.is_empty())
+}
+
 /// Build one `LayerItem` from a `PenNode` (without recursing).
 fn item_for(node: &PenNode, cx: &WalkCx<'_>, depth: usize) -> LayerItem {
     let base = node.base();
@@ -148,6 +155,7 @@ fn item_for(node: &PenNode, cx: &WalkCx<'_>, depth: usize) -> LayerItem {
         renaming: false,
         is_reusable: matches!(node, PenNode::Frame(f) if f.reusable == Some(true)),
         is_instance: matches!(node, PenNode::Ref(_)),
+        animated: animated(node),
     }
 }
 

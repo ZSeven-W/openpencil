@@ -96,6 +96,27 @@ pub(super) fn layer_action_gutter_left_with_metrics(row: Rect, metrics: LayerPan
     }
 }
 
+/// The film mark of an animated row, in the trailing slot while the
+/// hover actions are hidden (they take the slot on hover).
+pub(super) fn paint_motion_mark(
+    cx: &mut PaintCx<'_>,
+    item: &super::LayerItem,
+    slot: Rect,
+    actions_shown: bool,
+    color: Color,
+) {
+    if item.animated && !actions_shown && !item.renaming {
+        crate::widgets::icons::draw_icon(
+            cx.backend,
+            crate::widgets::icons::Icon::Film,
+            slot.origin,
+            slot.size.x,
+            color,
+            1.2,
+        );
+    }
+}
+
 /// Six-dot grip centered in the dedicated touch reorder target.
 pub(super) fn paint_layer_drag_handle(cx: &mut PaintCx<'_>, target: Option<Rect>, color: Color) {
     let Some(target) = target else { return };
