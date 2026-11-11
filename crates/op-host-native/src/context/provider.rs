@@ -219,23 +219,51 @@ impl GlutinProvider {
             Display::new(raw_display_handle, preference).map_err(ProviderError::from_error)?
         };
 
-        let template = ConfigTemplateBuilder::new()
-            .with_alpha_size(8)
-            .with_stencil_size(8)
-            .compatible_with_native_window(raw_window_handle)
-            .build();
-
-        let gl_config = unsafe {
-            gl_display
-                .find_configs(template)
-                .map_err(ProviderError::from_error)?
-                .reduce(|best, cfg| {
-                    if prefer_candidate_config(cfg.num_samples(), best.num_samples()) {
-                        cfg
-                    } else {
-                        best
-                    }
-                })
+        // The window already exists, so only configs matching its native
+        // visual qualify. Some drivers (e.g. NVIDIA proprietary on X11) give
+        // the default 24-bit visual no alpha channel, so an alpha-8 request
+        // matches nothing. The window is opaque, so retry without alpha.
+        // Last resort: NVIDIA's EGL on X11 reports EGL_NATIVE_VISUAL_ID values
+        // that never equal winit's default visual, so glutin's strict
+        // visual-id filter rejects every config. Drop that filter (configs
+        // are still window-capable) and prefer alpha-less ones, whose depth
+        // matches the default 24-bit visual.
+        let pick_config = |with_alpha: bool,
+                           match_visual: bool|
+         -> ProviderResult<Option<glutin::config::Config>> {
+            let mut builder = ConfigTemplateBuilder::new().with_stencil_size(8);
+            if match_visual {
+                builder = builder.compatible_with_native_window(raw_window_handle);
+            }
+            if with_alpha {
+                builder = builder.with_alpha_size(8);
+            }
+            let configs = unsafe {
+                gl_display
+                    .find_configs(builder.build())
+                    .map_err(ProviderError::from_error)?
+            };
+            Ok(configs.reduce(|best, cfg| {
+                if !match_visual && (cfg.alpha_size() == 0) != (best.alpha_size() == 0) {
+                    return if cfg.alpha_size() == 0 { cfg } else { best };
+                }
+                if prefer_candidate_config(cfg.num_samples(), best.num_samples()) {
+                    cfg
+                } else {
+                    best
+                }
+            }))
+        };
+        let gl_config = if let Some(cfg) = pick_config(true, true)? {
+            cfg
+        } else if let Some(cfg) = pick_config(false, true)? {
+            tracing::warn!("no alpha-8 GL config matched the window; using an alpha-less config");
+            cfg
+        } else {
+            tracing::warn!(
+                "no GL config matched the window's native visual; ignoring the visual id"
+            );
+            pick_config(false, false)?
                 .ok_or_else(|| ProviderError::from_msg("no GL config matched the window"))?
         };
         tracing::info!(
