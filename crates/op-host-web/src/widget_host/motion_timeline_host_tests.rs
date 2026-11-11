@@ -1,5 +1,5 @@
 //! The motion timeline through the web ladders: its resize grips set the
-//! canvas cursor and M toggles it.
+//! canvas cursor, M toggles it, and Escape drops a drag in flight.
 
 use super::WidgetHost;
 use op_editor_core::EditorState;
@@ -66,4 +66,25 @@ fn m_toggles_the_timeline() {
     assert!(!host.editor_state.editor_ui.motion_timeline.open);
     assert!(host.apply_tool_shortcut("M"));
     assert!(host.editor_state.editor_ui.motion_timeline.open);
+}
+
+#[test]
+fn escape_cancels_a_timeline_drag_without_writing() {
+    let mut host = host();
+    let row = timeline_layout(&host).rows[0].clone();
+    let grab = op_editor_ui::Point2D::new(
+        (row.keyframes[0].1.x + row.keyframes[1].1.x) / 2.0,
+        row.keyframes[0].1.y,
+    );
+    assert!(host.apply_press(grab.x, grab.y, VW, VH));
+    host.apply_cursor_move(grab.x + 60.0, grab.y);
+    assert!(host.apply_escape());
+    assert!(host.editor_state.editor_ui.motion_timeline.drag.is_none());
+    host.apply_release_with_viewport(VW, VH);
+    let delay = op_editor_core::walkers::find_node(
+        host.editor_state.active_children(),
+        &op_editor_core::NodeId::new("card"),
+    )
+    .and_then(|node| node.motion_declarations().1.map(|a| a[0].delay_ms));
+    assert_eq!(delay, Some(100), "nothing was written");
 }

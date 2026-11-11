@@ -18,6 +18,12 @@ impl WidgetHost {
             self.mark_dirty();
             return true;
         }
+        // A timeline drag in flight (nothing is written), then the
+        // timeline's screen dropdown — native's rung, same place.
+        if escape::escape_motion_timeline(&mut self.editor_state) {
+            self.mark_dirty();
+            return true;
+        }
         // Slideshow presentation consumes Escape to exit. This must run
         // before all the property/panel/modal escapes so presentation gets
         // priority when it is active. Use the cached viewport dimensions,
