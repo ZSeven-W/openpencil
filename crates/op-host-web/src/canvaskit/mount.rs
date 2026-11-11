@@ -461,6 +461,11 @@ pub(super) async fn mount_ck(canvas_id: String) -> Result<(), JsValue> {
                     if b.host.apply_cursor_move(x, y) {
                         crate::repaint_coalescer::request();
                     }
+                    let cursor = b.host.motion_timeline_cursor_css(x, y);
+                    let style = b.canvas.style();
+                    if style.get_property_value("cursor").ok().as_deref() != Some(cursor) {
+                        let _ = style.set_property("cursor", cursor);
+                    }
                 }
                 // Landing on a top-bar button owes a repaint once its
                 // tooltip's dwell expires, and no further DOM event is

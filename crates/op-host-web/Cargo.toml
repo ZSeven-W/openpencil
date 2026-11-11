@@ -94,6 +94,8 @@ features = [
   "BlobPropertyBag",
   "CanvasRenderingContext2d",
   "Clipboard",
+  # `canvas.style.cursor` for the motion timeline's resize grips.
+  "CssStyleDeclaration",
   # Browser file-IO P0 (paste / drag-drop / hidden file input): the
   # ClipboardEvent / DataTransfer / DragEvent / File* / HtmlInputElement
   # bindings below are only *called* from the `canvaskit`-gated dom_io glue,

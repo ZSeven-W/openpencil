@@ -27,9 +27,27 @@ impl WidgetHost {
         deleted
     }
 
+    /// The CSS cursor of the timeline's resize grips (its top edge, a
+    /// strip's end) under `(x, y)` or held by a drag; `""` hands the canvas
+    /// back to the default arrow. These grips are the web shell's only
+    /// cursor feedback so far.
+    pub fn motion_timeline_cursor_css(&self, x: f32, y: f32) -> &'static str {
+        let point = op_editor_ui::Point2D::new(x, y);
+        let (vw, vh) = (self.last_viewport_w, self.last_viewport_h);
+        match flow::cursor(&self.editor_state, point, vw, vh) {
+            Some(jian_core::CursorHint::ResizeNs) => "ns-resize",
+            Some(jian_core::CursorHint::ResizeEw) => "ew-resize",
+            _ => "",
+        }
+    }
+
     /// Whether the shell must keep requesting frames: the canvas plays the
     /// motion timeline.
     pub fn motion_timeline_playing(&self) -> bool {
         canvas_paint_scene::motion_timeline_playing(&self.editor_state)
     }
 }
+
+#[cfg(test)]
+#[path = "motion_timeline_host_tests.rs"]
+mod tests;
