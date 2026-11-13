@@ -295,7 +295,7 @@ The shared implementation of these lives in `op_editor_core::host_keyboard_trans
 
 ## Desktop binary (`openpencil-desktop/`)
 
-`crates/openpencil-desktop/src/main.rs` is the production desktop entry. It owns the winit `ApplicationHandler`, opens a GL window via `SharedSkiaContext::new_desktop`, and dispatches every `WindowEvent` onto `WidgetHostNative::apply_*`. Behaviour:
+`crates/op-host-desktop/src/main.rs` is the production desktop entry. It owns the winit `ApplicationHandler`, opens a GL window via `SharedSkiaContext::new_desktop`, and dispatches every `WindowEvent` onto `WidgetHostNative::apply_*`. Behaviour:
 
 - DPI scale via `canvas.scale((dpi, dpi))` per frame (preceded by `reset_matrix()` so it doesn't compound)
 - LOGICAL viewport sizes (physical / dpi)
@@ -321,7 +321,7 @@ Skia surface: `wasm32-unknown-unknown` raster (N32_PREMUL) + `put_image_data`. F
 
 Build: needs `EMSDK` env var pointing at an emsdk install (brew emscripten won't work — needs the real emsdk layout `$EMSDK/upstream/emscripten/llvm/bin/clang++`). Once set: `tools/check-wasm-bundle.sh` runs the full bundle gate (cargo → wasm-bindgen → wasm-opt -Oz, asserts 0 env.\* imports + ≤1 MiB gzip).
 
-Smoke: `crates/openpencil-shell-web/smoke/step-1b.html` — start `python3 -m http.server 8000` from `crates/openpencil-shell-web/` and open http://localhost:8000/smoke/step-1b.html.
+Smoke: `crates/op-host-web/smoke/step-1b.html` — start `python3 -m http.server 8000` from `crates/op-host-web/` and open http://localhost:8000/smoke/step-1b.html.
 
 ## Hit-test order
 
@@ -406,7 +406,7 @@ Layer-panel drag now supports **cross-parent reparenting**: a drag whose drop-ta
 - **History via VecDeque** (`document/mutators.rs`) — `pop_front` + `push_back` capped at 100 entries; the old `Vec::remove(0)` was O(n) on every commit past the cap.
 - **`Document::t` returns `&'static str`** — every locale value is a string literal, so chrome paint stores `&'static str` instead of cloning a `String` per frame. `PropertyLabels` is a `Copy` struct of static slices; widget builders propagate the `'static` lifetime so no per-paint allocations happen for labels.
 - **Viewport culling** (`widgets/canvas_viewport.rs`) — `paint_node` takes a `cull: Rect` (canvas region + 64 px stroke/handle margin). Leaf nodes outside the cull skip paint entirely; containers always recurse so off-screen-parent / on-screen-child still renders.
-- **Redraw scheduler** (`openpencil-desktop/src/main.rs`) — `request_redraw(dirty: bool)` + a `prepare_redraw` step that skips paint when only a tracked redraw fired and no visible state changed (kills the first-click chip flicker because macOS GL swap chain didn't perfectly hide `canvas.clear(BLACK)` between same-output frames).
+- **Redraw scheduler** (`op-host-desktop/src/main.rs`) — `request_redraw(dirty: bool)` + a `prepare_redraw` step that skips paint when only a tracked redraw fired and no visible state changed (kills the first-click chip flicker because macOS GL swap chain didn't perfectly hide `canvas.clear(BLACK)` between same-output frames).
 - **Cursor-move coalescing** — `apply_cursor_move` cached as `pending_cursor_move`, drained on `RedrawRequested` AND right before `apply_press` / `apply_release` / `apply_right_press` (so the final drag-end frame isn't dropped). Without the press-time drain a fast drag-release could fire press before the queued cursor-move and the release saw stale hover state.
 - **Font cache prewarm** (`op-host-native/src/backend/skia.rs`) — `NativeBackend::new` walks `PREWARM_CJK_CODEPOINTS` (~50 chars covering every CJK glyph used in the chrome + settings modal) through `FontMgr::match_family_style_character` at startup. Without this the first cross-tab paint stutters because each unseen CJK char triggers a synchronous system font scan.
 
