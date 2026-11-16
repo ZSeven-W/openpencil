@@ -514,6 +514,10 @@ fn structured_arg_allowed(tool: &str, key: &str) -> bool {
             | ("set_themes", "themes")
             | ("read_nodes", "nodeIds")
             | ("export_nodes", "nodeIds")
+            | ("set_node_animation", "animation")
+            | ("set_node_transition", "transition")
+            | ("apply_motion_preset", "nodeIds")
+            | ("get_motion_frames", "timesMs")
             // The lean MCP profile's get_editor_state forwards nodeIds to
             // read_nodes; the full-catalog tool ignores arguments.
             | ("get_editor_state", "nodeIds")

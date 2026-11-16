@@ -11,7 +11,9 @@
 
 use crate::motion_presets::MotionPreset;
 use crate::NodeId;
-use jian_ops_schema::motion::{Easing, Keyframe, MotionTrigger, NodeAnimation, Transition};
+use jian_ops_schema::motion::{
+    Easing, Keyframe, MotionPreference, MotionTrigger, NodeAnimation, Transition,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MotionCommand {
@@ -49,13 +51,16 @@ pub enum MotionCommand {
         transition: Option<Transition>,
     },
     /// Append `preset` to every node (multi-select applies it to each).
-    /// A manual trigger needs `id`.
+    /// A manual trigger needs `id`. Each node adds `stagger_ms` per index.
     ApplyPreset {
         node_ids: Vec<NodeId>,
         preset: MotionPreset,
         trigger: MotionTrigger,
         id: Option<String>,
+        stagger_ms: u64,
     },
+    /// Set the document-level motion preference.
+    SetPreference(MotionPreference),
     /// Append `preset` to the container's direct children with
     /// `delay = base + i × step`.
     Stagger {

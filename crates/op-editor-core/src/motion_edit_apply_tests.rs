@@ -134,6 +134,7 @@ fn presets_apply_to_every_selected_node_and_manual_ones_need_an_id() {
         preset: MotionPreset::Pulse,
         trigger,
         id: id.map(str::to_owned),
+        stagger_ms: 0,
     };
     assert!(matches!(
         state.apply_motion_edits(vec![preset(None, MotionTrigger::Manual)]),

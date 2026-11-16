@@ -24,7 +24,7 @@ fn tools_list_response_includes_all_registered_tools() {
     // TOOL_SCHEMAS without being added to the list below.
     assert_eq!(
         TOOL_SCHEMAS.len(),
-        147,
+        155,
         "tools/list catalog count must match the registered tools — add the new tool to this test"
     );
     // Production catalog excludes debug tools (we removed the
@@ -107,6 +107,14 @@ fn tools_list_response_includes_all_registered_tools() {
         "ToolSearch",
         "get_screenshot",
         "export_item",
+        "get_motion",
+        "set_node_animation",
+        "remove_node_animation",
+        "apply_motion_preset",
+        "set_node_transition",
+        "set_motion_preference",
+        "get_motion_frames",
+        "export_motion",
         "export_nodes",
         "get_active_theme",
         "list_components",

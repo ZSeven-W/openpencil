@@ -86,3 +86,30 @@ fn motion_limits_are_checked_before_the_writer_is_used() {
     ));
     assert!(output.into_inner().is_empty());
 }
+
+#[test]
+fn contact_sheet_preserves_order_crop_and_exact_samples() {
+    let (root, scene) = fixture();
+    let sheet =
+        render_motion_contact_sheet(&scene, &root, &ClipTrigger::Mount, &[90, 0, 45], 1.0).unwrap();
+    let mut decoder = png::Decoder::new(Cursor::new(sheet.png))
+        .read_info()
+        .unwrap();
+    let mut pixels = vec![0; decoder.output_buffer_size().unwrap()];
+    let info = decoder.next_frame(&mut pixels).unwrap();
+    assert_eq!((info.width, info.height), (40, 32));
+    assert_eq!(
+        sheet
+            .frames
+            .iter()
+            .map(|frame| frame.time_ms)
+            .collect::<Vec<_>>(),
+        [90, 0, 45]
+    );
+    assert_eq!((sheet.frames[1].x, sheet.frames[1].y), (24, 0));
+    assert_eq!((sheet.frames[2].x, sheet.frames[2].y), (0, 20));
+    for (frame, alpha) in sheet.frames.iter().zip([255, 0, 128]) {
+        let pos = (frame.y as usize * info.line_size) + (frame.x as usize * 4);
+        assert_eq!(pixels[pos + 3], alpha);
+    }
+}

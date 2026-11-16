@@ -117,6 +117,7 @@ impl EditorState {
                 preset: *preset,
                 trigger: MotionTrigger::Mount,
                 id: None,
+                stagger_ms: 0,
             }],
             MotionPanelEdit::StaggerPreset(preset) => vec![MotionCommand::Stagger {
                 container_id: node_id.clone(),

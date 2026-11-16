@@ -12,7 +12,9 @@ use crate::motion_timeline_edit::set_easing_keep_times;
 use crate::pen_node_ext::PenNodeExt;
 use crate::walkers::{find_node, find_node_mut};
 use crate::{EditorCommand, EditorState, NodeId};
-use jian_ops_schema::motion::{validate_animations, MotionTrigger, NodeAnimation, Transition};
+use jian_ops_schema::motion::{
+    validate_animations, MotionPreference, MotionTrigger, NodeAnimation, Transition,
+};
 use std::collections::BTreeMap;
 
 /// A node's motion fields as a plan sees them.
@@ -24,12 +26,22 @@ struct NodeMotion {
 }
 
 /// Planned writes, keyed by node id.
-type Plan = BTreeMap<String, NodeMotion>;
+#[derive(Default)]
+struct Plan {
+    nodes: BTreeMap<String, NodeMotion>,
+    preference: Option<MotionPreference>,
+}
 
 impl EditorState {
     /// Whether `cmd` would apply, and why not.
     pub fn check_motion_command(&self, cmd: &MotionCommand) -> Result<(), MotionEditError> {
         self.plan_motion(std::slice::from_ref(cmd)).map(|_| ())
+    }
+
+    /// Whether a motion edit is valid and would change the document.
+    pub fn motion_command_changes(&self, cmd: &MotionCommand) -> Result<bool, MotionEditError> {
+        let plan = self.plan_motion(std::slice::from_ref(cmd))?;
+        Ok(self.motion_plan_changes(&plan))
     }
 
     /// Apply `commands` as one undo step, all or nothing. Returns whether
@@ -79,11 +91,11 @@ impl EditorState {
     }
 
     fn plan_motion(&self, commands: &[MotionCommand]) -> Result<Plan, MotionEditError> {
-        let mut plan = Plan::new();
+        let mut plan = Plan::default();
         for cmd in commands {
             self.plan_motion_command(cmd, &mut plan)?;
         }
-        for motion in plan.values() {
+        for motion in plan.nodes.values() {
             validate_animations(&motion.animations, "animations").map_err(|(path, reason)| {
                 MotionEditError::Invalid {
                     node_id: motion.node_id.clone(),
@@ -146,12 +158,15 @@ impl EditorState {
                 preset,
                 trigger,
                 id,
+                stagger_ms,
             } => {
-                for node_id in node_ids {
-                    let animation = preset_animation(*preset, *trigger, id.as_deref(), 0);
+                for (index, node_id) in node_ids.iter().enumerate() {
+                    let delay = stagger_delay(0, *stagger_ms, index);
+                    let animation = preset_animation(*preset, *trigger, id.as_deref(), delay);
                     self.planned(plan, node_id)?.animations.push(animation);
                 }
             }
+            MotionCommand::SetPreference(value) => plan.preference = Some(*value),
             MotionCommand::Stagger {
                 container_id,
                 preset,
@@ -204,11 +219,11 @@ impl EditorState {
         plan: &'a mut Plan,
         node_id: &NodeId,
     ) -> Result<&'a mut NodeMotion, MotionEditError> {
-        if !plan.contains_key(node_id.as_str()) {
+        if !plan.nodes.contains_key(node_id.as_str()) {
             let node = find_node(self.active_children(), node_id)
                 .ok_or_else(|| MotionEditError::NodeMissing(node_id.clone()))?;
             let (transition, animations) = node.motion_declarations();
-            plan.insert(
+            plan.nodes.insert(
                 node_id.as_str().to_owned(),
                 NodeMotion {
                     node_id: node_id.clone(),
@@ -218,12 +233,16 @@ impl EditorState {
             );
         }
         Ok(plan
+            .nodes
             .get_mut(node_id.as_str())
             .expect("inserted above when missing"))
     }
 
     fn motion_plan_changes(&self, plan: &Plan) -> bool {
-        plan.values().any(|motion| {
+        if plan.preference.is_some() && self.doc.motion != plan.preference {
+            return true;
+        }
+        plan.nodes.values().any(|motion| {
             find_node(self.active_children(), &motion.node_id).is_some_and(|node| {
                 let (transition, animations) = node.motion_declarations();
                 transition != motion.transition.as_ref()
@@ -234,7 +253,11 @@ impl EditorState {
 
     fn write_motion_plan(&mut self, plan: Plan) -> bool {
         let mut changed = false;
-        for motion in plan.into_values() {
+        if let Some(preference) = plan.preference {
+            changed = self.doc.motion != Some(preference);
+            self.doc.motion = Some(preference);
+        }
+        for motion in plan.nodes.into_values() {
             let Some(node) = find_node_mut(self.active_children_mut(), &motion.node_id) else {
                 continue;
             };

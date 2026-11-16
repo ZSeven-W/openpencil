@@ -62,7 +62,7 @@ impl FrameRenderer {
         self.size
     }
 
-    fn render(&self, time_ms: u64) -> Result<Surface, ExportError> {
+    pub(super) fn render(&self, time_ms: u64) -> Result<Surface, ExportError> {
         let mut scene = self.scene.clone();
         apply_motion_overrides(&mut scene, &self.clip.sample(time_ms, &self.scene));
         // The renderer's scene contains only the export root and its subtree.

@@ -475,3 +475,58 @@ fn comment_tools_round_trip_over_mcp_and_hide_archived_by_default() {
     assert!(history.contains(r#""count":1"#), "{history}");
     assert!(history.contains("Logo feels small"), "{history}");
 }
+
+#[test]
+fn motion_tools_render_native_mcp_images_and_export_the_same_clip() {
+    use base64::Engine as _;
+    let doc = jian_ops_schema::load_str(
+        r##"{"version":"1.1","children":[
+      {"type":"rectangle","id":"box","width":20,"height":12,
+       "fill":[{"type":"solid","color":"#cc5544"}]}]}"##,
+    )
+    .unwrap()
+    .value;
+    let mut state = op_editor_core::EditorState::from_document(doc);
+    let mut call = |name: &str, arguments: serde_json::Value| -> serde_json::Value {
+        let line = serde_json::json!({"jsonrpc":"2.0","id":1,"method":"tools/call",
+            "params":{"name":name,"arguments":arguments}})
+        .to_string();
+        let response = process_message_with_applier(&mut state, &line, |_, state, command| {
+            state.apply(command.clone())
+        })
+        .unwrap()
+        .unwrap();
+        let response: serde_json::Value = serde_json::from_str(&response).unwrap();
+        assert!(response["error"].is_null(), "{response}");
+        assert_ne!(response["result"]["isError"], true, "{response}");
+        response
+    };
+    call(
+        "apply_motion_preset",
+        serde_json::json!({"nodeIds":["box"],"preset":"fadeIn","trigger":"manual","clipId":"reveal"}),
+    );
+    let samples = call(
+        "get_motion_frames",
+        serde_json::json!({"rootId":"box","clipId":"reveal","timesMs":[0,150,300]}),
+    );
+    let content = samples["result"]["content"].as_array().unwrap();
+    assert_eq!(content[0]["type"], "image");
+    assert_eq!(content[0]["mimeType"], "image/png");
+    let png = base64::engine::general_purpose::STANDARD
+        .decode(content[0]["data"].as_str().unwrap())
+        .unwrap();
+    assert!(png.starts_with(b"\x89PNG\r\n\x1a\n"));
+    let metadata: serde_json::Value =
+        serde_json::from_str(content[1]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(metadata["frames"][1]["timeMs"], 150);
+    let exported = call(
+        "export_motion",
+        serde_json::json!({"rootId":"box","clipId":"reveal","format":"gif","fps":12}),
+    );
+    let metadata: serde_json::Value =
+        serde_json::from_str(exported["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    let gif = base64::engine::general_purpose::STANDARD
+        .decode(metadata["bytes_base64"].as_str().unwrap())
+        .unwrap();
+    assert!(gif.starts_with(b"GIF89a"));
+}

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::io::Cursor;
 
 use base64::Engine as _;
-use jian_ops_schema::PenDocument;
+use jian_ops_schema::{node::PenNode, PenDocument};
 use op_editor_core::{walkers::find_node, EditorState, NodeId};
 use op_editor_ui::layout_scene::LayoutScene;
 use op_mcp::{McpTool, ToolErrorCode, ToolOutcome};
@@ -56,13 +56,7 @@ impl McpTool for ExportItem {
             .and_then(|value| value.trim().parse::<f32>().ok())
             .unwrap_or(1.0);
 
-        let motion = match format {
-            "gif" => Some(MotionFormat::Gif),
-            "apng" => Some(MotionFormat::Apng),
-            "png-seq" => Some(MotionFormat::PngSequence),
-            _ => None,
-        };
-        if let Some(motion) = motion {
+        if let Some(motion) = parse_motion_format(format) {
             return self.motion_export_response(args, item_id, format, motion, scale);
         }
         let (bytes, item_type) = if let Some(page) =
@@ -117,7 +111,7 @@ impl McpTool for ExportItem {
 }
 
 impl ExportItem {
-    fn motion_export_response(
+    pub(super) fn motion_export_response(
         &self,
         args: &BTreeMap<String, String>,
         item_id: &str,
@@ -146,7 +140,38 @@ impl ExportItem {
         format: MotionFormat,
         scale: f32,
     ) -> Result<Vec<u8>, (ToolErrorCode, String)> {
-        let invalid = |message: &str| (ToolErrorCode::InvalidArgument, message.to_owned());
+        let (node, scene) = self.motion_target(item_id)?;
+        let trigger = parse_motion_trigger(
+            args.get("trigger").map(String::as_str),
+            args.get("clip").map(String::as_str),
+        )?;
+        let fps = args
+            .get("fps")
+            .map(|value| value.parse::<u32>())
+            .transpose()
+            .map_err(|_| invalid("fps must be an integer"))?
+            .unwrap_or(30);
+        let duration_ms = args
+            .get("durationMs")
+            .map(|value| value.parse::<u64>())
+            .transpose()
+            .map_err(|_| invalid("durationMs must be a nonnegative integer"))?;
+        let options = MotionExportOptions {
+            trigger,
+            fps,
+            scale,
+            duration_ms,
+            ..Default::default()
+        };
+        let mut output = Cursor::new(Vec::new());
+        export_motion(&mut output, &scene, node, format, &options)
+            .map_err(|error| (ToolErrorCode::ToolFailed, error.to_string()))?;
+        Ok(output.into_inner())
+    }
+    pub(super) fn motion_target(
+        &self,
+        item_id: &str,
+    ) -> Result<(&PenNode, LayoutScene), MotionToolError> {
         let Some(document) = &self.document else {
             return Err(invalid("motion export needs an authored document"));
         };
@@ -171,47 +196,43 @@ impl ExportItem {
         let Some(node) = find_node(children, &node_id) else {
             return Err(invalid("motion export requires an authored node"));
         };
-        let clip = args
-            .get("clip")
-            .map(String::as_str)
-            .filter(|clip| !clip.trim().is_empty());
-        let trigger = match (args.get("trigger").map(String::as_str), clip) {
-            (None | Some("manual"), Some(clip)) => ClipTrigger::Manual(clip.to_owned()),
-            (None | Some("mount"), None) => ClipTrigger::Mount,
-            (Some("inView"), None) => ClipTrigger::InView,
-            _ => {
-                return Err(invalid(
-                    "trigger must be mount, inView, or manual with a clip id",
-                ))
-            }
-        };
-        let fps = args
-            .get("fps")
-            .map(|value| value.parse::<u32>())
-            .transpose()
-            .map_err(|_| invalid("fps must be an integer"))?
-            .unwrap_or(30);
-        let duration_ms = args
-            .get("durationMs")
-            .map(|value| value.parse::<u64>())
-            .transpose()
-            .map_err(|_| invalid("durationMs must be a nonnegative integer"))?;
         let scene = LayoutScene {
             pages: vec![page.clone()],
             active_page_index: 0,
         };
-        let options = MotionExportOptions {
-            trigger,
-            fps,
-            scale,
-            duration_ms,
-            ..Default::default()
-        };
-        let mut output = Cursor::new(Vec::new());
-        export_motion(&mut output, &scene, node, format, &options)
-            .map_err(|error| (ToolErrorCode::ToolFailed, error.to_string()))?;
-        Ok(output.into_inner())
+        Ok((node, scene))
     }
+}
+
+pub(super) type MotionToolError = (ToolErrorCode, String);
+
+fn invalid(message: &str) -> MotionToolError {
+    (ToolErrorCode::InvalidArgument, message.to_owned())
+}
+
+pub(super) fn parse_motion_trigger(
+    trigger: Option<&str>,
+    clip: Option<&str>,
+) -> Result<ClipTrigger, MotionToolError> {
+    match (trigger, clip) {
+        (None | Some("manual"), Some(id)) if !id.trim().is_empty() => {
+            Ok(ClipTrigger::Manual(id.into()))
+        }
+        (None | Some("mount"), None) => Ok(ClipTrigger::Mount),
+        (Some("inView"), None) => Ok(ClipTrigger::InView),
+        _ => Err(invalid(
+            "trigger must be mount, inView, or manual with a clip id",
+        )),
+    }
+}
+
+pub(super) fn parse_motion_format(format: &str) -> Option<MotionFormat> {
+    Some(match format {
+        "gif" => MotionFormat::Gif,
+        "apng" => MotionFormat::Apng,
+        "png-seq" => MotionFormat::PngSequence,
+        _ => return None,
+    })
 }
 
 fn canonical_format(format: &str) -> &str {

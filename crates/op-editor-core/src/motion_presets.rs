@@ -16,7 +16,8 @@ use serde_json::{json, Value};
 pub const STAGGER_STEP_MS: u64 = 60;
 
 /// Presets in menu order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum MotionPreset {
     FadeIn,
     SlideUp,

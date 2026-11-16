@@ -48,6 +48,7 @@ mod batch_layered_guidelines;
 mod batch_layered_tests;
 mod batch_page;
 mod image_annotation;
+pub mod motion_tools;
 pub use image_annotation::annotate_image_snapshot;
 mod batch_program;
 mod batch_program_dialect;

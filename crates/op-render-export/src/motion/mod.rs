@@ -9,7 +9,11 @@ use op_editor_ui::layout_scene::LayoutScene;
 
 use crate::{clamp_scale, ExportError};
 
+mod contact_sheet;
 mod render;
+pub use contact_sheet::{
+    render_motion_contact_sheet, MotionContactSheet, MotionFrameCell, MAX_CONTACT_SHEET_FRAMES,
+};
 
 pub const MAX_MOTION_FRAMES: u32 = 600;
 
@@ -53,10 +57,7 @@ pub fn export_motion<W: Write + Seek>(
     if !(1..=60).contains(&options.fps) {
         return Err(ExportError::InvalidMotionFps { fps: options.fps });
     }
-    let clip = Clip::build(root, &options.trigger);
-    if clip.is_empty() {
-        return Err(ExportError::EmptyMotionClip);
-    }
+    let clip = build_clip(root, &options.trigger)?;
     let duration = options
         .duration_ms
         .or_else(|| clip.duration_ms())
@@ -159,6 +160,14 @@ pub fn export_motion<W: Write + Seek>(
             Ok(())
         }
     }
+}
+
+fn build_clip(root: &PenNode, trigger: &ClipTrigger) -> Result<Clip, ExportError> {
+    let clip = Clip::build(root, trigger);
+    if clip.is_empty() {
+        return Err(ExportError::EmptyMotionClip);
+    }
+    Ok(clip)
 }
 
 #[cfg(test)]

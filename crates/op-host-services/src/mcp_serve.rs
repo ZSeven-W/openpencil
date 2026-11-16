@@ -682,6 +682,7 @@ pub(crate) mod export_tool;
 use export_tool::export_nodes_snapshot;
 
 pub(crate) mod export_item_tool;
+pub(crate) mod motion_render_tools;
 use export_item_tool::export_item_snapshot;
 pub(crate) mod export_deck_tool;
 use export_deck_tool::export_deck_snapshot;
