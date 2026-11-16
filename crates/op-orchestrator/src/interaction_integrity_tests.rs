@@ -151,3 +151,24 @@ fn race_branches_and_their_state_reads_are_checked_once() {
         "nested reads are reported at their own site only: {issues:?}"
     );
 }
+
+#[test]
+fn named_motion_must_be_manual_and_within_the_target_subtree() {
+    let source = r#"{"version":"1.1","children":[
+      {"type":"frame","id":"panel","children":[
+        {"type":"frame","id":"card","animations":[{"id":"reveal","trigger":"manual","durationMs":200,
+          "keyframes":[{"offset":0,"values":{"opacity":0}},{"offset":1,"values":{"opacity":1}}]}]}
+      ]},
+      {"type":"frame","id":"button","events":{"onTap":[
+        {"play_motion":{"target":"panel","animation":"reveal"}},
+        {"play_motion":{"target":"button","animation":"reveal"}}
+      ]}}
+    ]}"#;
+    assert_eq!(
+        kinds(&doc(source)),
+        vec![InteractionIssueKind::UnknownMotion {
+            target: "button".into(),
+            animation: "reveal".into()
+        }]
+    );
+}

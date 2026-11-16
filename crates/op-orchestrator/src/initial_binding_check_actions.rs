@@ -274,7 +274,7 @@ impl WriteEvidence {
             "delay" | "abort" | "push" | "replace" | "pop" | "open_url" | "copy"
             | "storage_set" | "storage_clear" | "toast" | "alert" | "ws_send" | "ws_close"
             | "vibrate" | "haptic" | "share" | "notify" | "focus" | "blur" | "dismiss_keyboard"
-            | "show" | "hide" | "toggle_visibility" | "scroll_to" | "animate" => {}
+            | "show" | "hide" | "toggle_visibility" | "scroll_to" | "animate" | "play_motion" => {}
             _ => self.opaque_initializer = true,
         }
     }

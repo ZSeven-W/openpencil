@@ -21,7 +21,7 @@
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::PenDocument;
 use serde_json::Value;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// One wiring defect, located by node id and schema site.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +47,10 @@ pub enum InteractionIssueKind {
     UnknownTarget {
         target: String,
     },
+    UnknownMotion {
+        target: String,
+        animation: String,
+    },
     /// A `bindings` key the runtime has no target for (`selected`, …).
     UnsupportedBindingProperty {
         property: String,
@@ -62,6 +66,7 @@ impl InteractionIssueKind {
             Self::UnsupportedBindingProperty { .. } => "interaction-unsupported-binding-property",
             Self::UnknownRoute { .. } => "interaction-unknown-route",
             Self::UnknownTarget { .. } => "interaction-unknown-target",
+            Self::UnknownMotion { .. } => "interaction-unknown-motion",
         }
     }
 }
@@ -84,6 +89,9 @@ impl std::fmt::Display for InteractionIssue {
                 f,
                 "interaction: `bindings.{property}` at {at} is not a property the runtime can bind"
             ),
+            InteractionIssueKind::UnknownMotion { target, animation } => {
+                write!(f, "interaction: action at {at} names missing manual motion `{animation}` in subtree `{target}`")
+            }
             InteractionIssueKind::UnknownTarget { target } => {
                 write!(f, "interaction: action at {at} targets missing node `{target}`")
             }
@@ -121,13 +129,22 @@ struct Context {
     declared: BTreeSet<String>,
     node_ids: BTreeSet<String>,
     screens: BTreeSet<String>,
+    manual_ids: BTreeMap<String, BTreeSet<String>>,
 }
 
 impl Context {
-    fn index(&mut self, node: &Value) {
+    fn index(&mut self, node: &Value) -> BTreeSet<String> {
         let Some(map) = node.as_object() else {
-            return;
+            return BTreeSet::new();
         };
+        let mut ids: BTreeSet<_> = map
+            .get("animations")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter(|clip| clip.get("trigger").and_then(Value::as_str) == Some("manual"))
+            .filter_map(|clip| clip.get("id").and_then(Value::as_str).map(str::to_owned))
+            .collect();
         if let Some(id) = map.get("id").and_then(Value::as_str) {
             self.node_ids.insert(id.to_owned());
         }
@@ -140,8 +157,17 @@ impl Context {
             self.declared.extend(state.keys().cloned());
         }
         for child in children(map) {
-            self.index(child);
+            ids.extend(self.index(child));
         }
+        if let Some(id) = map.get("id").and_then(Value::as_str) {
+            if !ids.is_empty() {
+                self.manual_ids
+                    .entry(id.to_owned())
+                    .or_default()
+                    .extend(ids.iter().cloned());
+            }
+        }
+        ids
     }
 
     fn check(&self, node: &Value, issues: &mut Vec<InteractionIssue>) {
@@ -235,7 +261,11 @@ impl Context {
         };
         match verb.as_str() {
             "push" | "replace" | "reset" => {
-                if let Some(path) = body.as_str().and_then(string_literal) {
+                if let Some(path) = body
+                    .as_str()
+                    .or_else(|| body.get("path").and_then(Value::as_str))
+                    .and_then(string_literal)
+                {
                     // No screens at all is the WORST case (every route is
                     // missing), not a reason to skip the check.
                     if !self.screens.contains(&path) {
@@ -255,6 +285,30 @@ impl Context {
                             InteractionIssueKind::UnknownTarget {
                                 target: target.to_owned(),
                             },
+                        );
+                    }
+                }
+            }
+            "play_motion" => {
+                if let Ok(control) =
+                    serde_json::from_value::<jian_core::motion::MotionControl>(body.clone())
+                {
+                    let jian_core::motion::MotionControl {
+                        target, animation, ..
+                    } = control;
+                    if !self.node_ids.contains(&target) {
+                        push(
+                            site.to_owned(),
+                            InteractionIssueKind::UnknownTarget { target },
+                        );
+                    } else if !self
+                        .manual_ids
+                        .get(&target)
+                        .is_some_and(|ids| ids.contains(&animation))
+                    {
+                        push(
+                            site.to_owned(),
+                            InteractionIssueKind::UnknownMotion { target, animation },
                         );
                     }
                 }

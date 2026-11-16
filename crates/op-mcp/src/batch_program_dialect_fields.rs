@@ -131,7 +131,7 @@ fn repair_events(obj: &mut Map<String, Value>, notes: &mut Vec<String>) {
     }
 }
 
-/// `animations` is a list of `mount` / `inView` animations. Wrap a single
+/// `animations` is a list of `mount`, `inView`, or `manual` animations. Wrap a single
 /// object; map trigger synonyms; drop an entry whose trigger has no
 /// counterpart (`press`, `hover` — interaction states, not entrance motion)
 /// rather than the node that carries it.
@@ -161,6 +161,7 @@ fn repair_animations(obj: &mut Map<String, Value>, notes: &mut Vec<String>) {
         {
             "mount" | "load" | "appear" | "enter" | "onmount" | "onload" => "mount",
             "inview" | "scroll" | "visible" | "viewport" | "oninview" => "inView",
+            "manual" => "manual",
             _ => {
                 dropped.push(trigger.to_string());
                 return false;

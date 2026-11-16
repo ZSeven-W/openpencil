@@ -1,7 +1,7 @@
 use crate::design_form::DesignForm;
 use crate::issue::{FixProperty, Issue, IssueCategory, IssueSeverity};
 use crate::node_util::{children, node_id};
-use jian_ops_schema::motion::P1_MOTION_PROPERTIES;
+use jian_ops_schema::motion::{Iterations, P1_MOTION_PROPERTIES};
 use jian_ops_schema::node::PenNode;
 use serde_json::json;
 
@@ -27,10 +27,9 @@ fn collect(node: &PenNode, nodes: &mut Vec<String>, issues: &mut Vec<Issue>) {
     let (transition, animations) = node.motion_declarations();
     if let Some(animations) = animations {
         nodes.push(node_id(node).to_owned());
-        if animations
-            .iter()
-            .any(|animation| animation.duration_ms > 1_500)
-        {
+        if animations.iter().any(|animation| {
+            animation.iterations != Iterations::Infinite && animation.duration_ms > 1_500
+        }) {
             issues.push(issue(
                 node_id(node),
                 1_500,

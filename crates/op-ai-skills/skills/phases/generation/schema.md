@@ -56,4 +56,4 @@ PADDING: number (uniform), [v, h], or [top, right, bottom, left].
 cornerRadius is a number. fill is ALWAYS an array. Do NOT set x/y on children inside layout frames.
 
 - Motion: document `motion` is `"full"|"reduced"`; nodes may declare `transition` and `animations` with camelCase fields, M3 easing names, and registry-property keyframes (during `delayMs` the node shows keyframe 0), e.g. `animations:[{trigger:"mount",durationMs:400,easing:"emphasizedDecelerate",keyframes:[{offset:0,values:{opacity:0,translateY:16}},{offset:1,values:{opacity:1,translateY:0}}]}]`.
-- Motion properties are compositor-safe: prefer `opacity`, `translateX/Y`, `scaleX/Y`, `rotation`, `fill`, `stroke`, and `cornerRadius`; keep `mount` and `inView` as time triggers, not scroll timelines.
+- Motion properties are compositor-safe: prefer `opacity`, `translateX/Y`, `scaleX/Y`, `rotation`, `fill`, `stroke`, and `cornerRadius`; see the motion recipe for named clips and navigation transitions.

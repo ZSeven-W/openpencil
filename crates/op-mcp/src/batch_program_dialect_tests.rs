@@ -281,3 +281,19 @@ fn genuinely_unknown_types_keep_the_unchanged_diagnostic() {
         "{errors:?}"
     );
 }
+
+#[test]
+fn generated_named_motion_and_infinite_iterations_survive_batch_program() {
+    let (state, envelope) = run(
+        r#"layer=I(b0, {"type":"rectangle","width":40,"height":40,"animations":[{"trigger":"manual","id":"pulse","iterations":"infinite","durationMs":1500,"keyframes":[{"offset":0,"values":{"opacity":0.5}},{"offset":1,"values":{"opacity":1}}]}],"events":{"onTap":[{"play_motion":{"target":"layer","animation":"pulse","mode":"restart"}}]}})"#,
+    );
+    assert!(errors(&envelope).is_empty(), "{envelope}");
+    let node = json_of(&state, &envelope, "layer");
+    assert_eq!(node["animations"][0]["trigger"], "manual");
+    assert_eq!(node["animations"][0]["id"], "pulse");
+    assert_eq!(node["animations"][0]["iterations"], "infinite");
+    assert_eq!(
+        node["events"]["onTap"][0]["play_motion"]["animation"],
+        "pulse"
+    );
+}
