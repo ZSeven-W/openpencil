@@ -1,10 +1,14 @@
 //! Editor-state export dispatch shared by desktop and mobile shells.
 
+use std::io::Cursor;
 use std::path::Path;
 
+use op_editor_core::motion_export::{MotionExportFormat, MotionExportRequest};
 use op_editor_core::scene_template_catalog::TemplateScene;
+use op_editor_core::walkers::find_node;
 use op_editor_core::{EditorState, ExportFormat, HomeFamily};
 
+use crate::motion::{export_motion, MotionExportOptions, MotionFormat};
 use crate::pdf::{render_deck_pdf_boards_bytes, render_deck_pdf_bytes, render_pdf_bytes};
 use crate::{
     render_node_on_page_raster_bytes, render_node_svg_bytes, render_page_raster_bytes,
@@ -12,11 +16,13 @@ use crate::{
 };
 
 /// Scope captured when the shell drains an export action.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum EditorExportScope {
     /// Use the format, scale, selection, and scenario currently configured on
     /// the editor state.
     Configured,
+    /// Export the clip selected in the motion section of the dialog.
+    Motion(MotionExportRequest),
     /// Export only these slide boards as a PDF. The ids are a filter; output
     /// order still follows authored deck order.
     DeckBoards(Vec<String>),
@@ -36,6 +42,9 @@ pub fn default_export_file_name(state: &EditorState, scope: &EditorExportScope) 
         EditorExportScope::Configured => {
             op_editor_core::export_name::default_export_file_name(state)
         }
+        EditorExportScope::Motion(request) => {
+            op_editor_core::export_name::motion_export_file_name(state, request)
+        }
         EditorExportScope::DeckBoards(_) => format!(
             "{}-slides.pdf",
             op_editor_core::export_name::document_export_stem(state)
@@ -54,6 +63,7 @@ pub fn export_editor_state(
             render_deck_pdf_boards_bytes(state, boards)?,
         ),
         EditorExportScope::Configured => render_configured(state)?,
+        EditorExportScope::Motion(request) => render_motion(state, request)?,
     };
     Ok(ExportArtifact {
         file_name: default_export_file_name(state, scope),
@@ -70,6 +80,33 @@ pub fn export_editor_state_to_path(
 ) -> Result<(), ExportError> {
     let artifact = export_editor_state(state, scope)?;
     std::fs::write(target, artifact.bytes).map_err(|e| ExportError::Write(e.to_string()))
+}
+
+fn render_motion(
+    state: &EditorState,
+    request: &MotionExportRequest,
+) -> Result<(&'static str, Vec<u8>), ExportError> {
+    let root = op_editor_core::NodeId::new_opt(request.root_id.clone())
+        .and_then(|id| find_node(state.active_children(), &id))
+        .ok_or_else(|| ExportError::NodeNotFoundOnActivePage {
+            node_id: request.root_id.clone(),
+        })?;
+    let scene = op_pen_loader::editor_state_to_active_page_export_layout_scene(state);
+    let (format, mime) = match request.format {
+        MotionExportFormat::Gif => (MotionFormat::Gif, "image/gif"),
+        MotionExportFormat::Apng => (MotionFormat::Apng, "image/apng"),
+        MotionExportFormat::PngSequence => (MotionFormat::PngSequence, "application/zip"),
+    };
+    let options = MotionExportOptions {
+        trigger: request.trigger.as_clip_trigger(),
+        fps: request.fps,
+        scale: request.scale,
+        duration_ms: request.duration_ms,
+        repeat: request.repeat,
+    };
+    let mut bytes = Cursor::new(Vec::new());
+    export_motion(&mut bytes, &scene, root, format, &options)?;
+    Ok((mime, bytes.into_inner()))
 }
 
 fn render_configured(state: &EditorState) -> Result<(&'static str, Vec<u8>), ExportError> {

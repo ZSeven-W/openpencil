@@ -210,6 +210,7 @@ pub(crate) fn drain_document_actions(session: &mut Session) -> FfiResult<i32> {
         }
         #[cfg(any(target_os = "ios", target_os = "android", target_env = "ohos", test))]
         Some(op_editor_core::FileAction::ExportImageConfirm)
+        | Some(op_editor_core::FileAction::ExportMotionConfirm)
         | Some(op_editor_core::FileAction::ExportDeckPdfSelection) => {
             crate::editor_export::stage_export(session, pending)
         }

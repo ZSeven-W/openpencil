@@ -15,7 +15,7 @@ pub use contact_sheet::{
     render_motion_contact_sheet, MotionContactSheet, MotionFrameCell, MAX_CONTACT_SHEET_FRAMES,
 };
 
-pub const MAX_MOTION_FRAMES: u32 = 600;
+pub use op_editor_core::motion_export::MAX_MOTION_EXPORT_FRAMES as MAX_MOTION_FRAMES;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MotionFormat {
@@ -63,10 +63,7 @@ pub fn export_motion<W: Write + Seek>(
         .or_else(|| clip.duration_ms())
         .ok_or(ExportError::MotionDurationRequired)?;
     let fps = u64::from(options.fps);
-    let frame_count = duration
-        .saturating_mul(fps)
-        .div_ceil(1_000)
-        .saturating_add(1);
+    let frame_count = op_editor_core::motion_export::motion_frame_count(duration, options.fps);
     if frame_count > u64::from(MAX_MOTION_FRAMES) {
         return Err(ExportError::TooManyMotionFrames {
             frames: frame_count,

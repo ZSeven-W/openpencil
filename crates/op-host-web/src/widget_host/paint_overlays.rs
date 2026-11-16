@@ -149,7 +149,7 @@ impl WidgetHost {
                     a: 0.45,
                 },
             );
-            let dlg = ExportDialog::centered(viewport_width, viewport_height);
+            let dlg = ExportDialog::for_editor(&self.editor_state, viewport_width, viewport_height);
             dlg.paint(&mut *backend, &self.theme, &self.editor_state.editor_ui);
         }
 

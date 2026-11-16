@@ -110,6 +110,15 @@ impl WidgetHost {
         if self.editor_state.editor_ui.agent_settings_open {
             return Some(self.update_agent_settings_hover(x, y));
         }
+        if self.editor_state.editor_ui.export_dialog_open {
+            let dialog =
+                op_editor_ui::widgets::ExportDialog::for_editor(&self.editor_state, vw, vh);
+            let changed = dialog.update_hover(point, &mut self.editor_state.editor_ui);
+            if changed {
+                self.mark_dirty();
+            }
+            return Some(changed);
+        }
         None
     }
 }

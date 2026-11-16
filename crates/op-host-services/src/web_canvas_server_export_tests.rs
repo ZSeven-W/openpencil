@@ -497,3 +497,32 @@ fn selection_push_is_visible_to_the_mcp_get_selection_tool() {
 }
 
 // --- serve_one routing (socket-level, via a mock stream) ---
+
+#[test]
+fn motion_export_renders_the_posted_document_without_mutating_daemon_state() {
+    use base64::Engine as _;
+    let mut server = fresh_state();
+    let before = server.editor.doc.clone();
+    let body = r##"{
+      "document":{"version":"1.1","name":"Motion Trial","children":[
+        {"id":"sample","type":"rectangle","width":20,"height":12,"fill":[{"type":"solid","color":"#cc4477"}],
+         "animations":[{"trigger":"manual","id":"reveal","durationMs":300,"easing":"linear",
+          "keyframes":[{"offset":0,"opacity":0},{"offset":1,"opacity":1}]}]}
+      ]},
+      "motion":{"rootId":"sample","format":"apng","trigger":{"kind":"manual","id":"reveal"},
+       "fps":12,"scale":1,"durationMs":300,"repeat":false}
+    }"##;
+    let response = handle_web_canvas_request("POST", "/api/export/motion", body, &mut server);
+    assert_eq!(response.status, "200 OK", "{}", response.body);
+    let payload: serde_json::Value = serde_json::from_str(&response.body).unwrap();
+    assert_eq!(payload["fileName"], "Motion Trial-rectangle-sample.apng");
+    assert_eq!(payload["mime"], "image/apng");
+    let encoded = payload["dataBase64"].as_str().unwrap();
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .unwrap();
+    assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+    let control = bytes.windows(4).position(|chunk| chunk == b"acTL").unwrap() + 4;
+    assert_eq!(&bytes[control..control + 8], &[0, 0, 0, 5, 0, 0, 0, 1]);
+    assert_eq!(server.editor.doc, before);
+}

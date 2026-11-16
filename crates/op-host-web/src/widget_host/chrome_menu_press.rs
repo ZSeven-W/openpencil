@@ -111,57 +111,6 @@ impl WidgetHost {
         }
     }
 
-    /// Export-dialog press dispatcher.
-    pub(in crate::widget_host) fn dispatch_export_dialog_press(
-        &mut self,
-        x: f32,
-        y: f32,
-        viewport_w: f32,
-        viewport_h: f32,
-    ) {
-        use op_editor_core::editor_ui_state::FileAction;
-        use op_editor_ui::widgets::export_dialog::{
-            scale_from_index, ExportDialog, ExportDialogHit,
-        };
-        let dlg = ExportDialog::centered(viewport_w, viewport_h);
-        let point = op_editor_ui::Point2D::new(x, y);
-        let hit = dlg.hit_test_for_ui(point, &self.editor_state.editor_ui);
-        self.editor_state.editor_ui.pressed_button = hit
-            .map(op_editor_ui::widgets::editor_state_ext::export_dialog_button)
-            .map(op_editor_core::ButtonPressTarget::ExportDialog);
-        match hit {
-            Some(ExportDialogHit::Format(f)) => {
-                self.editor_state.editor_ui.export_format =
-                    op_editor_ui::widgets::editor_state_ext::export_format(f);
-                self.editor_state.editor_ui.export_dialog_hover = None;
-            }
-            Some(ExportDialogHit::Scale(i)) => {
-                self.editor_state.editor_ui.export_scale = scale_from_index(i);
-            }
-            Some(ExportDialogHit::Cancel) => {
-                self.editor_state.editor_ui.export_dialog_open = false;
-                self.editor_state.editor_ui.export_dialog_hover = None;
-            }
-            Some(ExportDialogHit::Export) => {
-                self.editor_state.editor_ui.export_dialog_open = false;
-                self.editor_state.editor_ui.export_dialog_hover = None;
-                self.editor_state.editor_ui.pending_file_action =
-                    Some(FileAction::ExportImageConfirm);
-            }
-            None => {
-                // No control hit — blank press (inside chrome or
-                // outside the dialog): blur the chrome text inputs.
-                self.blur_text_inputs_on_blank_press();
-                if !dlg.contains(point) {
-                    // Outside click — dismiss like Cancel.
-                    self.editor_state.editor_ui.export_dialog_open = false;
-                    self.editor_state.editor_ui.export_dialog_hover = None;
-                }
-            }
-        }
-        self.mark_dirty();
-    }
-
     /// Figma-import-modal press dispatcher.
     pub(in crate::widget_host) fn dispatch_figma_import_press(
         &mut self,

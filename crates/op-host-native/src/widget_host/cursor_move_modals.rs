@@ -57,13 +57,13 @@ impl WidgetHostNative {
         // scrim.
         if self.editor_state.editor_ui.export_dialog_open {
             use op_editor_ui::widgets::ExportDialog;
-            let dlg = ExportDialog::centered(self.last_viewport_w, self.last_viewport_h);
-            let new_hover = dlg
-                .hit_test_for_ui(Point2D::new(x, y), &self.editor_state.editor_ui)
-                .map(op_editor_ui::widgets::editor_state_ext::export_dialog_button);
-            let changed = new_hover != self.editor_state.editor_ui.export_dialog_hover;
+            let dlg = ExportDialog::for_editor(
+                &self.editor_state,
+                self.last_viewport_w,
+                self.last_viewport_h,
+            );
+            let changed = dlg.update_hover(Point2D::new(x, y), &mut self.editor_state.editor_ui);
             if changed {
-                self.editor_state.editor_ui.export_dialog_hover = new_hover;
                 self.mark_dirty();
             }
             return Some(changed);

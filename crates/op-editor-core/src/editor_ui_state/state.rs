@@ -144,6 +144,7 @@ pub struct EditorUiState {
     /// cursor-move while the dialog is open.
     pub export_dialog_hover: Option<crate::export_dialog_state::ExportDialogButton>,
     pub export_format: ExportFormat,
+    pub motion_export: crate::motion_export::MotionExportDialogState,
     /// Property-panel Export section: the scale dropdown's inline
     /// select popup is open. Mutually exclusive with
     /// `export_format_picker_open` — opening one closes the other.

@@ -52,6 +52,7 @@ impl Default for EditorUiState {
             document_dirty: false,
             reduced_motion: false,
             export_scale: 2.0,
+            motion_export: Default::default(),
             export_dialog_open: false,
             export_dialog_hover: None,
             export_format: ExportFormat::Png,

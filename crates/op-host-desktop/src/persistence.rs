@@ -441,6 +441,31 @@ pub fn run_action(
             }
             ActionOutcome::Noop
         }
+        FileAction::ExportMotionConfirm => {
+            use op_host_services::export::{self, EditorExportScope};
+            let Some(request) = host
+                .editor_state_mut()
+                .editor_ui
+                .motion_export
+                .pending
+                .take()
+            else {
+                return ActionOutcome::Noop;
+            };
+            let format = request.format;
+            let scope = EditorExportScope::Motion(request);
+            let name = export::default_export_file_name(host.editor_state(), &scope);
+            if let Some(path) = pick_export_path(host, format.label(), &[format.extension()], &name)
+            {
+                if let Err(error) =
+                    export::export_editor_state_to_path(host.editor_state(), &scope, &path)
+                {
+                    eprintln!("[export-motion] {error}");
+                    show_error_dialog(host, ErrorKind::Export, Some(&path), &error.to_string());
+                }
+            }
+            ActionOutcome::Noop
+        }
         FileAction::ExportDeckPdfSelection => {
             // The same picker and the same exporter as the PDF branch
             // above, with the board list narrowed to the selection. It

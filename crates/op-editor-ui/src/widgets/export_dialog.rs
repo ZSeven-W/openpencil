@@ -14,6 +14,13 @@ use crate::widgets::editor_state_ext::{doc_export_format, export_format};
 use crate::widgets::text_metrics;
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::motion_export::{
+    motion_export_choices, MotionExportChoice, MotionExportFormat,
+};
+use op_editor_core::EditorState;
+
+#[path = "export_dialog_motion.rs"]
+mod motion;
 
 pub const DIALOG_WIDTH: f32 = 392.0;
 pub const DIALOG_HEIGHT: f32 = 236.0;
@@ -74,28 +81,95 @@ impl ExportFormat {
 pub enum ExportDialogHit {
     Format(ExportFormat),
     Scale(u8),
+    MotionFormat(MotionExportFormat),
+    PreviousClip,
+    NextClip,
+    FrameRate(u32),
+    MotionDuration,
+    RepeatMotion,
     Cancel,
     Export,
 }
 
 pub struct ExportDialog {
     rect: Rect,
+    motion_choices: Vec<MotionExportChoice>,
+    show_motion_settings: bool,
+    fit: f32,
 }
 
 impl ExportDialog {
     pub fn centered(viewport_w: f32, viewport_h: f32) -> Self {
-        let x = ((viewport_w - DIALOG_WIDTH) / 2.0).max(0.0);
-        let y = ((viewport_h - DIALOG_HEIGHT) / 2.0).max(0.0);
+        Self::layout(viewport_w, viewport_h, Vec::new(), false)
+    }
+
+    pub fn for_editor(state: &EditorState, viewport_w: f32, viewport_h: f32) -> Self {
+        let choices = motion_export_choices(state);
+        Self::layout(
+            viewport_w,
+            viewport_h,
+            choices,
+            state.editor_ui.motion_export.format.is_some(),
+        )
+    }
+
+    fn layout(
+        viewport_w: f32,
+        viewport_h: f32,
+        motion_choices: Vec<MotionExportChoice>,
+        motion_selected: bool,
+    ) -> Self {
+        let show_motion_settings = motion_selected && !motion_choices.is_empty();
+        let height = DIALOG_HEIGHT
+            + if motion_choices.is_empty() {
+                0.0
+            } else {
+                motion::SECTION_HEIGHT
+            }
+            + if show_motion_settings {
+                motion::SETTINGS_HEIGHT
+            } else {
+                0.0
+            };
+        let fit = if motion_choices.is_empty() {
+            1.0
+        } else {
+            ((viewport_w - 16.0) / DIALOG_WIDTH)
+                .min((viewport_h - 16.0) / height)
+                .clamp(0.05, 1.0)
+        };
+        let x = ((viewport_w - DIALOG_WIDTH * fit) / 2.0).max(0.0);
+        let y = ((viewport_h - height * fit) / 2.0).max(0.0);
         Self {
-            rect: Rect::xywh(x, y, DIALOG_WIDTH, DIALOG_HEIGHT),
+            rect: Rect::xywh(x, y, DIALOG_WIDTH, height),
+            motion_choices,
+            show_motion_settings,
+            fit,
         }
     }
 
     pub fn rect(&self) -> Rect {
-        self.rect
+        Rect::xywh(
+            self.rect.origin.x,
+            self.rect.origin.y,
+            self.rect.size.x * self.fit,
+            self.rect.size.y * self.fit,
+        )
+    }
+
+    fn unscale(&self, point: Point2D) -> Point2D {
+        let offset = point - self.rect.origin;
+        Point2D::new(
+            self.rect.origin.x + offset.x / self.fit,
+            self.rect.origin.y + offset.y / self.fit,
+        )
     }
 
     pub fn paint(&self, backend: &mut dyn RenderBackend, theme: &Theme, ui: &EditorUiState) {
+        if self.fit != 1.0 {
+            backend.save();
+            backend.scale(Point2D::new(self.fit, self.fit), self.rect.origin);
+        }
         let tr = |key: &'static str| op_i18n::translate(ui.effective_locale(), key);
         backend.fill_round_rect(self.rect, CORNER, theme.popover);
         backend.stroke_round_rect(self.rect, CORNER, theme.border, 1.0);
@@ -126,7 +200,7 @@ impl ExportDialog {
         backend.draw_text(&fmt_label, Point2D::new(self.rect.origin.x + PAD, body_y));
         for (i, &fmt) in ExportFormat::ALL.iter().enumerate() {
             let rect = self.format_pill_rect(i);
-            let selected = fmt == doc_export_format(ui.export_format);
+            let selected = !self.show_motion_settings && fmt == doc_export_format(ui.export_format);
             if !fmt.is_implemented() {
                 self.paint_disabled_pill(backend, theme, rect, fmt.label());
             } else {
@@ -161,7 +235,7 @@ impl ExportDialog {
             Point2D::new(self.rect.origin.x + PAD, scale_label_y),
         );
         for (i, lbl) in ["1x", "2x", "3x"].iter().enumerate() {
-            if !raster_scale_enabled(ui) {
+            if !self.scale_enabled(ui) {
                 self.paint_disabled_pill(backend, theme, self.scale_pill_rect(i), lbl);
                 continue;
             }
@@ -181,9 +255,30 @@ impl ExportDialog {
             );
         }
 
+        self.paint_motion(backend, theme, ui);
+
         // Footer buttons — Cancel as an outline (border + hover wash), Export
         // as the primary CTA. jian Button owns the fill / border / feedback.
         let (cancel, export) = self.button_rects();
+        let over_limit = self.motion_frame_limit_exceeded(ui);
+        if over_limit {
+            let hint = Rect::xywh(
+                self.rect.origin.x + PAD,
+                export.origin.y,
+                cancel.origin.x - self.rect.origin.x - 2.0 * PAD,
+                export.size.y,
+            );
+            backend.save();
+            backend.clip_rect(hint);
+            paint_centered_label(
+                backend,
+                tr("export.motionFrameLimit"),
+                11.0,
+                theme.muted_foreground,
+                hint,
+            );
+            backend.restore();
+        }
         let tokens = crate::widgets::button::tokens_from_theme(theme);
         use jian_widgets::components::button::{Button, ButtonVariant};
         use op_editor_core::ExportDialogButton;
@@ -201,12 +296,15 @@ impl ExportDialog {
             label: tr("common.export"),
             icon_paths: None,
             variant: ButtonVariant::Primary,
-            enabled: true,
+            enabled: !over_limit,
             hovered: ui.export_dialog_hover == Some(ExportDialogButton::Export),
             pressed: export_dialog_pressed(ui, ExportDialogButton::Export),
             font_size: 13.0,
         }
         .paint(backend, export, &tokens);
+        if self.fit != 1.0 {
+            backend.restore();
+        }
     }
 
     fn paint_disabled_pill(
@@ -256,12 +354,19 @@ impl ExportDialog {
     /// Resolve only controls that apply to the currently selected format.
     pub fn hit_test_for_ui(&self, point: Point2D, ui: &EditorUiState) -> Option<ExportDialogHit> {
         match self.hit_test(point) {
-            Some(ExportDialogHit::Scale(_)) if !raster_scale_enabled(ui) => None,
+            Some(ExportDialogHit::Scale(_)) if !self.scale_enabled(ui) => None,
+            Some(ExportDialogHit::Export) if self.motion_frame_limit_exceeded(ui) => None,
+            Some(ExportDialogHit::RepeatMotion)
+                if ui.motion_export.format == Some(MotionExportFormat::PngSequence) =>
+            {
+                None
+            }
             hit => hit,
         }
     }
 
     pub fn hit_test(&self, point: Point2D) -> Option<ExportDialogHit> {
+        let point = self.unscale(point);
         if !(self.rect).contains(point) {
             return None;
         }
@@ -280,6 +385,9 @@ impl ExportDialog {
                 return Some(ExportDialogHit::Scale((i as u8) + 1));
             }
         }
+        if let Some(hit) = self.hit_test_motion(point) {
+            return Some(hit);
+        }
         let (cancel, export) = self.button_rects();
         if (cancel).contains(point) {
             return Some(ExportDialogHit::Cancel);
@@ -293,7 +401,71 @@ impl ExportDialog {
     /// True iff the point lands inside the dialog rect (inclusive
     /// of the right + bottom edges).
     pub fn contains(&self, point: Point2D) -> bool {
-        self.rect.contains(point)
+        self.rect().contains(point)
+    }
+
+    pub fn update_hover(&self, point: Point2D, ui: &mut EditorUiState) -> bool {
+        let hover = self
+            .hit_test_for_ui(point, ui)
+            .map(crate::widgets::editor_state_ext::export_dialog_button);
+        let changed = hover != ui.export_dialog_hover;
+        ui.export_dialog_hover = hover;
+        changed
+    }
+
+    pub fn press_for_editor(
+        state: &mut EditorState,
+        point: Point2D,
+        width: f32,
+        height: f32,
+    ) -> bool {
+        Self::for_editor(state, width, height).press(point, &mut state.editor_ui)
+    }
+
+    /// Apply a modal press. Blank presses are returned to the host's blur flow.
+    pub fn press(&self, point: Point2D, ui: &mut EditorUiState) -> bool {
+        use op_editor_core::editor_ui_state::FileAction;
+        let hit = self.hit_test_for_ui(point, ui);
+        ui.pressed_button = hit
+            .map(crate::widgets::editor_state_ext::export_dialog_button)
+            .map(op_editor_core::ButtonPressTarget::ExportDialog);
+        match hit {
+            Some(ExportDialogHit::Format(format)) => {
+                ui.export_format = export_format(format);
+                ui.motion_export.format = None;
+                ui.export_dialog_hover = None;
+            }
+            Some(ExportDialogHit::Scale(scale)) => ui.export_scale = scale_from_index(scale),
+            Some(ExportDialogHit::Export) => {
+                ui.motion_export.pending = ui
+                    .motion_export
+                    .request(&self.motion_choices, ui.export_scale);
+                ui.pending_file_action = Some(if ui.motion_export.pending.is_some() {
+                    FileAction::ExportMotionConfirm
+                } else {
+                    FileAction::ExportImageConfirm
+                });
+                ui.export_dialog_open = false;
+                ui.export_dialog_hover = None;
+            }
+            Some(ExportDialogHit::Cancel) => {
+                ui.export_dialog_open = false;
+                ui.export_dialog_hover = None;
+            }
+            Some(hit) => self.press_motion(hit, ui),
+            None => {
+                if !self.contains(point) {
+                    ui.export_dialog_open = false;
+                    ui.export_dialog_hover = None;
+                }
+                return false;
+            }
+        }
+        true
+    }
+
+    fn scale_enabled(&self, ui: &EditorUiState) -> bool {
+        self.show_motion_settings || raster_scale_enabled(ui)
     }
 
     fn format_pill_rect(&self, i: usize) -> Rect {

@@ -108,6 +108,10 @@ pub fn selected_export_node_stem(state: &EditorState) -> Option<String> {
         return None;
     }
     let node = find_node(state.active_children(), &state.selection.anchor)?;
+    Some(export_node_stem(node))
+}
+
+fn export_node_stem(node: &PenNode) -> String {
     let from_name = node
         .base()
         .name
@@ -115,16 +119,32 @@ pub fn selected_export_node_stem(state: &EditorState) -> Option<String> {
         .map(|name| sanitize_name_component(name, MAX_NAME_COMPONENT_CHARS))
         .filter(|stem| !stem.is_empty());
     if let Some(stem) = from_name {
-        return Some(stem);
+        return stem;
     }
     // Unnamed node: the kind reads better than a generated id, and the
     // id only has to carry the name when even that is unavailable.
     let from_id = sanitize_name_component(node.id_str(), MAX_NAME_COMPONENT_CHARS);
-    Some(if from_id.is_empty() {
+    if from_id.is_empty() {
         kind_stem(node).to_string()
     } else {
         format!("{}-{from_id}", kind_stem(node))
-    })
+    }
+}
+
+/// Name a motion export after its captured root even when no layer was selected.
+pub fn motion_export_file_name(
+    state: &EditorState,
+    request: &crate::motion_export::MotionExportRequest,
+) -> String {
+    let document = document_export_stem(state);
+    let node = crate::NodeId::new_opt(request.root_id.clone())
+        .and_then(|id| find_node(state.active_children(), &id))
+        .map(export_node_stem);
+    let extension = request.format.extension();
+    match node {
+        Some(node) if node != document => format!("{document}-{node}.{extension}"),
+        _ => format!("{document}.{extension}"),
+    }
 }
 
 /// File-name stem for the current export, without an extension.

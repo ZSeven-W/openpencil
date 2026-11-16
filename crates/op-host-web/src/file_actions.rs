@@ -165,6 +165,20 @@ pub fn parse_pdf_download_response(response: &str) -> Result<PdfDownload, Docume
     })
 }
 
+pub fn export_motion_request_body(
+    state: &EditorState,
+    request: &op_editor_core::motion_export::MotionExportRequest,
+) -> Result<String, DocumentExportError> {
+    let document = document_value_with_editor_meta(state)?;
+    serde_json::to_string(&serde_json::json!({
+        "document": document,
+        "activePageIndex": state.ui.active_page_index,
+        "fullContent": state.editor_ui.workspace.visible,
+        "motion": request,
+    }))
+    .map_err(|e| DocumentExportError::SerializeRequest(e.to_string()))
+}
+
 pub fn export_raster_request_body(state: &EditorState) -> Result<String, DocumentExportError> {
     let format = match state.editor_ui.export_format {
         ExportFormat::Png => "png",

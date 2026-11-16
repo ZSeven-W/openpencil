@@ -30,6 +30,53 @@ pub(super) fn export_raster_download(body: &str, state: &WebCanvasState) -> WebR
     }
 }
 
+pub(super) fn export_motion_download(
+    body: &str,
+    fallback: impl FnOnce() -> EditorState,
+) -> WebReply {
+    use crate::export::{export_editor_state, EditorExportScope};
+    let result: Result<crate::export::ExportArtifact> = (|| {
+        let parsed = parse_export_body(body)?
+            .ok_or_else(|| WebCanvasError::BadRequest("motion request is required".into()))?;
+        let motion = parsed
+            .get("motion")
+            .ok_or_else(|| WebCanvasError::BadRequest("motion request is required".into()))?;
+        let request: op_editor_core::motion_export::MotionExportRequest =
+            serde_json::from_value(motion.clone())
+                .map_err(|error| WebCanvasError::BadRequest(error.to_string()))?;
+        if !request.scale.is_finite() || request.scale <= 0.0 {
+            return Err(WebCanvasError::BadRequest(
+                "scale must be a positive finite number".into(),
+            ));
+        }
+        let editor = if parsed.get("document").is_some() {
+            export_editor_from_value(Some(&parsed), &EditorState::new())?
+        } else {
+            export_editor_from_value(Some(&parsed), &fallback())?
+        };
+        Ok(export_editor_state(
+            &editor,
+            &EditorExportScope::Motion(request),
+        )?)
+    })();
+    match result {
+        Ok(artifact) => WebReply {
+            status: "200 OK",
+            body: serde_json::json!({
+                "ok": true,
+                "fileName": artifact.file_name,
+                "mime": artifact.mime_type,
+                "dataBase64": base64::engine::general_purpose::STANDARD.encode(artifact.bytes),
+            })
+            .to_string(),
+        },
+        Err(error) => WebReply {
+            status: error.http_status(),
+            body: crate::mcp_serve::rest_error_body(&format!("export motion failed: {error}")),
+        },
+    }
+}
+
 pub(super) fn build_raster_download(body: &str, fallback: &EditorState) -> Result<RasterDownload> {
     let parsed = parse_export_body(body)?;
     let mut editor = export_editor_from_value(parsed.as_ref(), fallback)?;

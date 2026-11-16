@@ -77,6 +77,8 @@ pub enum FileAction {
     SaveAs,
     ExportImage,
     ExportImageConfirm,
+    /// Export the authored clip captured in `motion_export.pending`.
+    ExportMotionConfirm,
     /// Slides rail ▸ Export PDF ▸ "Export selected slides" — host picks
     /// one output file and writes a slide-per-page PDF holding ONLY the
     /// boards `preview_slideshow::selected_page_boards` returns.

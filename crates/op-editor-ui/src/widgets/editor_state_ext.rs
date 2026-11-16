@@ -202,6 +202,12 @@ pub fn export_dialog_button(
     match hit {
         W::Format(f) => O::Format(export_format(f)),
         W::Scale(s) => O::Scale(s),
+        W::MotionFormat(format) => O::MotionFormat(format),
+        W::PreviousClip => O::PreviousClip,
+        W::NextClip => O::NextClip,
+        W::FrameRate(fps) => O::FrameRate(fps),
+        W::MotionDuration => O::MotionDuration,
+        W::RepeatMotion => O::RepeatMotion,
         W::Cancel => O::Cancel,
         W::Export => O::Export,
     }

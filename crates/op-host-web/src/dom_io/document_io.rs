@@ -69,6 +69,7 @@ pub(crate) fn drain_pending_file_action<C: RepaintContext + 'static>(inner: &Inn
             let _ = b.repaint();
         }
         FileAction::ExportImageConfirm => export_image(inner),
+        FileAction::ExportMotionConfirm => export_motion(inner),
         FileAction::ExportDeckPdfSelection => {
             // Unlike the batch / slideshow / pptx rows below, this one IS
             // reachable in a browser: the slides rail paints its export
@@ -510,6 +511,43 @@ pub(super) fn export_image<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
         Some(on_response),
     ) {
         console_error("[export-raster] request could not start");
+    }
+}
+
+fn export_motion<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
+    let mut b = inner.borrow_mut();
+    let state = b.host_mut().editor_state_mut();
+    let Some(request) = state.editor_ui.motion_export.pending.take() else {
+        return;
+    };
+    let file_name = op_editor_core::export_name::motion_export_file_name(state, &request);
+    let body = match file_actions::export_motion_request_body(state, &request) {
+        Ok(body) => body,
+        Err(error) => {
+            console_error(&format!("[export-motion] {error}"));
+            return;
+        }
+    };
+    let base = crate::daemon_base::daemon_base();
+    let on_response: Rc<dyn Fn(String)> =
+        Rc::new(
+            move |response| match file_actions::parse_raster_download_response(&response) {
+                Ok(file) => {
+                    if let Err(error) =
+                        crate::web_clipboard::download_bytes(&file_name, &file.mime, &file.bytes)
+                    {
+                        web_sys::console::error_1(&error);
+                    }
+                }
+                Err(error) => console_error(&format!("[export-motion] {error}")),
+            },
+        );
+    if !crate::live_sync::post_json(
+        &format!("{base}/api/export/motion"),
+        &body,
+        Some(on_response),
+    ) {
+        console_error("[export-motion] request could not start");
     }
 }
 

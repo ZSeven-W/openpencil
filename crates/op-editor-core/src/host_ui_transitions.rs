@@ -78,6 +78,8 @@ impl EditorUiState {
         if let Some(format) = scenario_default_export_format(self.scenario) {
             self.export_format = format;
         }
+        self.motion_export.format = None;
+        self.motion_export.choice = 0;
         self.export_dialog_open = true;
     }
 }

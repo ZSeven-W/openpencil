@@ -263,7 +263,15 @@ impl WidgetHostNative {
         }
         if self.editor_state.editor_ui.export_dialog_open {
             self.close_image_popovers_for_higher_overlay();
-            self.dispatch_export_dialog_press(x, y, viewport_width, viewport_height);
+            if !op_editor_ui::widgets::ExportDialog::press_for_editor(
+                &mut self.editor_state,
+                Point2D::new(x, y),
+                viewport_width,
+                viewport_height,
+            ) {
+                self.blur_text_inputs_on_blank_press();
+            }
+            self.mark_dirty();
             return Some(true);
         }
         if self.editor_state.editor_ui.figma_import_open {

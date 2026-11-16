@@ -94,15 +94,23 @@ pub unsafe extern "C" fn op_editor_cancel_export(engine: *mut crate::OpEngine) -
 
 #[cfg(any(target_os = "ios", target_os = "android", target_env = "ohos", test))]
 pub(crate) fn stage_export(session: &mut Session, action: Option<FileAction>) -> FfiResult<i32> {
-    let state = {
+    let (state, motion) = {
         let host = session.editor_mut()?;
-        // Consume the UI request before rendering. A failed encoder must
-        // surface once, not retry on every frame and allocate repeatedly.
-        host.editor_state_mut().editor_ui.pending_file_action = None;
-        host.editor_state().clone()
+        // Consume the UI request before rendering so an encoder failure surfaces once.
+        let ui = &mut host.editor_state_mut().editor_ui;
+        ui.pending_file_action = None;
+        let motion = if action == Some(FileAction::ExportMotionConfirm) {
+            ui.motion_export.pending.take()
+        } else {
+            None
+        };
+        (host.editor_state().clone(), motion)
     };
     let scope = match action {
         Some(FileAction::ExportImageConfirm) => EditorExportScope::Configured,
+        Some(FileAction::ExportMotionConfirm) => EditorExportScope::Motion(
+            motion.ok_or_else(|| FfiError::invalid("missing motion export request"))?,
+        ),
         Some(FileAction::ExportDeckPdfSelection) => EditorExportScope::DeckBoards(
             op_editor_core::preview_slideshow::selected_page_boards(&state),
         ),
