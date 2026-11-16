@@ -145,6 +145,8 @@ mod layer_panel_rename_tests;
 #[cfg(test)]
 mod locale_picker_scroll_tests;
 mod missing_fonts_press;
+#[cfg(all(test, target_arch = "wasm32", feature = "canvaskit"))]
+mod motion_scroll_browser_tests;
 mod motion_timeline_host;
 mod node_drag;
 #[cfg(test)]

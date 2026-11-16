@@ -1,0 +1,35 @@
+{
+  "version": "1.1",
+  "formatVersion": "1.1",
+  "children": [{
+    "type": "frame", "id": "screen", "width": 390, "height": 1180,
+    "fill": [{"type": "solid", "color": "#ffffff"}],
+    "children": [
+      {
+        "type": "rectangle", "id": "start", "x": 24, "y": 16, "width": 64, "height": 32,
+        "fill": [{"type": "solid", "color": "#4040a0"}]
+      },
+      {
+        "type": "rectangle", "id": "once", "x": 24, "y": 892, "width": 40, "height": 32,
+        "fill": [{"type": "solid", "color": "#a04020"}],
+        "animations": [{
+          "trigger": "inView", "once": true, "durationMs": 160, "easing": "linear",
+          "keyframes": {"from": {"translateX": 0}, "to": {"translateX": 40}}
+        }]
+      },
+      {
+        "type": "rectangle", "id": "repeat", "x": 24, "y": 1000, "width": 40, "height": 32,
+        "fill": [{"type": "solid", "color": "#2040a0"}],
+        "animations": [{
+          "trigger": "inView", "once": false, "fillMode": "none",
+          "durationMs": 160, "easing": "linear",
+          "keyframes": {"from": {"translateX": 0}, "to": {"translateX": 40}}
+        }]
+      },
+      {
+        "type": "rectangle", "id": "end", "x": 24, "y": 1140, "width": 64, "height": 24,
+        "fill": [{"type": "solid", "color": "#207040"}]
+      }
+    ]
+  }]
+}

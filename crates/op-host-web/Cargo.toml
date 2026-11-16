@@ -210,3 +210,7 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
   "binary-cache",
   "textlayout",
 ] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+jian-host-web = { path = "../../vendor/jian/crates/jian-host-web" }
+wasm-bindgen-test = "=0.3.67"
