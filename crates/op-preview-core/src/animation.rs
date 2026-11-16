@@ -4,42 +4,23 @@
 use crate::invalidation::InvalidationKind;
 use crate::session::PreviewSession;
 use jian_core::action::animation_registry::animatable_property_registry;
-use jian_core::action::services::{
-    AnimationOutcome, AnimationProperty, AnimationRequest, AnimationSink,
-};
-use jian_core::motion::{MotionControl, MotionObserver, MotionTimeline};
+use jian_core::action::services::AnimationProperty;
+use jian_core::motion::{MotionActionSink, MotionObserver, MotionTimeline};
 use jian_scene::layout_scene_motion::{apply_motion_overrides, sample_scene_property};
 use op_editor_ui::layout_scene::LayoutScene;
-use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
 
 #[derive(Clone, Default)]
 pub(crate) struct PreviewAnimationState {
-    timeline: MotionTimeline,
-    controls: Rc<RefCell<Vec<(MotionControl, u64)>>>,
+    pub(crate) sink: MotionActionSink,
 }
 
 impl Deref for PreviewAnimationState {
     type Target = MotionTimeline;
 
     fn deref(&self) -> &MotionTimeline {
-        &self.timeline
-    }
-}
-
-impl AnimationSink for PreviewAnimationState {
-    fn request(&self, request: &AnimationRequest) -> AnimationOutcome {
-        self.timeline.request(request)
-    }
-
-    fn control(&self, control: &MotionControl, now_ms: u64) -> AnimationOutcome {
-        let mut controls = self.controls.borrow_mut();
-        if controls.len() >= 256 {
-            return AnimationOutcome::Rejected("too many pending motion controls".into());
-        }
-        controls.push((control.clone(), now_ms));
-        AnimationOutcome::Accepted
+        &self.sink.timeline
     }
 }
 
@@ -59,16 +40,17 @@ impl MotionObserver for SessionObserver {
 
 impl PreviewAnimationState {
     pub(crate) fn clear(&self) {
-        self.controls.borrow_mut().clear();
-        self.timeline.clear();
+        self.sink.clear();
     }
 
     pub(crate) fn set_trace(&self, trace: crate::debug_trace::PreviewDebugTrace) {
-        self.timeline.set_observer(Rc::new(SessionObserver(trace)));
+        self.sink
+            .timeline
+            .set_observer(Rc::new(SessionObserver(trace)));
     }
 
     pub(crate) fn apply_to_scene(&self, scene: &mut LayoutScene) {
-        apply_motion_overrides(scene, &self.timeline.overrides());
+        apply_motion_overrides(scene, &self.sink.timeline.overrides());
     }
 }
 
@@ -149,7 +131,7 @@ impl PreviewSession {
     }
 
     fn admit_motion_controls(&mut self) -> InvalidationKind {
-        let controls = std::mem::take(&mut *self.animation.controls.borrow_mut());
+        let controls = self.animation.sink.take_controls();
         if controls.is_empty() {
             return InvalidationKind::None;
         }

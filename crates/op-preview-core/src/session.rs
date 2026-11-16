@@ -525,7 +525,7 @@ impl PreviewSession {
         runtime.set_ui_mutation_sink(Rc::new(ui_actions.clone()));
         let animation = crate::animation::PreviewAnimationState::default();
         animation.set_trace(debug.trace.clone());
-        runtime.set_animation_sink(Rc::new(animation.clone()));
+        runtime.set_animation_sink(Rc::new(animation.sink.clone()));
         runtime.enable_action_reporting();
         let motion = jian_core::motion::MotionTriggers::default();
         let has_switch_widgets =

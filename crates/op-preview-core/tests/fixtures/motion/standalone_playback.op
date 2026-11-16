@@ -1,0 +1,46 @@
+{
+  "version": "1.2",
+  "responsive": true,
+  "app": { "name": "Playback parity", "version": "1", "id": "playback-parity" },
+  "children": [
+    {
+      "type": "frame", "id": "home", "screen": "/", "width": 160, "height": 128,
+      "fill": [{ "type": "solid", "color": "#ffffff" }],
+      "children": [
+        {
+          "type": "rectangle", "id": "mount", "x": 16, "y": 12, "width": 24, "height": 16,
+          "fill": [{ "type": "solid", "color": "#2040a0" }],
+          "animations": [
+            { "trigger": "mount", "durationMs": 160, "easing": "linear",
+              "keyframes": { "from": { "translateX": 0 }, "to": { "translateX": 40 } } }
+          ]
+        },
+        {
+          "type": "rectangle", "id": "motion", "x": 16, "y": 48, "width": 24, "height": 16,
+          "fill": [{ "type": "solid", "color": "#a04020" }],
+          "animations": [
+            { "id": "move", "trigger": "manual", "durationMs": 160, "easing": "linear",
+              "keyframes": { "from": { "translateX": 0 }, "to": { "translateX": 40 } } }
+          ],
+          "events": { "onTap": [{ "play_motion": { "target": "motion", "animation": "move" } }] }
+        },
+        {
+          "type": "rectangle", "id": "fade", "x": 16, "y": 80, "width": 24, "height": 16,
+          "fill": [{ "type": "solid", "color": "#174230" }],
+          "events": { "onTap": [{ "replace": { "path": "'/detail'", "transition": { "kind": "fade", "durationMs": 160 } } }] }
+        }
+      ]
+    },
+    {
+      "type": "frame", "id": "detail", "screen": "/detail", "width": 160, "height": 128,
+      "fill": [{ "type": "solid", "color": "#244860" }],
+      "children": [
+        {
+          "type": "rectangle", "id": "slide", "x": 16, "y": 16, "width": 32, "height": 24,
+          "fill": [{ "type": "solid", "color": "#ffffff" }],
+          "events": { "onTap": [{ "push": { "path": "'/'", "transition": { "kind": "slideUp", "durationMs": 160, "easing": "linear" } } }] }
+        }
+      ]
+    }
+  ]
+}
