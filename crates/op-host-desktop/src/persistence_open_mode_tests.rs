@@ -2,6 +2,9 @@
 
 use super::*;
 use op_editor_core::{EntrySurface, HomeFamily, LeftPanelTab, Tool, WorkspacePhase, WorkspaceView};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static NEXT_WORK: AtomicUsize = AtomicUsize::new(0);
 
 struct SavedWork(PathBuf);
 
@@ -21,8 +24,9 @@ impl SavedWork {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
+        let sequence = NEXT_WORK.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "openpencil-open-mode-{}-{nanos}.op",
+            "openpencil-open-mode-{}-{nanos}-{sequence}.op",
             std::process::id()
         ));
         save_to_path(&state, &path).expect("save current-schema fixture");
