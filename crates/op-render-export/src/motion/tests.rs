@@ -146,7 +146,7 @@ fn reduced_export_keeps_terminal_fills_and_white_background_at_the_first_frame()
 }
 
 #[test]
-fn mp4_accepts_a_native_encode_and_rejects_clips_over_one_minute() {
+fn mp4_rejects_clips_over_one_minute() {
     let (root, scene) = fixture();
     let mut output = Cursor::new(Vec::new());
     let too_long = MotionExportOptions {
@@ -157,13 +157,16 @@ fn mp4_accepts_a_native_encode_and_rejects_clips_over_one_minute() {
         export_motion(&mut output, &scene, &root, MotionFormat::Mp4, &too_long),
         Err(ExportError::MotionDurationTooLong { .. })
     ));
-    if !mp4_available() {
-        return;
-    }
-    // Use a 64px canvas so the fixture can run on hardware encoders.
-    let mut scene = scene;
+    assert!(output.into_inner().is_empty());
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+#[test]
+fn rust_mp4_writes_even_dimensions_and_an_exact_sample_clock() {
+    let (root, mut scene) = fixture();
     scene.pages[0].children[0].bounds.size.x = 65.0;
     scene.pages[0].children[0].bounds.size.y = 65.0;
+    let mut output = Cursor::new(Vec::new());
     export_motion(
         &mut output,
         &scene,
@@ -173,7 +176,17 @@ fn mp4_accepts_a_native_encode_and_rejects_clips_over_one_minute() {
     )
     .unwrap();
     let bytes = output.into_inner();
-    assert_eq!(&bytes[4..8], b"ftyp");
-    assert!(bytes.windows(4).any(|box_type| box_type == b"avc1"));
-    assert!(bytes.windows(4).any(|box_type| box_type == b"moov"));
+    let mut reader =
+        ::mp4::Mp4Reader::read_header(Cursor::new(&bytes), bytes.len() as u64).unwrap();
+    let track = &reader.tracks()[&1];
+    assert_eq!((track.width(), track.height()), (66, 66));
+    assert_eq!(track.timescale(), 30);
+    assert_eq!(reader.sample_count(1).unwrap(), 4);
+    for sample_id in 1..=4 {
+        let sample = reader.read_sample(1, sample_id).unwrap().unwrap();
+        assert_eq!(sample.start_time, u64::from(sample_id - 1));
+        assert_eq!(sample.duration, 1);
+        assert_eq!(sample.rendering_offset, 0);
+        assert_eq!(sample.is_sync, sample_id == 1);
+    }
 }

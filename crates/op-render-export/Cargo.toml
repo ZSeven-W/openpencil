@@ -25,7 +25,6 @@ jian-scene = { path = "../../vendor/jian/crates/jian-scene" }
 gif = "0.14"
 png = "0.18"
 zip = { version = "9", default-features = false }
-tempfile = "3"
 glam = { version = "0.29", default-features = false, features = ["std"] }
 skia-safe = { version = "0.97.0", default-features = false, features = [
   "binary-cache",
@@ -33,8 +32,10 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
   "pdf",
 ] }
 
-[build-dependencies]
-cc = "1"
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
+mp4 = "0.14.0"
+rusty_h264-common = { version = "0.17.2", default-features = false, features = ["std"] }
+rusty_h264-encoder = { version = "0.17.2", default-features = false, features = ["std", "asm"] }
 
 [dev-dependencies]
 base64 = "0.22"

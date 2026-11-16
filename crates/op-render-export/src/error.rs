@@ -163,9 +163,9 @@ impl fmt::Display for ExportError {
                 f,
                 "motion export duration {duration_ms} ms exceeds the {limit_ms} ms limit"
             ),
-            ExportError::Mp4EncoderUnavailable => f.write_str(
-                "MP4 encoder unavailable. On Linux or Windows, install FFmpeg with libx264.",
-            ),
+            ExportError::Mp4EncoderUnavailable => {
+                f.write_str("MP4 export is unavailable on this platform.")
+            }
             ExportError::InvalidMotionFps { fps } => {
                 write!(f, "motion fps must be in 1–60, got {fps}")
             }
