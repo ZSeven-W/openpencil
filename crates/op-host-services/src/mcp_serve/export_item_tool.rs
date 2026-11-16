@@ -168,8 +168,10 @@ impl ExportItem {
             .get("reducedMotion")
             .map(|value| value.parse::<bool>())
             .transpose()
-            .map_err(|_| invalid("reducedMotion must be a boolean"))?
-            .unwrap_or(false);
+            .map_err(|_| invalid("reducedMotion must be a boolean"))?;
+        let reduced_motion = self.document.as_ref().is_some_and(|document| {
+            op_editor_core::motion_export::export_reduced_motion(document, reduced_motion)
+        });
         let options = MotionExportOptions {
             trigger,
             fps,

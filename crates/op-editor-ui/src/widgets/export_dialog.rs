@@ -97,12 +97,13 @@ pub struct ExportDialog {
     rect: Rect,
     motion_choices: Vec<MotionExportChoice>,
     show_motion_settings: bool,
+    document_reduced_motion: bool,
     fit: f32,
 }
 
 impl ExportDialog {
     pub fn centered(viewport_w: f32, viewport_h: f32) -> Self {
-        Self::layout(viewport_w, viewport_h, Vec::new(), false)
+        Self::layout(viewport_w, viewport_h, Vec::new(), false, false)
     }
 
     pub fn for_editor(state: &EditorState, viewport_w: f32, viewport_h: f32) -> Self {
@@ -112,6 +113,7 @@ impl ExportDialog {
             viewport_h,
             choices,
             state.editor_ui.motion_export.format.is_some(),
+            op_editor_core::motion_export::export_reduced_motion(&state.doc, None),
         )
     }
 
@@ -120,6 +122,7 @@ impl ExportDialog {
         viewport_h: f32,
         motion_choices: Vec<MotionExportChoice>,
         motion_selected: bool,
+        document_reduced_motion: bool,
     ) -> Self {
         let show_motion_settings = motion_selected && !motion_choices.is_empty();
         let height = DIALOG_HEIGHT
@@ -146,6 +149,7 @@ impl ExportDialog {
             rect: Rect::xywh(x, y, DIALOG_WIDTH, height),
             motion_choices,
             show_motion_settings,
+            document_reduced_motion,
             fit,
         }
     }

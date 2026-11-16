@@ -3,8 +3,9 @@
 use std::collections::BTreeSet;
 
 use jian_core::motion::{Clip, ClipTrigger};
-use jian_ops_schema::motion::MotionTrigger;
+use jian_ops_schema::motion::{MotionPreference, MotionTrigger};
 use jian_ops_schema::node::PenNode;
+use jian_ops_schema::PenDocument;
 use serde::{Deserialize, Serialize};
 
 use crate::{pen_node_ext::PenNodeExt, walkers::find_node, EditorState};
@@ -102,8 +103,8 @@ pub struct MotionExportRequest {
     pub repeat: bool,
     #[serde(default)]
     pub background: MotionExportBackground,
-    #[serde(default)]
-    pub reduced_motion: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reduced_motion: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -115,7 +116,7 @@ pub struct MotionExportDialogState {
     pub duration_ms: Option<u64>,
     pub repeat: bool,
     pub background: MotionExportBackground,
-    pub reduced_motion: bool,
+    pub reduced_motion: Option<bool>,
     pub pending: Option<MotionExportRequest>,
 }
 
@@ -129,7 +130,7 @@ impl Default for MotionExportDialogState {
             duration_ms: None,
             repeat: true,
             background: MotionExportBackground::Transparent,
-            reduced_motion: false,
+            reduced_motion: None,
             pending: None,
         }
     }
@@ -169,6 +170,11 @@ impl MotionExportDialogState {
             reduced_motion: self.reduced_motion,
         })
     }
+}
+
+/// An explicit export option overrides the authored document preference.
+pub fn export_reduced_motion(document: &PenDocument, selected: Option<bool>) -> bool {
+    selected.unwrap_or(document.motion == Some(MotionPreference::Reduced))
 }
 
 /// Export a single selected subtree, or choose a clip from the page's boards.

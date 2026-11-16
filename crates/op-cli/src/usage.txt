@@ -26,7 +26,7 @@ COMMON COMMANDS:
                                           --item is equivalent to --selection
   op export --item ID --output PATH --format gif|apng|png-seq|mp4 [--fps N]
             [--duration-ms N] [--trigger mount|inView|manual] [--clip ID]
-            [--background transparent|white] [--reduced-motion]
+            [--background transparent|white] [--reduced-motion [true|false]]
                                           export a node's motion (PNG sequence
                                           is a ZIP archive)
   op export-deck --output PATH [--format pptx|html|pdf]

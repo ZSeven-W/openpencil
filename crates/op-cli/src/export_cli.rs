@@ -15,7 +15,7 @@ pub(crate) struct MotionExportFlags {
     trigger: String,
     clip: Option<String>,
     background: Option<String>,
-    reduced_motion: bool,
+    reduced_motion: Option<bool>,
 }
 
 impl MotionExportFlags {
@@ -33,8 +33,8 @@ impl MotionExportFlags {
         if let Some(background) = &self.background {
             fields.insert("background".into(), Value::String(background.clone()));
         }
-        if self.reduced_motion {
-            fields.insert("reducedMotion".into(), Value::Bool(true));
+        if let Some(reduced) = self.reduced_motion {
+            fields.insert("reducedMotion".into(), Value::Bool(reduced));
         }
         fields
     }
@@ -94,7 +94,18 @@ fn motion_flags(flags: &Flags, format: &str) -> Result<Option<MotionExportFlags>
     {
         return Err(CliError::usage("--background must be transparent or white"));
     }
-    let reduced_motion = flags.contains_key("reduced-motion");
+    let reduced_motion = if flags.contains_key("reduced-motion") {
+        let value = flag_value(flags, "reduced-motion")
+            .map(|value| {
+                value
+                    .parse::<bool>()
+                    .map_err(|_| CliError::usage("--reduced-motion must be true or false"))
+            })
+            .transpose()?;
+        Some(value.unwrap_or(true))
+    } else {
+        None
+    };
     Ok(Some(MotionExportFlags {
         fps,
         duration_ms,

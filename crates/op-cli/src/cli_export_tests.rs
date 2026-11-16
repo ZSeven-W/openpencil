@@ -336,3 +336,31 @@ fn motion_export_flags_select_a_manual_clip() {
         serde_json::json!({"trigger":"manual","clip":"reveal","fps":24,"durationMs":1200})
     );
 }
+
+#[test]
+fn motion_export_can_inherit_or_override_the_document_preference() {
+    for (extra, expected) in [
+        (&[][..], None),
+        (&["--reduced-motion"][..], Some(true)),
+        (&["--reduced-motion", "false"][..], Some(false)),
+    ] {
+        let mut argv = args(&[
+            "export", "--item", "hero", "--output", "hero.mp4", "--format", "mp4",
+        ]);
+        argv.extend(args(extra));
+        let Command::Export {
+            motion: Some(motion),
+            ..
+        } = parse_args(&argv).unwrap().command
+        else {
+            panic!("expected motion export");
+        };
+        assert_eq!(
+            motion
+                .arguments()
+                .get("reducedMotion")
+                .and_then(serde_json::Value::as_bool),
+            expected
+        );
+    }
+}

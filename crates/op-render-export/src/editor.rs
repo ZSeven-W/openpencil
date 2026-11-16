@@ -105,7 +105,10 @@ fn render_motion(
         duration_ms: request.duration_ms,
         repeat: request.repeat,
         background: request.background,
-        reduced_motion: request.reduced_motion,
+        reduced_motion: op_editor_core::motion_export::export_reduced_motion(
+            &state.doc,
+            request.reduced_motion,
+        ),
     };
     let mut bytes = Cursor::new(Vec::new());
     export_motion(&mut bytes, &scene, root, format, &options)?;
@@ -329,5 +332,58 @@ mod tests {
             !matches!(result, Err(ExportError::UnsupportedFormat { .. })),
             "desktop must continue asking Skia to encode WebP"
         );
+    }
+}
+
+#[cfg(test)]
+mod motion_preference_tests {
+    use super::*;
+    use op_editor_core::motion_export::{MotionExportBackground, MotionExportTrigger};
+    use std::io::Read;
+
+    #[test]
+    fn motion_export_defaults_to_the_document_preference_and_allows_an_override() {
+        let doc = jian_ops_schema::load_str(
+            r##"{"version":"1.1","motion":"reduced","children":[{
+                "type":"rectangle","id":"card","width":16,"height":16,
+                "fill":[{"type":"solid","color":"#ee2255"}],
+                "animations":[{"trigger":"mount","durationMs":100,"easing":"linear",
+                    "keyframes":[{"offset":0,"opacity":0},{"offset":1,"opacity":1}]}]
+            }]}"##,
+        )
+        .unwrap()
+        .value;
+        let state = EditorState::from_document(doc);
+        for reduced_motion in [None, Some(false)] {
+            let artifact = export_editor_state(
+                &state,
+                &EditorExportScope::Motion(MotionExportRequest {
+                    root_id: "card".into(),
+                    format: MotionExportFormat::PngSequence,
+                    trigger: MotionExportTrigger::Mount,
+                    fps: 10,
+                    scale: 1.0,
+                    duration_ms: None,
+                    repeat: false,
+                    background: MotionExportBackground::Transparent,
+                    reduced_motion,
+                }),
+            )
+            .unwrap();
+            let mut archive = zip::ZipArchive::new(Cursor::new(artifact.bytes)).unwrap();
+            let mut first = Vec::new();
+            let mut last = Vec::new();
+            archive
+                .by_name("frame-0000.png")
+                .unwrap()
+                .read_to_end(&mut first)
+                .unwrap();
+            archive
+                .by_name("frame-0001.png")
+                .unwrap()
+                .read_to_end(&mut last)
+                .unwrap();
+            assert_eq!(first == last, reduced_motion.is_none());
+        }
     }
 }

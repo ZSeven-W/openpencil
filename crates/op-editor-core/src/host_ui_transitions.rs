@@ -80,6 +80,7 @@ impl EditorUiState {
         }
         self.motion_export.format = None;
         self.motion_export.choice = 0;
+        self.motion_export.reduced_motion = None;
         self.export_dialog_open = true;
     }
 }

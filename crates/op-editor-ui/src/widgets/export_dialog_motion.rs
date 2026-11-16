@@ -158,7 +158,13 @@ impl ExportDialog {
             }
             ExportDialogHit::RepeatMotion => motion.repeat = !motion.repeat,
             ExportDialogHit::MotionBackground(background) => motion.background = background,
-            ExportDialogHit::ReducedMotion => motion.reduced_motion = !motion.reduced_motion,
+            ExportDialogHit::ReducedMotion => {
+                motion.reduced_motion = Some(
+                    !motion
+                        .reduced_motion
+                        .unwrap_or(self.document_reduced_motion),
+                );
+            }
             _ => {}
         }
     }
@@ -323,7 +329,9 @@ impl ExportDialog {
                     rect,
                     hit,
                     tr("export.motionReduced"),
-                    ui.motion_export.reduced_motion,
+                    ui.motion_export
+                        .reduced_motion
+                        .unwrap_or(self.document_reduced_motion),
                 ),
                 _ => {}
             }
@@ -399,7 +407,7 @@ mod tests {
         assert_eq!(request.duration_ms, Some(3_000));
         assert!(!request.repeat);
         assert_eq!(request.background, MotionExportBackground::White);
-        assert!(request.reduced_motion);
+        assert_eq!(request.reduced_motion, Some(true));
         assert_eq!(state.editor_ui.export_format, static_format);
     }
 
