@@ -1,0 +1,73 @@
+{
+  "version": "1.2",
+  "responsive": true,
+  "app": {"name": "HTML route parity", "id": "html-route-parity", "version": "1"},
+  "state": {
+    "enabled": {"type":"bool", "default":false},
+    "ready": {"type":"bool", "default":false},
+    "paths": {"type":"array", "default":["/detail", "/alternate"]},
+    "selected": {"type":"int", "default":0}
+  },
+  "pages": [
+    {"id":"home-page", "name":"Home", "children":[{
+      "type":"frame", "id":"home", "screen":"/", "x":240, "width":160, "height":160,
+      "fill":[{"type":"solid","color":"#ffffff"}],
+      "children":[
+        {"type":"rectangle","id":"launch","x":16,"y":12,"width":32,"height":20,
+         "fill":[{"type":"solid","color":"#248040"}],
+         "events":{"onTap":[
+           {"toggle":"$app.enabled"},
+           {"if":{"expr":"$app.enabled","then":[
+             {"play_motion":{"target":"card","animation":"move","mode":"restart"}},
+             {"parallel":[
+               [{"delay":{"ms":64}},{"show":"cue"}],
+               [{"delay":{"ms":128}},{"set":{"$app.ready":"true"}}]
+             ]},
+             {"delay":{"ms":64}},
+             {"if":{"expr":"$app.ready","then":[
+               {"push":{"path":"`${$app.paths[$app.selected]}`","transition":{"kind":"slideUp","durationMs":160,"easing":"linear"}}}
+             ]}}
+           ],"else":[{"hide":"cue"},{"set":{"$app.ready":"false"}}]}}
+         ]}},
+        {"type":"rectangle","id":"card","x":16,"y":60,"width":28,"height":20,
+         "fill":[{"type":"solid","color":"#a04020"}],
+         "animations":[{"id":"move","trigger":"manual","durationMs":160,"easing":"linear",
+           "keyframes":{"from":{"translateX":0},"to":{"translateX":40}}}]},
+        {"type":"rectangle","id":"cue","x":16,"y":100,"width":28,"height":20,"visible":false,
+         "fill":[{"type":"solid","color":"#4242aa"}]},
+        {"type":"rectangle","id":"status","x":68,"y":100,"width":28,"height":20,
+         "fill":[{"type":"solid","color":"#b04060"}],
+         "bindings":{"fill":"$app.ready ? '#308050' : '#b04060'"}}
+      ]
+    }]},
+    {"id":"detail-page", "name":"Detail", "children":[{
+      "type":"frame", "id":"detail", "screen":"/detail", "width":160, "height":160,
+      "fill":[{"type":"solid","color":"#eae0c0"}],
+      "children":[
+        {"type":"rectangle","id":"next","x":16,"y":12,"width":32,"height":20,
+         "fill":[{"type":"solid","color":"#802040"}],
+         "events":{"onTap":[
+           {"set":{"target":"$app.selected","value":"$app.selected + 1"}},
+           {"play_motion":{"target":"badge","animation":"drop","mode":"restart"}},
+           {"delay":{"ms":32}},
+           {"if":{"expr":"$route.path == '/detail'","then":[
+             {"replace":{"path":"$app.paths[$app.selected]","transition":{"kind":"slideLeft","durationMs":160,"easing":"linear"}}}
+           ]}}
+         ]}},
+        {"type":"rectangle","id":"badge","x":80,"y":52,"width":32,"height":20,
+         "fill":[{"type":"solid","color":"#206080"}],
+         "animations":[{"id":"drop","trigger":"manual","durationMs":32,"easing":"linear",
+           "keyframes":{"from":{"translateY":0},"to":{"translateY":24}}}]}
+      ]
+    }]},
+    {"id":"alternate-page", "name":"Alternate", "children":[{
+      "type":"frame", "id":"alternate", "screen":"/alternate", "width":160, "height":160,
+      "fill":[{"type":"solid","color":"#203050"}],
+      "children":[
+        {"type":"rectangle","id":"back","x":16,"y":12,"width":32,"height":20,
+         "fill":[{"type":"solid","color":"#ffffff"}],
+         "events":{"onTap":[{"pop":null}]}}
+      ]
+    }]}
+  ]
+}

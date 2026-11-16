@@ -38,10 +38,16 @@ pub(super) fn render(doc: &PenDocument) -> String {
 /// Render all motion CSS for the given stylesheet scope, keeping keyframe
 /// names and selectors equal to the ones the inline markup references.
 pub(super) fn render_in(doc: &PenDocument, scope: MotionCssScope) -> String {
-    let mut animated = Vec::new();
-    for node in root_nodes(doc) {
-        collect_animated_nodes(node, &mut animated);
-    }
+    render_for_roots(doc, scope, root_nodes(doc).iter(), false)
+}
+
+pub(super) fn render_for_roots<'a>(
+    doc: &PenDocument,
+    scope: MotionCssScope,
+    roots: impl IntoIterator<Item = &'a PenNode>,
+    include_hidden: bool,
+) -> String {
+    let animated = animated_nodes(roots, include_hidden);
     if animated.is_empty() {
         return String::new();
     }
@@ -62,8 +68,19 @@ pub(super) fn render_in(doc: &PenDocument, scope: MotionCssScope) -> String {
     out
 }
 
-fn collect_animated_nodes<'a>(node: &'a PenNode, out: &mut Vec<&'a PenNode>) {
-    if node_hidden(node) {
+fn animated_nodes<'a>(
+    roots: impl IntoIterator<Item = &'a PenNode>,
+    include_hidden: bool,
+) -> Vec<&'a PenNode> {
+    let mut out = Vec::new();
+    for root in roots {
+        collect_animated_nodes(root, include_hidden, &mut out);
+    }
+    out
+}
+
+fn collect_animated_nodes<'a>(node: &'a PenNode, include_hidden: bool, out: &mut Vec<&'a PenNode>) {
+    if node_hidden(node) && !include_hidden {
         return;
     }
     let (transition, animations) = node.motion_declarations();
@@ -71,7 +88,7 @@ fn collect_animated_nodes<'a>(node: &'a PenNode, out: &mut Vec<&'a PenNode>) {
         out.push(node);
     }
     for child in node_children(node) {
-        collect_animated_nodes(child, out);
+        collect_animated_nodes(child, include_hidden, out);
     }
 }
 
@@ -269,18 +286,16 @@ pub(super) fn html_manual_attribute(node: &PenNode) -> String {
     )
 }
 
-pub(super) fn has_manual_motion(doc: &PenDocument) -> bool {
-    let mut animated = Vec::new();
-    for root in root_nodes(doc) {
-        collect_animated_nodes(root, &mut animated);
-    }
-    animated.iter().any(|node| {
-        node.motion_declarations()
-            .1
-            .into_iter()
-            .flatten()
-            .any(|clip| clip.trigger == MotionTrigger::Manual && clip.id.is_some())
-    })
+pub(super) fn has_manual_motion(roots: &[&PenNode], include_hidden: bool) -> bool {
+    animated_nodes(roots.iter().copied(), include_hidden)
+        .iter()
+        .any(|node| {
+            node.motion_declarations()
+                .1
+                .into_iter()
+                .flatten()
+                .any(|clip| clip.trigger == MotionTrigger::Manual && clip.id.is_some())
+        })
 }
 
 /// Stable selector attribute for an element with a motion declaration.
@@ -315,11 +330,14 @@ pub(super) fn data_attribute(node: &PenNode) -> String {
 
 /// Whether any visible node starts an animation when it scrolls into view.
 pub(super) fn has_in_view_motion(doc: &PenDocument) -> bool {
-    let mut animated = Vec::new();
-    for node in root_nodes(doc) {
-        collect_animated_nodes(node, &mut animated);
-    }
-    animated.iter().any(|node| {
+    has_in_view_motion_for_roots(root_nodes(doc).iter(), false)
+}
+
+pub(super) fn has_in_view_motion_for_roots<'a>(
+    roots: impl IntoIterator<Item = &'a PenNode>,
+    include_hidden: bool,
+) -> bool {
+    animated_nodes(roots, include_hidden).iter().any(|node| {
         node.motion_declarations().1.is_some_and(|animations| {
             animations
                 .iter()

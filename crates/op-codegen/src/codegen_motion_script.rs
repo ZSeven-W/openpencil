@@ -9,17 +9,20 @@
 //! plain JavaScript and as strict TypeScript, so component targets can call
 //! it from their own lifecycle hooks.
 
-use super::codegen_motion_css::{has_in_view_motion, has_manual_motion};
+use super::codegen_motion_css::{
+    has_in_view_motion, has_in_view_motion_for_roots, has_manual_motion,
+};
+use jian_ops_schema::node::PenNode;
 use jian_ops_schema::PenDocument;
 
 /// The HTML page's observer `<script>`, or an empty string when nothing
 /// animates in view.
-pub(super) fn render(doc: &PenDocument) -> String {
+pub(super) fn render(roots: &[&PenNode], include_hidden: bool) -> String {
     let mut out = String::new();
-    if has_manual_motion(doc) {
+    if has_manual_motion(roots, include_hidden) {
         out.push_str(MANUAL_MOTION);
     }
-    if !has_in_view_motion(doc) {
+    if !has_in_view_motion_for_roots(roots.iter().copied(), include_hidden) {
         return out;
     }
     let observer: String = OBSERVE_IN_VIEW_MOTION
@@ -105,21 +108,39 @@ const OBSERVE_IN_VIEW_MOTION: &str = r#"function observeInViewMotion() {
 const MANUAL_MOTION: &str = r#"<script>
 (() => {
   const running = new WeakMap();
+  const selector = "[data-op-manual]";
+  function clipTargets(root) {
+    const targets = [...root.querySelectorAll(selector)];
+    if (root.matches(selector)) targets.unshift(root);
+    return targets;
+  }
+
+  // A mounted screen starts with fresh manual clips, as in Play.
+  window.opResetManualMotion = root => {
+    for (const target of clipTargets(root)) {
+      const state = running.get(target);
+      if (!state) continue;
+      for (const animation of state.animations.values()) animation.cancel();
+      target.style.animation = state.authored;
+      running.delete(target);
+    }
+  };
+
   // From an event handler, call opPlayMotion(targetElement, clipId, mode).
   // The target may be a container. Modes: play, restart, reverse or stop.
   window.opPlayMotion = (root, id, mode = "play") => {
     if (!root || !["play", "restart", "reverse", "stop"].includes(mode)) return;
-    const selector = "[data-op-manual]";
-    const targets = [...root.querySelectorAll(selector)];
-    if (root.matches(selector)) targets.unshift(root);
-    for (const target of targets) {
+    for (const target of clipTargets(root)) {
       const specs = JSON.parse(target.getAttribute("data-op-manual"));
       const spec = specs.find(([clipId]) => clipId === id);
       if (!spec) continue;
       const [, name, declaration] = spec;
-      let animations = running.get(target);
-      if (!animations) running.set(target, animations = new Map());
-      let animation = animations.get(name);
+      let state = running.get(target);
+      if (!state) {
+        state = {authored: target.style.animation, animations: new Map()};
+        running.set(target, state);
+      }
+      let animation = state.animations.get(name);
       if (mode === "stop") {
         animation?.cancel();
         continue;
@@ -133,7 +154,7 @@ const MANUAL_MOTION: &str = r#"<script>
           target.style.animation = previous;
           continue;
         }
-        animations.set(name, animation);
+        state.animations.set(name, animation);
       }
       animation.cancel();
       animation.effect.updateTiming({ direction: mode === "reverse" ? "reverse" : "normal" });

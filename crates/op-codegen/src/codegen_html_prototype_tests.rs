@@ -27,30 +27,56 @@ fn html_wires_manual_motion_and_routes_as_data() {
     assert!(html.contains("data-op-stage "));
     assert!(html.contains("data-op-screen=\"/detail\" hidden inert"));
     assert!(html.contains("data-op-target=\"card\""));
-    assert!(html.contains("&quot;animation&quot;:&quot;reveal&quot;"));
-    assert!(html.contains("&quot;path&quot;:&quot;/detail&quot;"));
+    assert!(html.contains(r#""animation":"reveal""#));
+    assert!(html.contains(r#""path":[[3,"/detail"],[32]]"#));
     assert!(html.contains("role=\"button\" tabindex=\"0\""));
-    assert!(html.contains("window.opPlayMotion?.(target, action.animation, action.mode)"));
+    assert!(html.contains("window.opPlayMotion?.(target.element, action.animation, action.mode)"));
     assert!(html.contains("\"duration\":320"));
     assert!(html.contains("\"outgoing_on_top\":true"));
 }
 
+fn program(html: &str) -> serde_json::Value {
+    let (_, block) = html.split_once(r#"id="op-prototype">"#).unwrap();
+    serde_json::from_str(block.split_once("</script>").unwrap().0).unwrap()
+}
+
 #[test]
-fn dynamic_routes_and_unsupported_tap_chains_are_not_executed() {
-    let source = serde_json::to_value(source()).unwrap();
-    let mut source = source;
-    source["children"][0]["children"][2]["events"]["onTap"] =
-        serde_json::json!([{"push":"$app.nextScreen"}]);
-    source["children"][0]["children"][1]["events"]["onTap"] = serde_json::json!([
-        {"set":{"$app.isOpen":true}},
-        {"play_motion":{"target":"card","animation":"reveal"}}
-    ]);
-    let doc = jian_ops_schema::load_str(&source.to_string())
-        .unwrap()
-        .value;
+fn dynamic_routes_and_nested_chains_compile_as_data() {
+    let doc = jian_ops_schema::load_str(include_str!(
+        "../../op-preview-core/tests/fixtures/motion/html_dynamic_prototype.op"
+    ))
+    .unwrap()
+    .value;
     let html = Html.generate(&doc);
-    assert!(!html.contains("data-op-stage "));
-    assert!(!html.contains("data-op-target="));
-    assert!(!html.contains("id=\"op-screen-motion\""));
-    assert!(!html.contains("$app.nextScreen"));
+    let wire = program(&html);
+    assert!(html.contains(r#"data-op-screen="/alternate" hidden inert"#));
+    let actions = &wire["nodes"]["launch"]["events"]["onTap"];
+    assert_eq!(actions[0]["op"], "toggle");
+    assert_eq!(actions[1]["then"][1]["op"], "parallel");
+    assert_eq!(actions[1]["then"][1]["branches"][1][0]["ms"], 128);
+    assert_eq!(actions[1]["then"][3]["then"][0]["op"], "push");
+    assert_eq!(
+        wire["nodes"]["next"]["events"]["onTap"][3]["then"][0]["op"],
+        "replace"
+    );
+}
+
+#[test]
+fn authored_script_markup_stays_data_and_disallowed_actions_skip() {
+    let mut value = serde_json::to_value(source()).unwrap();
+    value["children"][0]["children"][1]["events"]["onTap"] = serde_json::json!([
+        {"fetch":{"url":"'/external'"}},
+        {"set":{"$app.label":"'x</script><script>alert(1)</script>'"}},
+        {"push":"$app.nextScreen"}
+    ]);
+    let doc = jian_ops_schema::load_str(&value.to_string()).unwrap().value;
+    let html = Html.generate(&doc);
+    assert!(!html.contains("x</script>"));
+    assert_eq!(
+        program(&html)["nodes"]["trigger"]["events"]["onTap"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
 }

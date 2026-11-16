@@ -6,8 +6,8 @@ use super::{
 };
 use crate::{
     color_to_css, fmt_num, html_escape, node_children, node_fill_css, node_hidden, node_is_ellipse,
-    node_is_text, node_origin, node_rotation_deg, node_size, node_stroke_css, node_text,
-    root_nodes, Codegen, CssVariables,
+    node_is_text, node_origin, node_rotation_deg, node_size, node_stroke_css, node_text, Codegen,
+    CssVariables,
 };
 use jian_ops_schema::node::PenNode;
 use jian_ops_schema::PenDocument;
@@ -33,25 +33,30 @@ impl Codegen for Html {
         out.push_str("<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\">");
         // The page is the document, so it declares the design variables the
         // way Vue and Svelte do: `:root` plus the per-theme selectors.
+        let markup = css_markup_doc(doc);
+        let prototype = HtmlPrototype::compile(&markup);
+        let motion_roots = prototype.motion_roots(doc);
         let mut css = String::new();
         if doc.variables.as_ref().is_some_and(|vars| !vars.is_empty()) {
             css.push_str(&CssVariables.generate(doc));
         }
-        css.push_str(&codegen_motion_css::render(doc));
+        css.push_str(&codegen_motion_css::render_for_roots(
+            doc,
+            codegen_motion_css::MotionCssScope::Document,
+            motion_roots.iter().copied(),
+            prototype.interactive(),
+        ));
         if !css.is_empty() {
             out.push_str(&format!("<style>\n{css}</style>\n"));
         }
         out.push_str("</head>\n<body>\n");
-        let markup = css_markup_doc(doc);
-        let prototype = HtmlPrototype::compile(&markup);
-        prototype.render_roots(
-            &mut out,
-            root_nodes(&markup),
-            |out, node, depth, at_origin| {
-                emit_node(out, node, depth, Some(&prototype), at_origin);
-            },
-        );
-        out.push_str(&codegen_motion_script::render(doc));
+        prototype.render_roots(&mut out, &markup, |out, node, depth, at_origin| {
+            emit_node(out, node, depth, Some(&prototype), at_origin);
+        });
+        out.push_str(&codegen_motion_script::render(
+            &motion_roots,
+            prototype.interactive(),
+        ));
         prototype.render_script(&mut out);
         out.push_str("</body></html>\n");
         out
@@ -69,7 +74,7 @@ fn emit_node(
     prototype: Option<&HtmlPrototype>,
     at_origin: bool,
 ) {
-    if node_hidden(node) {
+    if node_hidden(node) && !prototype.is_some_and(HtmlPrototype::interactive) {
         return;
     }
     let indent = "  ".repeat(depth);
