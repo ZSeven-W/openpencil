@@ -30,10 +30,15 @@ pub(crate) use op_editor_core::agent_reveals::{
 /// shared crate parameterizes out. Returns true when it registered.
 fn host_tool_registrar(state: &EditorState, requested: &str, registry: &mut ToolRegistry) -> bool {
     use crate::mcp_serve::export_tool::export_nodes_snapshot;
+    use crate::mcp_serve::motion_render_tools::MotionRenderTool;
     use crate::mcp_serve::screenshot_tool::get_screenshot_snapshot;
     match requested {
         "get_screenshot" => {
             registry.register(Box::new(get_screenshot_snapshot(state)));
+            true
+        }
+        "get_motion_frames" => {
+            registry.register(Box::new(MotionRenderTool::Frames.snapshot(state)));
             true
         }
         "export_nodes" => {
@@ -129,4 +134,39 @@ pub fn execute_agent_tool_with_root_seed_guard(
         indicator_epoch,
         root_seed_guard,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn design_agent_can_apply_a_preset_and_receive_an_ordered_contact_sheet() {
+        let doc = jian_ops_schema::load_str(
+            r##"{"version":"1.1","children":[{"type":"rectangle","id":"box","width":20,"height":12,
+            "fill":[{"type":"solid","color":"#cc5544"}]}]}"##,
+        )
+        .unwrap()
+        .value;
+        let mut state = EditorState::from_document(doc);
+        let (preset, applied) = execute_design_tool(
+            &mut state,
+            "apply_motion_preset",
+            r#"{"nodeIds":["box"],"preset":"fadeIn","clipId":"reveal"}"#,
+        );
+        assert!(applied && !preset.is_error, "{preset:?}");
+        let (frames, mutated) = execute_design_tool(
+            &mut state,
+            "get_motion_frames",
+            r#"{"rootId":"box","clipId":"reveal","timesMs":[0,300]}"#,
+        );
+        assert!(!mutated && !frames.is_error, "{frames:?}");
+        let value: serde_json::Value = serde_json::from_str(&frames.content).unwrap();
+        assert_eq!(value["data"]["format"], "png");
+        assert_eq!(value["data"]["frames"][1]["timeMs"], 300);
+        assert!(value["data"]["image_base64"]
+            .as_str()
+            .unwrap()
+            .starts_with("iVBOR"));
+    }
 }

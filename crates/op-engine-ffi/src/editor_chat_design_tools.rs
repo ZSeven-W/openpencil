@@ -10,7 +10,12 @@ use op_editor_core::ChatState;
 /// daemon installs, and `spawn_agents` needs the desktop sub-agent session
 /// host. Everything else — `batch_design` (script mode included), reads,
 /// variables, `ToolSearch` — is the shared implementation.
-const MOBILE_UNAVAILABLE_TOOLS: &[&str] = &["get_screenshot", "export_nodes", "spawn_agents"];
+const MOBILE_UNAVAILABLE_TOOLS: &[&str] = &[
+    "get_screenshot",
+    "get_motion_frames",
+    "export_nodes",
+    "spawn_agents",
+];
 
 /// Tool definitions the mobile design loop advertises — the shared defs
 /// filtered to what this host can execute. Installing the matching

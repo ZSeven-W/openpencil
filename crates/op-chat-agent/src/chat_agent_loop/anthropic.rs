@@ -384,7 +384,7 @@ pub(super) async fn run_anthropic_agent_loop_inner(
                         elide_inline_screenshots(prior_result);
                     }
                     json!([
-                    { "type": "text", "text": "Rendered screenshot of the current design:" },
+                    { "type": "text", "text": crate::chat_agent_context::image_observation_caption(&call.name, &result) },
                     {
                         "type": "image",
                         "source": {

@@ -351,6 +351,8 @@ Manual clips share an id across layers in a target subtree. The Interactions sec
 
 The Live Canvas CLI exports an authored layer or board as GIF, APNG or a ZIP of numbered PNG frames. For example, `op export --item hero --output reveal.apng --format apng --clip reveal --fps 30`. The export samples one trigger on a fixed crop and includes the exact end frame. Use `--duration-ms` to choose the export length for a looping clip.
 
+The full MCP catalog adds motion reads, presets, animation and transition edits, motion preference, frame samples, and export. `get_motion_frames` returns a PNG image and the timestamp and pixel bounds of each cell. The built-in design loop uses the same read, preset, and image-sampling tools.
+
 Web's `apply_press` runs the same order with two extra tiers split out (`press_import_locale_tiers`, `press_variables_tiers`, `press_font_and_picker_tiers`) because its overlay set differs; the relative priority is identical.
 
 `apply_cursor_move` (native `widget_host/input.rs`) runs its own 10-tier ladder: modals → floating panels → a live rail-resize drag → a motion timeline drag → in-flight property/text/crop/node/pen drags (pointer capture) → menus + Git panel → property-panel popovers → StatusBar/align/model-picker → TopBar → the left rail's slides tab → the single-shot chat probe (deliberately non-consuming, so the late drags still run) → late pointer-capture drags → base hover. The rail resize sits with the early pointer-capture drags rather than the late ones because its pointer travels back *over* the rail it is resizing, where the slides-tab hover tier would otherwise claim the move — which is exactly why the left rail could once be dragged wider but never narrower. It keeps one owned `PropertyPanel` snapshot per event in `CursorMoveCtx::property_panel_probe` so the expensive snapshot/i18n work happens at most once.
@@ -549,7 +551,7 @@ The **`op-mcp`** crate carries the MCP wire layer that mirrors the retired TS `p
 
 ### Tool catalog
 
-**123 static-schema tools** registered today. The authoritative list
+**155 static-schema tools** registered today. The authoritative list
 is `op-host-services/src/mcp_serve/schemas.rs` — `TOOL_SCHEMAS`
 (JSON inputSchemas; `DEBUG_TOOL_SCHEMAS` is gated out of the
 production catalog) — plus the `register_tool!` calls in

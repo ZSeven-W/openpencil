@@ -1,6 +1,6 @@
 //! In-process design tool surface for the AI design agent loop.
 //!
-//! Mirrors `chat_canvas_tools.rs` for the 16-tool design toolset (vs the
+//! Mirrors `chat_canvas_tools.rs` for the design toolset (vs the
 //! 7-tool CRUD set). Schema definitions for every tool are derived from
 //! `mcp_serve::schemas::TOOL_SCHEMAS` — the same source the MCP server
 //! advertises — so the in-process and MCP surfaces stay byte-equal as JSON.
@@ -25,7 +25,7 @@ use op_mcp::ToolRegistry;
 use crate::chat_canvas_tools::{execute_chat_tool, execute_with_registry};
 use crate::mcp_serve::schemas;
 
-/// The 16-tool design toolset with auth levels.
+/// The design toolset with auth levels.
 /// Reads = "read"; batch_design / set_variables / spawn_agents /
 /// export_nodes = "create".
 pub const DESIGN_TOOLS: &[(&str, &str)] = &[
@@ -42,6 +42,9 @@ pub const DESIGN_TOOLS: &[(&str, &str)] = &[
     ("batch_design", "create"),
     ("annotate_image", "create"),
     ("get_screenshot", "read"),
+    ("get_motion", "read"),
+    ("apply_motion_preset", "create"),
+    ("get_motion_frames", "read"),
     ("export_nodes", "create"),
     ("spawn_agents", "create"),
     ("ToolSearch", "read"),
@@ -544,7 +547,16 @@ fn design_tool_registry(state: &EditorState, requested: &str) -> ToolRegistry {
         "find_empty_space" => r.register(Box::new(op_mcp::find_empty_space_snapshot(state))),
         "batch_design" => r.register(Box::new(op_mcp::batch_design_snapshot(state))),
         "annotate_image" => r.register(Box::new(op_mcp::annotate_image_snapshot(state))),
-        "get_screenshot" | "export_nodes" => {
+        "get_motion" | "apply_motion_preset" => {
+            use op_mcp::motion_tools::MotionTool;
+            if let Some(tool) = MotionTool::ALL
+                .into_iter()
+                .find(|tool| tool.name() == requested)
+            {
+                r.register(Box::new(tool.snapshot(state)));
+            }
+        }
+        "get_screenshot" | "get_motion_frames" | "export_nodes" => {
             if let Some(registrar) = HOST_TOOL_REGISTRAR.get() {
                 let _ = registrar(state, requested, &mut r);
             }

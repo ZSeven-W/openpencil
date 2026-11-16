@@ -10,8 +10,11 @@ category: domain
 ---
 
 Use editable node animations for requested motion. Keep each node's authored
-layout and visible end state. For a subtle entrance use a 200–500 ms `mount`
-or `inView` clip with opacity and a small translation. The latter starts when
+layout and visible end state. When available, use `apply_motion_preset` for
+standard effects, inspect timing with `get_motion`, and sample the start,
+midpoint, and end of the clip with `get_motion_frames`. For a subtle
+entrance use a 200–500 ms `mount` or `inView` clip with opacity and a small
+translation. The latter starts when
 the node enters the viewport. A 60–100 ms stagger separates repeated items.
 Keep each screen under 32 motion tracks. Use `iterations:"infinite"` only for
 an intentional ambient loop, and respect reduced motion.

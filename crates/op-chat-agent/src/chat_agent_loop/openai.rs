@@ -343,7 +343,7 @@ pub(super) async fn run_openai_agent_loop_inner(
                     messages.push(json!({
                         "role": "user",
                         "content": [
-                            { "type": "text", "text": "Rendered screenshot of the current design:" },
+                            { "type": "text", "text": crate::chat_agent_context::image_observation_caption(&call.name, &result) },
                             {
                                 "type": "image_url",
                                 "image_url": { "url": format!("data:image/png;base64,{b64}") },

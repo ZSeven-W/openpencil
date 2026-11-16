@@ -598,7 +598,7 @@ fn attach_tool_result_to_transcript_with(
 fn transcript_result_value(name: &str, result: &ChatToolResult) -> serde_json::Value {
     let mut value = serde_json::from_str::<serde_json::Value>(&result.content)
         .unwrap_or_else(|_| serde_json::Value::String(result.content.clone()));
-    if name != "get_screenshot" || result.is_error {
+    if !op_host_services::chat_agent_loop::is_image_observation_tool(name) || result.is_error {
         return value;
     }
     if value.get("success").and_then(serde_json::Value::as_bool) == Some(false) {

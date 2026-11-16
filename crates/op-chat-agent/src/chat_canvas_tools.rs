@@ -169,13 +169,23 @@ pub fn execute_with_registry(
             result,
             command,
             json,
+            image,
             ..
         } => {
-            let data = match json {
+            let mut data = match json {
                 Some(raw) => serde_json::from_str::<serde_json::Value>(&raw)
                     .unwrap_or(serde_json::Value::String(raw)),
                 None => serde_json::to_value(&result).unwrap_or(serde_json::Value::Null),
             };
+            // Motion contact sheets carry the PNG separately on the MCP wire.
+            // The in-process model loop consumes image observations through
+            // the same JSON envelope as its screenshot tool.
+            if name == "get_motion_frames" {
+                if let (Some(image), Some(payload)) = (image, data.as_object_mut()) {
+                    payload.insert("image_base64".into(), serde_json::Value::String(image.data));
+                    payload.insert("format".into(), "png".into());
+                }
+            }
             // `batch_design` reports transactional rollbacks as structured
             // JSON so callers retain the failing lines and resend hint. That
             // is still a tool failure: no command landed and the agent loop

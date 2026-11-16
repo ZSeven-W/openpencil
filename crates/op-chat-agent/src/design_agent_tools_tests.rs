@@ -36,11 +36,11 @@ fn app_prompts_are_mobile_seeded() {
 use super::*;
 
 #[test]
-fn design_tool_defs_cover_all_14_tools_with_schema_parity() {
+fn design_tool_defs_cover_all_tools_with_schema_parity() {
     let defs = design_tool_defs();
 
-    // All 16 tools are present, every one MCP-sourced.
-    assert_eq!(defs.len(), 16, "expected 16 design tool defs");
+    // Every advertised tool is sourced from the MCP catalog.
+    assert_eq!(defs.len(), 19, "expected 19 design tool defs");
     for (name, _) in DESIGN_TOOLS {
         assert!(
             defs.iter().any(|d| d.name == *name),

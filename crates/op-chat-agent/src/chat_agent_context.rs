@@ -71,7 +71,10 @@ pub fn prepare_screenshot_for_context(
     tool_name: &str,
     result: &ChatToolResult,
 ) -> Option<PreparedScreenshot> {
-    if tool_name == "get_screenshot" && !result.is_error && !model_supports_inline_images(model) {
+    if is_image_observation_tool(tool_name)
+        && !result.is_error
+        && !model_supports_inline_images(model)
+    {
         return Some(PreparedScreenshot::TextOnly);
     }
     let base64_png = screenshot_image_base64(tool_name, result)?;
@@ -168,7 +171,7 @@ pub fn fit_screenshot_to_context(
 /// both prevents the wrapped base64 from falling through as a giant opaque
 /// text tool result.
 pub fn screenshot_image_base64(tool_name: &str, result: &ChatToolResult) -> Option<String> {
-    if tool_name != "get_screenshot" || result.is_error {
+    if !is_image_observation_tool(tool_name) || result.is_error {
         return None;
     }
     let value = serde_json::from_str::<Value>(&result.content).ok()?;
@@ -178,6 +181,34 @@ pub fn screenshot_image_base64(tool_name: &str, result: &ChatToolResult) -> Opti
     }
     let b64 = payload.get("image_base64").and_then(Value::as_str)?;
     (!b64.is_empty()).then(|| b64.to_string())
+}
+
+/// Tools whose results reach the model as inline visual observations.
+pub fn is_image_observation_tool(name: &str) -> bool {
+    matches!(name, "get_screenshot" | "get_motion_frames")
+}
+
+pub(super) fn image_observation_caption(tool_name: &str, result: &ChatToolResult) -> String {
+    if tool_name == "get_motion_frames" {
+        let times = serde_json::from_str::<Value>(&result.content)
+            .ok()
+            .and_then(|value| {
+                Some(
+                    value["data"]["frames"]
+                        .as_array()?
+                        .iter()
+                        .filter_map(|frame| frame["timeMs"].as_u64().map(|time| time.to_string()))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )
+            });
+        if let Some(times) = times {
+            return format!(
+                "Motion samples in row order, from left to right. Timestamp in ms: {times}."
+            );
+        }
+    }
+    "Rendered screenshot of the current design:".into()
 }
 
 /// Replace every previously-inline PNG screenshot in `value` with a compact,
@@ -218,6 +249,26 @@ pub fn elide_inline_screenshots(value: &mut Value) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn motion_contact_sheets_preserve_the_frame_order_in_model_context() {
+        let result = ChatToolResult {
+            content: json!({"success":true,"data":{
+                "format":"png","image_base64":"PNG","frames":[{"timeMs":90},{"timeMs":0}]
+            }})
+            .to_string(),
+            is_error: false,
+        };
+        assert_eq!(
+            screenshot_image_base64("get_motion_frames", &result).as_deref(),
+            Some("PNG")
+        );
+        assert!(image_observation_caption("get_motion_frames", &result).contains("90, 0"));
+        assert_eq!(
+            prepare_screenshot_for_context("deepseek-v4-pro", 1000, "get_motion_frames", &result),
+            Some(PreparedScreenshot::TextOnly)
+        );
+    }
 
     #[test]
     fn extractor_accepts_production_envelope_and_legacy_raw_shape() {

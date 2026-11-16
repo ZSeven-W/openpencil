@@ -2,4 +2,5 @@
 //! (pure code motion) so the mobile FFI hosts run the same loop; every
 //! existing `op_host_services::chat_agent_loop::…` path stays valid.
 
+pub use op_chat_agent::chat_agent_context::is_image_observation_tool;
 pub use op_chat_agent::chat_agent_loop::*;

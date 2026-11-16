@@ -6,7 +6,7 @@
 //! prompt (`op_ai_skills::design_agent_system_prompt_with_skills`), the
 //! same tool-executing loop (`ConfiguredBuiltinProvider::send` →
 //! `run_{anthropic,openai}_agent_loop`, `DESIGN_LOOP_MAX_TURNS`), the same
-//! 15-tool surface including real offscreen `get_screenshot`, and the same
+//! design tool surface including real offscreen `get_screenshot`, and the same
 //! loop-end structural backstop (`finalize_on_exit`). The provider comes
 //! from the daemon's persisted agent settings
 //! (`EditorState.editor_ui.agent_settings.builtin_agents`), never from the
