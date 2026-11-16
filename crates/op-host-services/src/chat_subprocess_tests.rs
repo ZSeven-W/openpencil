@@ -61,19 +61,15 @@ fn parse_line_codex_turn_completed() {
     }
 }
 
+fn canvas_template(cli: CliName) -> Option<SubprocessProvider> {
+    SubprocessProvider::cli_template(cli, safety::TurnPurpose::CanvasAgent)
+}
+
 #[test]
 fn for_cli_constructs_codex_exec_provider() {
-    // The base shape stays stable whether this test host has a new, old, or
-    // missing Codex binary. Fake-CLI tests below cover both gate outcomes.
-    let provider = SubprocessProvider::for_cli(CliName::Codex).expect("codex wired");
-    let args_without_ephemeral: Vec<_> = provider
-        .args
-        .iter()
-        .filter(|arg| arg.as_str() != "--ephemeral")
-        .map(String::as_str)
-        .collect();
+    let provider = canvas_template(CliName::Codex).expect("codex wired");
     assert_eq!(
-        args_without_ephemeral,
+        provider.args,
         [
             "exec",
             "--json",
@@ -94,8 +90,8 @@ struct CodexHelpStub {
 
 #[cfg(unix)]
 impl CodexHelpStub {
-    fn new(help_line: &str) -> Self {
-        use std::os::unix::fs::PermissionsExt;
+    fn new() -> Self {
+        use std::os::unix::fs::symlink;
         use std::sync::atomic::{AtomicU64, Ordering};
 
         static SEQ: AtomicU64 = AtomicU64::new(0);
@@ -105,25 +101,28 @@ impl CodexHelpStub {
             SEQ.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir_all(&dir).expect("create Codex help stub dir");
-        // Model the real npm launcher: Codex is an `env node` wrapper, and
-        // the matching Node runtime lives beside it. If the subprocess PATH
-        // stops leading with this directory, the host machine's Node will try
-        // to parse the shell fixture below as JavaScript and the probe fails.
-        let node = dir.join("node");
-        std::fs::write(&node, "#!/bin/sh\nexec /bin/sh \"$@\"\n").expect("write sibling Node stub");
-        std::fs::set_permissions(&node, std::fs::Permissions::from_mode(0o755))
-            .expect("make sibling Node stub executable");
         let binary = dir.join("codex");
-        let script = format!(
-            "#!/usr/bin/env node\n\
-             if [ \"$1\" != 'exec' ] || [ \"$2\" != '--help' ]; then exit 64; fi\n\
-             printf '%s\\n' '{}'\n",
-            help_line
-        );
-        std::fs::write(&binary, script).expect("write Codex help stub");
-        std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755))
-            .expect("make Codex help stub executable");
+        symlink("/usr/bin/env", &binary).expect("link env launcher");
+        symlink("/bin/sh", dir.join("node")).expect("link sibling interpreter");
         Self { dir, binary }
+    }
+
+    fn append(&self, help_line: &str, args: &mut Vec<String>) {
+        quirks::append_codex_ephemeral_arg_using(&self.binary, args, |binary, argv, timeout| {
+            assert_eq!(argv, ["exec", "--help"]);
+            // Keep the env → sibling Node PATH contract. The fixture is
+            // passed as interpreter input to avoid executing a new script.
+            let body = format!(
+                "if [ \"$1\" != 'exec' ] || [ \"$2\" != '--help' ]; then exit 64; fi
+                 printf '%s\n' '{help_line}'"
+            );
+            crate::cli_probe_support::bounded_cli_output(
+                CliName::Codex,
+                binary,
+                &["node", "-c", &body, "codex-fixture", argv[0], argv[1]],
+                timeout,
+            )
+        });
     }
 }
 
@@ -137,47 +136,21 @@ impl Drop for CodexHelpStub {
 #[cfg(unix)]
 #[test]
 fn codex_ephemeral_flag_is_capability_gated_and_cached() {
-    // The gate result is negative-cached per binary path, and the probe
-    // behind it (`codex exec --help` through the real `env node` wrapper
-    // chain) is wall-clock bounded. On a saturated machine — parallel
-    // `cargo test` plus external load; measured locally with the whole
-    // suite running concurrently — the stub's spawn chain can outlive
-    // even a generous probe budget, and that one slow probe would pin
-    // "unsupported" for the stub's path forever. So when the flag fails
-    // to appear, retry with a FRESH stub (fresh path = fresh cache slot)
-    // instead of re-asking the poisoned entry. A real gating regression
-    // fails every attempt deterministically, so nothing the test proves
-    // is weakened; the retries only absorb scheduler starvation. The
-    // attempt count is generous because it is nearly free where it
-    // matters: a regressed gate completes each probe in well under a
-    // second (the stub exits immediately), so all attempts together
-    // still fail fast — only a starved machine pays a probe budget per
-    // attempt, and that is exactly the case the retries exist to
-    // outlast (the suite's own spawn-storm phase can starve a fresh
-    // child for tens of seconds; measured 10+ consecutive 10s probe
-    // timeouts with three test binaries running concurrently).
-    let supported = (0..12)
-        .find_map(|_| {
-            let stub = CodexHelpStub::new("      --ephemeral  Do not persist session files");
-            let mut args = vec!["exec".into(), "--json".into()];
-            quirks::append_codex_ephemeral_arg(&stub.binary, &mut args);
-            (args == ["exec", "--ephemeral", "--json"]).then_some(stub)
-        })
-        .expect("a Codex advertising --ephemeral must have the flag gated in");
+    let supported = CodexHelpStub::new();
+    let mut args = vec!["exec".into(), "--json".into()];
+    supported.append("      --ephemeral  Do not persist session files", &mut args);
+    assert_eq!(args, ["exec", "--ephemeral", "--json"]);
 
-    // Removing the stand-in proves the second lookup uses the path cache.
     std::fs::remove_file(&supported.binary).expect("remove supported stub");
     let mut cached = vec!["exec".into(), "--json".into()];
-    quirks::append_codex_ephemeral_arg(&supported.binary, &mut cached);
+    quirks::append_codex_ephemeral_arg_using(&supported.binary, &mut cached, |_, _, _| {
+        panic!("a warm cache must not launch a probe")
+    });
     assert_eq!(cached, ["exec", "--ephemeral", "--json"]);
 
-    // No retry needed here: a probe failure and a genuine "not
-    // advertised" verdict both leave the flag out, which is exactly what
-    // the assertion requires — it cannot flake, only miss a regression
-    // that the retried positive case above would catch.
-    let unsupported = CodexHelpStub::new("Usage: codex exec [OPTIONS]");
+    let unsupported = CodexHelpStub::new();
     let mut old_args = vec!["exec".into(), "--json".into()];
-    quirks::append_codex_ephemeral_arg(&unsupported.binary, &mut old_args);
+    unsupported.append("Usage: codex exec [OPTIONS]", &mut old_args);
     assert_eq!(old_args, ["exec", "--json"]);
 }
 
@@ -216,7 +189,7 @@ fn parse_line_unknown_type_falls_through() {
 
 #[test]
 fn for_cli_claude_code_seeds_print_stream_json_flags() {
-    let p = SubprocessProvider::for_cli(CliName::ClaudeCode).unwrap();
+    let p = canvas_template(CliName::ClaudeCode).unwrap();
     // `binary` is the resolved absolute path when claude is on
     // PATH (or one of the npm-global / nvm fallback locations);
     // otherwise it falls back to the bare name. Either way the
@@ -235,15 +208,15 @@ fn for_cli_rejects_opencode_and_copilot() {
     // Copilot's routed transport is the official SDK
     // (chat_copilot.rs) — the old `gh-copilot suggest` argv was a
     // stale dead end, so the subprocess bridge refuses both.
-    assert!(SubprocessProvider::for_cli(CliName::OpenCode).is_none());
-    assert!(SubprocessProvider::for_cli(CliName::Copilot).is_none());
+    assert!(canvas_template(CliName::OpenCode).is_none());
+    assert!(canvas_template(CliName::Copilot).is_none());
 }
 
 #[test]
 fn for_cli_dsh_constructs_the_one_shot_headless_bridge() {
     // Verified dsh interface: `dsh --profile headless "<prompt>"` —
     // prompt as a bare trailing argv element, no model selector.
-    let dsh = SubprocessProvider::for_cli(CliName::Dsh).expect("dsh wired");
+    let dsh = canvas_template(CliName::Dsh).expect("dsh wired");
     assert!(dsh.binary.ends_with("dsh"), "binary={}", dsh.binary);
     assert_eq!(dsh.args, ["--profile", "headless"]);
     assert_eq!(dsh.prompt_mode, PromptMode::BareArg);
@@ -268,7 +241,7 @@ fn dsh_chat_routes_through_the_fail_closed_environment() {
 
 #[test]
 fn subprocess_providers_advertise_cooperative_cancellation() {
-    let provider = SubprocessProvider::for_cli(CliName::Codex).expect("codex provider");
+    let provider = canvas_template(CliName::Codex).expect("codex provider");
     assert!(provider.supports_cancellable_send());
 }
 
@@ -376,13 +349,13 @@ fn terminal_reap_obeys_receiver_cancellation() {
 
 #[test]
 fn antigravity_and_grok_use_documented_one_shot_flags() {
-    let antigravity = SubprocessProvider::for_cli(CliName::Antigravity).unwrap();
+    let antigravity = canvas_template(CliName::Antigravity).unwrap();
     assert!(antigravity.binary.ends_with("agy"));
     assert_eq!(antigravity.args, ["--sandbox", "--print-timeout", "280s"]);
     assert_eq!(antigravity.prompt_mode, PromptMode::FlagArg("-p"));
     assert_eq!(antigravity.model_flag, Some("--model"));
 
-    let grok = SubprocessProvider::for_cli(CliName::GrokBuild).unwrap();
+    let grok = canvas_template(CliName::GrokBuild).unwrap();
     assert!(grok.binary.ends_with("grok"));
     assert!(grok
         .args
@@ -411,7 +384,9 @@ fn antigravity_and_grok_use_documented_one_shot_flags() {
 
 #[test]
 fn generation_mode_disables_canvas_mcp_but_keeps_cli_containment() {
-    let grok = SubprocessProvider::for_cli_generation(CliName::GrokBuild).unwrap();
+    let grok =
+        SubprocessProvider::cli_template(CliName::GrokBuild, safety::TurnPurpose::Generation)
+            .unwrap();
     assert_eq!(grok.turn_purpose, safety::TurnPurpose::Generation);
     assert!(!grok.args.iter().any(|arg| arg == safety::GROK_MCP_ALLOW));
     let tools = grok.args.iter().position(|arg| arg == "--tools").unwrap();
@@ -422,7 +397,9 @@ fn generation_mode_disables_canvas_mcp_but_keeps_cli_containment() {
         .any(|pair| pair == ["--sandbox", "strict"]));
     assert!(grok.args.iter().any(|arg| arg == "--disable-web-search"));
 
-    let antigravity = SubprocessProvider::for_cli_generation(CliName::Antigravity).unwrap();
+    let antigravity =
+        SubprocessProvider::cli_template(CliName::Antigravity, safety::TurnPurpose::Generation)
+            .unwrap();
     assert_eq!(antigravity.turn_purpose, safety::TurnPurpose::Generation);
     assert_eq!(
         antigravity.args,
@@ -432,7 +409,7 @@ fn generation_mode_disables_canvas_mcp_but_keeps_cli_containment() {
 
 #[test]
 fn grok_default_model_keeps_cli_default_but_named_model_uses_m_flag() {
-    let grok = SubprocessProvider::for_cli(CliName::GrokBuild).unwrap();
+    let grok = canvas_template(CliName::GrokBuild).unwrap();
     let default_args = grok.turn_args(&request_with_model(Some("default")));
     assert!(!default_args.iter().any(|arg| arg == "-m"));
 
@@ -443,7 +420,7 @@ fn grok_default_model_keeps_cli_default_but_named_model_uses_m_flag() {
 
 #[test]
 fn antigravity_default_model_keeps_cli_default_but_named_model_uses_model_flag() {
-    let antigravity = SubprocessProvider::for_cli(CliName::Antigravity).unwrap();
+    let antigravity = canvas_template(CliName::Antigravity).unwrap();
     let default_args = antigravity.turn_args(&request_with_model(Some("default")));
     assert!(!default_args.iter().any(|arg| arg == "--model"));
 
@@ -465,7 +442,7 @@ fn request_with_model(model: Option<&str>) -> ChatRequest {
 
 #[test]
 fn codex_turn_args_append_model_flag_when_selected() {
-    let p = SubprocessProvider::for_cli(CliName::Codex).unwrap();
+    let p = canvas_template(CliName::Codex).unwrap();
     let args = p.turn_args(&request_with_model(Some("gpt-5.5")));
     let pos = args
         .iter()
@@ -480,7 +457,7 @@ fn codex_turn_args_append_model_flag_when_selected() {
 
 #[test]
 fn codex_turn_args_omit_model_flag_when_unset_or_blank() {
-    let p = SubprocessProvider::for_cli(CliName::Codex).unwrap();
+    let p = canvas_template(CliName::Codex).unwrap();
     // None → CLI default model, no flag.
     let args = p.turn_args(&request_with_model(None));
     assert!(!args.iter().any(|a| a == "--model"), "args={args:?}");
@@ -491,7 +468,7 @@ fn codex_turn_args_omit_model_flag_when_unset_or_blank() {
 
 #[test]
 fn codex_turn_args_map_effort_to_reasoning_config() {
-    let p = SubprocessProvider::for_cli(CliName::Codex).unwrap();
+    let p = canvas_template(CliName::Codex).unwrap();
     // Defaulted knobs (Adaptive + Low) emit no config — the CLI
     // keeps its own default reasoning effort.
     let args = p.turn_args(&ChatRequest::default());
@@ -524,7 +501,7 @@ fn claude_subprocess_template_passes_the_model_alias() {
     // Headless generation (op-smoke, the arena) selects the Claude model
     // through the CLI's own `--model` flag; the routed chat still rides
     // the SDK adapter (chat_claude.rs) and never reaches this template.
-    let p = SubprocessProvider::for_cli(CliName::ClaudeCode).unwrap();
+    let p = canvas_template(CliName::ClaudeCode).unwrap();
     let args = p.turn_args(&request_with_model(Some("opus")));
     let at = args
         .iter()
@@ -537,7 +514,8 @@ fn claude_subprocess_template_passes_the_model_alias() {
 fn claude_generation_turns_disallow_every_tool() {
     // A generation turn is parsed as text by the orchestrator; the child
     // must not be able to touch files, run commands or load MCP servers.
-    let p = SubprocessProvider::for_cli_generation(CliName::ClaudeCode).unwrap();
+    let p = SubprocessProvider::cli_template(CliName::ClaudeCode, safety::TurnPurpose::Generation)
+        .unwrap();
     assert!(p.args.iter().any(|a| a == "--strict-mcp-config"));
     let at = p
         .args
@@ -552,7 +530,7 @@ fn claude_generation_turns_disallow_every_tool() {
         );
     }
     // The canvas-agent template keeps the CLI's own tool policy.
-    let canvas = SubprocessProvider::for_cli(CliName::ClaudeCode).unwrap();
+    let canvas = canvas_template(CliName::ClaudeCode).unwrap();
     assert!(!canvas.args.iter().any(|a| a == "--disallowedTools"));
 }
 

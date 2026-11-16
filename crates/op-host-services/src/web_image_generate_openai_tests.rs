@@ -142,6 +142,14 @@ fn seedream_3_keeps_the_dalle_sizes_and_plain_openai_is_unchanged() {
     assert_eq!(body["response_format"], "url");
 }
 
+fn mock_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .use_rustls_tls()
+        .no_proxy()
+        .build()
+        .expect("mock HTTP client")
+}
+
 #[test]
 fn generation_posts_to_the_versioned_base_path() {
     let (base, rx) = mock_once(
@@ -149,7 +157,7 @@ fn generation_posts_to_the_versioned_base_path() {
         r#"{"data":[{"url":"https://cdn.example/a.jpeg"}]}"#,
     );
     let p = profile("doubao-seedream-5-0", Some(&format!("{base}/api/v3")));
-    let client = reqwest::Client::new();
+    let client = mock_client();
     let url = block_on(generate_openai(&client, "a cat", &p, None, None)).expect("generated");
     assert_eq!(url, "https://cdn.example/a.jpeg");
     let request = rx.recv().expect("request seen");
@@ -180,7 +188,7 @@ fn test_probe_accepts_a_prompt_rejection_and_refuses_key_path_or_model_faults() 
             ImageTestStatus::Invalid,
         ),
     ];
-    let client = reqwest::Client::new();
+    let client = mock_client();
     for (status, body, expected) in cases {
         let (base, rx) = mock_once(status, body);
         let p = profile("doubao-seedream-5-0", Some(&format!("{base}/api/v3")));

@@ -265,42 +265,13 @@ fn version_failure_message_falls_back_when_the_cli_said_nothing() {
     );
 }
 
-/// Write an executable `/bin/sh` stand-in for a CLI, so the version gate
-/// can be driven through a real subprocess without depending on which
-/// coding CLIs happen to be installed on the machine running the tests.
+/// Run a real subprocess without discovering an installed CLI or asking
+/// the OS to launch a freshly written executable.
 #[cfg(unix)]
-fn fake_cli(name: &str, body: &str) -> (std::path::PathBuf, std::path::PathBuf) {
-    use std::os::unix::fs::PermissionsExt;
-    let dir = std::env::temp_dir().join(format!("op-cli-version-{}-{name}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("scratch dir");
-    let exe = dir.join(name);
-    std::fs::write(&exe, format!("#!/bin/sh\n{body}")).expect("write fake cli");
-    std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).expect("chmod");
-    (dir, exe)
-}
-
-/// [`cli_version`] with a bounded retry for the /tmp write→exec race
-/// that surfaces as ETXTBSY ("Text file busy") on CI runners' overlay
-/// filesystems. A fake CLI written and executed back-to-back can still be
-/// mid-copy-up when the exec lands, so a single immediate retry keeps the
-/// test's intent (a real subprocess round-trip) without papering over
-/// genuine spawn failures.
-#[cfg(unix)]
-fn cli_version_retry(
-    exe: &std::path::Path,
-    timeout: std::time::Duration,
-) -> Result<String, CliVersionFailure> {
-    for attempt in 0..3 {
-        match cli_version(exe, timeout) {
-            Err(CliVersionFailure::Spawn(message))
-                if attempt < 2 && message.contains("Text file busy") =>
-            {
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
-            result => return result,
-        }
-    }
-    unreachable!("the loop returns on its final attempt")
+fn cli_version_fixture(body: &str, timeout: Duration) -> Result<String, CliVersionFailure> {
+    let mut command = std::process::Command::new("/bin/sh");
+    command.args(["-c", body, "cli-version-fixture", "--version"]);
+    cli_version_command(command, timeout)
 }
 
 #[cfg(unix)]
@@ -308,13 +279,13 @@ fn cli_version_retry(
 fn cli_version_reports_stderr_from_a_nonzero_exit() {
     // A stand-in for the broken-shebang case: prints to stderr, exits
     // non-zero. The captured tail must survive into the failure.
-    let (dir, exe) = fake_cli(
-        "fake-codex",
-        "printf 'env: node: No such file or directory\\n' >&2\nexit 127\n",
-    );
-
-    let failure = cli_version_retry(&exe, std::time::Duration::from_secs(10))
-        .expect_err("a 127 exit is not a usable version");
+    let failure = cli_version_fixture(
+        "printf 'env: node: No such file or directory\n' >&2
+exit 127
+",
+        Duration::from_secs(10),
+    )
+    .expect_err("a 127 exit is not a usable version");
     let CliVersionFailure::Exited { status, tail } = &failure else {
         panic!("expected a non-zero exit, got {failure:?}");
     };
@@ -324,8 +295,6 @@ fn cli_version_reports_stderr_from_a_nonzero_exit() {
         "stderr must survive into the card text, got {tail:?}"
     );
     assert!(cli_version_failure_message("Codex", &failure).contains("node"));
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[cfg(unix)]
@@ -348,9 +317,7 @@ fn cli_version_surfaces_node_optional_dependency_root_cause() {
          '    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:654:26)' >&2\n\
          exit 1\n"
     );
-    let (dir, exe) = fake_cli("broken-codex", &body);
-
-    let failure = cli_version_retry(&exe, std::time::Duration::from_secs(10))
+    let failure = cli_version_fixture(&body, Duration::from_secs(10))
         .expect_err("a missing platform package must fail the version gate");
     let message = cli_version_failure_message("Codex", &failure);
 
@@ -372,8 +339,6 @@ fn cli_version_surfaces_node_optional_dependency_root_cause() {
         "the provider card diagnostic must stay bounded, got {} characters",
         message.chars().count()
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[cfg(unix)]
@@ -382,12 +347,14 @@ fn cli_version_does_not_wait_for_a_descendant_holding_its_pipes() {
     // The wrapper has already delivered a valid version and exited, but its
     // background helper inherits stdout/stderr. A blocking reader join would
     // turn this quick responsiveness gate into a 30-second wait.
-    let (dir, exe) = fake_cli(
-        "forking-cli",
-        "printf 'codex-cli 1.2.3\\n'\nsleep 30 &\nexit 0\n",
+    let started = Instant::now();
+    let version = cli_version_fixture(
+        "printf 'codex-cli 1.2.3\n'
+sleep 30 &
+exit 0
+",
+        Duration::from_secs(10),
     );
-    let started = std::time::Instant::now();
-    let version = cli_version_retry(&exe, std::time::Duration::from_secs(10));
     let elapsed = started.elapsed();
 
     assert_eq!(version, Ok("codex-cli 1.2.3".to_string()));
@@ -395,57 +362,33 @@ fn cli_version_does_not_wait_for_a_descendant_holding_its_pipes() {
         elapsed < std::time::Duration::from_secs(15),
         "the exited wrapper, not its descendant's pipe EOF, must finish the gate; took {elapsed:?}"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[cfg(unix)]
 #[test]
 fn cli_version_accepts_a_healthy_cli_and_bounds_a_hung_one() {
-    let (healthy_dir, healthy) = fake_cli("healthy-cli", "printf 'codex-cli 0.9.1\\n'\n");
-    // A loaded runner can starve the freshly spawned shell past a fixed
-    // budget; escalate like the hung-CLI branch below so scheduling delay
-    // cannot fail the healthy path, while a genuine regression still
-    // reports within a few fast attempts.
-    let budget_cap = std::time::Duration::from_secs(20);
-    let mut budget = std::time::Duration::from_secs(5);
-    let version = loop {
-        match cli_version_retry(&healthy, budget) {
-            Ok(version) => break version,
-            Err(failure) if budget >= budget_cap => {
-                panic!("healthy CLI must yield a version: {failure:?}")
-            }
-            Err(_) => budget = (budget * 2).min(budget_cap),
-        }
-    };
+    let version = cli_version_fixture(
+        "printf 'codex-cli 0.9.1\n'
+",
+        Duration::from_secs(5),
+    )
+    .expect("healthy CLI must yield a version");
     assert_eq!(version, "codex-cli 0.9.1");
-    let _ = std::fs::remove_dir_all(&healthy_dir);
 
-    // Mid first-run OAuth: prints a prompt, then hangs past the budget. A
-    // loaded runner can take several seconds to schedule the freshly spawned
-    // shell, so retry with a larger budget instead of racing its first printf.
-    let (hung_dir, hung) = fake_cli(
-        "hung-cli",
-        "printf 'Sign in at https://x\\n'\nexec sleep 30\n",
+    // Mid first-run OAuth: prints a prompt, then hangs past the budget.
+    let budget = Duration::from_secs(4);
+    let started = Instant::now();
+    let failure = cli_version_fixture(
+        "printf 'Sign in at https://x\n'
+exec sleep 30
+",
+        budget,
+    )
+    .expect_err("a CLI still running at the deadline is not a usable version");
+    assert!(
+        started.elapsed() < budget * 4,
+        "the deadline, not the hung CLI, must bound the probe"
     );
-    let budget_cap = std::time::Duration::from_secs(16);
-    let mut budget = std::time::Duration::from_secs(4);
-    let failure = loop {
-        let started = std::time::Instant::now();
-        let failure = cli_version(&hung, budget)
-            .expect_err("a CLI still running at the deadline is not a usable version");
-        assert!(
-            started.elapsed() < budget * 4,
-            "the deadline, not the hung CLI, must bound the probe"
-        );
-        let captured_prompt = matches!(
-            &failure,
-            CliVersionFailure::TimedOut { tail, .. } if tail.contains("Sign in at")
-        );
-        if captured_prompt || budget >= budget_cap {
-            break failure;
-        }
-        budget = (budget * 2).min(budget_cap);
-    };
     let CliVersionFailure::TimedOut { seconds, tail } = &failure else {
         panic!("expected a timeout, got {failure:?}");
     };
@@ -454,5 +397,4 @@ fn cli_version_accepts_a_healthy_cli_and_bounds_a_hung_one() {
         tail.contains("Sign in at"),
         "output printed before the kill must survive, got {tail:?}"
     );
-    let _ = std::fs::remove_dir_all(&hung_dir);
 }

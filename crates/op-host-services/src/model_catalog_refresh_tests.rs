@@ -202,35 +202,21 @@ fn landing_replaces_the_refreshed_slice_and_selection_follows() {
 #[cfg(unix)]
 #[test]
 fn a_catalog_printed_by_a_real_cli_lands_in_the_picker() {
-    use std::os::unix::fs::PermissionsExt;
-
-    let script = std::env::temp_dir().join(format!(
-        "openpencil-model-catalog-refresh-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos()
-    ));
-    std::fs::write(
-        &script,
-        "#!/bin/sh\nprintf 'gpt-5.6-sol\\ngpt-5.6-luna\\n'\n",
-    )
-    .expect("write");
-    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).expect("chmod");
-
     let mut refresh = ModelCatalogRefresh::new();
     let mut state = EditorState::default();
     connect(&mut state, AgentProvider::CodexCli);
     seed(&mut state, AgentProvider::CodexCli, "gpt-5.5");
     state.rebuild_chat_models();
 
-    let exe = script.clone();
     assert!(refresh.request_with(
         state.editor_ui.agent_settings.verified_connected_mask(),
         Instant::now(),
-        move |_| {
-            let output = std::process::Command::new(&exe).output().expect("fake cli");
+        |_| {
+            let output = std::process::Command::new("/bin/sh")
+                .args(["-c", "printf 'gpt-5.6-sol\ngpt-5.6-luna\n'"])
+                .output()
+                .expect("fake cli");
+            assert!(output.status.success());
             String::from_utf8_lossy(&output.stdout)
                 .lines()
                 .map(str::trim)
@@ -240,7 +226,6 @@ fn a_catalog_printed_by_a_real_cli_lands_in_the_picker() {
         },
     ));
     assert!(drain(&mut refresh, &mut state));
-    let _ = std::fs::remove_file(&script);
 
     assert_eq!(catalog_values(&state), ["gpt-5.6-sol", "gpt-5.6-luna"]);
     assert!(state

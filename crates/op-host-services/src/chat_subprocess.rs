@@ -104,13 +104,25 @@ impl SubprocessProvider {
     }
 
     fn for_cli_with_purpose(cli: CliName, turn_purpose: safety::TurnPurpose) -> Option<Self> {
+        let mut provider = Self::cli_template(cli, turn_purpose)?;
+        provider.binary = find_binary(cli.default_binary());
+        if cli == CliName::Codex {
+            quirks::append_codex_ephemeral_arg(
+                std::path::Path::new(&provider.binary),
+                &mut provider.args,
+            );
+        }
+        Some(provider)
+    }
+
+    fn cli_template(cli: CliName, turn_purpose: safety::TurnPurpose) -> Option<Self> {
         // Per-CLI model selector (third tuple slot): Codex takes
         // `--model <id>` — matching the TS reference. Claude Code's
         // routed chat rides the SDK adapter (`chat_claude.rs`); the
         // subprocess template is what headless generation (op-smoke,
         // the arena) uses, so it takes `--model <alias>` as well.
         type Template = (Vec<String>, PromptMode, Option<&'static str>, Vec<String>);
-        let (mut args, prompt_mode, model_flag, tail_args): Template = match cli {
+        let (args, prompt_mode, model_flag, tail_args): Template = match cli {
             CliName::ClaudeCode => (
                 safety::claude_code_args(turn_purpose),
                 PromptMode::PositionalArg,
@@ -172,12 +184,8 @@ impl SubprocessProvider {
             // Kimi has no canvas-agent MCP wiring yet: generation only.
             CliName::Copilot | CliName::OpenCode | CliName::Kimi => return None,
         };
-        let binary = find_binary(cli.default_binary());
-        if cli == CliName::Codex {
-            quirks::append_codex_ephemeral_arg(std::path::Path::new(&binary), &mut args);
-        }
         Some(Self {
-            binary,
+            binary: cli.default_binary().into(),
             args,
             label: cli.label().into(),
             prompt_mode,
@@ -223,17 +231,6 @@ impl SubprocessProvider {
             cli: None,
             turn_purpose: safety::TurnPurpose::Generation,
         }
-    }
-
-    /// Point a known-CLI provider at a stand-in binary so the exit /
-    /// stderr / stdout handling can be exercised without the real CLI.
-    /// Its only callers are the unix-gated exit tests (the stand-ins are
-    /// `/bin/sh` scripts), so it carries the same gate to stay live-code
-    /// on Windows.
-    #[cfg(all(test, unix))]
-    pub(crate) fn with_test_binary(mut self, binary: impl Into<String>) -> Self {
-        self.binary = binary.into();
-        self
     }
 
     /// Argv for one turn: the configured base args plus the model

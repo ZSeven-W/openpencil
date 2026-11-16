@@ -45,10 +45,8 @@ EOT
 exit 3
 "#;
 
-/// A stand-in `agy` on disk. Returns the containing directory (for
-/// cleanup) and the executable path.
+/// A stand-in script read by the system shell. Returns its directory and path.
 fn stub_cli(body: &str) -> (std::path::PathBuf, std::path::PathBuf) {
-    use std::os::unix::fs::PermissionsExt;
     use std::sync::atomic::{AtomicU64, Ordering};
     // A counter, not just a timestamp: these tests run in parallel and
     // the clock is coarse enough that two of them collided on one
@@ -62,8 +60,22 @@ fn stub_cli(body: &str) -> (std::path::PathBuf, std::path::PathBuf) {
     std::fs::create_dir_all(&dir).expect("temp dir");
     let path = dir.join("agy");
     std::fs::write(&path, body).expect("write stub");
-    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("chmod");
     (dir, path)
+}
+
+fn script_provider(
+    cli: CliName,
+    purpose: safety::TurnPurpose,
+    script: &std::path::Path,
+) -> SubprocessProvider {
+    // Exercise the real stdio and process-group handling without discovering
+    // an installed CLI or asking the OS to launch a new temporary executable.
+    let mut provider = SubprocessProvider::cli_template(cli, purpose).expect("subprocess template");
+    provider.binary = "/bin/sh".into();
+    provider
+        .args
+        .insert(0, script.to_string_lossy().into_owned());
+    provider
 }
 
 fn read_test_pids(path: &std::path::Path) -> Vec<i32> {
@@ -125,31 +137,14 @@ fn assert_process_tree_reaped(pids: &[i32], context: &str) {
     assert!(survivors.is_empty(), "{context}: {survivors:?}");
 }
 
-/// Run one generation turn against a stand-in and return the error text
-/// the user would see.
-///
-/// Retries a spawn that races on `ETXTBSY`. Writing a stub and exec'ing
-/// it from many threads at once means one thread's still-open write fd
-/// can be inherited across another thread's `fork()` and briefly hold
-/// the freshly-written stub open for write, so `execve` reports "Text
-/// file busy". That is an artifact of the parallel write-then-exec
-/// harness, not the stderr-drain behaviour under test, and the window is
-/// microseconds — a retry clears it.
+/// Run one generation turn against a stand-in and return the error shown to the user.
 fn turn_error(body: &str) -> String {
-    for _ in 0..16 {
-        let message = turn_error_once(body);
-        if !message.contains("Text file busy") && !message.contains("os error 26") {
-            return message;
-        }
-    }
-    turn_error_once(body)
-}
-
-fn turn_error_once(body: &str) -> String {
     let (dir, binary) = stub_cli(body);
-    let provider = SubprocessProvider::for_cli_generation(CliName::Antigravity)
-        .expect("antigravity has a subprocess template")
-        .with_test_binary(binary.to_string_lossy().into_owned());
+    let provider = script_provider(
+        CliName::Antigravity,
+        safety::TurnPurpose::Generation,
+        &binary,
+    );
     let deltas: Vec<ChatDelta> = provider
         .send(ChatRequest {
             user_message: "design a landing page".into(),
@@ -315,9 +310,7 @@ fn codex_terminal_error_events_finish_the_turn_as_aborted() {
     ] {
         let body = format!("#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '{event}'\n");
         let (dir, binary) = stub_cli(&body);
-        let provider = SubprocessProvider::for_cli(CliName::Codex)
-            .expect("codex subprocess template")
-            .with_test_binary(binary.to_string_lossy().into_owned());
+        let provider = script_provider(CliName::Codex, safety::TurnPurpose::CanvasAgent, &binary);
         let deltas: Vec<_> = provider
             .send(ChatRequest {
                 user_message: "inspect the canvas".into(),
@@ -352,9 +345,7 @@ fn codex_reconnect_notice_does_not_end_a_turn_that_recovers() {
     let body =
         format!("#!/bin/sh\ncat >/dev/null\nprintf '%s\\n' '{notice}' '{answer}' '{done}'\n");
     let (dir, binary) = stub_cli(&body);
-    let provider = SubprocessProvider::for_cli(CliName::Codex)
-        .expect("codex subprocess template")
-        .with_test_binary(binary.to_string_lossy().into_owned());
+    let provider = script_provider(CliName::Codex, safety::TurnPurpose::CanvasAgent, &binary);
     let deltas: Vec<_> = provider
         .send(ChatRequest {
             user_message: "inspect the canvas".into(),
@@ -387,9 +378,7 @@ wait "$descendant"
 "#;
     let (dir, binary) = stub_cli(body);
     let pid_file = std::path::PathBuf::from(format!("{}.pids", binary.to_string_lossy()));
-    let provider = SubprocessProvider::for_cli(CliName::Codex)
-        .expect("codex subprocess template")
-        .with_test_binary(binary.to_string_lossy().into_owned());
+    let provider = script_provider(CliName::Codex, safety::TurnPurpose::CanvasAgent, &binary);
     let cancel = Arc::new(AtomicBool::new(false));
     let mut deltas = provider.send_cancellable(
         ChatRequest {
@@ -431,9 +420,7 @@ wait "$descendant"
 "#;
     let (dir, binary) = stub_cli(body);
     let pid_file = std::path::PathBuf::from(format!("{}.pids", binary.to_string_lossy()));
-    let provider = SubprocessProvider::for_cli(CliName::Codex)
-        .expect("codex subprocess template")
-        .with_test_binary(binary.to_string_lossy().into_owned());
+    let provider = script_provider(CliName::Codex, safety::TurnPurpose::CanvasAgent, &binary);
     let cancel = Arc::new(AtomicBool::new(false));
     let mut deltas = provider.send_cancellable(
         ChatRequest {
@@ -470,9 +457,7 @@ wait "$descendant"
 "#;
     let (dir, binary) = stub_cli(body);
     let pid_file = std::path::PathBuf::from(format!("{}.pids", binary.to_string_lossy()));
-    let provider = SubprocessProvider::for_cli(CliName::Codex)
-        .expect("codex subprocess template")
-        .with_test_binary(binary.to_string_lossy().into_owned());
+    let provider = script_provider(CliName::Codex, safety::TurnPurpose::CanvasAgent, &binary);
 
     let started = std::time::Instant::now();
     let _deltas: Vec<_> = provider
@@ -481,15 +466,8 @@ wait "$descendant"
             ..Default::default()
         })
         .collect();
-    // The elapsed bound covers the WHOLE turn, not just the post-EOF
-    // reap: spawn, prompt feed, EOF detection, and up to two EXIT_GRACE
-    // waits (~4s of legitimate fixed budget) all land inside it, and a
-    // loaded machine adds scheduling/timer lag on top. What the test must
-    // prove is only that the turn never waits out the still-live 30s
-    // descendant after stdout EOF — so the bound stays far below the
-    // descendant's lifetime while leaving real headroom over the fixed
-    // grace budget. The previous 15s-sleep/8s-bound pairing left ~4s of
-    // slack and flaked under parallel `cargo test` on loaded machines.
+    // The stand-in is read by an installed interpreter and does not
+    // probe the user's Codex, so this bound exercises the actual turn.
     assert!(
         started.elapsed() < Duration::from_secs(15),
         "post-EOF child wait exceeded exit grace: {:?}",
@@ -553,9 +531,7 @@ fn kimi_generation_turn_runs_tool_free_and_reads_the_assistant_message() {
         "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$(dirname \"$0\")/argv.txt\"\npwd > \"$(dirname \"$0\")/cwd.txt\"\nprintf '%s\\n' '{version}' '{answer}' '{resume}'\n"
     );
     let (dir, binary) = stub_cli(&body);
-    let provider = SubprocessProvider::for_cli_generation(CliName::Kimi)
-        .expect("kimi generation template")
-        .with_test_binary(binary.to_string_lossy().into_owned());
+    let provider = script_provider(CliName::Kimi, safety::TurnPurpose::Generation, &binary);
     let deltas: Vec<_> = provider
         .send(ChatRequest {
             user_message: "plan the page".into(),

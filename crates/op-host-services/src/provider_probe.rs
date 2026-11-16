@@ -287,7 +287,14 @@ fn cli_version_exit_diagnostic(stdout: &str, stderr: &str) -> String {
 /// chatty or hung CLI can neither fill a pipe nor cost us its output
 /// when the deadline kills it.
 fn cli_version(exe: &Path, timeout: Duration) -> Result<String, CliVersionFailure> {
-    let mut cmd = crate::chat_spawn::build_blocking_command(exe, &["--version"]);
+    let cmd = crate::chat_spawn::build_blocking_command(exe, &["--version"]);
+    cli_version_command(cmd, timeout)
+}
+
+fn cli_version_command(
+    mut cmd: std::process::Command,
+    timeout: Duration,
+) -> Result<String, CliVersionFailure> {
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

@@ -167,15 +167,28 @@ static CODEX_EPHEMERAL_SUPPORT: OnceLock<Mutex<HashMap<PathBuf, bool>>> = OnceLo
 /// it. The repository has no minimum Codex version; `--ephemeral` arrived in
 /// 0.99.0, so an unconditional flag would break otherwise-supported installs.
 pub(crate) fn append_codex_ephemeral_arg(binary: &Path, args: &mut Vec<String>) {
+    append_codex_ephemeral_arg_using(binary, args, |binary, args, timeout| {
+        bounded_cli_output(CliName::Codex, binary, args, timeout)
+    });
+}
+
+pub(super) fn append_codex_ephemeral_arg_using(
+    binary: &Path,
+    args: &mut Vec<String>,
+    probe: impl FnOnce(&Path, &[&str], Duration) -> BoundedProbe,
+) {
     if args.first().is_some_and(|arg| arg == "exec")
-        && codex_exec_supports_ephemeral(binary)
+        && codex_exec_supports_ephemeral(binary, probe)
         && !args.iter().any(|arg| arg == "--ephemeral")
     {
         args.insert(1, "--ephemeral".into());
     }
 }
 
-fn codex_exec_supports_ephemeral(binary: &Path) -> bool {
+fn codex_exec_supports_ephemeral(
+    binary: &Path,
+    probe: impl FnOnce(&Path, &[&str], Duration) -> BoundedProbe,
+) -> bool {
     let cache = CODEX_EPHEMERAL_SUPPORT.get_or_init(|| Mutex::new(HashMap::new()));
     if let Some(supported) = cache
         .lock()
@@ -184,12 +197,7 @@ fn codex_exec_supports_ephemeral(binary: &Path) -> bool {
     {
         return supported;
     }
-    let supported = match bounded_cli_output(
-        CliName::Codex,
-        binary,
-        &["exec", "--help"],
-        CODEX_EXEC_HELP_TIMEOUT,
-    ) {
+    let supported = match probe(binary, &["exec", "--help"], CODEX_EXEC_HELP_TIMEOUT) {
         BoundedProbe::Completed(output) if output.status.success() => {
             help_advertises_ephemeral(&output.stdout) || help_advertises_ephemeral(&output.stderr)
         }
