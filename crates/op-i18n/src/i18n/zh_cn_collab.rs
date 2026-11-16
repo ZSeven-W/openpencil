@@ -597,6 +597,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "interactions.noLayers" => "此屏幕没有其他图层",
         "interactions.hiddenSuffix" => "(已隐藏)",
         "preview.toast" => "{{message}}",
+        "export.motionFrameLimit" => "超过帧数上限",
         "motion.section.title" => "动效",
         "motion.add" => "+ 添加动效",
         "motion.stagger" => "子项错峰",

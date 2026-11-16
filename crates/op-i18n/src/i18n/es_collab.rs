@@ -597,6 +597,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "interactions.noLayers" => "No hay otras capas en esta pantalla",
         "interactions.hiddenSuffix" => "(oculta)",
         "preview.toast" => "{{message}}",
+        "export.motionFrameLimit" => "Demasiados fotogramas",
         "motion.section.title" => "Animación",
         "motion.add" => "+ Añadir animación",
         "motion.stagger" => "Escalonar hijos",

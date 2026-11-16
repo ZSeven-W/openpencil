@@ -601,6 +601,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "interactions.noLayers" => "इस स्क्रीन में कोई अन्य लेयर नहीं",
         "interactions.hiddenSuffix" => "(छिपा)",
         "preview.toast" => "{{message}}",
+        "export.motionFrameLimit" => "फ़्रेम सीमा पार",
         "motion.section.title" => "मोशन",
         "motion.add" => "+ मोशन जोड़ें",
         "motion.stagger" => "चाइल्ड को क्रम से",

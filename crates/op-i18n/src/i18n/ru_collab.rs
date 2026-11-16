@@ -627,6 +627,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "interactions.noLayers" => "На этом экране нет других слоёв",
         "interactions.hiddenSuffix" => "(скрыт)",
         "preview.toast" => "{{message}}",
+        "export.motionFrameLimit" => "Слишком много кадров",
         "motion.section.title" => "Анимация",
         "motion.add" => "+ Добавить анимацию",
         "motion.stagger" => "Дочерние по очереди",

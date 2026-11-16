@@ -597,6 +597,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "interactions.noLayers" => "Bu ekranda başka katman yok",
         "interactions.hiddenSuffix" => "(gizli)",
         "preview.toast" => "{{message}}",
+        "export.motionFrameLimit" => "Kare sınırı aşıldı",
         "motion.section.title" => "Hareket",
         "motion.add" => "+ Hareket ekle",
         "motion.stagger" => "Alt öğeleri sırala",

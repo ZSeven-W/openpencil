@@ -609,6 +609,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "interactions.noLayers" => "Màn hình này không có lớp khác",
         "interactions.hiddenSuffix" => "(đã ẩn)",
         "preview.toast" => "{{message}}",
+        "export.motionFrameLimit" => "Vượt số khung tối đa",
         "motion.section.title" => "Chuyển động",
         "motion.add" => "+ Thêm chuyển động",
         "motion.stagger" => "Lần lượt các phần tử con",

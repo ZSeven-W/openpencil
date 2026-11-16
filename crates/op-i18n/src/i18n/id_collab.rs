@@ -597,6 +597,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "interactions.noLayers" => "Tidak ada layer lain di layar ini",
         "interactions.hiddenSuffix" => "(tersembunyi)",
         "preview.toast" => "{{message}}",
+        "export.motionFrameLimit" => "Batas bingkai terlampaui",
         "motion.section.title" => "Gerak",
         "motion.add" => "+ Tambah gerak",
         "motion.stagger" => "Berurutan untuk anak",

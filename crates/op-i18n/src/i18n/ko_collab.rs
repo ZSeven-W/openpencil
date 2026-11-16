@@ -613,6 +613,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "interactions.noLayers" => "이 화면에 다른 레이어가 없습니다",
         "interactions.hiddenSuffix" => "(숨김)",
         "preview.toast" => "{{message}}",
+        "export.motionFrameLimit" => "프레임 수 한도 초과",
         "motion.section.title" => "모션",
         "motion.add" => "+ 모션 추가",
         "motion.stagger" => "하위 항목 시차 적용",

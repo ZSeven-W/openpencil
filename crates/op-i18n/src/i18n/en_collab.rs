@@ -637,6 +637,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "interactions.noLayers" => "No other layers in this screen",
         "interactions.hiddenSuffix" => "(hidden)",
         "preview.toast" => "{{message}}",
+        "export.motionFrameLimit" => "Frame limit exceeded",
         "motion.section.title" => "Motion",
         "motion.add" => "+ Add motion",
         "motion.stagger" => "Stagger children",

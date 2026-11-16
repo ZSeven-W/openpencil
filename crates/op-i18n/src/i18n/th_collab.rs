@@ -599,6 +599,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "interactions.noLayers" => "ไม่มีเลเยอร์อื่นในหน้าจอนี้",
         "interactions.hiddenSuffix" => "(ซ่อนอยู่)",
         "preview.toast" => "{{message}}",
+        "export.motionFrameLimit" => "เฟรมเกินขีดจำกัด",
         "motion.section.title" => "โมชัน",
         "motion.add" => "+ เพิ่มโมชัน",
         "motion.stagger" => "เหลื่อมเวลาลูก",

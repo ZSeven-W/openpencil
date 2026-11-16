@@ -597,6 +597,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "interactions.noLayers" => "Keine weiteren Ebenen in diesem Screen",
         "interactions.hiddenSuffix" => "(ausgeblendet)",
         "preview.toast" => "{{message}}",
+        "export.motionFrameLimit" => "Zu viele Frames",
         "motion.section.title" => "Animation",
         "motion.add" => "+ Animation hinzufügen",
         "motion.stagger" => "Untergeordnete versetzt",
