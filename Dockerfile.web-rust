@@ -209,6 +209,9 @@ RUN install -d -o 10001 -g 10001 -m 0700 /data
 
 USER 10001:10001
 
+RUN --mount=type=bind,from=builder,source=/src/tools/check-web-motion-mp4.sh,target=/tmp/check-web-motion-mp4.sh \
+    sh /tmp/check-web-motion-mp4.sh /app/op-host-web-server
+
 EXPOSE ${SERVE_PORT}
 
 # `/` is the one route served without a credential in every mode, so it is the
