@@ -21,7 +21,9 @@ if [ -z "$payload" ]; then
 fi
 printf '%s' "$payload" | base64 --decode > "$work/smoke.mp4"
 
-video=$(ffprobe -v error -count_frames -select_streams v:0 \
-  -show_entries stream=codec_name,width,height,nb_read_frames \
-  -of csv=p=0 "$work/smoke.mp4")
-test "$video" = "h264,66,66,3"
+# Keep the runtime smoke test independent of external media tools. The
+# renderer tests read samples and timestamps with the Rust MP4 parser.
+test "$(od -An -j 4 -N 4 -t x1 "$work/smoke.mp4" | tr -d '[:space:]')" = "66747970"
+LC_ALL=C grep -aq 'avc1' "$work/smoke.mp4"
+LC_ALL=C grep -aq 'moov' "$work/smoke.mp4"
+LC_ALL=C grep -aq 'mdat' "$work/smoke.mp4"
