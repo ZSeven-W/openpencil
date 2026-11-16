@@ -597,7 +597,9 @@ impl WidgetHost {
     /// adjacent state. Every whole-state seam uses this helper so async work
     /// observes one monotonic identity and host caches cannot alias revision 0.
     #[cfg(feature = "canvaskit")]
-    pub(crate) fn replace_editor_state(&mut self, state: op_editor_core::EditorState) {
+    pub(crate) fn replace_editor_state(&mut self, mut state: op_editor_core::EditorState) {
+        state.editor_ui.motion_export.mp4_available =
+            self.editor_state.editor_ui.motion_export.mp4_available;
         self.finish_exit_teardown();
         self.editor_state = state;
         self.editor_state.editor_ui.exit_preview();

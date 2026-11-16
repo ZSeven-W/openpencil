@@ -4934,6 +4934,7 @@ name = "op-render-export"
 version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
+ "cc",
  "gif",
  "glam",
  "jian-core",
@@ -4945,6 +4946,7 @@ dependencies = [
  "op-pen-loader",
  "png 0.18.1",
  "skia-safe",
+ "tempfile",
  "zip",
 ]
 

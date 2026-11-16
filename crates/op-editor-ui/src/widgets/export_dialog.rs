@@ -15,7 +15,7 @@ use crate::widgets::text_metrics;
 use crate::{Color, Point2D, Rect, RenderBackend, TextLayout};
 use op_editor_core::editor_ui_state::EditorUiState;
 use op_editor_core::motion_export::{
-    motion_export_choices, MotionExportChoice, MotionExportFormat,
+    motion_export_choices, MotionExportBackground, MotionExportChoice, MotionExportFormat,
 };
 use op_editor_core::EditorState;
 
@@ -87,6 +87,8 @@ pub enum ExportDialogHit {
     FrameRate(u32),
     MotionDuration,
     RepeatMotion,
+    MotionBackground(MotionExportBackground),
+    ReducedMotion,
     Cancel,
     Export,
 }
@@ -272,7 +274,11 @@ impl ExportDialog {
             backend.clip_rect(hint);
             paint_centered_label(
                 backend,
-                tr("export.motionFrameLimit"),
+                if ui.motion_export.format == Some(MotionExportFormat::Mp4) {
+                    "≤ 60 s"
+                } else {
+                    tr("export.motionFrameLimit")
+                },
                 11.0,
                 theme.muted_foreground,
                 hint,
@@ -353,16 +359,13 @@ impl ExportDialog {
 
     /// Resolve only controls that apply to the currently selected format.
     pub fn hit_test_for_ui(&self, point: Point2D, ui: &EditorUiState) -> Option<ExportDialogHit> {
-        match self.hit_test(point) {
-            Some(ExportDialogHit::Scale(_)) if !self.scale_enabled(ui) => None,
-            Some(ExportDialogHit::Export) if self.motion_frame_limit_exceeded(ui) => None,
-            Some(ExportDialogHit::RepeatMotion)
-                if ui.motion_export.format == Some(MotionExportFormat::PngSequence) =>
-            {
-                None
-            }
-            hit => hit,
-        }
+        let hit = self.hit_test(point)?;
+        let enabled = if matches!(hit, ExportDialogHit::Scale(_)) {
+            self.scale_enabled(ui)
+        } else {
+            self.motion_hit_enabled(hit, ui)
+        };
+        enabled.then_some(hit)
     }
 
     pub fn hit_test(&self, point: Point2D) -> Option<ExportDialogHit> {

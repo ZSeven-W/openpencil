@@ -113,3 +113,67 @@ fn contact_sheet_preserves_order_crop_and_exact_samples() {
         assert_eq!(pixels[pos + 3], alpha);
     }
 }
+
+#[test]
+fn reduced_export_keeps_terminal_fills_and_white_background_at_the_first_frame() {
+    let (root, scene) = fixture();
+    for (reduced_motion, rgb) in [(false, [255, 255, 255]), (true, [255, 0, 0])] {
+        let mut output = Cursor::new(Vec::new());
+        let options = MotionExportOptions {
+            background: MotionExportBackground::White,
+            reduced_motion,
+            ..MotionExportOptions::default()
+        };
+        export_motion(
+            &mut output,
+            &scene,
+            &root,
+            MotionFormat::PngSequence,
+            &options,
+        )
+        .unwrap();
+        let mut zip = zip::ZipArchive::new(Cursor::new(output.into_inner())).unwrap();
+        let mut png = Vec::new();
+        zip.by_name("frame-0000.png")
+            .unwrap()
+            .read_to_end(&mut png)
+            .unwrap();
+        let mut reader = png::Decoder::new(Cursor::new(png)).read_info().unwrap();
+        let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
+        reader.next_frame(&mut pixels).unwrap();
+        assert_eq!(&pixels[..3], rgb);
+    }
+}
+
+#[test]
+fn mp4_accepts_a_native_encode_and_rejects_clips_over_one_minute() {
+    let (root, scene) = fixture();
+    let mut output = Cursor::new(Vec::new());
+    let too_long = MotionExportOptions {
+        duration_ms: Some(60_001),
+        ..Default::default()
+    };
+    assert!(matches!(
+        export_motion(&mut output, &scene, &root, MotionFormat::Mp4, &too_long),
+        Err(ExportError::MotionDurationTooLong { .. })
+    ));
+    if !mp4_available() {
+        return;
+    }
+    // Use a 64px canvas so the fixture can run on hardware encoders.
+    let mut scene = scene;
+    scene.pages[0].children[0].bounds.size.x = 65.0;
+    scene.pages[0].children[0].bounds.size.y = 65.0;
+    export_motion(
+        &mut output,
+        &scene,
+        &root,
+        MotionFormat::Mp4,
+        &Default::default(),
+    )
+    .unwrap();
+    let bytes = output.into_inner();
+    assert_eq!(&bytes[4..8], b"ftyp");
+    assert!(bytes.windows(4).any(|box_type| box_type == b"avc1"));
+    assert!(bytes.windows(4).any(|box_type| box_type == b"moov"));
+}

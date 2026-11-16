@@ -28,7 +28,7 @@ impl McpTool for ExportItem {
             _ => {
                 return ToolOutcome::Err(
                     ToolErrorCode::MissingArgument,
-                    "format is required (png|jpeg|webp|pdf|gif|apng|png-seq)".into(),
+                    "format is required (png|jpeg|webp|pdf|gif|apng|png-seq|mp4)".into(),
                 );
             }
         };
@@ -156,11 +156,27 @@ impl ExportItem {
             .map(|value| value.parse::<u64>())
             .transpose()
             .map_err(|_| invalid("durationMs must be a nonnegative integer"))?;
+        let background = args
+            .get("background")
+            .map(|value| {
+                serde_json::from_value(serde_json::Value::String(value.clone()))
+                    .map_err(|_| invalid("background must be transparent or white"))
+            })
+            .transpose()?
+            .unwrap_or_default();
+        let reduced_motion = args
+            .get("reducedMotion")
+            .map(|value| value.parse::<bool>())
+            .transpose()
+            .map_err(|_| invalid("reducedMotion must be a boolean"))?
+            .unwrap_or(false);
         let options = MotionExportOptions {
             trigger,
             fps,
             scale,
             duration_ms,
+            background,
+            reduced_motion,
             ..Default::default()
         };
         let mut output = Cursor::new(Vec::new());
@@ -231,6 +247,7 @@ pub(super) fn parse_motion_format(format: &str) -> Option<MotionFormat> {
         "gif" => MotionFormat::Gif,
         "apng" => MotionFormat::Apng,
         "png-seq" => MotionFormat::PngSequence,
+        "mp4" => MotionFormat::Mp4,
         _ => return None,
     })
 }
@@ -247,7 +264,7 @@ fn unsupported_format(format: &str) -> ToolOutcome {
     ToolOutcome::Err(
         ToolErrorCode::InvalidArgument,
         format!(
-            "unknown format {format:?}: must be one of png, jpeg, webp, pdf, gif, apng, png-seq"
+            "unknown format {format:?}: must be one of png, jpeg, webp, pdf, gif, apng, png-seq, mp4"
         ),
     )
 }

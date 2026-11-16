@@ -1,19 +1,36 @@
 //! Motion controls for the shared export dialog.
 
 use op_editor_core::motion_export::{
-    motion_frame_count, MotionExportTrigger, MAX_MOTION_EXPORT_FRAMES,
+    motion_frame_count, MotionExportTrigger, MAX_MOTION_EXPORT_FRAMES, MAX_MP4_DURATION_MS,
 };
 
 use super::*;
 
 pub(super) const SECTION_HEIGHT: f32 = 68.0;
-pub(super) const SETTINGS_HEIGHT: f32 = 136.0;
+pub(super) const SETTINGS_HEIGHT: f32 = 204.0;
 const FIRST_ROW_Y: f32 = HEADER_HEIGHT + 2.0 * SECTION_HEIGHT;
 const ROW_WIDTH: f32 = DIALOG_WIDTH - 2.0 * PAD;
 const FRAME_RATES: [u32; 4] = [12, 24, 30, 60];
 const DURATIONS: [Option<u64>; 4] = [None, Some(3_000), Some(5_000), Some(10_000)];
 
 impl ExportDialog {
+    pub(super) fn motion_hit_enabled(&self, hit: ExportDialogHit, ui: &EditorUiState) -> bool {
+        match hit {
+            ExportDialogHit::Export => !self.motion_frame_limit_exceeded(ui),
+            ExportDialogHit::MotionFormat(MotionExportFormat::Mp4) => {
+                ui.motion_export.mp4_available
+            }
+            ExportDialogHit::RepeatMotion => ui
+                .motion_export
+                .format
+                .is_some_and(MotionExportFormat::supports_repeat),
+            ExportDialogHit::MotionBackground(_) => {
+                ui.motion_export.format != Some(MotionExportFormat::Mp4)
+            }
+            _ => true,
+        }
+    }
+
     pub(super) fn motion_frame_limit_exceeded(&self, ui: &EditorUiState) -> bool {
         if !self.show_motion_settings {
             return false;
@@ -22,10 +39,13 @@ impl ExportDialog {
             .get(ui.motion_export.choice)
             .or_else(|| self.motion_choices.first())
             .is_some_and(|choice| {
-                motion_frame_count(
-                    ui.motion_export.effective_duration(choice),
-                    ui.motion_export.fps,
-                ) > u64::from(MAX_MOTION_EXPORT_FRAMES)
+                let duration = ui.motion_export.effective_duration(choice);
+                if ui.motion_export.format == Some(MotionExportFormat::Mp4) {
+                    duration > MAX_MP4_DURATION_MS
+                } else {
+                    motion_frame_count(duration, ui.motion_export.fps)
+                        > u64::from(MAX_MOTION_EXPORT_FRAMES)
+                }
             })
     }
 
@@ -80,6 +100,18 @@ impl ExportDialog {
                 self.motion_row(2, 282.0, ROW_WIDTH - 282.0),
                 ExportDialogHit::RepeatMotion,
             ),
+            (
+                self.motion_row(3, 0.0, 90.0),
+                ExportDialogHit::MotionBackground(MotionExportBackground::Transparent),
+            ),
+            (
+                self.motion_row(3, 98.0, 62.0),
+                ExportDialogHit::MotionBackground(MotionExportBackground::White),
+            ),
+            (
+                self.motion_row(3, 172.0, 180.0),
+                ExportDialogHit::ReducedMotion,
+            ),
         ])
     }
 
@@ -125,6 +157,8 @@ impl ExportDialog {
                 motion.duration_ms = DURATIONS[(current + 1) % DURATIONS.len()];
             }
             ExportDialogHit::RepeatMotion => motion.repeat = !motion.repeat,
+            ExportDialogHit::MotionBackground(background) => motion.background = background,
+            ExportDialogHit::ReducedMotion => motion.reduced_motion = !motion.reduced_motion,
             _ => {}
         }
     }
@@ -169,6 +203,10 @@ impl ExportDialog {
         row_label(backend, 0, 0.0, tr("motion.section.title"));
         for (rect, hit) in self.motion_formats() {
             if let ExportDialogHit::MotionFormat(format) = hit {
+                if format == MotionExportFormat::Mp4 && !ui.motion_export.mp4_available {
+                    self.paint_disabled_pill(backend, theme, rect, format.label());
+                    continue;
+                }
                 paint(
                     backend,
                     rect,
@@ -178,6 +216,19 @@ impl ExportDialog {
                 );
             }
         }
+        if !ui.motion_export.mp4_available {
+            let hint = self.motion_row(0, 288.0, ROW_WIDTH - 288.0);
+            backend.save();
+            backend.clip_rect(hint);
+            paint_centered_label(
+                backend,
+                tr("export.motionNoEncoder"),
+                10.0,
+                theme.muted_foreground,
+                hint,
+            );
+            backend.restore();
+        }
         if !self.show_motion_settings {
             return;
         }
@@ -185,10 +236,15 @@ impl ExportDialog {
         row_label(backend, 1, 0.0, tr("motion.field.trigger"));
         row_label(backend, 2, 0.0, "FPS");
         row_label(backend, 2, 168.0, tr("motion.field.duration"));
-        let show_repeat = ui.motion_export.format != Some(MotionExportFormat::PngSequence);
+        let show_repeat = ui
+            .motion_export
+            .format
+            .is_some_and(MotionExportFormat::supports_repeat);
         if show_repeat {
             row_label(backend, 2, 282.0, tr("motion.timeline.loop"));
         }
+        row_label(backend, 3, 0.0, tr("export.motionBackground"));
+        row_label(backend, 3, 172.0, tr("motion.section.title"));
         let trigger = match &choice.trigger {
             MotionExportTrigger::Mount => tr("motion.trigger.mount"),
             MotionExportTrigger::InView => tr("motion.trigger.inView"),
@@ -245,6 +301,30 @@ impl ExportDialog {
                     },
                     ui.motion_export.repeat,
                 ),
+                ExportDialogHit::MotionBackground(background) => {
+                    let is_mp4 = ui.motion_export.format == Some(MotionExportFormat::Mp4);
+                    let label = tr(match background {
+                        MotionExportBackground::Transparent => "export.motionTransparent",
+                        MotionExportBackground::White => "export.motionWhite",
+                    });
+                    if is_mp4 && background == MotionExportBackground::Transparent {
+                        self.paint_disabled_pill(backend, theme, rect, label);
+                    } else {
+                        let current = if is_mp4 {
+                            MotionExportBackground::White
+                        } else {
+                            ui.motion_export.background
+                        };
+                        paint(backend, rect, hit, label, current == background);
+                    }
+                }
+                ExportDialogHit::ReducedMotion => paint(
+                    backend,
+                    rect,
+                    hit,
+                    tr("export.motionReduced"),
+                    ui.motion_export.reduced_motion,
+                ),
                 _ => {}
             }
         }
@@ -297,6 +377,11 @@ mod tests {
         select(&mut state, ExportDialogHit::NextClip);
         select(&mut state, ExportDialogHit::FrameRate(24));
         select(&mut state, ExportDialogHit::RepeatMotion);
+        select(
+            &mut state,
+            ExportDialogHit::MotionBackground(MotionExportBackground::White),
+        );
+        select(&mut state, ExportDialogHit::ReducedMotion);
         let dialog = ExportDialog::for_editor(&state, 1200.0, 800.0);
         assert!(dialog.press(
             point(&dialog, dialog.button_rects().1),
@@ -313,6 +398,8 @@ mod tests {
         assert_eq!(request.fps, 24);
         assert_eq!(request.duration_ms, Some(3_000));
         assert!(!request.repeat);
+        assert_eq!(request.background, MotionExportBackground::White);
+        assert!(request.reduced_motion);
         assert_eq!(state.editor_ui.export_format, static_format);
     }
 
@@ -332,5 +419,32 @@ mod tests {
             dialog.hit_test_for_ui(export, &state.editor_ui),
             Some(ExportDialogHit::Export)
         );
+    }
+    #[test]
+    fn mp4_requires_an_encoder_and_does_not_offer_transparency_or_repeat() {
+        let mut state = state();
+        let dialog = ExportDialog::for_editor(&state, 1200.0, 800.0);
+        let mp4 = dialog
+            .motion_formats()
+            .find_map(|(rect, hit)| {
+                (hit == ExportDialogHit::MotionFormat(MotionExportFormat::Mp4))
+                    .then_some(point(&dialog, rect))
+            })
+            .unwrap();
+        assert_eq!(dialog.hit_test_for_ui(mp4, &state.editor_ui), None);
+        state.editor_ui.motion_export.mp4_available = true;
+        assert!(dialog.press(mp4, &mut state.editor_ui));
+        let dialog = ExportDialog::for_editor(&state, 1200.0, 800.0);
+        for (rect, hit) in dialog.motion_settings() {
+            if matches!(
+                hit,
+                ExportDialogHit::RepeatMotion | ExportDialogHit::MotionBackground(_)
+            ) {
+                assert_eq!(
+                    dialog.hit_test_for_ui(point(&dialog, rect), &state.editor_ui),
+                    None
+                );
+            }
+        }
     }
 }

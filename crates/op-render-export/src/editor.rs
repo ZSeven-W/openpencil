@@ -96,6 +96,7 @@ fn render_motion(
         MotionExportFormat::Gif => (MotionFormat::Gif, "image/gif"),
         MotionExportFormat::Apng => (MotionFormat::Apng, "image/apng"),
         MotionExportFormat::PngSequence => (MotionFormat::PngSequence, "application/zip"),
+        MotionExportFormat::Mp4 => (MotionFormat::Mp4, "video/mp4"),
     };
     let options = MotionExportOptions {
         trigger: request.trigger.as_clip_trigger(),
@@ -103,6 +104,8 @@ fn render_motion(
         scale: request.scale,
         duration_ms: request.duration_ms,
         repeat: request.repeat,
+        background: request.background,
+        reduced_motion: request.reduced_motion,
     };
     let mut bytes = Cursor::new(Vec::new());
     export_motion(&mut bytes, &scene, root, format, &options)?;

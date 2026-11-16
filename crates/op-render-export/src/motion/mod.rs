@@ -5,11 +5,13 @@ use std::io::{Seek, Write};
 use jian_core::motion::Clip;
 pub use jian_core::motion::ClipTrigger;
 use jian_ops_schema::node::PenNode;
+use op_editor_core::motion_export::MotionExportBackground;
 use op_editor_ui::layout_scene::LayoutScene;
 
 use crate::{clamp_scale, ExportError};
 
 mod contact_sheet;
+mod mp4;
 mod render;
 pub use contact_sheet::{
     render_motion_contact_sheet, MotionContactSheet, MotionFrameCell, MAX_CONTACT_SHEET_FRAMES,
@@ -22,6 +24,7 @@ pub enum MotionFormat {
     Gif,
     Apng,
     PngSequence,
+    Mp4,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -31,6 +34,8 @@ pub struct MotionExportOptions {
     pub scale: f32,
     pub duration_ms: Option<u64>,
     pub repeat: bool,
+    pub background: MotionExportBackground,
+    pub reduced_motion: bool,
 }
 
 impl Default for MotionExportOptions {
@@ -41,8 +46,15 @@ impl Default for MotionExportOptions {
             scale: 1.0,
             duration_ms: None,
             repeat: true,
+            background: MotionExportBackground::Transparent,
+            reduced_motion: false,
         }
     }
+}
+
+/// Whether this renderer can produce H.264 MP4 on the current host.
+pub fn mp4_available() -> bool {
+    mp4::available()
 }
 
 /// Write a clip with one fixed crop across all frames. The writer owns
@@ -64,16 +76,27 @@ pub fn export_motion<W: Write + Seek>(
         .ok_or(ExportError::MotionDurationRequired)?;
     let fps = u64::from(options.fps);
     let frame_count = op_editor_core::motion_export::motion_frame_count(duration, options.fps);
-    if frame_count > u64::from(MAX_MOTION_FRAMES) {
+    if format == MotionFormat::Mp4 {
+        if duration > op_editor_core::motion_export::MAX_MP4_DURATION_MS {
+            return Err(ExportError::MotionDurationTooLong {
+                duration_ms: duration,
+                limit_ms: op_editor_core::motion_export::MAX_MP4_DURATION_MS,
+            });
+        }
+    } else if frame_count > u64::from(MAX_MOTION_FRAMES) {
         return Err(ExportError::TooManyMotionFrames {
             frames: frame_count,
             limit: MAX_MOTION_FRAMES,
         });
     }
     let root_id = jian_core::document::tree::node_schema_id(root);
-    let renderer = render::FrameRenderer::new(scene, root_id, clamp_scale(options.scale), clip)?;
+    let transparent =
+        format != MotionFormat::Mp4 && options.background == MotionExportBackground::Transparent;
+    let renderer = render::FrameRenderer::new(scene, root_id, clamp_scale(options.scale), clip)?
+        .with_options(transparent, options.reduced_motion);
     let time_at = |index: u64| (index * 1_000 / fps).min(duration);
     match format {
+        MotionFormat::Mp4 => mp4::encode(writer, &renderer, options.fps, frame_count, time_at),
         MotionFormat::Gif => {
             let (width, height) = renderer.size();
             let map_error = |error: gif::EncodingError| ExportError::MotionEncoding {

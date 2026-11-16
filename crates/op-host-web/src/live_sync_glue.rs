@@ -159,7 +159,7 @@ pub(crate) fn start<C: RepaintContext + 'static>(inner: &Rc<RefCell<C>>, sync: S
     let base = crate::daemon_base::daemon_base();
     // One-shot: learn whether this daemon is the document's sole sequencer,
     // which decides whether a sync conflict may auto-resolve.
-    probe_serve_mode(&base);
+    probe_serve_mode(&base, inner);
     // One document fetch / one push at a time; ticks observing an in-flight
     // request skip (the TS hook queues at most one — same effective shape).
     // `fetch_busy` stays a plain Cell (pull-side, local to this module);

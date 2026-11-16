@@ -14,6 +14,8 @@ pub(crate) struct MotionExportFlags {
     duration_ms: Option<u64>,
     trigger: String,
     clip: Option<String>,
+    background: Option<String>,
+    reduced_motion: bool,
 }
 
 impl MotionExportFlags {
@@ -28,19 +30,32 @@ impl MotionExportFlags {
         if let Some(clip) = &self.clip {
             fields.insert("clip".into(), Value::String(clip.clone()));
         }
+        if let Some(background) = &self.background {
+            fields.insert("background".into(), Value::String(background.clone()));
+        }
+        if self.reduced_motion {
+            fields.insert("reducedMotion".into(), Value::Bool(true));
+        }
         fields
     }
 }
 
 fn motion_flags(flags: &Flags, format: &str) -> Result<Option<MotionExportFlags>, CliError> {
-    let enabled = matches!(format, "gif" | "apng" | "png-seq");
+    let enabled = matches!(format, "gif" | "apng" | "png-seq" | "mp4");
     if !enabled {
-        if ["fps", "duration-ms", "trigger", "clip"]
-            .into_iter()
-            .any(|name| flags.contains_key(name))
+        if [
+            "fps",
+            "duration-ms",
+            "trigger",
+            "clip",
+            "background",
+            "reduced-motion",
+        ]
+        .into_iter()
+        .any(|name| flags.contains_key(name))
         {
             return Err(CliError::usage(
-                "motion options require gif, apng, or png-seq export",
+                "motion options require gif, apng, png-seq, or mp4 export",
             ));
         }
         return Ok(None);
@@ -72,11 +87,21 @@ fn motion_flags(flags: &Flags, format: &str) -> Result<Option<MotionExportFlags>
             ))
         }
     }
+    let background = flag_value(flags, "background");
+    if background
+        .as_deref()
+        .is_some_and(|v| !matches!(v, "transparent" | "white"))
+    {
+        return Err(CliError::usage("--background must be transparent or white"));
+    }
+    let reduced_motion = flags.contains_key("reduced-motion");
     Ok(Some(MotionExportFlags {
         fps,
         duration_ms,
         trigger,
         clip,
+        background,
+        reduced_motion,
     }))
 }
 
@@ -100,7 +125,7 @@ pub(crate) fn map_export(flags: &Flags) -> Result<Command, CliError> {
     let format = format_flag.or(formats_flag).unwrap_or_else(|| "png".into());
     if !matches!(
         format.as_str(),
-        "png" | "jpeg" | "jpg" | "webp" | "pdf" | "gif" | "apng" | "png-seq"
+        "png" | "jpeg" | "jpg" | "webp" | "pdf" | "gif" | "apng" | "png-seq" | "mp4"
     ) {
         return Err(CliError::Usage(format!(
             "unsupported export format {format:?}"

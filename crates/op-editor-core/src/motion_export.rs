@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::{pen_node_ext::PenNodeExt, walkers::find_node, EditorState};
 
 pub const MAX_MOTION_EXPORT_FRAMES: u32 = 600;
+pub const MAX_MP4_DURATION_MS: u64 = 60_000;
 const DEFAULT_LOOP_DURATION_MS: u64 = 3_000;
 
 pub fn motion_frame_count(duration_ms: u64, fps: u32) -> u64 {
@@ -26,17 +27,23 @@ pub enum MotionExportFormat {
     Apng,
     #[serde(rename = "png-seq")]
     PngSequence,
+    Mp4,
 }
 
 impl MotionExportFormat {
-    pub const ALL: [Self; 3] = [Self::Gif, Self::Apng, Self::PngSequence];
+    pub const ALL: [Self; 4] = [Self::Gif, Self::Apng, Self::PngSequence, Self::Mp4];
 
     pub const fn label(self) -> &'static str {
         match self {
             Self::Gif => "GIF",
             Self::Apng => "APNG",
             Self::PngSequence => "PNG ZIP",
+            Self::Mp4 => "MP4",
         }
+    }
+
+    pub const fn supports_repeat(self) -> bool {
+        matches!(self, Self::Gif | Self::Apng)
     }
 
     pub const fn extension(self) -> &'static str {
@@ -44,8 +51,17 @@ impl MotionExportFormat {
             Self::Gif => "gif",
             Self::Apng => "apng",
             Self::PngSequence => "zip",
+            Self::Mp4 => "mp4",
         }
     }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MotionExportBackground {
+    #[default]
+    Transparent,
+    White,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -84,15 +100,22 @@ pub struct MotionExportRequest {
     pub scale: f32,
     pub duration_ms: Option<u64>,
     pub repeat: bool,
+    #[serde(default)]
+    pub background: MotionExportBackground,
+    #[serde(default)]
+    pub reduced_motion: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MotionExportDialogState {
     pub format: Option<MotionExportFormat>,
+    pub mp4_available: bool,
     pub choice: usize,
     pub fps: u32,
     pub duration_ms: Option<u64>,
     pub repeat: bool,
+    pub background: MotionExportBackground,
+    pub reduced_motion: bool,
     pub pending: Option<MotionExportRequest>,
 }
 
@@ -100,10 +123,13 @@ impl Default for MotionExportDialogState {
     fn default() -> Self {
         Self {
             format: None,
+            mp4_available: false,
             choice: 0,
             fps: 30,
             duration_ms: None,
             repeat: true,
+            background: MotionExportBackground::Transparent,
+            reduced_motion: false,
             pending: None,
         }
     }
@@ -122,6 +148,9 @@ impl MotionExportDialogState {
         scale: f32,
     ) -> Option<MotionExportRequest> {
         let format = self.format?;
+        if format == MotionExportFormat::Mp4 && !self.mp4_available {
+            return None;
+        }
         let choice = choices.get(self.choice).or_else(|| choices.first())?;
         Some(MotionExportRequest {
             root_id: choice.root_id.clone(),
@@ -136,6 +165,8 @@ impl MotionExportDialogState {
                     .then_some(DEFAULT_LOOP_DURATION_MS)
             }),
             repeat: self.repeat,
+            background: self.background,
+            reduced_motion: self.reduced_motion,
         })
     }
 }

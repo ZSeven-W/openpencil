@@ -71,6 +71,11 @@ pub enum ExportError {
     MotionReadback,
     EmptyMotionClip,
     MotionDurationRequired,
+    MotionDurationTooLong {
+        duration_ms: u64,
+        limit_ms: u64,
+    },
+    Mp4EncoderUnavailable,
     InvalidMotionFps {
         fps: u32,
     },
@@ -151,6 +156,16 @@ impl fmt::Display for ExportError {
             ExportError::MotionDurationRequired => {
                 f.write_str("a looping motion clip needs a duration")
             }
+            ExportError::MotionDurationTooLong {
+                duration_ms,
+                limit_ms,
+            } => write!(
+                f,
+                "motion export duration {duration_ms} ms exceeds the {limit_ms} ms limit"
+            ),
+            ExportError::Mp4EncoderUnavailable => f.write_str(
+                "MP4 encoder unavailable. On Linux or Windows, install FFmpeg with libx264.",
+            ),
             ExportError::InvalidMotionFps { fps } => {
                 write!(f, "motion fps must be in 1–60, got {fps}")
             }

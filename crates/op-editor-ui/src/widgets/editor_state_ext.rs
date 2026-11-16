@@ -208,6 +208,8 @@ pub fn export_dialog_button(
         W::FrameRate(fps) => O::FrameRate(fps),
         W::MotionDuration => O::MotionDuration,
         W::RepeatMotion => O::RepeatMotion,
+        W::MotionBackground(background) => O::MotionBackground(background),
+        W::ReducedMotion => O::ReducedMotion,
         W::Cancel => O::Cancel,
         W::Export => O::Export,
     }

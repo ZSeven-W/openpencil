@@ -66,7 +66,7 @@ impl MotionRenderSnapshot {
             MotionRenderTool::Export => {
                 let format_name = required(args, "format")?;
                 let format = parse_motion_format(format_name)
-                    .ok_or_else(|| invalid("format must be gif, apng, or png-seq"))?;
+                    .ok_or_else(|| invalid("format must be gif, apng, png-seq, or mp4"))?;
                 let mut forwarded = args.clone();
                 if let Some(clip) = clip {
                     forwarded.insert("clip".into(), clip.into());

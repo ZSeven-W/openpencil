@@ -25,12 +25,16 @@ jian-scene = { path = "../../vendor/jian/crates/jian-scene" }
 gif = "0.14"
 png = "0.18"
 zip = { version = "9", default-features = false }
+tempfile = "3"
 glam = { version = "0.29", default-features = false, features = ["std"] }
 skia-safe = { version = "0.97.0", default-features = false, features = [
   "binary-cache",
   "textlayout",
   "pdf",
 ] }
+
+[build-dependencies]
+cc = "1"
 
 [dev-dependencies]
 base64 = "0.22"

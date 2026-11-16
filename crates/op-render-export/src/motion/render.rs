@@ -13,6 +13,8 @@ pub(super) struct FrameRenderer {
     scale: f32,
     bounds: Rect,
     size: (i32, i32),
+    transparent: bool,
+    reduced_motion: bool,
 }
 
 impl FrameRenderer {
@@ -55,7 +57,15 @@ impl FrameRenderer {
             scale,
             bounds,
             size,
+            transparent: true,
+            reduced_motion: false,
         })
+    }
+
+    pub(super) fn with_options(mut self, transparent: bool, reduced_motion: bool) -> Self {
+        self.transparent = transparent;
+        self.reduced_motion = reduced_motion;
+        self
     }
 
     pub(super) fn size(&self) -> (i32, i32) {
@@ -64,12 +74,27 @@ impl FrameRenderer {
 
     pub(super) fn render(&self, time_ms: u64) -> Result<Surface, ExportError> {
         let mut scene = self.scene.clone();
-        apply_motion_overrides(&mut scene, &self.clip.sample(time_ms, &self.scene));
+        let overrides = if self.reduced_motion {
+            self.clip.sample_reduced(&self.scene)
+        } else {
+            self.clip.sample(time_ms, &self.scene)
+        };
+        apply_motion_overrides(&mut scene, &overrides);
         // The renderer's scene contains only the export root and its subtree.
         let root = &scene.pages[0].children[0];
-        raster_surface(self.size, self.bounds, self.scale, 0.0, true, |canvas| {
-            op_editor_ui::shader_clock::with_sample_time(time_ms, || paint_node(canvas, root));
-        })
+        raster_surface(
+            self.size,
+            self.bounds,
+            self.scale,
+            0.0,
+            self.transparent,
+            |canvas| {
+                let shader_time = if self.reduced_motion { 0 } else { time_ms };
+                op_editor_ui::shader_clock::with_sample_time(shader_time, || {
+                    paint_node(canvas, root)
+                });
+            },
+        )
     }
 
     pub(super) fn render_png(&self, time_ms: u64) -> Result<Vec<u8>, ExportError> {
