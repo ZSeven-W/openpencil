@@ -41,6 +41,7 @@ op-util = { path = "../op-util" }
 op-editor-host-core = { path = "../op-editor-host-core", optional = true, default-features = false }
 # default-features = false drops `skia-measure` for the browser bundle.
 op-pen-loader = { path = "../op-pen-loader", optional = true, default-features = false }
+op-motion-export = { path = "../op-motion-export", optional = true }
 # Web AI/codegen foundation. Optional + behind `canvaskit`, so the wasm32-clean
 # stub baseline never compiles it. End-to-end browser AI still depends on the
 # desktop daemon routes; unit tests cover the pure SSE parsing and bundle checks
@@ -179,6 +180,7 @@ web = []
 canvaskit = [
   "dep:wasm-bindgen-futures",
   "dep:op-pen-loader",
+  "dep:op-motion-export",
   "dep:jian-ops-schema",
   "dep:serde",
   # Web integration modules absorbed from the codegen/skia path: AI chat
@@ -212,6 +214,7 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
 ] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+mp4 = "0.14.0"
 op-preview-core = { path = "../op-preview-core", features = ["testing"] }
 jian-host-web = { path = "../../vendor/jian/crates/jian-host-web" }
 wasm-bindgen-test = "=0.3.67"

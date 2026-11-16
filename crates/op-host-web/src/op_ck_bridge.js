@@ -1124,6 +1124,51 @@ export async function opCkInit(canvasId) {
   };
 
   return {
+    createExportSurface(width, height) {
+      // Match the daemon's premultiplied raster. CanvasKit.MakeSurface uses
+      // an unpremultiplied buffer, which can round translucent blends
+      // differently before they reach the video encoder.
+      const memory = CK.Malloc(Uint8Array, width * height * 4);
+      try {
+        const raster = CK.MakeRasterDirectSurface({
+          width, height,
+          colorType: CK.ColorType.RGBA_8888,
+          alphaType: CK.AlphaType.Premul,
+          colorSpace: CK.ColorSpace.SRGB,
+        }, memory, width * 4);
+        if (!raster) throw new Error("CanvasKit could not allocate the export surface");
+        return {raster, memory};
+      } catch (error) {
+        CK.Free(memory);
+        throw error;
+      }
+    },
+    withExportSurface({raster}, paint) {
+      // Share the editor's font and image registries. The Rust callback is
+      // synchronous; the next UI paint always sees its own canvas again.
+      const previous = surface;
+      const previousCanvas = canvas;
+      surface = raster;
+      canvas = raster.getCanvas();
+      try { paint(); }
+      finally { surface = previous; canvas = previousCanvas; }
+    },
+    readExportSurface({raster}, width, height) {
+      const image = raster.makeImageSnapshot();
+      try {
+        const pixels = image.readPixels(0, 0, {
+          width, height, colorType: CK.ColorType.RGBA_8888,
+          alphaType: CK.AlphaType.Unpremul, colorSpace: CK.ColorSpace.SRGB,
+        });
+        if (!pixels) throw new Error("CanvasKit could not read the export pixels");
+        return new Uint8Array(pixels);
+      } finally { image.delete(); }
+    },
+    deleteExportSurface({raster, memory}) {
+      raster.delete();
+      CK.Free(memory);
+    },
+
     beginFrame() {
       // Discard any leaked save / clip / matrix state from a prior (possibly
       // unbalanced) paint pass, then open a clean frame baseline. This mirrors

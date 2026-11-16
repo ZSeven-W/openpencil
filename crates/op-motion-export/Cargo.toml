@@ -1,0 +1,22 @@
+[package]
+name = "op-motion-export"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Portable OpenPencil motion crop, frame clock, and Rust MP4 encoder"
+
+[dependencies]
+op-editor-core = { path = "../op-editor-core" }
+op-editor-ui = { path = "../op-editor-ui" }
+jian-core = { path = "../../vendor/jian/crates/jian-core" }
+jian-scene = { path = "../../vendor/jian/crates/jian-scene" }
+glam = { version = "0.29", default-features = false, features = ["std"] }
+
+[target.'cfg(any(target_arch = "wasm32", target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
+mp4 = "0.14.0"
+rusty_h264-common = { version = "0.17.2", default-features = false, features = ["std"] }
+rusty_h264-encoder = { version = "0.17.2", default-features = false, features = ["std"] }
+
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
+rusty_h264-encoder = { version = "0.17.2", default-features = false, features = ["asm"] }

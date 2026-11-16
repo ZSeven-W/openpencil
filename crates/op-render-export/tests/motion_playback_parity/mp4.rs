@@ -1,26 +1,39 @@
 use std::io::Cursor;
 
 use ::mp4::Mp4Reader;
+use rusty_h264_common::YuvFrame;
 use rusty_h264_decoder::Decoder;
 
 use super::{export, Case, EditorState, MotionExportFormat, FPS, FRAME_STEP_MS, HEIGHT, WIDTH};
 
-pub(super) fn compare(case: &Case, editor: &EditorState, expected: &[Vec<u8>]) {
-    let bytes = export(case, editor, MotionExportFormat::Mp4);
+#[derive(Debug, PartialEq, Eq)]
+struct Timing {
+    timescale: u32,
+    duration: std::time::Duration,
+    samples: Vec<(u64, u32, i32, bool)>,
+}
+
+fn decode(bytes: Vec<u8>) -> (Timing, Vec<YuvFrame>) {
     let size = bytes.len() as u64;
     let mut reader = Mp4Reader::read_header(Cursor::new(bytes), size).unwrap();
     let track = &reader.tracks()[&1];
-    assert_eq!(track.timescale(), FPS);
-    assert_eq!(reader.sample_count(1).unwrap() as usize, expected.len());
+    let sample_count = reader.sample_count(1).unwrap();
+    let mut timing = Timing {
+        timescale: track.timescale(),
+        duration: track.duration(),
+        samples: Vec::with_capacity(sample_count as usize),
+    };
     let mut annex_b = Vec::new();
     append_nal(&mut annex_b, track.sequence_parameter_set().unwrap());
     append_nal(&mut annex_b, track.picture_parameter_set().unwrap());
-    for index in 0..expected.len() {
-        let sample = reader.read_sample(1, (index + 1) as u32).unwrap().unwrap();
-        assert_eq!(
-            (sample.start_time, sample.duration, sample.rendering_offset),
-            (index as u64, 1, 0)
-        );
+    for index in 1..=sample_count {
+        let sample = reader.read_sample(1, index).unwrap().unwrap();
+        timing.samples.push((
+            sample.start_time,
+            sample.duration,
+            sample.rendering_offset,
+            sample.is_sync,
+        ));
         let mut avcc = sample.bytes.as_ref();
         while !avcc.is_empty() {
             let (length, rest) = avcc.split_at(4);
@@ -30,9 +43,65 @@ pub(super) fn compare(case: &Case, editor: &EditorState, expected: &[Vec<u8>]) {
             avcc = rest;
         }
     }
-
     let frames = Decoder::new().decode_stream(&annex_b).unwrap();
-    assert_eq!(frames.len(), expected.len(), "decoded frame count");
+    assert_eq!(frames.len(), timing.samples.len(), "decoded frame count");
+    (timing, frames)
+}
+
+#[test]
+#[ignore = "supply the browser download and daemon export via OP_BROWSER_MP4 and OP_DAEMON_MP4"]
+fn browser_and_daemon_mp4_are_frame_and_timestamp_identical() {
+    let read = |name| std::fs::read(std::env::var_os(name).expect(name)).unwrap();
+    let (browser_timing, browser) = decode(read("OP_BROWSER_MP4"));
+    let (daemon_timing, daemon) = decode(read("OP_DAEMON_MP4"));
+    assert_eq!(browser_timing, daemon_timing, "sample clocks and keyframes");
+    assert_eq!(browser.len(), daemon.len());
+    let mut max_diff = 0;
+    let mut worst_mae = 0.0_f64;
+    let mut first_difference = None;
+    for (index, (browser, daemon)) in browser.iter().zip(&daemon).enumerate() {
+        assert_eq!(
+            (browser.width, browser.height),
+            (daemon.width, daemon.height)
+        );
+        for (plane, left, right) in [
+            ("Y", &browser.y, &daemon.y),
+            ("Cb", &browser.u, &daemon.u),
+            ("Cr", &browser.v, &daemon.v),
+        ] {
+            assert_eq!(left.len(), right.len());
+            let mut total = 0_u64;
+            for (offset, (&a, &b)) in left.iter().zip(right).enumerate() {
+                let difference = a.abs_diff(b);
+                max_diff = max_diff.max(difference);
+                total += u64::from(difference);
+                if difference > 0 && first_difference.is_none() {
+                    first_difference = Some((index, plane, offset, a, b));
+                }
+            }
+            worst_mae = worst_mae.max(total as f64 / left.len() as f64);
+        }
+    }
+    println!("decoded max difference {max_diff}/255, worst frame/plane MAE {worst_mae:.6}/255");
+    assert_eq!(first_difference, None, "first decoded sample mismatch");
+    let frame = &browser[0];
+    println!(
+        "{} frames, {}×{}, timescale {}, duration {:?}, exact Y/Cb/Cr and sample timing",
+        browser.len(),
+        frame.width,
+        frame.height,
+        browser_timing.timescale,
+        browser_timing.duration
+    );
+}
+
+pub(super) fn compare(case: &Case, editor: &EditorState, expected: &[Vec<u8>]) {
+    let (timing, frames) = decode(export(case, editor, MotionExportFormat::Mp4));
+    assert_eq!(timing.timescale, FPS);
+    assert_eq!(frames.len(), expected.len());
+    for (index, sample) in timing.samples.iter().enumerate() {
+        assert_eq!((sample.0, sample.1, sample.2), (index as u64, 1, 0));
+    }
     let mut worst_mean = 0.0_f64;
     for (index, (decoded, play)) in frames.iter().zip(expected).enumerate() {
         assert_eq!((decoded.width, decoded.height), (WIDTH, HEIGHT));

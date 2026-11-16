@@ -12,6 +12,8 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
 #[path = "html_prototype_browser_tests.rs"]
 mod html_prototype;
+#[path = "local_mp4_browser_tests.rs"]
+mod local_mp4;
 
 const SOURCE: &str =
     include_str!("../../../op-preview-core/tests/fixtures/motion/standalone_scroll.op");

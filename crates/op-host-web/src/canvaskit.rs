@@ -27,6 +27,8 @@ mod bindings;
 mod convert;
 mod inner;
 mod measure;
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod motion_export;
 mod mount;
 mod mount_keyboard;
 mod ops;

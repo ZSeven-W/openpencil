@@ -3,7 +3,7 @@ use op_editor_ui::{layout_scene::LayoutScene, Rect};
 use skia_safe::{AlphaType, Color, ColorType, ImageInfo};
 
 use super::{build_clip, render::FrameRenderer, ClipTrigger};
-use crate::{clamp_scale, encode_surface, raster_size, ExportError, RasterFormat};
+use crate::{encode_surface, raster_size, ExportError, RasterFormat};
 
 /// One MCP vision result stays within the same surface budget as a still.
 pub const MAX_CONTACT_SHEET_FRAMES: u32 = 8;
@@ -40,7 +40,7 @@ pub fn render_motion_contact_sheet(
     }
     let clip = build_clip(root, trigger)?;
     let root_id = jian_core::document::tree::node_schema_id(root);
-    let renderer = FrameRenderer::new(scene, root_id, clamp_scale(scale), clip)?;
+    let renderer = FrameRenderer::new(scene, root_id, scale, clip)?;
     let (width, height) = renderer.size();
     let columns = if times_ms.len() <= 2 {
         times_ms.len()

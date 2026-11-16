@@ -10,8 +10,17 @@ impl CanvasKitBackend {
         Self {
             ck,
             dpr,
+            quantize_rect_colors: false,
             logical_w,
             logical_h,
+        }
+    }
+
+    pub(super) fn rect_color(&self, color: op_editor_ui::Color) -> op_editor_ui::Color {
+        if self.quantize_rect_colors {
+            op_editor_ui::Color::from_jian(color.to_jian())
+        } else {
+            color
         }
     }
 

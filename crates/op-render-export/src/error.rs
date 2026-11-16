@@ -195,3 +195,37 @@ impl fmt::Display for ExportError {
 }
 
 impl std::error::Error for ExportError {}
+
+impl From<op_motion_export::MotionError> for ExportError {
+    fn from(error: op_motion_export::MotionError) -> Self {
+        use op_motion_export::MotionError;
+        match error {
+            MotionError::NoActivePage => Self::NoActivePage,
+            MotionError::RootMissing(node_id) => Self::NodeNotFoundOnActivePage { node_id },
+            MotionError::RootHidden(node_id) => Self::NodeHidden { node_id },
+            MotionError::RootPaintsNothing(node_id) => Self::NodePaintsNothing { node_id },
+            MotionError::NonFiniteSize => Self::NonFiniteOutputSize,
+            MotionError::OutputTooLarge {
+                width_px,
+                height_px,
+            } => Self::OutputTooLarge {
+                width_px,
+                height_px,
+            },
+            MotionError::InvalidFps(fps) => Self::InvalidMotionFps { fps },
+            MotionError::EmptyClip => Self::EmptyMotionClip,
+            MotionError::DurationRequired => Self::MotionDurationRequired,
+            MotionError::DurationTooLong {
+                duration_ms,
+                limit_ms,
+            } => Self::MotionDurationTooLong {
+                duration_ms,
+                limit_ms,
+            },
+            MotionError::Encoding(reason) => Self::MotionEncoding {
+                format: "MP4",
+                reason,
+            },
+        }
+    }
+}

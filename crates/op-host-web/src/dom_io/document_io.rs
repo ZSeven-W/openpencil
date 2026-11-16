@@ -516,11 +516,44 @@ pub(super) fn export_image<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
 
 fn export_motion<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     let mut b = inner.borrow_mut();
-    let state = b.host_mut().editor_state_mut();
+    let host = b.host_mut();
+    #[cfg(target_arch = "wasm32")]
+    let canvas = host.motion_export_canvas();
+    let state = host.editor_state_mut();
     let Some(request) = state.editor_ui.motion_export.pending.take() else {
         return;
     };
     let file_name = op_editor_core::export_name::motion_export_file_name(state, &request);
+    #[cfg(target_arch = "wasm32")]
+    if request.format == op_editor_core::motion_export::MotionExportFormat::Mp4 {
+        let Some(canvas) = canvas else {
+            console_error("[export-motion] browser MP4 needs CanvasKit");
+            return;
+        };
+        let export =
+            match crate::canvaskit::motion_export::LocalMotionExport::prepare(state, &request) {
+                Ok(export) => export,
+                Err(error) => {
+                    console_error(&format!("[export-motion] {error}"));
+                    return;
+                }
+            };
+        drop(b);
+        wasm_bindgen_futures::spawn_local(async move {
+            match crate::canvaskit::motion_export::encode_mp4(canvas, export).await {
+                Ok(bytes) => {
+                    if let Err(error) =
+                        crate::web_clipboard::download_bytes(&file_name, "video/mp4", &bytes)
+                    {
+                        web_sys::console::error_1(&error);
+                    }
+                }
+                Err(error) => web_sys::console::error_1(&error),
+            }
+        });
+        return;
+    }
+
     let body = match file_actions::export_motion_request_body(state, &request) {
         Ok(body) => body,
         Err(error) => {

@@ -46,6 +46,7 @@ pub use svg::{export_node_svg, export_svg, render_node_svg_bytes, render_svg_byt
 
 const MARGIN: f32 = 0.0;
 
+use op_motion_export::{clamp_scale, collect_raster_bounds as collect_bounds};
 /// Hard ceilings for the offscreen raster surface. A huge page (or a
 /// `debug_screenshot` request with extreme padding/scale) would
 /// otherwise force a giant UI-thread allocation: 16384 px per side is
@@ -53,8 +54,7 @@ const MARGIN: f32 = 0.0;
 /// N32 pixels) bounds the worst case. Exceeding either returns a
 /// structured error; the MCP screenshot glue wraps it in the TS-parity
 /// "Renderer reported failure: …" envelope.
-pub const MAX_RASTER_SIDE_PX: i64 = 16_384;
-pub const MAX_RASTER_TOTAL_PX: i64 = 64_000_000;
+pub use op_motion_export::{MAX_RASTER_SIDE_PX, MAX_RASTER_TOTAL_PX};
 
 /// Raster export format. Matches TS ExportDialog's PNG / JPEG / WEBP
 /// options; SVG has its own entry point (`export_svg`).
@@ -248,16 +248,6 @@ pub fn render_node_on_page_raster_bytes(
     })
 }
 
-/// Clamp a caller-supplied export scale to the @0.5x..@8x range,
-/// defaulting a non-finite value to @2x (TS export-dialog parity).
-fn clamp_scale(scale: f32) -> f32 {
-    if scale.is_finite() {
-        scale.clamp(0.5, 8.0)
-    } else {
-        2.0
-    }
-}
-
 /// Shared surface-alloc + background-clear + encode + write path for
 /// the whole-page and single-node raster exporters. `bounds` is the
 /// painted-content rect (doc-space); `paint` draws into the canvas
@@ -293,25 +283,7 @@ pub fn render_raster_bytes(
 }
 
 fn raster_size(bounds: Rect, scale: f32, margin: f32) -> Result<(i32, i32), ExportError> {
-    let width_f = ((bounds.size.x + margin * 2.0) * scale).round();
-    let height_f = ((bounds.size.y + margin * 2.0) * scale).round();
-    if !width_f.is_finite() || !height_f.is_finite() {
-        return Err(ExportError::NonFiniteOutputSize);
-    }
-    // `as i64` saturates, so an absurd-but-finite f32 still lands on a
-    // comparable integer instead of UB / wraparound.
-    let width_px = (width_f as i64).max(1);
-    let height_px = (height_f as i64).max(1);
-    if width_px > MAX_RASTER_SIDE_PX
-        || height_px > MAX_RASTER_SIDE_PX
-        || width_px.saturating_mul(height_px) > MAX_RASTER_TOTAL_PX
-    {
-        return Err(ExportError::OutputTooLarge {
-            width_px,
-            height_px,
-        });
-    }
-    Ok((width_px as i32, height_px as i32))
+    Ok(op_motion_export::raster_size(bounds, scale, margin)?)
 }
 
 fn raster_surface(
@@ -375,82 +347,7 @@ pub fn node_bounds(node: &SceneNode) -> Option<Rect> {
     acc.into_rect()
 }
 
-// BoundsAcc / normalize_rect / the per-NodeKind own-paint corner rules are
-// single-sourced in op-editor-ui's `scene_bounds` (shared with the SVG
-// exporter). This raster path keeps its own `collect_bounds` traversal:
-// a clip_content container contributes its full rect and skips the
-// subtree (surface sizing mirrors the painter), unlike the SVG exporter
-// which intersects the child union with the clip rect.
-use op_editor_ui::scene_bounds::PaintCornerRules;
-pub(crate) use op_editor_ui::scene_bounds::{normalize_rect, BoundsAcc};
-
-/// Raster export counts solid fill / stroke as own paint only (the SVG
-/// exporter also counts gradient + image fills).
-const RASTER_PAINT_RULES: PaintCornerRules = PaintCornerRules {
-    gradient_paints: false,
-    image_paints: false,
-};
-
-/// Mirror of `paint_node`'s traversal — visits the SAME nodes paint
-/// visits, in the SAME order, threading the cumulative parent
-/// transform so a child painted under a rotated container ends up in
-/// the same world coords paint will emit. `canvas_viewport_paint.rs`
-/// pivots rotation around the node's `aggregate_bounds()` (own bounds
-/// when bounded, child union otherwise); this mirrors that exactly so
-/// the surface never clips a row a downstream draw would touch.
-pub(crate) fn collect_bounds(n: &SceneNode, parent_xform: glam::Affine2, acc: &mut BoundsAcc) {
-    if n.hidden {
-        return;
-    }
-    let pivot_rect = n.aggregate_bounds();
-    let rotate_self =
-        n.rotation.abs() > f32::EPSILON && (pivot_rect.size.x != 0.0 || pivot_rect.size.y != 0.0);
-    let local_xform = if rotate_self {
-        let pivot = glam::Vec2::new(
-            pivot_rect.origin.x + pivot_rect.size.x * 0.5,
-            pivot_rect.origin.y + pivot_rect.size.y * 0.5,
-        );
-        parent_xform
-            * glam::Affine2::from_translation(pivot)
-            * glam::Affine2::from_angle(n.rotation)
-            * glam::Affine2::from_translation(-pivot)
-    } else {
-        parent_xform
-    };
-    if let Some(local_corners) = own_paint_corners(n) {
-        for p in local_corners {
-            let w = local_xform.transform_point2(p);
-            acc.add(w.x, w.y, w.x, w.y);
-        }
-    }
-    // A `clip_content` container clips its children to its own rect
-    // (the painter pushes the same clip scope the live canvas does —
-    // see `canvas_viewport_paint::push_clip_content`), so child
-    // overflow can never paint outside it. Contribute the container
-    // rect and skip the subtree instead of sizing the surface to the
-    // un-clipped child union. Gate mirrors the painter: only bounded
-    // containers with children actually clip.
-    if n.clip_content && !n.children.is_empty() && n.bounds.size.x > 0.0 && n.bounds.size.y > 0.0 {
-        let nr = normalize_rect(n.bounds);
-        for (x, y) in [
-            (nr.origin.x, nr.origin.y),
-            (nr.origin.x + nr.size.x, nr.origin.y),
-            (nr.origin.x + nr.size.x, nr.origin.y + nr.size.y),
-            (nr.origin.x, nr.origin.y + nr.size.y),
-        ] {
-            let w = local_xform.transform_point2(glam::Vec2::new(x, y));
-            acc.add(w.x, w.y, w.x, w.y);
-        }
-        return;
-    }
-    for child in &n.children {
-        collect_bounds(child, local_xform, acc);
-    }
-}
-
-fn own_paint_corners(n: &SceneNode) -> Option<Vec<glam::Vec2>> {
-    op_editor_ui::scene_bounds::own_paint_corners(n, RASTER_PAINT_RULES)
-}
+pub(crate) use op_editor_ui::scene_bounds::BoundsAcc;
 
 #[cfg(test)]
 pub mod test_support {

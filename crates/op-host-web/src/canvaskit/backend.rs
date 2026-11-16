@@ -24,6 +24,8 @@ use super::ops;
 pub struct CanvasKitBackend {
     pub(super) ck: OpCk,
     pub(super) dpr: f32,
+    /// The native export painter packs solid rect colours through Jian RGBA8.
+    pub(super) quantize_rect_colors: bool,
     /// Logical (CSS) viewport — what widget layout uses.
     pub(super) logical_w: u32,
     pub(super) logical_h: u32,
@@ -41,10 +43,10 @@ impl RenderBackend for CanvasKitBackend {
     }
 
     fn fill_rect(&mut self, rect: Rect, color: Color) {
-        ops::fill_rect(&self.ck, rect, color);
+        ops::fill_rect(&self.ck, rect, self.rect_color(color));
     }
     fn stroke_rect(&mut self, rect: Rect, color: Color, width: f32) {
-        ops::stroke_rect(&self.ck, rect, color, width);
+        ops::stroke_rect(&self.ck, rect, self.rect_color(color), width);
     }
     fn fill_round_rect(&mut self, rect: Rect, radius: f32, color: Color) {
         ops::fill_round_rect(&self.ck, rect, radius, color);

@@ -241,11 +241,16 @@ impl WidgetHost {
         }
     }
 
-    /// Set the CanvasKit bridge object for preview text measurement.
-    /// Called by the mount path after the backend is initialized.
+    #[cfg(all(feature = "canvaskit", target_arch = "wasm32"))]
+    pub(crate) fn motion_export_canvas(&self) -> Option<crate::canvaskit::OpCk> {
+        self.op_ck.clone()
+    }
+
+    /// Share the initialized CanvasKit bridge with preview and local export.
     #[cfg(feature = "canvaskit")]
     pub(crate) fn set_op_ck(&mut self, op_ck: &crate::canvaskit::OpCk) {
         self.op_ck = Some(op_ck.clone());
+        self.editor_state.editor_ui.motion_export.mp4_available = cfg!(target_arch = "wasm32");
     }
 }
 

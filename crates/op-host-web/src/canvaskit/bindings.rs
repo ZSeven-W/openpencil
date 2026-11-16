@@ -23,6 +23,32 @@ extern "C" {
     /// a handle rather than borrow the host's.
     #[derive(Clone)]
     pub type OpCk;
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen(method, catch, js_name = createExportSurface)]
+    pub(super) fn create_export_surface(
+        this: &OpCk,
+        width: u32,
+        height: u32,
+    ) -> Result<JsValue, JsValue>;
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen(method, catch, js_name = withExportSurface)]
+    pub(super) fn with_export_surface(
+        this: &OpCk,
+        surface: &JsValue,
+        paint: &js_sys::Function,
+    ) -> Result<(), JsValue>;
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen(method, catch, js_name = readExportSurface)]
+    pub(super) fn read_export_surface(
+        this: &OpCk,
+        surface: &JsValue,
+        width: u32,
+        height: u32,
+    ) -> Result<js_sys::Uint8Array, JsValue>;
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen(method, js_name = deleteExportSurface)]
+    pub(super) fn delete_export_surface(this: &OpCk, surface: &JsValue);
+
     #[wasm_bindgen(method, js_name = beginFrame)]
     pub(super) fn begin_frame(this: &OpCk);
     #[wasm_bindgen(method, js_name = endFrame)]

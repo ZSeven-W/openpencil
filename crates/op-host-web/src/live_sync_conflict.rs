@@ -137,24 +137,16 @@ fn parse_server_authoritative(body: &str) -> Option<bool> {
     Some(mode == "online")
 }
 
-/// Ask the daemon once which deployment and encoder are available.
+/// Ask the daemon once which deployment is serving the editor.
 pub(super) fn probe_serve_mode<C: RepaintContext + 'static>(base: &str, inner: &Rc<RefCell<C>>) {
     let target = Rc::downgrade(inner);
     crate::live_sync::get(
         &format!("{base}/api/mcp/server"),
         Rc::new(move |body: String| {
             note_serve_mode(&body);
-            let available = serde_json::from_str::<serde_json::Value>(&body)
-                .ok()
-                .and_then(|value| value["motionMp4"].as_bool())
-                .unwrap_or(false);
             if let Some(target) = target.upgrade() {
                 let mut context = target.borrow_mut();
                 let host = context.host_mut();
-                host.editor_state_mut()
-                    .editor_ui
-                    .motion_export
-                    .mp4_available = available;
                 host.mark_editor_state_dirty();
                 let _ = context.repaint();
             }

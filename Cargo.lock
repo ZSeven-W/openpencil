@@ -4785,6 +4785,7 @@ dependencies = [
  "jian-host-web",
  "jian-ops-schema",
  "js-sys",
+ "mp4",
  "op-ai",
  "op-codegen",
  "op-editor-core",
@@ -4794,6 +4795,7 @@ dependencies = [
  "op-host-native",
  "op-html",
  "op-i18n",
+ "op-motion-export",
  "op-pen-loader",
  "op-preview-core",
  "op-util",
@@ -4899,6 +4901,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-motion-export"
+version = "0.8.6"
+dependencies = [
+ "glam",
+ "jian-core",
+ "jian-scene",
+ "mp4",
+ "op-editor-core",
+ "op-editor-ui",
+ "rusty_h264-common",
+ "rusty_h264-encoder",
+]
+
+[[package]]
 name = "op-opmerge"
 version = "0.8.6"
 dependencies = [
@@ -4999,12 +5015,12 @@ dependencies = [
  "op-editor-core",
  "op-editor-ui",
  "op-host-native",
+ "op-motion-export",
  "op-pen-loader",
  "op-preview-core",
  "png 0.18.1",
  "rusty_h264-common",
  "rusty_h264-decoder",
- "rusty_h264-encoder",
  "skia-safe",
  "zip",
 ]

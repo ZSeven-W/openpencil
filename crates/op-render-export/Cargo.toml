@@ -17,6 +17,7 @@ pinned-skia-binaries = ["skia-safe/no-compile"]
 [dependencies]
 op-editor-core = { path = "../op-editor-core" }
 op-editor-ui = { path = "../op-editor-ui" }
+op-motion-export = { path = "../op-motion-export" }
 op-host-native = { path = "../op-host-native", default-features = false }
 op-pen-loader = { path = "../op-pen-loader" }
 jian-core = { path = "../../vendor/jian/crates/jian-core" }
@@ -32,14 +33,11 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
   "pdf",
 ] }
 
-[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
-mp4 = "0.14.0"
-rusty_h264-common = { version = "0.17.2", default-features = false, features = ["std"] }
-rusty_h264-encoder = { version = "0.17.2", default-features = false, features = ["std", "asm"] }
-
 [dev-dependencies]
 base64 = "0.22"
 op-preview-core = { path = "../op-preview-core" }
 
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dev-dependencies]
+mp4 = "0.14.0"
+rusty_h264-common = { version = "0.17.2", default-features = false, features = ["std"] }
 rusty_h264-decoder = { version = "0.17.2", default-features = false, features = ["std"] }

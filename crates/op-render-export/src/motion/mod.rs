@@ -8,7 +8,8 @@ use jian_ops_schema::node::PenNode;
 use op_editor_core::motion_export::MotionExportBackground;
 use op_editor_ui::layout_scene::LayoutScene;
 
-use crate::{clamp_scale, ExportError};
+use crate::ExportError;
+use op_motion_export::FrameClock;
 
 mod contact_sheet;
 mod mp4;
@@ -66,23 +67,16 @@ pub fn export_motion<W: Write + Seek>(
     format: MotionFormat,
     options: &MotionExportOptions,
 ) -> Result<(), ExportError> {
-    if !(1..=60).contains(&options.fps) {
-        return Err(ExportError::InvalidMotionFps { fps: options.fps });
-    }
+    FrameClock::validate_fps(options.fps)?;
     let clip = build_clip(root, &options.trigger)?;
-    let duration = options
-        .duration_ms
-        .or_else(|| clip.duration_ms())
-        .ok_or(ExportError::MotionDurationRequired)?;
+    let clock = FrameClock::new(
+        options.fps,
+        options.duration_ms.or_else(|| clip.duration_ms()),
+    )?;
     let fps = u64::from(options.fps);
-    let frame_count = op_editor_core::motion_export::motion_frame_count(duration, options.fps);
+    let frame_count = clock.frame_count();
     if format == MotionFormat::Mp4 {
-        if duration > op_editor_core::motion_export::MAX_MP4_DURATION_MS {
-            return Err(ExportError::MotionDurationTooLong {
-                duration_ms: duration,
-                limit_ms: op_editor_core::motion_export::MAX_MP4_DURATION_MS,
-            });
-        }
+        clock.validate_mp4()?;
     } else if frame_count > u64::from(MAX_MOTION_FRAMES) {
         return Err(ExportError::TooManyMotionFrames {
             frames: frame_count,
@@ -92,11 +86,11 @@ pub fn export_motion<W: Write + Seek>(
     let root_id = jian_core::document::tree::node_schema_id(root);
     let transparent =
         format != MotionFormat::Mp4 && options.background == MotionExportBackground::Transparent;
-    let renderer = render::FrameRenderer::new(scene, root_id, clamp_scale(options.scale), clip)?
+    let renderer = render::FrameRenderer::new(scene, root_id, options.scale, clip)?
         .with_options(transparent, options.reduced_motion);
-    let time_at = |index: u64| (index * 1_000 / fps).min(duration);
+    let time_at = |index| clock.time_at(index);
     match format {
-        MotionFormat::Mp4 => mp4::encode(writer, &renderer, options.fps, frame_count, time_at),
+        MotionFormat::Mp4 => mp4::encode(writer, &renderer, clock),
         MotionFormat::Gif => {
             let (width, height) = renderer.size();
             let map_error = |error: gif::EncodingError| ExportError::MotionEncoding {
