@@ -214,6 +214,13 @@ impl WidgetHostNative {
                     self.mark_dirty();
                     return Some(true);
                 }
+                TopBarHit::ReplayMotion => {
+                    if let Some(preview) = self.preview.as_mut() {
+                        preview.replay_motion(self.now_ms);
+                    }
+                    self.mark_dirty();
+                    return Some(true);
+                }
                 TopBarHit::TogglePreview => {
                     // Enter / exit canvas Preview (Play) mode. Layout is
                     // solved per-root from the document; the canvas region

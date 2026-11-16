@@ -18,6 +18,17 @@ impl crate::session::PreviewSession {
         }
     }
 
+    /// Replay authored motion on the current screen while retaining the
+    /// route, scroll position and interactive state.
+    pub fn replay_motion(&mut self, host_now_ms: u64) {
+        self.set_now_ms(host_now_ms);
+        self.animation.clear();
+        self.motion.reset_screen();
+        self.begin_lifecycle(self.last_now_ms);
+        let scene = self.overlay_runtime_state_without_animation(&self.scene);
+        self.observe_motion(&scene);
+    }
+
     pub fn effective_motion_preference(&self) -> MotionPreference {
         let document = self
             .reset_seed

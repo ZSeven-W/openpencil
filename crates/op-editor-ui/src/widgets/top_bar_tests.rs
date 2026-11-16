@@ -752,3 +752,22 @@ fn for_editor_ui_carries_signed_in_account() {
     assert!(bar.account.is_signed_in());
     assert_eq!(bar.account.initial(), 'F');
 }
+
+#[test]
+fn replay_motion_button_is_present_only_in_play_and_uses_its_own_rect() {
+    use op_editor_core::{editor_ui_state::EditorUiState, TopBarButton};
+    let mut ui = EditorUiState::default();
+    let rect = Rect::xywh(0.0, 0.0, 1200.0, TOP_BAR_HEIGHT);
+    let bar = TopBar::for_editor_ui(&ui);
+    assert!(bar.button_rect(rect, TopBarButton::ReplayMotion).is_none());
+    ui.preview.mode = true;
+    let bar = TopBar::for_editor_ui(&ui);
+    let replay = bar.button_rect(rect, TopBarButton::ReplayMotion).unwrap();
+    let point = replay.origin + replay.size * 0.5;
+    assert_eq!(bar.hit_test(rect, point), Some(TopBarHit::ReplayMotion));
+    let export = bar.export_button_rect(rect);
+    assert_eq!(
+        bar.hit_test(rect, export.origin + export.size * 0.5),
+        Some(TopBarHit::OpenExportMenu)
+    );
+}

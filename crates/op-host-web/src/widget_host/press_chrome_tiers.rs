@@ -196,6 +196,11 @@ impl WidgetHost {
                         }
                     }
                 }
+                TopBarHit::ReplayMotion => {
+                    if let Some(preview) = self.preview.as_mut() {
+                        preview.replay_motion(self.now_ms);
+                    }
+                }
                 TopBarHit::TogglePreview => {
                     if self.preview.is_some() {
                         // Exit preview mode. Track M-1: defer the teardown —

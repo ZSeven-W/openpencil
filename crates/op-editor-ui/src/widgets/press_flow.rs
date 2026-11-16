@@ -446,6 +446,7 @@ pub fn apply_shared_top_bar_hit(
         }
         TopBarHit::ToggleFullscreen
         | TopBarHit::TogglePreview
+        | TopBarHit::ReplayMotion
         | TopBarHit::ToggleGitPanel
         | TopBarHit::Account => TopBarPress::Platform,
     }

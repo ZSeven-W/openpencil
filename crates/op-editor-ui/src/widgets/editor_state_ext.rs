@@ -322,6 +322,7 @@ pub fn topbar_button_hover(
         W::ToggleGitPanel => O::ToggleGitPanel,
         W::ToggleFullscreen => O::ToggleFullscreen,
         W::TogglePreview => O::TogglePreview,
+        W::ReplayMotion => O::ReplayMotion,
         W::Account => O::OpenAccount,
     }
 }

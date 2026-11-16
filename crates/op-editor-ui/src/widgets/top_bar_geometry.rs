@@ -83,6 +83,20 @@ impl TopBar {
         PREVIEW_BUTTON_AVAILABLE
     }
 
+    pub(super) fn replay_motion_visible(&self) -> bool {
+        self.preview_button_visible() && self.preview_active
+    }
+
+    pub(super) fn replay_motion_rect(&self, top_bar_rect: Rect) -> Rect {
+        let preview = self.preview_button_rect(top_bar_rect);
+        Rect::xywh(
+            preview.origin.x - ICON_BUTTON,
+            preview.origin.y,
+            ICON_BUTTON,
+            ICON_BUTTON,
+        )
+    }
+
     /// File-scoped chrome (open menu, Figma import, centered file name):
     /// hidden inside a VS Code embed — the workbench owns file identity.
     pub(super) fn file_controls_visible(&self) -> bool {
@@ -105,7 +119,7 @@ impl TopBar {
         if self.preview_button_visible() {
             slots += 1.0;
         }
-        slots
+        slots + f32::from(self.replay_motion_visible())
     }
 
     /// Export quick-menu button — a plain icon button directly left of
@@ -414,6 +428,12 @@ impl TopBar {
                     return None;
                 }
                 self.preview_button_rect(top_bar_rect)
+            }
+            B::ReplayMotion => {
+                if !self.replay_motion_visible() {
+                    return None;
+                }
+                self.replay_motion_rect(top_bar_rect)
             }
             B::OpenExportMenu => self.export_button_rect(top_bar_rect),
             B::OpenAssetCenter => self.asset_center_button_rect(top_bar_rect),

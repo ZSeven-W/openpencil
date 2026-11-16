@@ -106,6 +106,8 @@ pub enum TopBarHit {
     ToggleFullscreen,
     /// Play / Stop icon — enter / exit canvas Preview (Play) mode.
     TogglePreview,
+    /// Replay the current screen's authored motion.
+    ReplayMotion,
     /// User-avatar button — open the sign-in modal (signed out) or the
     /// account dropdown (signed in).
     Account,
@@ -468,6 +470,9 @@ impl TopBar {
         // hidden) → toggle Preview mode.
         if self.preview_button_visible() && self.preview_button_rect(rect).contains(point) {
             return Some(TopBarHit::TogglePreview);
+        }
+        if self.replay_motion_visible() && self.replay_motion_rect(rect).contains(point) {
+            return Some(TopBarHit::ReplayMotion);
         }
         // Download (just left of Play) → export quick menu. Offered on
         // every document; the menu itself decides which rows apply.

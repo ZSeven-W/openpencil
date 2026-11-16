@@ -116,6 +116,7 @@ pub fn tooltip_for(ui: &EditorUiState, button: TopBarButton) -> TopBarTooltip {
             // toggle_preview_with_cached_viewport()`.
             DESKTOP_SHORTCUTS.then_some("⌘P"),
         ),
+        TopBarButton::ReplayMotion => (translate(ui, "tooltip.topbar.replayMotion"), None),
         TopBarButton::OpenAccount => (translate(ui, "tooltip.topbar.account"), None),
     };
     TopBarTooltip { label, shortcut }
@@ -145,7 +146,8 @@ pub fn suppressed(ui: &EditorUiState, button: TopBarButton) -> bool {
         | TopBarButton::Home
         | TopBarButton::ToggleTheme
         | TopBarButton::ToggleFullscreen
-        | TopBarButton::TogglePreview => false,
+        | TopBarButton::TogglePreview
+        | TopBarButton::ReplayMotion => false,
     }
 }
 
@@ -204,7 +206,7 @@ pub fn paint_top_bar_tooltip(
 }
 
 /// Every button the bar can hover, for exhaustive coverage checks.
-pub const ALL_TOP_BAR_BUTTONS: [TopBarButton; 14] = [
+pub const ALL_TOP_BAR_BUTTONS: [TopBarButton; 15] = [
     TopBarButton::ToggleSidebar,
     TopBarButton::ToggleFileMenu,
     TopBarButton::OpenImportMenu,
@@ -218,5 +220,6 @@ pub const ALL_TOP_BAR_BUTTONS: [TopBarButton; 14] = [
     TopBarButton::ToggleGitPanel,
     TopBarButton::ToggleFullscreen,
     TopBarButton::TogglePreview,
+    TopBarButton::ReplayMotion,
     TopBarButton::OpenAccount,
 ];

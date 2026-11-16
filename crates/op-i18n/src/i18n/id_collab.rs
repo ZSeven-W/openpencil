@@ -602,6 +602,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "export.motionWhite" => "Putih",
         "export.motionReduced" => "Kurangi gerakan",
         "export.motionNoEncoder" => "Tanpa enkoder",
+        "tooltip.topbar.replayMotion" => "Putar ulang animasi",
         "export.motionFrameLimit" => "Batas bingkai terlampaui",
         "motion.section.title" => "Gerak",
         "motion.add" => "+ Tambah gerak",

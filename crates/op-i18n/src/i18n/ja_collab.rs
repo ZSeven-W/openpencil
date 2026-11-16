@@ -618,6 +618,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "export.motionWhite" => "白",
         "export.motionReduced" => "動きを減らす",
         "export.motionNoEncoder" => "エンコーダなし",
+        "tooltip.topbar.replayMotion" => "モーションをもう一度再生",
         "export.motionFrameLimit" => "フレーム数の上限超過",
         "motion.section.title" => "モーション",
         "motion.add" => "+ モーションを追加",

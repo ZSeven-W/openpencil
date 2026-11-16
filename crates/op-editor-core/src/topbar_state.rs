@@ -39,6 +39,8 @@ pub enum TopBarButton {
     ToggleFullscreen,
     /// Play / Stop icon — enters / exits canvas Preview (Play) mode.
     TogglePreview,
+    /// Replay the current screen's authored motion.
+    ReplayMotion,
     /// User-avatar button — opens the sign-in modal (signed out) or the
     /// account dropdown (signed in).
     OpenAccount,

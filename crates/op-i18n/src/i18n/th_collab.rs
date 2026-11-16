@@ -604,6 +604,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "export.motionWhite" => "สีขาว",
         "export.motionReduced" => "ลดการเคลื่อนไหว",
         "export.motionNoEncoder" => "ไม่มีตัวเข้ารหัส",
+        "tooltip.topbar.replayMotion" => "เล่นแอนิเมชันอีกครั้ง",
         "export.motionFrameLimit" => "เฟรมเกินขีดจำกัด",
         "motion.section.title" => "โมชัน",
         "motion.add" => "+ เพิ่มโมชัน",

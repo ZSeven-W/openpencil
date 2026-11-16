@@ -606,6 +606,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "export.motionWhite" => "सफ़ेद",
         "export.motionReduced" => "गति कम करें",
         "export.motionNoEncoder" => "एन्कोडर नहीं",
+        "tooltip.topbar.replayMotion" => "ऐनिमेशन फिर चलाएँ",
         "export.motionFrameLimit" => "फ़्रेम सीमा पार",
         "motion.section.title" => "मोशन",
         "motion.add" => "+ मोशन जोड़ें",

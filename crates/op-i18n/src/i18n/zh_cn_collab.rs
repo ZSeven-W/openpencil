@@ -602,6 +602,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "export.motionWhite" => "白色",
         "export.motionReduced" => "减少动态效果",
         "export.motionNoEncoder" => "无编码器",
+        "tooltip.topbar.replayMotion" => "重播动效",
         "export.motionFrameLimit" => "超过帧数上限",
         "motion.section.title" => "动效",
         "motion.add" => "+ 添加动效",

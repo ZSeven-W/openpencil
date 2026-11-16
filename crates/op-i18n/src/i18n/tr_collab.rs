@@ -602,6 +602,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "export.motionWhite" => "Beyaz",
         "export.motionReduced" => "Hareketi azalt",
         "export.motionNoEncoder" => "Kodlayıcı yok",
+        "tooltip.topbar.replayMotion" => "Animasyonu yeniden oynat",
         "export.motionFrameLimit" => "Kare sınırı aşıldı",
         "motion.section.title" => "Hareket",
         "motion.add" => "+ Hareket ekle",

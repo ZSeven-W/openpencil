@@ -528,3 +528,31 @@ fn tap_starts_a_named_manual_clip_on_descendants() {
     session.pump(120);
     assert_eq!(opacity(&session, "card"), 1.0);
 }
+
+#[test]
+fn replay_motion_restarts_the_current_clip_without_resetting_app_state() {
+    let mut session = session_for(serde_json::json!({
+        "version":"1.1",
+        "children":[{"type":"rectangle","id":"card","width":100,"height":100,
+            "animations":[{"trigger":"mount","durationMs":200,"easing":"linear",
+                "keyframes":[{"offset":0,"opacity":0},{"offset":1,"opacity":1}]}]}]
+    }));
+    session
+        .runtime
+        .state
+        .app_set("selection", serde_json::json!("track-2"));
+    session.set_now_ms(250);
+    assert_eq!(opacity(&session, "card"), 1.0);
+    session.replay_motion(300);
+    assert_eq!(opacity(&session, "card"), 0.0);
+    session.set_now_ms(400);
+    assert!((opacity(&session, "card") - 0.5).abs() < 1e-6);
+    assert_eq!(
+        session
+            .runtime
+            .state
+            .app_get("selection")
+            .map(|value| value.0),
+        Some(serde_json::json!("track-2"))
+    );
+}

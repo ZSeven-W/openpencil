@@ -618,6 +618,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "export.motionWhite" => "흰색",
         "export.motionReduced" => "동작 줄이기",
         "export.motionNoEncoder" => "인코더 없음",
+        "tooltip.topbar.replayMotion" => "모션 다시 재생",
         "export.motionFrameLimit" => "프레임 수 한도 초과",
         "motion.section.title" => "모션",
         "motion.add" => "+ 모션 추가",

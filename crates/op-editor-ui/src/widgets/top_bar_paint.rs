@@ -224,6 +224,19 @@ impl TopBar {
             );
         }
 
+        if self.replay_motion_visible() {
+            rx -= ICON_BUTTON;
+            paint_icon_button(
+                cx,
+                &self.theme,
+                rx,
+                center_y,
+                Icon::RefreshCw,
+                self.is_hovered(TopBarButton::ReplayMotion),
+                self.is_pressed(TopBarButton::ReplayMotion),
+            );
+        }
+
         // Export quick menu — a download glyph on every document; the
         // dropdown decides which formats the document actually offers.
         rx -= ICON_BUTTON;

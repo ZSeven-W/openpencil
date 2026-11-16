@@ -614,6 +614,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "export.motionWhite" => "Trắng",
         "export.motionReduced" => "Giảm chuyển động",
         "export.motionNoEncoder" => "Thiếu bộ mã hóa",
+        "tooltip.topbar.replayMotion" => "Phát lại chuyển động",
         "export.motionFrameLimit" => "Vượt số khung tối đa",
         "motion.section.title" => "Chuyển động",
         "motion.add" => "+ Thêm chuyển động",

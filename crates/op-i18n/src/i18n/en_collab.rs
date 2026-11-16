@@ -642,6 +642,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "export.motionWhite" => "White",
         "export.motionReduced" => "Reduced motion",
         "export.motionNoEncoder" => "No encoder",
+        "tooltip.topbar.replayMotion" => "Replay motion",
         "export.motionFrameLimit" => "Frame limit exceeded",
         "motion.section.title" => "Motion",
         "motion.add" => "+ Add motion",

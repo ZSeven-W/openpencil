@@ -602,6 +602,7 @@ pub fn lookup(key: &str) -> Option<&'static str> {
         "export.motionWhite" => "Blanc",
         "export.motionReduced" => "Réduire les animations",
         "export.motionNoEncoder" => "Sans encodeur",
+        "tooltip.topbar.replayMotion" => "Rejouer l’animation",
         "export.motionFrameLimit" => "Trop d’images",
         "motion.section.title" => "Animation",
         "motion.add" => "+ Ajouter une animation",
