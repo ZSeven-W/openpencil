@@ -179,12 +179,16 @@ RUN sed -ri \
       -e '/^Signed-By:/a Check-Valid-Until: no' \
       /etc/apt/sources.list.d/debian.sources \
     && apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates wget \
+      ca-certificates wget ffmpeg \
       libssl3 \
       libfreetype6 libfontconfig1 fonts-noto-cjk \
+    && ffmpeg -hide_banner -encoders | awk '$2 == "libx264" { available = 1 } END { exit !available }' \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd -g 10001 openpencil \
     && useradd -r -u 10001 -g openpencil -M -d /app openpencil
+
+# FFmpeg is a standalone executable; Debian's package retains its copyright.
+LABEL org.openpencil.ffmpeg.source="https://snapshot.debian.org/archive/debian/20260803T000000Z/"
 
 WORKDIR /app
 
