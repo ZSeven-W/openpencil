@@ -185,4 +185,7 @@ fn html_manual_motion_waits_for_an_interaction() {
     assert!(!html.contains("animation:op-card-0"));
     assert!(!html.contains("animation:op-only-0"));
     assert!(!html.contains(";animation:\""));
+    assert!(html.contains("class=\"op-motion-pulse\""));
+    assert!(html.contains("data-op-manual=\""));
+    assert!(html.contains("window.opPlayMotion"));
 }

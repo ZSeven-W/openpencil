@@ -91,7 +91,8 @@ pub(super) fn emit_node_html(out: &mut String, node: &PenNode, depth: usize) {
         style.push_str(&format!(";transform:rotate({}deg)", fmt_num(rotation)));
     }
     style.push_str(&codegen_motion_css::inline_style(node));
-    let motion_attr = codegen_motion_css::data_attribute(node);
+    let mut motion_attr = codegen_motion_css::data_attribute(node);
+    motion_attr.push_str(&codegen_motion_css::html_manual_attribute(node));
     if let PenNode::Image(image) = node {
         style.push_str(&format!(
             ";object-fit:{}",

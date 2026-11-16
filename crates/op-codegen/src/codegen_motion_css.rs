@@ -210,27 +210,8 @@ pub(super) fn inline_style(node: &PenNode) -> String {
         let declarations = animations
             .iter()
             .enumerate()
-            // Manual motion plays only through a play_motion interaction,
-            // which the export does not carry yet; like Preview before such
-            // an interaction, the node keeps its authored look.
             .filter(|(_, animation)| animation.trigger != MotionTrigger::Manual)
-            .map(|(index, animation)| {
-                // The curve lives in the keyframes' timing functions. In-view
-                // motion waits on its first keyframe for the observer script.
-                format!(
-                    "{} {}ms linear {}ms {} {}{}",
-                    animation_name(node.id_str(), index),
-                    animation.duration_ms,
-                    animation.delay_ms,
-                    iteration_count(&animation.iterations),
-                    fill_mode(animation.fill_mode),
-                    if animation.trigger == MotionTrigger::InView {
-                        " paused"
-                    } else {
-                        ""
-                    }
-                )
-            })
+            .map(|(index, animation)| animation_declaration(node.id_str(), index, animation))
             .collect::<Vec<_>>()
             .join(", ");
         if !declarations.is_empty() {
@@ -238,6 +219,68 @@ pub(super) fn inline_style(node: &PenNode) -> String {
         }
     }
     style
+}
+
+fn animation_declaration(node_id: &str, index: usize, animation: &NodeAnimation) -> String {
+    // The curve lives on the keyframes. In-view motion waits for its observer.
+    format!(
+        "{} {}ms linear {}ms {} {}{}",
+        animation_name(node_id, index),
+        animation.duration_ms,
+        animation.delay_ms,
+        iteration_count(&animation.iterations),
+        fill_mode(animation.fill_mode),
+        if animation.trigger == MotionTrigger::InView {
+            " paused"
+        } else {
+            ""
+        },
+    )
+}
+
+pub(super) fn html_manual_attribute(node: &PenNode) -> String {
+    let clips: Vec<_> = node
+        .motion_declarations()
+        .1
+        .into_iter()
+        .flatten()
+        .enumerate()
+        .filter(|(_, clip)| clip.trigger == MotionTrigger::Manual)
+        .filter_map(|(index, clip)| {
+            Some((
+                clip.id.as_deref()?,
+                animation_name(node.id_str(), index),
+                animation_declaration(node.id_str(), index, clip),
+            ))
+        })
+        .collect();
+    if clips.is_empty() {
+        return String::new();
+    }
+    let classes: Vec<_> = clips
+        .iter()
+        .map(|(id, _, _)| format!("op-motion-{}", css_identifier(id)))
+        .collect();
+    let manifest = serde_json::to_string(&clips).expect("serializable clip descriptors");
+    format!(
+        " class=\"{}\" data-op-manual=\"{}\"",
+        classes.join(" "),
+        html_escape(&manifest)
+    )
+}
+
+pub(super) fn has_manual_motion(doc: &PenDocument) -> bool {
+    let mut animated = Vec::new();
+    for root in root_nodes(doc) {
+        collect_animated_nodes(root, &mut animated);
+    }
+    animated.iter().any(|node| {
+        node.motion_declarations()
+            .1
+            .into_iter()
+            .flatten()
+            .any(|clip| clip.trigger == MotionTrigger::Manual && clip.id.is_some())
+    })
 }
 
 /// Stable selector attribute for an element with a motion declaration.

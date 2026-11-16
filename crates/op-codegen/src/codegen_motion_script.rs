@@ -9,14 +9,18 @@
 //! plain JavaScript and as strict TypeScript, so component targets can call
 //! it from their own lifecycle hooks.
 
-use super::codegen_motion_css::has_in_view_motion;
+use super::codegen_motion_css::{has_in_view_motion, has_manual_motion};
 use jian_ops_schema::PenDocument;
 
 /// The HTML page's observer `<script>`, or an empty string when nothing
 /// animates in view.
 pub(super) fn render(doc: &PenDocument) -> String {
+    let mut out = String::new();
+    if has_manual_motion(doc) {
+        out.push_str(MANUAL_MOTION);
+    }
     if !has_in_view_motion(doc) {
-        return String::new();
+        return out;
     }
     let observer: String = OBSERVE_IN_VIEW_MOTION
         .lines()
@@ -25,7 +29,10 @@ pub(super) fn render(doc: &PenDocument) -> String {
             line => format!("  {line}\n"),
         })
         .collect();
-    format!("<script>\n(() => {{\n{observer}  observeInViewMotion();\n}})();\n</script>\n")
+    out.push_str(&format!(
+        "<script>\n(() => {{\n{observer}  observeInViewMotion();\n}})();\n</script>\n"
+    ));
+    out
 }
 
 /// `<script setup>` statements that start in-view motion once the Vue
@@ -92,4 +99,47 @@ const OBSERVE_IN_VIEW_MOTION: &str = r#"function observeInViewMotion() {
   }
   return observer;
 }
+"#;
+
+/// The HTML target emits markup without a runtime action dispatcher.
+const MANUAL_MOTION: &str = r#"<script>
+(() => {
+  const running = new WeakMap();
+  // From an event handler, call opPlayMotion(targetElement, clipId, mode).
+  // The target may be a container. Modes: play, restart, reverse or stop.
+  window.opPlayMotion = (root, id, mode = "play") => {
+    if (!root || !["play", "restart", "reverse", "stop"].includes(mode)) return;
+    const selector = "[data-op-manual]";
+    const targets = [...root.querySelectorAll(selector)];
+    if (root.matches(selector)) targets.unshift(root);
+    for (const target of targets) {
+      const specs = JSON.parse(target.getAttribute("data-op-manual"));
+      const spec = specs.find(([clipId]) => clipId === id);
+      if (!spec) continue;
+      const [, name, declaration] = spec;
+      let animations = running.get(target);
+      if (!animations) running.set(target, animations = new Map());
+      let animation = animations.get(name);
+      if (mode === "stop") {
+        animation?.cancel();
+        continue;
+      }
+      if (mode === "play" && animation?.playState === "running") continue;
+      if (!animation) {
+        const previous = target.style.animation;
+        target.style.animation = previous ? previous + ", " + declaration : declaration;
+        animation = target.getAnimations().find(item => item.animationName === name);
+        if (!animation) {
+          target.style.animation = previous;
+          continue;
+        }
+        animations.set(name, animation);
+      }
+      animation.cancel();
+      animation.effect.updateTiming({ direction: mode === "reverse" ? "reverse" : "normal" });
+      animation.play();
+    }
+  };
+})();
+</script>
 "#;
