@@ -164,6 +164,7 @@ fn run(args: &[String]) -> Result<String, CliError> {
             output,
             format,
             scale,
+            motion,
         } => export_cli::run_export(
             target_port,
             &target_token,
@@ -171,6 +172,7 @@ fn run(args: &[String]) -> Result<String, CliError> {
             &output,
             &format,
             scale.as_deref(),
+            motion.as_ref(),
         )?,
     };
     Ok(if pretty { pretty_json(&out) } else { out })
@@ -269,6 +271,7 @@ enum Command {
         output: String,
         format: String,
         scale: Option<String>,
+        motion: Option<export_cli::MotionExportFlags>,
     },
     ExportDeck {
         output: String,

@@ -54,6 +54,23 @@ impl Drop for FrameScope {
     }
 }
 
+/// Paint an offline sample at its own time without changing the host's epoch
+/// or whether the most recent host frame drew an animated shader.
+pub fn with_sample_time<T>(time_ms: u64, paint: impl FnOnce() -> T) -> T {
+    struct RestoreClock(Option<f32>, bool);
+    impl Drop for RestoreClock {
+        fn drop(&mut self) {
+            FRAME_TIME_S.with(|time| time.set(self.0));
+            PAINTED.with(|painted| painted.set(self.1));
+        }
+    }
+    let _restore = RestoreClock(
+        FRAME_TIME_S.with(|time| time.replace(Some((time_ms as f64 / 1000.0) as f32))),
+        PAINTED.with(Cell::get),
+    );
+    paint()
+}
+
 /// The value to bind to `time` for `sksl`, or `None` when the program has
 /// no `time` uniform. Marks the frame as animated when a host clock runs.
 pub fn bind_time(sksl: &str) -> Option<f32> {

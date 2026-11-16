@@ -31,6 +31,7 @@ use std::path::Path as StdPath;
 
 mod editor;
 mod error;
+pub mod motion;
 pub mod pdf;
 mod scene_painter;
 mod svg;
@@ -286,6 +287,12 @@ pub fn render_raster_bytes(
     paint: impl FnOnce(&Canvas),
 ) -> Result<Vec<u8>, ExportError> {
     format.ensure_supported()?;
+    let size = raster_size(bounds, scale, margin)?;
+    let mut surface = raster_surface(size, bounds, scale, margin, format.supports_alpha(), paint)?;
+    encode_surface(&mut surface, format)
+}
+
+fn raster_size(bounds: Rect, scale: f32, margin: f32) -> Result<(i32, i32), ExportError> {
     let width_f = ((bounds.size.x + margin * 2.0) * scale).round();
     let height_f = ((bounds.size.y + margin * 2.0) * scale).round();
     if !width_f.is_finite() || !height_f.is_finite() {
@@ -304,8 +311,19 @@ pub fn render_raster_bytes(
             height_px,
         });
     }
+    Ok((width_px as i32, height_px as i32))
+}
+
+fn raster_surface(
+    size: (i32, i32),
+    bounds: Rect,
+    scale: f32,
+    margin: f32,
+    transparent: bool,
+    paint: impl FnOnce(&Canvas),
+) -> Result<skia_safe::Surface, ExportError> {
     let info = skia_safe::ImageInfo::new(
-        (width_px as i32, height_px as i32),
+        size,
         skia_safe::ColorType::N32,
         skia_safe::AlphaType::Premul,
         None,
@@ -313,7 +331,7 @@ pub fn render_raster_bytes(
     let mut surface =
         skia_safe::surfaces::raster(&info, None, None).ok_or(ExportError::SurfaceAlloc)?;
     let canvas = surface.canvas();
-    if format.supports_alpha() {
+    if transparent {
         canvas.clear(skia_safe::Color::TRANSPARENT);
     } else {
         canvas.clear(skia_safe::Color::WHITE);
@@ -321,6 +339,13 @@ pub fn render_raster_bytes(
     canvas.scale((scale, scale));
     canvas.translate((margin - bounds.origin.x, margin - bounds.origin.y));
     paint(canvas);
+    Ok(surface)
+}
+
+fn encode_surface(
+    surface: &mut skia_safe::Surface,
+    format: RasterFormat,
+) -> Result<Vec<u8>, ExportError> {
     let image = surface.image_snapshot();
     let data = image
         .encode(None, format.skia(), format.quality())

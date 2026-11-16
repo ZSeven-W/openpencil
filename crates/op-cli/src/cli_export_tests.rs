@@ -27,6 +27,7 @@ fn export_item_maps_to_dedicated_command() {
             output: "/tmp/page.png".into(),
             format: "png".into(),
             scale: Some("2".into()),
+            motion: None,
         }
     );
 }
@@ -303,4 +304,35 @@ fn every_mcp_backed_alias_uses_running_endpoint_discovery() {
             "MCP-backed alias must discover the running endpoint: {argv:?}"
         );
     }
+}
+
+#[test]
+fn motion_export_flags_select_a_manual_clip() {
+    let parsed = parse_args(&args(&[
+        "export",
+        "--item",
+        "hero",
+        "--output",
+        "hero.apng",
+        "--format",
+        "apng",
+        "--clip",
+        "reveal",
+        "--fps",
+        "24",
+        "--duration-ms",
+        "1200",
+    ]))
+    .unwrap();
+    let Command::Export {
+        motion: Some(motion),
+        ..
+    } = parsed.command
+    else {
+        panic!("expected motion export");
+    };
+    assert_eq!(
+        serde_json::Value::Object(motion.arguments()),
+        serde_json::json!({"trigger":"manual","clip":"reveal","fps":24,"durationMs":1200})
+    );
 }

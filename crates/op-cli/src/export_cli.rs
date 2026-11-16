@@ -8,6 +8,78 @@ use crate::command_helpers::flag_value;
 use crate::mcp_http_cli::{post, tool_call_body};
 use crate::{Command, Flags};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MotionExportFlags {
+    fps: u32,
+    duration_ms: Option<u64>,
+    trigger: String,
+    clip: Option<String>,
+}
+
+impl MotionExportFlags {
+    pub(crate) fn arguments(&self) -> serde_json::Map<String, Value> {
+        let mut fields = serde_json::Map::from_iter([
+            ("fps".into(), Value::from(self.fps)),
+            ("trigger".into(), Value::String(self.trigger.clone())),
+        ]);
+        if let Some(duration) = self.duration_ms {
+            fields.insert("durationMs".into(), Value::from(duration));
+        }
+        if let Some(clip) = &self.clip {
+            fields.insert("clip".into(), Value::String(clip.clone()));
+        }
+        fields
+    }
+}
+
+fn motion_flags(flags: &Flags, format: &str) -> Result<Option<MotionExportFlags>, CliError> {
+    let enabled = matches!(format, "gif" | "apng" | "png-seq");
+    if !enabled {
+        if ["fps", "duration-ms", "trigger", "clip"]
+            .into_iter()
+            .any(|name| flags.contains_key(name))
+        {
+            return Err(CliError::usage(
+                "motion options require gif, apng, or png-seq export",
+            ));
+        }
+        return Ok(None);
+    }
+    let fps = match flag_value(flags, "fps") {
+        Some(value) => value
+            .parse::<u32>()
+            .ok()
+            .filter(|fps| (1..=60).contains(fps))
+            .ok_or_else(|| CliError::usage("--fps must be an integer from 1 to 60"))?,
+        None => 30,
+    };
+    let duration_ms = flag_value(flags, "duration-ms")
+        .map(|value| {
+            value
+                .parse::<u64>()
+                .map_err(|_| CliError::usage("--duration-ms must be a nonnegative integer"))
+        })
+        .transpose()?;
+    let clip = flag_value(flags, "clip");
+    let trigger = flag_value(flags, "trigger")
+        .unwrap_or_else(|| if clip.is_some() { "manual" } else { "mount" }.into());
+    match trigger.as_str() {
+        "mount" | "inView" if clip.is_none() => {}
+        "manual" if clip.as_ref().is_some_and(|clip| !clip.trim().is_empty()) => {}
+        _ => {
+            return Err(CliError::usage(
+                "use --trigger mount, --trigger inView, or --trigger manual --clip ID",
+            ))
+        }
+    }
+    Ok(Some(MotionExportFlags {
+        fps,
+        duration_ms,
+        trigger,
+        clip,
+    }))
+}
+
 pub(crate) fn map_export(flags: &Flags) -> Result<Command, CliError> {
     let item_id = flag_value(flags, "item");
     let selection = flags.contains_key("selection");
@@ -26,7 +98,10 @@ pub(crate) fn map_export(flags: &Flags) -> Result<Command, CliError> {
         }
     }
     let format = format_flag.or(formats_flag).unwrap_or_else(|| "png".into());
-    if !matches!(format.as_str(), "png" | "jpeg" | "jpg" | "webp" | "pdf") {
+    if !matches!(
+        format.as_str(),
+        "png" | "jpeg" | "jpg" | "webp" | "pdf" | "gif" | "apng" | "png-seq"
+    ) {
         return Err(CliError::Usage(format!(
             "unsupported export format {format:?}"
         )));
@@ -39,12 +114,14 @@ pub(crate) fn map_export(flags: &Flags) -> Result<Command, CliError> {
             .parse::<f32>()
             .map_err(|_| CliError::Usage(format!("--scale must be a number, got {value:?}")))?;
     }
+    let motion = motion_flags(flags, &format)?;
     Ok(Command::Export {
         item_id,
         selection,
         output,
         format,
         scale,
+        motion,
     })
 }
 
@@ -55,6 +132,7 @@ pub(crate) fn run_export(
     output: &str,
     format: &str,
     scale: Option<&str>,
+    motion: Option<&MotionExportFlags>,
 ) -> Result<String, CliError> {
     let mut arguments = serde_json::Map::new();
     if let Some(item_id) = item_id {
@@ -66,6 +144,9 @@ pub(crate) fn run_export(
             .parse::<f64>()
             .map_err(|_| CliError::Usage(format!("--scale must be a number, got {scale:?}")))?;
         arguments.insert("scale".into(), Value::from(scale));
+    }
+    if let Some(motion) = motion {
+        arguments.extend(motion.arguments());
     }
     let response = post(
         port,

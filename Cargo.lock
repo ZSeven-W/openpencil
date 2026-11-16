@@ -1084,6 +1084,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "color_quant"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
+
+[[package]]
 name = "combine"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2169,6 +2175,16 @@ checksum = "f0d8a4362ccb29cb0b265253fb0a2728f592895ee6854fd9bc13f2ffda266ff1"
 dependencies = [
  "opaque-debug",
  "polyval",
+]
+
+[[package]]
+name = "gif"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
+dependencies = [
+ "color_quant",
+ "weezl",
 ]
 
 [[package]]
@@ -4918,13 +4934,18 @@ name = "op-render-export"
 version = "0.8.6"
 dependencies = [
  "base64 0.22.1",
+ "gif",
  "glam",
+ "jian-core",
  "jian-ops-schema",
+ "jian-scene",
  "op-editor-core",
  "op-editor-ui",
  "op-host-native",
  "op-pen-loader",
+ "png 0.18.1",
  "skia-safe",
+ "zip",
 ]
 
 [[package]]

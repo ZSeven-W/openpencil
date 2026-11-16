@@ -35,32 +35,64 @@ pub enum ExportError {
     /// rather than a shared one with a branchy `Display`.
     NothingToCapture,
     /// A named page resolved but contributes no visible pixels.
-    PageEmpty { page_id: String },
+    PageEmpty {
+        page_id: String,
+    },
     /// The requested node id is absent from the scene's active page.
-    NodeNotFoundOnActivePage { node_id: String },
+    NodeNotFoundOnActivePage {
+        node_id: String,
+    },
     /// The requested node id is absent from the explicitly named page.
-    NodeNotFoundOnPage { node_id: String, page_id: String },
+    NodeNotFoundOnPage {
+        node_id: String,
+        page_id: String,
+    },
     /// The node exists but its subtree paints nothing, so there are no
     /// bounds to size a surface from.
-    NodePaintsNothing { node_id: String },
+    NodePaintsNothing {
+        node_id: String,
+    },
     /// The node is hidden; exporting it would produce an empty image, so the
     /// request is refused rather than silently satisfied.
-    NodeHidden { node_id: String },
+    NodeHidden {
+        node_id: String,
+    },
     /// Corrupt bounds or scale produced a non-finite surface size.
     NonFiniteOutputSize,
     /// The requested surface exceeds [`MAX_RASTER_SIDE_PX`] per side or
     /// [`MAX_RASTER_TOTAL_PX`] in total — the guard against a giant
     /// UI-thread allocation.
-    OutputTooLarge { width_px: i64, height_px: i64 },
+    OutputTooLarge {
+        width_px: i64,
+        height_px: i64,
+    },
     /// Skia refused to allocate the offscreen raster surface.
     SurfaceAlloc,
+    MotionReadback,
+    EmptyMotionClip,
+    MotionDurationRequired,
+    InvalidMotionFps {
+        fps: u32,
+    },
+    TooManyMotionFrames {
+        frames: u64,
+        limit: u32,
+    },
+    MotionEncoding {
+        format: &'static str,
+        reason: String,
+    },
     /// Skia's encoder failed for the requested format ("PNG" / "JPEG" /
     /// "WEBP").
-    Encode { format: &'static str },
+    Encode {
+        format: &'static str,
+    },
     /// The selected build deliberately omits an optional encoder. Mobile
     /// release archives omit WebP, so callers must not fall through to a
     /// generic Skia encode failure.
-    UnsupportedFormat { format: &'static str },
+    UnsupportedFormat {
+        format: &'static str,
+    },
     /// Skia's PDF backend closed the document without emitting any bytes.
     PdfEncoderEmpty,
     /// A multi-node PDF export was asked for an empty id list.
@@ -112,6 +144,25 @@ impl fmt::Display for ExportError {
                  lower the scale / padding or export a smaller node"
             ),
             ExportError::SurfaceAlloc => f.write_str("alloc surface"),
+            ExportError::MotionReadback => f.write_str("could not read the rendered motion frame"),
+            ExportError::EmptyMotionClip => {
+                f.write_str("no animation matches the requested trigger")
+            }
+            ExportError::MotionDurationRequired => {
+                f.write_str("a looping motion clip needs a duration")
+            }
+            ExportError::InvalidMotionFps { fps } => {
+                write!(f, "motion fps must be in 1–60, got {fps}")
+            }
+            ExportError::TooManyMotionFrames { frames, limit } => {
+                write!(
+                    f,
+                    "motion export needs {frames} frames, exceeding the limit of {limit}"
+                )
+            }
+            ExportError::MotionEncoding { format, reason } => {
+                write!(f, "{format} encoding failed: {reason}")
+            }
             ExportError::Encode { format } => write!(f, "encode {format} failed"),
             ExportError::UnsupportedFormat { format } => {
                 write!(f, "{format} export is not supported by this build")
