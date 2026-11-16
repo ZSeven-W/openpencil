@@ -1,7 +1,7 @@
 ---
 name: motion
 description: Editable keyframes, named interaction clips, and screen transitions
-phase: [generation]
+phase: [generation, maintenance]
 trigger:
   keywords: [motion, animation, animate, animated, transition, keyframes, 动效, 动画, 转场, 关键帧]
 priority: 29

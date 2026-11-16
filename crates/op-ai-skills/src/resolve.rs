@@ -354,6 +354,25 @@ mod tests {
     }
 
     #[test]
+    fn motion_recipe_reaches_new_designs_and_edits() {
+        for phase in [Phase::Generation, Phase::Maintenance] {
+            let resolved = resolve_skills(
+                phase,
+                "给这页加一个点击触发的动效",
+                &ResolveOptions::default(),
+            );
+            assert!(
+                resolved
+                    .skills
+                    .iter()
+                    .any(|skill| skill.meta.name == "motion"
+                        && skill.content.contains("play_motion")),
+                "{phase:?} did not load the motion recipe",
+            );
+        }
+    }
+
+    #[test]
     fn report_records_intent_miss_and_included() {
         // A login-form prompt loads base skills (Always) and surfaces a
         // report; at least one phase skill whose keyword didn't match is
