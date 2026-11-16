@@ -14,6 +14,10 @@ use jian_ops_schema::PenDocument;
 
 use crate::codegen_variable_refs::css_markup_doc;
 
+#[path = "codegen_html_prototype.rs"]
+mod prototype;
+use prototype::HtmlPrototype;
+
 /// HTML + inline-CSS generator. Walks the document's node tree and emits
 /// absolutely positioned elements with optional motion declarations.
 pub struct Html;
@@ -39,22 +43,42 @@ impl Codegen for Html {
         }
         out.push_str("</head>\n<body>\n");
         let markup = css_markup_doc(doc);
-        for node in root_nodes(&markup) {
-            emit_node_html(&mut out, node, 1);
-        }
+        let prototype = HtmlPrototype::compile(&markup);
+        prototype.render_roots(
+            &mut out,
+            root_nodes(&markup),
+            |out, node, depth, at_origin| {
+                emit_node(out, node, depth, Some(&prototype), at_origin);
+            },
+        );
         out.push_str(&codegen_motion_script::render(doc));
+        prototype.render_script(&mut out);
         out.push_str("</body></html>\n");
         out
     }
 }
 
 pub(super) fn emit_node_html(out: &mut String, node: &PenNode, depth: usize) {
+    emit_node(out, node, depth, None, false);
+}
+
+fn emit_node(
+    out: &mut String,
+    node: &PenNode,
+    depth: usize,
+    prototype: Option<&HtmlPrototype>,
+    at_origin: bool,
+) {
     if node_hidden(node) {
         return;
     }
     let indent = "  ".repeat(depth);
     let tag = if node_is_text(node) { "span" } else { "div" };
-    let (x, y) = node_origin(node);
+    let (x, y) = if at_origin {
+        (0.0, 0.0)
+    } else {
+        node_origin(node)
+    };
     let (w, h) = node_size(node);
     let mut style = format!(
         "position:absolute;left:{}px;top:{}px;width:{}px;height:{}px",
@@ -93,6 +117,9 @@ pub(super) fn emit_node_html(out: &mut String, node: &PenNode, depth: usize) {
     style.push_str(&codegen_motion_css::inline_style(node));
     let mut motion_attr = codegen_motion_css::data_attribute(node);
     motion_attr.push_str(&codegen_motion_css::html_manual_attribute(node));
+    if let Some(prototype) = prototype {
+        motion_attr.push_str(&prototype.attributes(node));
+    }
     if let PenNode::Image(image) = node {
         style.push_str(&format!(
             ";object-fit:{}",
@@ -123,7 +150,7 @@ pub(super) fn emit_node_html(out: &mut String, node: &PenNode, depth: usize) {
         } else {
             out.push('\n');
             for child in children {
-                emit_node_html(out, child, depth + 1);
+                emit_node(out, child, depth + 1, prototype, false);
             }
             out.push_str(&format!("{indent}</div>\n"));
         }
@@ -143,7 +170,7 @@ pub(super) fn emit_node_html(out: &mut String, node: &PenNode, depth: usize) {
         if !children.is_empty() {
             out.push('\n');
             for child in children {
-                emit_node_html(out, child, depth + 1);
+                emit_node(out, child, depth + 1, prototype, false);
             }
             out.push_str(&indent);
         }

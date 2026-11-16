@@ -101,7 +101,7 @@ const OBSERVE_IN_VIEW_MOTION: &str = r#"function observeInViewMotion() {
 }
 "#;
 
-/// The HTML target emits markup without a runtime action dispatcher.
+/// The HTML target exposes named clips to its own dispatcher and callers.
 const MANUAL_MOTION: &str = r#"<script>
 (() => {
   const running = new WeakMap();
