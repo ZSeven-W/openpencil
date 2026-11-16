@@ -344,6 +344,7 @@ impl PreviewSession {
             app.page_idx,
             self.measure.clone(),
         );
+        self.has_in_view_animations = crate::motion::has_in_view_animations(&self.runtime);
         self.binding_sites.clear();
         let children: &[jian_ops_schema::node::PenNode] = app
             .promoted_doc

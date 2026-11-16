@@ -1,0 +1,87 @@
+{
+  "version": "1.1",
+  "pages": [
+    {
+      "id": "entry-page", "name": "Entry",
+      "children": [{
+        "type": "frame", "id": "entry", "width": 160, "height": 128,
+        "fill": [{"type": "solid", "color": "#ffffff"}],
+        "children": [
+          {
+            "type": "rectangle", "id": "headline", "x": 24, "y": 18, "width": 52, "height": 22,
+            "fill": [{"type": "solid", "color": "#2040a0"}],
+            "animations": [{
+              "trigger": "mount", "durationMs": 400, "easing": "emphasizedDecelerate",
+              "keyframes": [
+                {"offset": 0, "values": {"opacity": 0.25, "translateY": 20}},
+                {"offset": 0.45, "values": {"opacity": 0.85, "translateY": -4}},
+                {"offset": 1, "values": {"opacity": 1, "translateY": 0}}
+              ]
+            }]
+          },
+          {
+            "type": "rectangle", "id": "card", "x": 18, "y": 80, "width": 40, "height": 28,
+            "fill": [{"type": "solid", "color": "#a04020"}],
+            "animations": [
+              {
+                "trigger": "mount", "durationMs": 500, "easing": "linear",
+                "keyframes": {"from": {"translateX": 0}, "to": {"translateX": 52}}
+              },
+              {
+                "trigger": "mount", "delayMs": 40, "durationMs": 160,
+                "easing": "linear", "fillMode": "none",
+                "keyframes": {"from": {"translateX": 24}, "to": {"translateX": 0}}
+              }
+            ]
+          }
+        ]
+      }]
+    },
+    {
+      "id": "interaction-page", "name": "Interaction",
+      "children": [{
+        "type": "frame", "id": "manual-screen", "width": 160, "height": 128,
+        "fill": [{"type": "solid", "color": "#ffffff"}],
+        "children": [
+          {
+            "type": "rectangle", "id": "play-button", "x": 16, "y": 12, "width": 30, "height": 20,
+            "fill": [{"type": "solid", "color": "#206040"}],
+            "events": {"onTap": [{"play_motion": {"target": "manual-screen", "animation": "reveal"}}]}
+          },
+          {
+            "type": "rectangle", "id": "reveal-first", "x": 20, "y": 48, "width": 36, "height": 24,
+            "fill": [{"type": "solid", "color": "#283880"}],
+            "animations": [{
+              "id": "reveal", "trigger": "manual", "durationMs": 400, "easing": "standard",
+              "keyframes": {"from": {"translateX": 0, "opacity": 0.45}, "to": {"translateX": 64, "opacity": 1}}
+            }]
+          },
+          {
+            "type": "rectangle", "id": "reveal-second", "x": 20, "y": 85, "width": 32, "height": 20,
+            "fill": [{"type": "solid", "color": "#982040"}],
+            "animations": [{
+              "id": "reveal", "trigger": "manual", "delayMs": 80, "durationMs": 320, "easing": "linear",
+              "keyframes": {"from": {"translateX": 12}, "to": {"translateX": 68}}
+            }]
+          }
+        ]
+      }]
+    },
+    {
+      "id": "visible-page", "name": "In view",
+      "children": [{
+        "type": "frame", "id": "visible-screen", "width": 160, "height": 128,
+        "fill": [{"type": "solid", "color": "#ffffff"}],
+        "children": [{
+          "type": "rectangle", "id": "visible-card", "x": 24, "y": 28, "width": 48, "height": 32,
+          "fill": [{"type": "solid", "color": "#206880"}],
+          "animations": [{
+            "trigger": "inView", "delayMs": 40, "durationMs": 360, "easing": "linear",
+            "keyframes": {"from": {"translateX": 0.0}, "to": {"translateX": 60}}
+          }]
+        }]
+      }]
+    }
+  ],
+  "children": []
+}

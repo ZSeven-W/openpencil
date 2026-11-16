@@ -39,3 +39,7 @@ rusty_h264-encoder = { version = "0.17.2", default-features = false, features = 
 
 [dev-dependencies]
 base64 = "0.22"
+op-preview-core = { path = "../op-preview-core" }
+
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dev-dependencies]
+rusty_h264-decoder = { version = "0.17.2", default-features = false, features = ["std"] }

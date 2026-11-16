@@ -177,6 +177,7 @@ pub struct PreviewSession {
     pub(crate) ui_actions: crate::ui_actions::PreviewUiActions,
     /// Cached at enter/reset: skip switch-tween overlay clones when none exist.
     pub(crate) has_switch_widgets: bool,
+    pub(crate) has_in_view_animations: bool,
     #[cfg(test)]
     pub(crate) overlay_builds_for_test: std::cell::Cell<u64>,
 }
@@ -530,6 +531,7 @@ impl PreviewSession {
         let motion = jian_core::motion::MotionTriggers::default();
         let has_switch_widgets =
             jian_core::motion::declarations::runtime_has_switch_widgets(&runtime);
+        let has_in_view_animations = crate::motion::has_in_view_animations(&runtime);
         let mut session = Self {
             runtime,
             measure,
@@ -560,6 +562,7 @@ impl PreviewSession {
             effects,
             ui_actions,
             has_switch_widgets,
+            has_in_view_animations,
             #[cfg(test)]
             overlay_builds_for_test: std::cell::Cell::new(0),
         };

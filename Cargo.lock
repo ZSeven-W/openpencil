@@ -5000,8 +5000,10 @@ dependencies = [
  "op-editor-ui",
  "op-host-native",
  "op-pen-loader",
+ "op-preview-core",
  "png 0.18.1",
  "rusty_h264-common",
+ "rusty_h264-decoder",
  "rusty_h264-encoder",
  "skia-safe",
  "zip",
@@ -6178,6 +6180,15 @@ dependencies = [
  "portable-atomic",
  "rusty_h264-accel",
  "wide",
+]
+
+[[package]]
+name = "rusty_h264-decoder"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "094423de82effaf636b119c9f4dc05c9137a54322c39b144a1776069740df87f"
+dependencies = [
+ "rusty_h264-common",
 ]
 
 [[package]]

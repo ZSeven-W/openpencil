@@ -2,8 +2,24 @@
 //! motion triggers (mount, in-view, transitions, the switch tween), which
 //! run against the Preview scene and timeline.
 
-use jian_ops_schema::motion::MotionPreference;
+use jian_core::Runtime;
+use jian_ops_schema::motion::{MotionPreference, MotionTrigger};
 use op_editor_ui::layout_scene::LayoutScene;
+
+pub(crate) fn has_in_view_animations(runtime: &Runtime) -> bool {
+    runtime.document.as_ref().is_some_and(|document| {
+        document.tree.nodes.values().any(|node| {
+            node.schema
+                .motion_declarations()
+                .1
+                .is_some_and(|declarations| {
+                    declarations
+                        .iter()
+                        .any(|animation| animation.trigger == MotionTrigger::InView)
+                })
+        })
+    })
+}
 
 impl crate::session::PreviewSession {
     pub fn set_motion_preference(&mut self, host: MotionPreference) {
@@ -68,6 +84,13 @@ impl crate::session::PreviewSession {
             self.effective_motion_preference(),
             now_ms,
         );
+    }
+
+    pub(crate) fn scene_motion_needs_overlay(&self) -> bool {
+        // In-view observation can start the first track on an otherwise
+        // static page, even when its first keyframe equals the authored pose.
+        self.animation.has_visual_state()
+            || (self.has_in_view_animations && self.motion.lifecycle_started())
     }
 
     pub(crate) fn observe_motion(&self, scene: &LayoutScene) {
