@@ -7,8 +7,21 @@ use crate::interaction_edit::{
 };
 use crate::pen_node_ext::PenNodeExt;
 use crate::{EditorCommand, EditorState};
+use jian_core::motion::screen_transition::ScreenTransitionKind;
+use jian_core::motion::MotionControlMode;
+use jian_ops_schema::motion::{Easing, MotionTrigger};
 use jian_ops_schema::node::PenNode;
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
+use std::collections::{BTreeMap, BTreeSet};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InteractionOption {
+    Clip,
+    Mode,
+    TransitionKind,
+    TransitionDuration,
+    TransitionEasing,
+}
 
 /// One structured change to the selected node's interactions.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,6 +48,16 @@ pub enum InteractionEdit {
     SetActionParam {
         trigger: InteractionTrigger,
         index: usize,
+        value: String,
+    },
+    CreateManualMotion {
+        trigger: InteractionTrigger,
+        index: usize,
+    },
+    SetActionOption {
+        trigger: InteractionTrigger,
+        index: usize,
+        option: InteractionOption,
         value: String,
     },
     RemoveAction {
@@ -66,6 +89,11 @@ pub enum InteractionMenuTarget {
         trigger: InteractionTrigger,
         index: usize,
     },
+    Option {
+        trigger: InteractionTrigger,
+        index: usize,
+        option: InteractionOption,
+    },
     /// A Motion-section dropdown; the section shares this popover.
     Motion(crate::motion_summary::MotionMenuTarget),
 }
@@ -85,6 +113,8 @@ pub struct InteractionContext {
     /// The `screen` of the top-level frame holding the selection.
     pub own_screen: Option<String>,
     pub nodes: Vec<InteractionTargetNode>,
+    pub motion_targets: Vec<InteractionTargetNode>,
+    pub manual_clips: BTreeMap<String, Vec<String>>,
 }
 
 impl InteractionContext {
@@ -98,6 +128,11 @@ impl InteractionContext {
                 .or_else(|| self.screens.first())
                 .cloned()
                 .unwrap_or_else(|| "/".into()),
+            K::PlayMotion => self
+                .motion_targets
+                .first()
+                .map(|node| node.id.clone())
+                .unwrap_or_default(),
             K::Show | K::ToggleVisibility => self
                 .nodes
                 .iter()
@@ -131,7 +166,14 @@ impl InteractionContext {
     }
 
     fn default_action(&self, kind: InteractionActionKind) -> Value {
-        build_action(kind, &self.default_param(kind), None)
+        let param = self.default_param(kind);
+        let mut action = build_action(kind, &param, None);
+        if kind == InteractionActionKind::PlayMotion {
+            if let Some(id) = self.manual_clips.get(&param).and_then(|ids| ids.first()) {
+                action["play_motion"]["animation"] = json!(id);
+            }
+        }
+        action
     }
 }
 
@@ -212,7 +254,49 @@ pub fn apply_interaction_edit(
                 return false;
             }
             let verb = key.to_string();
-            *slot = build_action(kind, value, Some(&verb));
+            let body = body.clone();
+            *slot = match kind {
+                InteractionActionKind::Navigate if body.is_object() => {
+                    let mut body = body;
+                    body["path"] = json!(crate::interaction_edit::quote_literal(value));
+                    json!({ verb: body })
+                }
+                InteractionActionKind::PlayMotion => {
+                    let Some(ids) = ctx.manual_clips.get(value) else {
+                        return false;
+                    };
+                    let mut body = body;
+                    body["target"] = json!(value);
+                    if !body
+                        .get("animation")
+                        .and_then(Value::as_str)
+                        .is_some_and(|id| ids.iter().any(|candidate| candidate == id))
+                    {
+                        body["animation"] = json!(ids.first());
+                    }
+                    json!({ verb: body })
+                }
+                _ => build_action(kind, value, Some(&verb)),
+            };
+        }
+        InteractionEdit::CreateManualMotion { trigger, index } => {
+            let Some(slot) = list_mut(map, *trigger).get_mut(*index) else {
+                return false;
+            };
+            *slot = ctx.default_action(InteractionActionKind::PlayMotion);
+        }
+        InteractionEdit::SetActionOption {
+            trigger,
+            index,
+            option,
+            value,
+        } => {
+            let Some(slot) = list_mut(map, *trigger).get_mut(*index) else {
+                return false;
+            };
+            if !set_action_option(slot, *option, value, ctx) {
+                return false;
+            }
         }
         InteractionEdit::RemoveAction { trigger, index } => {
             let list = list_mut(map, *trigger);
@@ -238,6 +322,131 @@ pub fn apply_interaction_edit(
     }
     map.retain(|_, v| !v.as_array().is_some_and(Vec::is_empty));
     *map != before
+}
+
+fn set_action_option(
+    slot: &mut Value,
+    option: InteractionOption,
+    value: &str,
+    ctx: &InteractionContext,
+) -> bool {
+    let Some((verb, body)) = one_key(slot) else {
+        return false;
+    };
+    let mut body = body.clone();
+    use InteractionOption as O;
+    match (verb, option) {
+        ("play_motion", O::Clip) => {
+            let target = body
+                .get("target")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if !ctx
+                .manual_clips
+                .get(target)
+                .is_some_and(|ids| ids.iter().any(|id| id == value))
+            {
+                return false;
+            }
+            body["animation"] = json!(value);
+        }
+        ("play_motion", O::Mode) => {
+            let Ok(mode) = serde_json::from_value::<MotionControlMode>(json!(value)) else {
+                return false;
+            };
+            body["mode"] = json!(mode);
+        }
+        (
+            "push" | "replace" | "pop",
+            O::TransitionKind | O::TransitionDuration | O::TransitionEasing,
+        ) => {
+            if !body.is_object() {
+                body = if verb == "pop" {
+                    json!({})
+                } else {
+                    json!({"path":body})
+                };
+            }
+            let mut transition = body
+                .get("transition")
+                .and_then(Value::as_object)
+                .cloned()
+                .unwrap_or_default();
+            match option {
+                O::TransitionKind => {
+                    let Ok(kind) = serde_json::from_value::<ScreenTransitionKind>(json!(value))
+                    else {
+                        return false;
+                    };
+                    if kind == ScreenTransitionKind::Default {
+                        transition.remove("kind");
+                    } else {
+                        transition.insert("kind".into(), json!(kind));
+                    }
+                }
+                O::TransitionDuration => {
+                    if value.trim().is_empty() {
+                        transition.remove("durationMs");
+                    } else {
+                        let Ok(ms) = value.trim().parse::<u64>() else {
+                            return false;
+                        };
+                        transition.insert("durationMs".into(), json!(ms));
+                    }
+                }
+                O::TransitionEasing => {
+                    if value.is_empty() {
+                        transition.remove("easing");
+                    } else {
+                        let Ok(easing) = serde_json::from_value::<Easing>(json!(value)) else {
+                            return false;
+                        };
+                        transition.insert("easing".into(), json!(easing));
+                    }
+                }
+                _ => unreachable!(),
+            }
+            if transition.is_empty() {
+                body.as_object_mut().unwrap().remove("transition");
+                let path = body.get("path");
+                if body.as_object().unwrap().len() == usize::from(path.is_some()) {
+                    body = path.cloned().unwrap_or(Value::Null);
+                }
+            } else {
+                body["transition"] = Value::Object(transition);
+            }
+        }
+        _ => return false,
+    }
+    *slot = json!({ verb: body });
+    true
+}
+
+fn collect_manual_clips(
+    node: &PenNode,
+    manual_clips: &mut BTreeMap<String, Vec<String>>,
+    targets: &mut Vec<InteractionTargetNode>,
+) -> BTreeSet<String> {
+    let base = node.base();
+    let mut ids: BTreeSet<_> = base
+        .animations
+        .iter()
+        .flatten()
+        .filter(|clip| clip.trigger == MotionTrigger::Manual)
+        .filter_map(|clip| clip.id.clone())
+        .collect();
+    for child in node.children().into_iter().flatten() {
+        ids.extend(collect_manual_clips(child, manual_clips, targets));
+    }
+    if !ids.is_empty() {
+        manual_clips.insert(base.id.clone(), ids.iter().cloned().collect());
+        targets.push(InteractionTargetNode {
+            id: base.id.clone(),
+            name: base.name.clone().unwrap_or_else(|| base.id.clone()),
+            hidden: base.visible == Some(false),
+        });
+    }
+    ids
 }
 
 /// `$app` keys toggled anywhere in `map`.
@@ -301,13 +510,19 @@ impl EditorState {
             .iter()
             .find(|n| contains_id(n, &anchor));
         let mut nodes = Vec::new();
+        let mut motion_targets = Vec::new();
+        let mut manual_clips = BTreeMap::new();
         if let Some(root) = root {
             collect_targets(root, &anchor, &mut nodes);
+            collect_manual_clips(root, &mut manual_clips, &mut motion_targets);
+            motion_targets.reverse();
         }
         InteractionContext {
             screens,
             own_screen: root.and_then(|r| r.screen().map(str::to_string)),
             nodes,
+            motion_targets,
+            manual_clips,
         }
     }
 
@@ -335,7 +550,42 @@ impl EditorState {
             return false;
         };
         let mut map = events_map(node.events());
-        let ctx = self.interaction_context();
+        let mut ctx = self.interaction_context();
+        let manual = if matches!(edit, InteractionEdit::CreateManualMotion { .. }) {
+            let base = node.base();
+            let mut clips = base.animations.clone().unwrap_or_default();
+            let ids: BTreeSet<&str> = clips
+                .iter()
+                .filter_map(|clip| clip.id.as_deref())
+                .chain(
+                    ctx.manual_clips
+                        .get(&base.id)
+                        .into_iter()
+                        .flatten()
+                        .map(String::as_str),
+                )
+                .collect();
+            let new_id = (1..)
+                .map(|index| format!("fade-in-{index}"))
+                .find(|candidate| !ids.contains(candidate.as_str()))
+                .expect("a finite set cannot occupy every id");
+            let mut clip =
+                crate::motion_presets::MotionPreset::FadeIn.animation(MotionTrigger::Manual);
+            clip.id = Some(new_id.clone());
+            clips.push(clip);
+            ctx.motion_targets.insert(
+                0,
+                InteractionTargetNode {
+                    id: base.id.clone(),
+                    name: base.name.clone().unwrap_or_else(|| base.id.clone()),
+                    hidden: base.visible == Some(false),
+                },
+            );
+            ctx.manual_clips.insert(base.id.clone(), vec![new_id]);
+            Some(clips)
+        } else {
+            None
+        };
         if !apply_interaction_edit(&mut map, edit, &ctx) {
             return false;
         }
@@ -362,7 +612,11 @@ impl EditorState {
         } else {
             Value::Object(map)
         };
-        let patch_json = serde_json::json!({ "events": events }).to_string();
+        let mut patch = json!({ "events": events });
+        if let Some(clips) = manual {
+            patch["animations"] = json!(clips);
+        }
+        let patch_json = patch.to_string();
         if track {
             self.commit_history();
         }

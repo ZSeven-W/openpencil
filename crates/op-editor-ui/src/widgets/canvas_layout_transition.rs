@@ -1,6 +1,6 @@
 use crate::layout_scene::{LayoutScene, SceneNode};
 use crate::Rect;
-use jian_core::motion::ease_out_cubic;
+use jian_core::motion::{ease_out_cubic, TimedTransition};
 use jian_scene::layout_scene_binding::translate_subtree;
 use std::collections::HashMap;
 
@@ -9,8 +9,7 @@ const EPSILON: f32 = 0.5;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CanvasLayoutTransition {
-    started_at_ms: u64,
-    duration_ms: u64,
+    clock: TimedTransition,
     start_bounds: HashMap<String, Rect>,
 }
 
@@ -43,30 +42,24 @@ impl CanvasLayoutTransition {
 
     pub fn from_start_bounds(start_bounds: HashMap<String, Rect>, now_ms: u64) -> Option<Self> {
         (!start_bounds.is_empty()).then_some(Self {
-            started_at_ms: now_ms,
-            duration_ms: CANVAS_LAYOUT_TRANSITION_MS,
+            clock: TimedTransition::new(now_ms, CANVAS_LAYOUT_TRANSITION_MS),
             start_bounds,
         })
     }
 
     pub fn is_active(&self, now_ms: u64) -> bool {
-        now_ms < self.started_at_ms.saturating_add(self.duration_ms)
+        self.clock.is_active(now_ms)
     }
 
     pub fn next_deadline_ms(&self, now_ms: u64) -> Option<u64> {
-        if !self.is_active(now_ms) {
-            return None;
-        }
-        Some((now_ms.saturating_add(16)).min(self.started_at_ms + self.duration_ms))
+        self.clock.next_deadline_ms(now_ms)
     }
 
     pub fn apply_to_scene(&self, scene: &mut LayoutScene, now_ms: u64) {
         if self.start_bounds.is_empty() {
             return;
         }
-        let elapsed = now_ms.saturating_sub(self.started_at_ms);
-        let t = (elapsed as f32 / self.duration_ms.max(1) as f32).clamp(0.0, 1.0);
-        let progress = ease_out_cubic(t);
+        let progress = ease_out_cubic(self.clock.linear_t(now_ms));
         let Some(page) = scene.pages.get_mut(scene.active_page_index) else {
             return;
         };

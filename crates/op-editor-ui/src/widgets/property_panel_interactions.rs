@@ -32,11 +32,11 @@ use crate::widgets::PaintCx;
 use crate::{Point2D, Rect, TextLayout};
 use jian_ops_schema::node::PenNode;
 use op_editor_core::interaction_edit::{
-    summarize_events, InteractionActionKind, InteractionParamKind, InteractionTrigger,
-    InteractionTriggerView,
+    summarize_events, InteractionActionKind, InteractionActionView, InteractionParamKind,
+    InteractionTrigger, InteractionTriggerView,
 };
 use op_editor_core::interaction_edit_apply::{
-    InteractionContext, InteractionEdit, InteractionMenuTarget,
+    InteractionContext, InteractionEdit, InteractionMenuTarget, InteractionOption,
 };
 use op_editor_core::pen_node_ext::PenNodeExt;
 use op_editor_core::PropertyFocus;
@@ -112,6 +112,7 @@ enum Row {
     Action(usize, usize),
     /// Parameter row under an action.
     Param(usize, usize, InteractionParamKind),
+    Option(usize, usize, InteractionOption),
     Add,
 }
 
@@ -135,6 +136,17 @@ fn rows(summary: &InteractionSummary) -> Vec<Row> {
                 if param != InteractionParamKind::None {
                     out.push(Row::Param(ti, ai, param));
                 }
+                use InteractionOption as O;
+                let options: &[O] = match kind {
+                    InteractionActionKind::PlayMotion => &[O::Clip, O::Mode],
+                    InteractionActionKind::Navigate | InteractionActionKind::Back => &[
+                        O::TransitionKind,
+                        O::TransitionDuration,
+                        O::TransitionEasing,
+                    ],
+                    _ => &[],
+                };
+                out.extend(options.iter().map(|option| Row::Option(ti, ai, *option)));
             }
         }
     }
@@ -171,7 +183,7 @@ fn row_geometry(summary: &InteractionSummary, x: f32, y: f32, width: f32) -> Vec
     for row in rows(summary) {
         let indent = match row {
             Row::Action(..) => ACTION_INDENT,
-            Row::Param(..) => PARAM_INDENT,
+            Row::Param(..) | Row::Option(..) => PARAM_INDENT,
             _ => 0.0,
         };
         let has_button = matches!(row, Row::Trigger(_) | Row::Action(..));
@@ -251,7 +263,19 @@ pub fn push_interaction_action_rects(
                     ));
                 }
             }
-            Row::Param(..) => {}
+            Row::Param(..) | Row::Option(_, _, InteractionOption::TransitionDuration) => {}
+            Row::Option(ti, index, option) => {
+                if let Some(trigger) = summary.triggers[ti].trigger {
+                    out.push((
+                        PropertyPanelAction::ToggleInteractionMenu(InteractionMenuTarget::Option {
+                            trigger,
+                            index,
+                            option,
+                        }),
+                        g.main,
+                    ));
+                }
+            }
             Row::Add => out.push((
                 PropertyPanelAction::ToggleInteractionMenu(InteractionMenuTarget::AddTrigger),
                 g.main,
@@ -269,12 +293,18 @@ pub fn push_interaction_input_rects(
     width: f32,
 ) {
     for g in row_geometry(summary, x, y, width) {
-        if let Row::Param(ti, ai, kind) = g.row {
-            if is_text_param(kind) {
-                if let Some(trigger) = summary.triggers[ti].trigger {
-                    out.push((PropertyFocus::InteractionParam(trigger, ai), g.main));
-                }
-            }
+        let (ti, ai, transition) = match g.row {
+            Row::Param(ti, ai, kind) if is_text_param(kind) => (ti, ai, false),
+            Row::Option(ti, ai, InteractionOption::TransitionDuration) => (ti, ai, true),
+            _ => continue,
+        };
+        if let Some(trigger) = summary.triggers[ti].trigger {
+            let focus = if transition {
+                PropertyFocus::InteractionTransitionDuration(trigger, ai)
+            } else {
+                PropertyFocus::InteractionParam(trigger, ai)
+            };
+            out.push((focus, g.main));
         }
     }
 }
@@ -305,6 +335,7 @@ fn trigger_label(locale: op_editor_core::Locale, view: &InteractionTriggerView) 
 pub(crate) fn node_label(ctx: &InteractionContext, id: &str) -> String {
     ctx.nodes
         .iter()
+        .chain(&ctx.motion_targets)
         .find(|n| n.id == id)
         .map(|n| n.name.clone())
         .unwrap_or_else(|| id.to_string())
@@ -409,14 +440,43 @@ pub fn paint_interactions_section(
                     );
                 } else {
                     let label = match kind {
-                        InteractionParamKind::Node if param.is_empty() => {
+                        InteractionParamKind::Node | InteractionParamKind::MotionTarget
+                            if param.is_empty() =>
+                        {
                             tr(locale, ("interactions.param.pickLayer", "Choose a layer"))
                                 .to_string()
                         }
-                        InteractionParamKind::Node => node_label(ctx, param),
+                        InteractionParamKind::Node | InteractionParamKind::MotionTarget => {
+                            node_label(ctx, param)
+                        }
                         _ => param.clone(),
                     };
                     paint_dropdown(cx, theme, g.main, &label);
+                }
+            }
+            Row::Option(ti, ai, option) => {
+                let view = &summary.triggers[*ti];
+                let action = &view.actions[*ai];
+                if *option == InteractionOption::TransitionDuration {
+                    let Some(trigger) = view.trigger else {
+                        continue;
+                    };
+                    let focus = PropertyFocus::InteractionTransitionDuration(trigger, *ai);
+                    paint_input_with_prefix_focused_state(
+                        cx,
+                        theme,
+                        g.main,
+                        tr(locale, ("interactions.param.ms", "ms")),
+                        edit.value_for(focus, &transition_duration(action)),
+                        edit.focus == Some(focus),
+                        edit.caret_at(focus),
+                        edit.select_all_at(focus),
+                        edit.input_at(focus),
+                        edit.now_ms,
+                    );
+                } else {
+                    use super::property_panel_interactions_menu::option_label;
+                    paint_dropdown(cx, theme, g.main, &option_label(locale, *option, action));
                 }
             }
             Row::Add => paint_dropdown(
@@ -430,6 +490,15 @@ pub fn paint_interactions_section(
     let y = start_y + SECTION_HEADER_HEIGHT + geometry.len() as f32 * ROW_STEP + 6.0;
     paint_section_divider(cx, theme, x, y, width);
     y + SECTION_GAP
+}
+
+pub(super) fn transition_duration(action: &InteractionActionView) -> String {
+    action
+        .transition
+        .as_ref()
+        .and_then(|transition| transition.duration_ms)
+        .map(|ms| ms.to_string())
+        .unwrap_or_default()
 }
 
 fn paint_icon_button(cx: &mut PaintCx<'_>, theme: &Theme, rect: Rect, icon: Icon) {

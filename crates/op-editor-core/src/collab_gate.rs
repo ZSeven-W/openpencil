@@ -256,6 +256,7 @@ impl PropertyFocus {
             | P::VideoSrc
             | P::GeneratorParam(_)
             | P::InteractionParam(..)
+            | P::InteractionTransitionDuration(..)
             | P::MotionField(..)
             | P::MotionKeyframeValue(_)
             | P::TransitionDuration => D::Unsupported(U::UnsupportedNodeProperty),

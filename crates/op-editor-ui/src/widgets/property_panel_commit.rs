@@ -134,6 +134,12 @@ pub fn property_focus_initial(focus: PropertyFocus, panel: &PropertyPanel) -> St
             .param(trigger, index)
             .unwrap_or_default()
             .to_string(),
+        F::InteractionTransitionDuration(trigger, index) => panel
+            .snapshot
+            .interactions
+            .action(trigger, index)
+            .map(super::property_panel_interactions::transition_duration)
+            .unwrap_or_default(),
         F::VideoSrc => panel
             .snapshot
             .video
@@ -420,6 +426,17 @@ pub fn commit_property_focus(state: &mut EditorState) -> bool {
                 &op_editor_core::interaction_edit_apply::InteractionEdit::SetActionParam {
                     trigger,
                     index,
+                    value: draft.to_string(),
+                },
+            );
+        }
+        PropertyFocus::InteractionTransitionDuration(trigger, index) => {
+            use op_editor_core::interaction_edit_apply::{InteractionEdit, InteractionOption};
+            let _ = state.apply_selected_interaction_edit_untracked(
+                &InteractionEdit::SetActionOption {
+                    trigger,
+                    index,
+                    option: InteractionOption::TransitionDuration,
                     value: draft.to_string(),
                 },
             );

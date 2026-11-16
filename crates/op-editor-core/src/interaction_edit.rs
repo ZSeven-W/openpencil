@@ -100,6 +100,7 @@ impl InteractionTrigger {
 pub enum InteractionActionKind {
     Navigate,
     Back,
+    PlayMotion,
     Show,
     Hide,
     ToggleVisibility,
@@ -122,6 +123,8 @@ pub enum InteractionParamKind {
     Screen,
     /// A node id, picked from the current screen's layers.
     Node,
+    /// A target layer with at least one manual clip in its subtree.
+    MotionTarget,
     /// Free text (toast message, URL, clipboard text).
     Text,
     /// A `$app` state key name (free text).
@@ -131,9 +134,10 @@ pub enum InteractionParamKind {
 }
 
 impl InteractionActionKind {
-    pub const ALL: [InteractionActionKind; 13] = [
+    pub const ALL: [InteractionActionKind; 14] = [
         Self::Navigate,
         Self::Back,
+        Self::PlayMotion,
         Self::Show,
         Self::Hide,
         Self::ToggleVisibility,
@@ -151,6 +155,7 @@ impl InteractionActionKind {
         use InteractionParamKind as P;
         match self {
             Self::Navigate => P::Screen,
+            Self::PlayMotion => P::MotionTarget,
             Self::Show | Self::Hide | Self::ToggleVisibility | Self::ScrollTo => P::Node,
             Self::Toast | Self::OpenUrl | Self::Copy => P::Text,
             Self::ToggleState => P::StateKey,
@@ -164,6 +169,7 @@ impl InteractionActionKind {
         match self {
             Self::Navigate => ("interactions.action.navigate", "Navigate to"),
             Self::Back => ("interactions.action.back", "Go back"),
+            Self::PlayMotion => ("interactions.action.playMotion", "Play motion"),
             Self::Show => ("interactions.action.show", "Show layer"),
             Self::Hide => ("interactions.action.hide", "Hide layer"),
             Self::ToggleVisibility => ("interactions.action.toggleVisibility", "Toggle layer"),
@@ -184,6 +190,7 @@ impl InteractionActionKind {
         Some(match key {
             "push" | "replace" => Self::Navigate,
             "pop" => Self::Back,
+            "play_motion" => Self::PlayMotion,
             "show" => Self::Show,
             "hide" => Self::Hide,
             "toggle_visibility" => Self::ToggleVisibility,
@@ -209,6 +216,8 @@ pub struct InteractionActionView {
     /// Display/edit value of the single parameter (route path, node id,
     /// text, state key, or milliseconds). Empty when the kind has none.
     pub param: String,
+    pub motion: Option<jian_core::motion::MotionControl>,
+    pub transition: Option<jian_core::motion::screen_transition::ScreenTransitionSpec>,
 }
 
 /// One trigger with its action list.
@@ -263,6 +272,8 @@ fn action_view(action: &Value) -> InteractionActionView {
             kind: None,
             raw_key: String::new(),
             param: String::new(),
+            motion: None,
+            transition: None,
         };
     };
     let kind = InteractionActionKind::classify(key, body);
@@ -270,6 +281,12 @@ fn action_view(action: &Value) -> InteractionActionView {
         kind,
         raw_key: key.clone(),
         param: kind.map(|k| read_param(k, body)).unwrap_or_default(),
+        motion: (kind == Some(InteractionActionKind::PlayMotion))
+            .then(|| serde_json::from_value(body.clone()).ok())
+            .flatten(),
+        transition: body
+            .get("transition")
+            .and_then(|value| serde_json::from_value(value.clone()).ok()),
     }
 }
 
@@ -317,7 +334,8 @@ fn str_or_field<'a>(body: &'a Value, field: &str) -> &'a str {
 fn read_param(kind: InteractionActionKind, body: &Value) -> String {
     use InteractionActionKind as K;
     match kind {
-        K::Navigate => unquote_literal(body.as_str().unwrap_or("")),
+        K::Navigate => unquote_literal(str_or_field(body, "path")),
+        K::PlayMotion => str_or_field(body, "target").to_owned(),
         K::Show | K::Hide | K::ToggleVisibility | K::ScrollTo => {
             str_or_field(body, "target").trim().to_string()
         }
@@ -375,6 +393,9 @@ pub fn build_action(kind: InteractionActionKind, param: &str, verb: Option<&str>
             json!({ verb: quote_literal(param) })
         }
         K::Back => json!({ "pop": null }),
+        K::PlayMotion => {
+            json!({ "play_motion": { "target": param, "animation": "", "mode": "play" } })
+        }
         K::Show => json!({ "show": param }),
         K::Hide => json!({ "hide": param }),
         K::ToggleVisibility => json!({ "toggle_visibility": param }),

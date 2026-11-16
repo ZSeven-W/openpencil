@@ -7,15 +7,17 @@ use jian_core::action::animation_registry::animatable_property_registry;
 use jian_core::action::services::{
     AnimationOutcome, AnimationProperty, AnimationRequest, AnimationSink,
 };
-use jian_core::motion::{MotionObserver, MotionTimeline};
+use jian_core::motion::{MotionControl, MotionObserver, MotionTimeline};
 use jian_scene::layout_scene_motion::{apply_motion_overrides, sample_scene_property};
 use op_editor_ui::layout_scene::LayoutScene;
+use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
 
 #[derive(Clone, Default)]
 pub(crate) struct PreviewAnimationState {
     timeline: MotionTimeline,
+    controls: Rc<RefCell<Vec<(MotionControl, u64)>>>,
 }
 
 impl Deref for PreviewAnimationState {
@@ -29,6 +31,15 @@ impl Deref for PreviewAnimationState {
 impl AnimationSink for PreviewAnimationState {
     fn request(&self, request: &AnimationRequest) -> AnimationOutcome {
         self.timeline.request(request)
+    }
+
+    fn control(&self, control: &MotionControl, now_ms: u64) -> AnimationOutcome {
+        let mut controls = self.controls.borrow_mut();
+        if controls.len() >= 256 {
+            return AnimationOutcome::Rejected("too many pending motion controls".into());
+        }
+        controls.push((control.clone(), now_ms));
+        AnimationOutcome::Accepted
     }
 }
 
@@ -47,6 +58,11 @@ impl MotionObserver for SessionObserver {
 }
 
 impl PreviewAnimationState {
+    pub(crate) fn clear(&self) {
+        self.controls.borrow_mut().clear();
+        self.timeline.clear();
+    }
+
     pub(crate) fn set_trace(&self, trace: crate::debug_trace::PreviewDebugTrace) {
         self.timeline.set_observer(Rc::new(SessionObserver(trace)));
     }
@@ -66,6 +82,16 @@ impl PreviewSession {
     }
 
     pub(crate) fn admit_animation_requests(&mut self, now_ms: u64) -> InvalidationKind {
+        let structured = self.admit_structured_requests(now_ms);
+        let manual = self.admit_motion_controls();
+        if manual != InvalidationKind::None {
+            let values = self.animation.binding_values();
+            self.apply_invalidation_with_values(manual, &values);
+        }
+        structured.merge(manual)
+    }
+
+    fn admit_structured_requests(&mut self, now_ms: u64) -> InvalidationKind {
         let animation = self.animation.clone();
         let requests = animation.take_pending();
         if requests.is_empty() {
@@ -120,6 +146,39 @@ impl PreviewSession {
         let values = animation.binding_values();
         self.apply_invalidation_with_values(invalidation, &values);
         invalidation
+    }
+
+    fn admit_motion_controls(&mut self) -> InvalidationKind {
+        let controls = std::mem::take(&mut *self.animation.controls.borrow_mut());
+        if controls.is_empty() {
+            return InvalidationKind::None;
+        }
+        let base = self.overlay_runtime_state_without_animation(&self.scene);
+        let effective = self.effective_motion_preference();
+        let before = self.animation.overrides();
+        for (control, at_ms) in controls {
+            let count = self.motion.control(
+                &control,
+                &self.runtime,
+                &base,
+                &self.animation,
+                effective,
+                at_ms,
+            );
+            if count == 0 {
+                self.warnings.push(format!(
+                    "play_motion: no manual animation '{}' in subtree '{}'",
+                    control.animation, control.target,
+                ));
+            }
+        }
+        let after = self.animation.overrides();
+        before
+            .keys()
+            .chain(after.keys())
+            .filter(|key| before.get(*key) != after.get(*key))
+            .filter_map(|(_, property)| property.invalidation())
+            .fold(InvalidationKind::None, InvalidationKind::merge)
     }
 
     pub fn cancel_animation(&mut self, target: &str, property: &str) -> bool {

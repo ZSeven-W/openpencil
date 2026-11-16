@@ -490,3 +490,41 @@ fn stationary_pump_does_not_clone_scene_without_switches() {
         "a stationary pump must not rebuild the overlay when the document has no switch"
     );
 }
+
+#[test]
+fn tap_starts_a_named_manual_clip_on_descendants() {
+    let mut session = session_for(serde_json::json!({
+        "version":"1.1",
+        "children":[{"type":"frame","id":"panel","width":200,"height":100,"children":[
+            {"type":"rectangle","id":"trigger","x":0,"y":0,"width":50,"height":100,
+             "fill":[{"type":"solid","color":"#000000"}],
+             "events":{"onTap":[{"play_motion":{"target":"panel","animation":"reveal"}}]}},
+            {"type":"rectangle","id":"card","x":100,"y":0,"width":100,"height":100,
+             "opacity":1,"animations":[{
+                "trigger":"manual","id":"reveal","durationMs":100,"delayMs":20,"easing":"linear",
+                "keyframes":[{"offset":0,"values":{"opacity":0}},{"offset":1,"values":{"opacity":1}}]
+             }]}
+        ]}]
+    }));
+    assert_eq!(opacity(&session, "card"), 1.0);
+    let (x, y, width, height) = session.node_rect("trigger").unwrap();
+    use crate::{PreviewInput, PreviewInputEnvelope};
+    use jian_core::gesture::PointerEvent;
+    let center = jian_core::geometry::point(x + width / 2.0, y + height / 2.0);
+    for phase in [PointerPhase::Down, PointerPhase::Up] {
+        let mut event = PointerEvent::simple_at(1, phase, center, 0);
+        event.kind = PointerKind::Touch;
+        session.dispatch_input(PreviewInputEnvelope::new(PreviewInput::Pointer(event)));
+    }
+    assert_eq!(
+        session.active_animation_track_count(),
+        1,
+        "{:?}",
+        session.warnings()
+    );
+    assert_eq!(opacity(&session, "card"), 0.0);
+    session.pump(70);
+    assert!((opacity(&session, "card") - 0.5).abs() < 1e-6);
+    session.pump(120);
+    assert_eq!(opacity(&session, "card"), 1.0);
+}

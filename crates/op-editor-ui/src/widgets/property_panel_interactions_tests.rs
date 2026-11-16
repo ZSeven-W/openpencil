@@ -142,6 +142,16 @@ fn rows_cover_trigger_action_param_and_add() {
                 trigger: tap,
                 index: 0
             }),
+            PropertyPanelAction::ToggleInteractionMenu(T::Option {
+                trigger: tap,
+                index: 0,
+                option: InteractionOption::TransitionKind,
+            }),
+            PropertyPanelAction::ToggleInteractionMenu(T::Option {
+                trigger: tap,
+                index: 0,
+                option: InteractionOption::TransitionEasing,
+            }),
             PropertyPanelAction::ToggleInteractionMenu(T::Action {
                 trigger: tap,
                 index: 1
@@ -157,20 +167,38 @@ fn rows_cover_trigger_action_param_and_add() {
             PropertyPanelAction::EditInteraction(InteractionEdit::RemoveAction {
                 trigger: tap,
                 index: 2
+            }),
+            PropertyPanelAction::ToggleInteractionMenu(T::Option {
+                trigger: tap,
+                index: 2,
+                option: InteractionOption::TransitionKind,
+            }),
+            PropertyPanelAction::ToggleInteractionMenu(T::Option {
+                trigger: tap,
+                index: 2,
+                option: InteractionOption::TransitionEasing,
             }),
             PropertyPanelAction::ToggleInteractionMenu(T::AddTrigger),
         ]
     );
-    // Screen + trigger + 3 actions + 2 params + add = 8 rows.
+    // Screen, trigger, three actions, two params, six transition options and add.
     assert_eq!(
         interactions_section_height(&summary),
-        SECTION_HEADER_HEIGHT + 8.0 * ROW_STEP + 6.0 + SECTION_GAP
+        SECTION_HEADER_HEIGHT + 14.0 * ROW_STEP + 6.0 + SECTION_GAP
     );
     // The toast's text param is an input, not an action.
     let mut inputs = Vec::new();
     push_interaction_input_rects(&mut inputs, &summary, 0.0, 0.0, 280.0);
-    assert_eq!(inputs.len(), 1);
-    assert_eq!(inputs[0].0, PropertyFocus::InteractionParam(tap, 1));
+    assert_eq!(inputs.len(), 3);
+    assert_eq!(
+        inputs[0].0,
+        PropertyFocus::InteractionTransitionDuration(tap, 0)
+    );
+    assert_eq!(inputs[1].0, PropertyFocus::InteractionParam(tap, 1));
+    assert_eq!(
+        inputs[2].0,
+        PropertyFocus::InteractionTransitionDuration(tap, 2)
+    );
     let add = rects.last().unwrap().1;
     assert!(inputs[0].1.origin.y < add.origin.y);
 }
@@ -204,6 +232,7 @@ fn ctx() -> InteractionContext {
                 hidden: true,
             },
         ],
+        ..Default::default()
     }
 }
 

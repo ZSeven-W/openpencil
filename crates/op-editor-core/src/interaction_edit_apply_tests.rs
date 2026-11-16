@@ -18,6 +18,7 @@ fn ctx() -> InteractionContext {
                 hidden: true,
             },
         ],
+        ..Default::default()
     }
 }
 
@@ -207,4 +208,39 @@ fn removing_everything_clears_events_field() {
     s.apply_selected_interaction_edit(&InteractionEdit::AddTrigger(InteractionTrigger::Tap));
     s.apply_selected_interaction_edit(&InteractionEdit::RemoveTrigger("onTap".into()));
     assert!(s.selected_node().unwrap().events().is_none());
+}
+
+#[test]
+fn changing_a_route_keeps_its_authored_transition() {
+    let mut events = map(json!({"onTap":[{"replace":{
+        "path":"'/old'", "transition":{"kind":"slideUp", "durationMs":400}
+    }}]}));
+    assert!(apply_interaction_edit(
+        &mut events,
+        &InteractionEdit::SetActionParam {
+            trigger: InteractionTrigger::Tap,
+            index: 0,
+            value: "/detail".into()
+        },
+        &ctx(),
+    ));
+    assert_eq!(events["onTap"][0]["replace"]["path"], "\"/detail\"");
+    assert_eq!(
+        events["onTap"][0]["replace"]["transition"]["durationMs"],
+        400
+    );
+    assert!(apply_interaction_edit(
+        &mut events,
+        &InteractionEdit::SetActionOption {
+            trigger: InteractionTrigger::Tap,
+            index: 0,
+            option: InteractionOption::TransitionKind,
+            value: "fade".into(),
+        },
+        &ctx(),
+    ));
+    assert_eq!(
+        events["onTap"][0]["replace"]["transition"],
+        json!({"kind":"fade", "durationMs":400})
+    );
 }

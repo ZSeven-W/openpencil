@@ -389,6 +389,7 @@ impl EditorState {
             | PropertyFocus::VideoSrc
             | PropertyFocus::GeneratorParam(_)
             | PropertyFocus::InteractionParam(..)
+            | PropertyFocus::InteractionTransitionDuration(..)
             | PropertyFocus::MotionField(..)
             | PropertyFocus::MotionKeyframeValue(_)
             | PropertyFocus::TransitionDuration => {}

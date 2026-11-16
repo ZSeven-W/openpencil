@@ -22,19 +22,18 @@
 //! second transition ever waits in line.
 
 use super::PreviewSession;
+pub(crate) use jian_core::motion::screen_transition::NavigationKind as TransitionKind;
+use jian_core::motion::screen_transition::{
+    ResolvedScreenTransition, ScreenTransitionSpec, TransitionEffect, TransitionScreen,
+};
+#[cfg(all(test, not(target_os = "windows")))]
+pub(crate) use jian_core::motion::screen_transition::{
+    DEFAULT_FADE_MS as REPLACE_DURATION_MS, DEFAULT_SLIDE_MS as PUSH_POP_DURATION_MS,
+};
+use jian_core::motion::TimedTransition;
 use op_editor_ui::layout_scene::{LayoutScene, SceneNode, ScenePage};
 use op_editor_ui::widgets::{paint_scene_page_with, PaintCx, PaintSceneOptions};
 use op_editor_ui::{Point2D, Rect, RenderBackend};
-
-pub(crate) const PUSH_POP_DURATION_MS: u64 = 240;
-pub(crate) const REPLACE_DURATION_MS: u64 = 160;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TransitionKind {
-    Push,
-    Pop,
-    Replace,
-}
 
 /// Classify a screen switch from the route-stack depth recorded at the
 /// LAST reconcile (`AppMode::mounted_stack`) versus the depth just after
@@ -53,9 +52,8 @@ pub(crate) fn classify_transition(prev_len: usize, new_len: usize) -> Transition
 
 /// An in-flight screen-transition animation.
 pub(crate) struct ScreenTransition {
-    kind: TransitionKind,
-    started_at_ms: u64,
-    duration_ms: u64,
+    resolved: ResolvedScreenTransition,
+    clock: TimedTransition,
     /// The scene page as it looked immediately before this switch — the
     /// layer a push/pop slides or a replace fades out.
     outgoing: ScenePage,
@@ -159,49 +157,49 @@ impl TransitionTapTracker {
 }
 
 impl ScreenTransition {
+    #[cfg(test)]
     pub(crate) fn start(kind: TransitionKind, outgoing: ScenePage, now_ms: u64) -> Self {
-        let duration_ms = match kind {
-            TransitionKind::Replace => REPLACE_DURATION_MS,
-            TransitionKind::Push | TransitionKind::Pop => PUSH_POP_DURATION_MS,
-        };
+        Self::start_with(kind, None, outgoing, now_ms)
+    }
+
+    pub(crate) fn start_with(
+        kind: TransitionKind,
+        spec: Option<&ScreenTransitionSpec>,
+        outgoing: ScenePage,
+        now_ms: u64,
+    ) -> Self {
+        let resolved = ResolvedScreenTransition::resolve(spec, kind);
         Self {
-            kind,
-            started_at_ms: now_ms,
-            duration_ms,
+            clock: TimedTransition::new(now_ms, resolved.duration_ms),
+            resolved,
             outgoing,
         }
     }
 
     pub(crate) fn is_active(&self, now_ms: u64) -> bool {
-        now_ms < self.started_at_ms.saturating_add(self.duration_ms)
+        self.clock.is_active(now_ms)
     }
 
-    /// Next wake time for the host's animation loop — same shape as
-    /// `op_editor_ui::widgets::CanvasLayoutTransition::next_deadline_ms`.
-    /// `PreviewSession::next_wake_deadline_ms` folds this into the host's
-    /// deadline chain so an idle preview no longer needs a blanket tick.
     pub(crate) fn next_deadline_ms(&self, now_ms: u64) -> Option<u64> {
-        if !self.is_active(now_ms) {
-            return None;
-        }
-        Some((now_ms.saturating_add(16)).min(self.started_at_ms + self.duration_ms))
+        self.clock.next_deadline_ms(now_ms)
     }
 
-    /// `(linear, eased)` progress, read by the motion golden-vector generator.
+    /// The legacy vector records the cubic slide curve even for replace,
+    /// whose painter has always used linear progress instead.
     #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn progress_for_golden(&self, now_ms: u64) -> (f32, f32) {
-        (self.linear_t(now_ms), self.eased_t(now_ms))
+        let linear = self.clock.linear_t(now_ms);
+        (linear, jian_core::motion::ease_out_cubic(linear))
     }
 
+    #[cfg(test)]
     fn linear_t(&self, now_ms: u64) -> f32 {
-        let elapsed = now_ms.saturating_sub(self.started_at_ms);
-        (elapsed as f32 / self.duration_ms.max(1) as f32).clamp(0.0, 1.0)
+        self.clock.linear_t(now_ms)
     }
 
-    /// Ease-out-cubic progress for the push/pop slide: jian-core's curve,
-    /// the same one the canvas layout transition uses.
+    #[cfg(test)]
     fn eased_t(&self, now_ms: u64) -> f32 {
-        jian_core::motion::ease_out_cubic(self.linear_t(now_ms))
+        self.resolved.progress(self.clock.linear_t(now_ms))
     }
 }
 
@@ -349,82 +347,17 @@ impl PreviewSession {
             ),
         };
 
-        match transition.kind {
-            TransitionKind::Push => {
-                // Bottom: outgoing, static (already correctly placed).
-                // Top: entering, sliding in from the right toward 0.
-                paint_content_layer(
-                    backend,
-                    &transition.outgoing,
-                    &outgoing_id,
-                    content_origin,
-                    fit,
-                    content_clip,
-                    cull,
-                    None,
-                );
-                let dx = content_clip.size.x * (1.0 - transition.eased_t(now_ms));
-                let entering_origin = Point2D::new(content_origin.x + dx, content_origin.y);
-                paint_content_layer(
-                    backend,
-                    entering_page,
-                    only_root,
-                    entering_origin,
-                    fit,
-                    content_clip,
-                    cull,
-                    None,
-                );
-            }
-            TransitionKind::Pop => {
-                // Bottom: entering (the destination, already revealed).
-                // Top: outgoing, sliding right off-screen to uncover it.
-                paint_content_layer(
-                    backend,
-                    entering_page,
-                    only_root,
-                    content_origin,
-                    fit,
-                    content_clip,
-                    cull,
-                    None,
-                );
-                let dx = content_clip.size.x * transition.eased_t(now_ms);
-                let outgoing_origin = Point2D::new(content_origin.x + dx, content_origin.y);
-                paint_content_layer(
-                    backend,
-                    &transition.outgoing,
-                    &outgoing_id,
-                    outgoing_origin,
-                    fit,
-                    content_clip,
-                    cull,
-                    None,
-                );
-            }
-            TransitionKind::Replace => {
-                let t = transition.linear_t(now_ms);
-                paint_content_layer(
-                    backend,
-                    &transition.outgoing,
-                    &outgoing_id,
-                    content_origin,
-                    fit,
-                    content_clip,
-                    cull,
-                    Some(1.0 - t),
-                );
-                paint_content_layer(
-                    backend,
-                    entering_page,
-                    only_root,
-                    content_origin,
-                    fit,
-                    content_clip,
-                    cull,
-                    Some(t),
-                );
-            }
+        let time = transition.clock.linear_t(now_ms);
+        let viewport = (content_clip.size.x, content_clip.size.y);
+        for layer in transition.resolved.layers_at(time, viewport) {
+            let (page, root) = match layer.screen {
+                TransitionScreen::Outgoing => (&transition.outgoing, outgoing_id.as_str()),
+                TransitionScreen::Entering => (entering_page, only_root),
+            };
+            let origin = Point2D::new(content_origin.x + layer.dx, content_origin.y + layer.dy);
+            let fade =
+                (transition.resolved.effect == TransitionEffect::Fade).then_some(layer.alpha);
+            paint_content_layer(backend, page, root, origin, fit, content_clip, cull, fade);
         }
 
         // The pinned strips stay STEADY through the whole slide/fade,
@@ -492,7 +425,7 @@ impl PreviewSession {
     /// Test-only: the kind of the current (possibly finished) transition.
     #[cfg(all(test, not(target_os = "windows")))]
     pub(crate) fn transition_kind_for_test(&self) -> Option<TransitionKind> {
-        self.transition.as_ref().map(|t| t.kind)
+        self.transition.as_ref().map(|t| t.resolved.navigation)
     }
 }
 

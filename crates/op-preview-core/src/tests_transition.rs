@@ -264,3 +264,33 @@ fn paint_framed_animated_falls_back_to_single_layer_once_finished() {
         "once finished, paint_framed_animated routes to the plain single-layer paint_framed"
     );
 }
+
+#[test]
+fn authored_navigation_uses_its_duration_and_reuses_it_on_back() {
+    let source = super::tests_app_mode::TWO_SCREEN_DOC_JSON.replace(
+        r#""push": "\"/detail\"""#,
+        r#""push": {"path": "'/detail'", "transition": {"kind": "slideUp", "durationMs": 500}}"#,
+    );
+    assert!(source.contains("slideUp"));
+    let doc = jian_ops_schema::load_str(&source).unwrap().value;
+    let mut session = PreviewSession::enter(
+        &doc,
+        (1200.0, 800.0),
+        &Default::default(),
+        0,
+        false,
+        false,
+        test_measure(),
+        0,
+    )
+    .unwrap();
+    let (x, y) = go_button_center(&session);
+    session.dispatch_tap(x, y);
+    assert!(session.reconcile(1_000).switched);
+    assert!(session.transition_active_for_test(1_499));
+    assert!(!session.transition_active_for_test(1_500));
+    session.router_for_test().pop();
+    assert!(session.reconcile(2_000).switched);
+    assert!(session.transition_active_for_test(2_499));
+    assert!(!session.transition_active_for_test(2_500));
+}

@@ -127,6 +127,7 @@ pub enum PropertyFocus {
     /// Interactions-section free-text parameter (toast text, URL, copy
     /// text, state key, delay ms) of action `index` under `trigger`.
     InteractionParam(crate::interaction_edit::InteractionTrigger, usize),
+    InteractionTransitionDuration(crate::interaction_edit::InteractionTrigger, usize),
     /// Motion-section text field of animation `index`.
     MotionField(usize, crate::motion_summary::MotionField),
     /// Motion-section transition duration (ms).

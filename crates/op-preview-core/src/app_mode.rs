@@ -294,6 +294,7 @@ impl PreviewSession {
         // REPLACES whatever was still playing outright (`transition`
         // module doc): no queuing, so a rapid second nav never leaves a
         // half-finished slide lingering.
+        let mut transition_spec = app.router.last_transition();
         let new_stack = app.router.current().stack;
         let prev_stack = std::mem::replace(&mut app.mounted_stack, new_stack.clone());
         let transition_kind =
@@ -445,13 +446,24 @@ impl PreviewSession {
         // `None` only for an empty pre-switch page (nothing to animate
         // from) — `paint_framed_animated` falls back to a plain static
         // paint of the entering layer in that case.
-        if let Some(page) = outgoing_page {
-            self.transition = Some(super::transition::ScreenTransition::start(
+        if self.effective_motion_preference() == jian_ops_schema::motion::MotionPreference::Reduced
+        {
+            use jian_core::motion::screen_transition::{
+                ScreenTransitionKind, ScreenTransitionSpec,
+            };
+            transition_spec = Some(ScreenTransitionSpec {
+                kind: ScreenTransitionKind::None,
+                ..Default::default()
+            });
+        }
+        self.transition = outgoing_page.map(|page| {
+            super::transition::ScreenTransition::start_with(
                 transition_kind,
+                transition_spec.as_ref(),
                 page,
                 now_ms,
-            ));
-        }
+            )
+        });
 
         // R8: the route changed, so anything a user deferred against the
         // PREVIOUS screen is now aimed at a screen that is gone. Bumping
