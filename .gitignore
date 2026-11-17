@@ -80,3 +80,4 @@ packages/.toolchain/
 
 # Codex CLI local config
 .codex/
+promo
