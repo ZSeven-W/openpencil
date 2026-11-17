@@ -81,3 +81,14 @@
 "backgroundGeneration.subtitle" = "Your design is still being generated.";
 "imageImport.error.title" = "Unable to Import Image";
 "imageImport.error.body" = "Choose a PNG, JPEG, GIF, WebP, or SVG file up to 32 MiB.";
+"toolDock.select" = "Select";
+"toolDock.shape" = "Shape";
+"toolDock.pen" = "Pen";
+"toolDock.text" = "Text";
+"toolDock.more" = "More";
+"toolDock.rectangle" = "Rectangle";
+"toolDock.ellipse" = "Ellipse";
+"toolDock.polygon" = "Polygon";
+"toolDock.line" = "Line";
+"toolDock.icon" = "Icon";
+"toolDock.import" = "Import Image or SVG…";

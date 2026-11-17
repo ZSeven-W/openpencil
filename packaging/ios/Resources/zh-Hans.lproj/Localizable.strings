@@ -81,3 +81,14 @@
 "backgroundGeneration.subtitle" = "你的设计仍在生成中。";
 "imageImport.error.title" = "无法导入图片";
 "imageImport.error.body" = "请选择不超过 32 MiB 的 PNG、JPEG、GIF、WebP 或 SVG 文件。";
+"toolDock.select" = "选择";
+"toolDock.shape" = "形状";
+"toolDock.pen" = "钢笔";
+"toolDock.text" = "文本";
+"toolDock.more" = "更多";
+"toolDock.rectangle" = "矩形";
+"toolDock.ellipse" = "椭圆";
+"toolDock.polygon" = "多边形";
+"toolDock.line" = "线条";
+"toolDock.icon" = "图标";
+"toolDock.import" = "导入图片或 SVG…";

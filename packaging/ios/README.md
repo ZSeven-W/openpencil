@@ -110,6 +110,12 @@ entitlements, encryption declarations, and final upload result before it can
 report success. It uploads the build to App Store Connect/TestFlight but does
 not automatically submit a store review.
 
+App Store archives use the iOS 27.1 SDK or later so iPhone Duo can resize
+between its outer and inner displays. The app still deploys to iOS 15.
+When the inner display is partially folded, the editor uses one pane and
+the other shows a read-only preview of the active document page. Use Device Hub with the
+iPhone Duo simulator to check the closed, partially open, and open poses.
+
 Generate the project (do this again after changing `project.yml`):
 
 ```bash
@@ -127,7 +133,7 @@ xcodebuild \
   -project OpenPencilPlayer.xcodeproj \
   -scheme OpenPencilPlayer \
   -configuration Release \
-  -sdk iphonesimulator26.4 \
+  -sdk iphonesimulator \
   -destination 'platform=iOS Simulator,id=<sim-id>' \
   -derivedDataPath "$PWD/.derived-data" \
   HEADER_SEARCH_PATHS="$PWD/../../crates/op-engine-ffi/include" \
@@ -151,7 +157,7 @@ xcodebuild \
   -project OpenPencilPlayer.xcodeproj \
   -scheme OpenPencilPlayer \
   -configuration Release \
-  -sdk iphoneos26.4 \
+  -sdk iphoneos \
   -destination 'platform=iOS,id=<device-id>' \
   -derivedDataPath "$PWD/.derived-data-device" \
   HEADER_SEARCH_PATHS="$PWD/../../crates/op-engine-ffi/include" \

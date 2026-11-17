@@ -207,6 +207,7 @@ pub mod canvas_text_edit;
 mod canvas_text_kinsoku;
 pub mod canvas_viewport;
 mod canvas_viewport_background;
+pub use canvas_viewport_background::paint_canvas_background_extension;
 mod canvas_viewport_fill_layers;
 mod canvas_viewport_grid;
 // `pub` for the remote-image miss-queue API (`take_remote_image_requests`

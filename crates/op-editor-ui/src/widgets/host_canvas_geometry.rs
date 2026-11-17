@@ -155,7 +155,9 @@ pub fn touch_dock_rect(state: &EditorState, viewport_w: f32, viewport_h: f32) ->
 }
 
 pub fn touch_dock_bottom_gap(state: &EditorState) -> f32 {
-    if state.editor_ui.compact_layout() {
+    if state.editor_ui.native_touch_dock {
+        0.0
+    } else if state.editor_ui.compact_layout() {
         MOBILE_DOCK_HEIGHT
     } else {
         TABLET_DOCK_HEIGHT + TABLET_DOCK_BOTTOM_INSET * 2.0

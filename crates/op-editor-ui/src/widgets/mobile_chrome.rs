@@ -6,11 +6,9 @@
 use super::panel_control_metrics::mix;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::text_metrics;
-use crate::widgets::toolbar::icon_for_shape;
 use crate::widgets::PaintCx;
 use crate::{Color, Point2D, Rect, Theme};
 use jian_widgets::centered_text_baseline_y;
-use op_editor_core::tool::Tool;
 use op_editor_core::EditorState;
 
 pub use super::mobile_more_panel::{
@@ -71,7 +69,9 @@ pub fn safe_area_band_colors(state: &EditorState) -> (Option<Color>, Option<Colo
     let top = Some(app_bar_surface(theme));
     // Mirrors the dock's paint gating: a modal sheet or the variables panel
     // hides the dock, so the band returns to the plain background.
-    let bottom = if state.editor_ui.compact_layout()
+    let bottom = if state.editor_ui.native_touch_dock {
+        Some(theme.canvas_surface)
+    } else if state.editor_ui.compact_layout()
         && state.editor_ui.mobile_sheet.is_none()
         && !state.editor_ui.variables_panel_open
     {
@@ -311,184 +311,9 @@ impl MobileAppBar {
     }
 }
 
-// ---------------------------------------------------------------------
-// Bottom tool dock
-// ---------------------------------------------------------------------
-
-/// Dock hit results.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MobileDockHit {
-    /// Tool selection (Select / Pen / Text).
-    Tool(Tool),
-    /// Shape slot — opens the touch shape picker.
-    ShapeSlot,
-    /// More sheet.
-    More,
-}
-
-/// The bottom tool dock: Select / Shape / Pen / Text / More.
-pub struct MobileDock {
-    pub active: Tool,
-    pub shape_tool: Tool,
-    pub shape_picker_open: bool,
-    pub theme: Theme,
-    pub compact: bool,
-}
-
-impl MobileDock {
-    pub fn for_editor(state: &EditorState) -> Self {
-        Self {
-            active: state.tool,
-            shape_tool: state.editor_ui.shape_tool,
-            shape_picker_open: state.editor_ui.shape_picker.open,
-            theme: super::editor_state_ext::theme_for(&state.editor_ui),
-            compact: state.editor_ui.compact_layout(),
-        }
-    }
-
-    pub fn slot_count(&self) -> usize {
-        if self.compact {
-            5
-        } else {
-            4
-        }
-    }
-
-    pub fn slot_rect(rect: Rect, index: usize, slot_count: usize) -> Rect {
-        let slot_w = rect.size.x / slot_count.max(1) as f32;
-        Rect {
-            origin: Point2D::new(rect.origin.x + slot_w * index as f32, rect.origin.y),
-            size: Point2D::new(slot_w, rect.size.y),
-        }
-    }
-
-    fn slot_icon(&self, index: usize) -> Icon {
-        match index {
-            0 => Icon::from_name("mouse-pointer-2").unwrap_or(Icon::Cursor),
-            1 => icon_for_shape(self.shape_tool),
-            2 => Icon::from_name("pen-tool").unwrap_or(Icon::PenTool),
-            3 => Icon::from_name("type").unwrap_or(Icon::Type),
-            _ => Icon::from_name("ellipsis").unwrap_or(Icon::MoreHorizontal),
-        }
-    }
-
-    fn slot_active(&self, index: usize) -> bool {
-        match index {
-            0 => self.active == Tool::Select,
-            1 => matches!(
-                self.active,
-                Tool::Rect | Tool::Ellipse | Tool::Polygon | Tool::Line
-            ),
-            2 => self.active == Tool::Pen,
-            3 => self.active == Tool::Text,
-            _ => false,
-        }
-    }
-
-    pub fn paint(&self, cx: &mut PaintCx<'_>, rect: Rect) {
-        if self.compact {
-            cx.backend.fill_rect(rect, dock_surface(self.theme));
-            cx.backend.fill_rect(
-                Rect {
-                    origin: rect.origin,
-                    size: Point2D::new(rect.size.x, 1.0),
-                },
-                self.theme.border,
-            );
-        } else {
-            cx.backend
-                .fill_round_rect(rect, 20.0, mix(self.theme.popover, Color::BLACK, 0.08));
-            cx.backend
-                .stroke_round_rect(rect, 20.0, self.theme.border, 1.0);
-        }
-
-        let slot_count = self.slot_count();
-        for index in 0..slot_count {
-            let slot = Self::slot_rect(rect, index, slot_count);
-            let active = self.slot_active(index);
-            let open = index == 1 && self.shape_picker_open;
-            let emphasized = active || open;
-            let icon = self.slot_icon(index);
-            let active_rect = centered_icon_rect(slot, 40.0);
-            if emphasized {
-                cx.backend
-                    .fill_round_rect(active_rect, 12.0, self.theme.row_selected_primary);
-            }
-            let color = if emphasized {
-                self.theme.primary
-            } else {
-                self.theme.foreground.with_alpha(0.82)
-            };
-            if index == 1 {
-                // Keep the shape glyph and its dropdown cue together inside
-                // the 40pt feedback wash. The whole slot remains one touch
-                // target; the chevron is a visual affordance, not a second
-                // control.
-                let (icon_rect, chevron_rect) = shape_slot_glyph_rects(slot);
-                draw_icon(
-                    cx.backend,
-                    icon,
-                    icon_rect.origin,
-                    icon_rect.size.x,
-                    color,
-                    1.75,
-                );
-                draw_icon(
-                    cx.backend,
-                    if open {
-                        Icon::ChevronUp
-                    } else {
-                        Icon::ChevronDown
-                    },
-                    chevron_rect.origin,
-                    chevron_rect.size.x,
-                    color,
-                    1.6,
-                );
-            } else {
-                paint_touch_icon(cx, slot, icon, 22.0, color);
-            }
-        }
-    }
-
-    pub fn hit_test(&self, rect: Rect, point: Point2D) -> Option<MobileDockHit> {
-        if !rect.contains(point) {
-            return None;
-        }
-        let slot_count = self.slot_count();
-        let index = (((point.x - rect.origin.x) / (rect.size.x / slot_count as f32)).floor()
-            as usize)
-            .min(slot_count - 1);
-        match index {
-            0 => Some(MobileDockHit::Tool(Tool::Select)),
-            1 => Some(MobileDockHit::ShapeSlot),
-            2 => Some(MobileDockHit::Tool(Tool::Pen)),
-            3 => Some(MobileDockHit::Tool(Tool::Text)),
-            _ => Some(MobileDockHit::More),
-        }
-    }
-}
-
-/// Lay out the shape glyph and its dropdown cue as one centered compound
-/// mark. Both remain inside the dock's 40pt active/pressed feedback wash.
-fn shape_slot_glyph_rects(slot: Rect) -> (Rect, Rect) {
-    const ICON_SIZE: f32 = 20.0;
-    const CHEVRON_SIZE: f32 = 9.0;
-    const GAP: f32 = 3.0;
-    let group_width = ICON_SIZE + GAP + CHEVRON_SIZE;
-    let group_x = slot.origin.x + (slot.size.x - group_width) / 2.0;
-    let center_y = slot.origin.y + slot.size.y / 2.0;
-    (
-        Rect {
-            origin: Point2D::new(group_x, center_y - ICON_SIZE / 2.0),
-            size: Point2D::new(ICON_SIZE, ICON_SIZE),
-        },
-        Rect {
-            origin: Point2D::new(group_x + ICON_SIZE + GAP, center_y - CHEVRON_SIZE / 2.0),
-            size: Point2D::new(CHEVRON_SIZE, CHEVRON_SIZE),
-        },
-    )
-}
+#[path = "mobile_tool_dock.rs"]
+mod tool_dock;
+pub use tool_dock::{MobileDock, MobileDockHit};
 
 // ---------------------------------------------------------------------
 // Bottom-sheet chrome
@@ -596,6 +421,14 @@ pub fn selection_actions_rect_for(state: &EditorState, viewport_w: f32, viewport
     let dock = super::host_canvas_geometry::touch_dock_rect(state, viewport_w, viewport_h);
     let canvas = super::host_canvas_geometry::canvas_rect(state, viewport_w, viewport_h);
     let width = 152.0_f32.min((viewport_w - 24.0).max(0.0));
+    if state.editor_ui.native_touch_dock {
+        return Rect::xywh(
+            (viewport_w - width - 12.0).max(12.0),
+            viewport_h - TOUCH_TARGET * 2.0 - 20.0,
+            width,
+            TOUCH_TARGET,
+        );
+    }
     let inline_y = dock.origin.y + (dock.size.y - TOUCH_TARGET) / 2.0;
     let inline_x = canvas.origin.x + canvas.size.x - width - 12.0;
     let clears_dock = inline_x >= dock.origin.x + dock.size.x + 12.0;
@@ -710,6 +543,9 @@ pub fn page_pill_rect_for(state: &EditorState, viewport_w: f32, viewport_h: f32)
     } else {
         TABLET_W
     };
+    if state.editor_ui.native_touch_dock {
+        return Rect::xywh((viewport_w - width) / 2.0, viewport_h - H - 8.0, width, H);
+    }
     let canvas = super::host_canvas_geometry::canvas_rect(state, viewport_w, viewport_h);
     let dock = super::host_canvas_geometry::touch_dock_rect(state, viewport_w, viewport_h);
     let inline_y = dock.origin.y + (dock.size.y - H) / 2.0;

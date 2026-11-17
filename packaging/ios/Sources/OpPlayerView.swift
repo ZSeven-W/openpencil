@@ -13,6 +13,7 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
     private static let editorLongPressSlop: CGFloat = 8
 
     let host: OpEngineHost
+    weak var toolDockController: OpToolDockController?
     private var touchIDs: [ObjectIdentifier: UInt32] = [:]
     private var nextTouchID: UInt32 = 1
     private var keyboardObservers: [NSObjectProtocol] = []
@@ -139,8 +140,6 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
         addSubview(imeTextView)
     }
 
-    // MARK: - Page overlay
-
     // MARK: - Layout
 
     override func layoutSubviews() {
@@ -212,19 +211,18 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
         }
     }
 
+    override func updateConstraints() {
+        super.updateConstraints()
+        // UIKit tracks reserved regions queried in this pass even when
+        // changing the fold angle leaves the window bounds unchanged.
+        let sample = currentViewportSample()
+        if !didTearDown, let committed = geometryGate.committed, sample != committed {
+            signalViewportConvergence(.layout)
+        }
+    }
+
     private func currentViewportSample() -> ViewportSample {
-        let displayScale = window?.screen.scale ?? UIScreen.main.scale
-        return ViewportSample(
-            size: bounds.size,
-            scale: displayScale,
-            insets: ViewportInsets.clamped(
-                top: safeAreaInsets.top,
-                right: safeAreaInsets.right,
-                bottom: safeAreaInsets.bottom,
-                left: safeAreaInsets.left,
-                to: bounds.size
-            )
-        )
+        ViewportSample(view: self)
     }
 
     private func convergeViewport(_ sample: ViewportSample) -> Bool {
@@ -250,7 +248,8 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
                 left: sample.insets.left,
                 bottom: sample.insets.bottom,
                 right: sample.insets.right
-            )
+            ),
+            foldPreview: sample.foldPreview
         )
     }
 
@@ -276,6 +275,7 @@ final class OpPlayerView: UIView, UITextViewDelegate, UIDocumentPickerDelegate {
             teardownEngine()
         } else {
             applySystemChromeStyle()
+            setNeedsUpdateConstraints()
             setNeedsLayout()
         }
     }

@@ -44,6 +44,8 @@ pub struct EditorUiState {
     /// subprocess CLIs, so their FFI clears this and the chat catalog plus
     /// the settings panel hide every external-CLI surface.
     pub external_cli_available: bool,
+    /// The iOS shell supplies its native tool dock outside the editor viewport.
+    pub native_touch_dock: bool,
     pub mobile_sheet: Option<crate::size_class::MobileSheetKind>,
 
     // --- Theme + locale --------------------------------------------

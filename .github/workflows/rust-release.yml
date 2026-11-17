@@ -106,7 +106,7 @@ jobs:
     name: iOS App Store / TestFlight
     needs: version
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.ios_app_store_only == true)
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 120
     environment: testflight
     permissions:

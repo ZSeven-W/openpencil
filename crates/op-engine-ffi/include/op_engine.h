@@ -68,6 +68,14 @@ typedef struct OpInsets {
     float left;
 } OpInsets;
 
+/* Read-only fold preview bounds in surface-logical points. */
+typedef struct OpFoldPreviewRect {
+    float x;
+    float y;
+    float width;
+    float height;
+} OpFoldPreviewRect;
+
 /* Runtime diagnostic payload copied synchronously into the callback. */
 typedef struct OpRuntimeError {
     int32_t kind;
@@ -245,6 +253,15 @@ OpStatus op_resize(OpEngine *engine, float width, float height, float dpr);
 /* Atomically update logical viewport, DPR, and safe-area insets. Mobile
  * rotation/configuration paths should prefer this over separate calls. */
 OpStatus op_resize_with_safe_area(OpEngine *engine, float width, float height, float dpr, float top, float right, float bottom, float left);
+
+/* Update the viewport atomically with an optional noninteractive fold preview.
+ * Pass NULL to remove the preview when the device opens or closes. */
+OpStatus op_resize_with_fold_preview(OpEngine *engine, float width, float height, float dpr, OpInsets insets, const OpFoldPreviewRect *preview);
+
+/* Native shell toolbar bridge (editor feature): -1 hides it. */
+OpStatus op_editor_native_dock_state(OpEngine *engine, int32_t *slot, uint32_t *shape);
+OpStatus op_editor_native_shape_press(OpEngine *engine, uint32_t row);
+OpStatus op_editor_native_dock_press(OpEngine *engine, uint32_t index);
 
 /* Return the current physical pixel dimensions. */
 OpStatus op_get_pixel_size(OpEngine *engine, uint32_t *width, uint32_t *height);

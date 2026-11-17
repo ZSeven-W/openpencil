@@ -214,8 +214,8 @@ fn assert_safe_bands_use_theme_surfaces(profile: Profile, frame: &[u8]) {
     // Since d20be2410 the safe-area bands are deliberately tinted toward the
     // chrome they extend instead of repeating the raw root background: the
     // top band matches the app bar and the compact bottom band matches the
-    // edge-to-edge dock. Tablets float their dock, so their bottom band —
-    // and every side cutout/gesture band — keeps the plain root background.
+    // edge-to-edge dock. Tablets float their dock and keep the plain root
+    // background below it. Side insets continue the canvas and its grid.
     // The expectations call the SAME production helpers the chrome paints
     // with, so a re-tuned blend cannot leave this test asserting a stale
     // constant.
@@ -262,24 +262,21 @@ fn assert_safe_bands_use_theme_surfaces(profile: Profile, frame: &[u8]) {
             }
         );
     }
-    if left > 0 {
-        assert_eq!(
-            pixel_at(frame, profile.width, left / 2, content_mid_y),
-            root_background,
-            "{} left cutout band should use the root app surface",
-            profile.name
-        );
-    }
-    if right > 0 {
-        assert_eq!(
-            pixel_at(
-                frame,
-                profile.width,
-                profile.width - (right / 2).max(1),
-                content_mid_y,
-            ),
-            root_background,
-            "{} right gesture/cutout band should use the root app surface",
+    for x in [
+        (left > 0).then_some(left / 2),
+        (right > 0).then_some(profile.width - (right / 2).max(1)),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let canvas = dark_theme_bytes(Theme::dark().canvas_surface);
+        let rows = (content_mid_y - 8)..(content_mid_y + 8);
+        let canvas_pixels = rows
+            .filter(|&y| pixel_at(frame, profile.width, x, y) == canvas)
+            .count();
+        assert!(
+            canvas_pixels > 8,
+            "{} side cutout band should continue the canvas",
             profile.name
         );
     }

@@ -121,6 +121,16 @@ pub fn shape_picker_rect(state: &EditorState, viewport_w: f32, viewport_h: f32) 
     // Mobile: anchored above the dock's Shape slot, centered.
     if state.editor_ui.touch_chrome() {
         let dock = super::host_canvas_geometry::touch_dock_rect(state, viewport_w, viewport_h);
+        if state.editor_ui.native_touch_dock {
+            let height = ShapePicker::panel_height();
+            let top = super::host_canvas_geometry::touch_app_bar_height(state);
+            return Rect::xywh(
+                (viewport_w - SHAPE_PICKER_WIDTH - 12.0).max(4.0),
+                ((viewport_h - height) * 0.5).max(top),
+                SHAPE_PICKER_WIDTH,
+                height,
+            );
+        }
         let x = ((viewport_w - SHAPE_PICKER_WIDTH) / 2.0).max(4.0);
         return Rect {
             origin: Point2D::new(x, dock.origin.y - ShapePicker::panel_height() - 8.0),

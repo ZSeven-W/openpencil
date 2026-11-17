@@ -171,14 +171,21 @@ pub(crate) fn paint_into_canvas(session: &mut Session, canvas: &skia_safe::Canva
                 canvas.translate((insets_left, insets_top));
             }
             let mut frame = NativeFrameBackend::new(backend, canvas);
-            frame.fill_rect(
-                Rect {
-                    origin: Point2D::new(0.0, 0.0),
-                    size: Point2D::new(w, h),
-                },
-                Color::BLACK,
-            );
+            if !host.preview_slideshow_active() {
+                paint_editor_side_bands(&mut frame, host.editor_state(), session.insets, w, h);
+            }
+            let editor_rect = Rect::xywh(0.0, 0.0, w, h);
+            if session.fold_preview.is_some() {
+                frame.save();
+                frame.clip_rect(editor_rect);
+            }
+            frame.fill_rect(editor_rect, Color::BLACK);
             host.paint(&mut frame, w, h);
+            if let Some(preview) = session.fold_preview {
+                frame.restore();
+                frame.translate(Point2D::new(-insets_left, -insets_top));
+                paint_fold_preview(&mut frame, host, preview);
+            }
             return;
         }
     }
@@ -313,6 +320,110 @@ fn union_rects(a: &Rect, b: &Rect) -> Rect {
     }
 }
 
+#[cfg(feature = "editor")]
+fn paint_editor_side_bands(
+    frame: &mut NativeFrameBackend<'_>,
+    state: &op_editor_core::EditorState,
+    insets: crate::viewport::OpInsets,
+    width: f32,
+    height: f32,
+) {
+    use op_editor_ui::widgets::{home_surface, host_canvas_geometry, mobile_chrome};
+
+    let ui = &state.editor_ui;
+    if !ui.touch_chrome() || (insets.left <= 0.0 && insets.right <= 0.0) {
+        return;
+    }
+
+    let bands = [(-insets.left, insets.left), (width, insets.right)];
+    if ui.home.visible {
+        let palette = home_surface::StudioPalette::for_mode(ui.effective_theme_mode());
+        for (x, band_width) in bands
+            .into_iter()
+            .filter(|(_, band_width)| *band_width > 0.0)
+        {
+            frame.fill_rect(Rect::xywh(x, 0.0, band_width, height), palette.page);
+            let top = home_surface::HOME_TOPBAR_H.min(height);
+            frame.fill_rect(Rect::xywh(x, 0.0, band_width, top), palette.topbar);
+            if ui.compact_layout() {
+                let bottom = home_surface::HOME_BOTTOM_NAV_H.min(height);
+                frame.fill_rect(
+                    Rect::xywh(x, height - bottom, band_width, bottom),
+                    palette.topbar,
+                );
+            }
+        }
+        return;
+    }
+    if ui.works_reader_visible() {
+        return;
+    }
+
+    let canvas = host_canvas_geometry::canvas_rect(state, width, height);
+    let canvas_bottom = canvas.origin.y + canvas.size.y;
+    let canvas_edges = [
+        canvas.origin.x <= 0.0,
+        canvas.origin.x + canvas.size.x >= width - 0.5,
+    ];
+    let (top, dock) = mobile_chrome::safe_area_band_colors(state);
+    let bar_height = host_canvas_geometry::touch_app_bar_height(state).min(height);
+    for ((x, band_width), canvas_touches_edge) in bands.into_iter().zip(canvas_edges) {
+        if band_width <= 0.0 {
+            continue;
+        }
+        if let Some(color) = top {
+            frame.fill_rect(Rect::xywh(x, 0.0, band_width, bar_height), color);
+        }
+        if canvas_touches_edge && canvas.size.y > 0.0 {
+            op_editor_ui::widgets::paint_canvas_background_extension(
+                &mut PaintCx { backend: frame },
+                state,
+                Rect::xywh(x, canvas.origin.y, band_width, canvas.size.y),
+                canvas.origin,
+            );
+        }
+        if let Some(color) = dock {
+            let rect = host_canvas_geometry::touch_dock_rect(state, width, height);
+            let y = rect.origin.y.max(canvas_bottom);
+            frame.fill_rect(Rect::xywh(x, y, band_width, (height - y).max(0.0)), color);
+        }
+    }
+}
+
+#[cfg(feature = "editor")]
+fn paint_fold_preview(
+    frame: &mut NativeFrameBackend<'_>,
+    host: &mut op_host_native::WidgetHostNative,
+    rect: Rect,
+) {
+    let theme = op_editor_ui::widgets::editor_state_ext::theme_for(&host.editor_state().editor_ui);
+    frame.fill_rect(rect, theme.canvas_surface);
+    let Some(page) = host.layout_scene().active_page() else {
+        return;
+    };
+    let bounds = page_doc_bounds(page);
+    let padding = (rect.size.x.min(rect.size.y) * 0.06).min(20.0);
+    if bounds.size.x <= 0.0 || bounds.size.y <= 0.0 {
+        return;
+    }
+    let zoom = ((rect.size.x - padding * 2.0) / bounds.size.x)
+        .min((rect.size.y - padding * 2.0) / bounds.size.y);
+    let origin = Point2D::new(
+        rect.origin.x + (rect.size.x - bounds.size.x * zoom) * 0.5 - bounds.origin.x * zoom,
+        rect.origin.y + (rect.size.y - bounds.size.y * zoom) * 0.5 - bounds.origin.y * zoom,
+    );
+    frame.save();
+    frame.clip_rect(rect);
+    canvas_viewport_paint::paint_scene_page_without_video_badge(
+        &mut PaintCx { backend: frame },
+        page,
+        origin,
+        zoom,
+        rect,
+    );
+    frame.restore();
+}
+
 #[cfg(all(test, feature = "editor"))]
 mod editor_viewport_tests {
     use super::*;
@@ -402,6 +513,98 @@ mod editor_viewport_tests {
             sample(160, 12).iter().all(|channel| *channel > 0xC0),
             "light theme band must stay light"
         );
+    }
+
+    #[test]
+    fn fold_preview_renders_current_document_above_the_editor() {
+        let document = |color: &str| {
+            format!(
+                r#"{{"version":"1.0.0","children":[{{"type":"rectangle","id":"art",
+                    "width":100,"height":100,"fill":[{{"type":"solid","color":"{color}"}}]}}]}}"#
+            )
+        };
+        let mut session = Session::new(CreateOptions {
+            document: document("#F04030"),
+            width: 480.0,
+            height: 720.0,
+            dpr: 1.0,
+            callbacks: Callbacks::default(),
+            asset_base: None,
+            editor_mode: true,
+            documents_root: None,
+        })
+        .expect("editor session");
+        session.insets.top = 354.0;
+        session.fold_preview = Some(Rect::xywh(0.0, 20.0, 480.0, 316.0));
+        let mut surface = SkiaSurface::new_raster(480, 720);
+        let mut pixels = vec![0_u8; 480 * 720 * 4];
+        let sample = 4 * (180 * 480 + 240);
+        paint_into_canvas(&mut session, surface.canvas());
+        assert!(surface.read_rgba8(&mut pixels));
+        assert_eq!(&pixels[sample..sample + 3], &[240, 64, 48]);
+
+        let host = session.editor.as_mut().unwrap();
+        let edited = jian_ops_schema::load_str(&document("#3040F0"))
+            .unwrap()
+            .value;
+        host.editor_state_mut().replace_document(edited);
+        host.mark_editor_state_dirty();
+        paint_into_canvas(&mut session, surface.canvas());
+        assert!(surface.read_rgba8(&mut pixels));
+        assert_eq!(&pixels[sample..sample + 3], &[48, 64, 240]);
+    }
+
+    #[test]
+    fn touch_canvas_grid_continues_into_right_safe_band() {
+        let mut session = Session::new(CreateOptions {
+            document: r#"{"version":"1.0.0","children":[]}"#.into(),
+            width: 480.0,
+            height: 480.0,
+            dpr: 1.0,
+            callbacks: Callbacks::default(),
+            asset_base: None,
+            editor_mode: true,
+            documents_root: None,
+        })
+        .expect("empty editor session");
+        session.insets.right = 80.0;
+        let state = session.editor.as_mut().unwrap().editor_state_mut();
+        state.editor_ui.theme_mode = op_editor_core::ThemeMode::Dark;
+        state.editor_ui.size_class = op_editor_core::size_class::EditorSizeClass::Compact;
+        state.editor_ui.home.visible = false;
+        state.viewport.pan_x = 7.0;
+        state.viewport.pan_y = 9.0;
+        state.viewport.zoom = 1.0;
+
+        let mut surface = SkiaSurface::new_raster(480, 480);
+        paint_into_canvas(&mut session, surface.canvas());
+        let mut pixels = vec![0_u8; 480 * 480 * 4];
+        assert!(surface.read_rgba8(&mut pixels));
+        let sample = |x: usize, y: usize| {
+            let i = (y * 480 + x) * 4;
+            [pixels[i], pixels[i + 1], pixels[i + 2]]
+        };
+
+        // One grid period straddles the canvas edge; the color and the
+        // placement of the individual dots must stay continuous.
+        let mut colors = std::collections::HashSet::new();
+        for y in 130..162 {
+            for x in 368..400 {
+                let inside = sample(x, y);
+                colors.insert(inside);
+                assert_eq!(
+                    inside,
+                    sample(x + 32, y),
+                    "side-band mismatch at ({x}, {y})"
+                );
+            }
+        }
+        assert!(
+            colors.len() > 1,
+            "the tested area must contain visible grid dots"
+        );
+        assert_eq!(sample(390, 5), sample(405, 5));
+        assert_eq!(sample(390, 450), sample(405, 450));
     }
 
     #[test]

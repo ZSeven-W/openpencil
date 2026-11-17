@@ -246,7 +246,7 @@ raise "AppIcon must be 1024x1024" unless width == 1024 && height == 1024
 raise "AppIcon must be 8-bit opaque RGB" unless bit_depth == 8 && color_type == 2
 RUBY
 
-grep -Fq -- "-sdk iphonesimulator26.4" "$player_dir/README.md"
+grep -Fq -- "-sdk iphonesimulator" "$player_dir/README.md"
 grep -Fq -- "-destination 'platform=iOS Simulator,id=<sim-id>'" "$player_dir/README.md"
 grep -Fq -- "aarch64-apple-ios-sim/release/libop_engine_ffi.a -lc++" "$player_dir/README.md"
 grep -Fq -- "aarch64-apple-ios/release/libop_engine_ffi.a -lc++" "$player_dir/README.md"
@@ -293,7 +293,7 @@ grep -Fq -- 'viewportConvergence.displayFrame' "$player_dir/Sources/OpPlayerView
 grep -Fq -- 'geometryGate.isPending || !suppressedTouches.isEmpty' "$player_dir/Sources/OpPlayerView.swift"
 grep -Fq -- 'suppressedTouches.suppress(touchIDs.keys)' "$player_dir/Sources/OpPlayerView.swift"
 grep -Fq -- 'safeArea: UIEdgeInsets(' "$player_dir/Sources/OpPlayerView.swift"
-grep -Fq -- 'op_resize_with_safe_area(' "$player_dir/Sources/OpEngineHost.swift"
+grep -Fq -- 'op_resize_with_fold_preview(' "$player_dir/Sources/OpEngineHost.swift"
 if grep -Fq -- 'op_set_safe_area(engine' "$player_dir/Sources/OpEngineHost.swift"; then
   echo "iOS viewport updates must not split size and safe-area mutations" >&2
   exit 1

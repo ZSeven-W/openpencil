@@ -318,30 +318,40 @@ pub fn press_shape_picker(
 ) -> ShapePickerPress {
     let picker = ShapePicker::for_editor_ui(&state.editor_ui);
     match picker.hit_popup(panel_rect, point) {
-        crate::widgets::shape_picker::SelectHit::Row(idx) => match picker.choice_at(idx) {
-            Some(ShapeChoice::Tool(tool)) => ShapePickerPress::SetTool(tool),
-            Some(ShapeChoice::OpenIconPicker) => {
-                state.editor_ui.open_icon_picker(false);
-                ShapePickerPress::Close
-            }
-            Some(ShapeChoice::InsertGenerator(index)) => {
-                if let Some(starter) = op_editor_core::generator::GENERATOR_STARTERS.get(index) {
-                    let runner = op_editor_core::generator::installed_generator_runner();
-                    let _ = state.insert_generator_starter(starter, runner);
-                }
-                ShapePickerPress::Close
-            }
-            Some(ShapeChoice::ImportImageOrSvg) => {
-                // Neither host owns a file-picker service here — both
-                // raise the same pending flag for their host loop.
-                state.editor_ui.pending_file_action =
-                    Some(op_editor_core::editor_ui_state::FileAction::ImportImageOrSvg);
-                ShapePickerPress::Close
-            }
-            None => ShapePickerPress::Swallow,
-        },
+        crate::widgets::shape_picker::SelectHit::Row(idx) => {
+            apply_shape_picker_choice(state, picker.choice_at(idx))
+        }
         crate::widgets::shape_picker::SelectHit::Inside => ShapePickerPress::Swallow,
         crate::widgets::shape_picker::SelectHit::Outside => ShapePickerPress::Outside,
+    }
+}
+
+/// Run a shape picker choice from the shared popup or a native menu.
+pub fn apply_shape_picker_choice(
+    state: &mut EditorState,
+    choice: Option<ShapeChoice>,
+) -> ShapePickerPress {
+    match choice {
+        Some(ShapeChoice::Tool(tool)) => ShapePickerPress::SetTool(tool),
+        Some(ShapeChoice::OpenIconPicker) => {
+            state.editor_ui.open_icon_picker(false);
+            ShapePickerPress::Close
+        }
+        Some(ShapeChoice::InsertGenerator(index)) => {
+            if let Some(starter) = op_editor_core::generator::GENERATOR_STARTERS.get(index) {
+                let runner = op_editor_core::generator::installed_generator_runner();
+                let _ = state.insert_generator_starter(starter, runner);
+            }
+            ShapePickerPress::Close
+        }
+        Some(ShapeChoice::ImportImageOrSvg) => {
+            // Neither host owns a file-picker service here — both
+            // raise the same pending flag for their host loop.
+            state.editor_ui.pending_file_action =
+                Some(op_editor_core::editor_ui_state::FileAction::ImportImageOrSvg);
+            ShapePickerPress::Close
+        }
+        None => ShapePickerPress::Swallow,
     }
 }
 

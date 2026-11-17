@@ -105,7 +105,7 @@ if verify.inspect.include?("secrets.") || verify.inspect.include?("vars.")
   raise "verify job must not read protected configuration"
 end
 raise "publish job must use the testflight environment" unless publish.fetch("environment") == "testflight"
-raise "publish job must use the macos-26 image" unless publish.fetch("runs-on") == "macos-26"
+raise "publish job must use the Xcode 27 image for iPhone Duo" unless publish.fetch("runs-on") == "xcode-27"
 raise "publish job must not expose secrets at job scope" if publish.key?("env")
 
 verify_steps = verify.fetch("steps")
@@ -184,17 +184,13 @@ if document.inspect.include?(".op-auth-artifact") ||
 end
 
 toolchain_gate = publish.fetch("steps").find do |step|
-  step["name"] == "Validate Xcode 26, iOS 26 SDK, and source before credentials are exposed"
+  step["name"] == "Validate iPhone Duo SDK and source before credentials are exposed"
 end
 raise "missing pre-secret Apple toolchain gate" unless toolchain_gate
 gate_script = toolchain_gate.fetch("run")
-[
-  "xcode_version=$(xcodebuild -version)",
-  "xcode_major=${BASH_REMATCH[1]}",
-  "if (( xcode_major < 26 )); then",
-  "iphoneos_sdk_version=$(xcrun --sdk iphoneos --show-sdk-version)",
-  "iphoneos_sdk_major=${BASH_REMATCH[1]}",
-  "if (( iphoneos_sdk_major < 26 )); then",
+%w[
+  tools/check-ios-duo-sdk.sh
+  packaging/ios/Tests/validate_sources.sh
 ].each { |literal| raise "missing Apple toolchain gate: #{literal}" unless gate_script.include?(literal) }
 
 steps = publish.fetch("steps")

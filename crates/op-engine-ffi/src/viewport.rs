@@ -4,6 +4,7 @@
 
 use crate::lifecycle::call_session;
 use crate::{OpEngine, OpStatus};
+use op_editor_ui::Rect;
 
 /// Logical safe-area insets (top-left origin, logical points).
 #[repr(C)]
@@ -20,6 +21,193 @@ impl OpInsets {
         [self.top, self.right, self.bottom, self.left]
             .into_iter()
             .all(|value| value.is_finite() && value >= 0.0)
+    }
+}
+
+/// Rectangle of the noninteractive fold preview in surface-logical points.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct OpFoldPreviewRect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+impl OpFoldPreviewRect {
+    fn checked(self, width: f32, height: f32, insets: OpInsets) -> crate::error::FfiResult<Rect> {
+        let Self {
+            x,
+            y,
+            width: w,
+            height: h,
+        } = self;
+        let right = x + w;
+        let bottom = y + h;
+        let overlaps = right > insets.left
+            && x < width - insets.right
+            && bottom > insets.top
+            && y < height - insets.bottom;
+        if ![x, y, w, h].into_iter().all(f32::is_finite)
+            || x < 0.0
+            || y < 0.0
+            || w <= 0.0
+            || h <= 0.0
+            || right > width
+            || bottom > height
+            || overlaps
+        {
+            return Err(crate::error::FfiError::invalid(
+                "fold preview must fit the surface outside the editor viewport",
+            ));
+        }
+        Ok(Rect::xywh(x, y, w, h))
+    }
+}
+
+/// Resize atomically with an optional read-only fold preview rectangle.
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread. `preview` must
+/// be null or point to a readable `OpFoldPreviewRect` for this call.
+#[no_mangle]
+pub unsafe extern "C" fn op_resize_with_fold_preview(
+    engine: *mut OpEngine,
+    width: f32,
+    height: f32,
+    dpr: f32,
+    insets: OpInsets,
+    preview: *const OpFoldPreviewRect,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let next = preview
+                .as_ref()
+                .map(|rect| rect.checked(width, height, insets))
+                .transpose()?;
+            session.resize_with_safe_area(width, height, dpr, insets)?;
+            session.fold_preview = next;
+            #[cfg(feature = "editor")]
+            configure_touch_dock(session, next.is_none());
+            session.request_redraw();
+            Ok(())
+        })
+    }
+}
+
+#[cfg(feature = "editor")]
+fn configure_touch_dock(session: &mut crate::lifecycle::Session, single_pane: bool) {
+    use op_editor_ui::widgets::mobile_chrome::TOUCH_TARGET;
+
+    let (width, height) = session.editor_viewport();
+    let side_status_area =
+        session.insets.right >= TOUCH_TARGET && session.insets.left < session.insets.right * 0.5;
+    let Some(host) = session.editor.as_mut() else {
+        return;
+    };
+    let ui = &mut host.editor_state_mut().editor_ui;
+    let right =
+        single_pane && ui.compact_layout() && side_status_area && width < height && height >= 340.0;
+    if ui.native_touch_dock != right {
+        ui.native_touch_dock = right;
+        host.mark_editor_state_dirty();
+        if !session.user_interacted {
+            host.fit_content_to_viewport(width, height);
+        }
+    }
+}
+
+/// Return the active toolbar slot and selected shape row. Slot -1 hides the toolbar.
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread. The two output
+/// pointers must be writable.
+#[cfg(feature = "editor")]
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_native_dock_state(
+    engine: *mut OpEngine,
+    slot: *mut i32,
+    shape: *mut u32,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            let (Some(slot), Some(shape)) = (slot.as_mut(), shape.as_mut()) else {
+                return Err(crate::error::FfiError::invalid(
+                    "native dock state requires an output",
+                ));
+            };
+            let Some(host) = session
+                .editor()
+                .filter(|host| host.native_touch_dock_visible())
+            else {
+                *slot = -1;
+                return Ok(());
+            };
+            use op_editor_core::Tool;
+            let state = host.editor_state();
+            *shape = match state.editor_ui.shape_tool {
+                Tool::Ellipse => 1,
+                Tool::Polygon => 2,
+                Tool::Line => 3,
+                _ => 0,
+            };
+            *slot = if state.editor_ui.shape_picker.open {
+                1
+            } else {
+                match state.tool {
+                    Tool::Select => 0,
+                    Tool::Rect | Tool::Ellipse | Tool::Polygon | Tool::Line => 1,
+                    Tool::Pen => 2,
+                    Tool::Text => 3,
+                    _ => 5,
+                }
+            };
+            Ok(())
+        })
+    }
+}
+
+/// Dispatch a standard dock action raised by the iOS toolbar.
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread.
+#[cfg(feature = "editor")]
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_native_dock_press(
+    engine: *mut OpEngine,
+    index: u32,
+) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            if session
+                .editor_mut()?
+                .press_native_touch_dock(index as usize)
+            {
+                session.request_redraw();
+            }
+            Ok(())
+        })
+    }
+}
+
+/// Run a shape action selected from UIKit's menu.
+///
+/// # Safety
+///
+/// `engine` must be live and called on its owner thread.
+#[cfg(feature = "editor")]
+#[no_mangle]
+pub unsafe extern "C" fn op_editor_native_shape_press(engine: *mut OpEngine, row: u32) -> OpStatus {
+    unsafe {
+        call_session(engine, |session| {
+            if session.editor_mut()?.press_native_shape_menu(row as usize) {
+                session.request_redraw();
+            }
+            Ok(())
+        })
     }
 }
 
@@ -99,6 +287,159 @@ mod tests {
 
     const SAMPLE_DOC: &str =
         include_str!("../../op-editor-core/assets/scene_templates/daily-sign-card.op");
+
+    #[test]
+    fn fold_preview_updates_with_the_viewport_and_rejects_overlap() {
+        let mut engine = editor_engine();
+        let engine_ptr = &mut engine as *mut OpEngine;
+        let insets = OpInsets {
+            top: 320.0,
+            ..OpInsets::default()
+        };
+        let preview = OpFoldPreviewRect {
+            x: 0.0,
+            y: 20.0,
+            width: 800.0,
+            height: 280.0,
+        };
+        assert_eq!(
+            unsafe { op_resize_with_fold_preview(engine_ptr, 800.0, 640.0, 1.0, insets, &preview) },
+            OpStatus::Ok
+        );
+        let session = engine.session_mut_for_test();
+        assert_eq!(session.editor_viewport(), (800.0, 320.0));
+        let previous = session.fold_preview;
+        assert_eq!(previous, Some(Rect::xywh(0.0, 20.0, 800.0, 280.0)));
+
+        let overlapping = OpFoldPreviewRect {
+            y: 100.0,
+            ..preview
+        };
+        assert_eq!(
+            unsafe {
+                op_resize_with_fold_preview(engine_ptr, 800.0, 700.0, 1.0, insets, &overlapping)
+            },
+            OpStatus::InvalidArg
+        );
+        let session = engine.session_mut_for_test();
+        assert_eq!(session.logical, (800.0, 640.0));
+        assert_eq!(session.fold_preview, previous);
+
+        assert_eq!(
+            unsafe {
+                op_resize_with_fold_preview(
+                    engine_ptr,
+                    800.0,
+                    640.0,
+                    1.0,
+                    OpInsets::default(),
+                    std::ptr::null(),
+                )
+            },
+            OpStatus::Ok
+        );
+        assert!(engine.session_mut_for_test().fold_preview.is_none());
+    }
+
+    #[test]
+    fn portrait_side_status_area_enables_the_native_dock() {
+        let mut engine = editor_engine();
+        let ptr = &mut engine as *mut OpEngine;
+        let side = OpInsets {
+            right: 84.0,
+            bottom: 34.0,
+            ..OpInsets::default()
+        };
+        for (width, height, insets, expected) in [
+            (466.0, 678.0, side, true),
+            (678.0, 466.0, side, false),
+            (466.0, 678.0, OpInsets::default(), false),
+        ] {
+            assert_eq!(
+                unsafe {
+                    op_resize_with_fold_preview(ptr, width, height, 1.0, insets, std::ptr::null())
+                },
+                OpStatus::Ok
+            );
+            let session = engine.session_mut_for_test();
+            assert_eq!(
+                session
+                    .editor()
+                    .unwrap()
+                    .editor_state()
+                    .editor_ui
+                    .native_touch_dock,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn native_dock_routes_tools_shape_picker_and_more() {
+        let mut engine = editor_engine();
+        let ptr = &mut engine as *mut OpEngine;
+        let insets = OpInsets {
+            right: 84.0,
+            ..OpInsets::default()
+        };
+        assert_eq!(
+            unsafe {
+                op_resize_with_fold_preview(ptr, 466.0, 678.0, 1.0, insets, std::ptr::null())
+            },
+            OpStatus::Ok
+        );
+        let mut slot = -1;
+        let mut shape = 0;
+        assert_eq!(
+            unsafe { op_editor_native_dock_state(ptr, &mut slot, &mut shape) },
+            OpStatus::Ok
+        );
+        assert_eq!(slot, 0);
+        for (index, tool) in [
+            (2, op_editor_core::Tool::Pen),
+            (3, op_editor_core::Tool::Text),
+            (0, op_editor_core::Tool::Select),
+        ] {
+            assert_eq!(
+                unsafe { op_editor_native_dock_press(ptr, index) },
+                OpStatus::Ok
+            );
+            assert_eq!(
+                engine
+                    .session_mut_for_test()
+                    .editor()
+                    .unwrap()
+                    .editor_state()
+                    .tool,
+                tool
+            );
+        }
+        assert_eq!(
+            unsafe { op_editor_native_shape_press(ptr, 2) },
+            OpStatus::Ok
+        );
+        assert_eq!(
+            unsafe { op_editor_native_dock_state(ptr, &mut slot, &mut shape) },
+            OpStatus::Ok
+        );
+        assert_eq!((slot, shape), (1, 2));
+        assert_eq!(unsafe { op_editor_native_dock_press(ptr, 4) }, OpStatus::Ok);
+        assert_eq!(
+            unsafe { op_editor_native_dock_state(ptr, &mut slot, &mut shape) },
+            OpStatus::Ok
+        );
+        assert_eq!(slot, -1);
+        assert_eq!(
+            engine
+                .session_mut_for_test()
+                .editor()
+                .unwrap()
+                .editor_state()
+                .editor_ui
+                .mobile_sheet,
+            Some(op_editor_core::size_class::MobileSheetKind::More)
+        );
+    }
 
     fn editor_engine() -> OpEngine {
         OpEngine::new(

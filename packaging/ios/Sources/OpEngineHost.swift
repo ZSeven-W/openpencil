@@ -14,6 +14,7 @@ final class OpEngineHost: NSObject {
     private weak var surfaceLayer: CAMetalLayer?
     private var logicalSize = CGSize.zero
     private var scale: CGFloat = 1
+    private var foldPreview: CGRect?
     private var viewportInsets = ViewportInsets(top: 0, right: 0, bottom: 0, left: 0)
     private var viewportSynchronized = false
     private var isSuspended = false
@@ -73,7 +74,8 @@ final class OpEngineHost: NSObject {
         surface: CAMetalLayer,
         logicalSize size: CGSize,
         scale newScale: CGFloat,
-        safeArea insets: UIEdgeInsets
+        safeArea insets: UIEdgeInsets,
+        foldPreview preview: CGRect?
     ) -> Bool {
         precondition(Thread.isMainThread)
         guard isAlive, size.width > 0, size.height > 0, newScale > 0 else { return false }
@@ -89,11 +91,12 @@ final class OpEngineHost: NSObject {
             currentScale: scale,
             nextSize: size,
             nextScale: newScale
-        ) || viewportInsets != nextInsets
+        ) || viewportInsets != nextInsets || foldPreview != preview
         surfaceLayer = surface
         logicalSize = size
         scale = newScale
         viewportInsets = nextInsets
+        foldPreview = preview
 
         if engine == nil {
             createAndAttach(surface: surface)
@@ -552,18 +555,23 @@ final class OpEngineHost: NSObject {
             viewportSynchronized = false
             return false
         }
-        let status = op_resize_with_safe_area(
-            engine,
-            Float(logicalSize.width),
-            Float(logicalSize.height),
-            Float(scale),
-            Float(viewportInsets.top),
-            Float(viewportInsets.right),
-            Float(viewportInsets.bottom),
-            Float(viewportInsets.left)
+        let rect = foldPreview ?? .zero
+        var preview = OpFoldPreviewRect(
+            x: Float(rect.minX), y: Float(rect.minY),
+            width: Float(rect.width), height: Float(rect.height)
         )
+        let status = withUnsafePointer(to: &preview) { pointer in
+            op_resize_with_fold_preview(
+                engine, Float(logicalSize.width), Float(logicalSize.height), Float(scale),
+                OpInsets(
+                    top: Float(viewportInsets.top), right: Float(viewportInsets.right),
+                    bottom: Float(viewportInsets.bottom), left: Float(viewportInsets.left)
+                ),
+                foldPreview == nil ? nil : pointer
+            )
+        }
         if status != OpStatus_Ok {
-            reportFailure(status, operation: "op_resize_with_safe_area", engine: engine)
+            reportFailure(status, operation: "op_resize_with_fold_preview", engine: engine)
         }
         viewportSynchronized = status == OpStatus_Ok
         return viewportSynchronized
@@ -594,6 +602,7 @@ final class OpEngineHost: NSObject {
             syncImeFocus()
             drainCopyText()
             drainShellActions()
+            view?.toolDockController?.syncTools(using: engine)
         }
         syncSystemChromeStyle()
     }

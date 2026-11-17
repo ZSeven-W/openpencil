@@ -382,7 +382,7 @@ impl WidgetHostNative {
         &mut self,
         ctx: &PressCtx,
     ) -> Option<bool> {
-        if self.preview_slideshow_active() {
+        if self.editor_state.editor_ui.native_touch_dock || self.preview_slideshow_active() {
             return None;
         }
         let point = Point2D::new(ctx.x, ctx.y);
@@ -393,20 +393,7 @@ impl WidgetHostNative {
             ctx.viewport_height,
         );
         let hit = dock.hit_test(dock_rect, point)?;
-        match hit {
-            op_editor_ui::widgets::MobileDockHit::Tool(tool) => {
-                self.editor_state.tool = tool;
-            }
-            op_editor_ui::widgets::MobileDockHit::ShapeSlot => {
-                op_editor_core::host_press_transitions::toggle_shape_picker(
-                    &mut self.editor_state.editor_ui,
-                );
-            }
-            op_editor_ui::widgets::MobileDockHit::More => {
-                self.toggle_mobile_sheet(op_editor_core::size_class::MobileSheetKind::More);
-            }
-        }
-        self.mark_dirty();
+        self.dispatch_mobile_dock_hit(hit);
         Some(true)
     }
 

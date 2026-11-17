@@ -24,6 +24,7 @@ impl Default for EditorUiState {
             touch: false,
             keyboard_occlusion: 0.0,
             external_cli_available: true,
+            native_touch_dock: false,
             mobile_sheet: None,
             theme_mode: ThemeMode::Dark,
             host_theme_override: None,

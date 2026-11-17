@@ -177,7 +177,7 @@ jobs:
   publish:
     name: Archive, sign, and upload
     needs: verify
-    runs-on: macos-26
+    runs-on: xcode-27
     timeout-minutes: 120
     environment: testflight
     steps:
@@ -225,33 +225,11 @@ jobs:
           tools/pinned-release-tools.sh skia ios aarch64-apple-ios
           "$RUNNER_TEMP/openpencil-skia-aarch64-apple-ios"
 
-      - name: Validate Xcode 26, iOS 26 SDK, and source before credentials are exposed
+      - name: Validate iPhone Duo SDK and source before credentials are exposed
         shell: bash
         run: |
           set -euo pipefail
-          xcode_version=$(xcodebuild -version)
-          printf '%s\n' "$xcode_version"
-          xcode_header=${xcode_version%%$'\n'*}
-          if [[ ! $xcode_header =~ ^Xcode[[:space:]]+([0-9]+)([.][0-9]+)*$ ]]; then
-            echo "::error::could not parse the selected Xcode version"
-            exit 1
-          fi
-          xcode_major=${BASH_REMATCH[1]}
-          if (( xcode_major < 26 )); then
-            echo "::error::App Store Connect requires Xcode 26 or newer"
-            exit 1
-          fi
-          iphoneos_sdk_version=$(xcrun --sdk iphoneos --show-sdk-version)
-          if [[ ! $iphoneos_sdk_version =~ ^([0-9]+)([.][0-9]+)*$ ]]; then
-            echo "::error::could not parse the selected iPhoneOS SDK version"
-            exit 1
-          fi
-          iphoneos_sdk_major=${BASH_REMATCH[1]}
-          if (( iphoneos_sdk_major < 26 )); then
-            echo "::error::App Store Connect requires the iOS 26 SDK or newer"
-            exit 1
-          fi
-          printf 'iPhoneOS SDK %s\n' "$iphoneos_sdk_version"
+          tools/check-ios-duo-sdk.sh
           packaging/ios/Tests/validate_sources.sh
 
       - name: Validate protected production release configuration

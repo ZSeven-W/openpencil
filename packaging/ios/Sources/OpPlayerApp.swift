@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main
 struct OpenPencilPlayerApp: App {
@@ -44,7 +45,7 @@ struct OpenPencilPlayerApp: App {
     }
 }
 
-private struct OpPlayerContainer: UIViewRepresentable {
+private struct OpPlayerContainer: UIViewControllerRepresentable {
     /// Launch with `-editor` for the full desktop chrome (default), or
     /// `-viewer` for the bare document viewer.
     private static let editorMode: Bool = {
@@ -53,17 +54,20 @@ private struct OpPlayerContainer: UIViewRepresentable {
         return true
     }()
 
-    func makeUIView(context: Context) -> OpPlayerView {
-        let view = OpPlayerView(editorMode: Self.editorMode)
-        AccountDeletionCoordinator.shared.register(view)
-        return view
+    func makeUIViewController(context: Context) -> UINavigationController {
+        let editor = OpToolDockController(editorMode: Self.editorMode)
+        AccountDeletionCoordinator.shared.register(editor.playerView)
+        let navigation = UINavigationController(rootViewController: editor)
+        navigation.setNavigationBarHidden(true, animated: false)
+        navigation.setToolbarHidden(true, animated: false)
+        return navigation
     }
 
-    func updateUIView(_ view: OpPlayerView, context: Context) {
-        view.setNeedsLayout()
+    func updateUIViewController(_ navigation: UINavigationController, context: Context) {
+        (navigation.viewControllers.first as? OpToolDockController)?.playerView.setNeedsLayout()
     }
 
-    static func dismantleUIView(_ view: OpPlayerView, coordinator: ()) {
-        view.teardownEngine()
+    static func dismantleUIViewController(_ navigation: UINavigationController, coordinator: ()) {
+        (navigation.viewControllers.first as? OpToolDockController)?.playerView.teardownEngine()
     }
 }

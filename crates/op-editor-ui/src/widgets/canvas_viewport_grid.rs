@@ -25,7 +25,17 @@ struct GridMetrics {
 /// zoom decreases (skipping every other dot at low zoom) so they
 /// stay visually airy.
 pub(super) fn paint_grid(cx: &mut PaintCx<'_>, rect: Rect, viewport: &DocViewport, theme: &Theme) {
-    let metrics = grid_metrics(rect, viewport, theme);
+    paint_grid_from(cx, rect, rect.origin, viewport, theme);
+}
+
+pub(super) fn paint_grid_from(
+    cx: &mut PaintCx<'_>,
+    rect: Rect,
+    anchor: Point2D,
+    viewport: &DocViewport,
+    theme: &Theme,
+) {
+    let metrics = grid_metrics(rect, anchor, viewport, theme);
     let count = grid_dot_count_from_metrics(rect, metrics);
     let mut centers = Vec::with_capacity(count);
     let mut y = metrics.origin_y - metrics.step;
@@ -43,7 +53,10 @@ pub(super) fn paint_grid(cx: &mut PaintCx<'_>, rect: Rect, viewport: &DocViewpor
 
 #[cfg(test)]
 pub(crate) fn grid_dot_count(rect: Rect, viewport: &DocViewport) -> usize {
-    grid_dot_count_from_metrics(rect, grid_metrics(rect, viewport, &Theme::light()))
+    grid_dot_count_from_metrics(
+        rect,
+        grid_metrics(rect, rect.origin, viewport, &Theme::light()),
+    )
 }
 
 fn grid_dot_count_from_metrics(rect: Rect, metrics: GridMetrics) -> usize {
@@ -67,7 +80,7 @@ fn axis_dot_count(first: f32, limit: f32, step: f32) -> usize {
     ((limit - first) / step).ceil() as usize
 }
 
-fn grid_metrics(rect: Rect, viewport: &DocViewport, theme: &Theme) -> GridMetrics {
+fn grid_metrics(rect: Rect, anchor: Point2D, viewport: &DocViewport, theme: &Theme) -> GridMetrics {
     let zoom = viewport.zoom.max(0.0001);
     let mut step = GRID_SPACING * zoom;
     while step < 8.0 {
@@ -76,8 +89,8 @@ fn grid_metrics(rect: Rect, viewport: &DocViewport, theme: &Theme) -> GridMetric
     let dot_size = (1.5 * zoom.sqrt()).clamp(1.0, 2.5);
     GridMetrics {
         step,
-        origin_x: rect.origin.x + viewport.pan_x.rem_euclid(step),
-        origin_y: rect.origin.y + viewport.pan_y.rem_euclid(step),
+        origin_x: rect.origin.x + (anchor.x - rect.origin.x + viewport.pan_x).rem_euclid(step),
+        origin_y: rect.origin.y + (anchor.y - rect.origin.y + viewport.pan_y).rem_euclid(step),
         dot_radius: dot_size / 2.0,
         color: Color {
             r: theme.muted_foreground.r,

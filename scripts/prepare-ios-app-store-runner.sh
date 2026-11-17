@@ -42,21 +42,7 @@ xcodegen_binary="$xcodegen_root/xcodegen/bin/xcodegen"
 tools/pinned-release-tools.sh skia ios aarch64-apple-ios \
     "$RUNNER_TEMP/openpencil-skia-aarch64-apple-ios"
 
-xcode_version=$(xcodebuild -version)
-printf '%s\n' "$xcode_version"
-xcode_header=${xcode_version%%$'\n'*}
-if [[ ! $xcode_header =~ ^Xcode[[:space:]]+([0-9]+)([.][0-9]+)*$ ]] ||
-    ((BASH_REMATCH[1] < 26)); then
-    echo "error: App Store Connect requires Xcode 26 or newer" >&2
-    exit 1
-fi
-iphoneos_sdk_version=$(xcrun --sdk iphoneos --show-sdk-version)
-if [[ ! $iphoneos_sdk_version =~ ^([0-9]+)([.][0-9]+)*$ ]] ||
-    ((BASH_REMATCH[1] < 26)); then
-    echo "error: App Store Connect requires the iOS 26 SDK or newer" >&2
-    exit 1
-fi
-printf 'iPhoneOS SDK %s\n' "$iphoneos_sdk_version"
+tools/check-ios-duo-sdk.sh
 packaging/ios/Tests/validate_sources.sh
 
 printf 'build_number=%s\n' "$build_number" >> "$GITHUB_OUTPUT"

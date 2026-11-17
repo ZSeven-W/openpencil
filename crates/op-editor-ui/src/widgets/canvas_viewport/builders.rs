@@ -26,14 +26,8 @@ impl<'a> CanvasViewport<'a> {
         // The normal-mode workspace recedes behind the work on its own
         // studio backdrop; the professional editor keeps the editor
         // theme's canvas surface unchanged.
-        let fallback = if state.editor_ui.workspace.active {
-            crate::widgets::home_surface::StudioPalette::for_mode(
-                state.editor_ui.effective_theme_mode(),
-            )
-            .canvas
-        } else {
-            theme.canvas_surface
-        };
+        let fallback =
+            crate::widgets::canvas_viewport_background::editor_canvas_surface(state, &theme);
         let (canvas_background, show_grid) =
             crate::widgets::canvas_viewport_background::resolve(state, fallback);
         let viewport = DocViewport {

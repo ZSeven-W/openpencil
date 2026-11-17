@@ -46,7 +46,10 @@ impl WidgetHostNative {
             // The dock is navigation chrome, not sheet content. It stays
             // available beside the bounded iPad AI assistant, but hides under
             // true modal sheets so invisible controls cannot steal taps.
-            if !self.mobile_sheet_is_modal() && !self.editor_state.editor_ui.variables_panel_open {
+            if !self.editor_state.editor_ui.native_touch_dock
+                && !self.mobile_sheet_is_modal()
+                && !self.editor_state.editor_ui.variables_panel_open
+            {
                 let dock = op_editor_ui::widgets::MobileDock::for_editor(&self.editor_state);
                 let dock_rect = canvas_geometry::touch_dock_rect(
                     &self.editor_state,

@@ -77,6 +77,7 @@ struct ViewportSample: Equatable {
     var size: CGSize
     var scale: CGFloat
     var insets: ViewportInsets
+    var foldPreview: CGRect? = nil
 }
 
 /// Gates input while UIKit and the engine temporarily expose different
@@ -123,3 +124,33 @@ struct SuppressedTouchSet<Key: Hashable> {
         keys.subtract(values)
     }
 }
+
+#if canImport(UIKit)
+import UIKit
+
+extension ViewportSample {
+    @MainActor
+    init(view: UIView) {
+        let bounds = view.bounds
+        let safeArea = view.safeAreaInsets
+        let insets = ViewportInsets.clamped(
+            top: safeArea.top,
+            right: safeArea.right,
+            bottom: safeArea.bottom,
+            left: safeArea.left,
+            to: bounds.size
+        )
+        let fold = insets.foldLayout(
+            OPActiveDisplayDivisions(view).map(\.cgRectValue),
+            in: bounds,
+            rightToLeft: view.effectiveUserInterfaceLayoutDirection == .rightToLeft
+        )
+        self.init(
+            size: bounds.size,
+            scale: max(1, view.window?.windowScene?.screen.scale ?? view.traitCollection.displayScale),
+            insets: fold.editor,
+            foldPreview: fold.preview
+        )
+    }
+}
+#endif

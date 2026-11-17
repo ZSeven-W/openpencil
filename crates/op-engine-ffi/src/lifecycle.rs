@@ -37,6 +37,7 @@ pub(crate) struct Session {
     pub logical: (f32, f32),
     pub dpr: f32,
     pub insets: OpInsets,
+    pub fold_preview: Option<op_editor_ui::Rect>,
     pub keyboard: f32,
     pub surface: SurfaceSlot,
     /// Doc-space point at the viewport's top-left (logical points).
@@ -49,8 +50,7 @@ pub(crate) struct Session {
     pub suspended: bool,
     /// False until the user pans/zooms — resize then re-fits the page.
     pub user_interacted: bool,
-    /// Engine clock (ms, monotonic) — fed by `op_frame` / `op_pointer`;
-    /// drives text-edit history coalescing and the caret blink.
+    /// Monotonic frame and pointer clock, in milliseconds.
     pub now_ms: u64,
     /// Full-editor host (the complete desktop chrome) — `Some` only in
     /// editor mode (`OpCreateDesc.mode == 1`).
@@ -182,6 +182,7 @@ impl Session {
             logical: (options.width, options.height),
             dpr: options.dpr,
             insets: OpInsets::default(),
+            fold_preview: None,
             keyboard: 0.0,
             surface: SurfaceSlot::None,
             viewport_origin: Point2D::ZERO,
