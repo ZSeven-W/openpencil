@@ -337,6 +337,8 @@ pub enum HomeHit {
     /// lands, so the way in to an account has to be reachable without
     /// first going to the professional canvas to find it.
     Account,
+    /// Open the shared language picker from Home.
+    ToggleLocale,
     /// The top bar's 打开文件 button.
     OpenFile,
     /// The top bar's 进入专业画布 button.

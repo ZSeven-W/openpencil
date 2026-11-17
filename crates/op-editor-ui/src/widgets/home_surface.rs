@@ -416,6 +416,9 @@ impl<'a> HomeSurface<'a> {
         // A touch tablet grows the desktop-sized targets to 44 pt.
         let tablet = tablet::is_touch_tablet(self.ui);
         let hits = |rect: Rect| tablet::hits(tablet, rect, point);
+        if hits(layout.language) {
+            return Some(HomeHit::ToggleLocale);
+        }
         if hits(layout.professional) {
             return Some(HomeHit::Professional);
         }

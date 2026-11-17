@@ -187,7 +187,12 @@ impl WidgetHost {
         if !self.home_visible() || self.home_modal_open() {
             return false;
         }
-        let home = &mut self.editor_state.editor_ui.home;
+        let ui = &mut self.editor_state.editor_ui;
+        if !ui.account_menu_open && ui.escape_locale_picker() {
+            self.mark_dirty();
+            return true;
+        }
+        let home = &mut ui.home;
         if home.references_open {
             home.references_open = false;
         } else if home.connect_card_open {
@@ -240,6 +245,14 @@ impl WidgetHost {
                 viewport_width,
                 viewport_height,
             ));
+        }
+        if self.editor_state.editor_ui.account_menu_open
+            || self.editor_state.editor_ui.login_modal_open
+        {
+            return Some(false);
+        }
+        if self.editor_state.editor_ui.locale_picker.open {
+            return Some(self.try_scroll_locale_picker(x, y, delta_y, viewport_width));
         }
         if let Some(scrolled) = self.wheel_home_model_picker(x, y, delta_y) {
             return Some(scrolled);
@@ -317,6 +330,9 @@ impl WidgetHost {
             self.dispatch_account_menu_press(x, y, viewport_width, viewport_height);
             return Some(true);
         }
+        if ui.locale_picker.open {
+            return self.press_locale_picker_overlay(x, y, viewport_width);
+        }
         if ui.chat_model_picker.open {
             self.press_home_model_picker(x, y, viewport_width, viewport_height);
             return Some(true);
@@ -341,6 +357,9 @@ impl WidgetHost {
         }
         if self.home_modal_open() || self.editor_state.editor_ui.account_menu_open {
             return Some(self.cursor_move_modal_tiers(x, y).unwrap_or(false));
+        }
+        if self.editor_state.editor_ui.locale_picker.open {
+            return Some(self.update_locale_picker_hover(x, y));
         }
         if !self.editor_state.editor_ui.chat_model_picker.open {
             return None;
@@ -492,6 +511,11 @@ impl WidgetHost {
         }
         // Reverse the press / hover priority so keyboard-opened settings
         // also cover a model picker or account dropdown left underneath.
+        op_editor_ui::widgets::locale_picker::paint_locale_picker_overlay(
+            &self.editor_state,
+            backend,
+            viewport_width,
+        );
         self.paint_home_account_menu(backend, viewport_width);
         self.paint_login_modal_overlay(backend, viewport_width, viewport_height);
         self.paint_agent_settings_overlay(backend, viewport_width, viewport_height);

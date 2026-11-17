@@ -240,6 +240,11 @@ impl WidgetHost {
                 self.editor_state.editor_ui.pending_file_action =
                     Some(op_editor_core::FileAction::New);
             }
+            HomeHit::ToggleLocale => {
+                op_editor_core::host_press_transitions::toggle_locale_picker(
+                    &mut self.editor_state.editor_ui,
+                );
+            }
             HomeHit::Account => {
                 self.open_account_entry();
             }

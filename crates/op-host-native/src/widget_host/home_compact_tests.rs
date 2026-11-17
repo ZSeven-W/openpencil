@@ -294,3 +294,34 @@ fn compact_task_grid_selects_the_task() {
         HomeFamily::EventPoster
     );
 }
+
+#[test]
+fn compact_home_language_picker_scrolls_and_selects_on_touch_release() {
+    use op_editor_core::Locale;
+    use op_editor_ui::widgets::LocalePicker;
+
+    let mut host = compact_host_with(|state| state.editor_ui.locale = Locale::ZhCn);
+    let button = center(compact_layout(&host).language);
+    assert!(host.apply_press(button.x, button.y, W, H));
+    host.apply_release();
+    assert!(host.editor_state().editor_ui.locale_picker.open);
+
+    let picker = host.locale_picker_rect(W);
+    let row_y = picker.origin.y + LocalePicker::row_height() / 2.0;
+    assert!(host.apply_press(button.x, row_y, W, H));
+    assert!(host.apply_cursor_move(button.x, row_y - 70.0));
+    assert!(host.apply_release());
+    let ui = &host.editor_state().editor_ui;
+    assert!(ui.locale_picker.scroll.offset > 0.0);
+    assert!(ui.locale_picker.open);
+    assert_eq!(ui.locale, Locale::ZhCn);
+
+    assert!(host.apply_press(button.x, button.y, W, H));
+    assert!(host.apply_press(button.x, button.y, W, H));
+    host.apply_release();
+    assert!(host.apply_press(button.x, row_y, W, H));
+    assert_eq!(host.editor_state().editor_ui.locale, Locale::ZhCn);
+    assert!(host.apply_release());
+    assert_eq!(host.editor_state().editor_ui.locale, Locale::EnUs);
+    assert!(host.home_visible());
+}

@@ -73,7 +73,6 @@ const MODE_SEG_MIN_W: f32 = 48.0;
 const MODE_SEG_GAP: f32 = 2.0;
 /// `.mobile-header` paddings (`professional.css` overrides): 16 left
 /// (the brand's own x in the compact painter), 10 right, 6 gap.
-const HEADER_PAD_RIGHT: f32 = 10.0;
 const HEADER_GAP: f32 = 6.0;
 /// The settings gear: a 44 pt square icon target.
 const GEAR_W: f32 = 44.0;
@@ -96,9 +95,10 @@ pub(super) fn compact_layout_for_scrolled(
     let content_w = (width - PAGE_PAD_X * 2.0).max(200.0);
     let translate = |y: f32, h: f32| Rect::xywh(content_x, y + scroll, content_w, h);
 
-    // ── pinned top bar: brand | … | 普通/专业 | gear ─────────────────
+    // ── pinned top bar ──────────────────────────────────────────────
+    let language = super::language_button_rect(width, true);
     let gear = Rect::xywh(
-        width - HEADER_PAD_RIGHT - GEAR_W,
+        language.origin.x - GEAR_W,
         (HOME_TOPBAR_H - GEAR_W) / 2.0,
         GEAR_W,
         GEAR_W,
@@ -335,6 +335,7 @@ pub(super) fn compact_layout_for_scrolled(
         viewport: Rect::xywh(0.0, 0.0, width, height),
         open_file,
         account,
+        language,
         professional,
         mode_switch,
         mode_normal,

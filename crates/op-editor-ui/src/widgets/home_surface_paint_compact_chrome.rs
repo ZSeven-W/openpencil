@@ -181,6 +181,8 @@ pub(super) fn paint_top_bar(
         );
     }
 
+    super::super::paint_language_button(surface, cx, layout.language, palette);
+
     // The settings gear (44 pt target, shares NavSettings).
     let gear = layout.settings;
     let gear_pressed = surface.state.pressed == Some(HomeHit::NavSettings);

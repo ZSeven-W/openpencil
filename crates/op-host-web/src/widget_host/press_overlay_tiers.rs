@@ -227,6 +227,15 @@ impl WidgetHost {
         //     sets locale + closes; ANY other hit (including the
         //     Globe button itself) closes the picker AND swallows
         //     the click so the same press doesn't re-toggle open.
+        self.press_locale_picker_overlay(x, y, viewport_width)
+    }
+
+    pub(in crate::widget_host) fn press_locale_picker_overlay(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+    ) -> Option<bool> {
         if self.editor_state.editor_ui.locale_picker.open {
             let panel_rect = self.locale_picker_rect(viewport_width);
             match press_flow::press_locale_picker(

@@ -188,13 +188,16 @@ pub fn close_import_menu(state: &mut EditorState) {
     state.editor_ui.import_menu.hover = None;
 }
 
-/// Locale-picker dropdown rect — centred under the TopBar globe button,
-/// clamped 8 px inside both viewport edges.
+/// Locale-picker dropdown rect, centred under the visible globe button.
 pub fn locale_picker_rect(state: &EditorState, viewport_w: f32) -> Rect {
-    let globe = TopBar::for_editor_ui(&state.editor_ui).globe_rect(top_bar_rect(viewport_w));
-    let x = (globe.origin.x + globe.size.x / 2.0 - LOCALE_PICKER_WIDTH / 2.0)
-        .max(8.0)
-        .min(viewport_w - LOCALE_PICKER_WIDTH - 8.0);
+    let ui = &state.editor_ui;
+    let globe = if ui.home.visible {
+        super::home_surface::layout::language_button_rect(viewport_w, ui.compact_layout())
+    } else {
+        TopBar::for_editor_ui(ui).globe_rect(top_bar_rect(viewport_w))
+    };
+    let max_x = (viewport_w - LOCALE_PICKER_WIDTH - 8.0).max(8.0);
+    let x = (globe.origin.x + globe.size.x / 2.0 - LOCALE_PICKER_WIDTH / 2.0).clamp(8.0, max_x);
     Rect {
         origin: Point2D::new(x, globe.origin.y + globe.size.y + 6.0),
         size: Point2D::new(LOCALE_PICKER_WIDTH, LocalePicker::panel_height()),

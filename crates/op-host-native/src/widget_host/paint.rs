@@ -9,8 +9,8 @@ use op_editor_ui::widgets::editor_state_ext::theme_for;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
 use op_editor_ui::widgets::{
     motion_timeline, variables_panel::VariablesPanel, AIChatPlaceholder, AlignToolbar,
-    CanvasViewport, GitPanel, HomeSurface, LayoutCx, LocalePicker, PaintCx, PropertyPanel,
-    ShapePicker, StatusBar, Toolbar, TopBar, Widget, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
+    CanvasViewport, GitPanel, HomeSurface, LayoutCx, PaintCx, PropertyPanel, ShapePicker,
+    StatusBar, Toolbar, TopBar, Widget, TOOLBAR_WIDTH, TOP_BAR_HEIGHT,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -614,14 +614,11 @@ impl WidgetHostNative {
 
         // 10. LocalePicker — top-most overlay so it covers chat /
         //     toolbar / status when open.
-        if ui.locale_picker.open {
-            let picker_rect = self.locale_picker_rect(viewport_width);
-            let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
-            let mut cx = PaintCx {
-                backend: &mut *frame,
-            };
-            picker.paint(&mut cx, picker_rect);
-        }
+        op_editor_ui::widgets::locale_picker::paint_locale_picker_overlay(
+            &self.editor_state,
+            frame,
+            viewport_width,
+        );
 
         // Collaboration popover — a real shared widget anchored to the
         // collaboration status chip. It consumes only sanitized UI state;

@@ -327,6 +327,15 @@ impl WidgetHostNative {
         }
 
         // 0a. Locale picker overlay — top-most when open.
+        self.press_locale_picker_overlay(x, y, viewport_width)
+    }
+
+    pub(in crate::widget_host) fn press_locale_picker_overlay(
+        &mut self,
+        x: f32,
+        y: f32,
+        viewport_width: f32,
+    ) -> Option<bool> {
         if self.editor_state.editor_ui.locale_picker.open {
             self.refresh_layout_scene();
             let panel_rect = self.locale_picker_rect(viewport_width);

@@ -38,6 +38,9 @@ impl WidgetHostNative {
         {
             return Some(false);
         }
+        if ui.locale_picker.open {
+            return Some(self.try_scroll_locale_picker(x, y, delta_y, viewport_width));
+        }
         if let Some(scrolled) =
             self.wheel_home_model_picker(x, y, delta_y, viewport_width, viewport_height)
         {

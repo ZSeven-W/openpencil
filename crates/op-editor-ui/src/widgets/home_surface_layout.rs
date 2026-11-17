@@ -99,6 +99,7 @@ pub struct HomeLayout {
     /// The top bar's account avatar. Zero-sized when the host has not
     /// enabled the account gate, so it cannot be hit or painted.
     pub account: Rect,
+    pub language: Rect,
     pub professional: Rect,
     /// The 普通 / 专业 segmented control of the compact (phone) top bar:
     /// the whole control plus its 普通 segment. The 专业 segment reuses
@@ -157,6 +158,16 @@ pub struct HomeLayout {
     /// its three equal items. Zero on the desktop composition.
     pub bottom_nav: Rect,
     pub nav_items: [Rect; 3],
+}
+
+pub(crate) fn language_button_rect(width: f32, compact: bool) -> Rect {
+    let (padding, size) = if compact { (8.0, 44.0) } else { (30.0, 38.0) };
+    Rect::xywh(
+        width - padding - size,
+        (HOME_TOPBAR_H - size) / 2.0,
+        size,
+        size,
+    )
 }
 
 impl HomeLayout {
@@ -295,8 +306,9 @@ pub(crate) fn wide_layout_for_scrolled(
         + 30.0
         + 17.0
         + 9.0;
+    let language = language_button_rect(width, false);
     let professional = Rect::xywh(
-        width - 30.0 - professional_w,
+        language.origin.x - 10.0 - professional_w,
         (HOME_TOPBAR_H - 38.0) / 2.0,
         professional_w,
         38.0,
@@ -642,6 +654,7 @@ pub(crate) fn wide_layout_for_scrolled(
         viewport: Rect::xywh(0.0, 0.0, width, viewport_height),
         open_file,
         account,
+        language,
         professional,
         welcome,
         welcome_sub,

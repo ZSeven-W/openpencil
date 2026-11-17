@@ -63,6 +63,21 @@ impl WidgetHostNative {
             self.dispatch_account_menu_press(x, y, viewport_width, viewport_height);
             return Some(true);
         }
+        if self.editor_state.editor_ui.locale_picker.open {
+            if allow_touch_panel_defer && self.editor_state.editor_ui.touch_chrome() {
+                let point = Point2D::new(x, y);
+                if self.locale_picker_rect(viewport_width).contains(point) {
+                    self.arm_touch_panel_gesture_at(
+                        point,
+                        viewport_width,
+                        viewport_height,
+                        super::touch_panel_gesture::TouchPanelTarget::LocalePicker,
+                    );
+                    return Some(true);
+                }
+            }
+            return self.press_locale_picker_overlay(x, y, viewport_width);
+        }
         if account_ui {
             if allow_touch_panel_defer
                 && self.begin_model_picker_touch_gesture(x, y, viewport_width, viewport_height)
@@ -86,6 +101,11 @@ impl WidgetHostNative {
             return;
         }
         self.paint_home_model_picker(frame, viewport_width, viewport_height);
+        op_editor_ui::widgets::locale_picker::paint_locale_picker_overlay(
+            &self.editor_state,
+            frame,
+            viewport_width,
+        );
         self.paint_account_menu_overlay(frame, viewport_width, viewport_height);
         self.paint_login_modal_overlay(frame, viewport_width, viewport_height);
         self.paint_agent_settings_modal_overlay(frame, viewport_width, viewport_height);
@@ -333,6 +353,9 @@ impl WidgetHostNative {
             || (ui.account_ui_available && ui.account_menu_open)
         {
             return Some(self.cursor_move_modal_tiers(x, y).unwrap_or(false));
+        }
+        if ui.locale_picker.open {
+            return Some(self.update_locale_picker_hover(x, y));
         }
         if !ui.chat_model_picker.open {
             return None;

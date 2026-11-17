@@ -283,7 +283,7 @@ impl WidgetHostNative {
         true
     }
 
-    fn try_scroll_locale_picker(
+    pub(in crate::widget_host) fn try_scroll_locale_picker(
         &mut self,
         x: f32,
         y: f32,

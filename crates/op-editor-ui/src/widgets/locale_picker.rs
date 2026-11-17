@@ -9,11 +9,12 @@
 use crate::theme::Theme;
 use crate::widgets::editor_state_ext::theme_for;
 use crate::widgets::{LayoutBox, LayoutCx, PaintCx, Widget, WidgetId};
-use crate::{Point2D, Rect};
+use crate::{Point2D, Rect, RenderBackend};
 pub use jian_widgets::components::select::SelectHit;
 use jian_widgets::components::select::{Select, SelectItem, SelectState, MAX_VISIBLE_ROWS};
 use jian_widgets::Tokens;
 use op_editor_core::editor_ui_state::EditorUiState;
+use op_editor_core::EditorState;
 use op_i18n::Locale;
 
 pub const LOCALE_PICKER_WIDTH: f32 = 200.0;
@@ -140,6 +141,29 @@ impl Widget for LocalePicker {
         node.set_label("Language picker");
         node
     }
+}
+
+pub fn paint_locale_picker_overlay(
+    state: &EditorState,
+    backend: &mut dyn RenderBackend,
+    width: f32,
+) {
+    if state.editor_ui.locale_picker.open {
+        let rect = super::host_overlay_geometry::locale_picker_rect(state, width);
+        let picker = LocalePicker::for_editor_ui(&state.editor_ui);
+        picker.paint(&mut PaintCx { backend }, rect);
+    }
+}
+
+pub fn update_locale_picker_hover(state: &mut EditorState, width: f32, point: Point2D) -> bool {
+    let rect = super::host_overlay_geometry::locale_picker_rect(state, width);
+    let picker = LocalePicker::for_editor_ui(&state.editor_ui);
+    let hover = match picker.hit_popup(rect, point) {
+        SelectHit::Row(index) => Some(index),
+        SelectHit::Inside | SelectHit::Outside => None,
+    };
+    let previous = std::mem::replace(&mut state.editor_ui.locale_picker.hover, hover);
+    previous != hover
 }
 
 fn popup_anchor(popup: Rect) -> Rect {

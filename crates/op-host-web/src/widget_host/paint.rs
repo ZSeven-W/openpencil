@@ -12,8 +12,8 @@ use super::WidgetHost;
 use op_editor_ui::widgets::host_canvas_geometry as canvas_geometry;
 use op_editor_ui::widgets::variables_panel::VariablesPanel;
 use op_editor_ui::widgets::{
-    motion_timeline, AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, LocalePicker,
-    PaintCx, PropertyPanel, ShapePicker, StatusBar, Toolbar, Widget, TOOLBAR_WIDTH,
+    motion_timeline, AIChatPlaceholder, CanvasViewport, LayerPanel, LayoutCx, PaintCx,
+    PropertyPanel, ShapePicker, StatusBar, Toolbar, Widget, TOOLBAR_WIDTH,
 };
 use op_editor_ui::{Point2D, Rect, RenderBackend};
 
@@ -582,14 +582,11 @@ impl WidgetHost {
             menu.paint_select(&mut cx, anchor, menu_viewport);
         }
 
-        if ui.locale_picker.open {
-            let picker_rect = self.locale_picker_rect(viewport_width);
-            let picker = LocalePicker::for_editor_ui(&self.editor_state.editor_ui);
-            let mut cx = PaintCx {
-                backend: &mut *backend,
-            };
-            picker.paint(&mut cx, picker_rect);
-        }
+        op_editor_ui::widgets::locale_picker::paint_locale_picker_overlay(
+            &self.editor_state,
+            backend,
+            viewport_width,
+        );
 
         // Shared collaboration popover. Web builds normally keep the
         // capability unavailable for M1, but the real surface is present for

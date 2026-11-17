@@ -66,6 +66,7 @@ impl HomeSurface<'_> {
             HomeHit::NewCanvas => layout.new_canvas,
             HomeHit::OpenFile => layout.open_file,
             HomeHit::Account => layout.account,
+            HomeHit::ToggleLocale => layout.language,
             HomeHit::Professional => layout.professional,
             HomeHit::ConnectFreeTier => layout.connect_rows[0],
             HomeHit::ConnectApiKey => layout.connect_rows[1],
@@ -120,6 +121,7 @@ impl HomeSurface<'_> {
             HomeHit::OpenFile,
             HomeHit::Account,
             HomeHit::Professional,
+            HomeHit::ToggleLocale,
         ]);
         order
     }
@@ -154,6 +156,7 @@ impl HomeSurface<'_> {
             HomeHit::OpenFile
                 | HomeHit::Account
                 | HomeHit::Professional
+                | HomeHit::ToggleLocale
                 | HomeHit::ReferenceRemove(_)
                 | HomeHit::ReferencesClose
         ) {

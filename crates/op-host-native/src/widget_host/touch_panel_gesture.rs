@@ -27,6 +27,7 @@ pub(in crate::widget_host) enum TouchPanelTarget {
     Slides,
     ChatTranscript,
     ModelPicker,
+    LocalePicker,
     /// The compact (phone) Home page column.
     Home,
 }
@@ -500,6 +501,12 @@ impl WidgetHostNative {
                 gesture.viewport_w,
                 gesture.viewport_h,
             ),
+            TouchPanelTarget::LocalePicker => self.try_scroll_locale_picker(
+                gesture.start.x,
+                gesture.start.y,
+                scroll_dy,
+                gesture.viewport_w,
+            ),
             // The compact Home page column scrolls under one finger;
             // the pinned top bar and bottom nav answer taps instead.
             TouchPanelTarget::Home => self.try_scroll_home(
@@ -570,6 +577,13 @@ impl WidgetHostNative {
         match target {
             TouchPanelTarget::Canvas => !self.mobile_sheet_is_modal(),
             TouchPanelTarget::Home => ui.home.visible && ui.compact_layout(),
+            TouchPanelTarget::LocalePicker => {
+                ui.home.visible
+                    && ui.locale_picker.open
+                    && !ui.agent_settings_open
+                    && !ui.login_modal_open
+                    && !ui.account_menu_open
+            }
             TouchPanelTarget::AssetCenter => ui.scene_template_center.open,
             TouchPanelTarget::Property => {
                 (ui.mobile_sheet == Some(MobileSheetKind::Properties)

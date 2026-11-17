@@ -551,3 +551,42 @@ fn home_vertical_arrows_edit_the_prompt_and_leave_modal_input_alone() {
     host.editor_state.editor_ui.agent_settings_open = true;
     assert!(!host.apply_home_vertical_caret(true, false));
 }
+
+#[test]
+fn home_language_picker_switches_locale_without_leaving_home() {
+    use op_editor_core::Locale;
+    use op_editor_ui::widgets::LocalePicker;
+
+    let mut host = home_host();
+    host.editor_state.editor_ui.locale = Locale::ZhCn;
+    host.editor_state.editor_ui.home.set_draft("保留需求");
+    let layout = home_layout(&host);
+    let button = center(layout.language);
+    assert!(host.apply_press(button.x, button.y, W, H));
+
+    let picker = host.locale_picker_rect(W);
+    assert!(picker.origin.y > layout.language.origin.y + layout.language.size.y);
+    let row = Point2D::new(button.x, picker.origin.y + LocalePicker::row_height() / 2.0);
+    assert!(host.apply_cursor_move(row.x, row.y));
+    assert_eq!(host.editor_state.editor_ui.locale_picker.hover, Some(0));
+    assert!(host.apply_wheel(row.x, row.y, -60.0, W, H));
+    assert!(host.editor_state.editor_ui.locale_picker.scroll.offset > 0.0);
+    assert_eq!(host.editor_state.editor_ui.home.scroll_y, 0.0);
+
+    let professional = center(layout.professional);
+    assert!(host.apply_press(professional.x, professional.y, W, H));
+    assert!(!host.editor_state.editor_ui.locale_picker.open);
+    assert!(host.home_visible());
+
+    assert!(host.apply_press(button.x, button.y, W, H));
+    assert!(host.apply_press(row.x, row.y, W, H));
+    let ui = &host.editor_state.editor_ui;
+    assert_eq!(ui.locale, Locale::EnUs);
+    assert!(!ui.locale_picker.open);
+    assert!(ui.home.visible);
+    assert_eq!(ui.home.draft, "保留需求");
+
+    assert!(host.apply_press(button.x, button.y, W, H));
+    assert!(host.apply_escape());
+    assert!(!host.editor_state.editor_ui.locale_picker.open);
+}
