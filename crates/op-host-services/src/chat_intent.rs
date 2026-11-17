@@ -588,7 +588,19 @@ pub fn requests_new_whole_screen(prompt: &str) -> bool {
         return true;
     }
     if is_section_add_request(prompt) {
-        return false;
+        // A brief can request a new screen up front and list its sections
+        // in later sentences. Only the opening instruction decides scope.
+        let (opening, _) = match prompt.split_once(". ") {
+            Some(parts) => parts,
+            None => return false,
+        };
+        let opening = opening.trim().to_ascii_lowercase();
+        return DRAW_VERB_EN.iter().any(|verb| {
+            opening
+                .strip_prefix(verb)
+                .is_some_and(|rest| rest.starts_with(' '))
+        }) && !is_section_add_request(&opening)
+            && english_requests_new_screen(&opening);
     }
     // An edit pointed at the CURRENT CJK screen ("重新画一下这个页面") — the
     // creation verb is present but 这个/当前 marks it as the existing one.

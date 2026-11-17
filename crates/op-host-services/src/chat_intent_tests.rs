@@ -556,6 +556,20 @@ fn whole_screen_draw_overrides_modify_in_standard_route() {
 }
 
 #[test]
+fn new_screen_brief_with_section_requirements_bypasses_chat_classifier() {
+    let provider = Scripted::text("CHAT");
+    let state = state_with_page();
+    let prompt = "Design a dark-themed music streaming mobile app home screen. Include a Made For You section with three playlist cards.";
+    assert_eq!(
+        classify_intent_for_standard_route(&provider, &state, prompt, None),
+        DesignIntent::New,
+    );
+    assert!(!requests_new_whole_screen(
+        "Design a new section on the music home screen. Include three playlist cards.",
+    ));
+}
+
+#[test]
 fn english_page_edits_stay_on_modify_route() {
     // An English EDIT that merely mentions a page/screen must NOT be mistaken
     // for a new-screen draw — it needs a creation verb (draw/create/design/…),
