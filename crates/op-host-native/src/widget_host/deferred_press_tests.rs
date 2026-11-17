@@ -129,6 +129,10 @@ fn chat_model_row_outside_chat_wins_over_covered_canvas() {
            "x":0,"y":0,"width":3000,"height":3000}
         ]}"#,
     );
+    // Opening a document leaves the transcript minimized, but the
+    // desktop composer still displays its model picker.
+    host.editor_state_mut().chat.minimize();
+    assert!(host.editor_state().editor_ui.chat_composer_only());
     seed_many_chat_models(&mut host, 10);
     host.editor_state_mut().editor_ui.chat_model_picker.open = true;
     let card = host.ai_chat_rect(1200.0, 800.0).unwrap();
@@ -163,6 +167,35 @@ fn chat_model_row_outside_chat_wins_over_covered_canvas() {
         "the covered canvas node must not be selected by the row press"
     );
     assert!(!host.editor_state().editor_ui.chat_model_picker.open);
+
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
+    let picker = host.chat_model_picker_rect(1200.0, 800.0).unwrap();
+    let search_x = picker.origin.x + 48.0;
+    let search_y = picker.origin.y + ai_chat_model_picker::MODEL_SEARCH_H / 2.0;
+    assert!(host.apply_press(search_x, search_y, 1200.0, 800.0));
+    assert!(host.apply_text('8'));
+    assert_eq!(
+        host.editor_state().editor_ui.chat_model_picker_input.text(),
+        "8"
+    );
+
+    let filtered = host.chat_model_picker_rect(1200.0, 800.0).unwrap();
+    let row_y = filtered.origin.y
+        + ai_chat_model_picker::MODEL_SEARCH_H
+        + ai_chat_model_picker::MODEL_PICKER_PAD_Y
+        + ai_chat_model_picker::MODEL_GROUP_H
+        + ai_chat_model_picker::MODEL_ROW_H / 2.0;
+    assert!(host.apply_press(search_x, row_y, 1200.0, 800.0));
+    assert_eq!(host.editor_state().chat.selected_model, 8);
+
+    host.editor_state_mut().editor_ui.chat_model_picker.open = true;
+    let picker = host.chat_model_picker_rect(1200.0, 800.0).unwrap();
+    let footer_y = picker.origin.y + picker.size.y - ai_chat_model_picker::MODEL_FOOTER_H / 2.0;
+    assert!(host.apply_press(search_x, footer_y, 1200.0, 800.0));
+    let ui = &host.editor_state().editor_ui;
+    assert!(!ui.chat_model_picker.open);
+    assert!(ui.agent_settings_open);
+    assert_eq!(ui.agent_settings.tab, AgentSettingsTab::Agents);
 }
 
 #[test]

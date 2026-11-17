@@ -20,9 +20,6 @@ impl<'a> AIChatPlaceholder<'a> {
     /// containment check so every painted part of the overlay stays
     /// interactive and wins over controls painted underneath it.
     fn open_model_picker_hit(&self, rect: Rect, point: Point2D) -> Option<AIChatHit> {
-        if self.state.is_minimized() || !self.model_picker.open {
-            return None;
-        }
         let picker = self.model_picker_bounds(rect)?;
         if crate::widgets::ai_chat_model_picker::search_clear_hit(
             picker,
