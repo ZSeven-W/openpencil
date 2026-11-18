@@ -40,6 +40,12 @@ docs/
 packages/op-chrome-extension/docs/*
 !packages/op-chrome-extension/docs/privacy-policy.md
 
+# Keep DSH and Codex plugin documentation and README assets tracked.
+!packages/op-dsh/docs/
+!packages/op-dsh/docs/**
+!packages/op-codex/docs/
+!packages/op-codex/docs/**
+
 # Build outputs
 out/
 dist/

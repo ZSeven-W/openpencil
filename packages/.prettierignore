@@ -10,3 +10,8 @@ op-chrome-extension/vendor/
 # `op-chrome-extension/scripts/build-wasm.sh`. Generated code is never edited,
 # so formatting it would only produce churn.
 op-chrome-extension/wasm/
+
+# Independent plugin toolchains: op-dsh uses semicolon-free TS, and op-codex
+# validates exact markdown/file contracts via scripts/check-package.mjs.
+op-dsh/
+op-codex/

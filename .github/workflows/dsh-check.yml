@@ -1,0 +1,192 @@
+name: DSH plugin check
+
+# Every change must preserve both halves of the DSH plugin: the read-only
+# viewer bundle generated from op-web-sdk, and the managed native editor
+# runtime selected through the six platform packages.
+
+on:
+  pull_request:
+    paths:
+      - 'packages/op-dsh/**'
+      - 'crates/op-web-sdk/**'
+      - 'packages/op-web-sdk/**'
+      - 'crates/op-cli/assets/skill-bundle.json'
+      - 'crates/op-ai-skills/**'
+      - 'crates/op-editor-ui/assets/iconify-catalog-*.json'
+      - 'crates/op-editor-core/assets/scene_templates/**'
+      - '.github/workflows/dsh-check.yml'
+  push:
+    branches: ['main']
+    paths:
+      - 'packages/op-dsh/**'
+      - 'crates/op-web-sdk/**'
+      - 'packages/op-web-sdk/**'
+      - 'crates/op-cli/assets/skill-bundle.json'
+      - 'crates/op-ai-skills/**'
+      - 'crates/op-editor-ui/assets/iconify-catalog-*.json'
+      - 'crates/op-editor-core/assets/scene_templates/**'
+      - '.github/workflows/dsh-check.yml'
+
+concurrency:
+  group: dsh-check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24.11.0'
+  RUST_VERSION: '1.94'
+
+jobs:
+  release-scripts:
+    name: Registry convergence and release guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - working-directory: packages/op-dsh
+        run: npm run test:release-publish
+
+  plugin:
+    name: Node 24 / viewer assets + build + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: '10.12.1'
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: packages/op-dsh/pnpm-lock.yaml
+
+      - name: Install JavaScript dependencies
+        working-directory: packages/op-dsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify the OpenPencil revision and package catalog
+        working-directory: packages/op-dsh
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          node scripts/check-release-version.mjs "$version"
+
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable 2026-08-15
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-bindgen-cli matching Cargo.lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(awk '/^name = "wasm-bindgen"$/{found=1; next} found && /^version = /{gsub(/[" ]/,"",$3); print $3; exit}' Cargo.lock)"
+          if [ -z "$version" ]; then
+            echo "::error::could not resolve wasm-bindgen version from Cargo.lock"
+            exit 1
+          fi
+          cargo install wasm-bindgen-cli --version "$version" --locked
+
+      # The viewer pkg is a generated artifact and is not committed in git.
+      - name: Build the OpenPencil viewer wasm pkg
+        run: |
+          cargo build -p op-web-sdk --target wasm32-unknown-unknown --features canvaskit --release
+          wasm-bindgen --target web --out-dir crates/op-web-sdk/pkg target/wasm32-unknown-unknown/release/op_web_sdk.wasm
+
+      - name: Sync viewer assets
+        working-directory: packages/op-dsh
+        run: pnpm run sync:viewer-assets
+
+      - name: Build plugin
+        working-directory: packages/op-dsh
+        run: pnpm run build
+
+      - name: Verify six platform package metadata
+        working-directory: packages/op-dsh
+        run: node scripts/verify-platform-packages.mjs
+
+      - name: Test viewer assets
+        working-directory: packages/op-dsh
+        run: pnpm run test:viewer-assets
+
+      - name: Test client
+        working-directory: packages/op-dsh
+        run: pnpm run test:client
+
+      - name: Test host API
+        working-directory: packages/op-dsh
+        run: pnpm run test:host-api
+
+      - name: Test MCP client
+        working-directory: packages/op-dsh
+        run: pnpm run test:mcp
+
+  editor-server:
+    name: Rust 1.94 / op-host-web-server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable 2026-08-15
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: . -> target
+          shared-key: dsh-openpencil-editor-server-check
+
+      - name: Install headless server build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pkg-config libfreetype-dev libfontconfig1-dev fonts-noto-cjk
+
+      - name: Test native design planning and MCP tools
+        run: >-
+          cargo test
+          --locked
+          -p op-mcp
+          -p op-chat-agent
+          --lib
+
+      - name: Test native MCP host surface
+        run: >-
+          cargo test
+          --locked
+          -p op-host-services
+          mcp_serve
+          --lib
+
+      - name: Test collaboration document and transport queues
+        run: >-
+          cargo test
+          --locked
+          -p op-collab-host
+          -p op-collab-transport
+
+      - name: Smoke two-process document convergence
+        run: >-
+          cargo run
+          --locked
+          -p op-collab-smoke
+          --features test-issuer
+          -- run
+
+      - name: Test op-host-web-server
+        run: cargo test --locked -p op-host-web-server
+
+      - name: Verify the headless dependency boundary
+        run: bash tools/check-web-server-headless.sh

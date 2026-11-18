@@ -1,0 +1,170 @@
+{
+  "name": "@zseven-w/dsh-openpencil",
+  "version": "0.1.0-rc.15",
+  "description": "Preview, inspect, and edit real .op OpenPencil design documents inside DSH conversations — headless rendering, a read-only canvas, and a managed editor.",
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "openpencil",
+    "plugin",
+    "design"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZSeven-W/openpencil.git",
+    "directory": "packages/op-dsh"
+  },
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=24.11.0"
+  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "src",
+    "scripts",
+    "platforms.json",
+    "cordis.patch.yml",
+    "README.*.md",
+    "docs/images/dsh-openpencil-overview.png",
+    "docs/images/dsh-openpencil-logo.png",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build-design-skill.mjs && node scripts/build-icon-catalog.mjs && node scripts/build-style-guides.mjs && node scripts/build-domain-skills.mjs && node scripts/run-tool.mjs tsc -p tsconfig.json && pnpm run build:client",
+    "build:design-skill": "node scripts/build-design-skill.mjs",
+    "build:icon-catalog": "node scripts/build-icon-catalog.mjs",
+    "build:style-guides": "node scripts/build-style-guides.mjs",
+    "build:domain-skills": "node scripts/build-domain-skills.mjs",
+    "build:client": "node scripts/run-tool.mjs tsc -p tsconfig.client.json && node scripts/run-tool.mjs tsdown src/client/index.tsx --format cjs --platform browser --target es2022 --tsconfig tsconfig.client.json --deps.never-bundle react --deps.never-bundle react/jsx-runtime --deps.never-bundle react-dom --deps.never-bundle react-dom/client --out-dir .client-build --clean --sourcemap --logLevel warn && node scripts/build-client.mjs",
+    "sync:viewer-assets": "node scripts/sync-viewer-assets.mjs",
+    "test:viewer-assets": "node scripts/test-viewer-assets.mjs",
+    "test:client": "pnpm run build:client && node --test tests/client.test.mjs",
+    "test:host-api": "pnpm run build && node --test tests/host-service.test.mjs tests/design-draft-tools.test.mjs tests/design-skill.test.mjs tests/design-quality.test.mjs tests/new-tool.test.mjs tests/presentation-hydration.test.mjs tests/editor-draft-lifecycle.test.mjs tests/editor-host-lifecycle.test.mjs tests/editor-runtime.test.mjs tests/collab-bootstrap-config.test.mjs tests/run-tool.test.mjs tests/pattern-audit-regressions.test.mjs tests/package-compatibility.test.mjs tests/style-picker.test.mjs",
+    "test:design-skill": "pnpm run build && node --test tests/design-skill.test.mjs",
+    "test:design-quality": "pnpm run build && node --test tests/design-quality.test.mjs tests/new-tool.test.mjs",
+    "test:mcp": "pnpm run build && node --test tests/mcp-client.test.mjs",
+    "test:host": "pnpm run build && node scripts/test-host.mjs",
+    "build:editor-web": "node scripts/build-editor-web.mjs",
+    "build:editor-runtime": "node scripts/build-editor-runtime.mjs",
+    "stage:editor-runtime": "node scripts/stage-editor-runtime.mjs",
+    "stage:runtime": "pnpm run stage:editor-runtime",
+    "verify:packages": "node scripts/verify-platform-packages.mjs",
+    "release:sync": "node scripts/sync-platform-versions.mjs",
+    "release:check": "node scripts/check-release-version.mjs",
+    "pack:artifact": "node scripts/pack-package.mjs",
+    "verify:install": "node scripts/verify-selective-install.mjs",
+    "release:publish": "node scripts/publish-release.mjs",
+    "test:release-publish": "node --test tests/registry-convergence.test.mjs && node scripts/publish-release.mjs --self-test"
+  },
+  "packageManager": "pnpm@10.12.1",
+  "pnpm": {
+    "autoInstallPeers": true,
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-tool",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "platform": "web"
+    }
+  },
+  "dshHostRuntime": {
+    "server": {
+      "requiredServices": [
+        "tools",
+        "sessions",
+        "fs",
+        "sandboxPolicy"
+      ],
+      "optionalServices": [
+        "webServer",
+        "connection"
+      ],
+      "requiredPackages": {
+        "@deepseek-ai/dsh-fs": ">=0.1.5-rc.1",
+        "@deepseek-ai/dsh-host-webserver": ">=0.1.5-rc.1",
+        "@deepseek-ai/dsh-sandbox-policy": ">=0.1.5-rc.1",
+        "@deepseek-ai/dsh-session": ">=0.1.5-rc.1",
+        "@deepseek-ai/dsh-tools": ">=0.1.5-rc.1"
+      }
+    },
+    "client": {
+      "requiredPackages": {
+        "@deepseek-ai/dsh-client-locale": ">=0.1.5-rc.1",
+        "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.5-rc.1",
+        "@deepseek-ai/dsh-client-ui-renderer": ">=0.1.5-rc.1",
+        "@deepseek-ai/dsh-client-ui-theme": ">=0.1.5-rc.1",
+        "@deepseek-ai/dsh-client-ui-tool": ">=0.1.5-rc.1",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0"
+      },
+      "resolution": "not exercised by the server/headless plugin entry"
+    },
+    "note": "Inert documentation only; host packages are intentionally absent from dependencies and peerDependencies."
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "optionalDependencies": {
+    "@zseven-w/dsh-openpencil-darwin-arm64": "0.1.0-rc.15",
+    "@zseven-w/dsh-openpencil-darwin-x64": "0.1.0-rc.15",
+    "@zseven-w/dsh-openpencil-linux-arm64": "0.1.0-rc.15",
+    "@zseven-w/dsh-openpencil-linux-x64": "0.1.0-rc.15",
+    "@zseven-w/dsh-openpencil-win32-arm64": "0.1.0-rc.15",
+    "@zseven-w/dsh-openpencil-win32-x64": "0.1.0-rc.15"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-agent": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-attachment": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-locale": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-session": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-theme": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-tool": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-fs": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-host-webserver": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-sandbox-policy": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-session": "0.2.0-rc.2",
+    "@deepseek-ai/dsh-tools": "0.2.0-rc.2",
+    "@types/node": "^22.0.0",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "esbuild": "^0.28.2",
+    "semver": "^7.8.5",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@zseven-w/dsh-openpencil-win32-x64",
+  "version": "0.1.0-rc.15",
+  "description": "Atomic OpenPencil editor runtime for dsh-openpencil on Windows x64.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZSeven-W/openpencil.git",
+    "directory": "packages/op-dsh/npm/win32-x64"
+  },
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "engines": {
+    "node": ">=24.11.0"
+  },
+  "preferUnplugged": true,
+  "files": [
+    "bin",
+    "openpencil-runtime.json",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

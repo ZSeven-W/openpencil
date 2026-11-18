@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "openPencil": {
+    "version": "0.8.6",
+    "revision": "42d9fbf963a5576a2730e1cf07fd1b82ac368330"
+  },
+  "platforms": [
+    {
+      "id": "darwin-arm64",
+      "os": "darwin",
+      "cpu": "arm64",
+      "rustTarget": "aarch64-apple-darwin",
+      "runner": "macos-15",
+      "packageName": "@zseven-w/dsh-openpencil-darwin-arm64",
+      "binaryName": "op-host-web-server"
+    },
+    {
+      "id": "darwin-x64",
+      "os": "darwin",
+      "cpu": "x64",
+      "rustTarget": "x86_64-apple-darwin",
+      "runner": "macos-15-intel",
+      "packageName": "@zseven-w/dsh-openpencil-darwin-x64",
+      "binaryName": "op-host-web-server"
+    },
+    {
+      "id": "linux-arm64",
+      "os": "linux",
+      "cpu": "arm64",
+      "libc": "glibc",
+      "rustTarget": "aarch64-unknown-linux-gnu",
+      "runner": "ubuntu-24.04-arm",
+      "packageName": "@zseven-w/dsh-openpencil-linux-arm64",
+      "binaryName": "op-host-web-server"
+    },
+    {
+      "id": "linux-x64",
+      "os": "linux",
+      "cpu": "x64",
+      "libc": "glibc",
+      "rustTarget": "x86_64-unknown-linux-gnu",
+      "runner": "ubuntu-22.04",
+      "packageName": "@zseven-w/dsh-openpencil-linux-x64",
+      "binaryName": "op-host-web-server"
+    },
+    {
+      "id": "win32-arm64",
+      "os": "win32",
+      "cpu": "arm64",
+      "rustTarget": "aarch64-pc-windows-msvc",
+      "runner": "windows-11-arm",
+      "packageName": "@zseven-w/dsh-openpencil-win32-arm64",
+      "binaryName": "op-host-web-server.exe"
+    },
+    {
+      "id": "win32-x64",
+      "os": "win32",
+      "cpu": "x64",
+      "rustTarget": "x86_64-pc-windows-msvc",
+      "runner": "windows-2025",
+      "packageName": "@zseven-w/dsh-openpencil-win32-x64",
+      "binaryName": "op-host-web-server.exe"
+    }
+  ]
+}

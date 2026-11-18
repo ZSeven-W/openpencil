@@ -1,0 +1,10 @@
+packages:
+  - "."
+linkWorkspacePackages: false
+overrides:
+  "@zseven-w/dsh-openpencil-darwin-arm64": "link:./npm/darwin-arm64"
+  "@zseven-w/dsh-openpencil-darwin-x64": "link:./npm/darwin-x64"
+  "@zseven-w/dsh-openpencil-linux-arm64": "link:./npm/linux-arm64"
+  "@zseven-w/dsh-openpencil-linux-x64": "link:./npm/linux-x64"
+  "@zseven-w/dsh-openpencil-win32-arm64": "link:./npm/win32-arm64"
+  "@zseven-w/dsh-openpencil-win32-x64": "link:./npm/win32-x64"
