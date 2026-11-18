@@ -12,6 +12,11 @@ Three shader-fill presets are available through `.op` files and `batch_design`:
 | `spark_burst` | Start time, lifetime, origin, speed, gravity and tint |
 | `iridescent_glass` | Sphere position, radius, intensity, rainbow bands and specular reflection |
 
+For continuous camera motion set `pathSmoothness:1`. Fractional candle indices
+progressively reveal the next bar; they do not snap the camera to whole bars.
+Candlestick lighting follows physical face edges, with smoothed silhouettes
+and upper/lower wicks drawn outside the body.
+
 These are procedural surfaces, with camera controls for the candlestick scene.
 They do not import mesh models or provide a general 3D scene editor. Text and
 event overlays can remain ordinary editable nodes. Presets are expanded by

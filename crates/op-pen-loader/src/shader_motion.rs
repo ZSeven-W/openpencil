@@ -7,6 +7,7 @@ use crate::shader_preset::ExpandedShaderPreset;
 
 const MAX_CANDLES: usize = 256;
 const MAX_PATH_ROWS: usize = 256;
+mod camera_path;
 
 pub(crate) fn expand(body: &ShaderFillBody) -> Option<ExpandedShaderPreset> {
     match body.preset.as_deref()? {
@@ -87,6 +88,7 @@ fn candlesticks(body: &ShaderFillBody) -> Option<ExpandedShaderPreset> {
             ("lens", &[900.0, 0.34, 0.2, 1.0]),
             ("focal", &[1250.0]),
             ("baseline", &[bars[0]]),
+            ("edgeSoftness", &[0.8]),
         ],
     )?;
     preset.uniforms.push(ShaderUniformPayload {
@@ -97,8 +99,18 @@ fn candlesticks(body: &ShaderFillBody) -> Option<ExpandedShaderPreset> {
     source.push_str("float4 candleAt(int i){");
     source.push_str(&lookup(0, count));
     source.push_str("}\n");
-    source.push_str(&path(body, "viewPath", 6, &mut preset.uniforms)?);
-    source.push_str(&path(body, "cameraPath", 5, &mut preset.uniforms)?);
+    source.push_str(&camera_path::expand(
+        body,
+        "viewPath",
+        6,
+        &mut preset.uniforms,
+    )?);
+    source.push_str(&camera_path::expand(
+        body,
+        "cameraPath",
+        5,
+        &mut preset.uniforms,
+    )?);
     let view_sample = if source.contains("sampleView(") {
         "currentView=sampleView(t); endpoint=sampleFocus(t).x;"
     } else {
@@ -129,90 +141,6 @@ fn lookup(lo: usize, hi: usize) -> String {
         "if(i<{mid}){{{}}}else{{{}}}",
         lookup(lo, mid),
         lookup(mid, hi)
-    )
-}
-
-/// Rows: seconds + five view values, or seconds + yaw/pitch/focal/glow.
-fn path(
-    body: &ShaderFillBody,
-    name: &str,
-    width: usize,
-    uniforms: &mut Vec<ShaderUniformPayload>,
-) -> Option<String> {
-    let Some(data) = values(body, name) else {
-        return Some(String::new());
-    };
-    if data.is_empty() || !data.len().is_multiple_of(width) || data.len() / width > MAX_PATH_ROWS {
-        return None;
-    }
-    let rows: Vec<_> = data.chunks_exact(width).collect();
-    if rows.iter().any(|row| row[0] < 0.0) || rows.windows(2).any(|pair| pair[0][0] >= pair[1][0]) {
-        return None;
-    }
-    let is_view = name == "viewPath";
-    if rows.iter().any(|r| {
-        if is_view {
-            r[2] <= 0.0 || r[3] <= 0.0
-        } else {
-            r[1].abs() > 1.2 || r[2].abs() > 1.2 || r[3] < 100.0 || r[4] < 0.0
-        }
-    }) {
-        return None;
-    }
-    let components = if is_view { 8 } else { 4 };
-    let mut packed = Vec::with_capacity(rows.len() * components);
-    for row in &rows {
-        packed.extend_from_slice(&row[1..5]);
-        if is_view {
-            packed.extend_from_slice(&[row[5], 0.0, 0.0, 0.0]);
-        }
-    }
-    uniforms.push(ShaderUniformPayload {
-        name: name.to_owned(),
-        values: packed,
-    });
-    let mut source = format!("uniform float4 {name}[{}];\n", rows.len() * components / 4);
-    let stride = components / 4;
-    let kinds: &[(&str, usize)] = if is_view {
-        &[("sampleView", 0), ("sampleFocus", 1)]
-    } else {
-        &[("sampleCamera", 0)]
-    };
-    for (function, offset) in kinds {
-        source.push_str(&format!("float4 {function}(float t){{"));
-        source.push_str(&format!("if(t<={})return {name}[{offset}];", rows[0][0]));
-        source.push_str(&path_tree(&rows, 0, rows.len() - 1, name, stride, *offset));
-        source.push_str("}\n");
-    }
-    Some(source)
-}
-
-fn path_tree(
-    rows: &[&[f32]],
-    lo: usize,
-    hi: usize,
-    name: &str,
-    stride: usize,
-    offset: usize,
-) -> String {
-    let a = lo * stride + offset;
-    if lo == hi {
-        return format!("return {name}[{a}];");
-    }
-    if hi - lo == 1 {
-        let b = hi * stride + offset;
-        return format!(
-            "return mix({name}[{a}],{name}[{b}],clamp((t-{})/{},0.,1.));",
-            rows[lo][0],
-            rows[hi][0] - rows[lo][0]
-        );
-    }
-    let mid = (lo + hi) / 2;
-    format!(
-        "if(t<{}){{{}}}else{{{}}}",
-        rows[mid][0],
-        path_tree(rows, lo, mid, name, stride, offset),
-        path_tree(rows, mid, hi, name, stride, offset)
     )
 }
 

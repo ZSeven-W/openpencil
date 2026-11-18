@@ -1,13 +1,15 @@
 //! Real Skia RuntimeEffect coverage for loader-expanded shader presets.
 
 use super::*;
+#[path = "shader/candlesticks.rs"]
+mod candlesticks;
 
 #[test]
 fn motion_presets_compile_and_animate_in_real_skia() {
     for (name, uniforms) in [
         (
             "candlesticks_3d",
-            serde_json::json!({"bars":[100,110,90,105,105,115,100,112], "viewPath":[0,0,12,1,500,900,2,1,9,2,450,800], "cameraPath":[0,0.2,0.1,1000,1,2,0.4,0.3,1200,1.5]}),
+            serde_json::json!({"bars":[100,110,90,105,105,115,100,112], "pathSmoothness":1, "viewPath":[0,0,12,1,500,900,2,1,9,2,450,800], "cameraPath":[0,0.2,0.1,1000,1,2,0.4,0.3,1200,1.5]}),
         ),
         ("spark_burst", serde_json::json!({"burst":[0,2,30,10]})),
         ("iridescent_glass", serde_json::json!({})),

@@ -23,9 +23,13 @@ fill: [{ type: "shader", preset: "candlesticks_3d", uniforms: {
 `bars` contains 1–256 `[open,high,low,close]` rows flattened into one array.
 `viewPath` rows are `[seconds,index,spacing,priceScale,cursorX,cursorY]`.
 `cameraPath` rows are `[seconds,yawRadians,pitchRadians,focalPx,glow]`.
-Both paths interpolate linearly, hold their endpoints and accept 1–256 rows
+Both paths hold their endpoints and accept 1–256 rows
 with strictly increasing nonnegative times. Coordinates use a 720×1280
 scene fitted to the node. Camera angles are limited to ±1.2 radians.
+Set `pathSmoothness:1` for bounded cubic interpolation with continuous
+velocity; omit it for linear paths. Fractional indices progressively form
+the next candle and move the camera continuously. `edgeSoftness` controls
+subpixel silhouette smoothing (default 0.8 document pixels).
 Static alternatives: `view:[index,spacing,priceScale,cursorX]`,
 `lens:[cursorY,yaw,pitch,glow]`, `focal:1250`, `baseline:100`.
 
