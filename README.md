@@ -480,7 +480,8 @@ OpenPencil is part of a family of pure-Rust, AI-native tools from **[ZSeven-W](h
 
 | Project | What it is |
 | ------- | ---------- |
-| <img src="./screenshot/logo-dsh-openpencil.png" alt="DSH OpenPencil" width="40" /> **[DSH OpenPencil](https://github.com/ZSeven-W/dsh-openpencil)** | DeepSeek Harness plugin for OpenPencil — exact multi-frame `.op` previews, an interactive canvas, and a managed editor with agent-native design tools, right inside a conversation. |
+| <img src="./screenshot/logo-dsh-openpencil.png" alt="DSH OpenPencil" width="40" /> **[DSH OpenPencil](./packages/op-dsh)** | DeepSeek Harness plugin for OpenPencil — exact multi-frame `.op` previews, an interactive canvas, and a managed editor with agent-native design tools, right inside a conversation. |
+| **[Codex OpenPencil](./packages/op-codex)** | Codex plugin for OpenPencil — an interactive Rust/WASM canvas for AI-assisted UI design with one-prompt setup, selection refinement, and `.op` round-trip saves. |
 | <img src="./screenshot/logo-zode.png" alt="Zode logo" width="40" /> **[Zode](https://github.com/ZSeven-W/zode)** | Open-source, AI-native coding assistant for your terminal — a fast Rust TUI (`ratatui`) that reads your code, runs commands, searches files, and manages git. Drives OpenPencil over MCP. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | A pure-Rust async runtime for shipping LLM agents — multi-provider, tool-capable end-to-end, structured permissions, real MCP, zero `unsafe`. Powers OpenPencil's built-in agent runtime (`vendor/agent`) and Zode. |
 | <img src="./screenshot/logo-jian-rounded.png" alt="jian logo" width="40" /> **[jian](https://github.com/ZSeven-W/jian)** | Pure-Rust, GPU-Skia UI framework — widgets, layout, events, and hot reload in one stack. Turns a declarative `.op` document into a native, AI-controllable app with no JS runtime, no DOM, no Electron. OpenPencil's UI framework (`vendor/jian`). |
@@ -540,10 +541,14 @@ openpencil/
 │   ├── op-git/               Git integration — clone, branch, push/pull, merge
 │   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
 │                             op-config-store / op-process-io / op-acp / op-smoke / ...
-├── packages/                 Web SDK workspace (Bun)
+├── packages/                 Web SDK & editor/agent integrations
 │   ├── op-web-sdk/           Read-only `.op` web viewer SDK (wraps the wasm bundle)
 │   ├── op-web-sdk-react/     React 19 adapter
-│   └── op-web-sdk-vue/       Vue 3 adapter
+│   ├── op-web-sdk-vue/       Vue 3 adapter
+│   ├── op-vscode/            VS Code extension for `.op` and `.fig` editing
+│   ├── op-chrome-extension/  Chrome extension for capturing rendered web pages
+│   ├── op-dsh/               DeepSeek Harness plugin (`@zseven-w/dsh-openpencil`)
+│   └── op-codex/             Codex plugin (`@zseven-w/codex-openpencil`)
 ├── vendor/                   Vendored subsystems (git submodules)
 │   ├── jian/                 GPU-Skia UI framework — widgets/render/events
 │   ├── casement/             winit fork

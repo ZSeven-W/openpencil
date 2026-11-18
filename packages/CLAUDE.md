@@ -88,3 +88,31 @@ member — load it unpacked from `chrome://extensions`.
   `pt_BR`/`pt_PT` for Chrome's manifest-locale lookup, and writes
   `op-chrome-extension/dist/op-chrome-extension-<version>.zip` (gitignored).
   The listing's privacy policy is `op-chrome-extension/docs/privacy-policy.md`.
+
+## op-vscode (`op-vscode/`)
+
+VS Code custom editor and MCP/skill/codegen integration for `.op` and `.fig`
+files (`openpencil-vscode`, Bun workspace member). Build with `bun run build`
+and unit-test with `bun test src` inside `packages/op-vscode/`.
+
+## op-dsh (`op-dsh/`)
+
+DeepSeek Harness plugin (`@zseven-w/dsh-openpencil` plus six `@zseven-w/dsh-openpencil-*`
+platform runtime packages). Kept outside `packages/package.json` `"workspaces"`
+with its own `pnpm-lock.yaml` so DSH bundle builds and six-platform selective
+npm installs stay isolated from `packages/bun.lock`.
+
+- Build scripts read directly from `../../crates/` (skills, templates, iconify
+  catalogs, and `crates/op-web-sdk/pkg`).
+- From `packages/op-dsh/`: `pnpm run sync:viewer-assets`, `pnpm run build`,
+  `pnpm run test:viewer-assets`, `pnpm run test:client`, `pnpm run test:host-api`,
+  and `pnpm run test:mcp`.
+
+## op-codex (`op-codex/`)
+
+Zero-dependency Node >= 22 Codex plugin package (`@zseven-w/codex-openpencil`),
+paired with the root `.agents/plugins/marketplace.json` so Codex can register
+`openpencil@zseven-openpencil` directly from a checkout of this repository.
+
+- From `packages/op-codex/`: `npm run check`, `npm test`, `npm run setup`, and
+  `npm run canvas`.

@@ -49,7 +49,11 @@ crates/
 packages/
 ├── op-web-sdk/           Read-only `.op` web viewer SDK (wraps the op-host-web wasm bundle)
 ├── op-web-sdk-react/     React 19 adapter for op-web-sdk
-└── op-web-sdk-vue/       Vue 3 adapter for op-web-sdk
+├── op-web-sdk-vue/       Vue 3 adapter for op-web-sdk
+├── op-vscode/            VS Code extension (`openpencil-vscode`)
+├── op-chrome-extension/  Chrome MV3 web-capture extension (Rust/wasm core)
+├── op-dsh/               DeepSeek Harness plugin (`@zseven-w/dsh-openpencil`, standalone pnpm)
+└── op-codex/             Codex plugin (`@zseven-w/codex-openpencil`, Node >= 22, root `.agents/plugins/`)
 ```
 
 Data flow, canvas engine, Document/EditorCommand model, MCP layered-design workflow, design variables, and the run/debug recipe are all documented in **`crates/CLAUDE.md`**.
