@@ -1,0 +1,50 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "openpencil",
+  "version": "0.3.13",
+  "description": "Create, inspect, preview, and save editable OpenPencil designs with Codex.",
+  "author": {
+    "name": "ZSeven-W",
+    "url": "https://github.com/ZSeven-W"
+  },
+  "repository": "https://github.com/ZSeven-W/openpencil",
+  "homepage": "https://github.com/ZSeven-W/openpencil",
+  "license": "MIT",
+  "keywords": [
+    "openpencil",
+    "design",
+    "codex",
+    "mcp"
+  ],
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true,
+      "onboardingSkill": "./skills/openpencil-setup/SKILL.md",
+      "interface": {
+        "displayName": "OpenPencil",
+        "shortDescription": "Design editable UI on your local OpenPencil canvas",
+        "longDescription": "Open an editable Rust canvas for your conversation. The matching native editor, WASM and CanvasKit runtime downloads automatically on first use and is verified before launch. Interactive edits and Codex tools share one document, with selection context, guarded saves and recovery drafts. New image assets use Codex image generation by default and may consume generation quota, with stock-search fallback. Say use stock images only to skip generation. Requires Node.js 22+ and a local executor.",
+        "developerName": "ZSeven-W",
+        "category": "Design",
+        "capabilities": [
+          "Interactive canvas",
+          "Design UI",
+          "Inspect layout",
+          "Preview designs",
+          "Save .op files"
+        ],
+        "websiteURL": "https://github.com/ZSeven-W/openpencil",
+        "defaultPrompt": [
+          "Open an interactive OpenPencil canvas for this conversation.",
+          "Create a single-page dashboard in OpenPencil.",
+          "Inspect and refine the selected OpenPencil frame."
+        ],
+        "brandColor": "#CFB537",
+        "composerIcon": "./assets/icon.png",
+        "composerIconDark": "./assets/icon.png",
+        "logo": "./assets/logo.png",
+        "logoDark": "./assets/logo.png"
+      }
+    }
+  }
+}

@@ -1,0 +1,311 @@
+:root {
+  /* Match the Rust editor's Theme::light/dark in op-editor-ui/src/theme.rs. */
+  --text:#1d1d1f;
+  --background:#efefef;
+  --surface:#f7f7f7;
+  --popover:#fff;
+  --canvas:#f3f3f3;
+  --border:#d8d8da;
+  --muted:#68686d;
+  --subtle:var(--muted);
+  --divider:var(--border);
+  --button-background:var(--surface);
+  --button-border:var(--border);
+  --button-hover:#e8e8ea;
+  --focus:var(--primary-background);
+  --primary-background:#3b82f6;
+  --primary-text:#fff;
+  --primary-hover:color-mix(in srgb,var(--primary-background) 88%,#000);
+  --spinner-track:#e9e9e9;
+  --spinner-accent:var(--primary-background);
+  --success:#3fb950;
+  --destructive:#ef4444;
+  --error-background:color-mix(in srgb,var(--destructive) 10%,var(--popover));
+  --error-border:color-mix(in srgb,var(--destructive) 40%,var(--border));
+  --error-text:var(--text);
+  --error-shadow:#0001;
+  --dialog-border:var(--border);
+  --dialog-shadow:#0002;
+  --backdrop:#0005;
+  --input-border:#e1e1e4;
+  --input-background:var(--popover);
+  font-family:"Avenir Next","PingFang SC",sans-serif;
+  color:var(--text);
+  background:var(--background);
+  font-size:13px;
+  color-scheme:light;
+}
+:root[data-theme="dark"] {
+  color-scheme:dark;
+  --text:#fafafa;
+  --background:#121212;
+  --surface:#1e1e1e;
+  --popover:#181818;
+  --canvas:#1b1b1b;
+  --border:#313131;
+  --muted:#a3a3a3;
+  --button-hover:#2d2d2d;
+  --spinner-track:#272727;
+  --error-shadow:#0004;
+  --dialog-shadow:#0008;
+  --backdrop:#0008;
+  --input-border:#343434;
+}
+* {
+  box-sizing:border-box;
+}
+body {
+  margin:0;
+  height:100vh;
+  min-height:420px;
+  display:flex;
+  flex-direction:column;
+}
+header {
+  height:58px;
+  flex:none;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 18px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+  gap:12px;
+}
+.brand,.actions {
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.brand strong {
+  font-size:17px;
+  letter-spacing:-.6px;
+}
+.mark {
+  width:29px;
+  height:29px;
+  display:block;
+  flex:none;
+  object-fit:contain;
+}
+.context {
+  font-size:10px;
+  font-weight:600;
+  letter-spacing:1.6px;
+  color:var(--muted);
+  border-left:1px solid var(--divider);
+  padding-left:12px;
+}
+.actions #status {
+  font-size:12px;
+  color:var(--muted);
+  max-width:180px;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  overflow:hidden;
+}
+button {
+  font:inherit;
+  background:var(--button-background);
+  border:1px solid var(--button-border);
+  padding:8px 13px;
+  border-radius:7px;
+  cursor:pointer;
+  color:inherit;
+}
+button:hover:not(:disabled) {
+  background:var(--button-hover);
+}
+button:focus-visible,input:focus-visible,textarea:focus-visible {
+  outline:2px solid var(--focus);
+  outline-offset:3px;
+}
+button:disabled {
+  opacity:.45;
+  cursor:default;
+}
+.primary {
+  background:var(--primary-background);
+  color:var(--primary-text);
+  border-color:var(--primary-background);
+}
+.primary:hover:not(:disabled) {
+  background:var(--primary-hover);
+}
+kbd {
+  font:10px "Menlo",monospace;
+  margin-left:10px;
+  opacity:.65;
+}
+main {
+  flex:1;
+  position:relative;
+  min-height:0;
+  background:var(--canvas);
+}
+iframe {
+  width:100%;
+  height:100%;
+  border:0;
+  display:block;
+}
+#loading {
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-direction:column;
+  gap:12px;
+  background:var(--background);
+  pointer-events:none;
+}
+#loading span:last-child {
+  color:var(--subtle);
+  font-size:12px;
+}
+.spinner {
+  width:24px;
+  height:24px;
+  border:2px solid var(--spinner-track);
+  border-top-color:var(--spinner-accent);
+  border-radius:50%;
+  animation:rotate 1.2s linear infinite;
+}
+@keyframes rotate {
+  to {
+    transform:rotate(360deg);
+  }
+}
+footer {
+  height:28px;
+  flex:none;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding:0 16px;
+  color:var(--muted);
+  font-size:10px;
+  border-top:1px solid var(--border);
+  background:var(--surface);
+}
+#document-label {
+  flex:1;
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+#selection-label {
+  margin-left:auto;
+  min-width:0;
+  max-width:55%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:var(--text);
+}
+.live-dot {
+  flex:none;
+  width:5px;
+  height:5px;
+  border-radius:50%;
+  background:var(--success);
+}
+#error {
+  position:absolute;
+  top:70px;
+  left:18px;
+  right:18px;
+  max-height:150px;
+  overflow:auto;
+  background:var(--error-background);
+  border:1px solid var(--error-border);
+  color:var(--error-text);
+  border-radius:8px;
+  padding:12px 48px 12px 16px;
+  box-shadow:0 5px 24px var(--error-shadow);
+}
+#error-dismiss {
+  position:absolute;
+  top:5px;
+  right:6px;
+  padding:3px 8px;
+  font-size:20px;
+  background:transparent;
+  border:0;
+  color:inherit;
+}
+dialog {
+  border:1px solid var(--dialog-border);
+  border-radius:13px;
+  padding:26px;
+  width:min(550px,90vw);
+  background:var(--popover);
+  color:var(--text);
+  box-shadow:0 20px 80px var(--dialog-shadow);
+}
+dialog::backdrop {
+  background:var(--backdrop);
+}
+dialog h2 {
+  margin:0 0 10px;
+  font-size:22px;
+  letter-spacing:-.7px;
+}
+dialog p {
+  line-height:1.7;
+  color:var(--muted);
+  margin-bottom:24px;
+}
+dialog label {
+  display:block;
+  margin-bottom:8px;
+  font-weight:600;
+}
+dialog input {
+  width:100%;
+  padding:11px;
+  border:1px solid var(--input-border);
+  border-radius:6px;
+  background:var(--input-background);
+  color:var(--text);
+  font:13px Menlo,monospace;
+}
+.dialog-actions {
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  margin-top:24px;
+}
+[hidden] {
+  display:none!important;
+}
+@media(max-width:650px) {
+  .context,kbd {
+    display:none;
+  }
+  header {
+    padding:0 10px;
+  }
+  .actions {
+    gap:6px;
+  }
+  .actions #status {
+    max-width:85px;
+  }
+  button {
+    padding:8px;
+  }
+  .brand {
+    gap:7px;
+  }
+  .brand strong {
+    font-size:14px;
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  .spinner {
+    animation:none;
+  }
+}

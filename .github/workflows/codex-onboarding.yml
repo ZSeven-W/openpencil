@@ -1,0 +1,42 @@
+name: Codex plugin fresh install
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel, ubuntu-22.04, ubuntu-24.04-arm, windows-2025, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Linux font libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1 libfreetype6
+      - name: Install public Codex CLI
+        run: npm install --global @openai/codex@0.162.1
+      - name: Install from empty state and exercise the installed plugin
+        working-directory: packages/op-codex
+        env:
+          GIT_TERMINAL_PROMPT: '0'
+        run: |
+          export CODEX_HOME="$(node -p 'require("path").resolve("artifacts/fresh-codex")')"
+          export OPENPENCIL_CODEX_STATE_DIR="$(node -p 'require("path").resolve("artifacts/fresh-runtime")')"
+          npm run setup
+          node scripts/installed-smoke.mjs
+          node scripts/terminal-smoke.mjs
+          if [[ "$RUNNER_OS" != "Windows" ]]; then node scripts/terminal-smoke.mjs --pty; fi
+          npm run setup

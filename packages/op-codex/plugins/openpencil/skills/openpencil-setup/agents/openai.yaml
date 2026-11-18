@@ -1,0 +1,4 @@
+interface:
+  display_name: "Connect OpenPencil"
+  short_description: "Verify and connect the local Rust design editor"
+  default_prompt: "Use $openpencil-setup to connect this plugin to my OpenPencil editor."

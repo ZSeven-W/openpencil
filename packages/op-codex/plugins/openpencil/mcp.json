@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "codex_openpencil": {
+      "type": "stdio",
+      "command": "./scripts/launch-mcp",
+      "args": [],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}

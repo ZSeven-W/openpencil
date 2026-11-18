@@ -1,0 +1,31 @@
+{
+  "name": "@zseven-w/codex-openpencil",
+  "version": "0.3.13",
+  "private": true,
+  "description": "OpenPencil design workflows and a local MCP bridge for Codex",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZSeven-W/openpencil.git",
+    "directory": "packages/op-codex"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/check-package.mjs",
+    "doctor": "node plugins/openpencil/scripts/mcp-bridge.mjs --doctor",
+    "host-check": "node scripts/plugin-host-check.mjs",
+    "configure-runtime": "node scripts/configure-runtime.mjs",
+    "canvas-smoke": "node scripts/canvas-smoke.mjs",
+    "selection-smoke": "node scripts/selection-smoke.mjs",
+    "images-smoke": "node scripts/images-smoke.mjs",
+    "mobile-smoke": "node scripts/mobile-smoke.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "setup": "node scripts/setup.mjs",
+    "canvas": "node scripts/canvas.mjs",
+    "codegen-smoke": "node scripts/codegen-smoke.mjs"
+  }
+}

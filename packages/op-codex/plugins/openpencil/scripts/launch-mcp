@@ -1,0 +1,22 @@
+#!/bin/sh
+# GUI hosts may not inherit the terminal's Node version-manager PATH.
+set -eu
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+state_dir="$HOME/.codex-openpencil"
+node_bin=
+if [ -f "$state_dir/node-path" ]; then
+  IFS= read -r node_bin < "$state_dir/node-path" || true
+fi
+usable_node() {
+  [ -n "$1" ] && "$1" -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)' >/dev/null 2>&1
+}
+if usable_node "$node_bin"; then
+  exec "$node_bin" "$script_dir/mcp-bridge.mjs" "$@"
+fi
+for candidate in "$(command -v node || true)" /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
+  if usable_node "$candidate"; then
+    exec "$candidate" "$script_dir/mcp-bridge.mjs" "$@"
+  fi
+done
+printf '%s\n' 'OpenPencil requires Node.js 22+. Run npm run setup from its repository to register your current Node executable, then reconnect the plugin.' >&2
+exit 1

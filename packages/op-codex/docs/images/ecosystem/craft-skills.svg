@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="title desc">
+  <title id="title">Craft Skills ecosystem identifier</title>
+  <desc id="desc">Four interlocking pieces representing reusable, carefully assembled agent skills.</desc>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="#151921" stroke="#465062" stroke-width="1.5"/>
+  <path d="M16 27V16h18M37 16h11v18M48 37v11H30M27 48H16V30" fill="none" stroke="#E7C77E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m32 24 8 8-8 8-8-8Z" fill="#F4F1E9"/>
+</svg>

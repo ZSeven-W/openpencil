@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenPencil Design"
+  short_description: "Build, inspect, and save editable .op UI designs"
+  default_prompt: "Use $openpencil-design to create an editable UI and verify its saved output."

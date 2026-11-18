@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "release": "runtime-v0.8.5-d155cd0",
+  "openPencilVersion": "0.8.5",
+  "openPencilRevision": "d155cd08c09cdb79f4c0a2c733dc5f9376765abd",
+  "platforms": {
+    "darwin-arm64": {
+      "platform": "darwin-arm64",
+      "asset": "openpencil-runtime-darwin-arm64.tar.gz",
+      "bytes": 43709355,
+      "sha256": "1090ccaea36d3e77adb286c5a8951b73c89d1d1abaecc43d40580af78e17caff"
+    },
+    "darwin-x64": {
+      "platform": "darwin-x64",
+      "asset": "openpencil-runtime-darwin-x64.tar.gz",
+      "bytes": 44390284,
+      "sha256": "4d01d52db2bb3697ae559e5a4f84fa44d7c784967c7d6b96aac6db0f521a4aec"
+    },
+    "linux-arm64": {
+      "platform": "linux-arm64",
+      "asset": "openpencil-runtime-linux-arm64.tar.gz",
+      "bytes": 45097218,
+      "sha256": "e3b1a52770fe7d81b0608327a11aa83a159b6e7e942f44834ea3a675ca4bdb0a"
+    },
+    "linux-x64": {
+      "platform": "linux-x64",
+      "asset": "openpencil-runtime-linux-x64.tar.gz",
+      "bytes": 45737239,
+      "sha256": "a24c503018873c0be932d0eca2455aec75feca2862fdc761801ec85be765b20b"
+    },
+    "win32-arm64": {
+      "platform": "win32-arm64",
+      "asset": "openpencil-runtime-win32-arm64.tar.gz",
+      "bytes": 44319195,
+      "sha256": "c84dc99e910fa38a44ef3cd5dda3327d87a094481444beef96f94fae2fd537d1"
+    },
+    "win32-x64": {
+      "platform": "win32-x64",
+      "asset": "openpencil-runtime-win32-x64.tar.gz",
+      "bytes": 45610297,
+      "sha256": "68aa88536328494466d595e97c7bc3419466c37fb0d58b535b80a03055497f7e"
+    }
+  }
+}

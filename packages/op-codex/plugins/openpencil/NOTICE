@@ -1,0 +1,10 @@
+The node and layout reference in plugins/openpencil/skills/openpencil-design/
+references/node-schema.md is adapted from the MIT-licensed bundled design skill
+in ZSeven-W/openpencil (crates/op-cli/assets/skill-bundle.json).
+Copyright (c) 2026 ZSeven-W.
+
+The managed editor protocol and structural image-reference visitor follow the
+MIT-licensed Rust OpenPencil engine and DSH OpenPencil integration by ZSeven-W.
+The runtime is configured separately, not redistributed in this plugin.
+
+This is an independent OpenPencil integration, not an OpenAI-authored plugin.

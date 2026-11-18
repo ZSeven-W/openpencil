@@ -1,0 +1,12 @@
+{
+  "name": "zseven-openpencil",
+  "interface": { "displayName": "ZSeven · OpenPencil" },
+  "plugins": [
+    {
+      "name": "openpencil",
+      "source": { "source": "local", "path": "./plugins/openpencil" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Design"
+    }
+  ]
+}

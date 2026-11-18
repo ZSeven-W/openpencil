@@ -1,0 +1,34 @@
+name: Codex plugin check
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - '.agents/plugins/marketplace.json'
+      - 'packages/op-codex/**'
+      - '.github/workflows/codex-check.yml'
+  pull_request:
+    paths:
+      - '.agents/plugins/marketplace.json'
+      - 'packages/op-codex/**'
+      - '.github/workflows/codex-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - working-directory: packages/op-codex
+        run: npm run check
+      - working-directory: packages/op-codex
+        run: npm test

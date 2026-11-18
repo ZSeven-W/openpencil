@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="title desc">
+  <title id="title">DSH QA ecosystem identifier</title>
+  <desc id="desc">A magnifying glass and check mark representing inspection backed by evidence.</desc>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="#151921" stroke="#465062" stroke-width="1.5"/>
+  <circle cx="28" cy="28" r="14" fill="none" stroke="#F4F1E9" stroke-width="4"/>
+  <path d="m39 39 10 10" fill="none" stroke="#F4F1E9" stroke-width="6" stroke-linecap="round"/>
+  <path d="m21 28 5 5 10-11" fill="none" stroke="#85D9BE" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

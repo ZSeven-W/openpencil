@@ -1,0 +1,153 @@
+name: Release Codex editor runtime
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
+  web:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.94'
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: codex-runtime-wasm
+      - name: Install bundle tools
+        shell: bash
+        run: |
+          version=$(awk '/^name = "wasm-bindgen"$/{found=1; next} found && /^version = /{gsub(/[" ]/,"",$3); print $3; exit}' Cargo.lock)
+          cargo install wasm-bindgen-cli --version "$version" --locked
+          curl -fsSL https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-x86_64-linux.tar.gz | tar -xz
+          echo "$PWD/binaryen-version_123/bin" >> "$GITHUB_PATH"
+      - run: bash tools/check-wasm-bundle.sh
+      - name: Assemble web assets
+        run: |
+          mkdir web-bundle
+          cp -R crates/op-host-web/pkg/. web-bundle/
+          cp -R crates/op-host-web/assets/canvaskit web-bundle/canvaskit
+          test -f web-bundle/assets/i18n/ja.json
+          test -d web-bundle/assets/scene_templates
+          test -d web-bundle/assets/prompt_center_previews
+      - uses: actions/upload-artifact@v4
+        with:
+          name: editor-web
+          path: web-bundle
+          retention-days: 7
+
+  native:
+    needs: web
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel, ubuntu-22.04, ubuntu-24.04-arm, windows-2025, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.94'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: codex-runtime-native
+      - name: Linux prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libfreetype-dev libfontconfig1-dev fonts-noto-cjk
+      - uses: actions/download-artifact@v4
+        with:
+          name: editor-web
+          path: web-bundle
+      - name: Build native editor
+        run: cargo build --release --locked -p op-host-web-server
+      - name: Stage complete runtime
+        run: node packages/op-codex/scripts/stage-runtime.mjs . web-bundle output
+      - name: Native edit, save and reopen smoke
+        working-directory: packages/op-codex
+        run: |
+          export OPENPENCIL_EDITOR_RUNTIME_DIR="$(node -p 'require("path").resolve("../../output/runtime")')"
+          export OPENPENCIL_CODEX_STATE_DIR="$(node -p 'require("path").resolve("artifacts/runtime-state")')"
+          npm run canvas-smoke
+          npm run codegen-smoke
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-${{ matrix.os }}
+          path: |
+            output/*.tar.gz
+            output/*.json
+          retention-days: 7
+
+  publish:
+    needs: [audit, native]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: runtime-*
+          path: release
+          merge-multiple: true
+      - name: Publish verified assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          OP_VERSION="$(bash scripts/workspace-version.sh)"
+          OP_REV="$(git rev-parse HEAD)"
+          RUNTIME_TAG="runtime-v${OP_VERSION}-${OP_REV:0:7}"
+          export OP_VERSION OP_REV RUNTIME_TAG
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const platforms = Object.fromEntries(
+              fs.readdirSync("release")
+                .filter(n => n.endsWith(".json") && n !== "runtime-catalog.json")
+                .map(n => {
+                  const p = JSON.parse(fs.readFileSync("release/" + n, "utf8"));
+                  return [p.platform, p];
+                }),
+            );
+            if (Object.keys(platforms).length !== 6) throw Error("Expected six native platforms");
+            fs.writeFileSync("release/runtime-catalog.json", JSON.stringify({
+              schemaVersion: 1,
+              repository: process.env.GH_REPO,
+              release: process.env.RUNTIME_TAG,
+              openPencilVersion: process.env.OP_VERSION,
+              openPencilRevision: process.env.OP_REV,
+              platforms,
+            }, null, 2) + "\n");
+          '
+          gh release create "$RUNTIME_TAG" release/*.tar.gz release/runtime-catalog.json \
+            --latest=false \
+            --title "Rust editor runtime ${OP_VERSION} (${OP_REV:0:7})" \
+            --notes "Complete native Rust editor, matching editable WASM, CanvasKit, fonts and product assets. Six native build runners pass edit/save/reopen and design-to-code round-trip smoke tests. Dependency audit passes with documented build-only SDK exceptions."
