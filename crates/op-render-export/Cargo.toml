@@ -37,6 +37,9 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
 base64 = "0.22"
 op-preview-core = { path = "../op-preview-core" }
 
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
+op-audio = { path = "../op-audio" }
+
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dev-dependencies]
 mp4 = "0.14.0"
 rusty_h264-common = { version = "0.17.2", default-features = false, features = ["std"] }

@@ -99,6 +99,7 @@ impl AutoFinalize {
     pub fn note_finalize(&mut self, revision: u64) {
         if self.enabled() {
             self.finalized_at_revision = Some(revision);
+            self.last_write_at = None;
         }
     }
 
@@ -131,6 +132,7 @@ impl AutoFinalize {
         *state = recorded.state;
         let finalized_revision = state.document_revision();
         self.finalized_at_revision = Some(finalized_revision);
+        self.last_write_at = None;
         eprintln!(
             "openpencil-desktop mcp: auto-finalize ({reason}) repairs={} revision={finalized_revision}",
             summary.total_repairs()
@@ -140,6 +142,24 @@ impl AutoFinalize {
 
     fn enabled(&self) -> bool {
         self.idle_after != Duration::MAX
+    }
+}
+
+#[cfg(test)]
+mod finalize_barrier_tests {
+    use super::*;
+    #[test]
+    fn explicit_finalize_does_not_rearm_after_a_precise_audio_or_geometry_edit() {
+        let now = Instant::now();
+        let mut finalize = AutoFinalize::for_test(Duration::ZERO);
+        finalize.note_write(now);
+        assert!(finalize.due(now, 1));
+        finalize.note_finalize(1);
+        assert!(!finalize.due(now, 2));
+        assert!(!arms_auto_finalize("import_audio"));
+        assert!(!arms_auto_finalize("generate_voiceover"));
+        finalize.note_write(now);
+        assert!(finalize.due(now, 3));
     }
 }
 

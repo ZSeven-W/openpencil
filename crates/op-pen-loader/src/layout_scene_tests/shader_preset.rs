@@ -145,3 +145,15 @@ fn unknown_preset_is_ignored_and_authored_sksl_remains_the_fallback() {
         .expect("unknown preset falls back to authored source");
     assert_eq!(shader.sksl, "half4 main(float2 p){ return half4(1.0); }");
 }
+
+#[test]
+fn authored_shader_size_is_bound_without_a_placeholder_uniform() {
+    let source = shader_fixture(
+        r#""sksl":"uniform float2 size; half4 main(float2 p){return half4(p/size,0,1);}""#,
+        320.0,
+        180.0,
+    );
+    let scene = editor_state_to_layout_scene(&state_from(&source));
+    let shader = scene.pages[0].children[0].shader.as_ref().unwrap();
+    assert_eq!(uniform(shader, "size"), [320.0, 180.0]);
+}

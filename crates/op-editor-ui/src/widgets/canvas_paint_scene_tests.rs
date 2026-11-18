@@ -93,3 +93,57 @@ fn only_a_playing_timeline_asks_for_frames() {
     state.editor_ui.preview.mode = true;
     assert!(!motion_timeline_playing(&state), "Preview hides the panel");
 }
+
+#[test]
+fn shader_time_follows_the_paused_playhead_only_inside_its_scope() {
+    use crate::layout_scene::SceneShader;
+    let mut state = state();
+    state.toggle_motion_timeline();
+    state.scrub_motion_playhead(200.0, 0);
+    let mut base = scene();
+    for root in &mut base.pages[0].children {
+        root.children[0].shader = Some(SceneShader {
+            sample_time: None,
+            sksl: "uniform float time; half4 main(float2 p){return half4(time,0,0,1);}".into(),
+            uniforms: Vec::new(),
+            opacity: 1.0,
+            fallback: crate::Color::BLACK,
+        });
+    }
+    let sampled = canvas_paint_scene(&state, &base, None, 99_000).unwrap();
+    assert_eq!(
+        sampled
+            .active_page()
+            .unwrap()
+            .find("card")
+            .unwrap()
+            .shader
+            .as_ref()
+            .unwrap()
+            .sample_time,
+        Some(0.2)
+    );
+    assert_eq!(
+        sampled
+            .active_page()
+            .unwrap()
+            .find("other")
+            .unwrap()
+            .shader
+            .as_ref()
+            .unwrap()
+            .sample_time,
+        None
+    );
+    assert_eq!(
+        base.active_page()
+            .unwrap()
+            .find("card")
+            .unwrap()
+            .shader
+            .as_ref()
+            .unwrap()
+            .sample_time,
+        None
+    );
+}

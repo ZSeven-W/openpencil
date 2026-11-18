@@ -99,6 +99,7 @@ accesskit = "0.24"
 # `op_editor_core::EditorState` (canonical `.op` document) instead of the
 # old shell-core `Document`.
 op-editor-core = { path = "../op-editor-core" }
+op-audio = { path = "../op-audio" }
 # Transport-free host state machines shared with web/native hosts.
 op-editor-host-core = { path = "../op-editor-host-core" }
 # Shared `~/.openpencil` well-known paths used by CLI and desktop discovery.

@@ -1,17 +1,19 @@
 use std::collections::BTreeMap;
-use std::io::Cursor;
 
 use base64::Engine as _;
 use jian_ops_schema::{node::PenNode, PenDocument};
 use op_editor_core::{walkers::find_node, EditorState, NodeId};
 use op_editor_ui::layout_scene::LayoutScene;
 use op_mcp::{McpTool, ToolErrorCode, ToolOutcome};
-use op_render_export::motion::{export_motion, ClipTrigger, MotionExportOptions, MotionFormat};
+use op_render_export::motion::{
+    export_motion_bytes, ClipTrigger, MotionExportOptions, MotionFormat,
+};
 
 use crate::export::{render_node_on_page_raster_bytes, render_page_raster_bytes, RasterFormat};
 use crate::export_pdf::{render_node_on_page_pdf_bytes, render_page_pdf_bytes};
 
 pub struct ExportItem {
+    allow_audio_mixing: bool,
     scene: LayoutScene,
     document: Option<PenDocument>,
     selected_node_id: Option<String>,
@@ -111,6 +113,10 @@ impl McpTool for ExportItem {
 }
 
 impl ExportItem {
+    pub(crate) fn with_audio_mixing(mut self, allowed: bool) -> Self {
+        self.allow_audio_mixing = allowed;
+        self
+    }
     pub(super) fn motion_export_response(
         &self,
         args: &BTreeMap<String, String>,
@@ -145,6 +151,15 @@ impl ExportItem {
             args.get("trigger").map(String::as_str),
             args.get("clip").map(String::as_str),
         )?;
+        if format == MotionFormat::Mp4
+            && !self.allow_audio_mixing
+            && op_editor_core::audio_tracks::audio_duration_ms(node, &trigger) > 0
+        {
+            return Err((
+                ToolErrorCode::ToolFailed,
+                "tool-not-available: MP4 audio mixing is unavailable on this deployment".into(),
+            ));
+        }
         let fps = args
             .get("fps")
             .map(|value| value.parse::<u32>())
@@ -181,10 +196,8 @@ impl ExportItem {
             reduced_motion,
             ..Default::default()
         };
-        let mut output = Cursor::new(Vec::new());
-        export_motion(&mut output, &scene, node, format, &options)
-            .map_err(|error| (ToolErrorCode::ToolFailed, error.to_string()))?;
-        Ok(output.into_inner())
+        export_motion_bytes(&scene, node, format, &options)
+            .map_err(|error| (ToolErrorCode::ToolFailed, error.to_string()))
     }
     pub(super) fn motion_target(
         &self,
@@ -273,6 +286,7 @@ fn unsupported_format(format: &str) -> ToolOutcome {
 
 pub fn export_item_snapshot(state: &EditorState) -> ExportItem {
     ExportItem {
+        allow_audio_mixing: true,
         scene: op_pen_loader::editor_state_to_layout_scene(state),
         document: Some(state.doc.clone()),
         selected_node_id: state
@@ -292,6 +306,22 @@ mod tests {
     use std::collections::BTreeMap;
 
     use crate::export::test_support::filled_rect;
+
+    #[test]
+    fn shared_audio_export_is_refused_before_starting_a_media_process() {
+        let doc=serde_json::from_value(serde_json::json!({"version":"1.0","children":[{
+            "type":"frame","id":"board","width":16,"height":16,
+            "audioTracks":[{"id":"voice","name":"Voice","source":"data:audio/wav;base64,UklGRg==","durationMs":1000}]
+        }]})).unwrap();
+        let tool = export_item_snapshot(&EditorState::from_document(doc)).with_audio_mixing(false);
+        let result = tool.call(&BTreeMap::from([
+            ("itemId".into(), "board".into()),
+            ("format".into(), "mp4".into()),
+        ]));
+        assert!(
+            matches!(result,ToolOutcome::Err(_,message) if message.contains("tool-not-available"))
+        );
+    }
 
     #[test]
     fn exports_a_named_clip_through_the_live_canvas_tool() {
@@ -354,6 +384,7 @@ mod tests {
 
     fn tool_from_scene(scene: LayoutScene, selected_node_id: Option<String>) -> ExportItem {
         ExportItem {
+            allow_audio_mixing: true,
             scene,
             document: None,
             selected_node_id,

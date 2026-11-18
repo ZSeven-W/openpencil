@@ -45,6 +45,10 @@ pub fn paint(
 /// What a lane shows.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TimelineLane {
+    Audio {
+        node_id: String,
+        track: op_editor_core::audio_tracks::AudioTrack,
+    },
     /// One animation, drag-previewed; `expanded` shows its property
     /// sub-tracks below it.
     Strip {
@@ -77,7 +81,7 @@ impl TimelineRow {
     pub fn strip(&self) -> Option<&TimelineStrip> {
         match &self.lane {
             TimelineLane::Strip { strip, .. } | TimelineLane::Property { strip, .. } => Some(strip),
-            TimelineLane::Empty { .. } => None,
+            TimelineLane::Empty { .. } | TimelineLane::Audio { .. } => None,
         }
     }
 
@@ -87,13 +91,14 @@ impl TimelineRow {
             TimelineLane::Strip { strip, .. } | TimelineLane::Property { strip, .. } => {
                 &strip.node_id
             }
-            TimelineLane::Empty { node_id } => node_id,
+            TimelineLane::Empty { node_id } | TimelineLane::Audio { node_id, .. } => node_id,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MotionTimelineView {
+    pub audio_busy: bool,
     pub locale: Locale,
     /// Name of the projected root.
     pub scope_label: Option<String>,
@@ -129,10 +134,27 @@ impl MotionTimelineView {
             .iter()
             .filter_map(|strip| strip.end_ms)
             .fold(projection.clip_ms, f64::max);
-        let rows = scope
+        let mut rows = scope
             .map(|root| motion_timeline_rows::rows(state, root, &strips))
             .unwrap_or_default();
+        if let (Some(root), Some(trigger)) = (scope, timeline.clip_trigger()) {
+            let mut audio_rows: Vec<_> =
+                op_editor_core::audio_tracks::collect_audio_tracks(root, &trigger)
+                    .into_iter()
+                    .map(|(owner, track)| TimelineRow {
+                        label: format!("♪ {}{}", if track.muted { "○ " } else { "" }, track.name),
+                        depth: 0,
+                        lane: TimelineLane::Audio {
+                            node_id: owner.to_owned(),
+                            track: track.clone(),
+                        },
+                    })
+                    .collect();
+            audio_rows.append(&mut rows);
+            rows = audio_rows;
+        }
         Self {
+            audio_busy: timeline.audio_busy || timeline.audio_preview_busy,
             locale: state.editor_ui.locale,
             scope_label: scope.map(motion_node_label),
             scope_id: scope.map(|root| root.id_str().to_owned()),
@@ -189,6 +211,13 @@ impl MotionTimelineView {
 
     /// Why the lanes are empty, if they are.
     pub fn empty_message(&self) -> Option<&'static str> {
+        if self
+            .rows
+            .iter()
+            .any(|row| matches!(row.lane, TimelineLane::Audio { .. }))
+        {
+            return None;
+        }
         if !self.strips.is_empty() {
             return None;
         }

@@ -681,6 +681,7 @@ use screenshot_tool::get_screenshot_snapshot;
 pub(crate) mod export_tool;
 use export_tool::export_nodes_snapshot;
 
+mod audio_tools;
 pub(crate) mod export_item_tool;
 pub(crate) mod motion_render_tools;
 use export_item_tool::export_item_snapshot;

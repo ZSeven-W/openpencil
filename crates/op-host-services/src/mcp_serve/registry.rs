@@ -80,7 +80,10 @@ pub(super) fn rebuild_registry(
         tool_search_snapshot(tool_profile::tool_search_schemas(profile))
     );
     register_tool!("get_screenshot", get_screenshot_snapshot(doc));
-    register_tool!("export_item", export_item_snapshot(doc));
+    register_tool!(
+        "export_item",
+        export_item_snapshot(doc).with_audio_mixing(!profile.deny_unshareable_tools)
+    );
     for tool in op_mcp::motion_tools::MotionTool::ALL {
         if should_register(requested_tool, tool.name()) {
             r.register(Box::new(tool.snapshot(doc)));
@@ -88,7 +91,15 @@ pub(super) fn rebuild_registry(
     }
     use super::motion_render_tools::MotionRenderTool;
     register_tool!("get_motion_frames", MotionRenderTool::Frames.snapshot(doc));
-    register_tool!("export_motion", MotionRenderTool::Export.snapshot(doc));
+    register_tool!(
+        "export_motion",
+        MotionRenderTool::Export.snapshot_with_audio(doc, !profile.deny_unshareable_tools)
+    );
+    for tool in super::audio_tools::AudioTool::ALL {
+        if should_register(requested_tool, tool.name()) {
+            r.register(Box::new(tool.snapshot(doc)));
+        }
+    }
     register_tool!("export_nodes", export_nodes_snapshot(doc));
     register_tool!("export_deck", export_deck_snapshot(doc));
     register_tool!("export_frames", export_frames_snapshot(doc));

@@ -757,8 +757,14 @@ fn payload_shader_to_scene(s: &ShaderPayload, k: f32, size: [f32; 2]) -> SceneSh
         .collect();
     if let Some(uniform) = uniforms.iter_mut().find(|uniform| uniform.name == "size") {
         uniform.values = size.to_vec();
+    } else if crate::shader_preset::declares_size(&s.sksl) {
+        uniforms.push(SceneShaderUniform {
+            name: "size".into(),
+            values: size.to_vec(),
+        });
     }
     SceneShader {
+        sample_time: None,
         sksl: s.sksl.clone(),
         uniforms,
         opacity: (s.opacity * k).clamp(0.0, 1.0),

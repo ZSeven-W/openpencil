@@ -79,6 +79,39 @@ fn paint_header(
     layout: &TimelineLayout,
     view: &MotionTimelineView,
 ) {
+    for (rect, key) in [
+        (layout.audio_import, "audio.import"),
+        (layout.voiceover, "audio.generate"),
+        (layout.neural_voiceover, "audio.neural"),
+    ] {
+        if let Some(rect) = rect {
+            cx.backend.fill_round_rect(rect, 5.0, theme.muted);
+            text(
+                cx,
+                op_i18n::translate(view.locale, key),
+                rect.origin.x + 8.0,
+                rect,
+                12.0,
+                theme.foreground,
+            );
+        }
+    }
+    if view.audio_busy {
+        let rect = Rect::xywh(
+            layout.rect.origin.x + 436.0,
+            layout.rect.origin.y + 33.0,
+            300.0,
+            23.0,
+        );
+        text(
+            cx,
+            op_i18n::translate(view.locale, "audio.busy"),
+            rect.origin.x,
+            rect,
+            12.0,
+            theme.muted_foreground,
+        );
+    }
     if let Some(scope) = &view.scope_label {
         // The name, then the dropdown chevron at the column's end.
         let chevron_x = layout.scope.origin.x + layout.scope.size.x - 24.0;
@@ -241,6 +274,14 @@ fn paint_lanes(
             );
         }
         paint_label(cx, theme, row, row_layout);
+        if let TimelineLane::Audio { track, .. } = &row.lane {
+            cx.backend.fill_round_rect(
+                row_layout.strip,
+                4.0,
+                if track.muted { theme.muted } else { iteration },
+            );
+            continue;
+        }
         let Some(strip) = row.strip() else {
             continue;
         };

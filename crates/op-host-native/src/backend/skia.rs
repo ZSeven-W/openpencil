@@ -73,6 +73,7 @@ mod image;
 mod image_diagnostics;
 mod layer;
 mod path;
+mod runtime_uniforms;
 mod shaped_text;
 mod text;
 #[cfg(test)]

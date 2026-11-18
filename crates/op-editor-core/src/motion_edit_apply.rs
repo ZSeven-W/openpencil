@@ -30,6 +30,7 @@ struct NodeMotion {
 struct Plan {
     nodes: BTreeMap<String, NodeMotion>,
     preference: Option<MotionPreference>,
+    audio: BTreeMap<String, Vec<crate::audio_tracks::AudioTrack>>,
 }
 
 impl EditorState {
@@ -113,6 +114,45 @@ impl EditorState {
         plan: &mut Plan,
     ) -> Result<(), MotionEditError> {
         match cmd {
+            MotionCommand::SetAudioTracks { node_id, tracks }
+            | MotionCommand::SetAudioTracksChecked {
+                node_id, tracks, ..
+            } => {
+                let node = find_node(self.active_children(), node_id)
+                    .ok_or_else(|| MotionEditError::NodeMissing(node_id.clone()))?;
+                if let MotionCommand::SetAudioTracksChecked { expected, .. } = cmd {
+                    let current = plan
+                        .audio
+                        .get(node_id.as_str())
+                        .map(Vec::as_slice)
+                        .unwrap_or_else(|| crate::audio_tracks::audio_tracks(node));
+                    if crate::audio_tracks::audio_tracks_signature(current) != *expected {
+                        return Err(MotionEditError::Invalid {node_id:node_id.clone(),path:"audioTracks".into(),
+                            reason:"audio changed while the request was running; no tracks were overwritten".into()});
+                    }
+                }
+                if !matches!(
+                    node,
+                    jian_ops_schema::node::PenNode::Frame(_)
+                        | jian_ops_schema::node::PenNode::Group(_)
+                        | jian_ops_schema::node::PenNode::Rectangle(_)
+                ) {
+                    return Err(MotionEditError::Invalid {
+                        node_id: node_id.clone(),
+                        path: "audioTracks".into(),
+                        reason: "audio requires a container".into(),
+                    });
+                }
+                crate::audio_tracks::validate_audio_tracks(tracks).map_err(|error| {
+                    MotionEditError::Invalid {
+                        node_id: node_id.clone(),
+                        path: "audioTracks".into(),
+                        reason: error.to_string(),
+                    }
+                })?;
+                plan.audio
+                    .insert(node_id.as_str().to_owned(), tracks.clone());
+            }
             MotionCommand::AddAnimation {
                 node_id,
                 animation,
@@ -239,6 +279,12 @@ impl EditorState {
     }
 
     fn motion_plan_changes(&self, plan: &Plan) -> bool {
+        if plan.audio.iter().any(|(id, tracks)| {
+            find_node(self.active_children(), &NodeId::new(id))
+                .is_some_and(|node| crate::audio_tracks::audio_tracks(node) != tracks)
+        }) {
+            return true;
+        }
         if plan.preference.is_some() && self.doc.motion != plan.preference {
             return true;
         }
@@ -253,6 +299,17 @@ impl EditorState {
 
     fn write_motion_plan(&mut self, plan: Plan) -> bool {
         let mut changed = false;
+        for (id, tracks) in plan.audio {
+            if let Some(slot) = find_node_mut(self.active_children_mut(), &NodeId::new(id))
+                .and_then(crate::audio_tracks::audio_tracks_mut)
+            {
+                let next = (!tracks.is_empty()).then_some(tracks);
+                if *slot != next {
+                    *slot = next;
+                    changed = true;
+                }
+            }
+        }
         if let Some(preference) = plan.preference {
             changed = self.doc.motion != Some(preference);
             self.doc.motion = Some(preference);

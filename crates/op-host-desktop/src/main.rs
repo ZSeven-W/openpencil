@@ -114,6 +114,8 @@ mod update_check;
 mod user_style_store;
 mod user_template_save;
 mod user_template_store;
+mod voiceover_host;
+mod voiceover_preview;
 mod window_resize;
 mod window_state;
 mod workspace_phase;
@@ -140,6 +142,7 @@ type PendingHtmlPaste = (u64, std::sync::mpsc::Receiver<HtmlPasteResult>);
 
 #[derive(Clone, Copy, Debug)]
 enum DesktopEvent {
+    AudioReady,
     McpWake,
     /// A bounded collaboration network worker queued typed input for the
     /// GUI-owned session/editor actor.
@@ -307,6 +310,8 @@ struct DesktopApp {
     /// In-flight `.html` import — same worker/pump lifecycle as the
     /// Figma session above.
     current_html_import: Option<html_import_session::HtmlImportSession>,
+    voiceover_job: Option<voiceover_host::AudioJob>,
+    audio_preview: voiceover_preview::AudioPreviewHost,
     /// In-flight Figma CLIPBOARD paste decode (Cmd+V) — worker sends
     /// the parsed nodes; the redraw path pumps + inserts them.
     pending_figma_paste: Option<(

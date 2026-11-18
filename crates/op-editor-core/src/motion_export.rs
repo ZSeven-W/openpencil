@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::{pen_node_ext::PenNodeExt, walkers::find_node, EditorState};
 
 pub const MAX_MOTION_EXPORT_FRAMES: u32 = 600;
-pub const MAX_MP4_DURATION_MS: u64 = 60_000;
+pub const MAX_MP4_DURATION_MS: u64 = 600_000;
 const DEFAULT_LOOP_DURATION_MS: u64 = 3_000;
 
 pub fn motion_frame_count(duration_ms: u64, fps: u32) -> u64 {
@@ -191,7 +191,8 @@ pub fn motion_export_choices(state: &EditorState) -> Vec<MotionExportChoice> {
         collect_visible_triggers(root, &mut triggers);
         for trigger in triggers {
             let clip = Clip::build(root, &trigger.as_clip_trigger());
-            if !clip.is_empty() {
+            let audio_ms = crate::audio_tracks::audio_duration_ms(root, &trigger.as_clip_trigger());
+            if !clip.is_empty() || audio_ms > 0 {
                 choices.push(MotionExportChoice {
                     root_id: root.id_str().to_owned(),
                     root_name: root
@@ -202,7 +203,10 @@ pub fn motion_export_choices(state: &EditorState) -> Vec<MotionExportChoice> {
                         .unwrap_or(root.id_str())
                         .to_owned(),
                     trigger,
-                    duration_ms: clip.duration_ms(),
+                    duration_ms: clip
+                        .duration_ms()
+                        .map(|ms| ms.max(audio_ms))
+                        .or((audio_ms > 0).then_some(audio_ms)),
                 });
             }
         }
@@ -213,6 +217,22 @@ pub fn motion_export_choices(state: &EditorState) -> Vec<MotionExportChoice> {
 fn collect_visible_triggers(node: &PenNode, triggers: &mut BTreeSet<MotionExportTrigger>) {
     if node.base().visible == Some(false) {
         return;
+    }
+    for track in crate::audio_tracks::audio_tracks(node)
+        .iter()
+        .filter(|track| !track.muted)
+    {
+        let trigger = match track.trigger {
+            MotionTrigger::Mount => MotionExportTrigger::Mount,
+            MotionTrigger::InView => MotionExportTrigger::InView,
+            MotionTrigger::Manual => {
+                let Some(id) = &track.clip_id else {
+                    continue;
+                };
+                MotionExportTrigger::Manual(id.clone())
+            }
+        };
+        triggers.insert(trigger);
     }
     for clip in node.motion_declarations().1.into_iter().flatten() {
         let trigger = match clip.trigger {

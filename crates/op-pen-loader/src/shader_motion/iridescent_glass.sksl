@@ -1,0 +1,27 @@
+uniform float2 size;
+uniform float time;
+uniform float sampleTime;
+// Normalized center, radius in min(size), intensity.
+uniform float4 sphere;
+
+half4 main(float2 p) {
+    float t = sampleTime >= 0. ? sampleTime : time;
+    float radius = max(abs(sphere.z) * min(size.x, size.y), 1.);
+    float2 q = (p - sphere.xy * size) / radius;
+    float r2 = dot(q, q);
+    float edge = 1. - smoothstep(.98, 1.02, sqrt(r2));
+    if (edge <= 0.) return half4(0.);
+    float3 n = float3(q, sqrt(max(0., 1. - r2)));
+    float fresnel = pow(1. - n.z, 2.4);
+    float angle = atan(q.y, q.x) + t * .35;
+    float phase = angle * 1.4 + n.z * 8. + sin(t * .6) * .6;
+    float3 rainbow = .78 + .22 * cos(phase + float3(0., 2.094, 4.189));
+    float specular = pow(max(dot(n, normalize(float3(-.42, -.52, .74))), 0.), 85.);
+    float ribbon = pow(.5 + .5 * sin(q.y * 7. + q.x * 3. + t), 12.);
+    float3 rgb = rainbow * (.75 + fresnel * .35 + ribbon * .15);
+    rgb += .16 * pow(max(dot(n, normalize(float3(-.5, -.6, .8))), 0.), 4.);
+    rgb += specular * float3(1., .98, .95) * 1.8;
+    rgb *= clamp(sphere.w, 0., 4.);
+    float alpha = clamp(.72 + fresnel * .25 + specular * .5, 0., .98) * edge;
+    return half4(min(rgb, float3(1.)) * alpha, alpha);
+}

@@ -7,6 +7,27 @@ use super::{ToolAccess, ToolProfile, ToolSurface};
 /// Kept in the same alphabetical order as the catalog so the two are
 /// diffable side by side.
 pub const TOOL_PROFILES: &[ToolProfile] = &[
+    ToolProfile::new("list_audio_tracks", ToolAccess::Read, ToolSurface::InMemory),
+    ToolProfile::new(
+        "import_audio",
+        ToolAccess::Write,
+        ToolSurface::LocalFilesystem,
+    ),
+    ToolProfile::new(
+        "generate_voiceover",
+        ToolAccess::Write,
+        ToolSurface::HostProcess,
+    ),
+    ToolProfile::new(
+        "update_audio_track",
+        ToolAccess::Write,
+        ToolSurface::InMemory,
+    ),
+    ToolProfile::new(
+        "remove_audio_track",
+        ToolAccess::Write,
+        ToolSurface::InMemory,
+    ),
     ToolProfile::new("ToolSearch", ToolAccess::Read, ToolSurface::InMemory),
     ToolProfile::new("add_node_effect", ToolAccess::Write, ToolSurface::InMemory),
     ToolProfile::new("add_comment", ToolAccess::Write, ToolSurface::InMemory),

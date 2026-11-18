@@ -4133,6 +4133,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "op-audio"
+version = "0.8.6"
+dependencies = [
+ "base64 0.22.1",
+ "jian-core",
+ "jian-ops-schema",
+ "op-editor-core",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "op-auth-bridge"
 version = "0.8.6"
 dependencies = [
@@ -4642,6 +4654,7 @@ dependencies = [
  "op-acp",
  "op-ai",
  "op-ai-skills",
+ "op-audio",
  "op-auth-bridge",
  "op-codegen",
  "op-collab",
@@ -4741,6 +4754,7 @@ dependencies = [
  "op-acp",
  "op-ai",
  "op-ai-skills",
+ "op-audio",
  "op-auth-bridge",
  "op-brand",
  "op-builtin-model-discovery",
@@ -5012,6 +5026,7 @@ dependencies = [
  "jian-ops-schema",
  "jian-scene",
  "mp4",
+ "op-audio",
  "op-editor-core",
  "op-editor-ui",
  "op-host-native",

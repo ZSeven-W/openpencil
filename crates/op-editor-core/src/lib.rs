@@ -85,6 +85,8 @@ pub mod editor_toast;
 pub mod quality_report;
 pub mod size_class;
 // Runtime-fetched product assets for the browser bundle (native embeds them).
+pub mod audio_request;
+pub mod audio_tracks;
 pub mod editor_ui_state;
 pub mod export_batch;
 pub mod export_dialog_state;

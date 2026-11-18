@@ -20,9 +20,13 @@ pub(crate) enum MotionRenderTool {
 
 impl MotionRenderTool {
     pub(crate) fn snapshot(self, state: &EditorState) -> impl McpTool {
+        self.snapshot_with_audio(state, true)
+    }
+
+    pub(crate) fn snapshot_with_audio(self, state: &EditorState, allowed: bool) -> impl McpTool {
         MotionRenderSnapshot {
             tool: self,
-            source: export_item_snapshot(state),
+            source: export_item_snapshot(state).with_audio_mixing(allowed),
         }
     }
 }

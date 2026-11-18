@@ -479,6 +479,7 @@ fn container_props_from_impl(
     let effects = visual::map_effects(style, context);
     let padding = box_model::map_padding(style, context, border_widths);
     let mut container = ContainerProps {
+        audio_tracks: None,
         width,
         height,
         layout: Some(layout),

@@ -1,6 +1,5 @@
 //! Editor-state export dispatch shared by desktop and mobile shells.
 
-use std::io::Cursor;
 use std::path::Path;
 
 use op_editor_core::motion_export::{MotionExportFormat, MotionExportRequest};
@@ -8,7 +7,7 @@ use op_editor_core::scene_template_catalog::TemplateScene;
 use op_editor_core::walkers::find_node;
 use op_editor_core::{EditorState, ExportFormat, HomeFamily};
 
-use crate::motion::{export_motion, MotionExportOptions, MotionFormat};
+use crate::motion::{export_motion_bytes, MotionExportOptions, MotionFormat};
 use crate::pdf::{render_deck_pdf_boards_bytes, render_deck_pdf_bytes, render_pdf_bytes};
 use crate::{
     render_node_on_page_raster_bytes, render_node_svg_bytes, render_page_raster_bytes,
@@ -110,9 +109,7 @@ fn render_motion(
             request.reduced_motion,
         ),
     };
-    let mut bytes = Cursor::new(Vec::new());
-    export_motion(&mut bytes, &scene, root, format, &options)?;
-    Ok((mime, bytes.into_inner()))
+    Ok((mime, export_motion_bytes(&scene, root, format, &options)?))
 }
 
 fn render_configured(state: &EditorState) -> Result<(&'static str, Vec<u8>), ExportError> {
@@ -339,7 +336,7 @@ mod tests {
 mod motion_preference_tests {
     use super::*;
     use op_editor_core::motion_export::{MotionExportBackground, MotionExportTrigger};
-    use std::io::Read;
+    use std::io::{Cursor, Read};
 
     #[test]
     fn motion_export_defaults_to_the_document_preference_and_allows_an_override() {

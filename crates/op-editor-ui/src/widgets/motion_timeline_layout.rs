@@ -19,7 +19,15 @@ use crate::widgets::motion_timeline::{MotionTimelineView, TimelineLane, Timeline
 use crate::{Point2D, Rect};
 use op_editor_core::editor_ui_state::{MotionTimelineTab, TimelineKeyframeRef};
 
-pub const HEADER_H: f32 = 32.0;
+pub const HEADER_H: f32 = if cfg!(any(
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "windows"
+)) {
+    60.0
+} else {
+    32.0
+};
 pub const RULER_H: f32 = 20.0;
 pub const ROW_H: f32 = 26.0;
 pub const LABEL_W: f32 = 150.0;
@@ -54,6 +62,9 @@ const TABS: [MotionTimelineTab; 3] = [
 /// What a point on the panel is.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TimelineHit {
+    ImportAudio,
+    GenerateVoiceover,
+    NeuralVoiceover,
     /// The band along the top edge: drags the panel's height.
     ResizeEdge,
     /// The screen name in the header: opens the screen dropdown.
@@ -110,6 +121,9 @@ pub struct RowLayout {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TimelineLayout {
+    pub audio_import: Option<Rect>,
+    pub voiceover: Option<Rect>,
+    pub neural_voiceover: Option<Rect>,
     pub rect: Rect,
     pub resize_edge: Rect,
     pub header: Rect,
@@ -143,7 +157,7 @@ impl TimelineLayout {
         let track_x = x + LABEL_W;
         let track_w = (w - LABEL_W).max(0.0);
         let header = Rect::xywh(x, y, w, HEADER_H);
-        let button_y = y + (HEADER_H - 24.0) / 2.0;
+        let button_y = y + 4.0;
         let right = x + w - 8.0;
         let zoom_in = Rect::xywh(right - BUTTON_W, button_y, BUTTON_W, 24.0);
         let zoom_out = Rect::xywh(zoom_in.origin.x - BUTTON_W, button_y, BUTTON_W, 24.0);
@@ -179,7 +193,7 @@ impl TimelineLayout {
             track_w,
             (body_h - RULER_H).max(0.0),
         );
-        let scope = Rect::xywh(x, y, LABEL_W, HEADER_H);
+        let scope = Rect::xywh(x, y, LABEL_W, 32.0);
         let scope_menu = view.scope_menu.as_ref().map(|screens| {
             let menu_h = screens.len() as f32 * MENU_ROW_H + 8.0;
             let frame = Rect::xywh(x + 4.0, y - 4.0 - menu_h, MENU_W, menu_h);
@@ -197,6 +211,10 @@ impl TimelineLayout {
             (frame, rows)
         });
         let mut layout = Self {
+            audio_import: (HEADER_H > 32.0).then(|| Rect::xywh(x + 10.0, y + 33.0, 112.0, 23.0)),
+            voiceover: (HEADER_H > 32.0).then(|| Rect::xywh(x + 130.0, y + 33.0, 130.0, 23.0)),
+            neural_voiceover: (HEADER_H > 32.0)
+                .then(|| Rect::xywh(x + 268.0, y + 33.0, 154.0, 23.0)),
             rect,
             resize_edge: Rect::xywh(x, y - RESIZE_BAND, w, RESIZE_BAND * 2.0),
             header,
@@ -249,6 +267,22 @@ impl TimelineLayout {
             keyframes: Vec::new(),
             loops: false,
         };
+        if let TimelineLane::Audio { track, .. } = &row.lane {
+            let start = self.x_for_ms(track.start_ms as f64);
+            let end = self.x_for_ms(
+                track
+                    .start_ms
+                    .saturating_add(track.duration_ms.saturating_sub(track.trim_start_ms))
+                    as f64,
+            );
+            out.strip = Rect::xywh(
+                start,
+                center_y - STRIP_H / 2.0,
+                (end - start).max(1.0),
+                STRIP_H,
+            );
+            return out;
+        }
         let Some(strip) = row.strip() else {
             return out;
         };
@@ -287,7 +321,7 @@ impl TimelineLayout {
             TimelineLane::Property { keyframes, .. } => {
                 out.keyframes = keyframes.iter().copied().filter_map(at).collect();
             }
-            TimelineLane::Empty { .. } => {}
+            TimelineLane::Empty { .. } | TimelineLane::Audio { .. } => {}
         }
         out
     }
@@ -322,6 +356,18 @@ impl TimelineLayout {
         }
         if !self.rect.contains(point) {
             return None;
+        }
+        if self.audio_import.is_some_and(|rect| rect.contains(point)) {
+            return Some(TimelineHit::ImportAudio);
+        }
+        if self.voiceover.is_some_and(|rect| rect.contains(point)) {
+            return Some(TimelineHit::GenerateVoiceover);
+        }
+        if self
+            .neural_voiceover
+            .is_some_and(|rect| rect.contains(point))
+        {
+            return Some(TimelineHit::NeuralVoiceover);
         }
         if self.scope.contains(point) {
             return Some(TimelineHit::Scope);

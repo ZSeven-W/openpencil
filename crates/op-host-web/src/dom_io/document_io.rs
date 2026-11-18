@@ -525,7 +525,16 @@ fn export_motion<C: RepaintContext + 'static>(inner: &InnerRc<C>) {
     };
     let file_name = op_editor_core::export_name::motion_export_file_name(state, &request);
     #[cfg(target_arch = "wasm32")]
-    if request.format == op_editor_core::motion_export::MotionExportFormat::Mp4 {
+    if request.format == op_editor_core::motion_export::MotionExportFormat::Mp4
+        && !op_editor_core::NodeId::new_opt(request.root_id.clone())
+            .and_then(|id| op_editor_core::walkers::find_node(state.active_children(), &id))
+            .is_some_and(|root| {
+                op_editor_core::audio_tracks::audio_duration_ms(
+                    root,
+                    &request.trigger.as_clip_trigger(),
+                ) > 0
+            })
+    {
         let Some(canvas) = canvas else {
             console_error("[export-motion] browser MP4 needs CanvasKit");
             return;

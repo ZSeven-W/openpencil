@@ -14,6 +14,7 @@ fn shader_fill_dispatches_through_the_shader_backend_method() {
     node.fill = Some(Color::WHITE); // fallback colour the builder bakes in
     node.fill_type = SceneFillType::Shader;
     node.shader = Some(SceneShader {
+        sample_time: None,
         sksl: "half4 main(float2 p){ return half4(1.0,0.0,0.0,1.0); }".to_string(),
         uniforms: vec![SceneShaderUniform {
             name: "u_mix".to_string(),

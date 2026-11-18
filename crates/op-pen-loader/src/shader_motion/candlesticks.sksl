@@ -1,0 +1,119 @@
+uniform float2 size;
+uniform float time;
+uniform float sampleTime;
+uniform float focal;
+uniform float baseline;
+uniform float4 view;
+uniform float4 lens;
+const float PI=3.14159265;
+
+float hash(float2 q){return fract(sin(dot(q,float2(127.1,311.7)))*43758.5453);}
+float3 neon(float4 bar){return bar.w>=bar.x?float3(2.8,.025,.29):float3(.01,2.6,1.08);}
+
+float box_hit(float3 ro,float3 rd,float3 c,float3 h,out float3 normal){
+    float3 inv=1.0/rd;
+    float3 lo=(c-h-ro)*inv,hi=(c+h-ro)*inv;
+    float3 a=min(lo,hi),b=max(lo,hi);
+    float near=max(a.x,max(a.y,a.z));
+    float far=min(b.x,min(b.y,b.z));
+    if(far<max(near,0.))return -1.;
+    float3 hit=ro+rd*near-c;
+    float3 face=abs(hit)/h;
+    normal=face.x>face.y&&face.x>face.z?float3(sign(hit.x),0,0):
+           face.y>face.z?float3(0,sign(hit.y),0):float3(0,0,sign(hit.z));
+    return near;
+}
+
+float distance_segment(float2 p,float2 a,float2 b){
+    float2 v=b-a;
+    return length(p-a-v*clamp(dot(p-a,v)/max(dot(v,v),.0001),0.,1.));
+}
+
+float2 project(float3 w,float3 eye,float3 right,float3 up,float3 forward,float safeFocal){
+    float3 v=w-eye;
+    float z=max(.01,dot(v,forward));
+    return float2(360.+safeFocal*dot(v,right)/z,820.-safeFocal*dot(v,up)/z);
+}
+
+half4 main(float2 coord){
+    float2 p=coord*float2(720.,1280.)/max(size,float2(1.));
+    float t=sampleTime>=0.?sampleTime:time;
+    float4 currentView=view;
+    float endpoint=lens.x;
+    float4 currentCamera=float4(lens.y,lens.z,focal,lens.w);
+    VIEW_SAMPLE
+    CAMERA_SAMPLE
+    float progress=currentView.x,spacing=max(currentView.y,.1),scale=max(currentView.z,.001),cursor=currentView.w;
+    float yaw=clamp(currentCamera.x,-1.2,1.2),pitch=clamp(currentCamera.y,-1.2,1.2);
+    float safeFocal=max(currentCamera.z,100.);
+    float glowStrength=clamp(currentCamera.w,0.,4.);
+    float stepSize=.30;
+    float sy=stepSize*scale/max(spacing,.1);
+    int last=int(clamp(floor(progress),0.,float(CANDLE_COUNT-1)));
+    float4 lastbar=candleAt(last);
+    float3 head=float3(float(last)*stepSize,(lastbar.w-baseline)*sy,0.);
+    float distance=safeFocal*stepSize/max(spacing,.1);
+    float3 forward=normalize(float3(sin(yaw)*cos(pitch),-sin(pitch),cos(yaw)*cos(pitch)));
+    float3 right=normalize(cross(float3(0.,1.,0.),forward));
+    float3 up=cross(forward,right);
+    float3 eye=head-forward*distance-right*((cursor-360.)*stepSize/spacing)-up*((820.-endpoint)*stepSize/spacing);
+    float3 ray=normalize(forward+right*((p.x-360.)/safeFocal)+up*((820.-p.y)/safeFocal));
+
+    float2 uv=p/float2(720.,1280.);
+    float fog=exp(-dot((uv-float2(.68,.80))*float2(3.,3.8),(uv-float2(.68,.80))*float2(3.,3.8)));
+    float3 radiance=float3(.0025,.004,.007)+float3(.013,.033,.082)*fog;
+    float star=step(.9991,hash(floor(p*.55+float2(t*.7,t*1.8))));
+    radiance+=star*.09;
+    float planeT=-eye.z/ray.z;
+    float planeX=eye.x+planeT*ray.x;
+    int candidate=int(floor(planeX/stepSize+.5));
+    float closest=1.e10;
+    float3 surface=float3(0.);
+    float3 glow=float3(0.);
+    for(int k=-2;k<=2;k++){
+        int i=candidate+k;
+        if(i<0||i>last||i>=CANDLE_COUNT)continue;
+        float4 b=candleAt(i);
+        float open=(b.x-baseline)*sy,close=(b.w-baseline)*sy;
+        float high=(b.y-baseline)*sy,low=(b.z-baseline)*sy;
+        float3 color=neon(b);
+        float3 center=float3(float(i)*stepSize,(open+close)*.5,0.);
+        float3 halfsize=float3(.104,max(abs(close-open)*.5,.020),.19);
+        float3 n;
+        float hit=box_hit(eye,ray,center,halfsize,n);
+        if(hit>0.&&hit<closest){
+            closest=hit;
+            float3 q=eye+ray*hit-center;
+            float lighting=.38+.62*max(dot(n,normalize(float3(-.4,.8,-.6))),0.);
+            float rim=pow(1.-max(dot(-ray,n),0.),3.);
+            float top=n.y>.5?1.:0.;
+            surface=color*(.27+.53*lighting)+float3(.40,.70,.62)*top*.42+color*rim*.38;
+            // Fresnel edge highlights follow the actual box surface.
+            float ex=min(abs(abs(q.x)-halfsize.x),abs(abs(q.z)-halfsize.z));
+            float seam=1.-smoothstep(.002,.016,ex);
+            surface+=float3(.45,.75,.65)*seam*.36;
+        }
+        float2 a=project(float3(float(i)*stepSize,open,-.115),eye,right,up,forward,safeFocal);
+        float2 z=project(float3(float(i)*stepSize,close,-.115),eye,right,up,forward,safeFocal);
+        float d=distance_segment(p,a,z);
+        glow+=color*(.16*exp(-d/2.3)+.032*exp(-d/9.))*glowStrength;
+        float2 wh=project(float3(float(i)*stepSize,high,0.),eye,right,up,forward,safeFocal);
+        float2 wl=project(float3(float(i)*stepSize,low,0.),eye,right,up,forward,safeFocal);
+        float wd=distance_segment(p,wh,wl);
+        glow+=color*(1.-smoothstep(.3,.85,wd))*.38;
+        float2 origin=project(float3(float(i)*stepSize,min(low,close)-.05,0.),eye,right,up,forward,safeFocal);
+        float trail=exp(-abs(p.x-origin.x)/.7)*exp(-max(0.,p.y-origin.y)/240.);
+        if(p.y>origin.y)glow+=color*trail*.06;
+    }
+    radiance+=glow;
+    if(closest<1.e9)radiance+=surface;
+    float3 headcolor=neon(lastbar);
+    float2 delta=p-float2(cursor,endpoint);
+    float halo=exp(-length(delta)/15.)*.32;
+    float flare=exp(-abs(delta.y)/.6-abs(delta.x)/39.)*.72+exp(-abs(delta.x)/.6-abs(delta.y)/21.)*.54;
+    radiance+=headcolor*halo+float3(.72,1.,.88)*flare;
+    float f1=abs(p.y-(1080.+.18*(p.x-360.)));
+    radiance+=float3(.035,.055,.065)*exp(-f1*.8)*.20;
+    float3 mapped=1.-exp(-radiance*1.13);
+    return half4(mapped,1.);
+}

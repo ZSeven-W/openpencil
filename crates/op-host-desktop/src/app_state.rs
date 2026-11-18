@@ -185,6 +185,8 @@ impl DesktopApp {
             design_md_test_provider: None,
             current_figma_import: None,
             current_html_import: None,
+            voiceover_job: None,
+            audio_preview: Default::default(),
             pending_figma_paste: None,
             pending_html_paste: None,
             model_probe,

@@ -146,11 +146,11 @@ fn reduced_export_keeps_terminal_fills_and_white_background_at_the_first_frame()
 }
 
 #[test]
-fn mp4_rejects_clips_over_one_minute() {
+fn mp4_rejects_clips_over_ten_minutes() {
     let (root, scene) = fixture();
     let mut output = Cursor::new(Vec::new());
     let too_long = MotionExportOptions {
-        duration_ms: Some(60_001),
+        duration_ms: Some(op_editor_core::motion_export::MAX_MP4_DURATION_MS + 1),
         ..Default::default()
     };
     assert!(matches!(

@@ -64,6 +64,9 @@ pub struct TimelineDragAnchor {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MotionTimelineState {
+    pub audio_request: Option<crate::audio_request::NativeAudioRequest>,
+    pub audio_busy: bool,
+    pub audio_preview_busy: bool,
     pub open: bool,
     /// Panel height in logical pixels.
     pub height: f32,
@@ -156,6 +159,9 @@ impl MotionTimelineState {
 impl Default for MotionTimelineState {
     fn default() -> Self {
         Self {
+            audio_request: None,
+            audio_busy: false,
+            audio_preview_busy: false,
             open: false,
             height: Self::DEFAULT_HEIGHT,
             scope_root: None,

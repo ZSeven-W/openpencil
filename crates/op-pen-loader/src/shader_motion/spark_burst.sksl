@@ -1,0 +1,35 @@
+uniform float2 size;
+uniform float time;
+uniform float sampleTime;
+uniform float2 origin;
+// start seconds, lifetime seconds, speed px/s, gravity px/s^2.
+uniform float4 burst;
+uniform float3 tint;
+
+float hash(float x) { return fract(sin(x * 127.1) * 43758.5453); }
+float segment(float2 p, float2 a, float2 b) {
+    float2 v = b - a;
+    return length(p - a - v * clamp(dot(p - a, v) / max(dot(v, v), .001), 0., 1.));
+}
+half4 main(float2 coord) {
+    float t = (sampleTime >= 0. ? sampleTime : time) - burst.x;
+    float life = max(burst.y, .001);
+    if (t < 0. || t > life) return half4(0.);
+    float2 p = coord - origin * size;
+    float3 light = float3(0.);
+    float fade = pow(1. - t / life, 1.8);
+    for (int i = 0; i < 40; i++) {
+        float seed = float(i) + 1.;
+        float angle = hash(seed) * 6.2831853;
+        float speed = max(burst.z, 0.) * (.3 + hash(seed + 42.) * .7);
+        float2 velocity = float2(cos(angle), sin(angle)) * speed;
+        float2 head = velocity * t + float2(0., burst.w * t * t * .5);
+        float tailTime = max(0., t - .045);
+        float2 tail = velocity * tailTime + float2(0., burst.w * tailTime * tailTime * .5);
+        float d = segment(p, head, tail);
+        light += tint * (exp(-d * 1.9) + .12 * exp(-d * .28)) * fade;
+    }
+    float3 rgb = 1. - exp(-light * 1.7);
+    float alpha = max(rgb.r, max(rgb.g, rgb.b));
+    return half4(rgb, alpha);
+}

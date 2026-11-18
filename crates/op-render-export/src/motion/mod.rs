@@ -58,6 +58,38 @@ pub fn mp4_available() -> bool {
     mp4::available()
 }
 
+/// Render one deliverable, including embedded soundtracks for MP4.
+pub fn export_motion_bytes(
+    scene: &LayoutScene,
+    root: &PenNode,
+    format: MotionFormat,
+    options: &MotionExportOptions,
+) -> Result<Vec<u8>, ExportError> {
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    if format == MotionFormat::Mp4
+        && op_editor_core::audio_tracks::audio_duration_ms(root, &options.trigger) > 0
+    {
+        return Err(ExportError::UnsupportedFormat {
+            format: "MP4 audio on this platform",
+        });
+    }
+    let mut output = std::io::Cursor::new(Vec::new());
+    export_motion(&mut output, scene, root, format, options)?;
+    let bytes = output.into_inner();
+    #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+    if format == MotionFormat::Mp4 {
+        let duration = motion_duration(root, &options.trigger, options.duration_ms)
+            .ok_or(ExportError::MotionDurationRequired)?;
+        return op_audio::mix_mp4(bytes, root, &options.trigger, duration).map_err(|error| {
+            ExportError::MotionEncoding {
+                format: "MP4 audio",
+                reason: error.to_string(),
+            }
+        });
+    }
+    Ok(bytes)
+}
+
 /// Write a clip with one fixed crop across all frames. The writer owns
 /// the output so callers can stream to a file without buffering its bytes.
 pub fn export_motion<W: Write + Seek>(
@@ -71,7 +103,7 @@ pub fn export_motion<W: Write + Seek>(
     let clip = build_clip(root, &options.trigger)?;
     let clock = FrameClock::new(
         options.fps,
-        options.duration_ms.or_else(|| clip.duration_ms()),
+        motion_duration(root, &options.trigger, options.duration_ms),
     )?;
     let fps = u64::from(options.fps);
     let frame_count = clock.frame_count();
@@ -178,10 +210,20 @@ pub fn export_motion<W: Write + Seek>(
 
 fn build_clip(root: &PenNode, trigger: &ClipTrigger) -> Result<Clip, ExportError> {
     let clip = Clip::build(root, trigger);
-    if clip.is_empty() {
+    if clip.is_empty() && op_editor_core::audio_tracks::audio_duration_ms(root, trigger) == 0 {
         return Err(ExportError::EmptyMotionClip);
     }
     Ok(clip)
+}
+
+fn motion_duration(root: &PenNode, trigger: &ClipTrigger, selected: Option<u64>) -> Option<u64> {
+    selected.or_else(|| {
+        let audio = op_editor_core::audio_tracks::audio_duration_ms(root, trigger);
+        Clip::build(root, trigger)
+            .duration_ms()
+            .map(|ms| ms.max(audio))
+            .or((audio > 0).then_some(audio))
+    })
 }
 
 #[cfg(test)]

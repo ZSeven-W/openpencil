@@ -1,0 +1,15 @@
+[package]
+name = "op-audio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Native audio import, system narration and soundtrack mixing"
+
+[dependencies]
+op-editor-core = { path = "../op-editor-core" }
+jian-ops-schema = { path = "../../vendor/jian/crates/jian-ops-schema" }
+jian-core = { path = "../../vendor/jian/crates/jian-core" }
+base64 = "0.22"
+serde_json = { workspace = true }
+tempfile = "3"

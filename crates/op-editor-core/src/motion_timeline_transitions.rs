@@ -174,9 +174,11 @@ fn stop(timeline: &mut MotionTimelineState) {
 }
 
 pub(crate) fn animates(node: &PenNode) -> bool {
-    node.motion_declarations()
-        .1
-        .is_some_and(|animations| !animations.is_empty())
+    !crate::audio_tracks::audio_tracks(node).is_empty()
+        || node
+            .motion_declarations()
+            .1
+            .is_some_and(|animations| !animations.is_empty())
         || node.children().into_iter().flatten().any(animates)
 }
 

@@ -194,3 +194,42 @@ fn the_static_hint_shows_once_the_playhead_leaves_zero() {
             && layout.hint.origin.x + layout.hint.size.x < layout.time.origin.x
     );
 }
+
+#[test]
+fn embedded_audio_has_a_lane_at_its_authored_time() {
+    let mut state = state();
+    let audio = serde_json::from_value(json!({"id":"voice","name":"Narration",
+        "source":"data:audio/wav;base64,UklGRg==","durationMs":1000,"startMs":200}))
+    .unwrap();
+    state
+        .apply_motion_edits(vec![
+            op_editor_core::motion_edit::MotionCommand::SetAudioTracks {
+                node_id: op_editor_core::NodeId::new("home"),
+                tracks: vec![audio],
+            },
+        ])
+        .unwrap();
+    let view = MotionTimelineView::for_editor(&state);
+    assert!(matches!(view.rows[0].lane, TimelineLane::Audio { .. }));
+    let layout = TimelineLayout::new(PANEL, &view);
+    assert_eq!(layout.rows[0].strip.origin.x, layout.x_for_ms(200.0));
+    assert_eq!(view.clip_ms, 1200.0);
+}
+
+#[test]
+fn desktop_audio_buttons_have_distinct_hits() {
+    let view = MotionTimelineView::for_editor(&state());
+    let layout = TimelineLayout::new(PANEL, &view);
+    if let (Some(import), Some(generate)) = (layout.audio_import, layout.voiceover) {
+        let center =
+            |r: Rect| Point2D::new(r.origin.x + r.size.x / 2.0, r.origin.y + r.size.y / 2.0);
+        assert_eq!(
+            layout.hit(center(import), &view),
+            Some(TimelineHit::ImportAudio)
+        );
+        assert_eq!(
+            layout.hit(center(generate), &view),
+            Some(TimelineHit::GenerateVoiceover)
+        );
+    }
+}

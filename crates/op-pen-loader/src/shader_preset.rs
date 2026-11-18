@@ -14,6 +14,16 @@ use crate::payload::ShaderUniformPayload;
 const DEFAULT_BASE_FREQUENCY: f32 = 0.08;
 const DEFAULT_SEED: f32 = 0.0;
 
+pub(crate) fn declares_size(source: &str) -> bool {
+    let words: Vec<_> = source
+        .split(|c: char| c.is_whitespace() || c == ';')
+        .filter(|s| !s.is_empty())
+        .collect();
+    words
+        .windows(3)
+        .any(|w| w[0] == "uniform" && matches!(w[1], "float2" | "half2") && w[2] == "size")
+}
+
 pub(crate) struct ExpandedShaderPreset {
     pub(crate) sksl: String,
     pub(crate) uniforms: Vec<ShaderUniformPayload>,
@@ -24,6 +34,9 @@ pub(crate) struct ExpandedShaderPreset {
 pub(crate) fn expand(body: &ShaderFillBody) -> Option<ExpandedShaderPreset> {
     match body.preset.as_deref() {
         Some("turbulence") => Some(expand_turbulence(body)),
+        Some("candlesticks_3d" | "spark_burst" | "iridescent_glass") => {
+            crate::shader_motion::expand(body)
+        }
         _ => None,
     }
 }

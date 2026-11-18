@@ -40,7 +40,8 @@ fill: [{ type: "shader", sksl: "<SkSL source>", uniforms: { name: value, ... } }
 - Reserved uniforms, bound by the canvas (an authored value is replaced):
   `uniform float2 size;` = node box in px; `uniform float time;` (or
   `half time`) = elapsed seconds, so the fill ANIMATES on the canvas.
-  Exports and screenshots render at `time = 0`, so make frame 0 look good.
+  The open motion timeline binds its playhead, including pause and seek.
+  Motion export binds each frame's sample time. Static images use `time = 0`.
 
 KNOWN-GOOD SNIPPETS (copy verbatim, tweak colours via uniforms):
 

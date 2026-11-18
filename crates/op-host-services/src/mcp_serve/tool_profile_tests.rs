@@ -75,6 +75,8 @@ fn the_denied_set_is_exactly_the_reviewed_list() {
             // same reason save_document is.
             "export_deck",
             "export_frames",
+            "generate_voiceover",
+            "import_audio",
             "import_html",
             "import_html_url",
             "import_svg",

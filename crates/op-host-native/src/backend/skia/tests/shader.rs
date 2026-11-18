@@ -2,6 +2,54 @@
 
 use super::*;
 
+#[test]
+fn motion_presets_compile_and_animate_in_real_skia() {
+    for (name, uniforms) in [
+        (
+            "candlesticks_3d",
+            serde_json::json!({"bars":[100,110,90,105,105,115,100,112], "viewPath":[0,0,12,1,500,900,2,1,9,2,450,800], "cameraPath":[0,0.2,0.1,1000,1,2,0.4,0.3,1200,1.5]}),
+        ),
+        ("spark_burst", serde_json::json!({"burst":[0,2,30,10]})),
+        ("iridescent_glass", serde_json::json!({})),
+    ] {
+        let document = jian_ops_schema::load_str(&serde_json::json!({"version":"1.0.0", "children":[{"type":"rectangle","id":"r","width":64,"height":64,"fill":[{"type":"shader","preset":name,"uniforms":uniforms}]}]}).to_string()).unwrap().value;
+        let scene = op_pen_loader::pen_document_to_layout_scene(&document, &Default::default(), 0);
+        let shader = scene.pages[0].children[0].shader.as_ref().unwrap();
+        skia_safe::RuntimeEffect::make_for_shader(&shader.sksl, None)
+            .unwrap_or_else(|error| panic!("{name} must compile: {error}"));
+        let render = |time: f32| {
+            let clock = [time];
+            let mut uniforms: Vec<_> = shader
+                .uniforms
+                .iter()
+                .map(|u| (u.name.as_str(), u.values.as_slice()))
+                .collect();
+            uniforms.push(("time", clock.as_slice()));
+            raster_bytes(64, 64, |backend, canvas| {
+                backend.fill_round_rect_shader(
+                    canvas,
+                    Rect::xywh(0., 0., 64., 64.),
+                    0.,
+                    &shader.sksl,
+                    &uniforms,
+                    1.,
+                    Color::GREEN,
+                );
+            })
+        };
+        assert_ne!(
+            render(0.1),
+            render(0.9),
+            "{name} must respond to sampled time"
+        );
+        assert_eq!(
+            render(0.1),
+            render(0.1),
+            "{name} must sample deterministically"
+        );
+    }
+}
+
 fn turbulence_shader() -> op_editor_ui::layout_scene::SceneShader {
     let source = r#"{
       "version":"1.0.0","pages":[{"id":"p","name":"P","children":[{
@@ -156,5 +204,24 @@ fn shader_pixels_stay_node_local_across_viewport_translation() {
                 );
             }
         }
+    }
+}
+
+#[test]
+fn shader_uniform_arrays_are_bound_at_reflected_offsets() {
+    let values = [1.0, 0.0, 0.0, 1.0, 0.2, 0.6, 1.0, 1.0];
+    let gain = [0.5];
+    let pixels = raster_bytes(8, 8, |backend, canvas| {
+        backend.fill_round_rect_shader(canvas, Rect::xywh(0.0, 0.0, 8.0, 8.0), 0.0,
+            "uniform float4 data[2]; uniform float gain; half4 main(float2 p){return half4(data[1].rgb*gain,1);}",
+            &[("data", values.as_slice()), ("gain", gain.as_slice())], 1.0, Color::RED);
+    });
+    let mut channels = pixels[..3].to_vec();
+    channels.sort_unstable();
+    for (actual, expected) in channels.into_iter().zip([26u8, 77, 128]) {
+        assert!(
+            actual.abs_diff(expected) <= 1,
+            "array uniform produced {actual}, expected {expected}"
+        );
     }
 }

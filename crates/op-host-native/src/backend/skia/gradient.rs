@@ -231,19 +231,10 @@ impl NativeBackend {
         opacity: f32,
         fallback: Color,
     ) {
-        use skia_safe::runtime_effect::RuntimeShaderBuilder;
-
         let local_matrix = runtime_shader_local_matrix(rect, uniforms);
         let shader = self.shader_cache.get_or_compile(sksl).and_then(|effect| {
-            // `RuntimeEffect` is an RCHandle — this is a refcount bump,
-            // not a recompile.
-            let mut builder = RuntimeShaderBuilder::new(effect);
-            for (name, values) in uniforms {
-                // Tolerate undeclared-name / arity mismatch so one bad
-                // uniform doesn't sink the whole fill.
-                let _ = builder.set_uniform_float(*name, values);
-            }
-            builder.make_shader(&local_matrix)
+            let data = super::runtime_uniforms::pack(&effect, uniforms);
+            effect.make_shader(data, &[], Some(&local_matrix))
         });
 
         let mut paint = skia_safe::Paint::default();

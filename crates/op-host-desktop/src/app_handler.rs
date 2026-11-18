@@ -409,7 +409,7 @@ impl ApplicationHandler<DesktopEvent> for DesktopApp {
                     self.request_redraw(true);
                 }
             }
-            DesktopEvent::ImageDecodeReady => {
+            DesktopEvent::ImageDecodeReady | DesktopEvent::AudioReady => {
                 self.request_redraw(true);
             }
             DesktopEvent::ForwardedFileReady => {

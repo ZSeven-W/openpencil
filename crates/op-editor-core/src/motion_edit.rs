@@ -17,6 +17,17 @@ use jian_ops_schema::motion::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MotionCommand {
+    /// Replace a container's complete soundtracks after validation.
+    SetAudioTracks {
+        node_id: NodeId,
+        tracks: Vec<crate::audio_tracks::AudioTrack>,
+    },
+    /// Refuse a detached worker's stale list instead of losing newer audio edits.
+    SetAudioTracksChecked {
+        node_id: NodeId,
+        tracks: Vec<crate::audio_tracks::AudioTrack>,
+        expected: u64,
+    },
     /// Insert `animation` at `index`, or append it.
     AddAnimation {
         node_id: NodeId,

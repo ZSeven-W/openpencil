@@ -41,3 +41,13 @@ Kinds are `slideLeft`, `slideRight`, `slideUp`, `slideDown`, `fade` and
 
 `replace` accepts the same body. `{"pop":null}` reuses the entering
 transition. Use `{"pop":{"transition":{"kind":"none"}}}` for an immediate return.
+
+For neon chart films, use shader fill `preset:"candlesticks_3d"` with OHLC
+`bars`, a timed `viewPath` (progress, spacing, scale, cursor), and optional
+`cameraPath` (yaw, pitch, focal length, glow). Use `spark_burst` for moving
+particles and `iridescent_glass` for translucent rainbow spheres. These are
+procedural surfaces with sampled camera paths; keep labels as editable text.
+See `motion-graphics` for parameters. They follow the timeline playhead and MP4
+frame clock. Add a finite root animation to establish the clip duration.
+Audio can be imported or generated with `generate_voiceover` using
+`provider:"neural"` for online natural speech, then mixed into MP4.

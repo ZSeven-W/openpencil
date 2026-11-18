@@ -43,7 +43,17 @@ pub struct TimelineProjection {
 pub fn project(root: &PenNode, trigger: &ClipTrigger) -> TimelineProjection {
     let mut strips = Vec::new();
     collect(root, trigger, &mut strips);
-    let clip_ms = clip_ms(&strips);
+    let audio_ms = crate::audio_tracks::collect_audio_tracks(root, trigger)
+        .into_iter()
+        .filter(|(_, track)| !track.muted)
+        .map(|(_, track)| {
+            track
+                .start_ms
+                .saturating_add(track.duration_ms.saturating_sub(track.trim_start_ms))
+                as f64
+        })
+        .fold(0.0, f64::max);
+    let clip_ms = clip_ms(&strips).max(audio_ms);
     TimelineProjection { strips, clip_ms }
 }
 
@@ -123,6 +133,12 @@ fn collect(node: &PenNode, trigger: &ClipTrigger, out: &mut Vec<TimelineStrip>) 
 }
 
 fn collect_manual_ids(node: &PenNode, out: &mut Vec<String>) {
+    out.extend(
+        crate::audio_tracks::audio_tracks(node)
+            .iter()
+            .filter(|t| t.trigger == MotionTrigger::Manual)
+            .filter_map(|t| t.clip_id.clone()),
+    );
     if let Some(animations) = node.motion_declarations().1 {
         out.extend(
             animations

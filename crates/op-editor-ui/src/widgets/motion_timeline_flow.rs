@@ -62,6 +62,13 @@ pub fn press(
     };
     let pointer_ms = layout.ms_for_x(point.x);
     match hit {
+        TimelineHit::ImportAudio => state.request_native_audio(None),
+        TimelineHit::GenerateVoiceover => state.request_native_audio(Some(
+            op_editor_core::audio_request::VoiceoverProvider::System,
+        )),
+        TimelineHit::NeuralVoiceover => state.request_native_audio(Some(
+            op_editor_core::audio_request::VoiceoverProvider::Neural,
+        )),
         TimelineHit::ResizeEdge => {
             state.begin_motion_timeline_drag(MotionTimelineDrag::Height {
                 pointer_y: point.y,
