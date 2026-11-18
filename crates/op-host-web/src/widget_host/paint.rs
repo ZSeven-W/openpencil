@@ -647,3 +647,23 @@ impl WidgetHost {
         }
     }
 }
+
+/// Paint one isolated motion-export scene node through the widget facade.
+/// Lives inside `widget_host` so `op_editor_ui::widgets` stays behind the
+/// Step 1b §1.4 widget boundary (`tools/check-widget-boundary.sh`).
+#[cfg(all(feature = "canvaskit", target_arch = "wasm32"))]
+pub(crate) fn paint_motion_export_node(
+    backend: &mut dyn RenderBackend,
+    root: &op_editor_ui::layout_scene::SceneNode,
+    shader_time: u64,
+) {
+    op_editor_ui::shader_clock::with_sample_time(shader_time, || {
+        op_editor_ui::widgets::canvas_viewport_paint::paint_node(
+            &mut PaintCx { backend },
+            root,
+            Point2D::ZERO,
+            1.0,
+            Rect::xywh(-1.0e15, -1.0e15, 2.0e15, 2.0e15),
+        );
+    });
+}

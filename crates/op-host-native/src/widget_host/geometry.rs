@@ -15,18 +15,6 @@ use op_editor_ui::widgets::{AIChatPlaceholder, ChatResizeEdge, TOP_BAR_HEIGHT};
 use op_editor_ui::{Point2D, Rect};
 
 impl WidgetHostNative {
-    pub(in crate::widget_host) fn update_locale_picker_hover(&mut self, x: f32, y: f32) -> bool {
-        let changed = op_editor_ui::widgets::locale_picker::update_locale_picker_hover(
-            &mut self.editor_state,
-            self.last_viewport_w,
-            op_editor_ui::Point2D::new(x, y),
-        );
-        if changed {
-            self.mark_dirty();
-        }
-        changed
-    }
-
     /// Hit-test which screen region the cursor is over. Used by
     /// the wheel + drag handlers so wheel-zoom + Hand-pan only
     /// fire when the cursor is over the canvas (not over a panel).
@@ -371,7 +359,14 @@ impl WidgetHostNative {
                 return true;
             }
         }
-        if self.editor_state.editor_ui.locale_picker.open && self.update_locale_picker_hover(x, y) {
+        if self.editor_state.editor_ui.locale_picker.open
+            && op_editor_ui::widgets::locale_picker::update_locale_picker_hover(
+                &mut self.editor_state,
+                self.last_viewport_w,
+                Point2D::new(x, y),
+            )
+        {
+            self.mark_dirty();
             return true;
         }
         if self.editor_state.editor_ui.shape_picker.open {

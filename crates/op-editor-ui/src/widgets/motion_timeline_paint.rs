@@ -4,7 +4,7 @@ use crate::theme::Theme;
 use crate::widgets::icons::{draw_icon, Icon};
 use crate::widgets::motion_timeline::{MotionTimelineView, TimelineLane, TimelineRow};
 use crate::widgets::motion_timeline_layout::{RowLayout, TimelineLayout, KEYFRAME_R, ROW_H};
-use crate::widgets::PaintCx;
+use crate::widgets::{text_metrics, PaintCx};
 use crate::{Color, Point2D, Rect, TextLayout};
 
 /// Tick spacings the ruler picks from: the first at least this many
@@ -82,10 +82,11 @@ fn paint_header(
     if let Some(scope) = &view.scope_label {
         // The name, then the dropdown chevron at the column's end.
         let chevron_x = layout.scope.origin.x + layout.scope.size.x - 24.0;
-        let name = crate::util::ellipsize_to_width(
+        let name = text_metrics::fit_chrome(
+            cx.backend,
             scope,
             chevron_x - layout.scope.origin.x - 16.0,
-            |value| cx.backend.measure_text(value, 12.0),
+            12.0,
         );
         text(
             cx,
@@ -124,7 +125,7 @@ fn paint_header(
     }
     if let Some(hint) = view.static_hint() {
         // Only where the whole sentence fits; a narrow panel drops it.
-        if cx.backend.measure_text(hint, 12.0) <= layout.hint.size.x {
+        if text_metrics::measure_chrome(cx.backend, hint, 12.0) <= layout.hint.size.x {
             text(
                 cx,
                 hint,
@@ -290,9 +291,7 @@ fn paint_label(cx: &mut PaintCx<'_>, theme: &Theme, row: &TimelineRow, layout: &
         _ => theme.muted_foreground,
     };
     let right = layout.label.origin.x + layout.label.size.x - 8.0;
-    let label = crate::util::ellipsize_to_width(&row.label, right - layout.label_x, |value| {
-        cx.backend.measure_text(value, 12.0)
-    });
+    let label = text_metrics::fit_chrome(cx.backend, &row.label, right - layout.label_x, 12.0);
     text(cx, &label, layout.label_x, layout.label, 12.0, color);
 }
 

@@ -11,18 +11,6 @@ use op_editor_ui::{Point2D, Rect};
 use super::WidgetHost;
 
 impl WidgetHost {
-    pub(in crate::widget_host) fn update_locale_picker_hover(&mut self, x: f32, y: f32) -> bool {
-        let changed = op_editor_ui::widgets::locale_picker::update_locale_picker_hover(
-            &mut self.editor_state,
-            self.last_viewport_w,
-            op_editor_ui::Point2D::new(x, y),
-        );
-        if changed {
-            self.mark_dirty();
-        }
-        changed
-    }
-
     /// Patch the live scene's resolved fill / stroke for the active
     /// colour-picker drag without a layout rebuild — the web twin of the
     /// native `try_patch_color_drag`. Returns `true` when the patch
@@ -535,7 +523,14 @@ impl WidgetHost {
                 return true;
             }
         }
-        if self.editor_state.editor_ui.locale_picker.open && self.update_locale_picker_hover(x, y) {
+        if self.editor_state.editor_ui.locale_picker.open
+            && op_editor_ui::widgets::locale_picker::update_locale_picker_hover(
+                &mut self.editor_state,
+                self.last_viewport_w,
+                Point2D::new(x, y),
+            )
+        {
+            self.mark_dirty();
             return true;
         }
         if self.editor_state.editor_ui.shape_picker.open {

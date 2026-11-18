@@ -646,6 +646,8 @@ pub(in crate::widget_host) use op_editor_core::host_drag_state::{
     CodeSelectionDragState, DragState, LayerDragState, MarqueeDragState, PanelDragState,
     PathAnchorDragState,
 };
+#[cfg(all(feature = "canvaskit", target_arch = "wasm32"))]
+pub(crate) use paint::paint_motion_export_node;
 
 impl WidgetHost {}
 

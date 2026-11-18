@@ -2,8 +2,7 @@
 
 use op_editor_core::motion_export::{export_reduced_motion, MotionExportRequest};
 use op_editor_core::{walkers::find_node, EditorState, NodeId};
-use op_editor_ui::widgets::{canvas_viewport_paint, PaintCx};
-use op_editor_ui::{Point2D, Rect, RenderBackend};
+use op_editor_ui::RenderBackend;
 use op_motion_export::{FrameClock, MotionError, MotionScene};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -66,7 +65,7 @@ pub(crate) async fn encode_mp4(ck: OpCk, export: LocalMotionExport) -> Result<Ve
     // Discover images before encoding so the first frame never ships the
     // editor's lazy placeholders. A bounded queue may take several passes.
     for _ in 0..64 {
-        paint(&surface, &mut backend, &export.scene, &first, 0)?;
+        render_frame(&surface, &mut backend, &export.scene, &first, 0)?;
         if backend.drain_pending_decodes(usize::MAX) == 0 {
             break;
         }
@@ -76,7 +75,7 @@ pub(crate) async fn encode_mp4(ck: OpCk, export: LocalMotionExport) -> Result<Ve
         let time = export.clock.time_at(index);
         let root = export.scene.sample(time, export.reduced);
         let shader_time = if export.reduced { 0 } else { time };
-        paint(&surface, &mut backend, &export.scene, &root, shader_time)?;
+        render_frame(&surface, &mut backend, &export.scene, &root, shader_time)?;
         surface.read_rgba(&mut rgba)?;
         encoder.push_rgba(&rgba).map_err(encoder_error)?;
     }
@@ -124,7 +123,7 @@ impl Drop for ExportSurface {
     }
 }
 
-fn paint(
+fn render_frame(
     surface: &ExportSurface,
     backend: &mut CanvasKitBackend,
     scene: &MotionScene,
@@ -137,15 +136,7 @@ fn paint(
         surface
             .ck
             .translate(-scene.bounds.origin.x, -scene.bounds.origin.y);
-        op_editor_ui::shader_clock::with_sample_time(shader_time, || {
-            canvas_viewport_paint::paint_node(
-                &mut PaintCx { backend },
-                root,
-                Point2D::ZERO,
-                1.0,
-                Rect::xywh(-1.0e15, -1.0e15, 2.0e15, 2.0e15),
-            );
-        });
+        crate::widget_host::paint_motion_export_node(backend, root, shader_time);
         backend.end_frame();
     };
     let callback = ScopedClosure::<dyn FnMut()>::borrow_mut_assert_unwind_safe(&mut draw);

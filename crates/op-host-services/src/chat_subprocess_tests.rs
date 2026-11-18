@@ -102,7 +102,7 @@ impl CodexHelpStub {
         ));
         std::fs::create_dir_all(&dir).expect("create Codex help stub dir");
         let binary = dir.join("codex");
-        symlink("/usr/bin/env", &binary).expect("link env launcher");
+        symlink("/bin/sh", &binary).expect("link shell launcher");
         symlink("/bin/sh", dir.join("node")).expect("link sibling interpreter");
         Self { dir, binary }
     }
@@ -110,16 +110,18 @@ impl CodexHelpStub {
     fn append(&self, help_line: &str, args: &mut Vec<String>) {
         quirks::append_codex_ephemeral_arg_using(&self.binary, args, |binary, argv, timeout| {
             assert_eq!(argv, ["exec", "--help"]);
-            // Keep the env → sibling Node PATH contract. The fixture is
-            // passed as interpreter input to avoid executing a new script.
+            // Keep the env → sibling Node PATH contract without invoking
+            // `/usr/bin/env` under a non-`env` argv[0] (Ubuntu 26.04 ships
+            // multi-call uutils coreutils, which rejects `argv[0] = codex`).
             let body = format!(
                 "if [ \"$1\" != 'exec' ] || [ \"$2\" != '--help' ]; then exit 64; fi
                  printf '%s\n' '{help_line}'"
             );
+            let launcher = "exec /usr/bin/env node -c \"$1\" codex-fixture \"$2\" \"$3\"";
             crate::cli_probe_support::bounded_cli_output(
                 CliName::Codex,
                 binary,
-                &["node", "-c", &body, "codex-fixture", argv[0], argv[1]],
+                &["-c", launcher, "codex-launcher", &body, argv[0], argv[1]],
                 timeout,
             )
         });

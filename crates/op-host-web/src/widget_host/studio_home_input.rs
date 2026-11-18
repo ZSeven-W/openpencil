@@ -359,7 +359,15 @@ impl WidgetHost {
             return Some(self.cursor_move_modal_tiers(x, y).unwrap_or(false));
         }
         if self.editor_state.editor_ui.locale_picker.open {
-            return Some(self.update_locale_picker_hover(x, y));
+            let changed = op_editor_ui::widgets::locale_picker::update_locale_picker_hover(
+                &mut self.editor_state,
+                self.last_viewport_w,
+                Point2D::new(x, y),
+            );
+            if changed {
+                self.mark_dirty();
+            }
+            return Some(changed);
         }
         if !self.editor_state.editor_ui.chat_model_picker.open {
             return None;
