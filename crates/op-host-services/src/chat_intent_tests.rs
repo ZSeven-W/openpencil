@@ -570,6 +570,28 @@ fn new_screen_brief_with_section_requirements_bypasses_chat_classifier() {
 }
 
 #[test]
+fn new_screen_brief_opening_ends_at_any_sentence_boundary() {
+    // The opening instruction decides scope however the brief separates its
+    // sentences, not only with ". ".
+    for prompt in [
+        "Design a music app home screen.\nInclude a Made For You section with three cards.",
+        "Design a music app home screen\nInclude a Made For You section with three cards.",
+        "Design a music app home screen! Include a Made For You section with three cards.",
+        "Design a music app home screen; include a Made For You section with three cards.",
+    ] {
+        assert!(requests_new_whole_screen(prompt), "{prompt:?}");
+    }
+    // A decimal does not end the opening sentence ("Design a 1" would not
+    // name a screen), and a section-add opening still keeps appending.
+    assert!(requests_new_whole_screen(
+        "Design a 1.5x scaled home screen.\nInclude a Made For You section.",
+    ));
+    assert!(!requests_new_whole_screen(
+        "Design a new section on the music home screen!\nInclude three playlist cards.",
+    ));
+}
+
+#[test]
 fn english_page_edits_stay_on_modify_route() {
     // An English EDIT that merely mentions a page/screen must NOT be mistaken
     // for a new-screen draw — it needs a creation verb (draw/create/design/…),
