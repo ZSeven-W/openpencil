@@ -4,6 +4,8 @@ uniform float sampleTime;
 uniform float focal;
 uniform float baseline;
 uniform float edgeSoftness;
+// Floor gap in scene pixels, grid strength, bevel light, projected trails.
+uniform float4 stage;
 uniform float4 view;
 uniform float4 lens;
 
@@ -48,6 +50,10 @@ float2 project(float3 w,float3 eye,float3 right,float3 up,float3 forward,float s
     return float2(360.+safeFocal*dot(v,right)/z,820.-safeFocal*dot(v,up)/z);
 }
 
+float grid_distance(float position, float stepSize){
+    return abs(fract(position/stepSize+.5)-.5)*stepSize;
+}
+
 half4 main(float2 coord){
     float2 p=coord*float2(720.,1280.)/max(size,float2(1.));
     float t=sampleTime>=0.?sampleTime:time;
@@ -76,12 +82,37 @@ half4 main(float2 coord){
     float3 eye=head-forward*distance-right*((cursor-360.)*stepSize/spacing)-up*((820.-endpoint)*stepSize/spacing);
     float3 ray=normalize(forward+right*((p.x-360.)/safeFocal)+up*((820.-p.y)/safeFocal));
 
+    // Place the floor so its center line crosses a point below the cursor.
+    // Intersect both the reference ray and the actual pixel ray with the
+    // corresponding world planes, so the floor rotates with the camera.
+    float floorY=0.;
+    float grid=clamp(stage.y,0.,2.);
+    float polish=clamp(stage.z,0.,2.);
+    float projectedTrails=clamp(stage.w,0.,1.);
+    if(grid>0.||projectedTrails>0.){
+        float floorPixel=max(endpoint+clamp(stage.x,20.,400.),1000.);
+        float3 floorRay=forward+right*((cursor-360.)/safeFocal)+up*((820.-floorPixel)/safeFocal);
+        floorY=eye.y-eye.z*floorRay.y/max(.05,floorRay.z);
+    }
+
     float2 uv=p/float2(720.,1280.);
     float fog=exp(-dot((uv-float2(.68,.80))*float2(3.,3.8),(uv-float2(.68,.80))*float2(3.,3.8)));
     float3 radiance=float3(.0025,.004,.007)+float3(.013,.033,.082)*fog;
     float2 dust=p*.35+float2(0.,t*.65);
     float star=step(.9982,hash(floor(dust)))*(1.-smoothstep(.04,.25,length(fract(dust)-.5)));
     radiance+=star*.09;
+    if(grid>0.&&ray.y<-.002){
+        float floorT=(floorY-eye.y)/ray.y;
+        if(floorT>0.){
+            float3 floorHit=eye+ray*floorT;
+            float lineWidth=max(.0005,floorT/safeFocal);
+            float gridDist=min(grid_distance(floorHit.x,.9),grid_distance(floorHit.z,.9));
+            float line=1.-smoothstep(0.,lineWidth*1.1,gridDist);
+            float axis=1.-smoothstep(0.,lineWidth*1.3,abs(floorHit.z));
+            float fade=exp(-abs(floorHit.z)*.13-abs(floorHit.x-head.x)*.035);
+            radiance+=grid*fade*(line*float3(.012,.019,.032)+axis*float3(.04,.067,.095));
+        }
+    }
     float planeT=-eye.z/ray.z;
     float planeX=eye.x+planeT*ray.x;
     int candidate=int(floor(planeX/stepSize+.5));
@@ -126,6 +157,13 @@ half4 main(float2 coord){
             float edge=max(min(e.x,e.y),min(max(e.x,e.y),e.z));
             float seam=1.-smoothstep(.002,.010,edge);
             surface+=float3(.45,.75,.65)*seam*.20;
+            // A broad body highlight and a narrow bevel keep the light
+            // attached to the solid as the viewing angle changes.
+            float heightTone=clamp(.5+.5*q.y/halfsize.y,0.,1.);
+            float3 highlight=mix(color,float3(1.8,1.8,1.7),.45);
+            float topLight=heightTone*heightTone;
+            surface+=polish*(highlight*topLight*.29+highlight*seam*.24);
+            surface*=1.-polish*.12*(1.-heightTone);
         }
         float2 a=project(float3(barIndex*stepSize,open,-.19),eye,right,up,forward,safeFocal);
         float2 z=project(float3(barIndex*stepSize,close,-.19),eye,right,up,forward,safeFocal);
@@ -141,7 +179,17 @@ half4 main(float2 coord){
         glow+=color*(1.-smoothstep(.25,.95,wd))*.38*weight;
         float2 origin=project(float3(barIndex*stepSize,min(low,close)-.05,0.),eye,right,up,forward,safeFocal);
         float trail=exp(-abs(p.x-origin.x)/.7)*exp(-max(0.,p.y-origin.y)/240.);
-        if(p.y>origin.y)glow+=color*trail*.045*weight;
+        if(p.y>origin.y)glow+=color*trail*.045*weight*(1.-projectedTrails);
+        if(projectedTrails>0.&&floorY<low){
+            float2 floorPoint=project(float3(barIndex*stepSize,floorY,0.),eye,right,up,forward,safeFocal);
+            float2 descent=floorPoint-origin;
+            float trailProgress=dot(p-origin,descent)/max(dot(descent,descent),.001);
+            if(trailProgress>0.&&trailProgress<1.){
+                float trailDistance=length(p-origin-descent*trailProgress);
+                float light=exp(-trailDistance/1.6)*pow(1.-trailProgress,1.55);
+                glow+=color*light*.12*projectedTrails*weight;
+            }
+        }
     }
     radiance+=glow;
     if(closest<1.e9)radiance=mix(radiance,surface,surfaceCoverage);
@@ -151,7 +199,7 @@ half4 main(float2 coord){
     float flare=exp(-abs(delta.y)/.6-abs(delta.x)/39.)*.72+exp(-abs(delta.x)/.6-abs(delta.y)/21.)*.54;
     radiance+=headcolor*halo+float3(.72,1.,.88)*flare;
     float f1=abs(p.y-(1080.+.18*(p.x-360.)));
-    radiance+=float3(.035,.055,.065)*exp(-f1*.8)*.20;
+    radiance+=float3(.035,.055,.065)*exp(-f1*.8)*.20*(1.-min(grid,1.));
     float3 mapped=1.-exp(-radiance*1.13);
     return half4(mapped,1.);
 }

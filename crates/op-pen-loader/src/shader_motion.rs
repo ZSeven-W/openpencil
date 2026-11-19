@@ -89,6 +89,7 @@ fn candlesticks(body: &ShaderFillBody) -> Option<ExpandedShaderPreset> {
             ("focal", &[1250.0]),
             ("baseline", &[bars[0]]),
             ("edgeSoftness", &[0.8]),
+            ("stage", &[90.0, 0.0, 0.0, 0.0]),
         ],
     )?;
     preset.uniforms.push(ShaderUniformPayload {

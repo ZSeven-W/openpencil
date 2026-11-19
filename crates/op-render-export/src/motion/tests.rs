@@ -42,6 +42,46 @@ fn png_sequence_captures_start_and_end_on_the_same_canvas() {
 }
 
 #[test]
+fn container_opacity_fades_overlapping_shapes_as_one_layer() {
+    let source = r##"{"version":"1.1","children":[{"type":"frame","id":"board",
+        "width":32,"height":24,"layout":"none","clipContent":true,
+        "children":[{"type":"frame","id":"card","width":32,"height":24,"layout":"none",
+        "opacity":0,"animations":[{"trigger":"mount","durationMs":1000,"easing":"linear",
+        "keyframes":[{"offset":0,"values":{"opacity":0}},{"offset":1,"values":{"opacity":1}}]}],
+        "children":[{"type":"rectangle","id":"top","x":4,"y":4,"width":16,"height":16,
+        "fill":[{"type":"solid","color":"#ff0000"}]},
+        {"type":"rectangle","id":"bottom","x":8,"y":8,"width":16,"height":16,
+        "fill":[{"type":"solid","color":"#0000ff"}]}]}]}]}"##;
+    let doc = jian_ops_schema::load_str(source).unwrap().value;
+    let scene = op_pen_loader::pen_document_to_layout_scene(&doc, &Default::default(), 0);
+    let sheet = render_motion_contact_sheet(
+        &scene,
+        &doc.children[0],
+        &ClipTrigger::Mount,
+        &[0, 500, 1000],
+        1.0,
+    )
+    .unwrap();
+    let mut decoder = png::Decoder::new(Cursor::new(sheet.png))
+        .read_info()
+        .unwrap();
+    let mut pixels = vec![0; decoder.output_buffer_size().unwrap()];
+    let info = decoder.next_frame(&mut pixels).unwrap();
+    for (frame, alpha) in sheet.frames.iter().zip([0, 128, 255]) {
+        let index = (frame.y as usize + 10) * info.line_size + (frame.x as usize + 10) * 4;
+        assert_eq!(
+            pixels[index + 3],
+            alpha,
+            "isolated card opacity at {}ms",
+            frame.time_ms
+        );
+        if alpha > 0 {
+            assert_eq!(&pixels[index..index + 3], &[255, 0, 0]);
+        }
+    }
+}
+
+#[test]
 fn apng_keeps_the_frame_count_and_final_short_step() {
     let mut decoder = png::Decoder::new(Cursor::new(export(MotionFormat::Apng)))
         .read_info()

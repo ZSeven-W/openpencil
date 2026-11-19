@@ -30,6 +30,8 @@ Set `pathSmoothness:1` for bounded cubic interpolation with continuous
 velocity; omit it for linear paths. Fractional indices progressively form
 the next candle and move the camera continuously. `edgeSoftness` controls
 subpixel silhouette smoothing (default 0.8 document pixels).
+Optional `stage:[floorGapPx,gridStrength,bevelLight,projectedTrails]`
+adds a perspective floor and keeps the light trails attached to it.
 Static alternatives: `view:[index,spacing,priceScale,cursorX]`,
 `lens:[cursorY,yaw,pitch,glow]`, `focal:1250`, `baseline:100`.
 

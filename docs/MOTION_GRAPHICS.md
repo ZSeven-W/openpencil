@@ -16,6 +16,8 @@ For continuous camera motion set `pathSmoothness:1`. Fractional candle indices
 progressively reveal the next bar; they do not snap the camera to whole bars.
 Candlestick lighting follows physical face edges, with smoothed silhouettes
 and upper/lower wicks drawn outside the body.
+Set `stage:[95,1.45,1.35,1]` for a perspective grid, brighter bevels and
+trails that land on the floor. The chart and stage share the same camera.
 
 These are procedural surfaces, with camera controls for the candlestick scene.
 They do not import mesh models or provide a general 3D scene editor. Text and
