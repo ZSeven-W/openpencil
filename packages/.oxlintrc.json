@@ -14,6 +14,10 @@
     "op-chrome-extension/vendor/**",
     "op-chrome-extension/wasm/**",
     "op-dsh/**",
-    "op-codex/**"
+    "op-codex/**",
+    "op-workbuddy/**",
+    "op-qwenwork/**",
+    "op-qoder/**",
+    "op-doubao/**"
   ]
 }

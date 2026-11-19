@@ -116,3 +116,67 @@ paired with the root `.agents/plugins/marketplace.json` so Codex can register
 
 - From `packages/op-codex/`: `npm run check`, `npm test`, `npm run setup`, and
   `npm run canvas`.
+
+## op-workbuddy (`op-workbuddy/`)
+
+Zero-dependency Node >= 22 connector and embedded MCP Apps plugin for Tencent
+WorkBuddy (`@zseven-w/workbuddy-openpencil` plus six `@zseven-w/workbuddy-openpencil-*`
+platform-selective npm runtime packages), kept outside `packages/package.json`
+`"workspaces"`.
+
+- Ships `.workbuddy-plugin/` and `.codebuddy-plugin/` plugin/marketplace manifests,
+  the `workbuddy-openpencil` CLI (`setup`, `uninstall`, `print-config`, `host-check`,
+  `canvas`, `doctor`, `configure-runtime`), atomic `~/.workbuddy/mcp.json` merging,
+  ownership-marked `~/.workbuddy/skills/` installation, and inline MCP Apps canvas
+  rendering (`_meta.ui.csp.frameDomains`).
+- From `packages/op-workbuddy/`: `npm run check`, `npm test`,
+  `npm run verify:packages`, `npm run release:check -- <version>`,
+  `npm run stage:editor-runtime`, `npm run setup`, and `npm run host-check`.
+
+## op-qwenwork (`op-qwenwork/`)
+
+Zero-dependency Node >= 22 connector, interactive Rust canvas, and local plugin kit
+for QwenWork / 千问办公 (`@zseven-w/qwenwork-openpencil` plus six
+`@zseven-w/qwenwork-openpencil-*` platform-selective npm runtime packages), kept
+outside `packages/package.json` `"workspaces"`.
+
+- Supports all three QwenWork registration modes: CLI `setup` (auto-detecting
+  `~/.qwenworkcn`, `~/.qwenwork`, `~/.qoderworkcn`, `~/.qoderwork` for `mcp.json`
+  + managed `skills/`), `print-config` (JSON paste for account-isolated Connector UI),
+  and zero-dependency `pack-plugin` (builds a QwenWorkCN-compatible `.zip` plugin kit
+  containing `.qwenwork-plugin/plugin.json`, `.mcp.json`, `CONNECTORS.md`, and `skills/`).
+- From `packages/op-qwenwork/`: `npm run check`, `npm test`, `npm run pack-plugin`,
+  `npm run verify:packages`, `npm run release:check -- <version>`,
+  `npm run stage:editor-runtime`, `npm run setup`, and `npm run host-check`.
+
+## op-qoder (`op-qoder/`)
+
+Zero-dependency Node >= 22 plugin and native MCP Apps 2026-01-26 Rust canvas for
+Qoder (`@zseven-w/qoder-openpencil` plus six `@zseven-w/qoder-openpencil-*`
+platform-selective npm runtime packages), kept outside `packages/package.json`
+`"workspaces"`.
+
+- Declares Qoder `qoder/ui` `global` + `thread` entrypoints and `inline`/`fullscreen`
+  display modes with loopback `_meta.ui.csp.frameDomains`, installs into Qoder's
+  canonical local cache (`plugins/cache/local/openpencil/<ver>` + `installed_plugins_v2.json`
+  + `settings.json` `enabledPlugins`, auto-detecting `~/.qoder` and `~/.qoder-cn`),
+  and ships a root-level `.qoder-plugin/plugin.json` ZIP packager (`pack-plugin`).
+- From `packages/op-qoder/`: `npm run check`, `npm test`, `npm run pack-plugin`,
+  `npm run verify:packages`, `npm run release:check -- <version>`,
+  `npm run stage:editor-runtime`, `npm run setup`, and `npm run host-check`.
+
+## op-doubao (`op-doubao/`)
+
+Zero-dependency Node >= 22 local `stdio` MCP connector, interactive Rust canvas,
+and uploadable Skill packager for Doubao Desktop Work Mode / 豆包办公
+(`@zseven-w/doubao-openpencil` plus six `@zseven-w/doubao-openpencil-*`
+platform-selective npm runtime packages), kept outside `packages/package.json`
+`"workspaces"`.
+
+- Provides `print-config` (`mcpServers` JSON), `print-form` (Doubao manual `stdio`
+  form fields), zero-dependency `pack-skill` (folder or `--flat` `SKILL.md` ZIP for
+  「我的技能 → 上传技能」), private Node 22+ registration, and optional `--mcp-config`
+  / `--skills-dir` management.
+- From `packages/op-doubao/`: `npm run check`, `npm test`, `npm run pack-skill`,
+  `npm run verify:packages`, `npm run release:check -- <version>`,
+  `npm run stage:editor-runtime`, `npm run setup`, and `npm run host-check`.

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "openpencil",
+  "version": "0.1.0",
+  "description": "Create, inspect, preview, and save editable OpenPencil designs in WorkBuddy.",
+  "author": {
+    "name": "ZSeven-W",
+    "url": "https://github.com/ZSeven-W"
+  },
+  "repository": "https://github.com/ZSeven-W/openpencil",
+  "homepage": "https://github.com/ZSeven-W/openpencil",
+  "license": "MIT",
+  "keywords": [
+    "openpencil",
+    "design",
+    "workbuddy",
+    "mcp",
+    "mcp-app"
+  ],
+  "icon": "./assets/icon.png",
+  "logo": "./assets/logo.png",
+  "skills": [
+    "./skills/openpencil-design",
+    "./skills/openpencil-setup"
+  ]
+}

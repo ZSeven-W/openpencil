@@ -1,0 +1,24 @@
+{
+  "name": "zseven-openpencil",
+  "owner": {
+    "name": "ZSeven-W",
+    "url": "https://github.com/ZSeven-W"
+  },
+  "plugins": [
+    {
+      "name": "openpencil",
+      "source": "./plugins/openpencil",
+      "version": "0.1.0",
+      "description": "Create, inspect, preview, and edit interactive .op UI designs in WorkBuddy with the local Rust OpenPencil canvas.",
+      "category": "mcp-app",
+      "keywords": [
+        "workbuddy",
+        "codebuddy",
+        "openpencil",
+        "design",
+        "mcp",
+        "mcp-app"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "openpencil": {
+      "type": "stdio",
+      "command": "${CODEBUDDY_PLUGIN_ROOT}/scripts/launch-mcp",
+      "args": [],
+      "cwd": "${CODEBUDDY_PLUGIN_ROOT}",
+      "defer_loading": false
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@zseven-w/doubao-openpencil-darwin-arm64",
+  "version": "0.1.0",
+  "description": "Atomic OpenPencil Rust editor runtime (darwin-arm64) for @zseven-w/doubao-openpencil.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZSeven-W/openpencil.git",
+    "directory": "packages/op-doubao/npm/darwin-arm64"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "preferUnplugged": true,
+  "files": [
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "bin",
+    "openpencil-runtime.json"
+  ]
+}

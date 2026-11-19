@@ -1,0 +1,30 @@
+{
+  "name": "@zseven-w/workbuddy-openpencil-win32-arm64",
+  "version": "0.1.0",
+  "description": "Atomic OpenPencil editor runtime for workbuddy-openpencil on Windows arm64.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZSeven-W/openpencil.git",
+    "directory": "packages/op-workbuddy/npm/win32-arm64"
+  },
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "preferUnplugged": true,
+  "files": [
+    "bin",
+    "openpencil-runtime.json",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

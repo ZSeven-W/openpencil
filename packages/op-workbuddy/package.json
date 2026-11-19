@@ -1,0 +1,71 @@
+{
+  "name": "@zseven-w/workbuddy-openpencil",
+  "version": "0.1.0",
+  "description": "OpenPencil design connector, embedded interactive Rust canvas, and local MCP bridge for Tencent WorkBuddy.",
+  "license": "MIT",
+  "keywords": [
+    "workbuddy",
+    "codebuddy",
+    "openpencil",
+    "connector",
+    "plugin",
+    "design",
+    "mcp",
+    "mcp-app"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZSeven-W/openpencil.git",
+    "directory": "packages/op-workbuddy"
+  },
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "workbuddy-openpencil": "./bin/workbuddy-openpencil.mjs"
+  },
+  "files": [
+    ".workbuddy-plugin/marketplace.json",
+    ".codebuddy-plugin/marketplace.json",
+    "bin",
+    "plugins",
+    "scripts",
+    "platforms.json",
+    "INSTALL.md",
+    "README.md",
+    "README.zh.md",
+    "LICENSE",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/check-package.mjs",
+    "doctor": "node plugins/openpencil/scripts/mcp-bridge.mjs --doctor",
+    "host-check": "node scripts/plugin-host-check.mjs",
+    "configure-runtime": "node scripts/configure-runtime.mjs",
+    "setup": "node scripts/setup.mjs",
+    "uninstall": "node scripts/setup.mjs --uninstall",
+    "print-config": "node scripts/setup.mjs --print-config",
+    "canvas": "node scripts/canvas.mjs",
+    "build:editor-runtime": "node scripts/build-editor-runtime.mjs",
+    "stage:editor-runtime": "node scripts/stage-editor-runtime.mjs",
+    "stage:runtime": "npm run stage:editor-runtime",
+    "verify:packages": "node scripts/verify-platform-packages.mjs",
+    "release:sync": "node scripts/sync-platform-versions.mjs",
+    "release:check": "node scripts/check-release-version.mjs",
+    "pack:artifact": "node scripts/pack-package.mjs"
+  },
+  "optionalDependencies": {
+    "@zseven-w/workbuddy-openpencil-darwin-arm64": "0.1.0",
+    "@zseven-w/workbuddy-openpencil-darwin-x64": "0.1.0",
+    "@zseven-w/workbuddy-openpencil-linux-arm64": "0.1.0",
+    "@zseven-w/workbuddy-openpencil-linux-x64": "0.1.0",
+    "@zseven-w/workbuddy-openpencil-win32-arm64": "0.1.0",
+    "@zseven-w/workbuddy-openpencil-win32-x64": "0.1.0"
+  }
+}

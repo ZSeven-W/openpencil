@@ -1,0 +1,20 @@
+{
+  "name": "openpencil",
+  "version": "0.1.0",
+  "displayName": "OpenPencil",
+  "description": "Editable Rust OpenPencil UI design canvas, native .op design tools, and uploadable Doubao Desktop skills for Doubao Work (豆包办公 / 豆包电脑版).",
+  "author": {
+    "name": "ZSeven-W",
+    "url": "https://github.com/ZSeven-W/openpencil"
+  },
+  "license": "MIT",
+  "keywords": [
+    "doubao",
+    "doubao-work",
+    "openpencil",
+    "design",
+    "canvas",
+    "mcp",
+    "skill"
+  ]
+}

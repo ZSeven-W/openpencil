@@ -1,0 +1,70 @@
+{
+  "name": "@zseven-w/qoder-openpencil",
+  "version": "0.1.0",
+  "description": "OpenPencil design plugin, interactive Rust MCP App canvas, and local MCP connector for Qoder.",
+  "license": "MIT",
+  "keywords": [
+    "qoder",
+    "qoder-plugin",
+    "openpencil",
+    "connector",
+    "plugin",
+    "design",
+    "mcp",
+    "mcp-app"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZSeven-W/openpencil.git",
+    "directory": "packages/op-qoder"
+  },
+  "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "qoder-openpencil": "./bin/qoder-openpencil.mjs"
+  },
+  "files": [
+    "bin",
+    "plugins",
+    "scripts",
+    "platforms.json",
+    "INSTALL.md",
+    "README.md",
+    "README.zh.md",
+    "LICENSE",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/check-package.mjs",
+    "doctor": "node plugins/openpencil/scripts/mcp-bridge.mjs --doctor",
+    "host-check": "node scripts/plugin-host-check.mjs",
+    "configure-runtime": "node scripts/configure-runtime.mjs",
+    "setup": "node scripts/setup.mjs",
+    "uninstall": "node scripts/setup.mjs --uninstall",
+    "print-config": "node scripts/setup.mjs --print-config",
+    "pack-plugin": "node scripts/pack-plugin.mjs",
+    "canvas": "node scripts/canvas.mjs",
+    "build:editor-runtime": "node scripts/build-editor-runtime.mjs",
+    "stage:editor-runtime": "node scripts/stage-editor-runtime.mjs",
+    "stage:runtime": "npm run stage:editor-runtime",
+    "verify:packages": "node scripts/verify-platform-packages.mjs",
+    "release:sync": "node scripts/sync-platform-versions.mjs",
+    "release:check": "node scripts/check-release-version.mjs",
+    "pack:artifact": "node scripts/pack-package.mjs"
+  },
+  "optionalDependencies": {
+    "@zseven-w/qoder-openpencil-darwin-arm64": "0.1.0",
+    "@zseven-w/qoder-openpencil-darwin-x64": "0.1.0",
+    "@zseven-w/qoder-openpencil-linux-arm64": "0.1.0",
+    "@zseven-w/qoder-openpencil-linux-x64": "0.1.0",
+    "@zseven-w/qoder-openpencil-win32-arm64": "0.1.0",
+    "@zseven-w/qoder-openpencil-win32-x64": "0.1.0"
+  }
+}

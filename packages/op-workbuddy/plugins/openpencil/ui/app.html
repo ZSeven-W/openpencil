@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root { color-scheme:light; --background:#efefef; --text:#68686d; }
+:root[data-theme="dark"] { color-scheme:dark; --background:#121212; --text:#a3a3a3; }
+html,body { margin:0; height:100%; min-height:600px; background:var(--background); color:var(--text); font:14px sans-serif; }
+iframe { border:0; width:100%; height:100vh; min-height:600px; display:block; }
+#notice { padding:20px; }
+#launcher { max-width:440px; margin:64px auto; padding:24px; line-height:1.7; }
+#launcher h1 { font-size:20px; color:var(--text); }
+#launcher button { padding:9px 16px; border:1px solid currentColor; border-radius:8px; color:inherit; background:transparent; font:inherit; cursor:pointer; }
+#launcher button:disabled { opacity:.5; cursor:wait; }
+#launcher input { box-sizing:border-box; width:100%; margin:8px 0; padding:8px; border:1px solid currentColor; border-radius:6px; color:inherit; background:transparent; font:12px monospace; }
+[hidden] { display:none!important; }
+</style></head><body><div id="notice" role="status">连接 OpenPencil 画布…</div><section id="launcher" hidden><h1>OpenPencil</h1><p id="launch-help">当前宿主限制了本地交互画布的内嵌框架。可将打开请求交给当前 WorkBuddy 对话或用浏览器预览打开这份交互画布。</p><button id="open-canvas" disabled>在 WorkBuddy 中打开</button><p>选中元素后，在当前对话描述修改。转代码时点击「生成」，再在对话说「继续转代码」。</p><details id="copy-fallback"><summary>备用：复制打开指令</summary><input id="canvas-url" aria-label="在 WorkBuddy 中打开画布的指令" readonly><button id="copy-canvas">复制打开指令</button></details><p id="launch-status" role="status" aria-live="polite"></p></section><iframe id="panel" title="OpenPencil Canvas" hidden allow="clipboard-read; clipboard-write; local-fonts"></iframe><script>
+const pending = new Map();
+let nextId = 1, panelOrigin, hostCapabilities = {}, opened = false;
+let hostTheme, hostThemeChanged = false;
+const frame = document.getElementById('panel'), notice = document.getElementById('notice');
+const launcher = document.getElementById('launcher'), launchLink = document.getElementById('open-canvas');
+let launchUrl, launching = false;
+const systemTheme = window.matchMedia?.('(prefers-color-scheme: dark)');
+const validTheme = value => value === 'light' || value === 'dark';
+let colorScheme;
+let lastContext;
+const codegenRequests = new Set();
+const openingRequests = new Set();
+
+function openingPrompt(url = launchUrl) {
+  return `请在当前 WorkBuddy 对话的内置浏览器预览中打开这份已有的 OpenPencil 画布：\n${url}\n请保留完整地址和片段，不要重新创建或修改设计。打开后确认画布已连接。`;
+}
+function updateOpeningPrompt() {
+  if (launchUrl) document.getElementById('canvas-url').value = openingPrompt().replace(/\n/g, ' ');
+}
+async function copyOpeningPrompt() {
+  if (!launchUrl) return;
+  const input = document.getElementById('canvas-url'), status = document.getElementById('launch-status');
+  updateOpeningPrompt();
+  try { await navigator.clipboard.writeText(openingPrompt()); status.textContent = '打开指令已复制，请粘贴到当前 WorkBuddy 对话发送。'; }
+  catch { input.focus(); input.select(); status.textContent = '请手动复制已选中的打开指令，粘贴到当前 WorkBuddy 对话发送。'; }
+}
+
+function supportsMessaging() {
+  return Boolean(hostCapabilities.message?.text || hostCapabilities.message === true);
+}
+
+async function handoffCodegen(value) {
+  if (typeof value.requestId !== 'string' || typeof value.prompt !== 'string' || value.prompt.length > 16_384 || codegenRequests.has(value.requestId)) return;
+  codegenRequests.add(value.requestId);
+  if (codegenRequests.size > 64) codegenRequests.delete(codegenRequests.values().next().value);
+  let status = 'unsupported';
+  try {
+    if (supportsMessaging()) {
+      const result = await request('ui/message', { role: 'user', content: [{ type: 'text', text: value.prompt }] });
+      status = result?.isError ? 'unknown' : 'accepted';
+    } else if (hostCapabilities.updateModelContext) {
+      await request('ui/update-model-context', { content: [{ type: 'text', text: value.prompt }] });
+    }
+  } catch { status = 'unknown'; }
+  frame.contentWindow?.postMessage({ type: 'openpencil-canvas/codegen-result', requestId: value.requestId, status }, panelOrigin);
+}
+
+function sendTheme() {
+  if (opened) frame.contentWindow?.postMessage({ type: 'openpencil-canvas/theme', colorScheme }, panelOrigin);
+}
+function applyTheme() {
+  const nextTheme = hostTheme || (systemTheme?.matches ? 'dark' : 'light');
+  if (colorScheme === nextTheme) return;
+  colorScheme = nextTheme;
+  document.documentElement.dataset.theme = colorScheme;
+  document.documentElement.style.colorScheme = colorScheme;
+  if (launchUrl) {
+    const url = new URL(launchUrl);
+    url.hash = `theme=${colorScheme}`;
+    launchUrl = url.href;
+    updateOpeningPrompt();
+  }
+  sendTheme();
+}
+function acceptHostTheme(value) {
+  if (!validTheme(value)) return;
+  hostTheme = value;
+  applyTheme();
+}
+systemTheme?.addEventListener('change', applyTheme);
+frame.addEventListener('load', sendTheme);
+applyTheme();
+
+function request(method, params) {
+  const id = `canvas-${nextId++}`;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { pending.delete(id); reject(new Error('插件连接超时，请重新打开画布。')); }, 20000);
+    pending.set(id, { resolve, reject, timer });
+    window.parent.postMessage({ jsonrpc: '2.0', id, method, params }, '*');
+  });
+}
+
+launchLink.addEventListener('click', async event => {
+  event.preventDefault();
+  if (!launchUrl || launching) return;
+  if (!hostCapabilities.serverTools || !supportsMessaging()) { await copyOpeningPrompt(); return; }
+  const status = document.getElementById('launch-status');
+  launching = true;
+  launchLink.disabled = true;
+  status.textContent = '正在请求 WorkBuddy 打开内置画布…';
+  try {
+    let result = await request('tools/call', { name: 'canvas_prepare_browser', arguments: { theme: colorScheme } });
+    const prepared = result?.structuredContent, url = new URL(prepared?.panelUrl);
+    const current = new URL(launchUrl);
+    if (
+      result?.isError
+      || !/^[A-Za-z0-9_-]{22}$/.test(prepared?.launchId || '')
+      || prepared.state !== 'pending'
+      || url.origin !== current.origin
+      || url.pathname !== current.pathname
+      || url.search
+      || url.username
+      || url.password
+      || url.hash !== `#theme=${colorScheme}&launch=${prepared.launchId}`
+    ) throw new Error('Invalid opening request');
+    if (!openingRequests.has(prepared.launchId)) {
+      openingRequests.add(prepared.launchId);
+      if (openingRequests.size > 64) openingRequests.delete(openingRequests.values().next().value);
+      const sent = await request('ui/message', { role: 'user', content: [{ type: 'text', text: openingPrompt(url.href) }] });
+      if (sent?.isError) throw new Error('Opening handoff failed');
+    }
+    status.textContent = '已交给 WorkBuddy，等待画布连接…';
+    for (let poll = 0; poll <= 60; poll++) {
+      const value = result?.structuredContent;
+      if (result?.isError || value?.launchId !== prepared.launchId) throw new Error('Opening status failed');
+      if (value.state === 'connected') { status.textContent = '画布已连接。'; return; }
+      if (value.state !== 'pending' || poll === 60) throw new Error('Canvas connection not confirmed');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      result = await request('tools/call', { name: 'canvas_launch_status', arguments: { launchId: value.launchId } });
+    }
+  } catch {
+    document.getElementById('copy-fallback').open = true;
+    status.textContent = '未确认画布已打开。请先查看当前对话；需要时复制打开指令发送给 WorkBuddy。';
+  } finally {
+    launching = false;
+    launchLink.disabled = false;
+  }
+});
+document.getElementById('copy-canvas').addEventListener('click', copyOpeningPrompt);
+
+function show(result) {
+  if (result?.isError) { notice.hidden = false; notice.textContent = result.content?.[0]?.text || '画布未打开'; return; }
+  const raw = result?.structuredContent?.panelUrl;
+  if (!raw || opened) return;
+  let url;
+  try { url = new URL(raw); } catch { return; }
+  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !/^\/canvas\/[A-Za-z0-9_-]{43}$/.test(url.pathname) || url.search || url.hash || url.username || url.password) return;
+  // Seed the first paint via the fragment; subsequent theme updates use postMessage.
+  url.hash = `theme=${colorScheme}`;
+  const frameDomains = hostCapabilities.sandbox?.csp?.frameDomains;
+  if (Array.isArray(frameDomains) && !frameDomains.includes(url.origin)) {
+    launchUrl = url.href;
+    updateOpeningPrompt();
+    launchLink.disabled = false;
+    if (!hostCapabilities.serverTools || !supportsMessaging()) {
+      launchLink.textContent = '复制打开指令';
+      document.getElementById('launch-help').textContent = '当前面板无法向对话发送打开请求。复制指令并发送到当前 WorkBuddy 对话即可打开这份画布。';
+    }
+    launcher.hidden = false;
+    notice.hidden = true;
+    return;
+  }
+  opened = true;
+  panelOrigin = url.origin;
+  frame.src = url.href;
+  frame.hidden = false;
+  notice.hidden = true;
+}
+
+window.addEventListener('message', event => {
+  if (event.source === frame.contentWindow && event.origin === panelOrigin) {
+    if (event.data?.type === 'openpencil-canvas/ready') sendTheme();
+    if (event.data?.type === 'openpencil-canvas/codegen') void handoffCodegen(event.data);
+    if (event.data?.type === 'openpencil-canvas/context' && hostCapabilities.updateModelContext) {
+      const context = JSON.stringify({ canvasFile: event.data.filePath, selection: event.data.selection });
+      if (context !== lastContext) {
+        lastContext = context;
+        request('ui/update-model-context', { content: [{ type: 'text', text: context }] }).catch(() => {
+          if (lastContext === context) lastContext = undefined;
+        });
+      }
+    }
+    return;
+  }
+  if (event.source !== window.parent || event.data?.jsonrpc !== '2.0') return;
+  const message = event.data;
+  if (pending.has(message.id)) {
+    const p = pending.get(message.id);
+    clearTimeout(p.timer);
+    pending.delete(message.id);
+    message.error ? p.reject(new Error(message.error.message)) : p.resolve(message.result);
+  }
+  if (message.method === 'ui/notifications/host-context-changed' && validTheme(message.params?.theme)) {
+    hostThemeChanged = true;
+    acceptHostTheme(message.params.theme);
+  }
+  if (message.method === 'ui/notifications/tool-result') show(message.params);
+  if (message.method === 'ping') window.parent.postMessage({ jsonrpc: '2.0', id: message.id, result: {} }, '*');
+  if (message.method === 'ui/resource-teardown') window.parent.postMessage({ jsonrpc: '2.0', id: message.id, result: {} }, '*');
+});
+
+(async () => {
+  const initialized = await request('ui/initialize', {
+    protocolVersion: '2026-01-26',
+    appInfo: { name: 'OpenPencil Canvas', version: '0.1.0' },
+    appCapabilities: { availableDisplayModes: ['inline', 'fullscreen'] },
+  });
+  hostCapabilities = initialized.hostCapabilities || {};
+  if (!hostThemeChanged) acceptHostTheme(initialized.hostContext?.theme);
+  window.parent.postMessage({ jsonrpc: '2.0', method: 'ui/notifications/initialized', params: {} }, '*');
+  if (hostCapabilities.serverTools && !opened) show(await request('tools/call', { name: 'open_canvas', arguments: {} }));
+})().catch(error => { notice.textContent = error.message; });
+</script></body></html>

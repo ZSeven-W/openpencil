@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+artifacts/
+dist/
+npm/*/bin/
+npm/*/openpencil-runtime.json
+*.log
+*.zip

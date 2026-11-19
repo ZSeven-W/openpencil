@@ -11,7 +11,12 @@ op-chrome-extension/vendor/
 # so formatting it would only produce churn.
 op-chrome-extension/wasm/
 
-# Independent plugin toolchains: op-dsh uses semicolon-free TS, and op-codex
-# validates exact markdown/file contracts via scripts/check-package.mjs.
+# Independent plugin toolchains: op-dsh uses semicolon-free TS, and op-codex,
+# op-workbuddy, op-qwenwork, op-qoder, and op-doubao validate exact
+# markdown/file contracts via scripts/check-package.mjs.
 op-dsh/
 op-codex/
+op-workbuddy/
+op-qwenwork/
+op-qoder/
+op-doubao/

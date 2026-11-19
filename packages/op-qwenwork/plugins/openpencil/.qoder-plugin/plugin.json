@@ -1,0 +1,28 @@
+{
+  "name": "openpencil",
+  "displayName": "OpenPencil 设计画布",
+  "displayNameEn": "OpenPencil Design Canvas",
+  "version": "0.1.0",
+  "description": "在千问办公中连接本地 Rust OpenPencil 矢量设计引擎，创建、检查、实时预览并编辑可保存的 .op 界面设计稿，支持选区修改、图片嵌入与多框架转代码。",
+  "descriptionEn": "Connect QwenWork to the local Rust OpenPencil vector design engine to create, inspect, preview, edit, and export editable .op UI designs.",
+  "author": {
+    "name": "ZSeven-W",
+    "url": "https://github.com/ZSeven-W"
+  },
+  "homepage": "https://github.com/ZSeven-W/openpencil",
+  "repository": "https://github.com/ZSeven-W/openpencil",
+  "license": "MIT",
+  "keywords": [
+    "openpencil",
+    "UI设计",
+    "原型设计",
+    "design",
+    "canvas",
+    "mcp",
+    "qwenwork"
+  ],
+  "skills": [
+    "./skills/openpencil-design",
+    "./skills/openpencil-setup"
+  ]
+}

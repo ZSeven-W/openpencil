@@ -1,0 +1,33 @@
+{
+  "name": "@zseven-w/qoder-openpencil-linux-x64",
+  "version": "0.1.0",
+  "description": "Atomic OpenPencil Rust editor runtime (linux-x64) for @zseven-w/qoder-openpencil.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZSeven-W/openpencil.git",
+    "directory": "packages/op-qoder/npm/linux-x64"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "libc": [
+    "glibc"
+  ],
+  "preferUnplugged": true,
+  "files": [
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "bin",
+    "openpencil-runtime.json"
+  ]
+}

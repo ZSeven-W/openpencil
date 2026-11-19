@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "openpencil": {
+      "type": "stdio",
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/launch-mcp",
+      "args": [],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}"
+    }
+  }
+}

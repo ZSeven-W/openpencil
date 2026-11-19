@@ -1,0 +1,19 @@
+{
+  "name": "openpencil",
+  "version": "0.1.0",
+  "displayName": "OpenPencil",
+  "description": "Editable Rust OpenPencil UI design canvas (MCP App with Global and Thread Sidebar entrypoints), native .op design tools, and code handoff for Qoder.",
+  "author": {
+    "name": "ZSeven-W",
+    "url": "https://github.com/ZSeven-W/openpencil"
+  },
+  "license": "MIT",
+  "keywords": [
+    "qoder-plugin",
+    "openpencil",
+    "design",
+    "canvas",
+    "mcp-app",
+    "ui"
+  ]
+}

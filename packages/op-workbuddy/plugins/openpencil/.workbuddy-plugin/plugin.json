@@ -1,0 +1,32 @@
+{
+  "name": "openpencil",
+  "version": "0.1.0",
+  "description": "OpenPencil design connector and embedded interactive Rust canvas for WorkBuddy — create, inspect, preview, edit, and export .op UI designs.",
+  "author": {
+    "name": "ZSeven-W",
+    "url": "https://github.com/ZSeven-W"
+  },
+  "repository": "https://github.com/ZSeven-W/openpencil",
+  "homepage": "https://github.com/ZSeven-W/openpencil",
+  "license": "MIT",
+  "category": "mcp-app",
+  "keywords": [
+    "workbuddy",
+    "openpencil",
+    "mcp-app",
+    "stdio",
+    "design",
+    "canvas"
+  ],
+  "mcpServers": "./.mcp.json",
+  "skills": [
+    "./skills/openpencil-design",
+    "./skills/openpencil-setup"
+  ],
+  "workbuddy": {
+    "welcomeModes": [
+      "design"
+    ],
+    "runtimeOwner": "agent-cli"
+  }
+}

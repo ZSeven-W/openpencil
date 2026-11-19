@@ -1,0 +1,45 @@
+name: QwenWork connector check
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'packages/op-qwenwork/**'
+      - '.github/workflows/qwenwork-check.yml'
+  pull_request:
+    paths:
+      - 'packages/op-qwenwork/**'
+      - '.github/workflows/qwenwork-check.yml'
+
+concurrency:
+  group: qwenwork-check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Check QwenWork connector package and release catalog
+        working-directory: packages/op-qwenwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run check
+          npm test
+          node scripts/verify-platform-packages.mjs
+          version="$(node -p "require('./package.json').version")"
+          node scripts/check-release-version.mjs "$version"
