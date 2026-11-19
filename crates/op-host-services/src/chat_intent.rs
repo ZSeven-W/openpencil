@@ -590,9 +590,8 @@ pub fn requests_new_whole_screen(prompt: &str) -> bool {
     if is_section_add_request(prompt) {
         // A brief can request a new screen up front and list its sections
         // in later sentences. Only the opening instruction decides scope.
-        let (opening, _) = match prompt.split_once(". ") {
-            Some(parts) => parts,
-            None => return false,
+        let Some(opening) = opening_sentence(prompt) else {
+            return false;
         };
         let opening = opening.trim().to_ascii_lowercase();
         return DRAW_VERB_EN.iter().any(|verb| {
@@ -614,6 +613,23 @@ pub fn requests_new_whole_screen(prompt: &str) -> bool {
         return true;
     }
     english_requests_new_screen(&prompt.to_lowercase())
+}
+
+/// The first sentence of a multi-sentence prompt, or `None` when the prompt is
+/// a single sentence. A sentence ends at a line break, or at `.` / `!` / `?` /
+/// `;` followed by whitespace — so a decimal like "1.5x" does not split it,
+/// while "…home screen.\nInclude…" and "…screen! Include…" do.
+fn opening_sentence(prompt: &str) -> Option<&str> {
+    let mut chars = prompt.char_indices().peekable();
+    while let Some((index, c)) = chars.next() {
+        let boundary = c == '\n'
+            || (matches!(c, '.' | '!' | '?' | ';')
+                && chars.peek().is_some_and(|&(_, next)| next.is_whitespace()));
+        if boundary {
+            return Some(&prompt[..index]);
+        }
+    }
+    None
 }
 
 /// Core "this is a NEW screen/design" signal: a creation verb aimed at a
