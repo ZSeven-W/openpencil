@@ -46,6 +46,8 @@ mod platform {
     use crate::common::egl_pbuffer::EglPbufferProvider;
     use glow::HasContext;
 
+    const PBUFFER_HEIGHT: i32 = 600;
+
     pub fn run() {
         // BLOCK 2 (Codex Phase A Gate round 1): see `gpu_smoke.rs` for
         // the full rationale. STEP1A_REQUIRE_GPU=1 ⇒ setup-failure is
@@ -55,7 +57,7 @@ mod platform {
             .map(|v| v == "1")
             .unwrap_or(false);
 
-        let provider = match EglPbufferProvider::new((800, 600)) {
+        let provider = match EglPbufferProvider::new((800, PBUFFER_HEIGHT as u32)) {
             Ok(p) => p,
             Err(err) => {
                 let msg = format!("Linux EGL pbuffer setup failed: {err}");
@@ -95,12 +97,15 @@ mod platform {
         let glow = ctx.glow().expect("glow handle").clone();
         let mut chrome_px = [0u8; 4];
         let mut stub_px = [0u8; 4];
+        // The surface is wrapped `SurfaceOrigin::BottomLeft`, so GL rows
+        // count up from the bottom; convert the canvas-space probe points.
+        let gl_row = |canvas_y: i32| PBUFFER_HEIGHT - 1 - canvas_y;
         unsafe {
             glow.bind_framebuffer(glow::READ_FRAMEBUFFER, None);
             glow.finish();
             glow.read_pixels(
                 75,
-                75,
+                gl_row(75),
                 1,
                 1,
                 glow::RGBA,
@@ -111,7 +116,7 @@ mod platform {
             // be the stub's blue paint.
             glow.read_pixels(
                 300,
-                200,
+                gl_row(200),
                 1,
                 1,
                 glow::RGBA,
