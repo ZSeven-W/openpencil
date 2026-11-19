@@ -166,6 +166,19 @@ fn engine_is_bound_to_its_creator_thread() {
 }
 
 #[test]
+fn frame_cpu_rejects_a_stride_whose_buffer_size_overflows() {
+    let engine = create_engine(200.0, 200.0, 1.0).expect("engine creation");
+    // 200 rows × 2^63 wraps to 0 in an unchecked multiply, which would pass
+    // the buffer-length check and send the row copies out of bounds.
+    let stride = usize::MAX / 2 + 1;
+    let mut buffer = vec![0u8; 16];
+    let status = unsafe { op_frame_cpu(engine, 0, buffer.as_mut_ptr(), buffer.len(), stride) };
+    assert_eq!(status, OpStatus::InvalidArg, "{}", last_error(engine));
+    assert!(buffer.iter().all(|&byte| byte == 0));
+    assert_eq!(unsafe { op_destroy(engine) }, OpStatus::Ok);
+}
+
+#[test]
 fn resize_updates_pixel_size() {
     let engine = create_engine(300.0, 400.0, 1.0).expect("engine creation");
     let mut width = 0u32;
