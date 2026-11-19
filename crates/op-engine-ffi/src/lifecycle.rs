@@ -672,7 +672,7 @@ impl Session {
                 "frame stride is smaller than the physical row",
             ));
         }
-        let required = height as usize * stride;
+        let required = (height as usize).saturating_mul(stride); // a wrap would pass the check
         if buffer_len < required {
             return Err(FfiError::invalid(format!(
                 "frame buffer covers {buffer_len} bytes but {required} are required"
