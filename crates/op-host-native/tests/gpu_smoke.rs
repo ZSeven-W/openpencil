@@ -210,6 +210,8 @@ mod platform {
     use crate::common::egl_pbuffer::EglPbufferProvider;
     use glow::HasContext;
 
+    const PBUFFER_HEIGHT: i32 = 600;
+
     pub fn run() {
         // BLOCK 2 (Codex Phase A Gate round 1): the previous behaviour
         // of returning silently on EGL pbuffer setup failure made
@@ -226,7 +228,7 @@ mod platform {
             .unwrap_or(false);
 
         // 800×600 pbuffer; mesa softpipe handles this without a display.
-        let provider = match EglPbufferProvider::new((800, 600)) {
+        let provider = match EglPbufferProvider::new((800, PBUFFER_HEIGHT as u32)) {
             Ok(p) => p,
             Err(err) => {
                 let msg = format!("Linux EGL pbuffer setup failed: {err}");
@@ -271,12 +273,15 @@ mod platform {
             .expect("glow handle live before teardown")
             .clone();
         let mut buf = [0u8; 4];
+        // The surface is wrapped `SurfaceOrigin::BottomLeft`, so GL rows
+        // count up from the bottom: canvas (75, 75) is GL row 600 - 1 - 75.
+        let gl_row = |canvas_y: i32| PBUFFER_HEIGHT - 1 - canvas_y;
         unsafe {
             glow.bind_framebuffer(glow::READ_FRAMEBUFFER, None);
             glow.finish();
             glow.read_pixels(
                 75,
-                75,
+                gl_row(75),
                 1,
                 1,
                 glow::RGBA,
