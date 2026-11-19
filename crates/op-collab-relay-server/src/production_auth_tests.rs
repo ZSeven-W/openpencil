@@ -578,7 +578,7 @@ fn authentication_debug_output_is_anonymous() {
 fn pinned_policy_fetcher_reads_regular_files_with_a_strict_bound() {
     let fixture = TempFixture::new();
     let path = fixture.path().join("operator-secret-policy.json");
-    fs::write(&path, b"{\"keys\":[]}").expect("write policy fixture");
+    write_public_fixture(&path, b"{\"keys\":[]}");
     let config = TestCollabIssuer::verifier_config().expect("test config");
     let fetcher = PinnedPolicyFileFetcher::new(
         &config,
@@ -681,12 +681,21 @@ fn write_locator_key_file(
             "public_key_ed25519": URL_SAFE_NO_PAD.encode(signing_key.verifying_key().to_bytes()),
         }],
     });
-    fs::write(
+    write_public_fixture(
         &path,
-        serde_json::to_vec(&body).expect("serialize key file"),
-    )
-    .expect("write verifier key file");
+        &serde_json::to_vec(&body).expect("serialize key file"),
+    );
     path
+}
+
+fn write_public_fixture(path: &Path, body: &[u8]) {
+    fs::write(path, body).expect("write public fixture");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o644))
+            .expect("public fixture permissions");
+    }
 }
 
 fn write_x25519_key_file(fixture: &TempFixture, filename: &str) -> PathBuf {

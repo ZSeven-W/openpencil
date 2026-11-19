@@ -35,11 +35,10 @@ fn production_check_rejects_a_policy_with_a_rewritten_signature() {
         "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     );
     let rewritten_policy = serde_json::to_vec(&policy).expect("policy JSON");
-    std::fs::write(
-        fixture.directory.path().join("policy.json"),
+    write_public_fixture(
+        &fixture.directory.path().join("policy.json"),
         &rewritten_policy,
-    )
-    .expect("rewrite policy");
+    );
     assert_eq!(
         check_production_config_at(
             &fixture.config(),
@@ -113,7 +112,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let directory = tempfile::tempdir().expect("temporary directory");
-        std::fs::write(directory.path().join("policy.json"), POLICY).expect("policy file");
+        write_public_fixture(&directory.path().join("policy.json"), POLICY);
         write_locator_keys(directory.path());
         write_x25519_keys(directory.path());
         Self { directory }
@@ -141,11 +140,20 @@ fn write_locator_keys(directory: &Path) {
             "public_key_ed25519": URL_SAFE_NO_PAD.encode(key.verifying_key().as_bytes()),
         }],
     });
-    std::fs::write(
-        directory.join("locator-keys.json"),
-        serde_json::to_vec(&body).expect("locator keys JSON"),
-    )
-    .expect("locator keys file");
+    write_public_fixture(
+        &directory.join("locator-keys.json"),
+        &serde_json::to_vec(&body).expect("locator keys JSON"),
+    );
+}
+
+fn write_public_fixture(path: &Path, body: &[u8]) {
+    std::fs::write(path, body).expect("public fixture file");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o644))
+            .expect("public fixture permissions");
+    }
 }
 
 fn write_x25519_keys(directory: &Path) {
