@@ -7,7 +7,7 @@ use std::{
     os::unix::net::UnixListener,
     path::Path,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use ed25519_dalek::{Signer as _, SigningKey};
@@ -124,7 +124,7 @@ fn run_check_with_inputs(
     let policy_path = directory.path().join("policy.json");
     let public_keys_path = directory.path().join("locator-public-keys.json");
     let socket_path = directory.path().join("signer.sock");
-    std::fs::write(&policy_path, policy_body).expect("policy file");
+    write_public_fixture(&policy_path, policy_body);
     write_public_keys(&public_keys_path, published_seed);
 
     let hsm = exercise_hsm.then(|| {
@@ -162,7 +162,22 @@ fn policy_sha256() -> String {
 }
 
 fn serve_one_signature(listener: UnixListener, signer_seed: [u8; 32]) {
-    let (mut stream, _) = listener.accept().expect("HSM accept");
+    listener
+        .set_nonblocking(true)
+        .expect("HSM listener non-blocking");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut stream = loop {
+        match listener.accept() {
+            Ok((stream, _)) => break stream,
+            Err(error)
+                if error.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline =>
+            {
+                thread::sleep(Duration::from_millis(10));
+            }
+            Err(_) => return,
+        }
+    };
+    stream.set_nonblocking(false).expect("HSM stream blocking");
     let mut request = Vec::new();
     stream.read_to_end(&mut request).expect("HSM request");
     assert_eq!(request.len(), HSM_SIGN_REQUEST_BYTES);
@@ -203,8 +218,15 @@ fn write_public_keys(path: &Path, seed: [u8; 32]) {
             "public_key_ed25519": URL_SAFE_NO_PAD.encode(verifying_key.as_bytes()),
         }],
     });
-    std::fs::write(path, serde_json::to_vec(&body).expect("public keys JSON"))
-        .expect("public keys file");
+    write_public_fixture(path, &serde_json::to_vec(&body).expect("public keys JSON"));
+}
+
+fn write_public_fixture(path: &Path, body: &[u8]) {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    std::fs::write(path, body).expect("public fixture file");
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o644))
+        .expect("public fixture permissions");
 }
 
 fn current_peer() -> ExpectedUnixPeer {
