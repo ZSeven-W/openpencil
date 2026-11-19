@@ -23,6 +23,8 @@ const manifest = JSON.parse(await readFile(resolve(projectRoot, 'package.json'),
 const manifestText = await readFile(resolve(projectRoot, 'package.json'), 'utf8')
 
 const HOST_PACKAGES = [
+  '@deepseek-ai/dsh-agent',
+  '@deepseek-ai/dsh-attachment',
   '@deepseek-ai/dsh-client-locale',
   '@deepseek-ai/dsh-client-ui-renderer',
   '@deepseek-ai/dsh-client-ui-session',
@@ -84,13 +86,13 @@ test('package.json declares no @deepseek-ai host peers', () => {
   assert.deepEqual(Object.keys(manifest.peerDependencies).sort(), ['react', 'react-dom'])
 })
 
-test('host packages are pinned to 0.2.0-rc.2 as devDependencies', () => {
+test('host packages are pinned to 0.2.2-rc.5 as devDependencies', () => {
   for (const name of HOST_PACKAGES) {
-    assert.equal(manifest.devDependencies?.[name], '0.2.0-rc.2', `${name} devDependency pin`)
+    assert.equal(manifest.devDependencies?.[name], '0.2.2-rc.5', `${name} devDependency pin`)
     assert.equal(manifest.dependencies?.[name], undefined, `${name} must not be a runtime dependency`)
     assert.equal(manifest.peerDependencies?.[name], undefined, `${name} must not be a peerDependency`)
   }
-  assert.equal(manifest.devDependencies?.['@deepseek-ai/cordis'], '~4.0.4')
+  assert.equal(manifest.devDependencies?.['@deepseek-ai/cordis'], '~4.1.0')
 })
 
 test('the injected client list names no removed runtime package', () => {
@@ -106,8 +108,9 @@ test('the injected client list names no removed runtime package', () => {
   assert.equal(manifestText.includes(removedRuntimePackage.slice('@deepseek-ai/'.length)), false)
 })
 
-test('the DSH 0.2.0 compatibility gate admits this package', () => {
+test('the DSH 0.2.x compatibility gate admits this package', () => {
   assert.equal(evaluatePluginCompatibility(manifest, {}, '0.2.0-rc.2'), undefined)
+  assert.equal(evaluatePluginCompatibility(manifest, {}, '0.2.2-rc.5'), undefined)
 })
 
 test('the same manifest stays admitted on the 0.1.5 line', () => {
@@ -123,10 +126,10 @@ test('the evaluator still rejects stale host peers (negative control)', () => {
       '@deepseek-ai/dsh-tools': '0.1.5-rc.1',
     },
   }
-  assert.deepEqual(evaluatePluginCompatibility(stale, {}, '0.2.0-rc.2'), {
+  assert.deepEqual(evaluatePluginCompatibility(stale, {}, '0.2.2-rc.5'), {
     name: manifest.name,
     version: manifest.version,
-    runtimeVersion: '0.2.0-rc.2',
+    runtimeVersion: '0.2.2-rc.5',
     peers: { '@deepseek-ai/dsh-tools': '0.1.5-rc.1' },
     exempted: false,
   })

@@ -142,6 +142,29 @@ type StoredSession = NonNullable<ReturnType<SessionStore['get']>>
 // growth by length and confirms continuity by tail identity).
 type StoredEvent = ReturnType<StoredSession['snapshotEvents']>[number]
 
+// DSH 0.2.2 extracted the PTC executor out of `@deepseek-ai/dsh-tools` into
+// `@deepseek-ai/dsh-tool-executor-ptc`, so `tool/ptc-dispatch` is no longer
+// augmented onto `SessionEventMap` by `@deepseek-ai/dsh-tools` alone.
+// Narrow the runtime event shape explicitly so hydration does not depend on
+// optional executor type augmentation.
+interface PtcDispatchEventData {
+  name: string
+  subCallId: unknown
+  isError?: unknown
+  content?: unknown
+}
+
+interface PtcDispatchEvent {
+  type: 'tool/ptc-dispatch'
+  data: PtcDispatchEventData
+}
+
+function asPtcDispatchEvent(event: unknown): PtcDispatchEvent | undefined {
+  if (!isRecord(event) || event.type !== 'tool/ptc-dispatch') return undefined
+  if (!isRecord(event.data) || typeof event.data.name !== 'string') return undefined
+  return event as unknown as PtcDispatchEvent
+}
+
 interface HistoricalSettlement {
   duplicate: boolean
   event?: StoredEvent
@@ -1100,22 +1123,23 @@ export class PresentationHydrationController {
     // last hydration; replacement, truncation, or tail mutation resets safely.
     for (let eventIndex = index.indexedLength; eventIndex < events.length; eventIndex += 1) {
       const event = events[eventIndex]
+      const ptcEvent = asPtcDispatchEvent(event)
       // DSH 0.1.5 renamed this event: `tool/code-dispatch` -> `tool/ptc-dispatch`
-      // (declared by @deepseek-ai/dsh-tools into SessionEventMap). Same
+      // (moved to `@deepseek-ai/dsh-tool-executor-ptc` in DSH 0.2.2). Same
       // vocabulary — subCallId / name / arguments / content / isError — so the
-      // settlement scan below is unchanged apart from the name.
+      // settlement scan below is unchanged apart from explicit narrowing.
       if (
-        event?.type !== 'tool/ptc-dispatch'
+        ptcEvent === undefined
         || (
-          event.data.name !== OPENPENCIL_RENDER_TOOL_NAME
-          && event.data.name !== OPENPENCIL_NEW_TOOL_NAME
-          && event.data.name !== OPENPENCIL_PIPELINE_BEGIN_TOOL_NAME
-          && event.data.name !== OPENPENCIL_PIPELINE_BATCH_TOOL_NAME
-          && event.data.name !== OPENPENCIL_PIPELINE_INSPECT_TOOL_NAME
-          && event.data.name !== OPENPENCIL_PIPELINE_FINISH_TOOL_NAME
+          ptcEvent.data.name !== OPENPENCIL_RENDER_TOOL_NAME
+          && ptcEvent.data.name !== OPENPENCIL_NEW_TOOL_NAME
+          && ptcEvent.data.name !== OPENPENCIL_PIPELINE_BEGIN_TOOL_NAME
+          && ptcEvent.data.name !== OPENPENCIL_PIPELINE_BATCH_TOOL_NAME
+          && ptcEvent.data.name !== OPENPENCIL_PIPELINE_INSPECT_TOOL_NAME
+          && ptcEvent.data.name !== OPENPENCIL_PIPELINE_FINISH_TOOL_NAME
         )
       ) continue
-      const callId = String(event.data.subCallId)
+      const callId = String(ptcEvent.data.subCallId)
       if (!isSafeString(callId, 512)) continue
       const existing = index.settlements.get(callId)
       if (existing === undefined) {
@@ -1130,8 +1154,9 @@ export class PresentationHydrationController {
   }
 
   #parseHistoricalEvent(event: StoredEvent): HydratableResult | undefined {
-    if (event.type !== 'tool/ptc-dispatch') return undefined
-    const data = event.data
+    const ptcEvent = asPtcDispatchEvent(event)
+    if (ptcEvent === undefined) return undefined
+    const data = ptcEvent.data
     if (data.isError !== false || !Array.isArray(data.content) || data.content.length !== 1) return undefined
     const block = data.content[0]
     if (!isRecord(block) || Object.keys(block).length !== 2 || block.type !== 'text' || typeof block.text !== 'string') return undefined
