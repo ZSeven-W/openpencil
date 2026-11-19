@@ -53,7 +53,7 @@ packages/
 ├── op-vscode/            VS Code extension (`openpencil-vscode`)
 ├── op-chrome-extension/  Chrome MV3 web-capture extension (Rust/wasm core)
 ├── op-dsh/               DeepSeek Harness plugin (`@zseven-w/dsh-openpencil`, standalone pnpm)
-├── op-codex/             Codex plugin (`@zseven-w/codex-openpencil`, Node >= 22, root `.agents/plugins/`)
+├── op-codex/             Codex plugin (`@zseven-w/codex-openpencil` + 6 platform npm packages, Node >= 22)
 ├── op-workbuddy/         WorkBuddy connector (`@zseven-w/workbuddy-openpencil` + 6 platform npm packages, Node >= 22)
 ├── op-qwenwork/          QwenWork (千问办公) connector & plugin kit (`@zseven-w/qwenwork-openpencil` + 6 platform npm packages, Node >= 22)
 ├── op-qoder/             Qoder plugin & native MCP App canvas (`@zseven-w/qoder-openpencil` + 6 platform npm packages, Node >= 22)

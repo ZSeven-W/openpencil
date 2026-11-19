@@ -18,5 +18,5 @@ for candidate in "$(command -v node || true)" /opt/homebrew/bin/node /usr/local/
     exec "$candidate" "$script_dir/mcp-bridge.mjs" "$@"
   fi
 done
-printf '%s\n' 'OpenPencil requires Node.js 22+. Run npm run setup from its repository to register your current Node executable, then reconnect the plugin.' >&2
+printf '%s\n' 'OpenPencil requires Node.js 22+. Run codex-openpencil setup (or npm run setup from a checkout) to register your current Node executable, then reconnect the plugin.' >&2
 exit 1

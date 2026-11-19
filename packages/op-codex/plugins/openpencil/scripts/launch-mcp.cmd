@@ -16,5 +16,5 @@ if errorlevel 1 goto missing_node
 node "%~dp0mcp-bridge.mjs" %*
 exit /b %errorlevel%
 :missing_node
-echo OpenPencil requires Node.js 22+. Run npm run setup from its repository, then reconnect the plugin. >&2
+echo OpenPencil requires Node.js 22+. Run codex-openpencil setup (or npm run setup from a checkout) to register your current Node executable, then reconnect the plugin. >&2
 exit /b 1

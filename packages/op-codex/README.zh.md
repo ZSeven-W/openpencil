@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZSeven-W/openpencil/releases"><img src="https://img.shields.io/github/v/release/ZSeven-W/openpencil?color=cfb537" alt="Release" /></a>
+  <a href="https://www.npmjs.com/package/@zseven-w/codex-openpencil"><img src="https://img.shields.io/npm/v/%40zseven-w%2Fcodex-openpencil?style=flat&amp;color=cfb537" alt="npm" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/actions/workflows/codex-check.yml"><img src="https://img.shields.io/github/actions/workflow/status/ZSeven-W/openpencil/codex-check.yml?label=CI" alt="CI" /></a>
   <a href="./INSTALL.md"><img src="https://img.shields.io/badge/Node.js-22%2B-43853d?logo=node.js&amp;logoColor=white" alt="Node.js 22+" /></a>
   <a href="https://github.com/ZSeven-W/openpencil/stargazers"><img src="https://img.shields.io/github/stars/ZSeven-W/openpencil?style=flat&amp;color=cfb537" alt="Stars" /></a>
@@ -40,24 +40,23 @@
 把这句话发给 Codex：
 
 ```text
-按照 https://github.com/ZSeven-W/openpencil 的 packages/op-codex/INSTALL.md 帮我安装并配置 OpenPencil，打开可编辑画布，做一个单页手机任务管理 APP。
+按照 https://github.com/ZSeven-W/openpencil/blob/main/packages/op-codex/INSTALL.md 帮我安装并配置 @zseven-w/codex-openpencil，打开可编辑画布，做一个单页手机任务管理 APP。
 ```
 
-[INSTALL.md](./INSTALL.md) 会引导 Codex 检查依赖、安装插件、验证运行环境、打开画布，并完成第一份设计。安装过程按系统和 CPU 下载完整 Rust 编辑器、对应 WASM、CanvasKit、字体与模板，先验证真实编辑、保存和重新打开，再注册插件。
+[INSTALL.md](./INSTALL.md) 会引导 Codex 检查依赖、通过 npm 安装插件、验证运行环境、打开画布，并完成第一份设计。安装 `@zseven-w/codex-openpencil` 会通过 npm `optionalDependencies` 按系统和 CPU 自动拉取匹配的单一平台运行包（`@zseven-w/codex-openpencil-<os>-<cpu>`，包含完整 Rust 编辑器、对应 WASM、CanvasKit、字体与模板），`codex-openpencil setup` 会先校验所有文件 SHA-256 并验证真实编辑、保存和重新打开，再注册插件。
 
-需要 **Node.js 22+、Git 和支持插件的新版本本地 Codex**。安装本插件不需要 GitHub 账号、API Key、DSH、Rust 编译器、独立 OpenPencil 桌面端，也不需要安装 npm 依赖。
+需要 **Node.js 22+（含 npm）和支持插件的新版本本地 Codex**。安装本插件不需要 `git clone`、GitHub 账号、API Key、DSH、Rust 编译器或独立 OpenPencil 桌面端。
 
 也可以手动安装：
 
 ```sh
-git clone https://github.com/ZSeven-W/openpencil.git
-cd openpencil/packages/op-codex
-npm run setup
+npm install -g @zseven-w/codex-openpencil@latest
+codex-openpencil setup
 ```
 
-请保留这个仓库目录。安装脚本将其注册为本地插件市场，安装 `openpencil@zseven-openpencil`。新插件可能需要重新连接或新建聊天才能加载工具；[终端画布入口](./INSTALL.md#instructions-for-the-installing-agent) 可让 Codex 在安装时的聊天中直接完成第一份设计。
+安装脚本将已安装的 npm 包注册为本地 `zseven-openpencil` 插件市场，安装 `openpencil@zseven-openpencil`。新插件可能需要重新连接或新建聊天才能加载工具；[终端画布入口](./INSTALL.md#instructions-for-the-installing-agent)（`codex-openpencil canvas`）可让 Codex 在安装时的聊天中直接完成第一份设计。
 
-安装还会通过 Codex 的真实插件加载器检查工具，并私下记录当前 Node 可执行文件路径，解决桌面端 PATH 与终端不同导致的启动失败。可运行 `npm run host-check` 诊断加载状态；它不会新建聊天或修改设计。
+安装还会通过 Codex 的真实插件加载器检查工具，并私下记录当前 Node 可执行文件路径，解决桌面端 PATH 与终端不同导致的启动失败。可运行 `codex-openpencil host-check` 诊断加载状态；它不会新建聊天或修改设计。
 
 | 平台 | 运行包 | 系统要求 |
 | --- | --- | --- |
@@ -98,9 +97,9 @@ Codex OpenPencil 将 Codex 连接到本地 Rust [OpenPencil](https://github.com/
 </td>
 <td width="50%" valign="top">
 
-### 📦 自动安装运行环境
+### 📦 按平台选择的 npm 运行包
 
-按需下载 macOS、Windows 或 Linux 的 ARM64 / x64 运行包，使用前验证压缩包和全部文件哈希，保留已有的有效自定义运行环境。
+六个原子化原生平台运行包（`@zseven-w/codex-openpencil-<os>-<cpu>`）覆盖 macOS、Windows 和 Linux 的 ARM64 / x64。npm 自动只拉取当前平台包，启动前校验全部文件 SHA-256，保留已有的有效自定义运行环境。
 
 </td>
 </tr>
@@ -189,15 +188,22 @@ Codex OpenPencil 将 Codex 连接到本地 Rust [OpenPencil](https://github.com/
 <details>
 <summary><strong>运行环境配置与更新</strong></summary>
 
-首次打开画布也会自动安装缺失的运行环境。私有配置保存在 `~/.codex-openpencil/runtime.json`，下载的二进制与本机路径独立于插件包。下载失败不会激活不完整的运行环境，已有配置异常时会明确报错。
+私有配置保存在 `~/.codex-openpencil/runtime.json`，指向已校验的 `@zseven-w/codex-openpencil-<os>-<cpu>` 平台包（或用户指定的自定义运行环境）。缺失或被篡改的文件会明确报错，已有配置异常时不会静默替换。
 
 如需选择自定义完整运行环境：
 
 ```sh
-npm run configure-runtime -- /absolute/path/to/runtime
+codex-openpencil configure-runtime /absolute/path/to/runtime
 ```
 
-更新前检查仓库本地改动，拉取发布的更新后再次运行 `npm run setup`，然后重新连接插件。仅关闭并重开画布标签，可能仍使用旧版连接；请在插件管理中停用再启用，必要时重启 Codex。有效的自定义环境会保留，托管环境升级中断时也保留之前的配置。详见[修复与更新说明](./INSTALL.md#repair-update-and-manual-runtime)。
+更新到最新版本：
+
+```sh
+npm install -g @zseven-w/codex-openpencil@latest
+codex-openpencil setup
+```
+
+更新后请重新连接插件。仅关闭并重开画布标签，可能仍使用旧版连接；请在插件管理中停用再启用，必要时重启 Codex。有效的自定义环境会保留。详见[修复与更新说明](./INSTALL.md#repair-update-and-manual-runtime)。
 
 </details>
 
@@ -207,9 +213,9 @@ npm run configure-runtime -- /absolute/path/to/runtime
 在 Rust OpenPencil 的 Agent Settings 中开启 MCP，再运行：
 
 ```sh
-npm run doctor
+codex-openpencil doctor
 # 显式检查一个独立端点：
-npm run doctor -- --port 3100
+codex-openpencil doctor --port 3100
 ```
 
 尚未打开托管画布时，桥接读取 `~/.openpencil/.op-mcp-port`，核验服务身份和实例令牌后转发到本地 `/mcp`，拒绝过期记录、无关服务和旧 REST 端点。打开托管画布后，所有原生工具统一指向自有 Rust 服务，包括受保护的 `save_document`。失败的写操作不会自动重试。
@@ -227,7 +233,7 @@ MCP Apps 使用宿主初始主题和实时主题通知；通过按钮打开的�
 
 原生资源加载、浏览器交互、宿主内嵌呈现分别验证。当前 Codex 的 HTTP iframe 限制阻止画布内嵌；修改需求仍在当前 Codex 聊天描述。浏览器画布中点击代码面板的「生成」后，在聊天说「继续转代码」；只有支持消息能力的内嵌宿主才能自动投递提示词。详见[验证证据与剩余检查](./docs/validation.md)。
 
-插件通过公开 GitHub 仓库和 Releases 分发，尚未提交或上架 OpenAI 公共插件目录。
+插件通过 npm（`@zseven-w/codex-openpencil` 及六个平台运行包）和公开 GitHub 仓库分发，尚未提交或上架 OpenAI 公共插件目录。
 
 </details>
 
@@ -240,31 +246,38 @@ MCP Apps 使用宿主初始主题和实时主题通知；通过按钮打开的�
 ```sh
 npm run check
 npm test
-# 原生功能或运行环境变更还需执行相关独立验证：
-npm run smoke -- --binary /path/to/openpencil-desktop
+npm run verify:packages
+npm run test:release-publish
+# 将本地 Rust 构建暂存到 npm/<platform> 进行原生验证：
+npm run stage:editor-runtime
 npm run canvas-smoke
 npm run codegen-smoke
+# 或直接指向独立二进制 / 运行环境目录：
+npm run smoke -- --binary /path/to/openpencil-desktop
 npm run selection-smoke -- --runtime /absolute/path/to/runtime --output /absolute/evidence-dir
 npm run mobile-smoke -- --runtime /absolute/path/to/runtime --output /absolute/evidence-dir
 # 保持独立画布开启，供交互验证：
 npm run canvas-smoke -- --hold
 ```
 
-验证使用独立文档和 Rust 服务，输出保存在忽略的 `artifacts/` 目录，仅关闭自己的进程。CI 在 Linux、macOS、Windows 上使用 Node.js 22/24 检查打包与协议行为；原生验证需要完整的兼容运行环境。
+验证使用独立文档和 Rust 服务，输出保存在忽略的 `artifacts/` 目录，仅关闭自己的进程。CI 在 Linux、macOS、Windows 上使用 Node.js 22/24 检查打包与协议行为。推送 `codex-v<version>` tag 会自动构建六个原生平台包、离线校验按平台选择性安装，并通过 npm OIDC 先发布六个平台包、最后发布 `@zseven-w/codex-openpencil` 主包。
 
 ```text
 packages/op-codex/
 ├── .agents/plugins/          包内插件市场清单（仓库根目录 .agents/plugins/ 用于单仓根安装）
-├── plugins/openpencil/      可分发的 Codex 插件
-│   ├── plugin.json          插件身份、品牌与能力
-│   ├── mcp.json             无运行依赖的 Node.js stdio 桥接
-│   ├── scripts/             运行环境安装、会话与画布路由
-│   ├── ui/                  MCP Apps 包装与交互画布面板
-│   └── skills/              安装诊断与设计工作流
-├── scripts/                 安装、打包与原生验证脚本
-├── tests/                   协议、选区、主题与安装回归
-├── docs/                    架构、验证记录与设计预览
-└── INSTALL.md               面向 Agent 的一句话安装指南
+├── bin/                      `codex-openpencil` CLI 入口
+├── npm/                      六个按平台选择的原生运行包（`@zseven-w/codex-openpencil-*`）
+├── platforms.json            规范的六平台目录与锁定的 OpenPencil 版本/修订
+├── plugins/openpencil/       可分发的 Codex 插件
+│   ├── plugin.json           插件身份、品牌与能力
+│   ├── mcp.json              无运行依赖的 Node.js stdio 桥接
+│   ├── scripts/              原子运行环境解析、会话与画布路由
+│   ├── ui/                   MCP Apps 包装与交互画布面板
+│   └── skills/               安装诊断与设计工作流
+├── scripts/                  安装、暂存、打包、选择性安装校验、发布与原生验证脚本
+├── tests/                    协议、选区、主题、运行时与发布回归
+├── docs/                     架构、验证记录与设计预览
+└── INSTALL.md                面向 Agent 的一句话安装指南
 ```
 
 修改插件后运行 `codex plugin add openpencil@zseven-openpencil` 重新安装，再重新连接以刷新缓存。进程归属、持久化与 UI 协议见[架构说明](./docs/architecture.md)。

@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, relative, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseEditorRuntimeCatalog } from '../plugins/openpencil/scripts/editor-runtime.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const json = async (path) => JSON.parse(await readFile(path, 'utf8'));
@@ -25,25 +26,39 @@ if (existsSync(rootMarketplacePath)) {
 }
 const manifest = await json(join(pluginRoot, 'plugin.json'));
 const pkg = await json(join(root, 'package.json'));
-const catalog = await json(join(pluginRoot, 'runtime-catalog.json'));
-assert.equal(catalog.schemaVersion, 1);
-if (catalog.repository !== undefined) {
-  assert.match(catalog.repository, /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/);
-}
-assert.match(catalog.openPencilVersion, /^\d+\.\d+\.\d+(?:-[\w.-]+)?$/);
-assert.match(catalog.openPencilRevision, /^[a-f0-9]{40}$/);
-assert.equal(catalog.release, `runtime-v${catalog.openPencilVersion}-${catalog.openPencilRevision.slice(0, 7)}`);
-const platforms = ['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'win32-arm64', 'win32-x64'];
-assert.deepEqual(Object.keys(catalog.platforms).sort(), platforms, 'Publish checksums for all six runtime builds');
-for (const platform of platforms) {
-  const asset = catalog.platforms[platform];
-  assert.equal(asset.platform, platform);
-  assert.equal(asset.asset, `openpencil-runtime-${platform}.tar.gz`);
-  assert.ok(Number.isSafeInteger(asset.bytes) && asset.bytes > 0 && asset.bytes <= 256 * 1024 * 1024);
-  assert.match(asset.sha256, /^[a-f0-9]{64}$/);
+const catalog = parseEditorRuntimeCatalog(await json(join(root, 'platforms.json')));
+const expectedPlatforms = ['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64', 'win32-arm64', 'win32-x64'];
+assert.deepEqual(catalog.platforms.map(p => p.id), expectedPlatforms, 'Publish metadata for all six runtime platforms');
+assert.equal(pkg.name, '@zseven-w/codex-openpencil');
+assert.notEqual(pkg.private, true, 'Root package must be publishable to npm');
+assert.equal(pkg.publishConfig?.access, 'public');
+assert.equal(pkg.bin?.['codex-openpencil'], './bin/codex-openpencil.mjs');
+assert.ok((await stat(join(root, 'bin/codex-openpencil.mjs'))).isFile());
+if (process.platform !== 'win32') assert.ok((await stat(join(root, 'bin/codex-openpencil.mjs'))).mode & 0o111);
+assert.ok((await stat(join(root, 'THIRD_PARTY_NOTICES.md'))).isFile());
+assert.deepEqual(
+  pkg.optionalDependencies,
+  Object.fromEntries(catalog.platforms.map(p => [p.packageName, pkg.version])),
+  'Root optionalDependencies must match the six synchronized platform packages',
+);
+for (const platform of catalog.platforms) {
+  const platformPkg = await json(join(root, 'npm', platform.id, 'package.json'));
+  assert.equal(platformPkg.name, platform.packageName);
+  assert.equal(platformPkg.version, pkg.version);
+  assert.deepEqual(platformPkg.os, [platform.os]);
+  assert.deepEqual(platformPkg.cpu, [platform.cpu]);
+  if (platform.libc) assert.deepEqual(platformPkg.libc, [platform.libc]);
+  else assert.equal(platformPkg.libc, undefined);
+  assert.equal(platformPkg.preferUnplugged, true);
+  assert.equal(platformPkg.publishConfig?.access, 'public');
 }
 assert.equal(manifest.name, entry.name);
 assert.equal(manifest.version, pkg.version);
+const controllerText = await readFile(join(pluginRoot, 'scripts/canvas-controller.mjs'), 'utf8');
+assert.ok(controllerText.includes(`'ui://openpencil/canvas/v${pkg.version}.html'`), 'CANVAS_URI version must match package.json');
+assert.ok(controllerText.includes(`serverInfo: { name: 'codex-openpencil', version: '${pkg.version}' }`), 'serverInfo version must match package.json');
+const appHtmlText = await readFile(join(pluginRoot, 'ui/app.html'), 'utf8');
+assert.ok(appHtmlText.includes(`appInfo:{name:'OpenPencil Canvas',version:'${pkg.version}'}`), 'app.html version must match package.json');
 assert.equal(entry.policy.installation, 'AVAILABLE');
 assert.equal(manifest.extensions['com.openai'].requires_local_executor, true);
 for (const path of [manifest.extensions['com.openai'].onboardingSkill, './LICENSE']) {
@@ -100,4 +115,4 @@ async function scan(dir) {
   }
 }
 await scan(pluginRoot);
-console.log('Plugin identity, runtime release catalog, MCP paths, skill references, portability and license: OK');
+console.log('Plugin identity, six-platform npm catalog, MCP paths, skill references, portability and license: OK');

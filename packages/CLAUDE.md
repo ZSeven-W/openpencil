@@ -110,12 +110,16 @@ npm installs stay isolated from `packages/bun.lock`.
 
 ## op-codex (`op-codex/`)
 
-Zero-dependency Node >= 22 Codex plugin package (`@zseven-w/codex-openpencil`),
-paired with the root `.agents/plugins/marketplace.json` so Codex can register
-`openpencil@zseven-openpencil` directly from a checkout of this repository.
+Zero-dependency Node >= 22 Codex plugin package (`@zseven-w/codex-openpencil` plus
+six `@zseven-w/codex-openpencil-*` platform-selective npm runtime packages), paired
+with `.agents/plugins/marketplace.json` (both in package root for npm installs and
+in repo root for checkout installs) and the `codex-openpencil` CLI entrypoint.
 
-- From `packages/op-codex/`: `npm run check`, `npm test`, `npm run setup`, and
-  `npm run canvas`.
+- Mirrors `op-dsh`'s six-platform staging, verification, selective-install check,
+  and tag-triggered (`codex-v*`) npm OIDC trusted publishing pipeline.
+- From `packages/op-codex/`: `npm run check`, `npm test`, `npm run verify:packages`,
+  `npm run test:release-publish`, `npm run stage:editor-runtime`, `npm run setup`,
+  and `npm run canvas`.
 
 ## op-workbuddy (`op-workbuddy/`)
 

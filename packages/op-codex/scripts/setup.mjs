@@ -3,18 +3,13 @@ import { mkdir, mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ensureRuntime, installRuntime } from '../plugins/openpencil/scripts/runtime-install.mjs';
+import { activatePackageRuntime, ensureRuntime } from '../plugins/openpencil/scripts/runtime-install.mjs';
 import { CanvasController } from '../plugins/openpencil/scripts/canvas-controller.mjs';
 import { EditorSession } from '../plugins/openpencil/scripts/editor-session.mjs';
 import { runCodex } from './codex-command.mjs';
 import { registerNode } from './node-registration.mjs';
 import { verifyPluginHost } from './plugin-host-check.mjs';
 
-const args = process.argv.slice(2);
-if (args.some(arg => !['--runtime-only', '--repair-runtime'].includes(arg))) {
-  throw new Error('Usage: node scripts/setup.mjs [--runtime-only] [--repair-runtime]');
-}
-if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('OpenPencil requires Node.js 22 or later.');
 const root = fileURLToPath(new URL('../', import.meta.url));
 
 export async function verifyRuntime(runtimeRoot) {
@@ -41,15 +36,19 @@ export async function verifyRuntime(runtimeRoot) {
   } finally { await controller.close(); await rm(dir, { recursive: true, force: true }); }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+export async function runSetup(args = process.argv.slice(2)) {
+  if (args.some(arg => !['--runtime-only', '--repair-runtime'].includes(arg))) {
+    throw new Error('Usage: codex-openpencil setup [--runtime-only] [--repair-runtime]');
+  }
+  if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('OpenPencil requires Node.js 22 or later.');
   try {
     if (!args.includes('--runtime-only')) {
       if (process.env.CODEX_HOME) await mkdir(resolve(process.env.CODEX_HOME), { recursive: true, mode: 0o700 });
       runCodex(['plugin', 'add', '--help'], { cwd: root, quiet: true });
     }
-    // Acquire and verify before registering the plugin; an interrupted download
-    // must not leave an apparently ready plugin with no usable editor.
-    const runtime = args.includes('--repair-runtime') ? await installRuntime() : await ensureRuntime();
+    // Verify the atomic platform runtime before registering the plugin; a
+    // missing or tampered runtime must never leave an apparently ready plugin.
+    const runtime = args.includes('--repair-runtime') ? await activatePackageRuntime() : await ensureRuntime();
     await verifyRuntime(runtime.root);
     let pluginHost;
     if (!args.includes('--runtime-only')) {
@@ -60,9 +59,22 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       runCodex(['plugin', 'add', 'openpencil@zseven-openpencil'], { cwd: marketplaceRoot });
       pluginHost = await verifyPluginHost();
     }
-    console.log(JSON.stringify({ ok: true, runtime: runtime.version, platform: `${process.platform}-${process.arch}`,
-      verified: ['panel', 'native-edit', 'save', 'reopen'], pluginInstalled: !args.includes('--runtime-only'),
+    console.log(JSON.stringify({
+      ok: true,
+      runtime: runtime.version,
+      source: runtime.source ?? 'custom',
+      platform: `${process.platform}-${process.arch}`,
+      verified: ['panel', 'native-edit', 'save', 'reopen'],
+      pluginInstalled: !args.includes('--runtime-only'),
       pluginHost,
-      next: 'Call canvas_open_browser and show its panelUrl in the Codex browser panel. Otherwise run npm run canvas in a persistent terminal to use the canvas now; reconnect the plugin or start a new chat to load its tools.' }, null, 2));
-  } catch (error) { console.error(`OpenPencil setup failed: ${error.message}`); process.exitCode = 1; }
+      next: 'Call canvas_open_browser and show its panelUrl in the Codex browser panel. Otherwise run codex-openpencil canvas (or npm run canvas in a checkout) in a persistent terminal to use the canvas now; reconnect the plugin or start a new chat to load its tools.',
+    }, null, 2));
+  } catch (error) {
+    console.error(`OpenPencil setup failed: ${error.message}`);
+    process.exitCode = 1;
+  }
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await runSetup(process.argv.slice(2));
 }

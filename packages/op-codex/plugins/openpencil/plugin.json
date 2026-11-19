@@ -23,7 +23,7 @@
       "interface": {
         "displayName": "OpenPencil",
         "shortDescription": "Design editable UI on your local OpenPencil canvas",
-        "longDescription": "Open an editable Rust canvas for your conversation. The matching native editor, WASM and CanvasKit runtime downloads automatically on first use and is verified before launch. Interactive edits and Codex tools share one document, with selection context, guarded saves and recovery drafts. New image assets use Codex image generation by default and may consume generation quota, with stock-search fallback. Say use stock images only to skip generation. Requires Node.js 22+ and a local executor.",
+        "longDescription": "Open an editable Rust canvas for your conversation. The matching native editor, WASM and CanvasKit runtime is distributed as a platform-selective npm package and verified before launch. Interactive edits and Codex tools share one document, with selection context, guarded saves and recovery drafts. New image assets use Codex image generation by default and may consume generation quota, with stock-search fallback. Say use stock images only to skip generation. Requires Node.js 22+ and a local executor.",
         "developerName": "ZSeven-W",
         "category": "Design",
         "capabilities": [

@@ -23,15 +23,18 @@ Native images and JSON-RPC errors pass through.
 
 Reading the UI resource starts only a lightweight panel server; it never switches
 the active document. Opening a canvas verifies every runtime manifest SHA-256
-entry, platform and release. If configuration is absent, the pinned platform
-archive downloads on demand through the existing HTTPS proxy settings. The
-installer bounds download and extraction sizes, rejects links/traversal, checks
-archive and file hashes, and activates a complete runtime atomically. Existing
-valid custom runtimes remain selected; invalid configurations fail explicitly.
+entry, platform, package identity and release. Native runtimes are distributed as
+six platform-selective npm `optionalDependencies` (`@zseven-w/codex-openpencil-<os>-<cpu>`),
+matching `packages/op-dsh`. Setup verifies the installed platform package (or staged
+development runtime), rejects symlinks and path traversal, checks every file hash,
+runs an isolated edit/save/reopen smoke test, and records the verified root in
+`~/.codex-openpencil/runtime.json` so Codex's isolated plugin cache resolves the
+same verified runtime. Existing valid custom runtimes remain selected; invalid
+configurations fail explicitly.
 The daemon launches with `--serve-web --managed
 --port 0` on a recovery copy, its own supervisor lease and settings root. The
-bounded handshake must match the bundle version. Discovery does not download or
-start the Rust editor.
+bounded handshake must match the bundle version. Discovery does not start the
+Rust editor.
 
 While managed, all native tools route to the owned daemon; browser edits and
 Codex therefore share a document. `save_document` uses the guarded save. One

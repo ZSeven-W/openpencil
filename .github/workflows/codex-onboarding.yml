@@ -2,6 +2,12 @@ name: Codex plugin fresh install
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Published npm dist-tag or version of @zseven-w/codex-openpencil (for example latest or 0.3.13)
+        required: false
+        default: latest
+        type: string
 
 permissions:
   contents: read
@@ -17,26 +23,30 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
       - name: Linux font libraries
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1 libfreetype6
-      - name: Install public Codex CLI
-        run: npm install --global @openai/codex@0.162.1
+      - name: Install public Codex CLI and @zseven-w/codex-openpencil from npm
+        run: |
+          npm install --global @openai/codex@0.162.1 "@zseven-w/codex-openpencil@${{ inputs.version || 'latest' }}"
       - name: Install from empty state and exercise the installed plugin
         working-directory: packages/op-codex
         env:
           GIT_TERMINAL_PROMPT: '0'
         run: |
+          set -euo pipefail
           export CODEX_HOME="$(node -p 'require("path").resolve("artifacts/fresh-codex")')"
           export OPENPENCIL_CODEX_STATE_DIR="$(node -p 'require("path").resolve("artifacts/fresh-runtime")')"
-          npm run setup
+          export OPENPENCIL_TEST_PLUGIN_VERSION="$(codex-openpencil --version)"
+          codex-openpencil setup
+          codex-openpencil host-check
           node scripts/installed-smoke.mjs
           node scripts/terminal-smoke.mjs
           if [[ "$RUNNER_OS" != "Windows" ]]; then node scripts/terminal-smoke.mjs --pty; fi
-          npm run setup
+          codex-openpencil setup

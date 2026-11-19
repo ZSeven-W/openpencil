@@ -2,24 +2,24 @@
 
 Give Codex this prompt (replace the example with your own design request):
 
-> Install and set up https://github.com/ZSeven-W/openpencil following packages/op-codex/INSTALL.md, open an editable canvas, and create a single-page mobile task app.
+> Install and set up `@zseven-w/codex-openpencil` following https://github.com/ZSeven-W/openpencil/blob/main/packages/op-codex/INSTALL.md, open an editable canvas, and create a single-page mobile task app.
 
 中文：
 
-> 按照 https://github.com/ZSeven-W/openpencil 的 packages/op-codex/INSTALL.md 帮我安装并配置 OpenPencil，打开可编辑画布，做一个单页手机任务管理 APP。
+> 按照 https://github.com/ZSeven-W/openpencil/blob/main/packages/op-codex/INSTALL.md 帮我安装并配置 `@zseven-w/codex-openpencil`，打开可编辑画布，做一个单页手机任务管理 APP。
 
 ## Instructions for the installing agent
 
 The user wants a working canvas and a design, so continue through verification
-and opening the canvas. This is a local install; no GitHub account, API key, DSH,
-Rust compiler, npm dependency install, or separate OpenPencil desktop app is needed.
+and opening the canvas. This is a local install from npm; no GitHub account,
+`git clone`, API key, DSH, Rust compiler, or separate OpenPencil desktop app is needed.
 
-1. Check for Node.js 22+, Git, and a recent Codex CLI with `plugin marketplace`
+1. Check for Node.js 22+ (with npm) and a recent Codex CLI with `plugin marketplace`
    and `plugin add` commands. If a prerequisite is missing, install it from its
    official distribution using the user's normal package manager when authorized
-   by their install request. Use the official [Node.js](https://nodejs.org/en/download),
-   [Git](https://git-scm.com/downloads), and [Codex CLI](https://developers.openai.com/codex/cli)
-   distributions. Preserve existing Codex settings, models and unrelated MCP servers.
+   by their install request. Use the official [Node.js](https://nodejs.org/en/download)
+   and [Codex CLI](https://developers.openai.com/codex/cli) distributions.
+   Preserve existing Codex settings, models and unrelated MCP servers.
    Setup records the current Node executable privately so the desktop host can
    launch it even when its PATH differs from the terminal. Linux also needs fontconfig
    and FreeType runtime libraries (`libfontconfig1` and `libfreetype6` on Ubuntu).
@@ -28,30 +28,34 @@ Rust compiler, npm dependency install, or separate OpenPencil desktop app is nee
    matching runtime is installed and install Microsoft's signed package if absent.
    These are system prerequisites the installing agent should resolve before
    proceeding, rather than asking the user to find a Rust binary manually.
-2. Clone the public repository over HTTPS into a persistent, user-owned location.
-   Do not overwrite another checkout or choose a temporary installation directory.
-   For an existing checkout, inspect local changes before updating it.
+2. Install the published npm package globally (without `--omit=optional`, so npm
+   selectively installs the matching `@zseven-w/codex-openpencil-<os>-<cpu>` native
+   runtime package) and run setup:
 
    ```sh
-   git clone https://github.com/ZSeven-W/openpencil.git
-   cd openpencil/packages/op-codex
-   npm run setup
+   npm install -g @zseven-w/codex-openpencil@latest
+   codex-openpencil setup
    ```
 
-   If Git cannot reach GitHub through the user's existing network, inspect the
-   normal proxy settings and pass that HTTP proxy to this process with
-   `HTTPS_PROXY`. Do not replace the user's global Git or system proxy settings.
+   Do not use `--omit=optional` or `--no-optional`: npm uses `optionalDependencies`
+   with `os`, `cpu`, and Linux `libc` selectors so only the single runtime matching
+   your OS and CPU is downloaded.
 
-   There are no npm runtime dependencies. `npm run setup` acquires the pinned
-   complete runtime for the local OS/CPU, verifies the archive SHA-256 and every
-   payload file, then proves panel startup, a native edit, save, and reopen using
-   an isolated test document. It finally registers this persistent checkout as the local marketplace and
-   installs `openpencil@zseven-openpencil`. It then starts Codex's actual plugin
-   loader and verifies the canvas controls. Success must contain `"ok": true`,
-   `"pluginInstalled": true`, and `"pluginHost": { "ok": true, ... }`; do not report
-   success after a failed prerequisite, download, smoke test, plugin command or
-   host check. This check opens no chat and does not edit a design. `OPENPENCIL_CODEX_BIN` can identify a
-   non-PATH Codex executable. No runtime is downloaded during tool discovery.
+   `codex-openpencil setup` verifies every payload file SHA-256 against the
+   package's `openpencil-runtime.json`, proves panel startup, a native edit, save,
+   and reopen using an isolated test document, records the verified runtime root
+   in `~/.codex-openpencil/runtime.json`, registers the installed npm package as
+   the local `zseven-openpencil` marketplace, and installs `openpencil@zseven-openpencil`.
+   It then starts Codex's actual plugin loader and verifies the canvas controls.
+   Success must contain `"ok": true`, `"pluginInstalled": true`, and
+   `"pluginHost": { "ok": true, ... }`; do not report success after a failed
+   prerequisite, install, smoke test, plugin command or host check. This check
+   opens no chat and does not edit a design. `OPENPENCIL_CODEX_BIN` can identify
+   a non-PATH Codex executable.
+
+   If the user previously registered `zseven-openpencil` from a local git clone,
+   remove the old marketplace source first (`codex plugin marketplace remove zseven-openpencil`)
+   and rerun `codex-openpencil setup`.
 3. Prefer `canvas_open_browser` in Codex, then show its `panelUrl` with
    `open_in_codex` (browser target) or `@Browser`. Use an external browser only
    when the user explicitly requests one. Codex currently
@@ -66,13 +70,13 @@ Rust compiler, npm dependency install, or separate OpenPencil desktop app is nee
    returned `panelUrl` in the browser. Verify
    `canvas_status` plus `get_editor_state` before designing. Read the installed
    `openpencil-design` skill and its node schema before editing. If this chat has
-   not loaded the new plugin yet, **open a canvas now** with the plugin package's
-   persistent terminal entry point (from `packages/op-codex`):
+   not loaded the new plugin yet, **open a canvas now** with the persistent
+   terminal entry point:
 
    ```sh
-   npm run canvas
+   codex-openpencil canvas
    # Existing document (copied into a recovery session):
-   npm run canvas -- --file /absolute/path/design.op
+   codex-openpencil canvas --file /absolute/path/design.op
    ```
 
    Run this in a persistent terminal/PTY and keep stdin open. Wait for its
@@ -109,44 +113,50 @@ Rust compiler, npm dependency install, or separate OpenPencil desktop app is nee
 
 ## Supported runtime builds
 
-| System | CPUs | Compatibility floor |
-| --- | --- | --- |
-| macOS | Apple Silicon, Intel | Built on macOS 15 native runners |
-| Windows | ARM64, x64 | MSVC builds; Windows 11 ARM / Windows Server 2025 x64 runners |
-| Linux | x64 | glibc, Ubuntu 22.04 or newer |
-| Linux | ARM64 | glibc, Ubuntu 24.04 or newer |
+Each release publishes `@zseven-w/codex-openpencil` plus six atomic native
+platform packages (`@zseven-w/codex-openpencil-<os>-<cpu>`):
 
-Alpine/musl and other architectures need a custom complete runtime. Unsupported
-platforms fail explicitly; the installer never substitutes a different binary.
+| System | CPUs | Platform package | Compatibility floor |
+| --- | --- | --- | --- |
+| macOS | Apple Silicon | `@zseven-w/codex-openpencil-darwin-arm64` | Built on macOS 15 native runner |
+| macOS | Intel | `@zseven-w/codex-openpencil-darwin-x64` | Built on macOS 15 Intel native runner |
+| Windows | ARM64 | `@zseven-w/codex-openpencil-win32-arm64` | MSVC build; Windows 11 ARM runner |
+| Windows | x64 | `@zseven-w/codex-openpencil-win32-x64` | MSVC build; Windows Server 2025 x64 runner |
+| Linux | x64 | `@zseven-w/codex-openpencil-linux-x64` | glibc (`>= 2.35`), Ubuntu 22.04 or newer |
+| Linux | ARM64 | `@zseven-w/codex-openpencil-linux-arm64` | glibc (`>= 2.39`), Ubuntu 24.04 or newer |
+
+Alpine/musl and other architectures skip the optional glibc package automatically
+and need a custom complete runtime. Unsupported platforms fail explicitly; the
+resolver never substitutes a different binary.
 
 ## Repair, update, and manual runtime
 
-- Rerun `npm --prefix packages/op-codex run setup` (or `npm run setup` inside `packages/op-codex`) after a network interruption. It reuses a verified cache.
+- To update to the latest release:
+  ```sh
+  npm install -g @zseven-w/codex-openpencil@latest
+  codex-openpencil setup
+  ```
+  Reconnect the installed plugin afterward (toggle it off/on in plugin management,
+  or restart Codex). Closing only the canvas tab can retain the previous running
+  bridge and UI resource. Valid custom runtimes remain selected.
 - If the desktop reports `No such file or directory` while the terminal works,
-  rerun setup to refresh the private Node registration, then run `npm run host-check` from `packages/op-codex`.
+  rerun `codex-openpencil setup` to refresh the private Node registration, then run
+  `codex-openpencil host-check`.
   The launcher reads `~/.codex-openpencil/node-path`, independently of a custom
   runtime state directory. It never changes your system PATH or another Node install.
   A passing host check proves a fresh Codex connection can load the tools; verify
   tool discovery separately in the current chat after reconnecting.
-- For an invalid configuration, inspect it first. `npm run setup -- --repair-runtime` (from `packages/op-codex`)
-  explicitly selects the published runtime. It preserves the previous runtime
-  directory; a corrupted immutable cache must be moved aside before a clean retry.
-- `npm run setup -- --runtime-only` installs/verifies the runtime without changing
-  Codex plugin registration.
-- `npm run configure-runtime -- /absolute/complete/runtime` selects a custom
+- For an invalid configuration, inspect it first. `codex-openpencil setup --repair-runtime`
+  explicitly re-selects the installed npm platform runtime package.
+- `codex-openpencil setup --runtime-only` verifies and activates the runtime without
+  changing Codex plugin registration.
+- `codex-openpencil configure-runtime /absolute/complete/runtime` selects a custom
   runtime. An existing valid choice is preserved by normal setup and first use.
-- To update, inspect the checkout, pull the published changes and rerun setup.
-  Managed downloads follow the new pinned release; valid custom runtimes remain
-  selected. An interrupted upgrade retains the previous runtime and configuration.
-  Reconnect the installed plugin afterward (toggle it off/on in plugin management,
-  or restart Codex). Closing only the canvas tab can retain the previous running
-  bridge and UI resource. Do not delete unrelated settings.
+- Developing from a monorepo checkout: stage the local runtime into
+  `packages/op-codex/npm/<platform>` with `npm run stage:editor-runtime` (or set
+  `OPENPENCIL_EDITOR_RUNTIME_DIR`), then run `npm run setup` / `npm run canvas`
+  inside `packages/op-codex/`.
 
-Runtime downloads use this repository's pinned GitHub Release assets. Private
-configuration lives under `~/.codex-openpencil/`; override its location with
-`OPENPENCIL_CODEX_STATE_DIR`. The installer never reads or edits a user's live
-OpenPencil document during its smoke test.
-
-Downloads honor `HTTPS_PROXY` / `https_proxy`, `NO_PROXY`, and an enabled macOS
-HTTPS system proxy without changing system settings. SOCKS-only environments
-should expose their HTTP proxy endpoint via `HTTPS_PROXY`.
+Private configuration lives under `~/.codex-openpencil/`; override its location with
+`OPENPENCIL_CODEX_STATE_DIR`. Setup never reads or edits a user's live OpenPencil
+document during its smoke test.

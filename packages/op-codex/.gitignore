@@ -2,4 +2,18 @@ node_modules/
 artifacts/
 .DS_Store
 *.tgz
+*.log
 __pycache__/
+
+# Local credentials and environment overrides must never be committed.
+.env
+.env.*
+!.env.example
+.npmrc
+*.pem
+*.key
+
+# Generated native runtime payloads. Platform metadata and notices stay tracked.
+npm/*/bin/
+npm/*/web/
+npm/*/openpencil-runtime.json
