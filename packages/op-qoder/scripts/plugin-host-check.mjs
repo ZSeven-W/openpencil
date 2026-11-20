@@ -38,6 +38,10 @@ export async function probeLauncher({
     },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
+  const closed = new Promise(resolveClosed => {
+    child.once('close', resolveClosed);
+    child.once('error', resolveClosed);
+  });
   let stderr = '';
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-8192); });
@@ -104,7 +108,24 @@ export async function probeLauncher({
     };
   } finally {
     child.stdin.end();
-    child.kill();
+    if (process.platform !== 'win32') {
+      child.kill('SIGTERM');
+    }
+    const killTimer = setTimeout(() => {
+      if (process.platform === 'win32' && child.pid) {
+        const killer = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' });
+        killer.on('error', () => { child.kill(); });
+      } else {
+        child.kill('SIGKILL');
+      }
+    }, 1000);
+    let fallbackTimer;
+    const fallback = new Promise(resolveFallback => {
+      fallbackTimer = setTimeout(resolveFallback, 3000);
+    });
+    await Promise.race([closed, fallback]);
+    clearTimeout(killTimer);
+    clearTimeout(fallbackTimer);
   }
 }
 

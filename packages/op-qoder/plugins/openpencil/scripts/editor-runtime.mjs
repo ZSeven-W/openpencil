@@ -307,7 +307,7 @@ function runtimeIo(options) {
     readFile: options.readFile ?? (path => readFileSync(path)),
     stat: options.stat ?? (path => statSync(path)),
     lstat: options.lstat ?? options.stat ?? (path => lstatSync(path)),
-    realpath: options.realpath ?? (options.stat ? (path => resolve(path)) : (path => realpathSync(path))),
+    realpath: options.realpath ?? (options.stat ? (path => resolve(path)) : (path => realpathSync.native(path))),
     chmod: options.chmod ?? ((path, mode) => chmodSync(path, mode)),
   };
 }

@@ -10,7 +10,7 @@ import { CANVAS_URI } from '../plugins/openpencil/scripts/canvas-controller.mjs'
 
 test('installed Qoder cached plugin launcher initializes MCP with qoder/ui entrypoints under stripped GUI PATH', async (t) => {
   const home = await mkdtemp(join(tmpdir(), 'op-qoder-startup-'));
-  t.after(() => rm(home, { recursive: true, force: true }));
+  t.after(() => rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }));
   const stateDir = join(home, '.qoder-openpencil');
   await registerNode(stateDir, process.execPath);
   await installQoderPlugin({ home, env: {}, version: '0.1.0' });

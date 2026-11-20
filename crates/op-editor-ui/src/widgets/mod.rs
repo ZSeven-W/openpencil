@@ -205,6 +205,7 @@ mod canvas_path_overlay;
 mod canvas_selection_overlay;
 pub mod canvas_text_edit;
 mod canvas_text_kinsoku;
+mod canvas_text_wrap;
 pub mod canvas_viewport;
 mod canvas_viewport_background;
 pub use canvas_viewport_background::paint_canvas_background_extension;
