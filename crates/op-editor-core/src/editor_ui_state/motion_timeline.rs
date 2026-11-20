@@ -93,6 +93,9 @@ pub struct MotionTimelineState {
     pub looping: bool,
     /// Horizontal scale in pixels per millisecond.
     pub zoom: f32,
+    /// Independent viewport offsets for the time axis and track rows.
+    pub horizontal_scroll: jian_core::scroll::ScrollState,
+    pub vertical_scroll: jian_core::scroll::ScrollState,
     pub selection: Vec<TimelineKeyframeRef>,
     pub drag: Option<MotionTimelineDrag>,
     pub drag_anchor: Option<TimelineDragAnchor>,
@@ -153,6 +156,8 @@ impl MotionTimelineState {
         self.playhead_ms = 0.0;
         self.playing = false;
         self.play_clock = None;
+        self.horizontal_scroll.offset = 0.0;
+        self.vertical_scroll.offset = 0.0;
     }
 }
 
@@ -176,6 +181,8 @@ impl Default for MotionTimelineState {
             play_clock: None,
             looping: false,
             zoom: Self::DEFAULT_ZOOM,
+            horizontal_scroll: Default::default(),
+            vertical_scroll: Default::default(),
             selection: Vec::new(),
             drag: None,
             drag_anchor: None,

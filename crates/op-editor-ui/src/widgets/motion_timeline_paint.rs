@@ -40,6 +40,7 @@ pub fn paint_motion_timeline(
     paint_ruler(cx, theme, &layout, view);
     paint_lanes(cx, theme, &layout, view);
     paint_playhead(cx, theme, &layout, view);
+    paint_scroll_indicators(cx, theme, &layout);
     cx.backend.restore();
     // The screen dropdown rises over the canvas, outside the panel's clip.
     paint_scope_menu(cx, theme, &layout, view);
@@ -215,7 +216,9 @@ fn paint_ruler(
         .unwrap_or(10_000.0);
     let ruler = layout.ruler;
     let last_ms = layout.ms_for_x(ruler.origin.x + ruler.size.x);
-    let mut tick = 0.0;
+    let mut tick = (layout.ms_for_x(ruler.origin.x) / step).floor() * step;
+    cx.backend.save();
+    cx.backend.clip_rect(ruler);
     while tick <= last_ms {
         let x = layout.x_for_ms(tick);
         let bottom = ruler.origin.y + ruler.size.y;
@@ -235,6 +238,7 @@ fn paint_ruler(
         );
         tick += step;
     }
+    cx.backend.restore();
 }
 
 fn paint_lanes(
@@ -243,9 +247,26 @@ fn paint_lanes(
     layout: &TimelineLayout,
     view: &MotionTimelineView,
 ) {
+    let visible = layout.visible_rows();
+    cx.backend.save();
+    cx.backend.clip_rect(Rect::xywh(
+        layout.rect.origin.x,
+        layout.lanes.origin.y,
+        layout.labels.size.x,
+        layout.lanes.size.y,
+    ));
+    for (row, row_layout) in view.rows[visible.clone()]
+        .iter()
+        .zip(&layout.rows[visible.clone()])
+    {
+        paint_label(cx, theme, row, row_layout);
+    }
+    cx.backend.restore();
+    cx.backend.save();
+    cx.backend.clip_rect(layout.lanes);
     if let Some(message) = view.empty_message() {
         // Below any row (the selected node's empty lane), not over it.
-        let top = layout.lanes.origin.y + layout.rows.len() as f32 * ROW_H;
+        let top = layout.lanes.origin.y + layout.rows.len() as f32 * ROW_H - layout.scroll_y;
         text(
             cx,
             message,
@@ -263,7 +284,14 @@ fn paint_lanes(
         a: 0.45,
         ..theme.primary
     };
-    for (index, (row, row_layout)) in view.rows.iter().zip(&layout.rows).enumerate() {
+    for (index, (row, row_layout)) in view
+        .rows
+        .iter()
+        .zip(&layout.rows)
+        .enumerate()
+        .skip(visible.start)
+        .take(visible.len())
+    {
         if index % 2 == 1 {
             cx.backend.fill_rect(
                 row_layout.lane,
@@ -273,7 +301,6 @@ fn paint_lanes(
                 },
             );
         }
-        paint_label(cx, theme, row, row_layout);
         if let TimelineLane::Audio { track, .. } = &row.lane {
             cx.backend.fill_round_rect(
                 row_layout.strip,
@@ -314,6 +341,7 @@ fn paint_lanes(
             diamond(cx, *center, KEYFRAME_R, color);
         }
     }
+    cx.backend.restore();
 }
 
 /// A row's label after its indent; a lane with sub-tracks leads with its
@@ -342,6 +370,13 @@ fn paint_playhead(
     layout: &TimelineLayout,
     view: &MotionTimelineView,
 ) {
+    cx.backend.save();
+    cx.backend.clip_rect(Rect::xywh(
+        layout.lanes.origin.x,
+        layout.ruler.origin.y,
+        layout.lanes.size.x,
+        layout.rect.origin.y + layout.rect.size.y - layout.ruler.origin.y,
+    ));
     let x = layout.x_for_ms(view.playhead_ms);
     let top = layout.ruler.origin.y;
     let bottom = layout.rect.origin.y + layout.rect.size.y;
@@ -352,6 +387,49 @@ fn paint_playhead(
         Point2D::new(x, bottom),
     );
     diamond(cx, Point2D::new(x, top + 5.0), 5.0, theme.destructive);
+    cx.backend.restore();
+}
+
+fn paint_scroll_indicators(cx: &mut PaintCx<'_>, theme: &Theme, layout: &TimelineLayout) {
+    use jian_core::scroll::ScrollState;
+    let width = layout.lanes.size.x;
+    let height = layout.lanes.size.y;
+    let color = Color {
+        a: 0.55,
+        ..theme.muted_foreground
+    };
+    if let Some(thumb) = (ScrollState {
+        offset: layout.scroll_y,
+    })
+    .thumb(height, height + layout.max_scroll_y, height, 24.0)
+    {
+        cx.backend.fill_round_rect(
+            Rect::xywh(
+                layout.rect.origin.x + layout.rect.size.x - 4.0,
+                layout.lanes.origin.y + thumb.offset,
+                3.0,
+                thumb.len,
+            ),
+            1.5,
+            color,
+        );
+    }
+    if let Some(thumb) = (ScrollState {
+        offset: layout.scroll_x,
+    })
+    .thumb(width, width + layout.max_scroll_x, width, 24.0)
+    {
+        cx.backend.fill_round_rect(
+            Rect::xywh(
+                layout.lanes.origin.x + thumb.offset,
+                layout.rect.origin.y + layout.rect.size.y - 4.0,
+                thumb.len,
+                3.0,
+            ),
+            1.5,
+            color,
+        );
+    }
 }
 
 /// A ruler tick in seconds with only the decimals it needs: `0 s`,

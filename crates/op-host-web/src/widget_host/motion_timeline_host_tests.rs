@@ -88,3 +88,72 @@ fn escape_cancels_a_timeline_drag_without_writing() {
     .and_then(|node| node.motion_declarations().1.map(|a| a[0].delay_ms));
     assert_eq!(delay, Some(100), "nothing was written");
 }
+
+#[test]
+fn browser_wheel_and_two_axis_pan_are_owned_by_the_timeline() {
+    let rows:Vec<_>=(0..40).map(|index|serde_json::json!({
+        "type":"rectangle","id":format!("track-{index}"),"width":20,"height":20,
+        "animations":[{"trigger":"mount","durationMs":182_310,
+            "keyframes":[{"offset":0,"values":{"opacity":0}},{"offset":1,"values":{"opacity":1}}]}]
+    })).collect();
+    let document=jian_ops_schema::load_str(&serde_json::json!({
+        "version":"1.1","children":[{"type":"frame","id":"home","width":390,"height":844,"children":rows}]
+    }).to_string()).unwrap().value;
+    let mut host = host();
+    host.editor_state = EditorState::from_document(document);
+    host.editor_state.toggle_motion_timeline();
+    let first = timeline_layout(&host);
+    let (x, y) = (first.lanes.origin.x + 160.0, first.lanes.origin.y + 30.0);
+    let viewport = host.editor_state.viewport;
+    assert!(host.apply_wheel(x, y, -80.0, VW, VH));
+    assert_eq!(
+        host.editor_state
+            .editor_ui
+            .motion_timeline
+            .vertical_scroll
+            .offset,
+        80.0
+    );
+    assert!(host.apply_pan_gesture(x, y, -4100.0, -70.0, VW, VH));
+    assert_eq!(
+        host.editor_state
+            .editor_ui
+            .motion_timeline
+            .horizontal_scroll
+            .offset,
+        4100.0
+    );
+    assert_eq!(
+        host.editor_state
+            .editor_ui
+            .motion_timeline
+            .vertical_scroll
+            .offset,
+        150.0
+    );
+    let ruler = timeline_layout(&host).ruler;
+    assert!(host.apply_wheel(x, ruler.origin.y + 8.0, -90.0, VW, VH));
+    assert_eq!(
+        host.editor_state
+            .editor_ui
+            .motion_timeline
+            .horizontal_scroll
+            .offset,
+        4190.0
+    );
+    assert_eq!(
+        host.editor_state
+            .editor_ui
+            .motion_timeline
+            .vertical_scroll
+            .offset,
+        150.0
+    );
+    assert_eq!(host.editor_state.viewport, viewport);
+    assert!(host.apply_pan_gesture(x, y, -1e6, -1e6, VW, VH));
+    let last = timeline_layout(&host);
+    assert_eq!(last.scroll_x, last.max_scroll_x);
+    assert_eq!(last.scroll_y, last.max_scroll_y);
+    assert!(host.apply_wheel(x, y, -90.0, VW, VH));
+    assert_eq!(host.editor_state.viewport, viewport);
+}

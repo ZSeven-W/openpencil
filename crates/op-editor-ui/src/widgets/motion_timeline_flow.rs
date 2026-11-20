@@ -35,6 +35,44 @@ fn layout(
     Some((view, layout))
 }
 
+/// Scroll only the timeline viewport, using content-motion deltas like the
+/// panel and canvas pan routes. Returning true owns the gesture at the limits
+/// too, so the underlying canvas never moves through the panel.
+pub fn scroll(
+    state: &mut EditorState,
+    point: Point2D,
+    delta: Point2D,
+    viewport: (f32, f32),
+) -> bool {
+    let Some((_, layout)) = layout(state, viewport.0, viewport.1) else {
+        return false;
+    };
+    if layout
+        .scope_menu
+        .as_ref()
+        .is_some_and(|(rect, _)| rect.contains(point))
+    {
+        return true;
+    }
+    if !layout.rect.contains(point) {
+        return false;
+    }
+    let on_ruler = layout.ruler.contains(point);
+    if point.y < layout.lanes.origin.y && !on_ruler {
+        return true;
+    }
+    let dx = if on_ruler && delta.x == 0.0 {
+        delta.y
+    } else {
+        delta.x
+    };
+    let dy = if on_ruler { 0.0 } else { delta.y };
+    let timeline = &mut state.editor_ui.motion_timeline;
+    timeline.horizontal_scroll.offset = (layout.scroll_x - dx).clamp(0.0, layout.max_scroll_x);
+    timeline.vertical_scroll.offset = (layout.scroll_y - dy).clamp(0.0, layout.max_scroll_y);
+    true
+}
+
 /// Route a press. Returns whether it landed on the panel (and so is
 /// consumed); `additive` (Shift) toggles keyframes in the selection. A
 /// press elsewhere drops the keyframe selection, so Delete goes back to
@@ -345,7 +383,9 @@ fn next_manual_id(view: &MotionTimelineView) -> Option<String> {
 fn zoom_by(state: &mut EditorState, factor: f32) {
     let timeline = &mut state.editor_ui.motion_timeline;
     let zoom = timeline.zoom * factor;
+    let previous = timeline.zoom;
     timeline.set_zoom(zoom);
+    timeline.horizontal_scroll.offset *= timeline.zoom / previous;
 }
 
 fn strip<'a>(

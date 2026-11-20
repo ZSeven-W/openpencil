@@ -2,6 +2,7 @@
 //! 800-line cap; pure code motion, the ladder order is unchanged.
 
 use crate::widget_host::WidgetHostNative;
+use op_editor_ui::widgets::motion_timeline_flow;
 use op_editor_ui::widgets::GitPanel;
 use op_editor_ui::Point2D;
 
@@ -119,6 +120,14 @@ impl WidgetHostNative {
             return true;
         }
         if self.mobile_sheet_owns_point(Point2D::new(x, y), viewport_width, viewport_height) {
+            return true;
+        }
+        if motion_timeline_flow::scroll(
+            &mut self.editor_state,
+            Point2D::new(x, y),
+            Point2D::new(dx, dy),
+            (viewport_width, viewport_height),
+        ) {
             return true;
         }
         if self.device_mode_active() && self.over_canvas(x, y, viewport_width, viewport_height) {

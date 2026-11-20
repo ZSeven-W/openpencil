@@ -5,6 +5,7 @@ mod pan_gesture;
 
 use super::WidgetHostNative;
 use op_editor_ui::util::scroll_by_max;
+use op_editor_ui::widgets::motion_timeline_flow;
 use op_editor_ui::widgets::press_flow;
 use op_editor_ui::widgets::scroll_flow;
 use op_editor_ui::widgets::GitPanel;
@@ -607,6 +608,19 @@ impl WidgetHostNative {
             return true;
         }
         if self.mobile_sheet_owns_point(Point2D::new(x, y), viewport_width, viewport_height) {
+            return true;
+        }
+        let timeline_delta = if self.shift_held {
+            Point2D::new(delta_y, 0.0)
+        } else {
+            Point2D::new(0.0, delta_y)
+        };
+        if motion_timeline_flow::scroll(
+            &mut self.editor_state,
+            Point2D::new(x, y),
+            timeline_delta,
+            (viewport_width, viewport_height),
+        ) {
             return true;
         }
         // A device frame owns every wheel over the canvas. Branch on

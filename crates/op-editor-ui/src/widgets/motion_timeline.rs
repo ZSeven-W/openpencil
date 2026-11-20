@@ -112,6 +112,8 @@ pub struct MotionTimelineView {
     pub clip_ms: f64,
     pub playhead_ms: f64,
     pub zoom: f32,
+    pub scroll_x: f32,
+    pub scroll_y: f32,
     pub tab: MotionTimelineTab,
     pub manual_id: Option<String>,
     /// Manual ids under the scope, for the manual tab.
@@ -166,6 +168,8 @@ impl MotionTimelineView {
             clip_ms,
             playhead_ms: timeline.playhead_ms,
             zoom: timeline.zoom,
+            scroll_x: timeline.horizontal_scroll.offset,
+            scroll_y: timeline.vertical_scroll.offset,
             tab: timeline.tab,
             manual_id: timeline.manual_id.clone(),
             manual_ids: scope.map(manual_ids).unwrap_or_default(),

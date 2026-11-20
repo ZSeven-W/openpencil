@@ -5,6 +5,7 @@
 //! 800-line cap.
 
 use super::*;
+use op_editor_ui::widgets::motion_timeline_flow;
 
 impl WidgetHost {
     /// Scroll the chat transcript message list when a wheel / trackpad
@@ -237,6 +238,14 @@ impl WidgetHost {
         if self.try_scroll_layer_panel(x, y, 0.0, delta_y, viewport_height) {
             return true;
         }
+        if motion_timeline_flow::scroll(
+            &mut self.editor_state,
+            Point2D::new(x, y),
+            Point2D::new(0.0, delta_y),
+            (viewport_width, viewport_height),
+        ) {
+            return true;
+        }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {
             return false;
         }
@@ -311,6 +320,14 @@ impl WidgetHost {
             return true;
         }
         if self.try_scroll_layer_panel(x, y, dx, dy, viewport_height) {
+            return true;
+        }
+        if motion_timeline_flow::scroll(
+            &mut self.editor_state,
+            Point2D::new(x, y),
+            Point2D::new(dx, dy),
+            (viewport_width, viewport_height),
+        ) {
             return true;
         }
         if !self.over_canvas(x, y, viewport_width, viewport_height) {

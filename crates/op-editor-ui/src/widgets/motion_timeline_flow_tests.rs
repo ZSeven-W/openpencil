@@ -389,3 +389,205 @@ fn the_shortcut_toggles_the_panel_only_where_it_can_show() {
     assert!(!toggle(&mut state));
     assert!(!state.editor_ui.motion_timeline.open);
 }
+
+fn overflow_state() -> EditorState {
+    let children: Vec<_> = (0..48)
+        .map(|index| json!({
+            "type":"rectangle", "id":format!("track-{index}"), "name":format!("Track {index}"),
+            "width":20, "height":20,
+            "animations":[{
+                "trigger":"mount", "durationMs":182_310, "easing":"linear",
+                "keyframes":[{"offset":0,"values":{"opacity":0}},{"offset":1,"values":{"opacity":1}}]
+            }]
+        }))
+        .collect();
+    let document = jian_ops_schema::load_str(&json!({
+        "version":"1.1",
+        "children":[{"type":"frame","id":"board","width":400,"height":300,"children":children,
+            "audioTracks":[{"id":"reference","name":"Reference audio","source":"data:audio/wav;base64,UklGRg==",
+                "durationMs":182_310,"muted":true}]}]
+    }).to_string()).unwrap().value;
+    let mut state = EditorState::from_document(document);
+    state.toggle_motion_timeline();
+    state
+}
+
+#[test]
+fn wheel_scrolls_audio_and_animation_rows_without_changing_playback_or_document() {
+    let mut state = overflow_state();
+    state.editor_ui.motion_timeline.playing = true;
+    state.editor_ui.motion_timeline.playhead_ms = 24_640.0;
+    let before = state.doc.clone();
+    let (_, initial) = layout_of(&state);
+    let point = Point2D::new(initial.rect.origin.x + 30.0, initial.lanes.origin.y + 15.0);
+    assert!(scroll(
+        &mut state,
+        point,
+        Point2D::new(0.0, -312.0),
+        (VW, VH)
+    ));
+    let (view, layout) = layout_of(&state);
+    assert_eq!(layout.scroll_y, 312.0);
+    assert_eq!(layout.header, initial.header);
+    assert_eq!(layout.ruler, initial.ruler);
+    let row = layout.visible_rows().start + 1;
+    assert_eq!(view.rows[row].node_id(), "track-12");
+    let label = center(layout.rows[row].label);
+    assert_eq!(
+        layout.hit(label, &view),
+        Some(TimelineHit::Label("track-12".into()))
+    );
+    let keyframe = layout.rows[row].keyframes[0].1;
+    assert!(press(&mut state, keyframe, VW, VH, 0, false));
+    assert_eq!(
+        state.editor_ui.motion_timeline.selection[0].node_id,
+        "track-12"
+    );
+    release(&mut state);
+    assert_eq!(state.doc, before);
+    assert!(state.editor_ui.motion_timeline.playing);
+    assert_eq!(state.editor_ui.motion_timeline.playhead_ms, 24_640.0);
+}
+
+#[test]
+fn horizontal_pan_and_ruler_scroll_preserve_time_hit_testing() {
+    let mut state = overflow_state();
+    let before = state.doc.clone();
+    let (_, initial) = layout_of(&state);
+    let point = center(initial.lanes);
+    assert!(scroll(
+        &mut state,
+        point,
+        Point2D::new(-5_000.0, 0.0),
+        (VW, VH)
+    ));
+    let (_, layout) = layout_of(&state);
+    assert_eq!(layout.scroll_x, 5_000.0);
+    assert_eq!(layout.scroll_y, 0.0);
+    let ruler = center(layout.ruler);
+    let time = layout.ms_for_x(ruler.x);
+    assert!(time > 20_000.0);
+    assert!((layout.x_for_ms(time) - ruler.x).abs() < 0.01);
+    assert!(press(&mut state, ruler, VW, VH, 0, false));
+    release(&mut state);
+    assert!((state.editor_ui.motion_timeline.playhead_ms - time).abs() < 0.01);
+    assert!(scroll(
+        &mut state,
+        ruler,
+        Point2D::new(0.0, -120.0),
+        (VW, VH)
+    ));
+    let (_, later) = layout_of(&state);
+    assert_eq!(later.scroll_x, 5_120.0);
+    assert_eq!(later.scroll_y, 0.0);
+    assert_eq!(state.doc, before);
+}
+
+#[test]
+fn scrolling_clamps_after_resize_and_owns_the_header_and_edges() {
+    let mut state = overflow_state();
+    let (_, initial) = layout_of(&state);
+    let point = center(initial.lanes);
+    assert!(scroll(
+        &mut state,
+        point,
+        Point2D::new(-1e6, -1e6),
+        (VW, VH)
+    ));
+    let (_, end) = layout_of(&state);
+    assert_eq!(end.scroll_x, end.max_scroll_x);
+    assert_eq!(end.scroll_y, end.max_scroll_y);
+    assert!(scroll(
+        &mut state,
+        point,
+        Point2D::new(-500.0, -500.0),
+        (VW, VH)
+    ));
+    state.editor_ui.motion_timeline.set_height(360.0);
+    let (_, larger) = layout_of(&state);
+    assert!(larger.max_scroll_y < end.max_scroll_y);
+    assert_eq!(larger.scroll_y, larger.max_scroll_y);
+    assert!(scroll(
+        &mut state,
+        center(larger.lanes),
+        Point2D::new(0.0, 20.0),
+        (VW, VH)
+    ));
+    assert_eq!(
+        state.editor_ui.motion_timeline.vertical_scroll.offset,
+        larger.max_scroll_y - 20.0
+    );
+    let offset = state.editor_ui.motion_timeline.vertical_scroll.offset;
+    assert!(scroll(
+        &mut state,
+        center(larger.header),
+        Point2D::new(0.0, -90.0),
+        (VW, VH)
+    ));
+    assert_eq!(
+        state.editor_ui.motion_timeline.vertical_scroll.offset,
+        offset
+    );
+    assert!(!scroll(
+        &mut state,
+        Point2D::new(0.0, 0.0),
+        Point2D::new(0.0, -90.0),
+        (VW, VH)
+    ));
+    state.editor_ui.motion_timeline.open = false;
+    assert!(!scroll(
+        &mut state,
+        point,
+        Point2D::new(0.0, -90.0),
+        (VW, VH)
+    ));
+}
+
+#[test]
+fn changing_tabs_resets_scroll_and_zoom_keeps_the_left_time() {
+    let mut state = overflow_state();
+    let (_, initial) = layout_of(&state);
+    scroll(
+        &mut state,
+        center(initial.lanes),
+        Point2D::new(-5_000.0, -100.0),
+        (VW, VH),
+    );
+    let (_, layout) = layout_of(&state);
+    let before =
+        layout.ms_for_x(layout.lanes.origin.x + super::super::motion_timeline_layout::TRACK_PAD);
+    zoom_by(&mut state, ZOOM_STEP);
+    let (_, zoomed) = layout_of(&state);
+    let after =
+        zoomed.ms_for_x(zoomed.lanes.origin.x + super::super::motion_timeline_layout::TRACK_PAD);
+    assert!((before - after).abs() < 0.01);
+    state.set_motion_timeline_tab(MotionTimelineTab::InView, None);
+    assert_eq!(
+        state.editor_ui.motion_timeline.horizontal_scroll.offset,
+        0.0
+    );
+    assert_eq!(state.editor_ui.motion_timeline.vertical_scroll.offset, 0.0);
+}
+
+#[test]
+fn scrolled_rows_cannot_take_clicks_in_the_pinned_header_or_label_column() {
+    let mut state = overflow_state();
+    let (_, initial) = layout_of(&state);
+    scroll(
+        &mut state,
+        center(initial.lanes),
+        Point2D::new(-900.0, -100.0),
+        (VW, VH),
+    );
+    let (view, layout) = layout_of(&state);
+    let point = Point2D::new(layout.rect.origin.x + 4.0, layout.ruler.origin.y + 5.0);
+    assert_eq!(layout.hit(point, &view), Some(TimelineHit::Background));
+    let row = &layout.rows[layout.visible_rows().start + 1];
+    let label = center(row.label);
+    assert!(matches!(
+        layout.hit(label, &view),
+        Some(TimelineHit::Label(_))
+    ));
+    let ruler = center(layout.ruler);
+    assert_eq!(layout.hit(ruler, &view), Some(TimelineHit::Ruler));
+}

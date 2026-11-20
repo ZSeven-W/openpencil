@@ -145,6 +145,10 @@ pub struct TimelineLayout {
     /// The lanes area under the ruler.
     pub lanes: Rect,
     pub rows: Vec<RowLayout>,
+    pub scroll_x: f32,
+    pub scroll_y: f32,
+    pub max_scroll_x: f32,
+    pub max_scroll_y: f32,
     zoom: f32,
 }
 
@@ -210,6 +214,11 @@ impl TimelineLayout {
                 .collect();
             (frame, rows)
         });
+        let max_scroll_x =
+            (view.clip_ms as f32 * view.zoom + TRACK_PAD * 2.0 + KEYFRAME_HIT + END_HANDLE_W
+                - lanes.size.x)
+                .max(0.0);
+        let max_scroll_y = (view.rows.len() as f32 * ROW_H - lanes.size.y).max(0.0);
         let mut layout = Self {
             audio_import: (HEADER_H > 32.0).then(|| Rect::xywh(x + 10.0, y + 33.0, 112.0, 23.0)),
             voiceover: (HEADER_H > 32.0).then(|| Rect::xywh(x + 130.0, y + 33.0, 130.0, 23.0)),
@@ -231,6 +240,10 @@ impl TimelineLayout {
             labels: Rect::xywh(x, y + HEADER_H, LABEL_W, body_h),
             lanes,
             rows: Vec::new(),
+            scroll_x: view.scroll_x.max(0.0).min(max_scroll_x),
+            scroll_y: view.scroll_y.max(0.0).min(max_scroll_y),
+            max_scroll_x,
+            max_scroll_y,
             zoom: view.zoom,
         };
         layout.rows = view
@@ -244,7 +257,7 @@ impl TimelineLayout {
 
     fn row(&self, index: usize, row: &TimelineRow, clip_ms: f64) -> RowLayout {
         let x = self.rect.origin.x;
-        let row_y = self.lanes.origin.y + index as f32 * ROW_H;
+        let row_y = self.lanes.origin.y + index as f32 * ROW_H - self.scroll_y;
         let lane = Rect::xywh(self.lanes.origin.x, row_y, self.lanes.size.x, ROW_H);
         let center_y = row_y + ROW_H / 2.0;
         let indent_x = x + 8.0 + row.depth as f32 * DEPTH_INDENT;
@@ -326,15 +339,23 @@ impl TimelineLayout {
         out
     }
 
+    /// Row indices intersecting the viewport, including partially visible rows.
+    pub fn visible_rows(&self) -> std::ops::Range<usize> {
+        let first = (self.scroll_y / ROW_H) as usize;
+        let end = ((self.scroll_y + self.lanes.size.y) / ROW_H).ceil() as usize;
+        first.min(self.rows.len())..end.min(self.rows.len())
+    }
+
     /// Screen x of time `ms`.
     pub fn x_for_ms(&self, ms: f64) -> f32 {
-        self.lanes.origin.x + TRACK_PAD + ms as f32 * self.zoom
+        self.lanes.origin.x + TRACK_PAD + ms as f32 * self.zoom - self.scroll_x
     }
 
     /// Time under screen x, never before zero.
     pub fn ms_for_x(&self, x: f32) -> f64 {
-        (f64::from(x - self.lanes.origin.x - TRACK_PAD) / f64::from(self.zoom.max(f32::EPSILON)))
-            .max(0.0)
+        (f64::from(x - self.lanes.origin.x - TRACK_PAD + self.scroll_x)
+            / f64::from(self.zoom.max(f32::EPSILON)))
+        .max(0.0)
     }
 
     /// Pixels → milliseconds at the current zoom (for snap distances).
@@ -389,6 +410,9 @@ impl TimelineLayout {
         }
         if self.ruler.contains(point) {
             return Some(TimelineHit::Ruler);
+        }
+        if point.y < self.lanes.origin.y {
+            return Some(TimelineHit::Background);
         }
         for (row, layout) in view.rows.iter().zip(&self.rows) {
             if layout
