@@ -407,9 +407,26 @@ pub(crate) fn paint_shader_rect(
 ) {
     // A `time` uniform reads the frame clock (0 for exports), overriding
     // any authored value — see `crate::shader_clock`.
-    let time = shader
-        .sample_time
-        .or_else(|| crate::shader_clock::bind_time(&shader.sksl))
+    let clock = shader.uniforms.iter().find(|u| u.name == "motionClock");
+    let fixed_time = clock.and_then(|_| {
+        shader
+            .uniforms
+            .iter()
+            .find_map(|u| match (u.name.as_str(), u.values.as_slice()) {
+                ("sampleTime", [time]) if *time >= 0.0 && time.is_finite() => Some(*time),
+                _ => None,
+            })
+    });
+    let motion_only = clock.is_some_and(|u| u.values == [1.0]);
+    let time = fixed_time
+        .or(shader.sample_time)
+        .or_else(|| {
+            if motion_only {
+                crate::shader_clock::bind_sample_time(&shader.sksl)
+            } else {
+                crate::shader_clock::bind_time(&shader.sksl)
+            }
+        })
         .map(|t| [t]);
     let mut uniforms: Vec<(&str, &[f32])> = shader
         .uniforms

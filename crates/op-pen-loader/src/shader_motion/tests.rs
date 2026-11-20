@@ -38,6 +38,7 @@ fn camera_paths_preserve_runtime_uniforms_and_constant_array_indices() {
     assert!(expanded.sksl.contains("sampleView"));
     assert!(expanded.sksl.contains("sampleCamera"));
     assert!(!expanded.sksl.contains("bars[i]"));
+    assert_eq!(motion_clock(&expanded), &[1.0]);
     assert_eq!(
         expanded
             .uniforms
@@ -57,6 +58,30 @@ fn camera_paths_preserve_runtime_uniforms_and_constant_array_indices() {
             .values
             .len(),
         8
+    );
+}
+
+fn motion_clock(preset: &ExpandedShaderPreset) -> &[f32] {
+    &preset
+        .uniforms
+        .iter()
+        .find(|u| u.name == "motionClock")
+        .unwrap()
+        .values
+}
+
+#[test]
+fn delayed_bursts_do_not_drive_the_editor_clock_unless_requested() {
+    let scheduled = [("burst", vec![12., 1., 220., 90.])];
+    let preset = expand(&fixture("spark_burst", &scheduled)).unwrap();
+    assert_eq!(motion_clock(&preset), &[1.0]);
+    let mut ambient = scheduled.to_vec();
+    ambient.push(("motionClock", vec![0.]));
+    let preset = expand(&fixture("spark_burst", &ambient)).unwrap();
+    assert_eq!(motion_clock(&preset), &[0.0]);
+    assert_eq!(
+        motion_clock(&expand(&fixture("spark_burst", &[])).unwrap()),
+        &[0.0]
     );
 }
 

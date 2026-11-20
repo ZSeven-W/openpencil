@@ -20,11 +20,13 @@ pub(crate) fn expand(body: &ShaderFillBody) -> Option<ExpandedShaderPreset> {
                 ("burst", &[0.0, 1.5, 220.0, 90.0]),
                 ("tint", &[0.2, 1.0, 0.65]),
             ],
+            values(body, "burst").is_some_and(|v| v.len() == 4 && v[0] > 0.0),
         ),
         "iridescent_glass" => effect(
             body,
             include_str!("shader_motion/iridescent_glass.sksl"),
             &[("sphere", &[0.5, 0.5, 0.4, 1.0])],
+            false,
         ),
         _ => None,
     }
@@ -52,10 +54,16 @@ fn effect(
     body: &ShaderFillBody,
     source: &str,
     parameters: &[(&str, &[f32])],
+    timeline_only: bool,
 ) -> Option<ExpandedShaderPreset> {
     let mut uniforms = vec![
         parameter(body, "size", &[0.0, 0.0]),
         parameter(body, "sampleTime", &[-1.0]),
+        parameter(
+            body,
+            "motionClock",
+            &[if timeline_only { 1.0 } else { 0.0 }],
+        ),
     ];
     uniforms.extend(
         parameters
@@ -91,6 +99,9 @@ fn candlesticks(body: &ShaderFillBody) -> Option<ExpandedShaderPreset> {
             ("edgeSoftness", &[0.8]),
             ("stage", &[90.0, 0.0, 0.0, 0.0]),
         ],
+        body.uniforms.as_ref().is_some_and(|uniforms| {
+            uniforms.contains_key("viewPath") || uniforms.contains_key("cameraPath")
+        }),
     )?;
     preset.uniforms.push(ShaderUniformPayload {
         name: "bars".into(),

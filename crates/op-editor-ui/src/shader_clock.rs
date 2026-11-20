@@ -21,6 +21,7 @@ thread_local! {
     /// Seconds bound to `time` for the frame in progress; `None` outside a
     /// host frame (exports).
     static FRAME_TIME_S: Cell<Option<f32>> = const { Cell::new(None) };
+    static SAMPLE_TIME_S: Cell<Option<f32>> = const { Cell::new(None) };
     /// Host clock at the first frame, so `time` starts near zero and keeps
     /// f32 precision however large the host's millisecond clock is.
     static EPOCH_MS: Cell<Option<u64>> = const { Cell::new(None) };
@@ -57,18 +58,27 @@ impl Drop for FrameScope {
 /// Paint an offline sample at its own time without changing the host's epoch
 /// or whether the most recent host frame drew an animated shader.
 pub fn with_sample_time<T>(time_ms: u64, paint: impl FnOnce() -> T) -> T {
-    struct RestoreClock(Option<f32>, bool);
+    struct RestoreClock(Option<f32>, Option<f32>, bool);
     impl Drop for RestoreClock {
         fn drop(&mut self) {
             FRAME_TIME_S.with(|time| time.set(self.0));
-            PAINTED.with(|painted| painted.set(self.1));
+            SAMPLE_TIME_S.with(|time| time.set(self.1));
+            PAINTED.with(|painted| painted.set(self.2));
         }
     }
+    let seconds = Some((time_ms as f64 / 1000.0) as f32);
     let _restore = RestoreClock(
-        FRAME_TIME_S.with(|time| time.replace(Some((time_ms as f64 / 1000.0) as f32))),
+        FRAME_TIME_S.with(|time| time.replace(seconds)),
+        SAMPLE_TIME_S.with(|time| time.replace(seconds)),
         PAINTED.with(Cell::get),
     );
     paint()
+}
+
+/// A timeline-only shader stays at its first frame in the idle editor.
+/// Explicit export samples still receive their timestamps.
+pub(crate) fn bind_sample_time(sksl: &str) -> Option<f32> {
+    declares_time_uniform(sksl).then(|| SAMPLE_TIME_S.with(Cell::get).unwrap_or(0.0))
 }
 
 /// The value to bind to `time` for `sksl`, or `None` when the program has
@@ -91,13 +101,19 @@ pub fn animated_shader_on_screen() -> bool {
 
 /// `uniform float time;` / `uniform half time;` anywhere in the source.
 pub fn declares_time_uniform(sksl: &str) -> bool {
-    let tokens: Vec<&str> = sksl
+    let mut tokens = sksl
         .split(|c: char| c.is_whitespace() || c == ';')
-        .filter(|token| !token.is_empty())
-        .collect();
-    tokens
-        .windows(3)
-        .any(|w| w[0] == "uniform" && matches!(w[1], "float" | "half") && w[2] == "time")
+        .filter(|token| !token.is_empty());
+    let mut window = [
+        tokens.next().unwrap_or_default(),
+        tokens.next().unwrap_or_default(),
+    ];
+    tokens.any(|token| {
+        let matched =
+            window[0] == "uniform" && matches!(window[1], "float" | "half") && token == "time";
+        window = [window[1], token];
+        matched
+    })
 }
 
 #[cfg(test)]
@@ -105,6 +121,16 @@ mod tests {
     use super::*;
 
     const ANIMATED: &str = "uniform float2 size;\nuniform half time;\nhalf4 main(float2 p) { return half4(sin(time)); }";
+
+    #[test]
+    fn timeline_only_shaders_ignore_idle_redraws_and_sample_export_time() {
+        let frame = begin_frame(12_000);
+        assert_eq!(bind_sample_time(ANIMATED), Some(0.0));
+        with_sample_time(2180, || assert_eq!(bind_sample_time(ANIMATED), Some(2.18)));
+        assert_eq!(bind_sample_time(ANIMATED), Some(0.0));
+        drop(frame);
+        assert!(!animated_shader_on_screen());
+    }
 
     #[test]
     fn only_a_declared_time_uniform_is_bound() {

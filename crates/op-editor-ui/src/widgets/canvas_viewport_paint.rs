@@ -138,6 +138,23 @@ fn paint_node_inner<'a>(
     if node.hidden || matches!(reveal_state, RevealPaintState::Pending) {
         return PaintNodeHits::default();
     }
+    // A zero-alpha Normal layer has no pixel contribution. Inactive motion
+    // cards should not allocate layers or shape their text on every frame.
+    // Keep traversing if this subtree owes the editor an interaction outline.
+    if node.composite_opacity <= 0.0
+        && node.blend_mode == crate::ImageBlendMode::Normal
+        && matches!(reveal_state, RevealPaintState::Idle)
+        && !node
+            .effects
+            .iter()
+            .any(|e| matches!(e, Effect::BackgroundBlur { .. }))
+        && [options.hovered, options.selected, options.pen]
+            .into_iter()
+            .flatten()
+            .all(|id| node.find(id).is_none())
+    {
+        return PaintNodeHits::default();
+    }
     let world_rect = Rect {
         origin: Point2D::new(
             viewport_origin.x + node.bounds.origin.x * zoom,

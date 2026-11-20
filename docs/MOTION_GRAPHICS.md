@@ -31,6 +31,10 @@ Skia's reflected offsets. `size` is supplied automatically when the program
 declares `uniform float2 size;`. An open timeline supplies `time` from the
 playhead; MP4 supplies the exact frame time. Static images sample time zero.
 The motion presets also accept `sampleTime` for a fixed poster frame.
+Charts with a camera or view path and bursts scheduled after zero default
+to the timeline clock, so they stay still when opening the file. Set
+`motionClock:1` to opt other motion presets into that behavior, or
+`motionClock:0` to run a preset from the live canvas clock.
 
 MP4 supports finite clips up to ten minutes. Resolution and shader complexity
 affect export time; software rendering can be slow for complex scenes. Audio

@@ -108,6 +108,18 @@ fn paint(node: &SceneNode) -> Vec<Op> {
 }
 
 #[test]
+fn inactive_composed_subtree_issues_no_draw_or_layer_operations() {
+    let mut frame = rect("overlay", 0.0);
+    frame.kind = NodeKind::Frame;
+    frame.children = vec![rect("headline", 5.0)];
+    frame.composite_opacity = 0.0;
+    assert!(paint(&frame).is_empty());
+
+    frame.composite_opacity = 0.25;
+    assert!(paint(&frame).contains(&Op::Composite(0.25, ImageBlendMode::Normal)));
+}
+
+#[test]
 fn container_blend_layer_wraps_own_paint_and_complete_subtree() {
     let mut frame = rect("frame", 0.0);
     frame.kind = NodeKind::Frame;
