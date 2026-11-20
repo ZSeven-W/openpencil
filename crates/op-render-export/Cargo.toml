@@ -27,6 +27,9 @@ gif = "0.14"
 png = "0.18"
 zip = { version = "9", default-features = false }
 glam = { version = "0.29", default-features = false, features = ["std"] }
+serde_json = { workspace = true }
+base64 = "0.22"
+usvg = { version = "0.48", default-features = false }
 skia-safe = { version = "0.97.0", default-features = false, features = [
   "binary-cache",
   "textlayout",
@@ -34,7 +37,6 @@ skia-safe = { version = "0.97.0", default-features = false, features = [
 ] }
 
 [dev-dependencies]
-base64 = "0.22"
 op-preview-core = { path = "../op-preview-core" }
 
 [target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]

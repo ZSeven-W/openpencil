@@ -1,7 +1,7 @@
 use super::*;
 use std::io::{Cursor, Read};
 
-fn fixture() -> (PenNode, LayoutScene) {
+pub(super) fn fixture() -> (PenNode, LayoutScene) {
     let mut document = jian_ops_schema::load_str(
         r##"{"version":"1.1","children":[{"type":"rectangle","id":"box","width":16,"height":12,
           "fill":[{"type":"solid","color":"#ff0000"}],

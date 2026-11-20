@@ -184,6 +184,54 @@ impl NativeBackend {
     /// synthetically (same philosophy as synthetic bold).
     #[tracing::instrument(skip(self, canvas, layout))]
     pub fn draw_text(&mut self, canvas: &skia_safe::Canvas, layout: &TextLayout, origin: Point2D) {
+        self.visit_text(layout, origin, |operation| match operation {
+            TextPaint::Glyphs(text, font, paint, position) => {
+                canvas.draw_str(text, position, font, paint);
+            }
+            TextPaint::Paragraph(paragraph, position, _) => paragraph.paint(canvas, position),
+        });
+    }
+
+    /// Outlines use the same runs, fallback fonts, bidi shaping and baseline
+    /// as the native canvas. Color glyphs without paths request raster paint.
+    pub fn outline_text(
+        &mut self,
+        layout: &TextLayout,
+        origin: Point2D,
+    ) -> Option<Vec<(skia_safe::Path, skia_safe::Paint)>> {
+        let mut result = Vec::new();
+        let mut complete = true;
+        self.visit_text(layout, origin, |operation| match operation {
+            TextPaint::Glyphs(text, font, paint, position) => {
+                let glyphs = font.str_to_glyphs_vec(text);
+                let mut positions = vec![skia_safe::Point::default(); glyphs.len()];
+                font.get_pos(&glyphs, &mut positions, Some(position.into()));
+                for ((character, glyph), position) in text.chars().zip(glyphs).zip(positions) {
+                    if let Some(path) = font.get_path(glyph) {
+                        result.push((path.with_offset(position), paint.clone()));
+                    } else if !character.is_whitespace() {
+                        complete = false;
+                    }
+                }
+            }
+            TextPaint::Paragraph(paragraph, position, color) => {
+                for line in 0..paragraph.line_number() {
+                    let (missing, path) = paragraph.get_path_at(line);
+                    complete &= missing == 0;
+                    let paint = skia_safe::Paint::new(color, None);
+                    result.push((path.with_offset(position), paint));
+                }
+            }
+        });
+        complete.then_some(result)
+    }
+
+    fn visit_text(
+        &mut self,
+        layout: &TextLayout,
+        origin: Point2D,
+        mut visit: impl FnMut(TextPaint<'_>),
+    ) {
         // Serialize the whole text-run paint — typeface resolution plus glyph
         // rasterization via `draw_str`, both DirectWrite-backed on Windows —
         // with every other font user, so a concurrent design-worker layout
@@ -199,8 +247,7 @@ impl NativeBackend {
                     // whole run to the cached Paragraph shaper; segmentation
                     // would defeat shaping anyway, since joining is decided
                     // across the run, not per typeface span.
-                    self.shaped_text.paint(
-                        canvas,
+                    self.shaped_text.with_paragraph(
                         &self.font_resolver,
                         &ShapedRun {
                             text: run.content.as_str(),
@@ -213,6 +260,13 @@ impl NativeBackend {
                         },
                         origin.x + run.origin.x,
                         origin.y + run.origin.y,
+                        |paragraph, position| {
+                            visit(TextPaint::Paragraph(
+                                paragraph,
+                                position,
+                                skia_safe::Color::from_argb(jc.a(), jc.r(), jc.g(), jc.b()).into(),
+                            ))
+                        },
                     );
                     continue;
                 }
@@ -255,7 +309,7 @@ impl NativeBackend {
                         paint.set_style(skia_safe::PaintStyle::Fill);
                         paint.set_stroke_width(0.0);
                     }
-                    canvas.draw_str(&segment.text, (x, y), &font, &paint);
+                    visit(TextPaint::Glyphs(&segment.text, &font, &paint, (x, y)));
                     let (mut advance, _) = font.measure_str(&segment.text, None);
                     if segment.synthetic_bold {
                         advance *= jian_skia::SYNTHETIC_BOLD_WIDTH_FACTOR;
@@ -265,4 +319,18 @@ impl NativeBackend {
             }
         });
     }
+}
+
+enum TextPaint<'a> {
+    Glyphs(
+        &'a str,
+        &'a skia_safe::Font,
+        &'a skia_safe::Paint,
+        (f32, f32),
+    ),
+    Paragraph(
+        &'a mut skia_safe::textlayout::Paragraph,
+        (f32, f32),
+        skia_safe::Color4f,
+    ),
 }

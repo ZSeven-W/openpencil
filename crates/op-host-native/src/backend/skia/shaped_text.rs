@@ -20,7 +20,7 @@ use op_editor_core::text_script::{base_direction, BaseDirection};
 use skia_safe::{
     font_style::{Slant, Weight, Width},
     textlayout::{FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, TextStyle},
-    Canvas, FontStyle,
+    FontStyle,
 };
 
 /// The default family jian seeds its own collections with, so a shaped run
@@ -82,13 +82,13 @@ impl ShapedText {
     /// Paint the run with `baseline_y` on its alphabetic baseline, matching
     /// the `draw_str` convention the unshaped path uses, so shaped and
     /// unshaped text sit on one line.
-    pub(crate) fn paint(
+    pub(super) fn with_paragraph(
         &mut self,
-        canvas: &Canvas,
         font_resolver: &FontResolver,
         run: &ShapedRun<'_>,
         x: f32,
         baseline_y: f32,
+        mut visit: impl FnMut(&mut Paragraph, (f32, f32)),
     ) {
         jian_skia::with_font_lock(|| {
             let mut paragraph = self.build(font_resolver, run);
@@ -108,7 +108,7 @@ impl ShapedText {
             // `Paragraph::paint` places the line-box top; callers hand us a
             // baseline.
             let top = baseline_y - paragraph.alphabetic_baseline();
-            paragraph.paint(canvas, (x, top));
+            visit(&mut paragraph, (x, top));
         });
     }
 

@@ -12,6 +12,7 @@ use crate::ExportError;
 use op_motion_export::FrameClock;
 
 mod contact_sheet;
+mod lottie;
 mod mp4;
 mod render;
 pub use contact_sheet::{
@@ -26,6 +27,7 @@ pub enum MotionFormat {
     Apng,
     PngSequence,
     Mp4,
+    Lottie,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -93,7 +95,7 @@ pub fn export_motion_bytes(
 /// Write a clip with one fixed crop across all frames. The writer owns
 /// the output so callers can stream to a file without buffering its bytes.
 pub fn export_motion<W: Write + Seek>(
-    writer: W,
+    mut writer: W,
     scene: &LayoutScene,
     root: &PenNode,
     format: MotionFormat,
@@ -116,6 +118,9 @@ pub fn export_motion<W: Write + Seek>(
         });
     }
     let root_id = jian_core::document::tree::node_schema_id(root);
+    if format == MotionFormat::Lottie {
+        return lottie::encode(&mut writer, scene, root, clip, clock, options);
+    }
     let transparent =
         format != MotionFormat::Mp4 && options.background == MotionExportBackground::Transparent;
     let renderer = render::FrameRenderer::new(scene, root_id, options.scale, clip)?
@@ -123,6 +128,7 @@ pub fn export_motion<W: Write + Seek>(
     let time_at = |index| clock.time_at(index);
     match format {
         MotionFormat::Mp4 => mp4::encode(writer, &renderer, clock),
+        MotionFormat::Lottie => unreachable!("Lottie uses vector export above"),
         MotionFormat::Gif => {
             let (width, height) = renderer.size();
             let map_error = |error: gif::EncodingError| ExportError::MotionEncoding {

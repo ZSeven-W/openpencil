@@ -24,7 +24,7 @@ COMMON COMMANDS:
                                           export a page, arbitrary node, or the
                                           current Live Canvas selection; omitting
                                           --item is equivalent to --selection
-  op export --item ID --output PATH --format gif|apng|png-seq|mp4 [--fps N]
+  op export --item ID --output PATH --format gif|apng|png-seq|mp4|lottie [--fps N]
             [--duration-ms N] [--trigger mount|inView|manual] [--clip ID]
             [--background transparent|white] [--reduced-motion [true|false]]
                                           export a node's motion (PNG sequence

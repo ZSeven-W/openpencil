@@ -96,6 +96,7 @@ fn render_motion(
         MotionExportFormat::Apng => (MotionFormat::Apng, "image/apng"),
         MotionExportFormat::PngSequence => (MotionFormat::PngSequence, "application/zip"),
         MotionExportFormat::Mp4 => (MotionFormat::Mp4, "video/mp4"),
+        MotionExportFormat::Lottie => (MotionFormat::Lottie, "application/json"),
     };
     let options = MotionExportOptions {
         trigger: request.trigger.as_clip_trigger(),

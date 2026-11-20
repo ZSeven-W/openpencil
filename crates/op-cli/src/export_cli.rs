@@ -41,7 +41,7 @@ impl MotionExportFlags {
 }
 
 fn motion_flags(flags: &Flags, format: &str) -> Result<Option<MotionExportFlags>, CliError> {
-    let enabled = matches!(format, "gif" | "apng" | "png-seq" | "mp4");
+    let enabled = matches!(format, "gif" | "apng" | "png-seq" | "mp4" | "lottie");
     if !enabled {
         if [
             "fps",
@@ -55,7 +55,7 @@ fn motion_flags(flags: &Flags, format: &str) -> Result<Option<MotionExportFlags>
         .any(|name| flags.contains_key(name))
         {
             return Err(CliError::usage(
-                "motion options require gif, apng, png-seq, or mp4 export",
+                "motion options require gif, apng, png-seq, mp4, or lottie export",
             ));
         }
         return Ok(None);
@@ -136,7 +136,7 @@ pub(crate) fn map_export(flags: &Flags) -> Result<Command, CliError> {
     let format = format_flag.or(formats_flag).unwrap_or_else(|| "png".into());
     if !matches!(
         format.as_str(),
-        "png" | "jpeg" | "jpg" | "webp" | "pdf" | "gif" | "apng" | "png-seq" | "mp4"
+        "png" | "jpeg" | "jpg" | "webp" | "pdf" | "gif" | "apng" | "png-seq" | "mp4" | "lottie"
     ) {
         return Err(CliError::Usage(format!(
             "unsupported export format {format:?}"

@@ -29,10 +29,17 @@ pub enum MotionExportFormat {
     #[serde(rename = "png-seq")]
     PngSequence,
     Mp4,
+    Lottie,
 }
 
 impl MotionExportFormat {
-    pub const ALL: [Self; 4] = [Self::Gif, Self::Apng, Self::PngSequence, Self::Mp4];
+    pub const ALL: [Self; 5] = [
+        Self::Gif,
+        Self::Apng,
+        Self::PngSequence,
+        Self::Mp4,
+        Self::Lottie,
+    ];
 
     pub const fn label(self) -> &'static str {
         match self {
@@ -40,6 +47,7 @@ impl MotionExportFormat {
             Self::Apng => "APNG",
             Self::PngSequence => "PNG ZIP",
             Self::Mp4 => "MP4",
+            Self::Lottie => "Lottie",
         }
     }
 
@@ -53,6 +61,7 @@ impl MotionExportFormat {
             Self::Apng => "apng",
             Self::PngSequence => "zip",
             Self::Mp4 => "mp4",
+            Self::Lottie => "json",
         }
     }
 }

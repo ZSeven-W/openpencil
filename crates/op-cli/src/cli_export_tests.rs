@@ -364,3 +364,34 @@ fn motion_export_can_inherit_or_override_the_document_preference() {
         );
     }
 }
+
+#[test]
+fn lottie_export_uses_the_motion_flags_and_json_destination() {
+    let parsed = parse_args(&args(&[
+        "export",
+        "--item",
+        "board",
+        "--output",
+        "board.json",
+        "--format",
+        "lottie",
+        "--fps",
+        "24",
+        "--duration-ms",
+        "5000",
+    ]))
+    .unwrap();
+    let Command::Export {
+        format,
+        output,
+        motion: Some(motion),
+        ..
+    } = parsed.command
+    else {
+        panic!("expected Lottie export");
+    };
+    assert_eq!(format, "lottie");
+    assert_eq!(output, "board.json");
+    assert_eq!(motion.arguments()["fps"], serde_json::json!(24));
+    assert_eq!(motion.arguments()["durationMs"], serde_json::json!(5000));
+}

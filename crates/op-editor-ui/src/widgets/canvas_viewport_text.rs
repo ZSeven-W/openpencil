@@ -275,7 +275,7 @@ fn decorate_slice(
 /// translucent bar ("greeking") instead of running the full layout.
 const GREEK_TEXT_MAX_DEVICE_PX: f32 = 3.0;
 
-pub(crate) fn paint_text_node(
+pub fn paint_text_node(
     cx: &mut PaintCx<'_>,
     node: &SceneNode,
     world_rect: Rect,

@@ -455,4 +455,24 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn lottie_is_selectable_and_fits_the_motion_format_row() {
+        let mut state = state();
+        let dialog = ExportDialog::for_editor(&state, 1000.0, 900.0);
+        let (rect, hit) = dialog
+            .motion_formats()
+            .find(|(_, hit)| *hit == ExportDialogHit::MotionFormat(MotionExportFormat::Lottie))
+            .unwrap();
+        assert!(rect.origin.x + rect.size.x <= dialog.rect.origin.x + dialog.rect.size.x - PAD);
+        assert!(dialog.motion_hit_enabled(hit, &state.editor_ui));
+        select(&mut state, hit);
+        let choices = motion_export_choices(&state);
+        let request = state
+            .editor_ui
+            .motion_export
+            .request(&choices, 1.0)
+            .unwrap();
+        assert_eq!(request.format, MotionExportFormat::Lottie);
+        assert_eq!(request.format.extension(), "json");
+    }
 }

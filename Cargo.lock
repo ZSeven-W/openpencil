@@ -5036,7 +5036,9 @@ dependencies = [
  "png 0.18.1",
  "rusty_h264-common",
  "rusty_h264-decoder",
+ "serde_json",
  "skia-safe",
+ "usvg",
  "zip",
 ]
 

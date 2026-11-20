@@ -30,7 +30,7 @@ impl McpTool for ExportItem {
             _ => {
                 return ToolOutcome::Err(
                     ToolErrorCode::MissingArgument,
-                    "format is required (png|jpeg|webp|pdf|gif|apng|png-seq|mp4)".into(),
+                    "format is required (png|jpeg|webp|pdf|gif|apng|png-seq|mp4|lottie)".into(),
                 );
             }
         };
@@ -263,6 +263,7 @@ pub(super) fn parse_motion_format(format: &str) -> Option<MotionFormat> {
         "apng" => MotionFormat::Apng,
         "png-seq" => MotionFormat::PngSequence,
         "mp4" => MotionFormat::Mp4,
+        "lottie" => MotionFormat::Lottie,
         _ => return None,
     })
 }
@@ -279,7 +280,7 @@ fn unsupported_format(format: &str) -> ToolOutcome {
     ToolOutcome::Err(
         ToolErrorCode::InvalidArgument,
         format!(
-            "unknown format {format:?}: must be one of png, jpeg, webp, pdf, gif, apng, png-seq, mp4"
+            "unknown format {format:?}: must be one of png, jpeg, webp, pdf, gif, apng, png-seq, mp4, lottie"
         ),
     )
 }
