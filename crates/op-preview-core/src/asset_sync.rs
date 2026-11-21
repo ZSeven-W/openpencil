@@ -332,6 +332,8 @@ fn sync_scene(
             node.image_original_size = source.image_original_size;
             node.image_tile_scale = source.image_tile_scale;
             node.image_adjustments = source.image_adjustments;
+            node.opacity = source.opacity;
+            node.composite_opacity = source.composite_opacity;
             node.children
                 .retain(|child| !patch.removed_fallbacks.contains(&child.id));
         }

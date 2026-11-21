@@ -330,17 +330,22 @@ fn accepted_image_arrival_does_not_restart_an_inflight_animation() {
     session.begin_lifecycle(10);
     session.set_now_ms(410);
     let before = session.preview_scene_for_test();
-    let opacity = find(&before, "photo").opacity;
+    let before_photo = find(&before, "photo");
+    let opacity = before_photo.composite_opacity;
     assert!((opacity - 0.4).abs() < 0.01);
+    assert_eq!(before_photo.opacity, 1.0);
     assert_eq!(session.active_animation_track_count(), 1);
     assert!(session.sync_image_assets(&filled(value), 7, 3));
-    assert_eq!(
-        find(&session.preview_scene_for_test(), "photo").opacity,
-        opacity
-    );
+    let after = session.preview_scene_for_test();
+    let after_photo = find(&after, "photo");
+    assert_eq!(after_photo.opacity, opacity);
+    assert_eq!(after_photo.composite_opacity, 1.0);
     assert_eq!(session.active_animation_track_count(), 1);
     session.set_now_ms(610);
-    assert!((find(&session.preview_scene_for_test(), "photo").opacity - 0.6).abs() < 0.01);
+    let later = session.preview_scene_for_test();
+    let later_photo = find(&later, "photo");
+    assert!((later_photo.opacity - 0.6).abs() < 0.01);
+    assert_eq!(later_photo.composite_opacity, 1.0);
 }
 
 #[test]
