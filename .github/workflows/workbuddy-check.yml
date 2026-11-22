@@ -6,10 +6,12 @@ on:
     paths:
       - 'packages/op-workbuddy/**'
       - '.github/workflows/workbuddy-check.yml'
+      - '.github/workflows/workbuddy-release.yml'
   pull_request:
     paths:
       - 'packages/op-workbuddy/**'
       - '.github/workflows/workbuddy-check.yml'
+      - '.github/workflows/workbuddy-release.yml'
 
 concurrency:
   group: workbuddy-check-${{ github.ref }}
@@ -43,3 +45,4 @@ jobs:
           node scripts/verify-platform-packages.mjs
           version="$(node -p "require('./package.json').version")"
           node scripts/check-release-version.mjs "$version"
+          npm run test:release-publish
