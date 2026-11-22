@@ -355,7 +355,7 @@ ios = jobs.fetch("ios-app-store")
 unless !ios.key?("uses") &&
     ios.fetch("if") == "startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.ios_app_store_only == true)" &&
     ios.fetch("needs") == "version" &&
-    ios.fetch("runs-on") == "macos-26" &&
+    ios.fetch("runs-on") == "xcode-27" &&
     ios.fetch("environment") == "testflight" &&
     ios.fetch("timeout-minutes") == 120 &&
     !ios.key?("env")
