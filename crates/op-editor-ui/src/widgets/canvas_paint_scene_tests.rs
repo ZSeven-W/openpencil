@@ -55,12 +55,14 @@ fn scene() -> LayoutScene {
     }
 }
 
+/// Effective painted alpha: a leaf keeps its baked paint opacity and fades
+/// through the composite layer.
 fn opacity(scene: &LayoutScene, id: &str) -> f32 {
-    scene
+    let node = scene
         .active_page()
         .and_then(|page| page.find(id))
-        .expect("node")
-        .opacity
+        .expect("node");
+    node.opacity * node.composite_opacity
 }
 
 #[test]

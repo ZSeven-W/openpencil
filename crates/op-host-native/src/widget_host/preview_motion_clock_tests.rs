@@ -82,7 +82,7 @@ fn mount_motion_is_visible_after_enter_at_a_late_native_host_clock() {
         host.preview_scene_for_test()
             .active_page()
             .and_then(|page| page.find("hero"))
-            .is_some_and(|hero| hero.opacity.abs() < 0.001),
+            .is_some_and(|hero| (hero.opacity * hero.composite_opacity).abs() < 0.001),
         "hero stays at its first keyframe under the merge"
     );
 
@@ -95,7 +95,7 @@ fn mount_motion_is_visible_after_enter_at_a_late_native_host_clock() {
         host.preview_scene_for_test()
             .active_page()
             .and_then(|page| page.find("hero"))
-            .is_some_and(|hero| hero.opacity.abs() < 0.001),
+            .is_some_and(|hero| (hero.opacity * hero.composite_opacity).abs() < 0.001),
         "hero starts at its first keyframe when the merge settles"
     );
 
@@ -110,7 +110,7 @@ fn mount_motion_is_visible_after_enter_at_a_late_native_host_clock() {
         .preview_scene_for_test()
         .active_page()
         .and_then(|page| page.find("hero"))
-        .map(|hero| hero.opacity)
+        .map(|hero| hero.opacity * hero.composite_opacity)
         .expect("hero node");
     assert!(
         mid_opacity > 0.0 && mid_opacity < 1.0,
@@ -125,7 +125,7 @@ fn mount_motion_is_visible_after_enter_at_a_late_native_host_clock() {
         .preview_scene_for_test()
         .active_page()
         .and_then(|page| page.find("hero"))
-        .map(|hero| hero.opacity)
+        .map(|hero| hero.opacity * hero.composite_opacity)
         .expect("hero node");
     assert!((final_opacity - 1.0).abs() < 0.001);
 }
