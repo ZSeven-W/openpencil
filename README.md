@@ -142,6 +142,7 @@ Design together over authenticated peer-to-peer sessions with a public relay and
 
 ```bash
 brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install --cask openpencil
 ```
 
@@ -191,6 +192,8 @@ published release; the source-built outputs always build the checked-out source.
 **CLI (`op`):**
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
 ```
 
@@ -348,6 +351,8 @@ docker run -p 3100:3100 openpencil-web-rust
 Install via Homebrew or the install script, then control the design tool from your terminal:
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
 ```
 

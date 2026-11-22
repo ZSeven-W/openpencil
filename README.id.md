@@ -71,11 +71,20 @@ Instal satu klik ke Claude Code, Codex, OpenCode, Kiro, atau Copilot CLI. Desain
 <tr>
 <td width="50%">
 
+### 🎨 Panduan Gaya
+
+Pustaka panduan gaya bawaan dengan pencocokan fuzzy berbasis tag. Terapkan gaya visual (glassmorphism, brutalist, retro, dll.) ke desain buatan AI. Alat MCP untuk akses agen eksternal.
+
+</td>
+<td width="50%">
+
 ### 📦 Design-as-Code
 
 File `.op` adalah JSON — mudah dibaca manusia, ramah Git, mudah dibandingkan. Variabel desain menghasilkan CSS custom properties. Ekspor kode ke React + Tailwind atau HTML + CSS.
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🖥️ Berjalan di Mana Saja
@@ -83,8 +92,6 @@ File `.op` adalah JSON — mudah dibaca manusia, ramah Git, mudah dibandingkan. 
 Aplikasi web + desktop native di macOS, Windows, dan Linux — satu inti Rust, satu binary mandiri, tanpa engine browser. Asosiasi file `.op` — klik dua kali untuk membuka.
 
 </td>
-</tr>
-<tr>
 <td width="50%">
 
 ### ⌨️ CLI — `op`
@@ -92,11 +99,36 @@ Aplikasi web + desktop native di macOS, Windows, dan Linux — satu inti Rust, s
 Kontrol alat desain dari terminal Anda. `op design`, `op insert` — batch design DSL, manipulasi node. Pipe dari file atau stdin. Bekerja dengan aplikasi desktop atau web server.
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🎯 Ekspor Kode Multi-Platform
 
 Ekspor dari satu file `.op` ke React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native. Variabel desain menjadi CSS custom properties.
+
+</td>
+<td width="50%">
+
+### 🧩 SDK yang Dapat Disematkan
+
+`op-web-sdk` (vanilla) + adaptor `op-web-sdk-react` / `op-web-sdk-vue` — sematkan penampil `.op` baca-saja di aplikasi Anda sendiri, ditenagai renderer wasm yang sama dengan editor.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🛡️ Kit Sistem Desain
+
+Kelola UIKit yang dapat digunakan ulang dengan pergantian gaya dan komposisi komponen. Impor/ekspor kit dari file `.pen`. Registri bawaan dengan alat MCP untuk akses eksternal.
+
+</td>
+<td width="50%">
+
+### 👥 Kolaborasi Real-Time
+
+Mendesain bersama melalui sesi peer-to-peer terautentikasi dengan relay publik dan hub regional bawaan. Bergabung dengan kode pasangan singkat, lihat kursor jarak jauh secara langsung, dan selesaikan konflik dengan detail dan pemutaran ulang setiap suntingan.
 
 </td>
 </tr>
@@ -110,6 +142,7 @@ Ekspor dari satu file `.op` ke React + Tailwind, HTML + CSS, Vue, Svelte, Flutte
 
 ```bash
 brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install --cask openpencil
 ```
 
@@ -121,6 +154,10 @@ scoop install openpencil
 ```
 
 **Unduh langsung untuk Linux / Windows:** [GitHub Releases](https://github.com/ZSeven-W/openpencil/releases) — `.exe` (Windows), `.AppImage` / `.deb` (Linux)
+
+Installer `.exe` Windows, kedua paket Scoop, dan installer CLI `install-op.ps1` memeriksa dan, bila perlu, memperbaiki runtime Visual C++ v14 yang disematkan dan ditandatangani Microsoft pada setiap instalasi atau pembaruan. Arsip `.zip` portabel Windows dan paket VSIX Windows tidak menjalankan installer sistem dengan hak elevasi; instal [Visual C++ Redistributable terbaru yang didukung](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) dari Microsoft sebelum memakai artefak tersebut secara langsung.
+
+> Antivirus menandai installer Windows? Itu positif palsu heuristik yang sudah dikenal pada rilis baru yang belum banyak dipakai — lihat [cara memverifikasi unduhan Anda](docs/security/antivirus-false-positives.md).
 
 **Nix (Linux x86_64):**
 
@@ -150,6 +187,8 @@ sedang di-checkout.
 **CLI (`op`):**
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
 ```
 
@@ -194,6 +233,14 @@ Tiga submodule berada di bawah `vendor/`; semuanya publik dan diambil melalui HT
 bash scripts/start-web-rust.sh
 ```
 
+Kredensial penyedia bawaan, pembuatan gambar, dan Openverse yang dimasukkan di browser secara default disimpan di `localStorage` dengan origin yang sama (`openpencil-rust-web-credentials`), terpisah dari preferensi web biasa. Kredensial yang dibutuhkan permintaan AI dikirim bersama permintaan itu, tetapi daemon tidak menulis snapshot browser ke `settings.json`.
+
+Deployment privat dapat memilih penyimpanan di server dengan `OPENPENCIL_PERSIST_WEB_CREDENTIALS_SERVER=true`. Pengaturan ini berlaku untuk seluruh deployment; setiap snapshot browser yang diterima menggantikan salinan bersama milik browser. Aktifkan hanya untuk deployment tepercaya dengan kontrol akses, satu profil administrator aktif, dan berada di balik HTTPS. Mematikan pengaturan akan menghapus kredensial milik browser yang tersimpan sebelumnya pada startup berikutnya sambil mempertahankan konfigurasi milik operator. Seperti semua `localStorage`, skrip dengan origin yang sama dapat membaca nilai ini, sehingga origin web harus dilindungi dari skrip tidak tepercaya dan XSS. Sebelum downgrade ke rilis yang lebih lama dari sakelar ini, matikan sakelar dan jalankan rilis saat ini sekali untuk menghapus salinan milik browser.
+
+Host web hanya mendukung agen bawaan dengan API key. Agen CLI dan ACP tetap hanya untuk versi native: agen tersebut tidak ditampilkan di pemilih model web, tidak disimpan di snapshot kredensial browser, tidak disinkronkan ke server, dan tidak diekspos melalui rute koneksi web. Permintaan browser ke endpoint kredensial dan AI secara default mengizinkan origin loopback/localhost. Reverse proxy publik harus mengatur `OPENPENCIL_WEB_ALLOWED_ORIGINS` secara terpisah ke daftar origin persis yang dipisahkan koma, misalnya `https://demo.openpencil.dev`.
+
+Penyimpanan di server tidak mengizinkan permintaan yang dikendalikan browser ke endpoint penyedia loopback, privat, link-local, metadata, atau yang dicadangkan. Deployment privat tepercaya yang sengaja memakai penyedia internal harus mengatur `OPENPENCIL_WEB_AI_ENDPOINT_ALLOWLIST` secara terpisah ke daftar origin URL persis yang dipisahkan koma, misalnya `http://127.0.0.1:11434,https://llm.internal.example`.
+
 Atau jalankan sebagai aplikasi desktop:
 
 ```bash
@@ -234,8 +281,11 @@ docker run -p 3100:3100 openpencil-web-rust
 
 - **Teks ke desain** — deskripsikan halaman, dan hasilkan di kanvas secara real-time dengan animasi streaming
 - **Orkestrator** — menguraikan halaman kompleks menjadi sub-tugas spasial untuk pembuatan secara paralel
+- **Tim Agen** — anggota tim yang bekerja bersamaan dengan alat delegasi, indikator kanvas per anggota, dan strategi cadangan
 - **Modifikasi desain** — pilih elemen, lalu deskripsikan perubahan dalam bahasa alami
 - **Masukan visual** — lampirkan tangkapan layar atau mockup sebagai referensi desain
+- **Panduan Gaya** — terapkan gaya visual (glassmorphism, brutalist, retro, dll.) melalui pencocokan fuzzy berbasis tag
+- **Anti-slop** — pelacakan keragaman lintas generasi untuk menghindari keluaran AI yang berulang
 
 **Dukungan Multi-Agen**
 
@@ -258,6 +308,7 @@ docker run -p 3100:3100 openpencil-web-rust
 - Otomasi desain dari terminal: baca, buat, dan modifikasi file `.op` melalui agen yang kompatibel dengan MCP
 - **Alur kerja desain berlapis** — `design_skeleton` → `design_content` → `design_refine` untuk desain multi-bagian dengan fidelitas lebih tinggi
 - **Pengambilan prompt tersegmentasi** — muat hanya pengetahuan desain yang Anda butuhkan (schema, layout, roles, icons, planning, dll.)
+- **Alat panduan gaya** — `get_style_guide_tags` dan `get_style_guide` untuk menerapkan gaya visual lewat MCP
 - Dukungan multi-halaman — buat, ganti nama, urutkan ulang, dan duplikasi halaman melalui alat MCP
 
 **Pembuatan Kode**
@@ -267,10 +318,28 @@ docker run -p 3100:3100 openpencil-web-rust
 
 ## CLI — `op`
 
-Instal secara global dan kontrol alat desain dari terminal Anda:
+Instal melalui Homebrew atau skrip instalasi, lalu kendalikan alat desain dari terminal Anda:
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | OP_PRERELEASE=1 bash
+```
+
+```powershell
+irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
+```
+
+```powershell
+$env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
 ```
 
 ```bash
@@ -386,12 +455,12 @@ OpenPencil adalah bagian dari keluarga alat murni-Rust, berbasis AI dari **[ZSev
 
 | Proyek | Apa itu |
 | ------ | ------- |
-| **[DSH OpenPencil](./packages/op-dsh)** | Plugin DeepSeek Harness untuk OpenPencil — pratinjau `.op` multi-bingkai yang presisi, kanvas interaktif, dan editor terkelola dengan alat desain asli untuk agen, langsung di dalam percakapan. |
+| <img src="./screenshot/logo-dsh-openpencil.png" alt="DSH OpenPencil" width="40" /> **[DSH OpenPencil](./packages/op-dsh)** | Plugin DeepSeek Harness untuk OpenPencil — pratinjau `.op` multi-bingkai yang presisi, kanvas interaktif, dan editor terkelola dengan alat desain asli untuk agen, langsung di dalam percakapan. |
 | **[Codex OpenPencil](./packages/op-codex)** | Plugin Codex untuk OpenPencil — kanvas Rust/WASM interaktif untuk desain UI berbantuan AI dengan penyiapan satu prompt, penyempurnaan seleksi, dan penyimpanan `.op`. |
-| **[Zode](https://github.com/ZSeven-W/zode)** | Asisten koding open-source berbasis AI untuk terminal Anda — TUI Rust yang cepat (`ratatui`) yang membaca kode Anda, menjalankan perintah, mencari file, dan mengelola git. Menggerakkan OpenPencil melalui MCP. |
+| <img src="./screenshot/logo-zode.png" alt="Zode logo" width="40" /> **[Zode](https://github.com/ZSeven-W/zode)** | Asisten koding open-source berbasis AI untuk terminal Anda — TUI Rust yang cepat (`ratatui`) yang membaca kode Anda, menjalankan perintah, mencari file, dan mengelola git. Menggerakkan OpenPencil melalui MCP. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | Runtime async murni-Rust untuk merilis agen LLM — multi-penyedia, mampu memakai alat secara ujung-ke-ujung, izin terstruktur, MCP asli, tanpa `unsafe`. Menggerakkan runtime agen bawaan OpenPencil (`vendor/agent`) dan Zode. |
-| **[jian](https://github.com/ZSeven-W/jian)** | Framework UI GPU-Skia murni-Rust — widget, layout, event, dan hot reload dalam satu stack. Mengubah dokumen `.op` deklaratif menjadi aplikasi native yang dapat dikendalikan AI tanpa runtime JS, tanpa DOM, tanpa Electron. Framework UI OpenPencil (`vendor/jian`). |
-| **[noema](https://github.com/ZSeven-W/noema)** | Sistem memori local-first, non-vektor untuk agen koding. Memori tahan lama sebagai file yang dapat diperiksa, antrean tinjauan untuk entri baru, dan pengambilan leksikal (tanpa embedding) — bekerja di seluruh Zode, Codex, Claude Code, dan runtime MCP. |
+| <img src="./screenshot/logo-jian-rounded.png" alt="jian logo" width="40" /> **[jian](https://github.com/ZSeven-W/jian)** | Framework UI GPU-Skia murni-Rust — widget, layout, event, dan hot reload dalam satu stack. Mengubah dokumen `.op` deklaratif menjadi aplikasi native yang dapat dikendalikan AI tanpa runtime JS, tanpa DOM, tanpa Electron. Framework UI OpenPencil (`vendor/jian`). |
+| <img src="./screenshot/logo-noema-rounded.png" alt="noema logo" width="84" /> **[noema](https://github.com/ZSeven-W/noema)** | Sistem memori local-first, non-vektor untuk agen koding. Memori tahan lama sebagai file yang dapat diperiksa, antrean tinjauan untuk entri baru, dan pengambilan leksikal (tanpa embedding) — bekerja di seluruh Zode, Codex, Claude Code, dan runtime MCP. |
 
 ## Mengapa Rust
 
@@ -427,7 +496,12 @@ openpencil/
 │   ├── op-editor-core/       State editor `.op` (PenDocument) kanonis + EditorCommand + variabel desain
 │   ├── op-editor-ui/         Widget platform-independen + fasad RenderBackend (wasm32-clean)
 │   ├── op-editor-host-core/  State machine host tanpa transport, digunakan bersama semua host
+│   ├── op-collab/            Tipe wire kolaborasi terbuka, hash kanonis, dan penerapan dokumen yang persis
+│   ├── op-collab-transport/  Transport Noise/TCP native, penerimaan terbatas, dan penemuan LAN opsional
+│   ├── op-collab-smoke/      Matriks pemulihan kolaborasi terautentikasi dua proses
 │   ├── op-host-native/       Lib host native — winit + skia-safe GL (desktop + mobile)
+│   ├── op-engine-ffi/        C ABI pemutar — sematkan kanvas di shell iOS / Android
+│   ├── op-engine-jni/        Lapisan marshalling Android JNI untuk op-engine-ffi
 │   ├── op-host-web/          Bundle browser — wasm32 cdylib, renderer CanvasKit
 │   ├── op-host-desktop/      Binary desktop `openpencil-desktop`; juga daemon `--serve-web`
 │   ├── op-host-services/     Lib daemon serve-web / MCP headless
@@ -442,10 +516,14 @@ openpencil/
 │   ├── op-git/               Integrasi Git — clone, branch, push/pull, merge
 │   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
 │                             op-config-store / op-process-io / op-acp / op-smoke / ...
-├── packages/                 Workspace Web SDK (Bun)
+├── packages/                 Web SDK dan integrasi editor/agen
 │   ├── op-web-sdk/           SDK viewer web `.op` baca-saja (membungkus bundle wasm)
 │   ├── op-web-sdk-react/     Adapter React 19
-│   └── op-web-sdk-vue/       Adapter Vue 3
+│   ├── op-web-sdk-vue/       Adapter Vue 3
+│   ├── op-vscode/            Ekstensi VS Code untuk mengedit `.op` dan `.fig`
+│   ├── op-chrome-extension/  Ekstensi Chrome untuk menangkap halaman web yang dirender
+│   ├── op-dsh/               Plugin DeepSeek Harness (`@zseven-w/dsh-openpencil`)
+│   └── op-codex/             Plugin Codex (`@zseven-w/codex-openpencil`)
 ├── vendor/                   Subsistem yang di-vendor (git submodules)
 │   ├── jian/                 Framework UI GPU-Skia — widget/render/event
 │   ├── casement/             Fork winit
@@ -492,6 +570,39 @@ cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon cat
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
+
+### Detail Rust workspace
+
+Migrasi ke Rust telah selesai — Rust workspace adalah produknya. Spesifikasi awal: `openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md` (v7 FROZEN).
+
+```bash
+# Install Rust toolchain (rust-toolchain.toml auto-pins 1.94)
+rustup toolchain install 1.94
+rustup target add wasm32-unknown-unknown
+
+# build / test / lint
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo check --target wasm32-unknown-unknown -p op-collab --no-default-features
+cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web  # kickoff §1.2 wasm32 invariant
+cargo deny check && cargo deny --target wasm32-unknown-unknown check bans        # cargo-deny (native + wasm32 bans; CI uses cargo-deny-action@v2)
+```
+
+**Crate entri (`crates/` — target build):**
+
+| Crate | Kategori | wasm32 |
+| --- | --- | --- |
+| op-host-web | Entri bundle browser — wasm32 cdylib, merender melalui CanvasKit | ✅ |
+| op-host-native | Pustaka host native — WidgetHostNative + backend skia-safe GL (desktop + seluler) | ❌ (hanya native) |
+| op-engine-ffi | C ABI pemutar — satu engine, tiga shell (iOS Metal / Android EGL / raster host) | ❌ (hanya native) |
+| op-engine-jni | Lapisan marshalling Android JNI untuk op-engine-ffi (thread engine, registri, callback) | ❌ (hanya native) |
+| op-host-desktop | Biner desktop `openpencil-desktop` (winit + skia-safe GL) — juga daemon `--serve-web` yang menyajikan bundle web | ❌ (hanya native) |
+| op-cli | Alat baris perintah `op` | ❌ (hanya native) |
+
+**Crate pustaka bersama:** `op-editor-core` (status `.op` kanonis), `op-editor-ui` (widget bebas platform + `RenderBackend`), `op-editor-host-core` (state machine host bebas transport), `op-collab` (protokol/hash/penerapan persis kolaborasi yang terbuka dan bebas transport), `op-collab-transport` (Noise/TCP native, penerimaan terbatas, dan penemuan LAN opsional), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — ditambah `op-collab-smoke` (matriks kolaborasi/pemulihan dua proses terautentikasi) dan `op-smoke` (runner uji giliran desain headless). Pemutar seluler berada di `packaging/` (shell `ios` + `android` di atas `op-engine-ffi` / `op-engine-jni`). Bundle browser merender melalui CanvasKit skia WASM resmi (dimuat terpisah), sehingga fork wasm `skia-safe-op` dan `wasm-libc-shim` yang sudah dipensiunkan tidak ada lagi.
+
+**Submodul:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (runtime agen Rust lintas produk).
 
 ## Berkontribusi
 

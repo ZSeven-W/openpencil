@@ -71,11 +71,20 @@ Claude Code, Codex, OpenCode, Kiro 또는 Copilot CLI에 원클릭 설치. 터�
 <tr>
 <td width="50%">
 
+### 🎨 스타일 가이드
+
+태그 기반 퍼지 매칭을 갖춘 내장 스타일 가이드 라이브러리. AI가 생성한 디자인에 비주얼 스타일(glassmorphism, brutalist, retro 등)을 적용하세요. 외부 에이전트용 MCP 도구도 제공합니다.
+
+</td>
+<td width="50%">
+
 ### 📦 디자인-애즈-코드
 
 `.op` 파일은 JSON입니다 — 사람이 읽을 수 있고, Git 친화적이며, diff가 가능합니다. 디자인 변수는 CSS 커스텀 프로퍼티를 생성합니다. React + Tailwind 또는 HTML + CSS로 코드 내보내기가 가능합니다.
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🖥️ 어디서든 실행
@@ -83,8 +92,6 @@ Claude Code, Codex, OpenCode, Kiro 또는 Copilot CLI에 원클릭 설치. 터�
 웹 앱 + macOS, Windows, Linux 네이티브 데스크톱 — 하나의 Rust 코어, 단일 자급자족 바이너리, 브라우저 엔진 없음. `.op` 파일 연결 — 더블 클릭으로 열기.
 
 </td>
-</tr>
-<tr>
 <td width="50%">
 
 ### ⌨️ CLI — `op`
@@ -92,11 +99,36 @@ Claude Code, Codex, OpenCode, Kiro 또는 Copilot CLI에 원클릭 설치. 터�
 터미널에서 디자인 도구 제어. `op design`, `op insert` — 배치 디자인 DSL, 노드 조작. 파일이나 stdin에서 파이프 입력 지원. 데스크톱 앱 또는 웹 서버와 연동.
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🎯 멀티 플랫폼 코드 내보내기
 
 하나의 `.op` 파일에서 React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native로 내보내기. 디자인 변수는 CSS 커스텀 프로퍼티로 변환.
+
+</td>
+<td width="50%">
+
+### 🧩 임베드 가능한 SDK
+
+`op-web-sdk`(vanilla) + `op-web-sdk-react` / `op-web-sdk-vue` 어댑터 — 에디터와 같은 wasm 렌더러로 동작하는 읽기 전용 `.op` 뷰어를 여러분의 앱에 임베드하세요.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🛡️ 디자인 시스템 키트
+
+스타일 전환과 컴포넌트 조합을 지원하는 재사용 가능한 UIKit을 관리합니다. `.pen` 파일에서 키트를 가져오거나 내보낼 수 있습니다. 외부 접근용 MCP 도구가 포함된 내장 레지스트리를 제공합니다.
+
+</td>
+<td width="50%">
+
+### 👥 실시간 협업
+
+공개 릴레이와 내장 지역 허브를 갖춘 인증된 P2P 세션으로 함께 디자인하세요. 짧은 페어링 코드로 참여하고, 원격 커서를 실시간으로 보고, 편집별 상세 정보와 재생으로 충돌을 해결할 수 있습니다.
 
 </td>
 </tr>
@@ -110,6 +142,7 @@ Claude Code, Codex, OpenCode, Kiro 또는 Copilot CLI에 원클릭 설치. 터�
 
 ```bash
 brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install --cask openpencil
 ```
 
@@ -121,6 +154,10 @@ scoop install openpencil
 ```
 
 **Linux / Windows 직접 다운로드:** [GitHub Releases](https://github.com/ZSeven-W/openpencil/releases) — `.exe` (Windows), `.AppImage` / `.deb` (Linux)
+
+Windows `.exe` 설치 프로그램, 두 Scoop 패키지, `install-op.ps1` CLI 설치 스크립트는 설치나 업그레이드 때마다 고정된 버전의 Microsoft 서명 Visual C++ v14 런타임을 확인하고 필요하면 복구합니다. Windows 포터블 `.zip` 아카이브와 Windows VSIX 패키지는 관리자 권한 시스템 설치 프로그램을 실행하지 않으므로, 이 산출물을 직접 사용하기 전에 Microsoft의 [최신 지원 Visual C++ 재배포 가능 패키지](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)를 설치하세요.
+
+> 백신이 Windows 설치 프로그램을 탐지했나요? 새롭고 사용량이 적은 릴리스에서 알려진 휴리스틱 오탐입니다 — [다운로드 검증 방법](docs/security/antivirus-false-positives.md)을 참고하세요.
 
 **Nix (Linux x86_64):**
 
@@ -149,6 +186,8 @@ workflow가 이 manifest를 갱신하는 PR을 엽니다. PR이 merge되기 전�
 **CLI (`op`):**
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
 ```
 
@@ -193,6 +232,14 @@ git submodule sync --recursive && git submodule update --init --recursive
 bash scripts/start-web-rust.sh
 ```
 
+브라우저에서 입력한 내장 공급자, 이미지 생성, Openverse 자격 증명은 기본적으로 일반 웹 환경설정과 별도로 동일 출처 `localStorage`(`openpencil-rust-web-credentials`)에 보관됩니다. AI 요청에 필요한 자격 증명은 해당 요청과 함께 전송되지만, 데몬은 브라우저 스냅샷을 `settings.json`에 기록하지 않습니다.
+
+비공개 배포에서는 `OPENPENCIL_PERSIST_WEB_CREDENTIALS_SERVER=true`로 서버 측 영속화를 선택할 수 있습니다. 이 설정은 배포 전체에 적용되며, 수락된 브라우저 스냅샷마다 공유 브라우저 소유 사본을 대체합니다. HTTPS 뒤에 있고 접근이 통제되며 활성 관리자 프로필이 하나뿐인 신뢰할 수 있는 배포에서만 활성화하세요. 설정을 끄면 다음 시작 시 이전에 영속화된 브라우저 소유 자격 증명이 제거되고 운영자 소유 구성은 유지됩니다. 모든 `localStorage`와 마찬가지로 동일 출처 스크립트가 이 값을 읽을 수 있으므로, 웹 출처를 신뢰할 수 없는 스크립트와 XSS로부터 보호해야 합니다. 이 스위치 이전 릴리스로 다운그레이드하기 전에 설정을 끄고 현재 릴리스를 한 번 실행해 브라우저 소유 사본을 지우세요.
+
+웹 호스트는 API 키 기반 내장 에이전트만 지원합니다. CLI 및 ACP 에이전트는 네이티브 전용으로 남아 있어 웹 모델 선택기에 표시되지 않고, 브라우저 자격 증명 스냅샷에 저장되지 않으며, 서버와 동기화되거나 웹 연결 경로로 노출되지 않습니다. 자격 증명 및 AI 엔드포인트에 대한 브라우저 요청은 기본적으로 loopback/localhost 출처를 허용합니다. 공개 리버스 프록시는 `OPENPENCIL_WEB_ALLOWED_ORIGINS`를 정확한 출처의 쉼표 구분 목록(예: `https://demo.openpencil.dev`)으로 별도 설정해야 합니다.
+
+서버 측 영속화는 브라우저가 제어하는 요청이 loopback, 사설, 링크 로컬, 메타데이터 또는 예약된 공급자 엔드포인트에 접근하는 것을 허용하지 않습니다. 의도적으로 내부 공급자를 사용하는 신뢰할 수 있는 비공개 배포는 `OPENPENCIL_WEB_AI_ENDPOINT_ALLOWLIST`를 정확한 URL 출처의 쉼표 구분 목록(예: `http://127.0.0.1:11434,https://llm.internal.example`)으로 별도 설정해야 합니다.
+
 또는 데스크톱 앱으로 실행:
 
 ```bash
@@ -233,8 +280,11 @@ docker run -p 3100:3100 openpencil-web-rust
 
 - **텍스트-투-디자인** — 페이지를 설명하면 스트리밍 애니메이션으로 실시간으로 캔버스에 생성
 - **오케스트레이터** — 복잡한 페이지를 공간적 서브태스크로 분해하여 병렬 생성
+- **에이전트 팀** — 위임 도구, 멤버별 캔버스 표시기, 폴백 전략을 갖춘 동시 팀 멤버
 - **디자인 수정** — 요소를 선택하고 자연어로 변경 사항을 설명
 - **비전 입력** — 스크린샷이나 목업을 참조로 첨부하여 디자인
+- **스타일 가이드** — 태그 기반 퍼지 매칭으로 비주얼 스타일(glassmorphism, brutalist, retro 등) 적용
+- **안티 슬롭** — 생성 간 다양성 추적으로 반복적인 AI 출력 방지
 
 **멀티 에이전트 지원**
 
@@ -257,6 +307,7 @@ docker run -p 3100:3100 openpencil-web-rust
 - 터미널에서 디자인 자동화: MCP 호환 에이전트를 통해 `.op` 파일 읽기, 생성, 편집
 - **계층적 디자인 워크플로** — `design_skeleton` → `design_content` → `design_refine`으로 더 높은 충실도의 멀티 섹션 디자인
 - **세그먼트 프롬프트 검색** — 필요한 디자인 지식만 로드 (schema, layout, roles, icons, planning 등)
+- **스타일 가이드 도구** — MCP로 비주얼 스타일을 적용하는 `get_style_guide_tags`와 `get_style_guide`
 - 멀티 페이지 지원 — MCP 도구를 통해 페이지 생성, 이름 변경, 순서 변경, 복제
 
 **코드 생성**
@@ -266,10 +317,28 @@ docker run -p 3100:3100 openpencil-web-rust
 
 ## CLI — `op`
 
-전역 설치 후 터미널에서 디자인 도구를 제어하세요:
+Homebrew 또는 설치 스크립트로 설치한 뒤 터미널에서 디자인 도구를 제어하세요:
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | OP_PRERELEASE=1 bash
+```
+
+```powershell
+irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
+```
+
+```powershell
+$env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
 ```
 
 ```bash
@@ -385,12 +454,12 @@ OpenPencil은 **[ZSeven-W](https://github.com/ZSeven-W)**의 순수 Rust, AI 네
 
 | 프로젝트 | 내용 |
 | ------- | ---------- |
-| **[DSH OpenPencil](./packages/op-dsh)** | OpenPencil용 DeepSeek Harness 플러그인 — 대화 속에서 정확한 다중 프레임 `.op` 미리보기, 인터랙티브 캔버스, 에이전트 네이티브 디자인 도구를 갖춘 관리형 편집기를 제공합니다. |
+| <img src="./screenshot/logo-dsh-openpencil.png" alt="DSH OpenPencil" width="40" /> **[DSH OpenPencil](./packages/op-dsh)** | OpenPencil용 DeepSeek Harness 플러그인 — 대화 속에서 정확한 다중 프레임 `.op` 미리보기, 인터랙티브 캔버스, 에이전트 네이티브 디자인 도구를 갖춘 관리형 편집기를 제공합니다. |
 | **[Codex OpenPencil](./packages/op-codex)** | OpenPencil용 Codex 플러그인 — 한 줄 프롬프트 설치, 선택 요소 정밀 수정, 안정적인 `.op` 저장을 지원하는 인터랙티브 Rust/WASM 캔버스를 제공합니다. |
-| **[Zode](https://github.com/ZSeven-W/zode)** | 터미널을 위한 오픈소스 AI 네이티브 코딩 어시스턴트 — 코드를 읽고, 명령을 실행하고, 파일을 검색하고, git을 관리하는 빠른 Rust TUI(`ratatui`). MCP를 통해 OpenPencil을 구동합니다. |
+| <img src="./screenshot/logo-zode.png" alt="Zode logo" width="40" /> **[Zode](https://github.com/ZSeven-W/zode)** | 터미널을 위한 오픈소스 AI 네이티브 코딩 어시스턴트 — 코드를 읽고, 명령을 실행하고, 파일을 검색하고, git을 관리하는 빠른 Rust TUI(`ratatui`). MCP를 통해 OpenPencil을 구동합니다. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | LLM 에이전트를 배포하기 위한 순수 Rust 비동기 런타임 — 멀티 프로바이더, 엔드투엔드 도구 지원, 구조화된 권한, 진짜 MCP, `unsafe` 제로. OpenPencil의 내장 에이전트 런타임(`vendor/agent`)과 Zode를 구동합니다. |
-| **[jian](https://github.com/ZSeven-W/jian)** | 순수 Rust GPU-Skia UI 프레임워크 — 위젯, 레이아웃, 이벤트, 핫 리로드를 하나의 스택에. 선언적 `.op` 문서를 JS 런타임도, DOM도, Electron도 없는 네이티브하고 AI로 제어 가능한 앱으로 바꿉니다. OpenPencil의 UI 프레임워크(`vendor/jian`). |
-| **[noema](https://github.com/ZSeven-W/noema)** | 코딩 에이전트를 위한 로컬 우선, 비벡터 메모리 시스템. 검사 가능한 파일로서의 지속적 메모리, 새 항목을 위한 리뷰 큐, 그리고 어휘 기반(임베딩 없는) 회상 — Zode, Codex, Claude Code, MCP 런타임 전반에서 작동합니다. |
+| <img src="./screenshot/logo-jian-rounded.png" alt="jian logo" width="40" /> **[jian](https://github.com/ZSeven-W/jian)** | 순수 Rust GPU-Skia UI 프레임워크 — 위젯, 레이아웃, 이벤트, 핫 리로드를 하나의 스택에. 선언적 `.op` 문서를 JS 런타임도, DOM도, Electron도 없는 네이티브하고 AI로 제어 가능한 앱으로 바꿉니다. OpenPencil의 UI 프레임워크(`vendor/jian`). |
+| <img src="./screenshot/logo-noema-rounded.png" alt="noema logo" width="84" /> **[noema](https://github.com/ZSeven-W/noema)** | 코딩 에이전트를 위한 로컬 우선, 비벡터 메모리 시스템. 검사 가능한 파일로서의 지속적 메모리, 새 항목을 위한 리뷰 큐, 그리고 어휘 기반(임베딩 없는) 회상 — Zode, Codex, Claude Code, MCP 런타임 전반에서 작동합니다. |
 
 ## Rust를 선택한 이유
 
@@ -426,7 +495,12 @@ openpencil/
 │   ├── op-editor-core/       정규 `.op` (PenDocument) 에디터 상태 + EditorCommand + 디자인 변수
 │   ├── op-editor-ui/         플랫폼 독립적 위젯 + RenderBackend 파사드 (wasm32-clean)
 │   ├── op-editor-host-core/  모든 호스트가 공유하는 전송 계층 독립적 호스트 상태 머신
+│   ├── op-collab/            개방형 협업 wire 타입, 정규 해시, 정확한 문서 적용
+│   ├── op-collab-transport/  네이티브 Noise/TCP 전송, 제한된 승인, 선택적 LAN 검색
+│   ├── op-collab-smoke/      2-프로세스 인증 협업 복구 매트릭스
 │   ├── op-host-native/       네이티브 호스트 라이브러리 — winit + skia-safe GL (데스크톱 + 모바일)
+│   ├── op-engine-ffi/        Player C ABI — iOS / Android 셸에 캔버스 임베드
+│   ├── op-engine-jni/        op-engine-ffi용 Android JNI 마샬링 계층
 │   ├── op-host-web/          브라우저 번들 — wasm32 cdylib, CanvasKit 렌더러
 │   ├── op-host-desktop/      데스크톱 바이너리 `openpencil-desktop`; `--serve-web` 데몬 겸용
 │   ├── op-host-services/     헤드리스 serve-web / MCP 데몬 라이브러리
@@ -441,10 +515,14 @@ openpencil/
 │   ├── op-git/               Git 통합 — 클론, 브랜치, 푸시/풀, 병합
 │   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
 │                             op-config-store / op-process-io / op-acp / op-smoke / ...
-├── packages/                 웹 SDK 워크스페이스 (Bun)
+├── packages/                 웹 SDK 및 에디터/에이전트 통합
 │   ├── op-web-sdk/           읽기 전용 `.op` 웹 뷰어 SDK (wasm 번들을 래핑)
 │   ├── op-web-sdk-react/     React 19 어댑터
-│   └── op-web-sdk-vue/       Vue 3 어댑터
+│   ├── op-web-sdk-vue/       Vue 3 어댑터
+│   ├── op-vscode/            `.op` 및 `.fig` 편집용 VS Code 확장
+│   ├── op-chrome-extension/  렌더링된 웹 페이지 캡처용 Chrome 확장
+│   ├── op-dsh/               DeepSeek Harness 플러그인 (`@zseven-w/dsh-openpencil`)
+│   └── op-codex/             Codex 플러그인 (`@zseven-w/codex-openpencil`)
 ├── vendor/                   벤더링된 서브시스템 (git submodules)
 │   ├── jian/                 GPU-Skia UI 프레임워크 — 위젯/렌더/이벤트
 │   ├── casement/             winit 포크
@@ -491,6 +569,39 @@ cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon cat
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
+
+### Rust 워크스페이스 상세
+
+Rust 전환은 완료되었으며 Rust 워크스페이스가 곧 제품입니다. 킥오프 사양: `openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md` (v7 FROZEN).
+
+```bash
+# Install Rust toolchain (rust-toolchain.toml auto-pins 1.94)
+rustup toolchain install 1.94
+rustup target add wasm32-unknown-unknown
+
+# build / test / lint
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo check --target wasm32-unknown-unknown -p op-collab --no-default-features
+cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web  # kickoff §1.2 wasm32 invariant
+cargo deny check && cargo deny --target wasm32-unknown-unknown check bans        # cargo-deny (native + wasm32 bans; CI uses cargo-deny-action@v2)
+```
+
+**엔트리 crate (`crates/` — 빌드 대상):**
+
+| Crate | 분류 | wasm32 |
+| --- | --- | --- |
+| op-host-web | 브라우저 번들 엔트리 — wasm32 cdylib, CanvasKit으로 렌더링 | ✅ |
+| op-host-native | 네이티브 호스트 라이브러리 — WidgetHostNative + skia-safe GL 백엔드 (데스크톱 + 모바일) | ❌ (네이티브 전용) |
+| op-engine-ffi | Player C ABI — 하나의 엔진, 세 가지 셸 (iOS Metal / Android EGL / 호스트 래스터) | ❌ (네이티브 전용) |
+| op-engine-jni | op-engine-ffi용 Android JNI 마샬링 계층 (엔진 스레드, 레지스트리, 콜백) | ❌ (네이티브 전용) |
+| op-host-desktop | 데스크톱 바이너리 `openpencil-desktop` (winit + skia-safe GL) — 웹 번들을 호스팅하는 `--serve-web` 데몬 겸용 | ❌ (네이티브 전용) |
+| op-cli | `op` 명령줄 도구 | ❌ (네이티브 전용) |
+
+**공유 라이브러리 crate:** `op-editor-core`(정규 `.op` 상태), `op-editor-ui`(플랫폼 독립 위젯 + `RenderBackend`), `op-editor-host-core`(전송 독립 호스트 상태 머신), `op-collab`(개방형, 전송 독립 협업 프로토콜/해시/정확한 적용), `op-collab-transport`(네이티브 Noise/TCP, 제한된 승인, 선택적 LAN 검색), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — 그리고 `op-collab-smoke`(인증된 2-프로세스 협업/복구 매트릭스)와 `op-smoke`(헤드리스 디자인 턴 테스트 러너). 모바일 플레이어는 `packaging/`(`op-engine-ffi` / `op-engine-jni` 위의 `ios` + `android` 셸)에 있습니다. 브라우저 번들은 공식 CanvasKit skia WASM(별도 로드)으로 렌더링하므로, 폐기된 `skia-safe-op` wasm 포크와 `wasm-libc-shim`은 더 이상 존재하지 않습니다.
+
+**서브모듈:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (제품 공용 Rust 에이전트 런타임).
 
 ## 기여하기
 

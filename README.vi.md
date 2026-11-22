@@ -71,11 +71,20 @@ Cài đặt một cú nhấp vào Claude Code, Codex, OpenCode, Kiro hoặc Copi
 <tr>
 <td width="50%">
 
+### 🎨 Style Guides
+
+Thư viện style guide tích hợp với khớp mờ theo thẻ. Áp dụng phong cách hình ảnh (glassmorphism, brutalist, retro, v.v.) cho thiết kế do AI tạo. Có công cụ MCP cho agent bên ngoài truy cập.
+
+</td>
+<td width="50%">
+
 ### 📦 Design-as-Code
 
 Tệp `.op` là JSON — dễ đọc, thân thiện Git, dễ so sánh khác biệt. Biến thiết kế tạo ra thuộc tính tùy chỉnh CSS. Xuất mã sang React + Tailwind hoặc HTML + CSS.
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🖥️ Chạy Mọi nơi
@@ -83,8 +92,6 @@ Tệp `.op` là JSON — dễ đọc, thân thiện Git, dễ so sánh khác bi�
 Ứng dụng web + desktop gốc trên macOS, Windows và Linux — một nhân Rust duy nhất, một tệp nhị phân độc lập duy nhất, không có browser engine. Liên kết tệp `.op` — nhấp đúp để mở.
 
 </td>
-</tr>
-<tr>
 <td width="50%">
 
 ### ⌨️ CLI — `op`
@@ -92,11 +99,36 @@ Tệp `.op` là JSON — dễ đọc, thân thiện Git, dễ so sánh khác bi�
 Điều khiển công cụ thiết kế từ terminal của bạn. `op design`, `op insert` — batch design DSL, thao tác node. Pipe từ tệp hoặc stdin. Hoạt động với ứng dụng desktop hoặc web server.
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🎯 Xuất mã Đa nền tảng
 
 Xuất từ một tệp `.op` duy nhất sang React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native. Biến thiết kế trở thành thuộc tính tùy chỉnh CSS.
+
+</td>
+<td width="50%">
+
+### 🧩 SDK nhúng được
+
+`op-web-sdk` (vanilla) + adapter `op-web-sdk-react` / `op-web-sdk-vue` — nhúng trình xem `.op` chỉ đọc vào ứng dụng của bạn, chạy bằng chính trình kết xuất wasm mà editor sử dụng.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🛡️ Bộ Design System
+
+Quản lý UIKit tái sử dụng với chuyển đổi style và kết hợp component. Nhập/xuất bộ kit từ tệp `.pen`. Registry tích hợp với công cụ MCP cho truy cập bên ngoài.
+
+</td>
+<td width="50%">
+
+### 👥 Cộng tác thời gian thực
+
+Cùng thiết kế qua các phiên peer-to-peer đã xác thực, có relay công khai và hub khu vực tích hợp. Tham gia bằng mã ghép nối ngắn, xem con trỏ từ xa trực tiếp và giải quyết xung đột với chi tiết và phát lại từng chỉnh sửa.
 
 </td>
 </tr>
@@ -110,6 +142,7 @@ Xuất từ một tệp `.op` duy nhất sang React + Tailwind, HTML + CSS, Vue,
 
 ```bash
 brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install --cask openpencil
 ```
 
@@ -121,6 +154,10 @@ scoop install openpencil
 ```
 
 **Tải trực tiếp cho Linux / Windows:** [GitHub Releases](https://github.com/ZSeven-W/openpencil/releases) — `.exe` (Windows), `.AppImage` / `.deb` (Linux)
+
+Trình cài đặt `.exe` cho Windows, cả hai gói Scoop và trình cài đặt CLI `install-op.ps1` sẽ kiểm tra và, khi cần, sửa chữa runtime Visual C++ v14 đã ghim phiên bản và được Microsoft ký trong mỗi lần cài đặt hoặc nâng cấp. Các bản lưu trữ `.zip` di động cho Windows và gói VSIX cho Windows không chạy trình cài đặt hệ thống với quyền nâng cao; hãy cài [Visual C++ Redistributable mới nhất được hỗ trợ](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) của Microsoft trước khi dùng trực tiếp các tệp đó.
+
+> Phần mềm diệt virus cảnh báo trình cài đặt Windows? Đây là dương tính giả theo heuristic đã biết với các bản phát hành mới, ít phổ biến — xem [cách xác minh tệp đã tải](docs/security/antivirus-false-positives.md).
 
 **Nix (Linux x86_64):**
 
@@ -149,6 +186,8 @@ dùng release đã phát hành trước đó; các output dựng từ source lu�
 **CLI (`op`):**
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
 ```
 
@@ -193,6 +232,14 @@ Ba submodule nằm trong `vendor/`; tất cả đều công khai và được t�
 bash scripts/start-web-rust.sh
 ```
 
+Thông tin xác thực của nhà cung cấp tích hợp, tạo ảnh và Openverse nhập trong trình duyệt được lưu mặc định trong `localStorage` cùng origin (`openpencil-rust-web-credentials`), tách biệt với tùy chọn web thông thường. Thông tin xác thực mà một yêu cầu AI cần sẽ được gửi kèm yêu cầu đó, nhưng daemon không ghi ảnh chụp trình duyệt vào `settings.json`.
+
+Triển khai riêng tư có thể bật lưu trữ phía máy chủ bằng `OPENPENCIL_PERSIST_WEB_CREDENTIALS_SERVER=true`. Thiết lập này áp dụng cho toàn bộ triển khai; mỗi ảnh chụp trình duyệt được chấp nhận sẽ thay thế bản sao dùng chung thuộc về trình duyệt. Chỉ bật cho triển khai đáng tin cậy, có kiểm soát truy cập, chỉ một hồ sơ quản trị viên đang hoạt động và nằm sau HTTPS. Tắt thiết lập sẽ xóa thông tin xác thực thuộc trình duyệt đã lưu trước đó ở lần khởi động tiếp theo, đồng thời giữ nguyên cấu hình của nhà vận hành. Giống mọi `localStorage`, script cùng origin có thể đọc các giá trị này, nên origin web phải được bảo vệ khỏi script không tin cậy và XSS. Trước khi hạ cấp xuống bản phát hành cũ hơn công tắc này, hãy tắt nó và khởi động bản hiện tại một lần để xóa bản sao thuộc trình duyệt.
+
+Web host chỉ hỗ trợ agent tích hợp dùng API key. Agent CLI và ACP vẫn chỉ có ở bản native: chúng không hiển thị trong bộ chọn mô hình web, không được lưu trong ảnh chụp thông tin xác thực của trình duyệt, không đồng bộ lên máy chủ và không được mở qua các route kết nối web. Yêu cầu từ trình duyệt tới endpoint thông tin xác thực và AI mặc định cho phép origin loopback/localhost. Reverse proxy công khai phải đặt riêng `OPENPENCIL_WEB_ALLOWED_ORIGINS` thành danh sách origin chính xác, phân tách bằng dấu phẩy, ví dụ `https://demo.openpencil.dev`.
+
+Lưu trữ phía máy chủ không cho phép yêu cầu do trình duyệt điều khiển tới endpoint nhà cung cấp loopback, riêng tư, link-local, metadata hoặc dành riêng. Triển khai riêng tư đáng tin cậy cố ý dùng nhà cung cấp nội bộ phải đặt riêng `OPENPENCIL_WEB_AI_ENDPOINT_ALLOWLIST` thành danh sách origin URL chính xác, phân tách bằng dấu phẩy, ví dụ `http://127.0.0.1:11434,https://llm.internal.example`.
+
 Hoặc chạy dưới dạng ứng dụng desktop:
 
 ```bash
@@ -233,8 +280,11 @@ docker run -p 3100:3100 openpencil-web-rust
 
 - **Văn bản thành thiết kế** — mô tả một trang, nhận kết quả được tạo ra trên canvas theo thời gian thực với hiệu ứng streaming
 - **Orchestrator** — phân rã các trang phức tạp thành các tác vụ con không gian để tạo song song
+- **Agent Teams** — các thành viên làm việc đồng thời với công cụ ủy quyền, chỉ báo canvas cho từng thành viên và chiến lược dự phòng
 - **Chỉnh sửa thiết kế** — chọn các phần tử, sau đó mô tả thay đổi bằng ngôn ngữ tự nhiên
 - **Đầu vào hình ảnh** — đính kèm ảnh chụp màn hình hoặc bản phác thảo để thiết kế dựa trên tham chiếu
+- **Style Guides** — áp dụng phong cách hình ảnh (glassmorphism, brutalist, retro, v.v.) qua khớp mờ theo thẻ
+- **Chống lặp** — theo dõi độ đa dạng giữa các lần tạo để tránh đầu ra AI lặp lại
 
 **Hỗ trợ Đa tác nhân**
 
@@ -257,6 +307,7 @@ docker run -p 3100:3100 openpencil-web-rust
 - Tự động hóa thiết kế từ terminal: đọc, tạo và chỉnh sửa các tệp `.op` qua bất kỳ tác nhân tương thích MCP nào
 - **Quy trình thiết kế phân lớp** — `design_skeleton` → `design_content` → `design_refine` cho thiết kế đa phần có độ trung thực cao hơn
 - **Truy xuất prompt phân đoạn** — chỉ tải kiến thức thiết kế cần thiết (schema, layout, roles, icons, planning, v.v.)
+- **Công cụ style guide** — `get_style_guide_tags` và `get_style_guide` để áp dụng phong cách hình ảnh qua MCP
 - Hỗ trợ nhiều trang — tạo, đổi tên, sắp xếp lại và nhân bản trang qua các công cụ MCP
 
 **Tạo mã nguồn**
@@ -266,10 +317,28 @@ docker run -p 3100:3100 openpencil-web-rust
 
 ## CLI — `op`
 
-Cài đặt toàn cục và điều khiển công cụ thiết kế từ terminal của bạn:
+Cài qua Homebrew hoặc script cài đặt, rồi điều khiển công cụ thiết kế từ terminal:
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | OP_PRERELEASE=1 bash
+```
+
+```powershell
+irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
+```
+
+```powershell
+$env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
 ```
 
 ```bash
@@ -385,12 +454,12 @@ OpenPencil là một phần của bộ công cụ thuần Rust, thuần AI đế
 
 | Dự án | Là gì |
 | ----- | ----- |
-| **[DSH OpenPencil](./packages/op-dsh)** | Plugin DeepSeek Harness cho OpenPencil — bản xem trước `.op` nhiều khung chính xác, canvas tương tác và trình chỉnh sửa được quản lý với các công cụ thiết kế gốc cho agent, ngay trong cuộc trò chuyện. |
+| <img src="./screenshot/logo-dsh-openpencil.png" alt="DSH OpenPencil" width="40" /> **[DSH OpenPencil](./packages/op-dsh)** | Plugin DeepSeek Harness cho OpenPencil — bản xem trước `.op` nhiều khung chính xác, canvas tương tác và trình chỉnh sửa được quản lý với các công cụ thiết kế gốc cho agent, ngay trong cuộc trò chuyện. |
 | **[Codex OpenPencil](./packages/op-codex)** | Plugin Codex cho OpenPencil — canvas Rust/WASM tương tác để thiết kế UI có AI hỗ trợ, cài đặt chỉ với một câu lệnh, tinh chỉnh theo vùng chọn và lưu tệp `.op`. |
-| **[Zode](https://github.com/ZSeven-W/zode)** | Trợ lý lập trình mã nguồn mở, thuần AI cho terminal của bạn — một Rust TUI nhanh (`ratatui`) đọc mã của bạn, chạy lệnh, tìm kiếm tệp và quản lý git. Điều khiển OpenPencil qua MCP. |
+| <img src="./screenshot/logo-zode.png" alt="Zode logo" width="40" /> **[Zode](https://github.com/ZSeven-W/zode)** | Trợ lý lập trình mã nguồn mở, thuần AI cho terminal của bạn — một Rust TUI nhanh (`ratatui`) đọc mã của bạn, chạy lệnh, tìm kiếm tệp và quản lý git. Điều khiển OpenPencil qua MCP. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | Một runtime bất đồng bộ thuần Rust để phát hành các tác nhân LLM — đa nhà cung cấp, hỗ trợ công cụ đầu-cuối, quyền có cấu trúc, MCP thực thụ, không có `unsafe`. Cung cấp năng lượng cho runtime tác nhân tích hợp sẵn của OpenPencil (`vendor/agent`) và Zode. |
-| **[jian](https://github.com/ZSeven-W/jian)** | Framework UI GPU-Skia thuần Rust — widget, layout, sự kiện và hot reload trong một stack duy nhất. Biến một tài liệu `.op` khai báo thành một ứng dụng gốc, có thể điều khiển bằng AI mà không cần JS runtime, không DOM, không Electron. Framework UI của OpenPencil (`vendor/jian`). |
-| **[noema](https://github.com/ZSeven-W/noema)** | Hệ thống bộ nhớ ưu tiên cục bộ, phi vector cho các tác nhân lập trình. Bộ nhớ bền vững dưới dạng tệp có thể kiểm tra, hàng đợi đánh giá cho các mục mới, và truy xuất từ vựng (không cần embedding) — hoạt động trên Zode, Codex, Claude Code và các runtime MCP. |
+| <img src="./screenshot/logo-jian-rounded.png" alt="jian logo" width="40" /> **[jian](https://github.com/ZSeven-W/jian)** | Framework UI GPU-Skia thuần Rust — widget, layout, sự kiện và hot reload trong một stack duy nhất. Biến một tài liệu `.op` khai báo thành một ứng dụng gốc, có thể điều khiển bằng AI mà không cần JS runtime, không DOM, không Electron. Framework UI của OpenPencil (`vendor/jian`). |
+| <img src="./screenshot/logo-noema-rounded.png" alt="noema logo" width="84" /> **[noema](https://github.com/ZSeven-W/noema)** | Hệ thống bộ nhớ ưu tiên cục bộ, phi vector cho các tác nhân lập trình. Bộ nhớ bền vững dưới dạng tệp có thể kiểm tra, hàng đợi đánh giá cho các mục mới, và truy xuất từ vựng (không cần embedding) — hoạt động trên Zode, Codex, Claude Code và các runtime MCP. |
 
 ## Tại sao chọn Rust
 
@@ -426,7 +495,12 @@ openpencil/
 │   ├── op-editor-core/       Trạng thái editor `.op` (PenDocument) chuẩn + EditorCommand + biến thiết kế
 │   ├── op-editor-ui/         Widget không phụ thuộc nền tảng + RenderBackend facade (wasm32-clean)
 │   ├── op-editor-host-core/  Máy trạng thái host không phụ thuộc transport, dùng chung cho mọi host
+│   ├── op-collab/            Kiểu wire cộng tác mở, hash chuẩn và áp dụng tài liệu chính xác
+│   ├── op-collab-transport/  Transport Noise/TCP native, tiếp nhận có giới hạn và khám phá LAN tùy chọn
+│   ├── op-collab-smoke/      Ma trận khôi phục cộng tác đã xác thực với hai tiến trình
 │   ├── op-host-native/       Thư viện host gốc — winit + skia-safe GL (desktop + mobile)
+│   ├── op-engine-ffi/        C ABI của player — nhúng canvas vào shell iOS / Android
+│   ├── op-engine-jni/        Lớp marshalling Android JNI cho op-engine-ffi
 │   ├── op-host-web/          Bundle trình duyệt — wasm32 cdylib, renderer CanvasKit
 │   ├── op-host-desktop/      Binary desktop `openpencil-desktop`; đồng thời là daemon `--serve-web`
 │   ├── op-host-services/     Thư viện daemon serve-web / MCP headless
@@ -441,10 +515,14 @@ openpencil/
 │   ├── op-git/               Tích hợp Git — clone, branch, push/pull, merge
 │   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
 │                             op-config-store / op-process-io / op-acp / op-smoke / ...
-├── packages/                 Web SDK workspace (Bun)
+├── packages/                 Web SDK và tích hợp editor/agent
 │   ├── op-web-sdk/           SDK trình xem web `.op` chỉ đọc (bọc bundle wasm)
 │   ├── op-web-sdk-react/     Adapter React 19
-│   └── op-web-sdk-vue/       Adapter Vue 3
+│   ├── op-web-sdk-vue/       Adapter Vue 3
+│   ├── op-vscode/            Tiện ích VS Code để chỉnh sửa `.op` và `.fig`
+│   ├── op-chrome-extension/  Tiện ích Chrome để chụp trang web đã kết xuất
+│   ├── op-dsh/               Plugin DeepSeek Harness (`@zseven-w/dsh-openpencil`)
+│   └── op-codex/             Plugin Codex (`@zseven-w/codex-openpencil`)
 ├── vendor/                   Các subsystem được vendor hóa (git submodules)
 │   ├── jian/                 Framework UI GPU-Skia — widget/render/event
 │   ├── casement/             Bản fork của winit
@@ -491,6 +569,39 @@ cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon cat
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
+
+### Chi tiết Rust workspace
+
+Quá trình chuyển sang Rust đã hoàn tất — Rust workspace chính là sản phẩm. Đặc tả khởi động: `openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md` (v7 FROZEN).
+
+```bash
+# Install Rust toolchain (rust-toolchain.toml auto-pins 1.94)
+rustup toolchain install 1.94
+rustup target add wasm32-unknown-unknown
+
+# build / test / lint
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo check --target wasm32-unknown-unknown -p op-collab --no-default-features
+cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web  # kickoff §1.2 wasm32 invariant
+cargo deny check && cargo deny --target wasm32-unknown-unknown check bans        # cargo-deny (native + wasm32 bans; CI uses cargo-deny-action@v2)
+```
+
+**Crate đầu vào (`crates/` — mục tiêu build):**
+
+| Crate | Loại | wasm32 |
+| --- | --- | --- |
+| op-host-web | Điểm vào bundle trình duyệt — wasm32 cdylib, kết xuất qua CanvasKit | ✅ |
+| op-host-native | Thư viện host native — WidgetHostNative + backend skia-safe GL (desktop + di động) | ❌ (chỉ native) |
+| op-engine-ffi | C ABI của player — một engine, ba shell (iOS Metal / Android EGL / raster của host) | ❌ (chỉ native) |
+| op-engine-jni | Lớp marshalling Android JNI cho op-engine-ffi (luồng engine, registry, callback) | ❌ (chỉ native) |
+| op-host-desktop | Binary desktop `openpencil-desktop` (winit + skia-safe GL) — đồng thời là daemon `--serve-web` phục vụ bundle web | ❌ (chỉ native) |
+| op-cli | Công cụ dòng lệnh `op` | ❌ (chỉ native) |
+
+**Crate thư viện dùng chung:** `op-editor-core` (trạng thái `.op` chuẩn), `op-editor-ui` (widget độc lập nền tảng + `RenderBackend`), `op-editor-host-core` (máy trạng thái host độc lập transport), `op-collab` (giao thức/hash/áp dụng chính xác cho cộng tác, mở và độc lập transport), `op-collab-transport` (Noise/TCP native, tiếp nhận có giới hạn và khám phá LAN tùy chọn), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — cùng với `op-collab-smoke` (ma trận cộng tác/khôi phục hai tiến trình đã xác thực) và `op-smoke` (trình chạy kiểm thử lượt thiết kế headless). Các player di động nằm trong `packaging/` (shell `ios` + `android` trên `op-engine-ffi` / `op-engine-jni`). Bundle trình duyệt kết xuất qua CanvasKit skia WASM chính thức (tải riêng), nên fork wasm `skia-safe-op` và `wasm-libc-shim` đã ngừng dùng không còn tồn tại.
+
+**Submodule:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (runtime agent Rust dùng chung giữa các sản phẩm).
 
 ## Đóng góp
 

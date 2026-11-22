@@ -71,11 +71,20 @@ Claude Code, Codex, OpenCode, Kiro veya Copilot CLI'larına tek tıkla kurulum. 
 <tr>
 <td width="50%">
 
+### 🎨 Stil Rehberleri
+
+Etiket tabanlı bulanık eşleştirmeli yerleşik stil rehberi kütüphanesi. Yapay zekâ ile üretilen tasarımlara görsel stiller (glassmorphism, brutalist, retro vb.) uygulayın. Harici ajan erişimi için MCP araçları.
+
+</td>
+<td width="50%">
+
 ### 📦 Kod Olarak Tasarım
 
 `.op` dosyaları JSON formatındadır — insan tarafından okunabilir, Git dostu, diff edilebilir. Tasarım değişkenleri CSS özel özellikleri üretir. React + Tailwind veya HTML + CSS olarak kod dışa aktarımı.
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🖥️ Her Yerde Çalışır
@@ -83,8 +92,6 @@ Claude Code, Codex, OpenCode, Kiro veya Copilot CLI'larına tek tıkla kurulum. 
 Web uygulaması + macOS, Windows ve Linux'ta yerel masaüstü — tek bir Rust çekirdeği, tek bir bağımsız ikili, tarayıcı motoru yok. `.op` dosya ilişkilendirmesi — açmak için çift tıklayın.
 
 </td>
-</tr>
-<tr>
 <td width="50%">
 
 ### ⌨️ CLI — `op`
@@ -92,11 +99,36 @@ Web uygulaması + macOS, Windows ve Linux'ta yerel masaüstü — tek bir Rust �
 Tasarım aracını terminalinizden kontrol edin. `op design`, `op insert` — toplu tasarım DSL, düğüm manipülasyonu. Dosyalardan veya stdin'den pipe ile besleyin. Masaüstü uygulama veya web sunucusuyla çalışır.
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🎯 Çok Platformlu Kod Dışa Aktarımı
 
 Tek bir `.op` dosyasından React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native'e dışa aktarın. Tasarım değişkenleri CSS özel özelliklerine dönüşür.
+
+</td>
+<td width="50%">
+
+### 🧩 Gömülebilir SDK
+
+`op-web-sdk` (vanilla) + `op-web-sdk-react` / `op-web-sdk-vue` adaptörleri — editörle aynı wasm oluşturucusuyla çalışan salt okunur bir `.op` görüntüleyiciyi kendi uygulamanıza gömün.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🛡️ Tasarım Sistemi Kiti
+
+Stil değiştirme ve bileşen kompozisyonu destekli yeniden kullanılabilir UIKit'leri yönetin. `.pen` dosyalarından kit içe/dışa aktarın. Harici erişim için MCP araçlarıyla yerleşik kayıt.
+
+</td>
+<td width="50%">
+
+### 👥 Gerçek Zamanlı İş Birliği
+
+Genel aktarıcı ve yerleşik bölgesel hub'larla kimliği doğrulanmış eşler arası oturumlarda birlikte tasarlayın. Kısa bir eşleştirme koduyla katılın, uzak imleçleri canlı görün ve çakışmaları her düzenlemenin ayrıntısı ve yeniden oynatımıyla çözün.
 
 </td>
 </tr>
@@ -110,6 +142,7 @@ Tek bir `.op` dosyasından React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, S
 
 ```bash
 brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install --cask openpencil
 ```
 
@@ -121,6 +154,10 @@ scoop install openpencil
 ```
 
 **Linux / Windows doğrudan indirme:** [GitHub Releases](https://github.com/ZSeven-W/openpencil/releases) — `.exe` (Windows), `.AppImage` / `.deb` (Linux)
+
+Windows `.exe` yükleyicisi, iki Scoop paketi ve `install-op.ps1` CLI yükleyicisi her kurulum veya yükseltmede sabitlenmiş, Microsoft imzalı Visual C++ v14 çalışma zamanını denetler ve gerekirse onarır. Taşınabilir Windows `.zip` arşivleri ve Windows VSIX paketleri yükseltilmiş bir sistem yükleyicisi çalıştırmaz; bu yapıtları doğrudan kullanmadan önce Microsoft'un [desteklenen en son Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) paketini kurun.
+
+> Antivirüs Windows yükleyicisini mi işaretledi? Bu, yeni ve az yaygın sürümlerde bilinen bir sezgisel yanlış pozitiftir — [indirmenizi nasıl doğrulayacağınıza](docs/security/antivirus-false-positives.md) bakın.
 
 **Nix (Linux x86_64):**
 
@@ -150,6 +187,8 @@ zaman checkout edilmiş kaynağı kullanır.
 **CLI (`op`):**
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
 ```
 
@@ -194,6 +233,14 @@ git submodule sync --recursive && git submodule update --init --recursive
 bash scripts/start-web-rust.sh
 ```
 
+Tarayıcıda girilen yerleşik sağlayıcı, görsel üretimi ve Openverse kimlik bilgileri varsayılan olarak sıradan web tercihlerinden ayrı biçimde aynı kökenli `localStorage` içinde (`openpencil-rust-web-credentials`) tutulur. Bir yapay zekâ isteğinin ihtiyaç duyduğu kimlik bilgisi o istekle birlikte gönderilir, ancak arka plan hizmeti tarayıcı anlık görüntüsünü `settings.json` dosyasına yazmaz.
+
+Özel dağıtımlar `OPENPENCIL_PERSIST_WEB_CREDENTIALS_SERVER=true` ile sunucu tarafı kalıcılığı etkinleştirebilir. Bu ayar tüm dağıtım için geçerlidir; kabul edilen her tarayıcı anlık görüntüsü paylaşılan, tarayıcıya ait kopyanın yerini alır. Yalnızca HTTPS arkasında, erişimi denetlenen ve tek bir etkin yönetici profiline sahip güvenilir bir dağıtımda etkinleştirin. Ayarı kapatmak, operatöre ait yapılandırmayı korurken daha önce saklanan tarayıcıya ait kimlik bilgilerini bir sonraki başlatmada kaldırır. Tüm `localStorage` verileri gibi bu değerleri de aynı kökenli betikler okuyabilir; bu yüzden web kökeni güvenilmeyen betiklere ve XSS'e karşı korunmalıdır. Bu anahtardan önceki bir sürüme düşmeden önce ayarı kapatın ve tarayıcıya ait kopyayı temizlemek için mevcut sürümü bir kez başlatın.
+
+Web ana bilgisayarı yalnızca API anahtarlı yerleşik ajanları destekler. CLI ve ACP ajanları yalnızca yerel sürümde kalır: web model seçicide gösterilmez, tarayıcı kimlik bilgisi anlık görüntülerinde saklanmaz, sunucuyla eşitlenmez ve web bağlantı rotalarıyla sunulmaz. Kimlik bilgisi ve yapay zekâ uç noktalarına yönelik tarayıcı istekleri varsayılan olarak loopback/localhost kökenlerine izin verir. Genel bir ters proxy, `OPENPENCIL_WEB_ALLOWED_ORIGINS` değerini ayrıca virgülle ayrılmış kesin köken listesine ayarlamalıdır; örneğin `https://demo.openpencil.dev`.
+
+Sunucu tarafı kalıcılık, tarayıcı denetimindeki isteklerin loopback, özel, link-local, meta veri veya ayrılmış sağlayıcı uç noktalarına erişmesine izin vermez. Bilerek dahili bir sağlayıcı kullanan güvenilir özel bir dağıtım, `OPENPENCIL_WEB_AI_ENDPOINT_ALLOWLIST` değerini ayrıca virgülle ayrılmış kesin URL kökenleri listesine ayarlamalıdır; örneğin `http://127.0.0.1:11434,https://llm.internal.example`.
+
 Ya da masaüstü uygulaması olarak çalıştırın:
 
 ```bash
@@ -234,8 +281,11 @@ docker run -p 3100:3100 openpencil-web-rust
 
 - **Metinden tasarıma** — bir sayfayı tanımlayın, gerçek zamanlı akış animasyonuyla kanvasta oluşturulsun
 - **Orkestratör** — karmaşık sayfaları paralel üretim için uzamsal alt görevlere ayırır
+- **Ajan Ekipleri** — devretme aracı, üye başına tuval göstergeleri ve yedek stratejilerle eşzamanlı ekip üyeleri
 - **Tasarım değişikliği** — öğeleri seçin, ardından değişiklikleri doğal dille tanımlayın
 - **Görsel girdi** — referans tabanlı tasarım için ekran görüntüleri veya maketler ekleyin
+- **Stil Rehberleri** — etiket tabanlı bulanık eşleştirmeyle görsel stiller (glassmorphism, brutalist, retro vb.) uygulayın
+- **Tekdüzelik önleme** — tekrarlayan yapay zekâ çıktısından kaçınmak için üretimler arası çeşitlilik takibi
 
 **Çok Ajanlı Destek**
 
@@ -258,6 +308,7 @@ docker run -p 3100:3100 openpencil-web-rust
 - Terminalden tasarım otomasyonu: herhangi bir MCP uyumlu ajan aracılığıyla `.op` dosyalarını okuyun, oluşturun ve düzenleyin
 - **Katmanlı tasarım iş akışı** — daha yüksek kaliteli çok bölümlü tasarımlar için `design_skeleton` → `design_content` → `design_refine`
 - **Bölümlenmiş prompt alımı** — yalnızca ihtiyacınız olan tasarım bilgisini yükleyin (şema, düzen, roller, simgeler, planlama vb.)
+- **Stil rehberi araçları** — MCP üzerinden görsel stil uygulamak için `get_style_guide_tags` ve `get_style_guide`
 - Çok sayfa desteği — MCP araçları ile sayfaları oluşturun, yeniden adlandırın, sıralayın ve çoğaltın
 
 **Kod Üretimi**
@@ -267,10 +318,28 @@ docker run -p 3100:3100 openpencil-web-rust
 
 ## CLI — `op`
 
-Global olarak yükleyin ve tasarım aracını terminalinizden kontrol edin:
+Homebrew veya kurulum betiğiyle yükleyin, ardından tasarım aracını terminalinizden kontrol edin:
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | OP_PRERELEASE=1 bash
+```
+
+```powershell
+irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
+```
+
+```powershell
+$env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
 ```
 
 ```bash
@@ -386,12 +455,12 @@ OpenPencil, **[ZSeven-W](https://github.com/ZSeven-W)** tarafından geliştirile
 
 | Proje | Nedir |
 | ----- | ----- |
-| **[DSH OpenPencil](./packages/op-dsh)** | OpenPencil için DeepSeek Harness eklentisi — bir sohbetin içinde tam çoklu çerçeve `.op` önizlemeleri, etkileşimli bir tuval ve ajan-yerel tasarım araçlarına sahip yönetilen bir düzenleyici. |
+| <img src="./screenshot/logo-dsh-openpencil.png" alt="DSH OpenPencil" width="40" /> **[DSH OpenPencil](./packages/op-dsh)** | OpenPencil için DeepSeek Harness eklentisi — bir sohbetin içinde tam çoklu çerçeve `.op` önizlemeleri, etkileşimli bir tuval ve ajan-yerel tasarım araçlarına sahip yönetilen bir düzenleyici. |
 | **[Codex OpenPencil](./packages/op-codex)** | OpenPencil için Codex eklentisi — tek komutlu kurulum, seçime göre iyileştirme ve güvenilir `.op` kaydı sunan etkileşimli Rust/WASM tuvali. |
-| **[Zode](https://github.com/ZSeven-W/zode)** | Terminaliniz için açık kaynaklı, AI-yerel kodlama asistanı — kodunuzu okuyan, komutları çalıştıran, dosyaları arayan ve git'i yöneten hızlı bir Rust TUI'si (`ratatui`). OpenPencil'ı MCP üzerinden sürer. |
+| <img src="./screenshot/logo-zode.png" alt="Zode logo" width="40" /> **[Zode](https://github.com/ZSeven-W/zode)** | Terminaliniz için açık kaynaklı, AI-yerel kodlama asistanı — kodunuzu okuyan, komutları çalıştıran, dosyaları arayan ve git'i yöneten hızlı bir Rust TUI'si (`ratatui`). OpenPencil'ı MCP üzerinden sürer. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | LLM ajanlarını sevk etmek için saf Rust asenkron çalışma ortamı — çoklu sağlayıcı, uçtan uca araç yetenekli, yapılandırılmış izinler, gerçek MCP ve sıfır `unsafe`. OpenPencil'ın yerleşik ajan çalışma ortamını (`vendor/agent`) ve Zode'u güçlendirir. |
-| **[jian](https://github.com/ZSeven-W/jian)** | Saf Rust, GPU-Skia UI çatısı — tek bir yığında widget'lar, düzen, olaylar ve hot reload. Bildirimsel bir `.op` belgesini JS çalışma ortamı, DOM ve Electron olmadan yerel, AI ile kontrol edilebilir bir uygulamaya dönüştürür. OpenPencil'ın UI çatısı (`vendor/jian`). |
-| **[noema](https://github.com/ZSeven-W/noema)** | Kodlama ajanları için yerel öncelikli, vektörsüz bellek sistemi. İncelenebilir dosyalar olarak kalıcı bellek, yeni girdiler için bir inceleme kuyruğu ve sözcüksel (gömme içermeyen) geri çağırma — Zode, Codex, Claude Code ve MCP çalışma ortamlarında çalışır. |
+| <img src="./screenshot/logo-jian-rounded.png" alt="jian logo" width="40" /> **[jian](https://github.com/ZSeven-W/jian)** | Saf Rust, GPU-Skia UI çatısı — tek bir yığında widget'lar, düzen, olaylar ve hot reload. Bildirimsel bir `.op` belgesini JS çalışma ortamı, DOM ve Electron olmadan yerel, AI ile kontrol edilebilir bir uygulamaya dönüştürür. OpenPencil'ın UI çatısı (`vendor/jian`). |
+| <img src="./screenshot/logo-noema-rounded.png" alt="noema logo" width="84" /> **[noema](https://github.com/ZSeven-W/noema)** | Kodlama ajanları için yerel öncelikli, vektörsüz bellek sistemi. İncelenebilir dosyalar olarak kalıcı bellek, yeni girdiler için bir inceleme kuyruğu ve sözcüksel (gömme içermeyen) geri çağırma — Zode, Codex, Claude Code ve MCP çalışma ortamlarında çalışır. |
 
 ## Neden Rust
 
@@ -427,7 +496,12 @@ openpencil/
 │   ├── op-editor-core/       Standart `.op` (PenDocument) editör durumu + EditorCommand + tasarım değişkenleri
 │   ├── op-editor-ui/         Platformdan bağımsız widget'lar + RenderBackend arayüzü (wasm32 uyumlu)
 │   ├── op-editor-host-core/  Tüm host'lar tarafından paylaşılan, taşımadan bağımsız host durum makineleri
+│   ├── op-collab/            Açık iş birliği wire türleri, kanonik özetler ve kesin belge uygulama
+│   ├── op-collab-transport/  Yerel Noise/TCP aktarımı, sınırlı kabul ve isteğe bağlı LAN keşfi
+│   ├── op-collab-smoke/      İki süreçli kimliği doğrulanmış iş birliği kurtarma matrisi
 │   ├── op-host-native/       Yerel host kütüphanesi — winit + skia-safe GL (masaüstü + mobil)
+│   ├── op-engine-ffi/        Oynatıcı C ABI — tuvali iOS / Android kabuklarına gömer
+│   ├── op-engine-jni/        op-engine-ffi için Android JNI sıralama katmanı
 │   ├── op-host-web/          Tarayıcı paketi — wasm32 cdylib, CanvasKit işleyici
 │   ├── op-host-desktop/      Masaüstü ikili dosyası `openpencil-desktop`; ayrıca `--serve-web` daemon'ı
 │   ├── op-host-services/     Headless serve-web / MCP daemon kütüphanesi
@@ -442,10 +516,14 @@ openpencil/
 │   ├── op-git/               Git entegrasyonu — klonlama, dal, push/pull, birleştirme
 │   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
 │                             op-config-store / op-process-io / op-acp / op-smoke / ...
-├── packages/                 Web SDK çalışma alanı (Bun)
+├── packages/                 Web SDK ve editör/ajan entegrasyonları
 │   ├── op-web-sdk/           Salt okunur `.op` web görüntüleyici SDK'sı (wasm paketini sarmalar)
 │   ├── op-web-sdk-react/     React 19 adaptörü
-│   └── op-web-sdk-vue/       Vue 3 adaptörü
+│   ├── op-web-sdk-vue/       Vue 3 adaptörü
+│   ├── op-vscode/            `.op` ve `.fig` düzenleme için VS Code uzantısı
+│   ├── op-chrome-extension/  Oluşturulmuş web sayfalarını yakalamak için Chrome uzantısı
+│   ├── op-dsh/               DeepSeek Harness eklentisi (`@zseven-w/dsh-openpencil`)
+│   └── op-codex/             Codex eklentisi (`@zseven-w/codex-openpencil`)
 ├── vendor/                   Vendored alt sistemler (git submodule'ları)
 │   ├── jian/                 GPU-Skia UI çatısı — widget/render/event
 │   ├── casement/             winit çatalı
@@ -492,6 +570,39 @@ cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon cat
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
+
+### Rust workspace ayrıntıları
+
+Rust'a geçiş tamamlandı — Rust workspace ürünün kendisidir. Başlangıç belirtimi: `openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md` (v7 FROZEN).
+
+```bash
+# Install Rust toolchain (rust-toolchain.toml auto-pins 1.94)
+rustup toolchain install 1.94
+rustup target add wasm32-unknown-unknown
+
+# build / test / lint
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo check --target wasm32-unknown-unknown -p op-collab --no-default-features
+cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web  # kickoff §1.2 wasm32 invariant
+cargo deny check && cargo deny --target wasm32-unknown-unknown check bans        # cargo-deny (native + wasm32 bans; CI uses cargo-deny-action@v2)
+```
+
+**Giriş crate'leri (`crates/` — derleme hedefleri):**
+
+| Crate | Kategori | wasm32 |
+| --- | --- | --- |
+| op-host-web | Tarayıcı paketi girişi — wasm32 cdylib, CanvasKit ile oluşturur | ✅ |
+| op-host-native | Yerel ana bilgisayar kütüphanesi — WidgetHostNative + skia-safe GL arka ucu (masaüstü + mobil) | ❌ (yalnızca yerel) |
+| op-engine-ffi | Oynatıcı C ABI — tek motor, üç kabuk (iOS Metal / Android EGL / ana bilgisayar raster) | ❌ (yalnızca yerel) |
+| op-engine-jni | op-engine-ffi için Android JNI sıralama katmanı (motor iş parçacığı, kayıt, geri çağrılar) | ❌ (yalnızca yerel) |
+| op-host-desktop | Masaüstü ikilisi `openpencil-desktop` (winit + skia-safe GL) — web paketini sunan `--serve-web` arka plan hizmeti de odur | ❌ (yalnızca yerel) |
+| op-cli | `op` komut satırı aracı | ❌ (yalnızca yerel) |
+
+**Paylaşılan kütüphane crate'leri:** `op-editor-core` (kanonik `.op` durumu), `op-editor-ui` (platformdan bağımsız bileşenler + `RenderBackend`), `op-editor-host-core` (aktarımdan bağımsız ana bilgisayar durum makineleri), `op-collab` (açık, aktarımdan bağımsız iş birliği protokolü/özet/kesin uygulama), `op-collab-transport` (yerel Noise/TCP, sınırlı kabul ve isteğe bağlı LAN keşfi), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — ayrıca `op-collab-smoke` (kimliği doğrulanmış iki süreçli iş birliği/kurtarma matrisi) ve `op-smoke` (başsız tasarım turu test çalıştırıcısı). Mobil oynatıcılar `packaging/` altındadır (`op-engine-ffi` / `op-engine-jni` üzerindeki `ios` + `android` kabukları). Tarayıcı paketi resmi CanvasKit skia WASM (ayrıca yüklenir) ile oluşturulur; bu nedenle emekliye ayrılan `skia-safe-op` wasm çatalı ve `wasm-libc-shim` artık mevcut değildir.
+
+**Alt modül:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (ürünler arası Rust ajan çalışma zamanı).
 
 ## Katkıda Bulunma
 

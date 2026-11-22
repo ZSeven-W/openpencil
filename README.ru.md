@@ -71,11 +71,20 @@
 <tr>
 <td width="50%">
 
+### 🎨 Руководства по стилю
+
+Встроенная библиотека руководств по стилю с нечётким поиском по тегам. Применяйте визуальные стили (glassmorphism, brutalist, retro и др.) к дизайнам, созданным ИИ. MCP-инструменты для доступа внешних агентов.
+
+</td>
+<td width="50%">
+
 ### 📦 Дизайн как код
 
 Файлы `.op` — это JSON: удобочитаемые, дружественные к Git, поддерживают diff. Переменные дизайна генерируют CSS custom properties. Экспорт кода в React + Tailwind или HTML + CSS.
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🖥️ Работает везде
@@ -83,8 +92,6 @@
 Веб-приложение + нативный десктоп на macOS, Windows и Linux — единое Rust-ядро, один самодостаточный бинарный файл, без браузерного движка. Ассоциация файлов `.op` — двойной клик для открытия.
 
 </td>
-</tr>
-<tr>
 <td width="50%">
 
 ### ⌨️ CLI — `op`
@@ -92,11 +99,36 @@
 Управляйте инструментом дизайна из терминала. `op design`, `op insert` — пакетный DSL дизайна, манипуляция узлами. Ввод через pipe из файлов или stdin. Работает с десктопным приложением или веб-сервером.
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🎯 Мультиплатформенный экспорт кода
 
 Экспорт из одного файла `.op` в React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native. Переменные дизайна превращаются в пользовательские свойства CSS.
+
+</td>
+<td width="50%">
+
+### 🧩 Встраиваемый SDK
+
+`op-web-sdk` (vanilla) + адаптеры `op-web-sdk-react` / `op-web-sdk-vue` — встройте просмотрщик `.op` только для чтения в своё приложение на том же wasm-рендерере, что и редактор.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🛡️ Набор дизайн-системы
+
+Управляйте переиспользуемыми UIKit с переключением стилей и композицией компонентов. Импорт/экспорт наборов из файлов `.pen`. Встроенный реестр с MCP-инструментами для внешнего доступа.
+
+</td>
+<td width="50%">
+
+### 👥 Совместная работа в реальном времени
+
+Проектируйте вместе через аутентифицированные одноранговые сессии с публичным ретранслятором и встроенными региональными хабами. Подключайтесь по короткому коду, видьте удалённые курсоры вживую и разрешайте конфликты с деталями и воспроизведением каждой правки.
 
 </td>
 </tr>
@@ -110,6 +142,7 @@
 
 ```bash
 brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install --cask openpencil
 ```
 
@@ -121,6 +154,10 @@ scoop install openpencil
 ```
 
 **Прямая загрузка для Linux / Windows:** [GitHub Releases](https://github.com/ZSeven-W/openpencil/releases) — `.exe` (Windows), `.AppImage` / `.deb` (Linux)
+
+Установщик Windows `.exe`, оба пакета Scoop и установщик CLI `install-op.ps1` при каждой установке или обновлении проверяют закреплённую, подписанную Microsoft среду выполнения Visual C++ v14 и при необходимости восстанавливают её. Портативные архивы Windows `.zip` и пакеты Windows VSIX не запускают системный установщик с повышенными правами; перед их прямым использованием установите [последний поддерживаемый Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) от Microsoft.
+
+> Антивирус ругается на установщик Windows? Это известное эвристическое ложное срабатывание на новых, малораспространённых релизах — см. [как проверить загрузку](docs/security/antivirus-false-positives.md).
 
 **Nix (Linux x86_64):**
 
@@ -149,6 +186,8 @@ PR для обновления этого манифеста. До слияни�
 **CLI (`op`):**
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
 ```
 
@@ -193,6 +232,14 @@ git submodule sync --recursive && git submodule update --init --recursive
 bash scripts/start-web-rust.sh
 ```
 
+Учётные данные встроенных провайдеров, генерации изображений и Openverse, введённые в браузере, по умолчанию хранятся в `localStorage` того же источника (`openpencil-rust-web-credentials`) отдельно от обычных веб-настроек. Учётные данные, нужные для ИИ-запроса, отправляются вместе с этим запросом, но демон не записывает браузерный снимок в `settings.json`.
+
+Частные развёртывания могут включить хранение на сервере через `OPENPENCIL_PERSIST_WEB_CREDENTIALS_SERVER=true`. Настройка действует на всё развёртывание; каждый принятый браузерный снимок заменяет общую копию, принадлежащую браузеру. Включайте её только в доверенном развёртывании с контролем доступа, единственным активным профилем администратора и за HTTPS. Отключение настройки при следующем запуске удаляет ранее сохранённые браузерные учётные данные, сохраняя конфигурацию оператора. Как и любой `localStorage`, эти значения доступны скриптам того же источника, поэтому веб-источник необходимо защищать от недоверенных скриптов и XSS. Перед откатом на релиз, где этого переключателя ещё нет, выключите его и один раз запустите текущий релиз, чтобы стереть браузерную копию.
+
+Веб-хост поддерживает только встроенных агентов с API-ключом. Агенты CLI и ACP остаются только в нативной версии: они не показываются в веб-выборе модели, не хранятся в браузерных снимках учётных данных, не синхронизируются с сервером и не доступны через веб-маршруты подключения. Браузерные запросы к эндпоинтам учётных данных и ИИ по умолчанию разрешены с источников loopback/localhost. Публичный обратный прокси должен отдельно задать `OPENPENCIL_WEB_ALLOWED_ORIGINS` — список точных источников через запятую, например `https://demo.openpencil.dev`.
+
+Хранение на сервере не разрешает управляемые браузером запросы к loopback, частным, link-local, метаданным или зарезервированным эндпоинтам провайдеров. Доверенное частное развёртывание, намеренно использующее внутреннего провайдера, должно отдельно задать `OPENPENCIL_WEB_AI_ENDPOINT_ALLOWLIST` — список точных URL-источников через запятую, например `http://127.0.0.1:11434,https://llm.internal.example`.
+
 Или запустить как десктопное приложение:
 
 ```bash
@@ -233,8 +280,11 @@ docker run -p 3100:3100 openpencil-web-rust
 
 - **Текст в дизайн** — опишите страницу и получите её на холсте в реальном времени со стриминговой анимацией
 - **Оркестратор** — разбивает сложные страницы на пространственные подзадачи для параллельной генерации
+- **Команды агентов** — параллельные участники с инструментом делегирования, индикаторами на холсте для каждого и резервными стратегиями
 - **Изменение дизайна** — выберите элементы и опишите изменения на естественном языке
 - **Визуальный ввод** — прикрепляйте скриншоты или макеты в качестве референса для дизайна
+- **Руководства по стилю** — применение визуальных стилей (glassmorphism, brutalist, retro и др.) через нечёткий поиск по тегам
+- **Анти-шаблонность** — отслеживание разнообразия между генерациями, чтобы избежать однообразного вывода ИИ
 
 **Поддержка нескольких агентов**
 
@@ -257,6 +307,7 @@ docker run -p 3100:3100 openpencil-web-rust
 - Автоматизация дизайна из терминала: чтение, создание и изменение файлов `.op` через любой MCP-совместимый агент
 - **Послойный рабочий процесс** — `design_skeleton` → `design_content` → `design_refine` для дизайнов высокого качества с несколькими секциями
 - **Сегментированное получение промптов** — загружайте только нужные знания о дизайне (schema, layout, roles, icons, planning и т.д.)
+- **Инструменты руководств по стилю** — `get_style_guide_tags` и `get_style_guide` для применения визуальных стилей через MCP
 - Поддержка нескольких страниц — создание, переименование, переупорядочивание и дублирование страниц через инструменты MCP
 
 **Генерация кода**
@@ -266,10 +317,28 @@ docker run -p 3100:3100 openpencil-web-rust
 
 ## CLI — `op`
 
-Установите глобально и управляйте инструментом дизайна из терминала:
+Установите через Homebrew или скрипт установки и управляйте инструментом дизайна из терминала:
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | OP_PRERELEASE=1 bash
+```
+
+```powershell
+irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
+```
+
+```powershell
+$env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
 ```
 
 ```bash
@@ -385,12 +454,12 @@ OpenPencil — часть семейства AI-нативных инструм�
 
 | Проект | Что это такое |
 | ------ | ------------- |
-| **[DSH OpenPencil](./packages/op-dsh)** | Плагин DeepSeek Harness для OpenPencil — точные многокадровые превью `.op`, интерактивный холст и управляемый редактор с нативными для агентов инструментами дизайна прямо в диалоге. |
+| <img src="./screenshot/logo-dsh-openpencil.png" alt="DSH OpenPencil" width="40" /> **[DSH OpenPencil](./packages/op-dsh)** | Плагин DeepSeek Harness для OpenPencil — точные многокадровые превью `.op`, интерактивный холст и управляемый редактор с нативными для агентов инструментами дизайна прямо в диалоге. |
 | **[Codex OpenPencil](./packages/op-codex)** | Плагин Codex для OpenPencil — интерактивный холст Rust/WASM для проектирования UI с помощью ИИ, настройкой одним промптом, уточнением по выделению и сохранением `.op`. |
-| **[Zode](https://github.com/ZSeven-W/zode)** | Open-source AI-нативный ассистент для программирования в вашем терминале — быстрый Rust TUI (`ratatui`), который читает ваш код, выполняет команды, ищет файлы и управляет git. Управляет OpenPencil через MCP. |
+| <img src="./screenshot/logo-zode.png" alt="Zode logo" width="40" /> **[Zode](https://github.com/ZSeven-W/zode)** | Open-source AI-нативный ассистент для программирования в вашем терминале — быстрый Rust TUI (`ratatui`), который читает ваш код, выполняет команды, ищет файлы и управляет git. Управляет OpenPencil через MCP. |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | Асинхронный рантайм на чистом Rust для выпуска LLM-агентов — мультипровайдерный, со сквозной поддержкой инструментов, структурированными разрешениями, настоящим MCP и нулём `unsafe`. Питает встроенный рантайм агентов OpenPencil (`vendor/agent`) и Zode. |
-| **[jian](https://github.com/ZSeven-W/jian)** | UI-фреймворк на чистом Rust с GPU-Skia — виджеты, раскладка, события и горячая перезагрузка в одном стеке. Превращает декларативный документ `.op` в нативное, управляемое ИИ приложение без JS-рантайма, без DOM, без Electron. UI-фреймворк OpenPencil (`vendor/jian`). |
-| **[noema](https://github.com/ZSeven-W/noema)** | Локальная невекторная система памяти для агентов программирования. Долговременная память в виде инспектируемых файлов, очередь на проверку новых записей и лексический (без эмбеддингов) поиск — работает в Zode, Codex, Claude Code и рантаймах MCP. |
+| <img src="./screenshot/logo-jian-rounded.png" alt="jian logo" width="40" /> **[jian](https://github.com/ZSeven-W/jian)** | UI-фреймворк на чистом Rust с GPU-Skia — виджеты, раскладка, события и горячая перезагрузка в одном стеке. Превращает декларативный документ `.op` в нативное, управляемое ИИ приложение без JS-рантайма, без DOM, без Electron. UI-фреймворк OpenPencil (`vendor/jian`). |
+| <img src="./screenshot/logo-noema-rounded.png" alt="noema logo" width="84" /> **[noema](https://github.com/ZSeven-W/noema)** | Локальная невекторная система памяти для агентов программирования. Долговременная память в виде инспектируемых файлов, очередь на проверку новых записей и лексический (без эмбеддингов) поиск — работает в Zode, Codex, Claude Code и рантаймах MCP. |
 
 ## Почему Rust
 
@@ -426,7 +495,12 @@ openpencil/
 │   ├── op-editor-core/       Каноническое состояние редактора `.op` (PenDocument) + EditorCommand + переменные дизайна
 │   ├── op-editor-ui/         Платформонезависимые виджеты + фасад RenderBackend (wasm32-clean)
 │   ├── op-editor-host-core/  Транспортонезависимые state machine хостов, общие для всех хостов
+│   ├── op-collab/            Открытые wire-типы совместной работы, канонические хеши и точное применение
+│   ├── op-collab-transport/  Нативный транспорт Noise/TCP, ограниченный допуск и опциональное LAN-обнаружение
+│   ├── op-collab-smoke/      Двухпроцессная матрица восстановления аутентифицированной совместной работы
 │   ├── op-host-native/       Библиотека нативного хоста — winit + skia-safe GL (десктоп + мобильные)
+│   ├── op-engine-ffi/        C ABI плеера — встраивание холста в оболочки iOS / Android
+│   ├── op-engine-jni/        Слой маршалинга Android JNI для op-engine-ffi
 │   ├── op-host-web/          Браузерный бандл — wasm32 cdylib, рендерер CanvasKit
 │   ├── op-host-desktop/      Десктопный бинарный файл `openpencil-desktop`; также демон `--serve-web`
 │   ├── op-host-services/     Библиотека headless-демона serve-web / MCP
@@ -441,10 +515,14 @@ openpencil/
 │   ├── op-git/               Интеграция с Git — клонирование, ветки, push/pull, слияние
 │   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
 │                             op-config-store / op-process-io / op-acp / op-smoke / ...
-├── packages/                 Пространство веб-SDK (Bun)
+├── packages/                 Веб-SDK и интеграции с редакторами/агентами
 │   ├── op-web-sdk/           SDK веб-просмотрщика `.op` только для чтения (обёртка wasm-бандла)
 │   ├── op-web-sdk-react/     Адаптер React 19
-│   └── op-web-sdk-vue/       Адаптер Vue 3
+│   ├── op-web-sdk-vue/       Адаптер Vue 3
+│   ├── op-vscode/            Расширение VS Code для редактирования `.op` и `.fig`
+│   ├── op-chrome-extension/  Расширение Chrome для захвата отрисованных веб-страниц
+│   ├── op-dsh/               Плагин DeepSeek Harness (`@zseven-w/dsh-openpencil`)
+│   └── op-codex/             Плагин Codex (`@zseven-w/codex-openpencil`)
 ├── vendor/                   Вендоренные подсистемы (git submodules)
 │   ├── jian/                 GPU-Skia UI-фреймворк — виджеты/рендеринг/события
 │   ├── casement/             Форк winit
@@ -491,6 +569,39 @@ cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon cat
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
+
+### Подробнее о Rust workspace
+
+Переход на Rust завершён — Rust workspace и есть продукт. Стартовая спецификация: `openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md` (v7 FROZEN).
+
+```bash
+# Install Rust toolchain (rust-toolchain.toml auto-pins 1.94)
+rustup toolchain install 1.94
+rustup target add wasm32-unknown-unknown
+
+# build / test / lint
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo check --target wasm32-unknown-unknown -p op-collab --no-default-features
+cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web  # kickoff §1.2 wasm32 invariant
+cargo deny check && cargo deny --target wasm32-unknown-unknown check bans        # cargo-deny (native + wasm32 bans; CI uses cargo-deny-action@v2)
+```
+
+**Входные crate (`crates/` — цели сборки):**
+
+| Crate | Категория | wasm32 |
+| --- | --- | --- |
+| op-host-web | Точка входа браузерного бандла — wasm32 cdylib, отрисовка через CanvasKit | ✅ |
+| op-host-native | Библиотека нативного хоста — WidgetHostNative + бэкенд skia-safe GL (десктоп + мобильные) | ❌ (только нативно) |
+| op-engine-ffi | C ABI плеера — один движок, три оболочки (iOS Metal / Android EGL / растр хоста) | ❌ (только нативно) |
+| op-engine-jni | Слой маршалинга Android JNI для op-engine-ffi (поток движка, реестр, колбэки) | ❌ (только нативно) |
+| op-host-desktop | Десктопный бинарник `openpencil-desktop` (winit + skia-safe GL) — он же демон `--serve-web`, раздающий веб-бандл | ❌ (только нативно) |
+| op-cli | Утилита командной строки `op` | ❌ (только нативно) |
+
+**Общие библиотечные crate:** `op-editor-core` (каноническое состояние `.op`), `op-editor-ui` (платформонезависимые виджеты + `RenderBackend`), `op-editor-host-core` (не зависящие от транспорта конечные автоматы хоста), `op-collab` (открытый, не зависящий от транспорта протокол/хеш/точное применение совместной работы), `op-collab-transport` (нативный Noise/TCP, ограниченный допуск и опциональное LAN-обнаружение), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — а также `op-collab-smoke` (аутентифицированная двухпроцессная матрица совместной работы/восстановления) и `op-smoke` (headless-раннер тестов дизайн-ходов). Мобильные плееры находятся в `packaging/` (оболочки `ios` + `android` поверх `op-engine-ffi` / `op-engine-jni`). Браузерный бандл отрисовывается через официальный CanvasKit skia WASM (загружается отдельно), поэтому выведенные из употребления wasm-форк `skia-safe-op` и `wasm-libc-shim` больше не существуют.
+
+**Подмодуль:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (общая для продуктов среда выполнения агентов на Rust).
 
 ## Участие в разработке
 

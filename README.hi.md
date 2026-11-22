@@ -71,11 +71,20 @@ Claude Code, Codex, OpenCode, Kiro, या Copilot CLIs में वन-क्�
 <tr>
 <td width="50%">
 
+### 🎨 स्टाइल गाइड
+
+टैग-आधारित फ़ज़ी मैचिंग के साथ बिल्ट-इन स्टाइल गाइड लाइब्रेरी। AI द्वारा बनाए गए डिज़ाइनों पर विज़ुअल स्टाइल (glassmorphism, brutalist, retro आदि) लागू करें। बाहरी एजेंट एक्सेस के लिए MCP टूल्स।
+
+</td>
+<td width="50%">
+
 ### 📦 डिज़ाइन-एज़-कोड
 
 `.op` फ़ाइलें JSON हैं — मानव-पठनीय, Git-फ्रेंडली, डिफ़ करने योग्य। डिज़ाइन वेरिएबल CSS कस्टम प्रॉपर्टीज़ जनरेट करते हैं। React + Tailwind या HTML + CSS में कोड एक्सपोर्ट।
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🖥️ हर जगह चलता है
@@ -83,8 +92,6 @@ Claude Code, Codex, OpenCode, Kiro, या Copilot CLIs में वन-क्�
 वेब ऐप + macOS, Windows और Linux पर नेटिव डेस्कटॉप — एक Rust कोर, एक एकल स्व-निहित बाइनरी, कोई ब्राउज़र इंजन नहीं। `.op` फ़ाइल एसोसिएशन — डबल-क्लिक से खोलें।
 
 </td>
-</tr>
-<tr>
 <td width="50%">
 
 ### ⌨️ CLI — `op`
@@ -92,11 +99,36 @@ Claude Code, Codex, OpenCode, Kiro, या Copilot CLIs में वन-क्�
 अपने टर्मिनल से डिज़ाइन टूल को नियंत्रित करें। `op design`, `op insert` — बैच डिज़ाइन DSL, नोड मैनिपुलेशन। फ़ाइलों या stdin से पाइप करें। डेस्कटॉप ऐप या वेब सर्वर के साथ काम करता है।
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🎯 मल्टी-प्लेटफ़ॉर्म कोड एक्सपोर्ट
 
 एक `.op` फ़ाइल से React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native में एक्सपोर्ट करें। डिज़ाइन वेरिएबल CSS कस्टम प्रॉपर्टीज़ बन जाते हैं।
+
+</td>
+<td width="50%">
+
+### 🧩 एम्बेड करने योग्य SDK
+
+`op-web-sdk` (vanilla) + `op-web-sdk-react` / `op-web-sdk-vue` एडैप्टर — अपने ऐप में केवल-पढ़ने वाला `.op` व्यूअर एम्बेड करें, जो एडिटर वाले ही wasm रेंडरर से चलता है।
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🛡️ डिज़ाइन सिस्टम किट
+
+स्टाइल स्विचिंग और कंपोनेंट कंपोज़िशन के साथ पुन: प्रयोज्य UIKit प्रबंधित करें। `.pen` फ़ाइलों से किट इम्पोर्ट/एक्सपोर्ट करें। बाहरी एक्सेस के लिए MCP टूल्स वाली बिल्ट-इन रजिस्ट्री।
+
+</td>
+<td width="50%">
+
+### 👥 रीयल-टाइम सहयोग
+
+सार्वजनिक रिले और बिल्ट-इन क्षेत्रीय हब के साथ प्रमाणित पीयर-टू-पीयर सत्रों में मिलकर डिज़ाइन करें। छोटे पेयरिंग कोड से जुड़ें, रिमोट कर्सर लाइव देखें, और हर संपादन के विवरण व रीप्ले से टकराव सुलझाएँ।
 
 </td>
 </tr>
@@ -110,6 +142,7 @@ Claude Code, Codex, OpenCode, Kiro, या Copilot CLIs में वन-क्�
 
 ```bash
 brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install --cask openpencil
 ```
 
@@ -121,6 +154,10 @@ scoop install openpencil
 ```
 
 **Linux / Windows सीधे डाउनलोड करें:** [GitHub Releases](https://github.com/ZSeven-W/openpencil/releases) — `.exe` (Windows), `.AppImage` / `.deb` (Linux)
+
+Windows `.exe` इंस्टॉलर, दोनों Scoop पैकेज और `install-op.ps1` CLI इंस्टॉलर हर इंस्टॉल या अपग्रेड के दौरान पिन किए गए, Microsoft-हस्ताक्षरित Visual C++ v14 रनटाइम की जाँच करते हैं और ज़रूरत होने पर उसे ठीक करते हैं। पोर्टेबल Windows `.zip` आर्काइव और Windows VSIX पैकेज कोई एलिवेटेड सिस्टम इंस्टॉलर नहीं चलाते; इन आर्टिफ़ैक्ट्स को सीधे उपयोग करने से पहले Microsoft का [नवीनतम समर्थित Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) इंस्टॉल करें।
+
+> एंटीवायरस ने Windows इंस्टॉलर को फ़्लैग किया? यह नए, कम प्रचलित रिलीज़ पर एक ज्ञात ह्यूरिस्टिक फ़ॉल्स पॉज़िटिव है — [अपना डाउनलोड कैसे सत्यापित करें](docs/security/antivirus-false-positives.md) देखें।
 
 **Nix (Linux x86_64):**
 
@@ -150,6 +187,8 @@ source का उपयोग करते हैं।
 **CLI (`op`):**
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
 ```
 
@@ -194,6 +233,14 @@ git submodule sync --recursive && git submodule update --init --recursive
 bash scripts/start-web-rust.sh
 ```
 
+ब्राउज़र में दर्ज किए गए बिल्ट-इन प्रोवाइडर, इमेज-जनरेशन और Openverse क्रेडेंशियल डिफ़ॉल्ट रूप से सामान्य वेब प्राथमिकताओं से अलग, उसी ओरिजिन के `localStorage` (`openpencil-rust-web-credentials`) में रखे जाते हैं। किसी AI अनुरोध के लिए ज़रूरी क्रेडेंशियल उसी अनुरोध के साथ भेजा जाता है, लेकिन डेमन ब्राउज़र स्नैपशॉट को `settings.json` में नहीं लिखता।
+
+निजी डिप्लॉयमेंट `OPENPENCIL_PERSIST_WEB_CREDENTIALS_SERVER=true` से सर्वर पर स्थायी भंडारण चुन सकते हैं। यह सेटिंग पूरे डिप्लॉयमेंट पर लागू होती है; हर स्वीकृत ब्राउज़र स्नैपशॉट साझा, ब्राउज़र-स्वामित्व वाली प्रति को बदल देता है। इसे केवल HTTPS के पीछे, एक्सेस-नियंत्रित और एक ही सक्रिय एडमिनिस्ट्रेटर प्रोफ़ाइल वाले भरोसेमंद डिप्लॉयमेंट में सक्षम करें। सेटिंग बंद करने पर अगली शुरुआत में पहले से सहेजे गए ब्राउज़र-स्वामित्व वाले क्रेडेंशियल हट जाते हैं, जबकि ऑपरेटर का कॉन्फ़िगरेशन बना रहता है। हर `localStorage` की तरह, उसी ओरिजिन की स्क्रिप्ट ये मान पढ़ सकती हैं, इसलिए वेब ओरिजिन को अविश्वसनीय स्क्रिप्ट और XSS से सुरक्षित रखना ज़रूरी है। इस स्विच से पुराने रिलीज़ पर डाउनग्रेड करने से पहले इसे बंद करें और ब्राउज़र-स्वामित्व वाली प्रति मिटाने के लिए वर्तमान रिलीज़ एक बार चलाएँ।
+
+वेब होस्ट केवल API-की वाले बिल्ट-इन एजेंट सपोर्ट करता है। CLI और ACP एजेंट केवल नेटिव ही रहते हैं: वे वेब मॉडल पिकर में नहीं दिखते, ब्राउज़र क्रेडेंशियल स्नैपशॉट में संग्रहीत नहीं होते, सर्वर से सिंक नहीं होते और वेब कनेक्ट रूट से उजागर नहीं होते। क्रेडेंशियल और AI एंडपॉइंट पर ब्राउज़र अनुरोध डिफ़ॉल्ट रूप से loopback/localhost ओरिजिन की अनुमति देते हैं। सार्वजनिक रिवर्स प्रॉक्सी को अलग से `OPENPENCIL_WEB_ALLOWED_ORIGINS` को सटीक ओरिजिन की कॉमा-से-अलग सूची पर सेट करना होगा, उदाहरण के लिए `https://demo.openpencil.dev`।
+
+सर्वर पर स्थायी भंडारण ब्राउज़र-नियंत्रित अनुरोधों को loopback, निजी, link-local, मेटाडेटा या आरक्षित प्रोवाइडर एंडपॉइंट तक जाने की अनुमति नहीं देता। जानबूझकर आंतरिक प्रोवाइडर उपयोग करने वाले भरोसेमंद निजी डिप्लॉयमेंट को अलग से `OPENPENCIL_WEB_AI_ENDPOINT_ALLOWLIST` को सटीक URL ओरिजिन की कॉमा-से-अलग सूची पर सेट करना होगा, उदाहरण के लिए `http://127.0.0.1:11434,https://llm.internal.example`।
+
 या डेस्कटॉप ऐप के रूप में चलाएँ:
 
 ```bash
@@ -234,8 +281,11 @@ docker run -p 3100:3100 openpencil-web-rust
 
 - **टेक्स्ट-टू-डिज़ाइन** — एक पेज का विवरण दें, और स्ट्रीमिंग एनिमेशन के साथ रियल-टाइम में कैनवास पर जनरेट करें
 - **ऑर्केस्ट्रेटर** — जटिल पेजों को समानांतर जनरेशन के लिए स्थानिक सब-टास्क में विभाजित करता है
+- **एजेंट टीमें** — डेलिगेट टूल, प्रति-सदस्य कैनवास संकेतक और फ़ॉलबैक रणनीतियों वाले समवर्ती टीम सदस्य
 - **डिज़ाइन संशोधन** — एलिमेंट चुनें, फिर प्राकृतिक भाषा में बदलाव का विवरण दें
 - **विज़न इनपुट** — संदर्भ-आधारित डिज़ाइन के लिए स्क्रीनशॉट या मॉकअप संलग्न करें
+- **स्टाइल गाइड** — टैग-आधारित फ़ज़ी मैचिंग से विज़ुअल स्टाइल (glassmorphism, brutalist, retro आदि) लागू करें
+- **एंटी-स्लॉप** — दोहराव वाले AI आउटपुट से बचने के लिए जनरेशन के पार विविधता ट्रैकिंग
 
 **मल्टी-एजेंट सपोर्ट**
 
@@ -258,6 +308,7 @@ docker run -p 3100:3100 openpencil-web-rust
 - टर्मिनल से डिज़ाइन ऑटोमेशन: किसी भी MCP-संगत एजेंट के ज़रिए `.op` फ़ाइलें पढ़ें, बनाएँ और संपादित करें
 - **लेयर्ड डिज़ाइन वर्कफ़्लो** — उच्च-फ़िडेलिटी मल्टी-सेक्शन डिज़ाइन के लिए `design_skeleton` → `design_content` → `design_refine`
 - **सेगमेंटेड प्रॉम्प्ट रिट्रीवल** — केवल आवश्यक डिज़ाइन ज्ञान लोड करें (schema, layout, roles, icons, planning, आदि)
+- **स्टाइल गाइड टूल्स** — MCP के ज़रिए विज़ुअल स्टाइल लागू करने के लिए `get_style_guide_tags` और `get_style_guide`
 - मल्टी-पेज सपोर्ट — MCP टूल के ज़रिए पेज बनाएँ, नाम बदलें, क्रम बदलें और डुप्लिकेट करें
 
 **कोड जनरेशन**
@@ -267,10 +318,28 @@ docker run -p 3100:3100 openpencil-web-rust
 
 ## CLI — `op`
 
-वैश्विक रूप से इंस्टॉल करें और अपने टर्मिनल से डिज़ाइन टूल को नियंत्रित करें:
+Homebrew या इंस्टॉल स्क्रिप्ट से इंस्टॉल करें, फिर अपने टर्मिनल से डिज़ाइन टूल नियंत्रित करें:
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | OP_PRERELEASE=1 bash
+```
+
+```powershell
+irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
+```
+
+```powershell
+$env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
 ```
 
 ```bash
@@ -386,12 +455,12 @@ OpenPencil, **[ZSeven-W](https://github.com/ZSeven-W)** के शुद्ध-R
 
 | प्रोजेक्ट | यह क्या है |
 | --------- | ---------- |
-| **[DSH OpenPencil](./packages/op-dsh)** | OpenPencil के लिए DeepSeek Harness प्लगइन — बातचीत के भीतर ही सटीक मल्टी-फ़्रेम `.op` प्रीव्यू, एक इंटरैक्टिव कैनवास और एजेंट-नेटिव डिज़ाइन टूल के साथ प्रबंधित एडिटर। |
+| <img src="./screenshot/logo-dsh-openpencil.png" alt="DSH OpenPencil" width="40" /> **[DSH OpenPencil](./packages/op-dsh)** | OpenPencil के लिए DeepSeek Harness प्लगइन — बातचीत के भीतर ही सटीक मल्टी-फ़्रेम `.op` प्रीव्यू, एक इंटरैक्टिव कैनवास और एजेंट-नेटिव डिज़ाइन टूल के साथ प्रबंधित एडिटर। |
 | **[Codex OpenPencil](./packages/op-codex)** | OpenPencil के लिए Codex प्लगइन — वन-प्रॉम्प्ट सेटअप, चयन परिष्करण और विश्वसनीय `.op` सेव के साथ AI-सहायता प्राप्त UI डिज़ाइन के लिए एक इंटरैक्टिव Rust/WASM कैनवास। |
-| **[Zode](https://github.com/ZSeven-W/zode)** | आपके टर्मिनल के लिए ओपन-सोर्स, AI-नेटिव कोडिंग असिस्टेंट — एक तेज़ Rust TUI (`ratatui`) जो आपका कोड पढ़ता है, कमांड चलाता है, फ़ाइलें खोजता है और git प्रबंधित करता है। MCP के ज़रिए OpenPencil को चलाता है। |
+| <img src="./screenshot/logo-zode.png" alt="Zode logo" width="40" /> **[Zode](https://github.com/ZSeven-W/zode)** | आपके टर्मिनल के लिए ओपन-सोर्स, AI-नेटिव कोडिंग असिस्टेंट — एक तेज़ Rust TUI (`ratatui`) जो आपका कोड पढ़ता है, कमांड चलाता है, फ़ाइलें खोजता है और git प्रबंधित करता है। MCP के ज़रिए OpenPencil को चलाता है। |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | LLM एजेंट शिप करने के लिए एक शुद्ध-Rust async रनटाइम — मल्टी-प्रोवाइडर, एंड-टू-एंड टूल-सक्षम, संरचित अनुमतियाँ, वास्तविक MCP, शून्य `unsafe`। OpenPencil के बिल्ट-इन एजेंट रनटाइम (`vendor/agent`) और Zode को शक्ति देता है। |
-| **[jian](https://github.com/ZSeven-W/jian)** | शुद्ध-Rust, GPU-Skia UI फ़्रेमवर्क — एक ही स्टैक में विजेट्स, लेआउट, इवेंट और हॉट रीलोड। एक घोषणात्मक `.op` दस्तावेज़ को बिना JS रनटाइम, बिना DOM, बिना Electron के एक नेटिव, AI-नियंत्रणीय ऐप में बदल देता है। OpenPencil का UI फ़्रेमवर्क (`vendor/jian`)। |
-| **[noema](https://github.com/ZSeven-W/noema)** | कोडिंग एजेंट्स के लिए लोकल-फ़र्स्ट, नॉन-वेक्टर मेमोरी सिस्टम। निरीक्षण-योग्य फ़ाइलों के रूप में टिकाऊ मेमोरी, नई प्रविष्टियों के लिए एक समीक्षा कतार, और लेक्सिकल (एम्बेडिंग-मुक्त) रिकॉल — Zode, Codex, Claude Code और MCP रनटाइम में काम करता है। |
+| <img src="./screenshot/logo-jian-rounded.png" alt="jian logo" width="40" /> **[jian](https://github.com/ZSeven-W/jian)** | शुद्ध-Rust, GPU-Skia UI फ़्रेमवर्क — एक ही स्टैक में विजेट्स, लेआउट, इवेंट और हॉट रीलोड। एक घोषणात्मक `.op` दस्तावेज़ को बिना JS रनटाइम, बिना DOM, बिना Electron के एक नेटिव, AI-नियंत्रणीय ऐप में बदल देता है। OpenPencil का UI फ़्रेमवर्क (`vendor/jian`)। |
+| <img src="./screenshot/logo-noema-rounded.png" alt="noema logo" width="84" /> **[noema](https://github.com/ZSeven-W/noema)** | कोडिंग एजेंट्स के लिए लोकल-फ़र्स्ट, नॉन-वेक्टर मेमोरी सिस्टम। निरीक्षण-योग्य फ़ाइलों के रूप में टिकाऊ मेमोरी, नई प्रविष्टियों के लिए एक समीक्षा कतार, और लेक्सिकल (एम्बेडिंग-मुक्त) रिकॉल — Zode, Codex, Claude Code और MCP रनटाइम में काम करता है। |
 
 ## Rust क्यों
 
@@ -427,7 +496,12 @@ openpencil/
 │   ├── op-editor-core/       कैननिकल `.op` (PenDocument) एडिटर स्टेट + EditorCommand + डिज़ाइन वेरिएबल
 │   ├── op-editor-ui/         प्लेटफ़ॉर्म-मुक्त विजेट्स + RenderBackend फ़साड (wasm32-clean)
 │   ├── op-editor-host-core/  सभी होस्ट्स द्वारा साझा ट्रांसपोर्ट-मुक्त होस्ट स्टेट मशीनें
+│   ├── op-collab/            खुले सहयोग wire टाइप, कैनोनिकल हैश और सटीक डॉक्यूमेंट अप्लाई
+│   ├── op-collab-transport/  नेटिव Noise/TCP ट्रांसपोर्ट, सीमित प्रवेश और वैकल्पिक LAN खोज
+│   ├── op-collab-smoke/      दो-प्रोसेस प्रमाणित सहयोग रिकवरी मैट्रिक्स
 │   ├── op-host-native/       नेटिव होस्ट लाइब्रेरी — winit + skia-safe GL (डेस्कटॉप + मोबाइल)
+│   ├── op-engine-ffi/        प्लेयर C ABI — iOS / Android शेल में कैनवास एम्बेड करें
+│   ├── op-engine-jni/        op-engine-ffi के लिए Android JNI मार्शलिंग लेयर
 │   ├── op-host-web/          ब्राउज़र बंडल — wasm32 cdylib, CanvasKit रेंडरर
 │   ├── op-host-desktop/      डेस्कटॉप बाइनरी `openpencil-desktop`; `--serve-web` डेमॉन भी
 │   ├── op-host-services/     हेडलेस serve-web / MCP डेमॉन लाइब्रेरी
@@ -442,10 +516,14 @@ openpencil/
 │   ├── op-git/               Git इंटीग्रेशन — क्लोन, ब्रांच, पुश/पुल, मर्ज
 │   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
 │                             op-config-store / op-process-io / op-acp / op-smoke / ...
-├── packages/                 वेब SDK वर्कस्पेस (Bun)
+├── packages/                 वेब SDK और एडिटर/एजेंट इंटीग्रेशन
 │   ├── op-web-sdk/           रीड-ओनली `.op` वेब व्यूअर SDK (wasm बंडल को रैप करता है)
 │   ├── op-web-sdk-react/     React 19 एडाप्टर
-│   └── op-web-sdk-vue/       Vue 3 एडाप्टर
+│   ├── op-web-sdk-vue/       Vue 3 एडाप्टर
+│   ├── op-vscode/            `.op` और `.fig` संपादन के लिए VS Code एक्सटेंशन
+│   ├── op-chrome-extension/  रेंडर किए गए वेब पेज कैप्चर करने के लिए Chrome एक्सटेंशन
+│   ├── op-dsh/               DeepSeek Harness प्लगइन (`@zseven-w/dsh-openpencil`)
+│   └── op-codex/             Codex प्लगइन (`@zseven-w/codex-openpencil`)
 ├── vendor/                   वेंडर्ड सबसिस्टम (git सबमॉड्यूल)
 │   ├── jian/                 GPU-Skia UI फ़्रेमवर्क — विजेट/रेंडर/इवेंट
 │   ├── casement/             winit फ़ोर्क
@@ -492,6 +570,39 @@ cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon cat
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
+
+### Rust workspace विवरण
+
+Rust में रूपांतरण पूरा हो चुका है — Rust workspace ही उत्पाद है। किकऑफ़ स्पेक: `openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md` (v7 FROZEN)।
+
+```bash
+# Install Rust toolchain (rust-toolchain.toml auto-pins 1.94)
+rustup toolchain install 1.94
+rustup target add wasm32-unknown-unknown
+
+# build / test / lint
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo check --target wasm32-unknown-unknown -p op-collab --no-default-features
+cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web  # kickoff §1.2 wasm32 invariant
+cargo deny check && cargo deny --target wasm32-unknown-unknown check bans        # cargo-deny (native + wasm32 bans; CI uses cargo-deny-action@v2)
+```
+
+**एंट्री crate (`crates/` — बिल्ड टार्गेट):**
+
+| Crate | श्रेणी | wasm32 |
+| --- | --- | --- |
+| op-host-web | ब्राउज़र बंडल एंट्री — wasm32 cdylib, CanvasKit से रेंडर करता है | ✅ |
+| op-host-native | नेटिव होस्ट लाइब्रेरी — WidgetHostNative + skia-safe GL बैकएंड (डेस्कटॉप + मोबाइल) | ❌ (केवल नेटिव) |
+| op-engine-ffi | प्लेयर C ABI — एक इंजन, तीन शेल (iOS Metal / Android EGL / होस्ट रास्टर) | ❌ (केवल नेटिव) |
+| op-engine-jni | op-engine-ffi के लिए Android JNI मार्शलिंग लेयर (इंजन थ्रेड, रजिस्ट्री, कॉलबैक) | ❌ (केवल नेटिव) |
+| op-host-desktop | डेस्कटॉप बाइनरी `openpencil-desktop` (winit + skia-safe GL) — वेब बंडल होस्ट करने वाला `--serve-web` डेमन भी | ❌ (केवल नेटिव) |
+| op-cli | `op` कमांड-लाइन टूल | ❌ (केवल नेटिव) |
+
+**साझा लाइब्रेरी crate:** `op-editor-core` (कैनोनिकल `.op` स्टेट), `op-editor-ui` (प्लेटफ़ॉर्म-मुक्त विजेट + `RenderBackend`), `op-editor-host-core` (ट्रांसपोर्ट-मुक्त होस्ट स्टेट मशीनें), `op-collab` (खुला, ट्रांसपोर्ट-मुक्त सहयोग प्रोटोकॉल/हैश/सटीक अप्लाई), `op-collab-transport` (नेटिव Noise/TCP, सीमित प्रवेश और वैकल्पिक LAN खोज), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — साथ ही `op-collab-smoke` (प्रमाणित दो-प्रोसेस सहयोग/रिकवरी मैट्रिक्स) और `op-smoke` (हेडलेस डिज़ाइन-टर्न टेस्ट रनर)। मोबाइल प्लेयर `packaging/` में हैं (`op-engine-ffi` / `op-engine-jni` पर आधारित `ios` + `android` शेल)। ब्राउज़र बंडल आधिकारिक CanvasKit skia WASM (अलग से लोड) से रेंडर होता है, इसलिए सेवानिवृत्त `skia-safe-op` wasm फ़ोर्क और `wasm-libc-shim` अब मौजूद नहीं हैं।
+
+**सबमॉड्यूल:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (उत्पादों में साझा Rust एजेंट रनटाइम)।
 
 ## योगदान
 

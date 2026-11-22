@@ -71,11 +71,20 @@
 <tr>
 <td width="50%">
 
+### 🎨 風格指南
+
+內建風格指南庫，支援基於標籤的模糊比對。可為 AI 產生的設計套用視覺風格（glassmorphism、brutalist、retro 等），並提供供外部智慧體存取的 MCP 工具。
+
+</td>
+<td width="50%">
+
 ### 📦 設計即程式碼
 
 `.op` 檔案是 JSON — 人類可讀、對 Git 友好、可差異比較。設計變數生成 CSS 自訂屬性。程式碼匯出為 React + Tailwind 或 HTML + CSS。
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🖥️ 隨處執行
@@ -83,8 +92,6 @@
 Web 應用程式 + macOS、Windows 和 Linux 上的原生桌面應用程式 — 單一 Rust 核心、單一自包含二進位檔，無需瀏覽器引擎。`.op` 檔案關聯 — 雙擊即可開啟。
 
 </td>
-</tr>
-<tr>
 <td width="50%">
 
 ### ⌨️ CLI — `op`
@@ -92,11 +99,36 @@ Web 應用程式 + macOS、Windows 和 Linux 上的原生桌面應用程式 — 
 從終端機控制設計工具。`op design`、`op insert` — 批次設計 DSL、節點操作。支援從檔案或 stdin 管道輸入。可搭配桌面應用程式或 Web 伺服器使用。
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🎯 多平台程式碼匯出
 
 從單個 `.op` 檔案匯出至 React + Tailwind、HTML + CSS、Vue、Svelte、Flutter、SwiftUI、Jetpack Compose、React Native。設計變數自動轉換為 CSS 自訂屬性。
+
+</td>
+<td width="50%">
+
+### 🧩 可嵌入 SDK
+
+`op-web-sdk`（原生 JS）+ `op-web-sdk-react` / `op-web-sdk-vue` 轉接器 — 在你自己的應用程式中嵌入唯讀 `.op` 檢視器，由編輯器同款 wasm 渲染器驅動。
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🛡️ 設計系統套件
+
+管理可重複使用的 UIKit，支援風格切換與元件組合。可從 `.pen` 檔案匯入/匯出套件。內建登錄表，並提供供外部存取的 MCP 工具。
+
+</td>
+<td width="50%">
+
+### 👥 即時協作
+
+透過經過身分驗證的點對點工作階段共同設計，配有公共中繼與內建區域 Hub。使用簡短的配對碼加入，即時查看遠端游標，並藉助逐筆編輯詳情與重播解決衝突。
 
 </td>
 </tr>
@@ -110,6 +142,7 @@ Web 應用程式 + macOS、Windows 和 Linux 上的原生桌面應用程式 — 
 
 ```bash
 brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install --cask openpencil
 ```
 
@@ -121,6 +154,10 @@ scoop install openpencil
 ```
 
 **Linux / Windows 直接下載：** [GitHub Releases](https://github.com/ZSeven-W/openpencil/releases) — `.exe`（Windows）、`.AppImage` / `.deb`（Linux）
+
+Windows `.exe` 安裝程式、兩個 Scoop 套件以及 `install-op.ps1` CLI 安裝指令碼，會在每次安裝或升級時檢查固定版本、由 Microsoft 簽署的 Visual C++ v14 執行階段，並在需要時修復。Windows 可攜式 `.zip` 封存檔和 Windows VSIX 套件不會執行需要提權的系統安裝程式；直接使用這些產物前，請先安裝 Microsoft 的[最新受支援 Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)。
+
+> 防毒軟體將 Windows 安裝程式標記為威脅？這是新發佈、低普及度版本上已知的啟發式誤報 — 請參閱[如何驗證你的下載](docs/security/antivirus-false-positives.md)。
 
 **Nix（Linux x86_64）：**
 
@@ -148,6 +185,8 @@ manifest。在 PR 合併前，預先建置的 output 仍使用上一個已發布
 **CLI（`op`）：**
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
 ```
 
@@ -192,6 +231,14 @@ git submodule sync --recursive && git submodule update --init --recursive
 bash scripts/start-web-rust.sh
 ```
 
+瀏覽器中輸入的內建提供者、圖像生成和 Openverse 憑證預設儲存在同源 `localStorage`（`openpencil-rust-web-credentials`）中，與一般 Web 偏好設定分開。AI 請求所需的憑證會隨該請求一起傳送，但常駐程式不會把瀏覽器快照寫入 `settings.json`。
+
+私有部署可以透過 `OPENPENCIL_PERSIST_WEB_CREDENTIALS_SERVER=true` 啟用伺服器端持久化。此設定作用於整個部署；每個被接受的瀏覽器快照都會取代共用的瀏覽器所有副本。僅應在位於 HTTPS 之後、受存取控制且只有一個活躍管理員設定檔的可信部署中啟用。關閉此設定後，下次啟動時會刪除先前持久化的瀏覽器所有憑證，同時保留維運方自有的設定。與所有 `localStorage` 一樣，同源指令碼可以讀取這些值，因此必須保護 Web 來源免受不可信指令碼和 XSS 的影響。降級到早於此開關的版本之前，請先關閉它，並用目前版本啟動一次，以清除瀏覽器所有的副本。
+
+Web 主機僅支援使用 API Key 的內建智慧體。CLI 和 ACP 智慧體仍僅限原生端：它們不會顯示在 Web 模型選擇器中，不會存入瀏覽器憑證快照，不會同步到伺服器，也不會透過 Web 連線路由公開。瀏覽器對憑證和 AI 端點的請求預設允許 loopback/localhost 來源。公共反向代理必須另行將 `OPENPENCIL_WEB_ALLOWED_ORIGINS` 設定為以逗號分隔的精確來源清單，例如 `https://demo.openpencil.dev`。
+
+伺服器端持久化不允許瀏覽器控制的請求存取 loopback、私有、鏈路本機、中繼資料或保留的提供者端點。有意使用內部提供者的可信私有部署，必須另行將 `OPENPENCIL_WEB_AI_ENDPOINT_ALLOWLIST` 設定為以逗號分隔的精確 URL 來源清單，例如 `http://127.0.0.1:11434,https://llm.internal.example`。
+
 或以桌面應用程式形式執行：
 
 ```bash
@@ -232,8 +279,11 @@ docker run -p 3100:3100 openpencil-web-rust
 
 - **文字轉設計** — 描述一個頁面，即時以串流動畫在畫布上生成
 - **編排器** — 將複雜頁面分解為空間子任務，支援並行生成
+- **Agent 團隊** — 並行團隊成員，配備委派工具、每位成員的畫布指示器以及備援策略
 - **設計修改** — 選取元素後，以自然語言描述變更
 - **視覺輸入** — 附加截圖或線框圖作為參考進行設計
+- **風格指南** — 透過基於標籤的模糊比對套用視覺風格（glassmorphism、brutalist、retro 等）
+- **反同質化** — 跨次生成的多樣性追蹤，避免 AI 輸出千篇一律
 
 **多智能體支援**
 
@@ -256,6 +306,7 @@ docker run -p 3100:3100 openpencil-web-rust
 - 從終端機進行設計自動化：透過任意 MCP 相容的智能體讀取、建立和修改 `.op` 檔案
 - **分層設計工作流** — `design_skeleton` → `design_content` → `design_refine`，適用於高保真多區塊設計
 - **分段提示詞擷取** — 僅載入所需的設計知識（schema、layout、roles、icons、planning 等）
+- **風格指南工具** — 透過 MCP 使用 `get_style_guide_tags` 和 `get_style_guide` 套用視覺風格
 - 多頁面支援 — 透過 MCP 工具建立、重新命名、重新排序和複製頁面
 
 **程式碼生成**
@@ -265,10 +316,28 @@ docker run -p 3100:3100 openpencil-web-rust
 
 ## CLI — `op`
 
-全域安裝後即可從終端機控制設計工具：
+透過 Homebrew 或安裝指令碼安裝後，即可從終端機控制設計工具：
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | OP_PRERELEASE=1 bash
+```
+
+```powershell
+irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
+```
+
+```powershell
+$env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
 ```
 
 ```bash
@@ -384,12 +453,12 @@ OpenPencil 是 **[ZSeven-W](https://github.com/ZSeven-W)** 出品的一系列純
 
 | 專案 | 簡介 |
 | ---- | ---- |
-| **[DSH OpenPencil](./packages/op-dsh)** | OpenPencil 的 DeepSeek Harness 外掛 — 在對話中提供精確的多畫板 `.op` 預覽、可互動畫布，以及具備代理原生設計工具的託管編輯器。 |
+| <img src="./screenshot/logo-dsh-openpencil.png" alt="DSH OpenPencil" width="40" /> **[DSH OpenPencil](./packages/op-dsh)** | OpenPencil 的 DeepSeek Harness 外掛 — 在對話中提供精確的多畫板 `.op` 預覽、可互動畫布，以及具備代理原生設計工具的託管編輯器。 |
 | **[Codex OpenPencil](./packages/op-codex)** | OpenPencil 的 Codex 外掛 — 提供可互動的 Rust/WASM 畫布，支援一句話安裝、選取元素精修與可靠的 `.op` 儲存回讀。 |
-| **[Zode](https://github.com/ZSeven-W/zode)** | 面向終端機的開源、AI 原生程式設計助手 — 一個快速的 Rust TUI（`ratatui`），可讀取你的程式碼、執行命令、搜尋檔案並管理 git。透過 MCP 驅動 OpenPencil。 |
+| <img src="./screenshot/logo-zode.png" alt="Zode logo" width="40" /> **[Zode](https://github.com/ZSeven-W/zode)** | 面向終端機的開源、AI 原生程式設計助手 — 一個快速的 Rust TUI（`ratatui`），可讀取你的程式碼、執行命令、搜尋檔案並管理 git。透過 MCP 驅動 OpenPencil。 |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | 用於交付 LLM 智能體的純 Rust 非同步執行環境 — 多提供商、端到端工具能力、結構化權限、真正的 MCP、零 `unsafe`。為 OpenPencil 內建的智能體執行環境（`vendor/agent`）和 Zode 提供動力。 |
-| **[jian](https://github.com/ZSeven-W/jian)** | 純 Rust、GPU-Skia UI 框架 — widgets、版面配置、事件和熱重載集於一棧。將宣告式的 `.op` 文件變為原生、AI 可控的應用程式，無需 JS 執行環境、無 DOM、無 Electron。OpenPencil 的 UI 框架（`vendor/jian`）。 |
-| **[noema](https://github.com/ZSeven-W/noema)** | 面向程式設計智能體的本地優先、非向量記憶系統。以可檢視的檔案形式提供持久記憶、為新項目提供審閱佇列，以及詞彙式（無需嵌入）召回 — 適用於 Zode、Codex、Claude Code 和 MCP 執行環境。 |
+| <img src="./screenshot/logo-jian-rounded.png" alt="jian logo" width="40" /> **[jian](https://github.com/ZSeven-W/jian)** | 純 Rust、GPU-Skia UI 框架 — widgets、版面配置、事件和熱重載集於一棧。將宣告式的 `.op` 文件變為原生、AI 可控的應用程式，無需 JS 執行環境、無 DOM、無 Electron。OpenPencil 的 UI 框架（`vendor/jian`）。 |
+| <img src="./screenshot/logo-noema-rounded.png" alt="noema logo" width="84" /> **[noema](https://github.com/ZSeven-W/noema)** | 面向程式設計智能體的本地優先、非向量記憶系統。以可檢視的檔案形式提供持久記憶、為新項目提供審閱佇列，以及詞彙式（無需嵌入）召回 — 適用於 Zode、Codex、Claude Code 和 MCP 執行環境。 |
 
 ## 為何選擇 Rust
 
@@ -425,7 +494,12 @@ openpencil/
 │   ├── op-editor-core/       正典 `.op`（PenDocument）編輯器狀態 + EditorCommand + 設計變數
 │   ├── op-editor-ui/         平台無關的 widgets + RenderBackend facade（wasm32-clean）
 │   ├── op-editor-host-core/  所有 host 共用、與傳輸方式無關的 host 狀態機
+│   ├── op-collab/            開放的協作 wire 型別、標準雜湊與精確文件套用
+│   ├── op-collab-transport/  原生 Noise/TCP 傳輸、有界准入與可選的區域網路探索
+│   ├── op-collab-smoke/      雙行程驗證協作復原矩陣
 │   ├── op-host-native/       原生 host 函式庫 — winit + skia-safe GL（桌面端 + 行動端）
+│   ├── op-engine-ffi/        Player C ABI — 將畫布嵌入 iOS / Android 外殼
+│   ├── op-engine-jni/        op-engine-ffi 的 Android JNI 封送層
 │   ├── op-host-web/          瀏覽器套件 — wasm32 cdylib，CanvasKit 渲染器
 │   ├── op-host-desktop/      桌面二進位檔 `openpencil-desktop`；同時也是 `--serve-web` daemon
 │   ├── op-host-services/     Headless serve-web / MCP daemon 函式庫
@@ -440,10 +514,14 @@ openpencil/
 │   ├── op-git/               Git 整合 — 複製、分支、推送/拉取、合併
 │   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
 │                             op-config-store / op-process-io / op-acp / op-smoke / ...
-├── packages/                 Web SDK workspace（Bun）
+├── packages/                 Web SDK 與編輯器/智慧體整合
 │   ├── op-web-sdk/           唯讀 `.op` Web 檢視器 SDK（包裝 wasm 套件）
 │   ├── op-web-sdk-react/     React 19 轉接器
-│   └── op-web-sdk-vue/       Vue 3 轉接器
+│   ├── op-web-sdk-vue/       Vue 3 轉接器
+│   ├── op-vscode/            用於編輯 `.op` 和 `.fig` 的 VS Code 擴充功能
+│   ├── op-chrome-extension/  用於擷取渲染後網頁的 Chrome 擴充功能
+│   ├── op-dsh/               DeepSeek Harness 外掛 (`@zseven-w/dsh-openpencil`)
+│   └── op-codex/             Codex 外掛 (`@zseven-w/codex-openpencil`)
 ├── vendor/                   內建子系統（Git submodules）
 │   ├── jian/                 GPU-Skia UI 框架 — 元件/渲染/事件
 │   ├── casement/             winit fork
@@ -490,6 +568,39 @@ cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon cat
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
+
+### Rust workspace 詳情
+
+Rust 化已經完成 — Rust workspace 就是產品本身。啟動規格：`openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md`（v7 已凍結）。
+
+```bash
+# Install Rust toolchain (rust-toolchain.toml auto-pins 1.94)
+rustup toolchain install 1.94
+rustup target add wasm32-unknown-unknown
+
+# build / test / lint
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo check --target wasm32-unknown-unknown -p op-collab --no-default-features
+cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web  # kickoff §1.2 wasm32 invariant
+cargo deny check && cargo deny --target wasm32-unknown-unknown check bans        # cargo-deny (native + wasm32 bans; CI uses cargo-deny-action@v2)
+```
+
+**入口 crate（`crates/` — 建置目標）：**
+
+| Crate | 類別 | wasm32 |
+| --- | --- | --- |
+| op-host-web | 瀏覽器建置入口 — wasm32 cdylib，透過 CanvasKit 渲染 | ✅ |
+| op-host-native | 原生主機函式庫 — WidgetHostNative + skia-safe GL 後端（桌面端 + 行動端） | ❌（僅原生） |
+| op-engine-ffi | Player C ABI — 一個引擎，三種外殼（iOS Metal / Android EGL / 主機點陣） | ❌（僅原生） |
+| op-engine-jni | op-engine-ffi 的 Android JNI 封送層（引擎執行緒、登錄表、回呼） | ❌（僅原生） |
+| op-host-desktop | 桌面應用程式二進位檔 `openpencil-desktop`（winit + skia-safe GL）— 同時也是託管 Web 建置產物的 `--serve-web` 常駐程式 | ❌（僅原生） |
+| op-cli | `op` 命令列工具 | ❌（僅原生） |
+
+**共用函式庫 crate：** `op-editor-core`（標準的 `.op` 狀態）、`op-editor-ui`（平台無關元件 + `RenderBackend`）、`op-editor-host-core`（與傳輸層無關的主機狀態機）、`op-collab`（開放、與傳輸層無關的協作協定/雜湊/精確套用）、`op-collab-transport`（原生 Noise/TCP、有界准入與可選的區域網路探索）、`op-mcp`、`op-ai`、`op-ai-skills`、`op-codegen`、`op-orchestrator`、`op-figma`、`op-git`、`op-opmerge`、`op-pen-loader`、`op-design-lint`、`op-config-store`、`op-process-io`、`op-acp`、`op-i18n`、`op-rpc-transport` — 另有 `op-collab-smoke`（經過驗證的雙行程協作/復原矩陣）和 `op-smoke`（無頭設計回合測試執行器）。行動端播放器位於 `packaging/`（基於 `op-engine-ffi` / `op-engine-jni` 的 `ios` + `android` 外殼）。瀏覽器建置產物透過官方 CanvasKit skia WASM（單獨載入）渲染，因此已退役的 `skia-safe-op` wasm fork 與 `wasm-libc-shim` 已不復存在。
+
+**子模組：** `vendor/agent` → `github.com/ZSeven-W/agent-rs`（跨產品 Rust 智慧體執行階段）。
 
 ## 參與貢獻
 

@@ -71,11 +71,20 @@ Orchestrator แบ่งหน้าที่ซับซ้อนออกเ�
 <tr>
 <td width="50%">
 
+### 🎨 Style Guides
+
+ไลบรารี Style Guide ในตัวพร้อมการจับคู่แบบ fuzzy ตามแท็ก ใช้สไตล์ภาพ (glassmorphism, brutalist, retro ฯลฯ) กับดีไซน์ที่ AI สร้าง พร้อมเครื่องมือ MCP สำหรับให้เอเจนต์ภายนอกเข้าถึง
+
+</td>
+<td width="50%">
+
 ### 📦 Design-as-Code
 
 ไฟล์ `.op` เป็น JSON — อ่านได้โดยมนุษย์, Git-friendly, เปรียบเทียบความแตกต่างได้ Design variables สร้าง CSS custom properties ส่งออกโค้ดเป็น React + Tailwind หรือ HTML + CSS
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🖥️ ใช้งานได้ทุกที่
@@ -83,8 +92,6 @@ Orchestrator แบ่งหน้าที่ซับซ้อนออกเ�
 เว็บแอป + เดสก์ท็อปแบบ native บน macOS, Windows และ Linux — Rust core เดียว, binary แบบ self-contained เดียว ไม่มี browser engine เชื่อมโยงไฟล์ `.op` — ดับเบิลคลิกเพื่อเปิด
 
 </td>
-</tr>
-<tr>
 <td width="50%">
 
 ### ⌨️ CLI — `op`
@@ -92,11 +99,36 @@ Orchestrator แบ่งหน้าที่ซับซ้อนออกเ�
 ควบคุมเครื่องมือออกแบบจาก terminal ของคุณ `op design`, `op insert` — batch design DSL, จัดการ node Pipe จากไฟล์หรือ stdin ทำงานร่วมกับแอปเดสก์ท็อปหรือ web server
 
 </td>
+</tr>
+<tr>
 <td width="50%">
 
 ### 🎯 ส่งออกโค้ดหลายแพลตฟอร์ม
 
 ส่งออกจากไฟล์ `.op` ไฟล์เดียวไปยัง React + Tailwind, HTML + CSS, Vue, Svelte, Flutter, SwiftUI, Jetpack Compose, React Native Design variables กลายเป็น CSS custom properties
+
+</td>
+<td width="50%">
+
+### 🧩 SDK ที่ฝังได้
+
+`op-web-sdk` (vanilla) + อะแดปเตอร์ `op-web-sdk-react` / `op-web-sdk-vue` — ฝังตัวแสดง `.op` แบบอ่านอย่างเดียวในแอปของคุณ ขับเคลื่อนด้วยตัวเรนเดอร์ wasm ตัวเดียวกับที่เอดิเตอร์ใช้
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🛡️ Design System Kit
+
+จัดการ UIKit ที่นำกลับมาใช้ได้ พร้อมการสลับสไตล์และการประกอบคอมโพเนนต์ นำเข้า/ส่งออกคิตจากไฟล์ `.pen` มีรีจิสทรีในตัวพร้อมเครื่องมือ MCP สำหรับการเข้าถึงจากภายนอก
+
+</td>
+<td width="50%">
+
+### 👥 ทำงานร่วมกันแบบเรียลไทม์
+
+ออกแบบร่วมกันผ่านเซสชันแบบ peer-to-peer ที่ยืนยันตัวตน พร้อมรีเลย์สาธารณะและฮับประจำภูมิภาคในตัว เข้าร่วมด้วยรหัสจับคู่สั้น ๆ เห็นเคอร์เซอร์ของผู้อื่นแบบสด และแก้ความขัดแย้งด้วยรายละเอียดและการเล่นซ้ำของแต่ละการแก้ไข
 
 </td>
 </tr>
@@ -110,6 +142,7 @@ Orchestrator แบ่งหน้าที่ซับซ้อนออกเ�
 
 ```bash
 brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install --cask openpencil
 ```
 
@@ -121,6 +154,10 @@ scoop install openpencil
 ```
 
 **ดาวน์โหลดโดยตรงสำหรับ Linux / Windows:** [GitHub Releases](https://github.com/ZSeven-W/openpencil/releases) — `.exe` (Windows), `.AppImage` / `.deb` (Linux)
+
+ตัวติดตั้ง `.exe` ของ Windows แพ็กเกจ Scoop ทั้งสอง และตัวติดตั้ง CLI `install-op.ps1` จะตรวจสอบรันไทม์ Visual C++ v14 ที่ตรึงเวอร์ชันและลงนามโดย Microsoft ทุกครั้งที่ติดตั้งหรืออัปเกรด และซ่อมแซมเมื่อจำเป็น ไฟล์ `.zip` แบบพกพาของ Windows และแพ็กเกจ VSIX ของ Windows จะไม่รันตัวติดตั้งระบบที่ต้องยกระดับสิทธิ์ ให้ติดตั้ง [Visual C++ Redistributable เวอร์ชันล่าสุดที่รองรับ](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170) ของ Microsoft ก่อนใช้งานไฟล์เหล่านั้นโดยตรง
+
+> แอนติไวรัสแจ้งเตือนตัวติดตั้ง Windows? นี่เป็นผลบวกลวงแบบ heuristic ที่รู้กันดีสำหรับรีลีสใหม่ที่ยังมีผู้ใช้น้อย — ดู[วิธีตรวจสอบไฟล์ที่ดาวน์โหลด](docs/security/antivirus-false-positives.md)
 
 **Nix (Linux x86_64):**
 
@@ -149,6 +186,8 @@ release ที่เผยแพร่ก่อนหน้า ส่วน outp
 **CLI (`op`):**
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
 ```
 
@@ -193,6 +232,14 @@ git submodule sync --recursive && git submodule update --init --recursive
 bash scripts/start-web-rust.sh
 ```
 
+ข้อมูลรับรองของผู้ให้บริการในตัว การสร้างภาพ และ Openverse ที่กรอกในเบราว์เซอร์ จะถูกเก็บไว้ใน `localStorage` ของ origin เดียวกัน (`openpencil-rust-web-credentials`) โดยค่าเริ่มต้น แยกจากการตั้งค่าเว็บทั่วไป ข้อมูลรับรองที่คำขอ AI ต้องใช้จะถูกส่งไปพร้อมคำขอนั้น แต่ daemon จะไม่เขียนสแนปช็อตของเบราว์เซอร์ลงใน `settings.json`
+
+การดีพลอยแบบส่วนตัวสามารถเลือกเก็บข้อมูลไว้ที่เซิร์ฟเวอร์ด้วย `OPENPENCIL_PERSIST_WEB_CREDENTIALS_SERVER=true` การตั้งค่านี้มีผลทั้งดีพลอย สแนปช็อตเบราว์เซอร์ที่ได้รับการยอมรับแต่ละครั้งจะแทนที่สำเนาที่เบราว์เซอร์เป็นเจ้าของซึ่งใช้ร่วมกัน เปิดใช้เฉพาะในดีพลอยที่เชื่อถือได้ มีการควบคุมการเข้าถึง มีโปรไฟล์ผู้ดูแลที่ใช้งานอยู่เพียงหนึ่งเดียว และอยู่หลัง HTTPS การปิดการตั้งค่านี้จะลบข้อมูลรับรองที่เบราว์เซอร์เป็นเจ้าของซึ่งเคยบันทึกไว้เมื่อเริ่มระบบครั้งถัดไป โดยยังคงการตั้งค่าของผู้ดูแลระบบไว้ เช่นเดียวกับ `localStorage` ทั้งหมด สคริปต์จาก origin เดียวกันอ่านค่าเหล่านี้ได้ จึงต้องปกป้อง origin ของเว็บจากสคริปต์ที่ไม่น่าเชื่อถือและ XSS ก่อนดาวน์เกรดไปยังรีลีสที่เก่ากว่าสวิตช์นี้ ให้ปิดสวิตช์และเปิดรีลีสปัจจุบันหนึ่งครั้งเพื่อล้างสำเนาที่เบราว์เซอร์เป็นเจ้าของ
+
+เว็บโฮสต์รองรับเฉพาะเอเจนต์ในตัวที่ใช้ API key เท่านั้น เอเจนต์ CLI และ ACP ยังคงใช้ได้เฉพาะเวอร์ชันเนทีฟ: จะไม่แสดงในตัวเลือกโมเดลบนเว็บ ไม่ถูกเก็บในสแนปช็อตข้อมูลรับรองของเบราว์เซอร์ ไม่ซิงก์ไปยังเซิร์ฟเวอร์ และไม่ถูกเปิดเผยผ่านเส้นทาง connect ของเว็บ คำขอจากเบราว์เซอร์ไปยังปลายทางข้อมูลรับรองและ AI อนุญาต origin แบบ loopback/localhost โดยค่าเริ่มต้น reverse proxy สาธารณะต้องตั้งค่า `OPENPENCIL_WEB_ALLOWED_ORIGINS` แยกต่างหากเป็นรายการ origin ที่ตรงกันทุกตัวอักษรคั่นด้วยจุลภาค เช่น `https://demo.openpencil.dev`
+
+การเก็บข้อมูลที่เซิร์ฟเวอร์ไม่อนุญาตให้คำขอที่เบราว์เซอร์ควบคุมเข้าถึงปลายทางผู้ให้บริการแบบ loopback, private, link-local, metadata หรือที่สงวนไว้ ดีพลอยส่วนตัวที่เชื่อถือได้ซึ่งตั้งใจใช้ผู้ให้บริการภายใน ต้องตั้งค่า `OPENPENCIL_WEB_AI_ENDPOINT_ALLOWLIST` แยกต่างหากเป็นรายการ URL origin ที่ตรงกันทุกตัวอักษรคั่นด้วยจุลภาค เช่น `http://127.0.0.1:11434,https://llm.internal.example`
+
 หรือรันเป็นแอปพลิเคชัน Desktop:
 
 ```bash
@@ -233,8 +280,11 @@ docker run -p 3100:3100 openpencil-web-rust
 
 - **ข้อความเป็นดีไซน์** — อธิบายหน้า แล้วสร้างขึ้นบน Canvas แบบเรียลไทม์พร้อม animation แบบ streaming
 - **Orchestrator** — แบ่งหน้าที่ซับซ้อนออกเป็น sub-task เชิงพื้นที่เพื่อการสร้างแบบขนาน
+- **Agent Teams** — สมาชิกทีมที่ทำงานพร้อมกัน พร้อมเครื่องมือมอบหมายงาน ตัวบ่งชี้บนแคนวาสของแต่ละสมาชิก และกลยุทธ์สำรอง
 - **การแก้ไขดีไซน์** — เลือกองค์ประกอบ แล้วอธิบายการเปลี่ยนแปลงด้วยภาษาธรรมชาติ
 - **Vision input** — แนบ screenshot หรือ mockup เพื่อใช้เป็นข้อมูลอ้างอิงในการออกแบบ
+- **Style Guides** — ใช้สไตล์ภาพ (glassmorphism, brutalist, retro ฯลฯ) ผ่านการจับคู่แบบ fuzzy ตามแท็ก
+- **Anti-slop** — ติดตามความหลากหลายข้ามการสร้างแต่ละครั้ง เพื่อหลีกเลี่ยงผลลัพธ์ AI ที่ซ้ำซาก
 
 **รองรับหลาย Agent**
 
@@ -257,6 +307,7 @@ docker run -p 3100:3100 openpencil-web-rust
 - การทำ Design automation จาก terminal: อ่าน สร้าง และแก้ไขไฟล์ `.op` ผ่าน agent ที่รองรับ MCP
 - **Layered design workflow** — `design_skeleton` → `design_content` → `design_refine` สำหรับดีไซน์หลายส่วนที่มีความละเอียดสูงขึ้น
 - **Segmented prompt retrieval** — โหลดเฉพาะความรู้ด้านดีไซน์ที่ต้องการ (schema, layout, roles, icons, planning ฯลฯ)
+- **เครื่องมือ Style guide** — `get_style_guide_tags` และ `get_style_guide` สำหรับใช้สไตล์ภาพผ่าน MCP
 - รองรับหลายหน้า — สร้าง เปลี่ยนชื่อ เรียงลำดับ และทำซ้ำหน้าผ่าน MCP tools
 
 **การสร้างโค้ด**
@@ -266,10 +317,28 @@ docker run -p 3100:3100 openpencil-web-rust
 
 ## CLI — `op`
 
-ติดตั้งแบบ global และควบคุมเครื่องมือออกแบบจาก terminal ของคุณ:
+ติดตั้งผ่าน Homebrew หรือสคริปต์ติดตั้ง แล้วควบคุมเครื่องมือออกแบบจากเทอร์มินัลของคุณ:
 
 ```bash
+brew tap zseven-w/openpencil
+brew trust --tap zseven-w/openpencil
 brew install zseven-w/openpencil/op
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | bash
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.sh | OP_PRERELEASE=1 bash
+```
+
+```powershell
+irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
+```
+
+```powershell
+$env:OP_PRERELEASE = "1"; irm https://raw.githubusercontent.com/ZSeven-W/openpencil/main/scripts/install-op.ps1 | iex
 ```
 
 ```bash
@@ -385,12 +454,12 @@ OpenPencil เป็นส่วนหนึ่งของตระกูลเ
 
 | โปรเจกต์ | คืออะไร |
 | -------- | ------- |
-| **[DSH OpenPencil](./packages/op-dsh)** | ปลั๊กอิน DeepSeek Harness สำหรับ OpenPencil — การแสดงตัวอย่าง `.op` หลายเฟรมที่แม่นยำ แคนวาสแบบอินเทอร์แอคทีฟ และเอดิเตอร์ที่มีการจัดการพร้อมเครื่องมือออกแบบแบบเอเจนต์เนทีฟ ภายในบทสนทนา |
+| <img src="./screenshot/logo-dsh-openpencil.png" alt="DSH OpenPencil" width="40" /> **[DSH OpenPencil](./packages/op-dsh)** | ปลั๊กอิน DeepSeek Harness สำหรับ OpenPencil — การแสดงตัวอย่าง `.op` หลายเฟรมที่แม่นยำ แคนวาสแบบอินเทอร์แอคทีฟ และเอดิเตอร์ที่มีการจัดการพร้อมเครื่องมือออกแบบแบบเอเจนต์เนทีฟ ภายในบทสนทนา |
 | **[Codex OpenPencil](./packages/op-codex)** | ปลั๊กอิน Codex สำหรับ OpenPencil — แคนวาส Rust/WASM แบบอินเทอร์แอคทีฟสำหรับออกแบบ UI ด้วย AI พร้อมติดตั้งด้วยพรอมต์เดียว แก้ไขตามส่วนที่เลือก และบันทึกไฟล์ `.op` |
-| **[Zode](https://github.com/ZSeven-W/zode)** | ผู้ช่วยเขียนโค้ดแบบโอเพนซอร์สที่ขับเคลื่อนด้วย AI สำหรับเทอร์มินัลของคุณ — Rust TUI (`ratatui`) ที่รวดเร็วซึ่งอ่านโค้ดของคุณ รันคำสั่ง ค้นหาไฟล์ และจัดการ git ขับเคลื่อน OpenPencil ผ่าน MCP |
+| <img src="./screenshot/logo-zode.png" alt="Zode logo" width="40" /> **[Zode](https://github.com/ZSeven-W/zode)** | ผู้ช่วยเขียนโค้ดแบบโอเพนซอร์สที่ขับเคลื่อนด้วย AI สำหรับเทอร์มินัลของคุณ — Rust TUI (`ratatui`) ที่รวดเร็วซึ่งอ่านโค้ดของคุณ รันคำสั่ง ค้นหาไฟล์ และจัดการ git ขับเคลื่อน OpenPencil ผ่าน MCP |
 | **[agent-rs](https://github.com/ZSeven-W/agent-rs)** | async runtime แบบ pure-Rust สำหรับส่งมอบ LLM agent — รองรับหลายผู้ให้บริการ ใช้เครื่องมือได้แบบ end-to-end สิทธิ์แบบมีโครงสร้าง MCP จริง และ `unsafe` เป็นศูนย์ ขับเคลื่อน agent runtime ในตัวของ OpenPencil (`vendor/agent`) และ Zode |
-| **[jian](https://github.com/ZSeven-W/jian)** | เฟรมเวิร์ก UI แบบ GPU-Skia ที่เป็น pure-Rust — widgets, layout, events และ hot reload ในสแตกเดียว เปลี่ยนเอกสาร `.op` แบบ declarative ให้เป็นแอปแบบ native ที่ควบคุมด้วย AI ได้ โดยไม่มี JS runtime, ไม่มี DOM, ไม่มี Electron เฟรมเวิร์ก UI ของ OpenPencil (`vendor/jian`) |
-| **[noema](https://github.com/ZSeven-W/noema)** | ระบบหน่วยความจำแบบ local-first ที่ไม่ใช่เวกเตอร์สำหรับ coding agent หน่วยความจำที่คงทนในรูปแบบไฟล์ที่ตรวจสอบได้ คิวสำหรับตรวจทานรายการใหม่ และการเรียกคืนแบบ lexical (ไม่ใช้ embedding) — ทำงานได้ทั้งบน Zode, Codex, Claude Code และ MCP runtime |
+| <img src="./screenshot/logo-jian-rounded.png" alt="jian logo" width="40" /> **[jian](https://github.com/ZSeven-W/jian)** | เฟรมเวิร์ก UI แบบ GPU-Skia ที่เป็น pure-Rust — widgets, layout, events และ hot reload ในสแตกเดียว เปลี่ยนเอกสาร `.op` แบบ declarative ให้เป็นแอปแบบ native ที่ควบคุมด้วย AI ได้ โดยไม่มี JS runtime, ไม่มี DOM, ไม่มี Electron เฟรมเวิร์ก UI ของ OpenPencil (`vendor/jian`) |
+| <img src="./screenshot/logo-noema-rounded.png" alt="noema logo" width="84" /> **[noema](https://github.com/ZSeven-W/noema)** | ระบบหน่วยความจำแบบ local-first ที่ไม่ใช่เวกเตอร์สำหรับ coding agent หน่วยความจำที่คงทนในรูปแบบไฟล์ที่ตรวจสอบได้ คิวสำหรับตรวจทานรายการใหม่ และการเรียกคืนแบบ lexical (ไม่ใช้ embedding) — ทำงานได้ทั้งบน Zode, Codex, Claude Code และ MCP runtime |
 
 ## ทำไมต้อง Rust
 
@@ -426,7 +495,12 @@ openpencil/
 │   ├── op-editor-core/       Editor state ของ `.op` (PenDocument) ที่เป็นแหล่งจริง + EditorCommand + design variables
 │   ├── op-editor-ui/         Widget ที่ไม่ผูกกับแพลตฟอร์ม + RenderBackend facade (wasm32-clean)
 │   ├── op-editor-host-core/  Host state machine ที่ไม่ผูกกับ transport ใช้ร่วมกันทุก host
+│   ├── op-collab/            ชนิด wire สำหรับการทำงานร่วมกันแบบเปิด แฮชมาตรฐาน และการ apply เอกสารแบบแม่นยำ
+│   ├── op-collab-transport/  ทรานสปอร์ต Noise/TCP แบบเนทีฟ การรับเข้าแบบจำกัด และการค้นหาใน LAN (ไม่บังคับ)
+│   ├── op-collab-smoke/      เมทริกซ์การกู้คืนการทำงานร่วมกันที่ยืนยันตัวตนแบบสองโปรเซส
 │   ├── op-host-native/       Native host lib — winit + skia-safe GL (เดสก์ท็อป + มือถือ)
+│   ├── op-engine-ffi/        Player C ABI — ฝังแคนวาสในเชลล์ iOS / Android
+│   ├── op-engine-jni/        เลเยอร์ marshalling ของ Android JNI สำหรับ op-engine-ffi
 │   ├── op-host-web/          Browser bundle — wasm32 cdylib, CanvasKit renderer
 │   ├── op-host-desktop/      Desktop binary `openpencil-desktop`; เป็น daemon `--serve-web` ด้วย
 │   ├── op-host-services/     Headless serve-web / MCP daemon lib
@@ -441,10 +515,14 @@ openpencil/
 │   ├── op-git/               การเชื่อมต่อ Git — clone, branch, push/pull, merge
 │   └── ...                   op-opmerge / op-pen-loader / op-design-lint / op-i18n /
 │                             op-config-store / op-process-io / op-acp / op-smoke / ...
-├── packages/                 Web SDK workspace (Bun)
+├── packages/                 Web SDK และการเชื่อมต่อกับเอดิเตอร์/เอเจนต์
 │   ├── op-web-sdk/           `.op` web viewer SDK แบบอ่านอย่างเดียว (wrap wasm bundle)
 │   ├── op-web-sdk-react/     React 19 adapter
-│   └── op-web-sdk-vue/       Vue 3 adapter
+│   ├── op-web-sdk-vue/       Vue 3 adapter
+│   ├── op-vscode/            ส่วนขยาย VS Code สำหรับแก้ไข `.op` และ `.fig`
+│   ├── op-chrome-extension/  ส่วนขยาย Chrome สำหรับจับภาพหน้าเว็บที่เรนเดอร์แล้ว
+│   ├── op-dsh/               ปลั๊กอิน DeepSeek Harness (`@zseven-w/dsh-openpencil`)
+│   └── op-codex/             ปลั๊กอิน Codex (`@zseven-w/codex-openpencil`)
 ├── vendor/                   Subsystem แบบ vendored (git submodules)
 │   ├── jian/                 เฟรมเวิร์ก UI แบบ GPU-Skia — widget/render/event
 │   ├── casement/             winit fork
@@ -491,6 +569,39 @@ cd packages && bun run generate-iconify-catalog   # Regenerate the Rust icon cat
 scripts/sync-version.sh                            # Sync all managed versions from root Cargo.toml
 tools/check-version-sync.sh                        # Verify all managed versions match root Cargo.toml
 ```
+
+### รายละเอียด Rust workspace
+
+การย้ายไป Rust เสร็จสมบูรณ์แล้ว — Rust workspace คือตัวผลิตภัณฑ์ สเปกเริ่มต้น: `openpencil-docs/superpowers/specs/2026-05-02-rust-ification-kickoff.md` (v7 FROZEN)
+
+```bash
+# Install Rust toolchain (rust-toolchain.toml auto-pins 1.94)
+rustup toolchain install 1.94
+rustup target add wasm32-unknown-unknown
+
+# build / test / lint
+cargo check --workspace
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo check --target wasm32-unknown-unknown -p op-collab --no-default-features
+cargo check --target wasm32-unknown-unknown -p op-host-web --no-default-features --features web  # kickoff §1.2 wasm32 invariant
+cargo deny check && cargo deny --target wasm32-unknown-unknown check bans        # cargo-deny (native + wasm32 bans; CI uses cargo-deny-action@v2)
+```
+
+**Entry crate (`crates/` — เป้าหมายการ build):**
+
+| Crate | หมวดหมู่ | wasm32 |
+| --- | --- | --- |
+| op-host-web | จุดเข้าของบันเดิลเบราว์เซอร์ — wasm32 cdylib เรนเดอร์ผ่าน CanvasKit | ✅ |
+| op-host-native | ไลบรารีโฮสต์เนทีฟ — WidgetHostNative + แบ็กเอนด์ skia-safe GL (เดสก์ท็อป + มือถือ) | ❌ (เนทีฟเท่านั้น) |
+| op-engine-ffi | Player C ABI — หนึ่งเอนจิน สามเชลล์ (iOS Metal / Android EGL / host raster) | ❌ (เนทีฟเท่านั้น) |
+| op-engine-jni | เลเยอร์ marshalling ของ Android JNI สำหรับ op-engine-ffi (เธรดเอนจิน, รีจิสทรี, callback) | ❌ (เนทีฟเท่านั้น) |
+| op-host-desktop | ไบนารีเดสก์ท็อป `openpencil-desktop` (winit + skia-safe GL) — และยังเป็น daemon `--serve-web` ที่โฮสต์บันเดิลเว็บ | ❌ (เนทีฟเท่านั้น) |
+| op-cli | เครื่องมือบรรทัดคำสั่ง `op` | ❌ (เนทีฟเท่านั้น) |
+
+**Crate ไลบรารีที่ใช้ร่วมกัน:** `op-editor-core` (สถานะ `.op` มาตรฐาน), `op-editor-ui` (วิดเจ็ตที่ไม่ผูกกับแพลตฟอร์ม + `RenderBackend`), `op-editor-host-core` (state machine ของโฮสต์ที่ไม่ผูกกับทรานสปอร์ต), `op-collab` (โปรโตคอล/แฮช/การ apply แบบแม่นยำสำหรับการทำงานร่วมกัน แบบเปิดและไม่ผูกกับทรานสปอร์ต), `op-collab-transport` (Noise/TCP แบบเนทีฟ การรับเข้าแบบจำกัด และการค้นหาใน LAN ที่เลือกใช้ได้), `op-mcp`, `op-ai`, `op-ai-skills`, `op-codegen`, `op-orchestrator`, `op-figma`, `op-git`, `op-opmerge`, `op-pen-loader`, `op-design-lint`, `op-config-store`, `op-process-io`, `op-acp`, `op-i18n`, `op-rpc-transport` — รวมถึง `op-collab-smoke` (เมทริกซ์การทำงานร่วมกัน/การกู้คืนแบบสองโปรเซสที่ยืนยันตัวตน) และ `op-smoke` (ตัวรันทดสอบรอบการออกแบบแบบ headless) ตัวเล่นบนมือถืออยู่ใน `packaging/` (เชลล์ `ios` + `android` บน `op-engine-ffi` / `op-engine-jni`) บันเดิลเบราว์เซอร์เรนเดอร์ผ่าน CanvasKit skia WASM อย่างเป็นทางการ (โหลดแยก) ดังนั้น wasm fork `skia-safe-op` และ `wasm-libc-shim` ที่เลิกใช้แล้วจึงไม่มีอยู่อีกต่อไป
+
+**ซับโมดูล:** `vendor/agent` → `github.com/ZSeven-W/agent-rs` (รันไทม์เอเจนต์ Rust ที่ใช้ร่วมกันข้ามผลิตภัณฑ์)
 
 ## การมีส่วนร่วม
 
