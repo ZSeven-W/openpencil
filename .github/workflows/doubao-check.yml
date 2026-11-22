@@ -6,10 +6,12 @@ on:
     paths:
       - 'packages/op-doubao/**'
       - '.github/workflows/doubao-check.yml'
+      - '.github/workflows/doubao-release.yml'
   pull_request:
     paths:
       - 'packages/op-doubao/**'
       - '.github/workflows/doubao-check.yml'
+      - '.github/workflows/doubao-release.yml'
 
 concurrency:
   group: doubao-check-${{ github.ref }}
@@ -43,3 +45,4 @@ jobs:
           node scripts/verify-platform-packages.mjs
           version="$(node -p "require('./package.json').version")"
           node scripts/check-release-version.mjs "$version"
+          npm run test:release-publish
