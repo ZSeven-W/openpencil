@@ -292,7 +292,9 @@ fn a_stalled_extra_tier_delivers_the_retained_weak_before_the_outer_deadline() {
         deadline: None,
     };
     let started = Instant::now();
-    let outer_deadline = started + Duration::from_millis(300);
+    // The fallback stops FALLBACK_DELIVERY_MARGIN (250 ms) before this, so
+    // leave a window that a loaded CI runner cannot exhaust while staging.
+    let outer_deadline = started + Duration::from_millis(1250);
     let mut fallback = WeakFallback::new(&used, Some(outer_deadline));
     assert!(stage(
         &slot,
