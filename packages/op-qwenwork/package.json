@@ -58,7 +58,10 @@
     "verify:packages": "node scripts/verify-platform-packages.mjs",
     "release:sync": "node scripts/sync-platform-versions.mjs",
     "release:check": "node scripts/check-release-version.mjs",
-    "pack:artifact": "node scripts/pack-package.mjs"
+    "pack:artifact": "node scripts/pack-package.mjs",
+    "release:publish": "node scripts/publish-release.mjs",
+    "test:release-publish": "node --test tests/registry-convergence.test.mjs && node scripts/publish-release.mjs --self-test",
+    "verify:install": "node scripts/verify-selective-install.mjs"
   },
   "optionalDependencies": {
     "@zseven-w/qwenwork-openpencil-darwin-arm64": "0.1.0",

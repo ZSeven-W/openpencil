@@ -1,0 +1,442 @@
+name: Release QwenWork plugin packages
+
+# A release contains one JavaScript plugin package (@zseven-w/qwenwork-openpencil)
+# plus six platform-selective native packages. The editor wasm/CanvasKit payload
+# is built once from the repository root, then staged into each daemon's native
+# bin/web-bundle deploy layout.
+#
+# npm authentication: trusted publishing (OIDC) only, enabled by
+# id-token: write in the `npm` environment; there is no token secret.
+#
+# packages/op-qwenwork/scripts/publish-release.mjs owns the multi-package invariants:
+# native packages publish before the root, an already-published matching tarball
+# is skipped (but different integrity fails), and every release takes latest.
+
+on:
+  push:
+    tags:
+      - 'qwenwork-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing synchronized QwenWork plugin version (for example 0.1.0)
+        required: true
+        type: string
+      publish:
+        description: Publish after every build and selective-install check passes
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  # npm dist-tags are shared mutable state across versions, so releases must
+  # serialize globally rather than only against another run of the same tag.
+  group: qwenwork-openpencil-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24.11.0'
+  RUST_VERSION: '1.94'
+  BINARYEN_VERSION: version_123
+
+jobs:
+  validate:
+    name: Validate release metadata
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      matrix: ${{ steps.release.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Stamp OpenPencil version and HEAD revision into platforms.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          op_version="$(bash scripts/workspace-version.sh)"
+          op_revision="$(git rev-parse HEAD)"
+          OP_VERSION="$op_version" OP_REVISION="$op_revision" node -e '
+            const fs = require("node:fs");
+            const file = "packages/op-qwenwork/platforms.json";
+            const data = JSON.parse(fs.readFileSync(file, "utf8"));
+            data.openPencil = { version: process.env.OP_VERSION, revision: process.env.OP_REVISION };
+            fs.writeFileSync(file, JSON.stringify(data, null, 2) + "\n");
+          '
+
+      - name: Select and validate the release version
+        id: release
+        working-directory: packages/op-qwenwork
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+        run: |
+          set -euo pipefail
+          version="${REQUESTED_VERSION#qwenwork-v}"
+          version="${version#v}"
+          node scripts/check-release-version.mjs "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          node -e "const config=require('./platforms.json'); process.stdout.write('matrix='+JSON.stringify({include:config.platforms})+'\\n')" >> "$GITHUB_OUTPUT"
+
+      - name: Check plugin package and unit tests
+        working-directory: packages/op-qwenwork
+        run: |
+          npm run check
+          npm test
+          node scripts/verify-platform-packages.mjs
+          npm run test:release-publish
+
+  audit:
+    name: Dependency supply-chain audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable 2026-08-15
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
+  build-web-once:
+    name: Build editor web assets once
+    needs: validate
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable 2026-08-15
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: . -> target
+          shared-key: qwenwork-openpencil-web-release
+
+      - name: Install native design test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pkg-config libfreetype-dev libfontconfig1-dev fonts-noto-cjk
+
+      - name: Install wasm-bindgen-cli matching Cargo.lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(awk '/^name = "wasm-bindgen"$/{found=1; next} found && /^version = /{gsub(/[" ]/,"",$3); print $3; exit}' Cargo.lock)"
+          if [ -z "$version" ]; then
+            echo "::error::could not resolve wasm-bindgen version from Cargo.lock"
+            exit 1
+          fi
+          cargo install wasm-bindgen-cli --version "$version" --locked
+
+      - name: Install pinned binaryen
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            "https://github.com/WebAssembly/binaryen/releases/download/${BINARYEN_VERSION}/binaryen-${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
+            | tar -xz
+          echo "${GITHUB_WORKSPACE}/binaryen-${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
+          "${GITHUB_WORKSPACE}/binaryen-${BINARYEN_VERSION}/bin/wasm-opt" --version
+
+      - name: Build and gate the packaged editor web bundle
+        run: bash tools/check-wasm-bundle.sh
+
+      - name: Test native MCP host surface
+        run: >-
+          cargo test
+          --locked
+          -p op-mcp
+          --lib
+
+      - name: Test headless serve-web surface
+        run: >-
+          cargo test
+          --locked
+          -p op-host-services
+          mcp_serve
+          --lib
+
+      - name: Test collaboration document and transport queues
+        run: >-
+          cargo test
+          --locked
+          -p op-collab-host
+          -p op-collab-transport
+
+      - name: Smoke two-process document convergence
+        run: >-
+          cargo run
+          --locked
+          -p op-collab-smoke
+          --features test-issuer
+          -- run
+
+      # Cross-job transfer layout; each native job stages into bin/web-bundle.
+      - name: Assemble editor web artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p web-artifact/pkg web-artifact/canvaskit
+          cp -R crates/op-host-web/pkg/. web-artifact/pkg/
+          cp -R crates/op-host-web/assets/canvaskit/. web-artifact/canvaskit/
+          rm -f web-artifact/pkg/*.opt.wasm web-artifact/pkg/*.d.ts
+          test -f web-artifact/pkg/op_host_web.js
+          test -f web-artifact/pkg/op_host_web_bg.wasm
+          test -f web-artifact/canvaskit/canvaskit.js
+          test -f web-artifact/canvaskit/canvaskit.wasm
+          test -f web-artifact/pkg/assets/i18n/ja.json
+          test -d web-artifact/pkg/assets/scene_templates
+          test -d web-artifact/pkg/assets/prompt_center_previews
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qwenwork-editor-web
+          path: web-artifact
+          if-no-files-found: error
+          retention-days: 7
+
+  build-native:
+    name: Build ${{ matrix.id }} runtime package
+    needs: [validate, build-web-once]
+    environment: release-production
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.validate.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Stamp OpenPencil version and HEAD revision into platforms.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          op_version="$(bash scripts/workspace-version.sh)"
+          op_revision="$(git rev-parse HEAD)"
+          OP_VERSION="$op_version" OP_REVISION="$op_revision" node -e '
+            const fs = require("node:fs");
+            const file = "packages/op-qwenwork/platforms.json";
+            const data = JSON.parse(fs.readFileSync(file, "utf8"));
+            data.openPencil = { version: process.env.OP_VERSION, revision: process.env.OP_REVISION };
+            fs.writeFileSync(file, JSON.stringify(data, null, 2) + "\n");
+          '
+
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable 2026-08-15
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.rustTarget }}
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: . -> target
+          key: qwenwork-openpencil-${{ matrix.rustTarget }}
+
+      - name: Install Linux headless server dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pkg-config libfreetype-dev libfontconfig1-dev fonts-noto-cjk
+
+      - name: Build collaboration-enabled op-host-web-server
+        working-directory: packages/op-qwenwork
+        env:
+          OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
+          OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
+        run: node scripts/build-editor-runtime.mjs --target ${{ matrix.rustTarget }}
+
+      - name: Verify production collaboration auth ABI
+        shell: bash
+        env:
+          OP_AUTH_CARGO_TARGET: ${{ matrix.rustTarget }}
+        run: bash tools/check-op-auth-cargo-build.sh
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: qwenwork-editor-web
+          path: web-artifact
+
+      - name: Stage the complete packaged editor runtime
+        working-directory: packages/op-qwenwork
+        run: >-
+          node scripts/stage-editor-runtime.mjs
+          --platform ${{ matrix.id }}
+          --binary ../../target/${{ matrix.rustTarget }}/release/${{ matrix.binaryName }}
+          --pkg ../../web-artifact/pkg
+          --canvaskit ../../web-artifact/canvaskit
+
+      - name: Verify and smoke the self-discovering packaged daemon
+        working-directory: packages/op-qwenwork
+        env:
+          OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_CN }}
+          OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL: ${{ secrets.OPENPENCIL_BUILD_COLLAB_BOOTSTRAP_URL_GLOBAL }}
+        run: node scripts/verify-platform-packages.mjs --platform ${{ matrix.id }} --require-runtime --require-collab-bootstrap
+
+      - name: Pack native package
+        working-directory: packages/op-qwenwork
+        run: node scripts/pack-package.mjs --package ./npm/${{ matrix.id }} --destination artifacts/packages
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-${{ matrix.id }}
+          path: packages/op-qwenwork/artifacts/packages/
+          if-no-files-found: error
+          retention-days: 7
+
+  pack-root:
+    name: Pack root plugin package
+    needs: [validate, build-web-once]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Stamp OpenPencil version and HEAD revision into platforms.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          op_version="$(bash scripts/workspace-version.sh)"
+          op_revision="$(git rev-parse HEAD)"
+          OP_VERSION="$op_version" OP_REVISION="$op_revision" node -e '
+            const fs = require("node:fs");
+            const file = "packages/op-qwenwork/platforms.json";
+            const data = JSON.parse(fs.readFileSync(file, "utf8"));
+            data.openPencil = { version: process.env.OP_VERSION, revision: process.env.OP_REVISION };
+            fs.writeFileSync(file, JSON.stringify(data, null, 2) + "\n");
+          '
+
+      - name: Verify root package
+        working-directory: packages/op-qwenwork
+        run: |
+          npm run check
+          node scripts/verify-platform-packages.mjs
+
+      - name: Pack root package
+        working-directory: packages/op-qwenwork
+        run: node scripts/pack-package.mjs --package . --destination artifacts/packages
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-root
+          path: packages/op-qwenwork/artifacts/packages/
+          if-no-files-found: error
+          retention-days: 7
+
+  verify-pack-set:
+    name: Verify npm selects exactly one native runtime
+    needs: [validate, audit, build-native, pack-root]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Stamp OpenPencil version and HEAD revision into platforms.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          op_version="$(bash scripts/workspace-version.sh)"
+          op_revision="$(git rev-parse HEAD)"
+          OP_VERSION="$op_version" OP_REVISION="$op_revision" node -e '
+            const fs = require("node:fs");
+            const file = "packages/op-qwenwork/platforms.json";
+            const data = JSON.parse(fs.readFileSync(file, "utf8"));
+            data.openPencil = { version: process.env.OP_VERSION, revision: process.env.OP_REVISION };
+            fs.writeFileSync(file, JSON.stringify(data, null, 2) + "\n");
+          '
+
+      - name: Use npm 11 platform override support
+        run: npm install --global npm@11
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: package-*
+          path: packages/op-qwenwork/artifacts
+
+      - name: Simulate all six selective installs
+        working-directory: packages/op-qwenwork
+        run: node scripts/verify-selective-install.mjs artifacts
+
+  publish:
+    name: Publish native packages first and root last
+    needs: [validate, verify-pack-set]
+    if: github.event_name == 'push' || inputs.publish == true
+    runs-on: ubuntu-22.04
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+
+      - name: Use npm 11 trusted publishing support
+        run: npm install --global npm@11
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: package-*
+          path: packages/op-qwenwork/artifacts
+
+      - name: Verify registry convergence and release guards
+        working-directory: packages/op-qwenwork
+        run: npm run test:release-publish
+
+      - name: Publish with idempotency and prerelease dist-tag guards
+        working-directory: packages/op-qwenwork
+        env:
+          # Explicitly empty: setup-node exports a placeholder token, which the
+          # script would otherwise mistake for dist-tag repair credentials.
+          NODE_AUTH_TOKEN: ''
+        run: node scripts/publish-release.mjs artifacts
