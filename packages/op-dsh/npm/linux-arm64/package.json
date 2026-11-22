@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/dsh-openpencil-linux-arm64",
-  "version": "0.1.0-rc.15",
+  "version": "0.1.0-rc.16",
   "description": "Atomic OpenPencil editor runtime for dsh-openpencil on Linux arm64 (glibc).",
   "license": "MIT",
   "repository": {

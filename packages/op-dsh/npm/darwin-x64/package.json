@@ -1,6 +1,6 @@
 {
   "name": "@zseven-w/dsh-openpencil-darwin-x64",
-  "version": "0.1.0-rc.15",
+  "version": "0.1.0-rc.16",
   "description": "Atomic OpenPencil editor runtime for dsh-openpencil on macOS x64.",
   "license": "MIT",
   "repository": {

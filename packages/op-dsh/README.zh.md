@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <sub>npm: <a href="https://www.npmjs.com/package/@zseven-w/dsh-openpencil"><code>@zseven-w/dsh-openpencil</code></a> · 当前插件版本：<code>0.1.0-rc.15</code> · 编辑器面板已在 DSH 桌面版 <code>0.2.1-rc.3</code> 验证</sub>
+  <sub>npm: <a href="https://www.npmjs.com/package/@zseven-w/dsh-openpencil"><code>@zseven-w/dsh-openpencil</code></a> · 当前插件版本：<code>0.1.0-rc.16</code> · 编辑器面板已在 DSH 桌面版 <code>0.2.1-rc.3</code> 验证</sub>
 </p>
 
 <p align="center">
