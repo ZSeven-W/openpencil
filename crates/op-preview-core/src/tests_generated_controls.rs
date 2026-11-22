@@ -11,7 +11,7 @@ fn scene_snapshot(scene: &LayoutScene) -> BTreeMap<String, Value> {
         for node in nodes {
             out.insert(node.id.clone(), json!({
                 "text":node.text, "fill":format!("{:?}",node.fill),
-                "opacity":node.opacity, "hidden":node.hidden, "rotation":node.rotation,
+                "opacity":node.effective_opacity(), "hidden":node.hidden, "rotation":node.rotation,
                 "rect":[node.bounds.origin.x,node.bounds.origin.y,node.bounds.size.x,node.bounds.size.y]
             }));
             collect(&node.children, out);

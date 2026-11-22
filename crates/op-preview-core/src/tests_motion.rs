@@ -58,7 +58,7 @@ fn color(session: &PreviewSession, id: &str) -> op_editor_ui::Color {
 }
 
 fn opacity(session: &PreviewSession, id: &str) -> f32 {
-    node(session, id).opacity
+    node(session, id).effective_opacity()
 }
 
 #[test]

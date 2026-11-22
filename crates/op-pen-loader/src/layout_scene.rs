@@ -214,8 +214,12 @@ pub(crate) fn node_payload_to_scene(
     // independently. Non-Normal node blending already requires the same
     // isolation layer, so it carries local opacity there even for leaves. Keep
     // ordinary leaves on the direct-paint path to avoid allocating a layer.
-    let isolates_output =
-        blend_mode != ImageBlendMode::Normal || (!node.children.is_empty() && local_opacity < 1.0);
+    // A fully transparent leaf is the exception: baking alpha 0 into its paint
+    // would leave motion nothing to fade in, while a zero composite layer is
+    // skipped by the painter and costs nothing until it becomes visible.
+    let isolates_output = blend_mode != ImageBlendMode::Normal
+        || (!node.children.is_empty() && local_opacity < 1.0)
+        || (node.children.is_empty() && local_opacity <= 0.0);
     let paint_opacity = if isolates_output {
         inherited_paint_opacity
     } else {

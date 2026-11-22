@@ -55,7 +55,7 @@ fn page_scroll_feeds_root_scope_and_explicit_scrollers_shadow_it() {
     );
     let before = session.preview_scene_for_test();
     assert_eq!(
-        find(&before, "hero").opacity,
+        find(&before, "hero").effective_opacity(),
         0.0,
         "unscrolled page → progress 0"
     );
@@ -67,9 +67,9 @@ fn page_scroll_feeds_root_scope_and_explicit_scrollers_shadow_it() {
     );
     let scrolled = session.preview_scene_for_test();
     assert!(
-        (find(&scrolled, "hero").opacity - 0.5).abs() < 1e-4,
+        (find(&scrolled, "hero").effective_opacity() - 0.5).abs() < 1e-4,
         "hero opacity tracks $scroll.progress of the page: {}",
-        find(&scrolled, "hero").opacity
+        find(&scrolled, "hero").effective_opacity()
     );
     assert_eq!(
         find(&scrolled, "hero").bounds.origin.y,
@@ -77,7 +77,7 @@ fn page_scroll_feeds_root_scope_and_explicit_scrollers_shadow_it() {
         "the host scrolls the page; the overlay must not translate page children too"
     );
     assert_eq!(
-        find(&scrolled, "inner-body").opacity,
+        find(&scrolled, "inner-body").effective_opacity(),
         0.0,
         "an explicit scroller shadows the page scope for its subtree"
     );

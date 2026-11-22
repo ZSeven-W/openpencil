@@ -72,7 +72,7 @@ fn opacity(session: &PreviewSession, id: &str) -> f32 {
         .active_page()
         .and_then(|page| page.find(id))
         .expect("scene node")
-        .opacity
+        .effective_opacity()
 }
 
 fn assert_mid(value: f32, what: &str) {

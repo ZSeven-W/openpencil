@@ -132,6 +132,11 @@ impl Builder<'_> {
             art.rotation = 0.0;
             art.flip_x = false;
             art.flip_y = false;
+            // A leaf faded on its composite layer (see jian's leaf opacity)
+            // becomes paint alpha here, since this layer keeps alpha 1.
+            if art.children.is_empty() && art.composite_opacity < 1.0 {
+                art.scale_paint_alpha(art.composite_opacity.max(0.0));
+            }
             art.composite_opacity = 1.0;
             if !flatten {
                 art.children.clear();

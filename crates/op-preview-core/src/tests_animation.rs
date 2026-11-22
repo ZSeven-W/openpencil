@@ -36,7 +36,7 @@ fn opacity(session: &PreviewSession) -> f32 {
         .active_page()
         .and_then(|page| page.find("box"))
         .expect("box")
-        .opacity
+        .effective_opacity()
 }
 
 fn tap(session: &mut PreviewSession) {
@@ -382,7 +382,7 @@ fn every_builtin_property_applies_through_r6_invalidation() {
         .active_page()
         .and_then(|page| page.find("box"))
         .expect("box");
-    assert!((box_node.opacity - 0.5).abs() < 0.001);
+    assert!((box_node.effective_opacity() - 0.5).abs() < 0.001);
     assert!((box_node.rotation - std::f32::consts::FRAC_PI_4).abs() < 0.001);
     assert_eq!(box_node.corner_radius, 5.0);
     assert_eq!(

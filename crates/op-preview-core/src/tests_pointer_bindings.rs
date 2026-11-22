@@ -46,7 +46,7 @@ fn find<'a>(scene: &'a LayoutScene, id: &str) -> &'a SceneNode {
 }
 
 fn opacity(session: &PreviewSession, id: &str) -> f32 {
-    find(&session.preview_scene_for_test(), id).opacity
+    find(&session.preview_scene_for_test(), id).effective_opacity()
 }
 
 fn pointer_fixture() -> &'static str {

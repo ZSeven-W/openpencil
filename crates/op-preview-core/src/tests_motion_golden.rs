@@ -603,7 +603,7 @@ fn node_json(node: &SceneNode, out: &mut serde_json::Map<String, Value>) {
                 "y": node.bounds.origin.y,
                 "w": node.bounds.size.x,
                 "h": node.bounds.size.y,
-                "opacity": node.opacity,
+                "opacity": node.effective_opacity(),
                 "fill": node.fill.map(color_json),
                 "stroke": node.stroke.as_ref().map(|stroke| color_json(stroke.color)),
                 "cornerRadius": node.corner_radius,

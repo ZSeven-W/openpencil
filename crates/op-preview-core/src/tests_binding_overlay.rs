@@ -266,7 +266,7 @@ fn non_content_bindings_apply_to_the_preview_scene() {
     let scene = session.preview_scene_for_test();
     let card = find(&scene, "card");
     assert!(card.hidden, "visible=false removes the node from hit/paint");
-    assert_eq!(card.opacity, 0.5);
+    assert_eq!(card.effective_opacity(), 0.5);
     let fill = card.fill.expect("bound fill");
     assert_eq!((fill.r, fill.g, fill.b), (1.0, 0.0, 0.0));
     assert_eq!(card.bounds.origin.x, 24.0);
@@ -545,13 +545,13 @@ fn scroll_phase_updates_namespace_and_moves_only_unpinned_content() {
         "ordinary content moves with the scroll offset"
     );
     assert!(
-        body.opacity > 0.0 && body.opacity < 1.0,
+        body.effective_opacity() > 0.0 && body.effective_opacity() < 1.0,
         "$scroll.progress drives the PaintOnly binding"
     );
     assert!(
-        (body.opacity - (1.0 / 3.0)).abs() < 0.01,
+        (body.effective_opacity() - (1.0 / 3.0)).abs() < 0.01,
         "offset=60 and maxOffset=180 produce progress=1/3, got {}",
-        body.opacity
+        body.effective_opacity()
     );
     assert_eq!(
         session
@@ -575,7 +575,7 @@ fn scroll_phase_updates_namespace_and_moves_only_unpinned_content() {
         "Ended changes direction to none"
     );
     assert_eq!(
-        find(&session.preview_scene_for_test(), "body").opacity,
+        find(&session.preview_scene_for_test(), "body").effective_opacity(),
         0.0,
         "ScrollPhase::Ended is consumed by the $scroll producer"
     );
@@ -614,7 +614,7 @@ fn scroll_binding_rejects_relayout_and_warns_once_without_ancestor() {
         "a top-level binding is never orphaned: it binds to the page scroll"
     );
     assert_eq!(
-        find(&session.preview_scene_for_test(), "orphan").opacity,
+        find(&session.preview_scene_for_test(), "orphan").effective_opacity(),
         0.0,
         "an unscrolled page evaluates $scroll.progress to 0"
     );

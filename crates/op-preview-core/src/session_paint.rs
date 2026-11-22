@@ -717,5 +717,9 @@ fn widget_field_foreground(node: &SceneNode) -> Color {
     );
     // Scene fill/stroke already carry direct-paint opacity; the contrast-derived
     // caret does not, so fold it exactly once through the shared widget policy.
-    Color::from_jian(with_visual_opacity(visual.foreground, node.opacity))
+    // Effective opacity also covers a leaf held transparent on its layer.
+    Color::from_jian(with_visual_opacity(
+        visual.foreground,
+        node.effective_opacity(),
+    ))
 }
