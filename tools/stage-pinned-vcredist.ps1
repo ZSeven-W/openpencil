@@ -9,10 +9,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 # Microsoft documents that the x64 bundle contains both x64 and ARM64 payloads.
-$PinnedUrl = 'https://download.visualstudio.microsoft.com/download/pr/ebdab8e5-1d7b-4d9f-a11b-cbb1720c3b12/843068991DAAA1F73AD9F6239BCE4D0F6A07A51F18C37EA2A867E9BECA71295C/VC_redist.x64.exe'
-$PinnedSha256 = '843068991daaa1f73ad9f6239bce4d0f6a07a51f18c37ea2a867e9beca71295c'
-$PinnedFileVersion = '14.51.36247.0'
-$PinnedProductVersion = '14.51.36247.0'
+$PinnedUrl = 'https://download.visualstudio.microsoft.com/download/pr/b017f968-2c4c-48cf-a327-865f04052b2b/9C02C9ED120F671B900E6B9471D890E3B2414117A7E53F4AE2E855466FA2B7C9/VC_redist.x64.exe'
+$PinnedSha256 = '9c02c9ed120f671b900e6b9471d890e3b2414117a7e53f4ae2e855466fa2b7c9'
+$PinnedFileVersion = '14.52.37029.0'
+$PinnedProductVersion = '14.52.37029.0'
 
 function Assert-RegularFile {
   param([string]$Path)
@@ -258,11 +258,11 @@ function Invoke-SelfTest {
       Assert-FileVersionValue -Actual '0.0.0.0' -Expected $PinnedFileVersion
     }
     Assert-ToolsetCoveredByRedist `
-      -ToolsetVersion ([version]'14.51.36247') `
+      -ToolsetVersion ([version]'14.52.37029') `
       -RedistVersion ([version]$PinnedProductVersion)
     Assert-Rejected -Name 'newer MSVC toolset' -Action {
       Assert-ToolsetCoveredByRedist `
-        -ToolsetVersion ([version]'14.52.0') `
+        -ToolsetVersion ([version]'14.53.0') `
         -RedistVersion ([version]$PinnedProductVersion)
     }
   } finally {

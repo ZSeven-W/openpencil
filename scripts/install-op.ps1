@@ -12,9 +12,9 @@ $Repo = "openpencil"
 $DefaultOpVersion = ""
 $DefaultShaWindowsAarch64 = ""
 $DefaultShaWindowsX86_64 = ""
-$VcRedistVersion = [version]"14.51.36247.0"
-$VcRedistUrl = "https://aka.ms/vs/18/release/14.51.36247/VC_redist.x64.exe"
-$VcRedistSha256 = "843068991daaa1f73ad9f6239bce4d0f6a07a51f18c37ea2a867e9beca71295c"
+$VcRedistVersion = [version]"14.52.37029.0"
+$VcRedistUrl = "https://aka.ms/vs/18/release/14.52.37029/VC_redist.x64.exe"
+$VcRedistSha256 = "9c02c9ed120f671b900e6b9471d890e3b2414117a7e53f4ae2e855466fa2b7c9"
 
 function ConvertTo-Version {
   param([object]$Value)

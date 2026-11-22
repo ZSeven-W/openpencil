@@ -88,9 +88,9 @@ unless manual == {
 end
 raise "workflow permissions must default to contents:read" unless document.fetch("permissions") == {"contents" => "read"}
 expected_vcredist = {
-  "VC_REDIST_URL" => "https://download.visualstudio.microsoft.com/download/pr/ebdab8e5-1d7b-4d9f-a11b-cbb1720c3b12/843068991DAAA1F73AD9F6239BCE4D0F6A07A51F18C37EA2A867E9BECA71295C/VC_redist.x64.exe",
-  "VC_REDIST_SHA256" => "843068991daaa1f73ad9f6239bce4d0f6a07a51f18c37ea2a867e9beca71295c",
-  "VC_REDIST_VERSION" => "14.51.36247.0",
+  "VC_REDIST_URL" => "https://download.visualstudio.microsoft.com/download/pr/b017f968-2c4c-48cf-a327-865f04052b2b/9C02C9ED120F671B900E6B9471D890E3B2414117A7E53F4AE2E855466FA2B7C9/VC_redist.x64.exe",
+  "VC_REDIST_SHA256" => "9c02c9ed120f671b900e6b9471d890e3b2414117a7e53f4ae2e855466fa2b7c9",
+  "VC_REDIST_VERSION" => "14.52.37029.0",
 }
 unless document.fetch("env", {}).slice(*expected_vcredist.keys) == expected_vcredist
   raise "release and Scoop packaging must use the reviewed VC++ Redistributable identity"

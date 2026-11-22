@@ -183,7 +183,7 @@ elif str(mode) == "vcredist-scoop-skip-postcheck":
     old = '  if ($null -eq $installedVersion -or $installedVersion -lt $requiredVersion) { throw \\"Microsoft Visual C++ Redistributable $requiredVersion or newer is required.\\" }'
     new = '  if ($false) { throw \\"Microsoft Visual C++ Redistributable $requiredVersion or newer is required.\\" }'
 elif str(mode) == "vcredist-stager-digest":
-    old = "843068991daaa1f73ad9f6239bce4d0f6a07a51f18c37ea2a867e9beca71295c"
+    old = "9c02c9ed120f671b900e6b9471d890e3b2414117a7e53f4ae2e855466fa2b7c9"
     new = "0" * 64
 elif str(mode) == "vcredist-nsis-soft-fail":
     old = 'Abort "Microsoft Visual C++ Redistributable verification failed."'
