@@ -59,8 +59,11 @@ async function verifySelection(platform, dependencies, root) {
       throw new Error(`${platform.id}: expected ${expected}, installed ${installed.join(', ') || 'nothing'}`);
     }
     const installedRoot = await realpath(join(directory, 'node_modules', '@zseven-w', 'workbuddy-openpencil'));
-    if (!(await stat(join(installedRoot, '.agents', 'plugins', 'marketplace.json'))).isFile()) {
-      throw new Error(`${platform.id}: installed root package is missing .agents/plugins/marketplace.json`);
+    if (!(await stat(join(installedRoot, 'plugins', 'openpencil', 'scripts', 'launch-mcp'))).isFile()) {
+      throw new Error(`${platform.id}: installed root package is missing plugins/openpencil/scripts/launch-mcp`);
+    }
+    if (!(await stat(join(installedRoot, '.workbuddy-plugin', 'marketplace.json'))).isFile()) {
+      throw new Error(`${platform.id}: installed root package is missing .workbuddy-plugin/marketplace.json`);
     }
     const cli = spawnSync(process.execPath, [join(installedRoot, 'bin', 'workbuddy-openpencil.mjs'), '--version'], {
       cwd: directory,
