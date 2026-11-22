@@ -7,21 +7,40 @@ use crate::shader_preset::ExpandedShaderPreset;
 
 const MAX_CANDLES: usize = 256;
 const MAX_PATH_ROWS: usize = 256;
+/// `[start, end]` seconds outside which a preset paints nothing. Painters
+/// skip the draw there (`op-editor-ui` `paint_shader_rect`); the program
+/// itself never declares it.
+pub(crate) const MOTION_WINDOW: &str = "motionWindow";
 mod camera_path;
 
 pub(crate) fn expand(body: &ShaderFillBody) -> Option<ExpandedShaderPreset> {
     match body.preset.as_deref()? {
         "candlesticks_3d" => candlesticks(body),
-        "spark_burst" => effect(
-            body,
-            include_str!("shader_motion/spark_burst.sksl"),
-            &[
-                ("origin", &[0.5, 0.65]),
-                ("burst", &[0.0, 1.5, 220.0, 90.0]),
-                ("tint", &[0.2, 1.0, 0.65]),
-            ],
-            values(body, "burst").is_some_and(|v| v.len() == 4 && v[0] > 0.0),
-        ),
+        "spark_burst" => {
+            let mut preset = effect(
+                body,
+                include_str!("shader_motion/spark_burst.sksl"),
+                &[
+                    ("origin", &[0.5, 0.65]),
+                    ("burst", &[0.0, 1.5, 220.0, 90.0]),
+                    ("tint", &[0.2, 1.0, 0.65]),
+                ],
+                values(body, "burst").is_some_and(|v| v.len() == 4 && v[0] > 0.0),
+            )?;
+            // The program returns transparent outside [start, start + life],
+            // so painters may skip the full-rect pass there entirely.
+            let burst = preset
+                .uniforms
+                .iter()
+                .find(|u| u.name == "burst")
+                .map(|u| u.values.clone())?;
+            let start = burst[0];
+            preset.uniforms.push(ShaderUniformPayload {
+                name: MOTION_WINDOW.into(),
+                values: vec![start, start + burst[1].max(0.001)],
+            });
+            Some(preset)
+        }
         "iridescent_glass" => effect(
             body,
             include_str!("shader_motion/iridescent_glass.sksl"),

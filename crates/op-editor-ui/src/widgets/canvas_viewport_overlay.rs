@@ -428,6 +428,11 @@ pub(crate) fn paint_shader_rect(
             }
         })
         .map(|t| [t]);
+    if let Some([t]) = time {
+        if outside_motion_window(shader, t) {
+            return;
+        }
+    }
     let mut uniforms: Vec<(&str, &[f32])> = shader
         .uniforms
         .iter()
@@ -455,5 +460,58 @@ pub(crate) fn paint_shader_rect(
             shader.opacity,
             shader.fallback,
         );
+    }
+}
+
+/// A preset's `motionWindow` uniform (`[start, end]` seconds) marks where
+/// its program can paint at all. Outside it the full-rect pass would only
+/// blend transparent pixels, which a timeline playing several full-frame
+/// bursts pays for on every frame.
+fn outside_motion_window(shader: &SceneShader, time: f32) -> bool {
+    shader
+        .uniforms
+        .iter()
+        .find(|u| u.name == "motionWindow")
+        .is_some_and(|u| match u.values.as_slice() {
+            [start, end] => time < *start || time > *end,
+            _ => false,
+        })
+}
+
+#[cfg(test)]
+mod motion_window_tests {
+    use super::*;
+    use crate::layout_scene::SceneShaderUniform;
+
+    fn shader(window: Option<Vec<f32>>) -> SceneShader {
+        SceneShader {
+            sample_time: None,
+            sksl: String::new(),
+            uniforms: window
+                .map(|values| {
+                    vec![SceneShaderUniform {
+                        name: "motionWindow".into(),
+                        values,
+                    }]
+                })
+                .unwrap_or_default(),
+            opacity: 1.0,
+            fallback: crate::Color::BLACK,
+        }
+    }
+
+    #[test]
+    fn skips_only_outside_the_window() {
+        let burst = shader(Some(vec![12.0, 13.5]));
+        assert!(outside_motion_window(&burst, 11.9));
+        assert!(!outside_motion_window(&burst, 12.0));
+        assert!(!outside_motion_window(&burst, 13.5));
+        assert!(outside_motion_window(&burst, 13.6));
+    }
+
+    #[test]
+    fn shaders_without_a_window_always_paint() {
+        assert!(!outside_motion_window(&shader(None), 99.0));
+        assert!(!outside_motion_window(&shader(Some(vec![1.0])), 99.0));
     }
 }
