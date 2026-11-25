@@ -35,33 +35,44 @@ pub struct OpFoldPreviewRect {
 }
 
 impl OpFoldPreviewRect {
-    fn checked(self, width: f32, height: f32, insets: OpInsets) -> crate::error::FfiResult<Rect> {
+    /// Shells derive the preview and the insets from shared edges in double
+    /// precision, so after the f32 conversion an edge can land a rounding
+    /// error past the surface or into the editor viewport. Errors within
+    /// half a device pixel (capped at half a point) are clamped onto the
+    /// surface and tolerated at the editor edge instead of failing the
+    /// whole resize.
+    fn checked(
+        self,
+        width: f32,
+        height: f32,
+        dpr: f32,
+        insets: OpInsets,
+    ) -> crate::error::FfiResult<Rect> {
         let Self {
             x,
             y,
             width: w,
             height: h,
         } = self;
-        let right = x + w;
-        let bottom = y + h;
-        let overlaps = right > insets.left
-            && x < width - insets.right
-            && bottom > insets.top
-            && y < height - insets.bottom;
-        if ![x, y, w, h].into_iter().all(f32::is_finite)
-            || x < 0.0
-            || y < 0.0
-            || w <= 0.0
-            || h <= 0.0
-            || right > width
-            || bottom > height
-            || overlaps
-        {
+        // `max` also maps a NaN dpr to 1; the resize rejects it afterwards.
+        let slack = 0.5 / dpr.max(1.0);
+        let fits = [x, y, w, h].into_iter().all(f32::is_finite)
+            && x >= -slack
+            && y >= -slack
+            && x + w <= width + slack
+            && y + h <= height + slack;
+        let (left, top) = (x.max(0.0), y.max(0.0));
+        let (right, bottom) = ((x + w).min(width), (y + h).min(height));
+        let overlaps = right > insets.left + slack
+            && left < width - insets.right - slack
+            && bottom > insets.top + slack
+            && top < height - insets.bottom - slack;
+        if !fits || right <= left || bottom <= top || overlaps {
             return Err(crate::error::FfiError::invalid(
                 "fold preview must fit the surface outside the editor viewport",
             ));
         }
-        Ok(Rect::xywh(x, y, w, h))
+        Ok(Rect::xywh(left, top, right - left, bottom - top))
     }
 }
 
@@ -84,7 +95,7 @@ pub unsafe extern "C" fn op_resize_with_fold_preview(
         call_session(engine, |session| {
             let next = preview
                 .as_ref()
-                .map(|rect| rect.checked(width, height, insets))
+                .map(|rect| rect.checked(width, height, dpr, insets))
                 .transpose()?;
             session.resize_with_safe_area(width, height, dpr, insets)?;
             session.fold_preview = next;
@@ -339,6 +350,51 @@ mod tests {
             OpStatus::Ok
         );
         assert!(engine.session_mut_for_test().fold_preview.is_none());
+    }
+
+    #[test]
+    fn fold_preview_clamps_float_rounding_of_shared_edges() {
+        let mut engine = editor_engine();
+        let engine_ptr = &mut engine as *mut OpEngine;
+        // Side-by-side halves sharing the hinge edge, as a shell converting
+        // double-precision geometry to f32 can send them: one ulp past the
+        // editor's left edge and one ulp past the surface's bottom.
+        let insets = OpInsets {
+            left: 400.0,
+            ..OpInsets::default()
+        };
+        let preview = OpFoldPreviewRect {
+            x: 0.0,
+            y: 0.0,
+            width: 400.0_f32.next_up(),
+            height: 640.0_f32.next_up(),
+        };
+        assert_eq!(
+            unsafe { op_resize_with_fold_preview(engine_ptr, 800.0, 640.0, 3.0, insets, &preview) },
+            OpStatus::Ok
+        );
+        let session = engine.session_mut_for_test();
+        assert_eq!(session.logical, (800.0, 640.0));
+        let accepted = session.fold_preview;
+        assert_eq!(
+            accepted,
+            Some(Rect::xywh(0.0, 0.0, 400.0_f32.next_up(), 640.0))
+        );
+
+        // More than half a device pixel is still a real overlap.
+        let overlapping = OpFoldPreviewRect {
+            width: 400.2,
+            ..preview
+        };
+        assert_eq!(
+            unsafe {
+                op_resize_with_fold_preview(engine_ptr, 800.0, 700.0, 3.0, insets, &overlapping)
+            },
+            OpStatus::InvalidArg
+        );
+        let session = engine.session_mut_for_test();
+        assert_eq!(session.logical, (800.0, 640.0));
+        assert_eq!(session.fold_preview, accepted);
     }
 
     #[test]
