@@ -102,7 +102,7 @@ impl LiveAdmission {
 /// a JSON-RPC error body, never a server fault the accept loop logs and
 /// turns into a 500.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum AdmissionDenial {
+pub(crate) enum AdmissionDenial {
     /// `Host` absent, not a numeric loopback literal, or carrying a port
     /// other than the one this server bound.
     ForeignHost,
@@ -114,7 +114,7 @@ impl AdmissionDenial {
     /// HTTP status line. Boundary failures are 403 (the caller is not
     /// allowed to talk to this endpoint at all); token failures are 401
     /// (the caller may retry with the credential it was given).
-    pub(super) fn http_status(self) -> &'static str {
+    pub(crate) fn http_status(self) -> &'static str {
         match self {
             AdmissionDenial::ForeignHost | AdmissionDenial::ForeignOrigin => "403 Forbidden",
         }
@@ -122,13 +122,13 @@ impl AdmissionDenial {
 
     /// Client-facing reason. Intentionally coarse: it names the gate, not
     /// which byte of the token differed.
-    pub(super) fn message(self) -> &'static str {
+    pub(crate) fn message(self) -> &'static str {
         match self {
             AdmissionDenial::ForeignHost => {
-                "live MCP endpoint accepts loopback requests only (bad Host header)"
+                "MCP endpoint accepts loopback requests only (bad Host header)"
             }
             AdmissionDenial::ForeignOrigin => {
-                "live MCP endpoint refuses cross-origin requests (bad Origin header)"
+                "MCP endpoint refuses cross-origin requests (bad Origin header)"
             }
         }
     }
@@ -172,10 +172,36 @@ pub(super) fn check_boundary(
     Ok(())
 }
 
+/// Browser screening for a loopback MCP endpoint that serves no browser UI
+/// and no extension route — the headless `--mcp-http` server. Same `Host`
+/// and `Origin` rules as [`check_boundary`], without its extension
+/// widenings, so a web page (directly or through DNS rebinding) cannot drive
+/// the endpoint while the CLI and local agents, which send no `Origin`, pass.
+pub(crate) fn check_loopback_boundary(
+    req: &crate::mcp_serve::HttpRequest,
+    port: u16,
+) -> Result<(), AdmissionDenial> {
+    if !host_allowed(req.host.as_deref(), port) {
+        return Err(AdmissionDenial::ForeignHost);
+    }
+    if !origin_allowed(req.origin.as_deref(), port) {
+        return Err(AdmissionDenial::ForeignOrigin);
+    }
+    Ok(())
+}
+
+/// The `Access-Control-Allow-Origin` value for [`check_loopback_boundary`]:
+/// the request's own loopback origin when it is accepted, otherwise `None`.
+/// Never `*`.
+pub(crate) fn loopback_cors_origin(req: &crate::mcp_serve::HttpRequest, port: u16) -> Option<&str> {
+    let origin = req.origin.as_deref()?.trim();
+    origin_allowed(Some(origin), port).then_some(origin)
+}
+
 /// JSON-RPC error body for a refused `/mcp` request, echoing the caller's
 /// request id so a client correlates the refusal with its call instead of
 /// hanging (same discipline as `op_mcp::parser`'s parse-failure path).
-pub(super) fn denial_json_rpc(request_body: &str, denial: AdmissionDenial) -> String {
+pub(crate) fn denial_json_rpc(request_body: &str, denial: AdmissionDenial) -> String {
     format!(
         r#"{{"jsonrpc":"2.0","error":{{"code":{DENIED_CODE},"message":"{}"}},"id":{}}}"#,
         crate::mcp_serve::json_escape(denial.message()),

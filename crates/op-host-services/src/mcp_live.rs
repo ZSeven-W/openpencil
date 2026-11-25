@@ -486,7 +486,9 @@ fn command_invalidates_layout(cmd: &EditorCommand) -> bool {
     }
 }
 
-mod admission;
+/// `pub(crate)` so the headless `--mcp-http` server (`mcp_serve`) applies the
+/// same loopback `Host` / `Origin` screening as the live endpoint.
+pub(crate) mod admission;
 mod connection;
 mod design_md_output;
 pub(crate) mod design_md_route;

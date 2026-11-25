@@ -329,6 +329,10 @@ fn local_profile(catalog: tool_catalog::McpToolCatalog) -> tool_profile::McpAcce
     tool_profile::McpAccessProfile::UNRESTRICTED.with_catalog(catalog)
 }
 
+/// The bound port the `--mcp-http` transport tests pretend to serve on.
+#[cfg(test)]
+const TEST_HTTP_PORT: u16 = 3_100;
+
 #[cfg(test)]
 fn serve_http_connection<S: std::io::Read + std::io::Write>(
     stream: &mut S,
@@ -341,6 +345,7 @@ fn serve_http_connection<S: std::io::Read + std::io::Write>(
         path,
         None,
         tool_profile::McpAccessProfile::UNRESTRICTED,
+        TEST_HTTP_PORT,
     )
 }
 
@@ -618,12 +623,12 @@ pub fn write_mcp_http_response<S: std::io::Write>(
 
 /// Like [`write_mcp_http_response`], but lets the caller supply the exact
 /// `Access-Control-Allow-Origin` value to emit: `Some(origin)` echoes that
-/// literal value, `None` omits the header entirely. Used by the managed
-/// web-canvas daemon (`web_canvas_server::serve_one`), which computes the
-/// right value per-request via `cors_origin_for` against its
-/// `--allow-origin` allowlist; every other caller (the `--mcp-http`
-/// server, the legacy `--serve-web` accept-loop overflow reply) keeps the
-/// permissive `*` via `write_mcp_http_response` above, unchanged.
+/// literal value, `None` omits the header entirely. Used by the web-canvas
+/// daemon (`web_canvas_server::serve_one`), which computes the right value
+/// per-request for its mode, and by the `--mcp-http` server, which echoes
+/// only its own loopback origin (`mcp_live::admission::loopback_cors_origin`).
+/// The legacy `--serve-web` accept-loop overflow reply keeps the permissive
+/// `*` via `write_mcp_http_response` above.
 pub(crate) fn write_mcp_http_response_with_origin<S: std::io::Write>(
     stream: &mut S,
     status: &str,
