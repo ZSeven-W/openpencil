@@ -37,6 +37,11 @@ impl OpEngine {
         }
     }
 
+    /// Whether the calling thread is the one that created this engine.
+    pub(crate) fn on_owner_thread(&self) -> bool {
+        self.owner == std::thread::current().id()
+    }
+
     /// Clone of the last call error (for `op_last_error`).
     pub(crate) fn last_error(&self) -> String {
         self.last_error.borrow().clone()
@@ -65,7 +70,7 @@ pub(crate) unsafe fn call_session(
         return OpStatus::InvalidArg;
     }
     let engine = unsafe { &*pointer };
-    if engine.owner != std::thread::current().id() || engine.in_call.get() {
+    if !engine.on_owner_thread() || engine.in_call.get() {
         return OpStatus::WrongThread;
     }
     if engine.poisoned.get() {
@@ -124,7 +129,7 @@ pub(crate) unsafe fn destroy_engine(pointer: *mut OpEngine) -> OpStatus {
         return OpStatus::InvalidArg;
     }
     let engine = unsafe { &*pointer };
-    if engine.owner != std::thread::current().id() || engine.in_call.get() {
+    if !engine.on_owner_thread() || engine.in_call.get() {
         return OpStatus::WrongThread;
     }
     engine.in_call.set(true);

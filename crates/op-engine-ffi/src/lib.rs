@@ -276,7 +276,8 @@ pub unsafe extern "C" fn op_destroy(engine: *mut OpEngine) -> OpStatus {
 ///
 /// # Safety
 ///
-/// A non-null `engine` must be live; output pointers must cover their sizes.
+/// A non-null `engine` must be live and called on its owner thread; output
+/// pointers must cover their sizes.
 #[no_mangle]
 pub unsafe extern "C" fn op_last_error(
     engine: *mut OpEngine,
@@ -297,6 +298,11 @@ pub unsafe extern "C" fn op_last_error(
         };
     }
     let engine = unsafe { &*engine };
+    // The error slot is a `RefCell` the owner writes after every failed
+    // call; reading it from another thread would race that write.
+    if !engine.on_owner_thread() {
+        return OpStatus::WrongThread;
+    }
     let message = engine.last_error();
     match unsafe { write_bytes(message.as_bytes(), buffer, length, required) } {
         Ok(()) => OpStatus::Ok,

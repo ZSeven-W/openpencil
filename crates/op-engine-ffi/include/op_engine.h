@@ -219,7 +219,8 @@ OpStatus op_create(const OpCreateDesc *desc, OpEngine **out);
 OpStatus op_destroy(OpEngine *engine);
 
 /* Copy the last error into a caller-owned byte buffer. With a NULL
- * engine, reports the op_create error. */
+ * engine, reports the op_create error; a non-NULL engine must be called
+ * on its owner thread (OpStatus_WrongThread otherwise). */
 OpStatus op_last_error(OpEngine *engine, uint8_t *buffer, size_t length, size_t *required);
 
 /* Select GPU mode using a borrowed platform surface. */
