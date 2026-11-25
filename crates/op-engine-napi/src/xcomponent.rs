@@ -139,7 +139,17 @@ pub fn ime_conduit_attached() -> bool {
     IME_CONDUIT_ATTACHED.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Guarded like the surface callbacks so a panic can never unwind across the
+/// non-unwinding C callback ABI; the key is dropped instead.
 extern "C" fn on_key_event(component: *mut OhNativeXComponent, _window: *mut c_void) {
+    let guarded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| route_key(component)));
+    if let Err(payload) = guarded {
+        op_engine_jni::engine_thread::drop_guarded(payload);
+    }
+}
+
+/// Tracks modifiers and routes one native key event to the bound engine.
+fn route_key(component: *mut OhNativeXComponent) {
     use std::sync::atomic::Ordering;
 
     let mut event: *mut OhNativeXComponentKeyEvent = std::ptr::null_mut();
