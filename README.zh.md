@@ -235,7 +235,7 @@ bash scripts/start-web-rust.sh
 
 私有部署可以通过 `OPENPENCIL_PERSIST_WEB_CREDENTIALS_SERVER=true` 启用服务器端持久化。该设置作用于整个部署；每个被接受的浏览器快照都会替换共享的浏览器所有副本。仅应在位于 HTTPS 之后、受访问控制且只有一个活跃管理员配置文件的可信部署中启用。关闭该设置后，下次启动时会删除此前持久化的浏览器所有凭据，同时保留运维方自有的配置。与所有 `localStorage` 一样，同源脚本可以读取这些值，因此必须保护 Web 源免受不可信脚本和 XSS 的影响。降级到早于此开关的版本之前，请先关闭它，并用当前版本启动一次，以清除浏览器所有的副本。
 
-Web 宿主仅支持使用 API Key 的内置智能体。CLI 和 ACP 智能体仍仅限原生端：它们不会显示在 Web 模型选择器中，不会存入浏览器凭据快照，不会同步到服务器，也不会通过 Web 连接路由暴露。浏览器对凭据和 AI 端点的请求默认允许 loopback/localhost 源。公共反向代理必须另行将 `OPENPENCIL_WEB_ALLOWED_ORIGINS` 设置为以逗号分隔的精确源列表，例如 `https://demo.openpencil.dev`。
+Web 宿主仅支持使用 API Key 的内置智能体。CLI 和 ACP 智能体仍仅限原生端：它们不会显示在 Web 模型选择器中，不会存入浏览器凭据快照，不会同步到服务器，也不会通过 Web 连接路由暴露。本地 Web 守护进程只响应来自其自身源（位于 loopback 主机或 IP 地址上）的浏览器请求，凭据和 AI 端点默认还额外要求 loopback/localhost 源。公共反向代理必须将 `OPENPENCIL_WEB_ALLOWED_ORIGINS` 设置为以逗号分隔的精确源列表，例如 `https://demo.openpencil.dev`。
 
 服务器端持久化不允许浏览器控制的请求访问 loopback、私有、链路本地、元数据或保留的提供商端点。有意使用内部提供商的可信私有部署，必须另行将 `OPENPENCIL_WEB_AI_ENDPOINT_ALLOWLIST` 设置为以逗号分隔的精确 URL 源列表，例如 `http://127.0.0.1:11434,https://llm.internal.example`。
 

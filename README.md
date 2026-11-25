@@ -260,10 +260,11 @@ browser-owned copy.
 The web host supports built-in API-key agents only. CLI and ACP agents remain
 native-only: they are not shown in the web model picker, stored in browser
 credential snapshots, synchronized to the server, or exposed through web
-connect routes. Browser requests to credential and AI endpoints allow
-loopback/localhost origins by default. A public reverse proxy must separately set
-`OPENPENCIL_WEB_ALLOWED_ORIGINS` to a comma-separated list of exact origins,
-for example `https://demo.openpencil.dev`.
+connect routes. The local web daemon answers browser requests only from its own
+origin on a loopback host or an IP address, and credential and AI endpoints
+additionally require a loopback/localhost origin by default. A public reverse
+proxy must set `OPENPENCIL_WEB_ALLOWED_ORIGINS` to a comma-separated list of
+exact origins, for example `https://demo.openpencil.dev`.
 
 Server persistence does not permit browser-controlled requests to loopback,
 private, link-local, metadata, or reserved provider endpoints. A trusted private
