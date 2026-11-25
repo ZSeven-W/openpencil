@@ -157,6 +157,12 @@ fn engine_is_bound_to_its_creator_thread() {
     });
     let status = handle.join().unwrap();
     assert_eq!(status, OpStatus::WrongThread);
+    // So is reading the error slot, which the owner writes after a call.
+    let handle = std::thread::spawn(move || {
+        let mut required = 0usize;
+        unsafe { op_last_error(raw as *mut OpEngine, ptr::null_mut(), 0, &mut required) }
+    });
+    assert_eq!(handle.join().unwrap(), OpStatus::WrongThread);
     // Destroying from the wrong thread is also refused.
     let handle = std::thread::spawn(move || unsafe { op_destroy(raw as *mut OpEngine) });
     assert_eq!(handle.join().unwrap(), OpStatus::WrongThread);
