@@ -256,7 +256,10 @@ OpStatus op_resize(OpEngine *engine, float width, float height, float dpr);
 OpStatus op_resize_with_safe_area(OpEngine *engine, float width, float height, float dpr, float top, float right, float bottom, float left);
 
 /* Update the viewport atomically with an optional noninteractive fold preview.
- * Pass NULL to remove the preview when the device opens or closes. */
+ * Pass NULL to remove the preview when the device opens or closes. Preview
+ * edges up to half a device pixel (at most half a point) past the surface are
+ * clamped, and as far into the editor viewport are tolerated, so float
+ * rounding of shared edges does not fail the resize. */
 OpStatus op_resize_with_fold_preview(OpEngine *engine, float width, float height, float dpr, OpInsets insets, const OpFoldPreviewRect *preview);
 
 /* Native shell toolbar bridge (editor feature): -1 hides it. */
