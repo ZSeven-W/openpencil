@@ -627,8 +627,7 @@ pub fn write_mcp_http_response<S: std::io::Write>(
 /// daemon (`web_canvas_server::serve_one`), which computes the right value
 /// per-request for its mode, and by the `--mcp-http` server, which echoes
 /// only its own loopback origin (`mcp_live::admission::loopback_cors_origin`).
-/// The legacy `--serve-web` accept-loop overflow reply keeps the permissive
-/// `*` via `write_mcp_http_response` above.
+/// The single-document `--serve-web` accept-loop overflow reply passes `None`.
 pub(crate) fn write_mcp_http_response_with_origin<S: std::io::Write>(
     stream: &mut S,
     status: &str,

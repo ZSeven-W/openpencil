@@ -45,7 +45,7 @@ fn serve_one_token_authed_shutdown_signals_caller() {
     let bad =
         r#"{"jsonrpc":"2.0","id":1,"method":"openpencil/shutdown","params":{"token":"nope"}}"#;
     let mut stream = mock_stream(&format!(
-        "POST /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{bad}",
+        "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:3100\r\nContent-Length: {}\r\n\r\n{bad}",
         bad.len()
     ));
     let wants_shutdown = serve_one(&mut stream, &state, &hub).expect("serve_one");
@@ -53,7 +53,7 @@ fn serve_one_token_authed_shutdown_signals_caller() {
     // Matching token → ack + shutdown signal for the accept loop.
     let good = r#"{"jsonrpc":"2.0","id":2,"method":"openpencil/shutdown","params":{"token":"serve-web-shutdown-test"}}"#;
     let mut stream = mock_stream(&format!(
-        "POST /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{good}",
+        "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:3100\r\nContent-Length: {}\r\n\r\n{good}",
         good.len()
     ));
     let wants_shutdown = serve_one(&mut stream, &state, &hub).expect("serve_one");

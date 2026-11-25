@@ -54,7 +54,7 @@ impl std::io::Write for MockStream {
 /// Drive one request through `serve_one` and return the raw HTTP response.
 pub(super) fn serve(method: &str, path: &str, body: &str) -> String {
     let request = format!(
-        "{method} {path} HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{body}",
+        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:3100\r\nContent-Length: {}\r\n\r\n{body}",
         body.len()
     );
     let mut stream = MockStream {
@@ -88,7 +88,7 @@ fn serve_one_post_document_broadcasts_new_version_to_sse() {
     let hub = SseHub::default();
     let sub = hub.subscribe();
     let request = format!(
-        "POST /api/mcp/document HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{}",
+        "POST /api/mcp/document HTTP/1.1\r\nHost: 127.0.0.1:3100\r\nContent-Length: {}\r\n\r\n{}",
         SYNC_BODY.len(),
         SYNC_BODY
     );
@@ -110,7 +110,7 @@ fn serve_one_routes_rest_health_and_document() {
 /// Drive one request with an explicit Content-Type header through `serve_one`.
 fn serve_with_content_type(method: &str, path: &str, content_type: &str, body: &str) -> String {
     let request = format!(
-        "{method} {path} HTTP/1.1\r\nHost: x\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\n\r\n{body}",
+        "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:3100\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\n\r\n{body}",
         body.len()
     );
     let mut stream = mock_stream(&request);
@@ -139,7 +139,8 @@ fn hosted_catalog_is_public_metadata_and_online_is_unavailable() {
         assert!(body.get(field).is_none());
     }
 
-    let mut stream = mock_stream("GET /api/ai/hosted/models HTTP/1.1\r\nHost: x\r\n\r\n");
+    let mut stream =
+        mock_stream("GET /api/ai/hosted/models HTTP/1.1\r\nHost: 127.0.0.1:3100\r\n\r\n");
     serve_one_in_mode(
         &mut stream,
         &Mutex::new(fresh_state()),
@@ -155,7 +156,7 @@ fn hosted_catalog_is_public_metadata_and_online_is_unavailable() {
 #[test]
 fn online_hosted_send_never_resolves_process_account_or_falls_back() {
     let body = r#"{"hosted_route_id":"not-a-current-route","user":"hello"}"#;
-    let request = format!("POST /api/ai/stream HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", body.len());
+    let request = format!("POST /api/ai/stream HTTP/1.1\r\nHost: 127.0.0.1:3100\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", body.len());
     let mut stream = mock_stream(&request);
     serve_one_in_mode(
         &mut stream,
@@ -188,7 +189,7 @@ fn serve_one_builtin_model_discovery_route_is_json_not_404() {
 fn managed_daemon_accepts_tokenless_native_model_discovery() {
     let body = r#"{"id":"builtin-1","generation":1,"credential":{}}"#;
     let request = format!(
-        "POST /api/ai/models/discover HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+        "POST /api/ai/models/discover HTTP/1.1\r\nHost: 127.0.0.1:3100\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
         body.len(),
         body,
     );
@@ -278,7 +279,7 @@ fn serve_one_post_mcp_debug_screenshot_uses_web_canvas_renderer() {
 
     let body = r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"debug_screenshot","arguments":{"target":"root","dpr":1}}}"#;
     let request = format!(
-        "POST /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{body}",
+        "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:3100\r\nContent-Length: {}\r\n\r\n{body}",
         body.len()
     );
     let mut stream = mock_stream(&request);
@@ -612,3 +613,108 @@ fn document_post_route_409s_on_stale_base_version_without_mutating() {
 /// stream and the `serve` helpers.
 #[path = "web_canvas_server_args_tests.rs"]
 mod args_tests;
+
+/// One raw request through the local (unmanaged) daemon.
+fn serve_local_raw(request: &str) -> String {
+    let mut stream = mock_stream(request);
+    let state = Mutex::new(fresh_state());
+    let hub = SseHub::default();
+    serve_one(&mut stream, &state, &hub).expect("serve_one");
+    String::from_utf8_lossy(&stream.output).into_owned()
+}
+
+#[test]
+fn local_daemon_refuses_a_cross_site_page_driving_mcp_tools() {
+    let target = std::env::temp_dir().join(format!(
+        "openpencil-serve-web-cross-origin-{}.op",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&target);
+    let body = format!(
+        r#"{{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{{"name":"save_document","arguments":{{"filePath":{}}}}}}}"#,
+        serde_json::to_string(&target.to_string_lossy()).expect("path json")
+    );
+    let resp = serve_local_raw(&format!(
+        "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:3100\r\nOrigin: https://evil.example\r\n\
+         Content-Type: text/plain\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    ));
+    assert!(resp.starts_with("HTTP/1.1 403 Forbidden"), "{resp}");
+    assert!(!resp.contains("Access-Control-Allow-Origin"), "{resp}");
+    assert!(
+        !target.exists(),
+        "a refused request must not write the file"
+    );
+}
+
+#[test]
+fn local_daemon_refuses_dns_rebound_reads_and_never_echoes_a_wildcard() {
+    // A rebound page's same-origin GET carries no `Origin`, only its own name.
+    let rebound = serve_local_raw(
+        "GET /api/mcp/document HTTP/1.1\r\nHost: attacker.example:3100\r\nContent-Length: 0\r\n\r\n",
+    );
+    assert!(rebound.starts_with("HTTP/1.1 403 Forbidden"), "{rebound}");
+    let preflight = serve_local_raw(
+        "OPTIONS /mcp HTTP/1.1\r\nHost: 127.0.0.1:3100\r\nOrigin: http://evil.example\r\nContent-Length: 0\r\n\r\n",
+    );
+    assert!(
+        preflight.starts_with("HTTP/1.1 403 Forbidden"),
+        "{preflight}"
+    );
+    let native = serve("GET", "/api/mcp/document", "");
+    assert!(native.starts_with("HTTP/1.1 200 OK"), "{native}");
+    assert!(!native.contains("Access-Control-Allow-Origin"), "{native}");
+}
+
+#[test]
+fn local_daemon_serves_its_own_shell_on_loopback_and_lan_addresses() {
+    for authority in ["127.0.0.1:3100", "localhost:3100", "192.168.1.20:3100"] {
+        let body = r#"{"jsonrpc":"2.0","id":5,"method":"tools/list"}"#;
+        let resp = serve_local_raw(&format!(
+            "POST /mcp HTTP/1.1\r\nHost: {authority}\r\nOrigin: http://{authority}\r\n\
+             Content-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        ));
+        assert!(resp.starts_with("HTTP/1.1 200 OK"), "{authority}: {resp}");
+        assert!(
+            resp.contains(&format!(
+                "Access-Control-Allow-Origin: http://{authority}\r\n"
+            )),
+            "{authority}: {resp}"
+        );
+    }
+}
+
+#[test]
+fn local_boundary_trusts_a_proxy_host_only_through_the_origin_allowlist() {
+    let request = |host: &str, origin: Option<&str>| crate::mcp_serve::HttpRequest {
+        method: "POST".into(),
+        path: "/mcp".into(),
+        body: String::new(),
+        host: Some(host.into()),
+        origin: origin.map(str::to_string),
+        token: None,
+        content_type: Some("application/json".into()),
+        authorization: None,
+        cookie: None,
+        query: None,
+    };
+    let proxied = request("demo.example", Some("https://demo.example"));
+    assert!(!local_request_allowed_with_config(&proxied, None));
+    assert!(local_request_allowed_with_config(
+        &proxied,
+        Some("https://other.example, https://demo.example")
+    ));
+    // The allowlist widens the host, not the origin: a cross-site page on an
+    // allowlisted proxy host is still refused.
+    let cross_site = request("demo.example", Some("https://evil.example"));
+    assert!(!local_request_allowed_with_config(
+        &cross_site,
+        Some("https://demo.example")
+    ));
+    let no_host = crate::mcp_serve::HttpRequest {
+        host: None,
+        ..request("127.0.0.1:3100", None)
+    };
+    assert!(!local_request_allowed_with_config(&no_host, None));
+}

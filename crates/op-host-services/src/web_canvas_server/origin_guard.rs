@@ -1,7 +1,8 @@
-//! Browser-origin screening for the daemon's sensitive POST routes
-//! (credentials / AI / auth / figma): same-origin by default, widened only
-//! by the explicit `OPENPENCIL_WEB_ALLOWED_ORIGINS` allowlist. Split out of
-//! `web_canvas_server.rs` to keep the spine under the 800-line cap.
+//! Browser-origin screening for the daemon: the local daemon's per-request
+//! `Host` / `Origin` boundary, and the stricter check for sensitive POST
+//! routes (credentials / AI / auth / figma) — same-origin by default, widened
+//! only by the explicit `OPENPENCIL_WEB_ALLOWED_ORIGINS` allowlist. Split out
+//! of `web_canvas_server.rs` to keep the spine under the 800-line cap.
 
 pub(crate) const WEB_ALLOWED_ORIGINS_ENV: &str = "OPENPENCIL_WEB_ALLOWED_ORIGINS";
 
@@ -58,30 +59,98 @@ pub(super) fn credential_request_origin_allowed_with_config(
     let Ok(host) = reqwest::Url::parse(&format!("http://{host}/")) else {
         return false;
     };
-    let same_request_authority =
-        origin
-            .host_str()
-            .zip(host.host_str())
-            .is_some_and(|(origin_host, request_host)| {
-                let request_port = host.port().or_else(|| match origin.scheme() {
-                    "http" => Some(80),
-                    "https" => Some(443),
-                    _ => None,
-                });
-                origin_host.eq_ignore_ascii_case(request_host)
-                    && origin.port_or_known_default() == request_port
-            });
-    if !same_request_authority {
+    if !same_request_authority(&origin, &host) {
         return false;
     }
     if origin.host_str().is_some_and(is_loopback_web_host) {
         return true;
     }
+    configured_origins(allowed_origins).any(|configured| same_url_origin(&origin, &configured))
+}
+
+/// Browser boundary for the local (unmanaged) daemon, applied to EVERY
+/// request before routing — it runs the unrestricted MCP profile, so a web
+/// page must not reach `/mcp` (file writes, imports) or read the document.
+///
+/// * `Host` must be trusted: a loopback name or address, any IP literal (so a
+///   `--host 0.0.0.0` LAN daemon stays reachable by address), or the host of
+///   an `OPENPENCIL_WEB_ALLOWED_ORIGINS` entry (a reverse proxy). DNS
+///   rebinding always presents the attacker's own DNS name, so it fails here
+///   even on same-origin GETs, which carry no `Origin`.
+/// * An `Origin`, when present, must be exactly the request's own authority,
+///   so a cross-site page is refused while the served shell (same origin) and
+///   native clients (no `Origin`) pass.
+pub(super) fn local_request_allowed(request: &crate::mcp_serve::HttpRequest) -> bool {
+    let allowed_origins = std::env::var(WEB_ALLOWED_ORIGINS_ENV).ok();
+    local_request_allowed_with_config(request, allowed_origins.as_deref())
+}
+
+pub(super) fn local_request_allowed_with_config(
+    request: &crate::mcp_serve::HttpRequest,
+    allowed_origins: Option<&str>,
+) -> bool {
+    let Some(host) = request.host.as_deref() else {
+        return false;
+    };
+    let Ok(host) = reqwest::Url::parse(&format!("http://{}/", host.trim())) else {
+        return false;
+    };
+    let Some(host_name) = host.host_str() else {
+        return false;
+    };
+    let host_trusted = is_loopback_web_host(host_name)
+        || is_ip_literal(host_name)
+        || configured_origins(allowed_origins).any(|configured| {
+            configured
+                .host_str()
+                .is_some_and(|configured| configured.eq_ignore_ascii_case(host_name))
+        });
+    if !host_trusted {
+        return false;
+    }
+    let Some(origin) = request.origin.as_deref() else {
+        return true;
+    };
+    parse_http_origin(origin.trim()).is_some_and(|origin| same_request_authority(&origin, &host))
+}
+
+/// Whether `origin` names exactly the authority the request was sent to
+/// (`host`, parsed from the `Host` header). A `Host` without a port takes the
+/// origin scheme's default.
+fn same_request_authority(origin: &reqwest::Url, host: &reqwest::Url) -> bool {
+    origin
+        .host_str()
+        .zip(host.host_str())
+        .is_some_and(|(origin_host, request_host)| {
+            let request_port = host.port().or_else(|| match origin.scheme() {
+                "http" => Some(80),
+                "https" => Some(443),
+                _ => None,
+            });
+            origin_host.eq_ignore_ascii_case(request_host)
+                && origin.port_or_known_default() == request_port
+        })
+}
+
+fn configured_origins(allowed_origins: Option<&str>) -> impl Iterator<Item = reqwest::Url> + '_ {
     allowed_origins
         .into_iter()
         .flat_map(|origins| origins.split(','))
         .filter_map(|configured| parse_http_origin(configured.trim()))
-        .any(|configured| same_url_origin(&origin, &configured))
+}
+
+fn is_ip_literal(host: &str) -> bool {
+    ip_literal(host).is_some()
+}
+
+/// `host` as an IP address when it is a numeric literal (IPv6 with or
+/// without the URL brackets), `None` for a name.
+fn ip_literal(host: &str) -> Option<std::net::IpAddr> {
+    host.strip_prefix('[')
+        .and_then(|host| host.strip_suffix(']'))
+        .unwrap_or(host)
+        .parse()
+        .ok()
 }
 
 pub(crate) fn parse_http_origin(value: &str) -> Option<reqwest::Url> {
@@ -106,16 +175,10 @@ pub(super) fn same_url_origin(left: &reqwest::Url, right: &reqwest::Url) -> bool
 }
 
 pub(super) fn is_loopback_web_host(host: &str) -> bool {
-    let ip_literal = host
-        .strip_prefix('[')
-        .and_then(|host| host.strip_suffix(']'))
-        .unwrap_or(host);
     host.eq_ignore_ascii_case("localhost")
         || host
             .to_ascii_lowercase()
             .strip_suffix(".localhost")
             .is_some_and(|prefix| !prefix.is_empty())
-        || ip_literal
-            .parse::<std::net::IpAddr>()
-            .is_ok_and(|address| address.is_loopback())
+        || ip_literal(host).is_some_and(|address| address.is_loopback())
 }
