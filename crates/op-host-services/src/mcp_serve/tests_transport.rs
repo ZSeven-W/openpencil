@@ -646,7 +646,7 @@ fn design_md_evidence_rejects_ambiguous_content_type_headers() {
 fn http_transport_serves_initialize() {
     let rpc = r#"{"jsonrpc":"2.0","id":7,"method":"initialize","params":{}}"#;
     let request = format!(
-        "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{rpc}",
+        "POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\n\r\n{rpc}",
         rpc.len()
     );
     let mut stream = MockStream {
@@ -664,7 +664,9 @@ fn http_transport_serves_initialize() {
     assert!(resp.starts_with("HTTP/1.1 200 OK"), "status line: {resp}");
     assert!(resp.contains("Content-Type: application/json"));
     assert!(resp.contains("mcp-session-id: openpencil"));
-    assert!(resp.contains("Access-Control-Allow-Origin: *"));
+    // A non-browser client sends no `Origin`, so no CORS origin is echoed —
+    // and never the `*` wildcard.
+    assert!(!resp.contains("Access-Control-Allow-Origin"), "{resp}");
     assert!(resp.contains("Cache-Control: no-store"));
     // The JSON-RPC initialize reply carries the protocol handshake +
     // the request id, proving the body round-tripped over HTTP.
@@ -674,7 +676,7 @@ fn http_transport_serves_initialize() {
 
 #[test]
 fn http_transport_serves_options_preflight() {
-    let request = "OPTIONS /mcp HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n";
+    let request = "OPTIONS /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n";
     let mut stream = MockStream {
         input: std::io::Cursor::new(request.as_bytes().to_vec()),
         output: Vec::new(),
@@ -689,4 +691,101 @@ fn http_transport_serves_options_preflight() {
     let resp = String::from_utf8(stream.output).unwrap();
     assert!(resp.starts_with("HTTP/1.1 204 No Content"), "{resp}");
     assert!(resp.contains("Access-Control-Allow-Methods"));
+}
+
+/// One `--mcp-http` request with the given extra headers; returns the raw
+/// HTTP response.
+fn mcp_http_exchange(method: &str, headers: &str, body: &str) -> String {
+    let request = format!(
+        "{method} /mcp HTTP/1.1\r\n{headers}Content-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+    let mut stream = MockStream {
+        input: std::io::Cursor::new(request.into_bytes()),
+        output: Vec::new(),
+    };
+    let mut state = EditorState::new();
+    serve_http_connection(
+        &mut stream,
+        &mut state,
+        std::path::Path::new("/tmp/unused.op"),
+    )
+    .expect("serve_http_connection");
+    String::from_utf8(stream.output).unwrap()
+}
+
+#[test]
+fn http_transport_refuses_a_cross_origin_page_before_any_tool_runs() {
+    let (dir, target, _) = temp_doc_paths("cross-origin-save");
+    let _ = std::fs::remove_file(&target);
+    let body = format!(
+        r#"{{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{{"name":"save_document","arguments":{{"filePath":{}}}}}}}"#,
+        serde_json::to_string(&target.to_string_lossy()).expect("path json")
+    );
+    let resp = mcp_http_exchange(
+        "POST",
+        "Host: 127.0.0.1:3100\r\nOrigin: https://evil.example\r\nContent-Type: text/plain\r\n",
+        &body,
+    );
+    assert!(resp.starts_with("HTTP/1.1 403 Forbidden"), "{resp}");
+    assert!(
+        resp.contains(r#""code":-32001"#) && resp.contains(r#""id":9"#),
+        "{resp}"
+    );
+    assert!(!resp.contains("Access-Control-Allow-Origin"), "{resp}");
+    assert!(
+        !target.exists(),
+        "a refused request must not write the file"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn http_transport_refuses_a_dns_rebound_host_and_foreign_preflight() {
+    // A rebound page keeps its own name in `Host` even without `Origin`.
+    let rebound = mcp_http_exchange(
+        "POST",
+        "Host: attacker.example:3100\r\n",
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#,
+    );
+    assert!(rebound.starts_with("HTTP/1.1 403 Forbidden"), "{rebound}");
+    // The preflight is screened too, so a page cannot unlock a JSON POST.
+    let preflight = mcp_http_exchange(
+        "OPTIONS",
+        "Host: 127.0.0.1:3100\r\nOrigin: http://evil.example\r\n",
+        "",
+    );
+    assert!(
+        preflight.starts_with("HTTP/1.1 403 Forbidden"),
+        "{preflight}"
+    );
+    assert!(
+        !preflight.contains("Access-Control-Allow-Origin"),
+        "{preflight}"
+    );
+}
+
+#[test]
+fn http_transport_echoes_only_its_own_loopback_origin() {
+    let resp = mcp_http_exchange(
+        "POST",
+        "Host: 127.0.0.1:3100\r\nOrigin: http://127.0.0.1:3100\r\n",
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#,
+    );
+    assert!(resp.starts_with("HTTP/1.1 200 OK"), "{resp}");
+    assert!(
+        resp.contains("Access-Control-Allow-Origin: http://127.0.0.1:3100\r\n"),
+        "{resp}"
+    );
+    assert!(!resp.contains("Access-Control-Allow-Origin: *"), "{resp}");
+    // Another loopback port is a different origin (another local server).
+    let other_port = mcp_http_exchange(
+        "POST",
+        "Host: 127.0.0.1:3100\r\nOrigin: http://127.0.0.1:5173\r\n",
+        r#"{"jsonrpc":"2.0","id":3,"method":"tools/list"}"#,
+    );
+    assert!(
+        other_port.starts_with("HTTP/1.1 403 Forbidden"),
+        "{other_port}"
+    );
 }

@@ -316,7 +316,7 @@ impl std::io::Write for HttpMock {
 fn mcp_http_tools(path: &str, profile: McpAccessProfile) -> usize {
     let body = r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
     let request = format!(
-        "POST {path} HTTP/1.1\r\nHost: x\r\nContent-Length: {}\r\n\r\n{body}",
+        "POST {path} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\n\r\n{body}",
         body.len()
     );
     let mut stream = HttpMock {
@@ -330,6 +330,7 @@ fn mcp_http_tools(path: &str, profile: McpAccessProfile) -> usize {
         std::path::Path::new("/tmp/unused-lean.op"),
         None,
         profile,
+        super::super::TEST_HTTP_PORT,
     )
     .expect("serve");
     let response = String::from_utf8(stream.output).expect("utf8");

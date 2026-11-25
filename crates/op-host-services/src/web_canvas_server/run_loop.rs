@@ -159,10 +159,13 @@ pub fn run_web_canvas(options: ServeWebOptions) -> Result<()> {
         };
         if conn_count.load(Ordering::Acquire) >= MAX_CONNS {
             let _ = s.set_write_timeout(Some(IO_TIMEOUT));
-            let _ = crate::mcp_serve::write_mcp_http_response(
+            // No CORS echo: the request was never read, so there is no
+            // origin to vet, and this daemon never answers with `*`.
+            let _ = crate::mcp_serve::write_mcp_http_response_with_origin(
                 &mut s,
                 "503 Service Unavailable",
                 r#"{"ok":false,"error":"server busy"}"#,
+                None,
             );
             continue;
         }

@@ -109,18 +109,33 @@ pub(super) fn dispatch<S: Read + Write>(
         let guard = state.lock().unwrap_or_else(|p| p.into_inner());
         (guard.managed_token.clone(), guard.allow_origins.clone())
     };
-    // Online never emits `*`: its requests carry credentials, and a wildcard
-    // plus credentials is what lets any page on the internet read another
-    // account's document. Managed mode keeps its own allowlist echo, and the
-    // local daemon keeps the permissive value it has always used.
+    // The local daemon's per-request boundary, evaluated once: it gates the
+    // request below and decides the CORS echo.
+    let local_refused = matches!(ctx.mode, ServeMode::Local) && !local_request_allowed(req);
+    // No mode emits `*`. Online requests carry credentials, and a wildcard
+    // plus credentials lets any page on the internet read another account's
+    // document. Managed mode echoes its own allowlist. The local daemon runs
+    // the unrestricted MCP profile, so it echoes only an origin its boundary
+    // accepts.
     let cors_origin: Option<String> = if ctx.mode.is_online() {
         online_policy::online_cors_origin(&allow_origins, req.origin.as_deref())
     } else if matches!(ctx.mode, ServeMode::Managed) {
         cors_origin_for(&allow_origins, req.origin.as_deref(), req.host.as_deref())
     } else {
-        Some("*".to_string())
+        req.origin.clone().filter(|_| !local_refused)
     };
     let cors_origin = cors_origin.as_deref();
+    if local_refused {
+        crate::mcp_serve::write_mcp_http_response_with_origin(
+            stream,
+            "403 Forbidden",
+            &crate::mcp_serve::rest_error_body(
+                "cross-origin or untrusted-host request is forbidden",
+            ),
+            cors_origin,
+        )?;
+        return Ok(false);
+    }
     if matches!(ctx.mode, ServeMode::Managed)
         && !managed_request_origin_allowed(
             &allow_origins,

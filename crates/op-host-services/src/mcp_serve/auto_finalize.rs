@@ -240,6 +240,9 @@ pub(super) fn run_http(
     let mut auto_finalize = AutoFinalize::from_env();
     let listener = std::net::TcpListener::bind(("127.0.0.1", port))
         .map_err(|e| McpServeError::Config(format!("bind 127.0.0.1:{port}: {e}")))?;
+    // The port actually bound (differs from `port` when it was 0): the
+    // `Host` / `Origin` screening must compare against the real one.
+    let port = listener.local_addr().map_or(port, |address| address.port());
     listener
         .set_nonblocking(true)
         .map_err(|e| McpServeError::Config(format!("set nonblocking listener: {e}")))?;
@@ -269,6 +272,7 @@ pub(super) fn run_http(
                     &path,
                     Some(&mut auto_finalize),
                     profile,
+                    port,
                 ) {
                     Ok(true) => {
                         eprintln!("openpencil-desktop --mcp-http: shutdown requested; exiting");
@@ -298,11 +302,24 @@ pub(super) fn serve_http_connection<S: std::io::Read + std::io::Write>(
     path: &Path,
     auto_finalize: Option<&mut AutoFinalize>,
     profile: McpAccessProfile,
+    port: u16,
 ) -> Result<bool, McpServeError> {
-    let reply = |stream: &mut S, status: &str, body: &str| {
-        super::write_mcp_http_response_with_origin(stream, status, body, Some("*"))
-    };
+    use crate::mcp_live::admission;
+
     let req = super::read_http_request(stream)?;
+    // Never `*`: this endpoint runs the unrestricted tool profile (file
+    // writes, imports), so only its own loopback origin may read replies.
+    let cors_origin = admission::loopback_cors_origin(&req, port);
+    let reply = |stream: &mut S, status: &str, body: &str| {
+        super::write_mcp_http_response_with_origin(stream, status, body, cors_origin)
+    };
+    // Browser screening ahead of ALL routing, the preflight included: a web
+    // page (directly or via DNS rebinding) must not reach the tools. Local
+    // clients send no `Origin` and a loopback `Host`, so they pass.
+    if let Err(denial) = admission::check_loopback_boundary(&req, port) {
+        let body = admission::denial_json_rpc(&req.body, denial);
+        return reply(stream, denial.http_status(), &body).map(|()| false);
+    }
     if req.method == "OPTIONS" {
         return reply(stream, "204 No Content", "").map(|()| false);
     }
