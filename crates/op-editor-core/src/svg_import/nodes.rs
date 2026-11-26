@@ -67,7 +67,7 @@ pub(super) fn element_to_node_ctx(
     // Preserve `<path d>` as SVG path data. That keeps arcs and
     // compound subpaths in the same representation the TS renderer
     // sends to CanvasKit.
-    let fill_hex = resolve_svg_fill_hex(&scaled.attrs, &ctx);
+    let fill = resolve_svg_fill(&scaled.attrs, &ctx);
     let stroke = resolve_svg_stroke(&scaled.attrs, &ctx, scale);
     if scaled.tag == "path" {
         if let Some(d) = scaled.attr("d") {
@@ -77,7 +77,7 @@ pub(super) fn element_to_node_ctx(
                 el.attr("id").unwrap_or("Path"),
                 d,
                 offset,
-                fill_hex,
+                fill,
                 stroke,
                 ctx.fill_rule,
             ));
@@ -93,12 +93,13 @@ pub(super) fn element_to_node_ctx(
     if let Some(stroke) = stroke {
         set_node_stroke(&mut node, stroke);
     }
-    if fill_hex.is_none() && scaled.tag != "line" && scaled.tag != "polyline" {
-        // Explicit fill="none" / fill="transparent" should not leave
-        // the old element builder's attribute fill behind.
+    if fill.is_none() && scaled.tag != "line" && scaled.tag != "polyline" {
+        // Clear the shape builder's default paint for absent fills.
         clear_node_fill(&mut node);
-    } else if let Some(hex) = fill_hex.as_deref() {
-        set_primary_fill_hex(&mut node, hex);
+    } else if let Some(fill) = fill {
+        if let Some(fills) = node_fills_mut(&mut node) {
+            *fills = vec![fill];
+        }
     }
     Ok(Some(node))
 }
@@ -108,8 +109,7 @@ pub(super) fn element_to_node_ctx(
 /// degenerate geometry.
 fn element_to_node(el: &SvgElement, id: NodeId, offset: (f64, f64)) -> Option<PenNode> {
     let (ox, oy) = offset;
-    let fill = el.attr("fill").and_then(parse_svg_color);
-    let mut node = match el.tag.as_str() {
+    let node = match el.tag.as_str() {
         "rect" => {
             let (w, h) = (el.num("width"), el.num("height"));
             if w <= 0.0 || h <= 0.0 {
@@ -186,9 +186,6 @@ fn element_to_node(el: &SvgElement, id: NodeId, offset: (f64, f64)) -> Option<Pe
         // <svg> / <g> / <defs> / <style> / <title> / … — skipped.
         _ => return None,
     };
-    if let Some(hex) = fill {
-        set_primary_fill_hex(&mut node, &hex);
-    }
     Some(node)
 }
 
@@ -261,7 +258,7 @@ fn path_node_from_svg_d(
     name: &str,
     d: &str,
     offset: (f64, f64),
-    fill_hex: Option<String>,
+    fill: Option<PenFill>,
     stroke: Option<PenStroke>,
     fill_rule: Option<PathFillRule>,
 ) -> Option<PenNode> {
@@ -282,7 +279,7 @@ fn path_node_from_svg_d(
         mask: None,
         width: Some(SizingBehavior::Number(bounds.w)),
         height: Some(SizingBehavior::Number(bounds.h)),
-        fill: fill_hex.map(|hex| vec![solid_fill(&hex)]),
+        fill: fill.map(|fill| vec![fill]),
         stroke,
         effects: None,
         state: None,

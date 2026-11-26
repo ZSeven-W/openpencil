@@ -9,13 +9,12 @@
 //!     relative). Cubic / quadratic curves keep their bezier handles
 //!     (`Q`/`T` are promoted to cubics); `A` (elliptical arc) degrades
 //!     to a straight segment to its endpoint.
-//!   - `fill` attribute — `#rgb` / `#rrggbb` + a small named-colour
-//!     table; `none` leaves the node unfilled.
+//!   - Fill / stroke CSS colors, inherited `currentColor`, and paint
+//!     opacity; `none` / `transparent` leave the paint unset.
 //!
-//! Out of scope for v1 (skipped, not an error): `<g>` grouping,
-//! `transform` attributes, CSS `<style>`, `<defs>` / gradients,
-//! `stroke` styling. Elements are scanned flat, so a shape nested in a
-//! `<g>` still imports — just without the group's transform.
+//! Out of scope (skipped, not an error): `transform` attributes,
+//! CSS `<style>`, `<defs>` / gradients. Group children inherit supported
+//! presentation properties, without the group's transform.
 //!
 //! The parser is hand-rolled (no XML / SVG crate) so `op-editor-core`
 //! stays dependency-light + wasm32-clean, matching the hand-rolled
@@ -32,11 +31,13 @@
 //! - `xml` — root `<svg>` extraction, viewBox-aware scale + inherited
 //!   style context, recursive element tree walk
 //! - `nodes` — element → `PenNode` conversion (containers + leaves)
-//! - `style` — fill / stroke resolution + the named-colour table
+//! - `style` — inherited color / fill / stroke and paint opacity
 //! - `scale` — applying the root scale to attrs / path data / points
 //! - `lexer` — hand-rolled tag / attribute / number scanning
 //! - `path_data` — the `<path d="…">` command reader
 
+#[cfg(test)]
+mod color_tests;
 mod lexer;
 mod nodes;
 mod path_data;
@@ -52,7 +53,7 @@ use style::*;
 use xml::*;
 
 use crate::command_node::build_leaf_node;
-use crate::fills::set_primary_fill_hex;
+use crate::fills::node_fills_mut;
 use crate::id_allocator::{IdAllocError, IdAllocator, SequentialIdAllocator};
 use crate::node_id::NodeId;
 use crate::pen_node_ext::PenNodeExt;
@@ -85,14 +86,16 @@ impl SvgElement {
     }
 }
 
-/// Inherited style context — propagates `fill` / `stroke` /
-/// `stroke-width` from `<g>` parents to children, mirroring the TS
-/// `StyleCtx` (`packages/pen-engine/src/core/svg-parser.ts`). `None`
-/// means "no inherited value, use the renderer default".
+/// Inherited presentation properties from root and group elements.
+/// Paint strings remain unresolved so inherited `currentColor` uses
+/// the child's computed `color`. `None` uses the renderer default.
 #[derive(Debug, Clone)]
 struct StyleCtx {
+    color: String,
     fill: Option<String>,
     stroke: Option<String>,
+    fill_opacity: f32,
+    stroke_opacity: f32,
     stroke_width: f64,
     fill_rule: Option<PathFillRule>,
 }
@@ -100,8 +103,11 @@ struct StyleCtx {
 impl Default for StyleCtx {
     fn default() -> Self {
         Self {
+            color: "#000000".to_string(),
             fill: None,
             stroke: None,
+            fill_opacity: 1.0,
+            stroke_opacity: 1.0,
             stroke_width: 1.0,
             fill_rule: None,
         }

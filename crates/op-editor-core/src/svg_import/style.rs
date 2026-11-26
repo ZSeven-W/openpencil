@@ -1,13 +1,30 @@
 //! SVG presentation attributes: style-context inheritance, fill /
-//! stroke resolution and the named-colour table.
+//! stroke resolution using the shared CSS color parser.
 
 use super::*;
 
-/// Merge `parent` with the element's own `fill` / `stroke` /
-/// `stroke-width` (inline `style="..."` takes precedence over the
-/// matching attribute, matching `extractStyleOrAttr` in TS).
+/// Merge inherited presentation properties with this element's values.
+/// Inline `style="..."` takes precedence over matching attributes.
 pub(super) fn merge_style_ctx(parent: &StyleCtx, attrs: &[(String, String)]) -> StyleCtx {
+    let color = extract_style_or_attr(attrs, "color")
+        .and_then(|raw| {
+            if raw.trim().eq_ignore_ascii_case("currentcolor") {
+                None
+            } else {
+                op_util::css_color::parse_css_color(&raw)
+            }
+        })
+        .unwrap_or_else(|| parent.color.clone());
     StyleCtx {
+        color,
+        fill_opacity: extract_style_or_attr(attrs, "fill-opacity")
+            .as_deref()
+            .and_then(parse_paint_opacity)
+            .unwrap_or(parent.fill_opacity),
+        stroke_opacity: extract_style_or_attr(attrs, "stroke-opacity")
+            .as_deref()
+            .and_then(parse_paint_opacity)
+            .unwrap_or(parent.stroke_opacity),
         fill: extract_style_or_attr(attrs, "fill").or_else(|| parent.fill.clone()),
         stroke: extract_style_or_attr(attrs, "stroke").or_else(|| parent.stroke.clone()),
         stroke_width: extract_style_or_attr(attrs, "stroke-width")
@@ -50,13 +67,15 @@ pub(super) fn extract_style_or_attr(attrs: &[(String, String)], name: &str) -> O
         .map(|(_, v)| v.to_string())
 }
 
-pub(super) fn resolve_svg_fill_hex(attrs: &[(String, String)], ctx: &StyleCtx) -> Option<String> {
+pub(super) fn resolve_svg_fill(attrs: &[(String, String)], ctx: &StyleCtx) -> Option<PenFill> {
     let raw = extract_style_or_attr(attrs, "fill").or_else(|| ctx.fill.clone());
     match raw.as_deref().map(str::trim) {
-        None => Some("#000000".to_string()),
+        None => Some(solid_fill([0, 0, 0, 255], ctx.fill_opacity)),
         Some(v) if v.eq_ignore_ascii_case("none") || v.eq_ignore_ascii_case("transparent") => None,
-        Some(v) if v.to_ascii_lowercase().starts_with("url(") => Some("#000000".to_string()),
-        Some(v) => parse_svg_color(v),
+        Some(v) if v.to_ascii_lowercase().starts_with("url(") => {
+            Some(solid_fill([0, 0, 0, 255], ctx.fill_opacity))
+        }
+        Some(v) => resolve_color(v, ctx).map(|rgba| solid_fill(rgba, ctx.fill_opacity)),
     }
 }
 
@@ -67,10 +86,13 @@ pub(super) fn resolve_svg_stroke(
 ) -> Option<PenStroke> {
     let raw = extract_style_or_attr(attrs, "stroke").or_else(|| ctx.stroke.clone())?;
     let raw = raw.trim();
-    if raw.eq_ignore_ascii_case("none") || raw.to_ascii_lowercase().starts_with("url(") {
+    if raw.eq_ignore_ascii_case("none")
+        || raw.eq_ignore_ascii_case("transparent")
+        || raw.to_ascii_lowercase().starts_with("url(")
+    {
         return None;
     }
-    let hex = parse_svg_color(raw).unwrap_or_else(|| "#000000".to_string());
+    let rgba = resolve_color(raw, ctx).unwrap_or([0, 0, 0, 255]);
     let width = (ctx.stroke_width * scale).max(0.0) as f32;
     if width <= 0.0 {
         return None;
@@ -82,15 +104,16 @@ pub(super) fn resolve_svg_stroke(
         cap: None,
         dash_pattern: None,
         dash_offset: None,
-        fill: Some(vec![solid_fill(&hex)]),
+        fill: Some(vec![solid_fill(rgba, ctx.stroke_opacity)]),
     })
 }
 
-pub(super) fn solid_fill(hex: &str) -> PenFill {
+fn solid_fill([r, g, b, a]: [u8; 4], opacity: f32) -> PenFill {
+    let opacity = opacity * (f32::from(a) / 255.0);
     PenFill::Solid(SolidFillBody {
-        color: hex.to_string(),
+        color: format!("#{r:02x}{g:02x}{b:02x}"),
         explain: None,
-        opacity: None,
+        opacity: (opacity < 1.0).then_some(opacity),
         blend_mode: None,
     })
 }
@@ -142,46 +165,22 @@ pub(super) fn clear_node_fill(node: &mut PenNode) {
     }
 }
 
-/// Parse an SVG `fill` value into a `#rrggbb` hex string. `none` /
-/// `transparent` and unparseable values return `None` (no fill).
-pub(super) fn parse_svg_color(raw: &str) -> Option<String> {
-    let v = raw.trim().to_ascii_lowercase();
-    if v.is_empty() || v == "none" || v == "transparent" {
-        return None;
-    }
-    if let Some(hex) = v.strip_prefix('#') {
-        return match hex.len() {
-            3 => {
-                let mut out = String::with_capacity(7);
-                out.push('#');
-                for ch in hex.chars() {
-                    out.push(ch);
-                    out.push(ch);
-                }
-                Some(out)
-            }
-            6 | 8 => Some(format!("#{}", &hex[..6])),
-            _ => None,
-        };
-    }
-    // Minimal named-colour table — the common SVG presentation names.
-    let named = match v.as_str() {
-        "black" => "#000000",
-        "white" => "#ffffff",
-        "red" => "#ff0000",
-        "green" => "#008000",
-        "lime" => "#00ff00",
-        "blue" => "#0000ff",
-        "yellow" => "#ffff00",
-        "cyan" | "aqua" => "#00ffff",
-        "magenta" | "fuchsia" => "#ff00ff",
-        "gray" | "grey" => "#808080",
-        "silver" => "#c0c0c0",
-        "orange" => "#ffa500",
-        "purple" => "#800080",
-        "navy" => "#000080",
-        "teal" => "#008080",
-        _ => return None,
+/// Resolve contextual color before delegating to the shared CSS parser.
+fn resolve_color(raw: &str, ctx: &StyleCtx) -> Option<[u8; 4]> {
+    let hex = if raw.trim().eq_ignore_ascii_case("currentcolor") {
+        ctx.color.clone()
+    } else {
+        op_util::css_color::parse_css_color(raw)?
     };
-    Some(named.to_string())
+    op_util::hex_color::parse_hex_rgba8(&hex, op_util::hex_color::HexOptions::default())
+}
+
+fn parse_paint_opacity(raw: &str) -> Option<f32> {
+    let raw = raw.trim();
+    let value = if let Some(percent) = raw.strip_suffix('%') {
+        percent.parse::<f32>().ok()? / 100.0
+    } else {
+        raw.parse::<f32>().ok()?
+    };
+    value.is_finite().then(|| value.clamp(0.0, 1.0))
 }
