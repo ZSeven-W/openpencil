@@ -180,6 +180,7 @@ pub mod share_routes;
 pub mod state;
 pub mod statusbar_state;
 pub mod svg_import;
+mod svg_path_arc;
 pub mod svg_path_bounds;
 mod svg_path_data;
 pub mod sync_gate;

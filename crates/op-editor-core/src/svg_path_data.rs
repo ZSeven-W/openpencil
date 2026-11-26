@@ -248,8 +248,17 @@ fn segment_bounds(segments: &[Segment]) -> Option<SvgPathBounds> {
                 last_quad_ctrl = Some((qx, qy));
                 last_cubic_ctrl = None;
             }
-            Segment::Arc(_, _, _, _, _, x, y) => {
-                include(x, y);
+            Segment::Arc(rx, ry, rot, large, sweep, x, y) => {
+                crate::svg_path_arc::include_arc_bounds(
+                    &mut include,
+                    (cx, cy),
+                    rx,
+                    ry,
+                    rot,
+                    large,
+                    sweep,
+                    (x, y),
+                );
                 cx = x;
                 cy = y;
                 last_cubic_ctrl = None;
@@ -456,7 +465,21 @@ fn tokenize_path(d: &str) -> Vec<PathToken> {
 
 #[cfg(test)]
 mod tests {
-    use super::localize_svg_path;
+    use super::{localize_svg_path, svg_path_bounds, SvgPathBounds};
+
+    fn assert_bounds_within(actual: SvgPathBounds, expected: (f64, f64, f64, f64), eps: f64) {
+        assert!(
+            (actual.x - expected.0).abs() < eps
+                && (actual.y - expected.1).abs() < eps
+                && (actual.w - expected.2).abs() < eps
+                && (actual.h - expected.3).abs() < eps,
+            "expected bounds {expected:?} (±{eps}), got {actual:?}"
+        );
+    }
+
+    fn assert_bounds_near(actual: SvgPathBounds, expected: (f64, f64, f64, f64)) {
+        assert_bounds_within(actual, expected, 1e-6);
+    }
 
     #[test]
     fn preserves_arc_and_compound_moves() {
@@ -465,5 +488,121 @@ mod tests {
         assert_eq!(d.matches('M').count(), 2);
         assert_eq!(bounds.x, 5.0);
         assert_eq!(bounds.y, 5.0);
+    }
+
+    #[test]
+    fn arc_semicircle_both_sweep_directions() {
+        let up = svg_path_bounds("M10 50 A40 40 0 0 1 90 50").expect("arc up");
+        assert_bounds_near(up, (10.0, 10.0, 80.0, 40.0));
+
+        let down = svg_path_bounds("M10 50 A40 40 0 0 0 90 50").expect("arc down");
+        assert_bounds_near(down, (10.0, 50.0, 80.0, 40.0));
+    }
+
+    #[test]
+    fn arc_full_circle_from_two_arcs() {
+        // Endpoints sit on x = 50 so horizontal extent (10..90) comes strictly from arc extrema.
+        let vertical_split =
+            svg_path_bounds("M50 10 A40 40 0 1 1 50 90 A40 40 0 1 1 50 10 Z").expect("circle");
+        assert_bounds_near(vertical_split, (10.0, 10.0, 80.0, 80.0));
+
+        let horizontal_split =
+            svg_path_bounds("M10 50 A40 40 0 0 1 90 50 A40 40 0 0 1 10 50").expect("circle");
+        assert_bounds_near(horizontal_split, (10.0, 10.0, 80.0, 80.0));
+    }
+
+    #[test]
+    fn arc_rotated_ellipse() {
+        // Full ellipse centered at (50, 50) with rx=40, ry=20 rotated 45 deg:
+        // half-width = half-height = sqrt((40^2 + 20^2) / 2) = sqrt(1000).
+        let r = 40.0 / 2.0_f64.sqrt();
+        let d = format!(
+            "M {:.15} {:.15} A 40 20 45 1 1 {:.15} {:.15} A 40 20 45 1 1 {:.15} {:.15}",
+            50.0 + r,
+            50.0 + r,
+            50.0 - r,
+            50.0 - r,
+            50.0 + r,
+            50.0 + r
+        );
+        let bounds = svg_path_bounds(&d).expect("rotated ellipse");
+        let half = 1000.0_f64.sqrt();
+        assert_bounds_near(bounds, (50.0 - half, 50.0 - half, 2.0 * half, 2.0 * half));
+
+        // Single partial rotated arc bulges outside its endpoint box.
+        let partial = svg_path_bounds("M20 50 A40 20 30 0 1 80 50").expect("partial rotated arc");
+        assert_bounds_within(partial, (16.399439, 26.849676, 63.600561, 23.150324), 1e-5);
+
+        // Partial rotated major arc with sweep=0 hits all four axis-aligned extrema.
+        let major_rev =
+            svg_path_bounds("M30 40 A40 20 35 1 0 70 60").expect("rotated major sweep=0 arc");
+        assert_bounds_within(
+            major_rev,
+            (13.910342, 39.968079, 69.432329, 56.383966),
+            1e-5,
+        );
+    }
+
+    #[test]
+    fn arc_large_arc_flag() {
+        let minor = svg_path_bounds("M50 10 A40 40 0 0 1 90 50").expect("minor arc");
+        assert_bounds_near(minor, (50.0, 10.0, 40.0, 40.0));
+
+        let major_cw = svg_path_bounds("M50 10 A40 40 0 1 1 90 50").expect("major cw arc");
+        assert_bounds_near(major_cw, (50.0, -30.0, 80.0, 80.0));
+
+        let major_ccw = svg_path_bounds("M50 10 A40 40 0 1 0 90 50").expect("major ccw arc");
+        assert_bounds_near(major_ccw, (10.0, 10.0, 80.0, 80.0));
+    }
+
+    #[test]
+    fn arc_relative_command() {
+        let rel = svg_path_bounds("M10 50 a40 40 0 0 1 80 0").expect("relative arc");
+        assert_bounds_near(rel, (10.0, 10.0, 80.0, 40.0));
+    }
+
+    #[test]
+    fn arc_radii_too_small_are_scaled_up() {
+        // Endpoints 80 apart, rx=20 ry=10 -> lambda=4 -> scaled to rx=40 ry=20.
+        let scaled = svg_path_bounds("M10 50 A20 10 0 0 1 90 50").expect("scaled arc");
+        assert_bounds_near(scaled, (10.0, 30.0, 80.0, 20.0));
+    }
+
+    #[test]
+    fn arc_degenerate_cases() {
+        // rx=0 -> straight line segment between endpoints.
+        let rx_zero = svg_path_bounds("M10 50 A0 40 30 1 1 90 20").expect("rx=0");
+        assert_bounds_near(rx_zero, (10.0, 20.0, 80.0, 30.0));
+
+        // ry=0 -> straight line segment between endpoints.
+        let ry_zero = svg_path_bounds("M10 50 A40 0 0 0 1 90 50").expect("ry=0");
+        assert_bounds_near(ry_zero, (10.0, 50.0, 80.0, 0.0));
+
+        // Negative radii -> absolute values used.
+        let neg_r = svg_path_bounds("M10 50 A-40 -40 0 0 1 90 50").expect("neg radii");
+        assert_bounds_near(neg_r, (10.0, 10.0, 80.0, 40.0));
+
+        // Identical endpoints -> arc omitted.
+        let same_pt = svg_path_bounds("M10 50 A40 40 0 0 1 10 50").expect("identical endpoints");
+        assert_bounds_near(same_pt, (10.0, 50.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn localize_svg_path_shifts_by_corrected_arc_origin() {
+        let (local, bounds) = localize_svg_path("M10 50 A40 40 0 0 1 90 50").expect("localized");
+        assert_eq!(
+            bounds,
+            SvgPathBounds {
+                x: 10.0,
+                y: 10.0,
+                w: 80.0,
+                h: 40.0,
+            }
+        );
+        assert_eq!(local, "M 0 40 A 40 40 0 0 1 80 40");
+        assert_eq!(
+            crate::svg_path_data_bounds("M10 50 A40 40 0 0 1 90 50"),
+            Some((10.0, 10.0, 80.0, 40.0))
+        );
     }
 }
